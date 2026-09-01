@@ -1,6 +1,36 @@
 CHANGELOG
 =========
 
+0.15: unreleased
+----------------
+
+Upgrade to prompt_toolkit 3.0 and the ptterm master branch. The client/server
+architecture (``pymux``, ``pymux start-server``, ``pymux attach``) works again.
+
+Backwards incompatible changes:
+- Dropped Python 2 and Python < 3.11 support.
+- Replaced ``docopt`` with ``argparse`` for the command line interface.
+  Options can now be given before the mode word, e.g.
+  ``pymux -S 2 start-server``. The internal pymux commands are still parsed
+  with the maintained ``docopt-ng`` fork.
+- The ``standalone`` mode accepts an optional command for the first pane:
+  ``pymux standalone htop``.
+- A command without a socket argument is sent to the first running server,
+  like tmux does.
+
+New:
+- Nix packaging: ``flake.nix`` with a pymux package, app and dev shell.
+  ``ptterm`` is packaged from the ptterm master branch.
+
+Fixes:
+- Fixed the server/client protocol for asyncio: ``ColorDepth`` is
+  serialized as a string, ``pane_id`` can be absent, closed connections
+  stop reading and clean up their input pipes.
+- The temporary CLI that handles ``run-command`` packets no longer starts
+  an application. (This caused ``Bad file descriptor`` errors.)
+- ``--log`` now works together with ``start-server``.
+
+
 0.14: 2017-07-27
 ----------------
 

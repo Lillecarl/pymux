@@ -1,32 +1,28 @@
-from __future__ import unicode_literals
+import asyncio
 import getpass
 import os
-import six
 import socket
 import tempfile
-
-from prompt_toolkit.eventloop import From, Return, Future, get_event_loop
+from asyncio import get_event_loop
+from typing import Callable, Optional
 
 from ..log import logger
-from .base import PipeConnection, BrokenPipeError
+from .base import BrokenPipeError, PipeConnection
 
 __all__ = [
-    'bind_and_listen_on_posix_socket',
-    'PosixSocketConnection',
+    "bind_and_listen_on_posix_socket",
+    "PosixSocketConnection",
 ]
 
 
-def bind_and_listen_on_posix_socket(socket_name, accept_callback):
+def bind_and_listen_on_posix_socket(socket_name: str, accept_callback: Callable):
     """
     :param accept_callback: Called with `PosixSocketConnection` when a new
         connection is established.
     """
-    assert socket_name is None or isinstance(socket_name, six.text_type)
-    assert callable(accept_callback)
-
     # Py2 uses 0027 and Py3 uses 0o027, but both know
     # how to create the right value from the string '0027'.
-    old_umask = os.umask(int('0027', 8))
+    old_umask = os.umask(int("0027", 8))
 
     # Bind socket.
     socket_name, socket = _bind_posix_socket(socket_name)
@@ -47,18 +43,16 @@ def bind_and_listen_on_posix_socket(socket_name, accept_callback):
 
     get_event_loop().add_reader(socket.fileno(), _accept_cb)
 
-    logger.info('Listening on %r.' % socket_name)
+    logger.info("Listening on %r." % socket_name)
     return socket_name
 
 
-def _bind_posix_socket(socket_name=None):
+def _bind_posix_socket(socket_name: Optional[str] = None):
     """
     Find a socket to listen on and return it.
 
     Returns (socket_name, sock_obj)
     """
-    assert socket_name is None or isinstance(socket_name, six.text_type)
-
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
     if socket_name:
@@ -68,8 +62,11 @@ def _bind_posix_socket(socket_name=None):
         i = 0
         while True:
             try:
-                socket_name = '%s/pymux.sock.%s.%i' % (
-                    tempfile.gettempdir(), getpass.getuser(), i)
+                socket_name = "%s/pymux.sock.%s.%i" % (
+                    tempfile.gettempdir(),
+                    getpass.getuser(),
+                    i,
+                )
                 s.bind(socket_name)
                 return socket_name, s
             except (OSError, socket.error):
@@ -77,8 +74,10 @@ def _bind_posix_socket(socket_name=None):
 
                 # When 100 times failed, cancel server
                 if i == 100:
-                    logger.warning('100 times failed to listen on posix socket. '
-                                   'Please clean up old sockets.')
+                    logger.warning(
+                        "100 times failed to listen on posix socket. "
+                        "Please clean up old sockets."
+                    )
                     raise
 
 
@@ -86,49 +85,67 @@ class PosixSocketConnection(PipeConnection):
     """
     A single active posix pipe connection on the server side.
     """
+
     def __init__(self, socket):
         self.socket = socket
         self._fd = socket.fileno()
-        self._recv_buffer = b''
+        self._recv_buffer = b""
+        self._closed = False
 
-    def read(self):
+    async def read(self):
         r"""
         Coroutine that reads the next packet.
         (Packets are \0 separated.)
         """
+        if self._closed:
+            raise BrokenPipeError
+
         # Read until we have a \0 in our buffer.
-        while b'\0' not in self._recv_buffer:
-            self._recv_buffer += yield From(_read_chunk_from_socket(self.socket))
+        while b"\0" not in self._recv_buffer:
+            self._recv_buffer += await _read_chunk_from_socket(self.socket)
 
         # Split on the first separator.
-        pos = self._recv_buffer.index(b'\0')
+        pos = self._recv_buffer.index(b"\0")
 
         packet = self._recv_buffer[:pos]
-        self._recv_buffer = self._recv_buffer[pos + 1:]
+        self._recv_buffer = self._recv_buffer[pos + 1 :]
 
-        raise Return(packet)
-
+        return packet
 
     def write(self, message):
         """
         Coroutine that writes the next packet.
         """
         try:
-            self.socket.send(message.encode('utf-8') + b'\0')
+            self.socket.send(message.encode("utf-8") + b"\0")
         except socket.error:
             if not self._closed:
                 raise BrokenPipeError
 
-        return Future.succeed(None)
+        try:
+            loop = get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        f = loop.create_future()
+        f.set_result(None)
+        return f
 
     def close(self):
         """
         Close connection.
         """
-        self.socket.close()
-
-        # Make sure to remove the reader from the event loop.
-        get_event_loop().remove_reader(self._fd)
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            self.socket.close()
+        finally:
+            # Make sure to remove the reader from the event loop.
+            try:
+                get_event_loop().remove_reader(self._fd)
+            except Exception:
+                pass
 
 
 def _read_chunk_from_socket(socket):
@@ -137,7 +154,16 @@ def _read_chunk_from_socket(socket):
     Turn socket reading into coroutine.
     """
     fd = socket.fileno()
-    f = Future()
+    try:
+        loop = get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    f = loop.create_future()
+
+    if fd == -1:  # Socket closed.
+        f.set_exception(BrokenPipeError())
+        return f
 
     def read_callback():
         get_event_loop().remove_reader(fd)
@@ -150,15 +176,16 @@ def _read_chunk_from_socket(socket):
             # new-window" in a centain pane, very often we get the following
             # error: "OSError: [Errno 9] Bad file descriptor."
             # This doesn't seem very harmful, and we can just try again.
-            logger.warning('Got OSError while reading data from client: %s. '
-                           'Trying again.', e)
-            f.set_result('')
+            logger.warning(
+                "Got OSError while reading data from client: %s. " "Trying again.", e
+            )
+            f.set_result(b"")
             return
 
         if data:
             f.set_result(data)
         else:
-            f.set_exception(BrokenPipeError)
+            f.set_exception(BrokenPipeError())
 
     get_event_loop().add_reader(fd, read_callback)
 

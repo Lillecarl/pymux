@@ -1,18 +1,11 @@
 Pymux
 =====
 
-WARNING: This project requires maintenance. The current master branch requires
-an old version of both prompt_toolkit and ptterm. There is a prompt-toolkit-3.0
-branch here that is compatible with the latest prompt_toolkit and the latest
-commit of the master branch of ptterm, but for that branch, only `pymux
-standalone` is working at the moment.
-
-
 *A terminal multiplexer (like tmux) in Python*
 
-::
-
-    pip install pymux
+Pymux is written on top of `prompt_toolkit 3.0
+<https://github.com/jonathanslenders/python-prompt-toolkit>`_ and requires
+Python 3.11 or newer.
 
 .. image :: https://raw.githubusercontent.com/jonathanslenders/pymux/master/images/pymux.png
 
@@ -32,6 +25,12 @@ Simply install ``pymux`` using pip:
 
 Start it by typing ``pymux``.
 
+When using `Nix <https://nixos.org/>`_, a flake is included:
+
+::
+
+    nix run github:jonathanslenders/pymux
+
 
 What does it do?
 ----------------
@@ -41,8 +40,8 @@ same terminal. It does this by emulating a vt100 terminal for each application.
 There are serveral programs doing this. The most famous are `GNU Screen
 <https://www.gnu.org/software/screen/>`_ and `tmux <https://tmux.github.io/>`_.
 
-Pymux is written entirely in Python. It doesn't need any C extension. It runs
-on all Python versions from 2.6 until 3.5. It should work on OS X and Linux.
+Pymux is written entirely in Python. It doesn't need any C extension. It
+requires Python 3.11+. It works on OS X and Linux.
 
 
 Compared to tmux
@@ -168,7 +167,8 @@ Special thanks
 
 - `Pyte <https://github.com/selectel/pyte>`_, for providing a working vt100
   parser. (This one is extended in order to support some xterm extensions.)
-- `docopt <http://docopt.org/>`_, for parsing the command line arguments.
+- `docopt-ng <https://github.com/jazzband/docopt-ng>`_, for parsing the
+  options of the pymux commands.
 - `prompt_toolkit
   <https://github.com/jonathanslenders/python-prompt-toolkit>`_, for the UI
   toolkit.
