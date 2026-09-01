@@ -10,7 +10,7 @@ arranged by ordering them in HSplit/VSplit instances.
 import math
 import os
 from enum import Enum
-from typing import Dict, List, Optional, Union
+from typing import List, Optional, Union
 from weakref import WeakKeyDictionary, ref
 
 from prompt_toolkit.application import Application, get_app, get_app_or_none, set_app

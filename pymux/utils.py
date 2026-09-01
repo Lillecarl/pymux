@@ -97,8 +97,8 @@ def get_default_shell():
     if is_windows():
         return "cmd.exe"
     else:
-        import pwd
         import getpass
+        import pwd
 
         if "SHELL" in os.environ:
             return os.environ["SHELL"]

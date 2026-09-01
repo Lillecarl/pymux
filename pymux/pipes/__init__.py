@@ -14,12 +14,13 @@ __all__ = [
 ]
 
 
-def bind_and_listen_on_socket(socket_name, accept_callback):
+def bind_and_listen_on_socket(socket_name, accept_callback, loop=None):
     """
     Return socket name.
 
     :param accept_callback: Callback is called with a `PipeConnection` as
         argument.
+    :param loop: The asyncio event loop to listen on. (Posix only.)
     """
     if is_windows():
         from .win32_server import bind_and_listen_on_win32_socket
@@ -28,4 +29,4 @@ def bind_and_listen_on_socket(socket_name, accept_callback):
     else:
         from .posix import bind_and_listen_on_posix_socket
 
-        return bind_and_listen_on_posix_socket(socket_name, accept_callback)
+        return bind_and_listen_on_posix_socket(socket_name, accept_callback, loop)

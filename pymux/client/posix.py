@@ -12,6 +12,7 @@ from prompt_toolkit.input.posix_utils import PosixStdinReader
 from prompt_toolkit.input.vt100 import cooked_mode, raw_mode
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output, _get_size
+
 from pymux.utils import nonblocking
 
 from .base import Client
@@ -44,13 +45,48 @@ class PosixClient(Client):
         #     consist of a fixed number of bytes.)
         self._stdin_reader = PosixStdinReader(sys.stdin.fileno(), errors="replace")
 
-    def run_command(self, command, pane_id=None):
+    def run_command(self, command, pane_id=None) -> int:
         """
-        Ask the server to run this command.
+        Ask the server to run this command. Print the output that the server
+        sends back, and return the exit code of the command.
 
         :param pane_id: Optional identifier of the current pane.
         """
         self._send_packet({"cmd": "run-command", "data": command, "pane_id": pane_id})
+
+        # Read the answer of the server. Packets:
+        #   "out": output of the command. (stdout)
+        #   "err": errors. (stderr)
+        #   "exit": exit code of the command.
+        exit_code = 0
+        data_buffer = b""
+
+        while True:
+            try:
+                data = self.socket.recv(4096)
+            except OSError:
+                break
+
+            if not data:
+                break  # Connection closed.
+
+            data_buffer += data
+            while b"\0" in data_buffer:
+                pos = data_buffer.index(b"\0")
+                packet_data, data_buffer = data_buffer[:pos], data_buffer[pos + 1 :]
+
+                packet = json.loads(packet_data.decode("utf-8"))
+
+                if packet["cmd"] == "out":
+                    sys.stdout.write(packet["data"])
+                    sys.stdout.flush()
+                elif packet["cmd"] == "err":
+                    sys.stderr.write(packet["data"])
+                    sys.stderr.flush()
+                elif packet["cmd"] == "exit":
+                    exit_code = packet["code"]
+
+        return exit_code
 
     def attach(
         self, detach_other_clients: bool = False, color_depth=ColorDepth.DEPTH_8_BIT

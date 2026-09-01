@@ -8,10 +8,11 @@ __all__ = [
 
 
 class Client(ABC):
-    def run_command(self, command, pane_id=None):
+    def run_command(self, command, pane_id=None) -> int:
         """
-        Ask the server to run this command.
+        Ask the server to run this command. Return the exit code.
         """
+        return 0
 
     def attach(self, detach_other_clients=False, color_depth=ColorDepth.DEPTH_8_BIT):
         """

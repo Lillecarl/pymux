@@ -31,6 +31,15 @@ When using `Nix <https://nixos.org/>`_, a flake is included:
 
     nix run github:jonathanslenders/pymux
 
+The command line is tmux compatible. Tools like `libtmux
+<https://github.com/tmux-python/libtmux>`_ can drive pymux:
+
+::
+
+    from libtmux import Server
+    server = Server(tmux_bin="pymux", socket_path="/tmp/pymux.sock")
+    session = server.new_session(session_name="work", attach=False)
+
 
 What does it do?
 ----------------

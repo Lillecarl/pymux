@@ -1,3 +1,4 @@
+import asyncio
 import contextvars
 import os
 import signal
@@ -7,8 +8,6 @@ import threading
 import time
 import traceback
 import weakref
-import asyncio
-from asyncio import get_event_loop
 from typing import Optional
 
 from prompt_toolkit.application import Application
@@ -37,6 +36,7 @@ from .layout import Justify, LayoutManager
 from .log import logger
 from .options import ALL_OPTIONS, ALL_WINDOW_OPTIONS
 from .pipes import bind_and_listen_on_socket
+from .ptterm_compat import apply_ptterm_compat_fixes
 from .rc import STARTUP_COMMANDS
 from .server import ServerConnection
 from .style import ui_style
@@ -45,6 +45,8 @@ from .utils import get_default_shell
 __all__ = [
     "Pymux",
 ]
+
+apply_ptterm_compat_fixes()
 
 
 class ClientState:
@@ -249,7 +251,12 @@ class Pymux:
         p.run_standalone()
     """
 
-    def __init__(self, source_file=None, startup_command=None):
+    def __init__(
+        self,
+        source_file=None,
+        startup_command=None,
+        session_name: Optional[str] = None,
+    ):
         self._client_states = {}  # connection -> client_state
 
         # Options
@@ -285,16 +292,34 @@ class Pymux:
         #: List of clients.
         self._runs_standalone = False
         self.connections = []
+        # Event loop for this server. (Python 3.14 doesn't have a global
+        # "current event loop" anymore. Keep our own reference.)
         try:
-            loop = get_event_loop()
+            self.loop = asyncio.get_running_loop()
         except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        self.done_f = loop.create_future()
+            self.loop = asyncio.new_event_loop()
+            # ptterm still uses `asyncio.Future()` without an explicit loop,
+            # which requires a current event loop. Set ours.
+            asyncio.set_event_loop(self.loop)
+        self.done_f = self.loop.create_future()
+
+        # Command output, for commands that were entered from the command
+        # line. (E.g. `pymux list-panes -F ...`.) When a run-command packet is
+        # handled, this is a list where commands can append their output.
+        # The server sends it back to the client before the connection is
+        # closed. It's `None` for commands entered interactively.
+        self.command_output: Optional[list] = None
+        self.command_error: Optional[list] = None
 
         self._startup_done = False
         self.source_file = source_file
         self.startup_command = startup_command
+
+        # Time when this server was started.
+        self.created = time.time()
+
+        if session_name is not None:
+            self.session_name = session_name
 
         # Keep track of all the panes, by ID. (For quick lookup.)
         self.panes_by_id = weakref.WeakValueDictionary()
@@ -489,6 +514,19 @@ class Pymux:
         )
         pane = Pane(terminal)
 
+        # ptterm starts the process only when the terminal is rendered for
+        # the first time. Start it right away, so that panes in detached
+        # sessions also run and produce output. (Like tmux does.)
+        terminal_control = terminal.terminal_control
+        if not getattr(terminal_control, "_running", False):
+            process = terminal_control.process
+            # Give the terminal a default size until a client attaches.
+            process.set_size(80, 24)
+            process.start()
+            terminal_control._running = True
+            # Now that the pty exists, apply the size to it as well.
+            process.set_size(80, 24)
+
         # Keep track of panes. This is a WeakKeyDictionary, we only add, but
         # don't remove.
         self.panes_by_id[pane.pane_id] = pane
@@ -506,8 +544,15 @@ class Pymux:
 
     def stop(self):
         for app in self.apps:
-            app.exit()
-        self.done_f.set_result(None)
+            try:
+                app.exit()
+            except Exception:
+                # `Application.exit()` raises for applications that never
+                # started running. (E.g. temporary CLIs that only handled a
+                # command.)
+                pass
+        if not self.done_f.done():
+            self.done_f.set_result(None)
 
     def create_window(
         self,
@@ -529,11 +574,14 @@ class Pymux:
         command: Optional[str] = None,
         vsplit: bool = False,
         start_directory: Optional[str] = None,
+        window: Optional[Window] = None,
     ):
         """
-        Add a new process to the current window. (vsplit/hsplit).
+        Add a new process to the given window (or the active window).
+        (vsplit/hsplit).
         """
-        window = self.arrangement.get_active_window()
+        if window is None:
+            window = self.arrangement.get_active_window()
 
         pane = self._create_pane(window, command, start_directory=start_directory)
         window.add_pane(pane, vsplit=vsplit)
@@ -578,7 +626,26 @@ class Pymux:
 
         :param message: String.
         """
-        self.get_client_state().message = message
+        try:
+            self.get_client_state().message = message
+        except ValueError:
+            pass  # No client. (E.g. a temporary CLI for a run-command.)
+
+    def print_command_line(self, text: str) -> None:
+        """
+        Print the output of a command that was entered from the command line.
+        (When `command_output` is set, this goes back to the client that sent
+        the run-command packet.)
+        """
+        if self.command_output is not None:
+            self.command_output.append(text)
+
+    def add_command_error(self, message: str) -> None:
+        """
+        Record an error for a command that was entered from the command line.
+        """
+        if self.command_error is not None:
+            self.command_error.append(message)
 
     def detach_client(self, app):
         """
@@ -605,7 +672,9 @@ class Pymux:
 
             self.connections.append(connection)
 
-        self.socket_name = bind_and_listen_on_socket(socket_name, connection_cb)
+        self.socket_name = bind_and_listen_on_socket(
+            socket_name, connection_cb, loop=self.loop
+        )
 
         # Set session_name according to socket name.
         #        if '.' in self.socket_name:
@@ -628,7 +697,7 @@ class Pymux:
 
         # Run eventloop.
         try:
-            get_event_loop().run_until_complete(self.done_f)
+            self.loop.run_until_complete(self.done_f)
         except:
             # When something bad happens, always dump the traceback.
             # (Otherwise, when running as a daemon, and stdout/stderr are not

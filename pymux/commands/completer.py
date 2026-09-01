@@ -2,6 +2,7 @@ from functools import partial
 
 from prompt_toolkit.completion import Completer, Completion, WordCompleter
 from prompt_toolkit.document import Document
+
 from pymux.arrangement import LayoutTypes
 from pymux.key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS
 

@@ -7,7 +7,6 @@ import weakref
 from functools import partial
 from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple, Type, Union
 
-import pymux.arrangement as arrangement
 from prompt_toolkit.application import Application, get_app
 from prompt_toolkit.filters import Condition, has_focus
 from prompt_toolkit.formatted_text import HTML, FormattedText, StyleAndTextTuples
@@ -38,13 +37,16 @@ from prompt_toolkit.layout.screen import Char, Screen
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.widgets import Dialog, FormattedTextToolbar, SearchToolbar, TextArea
 
+import pymux.arrangement as arrangement
+
 from .filters import WaitsForConfirmation
 from .format import format_pymux_string
 from .log import logger
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
     from prompt_toolkit.layout.controls import BufferControl, NotImplementedOrNone
+
+    from pymux.main import Pymux
 
 __all__ = ["LayoutManager"]
 

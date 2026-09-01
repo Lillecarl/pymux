@@ -14,17 +14,16 @@ from typing import (
 
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
+from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.input.vt100_parser import Vt100Parser
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
-from prompt_toolkit.utils import is_windows
-from prompt_toolkit.input.defaults import create_pipe_input
 
 from .log import logger
 from .pipes import BrokenPipeError
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux, ClientState
+    from pymux.main import ClientState, Pymux
 
 __all__ = ["ServerConnection"]
 
@@ -92,7 +91,10 @@ class ServerConnection:
 
         # Handle commands.
         if packet["cmd"] == "run-command":
-            self._run_command(packet)
+            # Handle this in a task. The command handler can produce output
+            # that has to be sent back to the client.
+            create_task(self._run_command(packet))
+            return
 
         # Handle stdin.
         elif packet["cmd"] == "in":
@@ -134,7 +136,7 @@ class ServerConnection:
 
         create_task(send())
 
-    def _run_command(self, packet: Dict[str, Any]) -> None:
+    async def _run_command(self, packet: Dict[str, Any]) -> None:
         """
         Execute a run command from the client.
         """
@@ -153,11 +155,50 @@ class ServerConnection:
                         int(pane_id)
                     )
 
+        pymux = self.pymux
+        pymux.command_output = []
+        pymux.command_error = []
+
         with set_app(self.client_state.app):
             try:
-                self.pymux.handle_command(packet["data"])
+                pymux.handle_command(packet["data"])
             finally:
+                # Send the output of the command back to the client, and
+                # close the connection.
+                output = pymux.command_output
+                errors = pymux.command_error
+                pymux.command_output = None
+                pymux.command_error = None
+
+                try:
+                    if output:
+                        await self._write_packet(
+                            {"cmd": "out", "data": "\n".join(output) + "\n"}
+                        )
+                    if errors:
+                        await self._write_packet(
+                            {"cmd": "err", "data": "\n".join(errors) + "\n"}
+                        )
+                    await self._write_packet(
+                        {"cmd": "exit", "code": 1 if errors else 0}
+                    )
+                except BrokenPipeError:
+                    pass
                 self._close_connection()
+
+    async def _write_packet(self, data_obj: object) -> None:
+        """
+        Write a packet to the client. (This waits for the write to complete.)
+        """
+        if self._closed:
+            return
+
+        data = json.dumps(data_obj)
+
+        try:
+            await self.pipe_connection.write(data)
+        except BrokenPipeError:
+            self.detach_and_close()
 
     def _create_app(
         self,

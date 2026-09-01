@@ -3,7 +3,6 @@ import getpass
 import os
 import socket
 import tempfile
-from asyncio import get_event_loop
 from typing import Callable, Optional
 
 from ..log import logger
@@ -15,13 +14,18 @@ __all__ = [
 ]
 
 
-def bind_and_listen_on_posix_socket(socket_name: str, accept_callback: Callable):
+def bind_and_listen_on_posix_socket(
+    socket_name: str, accept_callback: Callable, loop: Optional[asyncio.AbstractEventLoop] = None
+):
     """
     :param accept_callback: Called with `PosixSocketConnection` when a new
         connection is established.
+    :param loop: The asyncio event loop to listen on.
     """
-    # Py2 uses 0027 and Py3 uses 0o027, but both know
-    # how to create the right value from the string '0027'.
+    if loop is None:
+        loop = asyncio.get_running_loop()
+
+    # Set umask for the socket file.
     old_umask = os.umask(int("0027", 8))
 
     # Bind socket.
@@ -37,11 +41,11 @@ def bind_and_listen_on_posix_socket(socket_name: str, accept_callback: Callable)
         # Note: We don't have to put this socket in non blocking mode.
         #       This can cause crashes when sending big packets on OS X.
 
-        posix_connection = PosixSocketConnection(connection)
+        posix_connection = PosixSocketConnection(connection, loop=loop)
 
         accept_callback(posix_connection)
 
-    get_event_loop().add_reader(socket.fileno(), _accept_cb)
+    loop.add_reader(socket.fileno(), _accept_cb)
 
     logger.info("Listening on %r." % socket_name)
     return socket_name
@@ -86,11 +90,21 @@ class PosixSocketConnection(PipeConnection):
     A single active posix pipe connection on the server side.
     """
 
-    def __init__(self, socket):
+    def __init__(self, socket, loop: Optional[asyncio.AbstractEventLoop] = None):
         self.socket = socket
         self._fd = socket.fileno()
         self._recv_buffer = b""
         self._closed = False
+        self._loop = loop
+
+    def _loop_ref(self) -> Optional[asyncio.AbstractEventLoop]:
+        "Return the event loop for this connection, if it's still known."
+        if self._loop is not None:
+            return self._loop
+        try:
+            return asyncio.get_running_loop()
+        except RuntimeError:
+            return None
 
     async def read(self):
         r"""
@@ -102,7 +116,9 @@ class PosixSocketConnection(PipeConnection):
 
         # Read until we have a \0 in our buffer.
         while b"\0" not in self._recv_buffer:
-            self._recv_buffer += await _read_chunk_from_socket(self.socket)
+            self._recv_buffer += await _read_chunk_from_socket(
+                self.socket, self._loop_ref()
+            )
 
         # Split on the first separator.
         pos = self._recv_buffer.index(b"\0")
@@ -122,11 +138,10 @@ class PosixSocketConnection(PipeConnection):
             if not self._closed:
                 raise BrokenPipeError
 
-        try:
-            loop = get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+        loop = self._loop_ref()
+        if loop is None:
+            return None  # No event loop. (Connection is shutting down.)
+
         f = loop.create_future()
         f.set_result(None)
         return f
@@ -142,23 +157,20 @@ class PosixSocketConnection(PipeConnection):
             self.socket.close()
         finally:
             # Make sure to remove the reader from the event loop.
-            try:
-                get_event_loop().remove_reader(self._fd)
-            except Exception:
-                pass
+            loop = self._loop_ref()
+            if loop is not None:
+                try:
+                    loop.remove_reader(self._fd)
+                except (ValueError, KeyError, RuntimeError):
+                    pass
 
 
-def _read_chunk_from_socket(socket):
+def _read_chunk_from_socket(socket, loop):
     """
     (coroutine)
     Turn socket reading into coroutine.
     """
     fd = socket.fileno()
-    try:
-        loop = get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
     f = loop.create_future()
 
     if fd == -1:  # Socket closed.
@@ -166,7 +178,7 @@ def _read_chunk_from_socket(socket):
         return f
 
     def read_callback():
-        get_event_loop().remove_reader(fd)
+        loop.remove_reader(fd)
 
         # Read next chunk.
         try:
@@ -187,6 +199,6 @@ def _read_chunk_from_socket(socket):
         else:
             f.set_exception(BrokenPipeError())
 
-    get_event_loop().add_reader(fd, read_callback)
+    loop.add_reader(fd, read_callback)
 
     return f

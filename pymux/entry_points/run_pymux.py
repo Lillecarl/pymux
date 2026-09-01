@@ -31,10 +31,15 @@ import argparse
 import getpass
 import logging
 import os
+import shlex
+import socket
 import sys
 import tempfile
+import time
+from typing import Dict, List, Optional, Set, Tuple
 
 from prompt_toolkit.output import ColorDepth
+
 from pymux import __version__
 from pymux.client import create_client, list_clients
 from pymux.main import Pymux
@@ -43,6 +48,18 @@ from pymux.utils import daemonize
 __all__ = ["run"]
 
 MODES = ("standalone", "start-server", "attach", "list-sessions", "ls")
+
+
+def filename_var() -> Optional[str]:
+    """
+    Return the configuration file name for the current invocation. (This is
+    stored as a module global, because the daemonized server needs it after
+    the fork.)
+    """
+    return _current_filename
+
+
+_current_filename: Optional[str] = None
 
 
 def _add_options(parser: argparse.ArgumentParser, suppress_defaults: bool) -> None:
@@ -58,6 +75,12 @@ def _add_options(parser: argparse.ArgumentParser, suppress_defaults: bool) -> No
 
     parser.add_argument(
         "--version", action="version", version="%(prog)s " + __version__
+    )
+    parser.add_argument(
+        "-V",
+        dest="show_tmux_version",
+        action="store_true",
+        help="Print the version of the tmux interface that pymux emulates.",
     )
     parser.add_argument(
         "-S",
@@ -146,11 +169,15 @@ def run() -> None:
 
     if mode == "standalone":
         # An optional command can be given for the first pane.
-        command = " ".join(rest) if rest else None
+        command = " ".join(shlex.quote(x) for x in rest) if rest else None
+    elif mode is not None and rest:
+        # A mode with extra arguments: e.g. `pymux list-sessions -F ...`.
+        # The whole thing is sent to the server as one command.
+        command = " ".join(shlex.quote(x) for x in (mode, *rest))
+        mode = None
     elif rest:
         # Not a mode: all arguments form one pymux command.
-        command = " ".join(rest)
-        mode = None
+        command = " ".join(shlex.quote(x) for x in rest)
 
     socket_name = a.socket or os.environ.get("PYMUX")
     socket_name_from_env = not a.socket and bool(os.environ.get("PYMUX"))
@@ -189,9 +216,21 @@ def run() -> None:
     if filename:
         filename = os.path.abspath(os.path.expanduser(filename))
 
+    # Store the configuration file name. (The daemonized server, started by
+    # `new-session`, needs it after the fork.)
+    global _current_filename
+    _current_filename = filename
+
     # Setup logging.
     if a.logfile:
         logging.basicConfig(filename=a.logfile, level=logging.DEBUG, force=True)
+
+    if a.show_tmux_version:
+        # Like `tmux -V`. Tools like libtmux parse this to know which tmux
+        # features the command line supports. Pymux implements the command
+        # line interface of tmux 3.4.
+        print("tmux 3.4")
+        sys.exit(0)
 
     if mode == "standalone":
         # When a command was given (e.g. 'pymux standalone htop'), run it in
@@ -200,8 +239,18 @@ def run() -> None:
         mux.run_standalone(color_depth=color_depth)
 
     elif mode in ("list-sessions", "ls"):
-        for c in list_clients():
+        if socket_name:
+            # With an explicit socket, ask the server. (The exit code tells
+            # whether there is a session. Like tmux.)
+            sys.exit(_send_command(socket_name, "list-sessions", pane_id))
+
+        clients = list(list_clients())
+        for c in clients:
             print(c.socket_name)
+        if not clients:
+            # Like tmux, exit with a non-zero exit code when there is no
+            # server running.
+            sys.exit(1)
 
     elif mode == "start-server":
         if socket_name_from_env:
@@ -247,14 +296,13 @@ def run() -> None:
 
     elif command and socket_name:
         # Run command in the given session.
-        create_client(socket_name).run_command(command, pane_id)
+        sys.exit(_send_command(socket_name, command, pane_id))
 
     elif command:
         # A command was given, but no socket was given. Try to send it to the
         # first running server. (Like 'tmux split-window' without a target.)
         for c in list_clients():
-            c.run_command(command, pane_id)
-            break
+            sys.exit(c.run_command(command, pane_id))
         else:
             print("No pymux instance found.")
             sys.exit(1)
@@ -280,6 +328,181 @@ def run() -> None:
         else:
             print("Invalid command.")
             sys.exit(1)
+
+
+def _no_server_error(socket_name: Optional[str]) -> None:
+    "Print the 'no server running' error, like tmux does."
+    sys.stderr.write(
+        "no server running on %s\n"
+        % (socket_name or os.path.join(tempfile.gettempdir(), "pymux.sock.*"),)
+    )
+
+
+def _send_command(socket_name: str, command: str, pane_id=None) -> int:
+    """
+    Send a command to the server, print the answer and return the exit code.
+
+    Some commands are handled by the client itself:
+    - `new-session`: starts a new server when there is none yet.
+    - `kill-session` and `kill-server`: stop the server.
+    """
+    args = shlex.split(command)
+    name = args[0] if args else ""
+
+    if name == "new-session":
+        return _new_session(socket_name, command, args, pane_id)
+    elif name in ("kill-session", "kill-server"):
+        return _kill(socket_name, command)
+    else:
+        try:
+            client = create_client(socket_name)
+        except OSError:
+            _no_server_error(socket_name)
+            return 1
+        return client.run_command(command, pane_id)
+
+
+def _flag_args(args: List[str], flags_with_value: Tuple[str, ...]) -> Tuple[
+    Set[str], Dict[str, str], List[str]
+]:
+    """
+    Parse a list of short flags, given either glued to their value
+    (e.g. `-sname`) or as a separate argument (e.g. `-s name`).
+    """
+    flags: Set[str] = set()
+    values: Dict[str, str] = {}
+    positional: List[str] = []
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg.startswith("-") and len(arg) >= 2 and not arg.startswith("--"):
+            flag = arg[1]
+            rest = arg[2:]
+            if flag in flags_with_value:
+                if rest:
+                    values[flag] = rest
+                    i += 1
+                elif i + 1 < len(args):
+                    values[flag] = args[i + 1]
+                    i += 2
+                else:
+                    i += 1
+            else:
+                flags.add(flag)
+                i += 1
+        else:
+            positional.append(arg)
+            i += 1
+
+    return flags, values, positional
+
+
+def _wait_for_server(socket_name: str, timeout: float = 5.0) -> bool:
+    "Wait until the server accepts connections on this socket."
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if os.path.exists(socket_name):
+            try:
+                s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                try:
+                    s.connect(socket_name)
+                    return True
+                finally:
+                    s.close()
+            except OSError:
+                pass
+        time.sleep(0.05)
+    return False
+
+
+def _new_session(
+    socket_name: str, command: str, args: List[str], pane_id=None
+) -> int:
+    """
+    Handle `new-session`. Start a new server when there is no server yet.
+    Otherwise, pass the command to the running server. (Which will report
+    a duplicate session error, like tmux does.)
+    """
+    flags, values, positional = _flag_args(
+        args[1:], flags_with_value=("s", "F", "c", "n", "x", "y", "e")
+    )
+    attach = "d" not in flags
+    session_name = values.get("s")
+    start_directory = values.get("c")
+    window_name = values.get("n")
+    format_str = values.get("F")
+    print_info = "P" in flags
+    window_command = " ".join(positional) or None
+
+    startup_command = " ".join(x for x in (window_name, window_command) if x) or None
+
+    # Is there a server running on this socket?
+    server_running = _wait_for_server(socket_name, timeout=0.1)
+
+    if server_running:
+        # Pass to the server. (Pymux has one session per server. This will
+        # give a duplicate session error.)
+        try:
+            client = create_client(socket_name)
+        except OSError:
+            _no_server_error(socket_name)
+            return 1
+        return client.run_command(command, pane_id)
+
+    # Start a new daemonized server.
+    if start_directory:
+        try:
+            os.chdir(os.path.abspath(os.path.expanduser(start_directory)))
+        except OSError:
+            pass
+
+    mux = Pymux(
+        source_file=filename_var(),
+        startup_command=startup_command,
+        session_name=session_name,
+    )
+    socket_name = mux.listen_on_socket(socket_name)
+
+    pid = daemonize()
+    if pid > 0:
+        # This is the daemon. Run the server until all panes are gone.
+        mux.run_server()
+        return 0
+
+    # Wait for the server to come up.
+    if not _wait_for_server(socket_name):
+        _no_server_error(socket_name)
+        return 1
+
+    if print_info:
+        # Ask the server to format the session information.
+        client = create_client(socket_name)
+        query = "list-sessions -F %s" % shlex.quote(format_str or "#{session_id}")
+        return client.run_command(query)
+
+    if attach:
+        client = create_client(socket_name)
+        client.attach(color_depth=ColorDepth.DEPTH_8_BIT)
+        return 0
+
+    return 0
+
+
+def _kill(socket_name: str, command: str) -> int:
+    """
+    Handle `kill-session` and `kill-server`.
+    """
+    if not _wait_for_server(socket_name, timeout=0.1):
+        _no_server_error(socket_name)
+        return 1
+
+    try:
+        client = create_client(socket_name)
+    except OSError:
+        _no_server_error(socket_name)
+        return 1
+    return client.run_command(command)
 
 
 if __name__ == "__main__":

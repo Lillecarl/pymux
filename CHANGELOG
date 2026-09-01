@@ -7,6 +7,27 @@ CHANGELOG
 Upgrade to prompt_toolkit 3.0 and the ptterm master branch. The client/server
 architecture (``pymux``, ``pymux start-server``, ``pymux attach``) works again.
 
+New:
+- Nix packaging: ``flake.nix`` with a pymux package, app and dev shell.
+  ``ptterm`` is packaged from the ptterm master branch.
+- A tmux-compatible command line interface. Tools like `libtmux
+  <https://github.com/tmux-python/libtmux>`_ can drive pymux. (See
+  ``tests/drive_with_libtmux.py``.)
+  * tmux `#{...}` format variables for panes, windows and sessions.
+  * tmux style targets: `%<pane-id>`, `@<window-id>`, `$<session-id>`,
+    `<index>` and `session:window.pane`.
+  * New commands: `new-session`, `list-windows`, `list-sessions`,
+    `has-session`, `capture-pane`, `kill-session` and `kill-server`.
+  * `new-window`, `split-window`, `list-panes`, `send-keys`, `kill-pane`,
+    `kill-window` and `select-pane` accept tmux style options and targets.
+  * Commands print their output on stdout, report errors on stderr and
+    return an exit code, like tmux. (`pymux list-panes -F ...` > file works.)
+  * Several commands can be given at once, separated by `;`.
+  * `-V` reports the emulated tmux version (`tmux 3.4`), which libtmux
+    uses to pick its format templates.
+- Panes run and capture output in detached sessions, without a client
+  attached. (ptterm used to start the process only on the first render.)
+
 Backwards incompatible changes:
 - Dropped Python 2 and Python < 3.11 support.
 - Replaced ``docopt`` with ``argparse`` for the command line interface.
@@ -18,10 +39,6 @@ Backwards incompatible changes:
 - A command without a socket argument is sent to the first running server,
   like tmux does.
 
-New:
-- Nix packaging: ``flake.nix`` with a pymux package, app and dev shell.
-  ``ptterm`` is packaged from the ptterm master branch.
-
 Fixes:
 - Fixed the server/client protocol for asyncio: ``ColorDepth`` is
   serialized as a string, ``pane_id`` can be absent, closed connections
@@ -29,6 +46,11 @@ Fixes:
 - The temporary CLI that handles ``run-command`` packets no longer starts
   an application. (This caused ``Bad file descriptor`` errors.)
 - ``--log`` now works together with ``start-server``.
+- Fixed the inverted ``select-layout`` command and the ``LayoutTypes``
+  values.
+- Replied to the VT100 Primary Device Attributes query with the format
+  that programs expect. (fish used to wait 10 seconds for a reply.)
+- Compatible with the Python 3.14 event loop handling.
 
 
 0.14: 2017-07-27
