@@ -20,6 +20,7 @@
           ps.pyte
           ps.wcwidth
           ps.docopt-ng
+          ps.libtmux
           ptterm
           pymux
         ]);
