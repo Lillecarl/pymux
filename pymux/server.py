@@ -15,10 +15,10 @@ from typing import (
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input.defaults import create_pipe_input
-from prompt_toolkit.input.vt100_parser import Vt100Parser
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
+from .kitty import KittyVt100Parser
 from .log import logger
 from .pipes import BrokenPipeError
 
@@ -49,7 +49,9 @@ class ServerConnection:
                 self.client_state.app.key_processor.feed(key)
                 self.client_state.app.key_processor.process_keys()
 
-        self._inputstream = Vt100Parser(feed_key)
+        # (This parser also decodes the kitty keyboard protocol key
+        # encoding, which prompt_toolkit itself does not understand.)
+        self._inputstream = KittyVt100Parser(feed_key)
         self._pipeinput = _ClientInput(self._send_packet)
 
         create_task(self._start_reading())
