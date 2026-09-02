@@ -1,6 +1,15 @@
 { pkgs ? import <nixpkgs> {}}:
 let
-  ptterm = pkgs.python3Packages.callPackage ./ptterm.nix {};
+  # Build against a local ptterm working copy when one sits next to this
+  # repo, and fall back to the pinned upstream commit otherwise.
+  pttermSrc =
+    if builtins.pathExists ../ptterm
+    then ../ptterm
+    else null;
+
+  ptterm = pkgs.python3Packages.callPackage ./ptterm.nix
+    (pkgs.lib.optionalAttrs (pttermSrc != null) { src = pttermSrc; });
+
   package = pkgs.python3Packages.callPackage ./package.nix { inherit ptterm; };
 
   # Development shell with the dependencies of `tests/drive_with_libtmux.py`
