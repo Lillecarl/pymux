@@ -15,7 +15,9 @@ buildPythonPackage {
   src = fetchFromGitHub {
     owner = "prompt-toolkit";
     repo = "ptterm";
-    rev = "master";
+    # Pin the commit that we test against. (Upstream has no release that is
+    # compatible with prompt_toolkit 3 yet.)
+    rev = "48a590efe502712250ba75effd48f8a0cbdc2518";
     hash = "sha256-ZiBvLcKyQ84QaD6X7kfn1JMoPGc9iJZOoji+hh9JpWY=";
   };
 
