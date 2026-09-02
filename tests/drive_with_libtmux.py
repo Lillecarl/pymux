@@ -7,7 +7,7 @@ small `tmux` shim that runs `python -m pymux`.
 
 Run with:
 
-    nix develop -c python3 tests/drive_with_libtmux.py
+    nix develop --file . shell --command python3 tests/drive_with_libtmux.py
 """
 import stat
 import sys

@@ -25,11 +25,12 @@ Simply install ``pymux`` using pip:
 
 Start it by typing ``pymux``.
 
-When using `Nix <https://nixos.org/>`_, a flake is included:
+When using `Nix <https://nixos.org/>`_, build it with:
 
 ::
 
-    nix run github:jonathanslenders/pymux
+    nix build --file . package
+    ./result/bin/pymux
 
 The command line is tmux compatible. Tools like `libtmux
 <https://github.com/tmux-python/libtmux>`_ can drive pymux:
