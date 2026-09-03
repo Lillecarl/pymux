@@ -79,6 +79,12 @@ OSC_NOTIFICATION_ANSWER = "\x1b]99;i=mine\x1b\\"
 OSC_POINTER = "\x1b]22;pointer\x1b\\"
 PANE_OSC = OSC_CLIPBOARD + OSC_CLIPBOARD_QUERY + OSC_NOTIFICATION + OSC_POINTER
 
+# A hyperlink belongs to the cells that carry it, so it does not travel
+# as a sequence. The pane draws it, the cells hold the target, and the
+# renderer opens the link again on the terminal of the user.
+HYPERLINK_TARGET = "https://example.com/pymux"
+PANE_HYPERLINK = "\x1b]8;;%s\x1b\\LINK\x1b]8;;\x1b\\plain" % HYPERLINK_TARGET
+
 # The program that runs in the pane. It puts its tty in raw mode, asks
 # for the kitty keyboard protocol, draws one image, sends the OSC
 # sequences, and then echoes everything it reads as hex.
@@ -95,6 +101,7 @@ sys.stdout.write("\\r\\nENV<%%s|%%s|%%s|%%s>" %% (
     os.environ.get("KITTY_WINDOW_ID", ""),
     os.environ.get("TERM_PROGRAM", ""),
 ))
+sys.stdout.write("\\r\\n" + %r)
 sys.stdout.flush()
 while True:
     data = sys.stdin.buffer.read1(256)
@@ -104,7 +111,7 @@ while True:
     # it reads the wrapping as part of the text.
     sys.stdout.write("\\r\\n<<%%s>>" %% data.hex())
     sys.stdout.flush()
-""" % (KITTY_IMAGE, SIXEL_IMAGE, PANE_OSC)
+""" % (KITTY_IMAGE, SIXEL_IMAGE, PANE_OSC, PANE_HYPERLINK)
 
 
 #: The program of an overlay pane: it names itself, echoes what it
@@ -282,6 +289,24 @@ def check_the_osc_sequences(terminal, tail):
     return found.group(1)
 
 
+def check_the_hyperlink(terminal):
+    """
+    The link that the pane drew reaches the terminal of the user.
+
+    It opens before the text it belongs to and closes after it, and the
+    target never travels as text.
+    """
+    opened = ("\x1b]8;;%s\x1b\\" % HYPERLINK_TARGET).encode()
+    assert opened in terminal.seen, "the hyperlink never opened"
+    after = terminal.seen[terminal.seen.index(opened) + len(opened):]
+    assert b"L" in after[:40], "no text after the link opened"
+    assert b"\x1b]8;;\x1b\\" in after, "the hyperlink never closed"
+    assert terminal.seen.count(HYPERLINK_TARGET.encode()) == 1, (
+        "the target was written more than once"
+    )
+    print("hyperlink: ok")
+
+
 def check_kitty_terminal(tmp):
     "A terminal that speaks every kitty protocol and 24 bit colour."
     terminal = Terminal(tmp, "kitty")
@@ -309,6 +334,11 @@ def check_kitty_terminal(tmp):
         #    the client attached from: a pane takes 24 bit colour, and
         #    it is no kitty window.
         terminal.wait_for(b"ENV<xterm-256color|truecolor||>")
+        #    A hyperlink belongs to a cell, so the pane keeps it and the
+        #    renderer opens it again on the terminal of the user.
+        terminal.wait_for(b"plain")
+        check_the_hyperlink(terminal)
+
         assert b"a=T" not in terminal.seen, "graphics command leaked as text"
         assert (
             IMAGE_PAYLOAD.encode() not in terminal.seen
