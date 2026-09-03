@@ -22,6 +22,7 @@ screen emits nothing.
 """
 import base64
 import random
+import re
 import zlib
 from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Tuple
 
@@ -58,14 +59,16 @@ MAX_TOTAL_BYTES = 256 * 1024 * 1024
 SAVE_CURSOR = "\x1b7"
 RESTORE_CURSOR = "\x1b8"
 
+# The reply of the query: "ESC _ G i=31;OK ESC \". (Terminals add other
+# keys before the semicolon, so the image id is matched on its own.)
+_QUERY_REPLY_RE = re.compile(
+    r"^\x1b_G(?:[^;]*,)?i=%i(?:,[^;]*)?;OK" % QUERY_IMAGE_ID
+)
+
 
 def is_query_reply(data: str) -> bool:
     "True when `data` is the reply of `QUERY_SEQUENCE`."
-    return (
-        data.startswith("\x1b_G")
-        and ("i=%i" % QUERY_IMAGE_ID) in data
-        and ";OK" in data
-    )
+    return bool(_QUERY_REPLY_RE.match(data))
 
 
 class PaneView(NamedTuple):
