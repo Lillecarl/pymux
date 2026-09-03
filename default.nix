@@ -128,6 +128,7 @@ let
         ps.libtmux
         ps.pytest
         ptterm
+        ps.pyinstrument
       ]))
       pkgs.ruff
       pkgs.black
