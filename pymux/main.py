@@ -31,6 +31,7 @@ from .arrangement import Arrangement, Pane, Window
 from .commands.commands import call_command_handler, handle_command
 from .commands.completer import create_command_completer
 from .enums import COMMAND, PROMPT
+from .environment import scrub_terminal_identity
 from .graphics import PaneView
 from .key_bindings import PymuxKeyBindings
 from .layout import Justify, LayoutManager
@@ -560,6 +561,12 @@ class Pymux:
                 os.chdir(path or self.original_cwd)
             except OSError:
                 pass  # No such file or directory.
+
+            # A pane is not the terminal that the client attached
+            # from: it answers the protocol queries for itself. Drop
+            # the variables that name the outer terminal, so that a
+            # program asks the pane instead of believing them.
+            scrub_terminal_identity(os.environ)
 
             # Set terminal variable. (We emulate xterm.)
             os.environ["TERM"] = self.default_terminal
