@@ -69,7 +69,13 @@ CELL_WIDTH, CELL_HEIGHT = 8, 17
 # a pane may write the clipboard, not read it.
 OSC_CLIPBOARD = "\x1b]52;c;aGVsbG8=\x1b\\"
 OSC_CLIPBOARD_QUERY = "\x1b]52;c;?\x1b\\"
-OSC_NOTIFICATION = "\x1b]99;i=1;done\x1b\\"
+# The pane asks to be told when the user clicks the notification.
+OSC_NOTIFICATION = "\x1b]99;i=mine:a=report;done\x1b\\"
+# What pymux sends on: the identifier names the pane, not the program.
+OSC_NOTIFICATION_RE = rb"\x1b\]99;i=(\d+):a=report;done\x1b\\"
+# And the answer that comes back to the pane carries the name of the
+# program again.
+OSC_NOTIFICATION_ANSWER = "\x1b]99;i=mine\x1b\\"
 OSC_POINTER = "\x1b]22;pointer\x1b\\"
 PANE_OSC = OSC_CLIPBOARD + OSC_CLIPBOARD_QUERY + OSC_NOTIFICATION + OSC_POINTER
 
@@ -88,7 +94,9 @@ while True:
     data = sys.stdin.buffer.read1(256)
     if not data:
         break
-    sys.stdout.write("<<%%s>>" %% data.hex())
+    # A line of its own: a long echo must not wrap, or the check for
+    # it reads the wrapping as part of the text.
+    sys.stdout.write("\\r\\n<<%%s>>" %% data.hex())
     sys.stdout.flush()
 """ % (KITTY_IMAGE, SIXEL_IMAGE, PANE_OSC)
 
@@ -242,11 +250,14 @@ def check_the_osc_sequences(terminal, tail):
     clipboard query does not.
     """
     assert OSC_CLIPBOARD.encode() in tail, "the clipboard write did not arrive"
-    assert OSC_NOTIFICATION.encode() in tail, "the notification did not arrive"
     assert OSC_POINTER.encode() in tail, "the pointer shape did not arrive"
     assert (
         OSC_CLIPBOARD_QUERY.encode() not in tail
     ), "the pane read the clipboard of the user"
+
+    found = re.search(OSC_NOTIFICATION_RE, tail)
+    assert found, "the notification did not arrive"
+    return found.group(1)
 
 
 def check_kitty_terminal(tmp):
@@ -306,9 +317,16 @@ def check_kitty_terminal(tmp):
         # 7. The clipboard, the notification and the pointer shape of
         #    the pane reach the terminal.
         terminal.wait_for(OSC_POINTER.encode())
-        check_the_osc_sequences(terminal, terminal.since(mark))
+        identifier = check_the_osc_sequences(terminal, terminal.since(mark))
 
-        # 8. A reply of the outer terminal does not reach the pane. The
+        # 8. The user clicks the notification. The answer goes to the
+        #    pane that asked, under the name that the pane chose.
+        terminal.write(b"\x1b]99;i=" + identifier + b"\x1b\\")
+        terminal.wait_for(
+            ("<<%s>>" % OSC_NOTIFICATION_ANSWER.encode().hex()).encode()
+        )
+
+        # 9. A reply of the outer terminal does not reach the pane. The
         #    pane echoes everything it reads between "<<" and ">>", so
         #    a leak shows up there.
         terminal.drain(0.5)
@@ -320,7 +338,7 @@ def check_kitty_terminal(tmp):
             b"<<" not in terminal.since(quiet)
         ), "a reply of the terminal reached the pane"
 
-        # 9. The server goes away: the client resets the flags.
+        # 10. The server goes away: the client resets the flags.
         run_cli(terminal.sock_path, ["kill-server"])
         terminal.wait_for(b"\x1b[=0;1u")
     except BaseException:

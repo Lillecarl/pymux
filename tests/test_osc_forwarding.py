@@ -108,6 +108,13 @@ class FakeClientState:
     app = None
 
 
+class FakePane:
+    "A pane is named by its id when a notification answer comes back."
+
+    def __init__(self, pane_id=7):
+        self.pane_id = pane_id
+
+
 def make_pymux(focused=()):
     """
     A pymux with two client connections. `focused` names the ones that
@@ -123,7 +130,7 @@ def make_pymux(focused=()):
 
 def test_a_clipboard_write_reaches_every_client():
     pymux, connections = make_pymux()
-    pymux.forward_osc("a pane", "52", "c;aGVsbG8=")
+    pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
     for connection in connections:
         assert connection.written == [sequence("52", "c;aGVsbG8=")]
 
@@ -131,14 +138,29 @@ def test_a_clipboard_write_reaches_every_client():
 def test_a_notification_reaches_every_client():
     "A pane out of sight is exactly what a notification is for."
     pymux, connections = make_pymux()
-    pymux.forward_osc("a pane", "99", "i=1;done")
+    pymux.forward_osc(FakePane(), "99", "i=mine;done")
+    # The identifier is replaced by one that names the pane, so that
+    # the answer of the terminal finds its way back.
     for connection in connections:
         assert connection.written == [sequence("99", "i=1;done")]
 
 
+def test_a_notification_without_an_identifier_is_not_touched():
+    pymux, connections = make_pymux()
+    pymux.forward_osc(FakePane(), "99", "d=0;half a message")
+    assert connections[0].written == [sequence("99", "d=0;half a message")]
+
+
+def test_the_answer_finds_the_pane_that_asked():
+    pymux, _connections = make_pymux()
+    pymux.forward_osc(FakePane(pane_id=7), "99", "i=mine:a=report;done")
+    answer = pymux.notifications.incoming("i=1")
+    assert answer == (7, "i=mine")
+
+
 def test_the_pointer_shape_reaches_the_clients_that_look_at_the_pane():
     pymux, connections = make_pymux(focused=[1])
-    pymux.forward_osc("a pane", "22", "pointer")
+    pymux.forward_osc(FakePane(), "22", "pointer")
     assert connections[0].written == []
     assert connections[1].written == [sequence("22", "pointer")]
 
@@ -149,7 +171,7 @@ def test_only_the_pointer_shape_follows_the_focus():
 
 def test_an_unsafe_payload_reaches_nobody():
     pymux, connections = make_pymux()
-    pymux.forward_osc("a pane", "99", "i=1;done\x1b]0;owned\x07")
+    pymux.forward_osc(FakePane(), "99", "i=1;done\x1b]0;owned\x07")
     for connection in connections:
         assert connection.written == []
 
@@ -158,10 +180,10 @@ def test_the_clipboard_option_stops_the_clipboard_only():
     pymux, connections = make_pymux()
     pymux.enable_clipboard = False
 
-    pymux.forward_osc("a pane", "52", "c;aGVsbG8=")
+    pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
     assert connections[0].written == []
 
-    pymux.forward_osc("a pane", "99", "i=1;done")
+    pymux.forward_osc(FakePane(), "99", "i=1;done")
     assert connections[0].written == [sequence("99", "i=1;done")]
 
 
@@ -178,10 +200,10 @@ def test_a_broken_connection_does_not_stop_the_pane():
 
     pymux = Pymux()
     pymux._client_states = {BrokenConnection(): FakeClientState()}
-    pymux.forward_osc("a pane", "99", "i=1;done")  # Does not raise.
+    pymux.forward_osc(FakePane(), "99", "i=1;done")  # Does not raise.
 
 
 def test_a_client_without_focus_information_gets_no_pointer_shape():
     "`_has_focus` needs a running application, and says False without one."
     pymux = Pymux()
-    assert pymux._has_focus(FakeClientState(), "a pane") is False
+    assert pymux._has_focus(FakeClientState(), FakePane()) is False

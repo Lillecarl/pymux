@@ -36,6 +36,7 @@ from .graphics import PaneView
 from .key_bindings import PymuxKeyBindings
 from .layout import Justify, LayoutManager
 from .log import logger
+from .notifications import NotificationRoutes
 from .options import ALL_OPTIONS, ALL_WINDOW_OPTIONS
 from .osc import build_osc
 from .pipes import bind_and_listen_on_socket
@@ -344,6 +345,11 @@ class Pymux:
 
         self.options = ALL_OPTIONS
         self.window_options = ALL_WINDOW_OPTIONS
+
+        #: Which pane a desktop notification came from. The terminal of
+        #: the user answers a notification by its identifier, and every
+        #: pane names its own without knowing about the others.
+        self.notifications = NotificationRoutes()
 
         # When no panes are available.
         self.original_cwd = os.getcwd()
@@ -658,6 +664,11 @@ class Pymux:
         try:
             if code == "52" and not self.enable_clipboard:
                 return
+
+            if code == "99":
+                # Give the notification an identifier that names this
+                # pane, so that the answer finds its way back.
+                param = self.notifications.outgoing(pane.pane_id, param)
 
             sequence = build_osc(code, param)
             if sequence is None:

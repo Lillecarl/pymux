@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 from asyncio import create_task
 from typing import (
     TYPE_CHECKING,
@@ -29,6 +30,12 @@ if TYPE_CHECKING:
     from pymux.main import ClientState, Pymux
 
 __all__ = ["ServerConnection"]
+
+# An OSC reply of the outer terminal: the code, and everything between
+# the code and the terminator.
+_OSC_REPLY_RE = re.compile(
+    r"^(?:\x1b\]|\x9d)(\d+);(.*?)(?:\x1b\\|\x9c|\x07)$", re.DOTALL
+)
 
 
 class ServerConnection:
@@ -142,7 +149,17 @@ class ServerConnection:
         the keyboard flags query and of the graphics query say which
         protocols the terminal speaks. The device attributes reply comes
         last and closes the detection.
+
+        An answer to a desktop notification is not part of that. It can
+        arrive at any time, long after the detection, and it belongs to
+        one pane.
         """
+        osc = _OSC_REPLY_RE.match(data)
+        if osc is not None:
+            if osc.group(1) == "99":
+                self._route_notification(osc.group(2))
+            return
+
         if not self._kitty_detection_pending:
             return
 
@@ -180,6 +197,28 @@ class ServerConnection:
                 "data": {"flags": self.pymux.get_focused_kitty_flags()},
             }
         )
+
+    def _route_notification(self, param: str) -> None:
+        """
+        Give the answer to a desktop notification to the pane that
+        asked for it, under the identifier that the pane chose.
+
+        An answer that names no notification of a pane is dropped. It
+        must not reach a pane as key presses.
+        """
+        routed = self.pymux.notifications.incoming(param)
+        if routed is None:
+            return
+
+        pane_id, param = routed
+        pane = self.pymux.panes_by_id.get(pane_id)
+        if pane is None:
+            return  # The pane is gone.
+
+        try:
+            pane.process.write_input("\x1b]99;%s\x1b\\" % param)
+        except Exception:
+            logger.exception("Giving a notification answer to a pane failed.")
 
     async def _start_reading(self) -> None:
         while True:
