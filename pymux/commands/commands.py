@@ -1074,6 +1074,38 @@ def kill_server(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.stop()
 
 
+@cmd(
+    "display-popup",
+    options="[-E] [(-w <width>)] [(-h <height>)] [(-T <title>)] [<executable>]",
+)
+def display_popup(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Open an overlay pane in the middle of the screen.
+
+    It runs the given program, or the default shell, and closes itself
+    when that finishes. `-w` and `-h` take a number of cells or a share
+    of the screen, like "80" or "60%". `-T` names the title bar.
+
+    A session has one overlay at a time, so a second call replaces the
+    first. `-E` is accepted for the tmux command line and changes
+    nothing: an overlay of pymux always closes when its program ends.
+    """
+    pymux.display_overlay(
+        command=variables["<executable>"],
+        width=variables["<width>"],
+        height=variables["<height>"],
+        title=variables["<title>"],
+    )
+
+
+@cmd("close-popup")
+def close_popup(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Close the overlay pane, and kill what runs in it.
+    """
+    pymux.close_overlay()
+
+
 @cmd("capture-pane", options="[-p] [(-t <target-pane>)] [(-S <start>)] [(-E <end>)]")
 def capture_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     """

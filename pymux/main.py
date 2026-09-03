@@ -8,7 +8,7 @@ import threading
 import time
 import traceback
 import weakref
-from typing import Optional
+from typing import Callable, Optional
 
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app, set_app
@@ -85,6 +85,7 @@ class ClientState:
 
         # Popup.
         self.display_popup = False
+
 
         # Input buffers.
         self.command_buffer = Buffer(
@@ -284,6 +285,11 @@ class ClientState:
         if self.command_mode:
             return  # Focus command
 
+        # An overlay pane takes the keyboard while it is open.
+        if self.pymux.overlay_pane is not None:
+            self.app.layout.focus(self.pymux.overlay_pane.terminal)
+            return
+
         # No windows left, return. We will quit soon.
         if not self.pymux.arrangement.windows:
             return
@@ -407,6 +413,15 @@ class Pymux:
 
         self.arrangement = Arrangement()
 
+        # The overlay pane: a pane that floats in the middle of the
+        # screen over the layout, like the popup of tmux. It belongs to
+        # the session, so every client sees the same one, and it takes
+        # the keyboard while it is open.
+        self.overlay_pane = None
+        self.overlay_title = ""
+        self.overlay_width = None
+        self.overlay_height = None
+
         self.style = ui_style
 
     def _start_auto_refresh_thread(self):
@@ -514,6 +529,7 @@ class Pymux:
         window: Optional[Window] = None,
         command: Optional[str] = None,
         start_directory: Optional[str] = None,
+        on_done: Optional[Callable[[], None]] = None,
     ):
         """
         Create a new :class:`pymux.arrangement.Pane` instance. (Don't put it in
@@ -527,6 +543,9 @@ class Pymux:
 
         def done_callback():
             "When the process finishes."
+            if on_done is not None:
+                on_done()
+
             if not self.remain_on_exit:
                 # Remove pane from layout.
                 self.arrangement.remove_pane(pane)
@@ -635,6 +654,78 @@ class Pymux:
 
         return pane
 
+    def display_overlay(
+        self,
+        command: Optional[str] = None,
+        width: Optional[str] = None,
+        height: Optional[str] = None,
+        title: Optional[str] = None,
+    ):
+        """
+        Open an overlay pane in the middle of the screen.
+
+        It runs `command`, or the default shell, and closes itself when
+        that finishes. It takes the keyboard while it is open.
+
+        The overlay belongs to the session, like a window does, so
+        every client sees the same one and a second call replaces the
+        first. That also means a command from the command line reaches
+        it: the temporary client that runs such a command is gone
+        before the next render.
+        """
+        self.close_overlay()
+
+        pane: Optional["arrangement.Pane"] = None
+
+        def done() -> None:
+            "The program of the overlay finished, so the overlay goes."
+            if self.overlay_pane is pane:
+                self.overlay_pane = None
+                self._sync_focus_everywhere()
+
+        try:
+            window = self.arrangement.get_active_window()
+        except Exception:
+            window = None
+
+        pane = self._create_pane(window=window, command=command, on_done=done)
+
+        self.overlay_pane = pane
+        self.overlay_title = title or command or "overlay"
+        self.overlay_width = width
+        self.overlay_height = height
+        self._sync_focus_everywhere()
+        self.invalidate()
+
+        return pane
+
+    def close_overlay(self) -> None:
+        """
+        Close the overlay pane, and kill what runs in it.
+        """
+        pane = self.overlay_pane
+        if pane is None:
+            return
+
+        self.overlay_pane = None
+
+        process = getattr(pane, "process", None)
+        if process is not None and not process.is_terminated:
+            process.kill()
+
+        self._sync_focus_everywhere()
+        self.invalidate()
+
+    def _sync_focus_everywhere(self) -> None:
+        "Give every client the focus that its state asks for."
+        for client_state in list(self._client_states.values()):
+            try:
+                with set_app(client_state.app):
+                    client_state.sync_focus()
+            except Exception:
+                # An application that never ran has no layout to focus.
+                logger.exception("Could not sync the focus of a client.")
+
     def invalidate(self):
         "Invalidate the UI for all clients."
         logger.info("Invalidating %s applications", len(self.apps))
@@ -646,6 +737,25 @@ class Pymux:
         # can have pushed/popped kitty keyboard protocol flags.
         self.sync_kitty_flags()
 
+    def get_focused_pane(self):
+        """
+        The pane that the keyboard of the active client reaches.
+
+        An overlay pane takes the keyboard while it is open, so it is
+        not always the active pane of the arrangement.
+
+        Never raises: this runs on the invalidate path, also for
+        headless servers without a running prompt_toolkit application.
+        """
+        if self.overlay_pane is not None:
+            return self.overlay_pane
+
+        try:
+            return self.arrangement.get_active_pane()
+        except Exception:
+            # `get_active_window` needs a running application.
+            return None
+
     def get_focused_kitty_flags(self) -> int:
         """
         The kitty keyboard protocol flags requested by the process in
@@ -655,11 +765,7 @@ class Pymux:
         Never raises: this runs on the invalidate path, also for
         headless servers without a running prompt_toolkit application.
         """
-        try:
-            pane = self.arrangement.get_active_pane()
-        except Exception:
-            # `get_active_window` needs a running application.
-            return 0
+        pane = self.get_focused_pane()
         if pane is None:
             return 0
         screen = getattr(pane.process, "screen", None)
@@ -707,6 +813,9 @@ class Pymux:
 
     def _has_focus(self, client_state, pane) -> bool:
         "True when this client looks at this pane."
+        if self.overlay_pane is not None:
+            return self.overlay_pane is pane
+
         try:
             with set_app(client_state.app):
                 window = self.arrangement.get_active_window()

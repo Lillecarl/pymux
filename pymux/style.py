@@ -54,6 +54,10 @@ ui_style = Style.from_dict(
         #    'search-toolbar.text focused':         'bold #000000',
         "search-match": "#000000 bg:#88aa88",
         "search-match.current": "#000000 bg:#aaffaa underline",
+        # The overlay pane, which floats over the layout.
+        "overlay": "bg:#1c1c1c",
+        "overlay.titlebar": "bg:#5f5f87 #ffffff",
+        "overlay.title": "bold",
         # Pop-up dialog. Ignore built-in style.
         "dialog": "noinherit",
         "dialog.body": "noinherit",

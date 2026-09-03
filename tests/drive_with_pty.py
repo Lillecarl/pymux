@@ -107,6 +107,22 @@ while True:
 """ % (KITTY_IMAGE, SIXEL_IMAGE, PANE_OSC)
 
 
+#: The program of an overlay pane: it names itself, echoes what it
+#: reads and waits.
+OVERLAY_CHILD = """
+import sys, tty
+tty.setraw(0)
+sys.stdout.write("OVERLAYMARK")
+sys.stdout.flush()
+while True:
+    data = sys.stdin.buffer.read1(256)
+    if not data:
+        break
+    sys.stdout.write("\\r\\n[[%s]]" % data.decode("utf-8", "replace"))
+    sys.stdout.flush()
+"""
+
+
 class Failed(AssertionError):
     pass
 
@@ -508,6 +524,71 @@ def check_a_closing_split(tmp):
     print("closing split: ok")
 
 
+def check_an_overlay_pane(tmp):
+    """
+    An overlay pane floats over the layout and takes the keyboard.
+
+    It opens in the middle of the screen, the program in it writes
+    there, and the overlay goes away when that program ends.
+    """
+    terminal = Terminal(tmp, "kitty")
+    try:
+        terminal.wait_for_the_queries()
+        terminal.write(b"\x1b[?1u")
+        terminal.write(b"\x1b_Gi=31;OK\x1b\\")
+        terminal.write(b"\x1b[6;20;10t")
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"READY")
+
+        # An overlay that prints a mark, echoes what it reads and
+        # waits. The command of a pane is split on whitespace, so it
+        # goes into a file of its own.
+        child = tmp / "overlay-child.py"
+        child.write_text(OVERLAY_CHILD)
+        opened = run_cli(
+            terminal.sock_path,
+            ["display-popup", "-T", "the title", "%s %s" % (sys.executable, child)],
+        )
+        assert opened.returncode == 0, opened.stderr
+
+        terminal.wait_for(b"OVERLAYMARK")
+        tail = terminal.since(0)
+        assert b"the title" in tail, "the overlay drew no title bar"
+
+        # The keyboard reaches the overlay, not the pane behind it.
+        # One read of the overlay returns whatever has arrived, so the
+        # letters come back one block at a time.
+        mark = terminal.mark()
+        terminal.write(b"OVER")
+        terminal.wait_for(b"[[R]]")
+        typed = terminal.since(mark)
+        for letter in b"OVER":
+            assert b"[[%c]]" % letter in typed, "the overlay missed a key"
+        assert b"<<" not in typed, "the pane behind the overlay received the keys"
+
+        # Closing it takes the program with it.
+        closed = run_cli(terminal.sock_path, ["close-popup"])
+        assert closed.returncode == 0, closed.stderr
+        terminal.drain(1.5)
+
+        quiet = terminal.mark()
+        terminal.drain(2.0)
+        after = terminal.since(quiet)
+        assert (
+            b"\x1b[?1049l" not in after
+        ), "the client left the alternate screen after the overlay closed"
+        assert len(after) < 200000, (
+            "the client repainted without end after the overlay closed: %i bytes"
+            % len(after)
+        )
+    except BaseException:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+    print("overlay pane: ok")
+
+
 def main() -> None:
     # The server inherits this, and a pane must not: it names the
     # terminal that started the server, which is not what a pane is.
@@ -522,6 +603,7 @@ def main() -> None:
     check_colorterm_terminal(tmp)
     check_plain_terminal(tmp)
     check_a_closing_split(tmp)
+    check_an_overlay_pane(tmp)
     print("All pty checks passed.")
 
 

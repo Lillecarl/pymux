@@ -13,6 +13,7 @@ from prompt_toolkit.formatted_text import HTML, FormattedText, StyleAndTextTuple
 from prompt_toolkit.layout.containers import (
     ConditionalContainer,
     Container,
+    DynamicContainer,
     Float,
     FloatContainer,
     HSplit,
@@ -67,6 +68,36 @@ class Z_INDEX:
     MESSAGE_TOOLBAR = 7
     WINDOW_TITLE_BAR = 8
     POPUP = 9
+    OVERLAY = 10
+
+
+#: How much of the screen an overlay pane takes when nobody says.
+DEFAULT_OVERLAY_SIZE = "60%"
+
+#: The smallest overlay that still shows something.
+MIN_OVERLAY_SIZE = 3
+
+
+def overlay_size(given: Optional[str], available: int) -> int:
+    """
+    How many cells an overlay pane takes along one axis.
+
+    A plain number is a number of cells. A number with a percent sign
+    is a share of the screen, which is what `display-popup -w 60%`
+    gives. Anything that is not a number falls back to the default.
+    The answer never passes the screen.
+    """
+    text = (given or DEFAULT_OVERLAY_SIZE).strip()
+
+    try:
+        if text.endswith("%"):
+            cells = available * int(text[:-1]) // 100
+        else:
+            cells = int(text)
+    except ValueError:
+        cells = available * int(DEFAULT_OVERLAY_SIZE[:-1]) // 100
+
+    return max(MIN_OVERLAY_SIZE, min(cells, available))
 
 
 class Background(Container):
@@ -407,6 +438,9 @@ class LayoutManager:
             ),
         )
 
+        # The container of the overlay pane, and the pane it belongs to.
+        self._overlay_for_pane: Optional[Tuple[arrangement.Pane, Container]] = None
+
         self.layout = self._create_layout()
 
         # Keep track of render information.
@@ -486,6 +520,40 @@ class LayoutManager:
 
     def _before_prompt_command_tokens(self) -> StyleAndTextTuples:
         return [("class:commandline.prompt", "%s " % (self.client_state.prompt_text,))]
+
+    def _overlay_container(self) -> Container:
+        """
+        The overlay pane of this client, with a title bar above it.
+
+        The container is built again when the pane changes, and kept
+        while it stays, so that the terminal keeps its state.
+        """
+        pane = self.pymux.overlay_pane
+
+        if pane is None:
+            return Window()
+
+        if self._overlay_for_pane is not None and self._overlay_for_pane[0] is pane:
+            return self._overlay_for_pane[1]
+
+        def get_title() -> StyleAndTextTuples:
+            return [("class:overlay.title", " %s " % self.pymux.overlay_title)]
+
+        container = HSplit(
+            [
+                Window(
+                    height=1,
+                    align=WindowAlign.CENTER,
+                    content=FormattedTextControl(get_title),
+                    style="class:overlay.titlebar",
+                ),
+                TracePaneWritePosition(self.pymux, pane, content=pane.terminal),
+            ],
+            style="class:overlay",
+        )
+
+        self._overlay_for_pane = (pane, container)
+        return container
 
     def _create_layout(self) -> Container:
         """
@@ -635,6 +703,25 @@ class LayoutManager:
                 ),
                 Float(
                     xcursor=True, ycursor=True, content=CompletionsMenu(max_height=12)
+                ),
+                # The overlay pane, in the middle of the screen. A
+                # `Float` with no side given is centred.
+                Float(
+                    content=ConditionalContainer(
+                        content=DynamicContainer(self._overlay_container),
+                        filter=Condition(
+                            lambda: self.pymux.overlay_pane is not None
+                        ),
+                    ),
+                    width=lambda: overlay_size(
+                        self.pymux.overlay_width,
+                        self.pymux.get_window_size().columns,
+                    ),
+                    height=lambda: overlay_size(
+                        self.pymux.overlay_height,
+                        self.pymux.get_window_size().rows,
+                    ),
+                    z_index=Z_INDEX.OVERLAY,
                 ),
             ],
         )

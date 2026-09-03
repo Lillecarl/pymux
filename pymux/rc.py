@@ -37,6 +37,11 @@ bind-key M-Down resize-pane -D 5
 bind-key M-Left resize-pane -L 5
 bind-key M-Right resize-pane -R 5
 
+# An overlay pane in the middle of the screen. "g" opens one with the
+# default shell, and Escape closes it. (tmux binds neither.)
+bind-key g display-popup
+bind-key Escape close-popup
+
 bind-key : command-prompt
 bind-key 0 select-window -t :0
 bind-key 1 select-window -t :1
