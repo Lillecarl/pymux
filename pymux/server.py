@@ -19,6 +19,7 @@ from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
+from .colors import ColorDetection
 from .graphics import ClientGraphics
 from .kitty import KittyVt100Parser
 from .log import logger
@@ -60,6 +61,11 @@ class ServerConnection:
             self._write_output_raw, self._flush_output, self._request_repaint
         )
 
+        # Colour depth of the outer terminal. The same handshake
+        # answers it: the probe reply arrives before the device
+        # attributes reply that closes the detection.
+        self.colors = ColorDetection()
+
         # The client input is parsed by the application that reads from
         # the pipe input (see `_ClientInput`). Give that input a parser
         # that also understands the kitty keyboard protocol, and route
@@ -78,6 +84,22 @@ class ServerConnection:
     def _flush_output(self) -> None:
         if self.client_state is not None:
             self.client_state.output.flush()
+
+    def _apply_color_depth(self) -> None:
+        """
+        Render with the colour depth that the detection settled on.
+
+        The first frames use the fallback from TERM and COLORTERM; the
+        probe can raise it. A change needs a full repaint, because the
+        colours already on the screen were written with the old depth.
+        """
+        if self.client_state is None:
+            return
+        depth = self.colors.depth
+        if depth == self.client_state.color_depth:
+            return
+        self.client_state.color_depth = depth
+        self._request_repaint()
 
     def _request_repaint(self) -> None:
         """
@@ -115,8 +137,10 @@ class ServerConnection:
             return
 
         # The graphics query reply, the cell size report and the device
-        # attributes all say something about the images.
+        # attributes all say something about the images. The reply of
+        # the colour probe says how many colours the terminal takes.
         self.graphics.handle_reply(data)
+        self.colors.handle_reply(data)
 
         if not data.endswith("c"):
             return
@@ -124,6 +148,7 @@ class ServerConnection:
         # Device attributes reply: the fence of the detection. What did
         # not answer by now is not supported.
         self._kitty_detection_pending = False
+        self._apply_color_depth()
         self._send_packet(
             {
                 "cmd": "kitty-keyboard",
@@ -201,15 +226,21 @@ class ServerConnection:
         # Start GUI. (Create CommandLineInterface front-end for pymux.)
         elif packet["cmd"] == "start-gui":
             detach_other_clients = bool(packet["detach-others"])
-            color_depth = ColorDepth(packet["color-depth"])
+            forced = packet["color-depth"]
             term = packet["term"]
+
+            # The colour depth of the outer terminal. A flag of the
+            # client forces one; otherwise the environment gives the
+            # first answer and the probe can raise it later.
+            self.colors.forced = ColorDepth(forced) if forced else None
+            self.colors.term = term
+            self.colors.colorterm = packet.get("colorterm", "")
 
             if detach_other_clients:
                 for c in self.pymux.connections:
                     c.detach_and_close()
 
-            print("Create app...")
-            self._create_app(color_depth=color_depth, term=term)
+            self._create_app(color_depth=self.colors.depth, term=term)
 
     def _send_packet(self, data: object) -> None:
         """

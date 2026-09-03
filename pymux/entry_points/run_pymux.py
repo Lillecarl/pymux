@@ -192,13 +192,14 @@ def run() -> None:
     if socket_name and "," in socket_name:
         socket_name, pane_id = socket_name.rsplit(",", 1)
 
-    # Color depth.
+    # Color depth. Without a flag the client asks its terminal and
+    # falls back through COLORTERM and TERM. (See `pymux.colors`.)
     if ansi_colors_only:
         color_depth = ColorDepth.DEPTH_4_BIT
     elif true_color:
         color_depth = ColorDepth.DEPTH_24_BIT
     else:
-        color_depth = ColorDepth.DEPTH_8_BIT
+        color_depth = None
 
     # Expand socket name. (Make it possible to just accept numbers.)
     if socket_name and socket_name.isdigit():
@@ -236,7 +237,9 @@ def run() -> None:
         # When a command was given (e.g. 'pymux standalone htop'), run it in
         # the first pane.
         mux = Pymux(source_file=filename, startup_command=command)
-        mux.run_standalone(color_depth=color_depth)
+        mux.run_standalone(
+            color_depth=color_depth or ColorDepth.DEPTH_8_BIT
+        )
 
     elif mode in ("list-sessions", "ls"):
         if socket_name:

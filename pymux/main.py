@@ -202,7 +202,9 @@ class ClientState:
         app = Application(
             output=self.output,
             input=self.input,
-            color_depth=self.color_depth,
+            # Read on every render: the detection of the outer
+            # terminal can raise the depth after the app started.
+            color_depth=lambda: self.color_depth,
             layout=Layout(container=self.layout_manager.layout),
             key_bindings=pymux.key_bindings_manager.key_bindings,
             mouse_support=Condition(lambda: pymux.enable_mouse_support),

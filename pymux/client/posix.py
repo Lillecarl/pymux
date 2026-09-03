@@ -10,9 +10,9 @@ from select import select
 
 from prompt_toolkit.input.posix_utils import PosixStdinReader
 from prompt_toolkit.input.vt100 import cooked_mode, raw_mode
-from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output, _get_size
 
+from pymux.colors import TRUECOLOR_PROBE
 from pymux.graphics import CELL_SIZE_QUERY
 from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
 from pymux.utils import nonblocking
@@ -97,9 +97,7 @@ class PosixClient(Client):
 
         return exit_code
 
-    def attach(
-        self, detach_other_clients: bool = False, color_depth=ColorDepth.DEPTH_8_BIT
-    ):
+    def attach(self, detach_other_clients: bool = False, color_depth=None):
         """
         Attach client user interface.
         """
@@ -110,21 +108,23 @@ class PosixClient(Client):
                 "detach-others": detach_other_clients,
                 "color-depth": color_depth,
                 "term": os.environ.get("TERM", ""),
+                "colorterm": os.environ.get("COLORTERM", ""),
                 "data": "",
             }
         )
 
         # Ask the outer terminal what it supports. The replies arrive
         # as input and are interpreted by the server: keyboard flags,
-        # the kitty graphics protocol, the cell size, and last the
-        # device attributes, which also say whether sixel works. Every
-        # terminal answers the device attributes query, so a feature
-        # that did not answer before it is not supported.
+        # the kitty graphics protocol, the cell size, the colour depth,
+        # and last the device attributes, which also say whether sixel
+        # works. Every terminal answers the device attributes query, so
+        # a feature that did not answer before it is not supported.
         os.write(
             sys.stdout.fileno(),
             b"\x1b[?u"
             + GRAPHICS_QUERY.encode("ascii")
             + CELL_SIZE_QUERY.encode("ascii")
+            + TRUECOLOR_PROBE.encode("ascii")
             + b"\x1b[c",
         )
         self._send_packet({"cmd": "kitty-detect"})

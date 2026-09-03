@@ -14,7 +14,7 @@ class Client(ABC):
         """
         return 0
 
-    def attach(self, detach_other_clients=False, color_depth=ColorDepth.DEPTH_8_BIT):
+    def attach(self, detach_other_clients=False, color_depth=None):
         """
         Attach client user interface.
         """
