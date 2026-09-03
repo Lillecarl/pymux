@@ -192,7 +192,7 @@ def test_reply_split_over_chunks():
 
 
 # ----------------------------------------------------------------------
-# APC string sequences. (The graphics protocol query reply.)
+# String sequences and window reports. (The query replies.)
 
 
 def test_apc_reply_is_reported():
@@ -242,3 +242,46 @@ def test_unterminated_apc_does_not_swallow_input_forever():
     pressed = parse("\x1b_Gi=31;OK")
     assert pressed  # Decomposed, not swallowed.
     assert parse("\x1b_" + "x" * 2000 + "\x1b\\a")[-1] == ("a", "a")
+
+
+def test_dcs_reply_is_reported():
+    replies = []
+    pressed = []
+    parser = KittyVt100Parser(
+        lambda key_press: pressed.append(key_press),
+        reply_callback=replies.append,
+    )
+    # The reply of a DECRQSS colour request.
+    parser.feed_and_flush("\x1bP1$r38;2;1;2;3m\x1b\\")
+    assert pressed == []
+    assert replies == ["\x1bP1$r38;2;1;2;3m\x1b\\"]
+
+
+def test_dcs_reply_split_over_chunks():
+    replies = []
+    parser = KittyVt100Parser(lambda kp: None, reply_callback=replies.append)
+    parser.feed("\x1bP0$r")
+    parser.feed("m\x1b")
+    parser.feed("\\")
+    parser.flush()
+    assert replies == ["\x1bP0$rm\x1b\\"]
+
+
+def test_cell_size_reply_is_reported():
+    replies = []
+    pressed = []
+    parser = KittyVt100Parser(
+        lambda key_press: pressed.append(key_press),
+        reply_callback=replies.append,
+    )
+    parser.feed_and_flush("\x1b[6;20;10t")
+    assert pressed == []
+    assert replies == ["\x1b[6;20;10t"]
+
+
+def test_keys_after_a_dcs_reply_still_arrive():
+    assert parse("\x1bP1$rm\x1b\\b") == [("b", "b")]
+
+
+def test_an_unterminated_dcs_does_not_swallow_input_forever():
+    assert parse("\x1bP" + "y" * 2000 + "\x1b\\b")[-1] == ("b", "b")

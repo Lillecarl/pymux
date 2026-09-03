@@ -14,9 +14,11 @@ The parser below extends prompt_toolkit's `Vt100Parser`. Sequences that
 have no prompt_toolkit representation (key release events, lock keys)
 are consumed silently.
 
-The parser also swallows APC string sequences (`ESC _ ... ST`). The
-outer terminal answers the graphics protocol query with one. Without
-this the reply would arrive as a burst of key presses.
+The parser also swallows the string sequences that carry the replies of
+the terminal queries: APC (`ESC _ ... ST`) for the graphics protocol,
+DCS (`ESC P ... ST`) for the colour depth probe, and the `CSI ... t`
+window report for the cell size. Without this the replies would arrive
+as bursts of key presses.
 """
 import re
 from typing import Optional, Union
@@ -60,15 +62,16 @@ _KITTY_KEY_RE = re.compile(
 # CSI sequence with variable parameters).
 _KITTY_PREFIX_RE = re.compile(r"^\x1b\[[0-9;:<=>?]*$")
 
-# An APC string sequence and any prefix of one. The payload never
-# contains the escape character, so the terminator is unambiguous.
-# (Both the two-character ST and the 8-bit ST are accepted.)
-_APC_RE = re.compile(r"^\x1b_[^\x1b\x9c]*(?:\x1b\\|\x9c)\Z")
-_APC_PREFIX_RE = re.compile(r"^\x1b_[^\x1b\x9c]*\x1b?\Z")
+# An APC or DCS string sequence and any prefix of one. The payload
+# never contains the escape character, so the terminator is
+# unambiguous. (Both the two-character ST and the 8-bit ST are
+# accepted.)
+_STRING_RE = re.compile(r"^\x1b[_P][^\x1b\x9c]*(?:\x1b\\|\x9c)\Z")
+_STRING_PREFIX_RE = re.compile(r"^\x1b[_P][^\x1b\x9c]*\x1b?\Z")
 
-# An unterminated APC sequence must not swallow the input forever. The
-# replies that we expect are a few dozen characters long.
-MAX_APC_LENGTH = 1024
+# An unterminated string sequence must not swallow the input forever.
+# The replies that we expect are a few dozen characters long.
+MAX_STRING_LENGTH = 1024
 
 # ctrl+<char> legacy control codes. (ctrl+[ is the escape character; it
 # is not in this table.)
@@ -158,10 +161,14 @@ _DROP = object()
 _FLAGS_REPLY = object()
 _DA1_REPLY = object()
 
-# Sentinel for a complete APC string sequence. The kitty graphics
-# protocol answers queries with one; it is reported like the other
-# replies.
-_APC_REPLY = object()
+# Sentinel for a complete APC or DCS string sequence. The kitty
+# graphics protocol and the colour depth probe answer with one; they
+# are reported like the other replies.
+_STRING_REPLY = object()
+
+# Sentinel for the "CSI 6 ; height ; width t" reply of the cell size
+# query.
+_CELL_SIZE_REPLY = object()
 
 _KeyResult = Union[str, Keys, tuple, object]
 
@@ -170,6 +177,9 @@ _FLAGS_REPLY_RE = re.compile(r"^\x1b\[\?(\d+)u$")
 
 # Primary or Secondary device attributes reply.
 _DA1_REPLY_RE = re.compile(r"^\x1b\[\?[\d;]*c$")
+
+# Reply of the "CSI 16 t" cell size query.
+_CELL_SIZE_REPLY_RE = re.compile(r"^\x1b\[6;\d+;\d+t$")
 
 
 def _ctrl_mapping(char: str) -> Optional[Keys]:
@@ -254,8 +264,10 @@ def parse_kitty_key(prefix: str) -> Optional[_KeyResult]:
             return _FLAGS_REPLY
         if _DA1_REPLY_RE.match(prefix):
             return _DA1_REPLY
-        if _APC_RE.match(prefix):
-            return _APC_REPLY
+        if _CELL_SIZE_REPLY_RE.match(prefix):
+            return _CELL_SIZE_REPLY
+        if _STRING_RE.match(prefix):
+            return _STRING_REPLY
         return None
 
     if match.group("event") == str(_EVENT_RELEASE):
@@ -354,8 +366,8 @@ def _patch_prefix_cache() -> None:
             self[prefix] = True
             return True
         if (
-            len(prefix) <= MAX_APC_LENGTH
-            and _APC_PREFIX_RE.match(prefix)
+            len(prefix) <= MAX_STRING_LENGTH
+            and _STRING_PREFIX_RE.match(prefix)
         ):
             # Don't cache: the cache would grow with every payload.
             return True
@@ -375,9 +387,9 @@ class KittyVt100Parser(Vt100Parser):
 
     :param feed_key_callback: Called for every key press.
     :param reply_callback: Called with the raw sequence for terminal
-        replies: keyboard flags query replies, device attributes
-        replies and APC string sequences. Used for protocol support
-        detection.
+        replies: keyboard flags replies, device attributes replies,
+        cell size reports, and APC and DCS string sequences. Used for
+        protocol support detection.
     """
 
     def __init__(self, feed_key_callback, reply_callback=None) -> None:
@@ -397,7 +409,12 @@ class KittyVt100Parser(Vt100Parser):
     ) -> None:
         if key is _DROP:
             return
-        if key in (_FLAGS_REPLY, _DA1_REPLY, _APC_REPLY):
+        if key in (
+            _FLAGS_REPLY,
+            _DA1_REPLY,
+            _STRING_REPLY,
+            _CELL_SIZE_REPLY,
+        ):
             if self.reply_callback is not None:
                 self.reply_callback(insert_text)
             return
