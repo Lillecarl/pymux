@@ -31,6 +31,7 @@ from .arrangement import Arrangement, Pane, Window
 from .commands.commands import call_command_handler, handle_command
 from .commands.completer import create_command_completer
 from .enums import COMMAND, PROMPT
+from .graphics import PaneView
 from .key_bindings import PymuxKeyBindings
 from .layout import Justify, LayoutManager
 from .log import logger
@@ -108,6 +109,54 @@ class ClientState:
             self.layout_manager.reset_write_positions()
 
         self.app.before_render += before_render
+
+        # Draw the images of the panes right after rendering. (The text
+        # is on the screen by then; kitty draws images over it.)
+        def after_render(_):
+            graphics = getattr(self.connection, "graphics", None)
+            if graphics is None or not graphics.supported:
+                return
+            try:
+                graphics.render(self._graphics_views())
+            except Exception:
+                logger.exception("Drawing the pane images failed.")
+
+        self.app.after_render += after_render
+
+    def _graphics_views(self):
+        """
+        One `PaneView` per pane whose images the outer terminal should
+        show.
+
+        A pane in clock mode or copy mode shows something else than its
+        terminal content, and a popup covers the panes. Those show no
+        images. (The list is empty then, so the previous images go
+        away.)
+        """
+        if self.display_popup:
+            return []
+
+        result = []
+        for pane, write_position in self.layout_manager.pane_write_positions.items():
+            if pane.clock_mode or pane.terminal.is_copying:
+                continue
+            graphics = getattr(pane.process.screen, "graphics", None)
+            if graphics is None:
+                continue
+            window = pane.terminal.terminal_window
+            result.append(
+                PaneView(
+                    pane_id=pane.pane_id,
+                    x=write_position.xpos,
+                    y=write_position.ypos,
+                    width=write_position.width,
+                    height=write_position.height,
+                    vertical_scroll=window.vertical_scroll,
+                    horizontal_scroll=window.horizontal_scroll,
+                    graphics=graphics,
+                )
+            )
+        return result
 
     @property
     def command_mode(self):

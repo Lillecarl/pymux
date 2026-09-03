@@ -19,6 +19,7 @@ from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
+from .graphics import ClientGraphics
 from .kitty import KittyVt100Parser
 from .log import logger
 from .pipes import BrokenPipeError
@@ -51,6 +52,14 @@ class ServerConnection:
         self._kitty_detection_pending = False
         self._kitty_supported = False
 
+        # Kitty graphics protocol state of the outer terminal. The same
+        # query answers this one: the reply of the graphics query
+        # arrives before the device attributes reply that closes the
+        # detection.
+        self.graphics = ClientGraphics(
+            self._write_output_raw, self._flush_output
+        )
+
         # The client input is parsed by the application that reads from
         # the pipe input (see `_ClientInput`). Give that input a parser
         # that also understands the kitty keyboard protocol, and route
@@ -61,24 +70,38 @@ class ServerConnection:
 
         create_task(self._start_reading())
 
+    def _write_output_raw(self, data: str) -> None:
+        "Write to the outer terminal, without escaping. (For graphics.)"
+        if self.client_state is not None:
+            self.client_state.output.write_raw(data)
+
+    def _flush_output(self) -> None:
+        if self.client_state is not None:
+            self.client_state.output.flush()
+
     def _handle_kitty_reply(self, data: str) -> None:
         """
-        A terminal reply (keyboard flags or device attributes) arrived
-        from the outer terminal. Use it to conclude the protocol support
-        detection.
+        A terminal reply arrived from the outer terminal. The replies of
+        the keyboard flags query and of the graphics query say which
+        protocols the terminal speaks. The device attributes reply comes
+        last and closes the detection.
         """
         if not self._kitty_detection_pending:
+            return
+
+        if data.startswith("\x1b_"):
+            # APC string sequence: the reply of the graphics query.
+            self.graphics.handle_reply(data)
             return
 
         if data.startswith("\x1b[?") and data.endswith("u"):
             # Reply of the "CSI ? u" query: the terminal supports the
             # keyboard protocol.
             self._kitty_supported = True
-        else:
-            # Device attributes reply arrived without a flags reply: no
-            # protocol support.
-            self._kitty_supported = False
+            return
 
+        # Device attributes reply: the fence of the detection. What did
+        # not answer by now is not supported.
         self._kitty_detection_pending = False
         self._send_packet(
             {
@@ -295,6 +318,12 @@ class ServerConnection:
         # render CLI output for clients that aren't connected anymore.
         if self._closed:
             return
+        # Remove the images that this client put on its terminal.
+        try:
+            self.graphics.reset()
+        except Exception:
+            logger.exception("Removing the graphics of the client failed.")
+
         # Try to exit the application if it's still running.
         if self.client_state is not None:
             try:

@@ -13,6 +13,7 @@ from prompt_toolkit.input.vt100 import cooked_mode, raw_mode
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output, _get_size
 
+from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
 from pymux.utils import nonblocking
 
 from .base import Client
@@ -112,11 +113,15 @@ class PosixClient(Client):
             }
         )
 
-        # Ask the outer terminal whether it supports the kitty keyboard
-        # protocol. The reply arrives as input and is interpreted by the
-        # server. (Query flags first, then device attributes: if only
-        # the device attributes reply comes back, there is no support.)
-        os.write(sys.stdout.fileno(), b"\x1b[?u\x1b[c")
+        # Ask the outer terminal which kitty protocols it supports. The
+        # replies arrive as input and are interpreted by the server.
+        # (Keyboard flags first, then graphics, then device attributes.
+        # Every terminal answers the device attributes query, so a
+        # protocol that did not answer before it is not supported.)
+        os.write(
+            sys.stdout.fileno(),
+            b"\x1b[?u" + GRAPHICS_QUERY.encode("ascii") + b"\x1b[c",
+        )
         self._send_packet({"cmd": "kitty-detect"})
 
         with raw_mode(sys.stdin.fileno()):
