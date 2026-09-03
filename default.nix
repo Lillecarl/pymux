@@ -9,36 +9,45 @@ let
 
   pttermSrc = localSrc ../ptterm;
   pyteSrc = localSrc ../pyte;
+  promptToolkitSrc = localSrc ../prompt-toolkit;
 
   pyte = pkgs.python3Packages.callPackage ./pyte.nix {
     localSrc = pyteSrc;
   };
 
+  prompt-toolkit = pkgs.python3Packages.callPackage ./prompt-toolkit.nix {
+    localSrc = promptToolkitSrc;
+  };
+
   ptterm = pkgs.python3Packages.callPackage ./ptterm.nix {
-    inherit pyte;
+    inherit pyte prompt-toolkit;
     localSrc = pttermSrc;
   };
 
-  package = pkgs.python3Packages.callPackage ./package.nix { inherit ptterm; };
+  package = pkgs.python3Packages.callPackage ./package.nix {
+    inherit ptterm prompt-toolkit;
+  };
 
   # The same two, but always from the pinned commits. A local working
   # copy that is ahead of its pin hides a pin that nobody else can
   # build; `checks.pinned` is what catches that.
   pinnedPyte = pkgs.python3Packages.callPackage ./pyte.nix { };
+  pinnedPromptToolkit = pkgs.python3Packages.callPackage ./prompt-toolkit.nix { };
   pinnedPtterm = pkgs.python3Packages.callPackage ./ptterm.nix {
     pyte = pinnedPyte;
+    prompt-toolkit = pinnedPromptToolkit;
   };
 
-  pythonFor = terminal: emulator: pkgs.python3.withPackages (ps: [
+  pythonFor = terminal: emulator: toolkit: pkgs.python3.withPackages (ps: [
     ps.docopt-ng
-    ps.prompt-toolkit
     ps.pytest
     ps.wcwidth
     terminal
     emulator
+    toolkit
   ]);
 
-  pythonWithTests = pythonFor ptterm pyte;
+  pythonWithTests = pythonFor ptterm pyte prompt-toolkit;
 
   # `PYMUX_TESTS` picks what pytest runs, for instance
   # `PYMUX_TESTS=tests/test_sixel_encoder.py nix-build -A checks.pymux`.
@@ -93,7 +102,8 @@ let
 
     # The same tests against the pinned ptterm and pyte, so that a pin
     # which is behind the local working copy cannot pass unnoticed.
-    pinned = runWith (pythonFor pinnedPtterm pinnedPyte) "pymux-pinned-tests" ''
+    pinned = runWith (pythonFor pinnedPtterm pinnedPyte pinnedPromptToolkit)
+      "pymux-pinned-tests" ''
       python -m pytest $selection -q -p no:cacheprovider
       python tests/drive_with_pty.py
     '';
@@ -121,7 +131,7 @@ let
   shell = pkgs.mkShell {
     packages = [
       (pkgs.python3.withPackages (ps: [
-        ps.prompt-toolkit
+        prompt-toolkit
         pyte
         ps.wcwidth
         ps.docopt-ng
