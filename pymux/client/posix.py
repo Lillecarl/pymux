@@ -136,7 +136,12 @@ class PosixClient(Client):
 
                     if socket_fd in r:
                         # Received packet from server.
-                        data = self.socket.recv(1024)
+                        try:
+                            data = self.socket.recv(1024)
+                        except OSError:
+                            # Connection lost. (E.g. the server process
+                            # died.) Same as end of file.
+                            data = b""
 
                         if data == b"":
                             # End of file. Connection closed.
@@ -163,6 +168,9 @@ class PosixClient(Client):
 
             finally:
                 signal.signal(signal.SIGWINCH, signal.SIG_IGN)
+                # Restore the keyboard mode of the outer terminal, also
+                # when the loop ends through an exception.
+                self._set_kitty_flags(0)
 
     def _process(self, data_buffer):
         """

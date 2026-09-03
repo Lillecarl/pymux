@@ -589,6 +589,15 @@ class Pymux:
             logger.exception("Sending kitty keyboard flags failed.")
 
     def stop(self):
+        # Kill all pane processes first. (The pending `waitpid` calls in
+        # the event loop executor keep the server process alive as long
+        # as the children run. Also, `kill-server` should not leave the
+        # programs inside the panes running.)
+        for pane in list(self.panes_by_id.values()):
+            process = getattr(pane, "process", None)
+            if process is not None and not process.is_terminated:
+                process.kill()
+
         for app in self.apps:
             try:
                 app.exit()

@@ -44,24 +44,19 @@ class ServerConnection:
         self._recv_buffer = b""
         self.client_state: Optional["ClientState"] = None
 
-        def feed_key(key) -> None:
-            if self.client_state is not None:
-                self.client_state.app.key_processor.feed(key)
-                self.client_state.app.key_processor.process_keys()
-
-        # (This parser also decodes the kitty keyboard protocol key
-        # encoding, which prompt_toolkit itself does not understand.)
-        self._inputstream = KittyVt100Parser(
-            feed_key, reply_callback=self._handle_kitty_reply
-        )
-
         # Kitty keyboard protocol support of the outer terminal. The
         # client sends "kitty-detect" right after querying its terminal;
         # the reply of that query passes through this connection.
         self._kitty_detection_pending = False
         self._kitty_supported = False
 
-        self._pipeinput = _ClientInput(self._send_packet)
+        # The client input is parsed by the application that reads from
+        # the pipe input (see `_ClientInput`). Give that input a parser
+        # that also understands the kitty keyboard protocol, and route
+        # terminal replies to `_handle_kitty_reply`.
+        self._pipeinput = _ClientInput(
+            self._send_packet, kitty_reply_callback=self._handle_kitty_reply
+        )
 
         create_task(self._start_reading())
 
@@ -350,13 +345,22 @@ class _ClientInput:
     We only need this for turning the client into raw_mode/cooked_mode.
     """
 
-    def __init__(self, send_packet: Callable) -> None:
+    def __init__(self, send_packet: Callable, kitty_reply_callback=None) -> None:
         self.send_packet = send_packet
         # Keep a reference to the context manager for the whole lifetime of
         # this object. `create_pipe_input()` returns a generator context
         # manager; when it's garbage collected, the pipe is closed.
         self._input_cm = create_pipe_input()
         self._input = self._input_cm.__enter__()
+
+        # Replace the parser of the pipe input with one that also
+        # understands the key encoding of the kitty keyboard protocol,
+        # and routes terminal replies (keyboard flags query, device
+        # attributes) to the given callback.
+        self._input.vt100_parser = KittyVt100Parser(
+            lambda key_press: self._input._buffer.append(key_press),
+            reply_callback=kitty_reply_callback,
+        )
 
     def close(self) -> None:
         "Close the input pipe. (Idempotent.)"
