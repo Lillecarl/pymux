@@ -42,6 +42,9 @@ import sys, tty
 tty.setraw(0)
 # Push the disambiguate flag of the kitty keyboard protocol.
 sys.stdout.write("\\x1b[>1u")
+# Emit a kitty graphics image. The pane terminal must consume it
+# without corrupting the screen content.
+sys.stdout.write("\\x1b_Gf=32,s=10,v=10;AAAAAA\\x1b\\\\")
 sys.stdout.write("READY")
 sys.stdout.flush()
 while True:
@@ -133,6 +136,12 @@ def main() -> None:
 
         # 3. The pane child is running and its output is rendered.
         seen = wait_for(master_fd, b"READY", seen)
+
+        # The graphics sequence the child emitted must not have leaked
+        # into the rendered screen. (The image itself is not displayed
+        # yet, but it must not corrupt the text either.)
+        assert b"f=32" not in seen, "graphics payload leaked to the screen"
+        assert b"AAAAAA" not in seen, "graphics payload leaked to the screen"
 
         # 4. A kitty-encoded key from the outer terminal reaches the
         #    pane (translated to the same encoding for the pane).
