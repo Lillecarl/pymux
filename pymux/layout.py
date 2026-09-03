@@ -102,12 +102,20 @@ class Background(Container):
 
         ypos = write_position.ypos
         xpos = write_position.xpos
+        columns = range(xpos, xpos + write_position.width)
+
+        # The pattern repeats every three rows. Build one row of each of
+        # the three, and copy it. `dict.update` runs in C, which makes a
+        # render of a wide screen about a tenth cheaper.
+        rows = [
+            {x: (dot if (x + phase) % 3 == 0 else default_char) for x in columns}
+            for phase in range(3)
+        ]
+
+        data_buffer = screen.data_buffer
 
         for y in range(ypos, ypos + write_position.height):
-            row = screen.data_buffer[y]
-
-            for x in range(xpos, xpos + write_position.width):
-                row[x] = dot if (x + y) % 3 == 0 else default_char
+            data_buffer[y].update(rows[y % 3])
 
     def get_children(self) -> List[Container]:
         return []
