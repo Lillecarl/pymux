@@ -1,9 +1,9 @@
 """
-End-to-end test for the kitty keyboard protocol over a real pty.
+End-to-end test for the kitty protocols over a real pty.
 
 This test plays the outer terminal. It attaches a pymux client on a
-pty, answers the keyboard protocol detection query like a supporting
-terminal would, and then checks:
+pty, answers the detection queries like a supporting terminal would,
+and then checks:
 
 1. The client enables the flags of the focused pane on the outer
    terminal ("CSI = 1 ; 1 u" — the pane child pushed the disambiguate
@@ -11,10 +11,15 @@ terminal would, and then checks:
 2. A kitty-encoded key from the outer terminal reaches the pane child.
 3. A legacy key is translated for the pane ("\\x01" arrives as
    "CSI 97 ; 5 u").
-4. When the server goes away, the client resets the flags to zero.
+4. The image that the pane child transmits reaches the outer terminal:
+   the raw sequence never lands on the screen as text, the server
+   re-transmits the pixel data under its own image id, and it puts the
+   image at the cell of the pane.
+5. When the server goes away, the client resets the flags to zero.
 
 The pane child is a small script that puts its tty in raw mode, pushes
-the disambiguate flag, and echoes everything it reads as hex.
+the disambiguate flag, transmits a small image and echoes everything it
+reads as hex.
 
 Run with:
 
@@ -22,6 +27,7 @@ Run with:
 """
 import fcntl
 import os
+import re
 import select
 import signal
 import struct
@@ -32,19 +38,27 @@ import termios
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY  # noqa: E402
+
 REPO_ROOT = Path(__file__).parent.parent
 
 # "\x1b[97;5u" — kitty ctrl+a — as the pane child reports it (hex).
 CTRL_A_KITTY_HEX = b"<<1b5b39373b3575>>"
+
+# The image that the pane child transmits: 2x2 pixels, RGB.
+IMAGE_PAYLOAD = "AAECAwQFBgcICQoL"
 
 PANE_CHILD = """
 import sys, tty
 tty.setraw(0)
 # Push the disambiguate flag of the kitty keyboard protocol.
 sys.stdout.write("\\x1b[>1u")
-# Emit a kitty graphics image. The pane terminal must consume it
-# without corrupting the screen content.
-sys.stdout.write("\\x1b_Gf=32,s=10,v=10;AAAAAA\\x1b\\\\")
+# Transmit a kitty graphics image and place it at the cursor. The
+# pane terminal must consume the sequence without corrupting the
+# screen, store the image, and place it.
+sys.stdout.write("\\x1b_Ga=T,f=24,s=2,v=2,i=7,c=3,r=2,C=1;AAECAwQFBgcICQoL\\x1b\\\\")
 sys.stdout.write("READY")
 sys.stdout.flush()
 while True:
@@ -121,13 +135,15 @@ def main() -> None:
 
     seen = b""
     try:
-        # 1. The client queries the outer terminal: flags + device
-        #    attributes.
-        seen = wait_for(master_fd, b"\x1b[?u\x1b[c", seen)
+        # 1. The client queries the outer terminal: keyboard flags,
+        #    graphics support and device attributes.
+        seen = wait_for(master_fd, GRAPHICS_QUERY.encode(), seen)
+        seen = wait_for(master_fd, b"\x1b[c", seen)
 
-        # Reply like a terminal that supports the protocol: flags reply
-        # first, then device attributes.
+        # Reply like a terminal that supports both protocols: flags
+        # reply, graphics reply, then device attributes.
         os.write(master_fd, b"\x1b[?1u")
+        os.write(master_fd, b"\x1b_Gi=31;OK\x1b\\")
         os.write(master_fd, b"\x1b[?62;1;6c")
 
         # 2. The pane pushed disambiguate; after detection the client
@@ -138,10 +154,27 @@ def main() -> None:
         seen = wait_for(master_fd, b"READY", seen)
 
         # The graphics sequence the child emitted must not have leaked
-        # into the rendered screen. (The image itself is not displayed
-        # yet, but it must not corrupt the text either.)
-        assert b"f=32" not in seen, "graphics payload leaked to the screen"
-        assert b"AAAAAA" not in seen, "graphics payload leaked to the screen"
+        # into the rendered screen as text.
+        assert b"a=T" not in seen, "graphics command leaked to the screen"
+        assert (
+            IMAGE_PAYLOAD.encode() not in seen
+        ), "graphics payload leaked to the screen"
+
+        # The server re-transmits the image under its own id and puts
+        # it on the outer terminal.
+        seen = wait_for(master_fd, b"\x1b_Ga=t,i=", seen)
+        seen = wait_for(master_fd, b"a=p,i=", seen)
+        transmit = re.search(rb"\x1b_Ga=t,i=(\d+),t=d,q=2,f=24,s=2,v=2,o=z", seen)
+        assert transmit, "no image transmission on the outer terminal"
+        outer_id = transmit.group(1)
+        put = re.search(
+            rb"\x1b\[(\d+);(\d+)H\x1b_Ga=p,i=" + outer_id + rb",p=1,c=3,r=2,C=1,q=2",
+            seen,
+        )
+        assert put, "no placement on the outer terminal: %r" % seen[-2000:]
+        # The pane starts on the second row (the window titlebar takes
+        # the first one) and the child wrote nothing before the image.
+        assert (int(put.group(1)), int(put.group(2))) == (2, 1)
 
         # 4. A kitty-encoded key from the outer terminal reaches the
         #    pane (translated to the same encoding for the pane).
