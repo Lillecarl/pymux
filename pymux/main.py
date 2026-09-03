@@ -910,7 +910,10 @@ class Pymux:
             connection=None,
         )
 
-        client_state.app.run()
+        # The same as for a client over a socket: an exception in the
+        # event loop is logged, not turned into a prompt that nothing
+        # can answer.
+        client_state.app.run(set_exception_handler=False)
 
     def add_client(self, output, input, color_depth, connection) -> ClientState:
         client_state = ClientState(

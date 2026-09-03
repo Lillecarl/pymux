@@ -442,12 +442,62 @@ def check_plain_terminal(tmp):
     print("plain terminal: ok")
 
 
+def check_a_closing_split(tmp):
+    """
+    A split that closes must not upset the client.
+
+    A task of the server that nobody holds can be collected while it
+    still runs. The loop reports that, and prompt_toolkit answers an
+    exception in the loop by leaving the alternate screen and asking
+    for a key press. Nobody is there to press one, so the answer fails
+    and reports again: the client used to repaint without end.
+
+    This is a smoke check, not a proof: the collection depends on when
+    the garbage collector runs. `tests/test_server_tasks.py` pins the
+    two halves of the fix.
+    """
+    terminal = Terminal(tmp, "kitty")
+    try:
+        terminal.wait_for_the_queries()
+        terminal.write(b"\x1b[?1u")
+        terminal.write(b"\x1b_Gi=31;OK\x1b\\")
+        terminal.write(b"\x1b[6;20;10t")
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"READY")
+
+        # A second pane that ends on its own.
+        split = run_cli(
+            terminal.sock_path, ["split-window", "%s -c pass" % sys.executable]
+        )
+        assert split.returncode == 0, split.stderr
+        terminal.drain(2.0)
+
+        quiet = terminal.mark()
+        terminal.drain(3.0)
+        tail = terminal.since(quiet)
+
+        assert (
+            b"\x1b[?1049l" not in tail
+        ), "the client left the alternate screen after a split closed"
+        assert len(tail) < 200000, (
+            "the client repainted without end after a split closed: %i bytes"
+            % len(tail)
+        )
+    except BaseException:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+    print("closing split: ok")
+
+
 def main() -> None:
     tmp = Path(tempfile.mkdtemp(prefix="pymux-pty-test-"))
     check_kitty_terminal(tmp)
     check_sixel_terminal(tmp)
     check_colorterm_terminal(tmp)
     check_plain_terminal(tmp)
+    check_a_closing_split(tmp)
     print("All pty checks passed.")
 
 

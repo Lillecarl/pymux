@@ -10,6 +10,7 @@ from typing import (
     Dict,
     List,
     Optional,
+    Set,
     TextIO,
     cast,
 )
@@ -51,6 +52,11 @@ class ServerConnection:
         self.size = Size(rows=20, columns=80)
         self._closed = False
 
+        #: The background work of this connection. asyncio holds only a
+        #: weak reference to a task, so one that nobody else holds can
+        #: be collected while it still runs.
+        self._tasks: Set["asyncio.Task"] = set()
+
         self._recv_buffer = b""
         self.client_state: Optional["ClientState"] = None
 
@@ -81,7 +87,23 @@ class ServerConnection:
             self._send_packet, kitty_reply_callback=self._handle_kitty_reply
         )
 
-        create_task(self._start_reading())
+        self._spawn(self._start_reading())
+
+    def _spawn(self, coro) -> None:
+        """
+        Run a coroutine in the background, and hold on to it.
+
+        A task that nobody holds may be collected while it is still
+        pending. The loop then reports that, and prompt_toolkit answers
+        an exception in the loop by leaving the alternate screen and
+        asking the user to press a key. There is no user at that end,
+        so the answer fails and reports again: a lost task used to turn
+        into an endless storm of repaints on the terminal of every
+        client.
+        """
+        task = create_task(coro)
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
 
     def _write_output_raw(self, data: str) -> None:
         "Write to the outer terminal, without escaping. (For graphics.)"
@@ -260,7 +282,7 @@ class ServerConnection:
         if packet["cmd"] == "run-command":
             # Handle this in a task. The command handler can produce output
             # that has to be sent back to the client.
-            create_task(self._run_command(packet))
+            self._spawn(self._run_command(packet))
             return
 
         # Handle stdin.
@@ -312,7 +334,7 @@ class ServerConnection:
             except BrokenPipeError:
                 self.detach_and_close()
 
-        create_task(send())
+        self._spawn(send())
 
     async def _run_command(self, packet: Dict[str, Any]) -> None:
         """
@@ -410,7 +432,13 @@ class ServerConnection:
 
             async def run() -> None:
                 try:
-                    await client_state.app.run_async()
+                    # A server has no terminal of its own to print a
+                    # traceback on, and nobody to press ENTER, which is
+                    # what prompt_toolkit does with an exception in the
+                    # event loop. Let asyncio log it instead.
+                    await client_state.app.run_async(
+                        set_exception_handler=False
+                    )
                 except asyncio.CancelledError:
                     raise
                 except Exception:
@@ -418,7 +446,7 @@ class ServerConnection:
                 finally:
                     self._close_connection()
 
-            create_task(run())
+            self._spawn(run())
 
     def _close_connection(self) -> None:
         # This is important. If we would forget this, the server will
@@ -441,6 +469,13 @@ class ServerConnection:
         self.pymux.remove_client(self)
         self.client_state = None
         self._closed = True
+
+        # Stop the background work of this connection, so that no task
+        # of it is left pending when it is collected.
+        current = asyncio.current_task()
+        for task in list(self._tasks):
+            if task is not current:
+                task.cancel()
 
         # Close input pipe and remove connection from eventloop.
         self._pipeinput.close()
