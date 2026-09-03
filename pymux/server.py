@@ -1,3 +1,4 @@
+import asyncio
 import json
 from asyncio import create_task
 from typing import (
@@ -104,12 +105,13 @@ class ServerConnection:
                 self.detach_and_close()
                 break
 
-            except Exception as e:
-                import traceback
+            except asyncio.CancelledError:
+                raise
 
-                traceback.print_stack()
-                print("got exception ", repr(e))
-                break
+            except Exception:
+                # The read loop must never die silently: log the
+                # exception and keep the connection alive.
+                logger.exception("Exception while processing client packet.")
 
     def _process(self, data) -> None:
         """
@@ -277,8 +279,14 @@ class ServerConnection:
         if start:
 
             async def run() -> None:
-                await client_state.app.run_async()
-                self._close_connection()
+                try:
+                    await client_state.app.run_async()
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    logger.exception("Application crashed.")
+                finally:
+                    self._close_connection()
 
             create_task(run())
 
