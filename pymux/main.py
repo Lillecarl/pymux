@@ -40,6 +40,7 @@ from .notifications import NotificationRoutes
 from .options import ALL_OPTIONS, ALL_WINDOW_OPTIONS
 from .osc import build_osc
 from .pipes import bind_and_listen_on_socket
+from .prompt_toolkit_compat import apply_prompt_toolkit_compat_fixes
 from .ptterm_compat import apply_ptterm_compat_fixes
 from .rc import STARTUP_COMMANDS
 from .server import ServerConnection
@@ -51,6 +52,7 @@ __all__ = [
 ]
 
 apply_ptterm_compat_fixes()
+apply_prompt_toolkit_compat_fixes()
 
 
 class ClientState:
