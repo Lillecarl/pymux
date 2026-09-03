@@ -8,9 +8,10 @@ let
   localSrc = path: if builtins.pathExists path then path else null;
 
   pttermSrc = localSrc ../ptterm;
+  pyteSrc = localSrc ../pyte;
 
   pyte = pkgs.python3Packages.callPackage ./pyte.nix {
-    localSrc = localSrc ../pyte;
+    localSrc = pyteSrc;
   };
 
   ptterm = pkgs.python3Packages.callPackage ./ptterm.nix {
@@ -97,18 +98,23 @@ let
       python tests/drive_with_pty.py
     '';
   }
-  # The tests of the local ptterm working copy, when there is one.
+  # The tests of the local working copies, when there are any.
   // lib.optionalAttrs (pttermSrc != null) {
-    ptterm = pkgs.runCommand "ptterm-tests"
-      { nativeBuildInputs = [ pythonWithTests ]; }
-      ''
-        cp -r ${pttermSrc}/tests .
-        chmod -R +w .
-        export HOME="$TMPDIR"
-        python -m pytest tests -q -p no:cacheprovider
-        touch "$out"
-      '';
+    ptterm = runSuite "ptterm-tests" pttermSrc;
+  }
+  // lib.optionalAttrs (pyteSrc != null) {
+    pyte = runSuite "pyte-tests" pyteSrc;
   };
+
+  # The test suite of a working copy next to this repo.
+  runSuite = name: source:
+    pkgs.runCommand name { nativeBuildInputs = [ pythonWithTests ]; } ''
+      cp -r ${source}/tests .
+      chmod -R +w .
+      export HOME="$TMPDIR"
+      python -m pytest tests -q -p no:cacheprovider
+      touch "$out"
+    '';
 
   # Development shell with the dependencies of `tests/drive_with_libtmux.py`
   # and the linters.
