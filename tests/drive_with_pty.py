@@ -83,12 +83,18 @@ PANE_OSC = OSC_CLIPBOARD + OSC_CLIPBOARD_QUERY + OSC_NOTIFICATION + OSC_POINTER
 # for the kitty keyboard protocol, draws one image, sends the OSC
 # sequences, and then echoes everything it reads as hex.
 PANE_CHILD = """
-import sys, tty
+import os, sys, tty
 tty.setraw(0)
 sys.stdout.write("\\x1b[>1u")
 sys.stdout.write(%r if sys.argv[1] == "kitty" else %r)
 sys.stdout.write(%r)
 sys.stdout.write("READY")
+sys.stdout.write("\\r\\nENV<%%s|%%s|%%s|%%s>" %% (
+    os.environ.get("TERM", ""),
+    os.environ.get("COLORTERM", ""),
+    os.environ.get("KITTY_WINDOW_ID", ""),
+    os.environ.get("TERM_PROGRAM", ""),
+))
 sys.stdout.flush()
 while True:
     data = sys.stdin.buffer.read1(256)
@@ -282,6 +288,11 @@ def check_kitty_terminal(tmp):
 
         # 3. The pane child runs and its output is rendered.
         terminal.wait_for(b"READY")
+
+        #    Its environment describes the pane, not the terminal that
+        #    the client attached from: a pane takes 24 bit colour, and
+        #    it is no kitty window.
+        terminal.wait_for(b"ENV<xterm-256color|truecolor||>")
         assert b"a=T" not in terminal.seen, "graphics command leaked as text"
         assert (
             IMAGE_PAYLOAD.encode() not in terminal.seen
@@ -492,6 +503,13 @@ def check_a_closing_split(tmp):
 
 
 def main() -> None:
+    # The server inherits this, and a pane must not: it names the
+    # terminal that started the server, which is not what a pane is.
+    os.environ["KITTY_WINDOW_ID"] = "1"
+    os.environ["TERM_PROGRAM"] = "kitty"
+    # And a pane takes 24 bit colour whatever this says.
+    os.environ.pop("COLORTERM", None)
+
     tmp = Path(tempfile.mkdtemp(prefix="pymux-pty-test-"))
     check_kitty_terminal(tmp)
     check_sixel_terminal(tmp)

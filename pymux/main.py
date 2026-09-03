@@ -578,6 +578,21 @@ class Pymux:
             # Set terminal variable. (We emulate xterm.)
             os.environ["TERM"] = self.default_terminal
 
+            # A pane takes 24 bit colour, whatever the terminal of the
+            # client takes. ptterm keeps the colour that a program
+            # writes, and every client renders it as deeply as its own
+            # terminal allows.
+            #
+            # Saying so matters. Without it a program falls back to the
+            # 256 colours of TERM and picks the nearest index itself,
+            # which it then writes as that index: a colour of a theme
+            # ends up as the palette entry beside it, and pymux can no
+            # longer tell what the program meant. (A dark background
+            # becomes plain black that way.) The value that a client
+            # happened to start the server with says nothing about the
+            # pane, so it is not inherited either.
+            os.environ["COLORTERM"] = "truecolor"
+
             # Make sure to set the PYMUX environment variable.
             if self.socket_name:
                 os.environ["PYMUX"] = "%s,%i" % (self.socket_name, pane.pane_id)
