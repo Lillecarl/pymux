@@ -57,7 +57,7 @@ class ServerConnection:
         # arrives before the device attributes reply that closes the
         # detection.
         self.graphics = ClientGraphics(
-            self._write_output_raw, self._flush_output
+            self._write_output_raw, self._flush_output, self._request_repaint
         )
 
         # The client input is parsed by the application that reads from
@@ -79,6 +79,25 @@ class ServerConnection:
         if self.client_state is not None:
             self.client_state.output.flush()
 
+    def _request_repaint(self) -> None:
+        """
+        Ask the renderer to paint the whole screen again.
+
+        The sixel output needs this: those pixels sit in the cells, so
+        the text under an image that moved has to be written once more.
+        Dropping the last screen of the renderer makes the next render
+        a full one. (There is no public way to ask for that.)
+        """
+        if self.client_state is None:
+            return
+        app = self.client_state.app
+        try:
+            app.renderer._last_screen = None
+        except Exception:
+            logger.exception("Could not ask for a full repaint.")
+            return
+        app.invalidate()
+
     def _handle_kitty_reply(self, data: str) -> None:
         """
         A terminal reply arrived from the outer terminal. The replies of
@@ -89,15 +108,17 @@ class ServerConnection:
         if not self._kitty_detection_pending:
             return
 
-        if data.startswith("\x1b_"):
-            # APC string sequence: the reply of the graphics query.
-            self.graphics.handle_reply(data)
-            return
-
         if data.startswith("\x1b[?") and data.endswith("u"):
             # Reply of the "CSI ? u" query: the terminal supports the
             # keyboard protocol.
             self._kitty_supported = True
+            return
+
+        # The graphics query reply, the cell size report and the device
+        # attributes all say something about the images.
+        self.graphics.handle_reply(data)
+
+        if not data.endswith("c"):
             return
 
         # Device attributes reply: the fence of the detection. What did

@@ -21,7 +21,7 @@ def make_client():
     "Return (client graphics, list that collects what it writes)."
     written = []
     client = ClientGraphics(written.append, lambda: None)
-    client.supported = True
+    client.kitty_supported = True
     return client, written
 
 
@@ -293,6 +293,7 @@ def test_reset_removes_the_images():
 def test_an_unsupported_terminal_gets_nothing():
     written = []
     client = ClientGraphics(written.append, lambda: None)
+    assert not client.supported
     client.render([view(make_state(placement()))])
     assert written == []
 
@@ -311,19 +312,19 @@ def test_the_batch_saves_and_restores_the_cursor():
 def test_the_query_reply_enables_the_output():
     written = []
     client = ClientGraphics(written.append, lambda: None)
-    assert not client.supported
+    assert not client.kitty_supported
 
     client.handle_reply("\x1b_Gi=1;OK\x1b\\")  # Another image: not ours.
     client.handle_reply("\x1b_Gi=311;OK\x1b\\")  # An id that only looks like it.
     client.handle_reply("\x1b_Gi=31;ENOENT:no such image\x1b\\")
-    assert not client.supported
+    assert not client.kitty_supported
 
     client.handle_reply("\x1b_Gi=31;OK\x1b\\")
-    assert client.supported
+    assert client.kitty_supported
 
 
 def test_the_query_reply_is_recognised_with_extra_keys():
     written = []
     client = ClientGraphics(written.append, lambda: None)
     client.handle_reply("\x1b_GI=2,i=31,p=1;OK\x1b\\")
-    assert client.supported
+    assert client.kitty_supported

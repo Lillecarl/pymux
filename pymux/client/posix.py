@@ -13,6 +13,7 @@ from prompt_toolkit.input.vt100 import cooked_mode, raw_mode
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output, _get_size
 
+from pymux.graphics import CELL_SIZE_QUERY
 from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
 from pymux.utils import nonblocking
 
@@ -113,14 +114,18 @@ class PosixClient(Client):
             }
         )
 
-        # Ask the outer terminal which kitty protocols it supports. The
-        # replies arrive as input and are interpreted by the server.
-        # (Keyboard flags first, then graphics, then device attributes.
-        # Every terminal answers the device attributes query, so a
-        # protocol that did not answer before it is not supported.)
+        # Ask the outer terminal what it supports. The replies arrive
+        # as input and are interpreted by the server: keyboard flags,
+        # the kitty graphics protocol, the cell size, and last the
+        # device attributes, which also say whether sixel works. Every
+        # terminal answers the device attributes query, so a feature
+        # that did not answer before it is not supported.
         os.write(
             sys.stdout.fileno(),
-            b"\x1b[?u" + GRAPHICS_QUERY.encode("ascii") + b"\x1b[c",
+            b"\x1b[?u"
+            + GRAPHICS_QUERY.encode("ascii")
+            + CELL_SIZE_QUERY.encode("ascii")
+            + b"\x1b[c",
         )
         self._send_packet({"cmd": "kitty-detect"})
 

@@ -1,22 +1,24 @@
 """
-Kitty graphics protocol output for the outer terminal of a client.
+Image output for the outer terminal of a client.
 
 The panes store the images that their programs transmit (see
-`ptterm.graphics`), but a pane cannot draw pixels itself. This module
-draws them: after every render it re-emits the images of the visible
-panes to the outer terminal of one client.
+`ptterm.graphics` and `ptterm.sixel`), but a pane cannot draw pixels
+itself. This module draws them: after every render it re-emits the
+images of the visible panes to the outer terminal of one client.
 
-The flow for one image is:
+Terminals differ in what they can draw, so the client picks the best
+way that its terminal offers:
 
-1. The outer terminal is asked once, at attach time, whether it speaks
-   the protocol (`QUERY_SEQUENCE`). Without an answer nothing is drawn.
-2. The image data is transmitted once per client, under an id that this
-   module assigns. The ids of the pane and of the outer terminal are
-   two different namespaces: two panes can use the same id.
-3. Every frame, one placement command per visible image puts it at the
-   cell where the pane holds it. A placement that hangs over the edge of
-   its pane is cropped with the source rectangle keys.
+1. The kitty graphics protocol. The pixel data goes over once per
+   client, under an id that this module assigns, and every frame puts
+   each image at its cell. Images live above the text, so a placement
+   only has to be sent again when it changes.
+2. Sixel. The pixels are the cells, so the image is re-encoded for the
+   cell size of the terminal, and a changed image asks the renderer for
+   a full repaint before it is drawn again.
+3. Neither: nothing is drawn. The cells under an image stay blank.
 
+The outer terminal is asked which of these it speaks at attach time.
 The placements of the previous frame are remembered, so an unchanged
 screen emits nothing.
 """
@@ -27,8 +29,10 @@ import zlib
 from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Tuple
 
 from .log import logger
+from .sixel import encode_sixel, scale_rgba, to_rgba
 
 __all__ = [
+    "CELL_SIZE_QUERY",
     "QUERY_SEQUENCE",
     "ClientGraphics",
     "PaneView",
@@ -43,6 +47,20 @@ QUERY_IMAGE_ID = 31
 # terminal that speaks the protocol answers "ESC _ G i=31;OK ESC \".
 # One that does not answers nothing. (The sequence kitty documents.)
 QUERY_SEQUENCE = "\x1b_Gi=%i,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\" % QUERY_IMAGE_ID
+
+# Ask the outer terminal for the size of one cell in pixels. The reply
+# is "CSI 6 ; height ; width t". Sixel needs it: the pixels of a sixel
+# image are the cells, so the image has to match the cell size.
+CELL_SIZE_QUERY = "\x1b[16t"
+
+# The cell size to assume when the terminal does not report one. It
+# matches the size that `ptterm.graphics` assumes, so an image then
+# keeps the pixel size that the pane gave it.
+DEFAULT_CELL_WIDTH = 10
+DEFAULT_CELL_HEIGHT = 20
+
+# The largest cell that a report is believed to name.
+MAX_CELL_SIZE = 256
 
 # Base64 characters per transmission chunk. The protocol allows at most
 # 4096.
@@ -64,6 +82,13 @@ RESTORE_CURSOR = "\x1b8"
 _QUERY_REPLY_RE = re.compile(
     r"^\x1b_G(?:[^;]*,)?i=%i(?:,[^;]*)?;OK" % QUERY_IMAGE_ID
 )
+
+
+# Reply of the cell size query.
+_CELL_SIZE_REPLY_RE = re.compile(r"^\x1b\[6;(\d+);(\d+)t$")
+
+# Primary device attributes reply. Attribute 4 means sixel.
+_DEVICE_ATTRIBUTES_RE = re.compile(r"^\x1b\[\?([\d;]*)c$")
 
 
 def is_query_reply(data: str) -> bool:
@@ -107,16 +132,30 @@ class ClientGraphics:
 
     :param write_raw: Write a string to the outer terminal, unescaped.
     :param flush: Send what `write_raw` collected.
+    :param repaint: Ask the renderer to paint the whole screen again.
+        The sixel output needs it: those pixels are the cells, so the
+        text under a changed image has to be written once more.
     """
 
     def __init__(
-        self, write_raw: Callable[[str], None], flush: Callable[[], None]
+        self,
+        write_raw: Callable[[str], None],
+        flush: Callable[[], None],
+        repaint: Optional[Callable[[], None]] = None,
     ) -> None:
         self._write_raw = write_raw
         self._flush = flush
+        self._repaint = repaint
 
-        #: True once the outer terminal answered the support query.
-        self.supported = False
+        #: True once the outer terminal answered the graphics query.
+        self.kitty_supported = False
+
+        #: True when the device attributes name sixel.
+        self.sixel_supported = False
+
+        #: Size of one cell of the outer terminal, in pixels.
+        self.cell_width = DEFAULT_CELL_WIDTH
+        self.cell_height = DEFAULT_CELL_HEIGHT
 
         # Image ids of the outer terminal start at a random offset, so
         # that pymux does not overwrite the images of another program
@@ -130,13 +169,40 @@ class ClientGraphics:
         # (outer image id, slot) -> placement of the previous frame.
         self._placements: Dict[Tuple[int, int], _Placement] = {}
 
+        # Sixel state. The encoded images are cached: cropping means
+        # re-encoding, so a scrolling image would otherwise pay for the
+        # whole encoder on every frame.
+        self._sixel_placements: Dict[Tuple[int, int, int], str] = {}
+        self._sixel_cache: Dict[tuple, Tuple[object, str]] = {}
+        self._sixel_redraw = False
+
     # ------------------------------------------------------------------
     # Detection.
 
+    @property
+    def supported(self) -> bool:
+        "True when the outer terminal can draw images at all."
+        return self.kitty_supported or self.sixel_supported
+
     def handle_reply(self, data: str) -> None:
-        "Conclude the support query from a terminal reply."
+        "Read what a terminal reply says about the outer terminal."
         if is_query_reply(data):
-            self.supported = True
+            self.kitty_supported = True
+            return
+
+        match = _CELL_SIZE_REPLY_RE.match(data)
+        if match is not None:
+            height = int(match.group(1))
+            width = int(match.group(2))
+            if 0 < width <= MAX_CELL_SIZE and 0 < height <= MAX_CELL_SIZE:
+                self.cell_width = width
+                self.cell_height = height
+            return
+
+        match = _DEVICE_ATTRIBUTES_RE.match(data)
+        if match is not None:
+            attributes = [p for p in match.group(1).split(";") if p]
+            self.sixel_supported = "4" in attributes
 
     # ------------------------------------------------------------------
     # Frames.
@@ -145,10 +211,17 @@ class ClientGraphics:
         """
         Draw the images of one frame. `views` holds one `PaneView` per
         pane that the client can see.
-        """
-        if not self.supported:
-            return
 
+        The kitty graphics protocol comes first: it draws above the
+        text, so it never fights with the renderer. Sixel is the
+        fallback.
+        """
+        if self.kitty_supported:
+            self._render_kitty(views)
+        elif self.sixel_supported:
+            self._render_sixel(views)
+
+    def _render_kitty(self, views: Iterable[PaneView]) -> None:
         try:
             desired = self._collect(views)
         except Exception:
@@ -376,12 +449,133 @@ class ClientGraphics:
         self._write_raw("\x1b_Ga=d,d=I,i=%i,q=2\x1b\\" % outer_id)
 
     # ------------------------------------------------------------------
+    # Sixel.
+
+    def _render_sixel(self, views: Iterable[PaneView]) -> None:
+        """
+        Draw the images as sixel.
+
+        Sixel pixels are the cells, so the renderer and the images
+        write to the same place. Two rules keep them apart: the images
+        go out after the text of the frame, and a change asks for a
+        full repaint, which puts the text back under the image that
+        moved away.
+        """
+        try:
+            desired, live = self._collect_sixel(views)
+        except Exception:
+            logger.exception("Encoding the pane images failed.")
+            return
+
+        for key in list(self._sixel_cache):
+            if key not in live:
+                del self._sixel_cache[key]
+
+        changed = desired != self._sixel_placements
+        if not changed and not self._sixel_redraw:
+            return
+
+        self._sixel_placements = desired
+        if changed and self._repaint is not None:
+            # The next frame paints the whole screen, which wipes the
+            # pixels. Draw again once it did.
+            self._repaint()
+            self._sixel_redraw = True
+        else:
+            self._sixel_redraw = False
+
+        if not desired:
+            return
+
+        self._write_raw(
+            SAVE_CURSOR
+            + "".join(desired[key] for key in sorted(desired))
+            + RESTORE_CURSOR
+        )
+        self._flush()
+
+    def _collect_sixel(
+        self, views: Iterable[PaneView]
+    ) -> Tuple[Dict[Tuple[int, int, int], str], set]:
+        "The sixel commands of one frame, and the cache keys they used."
+        desired: Dict[Tuple[int, int, int], str] = {}
+        live = set()
+
+        for view in views:
+            slots: Dict[int, int] = {}
+            for (
+                placement,
+                image,
+                columns,
+                rows,
+                x,
+                y,
+                source,
+            ) in self._visible_placements(view):
+                slot = slots.get(placement.image_id, 0) + 1
+                slots[placement.image_id] = slot
+
+                key = (
+                    id(image),
+                    source,
+                    columns * self.cell_width,
+                    rows * self.cell_height,
+                )
+                live.add(key)
+
+                data = self._sixel_for(key, image, source, columns, rows)
+                if data is None:
+                    continue
+                desired[(view.pane_id, placement.image_id, slot)] = (
+                    "\x1b[%i;%iH%s" % (y + 1, x + 1, data)
+                )
+
+        return desired, live
+
+    def _sixel_for(
+        self, key: tuple, image, source, columns: int, rows: int
+    ) -> Optional[str]:
+        "The sixel sequence of one placement. (Cached by geometry.)"
+        known = self._sixel_cache.get(key)
+        if known is not None and known[0] is image:
+            return known[1]
+
+        pixels = to_rgba(image.format, image.width, image.height, image.data)
+        if pixels is None:
+            return None
+
+        width, height = image.width, image.height
+        if source is not None:
+            pixels = _crop_rgba(pixels, width, height, source)
+            if pixels is None:
+                return None
+            width, height = source[2], source[3]
+
+        target_width = max(1, columns * self.cell_width)
+        target_height = max(1, rows * self.cell_height)
+        pixels = scale_rgba(pixels, width, height, target_width, target_height)
+
+        encoded = encode_sixel(target_width, target_height, pixels)
+        if encoded is None:
+            return None
+
+        self._sixel_cache[key] = (image, encoded)
+        return encoded
+
+    # ------------------------------------------------------------------
 
     def reset(self) -> None:
         """
         Remove everything that this client put on the outer terminal.
         (When the client detaches, or when a popup covers the panes.)
         """
+        if self._sixel_placements:
+            self._sixel_placements = {}
+            self._sixel_cache = {}
+            self._sixel_redraw = False
+            if self._repaint is not None:
+                self._repaint()
+
         if not self._images and not self._placements:
             return
         for image, outer_id in self._images.values():
@@ -390,6 +584,23 @@ class ClientGraphics:
         self._placements = {}
         self._transmitted_bytes = 0
         self._flush()
+
+
+def _crop_rgba(
+    pixels: bytes, width: int, height: int, source: Tuple[int, int, int, int]
+) -> Optional[bytes]:
+    "Cut the source rectangle out of RGBA pixels."
+    left, top, crop_width, crop_height = source
+    if left < 0 or top < 0 or crop_width <= 0 or crop_height <= 0:
+        return None
+    if left + crop_width > width or top + crop_height > height:
+        return None
+
+    out = bytearray()
+    for row in range(top, top + crop_height):
+        start = (row * width + left) * 4
+        out += pixels[start : start + crop_width * 4]
+    return bytes(out)
 
 
 def _put_command(
