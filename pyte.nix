@@ -24,8 +24,8 @@ buildPythonPackage {
         repo = "pyte";
         # The APC, DCS and CSI parsing that the kitty protocols need
         # only lives on this fork.
-        rev = "13df028dd7fe2a0de1f47d0bef1ebd04fa37a59b";
-        hash = "sha256-ZqQZD+LGRIJOB6O0tLEfsD7s1g6Ci4RW74V46A/JnQU=";
+        rev = "3a6779f06420056f20415c528f9170ecb3952943";
+        hash = "sha256-DaA00vH0A4jkXWwLEjDMt4vURxfkskx2Rg2QxI4VwWM=";
       };
 
   dependencies = [ wcwidth ];
