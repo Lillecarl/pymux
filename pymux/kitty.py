@@ -137,7 +137,20 @@ _KEYPAD = {
 # producing a key press. (Release events, lock keys, media keys.)
 _DROP = object()
 
+# Sentinels for terminal replies that are not key events: the reply of
+# the "CSI ? u" keyboard flags query, and a Primary/Secondary device
+# attributes reply ("CSI ? ... c"). Both are used to detect whether the
+# outer terminal supports the keyboard protocol.
+_FLAGS_REPLY = object()
+_DA1_REPLY = object()
+
 _KeyResult = Union[str, Keys, tuple, object]
+
+# Reply of the "CSI ? u" flags query.
+_FLAGS_REPLY_RE = re.compile(r"^\x1b\[\?(\d+)u$")
+
+# Primary or Secondary device attributes reply.
+_DA1_REPLY_RE = re.compile(r"^\x1b\[\?[\d;]*c$")
 
 
 def _ctrl_mapping(char: str) -> Optional[Keys]:
@@ -216,6 +229,12 @@ def parse_kitty_key(prefix: str) -> Optional[_KeyResult]:
     """
     match = _KITTY_KEY_RE.match(prefix)
     if match is None:
+        # Terminal replies ("CSI ? <flags> u" and "CSI ? ... c") are not
+        # key events, but they must be consumed and reported.
+        if _FLAGS_REPLY_RE.match(prefix):
+            return _FLAGS_REPLY
+        if _DA1_REPLY_RE.match(prefix):
+            return _DA1_REPLY
         return None
 
     if match.group("event") == str(_EVENT_RELEASE):
@@ -326,7 +345,16 @@ class KittyVt100Parser(Vt100Parser):
     """
     Vt100 parser that also decodes the key encoding of the kitty
     keyboard protocol.
+
+    :param feed_key_callback: Called for every key press.
+    :param reply_callback: Called with the raw sequence for terminal
+        replies (keyboard flags query replies and device attributes
+        replies). Used for protocol support detection.
     """
+
+    def __init__(self, feed_key_callback, reply_callback=None) -> None:
+        self.reply_callback = reply_callback
+        super().__init__(feed_key_callback)
 
     def _get_match(self, prefix: str) -> Optional[Union[Keys, tuple, object]]:
         # prompt_toolkit's own table first: it knows richer variants
@@ -340,5 +368,9 @@ class KittyVt100Parser(Vt100Parser):
         self, key: Union[str, Keys, tuple], insert_text: str
     ) -> None:
         if key is _DROP:
+            return
+        if key in (_FLAGS_REPLY, _DA1_REPLY):
+            if self.reply_callback is not None:
+                self.reply_callback(insert_text)
             return
         super()._call_handler(key, insert_text)

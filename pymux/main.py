@@ -292,6 +292,11 @@ class Pymux:
         #: List of clients.
         self._runs_standalone = False
         self.connections = []
+
+        #: Kitty keyboard protocol flags last sent to the clients. (The
+        #: flags of the focused pane; clients enable the protocol on
+        #: their outer terminals accordingly.)
+        self._kitty_flags_sent = None
         # Event loop for this server. (Python 3.14 doesn't have a global
         # "current event loop" anymore. Keep our own reference.)
         try:
@@ -541,6 +546,47 @@ class Pymux:
 
         for app in self.apps:
             app.invalidate()
+
+        # The focused pane can have changed, or the process inside it
+        # can have pushed/popped kitty keyboard protocol flags.
+        self.sync_kitty_flags()
+
+    def get_focused_kitty_flags(self) -> int:
+        """
+        The kitty keyboard protocol flags requested by the process in
+        the focused pane. (Zero when the process did not request
+        anything or when there is no focused pane.)
+
+        Never raises: this runs on the invalidate path, also for
+        headless servers without a running prompt_toolkit application.
+        """
+        try:
+            pane = self.arrangement.get_active_pane()
+        except Exception:
+            # `get_active_window` needs a running application.
+            return 0
+        if pane is None:
+            return 0
+        screen = getattr(pane.process, "screen", None)
+        return getattr(screen, "kitty_keyboard_flags", 0) or 0
+
+    def sync_kitty_flags(self) -> None:
+        """
+        Send the kitty keyboard protocol flags of the focused pane to
+        all clients, so that they can enable the protocol on their outer
+        terminals. (Only sends when the value changed.)
+        """
+        flags = self.get_focused_kitty_flags()
+        if flags == self._kitty_flags_sent:
+            return
+        self._kitty_flags_sent = flags
+        try:
+            for connection in self.connections:
+                connection._send_packet(
+                    {"cmd": "kitty-keyboard", "data": {"flags": flags}}
+                )
+        except Exception:
+            logger.exception("Sending kitty keyboard flags failed.")
 
     def stop(self):
         for app in self.apps:

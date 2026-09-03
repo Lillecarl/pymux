@@ -137,3 +137,55 @@ def test_sequence_split_over_chunks():
 def test_escape_key_alone_still_works():
     "flush must still turn a lone escape into the Escape key."
     assert parse("\x1b") == [(Keys.Escape, "\x1b")]
+
+
+def test_flags_reply_goes_to_reply_callback():
+    "The reply of a 'CSI ? u' query is not a key press."
+    pressed = []
+    replies = []
+    parser = KittyVt100Parser(
+        lambda key_press: pressed.append(key_press),
+        reply_callback=replies.append,
+    )
+    parser.feed_and_flush("\x1b[?5u")
+    assert pressed == []
+    assert replies == ["\x1b[?5u"]
+
+
+def test_da1_reply_goes_to_reply_callback():
+    pressed = []
+    replies = []
+    parser = KittyVt100Parser(
+        lambda key_press: pressed.append(key_press),
+        reply_callback=replies.append,
+    )
+    parser.feed_and_flush("\x1b[?62;1;6c")
+    assert pressed == []
+    assert replies == ["\x1b[?62;1;6c"]
+
+
+def test_replies_are_consumed_without_callback():
+    "No reply callback: replies must not garble into key presses."
+    assert parse("\x1b[?5u") == []
+    assert parse("\x1b[?62;1;6c") == []
+
+
+def test_key_events_do_not_reach_reply_callback():
+    pressed = []
+    replies = []
+    parser = KittyVt100Parser(
+        lambda key_press: pressed.append(key_press),
+        reply_callback=replies.append,
+    )
+    parser.feed_and_flush("\x1b[97;5u")
+    assert [kp.key for kp in pressed] == [Keys.ControlA]
+    assert replies == []
+
+
+def test_reply_split_over_chunks():
+    replies = []
+    parser = KittyVt100Parser(lambda kp: None, reply_callback=replies.append)
+    parser.feed("\x1b[?62;")
+    parser.feed("1;6c")
+    parser.flush()
+    assert replies == ["\x1b[?62;1;6c"]

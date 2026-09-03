@@ -51,10 +51,54 @@ class ServerConnection:
 
         # (This parser also decodes the kitty keyboard protocol key
         # encoding, which prompt_toolkit itself does not understand.)
-        self._inputstream = KittyVt100Parser(feed_key)
+        self._inputstream = KittyVt100Parser(
+            feed_key, reply_callback=self._handle_kitty_reply
+        )
+
+        # Kitty keyboard protocol support of the outer terminal. The
+        # client sends "kitty-detect" right after querying its terminal;
+        # the reply of that query passes through this connection.
+        self._kitty_detection_pending = False
+        self._kitty_supported = False
+
         self._pipeinput = _ClientInput(self._send_packet)
 
         create_task(self._start_reading())
+
+    def _handle_kitty_reply(self, data: str) -> None:
+        """
+        A terminal reply (keyboard flags or device attributes) arrived
+        from the outer terminal. Use it to conclude the protocol support
+        detection.
+        """
+        if not self._kitty_detection_pending:
+            return
+
+        if data.startswith("\x1b[?") and data.endswith("u"):
+            # Reply of the "CSI ? u" query: the terminal supports the
+            # keyboard protocol.
+            self._kitty_supported = True
+        else:
+            # Device attributes reply arrived without a flags reply: no
+            # protocol support.
+            self._kitty_supported = False
+
+        self._kitty_detection_pending = False
+        self._send_packet(
+            {
+                "cmd": "kitty-keyboard",
+                "data": {"supported": self._kitty_supported},
+            }
+        )
+        # Enable the flags of the focused pane on this client's terminal
+        # as well. (Other clients are kept in sync through
+        # `Pymux.sync_kitty_flags`, which only sends on change.)
+        self._send_packet(
+            {
+                "cmd": "kitty-keyboard",
+                "data": {"flags": self.pymux.get_focused_kitty_flags()},
+            }
+        )
 
     async def _start_reading(self) -> None:
         while True:
@@ -101,6 +145,11 @@ class ServerConnection:
         # Handle stdin.
         elif packet["cmd"] == "in":
             self._pipeinput.send_text(packet["data"])
+
+        # The client queried its terminal for kitty keyboard protocol
+        # support. (The replies come back as input on this connection.)
+        elif packet["cmd"] == "kitty-detect":
+            self._kitty_detection_pending = True
 
         # Set size. (The client reports the size.)
         elif packet["cmd"] == "size":

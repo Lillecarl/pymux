@@ -28,6 +28,13 @@ class PosixClient(Client):
         self.socket_name = socket_name
         self._mode_context_managers = []
 
+        # Kitty keyboard protocol state of the outer terminal. Whether
+        # the terminal supports the protocol is detected at attach time
+        # ("CSI ? u" query + device attributes). The currently enabled
+        # flags follow the focused pane.
+        self._kitty_supported = False
+        self._kitty_flags = None
+
         # Connect to socket.
         self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.socket.connect(socket_name)
@@ -105,6 +112,13 @@ class PosixClient(Client):
             }
         )
 
+        # Ask the outer terminal whether it supports the kitty keyboard
+        # protocol. The reply arrives as input and is interpreted by the
+        # server. (Query flags first, then device attributes: if only
+        # the device attributes reply comes back, there is no support.)
+        os.write(sys.stdout.fileno(), b"\x1b[?u\x1b[c")
+        self._send_packet({"cmd": "kitty-detect"})
+
         with raw_mode(sys.stdin.fileno()):
             data_buffer = b""
 
@@ -128,6 +142,7 @@ class PosixClient(Client):
                             # End of file. Connection closed.
                             # Reset terminal
                             o = Vt100_Output.from_pty(sys.stdout)
+                            self._set_kitty_flags(0)
                             o.quit_alternate_screen()
                             o.disable_mouse_support()
                             o.disable_bracketed_paste()
@@ -164,6 +179,15 @@ class PosixClient(Client):
             if hasattr(signal, "SIGTSTP"):
                 os.kill(os.getpid(), signal.SIGTSTP)
 
+        elif packet["cmd"] == "kitty-keyboard":
+            # Kitty keyboard protocol instructions for the outer
+            # terminal.
+            data = packet["data"]
+            if "supported" in data:
+                self._kitty_supported = data["supported"]
+            if "flags" in data:
+                self._set_kitty_flags(data["flags"])
+
         elif packet["cmd"] == "mode":
             # Set terminal to raw/cooked.
             action = packet["data"]
@@ -181,6 +205,22 @@ class PosixClient(Client):
             elif action == "restore" and self._mode_context_managers:
                 cm = self._mode_context_managers.pop()
                 cm.__exit__()
+
+    def _set_kitty_flags(self, flags: int) -> None:
+        """
+        Enable the given kitty keyboard protocol flags on the outer
+        terminal. (Ignored when the terminal does not support the
+        protocol. Zero restores the legacy encoding.)
+        """
+        if not self._kitty_supported and flags != 0:
+            return
+        flags = flags or 0
+        if flags == self._kitty_flags:
+            return
+        if flags == 0 and self._kitty_flags is None:
+            return  # Never enabled anything.
+        self._kitty_flags = flags
+        os.write(sys.stdout.fileno(), ("\x1b[=%d;1u" % flags).encode())
 
     def _process_stdin(self):
         """
