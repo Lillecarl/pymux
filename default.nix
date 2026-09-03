@@ -40,6 +40,7 @@ let
 
   pythonFor = terminal: emulator: toolkit: pkgs.python3.withPackages (ps: [
     ps.docopt-ng
+    ps.hypothesis
     ps.pytest
     ps.wcwidth
     terminal
@@ -111,17 +112,50 @@ let
   # The tests of the local working copies, when there are any.
   // lib.optionalAttrs (pttermSrc != null) {
     ptterm = runSuite "ptterm-tests" pttermSrc;
+    # The hunt for deviations between ptterm and kitty. This is not a
+    # gate: it finds them faster than they get fixed, and each one
+    # needs a decision about whether to follow kitty or xterm.
+    # `PYMUX_FUZZ` says how many examples to try.
+    fuzz =
+      let
+        examples = let value = builtins.getEnv "PYMUX_FUZZ";
+                   in if value == "" then "2000" else value;
+      in
+      pkgs.runCommand "ptterm-fuzz"
+        {
+          nativeBuildInputs = [ pythonWithTests ];
+          inherit examples;
+        }
+        ''
+          cp -r ${pttermSrc}/tests .
+          chmod -R +w .
+          export HOME="$TMPDIR"
+          export PTTERM_KITTY=${pkgs.kitty}/lib/kitty
+          export PTTERM_FUZZ="$examples"
+          python -m pytest tests/fuzz_against_kitty.py -q -p no:cacheprovider
+          touch "$out"
+        '';
   }
   // lib.optionalAttrs (pyteSrc != null) {
     pyte = runSuite "pyte-tests" pyteSrc;
   };
 
   # The test suite of a working copy next to this repo.
+  #
+  # `PTTERM_KITTY` gives ptterm the emulator of kitty to compare its own
+  # screen against. kitty carries it as a python extension, so the same
+  # bytes go into both and the cells can be compared.
   runSuite = name: source:
     pkgs.runCommand name { nativeBuildInputs = [ pythonWithTests ]; } ''
       cp -r ${source}/tests .
       chmod -R +w .
       export HOME="$TMPDIR"
+      export PTTERM_KITTY=${pkgs.kitty}/lib/kitty
+
+      # A comparison that cannot run proves nothing, so say so loudly
+      # instead of skipping.
+      python -c "import sys; sys.path.insert(0, sys.argv[1]); import kitty.fast_data_types" "$PTTERM_KITTY"
+
       python -m pytest tests -q -p no:cacheprovider
       touch "$out"
     '';
@@ -135,6 +169,7 @@ let
         pyte
         ps.wcwidth
         ps.docopt-ng
+        ps.hypothesis
         ps.libtmux
         ps.pytest
         ptterm
