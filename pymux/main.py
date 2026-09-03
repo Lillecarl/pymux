@@ -156,6 +156,7 @@ class ClientState:
                     vertical_scroll=window.vertical_scroll,
                     horizontal_scroll=window.horizontal_scroll,
                     graphics=graphics,
+                    screen=pane.process.screen,
                 )
             )
         return result

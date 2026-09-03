@@ -28,6 +28,8 @@ import re
 import zlib
 from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Tuple
 
+from ptterm.graphics import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
+
 from .log import logger
 from .sixel import encode_sixel, scale_rgba, to_rgba
 
@@ -113,6 +115,9 @@ class PaneView(NamedTuple):
     vertical_scroll: int
     horizontal_scroll: int
     graphics: object
+    #: The screen of the pane. The unicode placeholders live in its
+    #: cells, so drawing them needs the text and not only the images.
+    screen: object = None
 
 
 class _Placement:
@@ -271,7 +276,7 @@ class ClientGraphics:
 
             slots: Dict[int, int] = {}
 
-            for placement in self._visible_placements(view):
+            for placement in self._pane_placements(view):
                 (
                     pane_placement,
                     image,
@@ -308,6 +313,73 @@ class ClientGraphics:
 
         self._forget_unused_images(live_keys)
         return desired
+
+    @classmethod
+    def _pane_placements(cls, view: PaneView):
+        """
+        Everything of one pane that the client should draw: the plain
+        placements, and the images that the unicode placeholders in the
+        text of the pane point at.
+        """
+        yield from cls._visible_placements(view)
+        yield from cls._placeholder_placements(view)
+
+    @staticmethod
+    def _placeholder_placements(view: PaneView):
+        """
+        Yield the images that the unicode placeholders of one pane
+        point at.
+
+        A placeholder cell says which cell of which image it stands
+        for. `BetterScreen.placeholder_runs` gathers the neighbouring
+        cells into rectangles; each rectangle becomes one placement
+        with the matching piece of the image.
+        """
+        screen = view.screen
+        if screen is None or not hasattr(screen, "placeholder_runs"):
+            return
+
+        first_row = view.vertical_scroll
+        last_row = first_row + view.height - 1
+        for run in screen.placeholder_runs(first_row, last_row):
+            placement = view.graphics.virtual_placement(
+                run.image_id, run.placement_id
+            )
+            if placement is None or not placement.columns or not placement.rows:
+                continue
+            image = view.graphics.images_by_id.get(run.image_id)
+            if image is None or not image.width or not image.height:
+                continue
+
+            x = run.column - view.horizontal_scroll
+            y = run.row - first_row
+
+            crop_left = max(0, -x)
+            columns = min(run.columns - crop_left, view.width - x - crop_left)
+            rows = min(run.rows, view.height - y)
+            if columns <= 0 or rows <= 0:
+                continue  # Outside the pane.
+
+            source = _placeholder_source(
+                image,
+                placement,
+                run.image_column + crop_left,
+                run.image_row,
+                columns,
+                rows,
+            )
+            if source is None:
+                continue  # The empty border around a fitted image.
+
+            yield (
+                placement,
+                image,
+                columns,
+                rows,
+                view.x + x + crop_left,
+                view.y + y,
+                source,
+            )
 
     @staticmethod
     def _visible_placements(view: PaneView):
@@ -511,7 +583,7 @@ class ClientGraphics:
                 x,
                 y,
                 source,
-            ) in self._visible_placements(view):
+            ) in self._pane_placements(view):
                 slot = slots.get(placement.image_id, 0) + 1
                 slots[placement.image_id] = slot
 
@@ -601,6 +673,53 @@ def _crop_rgba(
         start = (row * width + left) * 4
         out += pixels[start : start + crop_width * 4]
     return bytes(out)
+
+
+def _placeholder_source(image, placement, image_column, image_row, columns, rows):
+    """
+    The rectangle of `image`, in pixels, that a run of placeholder
+    cells shows. None when the run falls outside the image.
+
+    kitty fits the image into the box that the placement covers,
+    keeping the proportions and centring what is left over. A cell of
+    the box therefore does not map onto a fixed piece of the image, and
+    a cell along the border may show none of it.
+    """
+    box_width = placement.columns * ASSUMED_CELL_WIDTH
+    box_height = placement.rows * ASSUMED_CELL_HEIGHT
+
+    if image.width * box_height > image.height * box_width:
+        # The image fills the box sideways. What is left over is a
+        # border above and below it.
+        scale = box_width / image.width
+        x_offset = 0.0
+        y_offset = (box_height - image.height * scale) / 2
+    else:
+        scale = box_height / image.height
+        y_offset = 0.0
+        x_offset = (box_width - image.width * scale) / 2
+
+    left = (image_column * ASSUMED_CELL_WIDTH - x_offset) / scale
+    top = (image_row * ASSUMED_CELL_HEIGHT - y_offset) / scale
+    right = left + columns * ASSUMED_CELL_WIDTH / scale
+    bottom = top + rows * ASSUMED_CELL_HEIGHT / scale
+
+    # Cut away what falls outside the image. A run along the border
+    # keeps all of its cells, so the piece that is left stretches over
+    # them. That is at most one cell of error, on the first row and the
+    # last one.
+    left, top = max(0.0, left), max(0.0, top)
+    right = min(float(image.width), right)
+    bottom = min(float(image.height), bottom)
+    if right - left < 1 or bottom - top < 1:
+        return None
+
+    return (
+        int(left),
+        int(top),
+        max(1, int(right - left)),
+        max(1, int(bottom - top)),
+    )
 
 
 def _put_command(
