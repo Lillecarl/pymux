@@ -567,7 +567,12 @@ class Arrangement:
 
     def __init__(self) -> None:
         self.windows: List[Window] = []
-        self.base_index = 0
+
+        # The number of the first window. tmux starts at zero, but a
+        # keyboard starts at one: the "1" key is easier to reach than
+        # the "0" key, and it sits where the first window belongs.
+        # `set-option base-index 0` brings the tmux default back.
+        self.base_index = 1
 
         self._active_window_for_cli: "WeakKeyDictionary[Application, Window]" = (
             WeakKeyDictionary()
