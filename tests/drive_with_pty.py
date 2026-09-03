@@ -325,6 +325,12 @@ def check_kitty_terminal(tmp):
         terminal.write(b"\x01")  # The legacy encoding is translated too.
         terminal.wait_for(CTRL_A_KITTY_HEX)
 
+        # Let the pane finish reading. One read of the pane returns
+        # whatever has arrived, so a write that comes too soon lands in
+        # the same read as this one and the check below looks for a
+        # block that never appears on its own.
+        terminal.drain(0.5)
+
         # 7. The clipboard, the notification and the pointer shape of
         #    the pane reach the terminal.
         terminal.wait_for(OSC_POINTER.encode())
