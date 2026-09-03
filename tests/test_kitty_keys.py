@@ -285,3 +285,67 @@ def test_keys_after_a_dcs_reply_still_arrive():
 
 def test_an_unterminated_dcs_does_not_swallow_input_forever():
     assert parse("\x1bP" + "y" * 2000 + "\x1b\\b")[-1] == ("b", "b")
+
+
+def test_osc_reply_is_reported():
+    "An OSC reply of the outer terminal is not a burst of key presses."
+    replies = []
+    pressed = []
+    parser = KittyVt100Parser(
+        lambda key_press: pressed.append(key_press),
+        reply_callback=replies.append,
+    )
+    # The reply of an "OSC 11 ; ?" background colour query.
+    parser.feed_and_flush("\x1b]11;rgb:0000/0000/0000\x1b\\")
+    assert pressed == []
+    assert replies == ["\x1b]11;rgb:0000/0000/0000\x1b\\"]
+
+
+def test_osc_reply_ends_at_a_bell():
+    "Unlike APC and DCS, an OSC also ends at BEL."
+    replies = []
+    pressed = []
+    parser = KittyVt100Parser(
+        lambda key_press: pressed.append(key_press),
+        reply_callback=replies.append,
+    )
+    parser.feed_and_flush("\x1b]11;rgb:ffff/ffff/ffff\x07")
+    assert pressed == []
+    assert replies == ["\x1b]11;rgb:ffff/ffff/ffff\x07"]
+
+
+def test_osc_reply_with_8bit_terminator():
+    replies = []
+    parser = KittyVt100Parser(lambda kp: None, reply_callback=replies.append)
+    parser.feed_and_flush("\x1b]52;c;aGVsbG8=\x9c")
+    assert replies == ["\x1b]52;c;aGVsbG8=\x9c"]
+
+
+def test_osc_reply_split_over_chunks():
+    replies = []
+    parser = KittyVt100Parser(lambda kp: None, reply_callback=replies.append)
+    parser.feed("\x1b]11;rgb:")
+    parser.feed("1234/5678/9abc")
+    parser.feed("\x1b")
+    parser.feed("\\")
+    parser.flush()
+    assert replies == ["\x1b]11;rgb:1234/5678/9abc\x1b\\"]
+
+
+def test_osc_reply_is_consumed_without_callback():
+    "Without a callback the reply is dropped, never fed to a pane."
+    assert parse("\x1b]11;rgb:0000/0000/0000\x1b\\") == []
+    assert parse("\x1b]11;rgb:0000/0000/0000\x07") == []
+
+
+def test_keys_after_an_osc_reply_still_arrive():
+    assert parse("\x1b]11;rgb:0000/0000/0000\x07c\x1b[97;5u") == [
+        ("c", "c"),
+        (Keys.ControlA, "\x1b[97;5u"),
+    ]
+
+
+def test_an_unterminated_osc_does_not_swallow_input_forever():
+    pressed = parse("\x1b]11;rgb:0000")
+    assert pressed  # Decomposed, not swallowed.
+    assert parse("\x1b]" + "z" * 2000 + "\x07c")[-1] == ("c", "c")

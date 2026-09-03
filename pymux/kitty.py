@@ -16,9 +16,10 @@ are consumed silently.
 
 The parser also swallows the string sequences that carry the replies of
 the terminal queries: APC (`ESC _ ... ST`) for the graphics protocol,
-DCS (`ESC P ... ST`) for the colour depth probe, and the `CSI ... t`
-window report for the cell size. Without this the replies would arrive
-as bursts of key presses.
+DCS (`ESC P ... ST`) for the colour depth probe, OSC (`ESC ] ... ST`)
+for the colour and clipboard answers, and the `CSI ... t` window report
+for the cell size. Without this the replies would arrive as bursts of
+key presses, and land in whichever pane has the focus.
 """
 import re
 from typing import Optional, Union
@@ -62,12 +63,20 @@ _KITTY_KEY_RE = re.compile(
 # CSI sequence with variable parameters).
 _KITTY_PREFIX_RE = re.compile(r"^\x1b\[[0-9;:<=>?]*$")
 
-# An APC or DCS string sequence and any prefix of one. The payload
+# An APC, DCS or OSC string sequence and any prefix of one. The payload
 # never contains the escape character, so the terminator is
 # unambiguous. (Both the two-character ST and the 8-bit ST are
-# accepted.)
-_STRING_RE = re.compile(r"^\x1b[_P][^\x1b\x9c]*(?:\x1b\\|\x9c)\Z")
-_STRING_PREFIX_RE = re.compile(r"^\x1b[_P][^\x1b\x9c]*\x1b?\Z")
+# accepted.) An OSC ends at a bell as well, which is how most terminals
+# close their colour answers; APC and DCS do not, so the two shapes
+# stay apart.
+_STRING_RE = re.compile(
+    r"^(?:\x1b[_P][^\x1b\x9c]*(?:\x1b\\|\x9c)"
+    r"|\x1b\][^\x1b\x9c\x07]*(?:\x1b\\|\x9c|\x07))\Z"
+)
+_STRING_PREFIX_RE = re.compile(
+    r"^(?:\x1b[_P][^\x1b\x9c]*"
+    r"|\x1b\][^\x1b\x9c\x07]*)\x1b?\Z"
+)
 
 # An unterminated string sequence must not swallow the input forever.
 # The replies that we expect are a few dozen characters long.
@@ -161,9 +170,10 @@ _DROP = object()
 _FLAGS_REPLY = object()
 _DA1_REPLY = object()
 
-# Sentinel for a complete APC or DCS string sequence. The kitty
-# graphics protocol and the colour depth probe answer with one; they
-# are reported like the other replies.
+# Sentinel for a complete APC, DCS or OSC string sequence. The kitty
+# graphics protocol and the colour depth probe answer with one, and so
+# does a terminal that answers a colour or clipboard query. They are
+# reported like the other replies.
 _STRING_REPLY = object()
 
 # Sentinel for the "CSI 6 ; height ; width t" reply of the cell size
@@ -388,8 +398,10 @@ class KittyVt100Parser(Vt100Parser):
     :param feed_key_callback: Called for every key press.
     :param reply_callback: Called with the raw sequence for terminal
         replies: keyboard flags replies, device attributes replies,
-        cell size reports, and APC and DCS string sequences. Used for
-        protocol support detection.
+        cell size reports, and APC, DCS and OSC string sequences. Used
+        for protocol support detection. A reply that nothing asked for
+        is consumed all the same, so that it cannot reach a pane as key
+        presses.
     """
 
     def __init__(self, feed_key_callback, reply_callback=None) -> None:

@@ -203,6 +203,10 @@ class Terminal:
         self.wait_for(b"\x1b[c")
         return len(self.seen)
 
+    def mark(self):
+        "A point in the output, for `since`."
+        return len(self.seen)
+
     def since(self, mark):
         "Everything that arrived after `mark`."
         return self.seen[mark:]
@@ -304,7 +308,19 @@ def check_kitty_terminal(tmp):
         terminal.wait_for(OSC_POINTER.encode())
         check_the_osc_sequences(terminal, terminal.since(mark))
 
-        # 8. The server goes away: the client resets the flags.
+        # 8. A reply of the outer terminal does not reach the pane. The
+        #    pane echoes everything it reads between "<<" and ">>", so
+        #    a leak shows up there.
+        terminal.drain(0.5)
+        quiet = terminal.mark()
+        terminal.write(b"\x1b]11;rgb:dead/beef/cafe\x1b\\")
+        terminal.write(b"\x1b]10;rgb:1234/5678/9abc\x07")
+        terminal.drain(1.0)
+        assert (
+            b"<<" not in terminal.since(quiet)
+        ), "a reply of the terminal reached the pane"
+
+        # 9. The server goes away: the client resets the flags.
         run_cli(terminal.sock_path, ["kill-server"])
         terminal.wait_for(b"\x1b[=0;1u")
     except BaseException:
