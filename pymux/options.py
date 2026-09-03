@@ -177,6 +177,7 @@ class JustifyOption(Option):
 ALL_OPTIONS = {
     "base-index": BaseIndexOption(),
     "bell": OnOffOption("enable_bell"),
+    "set-clipboard": OnOffOption("enable_clipboard"),
     "history-limit": PositiveIntOption(
         "history_limit", [200, 500, 1000, 2000, 5000, 10000]
     ),

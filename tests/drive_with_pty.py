@@ -64,14 +64,24 @@ SIXEL_IMAGE = '\x1bP0;0;0q"1;1;20;12#4;2;100;0;0#4!20~-!20~\x1b\\'
 # Cell size that the sixel terminal reports, in pixels.
 CELL_WIDTH, CELL_HEIGHT = 8, 17
 
+# The OSC sequences that the pane child sends. Only the terminal of the
+# user can serve them, so pymux passes them on. The query does not go:
+# a pane may write the clipboard, not read it.
+OSC_CLIPBOARD = "\x1b]52;c;aGVsbG8=\x1b\\"
+OSC_CLIPBOARD_QUERY = "\x1b]52;c;?\x1b\\"
+OSC_NOTIFICATION = "\x1b]99;i=1;done\x1b\\"
+OSC_POINTER = "\x1b]22;pointer\x1b\\"
+PANE_OSC = OSC_CLIPBOARD + OSC_CLIPBOARD_QUERY + OSC_NOTIFICATION + OSC_POINTER
+
 # The program that runs in the pane. It puts its tty in raw mode, asks
-# for the kitty keyboard protocol, draws one image, and then echoes
-# everything it reads as hex.
+# for the kitty keyboard protocol, draws one image, sends the OSC
+# sequences, and then echoes everything it reads as hex.
 PANE_CHILD = """
 import sys, tty
 tty.setraw(0)
 sys.stdout.write("\\x1b[>1u")
 sys.stdout.write(%r if sys.argv[1] == "kitty" else %r)
+sys.stdout.write(%r)
 sys.stdout.write("READY")
 sys.stdout.flush()
 while True:
@@ -80,7 +90,7 @@ while True:
         break
     sys.stdout.write("<<%%s>>" %% data.hex())
     sys.stdout.flush()
-""" % (KITTY_IMAGE, SIXEL_IMAGE)
+""" % (KITTY_IMAGE, SIXEL_IMAGE, PANE_OSC)
 
 
 class Failed(AssertionError):
@@ -222,12 +232,25 @@ class Terminal:
 # ----------------------------------------------------------------------
 
 
+def check_the_osc_sequences(terminal, tail):
+    """
+    The three OSC sequences of the pane reach the terminal, and the
+    clipboard query does not.
+    """
+    assert OSC_CLIPBOARD.encode() in tail, "the clipboard write did not arrive"
+    assert OSC_NOTIFICATION.encode() in tail, "the notification did not arrive"
+    assert OSC_POINTER.encode() in tail, "the pointer shape did not arrive"
+    assert (
+        OSC_CLIPBOARD_QUERY.encode() not in tail
+    ), "the pane read the clipboard of the user"
+
+
 def check_kitty_terminal(tmp):
     "A terminal that speaks every kitty protocol and 24 bit colour."
     terminal = Terminal(tmp, "kitty")
     try:
         # 1. The client asks its terminal what it can do.
-        terminal.wait_for_the_queries()
+        mark = terminal.wait_for_the_queries()
         assert CELL_SIZE_QUERY.encode() in terminal.seen
         assert TRUECOLOR_PROBE.encode() in terminal.seen
 
@@ -276,7 +299,12 @@ def check_kitty_terminal(tmp):
         terminal.write(b"\x01")  # The legacy encoding is translated too.
         terminal.wait_for(CTRL_A_KITTY_HEX)
 
-        # 7. The server goes away: the client resets the flags.
+        # 7. The clipboard, the notification and the pointer shape of
+        #    the pane reach the terminal.
+        terminal.wait_for(OSC_POINTER.encode())
+        check_the_osc_sequences(terminal, terminal.since(mark))
+
+        # 8. The server goes away: the client resets the flags.
         run_cli(terminal.sock_path, ["kill-server"])
         terminal.wait_for(b"\x1b[=0;1u")
     except BaseException:
@@ -365,6 +393,9 @@ def check_plain_terminal(tmp):
         terminal.drain(1.5)
 
         tail = terminal.since(mark)
+        # Passing an OSC sequence on asks nothing of the terminal, so a
+        # terminal that answers no query still receives them.
+        check_the_osc_sequences(terminal, tail)
         assert b"\x1b_G" not in tail, "images without support"
         assert b"\x1bP" not in tail, "sixel without support"
         assert b"\x1b[=" not in tail, "keyboard flags without support"

@@ -36,6 +36,7 @@ from .key_bindings import PymuxKeyBindings
 from .layout import Justify, LayoutManager
 from .log import logger
 from .options import ALL_OPTIONS, ALL_WINDOW_OPTIONS
+from .osc import build_osc
 from .pipes import bind_and_listen_on_socket
 from .ptterm_compat import apply_ptterm_compat_fixes
 from .rc import STARTUP_COMMANDS
@@ -286,6 +287,12 @@ class ClientState:
         self.app.layout.focus(pane.terminal)
 
 
+#: The OSC sequences that only make sense for the pane a client looks
+#: at. The shape of the pointer is one: a pane out of sight must not
+#: change it.
+_FOCUSED_ONLY_OSC = frozenset(["22"])
+
+
 class Pymux:
     """
     The main Pymux application class.
@@ -315,6 +322,7 @@ class Pymux:
         self.enable_status = True
         self.enable_pane_status = True  # False
         self.enable_bell = True
+        self.enable_clipboard = True
         self.remain_on_exit = False
         self.status_keys_vi_mode = False
         self.mode_keys_vi_mode = False
@@ -529,6 +537,10 @@ class Pymux:
                 for c in self.apps:
                     c.output.bell()
 
+        def forward_osc(code: str, param: str) -> None:
+            "Pass an OSC sequence of this pane to the terminals of the clients."
+            self.forward_osc(pane, code, param)
+
         # Start directory.
         path: Optional[str]
 
@@ -565,6 +577,7 @@ class Pymux:
         terminal = Terminal(
             done_callback=done_callback,
             bell_func=bell,
+            osc_func=forward_osc,
             before_exec_func=before_exec,
             command=command_list,
         )
@@ -620,6 +633,51 @@ class Pymux:
             return 0
         screen = getattr(pane.process, "screen", None)
         return getattr(screen, "kitty_keyboard_flags", 0) or 0
+
+    def forward_osc(self, pane, code: str, param: str) -> None:
+        """
+        Write an OSC sequence of a pane to the terminals of the
+        clients. ptterm hands over the three that only the terminal of
+        the user can serve: the clipboard, a desktop notification and
+        the shape of the pointer.
+
+        The payload comes from a program in a pane, so `build_osc`
+        checks it before it reaches the terminal of the user.
+
+        Never raises: this runs on the read path of a pane, and one
+        sequence may not stop it.
+        """
+        try:
+            if code == "52" and not self.enable_clipboard:
+                return
+
+            sequence = build_osc(code, param)
+            if sequence is None:
+                logger.warning("Dropped an unsafe OSC %s of a pane.", code)
+                return
+
+            for connection, client_state in self._client_states.items():
+                # The shape of the pointer belongs to the pane that the
+                # client looks at. The clipboard and a notification come
+                # from any pane: a build that ends in a pane out of
+                # sight is exactly what a notification is for.
+                if code in _FOCUSED_ONLY_OSC and not self._has_focus(
+                    client_state, pane
+                ):
+                    continue
+                connection.forward_osc(sequence)
+        except Exception:
+            logger.exception("Forwarding an OSC sequence failed.")
+
+    def _has_focus(self, client_state, pane) -> bool:
+        "True when this client looks at this pane."
+        try:
+            with set_app(client_state.app):
+                window = self.arrangement.get_active_window()
+        except Exception:
+            # `get_active_window` needs a running application.
+            return False
+        return window is not None and window.active_pane is pane
 
     def sync_kitty_flags(self) -> None:
         """

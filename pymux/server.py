@@ -85,6 +85,22 @@ class ServerConnection:
         if self.client_state is not None:
             self.client_state.output.flush()
 
+    def forward_osc(self, sequence: str) -> None:
+        """
+        Write an OSC sequence of a pane to the outer terminal of this
+        client. (The clipboard, a notification, the shape of the
+        pointer: pymux cannot serve those, the terminal of the user
+        can.)
+
+        An OSC sequence moves no cursor and paints no cell, so it is
+        safe between two frames. `pymux.osc.build_osc` has already
+        checked the payload of the pane.
+        """
+        if self.client_state is None:
+            return
+        self._write_output_raw(sequence)
+        self._flush_output()
+
     def _apply_color_depth(self) -> None:
         """
         Render with the colour depth that the detection settled on.
