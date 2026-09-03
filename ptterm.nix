@@ -5,23 +5,27 @@
   prompt-toolkit,
   pyte,
   wcwidth,
-  # Override to build against a local working copy, e.g. ../ptterm.
-  src ? fetchFromGitHub {
-    owner = "prompt-toolkit";
-    repo = "ptterm";
-    # Pin the commit that we test against. (Upstream has no release that is
-    # compatible with prompt_toolkit 3 yet.)
-    rev = "48a590efe502712250ba75effd48f8a0cbdc2518";
-    hash = "sha256-ZiBvLcKyQ84QaD6X7kfn1JMoPGc9iJZOoji+hh9JpWY=";
-  },
+  # Set this to build against a local working copy, e.g. ../ptterm.
+  localSrc ? null,
 }:
 
 buildPythonPackage {
   pname = "ptterm";
-  version = "0.2-unstable-2026-08-09";
+  version = "0.2-unstable-2026-09-03";
   format = "setuptools";
 
-  inherit src;
+  src =
+    if localSrc != null then
+      localSrc
+    else
+      fetchFromGitHub {
+        owner = "Lillecarl";
+        repo = "ptterm";
+        # Upstream has no release that works with prompt_toolkit 3, and
+        # the kitty protocol support only lives on this fork.
+        rev = "ff77f84c0175d80ae31a94b0bc8003538fbc17ce";
+        hash = "sha256-ii7G1mR4EX7nNAk0SvdbJGoGrFNJRCbG6lak5DeI9VE=";
+      };
 
   propagatedBuildInputs = [
     prompt-toolkit

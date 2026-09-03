@@ -1,21 +1,18 @@
 { pkgs ? import <nixpkgs> {}}:
 let
   # Build against local working copies of ptterm and pyte when they sit
-  # next to this repo, and fall back to the pinned upstream sources
-  # otherwise.
-  pttermSrc =
-    if builtins.pathExists ../ptterm
-    then ../ptterm
-    else null;
+  # next to this repo, and fall back to the pinned fork commits
+  # otherwise. (Neither upstream carries the kitty protocol support.)
+  localSrc = path: if builtins.pathExists path then path else null;
 
-  pyte =
-    if builtins.pathExists ../pyte
-    then pkgs.python3Packages.callPackage ./pyte.nix { src = ../pyte; }
-    else pkgs.python3Packages.pyte;
+  pyte = pkgs.python3Packages.callPackage ./pyte.nix {
+    localSrc = localSrc ../pyte;
+  };
 
-  ptterm = pkgs.python3Packages.callPackage ./ptterm.nix ({
+  ptterm = pkgs.python3Packages.callPackage ./ptterm.nix {
     inherit pyte;
-  } // pkgs.lib.optionalAttrs (pttermSrc != null) { src = pttermSrc; });
+    localSrc = localSrc ../ptterm;
+  };
 
   package = pkgs.python3Packages.callPackage ./package.nix { inherit ptterm; };
 
