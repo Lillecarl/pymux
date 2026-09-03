@@ -556,14 +556,15 @@ def check_an_overlay_pane(tmp):
         assert b"the title" in tail, "the overlay drew no title bar"
 
         # The keyboard reaches the overlay, not the pane behind it.
-        # One read of the overlay returns whatever has arrived, so the
-        # letters come back one block at a time.
+        # One read of the overlay returns whatever has arrived, so two
+        # letters in a row can come back in one block. The next letter
+        # goes out only after the echo of the one before it, which
+        # keeps every block a single letter.
         mark = terminal.mark()
-        terminal.write(b"OVER")
-        terminal.wait_for(b"[[R]]")
-        typed = terminal.since(mark)
         for letter in b"OVER":
-            assert b"[[%c]]" % letter in typed, "the overlay missed a key"
+            terminal.write(bytes([letter]))
+            terminal.wait_for(b"[[%c]]" % letter)
+        typed = terminal.since(mark)
         assert b"<<" not in typed, "the pane behind the overlay received the keys"
 
         # Closing it takes the program with it.
