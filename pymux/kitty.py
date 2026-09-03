@@ -1,5 +1,5 @@
 """
-Kitty keyboard protocol support.
+Kitty protocol support for the input of the outer terminal.
 
 Decodes the CSI u key encoding of the kitty keyboard protocol into
 prompt_toolkit key presses.
@@ -13,6 +13,10 @@ sequence arrives garbled, one key press per character.
 The parser below extends prompt_toolkit's `Vt100Parser`. Sequences that
 have no prompt_toolkit representation (key release events, lock keys)
 are consumed silently.
+
+The parser also swallows APC string sequences (`ESC _ ... ST`). The
+outer terminal answers the graphics protocol query with one. Without
+this the reply would arrive as a burst of key presses.
 """
 import re
 from typing import Optional, Union
@@ -55,6 +59,16 @@ _KITTY_KEY_RE = re.compile(
 # A prefix that could still become a kitty key sequence (or any other
 # CSI sequence with variable parameters).
 _KITTY_PREFIX_RE = re.compile(r"^\x1b\[[0-9;:<=>?]*$")
+
+# An APC string sequence and any prefix of one. The payload never
+# contains the escape character, so the terminator is unambiguous.
+# (Both the two-character ST and the 8-bit ST are accepted.)
+_APC_RE = re.compile(r"^\x1b_[^\x1b\x9c]*(?:\x1b\\|\x9c)\Z")
+_APC_PREFIX_RE = re.compile(r"^\x1b_[^\x1b\x9c]*\x1b?\Z")
+
+# An unterminated APC sequence must not swallow the input forever. The
+# replies that we expect are a few dozen characters long.
+MAX_APC_LENGTH = 1024
 
 # ctrl+<char> legacy control codes. (ctrl+[ is the escape character; it
 # is not in this table.)
@@ -143,6 +157,11 @@ _DROP = object()
 # outer terminal supports the keyboard protocol.
 _FLAGS_REPLY = object()
 _DA1_REPLY = object()
+
+# Sentinel for a complete APC string sequence. The kitty graphics
+# protocol answers queries with one; it is reported like the other
+# replies.
+_APC_REPLY = object()
 
 _KeyResult = Union[str, Keys, tuple, object]
 
@@ -235,6 +254,8 @@ def parse_kitty_key(prefix: str) -> Optional[_KeyResult]:
             return _FLAGS_REPLY
         if _DA1_REPLY_RE.match(prefix):
             return _DA1_REPLY
+        if _APC_RE.match(prefix):
+            return _APC_REPLY
         return None
 
     if match.group("event") == str(_EVENT_RELEASE):
@@ -332,6 +353,12 @@ def _patch_prefix_cache() -> None:
         if _KITTY_PREFIX_RE.match(prefix):
             self[prefix] = True
             return True
+        if (
+            len(prefix) <= MAX_APC_LENGTH
+            and _APC_PREFIX_RE.match(prefix)
+        ):
+            # Don't cache: the cache would grow with every payload.
+            return True
         return original(self, prefix)
 
     _IsPrefixOfLongerMatchCache.__missing__ = __missing__
@@ -348,8 +375,9 @@ class KittyVt100Parser(Vt100Parser):
 
     :param feed_key_callback: Called for every key press.
     :param reply_callback: Called with the raw sequence for terminal
-        replies (keyboard flags query replies and device attributes
-        replies). Used for protocol support detection.
+        replies: keyboard flags query replies, device attributes
+        replies and APC string sequences. Used for protocol support
+        detection.
     """
 
     def __init__(self, feed_key_callback, reply_callback=None) -> None:
@@ -369,7 +397,7 @@ class KittyVt100Parser(Vt100Parser):
     ) -> None:
         if key is _DROP:
             return
-        if key in (_FLAGS_REPLY, _DA1_REPLY):
+        if key in (_FLAGS_REPLY, _DA1_REPLY, _APC_REPLY):
             if self.reply_callback is not None:
                 self.reply_callback(insert_text)
             return

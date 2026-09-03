@@ -189,3 +189,56 @@ def test_reply_split_over_chunks():
     parser.feed("1;6c")
     parser.flush()
     assert replies == ["\x1b[?62;1;6c"]
+
+
+# ----------------------------------------------------------------------
+# APC string sequences. (The graphics protocol query reply.)
+
+
+def test_apc_reply_is_reported():
+    replies = []
+    pressed = []
+    parser = KittyVt100Parser(
+        lambda key_press: pressed.append(key_press),
+        reply_callback=replies.append,
+    )
+    parser.feed_and_flush("\x1b_Gi=31;OK\x1b\\")
+    assert pressed == []
+    assert replies == ["\x1b_Gi=31;OK\x1b\\"]
+
+
+def test_apc_reply_with_8bit_terminator():
+    replies = []
+    parser = KittyVt100Parser(lambda kp: None, reply_callback=replies.append)
+    parser.feed_and_flush("\x1b_Gi=31;OK\x9c")
+    assert replies == ["\x1b_Gi=31;OK\x9c"]
+
+
+def test_apc_reply_split_over_chunks():
+    replies = []
+    parser = KittyVt100Parser(lambda kp: None, reply_callback=replies.append)
+    parser.feed("\x1b_Gi=")
+    parser.feed("31;ENOENT:no")
+    parser.feed(" such image\x1b")
+    parser.feed("\\")
+    parser.flush()
+    assert replies == ["\x1b_Gi=31;ENOENT:no such image\x1b\\"]
+
+
+def test_apc_reply_is_consumed_without_callback():
+    assert parse("\x1b_Gi=31;OK\x1b\\") == []
+
+
+def test_keys_after_an_apc_reply_still_arrive():
+    assert parse("\x1b_Gi=31;OK\x1b\\a\x1b[97;5u") == [
+        ("a", "a"),
+        (Keys.ControlA, "\x1b[97;5u"),
+    ]
+
+
+def test_unterminated_apc_does_not_swallow_input_forever():
+    # A flush ends the sequence. The characters are decomposed rather
+    # than lost, and the parser recovers for the next key.
+    pressed = parse("\x1b_Gi=31;OK")
+    assert pressed  # Decomposed, not swallowed.
+    assert parse("\x1b_" + "x" * 2000 + "\x1b\\a")[-1] == ("a", "a")
