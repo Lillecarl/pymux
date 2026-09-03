@@ -379,6 +379,17 @@ class _ClientInput:
                 pass
             self._input = None
 
+    def typeahead_hash(self) -> str:
+        """
+        The typeahead hash must keep working after the pipe is closed:
+        prompt_toolkit stores unprocessed input as typeahead when the
+        application exits, which can happen after the connection was
+        closed.
+        """
+        if self._input is not None:
+            return self._input.typeahead_hash()
+        return "closed-pipe-input-%i" % id(self)
+
     # Implement raw/cooked mode by sending this to the attached client.
 
     def raw_mode(self) -> ContextManager[None]:
