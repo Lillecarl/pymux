@@ -131,6 +131,7 @@ let
           chmod -R +w .
           export HOME="$TMPDIR"
           export PTTERM_KITTY=${pkgs.kitty}/lib/kitty
+          export PTTERM_LIBVTERM=${pkgs.libvterm-neovim}/lib/libvterm.so
           export PTTERM_FUZZ="$examples"
           python -m pytest tests/fuzz_against_kitty.py -q -p no:cacheprovider
           touch "$out"
@@ -142,19 +143,24 @@ let
 
   # The test suite of a working copy next to this repo.
   #
-  # `PTTERM_KITTY` gives ptterm the emulator of kitty to compare its own
-  # screen against. kitty carries it as a python extension, so the same
-  # bytes go into both and the cells can be compared.
+  # Two emulators to compare the screen of ptterm against.
+  # `PTTERM_KITTY` is the one kitty carries as a python extension, and
+  # kitty is the terminal that pymux runs inside. `PTTERM_LIBVTERM` is
+  # the one that Vim and Neovim carry, which leans towards xterm. Where
+  # the two agree and ptterm differs, ptterm is wrong; where they
+  # disagree, the difference is a choice.
   runSuite = name: source:
     pkgs.runCommand name { nativeBuildInputs = [ pythonWithTests ]; } ''
       cp -r ${source}/tests .
       chmod -R +w .
       export HOME="$TMPDIR"
       export PTTERM_KITTY=${pkgs.kitty}/lib/kitty
+      export PTTERM_LIBVTERM=${pkgs.libvterm-neovim}/lib/libvterm.so
 
       # A comparison that cannot run proves nothing, so say so loudly
       # instead of skipping.
       python -c "import sys; sys.path.insert(0, sys.argv[1]); import kitty.fast_data_types" "$PTTERM_KITTY"
+      python -c "import ctypes, os; ctypes.CDLL(os.environ['PTTERM_LIBVTERM'])"
 
       python -m pytest tests -q -p no:cacheprovider
       touch "$out"
