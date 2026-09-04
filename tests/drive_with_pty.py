@@ -44,12 +44,17 @@ from ptterm.sixel import decode_sixel  # noqa: E402
 from pymux.colors import TRUECOLOR_PROBE  # noqa: E402
 from pymux.graphics import CELL_SIZE_QUERY  # noqa: E402
 from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY  # noqa: E402
+from pymux.blocks import LOWER_HALF, UPPER_HALF  # noqa: E402
 from pymux.terminfo import terminal_name  # noqa: E402
 
 REPO_ROOT = Path(__file__).parent.parent
 
 # "\x1b[97;5u" — kitty ctrl+a — as the pane child reports it (hex).
 CTRL_A_KITTY_HEX = b"<<1b5b39373b3575>>"
+
+# The same key when the release is made up rather than reported: the
+# press and the release arrive in one read, so the pane echoes both.
+CTRL_A_KITTY_PRESS_AND_RELEASE = b"<<1b5b39373b35751b5b39373b353a3375>>"
 
 # A key that came back up, as a terminal that speaks the protocol
 # sends it, and as the pane child reports it. Only a pane that asked
@@ -220,52 +225,40 @@ def run_cli(sock_path, args):
     )
 
 
-class Terminal:
-    "One pymux server with one client attached to a pty."
+def attach_client(sock_path, stderr_path, colorterm=""):
+    """
+    Attach a client to a server that is already running, on a pty of
+    its own. Returns the master side, the process and the stderr file.
+    """
+    master_fd, slave_fd = os.openpty()
+    fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
 
-    def __init__(self, tmp, mode, colorterm=""):
-        self.tmp = tmp
-        self.sock_path = tmp / ("%s.sock" % mode)
-        self.stderr_path = tmp / ("%s-stderr.log" % mode)
+    stderr = open(stderr_path, "wb")
+    process = subprocess.Popen(
+        [sys.executable, "-m", "pymux", "-S", str(sock_path), "attach"],
+        cwd=str(REPO_ROOT),
+        stdin=slave_fd,
+        stdout=slave_fd,
+        stderr=stderr,
+        env={
+            **os.environ,
+            "TERM": "xterm-256color",
+            "LANG": "C.UTF-8",
+            # The tests decide what the environment says about
+            # colour; the shell that runs them must not.
+            "COLORTERM": colorterm,
+        },
+    )
+    os.close(slave_fd)
+    return master_fd, process, stderr
 
-        child_path = tmp / "pane_child.py"
-        child_path.write_text(PANE_CHILD)
 
-        started = run_cli(
-            self.sock_path,
-            [
-                "new-session",
-                "-d",
-                "-s",
-                "test",
-                "python3 %s %s" % (child_path, mode),
-            ],
-        )
-        assert started.returncode == 0, started.stderr
+class Attached:
+    "What every client on a pty can do: read it, write to it, watch it."
 
-        self.master_fd, slave_fd = os.openpty()
-        fcntl.ioctl(
-            slave_fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0)
-        )
-
-        self.stderr = open(self.stderr_path, "wb")
-        self.client = subprocess.Popen(
-            [sys.executable, "-m", "pymux", "-S", str(self.sock_path), "attach"],
-            cwd=str(REPO_ROOT),
-            stdin=slave_fd,
-            stdout=slave_fd,
-            stderr=self.stderr,
-            env={
-                **os.environ,
-                "TERM": "xterm-256color",
-                "LANG": "C.UTF-8",
-                # The tests decide what the environment says about
-                # colour; the shell that runs them must not.
-                "COLORTERM": colorterm,
-            },
-        )
-        os.close(slave_fd)
-        self.seen = b""
+    master_fd: int
+    seen: bytes
+    stderr_path = None
 
     def wait_for(self, pattern):
         self.seen = wait_for(self.master_fd, pattern, self.seen)
@@ -296,6 +289,95 @@ class Terminal:
         "Everything that arrived after `mark`."
         return self.seen[mark:]
 
+    def report(self):
+        print(self.seen[-4000:].decode("utf-8", "replace"))
+        if self.stderr_path is not None and self.stderr_path.exists():
+            print(
+                "--- client stderr ---\n"
+                + self.stderr_path.read_text(errors="replace")
+            )
+        log = getattr(self, "server_log", None)
+        if log is not None and log.exists():
+            # Only what the server complained about: the whole log is
+            # every frame of every render.
+            lines = [
+                line
+                for line in log.read_text(errors="replace").splitlines()
+                if "ERROR" in line or "Traceback" in line or line.startswith("  ")
+            ]
+            if lines:
+                print("--- server errors ---\n" + "\n".join(lines[-60:]))
+            probes = [
+                line
+                for line in log.read_text(errors="replace").splitlines()
+                if "PROBE" in line
+            ]
+            if probes:
+                print("--- probes ---\n" + "\n".join(probes[-25:]))
+
+
+class SecondClient(Attached):
+    """
+    Another client on the same server, playing another terminal.
+
+    `Terminal` starts a server and attaches the first client. This one
+    joins a server that is already there, so a check can put two
+    terminals of different abilities in front of one session.
+    """
+
+    def __init__(self, tmp, sock_path, name, colorterm=""):
+        self.sock_path = sock_path
+        self.stderr_path = tmp / ("%s-stderr.log" % name)
+        self.master_fd, self.client, self.stderr = attach_client(
+            sock_path, self.stderr_path, colorterm
+        )
+        self.seen = b""
+
+    def close(self):
+        "Leave. The server stays: the first client owns it."
+        if self.client.poll() is None:
+            self.client.send_signal(signal.SIGTERM)
+        try:
+            self.client.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self.client.kill()
+        self.stderr.close()
+        os.close(self.master_fd)
+
+
+class Terminal(Attached):
+    "One pymux server with one client attached to a pty."
+
+    def __init__(self, tmp, mode, colorterm=""):
+        self.tmp = tmp
+        self.sock_path = tmp / ("%s.sock" % mode)
+        self.stderr_path = tmp / ("%s-stderr.log" % mode)
+        # The server runs as a daemon, so nothing of it reaches this
+        # process. A check that fails is unreadable without this.
+        self.server_log = tmp / ("%s-server.log" % mode)
+
+        child_path = tmp / "pane_child.py"
+        child_path.write_text(PANE_CHILD)
+
+        started = run_cli(
+            self.sock_path,
+            [
+                "--log",
+                str(self.server_log),
+                "new-session",
+                "-d",
+                "-s",
+                "test",
+                "python3 %s %s" % (child_path, mode),
+            ],
+        )
+        assert started.returncode == 0, started.stderr
+
+        self.master_fd, self.client, self.stderr = attach_client(
+            self.sock_path, self.stderr_path, colorterm
+        )
+        self.seen = b""
+
     def close(self):
         run_cli(self.sock_path, ["kill-server"])
         if self.client.poll() is None:
@@ -308,14 +390,6 @@ class Terminal:
         os.close(self.master_fd)
         time.sleep(0.3)
         run_cli(self.sock_path, ["kill-server"])
-
-    def report(self):
-        print(self.seen[-4000:].decode("utf-8", "replace"))
-        if self.stderr_path.exists():
-            print(
-                "--- client stderr ---\n"
-                + self.stderr_path.read_text(errors="replace")
-            )
 
 
 # ----------------------------------------------------------------------
@@ -763,6 +837,115 @@ def check_an_overlay_pane(tmp):
     print("overlay pane: ok")
 
 
+def check_two_terminals_of_different_abilities(tmp):
+    """
+    Two clients, two terminals that can do different things, one
+    session.
+
+    One speaks the kitty graphics protocol. The other answers nothing
+    but the device attributes, so it draws the same image as half
+    blocks. Each gets what its own terminal takes, and neither gets the
+    other's.
+
+    The keyboard goes the other way, and on purpose. Only what every
+    attached client can report counts, so a plain terminal joining
+    would take the key releases away from the pane. Synthesis puts them
+    back: a pane keeps the flags it pushed, and a client that cannot
+    send a release has one made for it. A pane is never told that a
+    capability went away because somebody else attached.
+    """
+    terminal = Terminal(tmp, "kitty")
+    second = None
+    try:
+        terminal.wait_for_the_queries()
+        # This terminal serves every flag of the keyboard protocol, so
+        # a release it sends is a real one.
+        terminal.write(b"\x1b[?31u")
+        terminal.write(b"\x1b_Gi=31;OK\x1b\\")
+        terminal.write(b"\x1b[6;20;10t")
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"READY")
+
+        # The pane pushed flags 1 and 2, and this terminal serves both.
+        terminal.write(ASK_THE_FLAGS)
+        terminal.wait_for(flags_answer(3))
+
+        # One client, and it reports a release itself. The pane hears
+        # the press on its own.
+        terminal.write(b"\x01")
+        terminal.wait_for(CTRL_A_KITTY_HEX)
+        terminal.drain(1.0)
+
+        # A second terminal joins. It answers the device attributes and
+        # nothing else: no kitty keyboard, no kitty graphics, no sixel.
+        second = SecondClient(tmp, terminal.sock_path, "plain")
+        # After the queries: the graphics query carries "\x1b_G" itself,
+        # so a check that it never arrives has to start past it.
+        after_queries = second.wait_for_the_queries()
+        second.write(b"\x1b[?62;1;6c")
+        second.drain(2.0)
+        drawn = second.since(after_queries)
+
+        # Each terminal drew the image the way it can.
+        assert b"\x1b_Ga=" in terminal.seen, "the kitty client drew no image"
+        assert b"READY" in second.seen, "the second client never drew the pane"
+        assert UPPER_HALF.encode() in drawn or LOWER_HALF.encode() in drawn, (
+            "the plain client drew no half blocks"
+        )
+
+        # And neither got what it cannot read.
+        assert b"\x1b_Ga=" not in drawn, (
+            "kitty graphics reached a terminal that never claimed them"
+        )
+        assert b"\x1bP0;" not in drawn, "sixel reached a terminal without it"
+
+        # The pane keeps both flags. The client that cannot report a
+        # release has one made for it, so nothing was taken away.
+        terminal.write(ASK_THE_FLAGS)
+        terminal.wait_for(flags_answer(3))
+
+        # Both clients still work: a key from either reaches the pane,
+        # in the encoding the pane asked for.
+        #
+        # It arrives as a press and a release together. Only what every
+        # client can report counts, and the plain terminal reports no
+        # release, so the release is made rather than taken away. The
+        # pane reads every key going down and coming up; only the time
+        # between them is lost.
+        terminal.write(b"\x01")
+        terminal.wait_for(CTRL_A_KITTY_PRESS_AND_RELEASE)
+        second.write(b"\x01")
+        second.wait_for(CTRL_A_KITTY_PRESS_AND_RELEASE)
+
+        # The second client leaves. The made up release goes with the
+        # client that needed it: the pane hears one press again.
+        second.close()
+        second = None
+        terminal.drain(1.0)
+        mark = terminal.mark()
+        terminal.write(b"\x01")
+        terminal.wait_for(CTRL_A_KITTY_HEX)
+        assert CTRL_A_KITTY_PRESS_AND_RELEASE not in terminal.since(mark), (
+            "the release is still made up after the plain client left"
+        )
+
+        # The server is whole: one session, one window, one pane.
+        listed = run_cli(terminal.sock_path, ["list-panes", "-a", "-F", "#{pane_id}"])
+        assert listed.returncode == 0, listed.stderr
+        assert len(listed.stdout.split()) == 1, listed.stdout
+
+    except BaseException:
+        terminal.report()
+        if second is not None:
+            second.report()
+        raise
+    finally:
+        if second is not None:
+            second.close()
+        terminal.close()
+    print("two terminals: ok")
+
+
 def check_libpymux(tmp):
     """
     libpymux against a server that is really there.
@@ -871,6 +1054,7 @@ def main() -> None:
     check_a_closing_split(tmp)
     check_the_pointer_shape(tmp)
     check_an_overlay_pane(tmp)
+    check_two_terminals_of_different_abilities(tmp)
     check_libpymux(tmp)
     print("All pty checks passed.")
 
