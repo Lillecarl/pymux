@@ -30,17 +30,24 @@ Narrow it to one class while hunting one failure:
 
     PYMUX_ESCTEST_INCLUDE=BSTests nix build --file . checks.pymux-esctest
 
-Write the list again after fixing something. The result of the build is
-the new list:
+Write the list again after fixing something. The result of the build
+holds the new list, and the log that says why each test failed:
 
     PYMUX_ESCTEST_RECORD=1 nix build --file . checks.pymux-esctest
-    cp -L result pymux/tests/esctest-failures.txt
+    cp result/failures.txt pymux/tests/esctest-failures.txt
+
+Read the reasons for one class the same way. The run is judged against
+nothing, so it always succeeds and always leaves the log:
+
+    PYMUX_ESCTEST_INCLUDE=ChangeColorTests PYMUX_ESCTEST_RECORD=1 \\
+        nix build --file . checks.pymux-esctest
+    less result/esctest.log
 
 Three variables reach this file from `pymux/default.nix`:
 `PYMUX_ESCTEST` names the directory that holds `esctest.py`, and the
 check does nothing when it is not set. `PYMUX_ESCTEST_INCLUDE` is the
 regular expression of test names to run. `PYMUX_ESCTEST_RECORD` names
-the file to write the new list to.
+the directory to write the list and the log into.
 """
 import os
 import re
@@ -161,17 +168,25 @@ def read_baseline():
     return names
 
 
-def write_baseline(path: Path, failed) -> None:
-    "Write the list of failures, with a line saying where it comes from."
-    path.write_text(
+def write_record(directory: Path, failed, log: str) -> None:
+    """
+    Keep the list of failures and the log that says why.
+
+    The log matters as much as the list. A run happens in the build
+    sandbox, so without this the reasons go away with it, and the names
+    alone do not say what a pane did wrong.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "failures.txt").write_text(
         "# The esctest2 tests that fail today. Every name here is a real\n"
         "# difference between a pymux pane and xterm.\n"
         "#\n"
         "# Write this file again with:\n"
         "#     PYMUX_ESCTEST_RECORD=1 nix build --file . checks.pymux-esctest\n"
-        "#     cp -L result pymux/tests/esctest-failures.txt\n"
+        "#     cp result/failures.txt pymux/tests/esctest-failures.txt\n"
         + "".join(name + "\n" for name in sorted(failed))
     )
+    (directory / "esctest.log").write_text(log)
 
 
 def failures_in(log: str):
@@ -276,7 +291,9 @@ def report(log: str) -> int:
         print(
             "\nesctest: %s no longer describes the run. Write it again with:\n"
             "    PYMUX_ESCTEST_RECORD=1 nix build --file . checks.pymux-esctest\n"
-            "    cp -L result pymux/tests/%s" % (BASELINE.name, BASELINE.name)
+            "    cp result/failures.txt pymux/tests/%s\n"
+            "and read result/esctest.log for what each one did."
+            % (BASELINE.name, BASELINE.name)
         )
         return 1
 
@@ -296,8 +313,8 @@ def main() -> int:
     record = os.environ.get("PYMUX_ESCTEST_RECORD", "")
     if record:
         failed = failures_in(log)
-        write_baseline(Path(record), failed)
-        print("esctest: wrote %d names to %s" % (len(failed), record))
+        write_record(Path(record), failed, log)
+        print("esctest: wrote %d names and the log to %s" % (len(failed), record))
         return 0
 
     return report(log)
