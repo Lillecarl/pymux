@@ -23,8 +23,8 @@ buildPythonPackage {
         repo = "ptterm";
         # Upstream has no release that works with prompt_toolkit 3, and
         # the kitty protocol support only lives on this fork.
-        rev = "3cfeca873d97d6f423b712a09ce88461d792dd1d";
-        hash = "sha256-N9qdo//x7wLVHEORM/0W1Vg5ipmIgu2u+YR6ymBtEZk=";
+        rev = "c3b8fc48bd6b79e60ff4aef075abd5bba4c55f2d";
+        hash = "sha256-nZ3zNotKG72ZUz4AE4nTI4EELSiZIVLcwFFDGhjVHhA=";
       };
 
   propagatedBuildInputs = [
