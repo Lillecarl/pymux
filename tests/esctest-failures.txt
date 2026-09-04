@@ -4,13 +4,6 @@
 # Write this file again with:
 #     PYMUX_ESCTEST_RECORD=1 nix build --file . checks.pymux-esctest
 #     cp result/failures.txt pymux/tests/esctest-failures.txt
-BSTests.test_BS_AfterNoWrappedInlines
-BSTests.test_BS_AfterOneWrappedInline
-BSTests.test_BS_CursorStartsInDoWrapPosition
-BSTests.test_BS_ReverseWrapGoesToBottom
-BSTests.test_BS_ReverseWrapWithLeftRight
-BSTests.test_BS_ReversewrapFromLeftEdgeToRightMargin
-BSTests.test_BS_WrapsInWraparoundMode
 CHATests.test_CHA_RespectsOriginMode
 CUBTests.test_CUB_AfterNoWrappedInlines
 CUBTests.test_CUB_AfterOneWrappedInline
@@ -43,7 +36,6 @@ DECSETTests.test_DECSET_Allow80To132
 DECSETTests.test_DECSET_DECOM_DECRQCRA
 DECSETTests.test_DECSET_MoreFix
 DECSETTests.test_DECSET_OPT_ALTBUF
-DECSETTests.test_DECSET_ReverseWraparound_BS
 DECSETTests.test_DECSET_ReverseWraparound_Multi
 DECSTBMTests.test_DECSTBM_DefaultRestores
 HVPTests.test_HVP_RespectsOriginMode

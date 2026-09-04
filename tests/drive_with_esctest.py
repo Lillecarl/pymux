@@ -108,6 +108,13 @@ os.chdir(os.environ["ESCTEST_DIR"])
 # and leaves the suite set up and ready to be driven.
 sys.argv = ["esctest.py",
             "--expected-terminal=xterm",
+            # Which xterm ptterm answers as, where the two differ.
+            # xterm 383 split reverse wraparound in two: "?45" now
+            # goes back only over a line that was reached by wrapping,
+            # and "?1045" carries the old behaviour that went back
+            # over any line. ptterm follows the split, so the suite has
+            # to ask for the later reading.
+            "--xterm-reverse-wrap=383",
             "--no-print-logs",
             "--logfile=" + os.environ["ESCTEST_LOG"],
             "--timeout=" + os.environ["ESCTEST_TIMEOUT"],
