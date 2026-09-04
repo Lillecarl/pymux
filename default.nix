@@ -132,6 +132,7 @@ let
           export HOME="$TMPDIR"
           export PTTERM_KITTY=${pkgs.kitty}/lib/kitty
           export PTTERM_LIBVTERM=${pkgs.libvterm-neovim}/lib/libvterm.so
+          export PTTERM_JUDGES=${judges}/bin/ptterm-judges
           export PTTERM_FUZZ="$examples"
           python -m pytest tests/fuzz_against_kitty.py -q -p no:cacheprovider
           touch "$out"
@@ -140,6 +141,34 @@ let
   // lib.optionalAttrs (pyteSrc != null) {
     pyte = runSuite "pyte-tests" pyteSrc;
   };
+
+  # The judges that are written in Rust: WezTerm and Alacritty, each
+  # with a screen model of its own. One program answers for both, so
+  # the python side asks one process instead of starting two.
+  judges =
+    if pttermSrc == null then null else
+    pkgs.rustPlatform.buildRustPackage {
+      pname = "ptterm-judges";
+      version = "0.1.0";
+      src = "${pttermSrc}/tests/judges";
+      cargoLock = {
+        lockFile = "${pttermSrc}/tests/judges/Cargo.lock";
+        outputHashes = {
+          "wezterm-term-0.1.0" = "sha256-Fe2rH9HegaUixPXHyHv4B8c0RI34GPbeX8mTzHCQwQ4=";
+          "finl_unicode-1.3.0" = "sha256-38S6XH4hldbkb6NP+s7lXa/NR49PI0w3KYqd+jPHND0=";
+        };
+      };
+      doCheck = false;
+
+      # wezterm-term reads a file of termwiz by a path relative to its
+      # own directory, which the vendored copy does not have: every
+      # crate lands beside the others and the name carries a version.
+      # The name without the version brings the path back.
+      preBuild = ''
+        ln -sfn "$NIX_BUILD_TOP/cargo-vendor-dir/termwiz-0.24.0" \
+                "$NIX_BUILD_TOP/cargo-vendor-dir/termwiz"
+      '';
+    };
 
   # The test suite of a working copy next to this repo.
   #
@@ -156,11 +185,13 @@ let
       export HOME="$TMPDIR"
       export PTTERM_KITTY=${pkgs.kitty}/lib/kitty
       export PTTERM_LIBVTERM=${pkgs.libvterm-neovim}/lib/libvterm.so
+      export PTTERM_JUDGES=${judges}/bin/ptterm-judges
 
       # A comparison that cannot run proves nothing, so say so loudly
       # instead of skipping.
       python -c "import sys; sys.path.insert(0, sys.argv[1]); import kitty.fast_data_types" "$PTTERM_KITTY"
       python -c "import ctypes, os; ctypes.CDLL(os.environ['PTTERM_LIBVTERM'])"
+      echo '{"data":"x","lines":1,"columns":1}' | "$PTTERM_JUDGES" > /dev/null
 
       python -m pytest tests -q -p no:cacheprovider
       touch "$out"
@@ -187,5 +218,5 @@ let
   };
 in
 {
-  inherit package shell checks;
+  inherit package shell checks judges;
 }
