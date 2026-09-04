@@ -8,6 +8,7 @@ import pytest
 from ptterm.sixel import decode_sixel
 
 from pymux import graphics as graphics_module
+from pymux.blocks import LOWER_HALF, UPPER_HALF
 from pymux.graphics import ClientGraphics
 
 from test_graphics_output import IMAGE_DATA, make_state, placement, view
@@ -51,7 +52,9 @@ def test_device_attributes_without_four_leave_sixel_off():
     client, _written = make_client()
     client.handle_reply("\x1b[?62;1;6c")
     assert not client.sixel_supported
-    assert not client.supported
+    # It still draws: half blocks need nothing but colour.
+    assert client.supported
+    assert client.blocks_wanted
 
 
 def test_a_forty_in_the_attributes_is_not_a_four():
@@ -74,9 +77,24 @@ def test_an_impossible_cell_size_is_ignored():
     assert (client.cell_width, client.cell_height) == (10, 20)
 
 
-def test_a_terminal_that_answers_nothing_draws_nothing():
+def test_a_terminal_that_answers_nothing_draws_half_blocks():
+    "It used to draw nothing at all. Every client shows something now."
     client, written = make_client()
     client.handle_reply("\x1b[?62;1;6c")
+    client.render([view(make_state(placement()))])
+    joined = "".join(written)
+    assert UPPER_HALF in joined or LOWER_HALF in joined
+    assert "\x1bP" not in joined  # No sixel.
+    assert "\x1b_G" not in joined  # No kitty.
+
+
+def test_nothing_is_drawn_before_the_detection_answers():
+    """
+    The device attributes reply closes the detection. Drawing half
+    blocks before it would put text where an image is about to go.
+    """
+    client, written = make_client()
+    assert not client.supported
     client.render([view(make_state(placement()))])
     assert written == []
 
@@ -107,6 +125,37 @@ def test_the_sixel_batch_saves_and_restores_the_cursor():
     client.render([view(make_state(placement()))])
     assert written[-1].startswith("\x1b7")
     assert written[-1].endswith("\x1b8")
+
+
+def test_the_half_blocks_land_on_the_cells_of_the_placement():
+    "One cursor move for each row, at the left edge of the placement."
+    client, written = make_client()
+    client.handle_reply("\x1b[?62;1;6c")
+    client.render(
+        [view(make_state(placement(columns=3, rows=2)), x=4, y=2)]
+    )
+    joined = "".join(written)
+    moves = re.findall(r"\x1b\[(\d+);(\d+)H", joined)
+    assert moves == [("3", "5"), ("4", "5")]
+
+
+def test_the_half_blocks_save_and_restore_the_cursor():
+    client, written = make_client()
+    client.handle_reply("\x1b[?62;1;6c")
+    client.render([view(make_state(placement()))])
+    assert written[-1].startswith("\x1b7")
+    assert written[-1].endswith("\x1b8")
+
+
+def test_a_second_frame_that_did_not_change_writes_nothing():
+    client, written = make_client()
+    client.handle_reply("\x1b[?62;1;6c")
+    views = [view(make_state(placement()))]
+    client.render(views)
+    assert written
+    written.clear()
+    client.render(views)
+    assert written == []
 
 
 # ----------------------------------------------------------------------

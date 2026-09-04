@@ -16,9 +16,15 @@ way that its terminal offers:
 2. Sixel. The pixels are the cells, so the image is re-encoded for the
    cell size of the terminal, and a changed image asks the renderer for
    a full repaint before it is drawn again.
-3. Neither: nothing is drawn. The cells under an image stay blank.
+3. Half blocks. A terminal that draws no pixels still draws coloured
+   text, and one cell of text carries two pixels (see `blocks.py`). It
+   is a poor picture and it is a picture.
 
 The outer terminal is asked which of these it speaks at attach time.
+Half blocks need no answer, so every client draws something, and a
+pane never has to be told that images are not available. That is the
+rule: translate a capability down, do not take it away.
+
 The placements of the previous frame are remembered, so an unchanged
 screen emits nothing.
 """
@@ -28,8 +34,10 @@ import re
 import zlib
 from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Tuple
 
+from prompt_toolkit.output import ColorDepth
 from ptterm.graphics import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
 
+from .blocks import average_rgba, blocks_for, rows_for_cells
 from .log import logger
 from .sixel import encode_sixel, scale_rgba, to_rgba
 
@@ -147,16 +155,26 @@ class ClientGraphics:
         write_raw: Callable[[str], None],
         flush: Callable[[], None],
         repaint: Optional[Callable[[], None]] = None,
+        color_depth: Optional[Callable[[], ColorDepth]] = None,
     ) -> None:
         self._write_raw = write_raw
         self._flush = flush
         self._repaint = repaint
+        #: The colour depth of the outer terminal, read when it is
+        #: needed. Only the half blocks ask: they are cells, so they
+        #: take the colours that the terminal has.
+        self._color_depth = color_depth
 
         #: True once the outer terminal answered the graphics query.
         self.kitty_supported = False
 
         #: True when the device attributes name sixel.
         self.sixel_supported = False
+
+        #: True once the device attributes closed the detection. Half
+        #: blocks wait for it: drawing them before the answer would
+        #: put text where an image is about to go.
+        self.detected = False
 
         #: Size of one cell of the outer terminal, in pixels.
         self.cell_width = DEFAULT_CELL_WIDTH
@@ -174,20 +192,43 @@ class ClientGraphics:
         # (outer image id, slot) -> placement of the previous frame.
         self._placements: Dict[Tuple[int, int], _Placement] = {}
 
-        # Sixel state. The encoded images are cached: cropping means
-        # re-encoding, so a scrolling image would otherwise pay for the
-        # whole encoder on every frame.
-        self._sixel_placements: Dict[Tuple[int, int, int], str] = {}
-        self._sixel_cache: Dict[tuple, Tuple[object, str]] = {}
-        self._sixel_redraw = False
+        # The state of a way of drawing whose pixels are the cells:
+        # sixel, and half blocks. A client draws one way or the other,
+        # never both, so the two share this. The encoded images are
+        # cached, because cropping means encoding again and a scrolling
+        # image would otherwise pay for the encoder on every frame.
+        self._cell_placements: Dict[Tuple[int, int, int], str] = {}
+        self._cell_cache: Dict[tuple, Tuple[object, object]] = {}
+        self._cell_redraw = False
 
     # ------------------------------------------------------------------
     # Detection.
 
     @property
     def supported(self) -> bool:
-        "True when the outer terminal can draw images at all."
-        return self.kitty_supported or self.sixel_supported
+        """
+        True when this client draws images.
+
+        Every terminal that answered the detection does, because half
+        blocks need nothing of the terminal but colour. Before the
+        answer, only a terminal that already said yes draws.
+        """
+        return self.kitty_supported or self.sixel_supported or self.detected
+
+    @property
+    def blocks_wanted(self) -> bool:
+        "True when this client falls back to half blocks."
+        return self.detected and not self.kitty_supported and not self.sixel_supported
+
+    @property
+    def color_depth(self) -> ColorDepth:
+        "What the outer terminal can colour a cell with."
+        if self._color_depth is None:
+            return ColorDepth.DEPTH_24_BIT
+        try:
+            return self._color_depth()
+        except Exception:
+            return ColorDepth.DEPTH_24_BIT
 
     def handle_reply(self, data: str) -> None:
         "Read what a terminal reply says about the outer terminal."
@@ -208,6 +249,17 @@ class ClientGraphics:
         if match is not None:
             attributes = [p for p in match.group(1).split(";") if p]
             self.sixel_supported = "4" in attributes
+            # The last reply of the detection. What did not answer by
+            # now is not there, so the half blocks know where they
+            # stand.
+            was_detected = self.detected
+            self.detected = True
+            if not was_detected and self._repaint is not None:
+                # The frames drawn so far carried no image, because
+                # nothing knew yet whether this terminal takes one. Ask
+                # for another, or an image on a quiet pane waits for
+                # the next thing that happens to the pane.
+                self._repaint()
 
     # ------------------------------------------------------------------
     # Frames.
@@ -218,13 +270,16 @@ class ClientGraphics:
         pane that the client can see.
 
         The kitty graphics protocol comes first: it draws above the
-        text, so it never fights with the renderer. Sixel is the
-        fallback.
+        text, so it never fights with the renderer. Sixel comes next.
+        Half blocks are what is left, and they need nothing of the
+        terminal, so every client draws something.
         """
         if self.kitty_supported:
             self._render_kitty(views)
         elif self.sixel_supported:
             self._render_sixel(views)
+        elif self.detected:
+            self._render_blocks(views)
 
     def _render_kitty(self, views: Iterable[PaneView]) -> None:
         try:
@@ -533,28 +588,49 @@ class ClientGraphics:
         full repaint, which puts the text back under the image that
         moved away.
         """
+        self._render_cells(self._collect_sixel, views)
+
+    def _render_blocks(self, views: Iterable[PaneView]) -> None:
+        """
+        Draw the images as half blocks.
+
+        These are cells, like sixel pixels are, so they follow the same
+        two rules: they go out after the text of the frame, and a
+        change asks for a full repaint, which puts the text back where
+        an image moved away from.
+        """
+        self._render_cells(self._collect_blocks, views)
+
+    def _render_cells(self, collect, views: Iterable[PaneView]) -> None:
+        """
+        Draw one frame of a way whose pixels are the cells.
+
+        The images go out after the text of the frame, and a change
+        asks the renderer for a full repaint, so the text comes back
+        under an image that moved away.
+        """
         try:
-            desired, live = self._collect_sixel(views)
+            desired, live = collect(views)
         except Exception:
             logger.exception("Encoding the pane images failed.")
             return
 
-        for key in list(self._sixel_cache):
+        for key in list(self._cell_cache):
             if key not in live:
-                del self._sixel_cache[key]
+                del self._cell_cache[key]
 
-        changed = desired != self._sixel_placements
-        if not changed and not self._sixel_redraw:
+        changed = desired != self._cell_placements
+        if not changed and not self._cell_redraw:
             return
 
-        self._sixel_placements = desired
+        self._cell_placements = desired
         if changed and self._repaint is not None:
             # The next frame paints the whole screen, which wipes the
             # pixels. Draw again once it did.
             self._repaint()
-            self._sixel_redraw = True
+            self._cell_redraw = True
         else:
-            self._sixel_redraw = False
+            self._cell_redraw = False
 
         if not desired:
             return
@@ -604,11 +680,77 @@ class ClientGraphics:
 
         return desired, live
 
+    def _collect_blocks(
+        self, views: Iterable[PaneView]
+    ) -> Tuple[Dict[Tuple[int, int, int], str], set]:
+        "The half block rows of one frame, and the cache keys they used."
+        desired: Dict[Tuple[int, int, int], str] = {}
+        live = set()
+        depth = self.color_depth
+
+        for view in views:
+            slots: Dict[int, int] = {}
+            for (
+                placement,
+                image,
+                columns,
+                rows,
+                x,
+                y,
+                source,
+            ) in self._pane_placements(view):
+                slot = slots.get(placement.image_id, 0) + 1
+                slots[placement.image_id] = slot
+
+                key = (id(image), source, columns, rows, depth)
+                live.add(key)
+
+                lines = self._blocks_for(key, image, source, columns, rows, depth)
+                if not lines:
+                    continue
+
+                # One cursor move for each row: the rows of an image are
+                # not the rows of the screen once a pane is not at the
+                # left edge.
+                desired[(view.pane_id, placement.image_id, slot)] = "".join(
+                    "\x1b[%i;%iH%s" % (y + offset + 1, x + 1, line)
+                    for offset, line in enumerate(lines)
+                    if line
+                )
+
+        return desired, live
+
+    def _blocks_for(
+        self, key: tuple, image, source, columns: int, rows: int, depth
+    ) -> List[str]:
+        "The half block rows of one placement. (Cached by geometry.)"
+        known = self._cell_cache.get(key)
+        if known is not None and known[0] is image:
+            return known[1]
+
+        pixels = to_rgba(image.format, image.width, image.height, image.data)
+        if pixels is None:
+            return []
+
+        width, height = image.width, image.height
+        if source is not None:
+            pixels = _crop_rgba(pixels, width, height, source)
+            if pixels is None:
+                return []
+            width, height = source[2], source[3]
+
+        # Two pixels for every cell, one above the other.
+        pixels = average_rgba(pixels, width, height, columns, rows_for_cells(rows))
+        lines = blocks_for(pixels, columns, rows, depth)
+
+        self._cell_cache[key] = (image, lines)
+        return lines
+
     def _sixel_for(
         self, key: tuple, image, source, columns: int, rows: int
     ) -> Optional[str]:
         "The sixel sequence of one placement. (Cached by geometry.)"
-        known = self._sixel_cache.get(key)
+        known = self._cell_cache.get(key)
         if known is not None and known[0] is image:
             return known[1]
 
@@ -631,7 +773,7 @@ class ClientGraphics:
         if encoded is None:
             return None
 
-        self._sixel_cache[key] = (image, encoded)
+        self._cell_cache[key] = (image, encoded)
         return encoded
 
     # ------------------------------------------------------------------
@@ -641,10 +783,10 @@ class ClientGraphics:
         Remove everything that this client put on the outer terminal.
         (When the client detaches, or when a popup covers the panes.)
         """
-        if self._sixel_placements:
-            self._sixel_placements = {}
-            self._sixel_cache = {}
-            self._sixel_redraw = False
+        if self._cell_placements:
+            self._cell_placements = {}
+            self._cell_cache = {}
+            self._cell_redraw = False
             if self._repaint is not None:
                 self._repaint()
 

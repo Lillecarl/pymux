@@ -77,7 +77,13 @@ class ServerConnection:
         # arrives before the device attributes reply that closes the
         # detection.
         self.graphics = ClientGraphics(
-            self._write_output_raw, self._flush_output, self._request_repaint
+            self._write_output_raw,
+            self._flush_output,
+            self._request_repaint,
+            # Read when it is needed, not now: the colour detection
+            # below has not run yet, and the half blocks only ask once
+            # a frame carries an image.
+            color_depth=lambda: self.colors.depth,
         )
 
         # Colour depth of the outer terminal. The same handshake
