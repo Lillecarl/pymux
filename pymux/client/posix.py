@@ -119,9 +119,13 @@ class PosixClient(Client):
         # and last the device attributes, which also say whether sixel
         # works. Every terminal answers the device attributes query, so
         # a feature that did not answer before it is not supported.
+        # The keyboard query asks for every flag first, so that the
+        # reply says which ones the terminal took. A terminal that
+        # speaks a part of the protocol only says so that way. The pop
+        # puts the terminal back as it was.
         os.write(
             sys.stdout.fileno(),
-            b"\x1b[?u"
+            b"\x1b[>31u\x1b[?u\x1b[<u"
             + GRAPHICS_QUERY.encode("ascii")
             + CELL_SIZE_QUERY.encode("ascii")
             + TRUECOLOR_PROBE.encode("ascii")

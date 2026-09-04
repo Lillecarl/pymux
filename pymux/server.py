@@ -66,6 +66,12 @@ class ServerConnection:
         self._kitty_detection_pending = False
         self._kitty_supported = False
 
+        #: What the outer terminal can report of the keyboard protocol,
+        #: in the flags of that protocol. The query of the detection
+        #: asks for every flag, so the reply says which ones the
+        #: terminal took. Zero means the legacy encoding only.
+        self.kitty_source_flags = 0
+
         # Kitty graphics protocol state of the outer terminal. The same
         # query answers this one: the reply of the graphics query
         # arrives before the device attributes reply that closes the
@@ -206,8 +212,15 @@ class ServerConnection:
 
         if data.startswith("\x1b[?") and data.endswith("u"):
             # Reply of the "CSI ? u" query: the terminal supports the
-            # keyboard protocol.
+            # keyboard protocol. The detection asks for every flag
+            # first, so the number says which ones the terminal took,
+            # and that is what it can report.
             self._kitty_supported = True
+            try:
+                self.kitty_source_flags = int(data[3:-1] or 0)
+            except ValueError:
+                self.kitty_source_flags = 0
+            self.pymux.sync_keyboard_source_flags()
             return
 
         # The graphics query reply, the cell size report and the device

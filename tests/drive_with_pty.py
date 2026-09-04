@@ -51,6 +51,25 @@ REPO_ROOT = Path(__file__).parent.parent
 # "\x1b[97;5u" — kitty ctrl+a — as the pane child reports it (hex).
 CTRL_A_KITTY_HEX = b"<<1b5b39373b3575>>"
 
+# A key that came back up, as a terminal that speaks the protocol
+# sends it, and as the pane child reports it. Only a pane that asked
+# for the event types of a key may see one.
+KEY_RELEASE = b"\x1b[97;1:3u"
+# What the pane reads. The form is the one that kitty writes: a field
+# that holds its default stays empty, so the modifiers of a release
+# with none are an empty field and not the value one.
+KEY_RELEASE_HEX = b"<<%s>>" % b"\x1b[97;:3u".hex().encode("ascii")
+
+# The pane asks "CSI ? u" when it reads a "Q", and echoes the answer.
+# The answer holds the flags that the pane really gets, so it depends
+# on what the terminal of the client can report.
+ASK_THE_FLAGS = b"Q"
+
+
+def flags_answer(flags: int) -> bytes:
+    "The answer of the pane to the flags query, as the pane echoes it."
+    return b"<<%s>>" % ("\x1b[?%du" % flags).encode().hex().encode("ascii")
+
 # The kitty image that the pane child transmits: 2x2 pixels, RGB. It
 # is placed over three columns and two rows.
 IMAGE_PAYLOAD = "AAECAwQFBgcICQoL"
@@ -97,7 +116,7 @@ PANE_UNDERLINE = "\x1b[4:3;58:2::255:0:0mCURLY\x1b[0m"
 PANE_CHILD = """
 import os, sys, tty
 tty.setraw(0)
-sys.stdout.write("\\x1b[>1u")
+sys.stdout.write("\\x1b[>3u")
 sys.stdout.write(%r if sys.argv[1] == "kitty" else %r)
 sys.stdout.write(%r)
 sys.stdout.write("READY")
@@ -114,6 +133,13 @@ while True:
     data = sys.stdin.buffer.read1(256)
     if not data:
         break
+    if b"Q" in data:
+        # Ask what the terminal really does with the keyboard. The
+        # answer arrives as input, so the echo below shows it. Asking
+        # on demand and not at the start keeps it after the detection
+        # of the client, which is what decides the answer.
+        sys.stdout.write("\\x1b[?u")
+        sys.stdout.flush()
     # A line of its own: a long echo must not wrap, or the check for
     # it reads the wrapping as part of the text.
     sys.stdout.write("\\r\\n<<%%s>>" %% data.hex())
@@ -346,16 +372,17 @@ def check_kitty_terminal(tmp):
         assert CELL_SIZE_QUERY.encode() in terminal.seen
         assert TRUECOLOR_PROBE.encode() in terminal.seen
 
-        # Answer like a terminal that supports all of it.
-        terminal.write(b"\x1b[?1u")  # Keyboard flags.
+        # Answer like a terminal that supports all of it. The keyboard
+        # query asks for every flag, and a real kitty takes them all.
+        terminal.write(b"\x1b[?31u")  # Keyboard flags.
         terminal.write(b"\x1b_Gi=31;OK\x1b\\")  # Kitty graphics.
         terminal.write(b"\x1b[6;20;10t")  # Cell size.
         terminal.write(b"\x1bP1$r38:2::1:2:3m\x1b\\")  # The colour survived.
         terminal.write(b"\x1b[?62;1;6c")  # Device attributes: no sixel.
 
-        # 2. The pane pushed the disambiguate flag; the client enables
-        #    it on the outer terminal.
-        terminal.wait_for(b"\x1b[=1;1u")
+        # 2. The pane pushed the disambiguate flag and the event types;
+        #    the client enables both on the outer terminal.
+        terminal.wait_for(b"\x1b[=3;1u")
 
         # 3. The pane child runs and its output is rendered.
         terminal.wait_for(b"READY")
@@ -409,6 +436,18 @@ def check_kitty_terminal(tmp):
         terminal.wait_for(CTRL_A_KITTY_HEX)
         terminal.write(b"\x01")  # The legacy encoding is translated too.
         terminal.wait_for(CTRL_A_KITTY_HEX)
+
+        #    A key that came back up reaches the pane as well. Only a
+        #    terminal that speaks the protocol sends one, and only a
+        #    pane that asked for the event types may read it.
+        terminal.write(KEY_RELEASE)
+        terminal.wait_for(KEY_RELEASE_HEX)
+
+        #    And the pane hears the truth about its keyboard: this
+        #    terminal serves every flag, so the pane keeps both of the
+        #    flags that it pushed.
+        terminal.write(ASK_THE_FLAGS)
+        terminal.wait_for(flags_answer(3))
 
         # Let the pane finish reading. One read of the pane returns
         # whatever has arrived, so a write that comes too soon lands in
@@ -492,7 +531,7 @@ def check_sixel_terminal(tmp):
 
         # No kitty protocol was claimed, so nothing of it is sent.
         assert b"\x1b_G" not in terminal.since(mark)
-        assert b"\x1b[=1;1u" not in terminal.since(mark)
+        assert b"\x1b[=" not in terminal.since(mark)
     except BaseException:
         terminal.report()
         raise
@@ -536,6 +575,12 @@ def check_plain_terminal(tmp):
         assert b"\x1bP" not in tail, "sixel without support"
         assert b"\x1b[=" not in tail, "keyboard flags without support"
         assert b";38;2;" not in tail, "24 bit colour without support"
+
+        # The pane asked for the disambiguate flag and the event types.
+        # This terminal can report neither a key release nor the other
+        # codes of a key, so the pane hears only what it really gets.
+        terminal.write(ASK_THE_FLAGS)
+        terminal.wait_for(flags_answer(1))
     except BaseException:
         terminal.report()
         raise

@@ -380,6 +380,10 @@ class Pymux:
         #: flags of the focused pane; clients enable the protocol on
         #: their outer terminals accordingly.)
         self._kitty_flags_sent = None
+
+        # What the keyboards of the clients could report the last time
+        # the panes were told. (None: no pane was told yet.)
+        self._keyboard_source_flags_sent = None
         # Event loop for this server. (Python 3.14 doesn't have a global
         # "current event loop" anymore. Keep our own reference.)
         try:
@@ -661,6 +665,9 @@ class Pymux:
         # don't remove.
         self.panes_by_id[pane.pane_id] = pane
 
+        # A pane that starts now missed the last walk of the panes.
+        self.tell_pane_about_the_keyboard(pane)
+
         logger.info("Created process %r.", command_list)
 
         return pane
@@ -906,6 +913,63 @@ class Pymux:
         except Exception:
             logger.exception("Sending the shape of the pointer failed.")
 
+    def keyboard_source_flags(self) -> int:
+        """
+        What the terminals of the clients can report of the keyboard
+        protocol, in the flags of that protocol.
+
+        A pane may be looked at by several clients at once, and a key
+        can come from any of them. So only what every attached client
+        can report counts. No client at all reports nothing.
+
+        Only an attached client counts. A connection that runs one
+        command and leaves has no terminal of the user behind it, and
+        it never asked one what it does.
+        """
+        masks = [
+            getattr(connection, "kitty_source_flags", 0) or 0
+            for connection in self._client_states
+        ]
+        if not masks:
+            return 0
+        common = masks[0]
+        for mask in masks[1:]:
+            common &= mask
+        return common
+
+    def sync_keyboard_source_flags(self) -> None:
+        """
+        Tell every pane what the keyboards of the clients can report.
+
+        A pane answers the query of its program with the flags that it
+        really gets, and that answer needs this. (Only walks the panes
+        when the value changed.)
+        """
+        flags = self.keyboard_source_flags()
+        if flags == self._keyboard_source_flags_sent:
+            return
+        self._keyboard_source_flags_sent = flags
+        for pane in list(self.panes_by_id.values()):
+            self.tell_pane_about_the_keyboard(pane)
+
+    def tell_pane_about_the_keyboard(self, pane) -> None:
+        """
+        Tell one pane what the keyboards of the clients can report.
+
+        Never raises: this runs when a client attaches and when a pane
+        starts, and neither may stop for it.
+        """
+        try:
+            screen = pane.process.screen
+        except Exception:
+            return
+        try:
+            screen.keyboard_source_flags = self.keyboard_source_flags()
+        except AttributeError:
+            # An older ptterm knows nothing about the keyboard of the
+            # host. It then claims what a pane asks for, as before.
+            pass
+
     def sync_kitty_flags(self) -> None:
         """
         Send the kitty keyboard protocol flags of the focused pane to
@@ -1130,8 +1194,16 @@ class Pymux:
 
         self._client_states[connection] = client_state
 
+        # A client that just arrived may speak less than the ones that
+        # are here, and the keyboard of every client has to serve what
+        # a pane hears. (The detection of this client answers later,
+        # and raises it again when the terminal can do more.)
+        self.sync_keyboard_source_flags()
+
         return client_state
 
     def remove_client(self, connection):
         if connection in self._client_states:
             del self._client_states[connection]
+        # One client fewer can mean that the rest speak more.
+        self.sync_keyboard_source_flags()
