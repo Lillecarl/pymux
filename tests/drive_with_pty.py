@@ -159,11 +159,13 @@ while True:
 
 #: A program that draws nothing and waits. A pane running it asks for
 #: no pointer shape, which is what the check of the pointer needs.
+#:
+#: It waits on its stdin, which ends when the pane goes.
 QUIET_CHILD = """
-import sys, time
+import sys
 sys.stdout.write("QUIET")
 sys.stdout.flush()
-time.sleep(600)
+sys.stdin.read()
 """
 
 
