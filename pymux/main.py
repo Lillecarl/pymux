@@ -298,12 +298,6 @@ class ClientState:
         self.app.layout.focus(pane.terminal)
 
 
-#: The OSC sequences that only make sense for the pane a client looks
-#: at. The shape of the pointer is one: a pane out of sight must not
-#: change it.
-_FOCUSED_ONLY_OSC = frozenset(["22"])
-
-
 class Pymux:
     """
     The main Pymux application class.
@@ -734,8 +728,10 @@ class Pymux:
             app.invalidate()
 
         # The focused pane can have changed, or the process inside it
-        # can have pushed/popped kitty keyboard protocol flags.
+        # can have pushed/popped kitty keyboard protocol flags or asked
+        # for a different pointer.
         self.sync_kitty_flags()
+        self.sync_pointer_shape()
 
     def get_focused_pane(self):
         """
@@ -785,6 +781,15 @@ class Pymux:
         sequence may not stop it.
         """
         try:
+            if code == "22":
+                # The shape of the pointer is not a sequence to pass on
+                # as it arrives: it belongs to the pane, and the client
+                # has to see the shape of the pane it looks at. The
+                # screen of the pane holds it; this only asks every
+                # client to look again.
+                self.sync_pointer_shape()
+                return
+
             if code == "52" and not self.enable_clipboard:
                 return
 
@@ -798,31 +803,65 @@ class Pymux:
                 logger.warning("Dropped an unsafe OSC %s of a pane.", code)
                 return
 
-            for connection, client_state in self._client_states.items():
-                # The shape of the pointer belongs to the pane that the
-                # client looks at. The clipboard and a notification come
-                # from any pane: a build that ends in a pane out of
-                # sight is exactly what a notification is for.
-                if code in _FOCUSED_ONLY_OSC and not self._has_focus(
-                    client_state, pane
-                ):
-                    continue
+            # The clipboard and a notification come from any pane: a
+            # build that ends in a pane out of sight is exactly what a
+            # notification is for.
+            for connection in self._client_states:
                 connection.forward_osc(sequence)
         except Exception:
             logger.exception("Forwarding an OSC sequence failed.")
 
     def _has_focus(self, client_state, pane) -> bool:
         "True when this client looks at this pane."
+        return self.focused_pane_of(client_state) is pane
+
+    def focused_pane_of(self, client_state):
+        """
+        The pane that this client looks at, or `None`.
+
+        Never raises: this runs on the invalidate path, also for
+        headless servers without a running prompt_toolkit application.
+        """
         if self.overlay_pane is not None:
-            return self.overlay_pane is pane
+            return self.overlay_pane
 
         try:
             with set_app(client_state.app):
                 window = self.arrangement.get_active_window()
         except Exception:
             # `get_active_window` needs a running application.
-            return False
-        return window is not None and window.active_pane is pane
+            return None
+        return window.active_pane if window is not None else None
+
+    def pointer_shape_of(self, pane) -> str:
+        """
+        The shape of the pointer that the program in a pane asks for.
+
+        An empty string means that it asked for none, and that the
+        terminal of the user picks the shape itself.
+        """
+        if pane is None:
+            return ""
+        screen = getattr(pane.process, "screen", None)
+        return getattr(screen, "pointer_shape", "") or ""
+
+    def sync_pointer_shape(self) -> None:
+        """
+        Give every client the shape of the pointer that the pane it
+        looks at asks for.
+
+        Two clients can look at two panes, so this is answered for each
+        of them. A client that moves to a pane which asks for no shape
+        is told so, or the pointer keeps the shape of a pane that the
+        user left.
+        """
+        try:
+            for connection, client_state in self._client_states.items():
+                connection.set_pointer_shape(
+                    self.pointer_shape_of(self.focused_pane_of(client_state))
+                )
+        except Exception:
+            logger.exception("Sending the shape of the pointer failed.")
 
     def sync_kitty_flags(self) -> None:
         """

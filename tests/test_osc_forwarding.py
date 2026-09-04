@@ -8,7 +8,7 @@ comes from a program in a pane, so it is checked first.
 """
 import pytest
 
-from pymux.main import Pymux, _FOCUSED_ONLY_OSC
+from pymux.main import Pymux
 from pymux.osc import MAX_OSC_LENGTH, build_osc
 
 
@@ -99,32 +99,53 @@ class FakeConnection:
 
     def __init__(self):
         self.written = []
+        self._pointer_shape_sent = ""
 
     def forward_osc(self, data):
         self.written.append(data)
+
+    def set_pointer_shape(self, shape):
+        "The same rule as the real one: only a change goes out."
+        if shape == self._pointer_shape_sent:
+            return
+        self._pointer_shape_sent = shape
+        self.forward_osc("\x1b]22;%s\x1b\\" % shape)
 
 
 class FakeClientState:
     app = None
 
 
+class FakeScreen:
+    def __init__(self, pointer_shape=""):
+        self.pointer_shape = pointer_shape
+
+
+class FakeProcess:
+    def __init__(self, pointer_shape=""):
+        self.screen = FakeScreen(pointer_shape)
+
+
 class FakePane:
     "A pane is named by its id when a notification answer comes back."
 
-    def __init__(self, pane_id=7):
+    def __init__(self, pane_id=7, pointer_shape=""):
         self.pane_id = pane_id
+        self.process = FakeProcess(pointer_shape)
 
 
-def make_pymux(focused=()):
+def make_pymux(focused=(), pane=None):
     """
     A pymux with two client connections. `focused` names the ones that
-    look at the pane of the test.
+    look at `pane`.
     """
     pymux = Pymux()
     connections = [FakeConnection(), FakeConnection()]
     states = [FakeClientState(), FakeClientState()]
     pymux._client_states = dict(zip(connections, states))
-    pymux._has_focus = lambda state, pane: states.index(state) in focused
+    pymux.focused_pane_of = lambda state: (
+        pane if states.index(state) in focused else None
+    )
     return pymux, connections
 
 
@@ -158,15 +179,56 @@ def test_the_answer_finds_the_pane_that_asked():
     assert answer == (7, "i=mine")
 
 
-def test_the_pointer_shape_reaches_the_clients_that_look_at_the_pane():
-    pymux, connections = make_pymux(focused=[1])
-    pymux.forward_osc(FakePane(), "22", "pointer")
+# ----------------------------------------------------------------------
+# The shape of the pointer.
+#
+# It is not passed on as it arrives. It belongs to the pane, the screen
+# of the pane holds it, and every client is given the shape of the pane
+# that it looks at.
+
+
+def test_the_shape_reaches_the_client_that_looks_at_the_pane():
+    pane = FakePane(pointer_shape="pointer")
+    pymux, connections = make_pymux(focused=[1], pane=pane)
+    pymux.forward_osc(pane, "22", "pointer")
     assert connections[0].written == []
     assert connections[1].written == [sequence("22", "pointer")]
 
 
-def test_only_the_pointer_shape_follows_the_focus():
-    assert _FOCUSED_ONLY_OSC == {"22"}
+def test_the_shape_goes_away_when_the_focus_leaves_the_pane():
+    pane = FakePane(pointer_shape="pointer")
+    pymux, connections = make_pymux(focused=[0], pane=pane)
+    pymux.sync_pointer_shape()
+    assert connections[0].written == [sequence("22", "pointer")]
+
+    # The client looks at another pane now, which asks for no shape.
+    pymux.focused_pane_of = lambda state: None
+    pymux.sync_pointer_shape()
+    assert connections[0].written[-1] == sequence("22", "")
+
+
+def test_the_same_shape_goes_out_once():
+    pane = FakePane(pointer_shape="pointer")
+    pymux, connections = make_pymux(focused=[0], pane=pane)
+    pymux.sync_pointer_shape()
+    pymux.sync_pointer_shape()
+    assert connections[0].written == [sequence("22", "pointer")]
+
+
+def test_a_client_that_never_saw_a_shape_is_not_told_to_reset_it():
+    pymux, connections = make_pymux()
+    pymux.sync_pointer_shape()
+    assert connections[0].written == []
+
+
+def test_a_pane_without_a_screen_asks_for_no_shape():
+    "A pane that never started has no screen to read."
+    pymux, _connections = make_pymux()
+    assert pymux.pointer_shape_of(None) == ""
+
+    pane = FakePane()
+    pane.process = None
+    assert pymux.pointer_shape_of(pane) == ""
 
 
 def test_an_unsafe_payload_reaches_nobody():

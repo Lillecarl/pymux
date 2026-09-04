@@ -114,6 +114,16 @@ while True:
 """ % (KITTY_IMAGE, SIXEL_IMAGE, PANE_OSC, PANE_HYPERLINK)
 
 
+#: A program that draws nothing and waits. A pane running it asks for
+#: no pointer shape, which is what the check of the pointer needs.
+QUIET_CHILD = """
+import sys, time
+sys.stdout.write("QUIET")
+sys.stdout.flush()
+time.sleep(600)
+"""
+
+
 #: The program of an overlay pane: it names itself, echoes what it
 #: reads and waits.
 OVERLAY_CHILD = """
@@ -554,6 +564,55 @@ def check_a_closing_split(tmp):
     print("closing split: ok")
 
 
+def check_the_pointer_shape(tmp):
+    """
+    The shape of the pointer follows the pane that the client looks at.
+
+    The first pane asks for a shape. A split into a pane that asks for
+    none has to take the shape away again, or the pointer keeps the
+    shape of a pane that the user left.
+    """
+    terminal = Terminal(tmp, "kitty")
+    try:
+        terminal.wait_for_the_queries()
+        terminal.write(b"\x1b[?1u")
+        terminal.write(b"\x1b_Gi=31;OK\x1b\\")
+        terminal.write(b"\x1b[6;20;10t")
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"READY")
+        terminal.wait_for(OSC_POINTER.encode())
+
+        # A second pane, which asks for no shape.
+        child = tmp / "quiet-child.py"
+        child.write_text(QUIET_CHILD)
+        mark = terminal.mark()
+        split = run_cli(
+            terminal.sock_path,
+            ["split-window", "%s %s" % (sys.executable, child)],
+        )
+        assert split.returncode == 0, split.stderr
+        terminal.wait_for(b"QUIET")
+        terminal.drain(1.0)
+        assert b"\x1b]22;\x1b\\" in terminal.since(mark), (
+            "the pointer kept the shape of the pane that the user left"
+        )
+
+        # Back to the pane that asked for the shape.
+        mark = terminal.mark()
+        back = run_cli(terminal.sock_path, ["last-pane"])
+        assert back.returncode == 0, back.stderr
+        terminal.drain(1.0)
+        assert OSC_POINTER.encode() in terminal.since(mark), (
+            "the shape did not come back with the pane"
+        )
+    except BaseException:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+    print("pointer shape: ok")
+
+
 def check_an_overlay_pane(tmp):
     """
     An overlay pane floats over the layout and takes the keyboard.
@@ -634,6 +693,7 @@ def main() -> None:
     check_colorterm_terminal(tmp)
     check_plain_terminal(tmp)
     check_a_closing_split(tmp)
+    check_the_pointer_shape(tmp)
     check_an_overlay_pane(tmp)
     print("All pty checks passed.")
 

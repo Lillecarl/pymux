@@ -87,6 +87,10 @@ class ServerConnection:
             self._send_packet, kitty_reply_callback=self._handle_kitty_reply
         )
 
+        # The shape of the pointer that this client was told about. A
+        # client that never saw one is not told to reset it.
+        self._pointer_shape_sent = ""
+
         self._spawn(self._start_reading())
 
     def _spawn(self, coro) -> None:
@@ -129,6 +133,21 @@ class ServerConnection:
             return
         self._write_output_raw(sequence)
         self._flush_output()
+
+    def set_pointer_shape(self, shape: str) -> None:
+        """
+        Put the shape that the focused pane asks for on the pointer of
+        this client. An empty shape gives the pointer back to the
+        terminal of the user.
+
+        Only a change goes out. The shape belongs to the pane that the
+        client looks at, so it has to be written again when the focus
+        moves to a pane that wants a different one, or none.
+        """
+        if shape == self._pointer_shape_sent:
+            return
+        self._pointer_shape_sent = shape
+        self.forward_osc("\x1b]22;%s\x1b\\" % shape)
 
     def _apply_color_depth(self) -> None:
         """
