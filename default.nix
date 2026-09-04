@@ -48,7 +48,10 @@ let
 
     # The suites run as `checks.pymux` and `checks.pty`, against the source.
     doCheck = false;
-    pythonImportsCheck = [ "pymux" ];
+    pythonImportsCheck = [
+      "pymux"
+      "libpymux"
+    ];
 
     passthru = { inherit checks terminfo; };
 
@@ -105,6 +108,7 @@ let
     root = ./.;
     fileset = lib.fileset.unions [
       ./pymux
+      ./libpymux
       ./tests
     ];
   };
@@ -118,7 +122,7 @@ let
       # Rerun whenever the selection changes.
       inherit selection;
     } ''
-      cp -r ${testSources}/pymux ${testSources}/tests .
+      cp -r ${testSources}/pymux ${testSources}/libpymux ${testSources}/tests .
       chmod -R +w .
       export HOME="$TMPDIR"
       export LANG=C.UTF-8

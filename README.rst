@@ -14,6 +14,27 @@ Issues, questions, wishes, comments, feedback, remarks? Please create a GitHub
 issue, I appreciate it.
 
 
+Driving pymux from python
+-------------------------
+
+``libpymux`` drives a running server over its socket, with the object
+model that libtmux uses: a server holds sessions, a session holds
+windows, a window holds panes.
+
+.. code:: python
+
+    from libpymux import Server
+
+    server = Server.first()
+    pane = server.session.active_window.active_pane
+    pane.send_keys("echo hello")
+    print(pane.capture())
+
+See ``libpymux/README.md``. Pymux also implements the tmux command line,
+so libtmux itself can drive it through a ``tmux`` shim; see
+``tests/drive_with_libtmux.py``.
+
+
 Installation
 ------------
 

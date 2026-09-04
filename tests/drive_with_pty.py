@@ -763,6 +763,98 @@ def check_an_overlay_pane(tmp):
     print("overlay pane: ok")
 
 
+def check_libpymux(tmp):
+    """
+    libpymux against a server that is really there.
+
+    The unit tests in `test_libpymux.py` answer with a socket that says
+    what the test tells it to say. This one asks the real server, so it
+    catches a format variable that went away, a command that changed its
+    options, and output that does not parse.
+    """
+    from libpymux import CommandError, Server
+
+    terminal = Terminal(tmp, "kitty")
+    try:
+        terminal.wait_for_the_queries()
+        terminal.write(b"\x1b[?1u")
+        terminal.write(b"\x1b_Gi=31;OK\x1b\\")
+        terminal.write(b"\x1b[6;20;10t")
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"READY")
+
+        server = Server(str(terminal.sock_path))
+        assert server.is_alive(), "the library cannot reach the server"
+
+        # The session. A pymux server runs one.
+        session = server.session
+        assert session.name == "test", session.name
+        assert session.id == "$0", session.id
+        assert session.attached >= 1, session.attached
+        assert len(server.sessions) == 1
+
+        # The window and the pane that the session started with.
+        windows = server.windows
+        assert len(windows) == 1, windows
+        window = windows[0]
+        assert window.id.startswith("@"), window.id
+        assert window.active, "the only window is not the active one"
+
+        panes = server.panes
+        assert len(panes) == 1, panes
+        pane = panes[0]
+        assert pane.id.startswith("%"), pane.id
+        assert pane.pid > 0, pane.pid
+        assert pane.width > 0 and pane.height > 0, (pane.width, pane.height)
+        assert not pane.dead
+        assert pane.window_id == window.id
+        assert window.panes[0].id == pane.id
+        assert window.active_pane.id == pane.id
+        assert server.pane(pane.id).id == pane.id
+        assert server.pane("%99999") is None
+
+        # Every field the library asks for comes back with something in
+        # it. A variable that the server dropped would be empty here.
+        for name in ("pane_id", "pane_index", "window_id", "pane_width"):
+            assert pane.get(name), "%s came back empty" % (name,)
+
+        # A second pane, made through the library.
+        # A python with no arguments waits on its stdin, so the pane
+        # stays alive for the rest of this check.
+        second = window.split(command=sys.executable)
+        assert second is not None, "split-window said nothing"
+        terminal.drain(2.0)
+        assert len(server.panes) == 2, server.panes
+        assert len(window.panes) == 2, window.panes
+        assert second.id != pane.id
+
+        # Reading a pane back.
+        text = pane.capture()
+        assert "READY" in text, text[:200]
+
+        # The escape hatch, and the errors.
+        assert server.cmd("list-windows").ok
+        assert server.has_session()
+        assert not server.has_session("not-a-session")
+        try:
+            server.cmd(["select-window", "-t", "99"])
+        except CommandError as error:
+            assert error.result.exit_code != 0
+        else:
+            raise AssertionError("a command that fails has to raise")
+
+        # Killing the pane that the library made.
+        second.kill()
+        terminal.drain(2.0)
+        assert len(server.panes) == 1, server.panes
+    except BaseException:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+    print("libpymux: ok")
+
+
 def main() -> None:
     # The server inherits this, and a pane must not: it names the
     # terminal that started the server, which is not what a pane is.
@@ -779,6 +871,7 @@ def main() -> None:
     check_a_closing_split(tmp)
     check_the_pointer_shape(tmp)
     check_an_overlay_pane(tmp)
+    check_libpymux(tmp)
     print("All pty checks passed.")
 
 
