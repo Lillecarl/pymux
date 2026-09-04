@@ -23,10 +23,14 @@ call and parses what it prints. libpymux talks to the server itself: the
 wire of pymux is JSON on a unix socket, so there is no subprocess and no
 shell quoting between the caller and the server.
 
-Both routes work against pymux. `tests/drive_with_libtmux.py` drives it
-through a `tmux` shim, because pymux implements the tmux command line.
-Reach for that one to check the command line. Reach for this one to
-write a program.
+**This is the way to drive pymux.** libtmux can drive it too, through a
+`tmux` shim, and `tests/drive_with_libtmux.py` does that. But libtmux
+only knows what tmux has, and pymux does more: the kitty keyboard
+protocol, images, overlay panes, the pointer shape. Anything that tmux
+has no command for is out of reach through that route, whatever pymux
+can do. So the shim is a compatibility check, not a way to write a
+program: it proves the tmux command line still behaves, and nothing
+more.
 
 ## Reaching a server
 

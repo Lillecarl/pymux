@@ -32,7 +32,9 @@ windows, a window holds panes.
 
 See ``libpymux/README.md``. Pymux also implements the tmux command line,
 so libtmux itself can drive it through a ``tmux`` shim; see
-``tests/drive_with_libtmux.py``.
+``tests/drive_with_libtmux.py``. That route reaches only what tmux has,
+and pymux does more, so it is a compatibility check and not the way to
+write a program.
 
 
 Installation
