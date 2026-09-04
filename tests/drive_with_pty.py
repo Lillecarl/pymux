@@ -225,13 +225,19 @@ def run_cli(sock_path, args):
     )
 
 
-def attach_client(sock_path, stderr_path, colorterm=""):
+def attach_client(sock_path, stderr_path, colorterm="", rows=24, columns=80):
     """
     Attach a client to a server that is already running, on a pty of
     its own. Returns the master side, the process and the stderr file.
+
+    The size of the pty decides the size of the pane. A pane takes one
+    row for its title and the session takes one for the status line, so
+    a pane is two rows shorter than this.
     """
     master_fd, slave_fd = os.openpty()
-    fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+    fcntl.ioctl(
+        slave_fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0)
+    )
 
     stderr = open(stderr_path, "wb")
     process = subprocess.Popen(
@@ -260,8 +266,8 @@ class Attached:
     seen: bytes
     stderr_path = None
 
-    def wait_for(self, pattern):
-        self.seen = wait_for(self.master_fd, pattern, self.seen)
+    def wait_for(self, pattern, timeout=15.0):
+        self.seen = wait_for(self.master_fd, pattern, self.seen, timeout)
 
     def drain(self, seconds=1.0):
         self.seen = drain(self.master_fd, self.seen, seconds)
@@ -346,9 +352,16 @@ class SecondClient(Attached):
 
 
 class Terminal(Attached):
-    "One pymux server with one client attached to a pty."
+    """
+    One pymux server with one client attached to a pty.
 
-    def __init__(self, tmp, mode, colorterm=""):
+    `command` names the program of the first pane. The default is the
+    pane child of this file, which `mode` then tells to draw a kitty
+    image or a sixel one. `rows` sizes the pty of the client, and with
+    it the pane.
+    """
+
+    def __init__(self, tmp, mode, colorterm="", command=None, rows=24, columns=80):
         self.tmp = tmp
         self.sock_path = tmp / ("%s.sock" % mode)
         self.stderr_path = tmp / ("%s-stderr.log" % mode)
@@ -356,8 +369,10 @@ class Terminal(Attached):
         # process. A check that fails is unreadable without this.
         self.server_log = tmp / ("%s-server.log" % mode)
 
-        child_path = tmp / "pane_child.py"
-        child_path.write_text(PANE_CHILD)
+        if command is None:
+            child_path = tmp / "pane_child.py"
+            child_path.write_text(PANE_CHILD)
+            command = "python3 %s %s" % (child_path, mode)
 
         started = run_cli(
             self.sock_path,
@@ -368,13 +383,13 @@ class Terminal(Attached):
                 "-d",
                 "-s",
                 "test",
-                "python3 %s %s" % (child_path, mode),
+                command,
             ],
         )
         assert started.returncode == 0, started.stderr
 
         self.master_fd, self.client, self.stderr = attach_client(
-            self.sock_path, self.stderr_path, colorterm
+            self.sock_path, self.stderr_path, colorterm, rows=rows, columns=columns
         )
         self.seen = b""
 
