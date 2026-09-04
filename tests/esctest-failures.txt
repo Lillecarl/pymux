@@ -3,7 +3,7 @@
 #
 # Write this file again with:
 #     PYMUX_ESCTEST_RECORD=1 nix build --file . checks.pymux-esctest
-#     cp -L result pymux/tests/esctest-failures.txt
+#     cp result/failures.txt pymux/tests/esctest-failures.txt
 BSTests.test_BS_AfterNoWrappedInlines
 BSTests.test_BS_AfterOneWrappedInline
 BSTests.test_BS_CursorStartsInDoWrapPosition
@@ -142,22 +142,9 @@ DECIDTests.test_DECID_Basic
 DECRCTests.test_SaveRestoreCursor_Reset
 DECRCTests.test_SaveRestoreCursor_ResetsOriginMode
 DECRCTests.test_SaveRestoreCursor_Wrap
-DECRQMTests.test_DECRQM_ANSI_EBM
-DECRQMTests.test_DECRQM_ANSI_FEAM
-DECRQMTests.test_DECRQM_ANSI_FETM
-DECRQMTests.test_DECRQM_ANSI_GATM
-DECRQMTests.test_DECRQM_ANSI_HEM
 DECRQMTests.test_DECRQM_ANSI_KAM
-DECRQMTests.test_DECRQM_ANSI_MATM
-DECRQMTests.test_DECRQM_ANSI_PUM
-DECRQMTests.test_DECRQM_ANSI_SATM
 DECRQMTests.test_DECRQM_ANSI_SRM
-DECRQMTests.test_DECRQM_ANSI_SRTM
-DECRQMTests.test_DECRQM_ANSI_TSM
-DECRQMTests.test_DECRQM_ANSI_TTM
-DECRQMTests.test_DECRQM_ANSI_VEM
 DECRQMTests.test_DECRQM_DEC_DECBKM
-DECRQMTests.test_DECRQM_DEC_DECHCCM
 DECRQMTests.test_DECRQM_DEC_DECHEBM
 DECRQMTests.test_DECRQM_DEC_DECLRMM
 DECRQMTests.test_DECRQM_DEC_DECNKM
