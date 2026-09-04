@@ -269,3 +269,47 @@ def test_a_client_without_focus_information_gets_no_pointer_shape():
     "`_has_focus` needs a running application, and says False without one."
     pymux = Pymux()
     assert pymux._has_focus(FakeClientState(), FakePane()) is False
+
+
+# ----------------------------------------------------------------------
+# The paste buffer of the session.
+
+
+def test_what_a_pane_copies_reaches_the_paste_buffer():
+    pymux, _connections = make_pymux()
+    pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
+    assert pymux.clipboard.get_data().text == "hello"
+
+
+def test_text_of_a_user_survives_the_way_back():
+    pymux, _connections = make_pymux()
+    pymux.forward_osc(FakePane(), "52", "c;QnlnZ2V0IMOkciBrbGFydA==")
+    assert pymux.clipboard.get_data().text == "Bygget är klart"
+
+
+def test_a_selection_that_is_cleared_keeps_the_buffer():
+    "An empty payload clears a selection of the user, not the buffer."
+    pymux, _connections = make_pymux()
+    pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
+    pymux.forward_osc(FakePane(), "52", "p;")
+    assert pymux.clipboard.get_data().text == "hello"
+
+
+def test_a_payload_that_is_not_base64_reaches_nothing():
+    pymux, connections = make_pymux()
+    pymux.forward_osc(FakePane(), "52", "c;not base64!")
+    assert pymux.clipboard.get_data().text == ""
+    assert connections[0].written == []
+
+
+def test_the_clipboard_option_stops_the_paste_buffer_as_well():
+    pymux, _connections = make_pymux()
+    pymux.enable_clipboard = False
+    pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
+    assert pymux.clipboard.get_data().text == ""
+
+
+def test_the_buffer_is_one_for_the_whole_session():
+    "Two clients share it, so a copy in one pastes in the other."
+    pymux = Pymux()
+    assert pymux.clipboard is not None

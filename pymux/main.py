@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import contextvars
 import os
 import signal
@@ -14,6 +15,7 @@ from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app, set_app
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.clipboard import ClipboardData, InMemoryClipboard
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.enums import EditingMode
 from prompt_toolkit.filters import Condition
@@ -209,6 +211,10 @@ class ClientState:
         app = Application(
             output=self.output,
             input=self.input,
+            # One buffer for the whole session. Copy mode in one client
+            # and "paste-buffer" in another are the same buffer, and a
+            # pane that writes the clipboard fills it as well.
+            clipboard=pymux.clipboard,
             # Read on every render: the detection of the outer
             # terminal can raise the depth after the app started.
             color_depth=lambda: self.color_depth,
@@ -328,6 +334,11 @@ class Pymux:
         self.enable_pane_status = True  # False
         self.enable_bell = True
         self.enable_clipboard = True
+
+        # The paste buffer of the session. Copy mode writes it, a pane
+        # that writes the clipboard of the user writes it too, and
+        # "paste-buffer" reads it. Every client shares this one.
+        self.clipboard = InMemoryClipboard()
         self.remain_on_exit = False
         self.status_keys_vi_mode = False
         self.mode_keys_vi_mode = False
@@ -790,8 +801,15 @@ class Pymux:
                 self.sync_pointer_shape()
                 return
 
-            if code == "52" and not self.enable_clipboard:
-                return
+            if code == "52":
+                if not self.enable_clipboard:
+                    return
+                # What a pane copies goes into the paste buffer of the
+                # session as well, so that "paste-buffer" can put it in
+                # another pane. This stays one way: a pane may write the
+                # clipboard, and may not read what the user copied
+                # somewhere else.
+                self._mirror_clipboard(param)
 
             if code == "99":
                 # Give the notification an identifier that names this
@@ -810,6 +828,25 @@ class Pymux:
                 connection.forward_osc(sequence)
         except Exception:
             logger.exception("Forwarding an OSC sequence failed.")
+
+    def _mirror_clipboard(self, param: str) -> None:
+        """
+        Put what a pane copied into the paste buffer of the session.
+
+        The payload is "selections ; base64". An empty payload clears a
+        selection of the user, which is not a reason to throw away the
+        buffer of the session.
+        """
+        _selections, _semicolon, data = param.partition(";")
+        if not data:
+            return
+        try:
+            text = base64.b64decode(data.encode("ascii")).decode(
+                "utf-8", "replace"
+            )
+        except Exception:
+            return  # Not base64. `build_osc` drops it as well.
+        self.clipboard.set_data(ClipboardData(text))
 
     def _has_focus(self, client_state, pane) -> bool:
         "True when this client looks at this pane."

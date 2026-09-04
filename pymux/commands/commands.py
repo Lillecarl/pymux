@@ -819,10 +819,14 @@ def copy_mode(pymux: "Pymux", variables: _VariablesDict) -> None:
 @cmd("paste-buffer")
 def paste_buffer(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
-    Paste clipboard content into buffer.
+    Paste the buffer of the session into the pane.
+
+    The buffer holds what copy mode copied and what a pane wrote to the
+    clipboard of the user. It belongs to the session, so the command
+    reads it there and not from the application of one client.
     """
     pane = pymux.arrangement.get_active_pane()
-    pane.process.write_input(get_app().clipboard.get_data().text, paste=True)
+    pane.process.write_input(pymux.clipboard.get_data().text, paste=True)
 
 
 @cmd("source-file", options="<filename>")
