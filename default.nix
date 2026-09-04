@@ -24,8 +24,32 @@ let
     localSrc = pttermSrc;
   };
 
+  # The terminfo entry that describes a pane, compiled from the table
+  # that ptterm also answers XTGETTCAP with. A program built on
+  # ncurses reads the database instead of asking, and without an entry
+  # of our own it reads the one for xterm-256color and never writes a
+  # curly underline.
+  terminfo =
+    pkgs.runCommand "pymux-terminfo"
+      {
+        nativeBuildInputs = [
+          (pkgs.python3.withPackages (ps: [ ptterm ]))
+          pkgs.ncurses
+        ];
+      }
+      ''
+        mkdir -p $out/share/terminfo
+        python -m ptterm.terminfo > pymux.ti
+        tic -x -o $out/share/terminfo pymux.ti
+
+        # An entry that does not compile leaves a pane naming a
+        # terminal that is not there, which is worse than naming
+        # xterm.
+        TERMINFO_DIRS=$out/share/terminfo: infocmp -x pymux > /dev/null
+      '';
+
   package = pkgs.python3Packages.callPackage ./package.nix {
-    inherit ptterm prompt-toolkit;
+    inherit ptterm prompt-toolkit terminfo;
   };
 
   # The same two, but always from the pinned commits. A local working
@@ -85,6 +109,11 @@ let
         export TMPDIR="$TMPDIR"
         export LANG=C.UTF-8
         export PYTHONDONTWRITEBYTECODE=1
+
+        # The entry of terminfo that a pane is told about. The wrapper
+        # of the package sets this; a test runs the source, so it sets
+        # it here instead.
+        export PYMUX_TERMINFO=${terminfo}/share/terminfo
         ${command}
         touch "$out"
       '';
@@ -184,7 +213,10 @@ let
   # the two agree and ptterm differs, ptterm is wrong; where they
   # disagree, the difference is a choice.
   runSuite = name: source:
-    pkgs.runCommand name { nativeBuildInputs = [ pythonWithTests ]; } ''
+    pkgs.runCommand name {
+      # ncurses for the check that the terminfo entry compiles.
+      nativeBuildInputs = [ pythonWithTests pkgs.ncurses ];
+    } ''
       cp -r ${source}/tests .
       chmod -R +w .
       export HOME="$TMPDIR"
@@ -223,5 +255,5 @@ let
   };
 in
 {
-  inherit package shell checks judges;
+  inherit package shell checks judges terminfo;
 }

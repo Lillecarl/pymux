@@ -44,6 +44,7 @@ from ptterm.sixel import decode_sixel  # noqa: E402
 from pymux.colors import TRUECOLOR_PROBE  # noqa: E402
 from pymux.graphics import CELL_SIZE_QUERY  # noqa: E402
 from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY  # noqa: E402
+from pymux.terminfo import terminal_name  # noqa: E402
 
 REPO_ROOT = Path(__file__).parent.parent
 
@@ -362,7 +363,15 @@ def check_kitty_terminal(tmp):
         #    Its environment describes the pane, not the terminal that
         #    the client attached from: a pane takes 24 bit colour, and
         #    it is no kitty window.
-        terminal.wait_for(b"ENV<xterm-256color|truecolor||>")
+        # A pane is told what it really is. The name is "pymux" when
+        # the entry of terminfo was built and installed, and the name
+        # of xterm when it was not.
+        # A pane is told what it really is. The name is "pymux" when
+        # the entry of terminfo is there, and the name of xterm when
+        # it is not; the server and this check read the same rule.
+        terminal.wait_for(
+            b"ENV<%s|truecolor||>" % terminal_name().encode("ascii")
+        )
         #    A hyperlink belongs to a cell, so the pane keeps it and the
         #    renderer opens it again on the terminal of the user.
         terminal.wait_for(b"plain")

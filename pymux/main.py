@@ -38,6 +38,7 @@ from .graphics import PaneView
 from .key_bindings import PymuxKeyBindings
 from .layout import Justify, LayoutManager
 from .log import logger
+from .terminfo import add_to_environment, terminal_name
 from .notifications import NotificationRoutes
 from .options import ALL_OPTIONS, ALL_WINDOW_OPTIONS
 from .osc import build_osc
@@ -344,7 +345,9 @@ class Pymux:
         self.mode_keys_vi_mode = False
         self.history_limit = 2000
         self.status_interval = 4
-        self.default_terminal = "xterm-256color"
+        # What a pane is told it is. The entry of pymux describes what
+        # a pane really does; a build without one falls back to xterm.
+        self.default_terminal = terminal_name()
         self.status_left = "[#S] "
         self.status_left_length = 20
         self.status_right = " %H:%M %d-%b-%y "
@@ -601,8 +604,11 @@ class Pymux:
             # program asks the pane instead of believing them.
             scrub_terminal_identity(os.environ)
 
-            # Set terminal variable. (We emulate xterm.)
+            # Set terminal variable. A program built on ncurses reads
+            # the database instead of asking, so the entry that
+            # describes a pane goes on the path it searches.
             os.environ["TERM"] = self.default_terminal
+            add_to_environment(os.environ)
 
             # A pane takes 24 bit colour, whatever the terminal of the
             # client takes. ptterm keeps the colour that a program

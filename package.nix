@@ -5,6 +5,8 @@
   prompt-toolkit,
   ptterm,
   docopt-ng,
+  makeWrapper,
+  terminfo ? null,
 }:
 
 buildPythonApplication {
@@ -15,6 +17,16 @@ buildPythonApplication {
   src = ./.;
 
   disabled = pythonOlder "3.11";
+
+  nativeBuildInputs = lib.optional (terminfo != null) makeWrapper;
+
+  # Where the entry that describes a pane lives. A pane that finds it
+  # says `TERM=pymux`; one that does not falls back to xterm.
+  makeWrapperArgs = lib.optionals (terminfo != null) [
+    "--set-default"
+    "PYMUX_TERMINFO"
+    "${terminfo}/share/terminfo"
+  ];
 
   propagatedBuildInputs = [
     prompt-toolkit
