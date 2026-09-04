@@ -5,8 +5,6 @@
 #     PYMUX_ESCTEST_RECORD=1 nix build --file . checks.pymux-esctest
 #     cp result/failures.txt pymux/tests/esctest-failures.txt
 CHATests.test_CHA_RespectsOriginMode
-CUBTests.test_CUB_AfterNoWrappedInlines
-CUBTests.test_CUB_AfterOneWrappedInline
 CUPTests.test_CUP_RespectsOriginMode
 ChangeColorTests.test_ChangeColor_CIELuv
 ChangeColorTests.test_ChangeColor_CIEXYZ
@@ -36,13 +34,8 @@ DECSETTests.test_DECSET_Allow80To132
 DECSETTests.test_DECSET_DECOM_DECRQCRA
 DECSETTests.test_DECSET_MoreFix
 DECSETTests.test_DECSET_OPT_ALTBUF
-DECSETTests.test_DECSET_ReverseWraparound_Multi
 DECSTBMTests.test_DECSTBM_DefaultRestores
 HVPTests.test_HVP_RespectsOriginMode
-REPTests.test_REP_DefaultParam
-REPTests.test_REP_ExplicitParam
-REPTests.test_REP_RespectsLeftRightMargins
-REPTests.test_REP_RespectsTopBottomMargins
 ResetSpecialColorTests.test_ResetSpecialColor_Dynamic
 VPATests.test_VPA_IgnoresOriginMode
 XtermSaveTests.test_XtermSave_SaveResetState
