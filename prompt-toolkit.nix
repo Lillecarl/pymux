@@ -23,8 +23,8 @@ buildPythonPackage {
         # A render of pymux spends about 80% of its cpu in
         # prompt_toolkit. The cheaper render only lives on this fork,
         # which sits on the 3.0.52 release that nixpkgs carries.
-        rev = "40469801469d97a9b490c71eb8b91050ef56659b";
-        hash = "sha256-DgjJLpU+F62Ggw/NSmlQfiJpNr31UbeC4FvL66uPEzE=";
+        rev = "47cb62005f3b1c8e334397cb020f18c1f24e16bc";
+        hash = "sha256-r9YLs8To4b2by+/5E+zY83xx8VKVt671/uV9zsRcveI=";
       };
 
   postPatch = ''
