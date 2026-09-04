@@ -11,7 +11,7 @@ therefore reduces the colours with a median cut, and it leaves the
 pixels that are more transparent than half undrawn, which the sixel
 "P2 = 1" mode keeps clear.
 """
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Sequence, Tuple
 
 __all__ = [
     "encode_sixel",
@@ -37,7 +37,7 @@ _MIN_RUN = 4
 
 def to_rgba(
     image_format: int, width: int, height: int, data: bytes
-) -> Optional[bytes]:
+) -> bytes | None:
     """
     The RGBA bytes of a pane image, or None when the format is one that
     this module cannot read.
@@ -198,7 +198,7 @@ def _runs(row: Sequence[int], width: int) -> str:
 
 def encode_sixel(
     width: int, height: int, rgba: bytes, max_colors: int = MAX_COLORS
-) -> Optional[str]:
+) -> str | None:
     """
     The full DCS sequence that draws `rgba` as a sixel image, or None
     when there is nothing to draw.
@@ -213,7 +213,7 @@ def encode_sixel(
 
     # Index every pixel, and count the colours on the way.
     counts: Dict[Tuple[int, int, int], int] = {}
-    indexed: List[Optional[Tuple[int, int, int]]] = [None] * (width * height)
+    indexed: List[Tuple[int, int, int] | None] = [None] * (width * height)
     for index in range(width * height):
         offset = index * 4
         if rgba[offset + 3] < ALPHA_THRESHOLD:

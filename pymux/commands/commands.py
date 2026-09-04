@@ -56,7 +56,7 @@ def has_command_handler(command: str) -> bool:
     return command in COMMANDS_TO_HANDLERS
 
 
-def get_documentation_for_command(command: str) -> Optional[str]:
+def get_documentation_for_command(command: str) -> str | None:
     """
     Return the help text for this command, or None if the command is not known.
     """
@@ -275,7 +275,7 @@ class CommandException(Exception):
 #
 
 
-def _find_window(pymux: "Pymux", target: Optional[str]) -> Optional["Window"]:
+def _find_window(pymux: "Pymux", target: str | None) -> Optional["Window"]:
     """
     Find a window for a tmux-style target.
 
@@ -312,7 +312,7 @@ def _find_window(pymux: "Pymux", target: Optional[str]) -> Optional["Window"]:
     return None
 
 
-def _find_pane(pymux: "Pymux", target: Optional[str]) -> Optional["Pane"]:
+def _find_pane(pymux: "Pymux", target: str | None) -> Optional["Pane"]:
     """
     Find a pane for a tmux-style target.
 
@@ -341,7 +341,7 @@ def _find_pane(pymux: "Pymux", target: Optional[str]) -> Optional["Pane"]:
         _, _, target = target.rpartition(":")
 
     # Split off the pane part.
-    pane_part: Optional[str] = None
+    pane_part: str | None = None
     if "." in target:
         target, _, pane_part = target.partition(".")
 
@@ -1206,7 +1206,7 @@ def show_buffer(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 def _print_object_format(
     pymux: "Pymux",
-    format_str: Optional[str],
+    format_str: str | None,
     window: "Window",
     pane: "Pane",
 ) -> None:

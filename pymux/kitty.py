@@ -27,7 +27,6 @@ for the cell size. Without this the replies would arrive as bursts of
 key presses, and land in whichever pane has the focus.
 """
 import re
-from typing import Optional, Union
 
 from prompt_toolkit.input.vt100_parser import (
     Vt100Parser,
@@ -196,7 +195,7 @@ _CELL_SIZE_REPLY = object()
 # a release that matches no press without trouble.
 _KEY_RELEASE = object()
 
-_KeyResult = Union[str, Keys, tuple, object]
+_KeyResult = str | Keys | tuple | object
 
 # Reply of the "CSI ? u" flags query.
 _FLAGS_REPLY_RE = re.compile(r"^\x1b\[\?(\d+)u$")
@@ -208,7 +207,7 @@ _DA1_REPLY_RE = re.compile(r"^\x1b\[\?[\d;]*c$")
 _CELL_SIZE_REPLY_RE = re.compile(r"^\x1b\[6;\d+;\d+t$")
 
 
-def _ctrl_mapping(char: str) -> Optional[Keys]:
+def _ctrl_mapping(char: str) -> Keys | None:
     "Legacy ctrl+<char> mapping."
     lower = char.lower()
     if "a" <= lower <= "z":
@@ -217,8 +216,8 @@ def _ctrl_mapping(char: str) -> Optional[Keys]:
 
 
 def _apply_modifiers(
-    key: Union[str, Keys], mods: int
-) -> Optional[_KeyResult]:
+    key: str | Keys, mods: int
+) -> _KeyResult | None:
     """
     Apply the modifier bits to a plain key. Returns None when the
     combination has no prompt_toolkit representation.
@@ -275,7 +274,7 @@ _CTRL_FUNCTIONAL = {
 }
 
 
-def parse_kitty_key(prefix: str) -> Optional[_KeyResult]:
+def parse_kitty_key(prefix: str) -> _KeyResult | None:
     """
     Parse a complete kitty key sequence. Returns a key, a character or a
     tuple of keys (the shapes that the prompt_toolkit parser supports),
@@ -429,7 +428,7 @@ class KittyVt100Parser(Vt100Parser):
         self.reply_callback = reply_callback
         super().__init__(feed_key_callback)
 
-    def _get_match(self, prefix: str) -> Optional[Union[Keys, tuple, object]]:
+    def _get_match(self, prefix: str) -> Keys | tuple | object | None:
         # prompt_toolkit's own table first: it knows richer variants
         # (like shift+arrow) for the sequences that it covers.
         result = super()._get_match(prefix)
@@ -438,7 +437,7 @@ class KittyVt100Parser(Vt100Parser):
         return parse_kitty_key(prefix)
 
     def _call_handler(
-        self, key: Union[str, Keys, tuple], insert_text: str
+        self, key: str | Keys | tuple, insert_text: str
     ) -> None:
         if key is _DROP:
             return

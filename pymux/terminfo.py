@@ -20,7 +20,7 @@ database: `TERM` crosses an ssh connection and `TERMINFO_DIRS` does
 not.
 """
 import os
-from typing import MutableMapping, Optional
+from typing import MutableMapping
 
 __all__ = [
     "ENTRY_NAME",
@@ -40,7 +40,7 @@ FALLBACK_NAME = "xterm-256color"
 DATABASE_VARIABLE = "PYMUX_TERMINFO"
 
 
-def database() -> Optional[str]:
+def database() -> str | None:
     """
     The directory that holds the compiled entry, or None.
 

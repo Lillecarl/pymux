@@ -9,7 +9,6 @@ from typing import (
     ContextManager,
     Dict,
     List,
-    Optional,
     Set,
     TextIO,
     cast,
@@ -58,7 +57,7 @@ class ServerConnection:
         self._tasks: Set["asyncio.Task"] = set()
 
         self._recv_buffer = b""
-        self.client_state: Optional["ClientState"] = None
+        self.client_state: "ClientState" | None = None
 
         # Kitty keyboard protocol support of the outer terminal. The
         # client sends "kitty-detect" right after querying its terminal;

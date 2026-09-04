@@ -1,6 +1,5 @@
 from abc import ABC
 
-from prompt_toolkit.output import ColorDepth
 
 __all__ = [
     "Client",

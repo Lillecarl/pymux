@@ -2,7 +2,7 @@
 Key bindings.
 """
 import logging
-from typing import TYPE_CHECKING, Callable, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, Dict, Tuple
 
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.filters import Condition, Filter, has_focus, has_selection
@@ -46,7 +46,7 @@ class PymuxKeyBindings:
         )
 
         self._prefix: Tuple[str, ...] = ("c-b",)
-        self._prefix_binding: Optional[Callable[[E], None]] = None
+        self._prefix_binding: Callable[[E], None] | None = None
 
         # Load initial bindings.
         self._load_prefix_binding()

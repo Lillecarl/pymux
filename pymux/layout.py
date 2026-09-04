@@ -5,7 +5,7 @@ The layout engine. This builds the prompt_toolkit layout.
 import datetime
 import weakref
 from functools import partial
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple, Type, Union
+from typing import TYPE_CHECKING, Callable, Dict, List, Tuple, Type
 
 from prompt_toolkit.application import Application, get_app
 from prompt_toolkit.filters import Condition, has_focus
@@ -92,7 +92,7 @@ DEFAULT_OVERLAY_SIZE = "60%"
 MIN_OVERLAY_SIZE = 3
 
 
-def overlay_size(given: Optional[str], available: int) -> int:
+def overlay_size(given: str | None, available: int) -> int:
     """
     How many cells an overlay pane takes along one axis.
 
@@ -139,7 +139,7 @@ class Background(Container):
         write_position: WritePosition,
         parent_style: str,
         erase_bg: bool,
-        z_index: Optional[int],
+        z_index: int | None,
     ) -> None:
         "Fill the whole area of write_position with dots."
         default_char = Char(" ", "class:background")
@@ -275,7 +275,7 @@ class BigClock(Container):
         write_position: WritePosition,
         parent_style: str,
         erase_bg: bool,
-        z_index: Optional[int],
+        z_index: int | None,
     ) -> None:
         xpos = write_position.xpos
         ypos = write_position.ypos
@@ -364,7 +364,7 @@ class PaneNumber(Container):  # XXX: make FormattedTextControl
         write_position: WritePosition,
         parent_style: str,
         erase_bg: bool,
-        z_index: Optional[int],
+        z_index: int | None,
     ) -> None:
         style = "class:panenumber"
 
@@ -453,7 +453,7 @@ class LayoutManager:
         )
 
         # The container of the overlay pane, and the pane it belongs to.
-        self._overlay_for_pane: Optional[Tuple[arrangement.Pane, Container]] = None
+        self._overlay_for_pane: Tuple[arrangement.Pane, Container] | None = None
 
         self.layout = self._create_layout()
 
@@ -858,7 +858,7 @@ class DynamicBody(Container):
         write_position: WritePosition,
         parent_style: str,
         erase_bg: bool,
-        z_index: Optional[int],
+        z_index: int | None,
     ) -> None:
         body = self._get_body()
         body.write_to_screen(
@@ -886,7 +886,7 @@ class SizedBox(Container):
         content,
         width=None,
         height=None,
-        report_write_position_callback: Optional[Callable] = None,
+        report_write_position_callback: Callable | None = None,
     ):
         assert is_dimension(width)
         assert is_dimension(height)
@@ -912,7 +912,7 @@ class SizedBox(Container):
         write_position: WritePosition,
         parent_style: str,
         erase_bg: bool,
-        z_index: Optional[int],
+        z_index: int | None,
     ) -> None:
         # Report dimensions.
         if self.report_write_position_callback:
@@ -927,7 +927,7 @@ class SizedBox(Container):
 
 
 def _create_split(
-    pymux: "Pymux", window, split: Union[arrangement.HSplit, arrangement.VSplit]
+    pymux: "Pymux", window, split: arrangement.HSplit | arrangement.VSplit
 ) -> Container:
     """
     Create a prompt_toolkit `Container` instance for the given pymux split.
@@ -1000,7 +1000,7 @@ def _create_split(
         )
 
     # Create prompt_toolkit Container.
-    return_cls: Union[Type[HSplit], Type[VSplit]]
+    return_cls: Type[HSplit] | Type[VSplit]
 
     if is_vsplit:
         return_cls = VSplit
@@ -1171,7 +1171,7 @@ class _ContainerProxy(Container):
         write_position: WritePosition,
         parent_style: str,
         erase_bg: bool,
-        z_index: Optional[int],
+        z_index: int | None,
     ) -> None:
         self.content.write_to_screen(
             screen, mouse_handlers, write_position, parent_style, erase_bg, z_index
@@ -1279,7 +1279,7 @@ class TracePaneWritePosition(_ContainerProxy):  # XXX: replace with SizedBox
         write_position: WritePosition,
         parent_style: str,
         erase_bg: bool,
-        z_index: Optional[int],
+        z_index: int | None,
     ) -> None:
         _ContainerProxy.write_to_screen(
             self,

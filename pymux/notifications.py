@@ -19,7 +19,7 @@ one carries "i=0", which names nothing, so there is nothing to route.
 """
 import re
 from collections import OrderedDict
-from typing import Optional, Tuple
+from typing import Tuple
 
 __all__ = ["NotificationRoutes"]
 
@@ -40,7 +40,7 @@ def split_payload(param: str) -> Tuple[str, str, str]:
     return metadata, semicolon, text
 
 
-def read_identifier(metadata: str) -> Optional[str]:
+def read_identifier(metadata: str) -> str | None:
     "The value of the 'i' key of the metadata, or None."
     for field in metadata.split(":"):
         key, sign, value = field.partition("=")
@@ -100,7 +100,7 @@ class NotificationRoutes:
 
         return replace_identifier(metadata, ours) + semicolon + text
 
-    def incoming(self, param: str) -> Optional[Tuple[int, str]]:
+    def incoming(self, param: str) -> Tuple[int, str] | None:
         """
         The pane that an answer belongs to, and the payload to give it,
         with the identifier that the program chose. None when the

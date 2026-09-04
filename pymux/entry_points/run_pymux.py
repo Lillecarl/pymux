@@ -36,7 +36,7 @@ import socket
 import sys
 import tempfile
 import time
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Set, Tuple
 
 from prompt_toolkit.output import ColorDepth
 
@@ -50,7 +50,7 @@ __all__ = ["run"]
 MODES = ("standalone", "start-server", "attach", "list-sessions", "ls")
 
 
-def filename_var() -> Optional[str]:
+def filename_var() -> str | None:
     """
     Return the configuration file name for the current invocation. (This is
     stored as a module global, because the daemonized server needs it after
@@ -59,7 +59,7 @@ def filename_var() -> Optional[str]:
     return _current_filename
 
 
-_current_filename: Optional[str] = None
+_current_filename: str | None = None
 
 
 def _add_options(parser: argparse.ArgumentParser, suppress_defaults: bool) -> None:
@@ -333,7 +333,7 @@ def run() -> None:
             sys.exit(1)
 
 
-def _no_server_error(socket_name: Optional[str]) -> None:
+def _no_server_error(socket_name: str | None) -> None:
     "Print the 'no server running' error, like tmux does."
     sys.stderr.write(
         "no server running on %s\n"

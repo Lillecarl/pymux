@@ -9,7 +9,7 @@ import threading
 import time
 import traceback
 import weakref
-from typing import Callable, Optional
+from typing import Callable
 
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app, set_app
@@ -369,7 +369,7 @@ class Pymux:
         self,
         source_file=None,
         startup_command=None,
-        session_name: Optional[str] = None,
+        session_name: str | None = None,
     ):
         self._client_states = {}  # connection -> client_state
 
@@ -457,8 +457,8 @@ class Pymux:
         # handled, this is a list where commands can append their output.
         # The server sends it back to the client before the connection is
         # closed. It's `None` for commands entered interactively.
-        self.command_output: Optional[list] = None
-        self.command_error: Optional[list] = None
+        self.command_output: list | None = None
+        self.command_error: list | None = None
 
         self._startup_done = False
         self.source_file = source_file
@@ -595,10 +595,10 @@ class Pymux:
 
     def _create_pane(
         self,
-        window: Optional[Window] = None,
-        command: Optional[str] = None,
-        start_directory: Optional[str] = None,
-        on_done: Optional[Callable[[], None]] = None,
+        window: Window | None = None,
+        command: str | None = None,
+        start_directory: str | None = None,
+        on_done: Callable[[], None] | None = None,
     ):
         """
         Create a new :class:`pymux.arrangement.Pane` instance. (Don't put it in
@@ -644,7 +644,7 @@ class Pymux:
             self.resize_pane_for_program(pane, lines, columns)
 
         # Start directory.
-        path: Optional[str]
+        path: str | None
 
         if start_directory:
             path = start_directory
@@ -736,10 +736,10 @@ class Pymux:
 
     def display_overlay(
         self,
-        command: Optional[str] = None,
-        width: Optional[str] = None,
-        height: Optional[str] = None,
-        title: Optional[str] = None,
+        command: str | None = None,
+        width: str | None = None,
+        height: str | None = None,
+        title: str | None = None,
     ):
         """
         Open an overlay pane in the middle of the screen.
@@ -755,7 +755,7 @@ class Pymux:
         """
         self.close_overlay()
 
-        pane: Optional["arrangement.Pane"] = None
+        pane: "arrangement.Pane" | None = None
 
         def done() -> None:
             "The program of the overlay finished, so the overlay goes."
@@ -1121,8 +1121,8 @@ class Pymux:
 
     def create_window(
         self,
-        command: Optional[str] = None,
-        start_directory: Optional[str] = None,
+        command: str | None = None,
+        start_directory: str | None = None,
         name=None,
     ):
         """
@@ -1136,10 +1136,10 @@ class Pymux:
 
     def add_process(
         self,
-        command: Optional[str] = None,
+        command: str | None = None,
         vsplit: bool = False,
-        start_directory: Optional[str] = None,
-        window: Optional[Window] = None,
+        start_directory: str | None = None,
+        window: Window | None = None,
     ):
         """
         Add a new process to the given window (or the active window).

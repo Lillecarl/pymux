@@ -17,7 +17,6 @@ answers when it stays quiet:
 A command line flag beats all of it: the user knows their terminal.
 """
 import re
-from typing import Optional
 
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.utils import is_dumb_terminal
@@ -96,7 +95,7 @@ class ColorDetection:
         line. It wins over everything that the terminal says.
     """
 
-    def __init__(self, forced: Optional[ColorDepth] = None) -> None:
+    def __init__(self, forced: ColorDepth | None = None) -> None:
         self.forced = forced
         self.term = ""
         self.colorterm = ""

@@ -3,7 +3,7 @@ import getpass
 import os
 import socket
 import tempfile
-from typing import Callable, Optional
+from typing import Callable
 
 from ..log import logger
 from .base import BrokenPipeError, PipeConnection
@@ -15,7 +15,7 @@ __all__ = [
 
 
 def bind_and_listen_on_posix_socket(
-    socket_name: str, accept_callback: Callable, loop: Optional[asyncio.AbstractEventLoop] = None
+    socket_name: str, accept_callback: Callable, loop: asyncio.AbstractEventLoop | None = None
 ):
     """
     :param accept_callback: Called with `PosixSocketConnection` when a new
@@ -51,7 +51,7 @@ def bind_and_listen_on_posix_socket(
     return socket_name
 
 
-def _bind_posix_socket(socket_name: Optional[str] = None):
+def _bind_posix_socket(socket_name: str | None = None):
     """
     Find a socket to listen on and return it.
 
@@ -90,14 +90,14 @@ class PosixSocketConnection(PipeConnection):
     A single active posix pipe connection on the server side.
     """
 
-    def __init__(self, socket, loop: Optional[asyncio.AbstractEventLoop] = None):
+    def __init__(self, socket, loop: asyncio.AbstractEventLoop | None = None):
         self.socket = socket
         self._fd = socket.fileno()
         self._recv_buffer = b""
         self._closed = False
         self._loop = loop
 
-    def _loop_ref(self) -> Optional[asyncio.AbstractEventLoop]:
+    def _loop_ref(self) -> asyncio.AbstractEventLoop | None:
         "Return the event loop for this connection, if it's still known."
         if self._loop is not None:
             return self._loop

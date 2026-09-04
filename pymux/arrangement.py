@@ -10,7 +10,7 @@ arranged by ordering them in HSplit/VSplit instances.
 import math
 import os
 from enum import Enum
-from typing import List, Optional, Union
+from typing import List
 from weakref import WeakKeyDictionary, ref
 
 from prompt_toolkit.application import Application, get_app, get_app_or_none, set_app
@@ -49,7 +49,7 @@ class Pane:
 
     def __init__(self, terminal: Terminal) -> None:
         self.terminal = terminal
-        self.chosen_name: Optional[str] = None
+        self.chosen_name: str | None = None
 
         # Displayed the clock instead of this pane content.
         self.clock_mode = False
@@ -157,11 +157,11 @@ class Window:
 
     def __init__(self, index: int = 0) -> None:
         self.index = index
-        self.root: Union[VSplit, HSplit] = HSplit()
-        self._active_pane: Optional[Pane] = None
-        self._prev_active_pane: Optional["ref[Pane]"] = None
-        self.chosen_name: Optional[str] = None
-        self.previous_selected_layout: Optional[LayoutTypes] = None
+        self.root: VSplit | HSplit = HSplit()
+        self._active_pane: Pane | None = None
+        self._prev_active_pane: "ref[Pane]" | None = None
+        self.chosen_name: str | None = None
+        self.previous_selected_layout: LayoutTypes | None = None
 
         #: When true, the current pane is zoomed in.
         self.zoom = False
@@ -181,7 +181,7 @@ class Window:
         #        if not self.root:
         #            return '<empty-window>'
 
-        def _hash_for_split(split: Union[HSplit, VSplit]) -> str:
+        def _hash_for_split(split: HSplit | VSplit) -> str:
             result = []
             for item in split:
                 if isinstance(item, (VSplit, HSplit)):
@@ -201,7 +201,7 @@ class Window:
         )
 
     @property
-    def active_pane(self) -> Optional[Pane]:
+    def active_pane(self) -> Pane | None:
         """
         The current active :class:`.Pane`.
         """
@@ -217,7 +217,7 @@ class Window:
         self._active_pane = value
 
     @property
-    def previous_active_pane(self) -> Optional[Pane]:
+    def previous_active_pane(self) -> Pane | None:
         """
         The previous active :class:`.Pane` or `None` if unknown.
         """
@@ -314,7 +314,7 @@ class Window:
         return result
 
     @property
-    def splits(self) -> List[Union[HSplit, VSplit]]:
+    def splits(self) -> List[HSplit | VSplit]:
         "Return a list with all HSplit/VSplit instances."
         result = []
 
@@ -374,7 +374,7 @@ class Window:
         """
         # Create (split, index, pane, weight) tuples.
         items = []
-        current_pane_index: Optional[int] = None
+        current_pane_index: int | None = None
 
         for s in self.splits:
             for index, item in enumerate(s):
@@ -583,7 +583,7 @@ class Arrangement:
 
         # The active window of the last CLI. Used as default when a new session
         # is attached.
-        self._last_active_window: Optional[Window] = None
+        self._last_active_window: Window | None = None
 
     def invalidation_hash(self) -> str:
         """
@@ -636,7 +636,7 @@ class Arrangement:
                 if p.pane_id == pane_id:
                     self.set_active_window(w)
 
-    def get_previous_active_window(self) -> Optional[Window]:
+    def get_previous_active_window(self) -> Window | None:
         "The previous active Window or None if unknown."
         app = get_app()
 
@@ -652,7 +652,7 @@ class Arrangement:
                 return w
 
     def create_window(
-        self, pane: Pane, name: Optional[str] = None, set_active: bool = True
+        self, pane: Pane, name: str | None = None, set_active: bool = True
     ) -> None:
         """
         Create a new window that contains just this pane.
@@ -696,13 +696,13 @@ class Arrangement:
         # Sort windows by index.
         self.windows = sorted(self.windows, key=lambda w: w.index)
 
-    def get_active_pane(self) -> Optional[Pane]:
+    def get_active_pane(self) -> Pane | None:
         """
         The current :class:`.Pane` from the current window.
         """
         return self.get_active_pane_for(get_app())
 
-    def get_active_pane_for(self, app) -> Optional[Pane]:
+    def get_active_pane_for(self, app) -> Pane | None:
         "The active :class:`.Pane` of one client. See `get_active_window_for`."
         w = self.get_active_window_for(app)
         if w is not None:

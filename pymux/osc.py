@@ -12,7 +12,6 @@ payload that carries an escape byte can drive the terminal of the user
 instead of only naming a clipboard or a notification.
 """
 import string
-from typing import Optional
 
 __all__ = [
     "MAX_OSC_LENGTH",
@@ -32,7 +31,7 @@ _CLIPBOARD_SELECTIONS = frozenset("cpqs01234567")
 _BASE64 = frozenset(string.ascii_letters + string.digits + "+/=")
 
 
-def build_osc(code: str, param: str) -> Optional[str]:
+def build_osc(code: str, param: str) -> str | None:
     """
     The escape sequence to write to the terminal of the user, or None
     when the payload of the pane must not reach it.

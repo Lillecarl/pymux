@@ -32,7 +32,7 @@ import base64
 import random
 import re
 import zlib
-from typing import Callable, Dict, Iterable, List, NamedTuple, Optional, Tuple
+from typing import Callable, Dict, Iterable, List, NamedTuple, Tuple
 
 from prompt_toolkit.output import ColorDepth
 from ptterm.graphics import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
@@ -154,8 +154,8 @@ class ClientGraphics:
         self,
         write_raw: Callable[[str], None],
         flush: Callable[[], None],
-        repaint: Optional[Callable[[], None]] = None,
-        color_depth: Optional[Callable[[], ColorDepth]] = None,
+        repaint: Callable[[], None] | None = None,
+        color_depth: Callable[[], ColorDepth] | None = None,
     ) -> None:
         self._write_raw = write_raw
         self._flush = flush
@@ -500,7 +500,7 @@ class ClientGraphics:
     # ------------------------------------------------------------------
     # Image transmission.
 
-    def _outer_image_id(self, pane_id, placement, image) -> Optional[int]:
+    def _outer_image_id(self, pane_id, placement, image) -> int | None:
         """
         The id of `image` on the outer terminal. Transmits the image the
         first time it is needed. Returns None when it cannot be sent.
@@ -748,7 +748,7 @@ class ClientGraphics:
 
     def _sixel_for(
         self, key: tuple, image, source, columns: int, rows: int
-    ) -> Optional[str]:
+    ) -> str | None:
         "The sixel sequence of one placement. (Cached by geometry.)"
         known = self._cell_cache.get(key)
         if known is not None and known[0] is image:
@@ -802,7 +802,7 @@ class ClientGraphics:
 
 def _crop_rgba(
     pixels: bytes, width: int, height: int, source: Tuple[int, int, int, int]
-) -> Optional[bytes]:
+) -> bytes | None:
     "Cut the source rectangle out of RGBA pixels."
     left, top, crop_width, crop_height = source
     if left < 0 or top < 0 or crop_width <= 0 or crop_height <= 0:
@@ -872,7 +872,7 @@ def _put_command(
     columns: int,
     rows: int,
     z: int,
-    source: Optional[Tuple[int, int, int, int]],
+    source: Tuple[int, int, int, int] | None,
 ) -> str:
     """
     The escape sequences that put one image at (`x`, `y`) on the outer

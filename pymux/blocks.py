@@ -30,7 +30,7 @@ and the nearest neighbour that the sixel path uses throws most of the
 picture away at that size. This averages the pixels that fall into each
 cell instead, weighted by how opaque they are.
 """
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 from prompt_toolkit.output import ColorDepth
 
@@ -182,7 +182,7 @@ def blocks_for(
         parts: List[str] = []
         #: What the cell before set, so a run of one colour writes the
         #: sequence once.
-        current: Optional[Tuple[str, str]] = None
+        current: Tuple[str, str] | None = None
         #: Cells passed over since the last one that drew.
         skipped = 0
 
