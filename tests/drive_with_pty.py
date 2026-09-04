@@ -85,6 +85,11 @@ PANE_OSC = OSC_CLIPBOARD + OSC_CLIPBOARD_QUERY + OSC_NOTIFICATION + OSC_POINTER
 HYPERLINK_TARGET = "https://example.com/pymux"
 PANE_HYPERLINK = "\x1b]8;;%s\x1b\\LINK\x1b]8;;\x1b\\plain" % HYPERLINK_TARGET
 
+# The shape of an underline and its colour belong to a cell as well.
+# The pane draws a curly red line; the terminal of the user has to get
+# the sub-parameter and the colour back.
+PANE_UNDERLINE = "\x1b[4:3;58:2::255:0:0mCURLY\x1b[0m"
+
 # The program that runs in the pane. It puts its tty in raw mode, asks
 # for the kitty keyboard protocol, draws one image, sends the OSC
 # sequences, and then echoes everything it reads as hex.
@@ -102,6 +107,7 @@ sys.stdout.write("\\r\\nENV<%%s|%%s|%%s|%%s>" %% (
     os.environ.get("TERM_PROGRAM", ""),
 ))
 sys.stdout.write("\\r\\n" + %r)
+sys.stdout.write("\\r\\n" + %r)
 sys.stdout.flush()
 while True:
     data = sys.stdin.buffer.read1(256)
@@ -111,7 +117,7 @@ while True:
     # it reads the wrapping as part of the text.
     sys.stdout.write("\\r\\n<<%%s>>" %% data.hex())
     sys.stdout.flush()
-""" % (KITTY_IMAGE, SIXEL_IMAGE, PANE_OSC, PANE_HYPERLINK)
+""" % (KITTY_IMAGE, SIXEL_IMAGE, PANE_OSC, PANE_HYPERLINK, PANE_UNDERLINE)
 
 
 #: A program that draws nothing and waits. A pane running it asks for
@@ -317,6 +323,19 @@ def check_the_hyperlink(terminal):
     print("hyperlink: ok")
 
 
+def check_the_underline(terminal):
+    """
+    The shape of the line and its colour reach the terminal of the user.
+
+    Neither is a sequence that pymux passes on: both belong to a cell,
+    travel in the style of that cell, and the renderer writes them
+    again.
+    """
+    assert b"4:3" in terminal.seen, "the shape of the line never arrived"
+    assert b"58:2::255:0:0" in terminal.seen, "the colour of the line never arrived"
+    print("underline: ok")
+
+
 def check_kitty_terminal(tmp):
     "A terminal that speaks every kitty protocol and 24 bit colour."
     terminal = Terminal(tmp, "kitty")
@@ -348,6 +367,7 @@ def check_kitty_terminal(tmp):
         #    renderer opens it again on the terminal of the user.
         terminal.wait_for(b"plain")
         check_the_hyperlink(terminal)
+        check_the_underline(terminal)
 
         assert b"a=T" not in terminal.seen, "graphics command leaked as text"
         assert (
