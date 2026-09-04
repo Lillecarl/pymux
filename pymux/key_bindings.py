@@ -1,8 +1,10 @@
 """
 Key bindings.
 """
+import logging
 from typing import TYPE_CHECKING, Callable, Dict, Optional, Tuple
 
+from prompt_toolkit.application.current import get_app
 from prompt_toolkit.filters import Condition, Filter, has_focus, has_selection
 from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent as E
@@ -16,6 +18,8 @@ from .key_mappings import pymux_key_to_prompt_toolkit_key_sequence
 
 if TYPE_CHECKING:
     from pymux.main import Pymux
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["PymuxKeyBindings"]
 
@@ -190,6 +194,34 @@ class PymuxKeyBindings:
         def _quit_popup(event: E) -> None:
             "Quit pop-up dialog."
             self.pymux.get_client_state().display_popup = False
+
+        @kb.add(Keys.KeyRelease, eager=True)
+        def _forward_a_key_release(event: E) -> None:
+            """
+            A key came back up. Give the sequence to the pane that the
+            keyboard of this client reaches.
+
+            A release is not a key press, so it drives nothing here: it
+            does not leave the prefix, hide the pane numbers or stop
+            the clock. The binding is eager for that reason, because an
+            eager binding for any key would take it otherwise.
+
+            The pane drops the release when it did not ask for the
+            event types of a key. A press that this client kept, like
+            the prefix key, still sends its release on, so a pane can
+            see a release with no press. Holding the pressed keys of
+            every pane to stop that costs more than it is worth.
+            """
+            pane = pymux.get_focused_pane()
+            if pane is None or not event.data:
+                return
+            try:
+                if not get_app().layout.has_focus(pane.terminal):
+                    # The keyboard is on the command line or a prompt.
+                    return
+                pane.process.write_key_data(event.data)
+            except Exception:
+                logger.exception("Forwarding a key release failed.")
 
         @kb.add(Keys.Any, eager=True, filter=display_pane_numbers)
         def _hide_numbers(event: E) -> None:
