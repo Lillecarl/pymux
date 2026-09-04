@@ -432,6 +432,11 @@ class Pymux:
         #: not have it. ("synthesize-key-events".)
         self.synthesize_key_events = True
 
+        # May a program inside a pane resize that pane? DECSLPP and the
+        # window resize sequences ask for it. Off, because a pane sits
+        # in a layout that the person arranged.
+        self.allow_program_resize = False
+
         # What the panes were last told about the keyboards of the
         # clients: the flags and the switch above. (None: nothing was
         # told yet.)
@@ -634,6 +639,10 @@ class Pymux:
             "Pass an OSC sequence of this pane to the terminals of the clients."
             self.forward_osc(pane, code, param)
 
+        def resize(lines: int | None, columns: int | None) -> None:
+            "Give a pane the size that the program inside it asks for."
+            self.resize_pane_for_program(pane, lines, columns)
+
         # Start directory.
         path: Optional[str]
 
@@ -695,6 +704,7 @@ class Pymux:
             done_callback=done_callback,
             bell_func=bell,
             osc_func=forward_osc,
+            resize_func=resize,
             before_exec_func=before_exec,
             command=command_list,
         )
@@ -844,6 +854,51 @@ class Pymux:
             return 0
         screen = getattr(pane.process, "screen", None)
         return getattr(screen, "kitty_keyboard_flags", 0) or 0
+
+    def resize_pane_for_program(
+        self, pane, lines: int | None, columns: int | None
+    ) -> None:
+        """
+        Give a pane the size that the program inside it asks for.
+
+        Three sequences ask: DECSLPP, and the two forms of a window
+        resize. xterm has one window and does as it is told. A pane
+        does not: it sits in a layout, and making one pane taller makes
+        another shorter. So a program only gets its way when the person
+        says it may, with "set-option allow-program-resize on".
+
+        The layout holds weights and not cells, and a weight of one is
+        about one cell, so the change is what "resize-pane" would do.
+        The other panes give up the room, and the size of the window
+        holds. So a pane cannot ask for more than there is.
+
+        Never raises: this runs on the read path of a pane, and one
+        sequence may not stop it.
+        """
+        if not self.allow_program_resize:
+            return
+
+        try:
+            window = self._window_holding(pane)
+            if window is None:
+                return
+
+            process = pane.process
+            if lines is not None and process.sy:
+                window.change_size_for_pane(pane, down=lines - process.sy)
+            if columns is not None and process.sx:
+                window.change_size_for_pane(pane, right=columns - process.sx)
+
+            self.invalidate()
+        except Exception:
+            logger.exception("Failed to resize a pane for the program in it.")
+
+    def _window_holding(self, pane):
+        "The window that holds this pane, or None when it is gone."
+        for window in self.arrangement.windows:
+            if pane in window.panes:
+                return window
+        return None
 
     def forward_osc(self, pane, code: str, param: str) -> None:
         """

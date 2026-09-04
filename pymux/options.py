@@ -204,6 +204,10 @@ ALL_OPTIONS = {
     # cannot send, so that a pane gets the keyboard protocol whole from
     # any terminal.
     "synthesize-key-events": OnOffOption("synthesize_key_events"),
+    # May a program inside a pane resize that pane? Off by default: a
+    # pane sits in a layout, and making one taller makes another
+    # shorter.
+    "allow-program-resize": OnOffOption("allow_program_resize"),
     # Prompt-toolkit/pymux specific.
     "swap-light-and-dark-colors": OnOffOption("swap_dark_and_light"),
 }
