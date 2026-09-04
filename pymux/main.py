@@ -16,6 +16,7 @@ from prompt_toolkit.application.current import get_app, set_app
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.clipboard import ClipboardData, InMemoryClipboard
+from prompt_toolkit.cursor_shapes import CursorShape, CursorShapeConfig
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.enums import EditingMode
 from prompt_toolkit.filters import Condition
@@ -56,6 +57,46 @@ __all__ = [
 
 apply_ptterm_compat_fixes()
 apply_prompt_toolkit_compat_fixes()
+
+
+#: The shapes of DECSCUSR, as prompt_toolkit names them. The odd numbers
+#: blink. Number 0 means "the shape this terminal starts with", and
+#: `ptterm` turns it into 1 before it gets here.
+CURSOR_SHAPES = {
+    1: CursorShape.BLINKING_BLOCK,
+    2: CursorShape.BLOCK,
+    3: CursorShape.BLINKING_UNDERLINE,
+    4: CursorShape.UNDERLINE,
+    5: CursorShape.BLINKING_BEAM,
+    6: CursorShape.BEAM,
+}
+
+
+class PaneCursor(CursorShapeConfig):
+    """
+    The cursor of a client is the cursor of the pane it looks at.
+
+    A pane keeps its own shape, because a program in it writes DECSCUSR
+    or mode 12 and expects the terminal to obey. Two clients on one
+    session can look at different panes, so each one asks its own
+    question here.
+
+    prompt_toolkit hands the application to `get_cursor_shape`. That
+    matters: `get_app()` names the client that is current, and during a
+    render of one client another may be current.
+    """
+
+    def __init__(self, pymux: "Pymux") -> None:
+        self.pymux = pymux
+
+    def get_cursor_shape(self, application) -> CursorShape:
+        pane = self.pymux.overlay_pane
+        if pane is None:
+            pane = self.pymux.arrangement.get_active_pane_for(application)
+        if pane is None:
+            return CursorShape._NEVER_CHANGE
+        style = getattr(pane.process.screen, "cursor_style", 0)
+        return CURSOR_SHAPES.get(style, CursorShape._NEVER_CHANGE)
 
 
 class ClientState:
@@ -219,6 +260,9 @@ class ClientState:
             # Read on every render: the detection of the outer
             # terminal can raise the depth after the app started.
             color_depth=lambda: self.color_depth,
+            # The cursor belongs to the pane, so the client wears the
+            # shape of the pane it looks at.
+            cursor=PaneCursor(pymux),
             layout=Layout(container=self.layout_manager.layout),
             key_bindings=pymux.key_bindings_manager.key_bindings,
             mouse_support=Condition(lambda: pymux.enable_mouse_support),

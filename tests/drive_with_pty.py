@@ -185,6 +185,15 @@ while True:
 """
 
 
+#: A program that asks for a bar that does not blink, and waits.
+CURSOR_CHILD = """
+import sys
+sys.stdout.write("\\x1b[6 qCURSORMARK")
+sys.stdout.flush()
+sys.stdin.read()
+"""
+
+
 class Failed(AssertionError):
     pass
 
@@ -788,6 +797,66 @@ def check_the_pointer_shape(tmp):
     print("pointer shape: ok")
 
 
+def check_the_cursor_shape(tmp):
+    """
+    The cursor of the client is the cursor of the pane it looks at.
+
+    A pane keeps its own shape, because a program in it writes DECSCUSR
+    and expects the terminal to obey. So the shape follows the pane the
+    user looks at, the same way the pointer shape does.
+
+    And the client never takes the blinking away. prompt_toolkit used to
+    send "CSI ? 12 l" every time it showed the cursor, which stops the
+    cursor of the user blinking and never starts it again.
+    """
+    terminal = Terminal(tmp, "kitty")
+    try:
+        terminal.wait_for_the_queries()
+        terminal.write(b"\x1b[?1u")
+        terminal.write(b"\x1b_Gi=31;OK\x1b\\")
+        terminal.write(b"\x1b[6;20;10t")
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"READY")
+
+        # The first pane asks for no shape, so it keeps the one a
+        # terminal starts with: a block that blinks.
+        terminal.wait_for(b"\x1b[1 q")
+
+        # A second pane, which asks for a bar that does not blink.
+        child = tmp / "cursor-child.py"
+        child.write_text(CURSOR_CHILD)
+        mark = terminal.mark()
+        split = run_cli(
+            terminal.sock_path,
+            ["split-window", "%s %s" % (sys.executable, child)],
+        )
+        assert split.returncode == 0, split.stderr
+        terminal.wait_for(b"CURSORMARK")
+        terminal.drain(1.0)
+        assert b"\x1b[6 q" in terminal.since(mark), (
+            "the bar that the pane asked for never reached the terminal"
+        )
+
+        # Back to the pane that asked for nothing.
+        mark = terminal.mark()
+        back = run_cli(terminal.sock_path, ["last-pane"])
+        assert back.returncode == 0, back.stderr
+        terminal.drain(1.0)
+        assert b"\x1b[1 q" in terminal.since(mark), (
+            "the cursor did not come back with the pane"
+        )
+
+        assert b"\x1b[?12l" not in terminal.seen, (
+            "the client stopped the cursor of the user blinking"
+        )
+    except BaseException:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+    print("cursor shape: ok")
+
+
 def check_an_overlay_pane(tmp):
     """
     An overlay pane floats over the layout and takes the keyboard.
@@ -1070,6 +1139,7 @@ def main() -> None:
     check_plain_terminal(tmp)
     check_a_closing_split(tmp)
     check_the_pointer_shape(tmp)
+    check_the_cursor_shape(tmp)
     check_an_overlay_pane(tmp)
     check_two_terminals_of_different_abilities(tmp)
     check_libpymux(tmp)

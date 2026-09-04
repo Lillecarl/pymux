@@ -599,8 +599,18 @@ class Arrangement:
         """
         The current active :class:`.Window`.
         """
-        app = get_app()
+        return self.get_active_window_for(get_app())
 
+    def get_active_window_for(self, app) -> Window:
+        """
+        The active :class:`.Window` of one client.
+
+        Every client looks at a window of its own. `get_app()` names the
+        client that asks, which is right for a key binding and wrong
+        during a render: the renderer of one client may run while
+        another client is the current one. A caller that already holds
+        the application passes it here instead.
+        """
         try:
             return self._active_window_for_cli[app]
         except KeyError:
@@ -690,7 +700,11 @@ class Arrangement:
         """
         The current :class:`.Pane` from the current window.
         """
-        w = self.get_active_window()
+        return self.get_active_pane_for(get_app())
+
+    def get_active_pane_for(self, app) -> Optional[Pane]:
+        "The active :class:`.Pane` of one client. See `get_active_window_for`."
+        w = self.get_active_window_for(app)
         if w is not None:
             return w.active_pane
         return None
