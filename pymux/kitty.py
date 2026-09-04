@@ -11,8 +11,13 @@ input parser does not understand them: without this translation the
 sequence arrives garbled, one key press per character.
 
 The parser below extends prompt_toolkit's `Vt100Parser`. Sequences that
-have no prompt_toolkit representation (key release events, lock keys)
-are consumed silently.
+have no prompt_toolkit representation (lock keys, media keys) are
+consumed silently.
+
+A key that came back up is not a key press, so it takes the key of a
+release (`Keys.KeyRelease`) and keeps the sequence that the terminal
+sent. A pane that asked for the event types of a key is given that
+sequence; nothing else binds that key, so nothing else sees it.
 
 The parser also swallows the string sequences that carry the replies of
 the terminal queries: APC (`ESC _ ... ST`) for the graphics protocol,
@@ -180,6 +185,17 @@ _STRING_REPLY = object()
 # query.
 _CELL_SIZE_REPLY = object()
 
+# Sentinel for a key that came back up. The outer terminal sends one
+# only when a pane asked for the event types of a key.
+#
+# A release is read before the key is: the sequence goes on whatever
+# key it names. So a pane can read the release of a key whose press
+# has no prompt_toolkit name and never arrived, like a media key. That
+# is deliberate. The other way costs a table of the keys that pymux
+# can name, and a pane that asked for the event types of a key reads
+# a release that matches no press without trouble.
+_KEY_RELEASE = object()
+
 _KeyResult = Union[str, Keys, tuple, object]
 
 # Reply of the "CSI ? u" flags query.
@@ -263,8 +279,9 @@ def parse_kitty_key(prefix: str) -> Optional[_KeyResult]:
     """
     Parse a complete kitty key sequence. Returns a key, a character or a
     tuple of keys (the shapes that the prompt_toolkit parser supports),
-    `_DROP` for sequences to consume silently, and None when `prefix` is
-    not a kitty key sequence.
+    `_KEY_RELEASE` for a key that came back up, `_DROP` for sequences
+    to consume silently, and None when `prefix` is not a kitty key
+    sequence.
     """
     match = _KITTY_KEY_RE.match(prefix)
     if match is None:
@@ -281,7 +298,11 @@ def parse_kitty_key(prefix: str) -> Optional[_KeyResult]:
         return None
 
     if match.group("event") == str(_EVENT_RELEASE):
-        return _DROP
+        # A key that came back up. It is not a key press, so it does
+        # not become one: it carries its own key, which only a pane
+        # that asked for the event types reads. See
+        # `KittyVt100Parser._call_handler`.
+        return _KEY_RELEASE
 
     key = int(match.group("key"))
     mods = int(match.group("mods") or 1) - 1
@@ -429,5 +450,14 @@ class KittyVt100Parser(Vt100Parser):
         ):
             if self.reply_callback is not None:
                 self.reply_callback(insert_text)
+            return
+        if key is _KEY_RELEASE:
+            # A release keeps the sequence that the terminal sent, and
+            # takes the name of a release. A pane that asked for the
+            # event types of a key gets the sequence; nothing else
+            # binds that key, so nothing else sees it. Giving it the
+            # name of the key instead would run the binding of that
+            # key a second time.
+            super()._call_handler(Keys.KeyRelease, insert_text)
             return
         super()._call_handler(key, insert_text)

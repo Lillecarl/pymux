@@ -68,8 +68,22 @@ def test_alternate_key_codes_are_ignored():
     assert parse("\x1b[97:65;2u") == [("A", "\x1b[97:65;2u")]
 
 
-def test_release_event_is_dropped():
-    assert parse("\x1b[97;1:3u") == []
+def test_a_release_keeps_its_sequence_under_a_key_of_its_own():
+    """
+    A key that came back up is not a key press. It takes the name of a
+    release, so the binding of the key does not run a second time, and
+    it keeps the sequence, so a pane that asked for the event types of
+    a key can be given it.
+    """
+    assert parse("\x1b[97;1:3u") == [(Keys.KeyRelease, "\x1b[97;1:3u")]
+    assert parse("\x1b[98;5:3u") == [(Keys.KeyRelease, "\x1b[98;5:3u")]
+    # A release of a key of the letter form as well.
+    assert parse("\x1b[1;1:3D") == [(Keys.KeyRelease, "\x1b[1;1:3D")]
+
+
+def test_a_repeat_stays_a_key_press():
+    "That is what the key did, and it drives the same binding."
+    assert parse("\x1b[97;1:2u") == [("a", "\x1b[97;1:2u")]
     # Press events (type 1) and repeats (type 2) come through.
     assert parse("\x1b[97;1:1u") == [("a", "\x1b[97;1:1u")]
     assert parse("\x1b[97;1:2u") == [("a", "\x1b[97;1:2u")]
