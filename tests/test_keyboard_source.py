@@ -3,9 +3,10 @@ What pymux tells a pane about the keyboards of its clients.
 
 A pane asks the terminal what it does, and the answer has to hold. Two
 flags of the kitty keyboard protocol need a terminal that speaks the
-protocol: the event type of a key and the other codes of a key. So
-pymux has to know what the terminal of every client can report, and a
-pane may only hear what all of them serve.
+protocol: the event type of a key and the other codes of a key. pymux
+makes up what a legacy keyboard cannot send, so a pane keeps both. It
+still has to know what the terminal of every client can report: a
+keyboard that sends its own key release may not get a second one.
 """
 from pymux.main import Pymux
 
@@ -24,6 +25,7 @@ class FakeClientState:
 class FakeScreen:
     def __init__(self):
         self.keyboard_source_flags = 0
+        self.synthesize_key_events = False
 
 
 class FakeProcess:
@@ -146,3 +148,37 @@ def test_a_screen_that_knows_nothing_about_the_host_is_no_error():
 
     pymux, _ = make_pymux(0b11111)
     pymux.tell_pane_about_the_keyboard(OldPane())  # Does not raise.
+
+
+# ----------------------------------------------------------------------
+# The option.
+
+
+def test_making_up_key_events_is_on_by_default():
+    assert Pymux().synthesize_key_events is True
+
+
+def test_every_pane_hears_the_option():
+    pymux, _ = make_pymux(0)
+    pane = FakePane(1)
+    pymux.panes_by_id[pane.pane_id] = pane
+
+    pymux.sync_keyboard_source_flags()
+    assert pane.process.screen.synthesize_key_events is True
+
+    pymux.synthesize_key_events = False
+    pymux.sync_keyboard_source_flags()
+    assert pane.process.screen.synthesize_key_events is False
+
+
+def test_the_option_alone_reaches_the_panes():
+    "The mask does not change with it, and the panes still hear it."
+    pymux, _ = make_pymux(0b11111)
+    pane = FakePane(1)
+    pymux.panes_by_id[pane.pane_id] = pane
+    pymux.sync_keyboard_source_flags()
+
+    pymux.synthesize_key_events = False
+    pymux.sync_keyboard_source_flags()
+    assert pane.process.screen.synthesize_key_events is False
+    assert pane.process.screen.keyboard_source_flags == 0b11111

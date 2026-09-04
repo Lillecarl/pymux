@@ -60,6 +60,11 @@ KEY_RELEASE = b"\x1b[97;1:3u"
 # with none are an empty field and not the value one.
 KEY_RELEASE_HEX = b"<<%s>>" % b"\x1b[97;:3u".hex().encode("ascii")
 
+# The release that pymux makes up for a terminal that sends none. The
+# check looks for the hex alone, because the press of the key may
+# share a read with it or may not.
+MADE_UP_RELEASE_HEX = b"\x1b[97;:3u".hex().encode("ascii")
+
 # The pane asks "CSI ? u" when it reads a "Q", and echoes the answer.
 # The answer holds the flags that the pane really gets, so it depends
 # on what the terminal of the client can report.
@@ -577,10 +582,15 @@ def check_plain_terminal(tmp):
         assert b";38;2;" not in tail, "24 bit colour without support"
 
         # The pane asked for the disambiguate flag and the event types.
-        # This terminal can report neither a key release nor the other
-        # codes of a key, so the pane hears only what it really gets.
+        # This terminal reports no key release, so pymux makes one up
+        # and the pane keeps both flags.
         terminal.write(ASK_THE_FLAGS)
-        terminal.wait_for(flags_answer(1))
+        terminal.wait_for(flags_answer(3))
+
+        # And a key really comes up: one press of "a" reaches the pane
+        # as the character and the release of that key.
+        terminal.write(b"a")
+        terminal.wait_for(MADE_UP_RELEASE_HEX)
     except BaseException:
         terminal.report()
         raise

@@ -381,9 +381,17 @@ class Pymux:
         #: their outer terminals accordingly.)
         self._kitty_flags_sent = None
 
-        # What the keyboards of the clients could report the last time
-        # the panes were told. (None: no pane was told yet.)
-        self._keyboard_source_flags_sent = None
+        #: Make up the halves of a key event that the keyboard of a
+        #: client cannot send: the release of a key, and the shifted
+        #: key of a letter. With this, a pane gets what it asked for
+        #: from any terminal; without it, a pane hears that it does
+        #: not have it. ("synthesize-key-events".)
+        self.synthesize_key_events = True
+
+        # What the panes were last told about the keyboards of the
+        # clients: the flags and the switch above. (None: nothing was
+        # told yet.)
+        self._keyboard_state_sent = None
         # Event loop for this server. (Python 3.14 doesn't have a global
         # "current event loop" anymore. Keep our own reference.)
         try:
@@ -756,6 +764,8 @@ class Pymux:
         # for a different pointer.
         self.sync_kitty_flags()
         self.sync_pointer_shape()
+        # "set-option synthesize-key-events" takes effect here.
+        self.sync_keyboard_source_flags()
 
     def get_focused_pane(self):
         """
@@ -943,12 +953,12 @@ class Pymux:
 
         A pane answers the query of its program with the flags that it
         really gets, and that answer needs this. (Only walks the panes
-        when the value changed.)
+        when something changed.)
         """
-        flags = self.keyboard_source_flags()
-        if flags == self._keyboard_source_flags_sent:
+        state = (self.keyboard_source_flags(), self.synthesize_key_events)
+        if state == self._keyboard_state_sent:
             return
-        self._keyboard_source_flags_sent = flags
+        self._keyboard_state_sent = state
         for pane in list(self.panes_by_id.values()):
             self.tell_pane_about_the_keyboard(pane)
 
@@ -965,6 +975,7 @@ class Pymux:
             return
         try:
             screen.keyboard_source_flags = self.keyboard_source_flags()
+            screen.synthesize_key_events = self.synthesize_key_events
         except AttributeError:
             # An older ptterm knows nothing about the keyboard of the
             # host. It then claims what a pane asks for, as before.

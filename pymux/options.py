@@ -200,6 +200,10 @@ ALL_OPTIONS = {
     "default-shell": StringOption("default_shell", [get_default_shell()]),
     "status-justify": JustifyOption("status_justify"),
     "status-interval": PositiveIntOption("status_interval", [1, 2, 4, 8, 16, 30, 60]),
+    # Make up the halves of a key event that the keyboard of a client
+    # cannot send, so that a pane gets the keyboard protocol whole from
+    # any terminal.
+    "synthesize-key-events": OnOffOption("synthesize_key_events"),
     # Prompt-toolkit/pymux specific.
     "swap-light-and-dark-colors": OnOffOption("swap_dark_and_light"),
 }
