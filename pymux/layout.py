@@ -71,6 +71,20 @@ class Z_INDEX:
     OVERLAY = 10
 
 
+#: Where the panes of one render were drawn. It hangs on the screen of
+#: that render, so two clients never read each other's.
+_PANE_POSITIONS = "pymux_pane_write_positions"
+
+
+def pane_write_positions(screen) -> dict:
+    "Where each pane was drawn on this screen."
+    positions = getattr(screen, _PANE_POSITIONS, None)
+    if positions is None:
+        positions = {}
+        setattr(screen, _PANE_POSITIONS, positions)
+    return positions
+
+
 #: How much of the screen an overlay pane takes when nobody says.
 DEFAULT_OVERLAY_SIZE = "60%"
 
@@ -444,14 +458,26 @@ class LayoutManager:
         self.layout = self._create_layout()
 
         # Keep track of render information.
-        self.pane_write_positions: Dict[arrangement.Pane, WritePosition] = {}
+    @property
+    def pane_write_positions(self) -> Dict[arrangement.Pane, WritePosition]:
+        """
+        Where each pane was drawn, in the last render of this client.
+
+        The positions live on the screen that carried them, so a client
+        reads its own and never another's. Before the first render, and
+        on a frame that the renderer threw away, there are none.
+        """
+        renderer = getattr(self.client_state.app, "renderer", None)
+        screen = getattr(renderer, "_last_screen", None)
+        if screen is None:
+            return {}
+        return pane_write_positions(screen)
 
     def reset_write_positions(self) -> None:
         """
-        Clear write positions right before rendering. (They are populated
-        during rendering).
+        Nothing to clear: every render writes to a new screen, and the
+        positions go with it. Kept because the render hook calls it.
         """
-        self.pane_write_positions = {}
 
     def display_popup(self, title: str, content: str) -> None:
         """
@@ -1264,12 +1290,11 @@ class TracePaneWritePosition(_ContainerProxy):  # XXX: replace with SizedBox
             erase_bg,
             z_index,
         )
-        try:
-            self.pymux.get_client_state().layout_manager.pane_write_positions[
-                self.arrangement_pane
-            ] = write_position
-        except ValueError:
-            pass
+        # Where this pane was drawn, kept on the screen that was drawn
+        # and not on whichever client `get_app()` happens to name. With
+        # two clients attached, a render of one can carry the context of
+        # the other, and the positions then land on the wrong client.
+        pane_write_positions(screen)[self.arrangement_pane] = write_position
 
 
 def focus_left(pymux: "Pymux") -> None:
