@@ -150,7 +150,12 @@ let
     pkgs.rustPlatform.buildRustPackage {
       pname = "ptterm-judges";
       version = "0.1.0";
-      src = "${pttermSrc}/tests/judges";
+      # Only the judges, not the whole of ptterm: otherwise every
+      # change to a test rebuilds every crate.
+      src = builtins.path {
+        path = "${pttermSrc}/tests/judges";
+        name = "ptterm-judges-source";
+      };
       cargoLock = {
         lockFile = "${pttermSrc}/tests/judges/Cargo.lock";
         outputHashes = {
