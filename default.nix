@@ -19,6 +19,8 @@
   wcwidth,
   runCommand,
   ncurses,
+  stdenv,
+  fetchFromGitHub,
 }:
 let
   package = buildPythonApplication {
@@ -83,6 +85,50 @@ let
     TERMINFO_DIRS=$out/share/terminfo: infocmp -x pymux > /dev/null
   '';
 
+  # The conformance suite of Thomas Dickey, after George Nachman wrote it for
+  # iTerm2. It judges a terminal from the inside: it runs as a program in that
+  # terminal, writes control sequences, and reads the reports that come back.
+  #
+  # Its modules import each other by plain name, so they have to sit on the
+  # path together and not under a package directory of their own. `bin/esctest`
+  # runs the suite; `share/esctest2` is where the check imports it from,
+  # because the check drives it one test at a time.
+  esctest2 = stdenv.mkDerivation {
+    pname = "esctest2";
+    version = "0-unstable-2025-08-24";
+
+    src = fetchFromGitHub {
+      owner = "ThomasDickey";
+      repo = "esctest2";
+      rev = "664be3cf2c1e3f06bc93a8bafb48a0db83c607db";
+      hash = "sha256-JmUMvWmQoPyoWttW4K7Ap3/Tn0D3n8tHVPwprpeC+Is=";
+    };
+
+    nativeBuildInputs = [ makeWrapper ];
+    dontConfigure = true;
+    dontBuild = true;
+
+    installPhase = ''
+      runHook preInstall
+
+      mkdir -p $out/share/esctest2
+      cp -r esctest/. $out/share/esctest2/
+
+      makeWrapper ${python.interpreter} $out/bin/esctest \
+        --add-flags $out/share/esctest2/esctest.py
+
+      runHook postInstall
+    '';
+
+    meta = {
+      description = "Conformance tests for terminal emulators";
+      homepage = "https://github.com/ThomasDickey/esctest2";
+      license = lib.licenses.gpl2Only;
+      mainProgram = "esctest";
+      platforms = lib.platforms.unix;
+    };
+  };
+
   pythonWithTests = python.withPackages (ps: [
     ptterm
     prompt-toolkit
@@ -92,15 +138,32 @@ let
     wcwidth
   ]);
 
-  # `PYMUX_TESTS` picks what pytest runs, for instance
-  # `PYMUX_TESTS=tests/test_sixel_encoder.py nix-build -A pymux.checks.pymux`.
-  # It reaches the evaluation through the environment, so it only works with
-  # impure evaluation, which `nix-build` uses by default.
+  # Three knobs that reach the evaluation through the environment. They work
+  # because a build from a file evaluates impurely; a flake would see none of
+  # them.
+
+  # What pytest runs, for instance
+  # `PYMUX_TESTS=tests/test_sixel_encoder.py nix build --file . checks.pymux`.
   selection =
     let
       value = builtins.getEnv "PYMUX_TESTS";
     in
     if value == "" then "tests" else value;
+
+  # Which conformance tests run. It is a regular expression that the suite
+  # matches against "Class.method", for instance
+  # `PYMUX_ESCTEST_INCLUDE=BSTests nix build --file . checks.pymux-esctest`.
+  esctestInclude =
+    let
+      value = builtins.getEnv "PYMUX_ESCTEST_INCLUDE";
+    in
+    if value == "" then ".*" else value;
+
+  # Set `PYMUX_ESCTEST_RECORD` to anything and the conformance check writes
+  # the list of tests that fail now instead of judging the run against the
+  # recorded one. The result of the build is that list, ready to copy over
+  # `tests/esctest-failures.txt`.
+  esctestRecord = builtins.getEnv "PYMUX_ESCTEST_RECORD" != "";
 
   # Only the module and the tests, not the whole repository. A copy of
   # everything makes the test runs rebuild on every unrelated edit.
@@ -116,12 +179,14 @@ let
   # Run a test command in the build sandbox. Nothing of the run reaches the
   # machine: the sockets, the temporary directories and the processes all
   # live and die inside it.
-  runInSandbox = name: command:
-    runCommand name {
-      nativeBuildInputs = [ pythonWithTests ];
-      # Rerun whenever the selection changes.
-      inherit selection;
-    } ''
+  #
+  # `inputs` adds to what the run may call. `env` names the variables that the
+  # command reads, and a change to one of them rebuilds the check, which is
+  # what makes the knobs above work.
+  runInSandbox = { name, inputs ? [ ], env ? { } }: command:
+    runCommand name (env // {
+      nativeBuildInputs = [ pythonWithTests ] ++ inputs;
+    }) ''
       cp -r ${testSources}/pymux ${testSources}/libpymux ${testSources}/tests .
       chmod -R +w .
       export HOME="$TMPDIR"
@@ -137,14 +202,39 @@ let
 
   checks = {
     # The unit tests of pymux.
-    pymux = runInSandbox "pymux-tests" ''
+    pymux = runInSandbox {
+      name = "pymux-tests";
+      env = { inherit selection; };
+    } ''
       python -m pytest $selection -q -p no:cacheprovider
     '';
 
     # The end to end test. It opens a pty, starts a server and attaches a
     # client, so it needs a sandbox that gives it /dev/ptmx.
-    pty = runInSandbox "pymux-pty-tests" ''
+    pty = runInSandbox { name = "pymux-pty-tests"; } ''
       python tests/drive_with_pty.py
+    '';
+
+    # The conformance suite, run in a pane. It is not a pass or fail of its
+    # own: most of it fails, and each failure names a real difference from
+    # xterm. The run is judged against the list in
+    # `tests/esctest-failures.txt`, and a difference either way is what
+    # fails the check.
+    esctest = runInSandbox {
+      name = "pymux-esctest";
+      inputs = [ esctest2 ];
+      env = {
+        inherit esctestInclude;
+        record = esctestRecord;
+      };
+    } ''
+      export PYMUX_ESCTEST=${esctest2}/share/esctest2
+      export PYMUX_ESCTEST_INCLUDE="$esctestInclude"
+      ${lib.optionalString esctestRecord ''
+        # The result of the build is the new list.
+        export PYMUX_ESCTEST_RECORD="$out"
+      ''}
+      python tests/drive_with_esctest.py
     '';
   };
 in
