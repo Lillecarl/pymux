@@ -277,12 +277,40 @@ class PosixClient(Client):
         self._send_packet({"cmd": "size", "data": [rows, cols]})
 
 
+def list_socket_names():
+    """
+    The socket of every server that is running, the newest one first.
+
+    A server with no name takes the lowest number that is free, so the
+    oldest server usually holds "pymux.sock.<user>.0". `glob` gives no
+    order at all, and "pymux attach" takes the first name it reads. So
+    a person who started a second server and attached could land on
+    either one, and usually landed on the old one.
+
+    The time of the socket file is the time the server started, because
+    nothing writes to a socket file after the bind. Newest first means
+    that "pymux attach" reaches the server a person just started, which
+    is what they mean by it.
+    """
+    pattern = "%s/pymux.sock.%s.*" % (tempfile.gettempdir(), getpass.getuser())
+    return sorted(glob.glob(pattern), key=_started_at, reverse=True)
+
+
+def _started_at(path: str) -> float:
+    "When the server bound this socket. A socket that went away is oldest."
+    try:
+        return os.stat(path).st_mtime
+    except OSError:
+        return 0.0
+
+
 def list_clients():
     """
-    List all the servers that are running.
+    A client for every server that is running, the newest one first.
+
+    A server that no longer answers is left out.
     """
-    p = "%s/pymux.sock.%s.*" % (tempfile.gettempdir(), getpass.getuser())
-    for path in glob.glob(p):
+    for path in list_socket_names():
         try:
             yield PosixClient(path)
         except socket.error:
