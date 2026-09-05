@@ -6,7 +6,6 @@
 #     cp result/failures.txt pymux/tests/esctest-failures.txt
 DATests.test_DA_0
 DATests.test_DA_NoParameter
-DECIDTests.test_DECID_Basic
 DECRQMTests.test_DECRQM_DEC_DECNCSM
 DECRQSSTests.test_DECRQSS_DECSLPP
 DECSETTests.test_DECSET_Allow80To132
