@@ -33,7 +33,10 @@
 let
   inherit (callPackage ./suite.nix { }) suite;
 
-  esctest2 = callPackage ./esctest2.nix { inherit python; };
+  # The conformance suite belongs to ptterm: it judges an emulator, and the
+  # pane is where pymux puts one. ptterm carries the package and runs the
+  # same suite on a pty of its own, so the two lists can be compared.
+  inherit (ptterm) esctest2;
 
   pythonWithTests = python.withPackages (ps: [
     ptterm
