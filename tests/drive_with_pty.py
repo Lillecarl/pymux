@@ -246,6 +246,19 @@ sys.stdout.flush()
 sys.stdin.read()
 """
 
+#: A pane that writes a non-breaking space between two letters.
+#:
+#: prompt_toolkit visualises one the way a text editor does: a plain
+#: space with `class:nbsp`, which is `underline ansiyellow`. A terminal
+#: has no business doing that, and Claude Code writes one after its
+#: prompt arrow, so every prompt came out of pymux underlined.
+NBSP_CHILD = """
+import sys
+sys.stdout.write("A\\u00a0B")
+sys.stdout.flush()
+sys.stdin.read()
+"""
+
 CURSOR_CHILD = """
 import sys
 sys.stdout.write("\\x1b[6 qCURSORMARK")
@@ -1315,6 +1328,49 @@ def check_a_quoted_argument(tmp):
         terminal.close()
 
 
+def check_a_non_breaking_space(tmp):
+    """
+    A non-breaking space reaches the terminal of the user as one.
+
+    The program in the pane chose that character. A terminal draws what
+    the program drew, so the byte has to come out again and nothing may
+    be drawn under it.
+
+    `checks.pymux-pictures` measures the underline; this measures the
+    character. It is the cheaper of the two and it says which of the two
+    things went wrong.
+    """
+    child_path = tmp / "nbsp_child.py"
+    child_path.write_text(NBSP_CHILD)
+
+    terminal = Terminal(tmp, "nbsp", command="python3 %s" % child_path)
+    try:
+        terminal.wait_for_the_queries()
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for("A\u00a0B".encode("utf-8"))
+
+        # The character itself, and not the space that prompt_toolkit
+        # would put in its place.
+        written = terminal.seen
+        assert "A\u00a0B".encode("utf-8") in written, repr(written[-400:])
+
+        # And no rendition on it. The pane set none, so the cell has to
+        # arrive with none: an underline here is the one that
+        # `class:nbsp` draws.
+        drawn = re.search(rb"A(\x1b\[[0-9;:]*m)?\xc2\xa0", written)
+        assert drawn is not None, repr(written[-400:])
+        if drawn.group(1) is not None:
+            parameters = drawn.group(1)[2:-1].split(b";")
+            assert b"4" not in parameters, drawn.group(1)
+
+        print("non-breaking space: ok")
+    except Exception:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+
+
 def check_libpymux(tmp):
     """
     libpymux against a server that is really there.
@@ -1430,6 +1486,7 @@ def main() -> None:
     check_two_terminals_of_different_abilities(tmp)
     check_a_full_screen_pane(tmp)
     check_a_quoted_argument(tmp)
+    check_a_non_breaking_space(tmp)
     check_libpymux(tmp)
     print("All pty checks passed.")
 
