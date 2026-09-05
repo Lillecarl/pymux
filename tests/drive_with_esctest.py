@@ -88,6 +88,11 @@ FINISHED = b"ESCTEST-FINISHED"
 #: terminal of this shape, so there is nothing to record and nothing to
 #: decide.
 #:
+#: Leaving one out is not free to skip either: a report that never
+#: comes costs `REPORT_TIMEOUT`, and each of these three asks for one
+#: before it gives up. The reason to leave them out is the list, not
+#: the clock.
+#:
 #: `ptterm/tests/drive_with_esctest.py` leaves out the same three, for
 #: the same reason: what pymux draws a pane in is a window that belongs
 #: to somebody else as well.
