@@ -380,6 +380,11 @@ class Pymux:
         self.enable_mouse_support = True
         self.enable_status = True
         self.enable_pane_status = True  # False
+        # Full screen: one pane takes every cell, and pymux draws
+        # nothing of its own. It hides the status line and the pane
+        # titlebar without changing what the person asked for, so
+        # turning it off gives them both back.
+        self.full_screen = False
         self.enable_bell = True
         self.enable_clipboard = True
 
@@ -496,6 +501,16 @@ class Pymux:
 
         self.style = ui_style
 
+    @property
+    def show_status(self) -> bool:
+        "Whether a client draws the status line."
+        return self.enable_status and not self.full_screen
+
+    @property
+    def show_pane_status(self) -> bool:
+        "Whether a client draws the titlebar of a pane."
+        return self.enable_pane_status and not self.full_screen
+
     def _start_auto_refresh_thread(self):
         """
         Start the background thread that auto refreshes all clients according to
@@ -591,7 +606,8 @@ class Pymux:
 
         if rows and columns:
             return Size(
-                rows=min(rows) - (1 if self.enable_status else 0), columns=min(columns)
+                rows=min(rows) - (1 if self.show_status else 0),
+                columns=min(columns),
             )
         else:
             return Size(rows=20, columns=80)

@@ -641,7 +641,7 @@ class LayoutManager:
                             z_index=Z_INDEX.STATUS_BAR,
                             style="class:statusbar",
                         ),
-                        filter=Condition(lambda: self.pymux.enable_status),
+                        filter=Condition(lambda: self.pymux.show_status),
                     ),
                 ]
             ),
@@ -832,7 +832,7 @@ class DynamicBody(Container):
                     # Some spacing for the top status bar.
                     ConditionalContainer(
                         content=Window(height=1),
-                        filter=Condition(lambda: self.pymux.enable_pane_status),
+                        filter=Condition(lambda: self.pymux.show_pane_status),
                     ),
                     # The actual content.
                     _create_split(self.pymux, window, window.root),
@@ -1125,7 +1125,7 @@ def _create_container_for_process(
                             ],
                             style="class:titlebar",
                         ),
-                        filter=Condition(lambda: pymux.enable_pane_status),
+                        filter=Condition(lambda: pymux.show_pane_status),
                     ),
                     left=0,
                     right=0,

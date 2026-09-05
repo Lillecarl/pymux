@@ -186,6 +186,9 @@ ALL_OPTIONS = {
     "remain-on-exit": OnOffOption("remain_on_exit"),
     "status": OnOffOption("enable_status"),
     "pane-border-status": OnOffOption("enable_pane_status"),
+    # One pane over every cell, with nothing that pymux draws for
+    # itself. It hides the two options above without changing them.
+    "full-screen": OnOffOption("full_screen"),
     "status-keys": KeysOption("status_keys_vi_mode"),
     "mode-keys": KeysOption("mode_keys_vi_mode"),
     "default-terminal": StringOption(
