@@ -9,7 +9,6 @@
 # This is what the run saw. To make it what the check expects:
 #     nix build --file . checks.pymux-alacritty.run
 #     cp result/failures.txt pymux/tests/alacritty-failures.txt
-colored_underline
 decaln_reset
 deccolm_reset
 delete_chars_reset
