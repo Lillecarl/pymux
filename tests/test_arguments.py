@@ -94,7 +94,7 @@ def test_the_command_survives_a_round_trip():
     "What `parse_arguments` writes, `shlex.split` reads back."
     import shlex
 
-    argv = ["sh", "-c", "echo one two; sleep 3600"]
+    argv = ["sh", "-c", "echo one two; sleep 30"]
     _mode, command = parse("integrated", *argv)
     assert shlex.split(command) == argv
 

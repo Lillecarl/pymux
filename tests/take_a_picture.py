@@ -113,6 +113,15 @@ SCREEN = "1280x800x24"
 APPEAR_TIMEOUT = 20.0
 SETTLE_TIMEOUT = 15.0
 
+#: How long the program holds the window open after it has drawn. A
+#: terminal closes its window when its program ends, and the picture is
+#: taken after the program ran, so it has to still be there.
+#:
+#: It is a bound and not a parking space. The two waits above are the
+#: longest this can need, and anything left behind by a run that went
+#: wrong is gone in a minute rather than an hour.
+HOLD = APPEAR_TIMEOUT + SETTLE_TIMEOUT + 10
+
 
 # ----------------------------------------------------------------------
 # The fixtures. Each one is the bytes that a program wrote.
@@ -689,7 +698,9 @@ def write_the_program(path, fixture_path):
     `stty -echo` because a tty that echoes puts the answer to a query
     on the screen as text, and the two sides answer differently.
     `sleep` because a terminal closes its window when the program ends,
-    and the picture is taken after the program ran.
+    and the picture is taken after the program ran. `HOLD` says how
+    long, and it is a bound: a run that goes wrong leaves nothing behind
+    for longer than that.
 
     The clear is what makes the two sides start alike. A terminal may
     write on its own screen before the program runs: foot says which of
@@ -703,7 +714,7 @@ def write_the_program(path, fixture_path):
         "stty -echo\n"
         "printf '\\033[2J\\033[H'\n"
         "cat %s\n"
-        "exec sleep 3600\n" % fixture_path
+        "exec sleep %d\n" % (fixture_path, HOLD)
     )
 
 
