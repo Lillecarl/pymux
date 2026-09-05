@@ -4,12 +4,8 @@
 # Write this file again with:
 #     PYMUX_ESCTEST_RECORD=1 nix build --file . checks.pymux-esctest
 #     cp result/failures.txt pymux/tests/esctest-failures.txt
-DA2Tests.test_DA2_0
-DA2Tests.test_DA2_NoParameter
 DATests.test_DA_0
 DATests.test_DA_NoParameter
-DECDSRTests.test_DECDSR_DECXCPR
-DECDSRTests.test_DECDSR_DSRKeyboard
 DECIDTests.test_DECID_Basic
 DECRQMTests.test_DECRQM_DEC_DECNCSM
 DECRQSSTests.test_DECRQSS_DECSLPP
