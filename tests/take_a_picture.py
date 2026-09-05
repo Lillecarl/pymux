@@ -58,12 +58,14 @@ Run with:
     PYMUX_PICTURES=underlines nix build --file . checks.pymux-pictures
 
 `PYMUX_PICTURES` narrows the run to the fixtures whose name holds that
-text. `PYMUX_PICTURES_KEEP=1` keeps the pictures of a run that found a
-difference, because nix takes the output of a build that failed away.
-`PYMUX_PICTURES_RECORD=1` writes the list of differences instead of
-judging the run:
+text.
 
-    PYMUX_PICTURES_RECORD=1 nix build --file . checks.pymux-pictures
+Every run keeps its pictures and writes the list of differences it saw,
+whatever the verdict, because the run of a check does not fail when the
+suite fails. So looking at a difference and recording one are the same
+command:
+
+    nix build --file . checks.pymux-pictures.run
     cp result/picture-differences.txt pymux/tests/picture-differences.txt
 """
 import os
@@ -80,20 +82,6 @@ PICTURES = Path(os.environ.get("PYMUX_PICTURES_OUT", "pictures"))
 
 #: Which fixtures to run. Empty means all of them.
 ONLY = os.environ.get("PYMUX_PICTURES", "")
-
-#: Report a difference and end well anyway. Nix takes the output of a
-#: build that failed away, so a run that judges leaves nothing to look
-#: at. Set this and the result of the build is the pictures.
-#:
-#: `PYMUX_PICTURES_RECORD` keeps the pictures as well, and writes the
-#: list too. Use this one to look at a difference before deciding
-#: whether it belongs in the list.
-KEEP = os.environ.get("PYMUX_PICTURES_KEEP", "") != ""
-
-#: Write the list of differences that stand today, instead of judging
-#: the run against it. The result of the build is that list, ready to
-#: copy over `tests/picture-differences.txt`.
-RECORD = os.environ.get("PYMUX_PICTURES_RECORD", "")
 
 #: The differences that stand. Not every difference is a fault: a pane
 #: draws what a program asked for, and a terminal that cannot parse the
@@ -774,10 +762,10 @@ def main():
         for seat in seats.values():
             seat.stop()
 
-    if RECORD:
-        write_the_recorded(Path(RECORD) / "picture-differences.txt", seen)
-        print("Wrote the list of differences.")
-        return
+    # Keep the list that this run saw, beside the pictures, whatever the
+    # verdict is. The run of this check does not fail because a picture
+    # differed, so what it leaves is there to read either way.
+    write_the_recorded(out / "picture-differences.txt", seen)
 
     # Judge the run against the list. A difference either way matters:
     # one that grew is a regression, and one that went is a fix that
@@ -796,24 +784,11 @@ def main():
         for line in wrong:
             print(line, file=sys.stderr)
         print(
-            "\nA difference that is right belongs in "
-            "tests/picture-differences.txt, with a comment saying why:\n"
-            "    PYMUX_PICTURES_RECORD=1 nix build --file . "
-            "checks.pymux-pictures\n"
+            "\nLook at difference.png, and if the difference is right, take\n"
+            "the list this run wrote and say why in a comment:\n"
+            "    nix build --file . checks.pymux-pictures.run\n"
             "    cp result/picture-differences.txt "
             "pymux/tests/picture-differences.txt",
-            file=sys.stderr,
-        )
-        if KEEP:
-            print(
-                "PYMUX_PICTURES_KEEP is set, so the result of this build is "
-                "the pictures. Look at difference.png.",
-                file=sys.stderr,
-            )
-            return
-        print(
-            "Run it again with PYMUX_PICTURES_KEEP=1 to keep the pictures: "
-            "nix takes the output of a build that failed away.",
             file=sys.stderr,
         )
         raise SystemExit(1)

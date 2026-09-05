@@ -26,28 +26,26 @@ Run it:
 
     nix build --file . checks.pymux-esctest
 
-Narrow it to one class while hunting one failure:
+Narrow it to one class while hunting one failure. A narrowed run is
+judged too: a name in the list that the regular expression does not
+choose was never going to run, so it does not count as missing.
 
     PYMUX_ESCTEST_INCLUDE=BSTests nix build --file . checks.pymux-esctest
 
-Write the list again after fixing something. The result of the build
-holds the new list, and the log that says why each test failed:
+Every run writes the list it saw and the log that says why, whatever
+the verdict, because the run of a check does not fail when the suite
+fails. So reading the reasons and writing the list again are the same
+command:
 
-    PYMUX_ESCTEST_RECORD=1 nix build --file . checks.pymux-esctest
+    nix build --file . checks.pymux-esctest.run
+    less result/esctest.log
     cp result/failures.txt pymux/tests/esctest-failures.txt
 
-Read the reasons for one class the same way. The run is judged against
-nothing, so it always succeeds and always leaves the log:
-
-    PYMUX_ESCTEST_INCLUDE=ChangeColorTests PYMUX_ESCTEST_RECORD=1 \\
-        nix build --file . checks.pymux-esctest
-    less result/esctest.log
-
-Three variables reach this file from `pymux/default.nix`:
+Three variables reach this file from `pymux/nix/checks.nix`:
 `PYMUX_ESCTEST` names the directory that holds `esctest.py`, and the
 check does nothing when it is not set. `PYMUX_ESCTEST_INCLUDE` is the
-regular expression of test names to run. `PYMUX_ESCTEST_RECORD` names
-the directory to write the list and the log into.
+regular expression of test names to run. `PYMUX_ESCTEST_OUT` names the
+directory to write the list and the log into.
 """
 import os
 import re
@@ -175,21 +173,21 @@ def read_baseline():
     return names
 
 
-def write_record(directory: Path, failed, log: str) -> None:
+def keep(directory: Path, failed, log: str) -> None:
     """
     Keep the list of failures and the log that says why.
 
-    The log matters as much as the list. A run happens in the build
-    sandbox, so without this the reasons go away with it, and the names
-    alone do not say what a pane did wrong.
+    Every run writes both, whatever the verdict. The log matters as much
+    as the list: a run happens in the build sandbox, and the names alone
+    do not say what a pane did wrong.
     """
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "failures.txt").write_text(
-        "# The esctest2 tests that fail today. Every name here is a real\n"
-        "# difference between a pymux pane and xterm.\n"
+        "# The esctest2 tests that failed in this run. Every name here is a\n"
+        "# real difference between a pymux pane and xterm.\n"
         "#\n"
-        "# Write this file again with:\n"
-        "#     PYMUX_ESCTEST_RECORD=1 nix build --file . checks.pymux-esctest\n"
+        "# This is what the run saw. To make it what the check expects:\n"
+        "#     nix build --file . checks.pymux-esctest.run\n"
         "#     cp result/failures.txt pymux/tests/esctest-failures.txt\n"
         + "".join(name + "\n" for name in sorted(failed))
     )
@@ -266,16 +264,22 @@ def run(tmp: Path, directory: Path) -> str:
     return log.read_text(errors="replace")
 
 
-def report(log: str) -> int:
+def report(log: str, include: str) -> int:
     """
     Compare the run with the recorded list. Returns the exit status.
 
     A difference in either direction is a failure, and the message says
-    how to record the list again.
+    how to write the list again.
+
+    `include` is the regular expression that chose which tests ran. A
+    name in the list that it does not choose was never going to run, so
+    it is not missing. Without that, every narrowed run would fail for
+    every test it left out.
     """
     ran = tests_that_ran(log)
     failed = failures_in(log)
     known = read_baseline()
+    chosen = {name for name in known if re.search(include, name)}
 
     print("esctest: %d tests ran, %d failed" % (len(ran), len(failed)))
 
@@ -285,7 +289,7 @@ def report(log: str) -> int:
 
     new = sorted(failed - known)
     fixed = sorted((known & ran) - failed)
-    missing = sorted(known - ran)
+    missing = sorted(chosen - ran)
 
     for name in new:
         print("esctest: FAILS NOW, and did not before: " + name)
@@ -297,7 +301,7 @@ def report(log: str) -> int:
     if new or fixed or missing:
         print(
             "\nesctest: %s no longer describes the run. Write it again with:\n"
-            "    PYMUX_ESCTEST_RECORD=1 nix build --file . checks.pymux-esctest\n"
+            "    nix build --file . checks.pymux-esctest.run\n"
             "    cp result/failures.txt pymux/tests/%s\n"
             "and read result/esctest.log for what each one did."
             % (BASELINE.name, BASELINE.name)
@@ -314,17 +318,19 @@ def main() -> int:
         print("esctest: PYMUX_ESCTEST is not set, so there is nothing to run.")
         return 0
 
+    include = os.environ.get("PYMUX_ESCTEST_INCLUDE", ".*")
+
     tmp = Path(tempfile.mkdtemp(prefix="pymux-esctest-"))
     log = run(tmp, Path(directory))
 
-    record = os.environ.get("PYMUX_ESCTEST_RECORD", "")
-    if record:
-        failed = failures_in(log)
-        write_record(Path(record), failed, log)
-        print("esctest: wrote %d names and the log to %s" % (len(failed), record))
-        return 0
+    # Keep the list and the log first, and judge afterwards. The run of
+    # this check does not fail because the suite failed, so what it
+    # leaves is there to read either way.
+    out = os.environ.get("PYMUX_ESCTEST_OUT", "")
+    if out:
+        keep(Path(out), failures_in(log), log)
 
-    return report(log)
+    return report(log, include)
 
 
 if __name__ == "__main__":

@@ -10,7 +10,6 @@
 #
 # `nix/suite.nix` says why a check is two derivations.
 {
-  lib,
   python,
   ptterm,
   prompt-toolkit,
@@ -66,27 +65,9 @@ let
     in
     if value == "" then ".*" else value;
 
-  # Set `PYMUX_ESCTEST_RECORD` to anything and the conformance check writes
-  # the list of tests that fail now instead of judging the run against the
-  # recorded one. The result of the build is that list, ready to copy over
-  # `tests/esctest-failures.txt`.
-  esctestRecord = builtins.getEnv "PYMUX_ESCTEST_RECORD" != "";
-
   # Which picture fixtures run. It is a piece of a name, for instance
-  # `PYMUX_PICTURES=underlines nix build --file . checks.pictures`.
+  # `PYMUX_PICTURES=underlines nix build --file . checks.pymux-pictures`.
   pictureSelection = builtins.getEnv "PYMUX_PICTURES";
-
-  # Set `PYMUX_PICTURES_KEEP` to anything and a difference between the two
-  # pictures does not fail the build. Nix takes the output of a build that
-  # failed away, so a run that judges leaves nothing to look at; with this,
-  # the result of the build is the pictures.
-  pictureKeep = builtins.getEnv "PYMUX_PICTURES_KEEP";
-
-  # Set `PYMUX_PICTURES_RECORD` to anything and the picture check writes the
-  # list of differences that stand now, instead of judging the run against
-  # the recorded one. The result of the build is that list, ready to copy
-  # over `tests/picture-differences.txt`.
-  pictureRecord = builtins.getEnv "PYMUX_PICTURES_RECORD" != "";
 
   # A terminal emulator draws with the fonts that fontconfig finds, and the
   # build sandbox has no /etc/fonts at all. Without this every terminal dies
@@ -172,19 +153,11 @@ in
       grim
       imagemagick
     ];
-    env = {
-      inherit pictureSelection pictureKeep;
-      record = pictureRecord;
-    };
+    env = { inherit pictureSelection; };
   } ''
     export FONTCONFIG_FILE=${fontsConf}
     export PYMUX_PICTURES="$pictureSelection"
-    export PYMUX_PICTURES_KEEP="$pictureKeep"
     export PYMUX_PICTURES_OUT="$out"
-    ${lib.optionalString pictureRecord ''
-      # The result of the build is the new list.
-      export PYMUX_PICTURES_RECORD="$out"
-    ''}
     python tests/take_a_picture.py
   '';
 
@@ -196,17 +169,11 @@ in
   esctest = runInSandbox {
     name = "pymux-esctest";
     inputs = [ esctest2 ];
-    env = {
-      inherit esctestInclude;
-      record = esctestRecord;
-    };
+    env = { inherit esctestInclude; };
   } ''
     export PYMUX_ESCTEST=${esctest2}/share/esctest2
     export PYMUX_ESCTEST_INCLUDE="$esctestInclude"
-    ${lib.optionalString esctestRecord ''
-      # The result of the build is the new list.
-      export PYMUX_ESCTEST_RECORD="$out"
-    ''}
+    export PYMUX_ESCTEST_OUT="$out"
     python tests/drive_with_esctest.py
   '';
 }
