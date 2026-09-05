@@ -11,6 +11,7 @@ DATests.test_DA_NoParameter
 DECDSRTests.test_DECDSR_DECXCPR
 DECDSRTests.test_DECDSR_DSRKeyboard
 DECIDTests.test_DECID_Basic
+DECRQMTests.test_DECRQM_DEC_DECNCSM
 DECRQSSTests.test_DECRQSS_DECSLPP
 DECSCLTests.test_DECSCL_Level2DoesntSupportDECRQM
 DECSCLTests.test_DSCSCL_Level3_SupportsDECRQMDoesntSupportDECSLRM
