@@ -5,9 +5,13 @@ communication through pipes between the Pymux server and clients.
 from prompt_toolkit.utils import is_windows
 
 from .base import BrokenPipeError, PipeConnection
+from .memory import MemoryConnection, connect_in_memory
 
 __all__ = [
     "bind_and_listen_on_socket",
+    # In memory, for a server and a client in one process.
+    "connect_in_memory",
+    "MemoryConnection",
     # Base.
     "PipeConnection",
     "BrokenPipeError",
