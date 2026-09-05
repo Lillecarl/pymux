@@ -33,6 +33,40 @@ measures our model against theirs. This measures our wire against a
 recording of a real program: vim, tmux, fish and zsh, tens of thousands
 of bytes each. Nothing else here runs a program of that size.
 
+## What the 18 that differ are
+
+Five groups, and each one is a question about the wire and not about
+the recording.
+
+**A colour the program named is not the colour we emit** (6 tests:
+`indexed_256_colors`, `colored_underline`, `sgr`, `origin_goto`,
+`vim_large_window_scroll`, `wrapline_alt_toggle`). A palette number
+above fifteen reaches the wire as `#rrggbb`, so the palette of the
+terminal in front of the user is gone for 240 of its colours.
+Lillecarl/pymux#68. Two of the six are a different thing in the same
+group: `Indexed(1)` against `Named(Red)` is one colour in two
+encodings, and Alacritty keeps them apart in its model only.
+
+**The shape of an underline is lost** (1 test: `underline`). `SGR 4:3`
+is a curl and reaches the wire as a double line, so a spelling mistake
+and a warning look the same. Lillecarl/pymux#69.
+
+**The id of a hyperlink is dropped** (1 test: `hyperlinks`). The URI
+survives and the id does not, so Alacritty numbers each run itself and
+a link that wraps becomes two. Lillecarl/pymux#70.
+
+**A tab is a space** (2 tests: `tab_rendering`, `vttest_tab_clear_set`).
+Alacritty keeps the tab character in the cell it moved from. Nobody has
+asked the panel yet whether that is a rule or Alacritty's own model.
+
+**A cell holds something else** (8 tests: `decaln_reset`,
+`deccolm_reset`, `delete_lines`, `delete_chars_reset`, `saved_cursor`,
+`saved_cursor_alt`, `scroll_up_reset`, `selective_erasure`). Each one
+is its own question, and some are already answered elsewhere:
+`deccolm_reset` needs a 132 column page, which a pane cannot take
+(`ptterm/tests/DEVIATIONS.md`), and `selective_erasure` is DECSCA,
+where libvterm agrees with us and Alacritty erases nothing at all.
+
 ## What it has already found and fixed
 
 **An erase carried the underline onto every blank it left** (3 tests).
