@@ -401,7 +401,12 @@ def foot_argv(command):
         "--override=colors-dark.foreground=ffffff",
         # A cursor that never blinks cannot be measured. Every fixture
         # but the blink ones hides it, so this changes nothing for them.
+        #
+        # A terminal stops blinking when its window loses focus, and a
+        # window on a headless display server never has any. So the
+        # cursor of an unfocused window is asked to stay as it is.
         "--override=cursor.blink=yes",
+        "--override=cursor.unfocused-style=unchanged",
         "--override=main.pad=0x0",
         "--override=scrollback.lines=0",
         "sh", "-c", command,
