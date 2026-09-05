@@ -33,6 +33,15 @@ measures our model against theirs. This measures our wire against a
 recording of a real program: vim, tmux, fish and zsh, tens of thousands
 of bytes each. Nothing else here runs a program of that size.
 
+## What it has already found and fixed
+
+**An erase carried the underline onto every blank it left** (3 tests).
+A shell left the underline on and ran `clear`, and two thousand blank
+cells came off our wire underlined. Five judges take the underline off
+an erased cell and only kitty keeps it, while the background is the
+other way round. `erase_style` keeps the background and reverse video
+now, and drops the line. Lillecarl/pymux#67.
+
 Three variables reach this file from `pymux/nix/checks.nix`.
 `PYMUX_ALACRITTY` is the directory of reference tests and
 `PYMUX_ALACRITTY_JUDGE` is the built judge; without either there is
