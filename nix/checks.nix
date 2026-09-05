@@ -103,6 +103,11 @@ let
   # `PYMUX_ALACRITTY_TRACE=1 nix build --file . checks.pymux-alacritty.run`.
   alacrittyTrace = builtins.getEnv "PYMUX_ALACRITTY_TRACE";
 
+  # Keep the bytes pymux emitted for each test, for instance
+  # `PYMUX_ALACRITTY_WIRE=1 nix build --file . checks.pymux-alacritty.run`.
+  # They land in `result/wire/<name>.bin`.
+  alacrittyWire = builtins.getEnv "PYMUX_ALACRITTY_WIRE";
+
   esctestInclude =
     let
       value = builtins.getEnv "PYMUX_ESCTEST_INCLUDE";
@@ -274,12 +279,13 @@ in
   # why the rest cannot.
   alacritty = runInSandbox {
     name = "pymux-alacritty";
-    env = { inherit alacrittyInclude alacrittyTrace; };
+    env = { inherit alacrittyInclude alacrittyTrace alacrittyWire; };
   } ''
     export PYMUX_ALACRITTY=${alacrittySuite}/share/alacritty-ref
     export PYMUX_ALACRITTY_JUDGE=${judges.rust}/bin/alacritty-ref
     export PYMUX_ALACRITTY_INCLUDE="$alacrittyInclude"
     export PYMUX_ALACRITTY_TRACE="$alacrittyTrace"
+    export PYMUX_ALACRITTY_WIRE="$alacrittyWire"
     export PYMUX_ALACRITTY_TMP="$TMPDIR"
     export PYMUX_ALACRITTY_OUT="$out"
     python tests/drive_with_alacritty.py

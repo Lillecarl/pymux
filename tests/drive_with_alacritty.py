@@ -95,13 +95,16 @@ Three variables reach this file from `pymux/nix/checks.nix`.
 nothing to run. `PYMUX_ALACRITTY_OUT` is where the run leaves its
 report.
 
-Two knobs narrow a run:
+Three knobs narrow a run or say more about it:
 
     PYMUX_ALACRITTY_INCLUDE=vttest nix build --file . checks.pymux-alacritty
     PYMUX_ALACRITTY_TRACE=1 nix build --file . checks.pymux-alacritty.run
+    PYMUX_ALACRITTY_WIRE=1 nix build --file . checks.pymux-alacritty.run
 
 A narrowed run is judged too, and it makes no claim about the tests it
-did not choose.
+did not choose. `PYMUX_ALACRITTY_WIRE` keeps the bytes pymux emitted
+for each test in `result/wire/<name>.bin`, which is where the sequence
+behind a wrong cell is.
 
 ## What the run is judged against
 
@@ -167,6 +170,23 @@ def _trace(message: str) -> None:
     if os.environ.get("PYMUX_ALACRITTY_TRACE"):
         sys.stderr.write(message + "\n")
         sys.stderr.flush()
+
+
+def _keep_the_wire(name: str, wire: bytes) -> None:
+    """
+    Keep the bytes that pymux emitted, when the run is asked to.
+
+    A difference says which cell is wrong. It does not say which
+    sequence made it wrong, and the wire is the only place that
+    answers. It is tens of thousands of bytes, so a run keeps it only
+    when somebody asks.
+    """
+    out = os.environ.get("PYMUX_ALACRITTY_OUT", "")
+    if not out or not os.environ.get("PYMUX_ALACRITTY_WIRE"):
+        return
+    wires = Path(out) / "wire"
+    wires.mkdir(parents=True, exist_ok=True)
+    (wires / (name + ".bin")).write_bytes(wire)
 
 
 def read_baseline() -> set:
@@ -236,6 +256,7 @@ def run_one(tmp: Path, judge: str, name: str, directory: Path):
         return False, "the pane could not run it:\n" + traceback.format_exc()
 
     _trace("%s: %d bytes of wire to the judge" % (name, len(wire)))
+    _keep_the_wire(name, wire)
     try:
         done = subprocess.run(
             [judge, str(directory)],
