@@ -4,8 +4,6 @@
 # Write this file again with:
 #     PYMUX_ESCTEST_RECORD=1 nix build --file . checks.pymux-esctest
 #     cp result/failures.txt pymux/tests/esctest-failures.txt
-CHATests.test_CHA_RespectsOriginMode
-CUPTests.test_CUP_RespectsOriginMode
 ChangeColorTests.test_ChangeColor_CIELuv
 ChangeColorTests.test_ChangeColor_CIEXYZ
 ChangeColorTests.test_ChangeColor_CIEuvY
@@ -34,10 +32,7 @@ DECSETTests.test_DECSET_Allow80To132
 DECSETTests.test_DECSET_DECOM_DECRQCRA
 DECSETTests.test_DECSET_MoreFix
 DECSETTests.test_DECSET_OPT_ALTBUF
-DECSTBMTests.test_DECSTBM_DefaultRestores
-HVPTests.test_HVP_RespectsOriginMode
 ResetSpecialColorTests.test_ResetSpecialColor_Dynamic
-VPATests.test_VPA_IgnoresOriginMode
 XtermWinopsTests.test_XtermWinops_DECSLPP
 XtermWinopsTests.test_XtermWinops_IconifyDeiconfiy
 XtermWinopsTests.test_XtermWinops_MoveToXY
