@@ -47,6 +47,13 @@ let
   # puts one. Here the harness is the judge and pymux is in the middle.
   inherit (ptterm) vtermSuite;
 
+  # The reference tests of Alacritty, and the judge that reads one. The
+  # same reasoning again: Alacritty judges an emulator, ptterm carries it
+  # for the panel, and a pane is where pymux puts an emulator. `judges`
+  # holds the Rust crate that both the panel and that judge are built
+  # from.
+  inherit (ptterm) alacrittySuite judges;
+
   pythonWithTests = python.withPackages (ps: [
     ptterm
     prompt-toolkit
@@ -83,6 +90,18 @@ let
   # log, for instance
   # `PYMUX_VTERM_TRACE=1 nix build --file . checks.pymux-vterm.run`.
   vtermTrace = builtins.getEnv "PYMUX_VTERM_TRACE";
+
+  # Which of Alacritty's reference tests run, for instance
+  # `PYMUX_ALACRITTY_INCLUDE=vttest nix build --file . checks.pymux-alacritty`.
+  alacrittyInclude =
+    let
+      value = builtins.getEnv "PYMUX_ALACRITTY_INCLUDE";
+    in
+    if value == "" then ".*" else value;
+
+  # Write what the pane and the judge saw into the log, for instance
+  # `PYMUX_ALACRITTY_TRACE=1 nix build --file . checks.pymux-alacritty.run`.
+  alacrittyTrace = builtins.getEnv "PYMUX_ALACRITTY_TRACE";
 
   esctestInclude =
     let
@@ -240,5 +259,29 @@ in
     export PYMUX_VTERM_TMP="$TMPDIR"
     export PYMUX_VTERM_OUT="$out"
     python tests/drive_with_vterm.py
+  '';
+
+  # The reference tests of Alacritty, with pymux in the middle of them.
+  #
+  # Alacritty records a real program: the bytes it wrote and the grid they
+  # made. This puts those bytes on the screen of a full screen pane and
+  # gives what pymux emitted to a real `Term`, which compares the grid it
+  # builds against the recorded one.
+  #
+  # It is the second borrowed suite to go this way and the first that is
+  # not libvterm's, so `tests/middleman.py` is shared and only the judging
+  # differs. `tests/drive_with_alacritty.py` says which tests can run and
+  # why the rest cannot.
+  alacritty = runInSandbox {
+    name = "pymux-alacritty";
+    env = { inherit alacrittyInclude alacrittyTrace; };
+  } ''
+    export PYMUX_ALACRITTY=${alacrittySuite}/share/alacritty-ref
+    export PYMUX_ALACRITTY_JUDGE=${judges.rust}/bin/alacritty-ref
+    export PYMUX_ALACRITTY_INCLUDE="$alacrittyInclude"
+    export PYMUX_ALACRITTY_TRACE="$alacrittyTrace"
+    export PYMUX_ALACRITTY_TMP="$TMPDIR"
+    export PYMUX_ALACRITTY_OUT="$out"
+    python tests/drive_with_alacritty.py
   '';
 }

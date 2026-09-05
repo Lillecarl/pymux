@@ -194,10 +194,15 @@ class Pane:
         assert self.terminal is not None
         return FENCE.sub(b"", self.terminal.seen)
 
-    def write(self, data: bytes) -> bytes:
+    def write(self, data: bytes, timeout: float = 15.0) -> bytes:
         """
         Put bytes on the screen of the pane, and return what pymux
         wrote to its client because of them.
+
+        `timeout` is how long the fence may take. The default suits a
+        line of a test file; a recording of a third of a megabyte needs
+        far longer, because every byte of it is parsed and drawn before
+        the fence can come back.
         """
         assert self.terminal is not None
         self.fence += 1
@@ -206,7 +211,7 @@ class Pane:
         mark = self.terminal.mark()
         os.write(self.writer, data + b"\x1b]52;c;%s\x07" % token.encode())
 
-        self.terminal.wait_for(token.encode())
+        self.terminal.wait_for(token.encode(), timeout=timeout)
         self.settle()
         return FENCE.sub(b"", self.terminal.since(mark))
 
