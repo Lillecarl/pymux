@@ -43,7 +43,7 @@ from .terminfo import add_to_environment, terminal_name
 from .notifications import NotificationRoutes
 from .options import ALL_OPTIONS, ALL_WINDOW_OPTIONS
 from .osc import build_osc
-from .pipes import bind_and_listen_on_socket
+from .pipes import bind_and_listen_on_socket, connect_in_memory
 from .prompt_toolkit_compat import apply_prompt_toolkit_compat_fixes
 from .rc import STARTUP_COMMANDS
 from .server import ServerConnection
@@ -357,10 +357,15 @@ class Pymux:
         p.listen_on_socket()
         p.run_server()
 
-    Or:
+    Or, a server and one client in this process:
 
         p = Pymux()
-        p.run_standalone()
+        p.run_integrated(color_depth)
+
+    Or, no client and no protocol at all:
+
+        p = Pymux()
+        p.run_standalone(color_depth)
     """
 
     def __init__(
@@ -1273,7 +1278,64 @@ class Pymux:
 
         finally:
             # Clean up socket.
+            self._remove_socket()
+
+    def _remove_socket(self) -> None:
+        "Take away the socket file of this server, if it bound one."
+        if not self.socket_name:
+            return
+        try:
             os.remove(self.socket_name)
+        except OSError:
+            pass
+
+    def run_integrated(self, color_depth, detach_other_clients: bool = False):
+        """
+        Run the server and one client in this process.
+
+        The client reaches the server through a pair of queues, not
+        through a socket, so it reaches the server that this call
+        started and nothing else. Both halves of the protocol run, so
+        this route proves what the socket route proves.
+
+        This is not `run_standalone`. Standalone has no client and no
+        protocol at all: it puts the user interface straight on the
+        terminal. This runs the real client against the real server.
+
+        A socket is bound as well when one was asked for. Nothing of
+        the user interface reads it. It is there so that
+        `pymux -S <socket> <command>` and libpymux reach this server.
+
+        The call returns when the server closes the connection: the
+        last pane exited, somebody ran `kill-server`, or the client
+        detached. The process ends with it, because both halves are in
+        it.
+        """
+        # Here, not at the top of the file: the client reads a terminal
+        # through `termios`, which a server on Windows does not have.
+        from .client.memory import MemoryClient
+
+        self._start_auto_refresh_thread()
+
+        async def run() -> None:
+            server_end, client_end = connect_in_memory()
+
+            # A context of its own, the same as for a client that
+            # arrives over the socket. A `prompt_toolkit.Application`
+            # becomes active in it.
+            context = contextvars.copy_context()
+            connection = context.run(lambda: ServerConnection(self, server_end))
+            self.connections.append(connection)
+
+            await MemoryClient(client_end).attach(
+                detach_other_clients=detach_other_clients,
+                color_depth=color_depth,
+            )
+
+        try:
+            self.loop.run_until_complete(run())
+        finally:
+            self._remove_socket()
 
     def run_standalone(self, color_depth):
         """

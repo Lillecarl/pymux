@@ -3,7 +3,7 @@
 pymux: Pure Python terminal multiplexer.
 
 Usage:
-    pymux [options] [standalone|start-server|attach|list-sessions] [<command> ...]
+    pymux [options] [standalone|integrated|start-server|attach|list-sessions] [<command> ...]
 
 Running pymux without arguments starts a server (daemonized) and attaches
 a client to it. Any other command (e.g. ``split-window``) is sent to a
@@ -12,6 +12,13 @@ running server, like tmux does.
 Modes:
     standalone     : Run as a standalone process. (for debugging, detaching
                      is not possible.)
+    integrated     : Run a server and one client in this process. They talk
+                     through queues, not through a socket, so the client
+                     reaches the server this command started and nothing
+                     else. With -S, the server also listens on that socket
+                     for commands. One process holds both halves, so Ctrl-Z
+                     suspends the server too, and detaching ends the whole
+                     thing.
     start-server   : Run a server daemon that can be attached later on.
     attach         : Attach to a running session.
     list-sessions  : List all running sessions. ('ls' works as well.)
@@ -47,7 +54,18 @@ from pymux.utils import daemonize
 
 __all__ = ["run"]
 
-MODES = ("standalone", "start-server", "attach", "list-sessions", "ls")
+MODES = (
+    "standalone",
+    "integrated",
+    "start-server",
+    "attach",
+    "list-sessions",
+    "ls",
+)
+
+#: The modes that take the command of the first pane after the mode
+#: word, rather than a pymux command for a running server.
+MODES_WITH_A_FIRST_PANE = ("standalone", "integrated")
 
 
 def filename_var() -> str | None:
@@ -167,7 +185,7 @@ def run() -> None:
             setattr(a, key, value)
         rest = extra
 
-    if mode == "standalone":
+    if mode in MODES_WITH_A_FIRST_PANE:
         # An optional command can be given for the first pane.
         command = " ".join(shlex.quote(x) for x in rest) if rest else None
     elif mode is not None and rest:
@@ -239,6 +257,30 @@ def run() -> None:
         mux = Pymux(source_file=filename, startup_command=command)
         mux.run_standalone(
             color_depth=color_depth or ColorDepth.DEPTH_8_BIT
+        )
+
+    elif mode == "integrated":
+        if socket_name_from_env:
+            _socket_from_env_warning()
+            sys.exit(1)
+
+        # A server and one client in this process. The client reads a
+        # queue that this server writes, so it reaches this server and
+        # no other one.
+        mux = Pymux(source_file=filename, startup_command=command)
+
+        # Only when a socket was asked for. The user interface never
+        # reads it; it is there so that `pymux -S <socket> <command>`
+        # and libpymux reach this server.
+        if socket_name:
+            mux.listen_on_socket(socket_name)
+
+        # No depth of its own. Like `attach`, this passes on what the
+        # flags asked for, and `None` leaves the answer to the probe of
+        # the terminal and to the environment.
+        mux.run_integrated(
+            color_depth=color_depth,
+            detach_other_clients=a.detach_others,
         )
 
     elif mode in ("list-sessions", "ls"):

@@ -60,9 +60,13 @@ class MemoryConnection(PipeConnection):
 
         return packet
 
-    async def write(self, message: str) -> None:
+    def write_nowait(self, message: str) -> None:
         """
-        Give the next packet to the peer.
+        Give the next packet to the peer, without waiting.
+
+        The queue of the peer has no limit, so a write never waits.
+        The client side uses this: it writes from the keyboard reader
+        and from the signal handler, which are not coroutines.
 
         The packet is encoded the way the socket route encodes it, so
         that the other end reads the same bytes on both routes.
@@ -71,6 +75,12 @@ class MemoryConnection(PipeConnection):
             raise BrokenPipeError
 
         self._peer._incoming.put_nowait(message.encode("utf-8"))
+
+    async def write(self, message: str) -> None:
+        """
+        Give the next packet to the peer.
+        """
+        self.write_nowait(message)
 
     def close(self) -> None:
         """
