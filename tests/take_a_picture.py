@@ -257,8 +257,12 @@ def foot_argv(command):
     return [
         "foot",
         "--font=DejaVu Sans Mono:size=12",
-        "--override=colors.background=000000",
-        "--override=colors.foreground=ffffff",
+        # `colors` is the older name of this section, and foot writes a
+        # line on its own screen saying so. Anything a terminal writes
+        # there before the program runs is one more thing that has to
+        # come out the same on both sides.
+        "--override=colors-dark.background=000000",
+        "--override=colors-dark.foreground=ffffff",
         "--override=cursor.blink=no",
         "--override=main.pad=0x0",
         "--override=scrollback.lines=0",
@@ -605,9 +609,18 @@ def write_the_program(path, fixture_path):
     on the screen as text, and the two sides answer differently.
     `sleep` because a terminal closes its window when the program ends,
     and the picture is taken after the program ran.
+
+    The clear is what makes the two sides start alike. A terminal may
+    write on its own screen before the program runs: foot says which of
+    its settings are deprecated, and another one will say something
+    else. pymux paints every cell, so that message is gone on one side
+    and stays on the other, and everything below it sits one row lower.
+    Every fixture written by hand clears the screen itself; a recording
+    of a program that does not is what found this.
     """
     path.write_text(
         "stty -echo\n"
+        "printf '\\033[2J\\033[H'\n"
         "cat %s\n"
         "exec sleep 3600\n" % fixture_path
     )
