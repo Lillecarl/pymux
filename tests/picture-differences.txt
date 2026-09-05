@@ -1,0 +1,18 @@
+# Every difference between a picture with pymux and one without.
+# `tests/take_a_picture.py` says what this is and how to write it.
+#
+# Not every difference is a fault. A pane reads what a program asked
+# for and writes the request again in a form the terminal of the user
+# understands, so a pane can draw more than that terminal draws on its
+# own.
+#
+# A count is a number of pixels, so it belongs to the font and the size
+# that `take_a_picture.py` asks each terminal for. Change either and
+# every count has to be recorded again.
+
+# "CSI 4:1 m" asks for a single underline. xterm draws nothing for it.
+# A pane reads the shape and writes a plain "CSI 4 m", which xterm does
+# draw, so "straight" has a line through pymux and none without it.
+# That is the whole difference: the other five shapes have no line in
+# either picture.
+xterm underlines 206

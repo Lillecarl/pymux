@@ -21,6 +21,14 @@
   ncurses,
   stdenv,
   fetchFromGitHub,
+  # The picture check only. It runs real terminal emulators on an X server of
+  # its own and subtracts one screenshot from the other.
+  xorg-server,
+  xterm,
+  xdotool,
+  imagemagick,
+  makeFontsConf,
+  dejavu_fonts,
 }:
 let
   package = buildPythonApplication {
@@ -165,6 +173,28 @@ let
   # `tests/esctest-failures.txt`.
   esctestRecord = builtins.getEnv "PYMUX_ESCTEST_RECORD" != "";
 
+  # Which picture fixtures run. It is a piece of a name, for instance
+  # `PYMUX_PICTURES=underlines nix build --file . checks.pictures`.
+  pictureSelection = builtins.getEnv "PYMUX_PICTURES";
+
+  # Set `PYMUX_PICTURES_KEEP` to anything and a difference between the two
+  # pictures does not fail the build. Nix takes the output of a build that
+  # failed away, so a run that judges leaves nothing to look at; with this,
+  # the result of the build is the pictures.
+  pictureKeep = builtins.getEnv "PYMUX_PICTURES_KEEP";
+
+  # Set `PYMUX_PICTURES_RECORD` to anything and the picture check writes the
+  # list of differences that stand now, instead of judging the run against
+  # the recorded one. The result of the build is that list, ready to copy
+  # over `tests/picture-differences.txt`.
+  pictureRecord = builtins.getEnv "PYMUX_PICTURES_RECORD" != "";
+
+  # A terminal emulator draws with the fonts that fontconfig finds, and the
+  # build sandbox has no /etc/fonts at all. Without this every terminal dies
+  # at startup, or draws with whatever it falls back to, which is not the
+  # same twice.
+  fontsConf = makeFontsConf { fontDirectories = [ dejavu_fonts ]; };
+
   # Only the module and the tests, not the whole repository. A copy of
   # everything makes the test runs rebuild on every unrelated edit.
   testSources = lib.fileset.toSource {
@@ -183,7 +213,10 @@ let
   # `inputs` adds to what the run may call. `env` names the variables that the
   # command reads, and a change to one of them rebuilds the check, which is
   # what makes the knobs above work.
-  runInSandbox = { name, inputs ? [ ], env ? { } }: command:
+  #
+  # `keeps` makes the result a directory that the command writes into, rather
+  # than an empty file. A check that leaves something to look at needs it.
+  runInSandbox = { name, inputs ? [ ], env ? { }, keeps ? false }: command:
     runCommand name (env // {
       nativeBuildInputs = [ pythonWithTests ] ++ inputs;
     }) ''
@@ -196,8 +229,9 @@ let
       # The entry of terminfo that a pane is told about. The wrapper of the
       # package sets this; a test runs the source, so it sets it here.
       export PYMUX_TERMINFO=${terminfo}/share/terminfo
+      ${lib.optionalString keeps ''mkdir -p "$out"''}
       ${command}
-      touch "$out"
+      ${lib.optionalString (!keeps) ''touch "$out"''}
     '';
 
   checks = {
@@ -225,6 +259,40 @@ let
     integrated = runInSandbox { name = "pymux-integrated-tests"; } ''
       export PYMUX_ROUTE=integrated
       python tests/drive_with_pty.py
+    '';
+
+    # The picture of a real terminal, with pymux in it and without it.
+    #
+    # Every other check here stops at the cell. This one runs the same
+    # program twice in the same terminal emulator, on an X server of its own,
+    # and subtracts one screenshot from the other. It catches what pymux
+    # writes out again, which nothing else does.
+    #
+    # The result is a directory, so a run always leaves its pictures behind:
+    # `result/<terminal>/<fixture>/{bare,pymux,difference}.png`.
+    pictures = runInSandbox {
+      name = "pymux-pictures";
+      keeps = true;
+      inputs = [
+        xorg-server
+        xterm
+        xdotool
+        imagemagick
+      ];
+      env = {
+        inherit pictureSelection pictureKeep;
+        record = pictureRecord;
+      };
+    } ''
+      export FONTCONFIG_FILE=${fontsConf}
+      export PYMUX_PICTURES="$pictureSelection"
+      export PYMUX_PICTURES_KEEP="$pictureKeep"
+      export PYMUX_PICTURES_OUT="$out"
+      ${lib.optionalString pictureRecord ''
+        # The result of the build is the new list.
+        export PYMUX_PICTURES_RECORD="$out"
+      ''}
+      python tests/take_a_picture.py
     '';
 
     # The conformance suite, run in a pane. It is not a pass or fail of its
