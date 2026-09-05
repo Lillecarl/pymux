@@ -1078,8 +1078,8 @@ def main():
 
     # A cursor has to behave the same in a pane as without one. The
     # count itself is not judged: how often a terminal blinks in two
-    # seconds is the terminal's business, and one set up not to blink
-    # says zero on both sides, which is an answer.
+    # seconds is the terminal's business, and one that does not blink at
+    # all says zero on both sides, which is an answer and not a fault.
     for key, (bare, through) in sorted(blinks.items()):
         if bare and not through:
             wrong.append(
@@ -1089,6 +1089,22 @@ def main():
             wrong.append(
                 "%s %s: the cursor blinks in a pane and not bare" % key
             )
+
+    # "The same on both sides" is satisfied by a cursor that never
+    # blinks anywhere, so on its own it would pass while measuring
+    # nothing. xterm and foot do exactly that here: neither blinks a
+    # cursor in a window with no focus, and a headless display server
+    # gives none.
+    #
+    # So one terminal has to blink, or the comparison above said
+    # nothing at all. kitty is the one that does.
+    if blinks and not any(bare for bare, _ in blinks.values()):
+        wrong.append(
+            "no terminal blinked a cursor, so nothing was compared. "
+            "A blink fixture needs a terminal that blinks one: see "
+            "`cursor_stop_blinking_after` and whether the window has "
+            "the focus."
+        )
 
     if wrong:
         print("\n--- pymux draws something else ---", file=sys.stderr)
