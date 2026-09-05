@@ -843,10 +843,19 @@ def source_file(pymux: "Pymux", variables: _VariablesDict) -> None:
     filename = os.path.expanduser(variables["<filename>"])
     try:
         with open(filename, "r") as f:
-            for line in f:
-                handle_command(pymux, line)
+            lines = list(f)
     except IOError as e:
         raise CommandException("IOError: %s" % (e,))
+
+    # A line that fails names the file and the line it is on. Without
+    # that a person reads "Invalid option: -g" and has to find which of
+    # forty lines said it.
+    for number, line in enumerate(lines, start=1):
+        pymux.sourcing = "%s line %i" % (filename, number)
+        try:
+            handle_command(pymux, line)
+        finally:
+            pymux.sourcing = None
 
 
 @cmd("set-option", options="<option> <value>")

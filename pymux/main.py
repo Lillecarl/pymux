@@ -469,6 +469,14 @@ class Pymux:
         self.command_output: list | None = None
         self.command_error: list | None = None
 
+        # The lines of the configuration file that failed, until a
+        # client is there to be told about them.
+        self.startup_errors: list[str] = []
+
+        # The file and the line that `source-file` is reading now, so
+        # that a failure can say which line it was.
+        self.sourcing: str | None = None
+
         self._startup_done = False
         self.source_file = source_file
         self.startup_command = startup_command
@@ -1235,10 +1243,43 @@ class Pymux:
 
     def add_command_error(self, message: str) -> None:
         """
-        Record an error for a command that was entered from the command line.
+        Record an error for a command that failed.
+
+        A command that came over the command line answers the client
+        that sent it, and `command_error` is that answer.
+
+        A command that came from a configuration file has nobody to
+        answer. `startup()` runs it while the first application is still
+        being built, so `show_message` finds no client state and drops
+        the message. So it is kept, logged, and shown to the first
+        client that arrives. Lillecarl/pymux#38.
         """
+        if self.sourcing is not None:
+            message = "%s: %s" % (self.sourcing, message)
+
         if self.command_error is not None:
             self.command_error.append(message)
+        elif not self._startup_done or self.sourcing is not None:
+            logger.warning("%s", message)
+            self.startup_errors.append(message)
+
+    def report_startup_errors(self, client_state) -> None:
+        """
+        Show the lines of the configuration file that failed, once.
+
+        The first client that draws gets them, and they are dropped
+        afterwards: the second client did not make the mistake, and a
+        message it cannot act on is noise.
+
+        The message is set on the client state and not through
+        `show_message`, because that one looks the state up by the
+        application that is running now, and a client that has just been
+        made is not running yet.
+        """
+        if not self.startup_errors:
+            return
+        messages, self.startup_errors = self.startup_errors, []
+        client_state.message = "; ".join(messages)
 
     def detach_client(self, app):
         """
@@ -1388,6 +1429,11 @@ class Pymux:
         )
 
         self._client_states[connection] = client_state
+
+        # The configuration file was read while this client was being
+        # built, so nothing could be told about a line that failed.
+        # This is the first moment there is somebody to tell.
+        self.report_startup_errors(client_state)
 
         # A client that just arrived may speak less than the ones that
         # are here, and the keyboard of every client has to serve what
