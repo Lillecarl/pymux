@@ -7,6 +7,8 @@
 # `terminfo` and `testSources` come from `default.nix`. The package itself is
 # not an input: a pymux suite runs against the source in `testSources`, where
 # pyte and ptterm run their suites against the installed package.
+#
+# `nix/suite.nix` says why a check is two derivations.
 {
   lib,
   python,
@@ -16,7 +18,6 @@
   pytest,
   hypothesis,
   wcwidth,
-  runCommand,
   callPackage,
   xorg-server,
   xterm,
@@ -31,6 +32,8 @@
   testSources,
 }:
 let
+  inherit (callPackage ./suite.nix { }) suite;
+
   esctest2 = callPackage ./esctest2.nix { inherit python; };
 
   pythonWithTests = python.withPackages (ps: [
@@ -91,33 +94,31 @@ let
   # same twice.
   fontsConf = makeFontsConf { fontDirectories = [ dejavu_fonts ]; };
 
-  # Run a test command in the build sandbox. Nothing of the run reaches the
-  # machine: the sockets, the temporary directories and the processes all
-  # live and die inside it.
-  #
-  # `inputs` adds to what the run may call. `env` names the variables that the
-  # command reads, and a change to one of them rebuilds the check, which is
-  # what makes the knobs above work.
-  #
-  # `keeps` makes the result a directory that the command writes into, rather
-  # than an empty file. A check that leaves something to look at needs it.
-  runInSandbox = { name, inputs ? [ ], env ? { }, keeps ? false }: command:
-    runCommand name (env // {
-      nativeBuildInputs = [ pythonWithTests ] ++ inputs;
-    }) ''
-      cp -r ${testSources}/pymux ${testSources}/libpymux ${testSources}/tests .
-      chmod -R +w .
-      export HOME="$TMPDIR"
-      export LANG=C.UTF-8
-      export PYTHONDONTWRITEBYTECODE=1
+  # Nothing of a run reaches the machine: the sockets, the temporary
+  # directories and the processes all live and die inside the build sandbox.
+  prepare = ''
+    cp -r ${testSources}/pymux ${testSources}/libpymux ${testSources}/tests .
+    chmod -R +w .
+    export HOME="$TMPDIR"
+    export LANG=C.UTF-8
+    export PYTHONDONTWRITEBYTECODE=1
 
-      # The entry of terminfo that a pane is told about. The wrapper of the
-      # package sets this; a test runs the source, so it sets it here.
-      export PYMUX_TERMINFO=${terminfo}/share/terminfo
-      ${lib.optionalString keeps ''mkdir -p "$out"''}
-      ${command}
-      ${lib.optionalString (!keeps) ''touch "$out"''}
-    '';
+    # The entry of terminfo that a pane is told about. The wrapper of the
+    # package sets this; a test runs the source, so it sets it here.
+    export PYMUX_TERMINFO=${terminfo}/share/terminfo
+  '';
+
+  # `inputs` adds to what a run may call, and `pythonWithTests` is in every
+  # one of them. `env` names the variables that a run reads, and a change to
+  # one of them rebuilds the check, which is what makes the knobs above work.
+  runInSandbox =
+    { name, inputs ? [ ], env ? { }, setup ? "" }:
+    command:
+    suite {
+      inherit name env;
+      inputs = [ pythonWithTests ] ++ inputs;
+      setup = prepare + setup;
+    } command;
 in
 {
   # The unit tests of pymux.
@@ -157,7 +158,6 @@ in
   # `result/<terminal>/<fixture>/{bare,pymux,difference}.png`.
   pictures = runInSandbox {
     name = "pymux-pictures";
-    keeps = true;
     inputs = [
       # The X seat: a server, a terminal that speaks nothing else,
       # and the tools that find a window and take its picture.
