@@ -49,7 +49,7 @@ let
   # them.
 
   # What pytest runs, for instance
-  # `PYMUX_TESTS=tests/test_sixel_encoder.py nix build --file . checks.pymux`.
+  # `PYMUX_TESTS=tests/test_sixel_encoder.py nix build --file . checks.pymux-unit`.
   selection =
     let
       value = builtins.getEnv "PYMUX_TESTS";
@@ -103,8 +103,8 @@ let
 in
 {
   # The unit tests of pymux.
-  pymux = runInSandbox {
-    name = "pymux-tests";
+  unit = runInSandbox {
+    name = "pymux-unit";
     env = { inherit selection; };
   } ''
     python -m pytest $selection -q -p no:cacheprovider

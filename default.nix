@@ -48,7 +48,7 @@ let
       docopt-ng
     ];
 
-    # The suites run as `checks.pymux` and `checks.pty`, against the source.
+    # The suites run as `checks.unit`, `checks.pty` and the rest, against the source.
     doCheck = false;
     pythonImportsCheck = [
       "pymux"
