@@ -113,6 +113,17 @@ SCREEN = "1280x800x24"
 APPEAR_TIMEOUT = 20.0
 SETTLE_TIMEOUT = 15.0
 
+#: A blink is about half a second on and half a second off. Eight
+#: pictures a quarter of a second apart cover two cycles and catch each
+#: phase more than once.
+BLINK_FRAMES = 8
+BLINK_GAP = 0.25
+
+#: How long to let a blink fixture draw before the first picture.
+#: `_settle` cannot be used for one: a screen with a blinking cursor on
+#: it never settles, and that is the whole point of the measurement.
+BLINK_START = 2.0
+
 #: How long the program holds the window open after it has drawn. A
 #: terminal closes its window when its program ends, and the picture is
 #: taken after the program ran, so it has to still be there.
@@ -188,6 +199,39 @@ FIXTURES = {
     "wide-characters": wide_characters,
     "box-drawing": box_drawing,
 }
+
+
+# ----------------------------------------------------------------------
+# The fixtures that are about time.
+#
+# Every fixture above is a still picture, and each one hides the cursor
+# in its first byte so that it can be one. A cursor is the opposite: it
+# is only itself when it changes, so it is measured by taking several
+# pictures and asking whether they differ.
+#
+# These are programs and not streams of bytes, because what they measure
+# is what happens while something keeps drawing.
+
+
+#: Each one redraws the way an application with a spinner does, always
+#: writing the same cell, so the only thing that can differ between two
+#: pictures is the cursor.
+BLINK_FIXTURES = {
+    "cursor-blink": (
+        "printf '\\033[2J\\033[H'\n"
+        "printf 'the cursor is after this: '\n"
+        "i=0\n"
+        "while [ $i -lt %d ]; do"
+        " printf '\\033[10;1Hx'; sleep 0.1; i=$((i+1)); done\n"
+        "sleep 5\n"
+    ),
+}
+
+
+def blink_program(name):
+    "The program of one blink fixture, long enough to outlast the burst."
+    redraws = int((BLINK_START + BLINK_FRAMES * BLINK_GAP + 2) / 0.1)
+    return BLINK_FIXTURES[name] % redraws
 
 
 # ----------------------------------------------------------------------
@@ -327,6 +371,8 @@ def xterm_argv(command):
         "-fs", "12",
         "-bg", "black",
         "-fg", "white",
+        # As for foot: a cursor that never blinks cannot be measured.
+        "-bc",
         "-b", "0",  # No internal border.
         "-bw", "0",  # No window border.
         "+sb",  # No scrollbar.
@@ -353,7 +399,9 @@ def foot_argv(command):
         # come out the same on both sides.
         "--override=colors-dark.background=000000",
         "--override=colors-dark.foreground=ffffff",
-        "--override=cursor.blink=no",
+        # A cursor that never blinks cannot be measured. Every fixture
+        # but the blink ones hides it, so this changes nothing for them.
+        "--override=cursor.blink=yes",
         "--override=main.pad=0x0",
         "--override=scrollback.lines=0",
         "sh", "-c", command,
@@ -404,8 +452,13 @@ class Seat:
     def stop(self):
         "Close it."
 
-    def picture_of(self, terminal, command, work, path, log_path):
-        "Run one command in one terminal and leave its picture at `path`."
+    def picture_of(self, terminal, command, work, path, log_path, frames=1):
+        """
+        Run one command in one terminal and leave its picture at `path`.
+
+        `frames` above one takes a burst instead of waiting for the
+        screen to settle, and gives back the list of pictures.
+        """
         raise NotImplementedError
 
 
@@ -433,6 +486,35 @@ def _settle(work, path, take_one, ended, what, log_path):
             return
         shutil.copy(path, previous)
     raise RuntimeError("%s never settled\n%s" % (what, _tail(log_path)))
+
+
+def _burst(path, take_one, ended, what, log_path):
+    """
+    Take `BLINK_FRAMES` pictures, `BLINK_GAP` apart, and keep them all.
+
+    `_settle` waits for two pictures in a row to be the same. That is
+    the wrong instrument for a cursor: one that blinks never settles,
+    and one that has stopped blinking settles at once. So this takes a
+    fixed burst and the caller compares them.
+
+    The wait before the first one is fixed, because the fixture draws
+    a few bytes and there is nothing to settle on.
+    """
+    time.sleep(BLINK_START)
+    shots = []
+    for number in range(BLINK_FRAMES):
+        if number:
+            time.sleep(BLINK_GAP)
+        gone = ended()
+        if gone is not None:
+            raise RuntimeError(
+                "%s ended while it was drawing (exit %s)\n%s"
+                % (what, gone, _tail(log_path))
+            )
+        shot = path.with_name("%s.%d.png" % (path.stem, number))
+        take_one(shot)
+        shots.append(shot)
+    return shots
 
 
 class XSeat(Seat):
@@ -517,7 +599,7 @@ class XSeat(Seat):
             timeout=30,
         )
 
-    def picture_of(self, terminal, command, work, path, log_path):
+    def picture_of(self, terminal, command, work, path, log_path, frames=1):
         already = self._windows(terminal.window_class)
 
         log = open(log_path, "wb")
@@ -535,14 +617,11 @@ class XSeat(Seat):
             window = self._wait_for_a_new_window(
                 terminal.window_class, already, process, log_path
             )
-            _settle(
-                work,
-                path,
-                lambda where: self._take(window, where),
-                lambda: process.poll(),
-                "the window of %s" % terminal.name,
-                log_path,
-            )
+            take_one = lambda where: self._take(window, where)
+            what = "the window of %s" % terminal.name
+            if frames > 1:
+                return _burst(path, take_one, process.poll, what, log_path)
+            _settle(work, path, take_one, process.poll, what, log_path)
         finally:
             _end(process)
             log.close()
@@ -610,7 +689,7 @@ class WaylandSeat(Seat):
             },
         )
 
-    def picture_of(self, terminal, command, work, path, log_path):
+    def picture_of(self, terminal, command, work, path, log_path, frames=1):
         room = self._room(work)
 
         log = open(log_path, "wb")
@@ -635,14 +714,11 @@ class WaylandSeat(Seat):
         )
         try:
             display = self._wait_for_the_socket(room, process, log_path)
-            _settle(
-                work,
-                path,
-                lambda where: self._take(room, display, where),
-                lambda: process.poll(),
-                "the output of %s" % terminal.name,
-                log_path,
-            )
+            take_one = lambda where: self._take(room, display, where)
+            what = "the output of %s" % terminal.name
+            if frames > 1:
+                return _burst(path, take_one, process.poll, what, log_path)
+            _settle(work, path, take_one, process.poll, what, log_path)
         finally:
             _end(process)
             log.close()
@@ -797,6 +873,63 @@ def compare_one(terminal, seat, name, work, out):
     return differences(bare, through, room / "difference.png")
 
 
+def blink_of(terminal, seat, name, work, out):
+    """
+    Run one blink fixture both ways and say how often each side changed.
+
+    The fixture writes the same cell over and over, so the only thing
+    that can differ between two pictures is the cursor. The number is
+    how many of the consecutive pairs differ: zero is a cursor that does
+    not blink, and anything above it is one that does.
+
+    What matters is that the two sides agree. A terminal that is set up
+    not to blink says zero twice, which is an answer and not a fault.
+    """
+    room = out / terminal.name / name
+    room.mkdir(parents=True, exist_ok=True)
+
+    program_path = work / ("%s.sh" % name)
+    program_path.write_text(blink_program(name))
+
+    config_path = work / "full-screen.conf"
+    config_path.write_text("set full-screen on\n")
+
+    answers = []
+    for side, command in (
+        ("bare", bare_command(program_path)),
+        (
+            "pymux",
+            pymux_command(
+                program_path,
+                work / ("%s-%s.sock" % (terminal.name, name)),
+                config_path,
+                room / "pymux-server.log",
+                room / "pymux-stderr.log",
+            ),
+        ),
+    ):
+        try:
+            shots = seat.picture_of(
+                terminal,
+                command,
+                work,
+                room / ("%s.png" % side),
+                room / ("%s.log" % side),
+                frames=BLINK_FRAMES,
+            )
+        except RuntimeError as reason:
+            raise RuntimeError("%s\n%s" % (reason, every_log(room))) from None
+
+        changed = sum(
+            1
+            for first, second in zip(shots, shots[1:])
+            if differences(first, second) != 0
+        )
+        answers.append(changed)
+
+    return tuple(answers)
+
+
 def read_the_recorded():
     "The differences that stand, as {(terminal, fixture): pixels}."
     if not RECORDED.exists():
@@ -831,7 +964,8 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
 
     names = [name for name in every_fixture() if ONLY in name]
-    if not names:
+    blink_names = [name for name in BLINK_FIXTURES if ONLY in name]
+    if not names and not blink_names:
         raise SystemExit("no fixture holds %r" % ONLY)
 
     # A terminal that is not here is a hole in the check, not a
@@ -844,6 +978,7 @@ def main():
 
     standing = read_the_recorded()
     seen = {}
+    blinks = {}
 
     # One seat for each kind of display server that a terminal here
     # needs, and none for a kind that nothing needs.
@@ -861,6 +996,21 @@ def main():
                 seen[(terminal.name, name)] = found
                 print(
                     "%s %s: %d pixels differ" % (terminal.name, name, found),
+                    flush=True,
+                )
+
+        # The fixtures that are about time. These are not counted in
+        # pixels, so they are judged on their own: a cursor has to
+        # behave the same with pymux as without it.
+        for terminal in terminals:
+            for name in blink_names:
+                bare, through = blink_of(
+                    terminal, seats[terminal.seat], name, work, out
+                )
+                blinks[(terminal.name, name)] = (bare, through)
+                print(
+                    "%s %s: %d of %d pictures changed bare, %d with pymux"
+                    % (terminal.name, name, bare, BLINK_FRAMES - 1, through),
                     flush=True,
                 )
     finally:
@@ -882,6 +1032,20 @@ def main():
             wrong.append(
                 "%s %s: %d pixels differ, %d were recorded"
                 % (key[0], key[1], found, expected)
+            )
+
+    # A cursor has to behave the same in a pane as without one. The
+    # count itself is not judged: how often a terminal blinks in two
+    # seconds is the terminal's business, and one set up not to blink
+    # says zero on both sides, which is an answer.
+    for key, (bare, through) in sorted(blinks.items()):
+        if bare and not through:
+            wrong.append(
+                "%s %s: the cursor blinks bare and not in a pane" % key
+            )
+        elif through and not bare:
+            wrong.append(
+                "%s %s: the cursor blinks in a pane and not bare" % key
             )
 
     if wrong:
