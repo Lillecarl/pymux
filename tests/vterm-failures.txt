@@ -10,7 +10,6 @@
 # This is what the run saw. To make it what the check expects:
 #     nix build --file . checks.pymux-vterm.run
 #     cp result/failures.txt pymux/tests/vterm-failures.txt
-65screen_protect.test:16 ?screen_row 0
 67screen_dbl_wh.test:16 screen_cell 0,0
 67screen_dbl_wh.test:24 screen_cell 0,0
 67screen_dbl_wh.test:25 screen_cell 1,0
