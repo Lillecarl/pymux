@@ -60,6 +60,13 @@ Run with:
 `PYMUX_PICTURES` narrows the run to the fixtures whose name holds that
 text.
 
+**A fixture can be a recording of a real program.** Drop one in
+`tests/recordings/` and it becomes a fixture called `recorded-<name>`.
+That is how a program whose output depends on the machine it runs on
+gets in here: it is recorded once, outside the sandbox, and the bytes
+are replayed on both sides. `tests/recordings/README.md` says how to
+make one and what to watch for.
+
 Every run keeps its pictures and writes the list of differences it saw,
 whatever the verdict, because the run of a check does not fail when the
 suite fails. So looking at a difference and recording one are the same
@@ -68,6 +75,7 @@ command:
     nix build --file . checks.pymux-pictures.run
     cp result/picture-differences.txt pymux/tests/picture-differences.txt
 """
+import json
 import os
 import shutil
 import subprocess
@@ -109,10 +117,10 @@ SETTLE_TIMEOUT = 15.0
 # ----------------------------------------------------------------------
 # The fixtures. Each one is the bytes that a program wrote.
 #
-# A fixture writes no query. A query is answered into the tty, and a
-# tty that echoes puts the answer on the screen as text; the answer
-# differs on the two sides, so the echo would too. `record_a_session.py`
-# is how a program that does ask gets in, and that is a later step.
+# A fixture here writes no query. A query is answered into the tty, and
+# a tty that echoes puts the answer on the screen as text. The program
+# both sides run turns the echo off for that reason, so a recording,
+# which does hold queries, is safe as well.
 
 
 def sgr(fixture):
@@ -173,8 +181,81 @@ FIXTURES = {
 }
 
 
+# ----------------------------------------------------------------------
+# The recordings.
+#
+# A fixture above is bytes that somebody wrote by hand, and it can only
+# hold what that person thought to write. A recording holds what a real
+# program really drew, on a real machine, with the configuration of the
+# person who runs it. That is the only way to get a program like Claude
+# Code in here: what it draws depends on a login, a theme and a project,
+# none of which exist in a build sandbox.
+#
+# `tests/recordings/README.md` says how to make one.
+
+
+#: Where a recording lives. `<name>.bin` is what the program wrote.
+RECORDINGS = Path(__file__).parent / "recordings"
+
+
+def recorded_fixtures():
+    "Every recording there is, as {fixture name: the .bin file}."
+    if not RECORDINGS.is_dir():
+        return {}
+    return {
+        "recorded-%s" % path.stem: path for path in sorted(RECORDINGS.glob("*.bin"))
+    }
+
+
+RECORDED_FIXTURES = recorded_fixtures()
+
+
+def check_the_size_of(recording):
+    """
+    A recording is only worth replaying at the size it was made at.
+
+    The recorder writes the size it used beside the bytes. A recording
+    made at another size draws its own idea of where the edges are, and
+    the two pictures would then differ for a reason that is nobody's
+    fault.
+    """
+    beside = recording.with_suffix(".reads.json")
+    if not beside.exists():
+        return
+    made = json.loads(beside.read_text())
+    if (made.get("lines"), made.get("columns")) != (ROWS, COLUMNS):
+        raise SystemExit(
+            "%s was recorded at %sx%s and this harness is %dx%d.\n"
+            "Record it again with --lines %d --columns %d."
+            % (
+                recording.name,
+                made.get("lines"),
+                made.get("columns"),
+                ROWS,
+                COLUMNS,
+                ROWS,
+                COLUMNS,
+            )
+        )
+
+
+def every_fixture():
+    "The name of every fixture, written by hand or recorded."
+    return list(FIXTURES) + list(RECORDED_FIXTURES)
+
+
 def fixture_bytes(name):
     "The bytes of one fixture, with the cursor put out of the way."
+    recording = RECORDED_FIXTURES.get(name)
+    if recording is not None:
+        check_the_size_of(recording)
+        # The hide goes on both ends. Before, because a recording takes
+        # a while to reach its own, and the two runs do not reach it at
+        # the same moment. After, because a program often gives the
+        # cursor back when it ends, and a still picture cannot hold one
+        # that blinks.
+        return b"\x1b[?25l" + recording.read_bytes() + b"\x1b[?25l"
+
     pieces = ["\x1b[?25l"]  # No cursor: it is not what this measures.
     FIXTURES[name](pieces)
     return "".join(pieces).encode("utf-8")
@@ -738,7 +819,7 @@ def main():
     out = PICTURES
     out.mkdir(parents=True, exist_ok=True)
 
-    names = [name for name in FIXTURES if ONLY in name]
+    names = [name for name in every_fixture() if ONLY in name]
     if not names:
         raise SystemExit("no fixture holds %r" % ONLY)
 

@@ -1,0 +1,7 @@
+total 4
+drwxrwxrwx 1 lillecarl users   84 Sep  5 15:33 [0m[34;42m.[0m
+drwx------ 1 lillecarl users 3254 Sep  5 15:33 [01;34m..[0m
+drwxrwxrwx 1 lillecarl users    0 Sep  5 15:33 [34;42ma-directory[0m
+-rw-rw-rw- 1 lillecarl users    0 Sep  5 15:33 a-file.txt
+lrwxrwxrwx 1 lillecarl users   10 Sep  5 15:33 [01;36ma-link[0m -> a-file.txt
+-rwxrwxrwx 1 lillecarl users    0 Sep  5 15:33 [01;32manother-file.md[0m
