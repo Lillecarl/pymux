@@ -972,6 +972,11 @@ def check_the_cursor_shape(tmp):
     and expects the terminal to obey. So the shape follows the pane the
     user looks at, the same way the pointer shape does.
 
+    A pane that asks for nothing gives the cursor back rather than
+    naming a shape of its own. The person running pymux chose the cursor
+    of their terminal, and a pane holds a value from the moment it
+    starts only because it has to hold one.
+
     And the client never takes the blinking away. prompt_toolkit used to
     send "CSI ? 12 l" every time it showed the cursor, which stops the
     cursor of the user blinking and never starts it again.
@@ -985,9 +990,14 @@ def check_the_cursor_shape(tmp):
         terminal.write(b"\x1b[?62;1;6c")
         terminal.wait_for(b"READY")
 
-        # The first pane asks for no shape, so it keeps the one a
-        # terminal starts with: a block that blinks.
-        terminal.wait_for(b"\x1b[1 q")
+        # The first pane asks for no shape, so nothing is said about
+        # the cursor at all. Anything said here lands on the cursor the
+        # person chose.
+        terminal.drain(1.0)
+        asked = re.findall(rb"\x1b\[[0-9]* q", terminal.seen)
+        assert asked == [], (
+            "a pane that asked for no shape named one: %r" % asked
+        )
 
         # A second pane, which asks for a bar that does not blink.
         child = tmp / "cursor-child.py"
@@ -1004,13 +1014,15 @@ def check_the_cursor_shape(tmp):
             "the bar that the pane asked for never reached the terminal"
         )
 
-        # Back to the pane that asked for nothing.
+        # Back to the pane that asked for nothing. The bar of the other
+        # pane is on the terminal now, so saying nothing would leave it
+        # there. "CSI 0 SP q" is what gives the cursor back.
         mark = terminal.mark()
         back = run_cli(terminal.sock_path, ["last-pane"])
         assert back.returncode == 0, back.stderr
         terminal.drain(1.0)
-        assert b"\x1b[1 q" in terminal.since(mark), (
-            "the cursor did not come back with the pane"
+        assert b"\x1b[0 q" in terminal.since(mark), (
+            "the cursor of the person never came back"
         )
 
         assert b"\x1b[?12l" not in terminal.seen, (

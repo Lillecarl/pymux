@@ -94,7 +94,21 @@ class PaneCursor(CursorShapeConfig):
             pane = self.pymux.arrangement.get_active_pane_for(application)
         if pane is None:
             return CursorShape._NEVER_CHANGE
-        style = getattr(pane.process.screen, "cursor_style", 0)
+
+        # A pane that never asked for a shape gives the cursor back.
+        # The person running pymux chose the cursor of their terminal,
+        # and a pane that names a shape anyway takes that choice away: a
+        # blinking block would land on top of the beam they set, for no
+        # reason but that a pane has to hold some value.
+        #
+        # `DEFAULT` and not `_NEVER_CHANGE`, because the pane before
+        # this one may have asked. Then the shape it set is on the
+        # terminal now, and saying nothing would leave it there.
+        screen = pane.process.screen
+        if not getattr(screen, "cursor_style_asked", False):
+            return CursorShape.DEFAULT
+
+        style = getattr(screen, "cursor_style", 0)
         return CURSOR_SHAPES.get(style, CursorShape._NEVER_CHANGE)
 
 
