@@ -215,6 +215,18 @@ let
       python tests/drive_with_pty.py
     '';
 
+    # The same test, over the other route. `pymux integrated` puts the
+    # server and the client in one process and carries the packets in
+    # queues, so no socket is between them.
+    #
+    # The two runs together say which side a fault is on. A check that
+    # fails here and passes above is the transport; one that fails in
+    # both is the server or the client.
+    integrated = runInSandbox { name = "pymux-integrated-tests"; } ''
+      export PYMUX_ROUTE=integrated
+      python tests/drive_with_pty.py
+    '';
+
     # The conformance suite, run in a pane. It is not a pass or fail of its
     # own: most of it fails, and each failure names a real difference from
     # xterm. The run is judged against the list in

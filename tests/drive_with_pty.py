@@ -20,14 +20,28 @@ Three terminals are played:
 * A plain terminal that answers nothing but the device attributes. The
   check is that no image and no keyboard sequence is sent at all.
 
+Two routes carry the packets between the client and the server, and
+`PYMUX_ROUTE` picks the one to test:
+
+* `socket`, the default. A server daemon holds a unix socket and the
+  client connects to it. Two processes.
+* `integrated`. The server and the client are one process and the
+  packets go through queues. `pymux integrated` runs it.
+
+Both routes run the same protocol, so every check reads the same. A
+difference between the two runs is a difference of the transport, and
+says which side a fault is on.
+
 Run with:
 
-    nix develop --file . shell --command python3 tests/drive_with_pty.py
+    nix build --file . checks.pymux-pty
+    nix build --file . checks.pymux-integrated
 """
 import fcntl
 import os
 import re
 import select
+import shlex
 import signal
 import struct
 import subprocess
@@ -48,6 +62,10 @@ from pymux.blocks import LOWER_HALF, UPPER_HALF  # noqa: E402
 from pymux.terminfo import terminal_name  # noqa: E402
 
 REPO_ROOT = Path(__file__).parent.parent
+
+#: Which route carries the packets between the client and the server:
+#: "socket" or "integrated". See the docstring of this file.
+ROUTE = os.environ.get("PYMUX_ROUTE", "socket")
 
 # "\x1b[97;5u" — kitty ctrl+a — as the pane child reports it (hex).
 CTRL_A_KITTY_HEX = b"<<1b5b39373b3575>>"
@@ -236,10 +254,10 @@ def run_cli(sock_path, args):
     )
 
 
-def attach_client(sock_path, stderr_path, colorterm="", rows=24, columns=80):
+def run_on_a_pty(args, stderr_path, colorterm="", rows=24, columns=80):
     """
-    Attach a client to a server that is already running, on a pty of
-    its own. Returns the master side, the process and the stderr file.
+    Run a pymux command on a pty of its own. Returns the master side,
+    the process and the stderr file.
 
     The size of the pty decides the size of the pane. A pane takes one
     row for its title and the session takes one for the status line, so
@@ -252,7 +270,7 @@ def attach_client(sock_path, stderr_path, colorterm="", rows=24, columns=80):
 
     stderr = open(stderr_path, "wb")
     process = subprocess.Popen(
-        [sys.executable, "-m", "pymux", "-S", str(sock_path), "attach"],
+        [sys.executable, "-m", "pymux"] + [str(a) for a in args],
         cwd=str(REPO_ROOT),
         stdin=slave_fd,
         stdout=slave_fd,
@@ -268,6 +286,16 @@ def attach_client(sock_path, stderr_path, colorterm="", rows=24, columns=80):
     )
     os.close(slave_fd)
     return master_fd, process, stderr
+
+
+def attach_client(sock_path, stderr_path, colorterm="", rows=24, columns=80):
+    """
+    Attach a client to a server that is already running, over its
+    socket.
+    """
+    return run_on_a_pty(
+        ["-S", sock_path, "attach"], stderr_path, colorterm, rows, columns
+    )
 
 
 class Attached:
@@ -340,6 +368,12 @@ class SecondClient(Attached):
     `Terminal` starts a server and attaches the first client. This one
     joins a server that is already there, so a check can put two
     terminals of different abilities in front of one session.
+
+    This client always uses the socket, on both routes. A server has
+    one in-process client at most, so under `PYMUX_ROUTE=integrated`
+    the run is a mixed one: the first client reads a queue and this one
+    reads a socket. That is what a person does who attaches a second
+    terminal to a session they started with `pymux integrated`.
     """
 
     def __init__(self, tmp, sock_path, name, colorterm=""):
@@ -370,14 +404,20 @@ class Terminal(Attached):
     pane child of this file, which `mode` then tells to draw a kitty
     image or a sixel one. `rows` sizes the pty of the client, and with
     it the pane.
+
+    `PYMUX_ROUTE` says how the client reaches the server. On the socket
+    route a daemon starts first and the client attaches to it. On the
+    integrated route one process holds both, and it binds the socket
+    too, so `run_cli` still reaches the server.
     """
 
     def __init__(self, tmp, mode, colorterm="", command=None, rows=24, columns=80):
         self.tmp = tmp
         self.sock_path = tmp / ("%s.sock" % mode)
         self.stderr_path = tmp / ("%s-stderr.log" % mode)
-        # The server runs as a daemon, so nothing of it reaches this
-        # process. A check that fails is unreadable without this.
+        # On the socket route the server runs as a daemon, so nothing
+        # of it reaches this process. A check that fails is unreadable
+        # without this.
         self.server_log = tmp / ("%s-server.log" % mode)
 
         if command is None:
@@ -385,23 +425,44 @@ class Terminal(Attached):
             child_path.write_text(PANE_CHILD)
             command = "python3 %s %s" % (child_path, mode)
 
-        started = run_cli(
-            self.sock_path,
-            [
-                "--log",
-                str(self.server_log),
-                "new-session",
-                "-d",
-                "-s",
-                "test",
-                command,
-            ],
-        )
-        assert started.returncode == 0, started.stderr
+        if ROUTE == "integrated":
+            # One process. The command of the first pane follows the
+            # mode word. Nothing names the session, so it keeps the
+            # default name.
+            self.session_name = "0"
+            self.master_fd, self.client, self.stderr = run_on_a_pty(
+                [
+                    "-S",
+                    self.sock_path,
+                    "--log",
+                    self.server_log,
+                    "integrated",
+                    *shlex.split(command),
+                ],
+                self.stderr_path,
+                colorterm,
+                rows=rows,
+                columns=columns,
+            )
+        else:
+            self.session_name = "test"
+            started = run_cli(
+                self.sock_path,
+                [
+                    "--log",
+                    str(self.server_log),
+                    "new-session",
+                    "-d",
+                    "-s",
+                    "test",
+                    command,
+                ],
+            )
+            assert started.returncode == 0, started.stderr
 
-        self.master_fd, self.client, self.stderr = attach_client(
-            self.sock_path, self.stderr_path, colorterm, rows=rows, columns=columns
-        )
+            self.master_fd, self.client, self.stderr = attach_client(
+                self.sock_path, self.stderr_path, colorterm, rows=rows, columns=columns
+            )
         self.seen = b""
 
     def close(self):
@@ -1057,7 +1118,10 @@ def check_libpymux(tmp):
 
         # The session. A pymux server runs one.
         session = server.session
-        assert session.name == "test", session.name
+        # The two routes name the session differently: the socket route
+        # asks `new-session` for a name, the integrated route takes the
+        # default. `Terminal` says which one it started.
+        assert session.name == terminal.session_name, session.name
         assert session.id == "$0", session.id
         assert session.attached >= 1, session.attached
         assert len(server.sessions) == 1
