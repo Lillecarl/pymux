@@ -10,11 +10,6 @@
 # This is what the run saw. To make it what the check expects:
 #     nix build --file . checks.pymux-vterm.run
 #     cp result/failures.txt pymux/tests/vterm-failures.txt
-11state_movecursor.test:140 cursor
-11state_movecursor.test:35 cursor
-11state_movecursor.test:39 cursor
-11state_movecursor.test:41 cursor
-11state_movecursor.test:43 cursor
 65screen_protect.test:16 ?screen_row 0
 65screen_protect.test:9 ?screen_row 0
 67screen_dbl_wh.test:16 screen_cell 0,0
@@ -22,27 +17,4 @@
 67screen_dbl_wh.test:25 screen_cell 1,0
 67screen_dbl_wh.test:32 screen_cell 0,0
 67screen_dbl_wh.test:37 screen_cell 23,0
-90vttest_01-movement-2.test:20 ?screen_row 2
-90vttest_01-movement-2.test:21 ?screen_row 3
-90vttest_01-movement-2.test:22 ?screen_row 4
-90vttest_01-movement-2.test:23 ?screen_row 5
-90vttest_01-movement-2.test:24 ?screen_row 6
-90vttest_01-movement-2.test:25 ?screen_row 7
-90vttest_01-movement-2.test:26 ?screen_row 8
-90vttest_01-movement-2.test:27 ?screen_row 9
-90vttest_01-movement-2.test:28 ?screen_row 10
-90vttest_01-movement-2.test:29 ?screen_row 11
-90vttest_01-movement-2.test:30 ?screen_row 12
-90vttest_01-movement-2.test:31 ?screen_row 13
-90vttest_01-movement-2.test:32 ?screen_row 14
-90vttest_01-movement-2.test:33 ?screen_row 15
-90vttest_01-movement-2.test:34 ?screen_row 16
-90vttest_01-movement-2.test:35 ?screen_row 17
-90vttest_01-movement-2.test:36 ?screen_row 18
-90vttest_01-movement-2.test:37 ?screen_row 19
-90vttest_01-movement-2.test:40 cursor
 90vttest_01-movement-3.test:19 ?screen_row 3
-90vttest_02-screen-1.test:16 ?screen_row 0
-90vttest_02-screen-1.test:16 ?screen_row 1
-90vttest_02-screen-1.test:16 ?screen_row 2
-90vttest_02-screen-1.test:18 ?screen_row 4

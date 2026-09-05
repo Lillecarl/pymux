@@ -31,28 +31,32 @@ can run here, and it is a different cut from the one `ptterm` makes:
   the frame after it.
 
 13 files are left, and they ask 152 questions about the screen and the
-cursor. 116 of the answers agree.
+cursor. 144 of the answers agree.
 
-## What the 36 that differ are
+## What the 8 that differ are
 
-They fall into three groups, and none of them is libvterm being odd.
+Two groups, and neither of them is libvterm being odd.
 
-**The renderer loses a column after it writes the last one** (29). A
-character in the last column leaves a terminal waiting to wrap: the
-cursor still stands on that column, and only the next character moves it
-to the next row. The renderer counts it as having moved already, so
-every position it writes after that is one column to the left. It shows
-up as a whole row shifted, and as a cursor that reads one short.
-Lillecarl/pymux#62.
-
-**A cleared cell arrives as a written space** (6). The renderer paints a
-blank by writing `" "`, so nothing on the wire says the cell was erased,
-and a terminal on the other end has a row that is longer than the
-program's row. Lillecarl/pymux#61.
+**A blank is a blank, whoever made it** (3). The renderer paints an
+erased cell by writing `" "`, so a terminal on the other end has a row
+that is longer than the program's row; and it drops a trailing space
+that a program wrote, so another row is shorter. Nothing on the wire
+says which of the two a blank is. Lillecarl/pymux#61.
 
 **The double size lines are not held, so nothing is emitted** (5).
 DECDWL and DECDHL, the same gap the direct plug-in finds, because a wire
 cannot carry what the model never took. Lillecarl/pymux#55.
+
+## What it has already found and fixed
+
+**A cursor waiting to wrap moved the whole pane** (29 assertions). A
+character in the last column leaves ptterm's cursor one column further,
+where it waits. `ptterm/terminal.py` reported that column to
+prompt_toolkit, and it is not on the line, so the window scrolled
+sideways to bring it into view and every row of the pane was drawn one
+column to the left for as long as the scroll lasted. Nothing else could
+see it: the pane's own screen was right, and only a terminal reading our
+wire disagreed. Lillecarl/pymux#62.
 
 Run it:
 

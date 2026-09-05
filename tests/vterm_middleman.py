@@ -62,7 +62,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tests.drive_with_pty import Terminal  # noqa: E402
+from tests.drive_with_pty import Terminal, run_cli  # noqa: E402
 
 #: The screen that libvterm's `INIT` makes. A full screen pane is the
 #: whole terminal, so the pty of the client is the same size.
@@ -269,7 +269,24 @@ class MiddleMan:
 
         self.terminal.wait_for(token.encode())
         self.settle()
+        self.trace_the_pane()
         return _FENCE.sub(b"", self.terminal.since(mark))
+
+    def trace_the_pane(self) -> None:
+        """
+        Write the screen of the pane itself into the trace.
+
+        A difference here is between three screens: the one the program
+        drew, the one pymux keeps for the pane, and the one a terminal
+        builds from what pymux emitted. Only the middle one is invisible
+        from outside, and without it a fault cannot be placed.
+        """
+        if not os.environ.get("PYMUX_VTERM_TRACE"):
+            return
+        done = run_cli(self.terminal.sock_path, ["capture-pane", "-p"])
+        for number, row in enumerate(done.stdout.decode().splitlines()):
+            if row.strip():
+                _trace("pane %2d |%s|" % (number, row))
 
     def settle(self) -> None:
         """
