@@ -33,22 +33,18 @@ measures our model against theirs. This measures our wire against a
 recording of a real program: vim, tmux, fish and zsh, tens of thousands
 of bytes each. Nothing else here runs a program of that size.
 
-## What the 17 that differ are
+## What the 16 that differ are
 
 Five groups, and each one is a question about the wire and not about
 the recording.
 
-**A colour the program named is not the colour we emit** (4 tests:
-`indexed_256_colors`, `sgr`, `origin_goto`, `vim_large_window_scroll`).
-Three of the four are one colour in two encodings: a program that
-writes `SGR 48 ; 5 ; 1` gets `Named(Red)` from us and Alacritty
-recorded `Indexed(1)`. Both paint the same cell, because the first
-sixteen travel as `SGR 31` and `SGR 41`, which is what every
-multiplexer emits. Alacritty keeps them apart in its model only, so
-this is recorded and not fixed. The fourth is the other way round:
-`vim_large_window_scroll` recorded `Spec(0,0,0)` where we emit
-nothing, so a cell painted black reads as the default background.
-Lillecarl/pymux#71.
+**A colour the program named is not the colour we emit** (3 tests:
+`indexed_256_colors`, `sgr`, `origin_goto`). All three are one colour
+in two encodings: a program that writes `SGR 48 ; 5 ; 1` gets
+`Named(Red)` from us and Alacritty recorded `Indexed(1)`. Both paint
+the same cell, because the first sixteen travel as `SGR 31` and
+`SGR 41`, which is what every multiplexer emits. Alacritty keeps them
+apart in its model only, so this is recorded and not fixed.
 
 **Alacritty reads "SGR 21" as the end of bold** (1 test: `underline`).
 The recording writes `CSI 4:3 ; 21 m`, a curl and then 21, and records
@@ -75,6 +71,15 @@ is its own question, and some are already answered elsewhere:
 where libvterm agrees with us and Alacritty erases nothing at all.
 
 ## What it has already found and fixed
+
+**A linefeed at the bottom of the screen brought a line in with no
+background** (1 test: `vim_large_window_scroll`). vim writes a line,
+steps over eight cells with `CSI 8 C` and writes again, so those cells
+hold what the scroll left there. A scrolling region painted the line
+it brought in and a screen with no region did not, so the same
+linefeed painted or did not paint by whether a program had set a
+region. A pane claims `bce` and now holds the claim everywhere.
+Lillecarl/pymux#71.
 
 **A palette number above fifteen reached the wire as `#rrggbb`**
 (2 tests). A program that asks for colour 234 asks the terminal of the

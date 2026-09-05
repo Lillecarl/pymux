@@ -23,6 +23,5 @@ selective_erasure
 sgr
 tab_rendering
 underline
-vim_large_window_scroll
 vttest_tab_clear_set
 wrapline_alt_toggle
