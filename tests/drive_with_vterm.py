@@ -31,17 +31,18 @@ can run here, and it is a different cut from the one `ptterm` makes:
   the frame after it.
 
 13 files are left, and they ask 152 questions about the screen and the
-cursor. 144 of the answers agree.
+cursor. 145 of the answers agree.
 
-## What the 8 that differ are
+## What the 7 that differ are
 
 Two groups, and neither of them is libvterm being odd.
 
-**A blank is a blank, whoever made it** (3). The renderer paints an
-erased cell by writing `" "`, so a terminal on the other end has a row
-that is longer than the program's row; and it drops a trailing space
-that a program wrote, so another row is shorter. Nothing on the wire
-says which of the two a blank is. Lillecarl/pymux#61.
+**A blank is a blank, whoever made it** (2). The renderer drops a
+trailing space that a program wrote, so one row is shorter than the
+program's row; and an empty row still costs one space, because
+`get_max_column_index` answers 0 for a row that holds nothing. Nothing
+on the wire says whether a blank was written or erased.
+Lillecarl/pymux#61.
 
 **The double size lines are held and not emitted** (5). ptterm takes
 DECDWL and DECDHL now, and the direct plug-in reads them back
@@ -51,6 +52,16 @@ line, and prompt_toolkit hands the renderer fragments, which is the
 same wall Lillecarl/pymux#61 hits. Lillecarl/pymux#65.
 
 ## What it has already found and fixed
+
+**A border nobody could see made every row full width** (1 assertion).
+pymux puts the highlight border of the active pane one column outside
+the pane, which is the border column between two panes and off the
+screen when the pane touches the edge. `Screen` keeps what it is given,
+so every row held a styled cell at column 80, `get_max_column_index`
+answered 80 for all of them, and no row was ever short enough to erase.
+An erase of three cells went out as three spaces. prompt_toolkit's
+`get_max_column_index` counts only the columns of the screen now.
+Lillecarl/pymux#66.
 
 **A cursor waiting to wrap moved the whole pane** (29 assertions). A
 character in the last column leaves ptterm's cursor one column further,
