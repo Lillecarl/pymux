@@ -47,7 +47,7 @@ from typing import Dict, List, Set, Tuple
 
 from prompt_toolkit.output import ColorDepth
 
-from pymux import __version__
+from pymux import __version__, log
 from pymux.client import create_client, list_clients
 from pymux.main import Pymux
 from pymux.utils import daemonize
@@ -269,9 +269,14 @@ def run() -> None:
     global _current_filename
     _current_filename = filename
 
-    # Setup logging.
-    if a.logfile:
-        logging.basicConfig(filename=a.logfile, level=logging.DEBUG, force=True)
+    # Where the log goes. Never to the terminal: in `integrated` and in
+    # `standalone` the server shares one with the client that draws on
+    # it, and a logger with no handler writes to `sys.stderr`, which is
+    # that terminal. `pymux/log.py` says the rest.
+    #
+    # `start-server` sets this up for itself below, after it has forked.
+    if mode != "start-server":
+        log.configure(a.logfile)
 
     if a.show_tmux_version:
         # Like `tmux -V`. Tools like libtmux parse this to know which tmux
@@ -331,8 +336,12 @@ def run() -> None:
             _socket_from_env_warning()
             sys.exit(1)
 
-        # Log to stdout, when no logfile was given.
-        if not a.logfile:
+        # A daemon has no terminal to spoil, so its log may go to
+        # stdout. `daemonize` sends that to /dev/null, and a person who
+        # wants to read it runs the server in the foreground.
+        if a.logfile:
+            log.configure(a.logfile)
+        else:
             logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
         # Create 'Pymux'. (Do this after the logging setup, so that crashes
