@@ -4,18 +4,6 @@
 # Write this file again with:
 #     PYMUX_ESCTEST_RECORD=1 nix build --file . checks.pymux-esctest
 #     cp result/failures.txt pymux/tests/esctest-failures.txt
-ChangeColorTests.test_ChangeColor_CIELuv
-ChangeColorTests.test_ChangeColor_CIEXYZ
-ChangeColorTests.test_ChangeColor_CIEuvY
-ChangeColorTests.test_ChangeColor_CIExyY
-ChangeDynamicColorTests.test_ChangeDynamicColor_CIELuv
-ChangeDynamicColorTests.test_ChangeDynamicColor_CIEXYZ
-ChangeDynamicColorTests.test_ChangeDynamicColor_CIEuvY
-ChangeDynamicColorTests.test_ChangeDynamicColor_CIExyY
-ChangeSpecialColorTests.test_ChangeSpecialColor_CIELuv
-ChangeSpecialColorTests.test_ChangeSpecialColor_CIEXYZ
-ChangeSpecialColorTests.test_ChangeSpecialColor_CIEuvY
-ChangeSpecialColorTests.test_ChangeSpecialColor_CIExyY
 DA2Tests.test_DA2_0
 DA2Tests.test_DA2_NoParameter
 DATests.test_DA_0
