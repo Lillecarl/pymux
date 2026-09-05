@@ -8,16 +8,9 @@ import sys
 import tempfile
 from select import select
 
-from prompt_toolkit.input.posix_utils import PosixStdinReader
-from prompt_toolkit.input.vt100 import cooked_mode, raw_mode
-from prompt_toolkit.output.vt100 import Vt100_Output, _get_size
+from prompt_toolkit.input.vt100 import raw_mode
 
-from pymux.colors import TRUECOLOR_PROBE
-from pymux.graphics import CELL_SIZE_QUERY
-from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
-from pymux.utils import nonblocking
-
-from .base import Client
+from .terminal import TerminalClient
 
 __all__ = [
     "PosixClient",
@@ -25,34 +18,22 @@ __all__ = [
 ]
 
 
-class PosixClient(Client):
-    def __init__(self, socket_name):
-        self.socket_name = socket_name
-        self._mode_context_managers = []
+class PosixClient(TerminalClient):
+    """
+    A client that reaches the server over a unix socket.
 
-        # Kitty keyboard protocol state of the outer terminal. Whether
-        # the terminal supports the protocol is detected at attach time
-        # ("CSI ? u" query + device attributes). The currently enabled
-        # flags follow the focused pane.
-        self._kitty_supported = False
-        self._kitty_flags = None
+    The socket is what makes a client and a server two processes. See
+    `pymux.client.memory` for the other route, where they are one.
+    """
+
+    def __init__(self, socket_name):
+        super().__init__()
+        self.socket_name = socket_name
 
         # Connect to socket.
         self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.socket.connect(socket_name)
         self.socket.setblocking(1)
-
-        # Input reader.
-        #     Some terminals, like lxterminal send non UTF-8 input sequences,
-        #     even when the input encoding is supposed to be UTF-8. This
-        #     happens in the case of mouse clicks in the right area of a wide
-        #     terminal. Apparently, these are some binary blobs in between the
-        #     UTF-8 input.)
-        #     We should not replace these, because this would break the
-        #     decoding otherwise. (Also don't pass errors='ignore', because
-        #     that doesn't work for parsing mouse input escape sequences, which
-        #     consist of a fixed number of bytes.)
-        self._stdin_reader = PosixStdinReader(sys.stdin.fileno(), errors="replace")
 
     def run_command(self, command, pane_id=None) -> int:
         """
@@ -101,37 +82,7 @@ class PosixClient(Client):
         """
         Attach client user interface.
         """
-        self._send_size()
-        self._send_packet(
-            {
-                "cmd": "start-gui",
-                "detach-others": detach_other_clients,
-                "color-depth": color_depth,
-                "term": os.environ.get("TERM", ""),
-                "colorterm": os.environ.get("COLORTERM", ""),
-                "data": "",
-            }
-        )
-
-        # Ask the outer terminal what it supports. The replies arrive
-        # as input and are interpreted by the server: keyboard flags,
-        # the kitty graphics protocol, the cell size, the colour depth,
-        # and last the device attributes, which also say whether sixel
-        # works. Every terminal answers the device attributes query, so
-        # a feature that did not answer before it is not supported.
-        # The keyboard query asks for every flag first, so that the
-        # reply says which ones the terminal took. A terminal that
-        # speaks a part of the protocol only says so that way. The pop
-        # puts the terminal back as it was.
-        os.write(
-            sys.stdout.fileno(),
-            b"\x1b[>31u\x1b[?u\x1b[<u"
-            + GRAPHICS_QUERY.encode("ascii")
-            + CELL_SIZE_QUERY.encode("ascii")
-            + TRUECOLOR_PROBE.encode("ascii")
-            + b"\x1b[c",
-        )
-        self._send_packet({"cmd": "kitty-detect"})
+        self._start_gui(detach_other_clients, color_depth)
 
         with raw_mode(sys.stdin.fileno()):
             data_buffer = b""
@@ -160,13 +111,7 @@ class PosixClient(Client):
                         if data == b"":
                             # End of file. Connection closed.
                             # Reset terminal
-                            o = Vt100_Output.from_pty(sys.stdout)
-                            self._set_kitty_flags(0)
-                            o.quit_alternate_screen()
-                            o.disable_mouse_support()
-                            o.disable_bracketed_paste()
-                            o.reset_attributes()
-                            o.flush()
+                            self._reset_terminal()
                             return
                         else:
                             data_buffer += data
@@ -186,81 +131,6 @@ class PosixClient(Client):
                 # when the loop ends through an exception.
                 self._set_kitty_flags(0)
 
-    def _process(self, data_buffer):
-        """
-        Handle incoming packet from server.
-        """
-        packet = json.loads(data_buffer.decode("utf-8"))
-
-        if packet["cmd"] == "out":
-            # Call os.write manually. In Python2.6, sys.stdout.write doesn't use UTF-8.
-            os.write(sys.stdout.fileno(), packet["data"].encode("utf-8"))
-
-        elif packet["cmd"] == "suspend":
-            # Suspend client process to background.
-            if hasattr(signal, "SIGTSTP"):
-                os.kill(os.getpid(), signal.SIGTSTP)
-
-        elif packet["cmd"] == "kitty-keyboard":
-            # Kitty keyboard protocol instructions for the outer
-            # terminal.
-            data = packet["data"]
-            if "supported" in data:
-                self._kitty_supported = data["supported"]
-            if "flags" in data:
-                self._set_kitty_flags(data["flags"])
-
-        elif packet["cmd"] == "mode":
-            # Set terminal to raw/cooked.
-            action = packet["data"]
-
-            if action == "raw":
-                cm = raw_mode(sys.stdin.fileno())
-                cm.__enter__()
-                self._mode_context_managers.append(cm)
-
-            elif action == "cooked":
-                cm = cooked_mode(sys.stdin.fileno())
-                cm.__enter__()
-                self._mode_context_managers.append(cm)
-
-            elif action == "restore" and self._mode_context_managers:
-                cm = self._mode_context_managers.pop()
-                cm.__exit__()
-
-    def _set_kitty_flags(self, flags: int) -> None:
-        """
-        Enable the given kitty keyboard protocol flags on the outer
-        terminal. (Ignored when the terminal does not support the
-        protocol. Zero restores the legacy encoding.)
-        """
-        if not self._kitty_supported and flags != 0:
-            return
-        flags = flags or 0
-        if flags == self._kitty_flags:
-            return
-        if flags == 0 and self._kitty_flags is None:
-            return  # Never enabled anything.
-        self._kitty_flags = flags
-        os.write(sys.stdout.fileno(), ("\x1b[=%d;1u" % flags).encode())
-
-    def _process_stdin(self):
-        """
-        Received data on stdin. Read and send to server.
-        """
-        with nonblocking(sys.stdin.fileno()):
-            data = self._stdin_reader.read()
-
-        # Send input in chunks of 4k.
-        step = 4056
-        for i in range(0, len(data), step):
-            self._send_packet(
-                {
-                    "cmd": "in",
-                    "data": data[i : i + step],
-                }
-            )
-
     def _send_packet(self, data):
         "Send to server."
         data = json.dumps(data).encode("utf-8")
@@ -270,11 +140,6 @@ class PosixClient(Client):
         self.socket.setblocking(1)
 
         self.socket.send(data + b"\0")
-
-    def _send_size(self):
-        "Report terminal size to server."
-        rows, cols = _get_size(sys.stdout.fileno())
-        self._send_packet({"cmd": "size", "data": [rows, cols]})
 
 
 def list_socket_names():
