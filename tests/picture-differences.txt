@@ -14,5 +14,10 @@
 # A pane reads the shape and writes a plain "CSI 4 m", which xterm does
 # draw, so "straight" has a line through pymux and none without it.
 # That is the whole difference: the other five shapes have no line in
-# either picture.
+# either picture of xterm.
+#
+# foot has no difference at all on this fixture. It reads the colon
+# form itself, so both of its pictures carry every shape. Two seats say
+# the same thing two ways: the difference belongs to xterm, and not to
+# pymux.
 xterm underlines 206

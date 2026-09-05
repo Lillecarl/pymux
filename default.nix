@@ -26,6 +26,9 @@
   xorg-server,
   xterm,
   xdotool,
+  cage,
+  foot,
+  grim,
   imagemagick,
   makeFontsConf,
   dejavu_fonts,
@@ -274,9 +277,17 @@ let
       name = "pymux-pictures";
       keeps = true;
       inputs = [
+        # The X seat: a server, a terminal that speaks nothing else,
+        # and the tools that find a window and take its picture.
         xorg-server
         xterm
         xdotool
+        # The Wayland seat: a kiosk compositor that gives its one
+        # window the whole output, a terminal that speaks nothing
+        # else, and the tool that takes a picture of that output.
+        cage
+        foot
+        grim
         imagemagick
       ];
       env = {

@@ -8,7 +8,7 @@ that way: a cursor stopped blinking, and an underline appeared where
 none belonged.
 
 So this runs the same program twice in the same terminal emulator, on
-an X server of its own:
+a display server of its own:
 
 * bare, the program straight in the terminal;
 * through pymux, in a pane that covers every cell.
@@ -23,6 +23,19 @@ its own glyphs from its own font stack, so a difference between two
 terminals says nothing. What the pair says is whether pymux changes
 what a terminal draws, and that answer is worth having from more than
 one terminal, because a terminal can be wrong on its own.
+
+The underline fixture is what that is for. xterm draws no underline at
+all for "CSI 4:1 m", and a pane turns the same request into "CSI 4 m",
+which xterm does draw, so 206 pixels differ. foot reads the colon form
+itself, and there the two pictures are the same. Two seats, one answer:
+the difference belongs to xterm.
+
+**Two seats.** xterm speaks X and nothing else, so there is an Xvfb.
+foot speaks Wayland and nothing else, so there is a `cage`, a kiosk
+compositor that gives its one window the whole output. The Wayland
+seat is the better shape for this work: one window, no decoration, no
+window to find, and `grim` takes the output. The X seat has to find
+its window among the ones that ran before it.
 
 Not every difference is a fault. A pane reads what a program asked for
 and writes the request again in the form the terminal of the user
@@ -187,13 +200,29 @@ class Terminal:
     """
     One terminal emulator, and how to run a shell command in it.
 
-    `argv` gets the command and gives back the whole command line. The
-    window is found by its class, because a terminal names its own.
+    `argv` gets the command and gives back the whole command line.
+
+    `seat` names the display server this terminal needs. xterm speaks
+    X and nothing else; foot speaks Wayland and nothing else; the rest
+    speak both, and each one is listed under the seat it is native on.
+
+    `window_class` is how the X seat finds the window. A Wayland seat
+    does not need it: the compositor there holds one window and the
+    whole output is that window.
     """
 
-    def __init__(self, name, program, window_class, argv, environment=None):
+    def __init__(
+        self,
+        name,
+        program,
+        argv,
+        seat="x",
+        window_class="",
+        environment=None,
+    ):
         self.name = name
         self.program = program
+        self.seat = seat
         self.window_class = window_class
         self._argv = argv
         self.environment = environment or {}
@@ -229,29 +258,116 @@ def xterm_argv(command):
     ]
 
 
+def foot_argv(command):
+    """
+    foot, a terminal that speaks Wayland and no X at all.
+
+    The compositor gives it the whole output, so there is no geometry
+    to ask for. Everything that could move a pixel is turned off, the
+    same way as for xterm.
+    """
+    return [
+        "foot",
+        "--font=DejaVu Sans Mono:size=12",
+        "--override=colors.background=000000",
+        "--override=colors.foreground=ffffff",
+        "--override=cursor.blink=no",
+        "--override=main.pad=0x0",
+        "--override=scrollback.lines=0",
+        "sh", "-c", command,
+    ]
+
+
 TERMINALS = [
-    Terminal("xterm", "xterm", "XTerm", xterm_argv),
+    Terminal("xterm", "xterm", xterm_argv, seat="x", window_class="XTerm"),
+    Terminal("foot", "foot", foot_argv, seat="wayland"),
 ]
 
 
 # ----------------------------------------------------------------------
-# The X server, and the pictures.
+# The seats: a display server, and how to take a picture on it.
 
 
-class Display:
+def _tail(path, lines=40):
+    "The end of a log file, for a message that has to say why."
+    try:
+        text = Path(path).read_text(errors="replace")
+    except OSError:
+        return "(no log)"
+    return "--- %s ---\n%s" % (path, "\n".join(text.splitlines()[-lines:]))
+
+
+class Seat:
+    """
+    A display server, and how to take a picture of a terminal on it.
+
+    The two seats differ in more than the protocol.
+
+    The X seat runs one server for the whole run, and every terminal
+    opens a window on it. So a picture is of one window among several,
+    and the seat has to find the right one.
+
+    The Wayland seat runs a compositor for each picture, and that
+    compositor gives its one window the whole output. So a picture is
+    of the output, and there is nothing to find. That is the shape the
+    harness wants, and it is what a kiosk compositor is for.
+    """
+
+    name = ""
+
+    def start(self, work):
+        "Open the seat. Returns itself."
+        return self
+
+    def stop(self):
+        "Close it."
+
+    def picture_of(self, terminal, command, work, path, log_path):
+        "Run one command in one terminal and leave its picture at `path`."
+        raise NotImplementedError
+
+
+def _settle(work, path, take_one, ended, what, log_path):
+    """
+    Take pictures until two in a row are the same, and keep the last.
+
+    A fixed wait would be a race on a slow machine and a delay on a
+    fast one. `ended` gives back the exit code when whatever draws has
+    gone, and `None` while it is still there.
+    """
+    previous = work / "settle.png"
+    deadline = time.time() + SETTLE_TIMEOUT
+    take_one(previous)
+    while time.time() < deadline:
+        time.sleep(0.4)
+        gone = ended()
+        if gone is not None:
+            raise RuntimeError(
+                "%s ended while it was drawing (exit %s)\n%s"
+                % (what, gone, _tail(log_path))
+            )
+        take_one(path)
+        if differences(previous, path) == 0:
+            return
+        shutil.copy(path, previous)
+    raise RuntimeError("%s never settled\n%s" % (what, _tail(log_path)))
+
+
+class XSeat(Seat):
     "An X server of its own, with nothing else on it."
 
-    def __init__(self, work):
-        self.work = work
+    name = "x"
+
+    def __init__(self):
         self.number = None
         self._process = None
 
-    def __enter__(self):
+    def start(self, work):
         read_fd, write_fd = os.pipe()
         self._process = subprocess.Popen(
             ["Xvfb", "-displayfd", str(write_fd), "-screen", "0", SCREEN],
             pass_fds=(write_fd,),
-            stdout=open(self.work / "xvfb.log", "wb"),
+            stdout=open(work / "xvfb.log", "wb"),
             stderr=subprocess.STDOUT,
         )
         os.close(write_fd)
@@ -270,7 +386,7 @@ class Display:
         self.number = ":%s" % number.strip().decode()
         return self
 
-    def __exit__(self, *_):
+    def stop(self):
         if self._process is not None:
             self._process.terminate()
             try:
@@ -278,57 +394,191 @@ class Display:
             except subprocess.TimeoutExpired:
                 self._process.kill()
 
+    def _windows(self, window_class):
+        "Every window of this class that is on the display now."
+        found = subprocess.run(
+            ["xdotool", "search", "--class", window_class],
+            capture_output=True,
+            timeout=30,
+            env={**os.environ, "DISPLAY": self.number},
+        )
+        return set(found.stdout.split())
 
-def windows_of(display, window_class):
-    "Every window of this class that is on the display now."
-    found = subprocess.run(
-        ["xdotool", "search", "--class", window_class],
-        capture_output=True,
-        timeout=30,
-        env={**os.environ, "DISPLAY": display},
-    )
-    return set(found.stdout.split())
+    def _wait_for_a_new_window(self, window_class, already, process, log_path):
+        """
+        Wait for a window of this class that was not there before.
 
+        The identifier of a window that has gone is still an
+        identifier, and taking a picture of one waits for a window that
+        never draws again. So a run never reuses the one before it.
+        """
+        deadline = time.time() + APPEAR_TIMEOUT
+        while time.time() < deadline:
+            if process.poll() is not None:
+                raise RuntimeError(
+                    "the terminal ended before it drew anything (exit %s)\n%s"
+                    % (process.returncode, _tail(log_path))
+                )
+            new = self._windows(window_class) - already
+            if new:
+                return sorted(new)[-1].decode()
+            time.sleep(0.2)
+        raise RuntimeError(
+            "no %s window appeared on %s" % (window_class, self.number)
+        )
 
-def wait_for_a_new_window(display, window_class, already, process, log_path):
-    """
-    Wait for a window of this class that was not there before.
+    def _take(self, window, path):
+        subprocess.run(
+            ["import", "-display", self.number, "-window", window, str(path)],
+            check=True,
+            capture_output=True,
+            timeout=30,
+        )
 
-    The identifier of a window that has gone is still an identifier,
-    and taking a picture of one waits for a window that never draws
-    again. So a run never reuses the one before it.
-    """
-    deadline = time.time() + APPEAR_TIMEOUT
-    while time.time() < deadline:
-        if process.poll() is not None:
-            raise RuntimeError(
-                "the terminal ended before it drew anything (exit %s)\n%s"
-                % (process.returncode, _tail(log_path))
+    def picture_of(self, terminal, command, work, path, log_path):
+        already = self._windows(terminal.window_class)
+
+        log = open(log_path, "wb")
+        process = subprocess.Popen(
+            terminal.argv(command),
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            env={
+                **os.environ,
+                **terminal.environment,
+                "DISPLAY": self.number,
+            },
+        )
+        try:
+            window = self._wait_for_a_new_window(
+                terminal.window_class, already, process, log_path
             )
-        new = windows_of(display, window_class) - already
-        if new:
-            return sorted(new)[-1].decode()
-        time.sleep(0.2)
-    raise RuntimeError("no %s window appeared on %s" % (window_class, display))
+            _settle(
+                work,
+                path,
+                lambda where: self._take(window, where),
+                lambda: process.poll(),
+                "the window of %s" % terminal.name,
+                log_path,
+            )
+        finally:
+            _end(process)
+            log.close()
 
 
-def _tail(path, lines=40):
-    "The end of a log file, for a message that has to say why."
+class WaylandSeat(Seat):
+    """
+    A kiosk compositor, one for each picture.
+
+    `cage` runs a single application and gives it the whole output,
+    with no decoration of any kind. That is what this harness asks a
+    display server for, so there is no window to find and no geometry
+    to crop: `grim` takes the output, and the output is the terminal.
+
+    It renders with pixman. A build sandbox has no graphics card, and a
+    software renderer draws the same pixels on every machine, which is
+    what a comparison of pictures needs.
+
+    The compositor lives for one picture, because `cage` ends when the
+    application it runs ends. Each one gets a runtime directory of its
+    own, so the socket that appears in it is its own.
+    """
+
+    name = "wayland"
+
+    def __init__(self):
+        self._runs = 0
+
+    def _room(self, work):
+        self._runs += 1
+        room = work / ("wayland-%d" % self._runs)
+        room.mkdir(parents=True, exist_ok=True)
+        return room
+
+    @staticmethod
+    def _wait_for_the_socket(room, process, log_path):
+        "The name of the display that the compositor put in this room."
+        deadline = time.time() + APPEAR_TIMEOUT
+        while time.time() < deadline:
+            if process.poll() is not None:
+                raise RuntimeError(
+                    "the compositor ended before it drew anything "
+                    "(exit %s)\n%s" % (process.returncode, _tail(log_path))
+                )
+            sockets = sorted(room.glob("wayland-*"))
+            sockets = [s for s in sockets if not s.name.endswith(".lock")]
+            if sockets:
+                return sockets[0].name
+            time.sleep(0.2)
+        raise RuntimeError(
+            "the compositor never opened a display\n%s" % _tail(log_path)
+        )
+
+    @staticmethod
+    def _take(room, display, path):
+        subprocess.run(
+            ["grim", str(path)],
+            check=True,
+            capture_output=True,
+            timeout=30,
+            env={
+                **os.environ,
+                "XDG_RUNTIME_DIR": str(room),
+                "WAYLAND_DISPLAY": display,
+            },
+        )
+
+    def picture_of(self, terminal, command, work, path, log_path):
+        room = self._room(work)
+
+        log = open(log_path, "wb")
+        process = subprocess.Popen(
+            ["cage", "--"] + terminal.argv(command),
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            env={
+                **os.environ,
+                **terminal.environment,
+                "XDG_RUNTIME_DIR": str(room),
+                # No graphics card in a build sandbox, and no input
+                # devices either.
+                "WLR_BACKENDS": "headless",
+                "WLR_RENDERER": "pixman",
+                "WLR_LIBINPUT_NO_DEVICES": "1",
+                "LIBSEAT_BACKEND": "noop",
+                # A terminal that speaks both must not reach the X
+                # server that the other seat is running.
+                "DISPLAY": "",
+            },
+        )
+        try:
+            display = self._wait_for_the_socket(room, process, log_path)
+            _settle(
+                work,
+                path,
+                lambda where: self._take(room, display, where),
+                lambda: process.poll(),
+                "the output of %s" % terminal.name,
+                log_path,
+            )
+        finally:
+            _end(process)
+            log.close()
+
+
+def _end(process):
+    "Stop a process, and do not wait for ever."
+    process.terminate()
     try:
-        text = Path(path).read_text(errors="replace")
-    except OSError:
-        return "(no log)"
-    return "--- %s ---\n%s" % (path, "\n".join(text.splitlines()[-lines:]))
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
 
 
-def take(display, window, path):
-    "One picture of one window."
-    subprocess.run(
-        ["import", "-display", display, "-window", window, str(path)],
-        check=True,
-        capture_output=True,
-        timeout=30,
-    )
+SEATS = {
+    "x": XSeat,
+    "wayland": WaylandSeat,
+}
 
 
 def differences(first, second, into=None):
@@ -348,62 +598,6 @@ def differences(first, second, into=None):
         return int(float(text[0]))
     except ValueError:
         raise RuntimeError("compare said %r" % answer.stderr.decode())
-
-
-def picture_of(terminal, display, command, work, path, log_path):
-    """
-    Run one command in one terminal and take its picture.
-
-    The picture is taken when what the window draws stops changing:
-    two in a row that are the same. A fixed wait would be a race on a
-    slow machine and a delay on a fast one.
-
-    The log of the terminal is kept beside the picture. A terminal that
-    dies at startup says why there and nowhere else.
-    """
-    already = windows_of(display, terminal.window_class)
-
-    log = open(log_path, "wb")
-    process = subprocess.Popen(
-        terminal.argv(command),
-        stdout=log,
-        stderr=subprocess.STDOUT,
-        env={
-            **os.environ,
-            **terminal.environment,
-            "DISPLAY": display,
-        },
-    )
-    try:
-        window = wait_for_a_new_window(
-            display, terminal.window_class, already, process, log_path
-        )
-
-        previous = work / "settle.png"
-        deadline = time.time() + SETTLE_TIMEOUT
-        take(display, window, previous)
-        while time.time() < deadline:
-            time.sleep(0.4)
-            if process.poll() is not None:
-                raise RuntimeError(
-                    "the terminal ended while it was drawing (exit %s)\n%s"
-                    % (process.returncode, _tail(log_path))
-                )
-            take(display, window, path)
-            if differences(previous, path) == 0:
-                return
-            shutil.copy(path, previous)
-        raise RuntimeError(
-            "the window of %s never settled\n%s"
-            % (terminal.name, _tail(log_path))
-        )
-    finally:
-        process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-        log.close()
 
 
 # ----------------------------------------------------------------------
@@ -464,7 +658,7 @@ def every_log(room):
     )
 
 
-def compare_one(terminal, display, name, work, out):
+def compare_one(terminal, seat, name, work, out):
     "Run one fixture both ways, and say how many pixels differ."
     room = out / terminal.name / name
     room.mkdir(parents=True, exist_ok=True)
@@ -481,20 +675,21 @@ def compare_one(terminal, display, name, work, out):
     bare = room / "bare.png"
     through = room / "pymux.png"
     try:
-        picture_of(
+        seat.picture_of(
             terminal,
-            display,
             bare_command(program_path),
             work,
             bare,
             room / "bare.log",
         )
-        picture_of(
+        seat.picture_of(
             terminal,
-            display,
             pymux_command(
                 program_path,
-                work / ("%s.sock" % name),
+                # The name of the terminal is in it: every terminal
+                # runs every fixture, and a socket that a run before
+                # left behind is a socket that this one cannot bind.
+                work / ("%s-%s.sock" % (terminal.name, name)),
                 config_path,
                 room / "pymux-server.log",
                 room / "pymux-stderr.log",
@@ -546,22 +741,38 @@ def main():
     if not names:
         raise SystemExit("no fixture holds %r" % ONLY)
 
-    terminals = [t for t in TERMINALS if t.is_available()]
-    if not terminals:
-        raise SystemExit("no terminal emulator is here")
+    # A terminal that is not here is a hole in the check, not a
+    # detail. The build brings every one of them in, so a missing one
+    # says the inputs changed.
+    missing = [t.name for t in TERMINALS if not t.is_available()]
+    if missing:
+        raise SystemExit("these terminals are not here: %s" % ", ".join(missing))
+    terminals = list(TERMINALS)
 
     standing = read_the_recorded()
     seen = {}
 
-    with Display(work) as display:
+    # One seat for each kind of display server that a terminal here
+    # needs, and none for a kind that nothing needs.
+    seats = {}
+    try:
+        for terminal in terminals:
+            if terminal.seat not in seats:
+                seats[terminal.seat] = SEATS[terminal.seat]().start(work)
+
         for terminal in terminals:
             for name in names:
-                found = compare_one(terminal, display.number, name, work, out)
+                found = compare_one(
+                    terminal, seats[terminal.seat], name, work, out
+                )
                 seen[(terminal.name, name)] = found
                 print(
                     "%s %s: %d pixels differ" % (terminal.name, name, found),
                     flush=True,
                 )
+    finally:
+        for seat in seats.values():
+            seat.stop()
 
     if RECORD:
         write_the_recorded(Path(RECORD) / "picture-differences.txt", seen)
