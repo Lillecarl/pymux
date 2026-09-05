@@ -413,9 +413,46 @@ def foot_argv(command):
     ]
 
 
+def kitty_argv(command):
+    """
+    kitty, which is the terminal the faults get reported from.
+
+    `--config NONE` because the configuration of whoever runs this must
+    not reach a comparison. Everything that could move a pixel is then
+    named here, the same way as for the other two.
+
+    `cursor_stop_blinking_after=0` is the one that is not about pixels.
+    kitty stops blinking the cursor after fifteen seconds with no key
+    pressed, and nobody presses a key here.
+    """
+    return [
+        "kitty",
+        "--config", "NONE",
+        "-o", "font_family=DejaVu Sans Mono",
+        "-o", "font_size=12",
+        "-o", "background=#000000",
+        "-o", "foreground=#ffffff",
+        "-o", "window_padding_width=0",
+        "-o", "scrollback_lines=0",
+        "-o", "shell_integration=no",
+        "-o", "cursor_blink_interval=0.5",
+        "-o", "cursor_stop_blinking_after=0",
+        "sh", "-c", command,
+    ]
+
+
 TERMINALS = [
     Terminal("xterm", "xterm", xterm_argv, seat="x", window_class="XTerm"),
     Terminal("foot", "foot", foot_argv, seat="wayland"),
+    Terminal(
+        "kitty",
+        "kitty",
+        kitty_argv,
+        seat="wayland",
+        # kitty draws with OpenGL, and a build sandbox has no graphics
+        # card. llvmpipe is what draws instead.
+        environment={"LIBGL_ALWAYS_SOFTWARE": "1"},
+    ),
 ]
 
 

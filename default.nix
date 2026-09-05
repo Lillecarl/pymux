@@ -9,6 +9,11 @@
 # prompt-toolkit and ptterm arrive as arguments, so nixpkgs supplies them
 # when this repository is built on its own, and pyterm supplies the sibling
 # checkouts when it builds the collection.
+#
+# mesa arrives as an argument as well, and only the checks use it: kitty
+# draws with OpenGL and a build sandbox has no graphics card. It cannot come
+# from the scope here, because this is the python package set and `mesa`
+# there is a python binding that nixpkgs has marked broken.
 {
   lib,
   buildPythonApplication,
@@ -21,6 +26,7 @@
   runCommand,
   ncurses,
   callPackage,
+  mesa,
 }:
 let
   package = buildPythonApplication {
@@ -102,6 +108,10 @@ let
   # ptterm and prompt-toolkit go in by hand. They arrive here as arguments,
   # so the scope that `callPackage` fills from holds the ones of nixpkgs and
   # not the sibling checkouts that pyterm assembled.
+  #
+  # mesa arrives as an argument for the same reason, and pyterm passes the
+  # one that draws. In this package set `mesa` is a python binding that
+  # nixpkgs has marked broken, so it cannot be taken from the scope.
   checks = callPackage ./nix/checks.nix {
     inherit
       terminfo
@@ -109,6 +119,7 @@ let
       ptterm
       prompt-toolkit
       docopt-ng
+      mesa
       ;
   };
 in

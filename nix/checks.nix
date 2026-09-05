@@ -23,6 +23,8 @@
   xdotool,
   cage,
   foot,
+  kitty,
+  mesa,
   grim,
   imagemagick,
   makeFontsConf,
@@ -153,12 +155,25 @@ in
       # else, and the tool that takes a picture of that output.
       cage
       foot
+      # kitty is the terminal the faults get reported from, so it is
+      # the one to measure. It draws with OpenGL, which llvmpipe serves
+      # without a graphics card.
+      kitty
       grim
       imagemagick
     ];
     env = { inherit pictureSelection; };
   } ''
     export FONTCONFIG_FILE=${fontsConf}
+
+    # kitty draws with OpenGL and a build sandbox has no graphics card,
+    # so llvmpipe draws instead. It has to be told where the driver and
+    # the EGL description are: nothing here reads /run/opengl-driver.
+    export LIBGL_ALWAYS_SOFTWARE=1
+    export LIBGL_DRIVERS_PATH=${mesa}/lib/dri
+    export __EGL_VENDOR_LIBRARY_DIRS=${mesa}/share/glvnd/egl_vendor.d
+    export LD_LIBRARY_PATH=${mesa}/lib
+
     export PYMUX_PICTURES="$pictureSelection"
     export PYMUX_PICTURES_OUT="$out"
     python tests/take_a_picture.py
