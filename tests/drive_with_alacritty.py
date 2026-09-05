@@ -50,9 +50,12 @@ this is recorded and not fixed. The fourth is the other way round:
 nothing, so a cell painted black reads as the default background.
 Lillecarl/pymux#71.
 
-**The shape of an underline is lost** (1 test: `underline`). `SGR 4:3`
-is a curl and reaches the wire as a double line, so a spelling mistake
-and a warning look the same. Lillecarl/pymux#69.
+**Alacritty reads "SGR 21" as the end of bold** (1 test: `underline`).
+The recording writes `CSI 4:3 ; 21 m`, a curl and then 21, and records
+a curl. ptterm draws a double line, which is what ECMA-48 numbers 21.
+Five judges are with ptterm and Alacritty is alone, so this one is
+recorded and not fixed: `ptterm/tests/DEVIATIONS.md`, "Where Alacritty
+looks wrong". A bare `CSI 4:3 m` does reach the wire as `SGR 4:3`.
 
 **The id of a hyperlink is dropped** (1 test: `hyperlinks`). The URI
 survives and the id does not, so Alacritty numbers each run itself and
