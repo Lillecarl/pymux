@@ -79,6 +79,29 @@ RUN_TIMEOUT = 900.0
 #: What the runner writes when the suite is done.
 FINISHED = b"ESCTEST-FINISHED"
 
+#: The tests a pane has no business running, and the reason for each. A
+#: name that matches one of these regular expressions is never run.
+#:
+#: An exclusion is not a recorded failure. A failure says "a pane
+#: differs from xterm here, and an entry in ptterm/tests/DEVIATIONS.md
+#: says why". An exclusion says the question does not apply to a
+#: terminal of this shape, so there is nothing to record and nothing to
+#: decide.
+#:
+#: `ptterm/tests/drive_with_esctest.py` leaves out the same three, for
+#: the same reason: what pymux draws a pane in is a window that belongs
+#: to somebody else as well.
+#:
+#: A pattern that matches no test fails the check. An exclusion nobody
+#: can see is how a suite quietly stops covering something.
+NOT_OURS = (
+    (
+        r"^XtermWinopsTests\.test_XtermWinops_(IconifyDeiconfiy|MoveToXY)",
+        "a pane has no window to move, to iconify, or to report the "
+        "position of. DEVIATIONS.md entry 15.",
+    ),
+)
+
 #: The program of the pane. It runs the suite and then waits, because a
 #: pane that ends takes the session with it and there would be nothing
 #: left to read.
@@ -91,7 +114,7 @@ FINISHED = b"ESCTEST-FINISHED"
 #: when each starts clean. Throwing away what is left over before each
 #: test keeps every verdict about that test alone.
 RUNNER = '''
-import os, select, sys, tty
+import os, re, select, sys, tty
 
 # Nobody reads the pane after this, and a traceback drawn on it goes
 # away with the pane. Put it where the check can find it.
@@ -137,9 +160,16 @@ def drain():
             break
 
 
+excluded = os.environ["ESCTEST_EXCLUDE"]
+
 passed = failed = known = 0
 try:
     for name, method in esctest.MatchingNamesAndMethods():
+        if excluded and re.search(excluded, name):
+            # The driver reads this line, and fails when a pattern
+            # writes none of them.
+            esclog.LogInfo("Left out: " + name)
+            continue
         drain()
         status = esctest.RunTest(name, method)
         if status is None:
@@ -186,6 +216,9 @@ def keep(directory: Path, failed, log: str) -> None:
         "# The esctest2 tests that failed in this run. Every name here is a\n"
         "# real difference between a pymux pane and xterm.\n"
         "#\n"
+        "# ptterm/tests/esctest-failures.txt is the same list for ptterm on a\n"
+        "# pty of its own. A name here and not there is what the pane adds.\n"
+        "#\n"
         "# This is what the run saw. To make it what the check expects:\n"
         "#     nix build --file . checks.pymux-esctest.run\n"
         "#     cp result/failures.txt pymux/tests/esctest-failures.txt\n"
@@ -210,6 +243,11 @@ def tests_that_ran(log: str):
     return set(re.findall(r"^Run test: (\S+)$", log, re.MULTILINE))
 
 
+def left_out(log: str):
+    "Every test that `NOT_OURS` kept the suite from starting."
+    return set(re.findall(r"^Left out: (\S+)$", log, re.MULTILINE))
+
+
 def run(tmp: Path, directory: Path) -> str:
     "Run the suite in a pane and return what it logged."
     runner = tmp / "esctest_runner.py"
@@ -220,6 +258,7 @@ def run(tmp: Path, directory: Path) -> str:
     os.environ["ESCTEST_LOG"] = str(log)
     os.environ["ESCTEST_TIMEOUT"] = REPORT_TIMEOUT
     os.environ["ESCTEST_INCLUDE"] = os.environ.get("PYMUX_ESCTEST_INCLUDE", ".*")
+    os.environ["ESCTEST_EXCLUDE"] = "|".join(pattern for pattern, _ in NOT_OURS)
 
     terminal = Terminal(
         tmp,
@@ -280,8 +319,15 @@ def report(log: str, include: str) -> int:
     failed = failures_in(log)
     known = read_baseline()
     chosen = {name for name in known if re.search(include, name)}
+    out = left_out(log)
 
-    print("esctest: %d tests ran, %d failed" % (len(ran), len(failed)))
+    print("esctest: %d tests ran, %d failed, %d left out"
+          % (len(ran), len(failed), len(out)))
+    for pattern, reason in NOT_OURS:
+        print("esctest: left out %s, because %s"
+              % (", ".join(sorted(name for name in out
+                                  if re.search(pattern, name))) or "nothing",
+                 reason))
 
     if not ran:
         print("esctest: the suite ran nothing at all")
@@ -289,7 +335,16 @@ def report(log: str, include: str) -> int:
 
     new = sorted(failed - known)
     fixed = sorted((known & ran) - failed)
-    missing = sorted(chosen - ran)
+    missing = sorted(chosen - ran - out)
+
+    # An exclusion that names nothing is stale, and one that names a
+    # test the list also holds contradicts itself. A narrowed run
+    # chooses too few tests to say either, so it says neither.
+    stale = []
+    if include == ".*":
+        stale = [pattern for pattern, _ in NOT_OURS
+                 if not any(re.search(pattern, name) for name in out)]
+    both = sorted(out & known)
 
     for name in new:
         print("esctest: FAILS NOW, and did not before: " + name)
@@ -297,6 +352,16 @@ def report(log: str, include: str) -> int:
         print("esctest: PASSES NOW, so the list is out of date: " + name)
     for name in missing:
         print("esctest: named in the list, but the suite never ran it: " + name)
+    for pattern in stale:
+        print("esctest: NOT_OURS leaves out %r, and no test has that name."
+              % pattern)
+    for name in both:
+        print("esctest: left out, and named in the list as well: " + name)
+
+    if stale or both:
+        print("\nesctest: NOT_OURS in %s no longer describes the suite."
+              % Path(__file__).name)
+        return 1
 
     if new or fixed or missing:
         print(

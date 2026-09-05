@@ -1,8 +1,11 @@
-# The esctest2 tests that fail today. Every name here is a real
-# difference between a pymux pane and xterm.
+# The esctest2 tests that failed in this run. Every name here is a
+# real difference between a pymux pane and xterm.
 #
-# Write this file again with:
-#     PYMUX_ESCTEST_RECORD=1 nix build --file . checks.pymux-esctest
+# ptterm/tests/esctest-failures.txt is the same list for ptterm on a
+# pty of its own. A name here and not there is what the pane adds.
+#
+# This is what the run saw. To make it what the check expects:
+#     nix build --file . checks.pymux-esctest.run
 #     cp result/failures.txt pymux/tests/esctest-failures.txt
 DATests.test_DA_0
 DATests.test_DA_NoParameter
@@ -13,6 +16,3 @@ DECSETTests.test_DECSET_DECCOLM
 RISTests.test_RIS_ResetDECCOLM
 ResetSpecialColorTests.test_ResetSpecialColor_Dynamic
 XtermWinopsTests.test_XtermWinops_DECSLPP
-XtermWinopsTests.test_XtermWinops_IconifyDeiconfiy
-XtermWinopsTests.test_XtermWinops_MoveToXY
-XtermWinopsTests.test_XtermWinops_MoveToXY_Defaults
