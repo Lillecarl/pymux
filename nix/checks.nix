@@ -29,6 +29,7 @@
   imagemagick,
   makeFontsConf,
   dejavu_fonts,
+  perl,
   terminfo,
   testSources,
 }:
@@ -39,6 +40,12 @@ let
   # pane is where pymux puts one. ptterm carries the package and runs the
   # same suite on a pty of its own, so the two lists can be compared.
   inherit (ptterm) esctest2;
+
+  # The test files of libvterm, and libvterm's own program that answers
+  # them. ptterm carries both for the same reason it carries the
+  # conformance suite: they judge an emulator, and a pane is where pymux
+  # puts one. Here the harness is the judge and pymux is in the middle.
+  inherit (ptterm) vtermSuite;
 
   pythonWithTests = python.withPackages (ps: [
     ptterm
@@ -64,6 +71,19 @@ let
   # Which conformance tests run. It is a regular expression that the suite
   # matches against "Class.method", for instance
   # `PYMUX_ESCTEST_INCLUDE=BSTests nix build --file . checks.pymux-esctest`.
+  # Which of libvterm's test files run, for instance
+  # `PYMUX_VTERM_INCLUDE=unicode nix build --file . checks.pymux-vterm`.
+  vtermInclude =
+    let
+      value = builtins.getEnv "PYMUX_VTERM_INCLUDE";
+    in
+    if value == "" then ".*" else value;
+
+  # Write every line of the exchange between the three programs into the
+  # log, for instance
+  # `PYMUX_VTERM_TRACE=1 nix build --file . checks.pymux-vterm.run`.
+  vtermTrace = builtins.getEnv "PYMUX_VTERM_TRACE";
+
   esctestInclude =
     let
       value = builtins.getEnv "PYMUX_ESCTEST_INCLUDE";
@@ -193,5 +213,32 @@ in
     export PYMUX_ESCTEST_INCLUDE="$esctestInclude"
     export PYMUX_ESCTEST_OUT="$out"
     python tests/drive_with_esctest.py
+  '';
+
+  # The test suite of libvterm, with pymux in the middle of it.
+  #
+  # `checks.ptterm-vterm` plugs ptterm in where libvterm stands and judges
+  # our model. This judges our wire: the bytes of a test file reach a
+  # program in a full screen pane, pymux renders, and a real libvterm reads
+  # what pymux emitted and answers the assertions.
+  #
+  # So the judge is libvterm's own `t/harness`, built as it stands, and
+  # nothing of ours decides anything. `tests/drive_with_vterm.py` says which
+  # files can run this way and why the rest cannot.
+  vterm = runInSandbox {
+    name = "pymux-vterm";
+    inputs = [
+      perl
+      vtermSuite.harness
+    ];
+    env = { inherit vtermInclude vtermTrace; };
+  } ''
+    export PYMUX_VTERM=${vtermSuite.tests}/share/libvterm-tests
+    export PYMUX_VTERM_HARNESS=${vtermSuite.harness}/bin/libvterm-harness
+    export PYMUX_VTERM_INCLUDE="$vtermInclude"
+    export PYMUX_VTERM_TRACE="$vtermTrace"
+    export PYMUX_VTERM_TMP="$TMPDIR"
+    export PYMUX_VTERM_OUT="$out"
+    python tests/drive_with_vterm.py
   '';
 }
