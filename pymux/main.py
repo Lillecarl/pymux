@@ -2,6 +2,7 @@ import asyncio
 import base64
 import contextvars
 import os
+import shlex
 import signal
 import sys
 import tempfile
@@ -714,7 +715,15 @@ class Pymux:
                 os.environ["PYMUX"] = "%s,%i" % (self.socket_name, pane.pane_id)
 
         if command:
-            command_list = command.split()
+            # `shlex.split` and not `str.split`: a command reaches this as
+            # one string, and the quoting inside it is what says where one
+            # argument ends. A plain split on whitespace tears
+            # `sh -c 'echo one two'` into seven words, and `sh` then reads
+            # `'echo` as the whole of its script.
+            #
+            # `run_pymux.run` builds the string with `shlex.quote`, so this
+            # undoes exactly what that did.
+            command_list = shlex.split(command)
         else:
             command_list = [self.default_shell]
 

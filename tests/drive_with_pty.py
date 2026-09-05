@@ -237,6 +237,15 @@ while True:
 
 
 #: A program that asks for a bar that does not blink, and waits.
+#: A pane that says what its arguments were. One of them holds a space,
+#: so it says whether the quoting survived the trip.
+ARGUMENT_CHILD = """
+import sys
+sys.stdout.write("ARGV<%s>" % "|".join(sys.argv[1:]))
+sys.stdout.flush()
+sys.stdin.read()
+"""
+
 CURSOR_CHILD = """
 import sys
 sys.stdout.write("\\x1b[6 qCURSORMARK")
@@ -1251,6 +1260,61 @@ def check_a_full_screen_pane(tmp):
         terminal.close()
 
 
+def check_a_quoted_argument(tmp):
+    """
+    An argument with a space in it reaches the pane in one piece.
+
+    A command reaches a pane as one string, and the quoting inside it is
+    what says where one argument ends. `Pymux._create_pane` used to
+    split it on whitespace, so `sh -c 'echo one two'` became seven words
+    and `sh` read `'echo` as the whole of its script. The pane then died
+    at once and took the window with it. Lillecarl/pymux#39.
+
+    The route matters here, so this runs on both. The integrated route
+    builds the argument vector and lets `run_pymux` quote it again; the
+    socket route sends the string to a server that parses it. Both end
+    at the same place.
+    """
+    child_path = tmp / "argument_child.py"
+    child_path.write_text(ARGUMENT_CHILD)
+
+    wanted = "one two"
+    terminal = Terminal(
+        tmp,
+        "quoted",
+        command="python3 %s %s" % (child_path, shlex.quote(wanted)),
+    )
+    try:
+        terminal.wait_for_the_queries()
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"ARGV<")
+        terminal.drain(1.0)
+
+        # The pane draws the arguments it really got. Read the screen and
+        # not the byte stream: a renderer writes a cell where it likes.
+        # The row is not known either: a pane keeps a title row above it
+        # and the session a status line below.
+        screen = read_the_screen(terminal.seen)
+        found = None
+        for row in screen:
+            start = row.find("ARGV<")
+            if start != -1:
+                found = row[start : row.index(">", start) + 1]
+                break
+        if found != "ARGV<%s>" % wanted:
+            raise AssertionError(
+                "the pane got %r, and the argument was %r\n%s"
+                % (found, wanted, "\n".join(screen))
+            )
+
+        print("quoted argument: ok")
+    except Exception:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+
+
 def check_libpymux(tmp):
     """
     libpymux against a server that is really there.
@@ -1365,6 +1429,7 @@ def main() -> None:
     check_an_overlay_pane(tmp)
     check_two_terminals_of_different_abilities(tmp)
     check_a_full_screen_pane(tmp)
+    check_a_quoted_argument(tmp)
     check_libpymux(tmp)
     print("All pty checks passed.")
 
