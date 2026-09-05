@@ -53,7 +53,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from ptterm.screen import BetterScreen  # noqa: E402
 from ptterm.sixel import decode_sixel  # noqa: E402
+from ptterm.stream import BetterStream  # noqa: E402
 
 from pymux.colors import TRUECOLOR_PROBE  # noqa: E402
 from pymux.graphics import CELL_SIZE_QUERY  # noqa: E402
@@ -203,6 +205,37 @@ while True:
 """
 
 
+#: A program that marks every corner of its pane and waits.
+#:
+#: DECALN fills every cell with an "E", so a cell that the pane never
+#: reached stays blank and a cell that the client never wrote out stays
+#: blank on the far side as well. The four markers say where the pane
+#: begins and ends.
+CORNER_CHILD = """
+import os, signal, sys, time, tty
+tty.setraw(0)
+out = sys.stdout
+
+def draw(*_):
+    size = os.get_terminal_size()
+    out.write("\\x1b#8")
+    out.write("\\x1b[1;1HTL")
+    out.write("\\x1b[1;%dHTR" % (size.columns - 1))
+    out.write("\\x1b[%d;1HBL" % size.lines)
+    out.write("\\x1b[%d;%dHBR" % (size.lines, size.columns - 1))
+    out.write("\\x1b[2;1HSIZE<%dx%d>" % (size.columns, size.lines))
+    out.flush()
+
+# A pane is made before a client attaches, so its first size is not the
+# size of the terminal that ends up in front of it. A full screen
+# program draws again when the size changes, and so does this one.
+signal.signal(signal.SIGWINCH, draw)
+draw()
+while True:
+    time.sleep(1)
+"""
+
+
 #: A program that asks for a bar that does not blink, and waits.
 CURSOR_CHILD = """
 import sys
@@ -252,6 +285,42 @@ def run_cli(sock_path, args):
         timeout=20,
         check=False,
     )
+
+
+def read_the_screen(seen, rows=24, columns=80):
+    """
+    The screen that a terminal draws from what the client wrote.
+
+    A check that asks where something landed reads this, not the byte
+    stream: the renderer writes a cell wherever it likes and moves the
+    cursor there first, so the order of the bytes says nothing about
+    the order of the cells.
+
+    Returns a list of rows, each a string of `columns` characters.
+    """
+    screen = BetterScreen(rows, columns, write_process_input=lambda answer: None)
+    BetterStream(screen).feed(seen.decode("utf-8", "replace"))
+
+    buffer = screen.pt_screen.data_buffer
+    offset = screen.line_offset
+    lines = []
+    for y in range(offset, offset + rows):
+        row = buffer[y]
+        lines.append(
+            "".join((row[x].char or " ") for x in range(columns))
+        )
+    return lines
+
+
+def _side_by_side(wanted, found):
+    "Every row that differs, with the one that was wanted above it."
+    lines = []
+    for number, (a, b) in enumerate(zip(wanted, found)):
+        if a == b:
+            continue
+        lines.append("row %2d wanted %s" % (number, a))
+        lines.append("row %2d found  %s" % (number, b))
+    return "\n".join(lines)
 
 
 def run_on_a_pty(args, stderr_path, colorterm="", rows=24, columns=80):
@@ -411,7 +480,16 @@ class Terminal(Attached):
     too, so `run_cli` still reaches the server.
     """
 
-    def __init__(self, tmp, mode, colorterm="", command=None, rows=24, columns=80):
+    def __init__(
+        self,
+        tmp,
+        mode,
+        colorterm="",
+        command=None,
+        rows=24,
+        columns=80,
+        config=None,
+    ):
         self.tmp = tmp
         self.sock_path = tmp / ("%s.sock" % mode)
         self.stderr_path = tmp / ("%s-stderr.log" % mode)
@@ -425,6 +503,10 @@ class Terminal(Attached):
             child_path.write_text(PANE_CHILD)
             command = "python3 %s %s" % (child_path, mode)
 
+        # A configuration file, read before the first window opens.
+        # Both routes take it the same way.
+        configuration = ["-f", config] if config is not None else []
+
         if ROUTE == "integrated":
             # One process. The command of the first pane follows the
             # mode word. Nothing names the session, so it keeps the
@@ -436,6 +518,7 @@ class Terminal(Attached):
                     self.sock_path,
                     "--log",
                     self.server_log,
+                    *configuration,
                     "integrated",
                     *shlex.split(command),
                 ],
@@ -451,6 +534,7 @@ class Terminal(Attached):
                 [
                     "--log",
                     str(self.server_log),
+                    *[str(a) for a in configuration],
                     "new-session",
                     "-d",
                     "-s",
@@ -1093,6 +1177,80 @@ def check_two_terminals_of_different_abilities(tmp):
     print("two terminals: ok")
 
 
+def check_a_full_screen_pane(tmp):
+    """
+    One pane covers every cell of the terminal, and nothing else does.
+
+    A picture of a pane can only be compared against a picture of the
+    same program without pymux when the two line up. Every row that
+    pymux keeps for itself moves the content of the pane by one, and
+    then the comparison needs a crop, which is a place for a difference
+    to hide.
+
+    So this measures the whole grid. The pane fills it with "E", writes
+    a marker in each corner, and every cell of what the client draws
+    has to hold what the pane holds. The bottom right cell is the one
+    to watch: a renderer often leaves it alone, because writing it
+    scrolls some terminals.
+    """
+    rows, columns = 24, 80
+
+    config = tmp / "full-screen.conf"
+    config.write_text("set full-screen on\n")
+
+    child_path = tmp / "corner_child.py"
+    child_path.write_text(CORNER_CHILD)
+
+    terminal = Terminal(
+        tmp,
+        "fullscreen",
+        command="python3 %s" % child_path,
+        rows=rows,
+        columns=columns,
+        config=config,
+    )
+    try:
+        terminal.wait_for_the_queries()
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"SIZE<")
+        # The pane draws again when the client gives it its real size.
+        # Nothing in the byte stream marks the last frame, so give the
+        # redraw time and read the screen it left.
+        terminal.drain(2.0)
+
+        # 1. The pane is as large as the terminal of the client.
+        size = run_cli(
+            terminal.sock_path,
+            ["list-panes", "-F", "#{pane_width}x#{pane_height}"],
+        )
+        assert size.stdout.strip() == b"%dx%d" % (columns, rows), size.stdout
+
+        # 2. Every cell of the screen holds what the pane holds.
+        screen = read_the_screen(terminal.seen, rows, columns)
+        assert len(screen) == rows
+
+        marker = "SIZE<%dx%d>" % (columns, rows)
+        wanted = [
+            "TL" + "E" * (columns - 4) + "TR",
+            marker + "E" * (columns - len(marker)),
+        ]
+        wanted += ["E" * columns] * (rows - 3)
+        wanted.append("BL" + "E" * (columns - 4) + "BR")
+
+        if screen != wanted:
+            raise AssertionError(
+                "the screen of the client is not the screen of the pane\n"
+                + _side_by_side(wanted, screen)
+            )
+
+        print("full screen pane: ok")
+    except Exception:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+
+
 def check_libpymux(tmp):
     """
     libpymux against a server that is really there.
@@ -1206,6 +1364,7 @@ def main() -> None:
     check_the_cursor_shape(tmp)
     check_an_overlay_pane(tmp)
     check_two_terminals_of_different_abilities(tmp)
+    check_a_full_screen_pane(tmp)
     check_libpymux(tmp)
     print("All pty checks passed.")
 
