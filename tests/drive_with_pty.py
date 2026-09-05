@@ -1383,6 +1383,62 @@ def check_a_non_breaking_space(tmp):
         terminal.close()
 
 
+def check_the_cursor_of_a_drawing_pane(tmp):
+    """
+    A pane that keeps drawing does not stop the cursor blinking.
+
+    The renderer used to hide the cursor before painting a frame and
+    show it after, every frame. Showing a cursor restarts its blink in
+    most terminals, so a pane with a spinner in it held the cursor in
+    its "on" phase for ever: it was there, and it never blinked.
+    Measured at nine times a second.
+
+    A terminal that holds a frame back needs none of that. The painting
+    is not shown, so the cursor can stay where it is, and it is left
+    alone from one frame to the next.
+
+    Claude Code is the program that showed it, and this is the shape of
+    it: something that redraws while the person is not typing.
+    """
+    program = tmp / "animate.sh"
+    # The same cell every time, so nothing but the cursor could change.
+    program.write_text(
+        "printf '\\033[2J\\033[H'\n"
+        "printf ANIMATING\n"
+        "i=0\n"
+        "while [ $i -lt 40 ]; do printf '\\033[10;1Hx'; sleep 0.1; i=$((i+1)); done\n"
+        "sleep 5\n"
+    )
+
+    terminal = Terminal(tmp, "animate", command="sh %s" % program)
+    try:
+        terminal.wait_for_the_queries()
+        # A terminal that holds a frame back says so.
+        terminal.write(b"\x1b[?2026;2$y")
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"ANIMATING")
+
+        mark = terminal.mark()
+        terminal.drain(3.0)
+        since = terminal.since(mark)
+
+        toggles = len(re.findall(rb"\x1b\[\?25[lh]", since))
+        assert toggles == 0, (
+            "the client touched the cursor %d times while the pane drew"
+            % toggles
+        )
+
+        # And it held each frame back instead.
+        assert b"\x1b[?2026h" in since, "no frame was held back"
+
+        print("cursor of a drawing pane: ok")
+    except Exception:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+
+
 def check_libpymux(tmp):
     """
     libpymux against a server that is really there.
@@ -1499,6 +1555,7 @@ def main() -> None:
     check_a_full_screen_pane(tmp)
     check_a_quoted_argument(tmp)
     check_a_non_breaking_space(tmp)
+    check_the_cursor_of_a_drawing_pane(tmp)
     check_libpymux(tmp)
     print("All pty checks passed.")
 

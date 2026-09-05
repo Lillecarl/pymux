@@ -42,8 +42,15 @@ __all__ = [
 #: which ones the terminal took. A terminal that speaks a part of the
 #: protocol only says so that way. The pop puts the terminal back as it
 #: was.
+#: Does the terminal hold a frame back until it is complete?
+#: ("CSI ? 2026 $ p", DECRQM.) A terminal that does answers
+#: "CSI ? 2026 ; <state> $ y" with a state of 1, 2 or 4; one that does
+#: not answers 0, or does not answer at all.
+SYNCHRONIZED_OUTPUT_QUERY = b"\x1b[?2026$p"
+
 DETECTION_QUERIES = (
     b"\x1b[>31u\x1b[?u\x1b[<u"
+    + SYNCHRONIZED_OUTPUT_QUERY
     + GRAPHICS_QUERY.encode("ascii")
     + CELL_SIZE_QUERY.encode("ascii")
     + TRUECOLOR_PROBE.encode("ascii")

@@ -363,3 +363,22 @@ def test_an_unterminated_osc_does_not_swallow_input_forever():
     pressed = parse("\x1b]11;rgb:0000")
     assert pressed  # Decomposed, not swallowed.
     assert parse("\x1b]" + "z" * 2000 + "\x07c")[-1] == ("c", "c")
+
+
+def test_a_mode_reply_goes_to_reply_callback():
+    """
+    The reply of a DECRQM request is not a key press.
+
+    pymux asks whether the terminal holds a frame back while it is
+    painted ("CSI ? 2026 $ p"), and the answer says whether the cursor
+    has to be hidden for every frame.
+    """
+    pressed = []
+    replies = []
+    parser = KittyVt100Parser(
+        lambda key_press: pressed.append(key_press),
+        reply_callback=replies.append,
+    )
+    parser.feed_and_flush("\x1b[?2026;2$y")
+    assert pressed == []
+    assert replies == ["\x1b[?2026;2$y"]

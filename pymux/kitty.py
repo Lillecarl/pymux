@@ -65,7 +65,11 @@ _KITTY_KEY_RE = re.compile(
 
 # A prefix that could still become a kitty key sequence (or any other
 # CSI sequence with variable parameters).
-_KITTY_PREFIX_RE = re.compile(r"^\x1b\[[0-9;:<=>?]*$")
+#
+# "$" is in there for DECRQM, whose reply is "CSI ? <mode> ; <state> $ y".
+# Without it the parser stops buffering at the "$" and hands the rest
+# out as key presses.
+_KITTY_PREFIX_RE = re.compile(r"^\x1b\[[0-9;:<=>?$]*$")
 
 # An APC, DCS or OSC string sequence and any prefix of one. The payload
 # never contains the escape character, so the terminator is
@@ -184,6 +188,11 @@ _STRING_REPLY = object()
 # query.
 _CELL_SIZE_REPLY = object()
 
+# Sentinel for the "CSI ? <mode> ; <state> $ y" reply of a DECRQM
+# request. pymux asks whether the terminal holds a frame back while it
+# is painted ("CSI ? 2026 $ p").
+_MODE_REPLY = object()
+
 # Sentinel for a key that came back up. The outer terminal sends one
 # only when a pane asked for the event types of a key.
 #
@@ -205,6 +214,9 @@ _DA1_REPLY_RE = re.compile(r"^\x1b\[\?[\d;]*c$")
 
 # Reply of the "CSI 16 t" cell size query.
 _CELL_SIZE_REPLY_RE = re.compile(r"^\x1b\[6;\d+;\d+t$")
+
+# Reply of a DECRQM request: "CSI ? <mode> ; <state> $ y".
+_MODE_REPLY_RE = re.compile(r"^\x1b\[\?\d+;\d+\$y$")
 
 
 def _ctrl_mapping(char: str) -> Keys | None:
@@ -292,6 +304,8 @@ def parse_kitty_key(prefix: str) -> _KeyResult | None:
             return _DA1_REPLY
         if _CELL_SIZE_REPLY_RE.match(prefix):
             return _CELL_SIZE_REPLY
+        if _MODE_REPLY_RE.match(prefix):
+            return _MODE_REPLY
         if _STRING_RE.match(prefix):
             return _STRING_REPLY
         return None
@@ -446,6 +460,7 @@ class KittyVt100Parser(Vt100Parser):
             _DA1_REPLY,
             _STRING_REPLY,
             _CELL_SIZE_REPLY,
+            _MODE_REPLY,
         ):
             if self.reply_callback is not None:
                 self.reply_callback(insert_text)

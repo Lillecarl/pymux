@@ -33,6 +33,12 @@ __all__ = ["ServerConnection"]
 
 # An OSC reply of the outer terminal: the code, and everything between
 # the code and the terminator.
+#: The answer to "CSI ? 2026 $ p" (DECRQM): "CSI ? 2026 ; <state> $ y".
+#: A state of 0 means the terminal does not know the mode. 1 and 2 are
+#: set and reset, and 4 means it is on and cannot be turned off; all
+#: three say the terminal understands it.
+_SYNCHRONIZED_REPLY_RE = re.compile(r"^\x1b\[\?2026;(\d+)\$y$")
+
 _OSC_REPLY_RE = re.compile(
     r"^(?:\x1b\]|\x9d)(\d+);(.*?)(?:\x1b\\|\x9c|\x07)$", re.DOTALL
 )
@@ -226,6 +232,18 @@ class ServerConnection:
             except ValueError:
                 self.kitty_source_flags = 0
             self.pymux.sync_keyboard_source_flags()
+            return
+
+        # The answer to the synchronised output query. A terminal that
+        # holds a frame back does not need the cursor hidden while the
+        # frame is painted, and hiding it restarts the blink: at a frame
+        # rate that is a cursor which never blinks.
+        synchronized = _SYNCHRONIZED_REPLY_RE.match(data)
+        if synchronized is not None:
+            if self.client_state is not None:
+                self.client_state.output.synchronized_output = (
+                    synchronized.group(1) != "0"
+                )
             return
 
         # The graphics query reply, the cell size report and the device
