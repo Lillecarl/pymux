@@ -83,6 +83,11 @@ QUIET = 0.05
 #: give up, and it is the one wait that is paid every time.
 FIRST_BYTE = 0.15
 
+#: How long to wait for the pane to reach the size the suite asks
+#: about, in seconds. A pane opens at the size pymux gives it and is
+#: resized when the client says how big it is.
+SIZE_TIMEOUT = 10.0
+
 #: The program in the pane. It copies the fifo to its own output and
 #: changes nothing.
 #:
@@ -90,8 +95,27 @@ FIRST_BYTE = 0.15
 #: on the way out, and the suite pushes both, so without it every line
 #: feed of a test file arrives as something else.
 FORWARDER = r"""
-import os, sys
+import fcntl, os, signal, struct, sys, termios
 os.system("stty -opost -echo")
+
+# The size of the pane, written where the harness can read it, and
+# written again every time it changes. Every assertion names a row and a
+# column, so a pane that is not the size the suite thinks it is turns
+# every one of them into a different question.
+#
+# It changes at least once: a pane opens at the size pymux gives it and
+# is resized when the client says how big it is, which is after this
+# program has already started.
+def report(*_):
+    rows, columns = struct.unpack(
+        "HHHH", fcntl.ioctl(1, termios.TIOCGWINSZ, b"\0" * 8)
+    )[:2]
+    with open(sys.argv[2], "w") as out:
+        out.write("%d %d\n" % (rows, columns))
+
+signal.signal(signal.SIGWINCH, report)
+report()
+
 fd = os.open(sys.argv[1], os.O_RDONLY)
 while True:
     data = os.read(fd, 65536)
@@ -157,7 +181,7 @@ class Judge:
         suite is asking about our wire, and what libvterm redrew while
         reading it is libvterm's business.
         """
-        _trace("judge <- %s" % command[:120])
+        _trace("judge <- %s" % command)
         self.process.stdin.write(command.encode() + b"\n")
         while True:
             answer = self.process.stdout.readline()
@@ -196,10 +220,12 @@ class MiddleMan:
         config = self.tmp / "vterm.conf"
         config.write_text("set full-screen on\n")
 
+        size = self.tmp / "pane-size.txt"
+
         self.terminal = Terminal(
             self.tmp,
             "vterm",
-            command="%s %s %s" % (sys.executable, forwarder, self.fifo),
+            command="%s %s %s %s" % (sys.executable, forwarder, self.fifo, size),
             rows=ROWS,
             columns=COLUMNS,
             config=config,
@@ -212,6 +238,22 @@ class MiddleMan:
 
         self.terminal.wait_for_the_queries()
         self.terminal.drain(0.5)
+
+        # A pane of the wrong size makes every assertion a different
+        # question, and the answers still look like answers. So this
+        # waits for the size the suite asks about, and stops rather than
+        # reporting a screen nobody asked about.
+        found = ""
+        deadline = time.monotonic() + SIZE_TIMEOUT
+        while time.monotonic() < deadline:
+            found = size.read_text().split()
+            if [int(one) for one in found] == [ROWS, COLUMNS]:
+                return
+            self.settle()
+        raise AssertionError(
+            "the pane is %s and the suite asks about %d rows by %d columns"
+            % (" by ".join(found) or "not saying", ROWS, COLUMNS)
+        )
 
     def write(self, data: bytes) -> bytes:
         """
@@ -341,6 +383,8 @@ def main() -> int:
             line = raw.rstrip("\n")
             if not line:
                 continue
+
+            _trace("suite -> %s" % line)
 
             if line.startswith("?"):
                 try:
