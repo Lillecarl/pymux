@@ -165,8 +165,22 @@ def _socket_from_env_warning() -> None:
     print("Unset PYMUX environment variable first.")
 
 
-def run() -> None:
-    a = _build_parser().parse_args()
+def parse_arguments(
+    argv: List[str] | None = None,
+) -> Tuple[argparse.Namespace, str | None, str | None]:
+    """
+    Read the command line: the options, the mode and the command.
+
+    Returns the options, the mode word (`None` when there is none) and
+    the command as one string (`None` when there is none). A command is
+    one string because that is what reaches a pane and what a server
+    reads, and `shlex.quote` keeps an argument with a space in it in one
+    piece on the way.
+
+    `run` does the rest. This is separate so that a test can ask what a
+    command line means without starting a server.
+    """
+    a = _build_parser().parse_args(argv)
 
     rest = a.args
     mode = None
@@ -185,6 +199,15 @@ def run() -> None:
             setattr(a, key, value)
         rest = extra
 
+        # "--" says that everything after it is the command and not an
+        # option of pymux. argparse consumes one while it assigns
+        # positional arguments, and `mode_parser` declares none, so it
+        # hands the separator back and it would become the first word of
+        # the command. Only the first one: a second "--" is an argument
+        # of the program that runs.
+        if rest and rest[0] == "--":
+            rest = rest[1:]
+
     if mode in MODES_WITH_A_FIRST_PANE:
         # An optional command can be given for the first pane.
         command = " ".join(shlex.quote(x) for x in rest) if rest else None
@@ -196,6 +219,12 @@ def run() -> None:
     elif rest:
         # Not a mode: all arguments form one pymux command.
         command = " ".join(shlex.quote(x) for x in rest)
+
+    return a, mode, command
+
+
+def run() -> None:
+    a, mode, command = parse_arguments()
 
     socket_name = a.socket or os.environ.get("PYMUX")
     socket_name_from_env = not a.socket and bool(os.environ.get("PYMUX"))
