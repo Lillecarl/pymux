@@ -43,9 +43,12 @@ that is longer than the program's row; and it drops a trailing space
 that a program wrote, so another row is shorter. Nothing on the wire
 says which of the two a blank is. Lillecarl/pymux#61.
 
-**The double size lines are not held, so nothing is emitted** (5).
-DECDWL and DECDHL, the same gap the direct plug-in finds, because a wire
-cannot carry what the model never took. Lillecarl/pymux#55.
+**The double size lines are held and not emitted** (5). ptterm takes
+DECDWL and DECDHL now, and the direct plug-in reads them back
+(Lillecarl/pymux#55). Nothing puts them on the wire, so a real libvterm
+reading what pymux emitted sees a flat line. The attribute belongs to a
+line, and prompt_toolkit hands the renderer fragments, which is the
+same wall Lillecarl/pymux#61 hits. Lillecarl/pymux#65.
 
 ## What it has already found and fixed
 
