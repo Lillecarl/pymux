@@ -33,9 +33,9 @@ measures our model against theirs. This measures our wire against a
 recording of a real program: vim, tmux, fish and zsh, tens of thousands
 of bytes each. Nothing else here runs a program of that size.
 
-## What the 16 that differ are
+## What the 15 that differ are
 
-Five groups, and each one is a question about the wire and not about
+Four groups, and each one is a question about the wire and not about
 the recording.
 
 **A colour the program named is not the colour we emit** (3 tests:
@@ -53,10 +53,6 @@ Five judges are with ptterm and Alacritty is alone, so this one is
 recorded and not fixed: `ptterm/tests/DEVIATIONS.md`, "Where Alacritty
 looks wrong". A bare `CSI 4:3 m` does reach the wire as `SGR 4:3`.
 
-**The id of a hyperlink is dropped** (1 test: `hyperlinks`). The URI
-survives and the id does not, so Alacritty numbers each run itself and
-a link that wraps becomes two. Lillecarl/pymux#70.
-
 **A tab is a space** (2 tests: `tab_rendering`, `vttest_tab_clear_set`).
 Alacritty keeps the tab character in the cell it moved from. Nobody has
 asked the panel yet whether that is a rule or Alacritty's own model.
@@ -71,6 +67,16 @@ is its own question, and some are already answered elsewhere:
 where libvterm agrees with us and Alacritty erases nothing at all.
 
 ## What it has already found and fixed
+
+**The id of a hyperlink was dropped** (1 test: `hyperlinks`). The URI
+survived and the id did not. The id joins the pieces of one link, so a
+terminal that reads none gives each run one of its own: the recording
+opens three links with an id and two without, and all three of the
+first came back as `4_alacritty`, `3_alacritty` and `2_alacritty`. The
+two with no id already matched, which is what said the counter was the
+only thing wrong. ptterm keeps the id now and pymux writes it, so the
+wire carries `id=42` twice and `id=hello` once, as the program did.
+Lillecarl/pymux#70.
 
 **A linefeed at the bottom of the screen brought a line in with no
 background** (1 test: `vim_large_window_scroll`). vim writes a line,

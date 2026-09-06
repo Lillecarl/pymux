@@ -13,7 +13,6 @@ decaln_reset
 deccolm_reset
 delete_chars_reset
 delete_lines
-hyperlinks
 indexed_256_colors
 origin_goto
 saved_cursor
