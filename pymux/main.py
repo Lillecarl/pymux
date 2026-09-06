@@ -685,6 +685,17 @@ class Pymux:
             "Give a pane the size that the program inside it asks for."
             self.resize_pane_for_program(pane, lines, columns)
 
+        def may_resize() -> bool:
+            """
+            Would such an ask be granted?
+
+            Read every time, because a person can turn the option on and
+            off while the pane runs. A pane that answers "yes" and then
+            gives no room sends a program to lay its output out for a
+            width it does not have.
+            """
+            return self.allow_program_resize
+
         # Start directory.
         path: str | None
 
@@ -755,6 +766,7 @@ class Pymux:
             bell_func=bell,
             osc_func=forward_osc,
             resize_func=resize,
+            may_resize=may_resize,
             before_exec_func=before_exec,
             command=command_list,
         )
