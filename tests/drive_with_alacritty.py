@@ -35,7 +35,7 @@ of bytes each. Nothing else here runs a program of that size.
 
 ## What the 13 that differ are
 
-Eight groups, and each one is a question about the wire and not about
+Nine groups, and each one is a question about the wire and not about
 the recording.
 
 **A colour the program named is not the colour we emit** (3 tests:
@@ -99,9 +99,17 @@ Three judges bring the wait back and three do not, so this is recorded
 and not fixed: `ptterm/tests/DEVIATIONS.md`, entry 22, and
 Lillecarl/pymux#88.
 
-**A cell holds something else** (3 tests: `decaln_reset`,
-`deccolm_reset`, `selective_erasure`). Each one
-is its own question, and some are already answered elsewhere:
+**DECALN homes the cursor, or leaves it** (1 test: `decaln_reset`).
+40 cells. `ESC # 8` fills the screen with "E" and, in ptterm, sends the
+cursor home; the shell prompt after it lands on the second row, and
+Alacritty puts it on the fifth. The DEC manuals home the cursor, and
+Ghostty, kitty, WezTerm and xterm.js do too; Alacritty and libvterm do
+not. Four to two, and the manual with the four, so this is recorded and
+not fixed: `ptterm/tests/DEVIATIONS.md`, entry 4.
+
+**A cell holds something else** (2 tests: `deccolm_reset`,
+`selective_erasure`). Both
+are already answered elsewhere:
 `deccolm_reset` needs a 132 column page, which a pane cannot take
 (`ptterm/tests/DEVIATIONS.md`), and `selective_erasure` is DECSCA,
 where libvterm agrees with us and Alacritty erases nothing at all.
