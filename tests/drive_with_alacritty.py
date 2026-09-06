@@ -35,7 +35,7 @@ of bytes each. Nothing else here runs a program of that size.
 
 ## What the 13 that differ are
 
-Seven groups, and each one is a question about the wire and not about
+Eight groups, and each one is a question about the wire and not about
 the recording.
 
 **A colour the program named is not the colour we emit** (3 tests:
@@ -87,9 +87,20 @@ and xterm do not. A program that reverses and then erases means the
 block to be seen, so this is recorded and not fixed:
 `ptterm/tests/DEVIATIONS.md`, entry 21.
 
-**A cell holds something else** (4 tests: `decaln_reset`,
-`deccolm_reset`, `selective_erasure`,
-`wrapline_alt_toggle`). Each one
+**A restore does not bring the wait to wrap back** (1 test:
+`wrapline_alt_toggle`). 40 cells, and all of them one row. The
+recording fills a row with 139 characters, takes the alternate screen,
+gives it back and writes one more. A character in the last column
+leaves the cursor waiting to wrap, and a restore folds that away, so
+Alacritty starts a new line for the last character and ptterm writes it
+into the last column. Everything after it sits one row higher.
+
+Three judges bring the wait back and three do not, so this is recorded
+and not fixed: `ptterm/tests/DEVIATIONS.md`, entry 22, and
+Lillecarl/pymux#88.
+
+**A cell holds something else** (3 tests: `decaln_reset`,
+`deccolm_reset`, `selective_erasure`). Each one
 is its own question, and some are already answered elsewhere:
 `deccolm_reset` needs a 132 column page, which a pane cannot take
 (`ptterm/tests/DEVIATIONS.md`), and `selective_erasure` is DECSCA,
