@@ -35,7 +35,7 @@ of bytes each. Nothing else here runs a program of that size.
 
 ## What the 15 that differ are
 
-Four groups, and each one is a question about the wire and not about
+Six groups, and each one is a question about the wire and not about
 the recording.
 
 **A colour the program named is not the colour we emit** (3 tests:
@@ -62,10 +62,24 @@ and not fixed. Alacritty keeps the character for its own selection, and
 a pane does not select. `ptterm/tests/DEVIATIONS.md`, "Where Alacritty
 looks wrong".
 
-**A cell holds something else** (9 tests: `decaln_reset`,
-`deccolm_reset`, `delete_lines`, `delete_chars_reset`, `saved_cursor`,
-`saved_cursor_alt`, `scroll_up_reset`, `selective_erasure`,
-`wrapline_alt_toggle`). Each one
+**The line drawing set has three blanks** (1 test: `saved_cursor`). One
+cell: the underscore of a shell prompt drawn through "ESC ( 0".
+Position 0x5F of that set is a blank, and ptterm and kitty draw
+U+00A0, Alacritty draws a space, and Ghostty, libvterm, WezTerm and
+xterm.js draw the underscore itself. Three answers is not a rule, so
+this is recorded and not fixed: `ptterm/tests/DEVIATIONS.md`, entry 20.
+
+**"?1049h" moves the cursor, or does not** (1 test: `saved_cursor_alt`).
+ptterm puts the cursor home when a program takes the alternate screen,
+and so do kitty and WezTerm; Alacritty, Ghostty, libvterm and xterm.js
+leave it where it stands. The whole grid of this test is one screen
+shifted ten rows, and nothing else differs: ptterm draws it cell for
+cell the way kitty and WezTerm do. Recorded and not fixed:
+`ptterm/tests/DEVIATIONS.md`, entry 17, and Lillecarl/pymux#34.
+
+**A cell holds something else** (7 tests: `decaln_reset`,
+`deccolm_reset`, `delete_lines`, `delete_chars_reset`,
+`scroll_up_reset`, `selective_erasure`, `wrapline_alt_toggle`). Each one
 is its own question, and some are already answered elsewhere:
 `deccolm_reset` needs a 132 column page, which a pane cannot take
 (`ptterm/tests/DEVIATIONS.md`), and `selective_erasure` is DECSCA,
@@ -82,6 +96,23 @@ two with no id already matched, which is what said the counter was the
 only thing wrong. ptterm keeps the id now and pymux writes it, so the
 wire carries `id=42` twice and `id=hello` once, as the program did.
 Lillecarl/pymux#70.
+
+**The alternate screen forgot what it saved** (part of
+`saved_cursor_alt`). A program that takes the alternate screen, saves
+the cursor there, leaves and comes back found nothing saved: "?1049h"
+emptied the list. It clears the content and leaves the save alone, the
+way xterm keeps one saved cursor per screen. The whole panel was
+against ptterm, six to nothing, and the character sets went with the
+cursor. This test now differs from Alacritty in nothing but entry 17.
+`ptterm/tests/DEVIATIONS.md`, "Fixed by the comparison".
+
+**The line drawing set drew "h" as a shade** (part of `saved_cursor`).
+U+2591 LIGHT SHADE, where the DEC special graphics set puts U+2424
+SYMBOL FOR NEWLINE. pyte took the table from the linux kernel, which
+draws the shade. Alacritty, WezTerm, libvterm, Ghostty and xterm.js
+draw the newline symbol and kitty alone keeps the shade, so five to
+one. Three of the four cells of this test went away with it.
+`ptterm/tests/DEVIATIONS.md`, "Fixed by the comparison".
 
 **A linefeed at the bottom of the screen brought a line in with no
 background** (1 test: `vim_large_window_scroll`). vim writes a line,
