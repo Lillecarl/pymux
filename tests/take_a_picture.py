@@ -494,6 +494,23 @@ class Seat:
     def stop(self):
         "Close it."
 
+    def running(self, terminal, command, work, log_path, director):
+        """
+        Run one command in one terminal, and let `director` photograph it.
+
+        The director is called with `take_one`, which writes a picture
+        of the terminal to the path it is given, and `ended`, which
+        gives back the exit code once whatever draws has gone and
+        `None` while it is still there. What it returns is what this
+        returns.
+
+        Every way of taking a picture goes through here: one still
+        picture, a burst for a blink, and a long run that stops at each
+        screen of a program. Only the two ways of opening a terminal
+        differ, and a seat holds one of those.
+        """
+        raise NotImplementedError
+
     def picture_of(self, terminal, command, work, path, log_path, frames=1):
         """
         Run one command in one terminal and leave its picture at `path`.
@@ -501,7 +518,31 @@ class Seat:
         `frames` above one takes a burst instead of waiting for the
         screen to settle, and gives back the list of pictures.
         """
-        raise NotImplementedError
+        what = "%s of %s" % (self.subject, terminal.name)
+        if frames > 1:
+            return self.running(
+                terminal,
+                command,
+                work,
+                log_path,
+                lambda take_one, ended: _burst(
+                    path, take_one, ended, what, log_path
+                ),
+            )
+        return self.running(
+            terminal,
+            command,
+            work,
+            log_path,
+            lambda take_one, ended: _settle(
+                work, path, take_one, ended, what, log_path
+            ),
+        )
+
+    #: How a message names what this seat photographs. The X seat takes
+    #: a picture of one window among several; the Wayland seat takes the
+    #: whole output, because the compositor holds one window.
+    subject = "the picture"
 
 
 def _settle(work, path, take_one, ended, what, log_path):
@@ -641,7 +682,9 @@ class XSeat(Seat):
             timeout=30,
         )
 
-    def picture_of(self, terminal, command, work, path, log_path, frames=1):
+    subject = "the window"
+
+    def running(self, terminal, command, work, log_path, director):
         already = self._windows(terminal.window_class)
 
         log = open(log_path, "wb")
@@ -659,11 +702,9 @@ class XSeat(Seat):
             window = self._wait_for_a_new_window(
                 terminal.window_class, already, process, log_path
             )
-            take_one = lambda where: self._take(window, where)
-            what = "the window of %s" % terminal.name
-            if frames > 1:
-                return _burst(path, take_one, process.poll, what, log_path)
-            _settle(work, path, take_one, process.poll, what, log_path)
+            return director(
+                lambda where: self._take(window, where), process.poll
+            )
         finally:
             _end(process)
             log.close()
@@ -731,7 +772,9 @@ class WaylandSeat(Seat):
             },
         )
 
-    def picture_of(self, terminal, command, work, path, log_path, frames=1):
+    subject = "the output"
+
+    def running(self, terminal, command, work, log_path, director):
         room = self._room(work)
 
         log = open(log_path, "wb")
@@ -756,11 +799,9 @@ class WaylandSeat(Seat):
         )
         try:
             display = self._wait_for_the_socket(room, process, log_path)
-            take_one = lambda where: self._take(room, display, where)
-            what = "the output of %s" % terminal.name
-            if frames > 1:
-                return _burst(path, take_one, process.poll, what, log_path)
-            _settle(work, path, take_one, process.poll, what, log_path)
+            return director(
+                lambda where: self._take(room, display, where), process.poll
+            )
         finally:
             _end(process)
             log.close()
