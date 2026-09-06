@@ -31,24 +31,8 @@ can run here, and it is a different cut from the one `ptterm` makes:
   the frame after it.
 
 13 files are left, and they ask 152 questions about the screen and the
-cursor. 146 of the answers agree.
-
-## What the 6 that differ are
-
-Two groups, and neither of them is libvterm being odd.
-
-**A blank a program wrote never reaches the wire** (1). The renderer
-takes the unstyled whitespace off the end of a row, for the sake of
-somebody copying the output. A space a program wrote is content, and
-the wire does not say which of the two a blank is, so the guess drops
-it. Lillecarl/pymux#61.
-
-**The double size lines are held and not emitted** (5). ptterm takes
-DECDWL and DECDHL now, and the direct plug-in reads them back
-(Lillecarl/pymux#55). Nothing puts them on the wire, so a real libvterm
-reading what pymux emitted sees a flat line. The attribute belongs to a
-line, and prompt_toolkit hands the renderer fragments, which is the
-same wall Lillecarl/pymux#61 hits. Lillecarl/pymux#65.
+cursor. Every one of the answers agrees, so `vterm-failures.txt` holds
+nothing but its header.
 
 ## What it has already found and fixed
 
@@ -76,6 +60,21 @@ sideways to bring it into view and every row of the pane was drawn one
 column to the left for as long as the scroll lasted. Nothing else could
 see it: the pane's own screen was right, and only a terminal reading our
 wire disagreed. Lillecarl/pymux#62.
+
+**A blank a program wrote never reached the wire** (1 assertion). The
+renderer takes the unstyled whitespace off the end of a row, for the
+sake of somebody copying the output, and the wire did not say which of
+the two kinds of blank a cell held. A cell can ask to stay now, with
+prompt_toolkit's `KeepWhitespace`, and a pane asks for every space a
+program wrote. Lillecarl/pymux#61.
+
+**The double size lines were held and not emitted** (5 assertions).
+ptterm takes DECDWL and DECDHL, and the direct plug-in read them back
+(Lillecarl/pymux#55), but nothing put them on the wire and a real
+libvterm saw a flat line. The attribute belongs to a line and not to a
+cell, so prompt_toolkit's `Screen` carries one per row and the renderer
+diffs it against the frame before. A pane emits one only where pymux
+says it holds whole rows of the terminal. Lillecarl/pymux#65.
 
 Run it:
 
