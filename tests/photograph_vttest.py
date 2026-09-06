@@ -24,6 +24,18 @@ know, because it owns the pty vttest runs on and reads
 drew with ptterm, and passes the same bytes on to the terminal this
 runs in. That file says how.
 
+**A blinking screen has no still picture.** The terminal lights a cell
+that carries SGR 5 and puts it out again on a clock of its own, and no
+byte of that phase is on the wire. Two runs minutes apart are lit and
+dark at moments nobody can line up, so a pixel count of one is a coin
+toss: "2 Test of screen features #13" came out 6108 pixels apart while
+both sides were behaving. The walker knows which screens those are,
+because ptterm parses the attribute, and it says so. Such a screen gets
+a burst on each side and the question becomes whether both sides blink,
+which is a fact and not a phase. That answer is recorded in the same
+file as a pixel count, because a gate that is red for a reason
+everybody already knows is a gate everybody learns to ignore.
+
 **How the two sides are lined up.** The walker stops at each screen it
 keeps and waits for this program to say the picture is taken. It names
 the screen by the menu path that reached it, which is the same name in
@@ -55,6 +67,16 @@ regular expression against an item of vttest's main menu, written as
 "N title". `PYMUX_VTTEST_TERMINALS` is a comma separated list of
 terminal names.
 
+**This is not a gate yet, and it should not be made one yet.** The
+chain is proven: two runs of the default item give the same verdicts,
+and the first outing found three faults that no other check here can
+see (Lillecarl/pymux#115, #116 and #117). The judging is not proven.
+Item 2 of the main menu still flaps, and the reason is #117 itself: it
+is a single change at a fixed moment after a screen is drawn, so
+whether a measurement holds it depends on when the measurement starts.
+A check that flaps is worse than no check, so `checks.all` leaves this
+out and a person runs it.
+
 **What a difference means here is what it means there.** A pane reads
 what a program asked for and writes the request again in the form the
 terminal understands, so a pane can draw more than the terminal draws
@@ -64,11 +86,14 @@ both directions.
 """
 import os
 import shlex
+import shutil
 import sys
 import time
 from pathlib import Path
 
 from take_a_picture import (
+    BLINK_FRAMES,
+    BLINK_GAP,
     SEATS,
     TERMINALS,
     _settle,
@@ -117,8 +142,21 @@ WANTED = [
     if name.strip()
 ]
 
-#: The differences that stand, as a file of "terminal identity pixels".
+#: The differences that stand, as a file of "terminal identity verdict".
 RECORDED = Path(__file__).parent / "vttest-picture-differences.txt"
+
+#: What a screen says when nothing is wrong with it. A still screen is
+#: judged in pixels and says "0". A blinking screen is judged on whether
+#: it blinks at all, and says this when the two sides agree, which
+#: covers a screen that blinks on both sides and one that blinks on
+#: neither.
+#:
+#: Both are written down when they are not what a run found, the same
+#: way and in the same file. A gate that is red for a reason everybody
+#: already knows is a gate everybody learns to ignore, so what stands is
+#: recorded and only a change fails (Lillecarl/pymux#46).
+SAME = "0"
+BLINK_AGREE = "blink-agree"
 
 #: How long to wait for the walker to name its next screen, in seconds.
 #: The walk itself has a budget of its own; this covers the walker
@@ -127,6 +165,18 @@ NEXT_SCREEN_TIMEOUT = 120.0
 
 #: How often to look at the fifo while waiting.
 TICK = 0.02
+
+#: How long to let a blinking screen stand still before the burst, and
+#: how far apart to look, in seconds.
+#:
+#: `_settle` insists that a screen stops changing and fails when it does
+#: not. A blinking screen may never stop, so this waits for the same
+#: thing and gives up quietly. It is not optional: without it the first
+#: picture of the burst races the paint. Measured on "4 Test of
+#: double-sized characters #6", where the pane was still scrolling and
+#: the two sides came out 2848 pixels apart instead of 371.
+STILL_BOUND = 4.0
+STILL_GAP = 0.4
 
 
 def walker_script(walker_room: Path, side_room: Path) -> str:
@@ -227,6 +277,9 @@ class Camera:
         self.go = -1
         #: The identity of each screen photographed, in order.
         self.identities: list[str] = []
+        #: How often the screen changed during the burst, for each
+        #: screen the walker said blinks. A still screen is not in it.
+        self.blinked: dict[str, int] = {}
         self.rest = b""
 
     def open(self) -> None:
@@ -266,12 +319,81 @@ class Camera:
         line, self.rest = self.rest.split(b"\n", 1)
         return line.decode("utf-8", "replace")
 
+    @staticmethod
+    def _hold_still(work, take_one, ended, identity, path, log_path) -> None:
+        """
+        Wait for a blinking screen to stop moving, and do not insist.
+
+        `_settle` asks the same question and fails when the answer does
+        not come, which is right for a still screen and wrong for one
+        that blinks: a screen that never stops is what a blink is. This
+        waits for the same silence, gives up quietly, bounds the wait,
+        and leaves the last picture it took at `path`.
+
+        A terminal that has gone is still a failure. A picture of a
+        window that is not there says nothing.
+        """
+        scratch = work / "still.png"
+        take_one(path)
+        deadline = time.monotonic() + STILL_BOUND
+        while time.monotonic() < deadline:
+            time.sleep(STILL_GAP)
+            gone = ended()
+            if gone is not None:
+                raise RuntimeError(
+                    "%r ended while it was drawing (exit %s)\n%s"
+                    % (identity, gone, _tail(log_path))
+                )
+            take_one(scratch)
+            same = differences(path, scratch) == 0
+            shutil.copy(scratch, path)
+            if same:
+                return
+
+    def _burst(self, take_one, ended, identity, number, log_path) -> int:
+        """
+        Photograph a blinking screen several times, and count the changes.
+
+        A blinking screen has no still picture. The terminal lights the
+        cell and puts it out again on a clock of its own, nothing about
+        that phase is on the wire, and the two runs of a comparison
+        happen minutes apart. So one picture of each side compares two
+        coin tosses, which is how "2 Test of screen features #13" came
+        out 6108 pixels apart while both sides were behaving.
+
+        What can be compared is the behaviour. This counts how many of
+        the consecutive pictures differ: zero is a screen that does not
+        blink, and anything above it is one that does. `compare_one`
+        then asks only whether the two sides agree about that.
+        """
+        shots = []
+        for frame in range(BLINK_FRAMES):
+            if frame:
+                time.sleep(BLINK_GAP)
+            gone = ended()
+            if gone is not None:
+                raise RuntimeError(
+                    "%r ended while it was blinking (exit %s)\n%s"
+                    % (identity, gone, _tail(log_path))
+                )
+            shot = self.into / ("%04d.%d.png" % (number, frame))
+            take_one(shot)
+            shots.append(shot)
+        return sum(
+            1
+            for first, second in zip(shots, shots[1:])
+            if differences(first, second) != 0
+        )
+
     def take_them(self, work: Path, log_path: Path):
         """
         The director: photograph each screen until the walker has gone.
 
-        `_settle` is the fence, and it is a placeholder. It takes
-        pictures until two in a row are the same, which says the
+        A screen the walker marks as blinking gets a burst instead of a
+        still picture, and `_burst` says why.
+
+        `_settle` is the fence for the rest, and it is a placeholder. It
+        takes pictures until two in a row are the same, which says the
         terminal has stopped drawing but not that it drew what the
         walker last sent. A real paint fence is `wlr-screencopy` with
         `copy_with_damage`, which returns on the next committed frame;
@@ -297,16 +419,40 @@ class Camera:
                     time.sleep(TICK)
                     continue
 
+                identity, _, mark = identity.partition("\t")
                 self.identities.append(identity)
-                path = self.into / ("%04d.png" % len(self.identities))
-                _settle(
-                    work,
-                    path,
-                    take_one,
-                    ended,
-                    "the screen of %r" % identity,
-                    log_path,
-                )
+                number = len(self.identities)
+                if mark == "blinks":
+                    # The burst first, and it starts at the fence. What
+                    # happens to a screen after it is drawn happens at
+                    # a fixed moment after the draw, so a window that
+                    # starts anywhere else holds it only sometimes:
+                    # measured on "2 Test of screen features", where a
+                    # settle before the burst swallowed the one change
+                    # of Lillecarl/pymux#117 in one run of two.
+                    #
+                    # Then the still picture, taken once everything
+                    # that was going to happen has happened.
+                    self.blinked[identity] = self._burst(
+                        take_one, ended, identity, number, log_path
+                    )
+                    self._hold_still(
+                        work,
+                        take_one,
+                        ended,
+                        identity,
+                        self.into / ("%04d.png" % number),
+                        log_path,
+                    )
+                else:
+                    _settle(
+                        work,
+                        self.into / ("%04d.png" % number),
+                        take_one,
+                        ended,
+                        "the screen of %r" % identity,
+                        log_path,
+                    )
                 os.write(self.go, b"go\n")
                 deadline = time.monotonic() + NEXT_SCREEN_TIMEOUT
 
@@ -318,8 +464,9 @@ def one_side(terminal, seat, side, into_pane, work, room):
     Walk vttest once, in one terminal, and photograph every screen.
 
     `into_pane` says how the walker is started: straight, or as the
-    program of a pymux pane. Gives back the list of identities, in the
-    order they were drawn.
+    program of a pymux pane. Gives back the camera, which holds the
+    identities in the order they were drawn and how often each blinking
+    screen changed.
     """
     side_room = room / side
     side_room.mkdir(parents=True, exist_ok=True)
@@ -356,7 +503,7 @@ def one_side(terminal, seat, side, into_pane, work, room):
             "the %s walk ended with %s\n%s"
             % (side, status.read_text().strip(), every_log(side_room))
         )
-    return camera.identities
+    return camera
 
 
 def compare_one(terminal, seat, work, out):
@@ -393,21 +540,49 @@ def compare_one(terminal, seat, work, out):
     except RuntimeError as reason:
         raise RuntimeError("%s\n%s" % (reason, every_log(room))) from None
 
-    if bare != through:
+    if bare.identities != through.identities:
         raise RuntimeError(
             "the two walks drew different screens, so no picture of one "
             "can be compared with a picture of the other.\n%s"
-            % first_difference(bare, through)
+            % first_difference(bare.identities, through.identities)
         )
 
     differ = room / "differ"
     differ.mkdir(parents=True, exist_ok=True)
     found = {}
-    for number, identity in enumerate(bare, start=1):
+    for number, identity in enumerate(bare.identities, start=1):
+        blinking = identity in bare.blinked
+
+        # The pixels. A blinking screen gets its still picture after the
+        # burst, once everything that was going to happen has happened,
+        # so every screen has one and the name is the same. Without it a
+        # screen that blinks anywhere would be judged on its blinking
+        # alone, and a fault such as Lillecarl/pymux#115, the cursor two
+        # columns to the left, would not be measured at all.
         name = "%04d.png" % number
-        found[identity] = differences(
-            room / "bare" / name, room / "pymux" / name, differ / name
+        pixels = differences(
+            room / "bare" / name,
+            room / "pymux" / name,
+            differ / name,
         )
+        found[identity] = (str(pixels), SAME)
+
+        if not blinking:
+            continue
+
+        # And the behaviour, as a verdict of its own. The number of
+        # blinks is not judged: how often a terminal blinks in two
+        # seconds is the terminal's business. Whether it blinks at all
+        # is not.
+        lit = bool(bare.blinked[identity])
+        panel = bool(through.blinked.get(identity))
+        if lit == panel:
+            verdict = BLINK_AGREE
+        elif lit:
+            verdict = "blinks-bare-only"
+        else:
+            verdict = "blinks-in-a-pane-only"
+        found["%s (blink)" % identity] = (verdict, BLINK_AGREE)
     return found
 
 
@@ -429,9 +604,13 @@ def first_difference(bare, through):
 
 def read_the_recorded():
     """
-    The differences that stand, as {(terminal, identity): pixels}.
+    The differences that stand, as {(terminal, identity): verdict}.
 
-    A comment is a line that starts with a hash and not a hash
+    A verdict is a number of pixels for a still screen, and a word for
+    a blinking one. Both are text here, because both are compared
+    against what a run said and neither is arithmetic.
+
+    A comment is a line that starts with a hash, not a line with a hash
     anywhere. The name of a screen ends in one: "#3" is the third
     screen of that menu item, and the walk numbers them that way so
     that one screen more in an item does not rename every screen after
@@ -445,8 +624,8 @@ def read_the_recorded():
         if not line or line.startswith("#"):
             continue
         terminal, rest = line.split(None, 1)
-        identity, pixels = rest.rsplit(None, 1)
-        standing[(terminal, identity)] = int(pixels)
+        identity, verdict = rest.rsplit(None, 1)
+        standing[(terminal, identity)] = verdict
     return standing
 
 
@@ -455,13 +634,14 @@ def write_the_recorded(path, found):
     lines = [
         "# Every difference between a picture of vttest with pymux in the",
         "# chain and one without it. A line is a terminal, the screen by the",
-        "# menu path that reached it, and how many pixels differ.",
+        "# menu path that reached it, and the verdict: how many pixels differ",
+        "# for a still screen, and a word for a blinking one.",
         "# `tests/photograph_vttest.py` says what this is and how to write it.",
         "",
     ]
-    for (terminal, identity), pixels in sorted(found.items()):
-        if pixels:
-            lines.append("%s %s %d" % (terminal, identity, pixels))
+    for (terminal, identity), (verdict, default) in sorted(found.items()):
+        if verdict != default:
+            lines.append("%s %s %s" % (terminal, identity, verdict))
     path.write_text("\n".join(lines) + "\n")
 
 
@@ -501,14 +681,14 @@ def main():
 
         for terminal in terminals:
             found = compare_one(terminal, seats[terminal.seat], work, out)
-            for identity, pixels in found.items():
-                seen[(terminal.name, identity)] = pixels
+            for identity, verdict in found.items():
+                seen[(terminal.name, identity)] = verdict
             print(
                 "%s: %d screens, %d of them differ"
                 % (
                     terminal.name,
                     len(found),
-                    sum(1 for pixels in found.values() if pixels),
+                    sum(1 for one, default in found.values() if one != default),
                 ),
                 flush=True,
             )
@@ -523,12 +703,12 @@ def main():
     # down. Only the screens this run drew are judged, because the
     # include narrows which ones those are.
     wrong = []
-    for key, found in sorted(seen.items()):
-        expected = standing.get(key, 0)
-        if found != expected:
+    for key, (verdict, default) in sorted(seen.items()):
+        expected = standing.get(key, default)
+        if verdict != expected:
             wrong.append(
-                "%s %s: %d pixels differ, %d were recorded"
-                % (key[0], key[1], found, expected)
+                "%s %s: this run says %s, and %s was recorded"
+                % (key[0], key[1], verdict, expected)
             )
 
     if wrong:
