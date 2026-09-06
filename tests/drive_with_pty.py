@@ -285,23 +285,6 @@ class Failed(AssertionError):
     pass
 
 
-def wait_for(master_fd, pattern, seen, timeout=15.0):
-    """
-    Read from the pty master until `pattern` arrives. `seen` accumulates
-    everything that was ever read. Returns `seen`.
-    """
-    deadline = time.time() + timeout
-    while pattern not in seen:
-        if time.time() > deadline:
-            raise Failed(
-                "Timeout waiting for %r. Got: %r" % (pattern, seen[-2000:])
-            )
-        readable, _, _ = select.select([master_fd], [], [], 0.1)
-        if readable:
-            seen += os.read(master_fd, 65536)
-    return seen
-
-
 def drain(master_fd, seen, seconds=1.0):
     "Read whatever arrives for a while. (For checks that expect nothing.)"
     deadline = time.time() + seconds
@@ -410,8 +393,46 @@ class Attached:
     seen: bytes
     stderr_path = None
 
-    def wait_for(self, pattern, timeout=15.0):
-        self.seen = wait_for(self.master_fd, pattern, self.seen, timeout)
+    #: Where the last wait stopped. A wait starts from there, so a
+    #: check that asks the same question twice waits twice.
+    #:
+    #: Without it the second wait is met by the first answer, which
+    #: arrived minutes earlier, and everything after it runs too early.
+    #: That is how a press and a flags answer came to share one read.
+    #: `passed` counts in `seen`, and `passed_keys` in the stream of
+    #: bytes that the pane read, which is a different stream.
+    passed = 0
+    passed_keys = 0
+
+    def wait_for(self, pattern, timeout=15.0, since=None):
+        """
+        Wait for `pattern`, past everything an earlier wait already took.
+
+        `since` starts the search at a mark instead. Use it when the
+        thing waited for belongs to a moment the check chose, and not to
+        the step before it: a pane forwards its pointer shape once, when
+        it starts, and a check that reaches that step later still wants
+        the one from the start.
+
+        Do not use it to make a wait that fails pass. It can match bytes
+        that an earlier wait already stepped past, which is the bug this
+        mark is here to stop.
+        """
+        deadline = time.time() + timeout
+        while True:
+            start = self.passed if since is None else since
+            found = self.seen.find(pattern, start)
+            if found >= 0:
+                self.passed = max(self.passed, found + len(pattern))
+                return
+            if time.time() > deadline:
+                raise Failed(
+                    "Timeout waiting for %r. Got: %r"
+                    % (pattern, self.seen[start:][:2000])
+                )
+            readable, _, _ = select.select([self.master_fd], [], [], 0.1)
+            if readable:
+                self.seen += os.read(self.master_fd, 65536)
 
     def wait_for_input(self, keys, timeout=15.0):
         """
@@ -420,11 +441,16 @@ class Attached:
         `keys_read` says why this is not `wait_for` with a blob.
         """
         deadline = time.time() + timeout
-        while keys not in keys_read(self.seen):
+        while True:
+            read = keys_read(self.seen)
+            found = read.find(keys, self.passed_keys)
+            if found >= 0:
+                self.passed_keys = found + len(keys)
+                return
             if time.time() > deadline:
                 raise Failed(
                     "Timeout waiting for the pane to read %r. It read: %r"
-                    % (keys, keys_read(self.seen)[-400:])
+                    % (keys, read[self.passed_keys:][:400])
                 )
             readable, _, _ = select.select([self.master_fd], [], [], 0.1)
             if readable:
@@ -505,6 +531,8 @@ class SecondClient(Attached):
             sock_path, self.stderr_path, colorterm
         )
         self.seen = b""
+        self.passed = 0
+        self.passed_keys = 0
 
     def close(self):
         "Leave. The server stays: the first client owns it."
@@ -601,6 +629,8 @@ class Terminal(Attached):
                 self.sock_path, self.stderr_path, colorterm, rows=rows, columns=columns
             )
         self.seen = b""
+        self.passed = 0
+        self.passed_keys = 0
 
     def close(self):
         run_cli(self.sock_path, ["kill-server"])
@@ -732,7 +762,12 @@ def check_kitty_terminal(tmp):
         assert (int(put.group(1)), int(put.group(2))) == (2, 1)
 
         # 5. The colours are 24 bit, because the probe came back.
-        terminal.wait_for(b"\x1b[0;38;2;")
+        #
+        # This asks whether it ever happened and does not wait for the
+        # next one. A wait is for a thing this check made happen; the
+        # depth of the colour is a property of the whole session, and
+        # pymux drew its own status bar in 24 bit before step 1.
+        assert b"\x1b[0;38;2;" in terminal.seen, "the colours are not 24 bit"
 
         # 6. Keys reach the pane in the encoding that the pane asked for.
         terminal.write(b"\x1b[97;5u")
@@ -759,8 +794,10 @@ def check_kitty_terminal(tmp):
         terminal.drain(0.5)
 
         # 7. The clipboard, the notification and the pointer shape of
-        #    the pane reach the terminal.
-        terminal.wait_for(OSC_POINTER.encode())
+        #    the pane reach the terminal. The pane sends all three when
+        #    it starts, so the wait is from the mark that this check
+        #    reads them out of, and not from the step above.
+        terminal.wait_for(OSC_POINTER.encode(), since=mark)
         identifier = check_the_osc_sequences(terminal, terminal.since(mark))
 
         # 8. The user clicks the notification. The answer goes to the
@@ -961,8 +998,11 @@ def check_the_pointer_shape(tmp):
         terminal.write(b"\x1b_Gi=31;OK\x1b\\")
         terminal.write(b"\x1b[6;20;10t")
         terminal.write(b"\x1b[?62;1;6c")
-        terminal.wait_for(b"READY")
+        # The pane sends the pointer shape before it writes "READY", so
+        # the waits are in that order. `PANE_CHILD` is where the order
+        # comes from.
         terminal.wait_for(OSC_POINTER.encode())
+        terminal.wait_for(b"READY")
 
         # A second pane, which asks for no shape.
         child = tmp / "quiet-child.py"
