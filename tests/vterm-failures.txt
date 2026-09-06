@@ -15,4 +15,3 @@
 67screen_dbl_wh.test:25 screen_cell 1,0
 67screen_dbl_wh.test:32 screen_cell 0,0
 67screen_dbl_wh.test:37 screen_cell 23,0
-90vttest_01-movement-3.test:19 ?screen_row 3
