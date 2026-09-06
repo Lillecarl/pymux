@@ -37,7 +37,7 @@ from prompt_toolkit.output import ColorDepth
 # The colour tables of the renderer. A half block is a cell like any
 # other, so it has to land on the same colour that the renderer would
 # choose, and these are where that choice lives.
-from prompt_toolkit.output.vt100 import (
+from prompt_toolkit.output.vt100_colors import (
     BG_ANSI_COLORS,
     FG_ANSI_COLORS,
     _256_colors,
