@@ -141,6 +141,8 @@ class Pane:
         self.fifo = tmp / ("%s-payload.fifo" % name)
         self.writer = -1
         self.fence = 0
+        #: Where the program in the pane writes the size it was given.
+        self.size_file = tmp / ("%s-pane-size.txt" % name)
 
     def start(self) -> None:
         "Bring up pymux with one pane that copies the fifo to the screen."
@@ -152,7 +154,7 @@ class Pane:
         config = self.tmp / ("%s.conf" % self.name)
         config.write_text("set full-screen on\n")
 
-        size = self.tmp / ("%s-pane-size.txt" % self.name)
+        size = self.size_file
 
         self.terminal = Terminal(
             self.tmp,
@@ -169,17 +171,30 @@ class Pane:
         # the whole session: closing it is what ends the forwarder.
         self.writer = os.open(self.fifo, os.O_WRONLY)
 
+        self.size_file = size
+
         self.terminal.wait_for_the_queries()
         self.terminal.drain(0.5)
+        self.wait_for_the_size()
 
-        # A pane of the wrong size makes every assertion a different
-        # question, and the answers still look like answers. So this
-        # waits for the size the suite asks about, and stops rather than
-        # reporting a screen nobody asked about.
+    def wait_for_the_size(self) -> None:
+        """
+        Wait until the program in the pane says it is the size asked for.
+
+        A pane of the wrong size makes every assertion a different
+        question, and the answers still look like answers. So this waits
+        for the size the suite asks about, and stops rather than
+        reporting a screen nobody asked about.
+
+        The forwarder writes the size on every SIGWINCH, which is the
+        one thing that says the resize reached the far end. A client, a
+        server, a pane and a pty stand between the ioctl and the
+        program, and each of them acts when it is next scheduled.
+        """
         found = ""
         deadline = time.monotonic() + SIZE_TIMEOUT
         while time.monotonic() < deadline:
-            found = size.read_text().split()
+            found = self.size_file.read_text().split()
             if [int(one) for one in found] == [self.rows, self.columns]:
                 return
             self.settle()
@@ -212,6 +227,29 @@ class Pane:
         os.write(self.writer, data + b"\x1b]52;c;%s\x07" % token.encode())
 
         self.terminal.wait_for(token.encode(), timeout=timeout)
+        self.settle()
+        return FENCE.sub(b"", self.terminal.since(mark))
+
+    def resize(self, rows: int, columns: int) -> bytes:
+        """
+        Give the terminal of the client a new size, and read the wire.
+
+        A resize has no fence of its own. The payload fence proves the
+        pane consumed bytes, and nothing was written here: the size
+        travels the other way, from the terminal of the client down to
+        the program in the pane. So the size the program reports is the
+        fence, and `wait_for_the_size` waits for it.
+
+        A judge on the other end has to be resized as well, and by the
+        caller: this returns the frame, and what a judge does with a
+        frame of a different shape is the judge's business.
+        """
+        assert self.terminal is not None
+        self.rows, self.columns = rows, columns
+
+        mark = self.terminal.mark()
+        self.terminal.resize(rows, columns)
+        self.wait_for_the_size()
         self.settle()
         return FENCE.sub(b"", self.terminal.since(mark))
 

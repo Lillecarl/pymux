@@ -10,3 +10,14 @@
 # This is what the run saw. To make it what the check expects:
 #     nix build --file . checks.pymux-vterm.run
 #     cp result/failures.txt pymux/tests/vterm-failures.txt
+69screen_reflow.test:14 lineinfo 1
+69screen_reflow.test:38 lineinfo 1
+69screen_reflow.test:43 lineinfo 1
+69screen_reflow.test:54 lineinfo 3
+69screen_reflow.test:62 lineinfo 3
+69screen_reflow.test:70 lineinfo 3
+69screen_reflow.test:74 ?screen_row 0
+69screen_reflow.test:75 ?screen_row 1
+69screen_reflow.test:76 ?screen_row 2
+69screen_reflow.test:78 ?screen_row 3
+69screen_reflow.test:79 cursor

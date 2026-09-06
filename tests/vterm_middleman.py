@@ -196,10 +196,20 @@ class MiddleMan:
             self.feed_the_judge(self.write(bytes.fromhex(line[5:].strip())))
             return True
 
-        # A resize would have to reach the pty of the client, and the
-        # pane would then be a different size from the judge until the
-        # frame that follows. Every file that needs one is left out, so
-        # this says so rather than pretending.
+        if line.startswith("RESIZE "):
+            # Both ends again, and the judge first. libvterm reflows
+            # what it holds when its size changes, and the frame that
+            # pymux draws for the resize then lands on top of that. The
+            # other order would let libvterm reflow our frame.
+            #
+            # The size travels the other way from a payload: from the
+            # terminal of the client down to the program in the pane.
+            # `Pane.resize` waits for the program to say it arrived.
+            rows, columns = (int(one) for one in line[7:].split(","))
+            self.judge.command(line)
+            self.feed_the_judge(self.pane.resize(rows, columns))
+            return True
+
         return False
 
     def assertion(self, line: str) -> str:

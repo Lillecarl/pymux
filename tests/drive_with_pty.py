@@ -462,6 +462,29 @@ class Attached:
     def write(self, data):
         os.write(self.master_fd, data)
 
+    def resize(self, rows, columns):
+        """
+        Give the pty of the client a new size.
+
+        Setting the size on the master is what a terminal emulator does
+        when its window changes. Everything after that is pymux's own:
+        the client hears SIGWINCH, tells the server, the server resizes
+        the pane, and the pane signals the program in it.
+
+        The signal is sent here and not by the kernel. The kernel sends
+        SIGWINCH to the foreground process group of the pty, and this
+        pty has no session: `run_on_a_pty` gives the client the slave
+        as its three streams and never makes it a controlling terminal,
+        because nothing else in these checks needs one. So there is no
+        foreground group to signal, and this does what the kernel would
+        have done.
+        """
+        fcntl.ioctl(
+            self.master_fd, termios.TIOCSWINSZ,
+            struct.pack("HHHH", rows, columns, 0, 0),
+        )
+        self.client.send_signal(signal.SIGWINCH)
+
     def wait_for_the_queries(self):
         """
         Wait until the client asked everything, up to the fence.

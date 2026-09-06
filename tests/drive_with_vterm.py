@@ -26,13 +26,28 @@ can run here, and it is a different cut from the one `ptterm` makes:
   `?pen` asks what style the *next* character takes, and nothing has
   been drawn with it, so nothing is on the wire to read it from.
   `?lineinfo` and the mode, margin and tab stop files are the same.
-- A file that resizes cannot run here yet. A resize has to reach the pty
-  of the client, and the pane and the judge are different sizes until
-  the frame after it.
+A file that resizes does run. The size travels the other way from a
+payload: from the terminal of the client down to the program in the
+pane, so the payload fence proves nothing about it. The program in the
+pane reports the size it was given on every SIGWINCH, and that report
+is the fence. `middleman.py` says the rest.
 
-13 files are left, and they ask 152 questions about the screen and the
-cursor. Every one of the answers agrees, so `vterm-failures.txt` holds
-nothing but its header.
+14 files are left, and they ask 204 questions about the screen and the
+cursor. 193 of the answers agree.
+
+## What the 11 that differ are
+
+Two groups, and both are `69screen_reflow.test`.
+
+**`?lineinfo` cannot be answered here** (6). It asks whether a line
+continues the one above, and a wire does not carry that: the renderer
+puts each row where it goes and never wraps. Every other file that asks
+it is left out by name, and this one is not, because 46 of its 52
+questions are about the screen.
+
+**Our reflow differs from libvterm's on a wrapped shell prompt** (5).
+`checks.ptterm-vterm` records the same five against our model, so this
+is not something the wire loses. It is one deviation, seen twice.
 
 ## What it has already found and fixed
 
@@ -75,6 +90,15 @@ libvterm saw a flat line. The attribute belongs to a line and not to a
 cell, so prompt_toolkit's `Screen` carries one per row and the renderer
 diffs it against the frame before. A pane emits one only where pymux
 says it holds whole rows of the terminal. Lillecarl/pymux#65.
+
+**A resize left the cursor where the last frame put it** (2
+assertions). A terminal that changes size moves the cursor itself: it
+reflows the lines it had wrapped and carries the cursor with them, or
+it clamps the cursor to the new width. prompt_toolkit walked to the top
+left with a relative move, so the walk landed elsewhere, the erase
+after it kept a piece of the old screen, and the redraw was written
+beside that piece. A full screen application owns the screen, so it
+names the position now.
 
 Run it:
 
@@ -147,12 +171,6 @@ NOT_OURS = (
         "been drawn with it yet; \"?lineinfo\" is whether a line "
         "continues the one above. Both are real questions, and "
         "checks.ptterm-vterm is where they are asked.",
-    ),
-    (
-        r"^69screen_reflow\.test$",
-        "the file resizes. A resize has to reach the pty of the client, "
-        "and the pane and the judge are different sizes until the frame "
-        "after it. Worth serving later; it needs a fence of its own.",
     ),
 )
 
