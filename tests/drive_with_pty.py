@@ -69,26 +69,20 @@ REPO_ROOT = Path(__file__).parent.parent
 #: "socket" or "integrated". See the docstring of this file.
 ROUTE = os.environ.get("PYMUX_ROUTE", "socket")
 
-# "\x1b[97;5u" — kitty ctrl+a — as the pane child reports it (hex).
-CTRL_A_KITTY_HEX = b"<<1b5b39373b3575>>"
+# "\x1b[97;5u" — kitty ctrl+a — as the pane reads it.
+CTRL_A_KITTY = b"\x1b[97;5u"
 
-# The same key when the release is made up rather than reported: the
-# press and the release arrive in one read, so the pane echoes both.
-CTRL_A_KITTY_PRESS_AND_RELEASE = b"<<1b5b39373b35751b5b39373b353a3375>>"
+# The same key coming back up.
+CTRL_A_KITTY_RELEASE = b"\x1b[97;5:3u"
 
 # A key that came back up, as a terminal that speaks the protocol
-# sends it, and as the pane child reports it. Only a pane that asked
-# for the event types of a key may see one.
+# sends it. Only a pane that asked for the event types of a key may
+# see one.
 KEY_RELEASE = b"\x1b[97;1:3u"
 # What the pane reads. The form is the one that kitty writes: a field
 # that holds its default stays empty, so the modifiers of a release
 # with none are an empty field and not the value one.
-KEY_RELEASE_HEX = b"<<%s>>" % b"\x1b[97;:3u".hex().encode("ascii")
-
-# The release that pymux makes up for a terminal that sends none. The
-# check looks for the hex alone, because the press of the key may
-# share a read with it or may not.
-MADE_UP_RELEASE_HEX = b"\x1b[97;:3u".hex().encode("ascii")
+KEY_RELEASE_READ = b"\x1b[97;:3u"
 
 # The pane asks "CSI ? u" when it reads a "Q", and echoes the answer.
 # The answer holds the flags that the pane really gets, so it depends
@@ -97,8 +91,28 @@ ASK_THE_FLAGS = b"Q"
 
 
 def flags_answer(flags: int) -> bytes:
-    "The answer of the pane to the flags query, as the pane echoes it."
-    return b"<<%s>>" % ("\x1b[?%du" % flags).encode().hex().encode("ascii")
+    "The answer of the pane to the flags query, as the pane reads it back."
+    return ("\x1b[?%du" % flags).encode()
+
+
+def keys_read(data: bytes) -> bytes:
+    """
+    The bytes that the pane read, out of the blobs that it echoes.
+
+    The pane child echoes one blob for each `read1`, so where one blob
+    ends and the next begins is whatever the reads happened to be. Two
+    keys that arrive together land in one blob, and the same two keys
+    land in two when they do not.
+
+    A check about what a pane read may not depend on that. It did:
+    the whole check flipped from green to red on a comment in another
+    file, because the store path moved and the reads fell differently.
+    So the blobs are joined and the check reads the stream inside them.
+    """
+    return b"".join(
+        bytes.fromhex(blob.decode("ascii"))
+        for blob in re.findall(rb"<<([0-9a-f]*)>>", data)
+    )
 
 # The kitty image that the pane child transmits: 2x2 pixels, RGB. It
 # is placed over three columns and two rows.
@@ -398,6 +412,23 @@ class Attached:
 
     def wait_for(self, pattern, timeout=15.0):
         self.seen = wait_for(self.master_fd, pattern, self.seen, timeout)
+
+    def wait_for_input(self, keys, timeout=15.0):
+        """
+        Wait until the pane has read `keys`, however its reads fell.
+
+        `keys_read` says why this is not `wait_for` with a blob.
+        """
+        deadline = time.time() + timeout
+        while keys not in keys_read(self.seen):
+            if time.time() > deadline:
+                raise Failed(
+                    "Timeout waiting for the pane to read %r. It read: %r"
+                    % (keys, keys_read(self.seen)[-400:])
+                )
+            readable, _, _ = select.select([self.master_fd], [], [], 0.1)
+            if readable:
+                self.seen += os.read(self.master_fd, 65536)
 
     def drain(self, seconds=1.0):
         self.seen = drain(self.master_fd, self.seen, seconds)
@@ -705,21 +736,21 @@ def check_kitty_terminal(tmp):
 
         # 6. Keys reach the pane in the encoding that the pane asked for.
         terminal.write(b"\x1b[97;5u")
-        terminal.wait_for(CTRL_A_KITTY_HEX)
+        terminal.wait_for_input(CTRL_A_KITTY)
         terminal.write(b"\x01")  # The legacy encoding is translated too.
-        terminal.wait_for(CTRL_A_KITTY_HEX)
+        terminal.wait_for_input(CTRL_A_KITTY)
 
         #    A key that came back up reaches the pane as well. Only a
         #    terminal that speaks the protocol sends one, and only a
         #    pane that asked for the event types may read it.
         terminal.write(KEY_RELEASE)
-        terminal.wait_for(KEY_RELEASE_HEX)
+        terminal.wait_for_input(KEY_RELEASE_READ)
 
         #    And the pane hears the truth about its keyboard: this
         #    terminal serves every flag, so the pane keeps both of the
         #    flags that it pushed.
         terminal.write(ASK_THE_FLAGS)
-        terminal.wait_for(flags_answer(3))
+        terminal.wait_for_input(flags_answer(3))
 
         # Let the pane finish reading. One read of the pane returns
         # whatever has arrived, so a write that comes too soon lands in
@@ -852,12 +883,12 @@ def check_plain_terminal(tmp):
         # This terminal reports no key release, so pymux makes one up
         # and the pane keeps both flags.
         terminal.write(ASK_THE_FLAGS)
-        terminal.wait_for(flags_answer(3))
+        terminal.wait_for_input(flags_answer(3))
 
         # And a key really comes up: one press of "a" reaches the pane
         # as the character and the release of that key.
         terminal.write(b"a")
-        terminal.wait_for(MADE_UP_RELEASE_HEX)
+        terminal.wait_for_input(KEY_RELEASE_READ)
     except BaseException:
         terminal.report()
         raise
@@ -1133,12 +1164,12 @@ def check_two_terminals_of_different_abilities(tmp):
 
         # The pane pushed flags 1 and 2, and this terminal serves both.
         terminal.write(ASK_THE_FLAGS)
-        terminal.wait_for(flags_answer(3))
+        terminal.wait_for_input(flags_answer(3))
 
         # One client, and it reports a release itself. The pane hears
         # the press on its own.
         terminal.write(b"\x01")
-        terminal.wait_for(CTRL_A_KITTY_HEX)
+        terminal.wait_for_input(CTRL_A_KITTY)
         terminal.drain(1.0)
 
         # A second terminal joins. It answers the device attributes and
@@ -1167,7 +1198,7 @@ def check_two_terminals_of_different_abilities(tmp):
         # The pane keeps both flags. The client that cannot report a
         # release has one made for it, so nothing was taken away.
         terminal.write(ASK_THE_FLAGS)
-        terminal.wait_for(flags_answer(3))
+        terminal.wait_for_input(flags_answer(3))
 
         # Both clients still work: a key from either reaches the pane,
         # in the encoding the pane asked for.
@@ -1178,9 +1209,9 @@ def check_two_terminals_of_different_abilities(tmp):
         # pane reads every key going down and coming up; only the time
         # between them is lost.
         terminal.write(b"\x01")
-        terminal.wait_for(CTRL_A_KITTY_PRESS_AND_RELEASE)
+        terminal.wait_for_input(CTRL_A_KITTY + CTRL_A_KITTY_RELEASE)
         second.write(b"\x01")
-        second.wait_for(CTRL_A_KITTY_PRESS_AND_RELEASE)
+        second.wait_for_input(CTRL_A_KITTY + CTRL_A_KITTY_RELEASE)
 
         # The second client leaves. The made up release goes with the
         # client that needed it: the pane hears one press again.
@@ -1189,8 +1220,8 @@ def check_two_terminals_of_different_abilities(tmp):
         terminal.drain(1.0)
         mark = terminal.mark()
         terminal.write(b"\x01")
-        terminal.wait_for(CTRL_A_KITTY_HEX)
-        assert CTRL_A_KITTY_PRESS_AND_RELEASE not in terminal.since(mark), (
+        terminal.wait_for_input(CTRL_A_KITTY)
+        assert CTRL_A_KITTY_RELEASE not in keys_read(terminal.since(mark)), (
             "the release is still made up after the plain client left"
         )
 
