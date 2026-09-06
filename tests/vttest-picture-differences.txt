@@ -1,0 +1,40 @@
+# Every difference between a picture of vttest with pymux in the chain
+# and one without it. `tests/photograph_vttest.py` says what this is and
+# how to write it.
+#
+# A line is a terminal, the screen by the menu path that reached it, and
+# how many pixels differ. The path is what `paths.txt` names, so a
+# picture and a line here can always be lined up.
+#
+# Not every difference is a fault. A pane reads what a program asked for
+# and writes the request again in a form the terminal of the user
+# understands, so a pane can draw more than that terminal draws on its
+# own, and it cannot do some of the things a terminal does to itself.
+#
+# A count is a number of pixels, so it belongs to the font, the size and
+# the geometry that `take_a_picture.py` asks each terminal for. Change
+# any of them and every count has to be recorded again.
+
+# DECCOLM. vttest asks for 132 columns, and xterm answers by making its
+# window wider: the bare picture is 132 cells across and 1280 pixels
+# wide. A pane cannot do that. It has the cells the user gave it, and
+# nothing in the protocol lets a program in a pane resize the window of
+# the person running it, so the pymux picture stays 80 cells and 800
+# pixels and the rows are cut off at the edge.
+#
+# That is not a fault of pymux and there is nothing to fix. It is what a
+# multiplexer is: the terminal belongs to the user.
+#
+# The two counts are equal because the two screens differ in the same
+# way. `compare` measures the part the two pictures share, so the number
+# is the text that runs past column 80 and not the width itself.
+xterm 4 Test of double-sized characters #3 1594
+xterm 4 Test of double-sized characters #4 1594
+
+# The cursor, two columns to the left of where it belongs, and only on
+# this screen. xterm puts it after "Push <RETURN>", which is column 52.
+# ptterm's model says column 52 on both sides, so the pane holds the
+# right answer and what pymux draws is two cells off.
+#
+# This one is a fault. Lillecarl/pymux#115.
+xterm 4 Test of double-sized characters #6 371

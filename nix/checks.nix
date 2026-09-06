@@ -25,6 +25,7 @@
   foot,
   kitty,
   mesa,
+  vttest,
   grim,
   imagemagick,
   makeFontsConf,
@@ -53,6 +54,13 @@ let
   # holds the Rust crate that both the panel and that judge are built
   # from.
   inherit (ptterm) alacrittySuite judges;
+
+  # The walker that drives vttest. vttest is interactive: it draws a screen
+  # and waits for a key, so nothing outside it can tell a screen that is
+  # finished from one that is still arriving. The walker can, because it
+  # owns the pty vttest runs on. It belongs to ptterm, which is what it
+  # models, and here it is the program that gets photographed.
+  inherit (ptterm) vttestWalker;
 
   pythonWithTests = python.withPackages (ps: [
     ptterm
@@ -118,11 +126,63 @@ let
   # `PYMUX_PICTURES=underlines nix build --file . checks.pymux-pictures`.
   pictureSelection = builtins.getEnv "PYMUX_PICTURES";
 
+  # Which item of vttest's main menu gets photographed, and in which
+  # terminals, for instance
+  # `PYMUX_VTTEST_INCLUDE='^9 ' nix build --file . checks.pymux-vttest-pictures.run`.
+  # The whole of vttest is five hundred screens and each one is
+  # photographed twice, so the default is one item and one terminal.
+  vttestInclude =
+    let
+      value = builtins.getEnv "PYMUX_VTTEST_INCLUDE";
+    in
+    if value == "" then "^4 " else value;
+
+  # xterm is the one, and `tests/photograph_vttest.py` says why: it is the
+  # only one of the three that draws the DEC line attributes at all.
+  vttestTerminals =
+    let
+      value = builtins.getEnv "PYMUX_VTTEST_TERMINALS";
+    in
+    if value == "" then "xterm" else value;
+
   # A terminal emulator draws with the fonts that fontconfig finds, and the
   # build sandbox has no /etc/fonts at all. Without this every terminal dies
   # at startup, or draws with whatever it falls back to, which is not the
   # same twice.
   fontsConf = makeFontsConf { fontDirectories = [ dejavu_fonts ]; };
+
+  # What every seat needs: a display server, a terminal emulator and the
+  # tools that find a window and photograph it. Two checks take pictures,
+  # and both need all of it.
+  seatInputs = [
+    # The X seat: a server, a terminal that speaks nothing else, and the
+    # tools that find a window and take its picture.
+    xorg-server
+    xterm
+    xdotool
+    # The Wayland seat: a kiosk compositor that gives its one window the
+    # whole output, a terminal that speaks nothing else, and the tool that
+    # takes a picture of that output.
+    cage
+    foot
+    # kitty is the terminal the faults get reported from, so it is the one
+    # to measure. It draws with OpenGL, which llvmpipe serves without a
+    # graphics card.
+    kitty
+    grim
+    imagemagick
+  ];
+
+  # kitty draws with OpenGL and a build sandbox has no graphics card, so
+  # llvmpipe draws instead. It has to be told where the driver and the EGL
+  # description are: nothing here reads /run/opengl-driver.
+  seatSetup = ''
+    export FONTCONFIG_FILE=${fontsConf}
+    export LIBGL_ALWAYS_SOFTWARE=1
+    export LIBGL_DRIVERS_PATH=${mesa}/lib/dri
+    export __EGL_VENDOR_LIBRARY_DIRS=${mesa}/share/glvnd/egl_vendor.d
+    export LD_LIBRARY_PATH=${mesa}/lib
+  '';
 
   # Nothing of a run reaches the machine: the sockets, the temporary
   # directories and the processes all live and die inside the build sandbox.
@@ -188,40 +248,38 @@ in
   # `result/<terminal>/<fixture>/{bare,pymux,difference}.png`.
   pictures = runInSandbox {
     name = "pymux-pictures";
-    inputs = [
-      # The X seat: a server, a terminal that speaks nothing else,
-      # and the tools that find a window and take its picture.
-      xorg-server
-      xterm
-      xdotool
-      # The Wayland seat: a kiosk compositor that gives its one
-      # window the whole output, a terminal that speaks nothing
-      # else, and the tool that takes a picture of that output.
-      cage
-      foot
-      # kitty is the terminal the faults get reported from, so it is
-      # the one to measure. It draws with OpenGL, which llvmpipe serves
-      # without a graphics card.
-      kitty
-      grim
-      imagemagick
-    ];
+    inputs = seatInputs;
     env = { inherit pictureSelection; };
-  } ''
-    export FONTCONFIG_FILE=${fontsConf}
-
-    # kitty draws with OpenGL and a build sandbox has no graphics card,
-    # so llvmpipe draws instead. It has to be told where the driver and
-    # the EGL description are: nothing here reads /run/opengl-driver.
-    export LIBGL_ALWAYS_SOFTWARE=1
-    export LIBGL_DRIVERS_PATH=${mesa}/lib/dri
-    export __EGL_VENDOR_LIBRARY_DIRS=${mesa}/share/glvnd/egl_vendor.d
-    export LD_LIBRARY_PATH=${mesa}/lib
-
+  } (seatSetup + ''
     export PYMUX_PICTURES="$pictureSelection"
     export PYMUX_PICTURES_OUT="$out"
     python tests/take_a_picture.py
-  '';
+  '');
+
+  # The same picture, of vttest.
+  #
+  # `pictures` above photographs four fixtures that a person wrote by
+  # hand. vttest holds five hundred screens, and they are the awkward
+  # ones: double sized rows, national character sets, the reports of a
+  # VT420. It is interactive, so a walker drives it and says when each
+  # screen is finished; `ptterm/tests/drive_with_vttest.py` is that
+  # walker and `tests/photograph_vttest.py` is the harness around it.
+  #
+  # It is not a gate. One item of the main menu, in one terminal, is
+  # what it does by default, because the whole of vttest twice over is
+  # twenty minutes for each terminal.
+  vttestPictures = runInSandbox {
+    name = "pymux-vttest-pictures";
+    inputs = seatInputs ++ [ vttest ];
+    env = { inherit vttestInclude vttestTerminals; };
+  } (seatSetup + ''
+    export PYMUX_VTTEST=${vttest}/bin/vttest
+    export PYMUX_VTTEST_WALKER=${vttestWalker}
+    export PYMUX_VTTEST_INCLUDE="$vttestInclude"
+    export PYMUX_VTTEST_TERMINALS="$vttestTerminals"
+    export PYMUX_VTTEST_OUT="$out"
+    python tests/photograph_vttest.py
+  '');
 
   # The conformance suite, run in a pane. It is not a pass or fail of its
   # own: most of it fails, and each failure names a real difference from
