@@ -811,9 +811,17 @@ def send_keys(pymux: "Pymux", variables: _VariablesDict) -> None:
             pane.process.write_input(key)
             continue
 
-        # Translate prompt_toolkit key to VT100 key.
+        # Translate prompt_toolkit key to VT100 key. The name of a key
+        # is the toolkit's and the bytes are the protocol, so the
+        # translation belongs here and not to the process: a `Process`
+        # takes bytes and knows nothing about a key.
+        # Lillecarl/pymux#85.
         for k in keys_sequence:
-            pane.process.write_key(k)
+            data = prompt_toolkit_key_to_vt100_key(
+                k, application_mode=pane.process.screen.in_application_mode
+            )
+            if data:
+                pane.process.write_key_data(data)
 
 
 @cmd("copy-mode", options="[-u]")
