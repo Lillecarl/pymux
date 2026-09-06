@@ -137,7 +137,13 @@ def walker_script(walker_room: Path, side_room: Path) -> str:
     the other runs it as the program of a pymux pane, and that is the
     only difference between the two pictures.
 
-    Three things matter here.
+    Four things matter here.
+
+    `stty -echo` is inside this script and not around it, because the
+    pty it has to reach is the one the walker really reads. On the
+    pymux side that is the pane's pty, which the terminal's own `stty`
+    never touches. Every query vttest sends is answered into it, and a
+    tty that echoes puts the answer on the pane's screen as text.
 
     The environment is exported in this script and not inherited from
     this process. On the pymux side a pane is a child of a server that
@@ -168,7 +174,8 @@ def walker_script(walker_room: Path, side_room: Path) -> str:
         for name, value in settings.items()
     )
     return (
-        exports
+        "stty -echo\n"
+        + exports
         + "python3 %s 2>%s\n"
         % (shlex.quote(WALKER), shlex.quote(str(side_room / "walker.log")))
         + "echo $? > %s\n" % shlex.quote(str(side_room / "status"))
@@ -239,6 +246,13 @@ class Camera:
                 os.close(handle)
         self.ready = self.go = -1
 
+    def written(self) -> bool:
+        "Whether the walker's script has written its exit status yet."
+        try:
+            return bool(self.status.read_text().strip())
+        except OSError:
+            return False
+
     def _next_identity(self):
         "The next line the walker wrote, or None if it has written none."
         while b"\n" not in self.rest:
@@ -269,7 +283,11 @@ class Camera:
             while True:
                 identity = self._next_identity()
                 if identity is None:
-                    if self.status.exists() or ended() is not None:
+                    # The status has to hold something. The shell
+                    # creates the file and then writes the number, and
+                    # over five hundred screens the gap between those
+                    # two is a race that turns up.
+                    if self.written() or ended() is not None:
                         return self.identities
                     if time.monotonic() > deadline:
                         raise RuntimeError(

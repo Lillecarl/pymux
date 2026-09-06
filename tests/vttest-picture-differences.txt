@@ -15,19 +15,26 @@
 # the geometry that `take_a_picture.py` asks each terminal for. Change
 # any of them and every count has to be recorded again.
 
+# Two things at once on these two screens, and only one of them is a
+# fault.
+#
 # DECCOLM. vttest asks for 132 columns, and xterm answers by making its
 # window wider: the bare picture is 132 cells across and 1280 pixels
 # wide. A pane cannot do that. It has the cells the user gave it, and
 # nothing in the protocol lets a program in a pane resize the window of
 # the person running it, so the pymux picture stays 80 cells and 800
-# pixels and the rows are cut off at the edge.
+# pixels. That is not a fault and there is nothing to fix: a
+# multiplexer exists because the terminal belongs to the user.
 #
-# That is not a fault of pymux and there is nothing to fix. It is what a
-# multiplexer is: the terminal belongs to the user.
+# `compare` measures the 800 pixels the two pictures share, so the width
+# itself is not in the count. What is in it is the last cell of each
+# double sized row, which holds the wrong letter: Lillecarl/pymux#116.
+# A pane writes every cell of such a row, the cursor stops at the right
+# margin, and the last character of the row overwrites the cell that is
+# there. Both rows end in "line", so both show an "e".
 #
-# The two counts are equal because the two screens differ in the same
-# way. `compare` measures the part the two pictures share, so the number
-# is the text that runs past column 80 and not the width itself.
+# So these two counts fall when #116 is fixed, and they do not fall to
+# zero. Record them again then.
 xterm 4 Test of double-sized characters #3 1594
 xterm 4 Test of double-sized characters #4 1594
 
