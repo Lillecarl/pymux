@@ -35,7 +35,7 @@ of bytes each. Nothing else here runs a program of that size.
 
 ## What the 13 that differ are
 
-Six groups, and each one is a question about the wire and not about
+Seven groups, and each one is a question about the wire and not about
 the recording.
 
 **A colour the program named is not the colour we emit** (3 tests:
@@ -77,8 +77,18 @@ shifted ten rows, and nothing else differs: ptterm draws it cell for
 cell the way kitty and WezTerm do. Recorded and not fixed:
 `ptterm/tests/DEVIATIONS.md`, entry 17, and Lillecarl/pymux#34.
 
-**A cell holds something else** (5 tests: `decaln_reset`,
-`deccolm_reset`, `delete_chars_reset`, `selective_erasure`,
+**A delete leaves the reverse video behind** (1 test:
+`delete_chars_reset`). Twelve cells at the end of one row. The shell
+sets red, bold, reverse, underline and struck out, never puts it back,
+and then edits its line with "CSI 1 P". Those blanks take the style an
+erase leaves, and reverse video paints them with the foreground.
+ptterm, kitty and WezTerm paint the cell; Alacritty, Ghostty, libvterm
+and xterm do not. A program that reverses and then erases means the
+block to be seen, so this is recorded and not fixed:
+`ptterm/tests/DEVIATIONS.md`, entry 21.
+
+**A cell holds something else** (4 tests: `decaln_reset`,
+`deccolm_reset`, `selective_erasure`,
 `wrapline_alt_toggle`). Each one
 is its own question, and some are already answered elsewhere:
 `deccolm_reset` needs a 132 column page, which a pane cannot take
