@@ -54,8 +54,13 @@ recorded and not fixed: `ptterm/tests/DEVIATIONS.md`, "Where Alacritty
 looks wrong". A bare `CSI 4:3 m` does reach the wire as `SGR 4:3`.
 
 **A tab is a space** (2 tests: `tab_rendering`, `vttest_tab_clear_set`).
-Alacritty keeps the tab character in the cell it moved from. Nobody has
-asked the panel yet whether that is a rule or Alacritty's own model.
+Alacritty writes a tab character into the cell the cursor moved from,
+and 24 cells differ by that alone. The panel says it is Alacritty's own
+model: kitty, WezTerm, libvterm, Ghostty and xterm.js all leave the
+cells a tab steps over as they were. Five to one, so this is recorded
+and not fixed. Alacritty keeps the character for its own selection, and
+a pane does not select. `ptterm/tests/DEVIATIONS.md`, "Where Alacritty
+looks wrong".
 
 **A cell holds something else** (9 tests: `decaln_reset`,
 `deccolm_reset`, `delete_lines`, `delete_chars_reset`, `saved_cursor`,
