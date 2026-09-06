@@ -212,7 +212,7 @@ def test_the_placeholders_do_not_reach_the_terminal_as_text():
     screen, stream = make_screen()
     transmit_virtual(stream)
     stream.feed(cells(5, 0, 4))
-    line = screen.pt_screen.data_buffer[0]
+    line = screen.page.data_buffer[0]
     assert line[0].char.startswith(PLACEHOLDER)
     assert _visible_char(line[0].char) == " "
 

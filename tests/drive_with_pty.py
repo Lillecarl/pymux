@@ -320,7 +320,7 @@ def read_the_screen(seen, rows=24, columns=80):
     screen = BetterScreen(rows, columns, write_process_input=lambda answer: None)
     BetterStream(screen).feed(seen.decode("utf-8", "replace"))
 
-    buffer = screen.pt_screen.data_buffer
+    buffer = screen.page.data_buffer
     offset = screen.line_offset
     lines = []
     for y in range(offset, offset + rows):

@@ -786,7 +786,12 @@ def send_keys(pymux: "Pymux", variables: _VariablesDict) -> None:
 
     if variables["-R"]:
         # Reset the terminal of this pane. (Like `reset`.)
-        pane.process.screen.pt_screen.reset()
+        #
+        # `screen.reset()` makes a new page, so the cells go with it.
+        # There was a call to `pt_screen.reset()` before this one, and
+        # prompt_toolkit's `Screen` has no such method, so `send-keys
+        # -R` raised `AttributeError` and reset nothing.
+        # Lillecarl/pymux#118.
         pane.process.screen.reset()
 
     keys = variables["<keys>"]
@@ -1142,8 +1147,8 @@ def capture_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
 
     process = pane.process
     screen = process.screen
-    pt_screen = screen.pt_screen
-    data_buffer = pt_screen.data_buffer
+    page = screen.page
+    data_buffer = page.data_buffer
 
     lines_count = screen.lines
 
