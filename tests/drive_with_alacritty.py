@@ -33,7 +33,7 @@ measures our model against theirs. This measures our wire against a
 recording of a real program: vim, tmux, fish and zsh, tens of thousands
 of bytes each. Nothing else here runs a program of that size.
 
-## What the 15 that differ are
+## What the 13 that differ are
 
 Six groups, and each one is a question about the wire and not about
 the recording.
@@ -77,9 +77,9 @@ shifted ten rows, and nothing else differs: ptterm draws it cell for
 cell the way kitty and WezTerm do. Recorded and not fixed:
 `ptterm/tests/DEVIATIONS.md`, entry 17, and Lillecarl/pymux#34.
 
-**A cell holds something else** (7 tests: `decaln_reset`,
-`deccolm_reset`, `delete_lines`, `delete_chars_reset`,
-`scroll_up_reset`, `selective_erasure`, `wrapline_alt_toggle`). Each one
+**A cell holds something else** (5 tests: `decaln_reset`,
+`deccolm_reset`, `delete_chars_reset`, `selective_erasure`,
+`wrapline_alt_toggle`). Each one
 is its own question, and some are already answered elsewhere:
 `deccolm_reset` needs a 132 column page, which a pane cannot take
 (`ptterm/tests/DEVIATIONS.md`), and `selective_erasure` is DECSCA,
@@ -113,6 +113,16 @@ draws the shade. Alacritty, WezTerm, libvterm, Ghostty and xterm.js
 draw the newline symbol and kitty alone keeps the shade, so five to
 one. Three of the four cells of this test went away with it.
 `ptterm/tests/DEVIATIONS.md`, "Fixed by the comparison".
+
+**A big delete brought the history back onto the screen** (2 tests:
+`delete_lines`, `scroll_up_reset`). An erase with no background drops
+the row it clears, so "CSI 1000 M" near the top of a full screen took
+every row below it out of the buffer. The widget told prompt_toolkit
+how many rows the buffer held, prompt_toolkit read a document shorter
+than the window, and it scrolled back to the top rather than past the
+end. Four lines that had left the screen came back, and the whole
+picture sat four rows too low. The widget now reports what the screen
+occupies. Lillecarl/pymux#84.
 
 **A linefeed at the bottom of the screen brought a line in with no
 background** (1 test: `vim_large_window_scroll`). vim writes a line,

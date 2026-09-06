@@ -12,12 +12,10 @@
 decaln_reset
 deccolm_reset
 delete_chars_reset
-delete_lines
 indexed_256_colors
 origin_goto
 saved_cursor
 saved_cursor_alt
-scroll_up_reset
 selective_erasure
 sgr
 tab_rendering
