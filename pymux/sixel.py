@@ -13,6 +13,8 @@ pixels that are more transparent than half undrawn, which the sixel
 """
 from typing import Dict, List, Sequence, Tuple
 
+from pyte.images import PixelFormat
+
 __all__ = [
     "encode_sixel",
     "scale_rgba",
@@ -49,10 +51,10 @@ def to_rgba(
     if expected <= 0 or expected > MAX_PIXELS:
         return None
 
-    if image_format == 32:
+    if image_format == PixelFormat.RGBA:
         return data if len(data) >= expected * 4 else None
 
-    if image_format == 24:
+    if image_format == PixelFormat.RGB:
         if len(data) < expected * 3:
             return None
         out = bytearray(expected * 4)
@@ -63,7 +65,7 @@ def to_rgba(
             out[target + 3] = 255
         return bytes(out)
 
-    if image_format == 100:
+    if image_format == PixelFormat.PNG:
         try:
             from pyte.png import decode_png
         except ImportError:

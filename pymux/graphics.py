@@ -35,7 +35,8 @@ import zlib
 from typing import Callable, Dict, Iterable, List, NamedTuple, Tuple
 
 from prompt_toolkit.output import ColorDepth
-from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
+from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH, PixelFormat
+from pyte.terminfo import DeviceExtension
 
 from .blocks import average_rgba, blocks_for, rows_for_cells
 from .log import logger
@@ -56,10 +57,15 @@ QUERY_IMAGE_ID = 31
 # Support query: transmit a one pixel RGB image and ask about it. A
 # terminal that speaks the protocol answers "ESC _ G i=31;OK ESC \".
 # One that does not answers nothing. (The sequence kitty documents.)
-QUERY_SEQUENCE = "\x1b_Gi=%i,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\" % QUERY_IMAGE_ID
+# Three bytes of payload, because the format is three bytes a pixel.
+QUERY_SEQUENCE = "\x1b_Gi=%i,s=1,v=1,a=q,t=d,f=%i;AAAA\x1b\\" % (
+    QUERY_IMAGE_ID,
+    PixelFormat.RGB,
+)
 
-# Ask the outer terminal for the size of one cell in pixels. The reply
-# is "CSI 6 ; height ; width t". Sixel needs it: the pixels of a sixel
+# Ask the outer terminal for the size of one cell in pixels. "CSI 16 t"
+# is xterm's window operation for it, which `pyte.parameters.WindowOp`
+# calls REPORT_CELL_SIZE_PIXELS. Sixel needs it: the pixels of a sixel
 # image are the cells, so the image has to match the cell size.
 CELL_SIZE_QUERY = "\x1b[16t"
 
@@ -94,11 +100,15 @@ _QUERY_REPLY_RE = re.compile(
 )
 
 
-# Reply of the cell size query.
+# Reply of the cell size query: "CSI 6 ; height ; width t". The 6 is
+# xterm's answer code for the 16 that was asked; it is not a
+# `WindowOp`, which numbers the questions.
 _CELL_SIZE_REPLY_RE = re.compile(r"^\x1b\[6;(\d+);(\d+)t$")
 
-# Primary device attributes reply. Attribute 4 means sixel.
+# Primary device attributes reply. One of the numbers it lists is the
+# terminal saying it draws sixels.
 _DEVICE_ATTRIBUTES_RE = re.compile(r"^\x1b\[\?([\d;]*)c$")
+_SIXEL_ATTRIBUTE = str(int(DeviceExtension.SIXEL))
 
 
 def is_query_reply(data: str) -> bool:
@@ -248,7 +258,7 @@ class ClientGraphics:
         match = _DEVICE_ATTRIBUTES_RE.match(data)
         if match is not None:
             attributes = [p for p in match.group(1).split(";") if p]
-            self.sixel_supported = "4" in attributes
+            self.sixel_supported = _SIXEL_ATTRIBUTE in attributes
             # The last reply of the detection. What did not answer by
             # now is not there, so the half blocks know where they
             # stand.
