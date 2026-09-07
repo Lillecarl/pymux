@@ -1057,21 +1057,11 @@ def _create_container_for_process(
         if arrangement_pane.process.is_terminated:
             result.append(("class:terminated", " Terminated "))
 
-        # Scroll buffer info.
-        if arrangement_pane.display_scroll_buffer:
-            result.append(
-                ("class:copymode", " %s " % arrangement_pane.scroll_buffer_title)
-            )
-
-            # Cursor position.
-            document = arrangement_pane.scroll_buffer.document
-            result.append(
-                (
-                    "class:copymode.position",
-                    " %i,%i "
-                    % (document.cursor_position_row, document.cursor_position_col),
-                )
-            )
+        # A pane whose program is suspended while a person reads its
+        # history says so. Where in the history they are is drawn in
+        # the corner of the pane itself, by the widget that knows.
+        if arrangement_pane.is_copying:
+            result.append(("class:copymode", " Copy "))
 
         if arrangement_pane.name:
             result.append(("class:name", " %s " % arrangement_pane.name))

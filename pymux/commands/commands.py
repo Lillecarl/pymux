@@ -781,7 +781,7 @@ def send_keys(pymux: "Pymux", variables: _VariablesDict) -> None:
     else:
         pane = pymux.arrangement.get_active_pane()
 
-    if pane.display_scroll_buffer:
+    if pane.is_copying:
         raise CommandException("Cannot send keys. Pane is in copy mode.")
 
     if variables["-R"]:
@@ -914,7 +914,7 @@ def clear_history(pymux: "Pymux", variables: _VariablesDict) -> None:
     "Clear scrollback buffer."
     pane = pymux.arrangement.get_active_pane()
 
-    if pane.display_scroll_buffer:
+    if pane.is_copying:
         raise CommandException("Not available in copy mode")
     else:
         pane.screen.clear_history()

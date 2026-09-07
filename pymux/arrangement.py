@@ -14,7 +14,6 @@ from typing import List
 from weakref import WeakKeyDictionary, ref
 
 from prompt_toolkit.application import Application, get_app, get_app_or_none, set_app
-from prompt_toolkit.buffer import Buffer
 from ptterm import Terminal
 
 __all__ = [
@@ -58,14 +57,21 @@ class Pane:
         Pane._pane_counter += 1
         self.pane_id = Pane._pane_counter
 
-        # Prompt_toolkit buffer, for displaying scrollable text.
-        # (In copy mode, or help mode.)
-        # Note: Because the scroll_buffer can only contain text, we also use the
-        #       get_tokens_for_line, that returns the token list with color
-        #       information for each line.
-        self.scroll_buffer = Buffer(read_only=True)
-        self.display_scroll_buffer = False
-        self.scroll_buffer_title = ""
+    @property
+    def is_copying(self) -> bool:
+        """
+        Is a person reading the history of this pane rather than the
+        program in it?
+
+        **The widget knows, and a pane asks it.** A pane held a buffer,
+        a flag and a title of its own for this, from before copy mode
+        moved into `ptterm`. Nothing had set the flag since, so five
+        readers of it all answered "no": the mark in the title bar
+        never showed, `#{pane_in_mode}` was always zero, and `send-keys`
+        and `clear-history` never refused a pane whose program is
+        suspended. Lillecarl/pymux#133.
+        """
+        return self.terminal.is_copying
 
     @property
     def process(self):

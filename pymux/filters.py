@@ -5,9 +5,6 @@ __all__ = [
     "WaitsForConfirmation",
     "InCommandMode",
     "WaitsForPrompt",
-    "InScrollBuffer",
-    "InScrollBufferNotSearching",
-    "InScrollBufferSearching",
 ]
 
 
@@ -91,58 +88,12 @@ def _confirm_or_prompt_or_command(pymux):
         return True
 
 
-class InScrollBuffer(Filter):
-    def __init__(self, pymux):
-        self.pymux = pymux
-        super().__init__()
-
-    def __call__(self):
-        try:
-            if _confirm_or_prompt_or_command(self.pymux):
-                return False
-        except ValueError:
-            return False
-
-        try:
-            pane = self.pymux.arrangement.get_active_pane()
-        except Exception:
-            return False
-        return pane.display_scroll_buffer
-
-
-class InScrollBufferNotSearching(Filter):
-    def __init__(self, pymux):
-        self.pymux = pymux
-        super().__init__()
-
-    def __call__(self):
-        try:
-            if _confirm_or_prompt_or_command(self.pymux):
-                return False
-        except ValueError:
-            return False
-
-        try:
-            pane = self.pymux.arrangement.get_active_pane()
-        except Exception:
-            return False
-        return pane.display_scroll_buffer and not pane.is_searching
-
-
-class InScrollBufferSearching(Filter):
-    def __init__(self, pymux):
-        self.pymux = pymux
-        super().__init__()
-
-    def __call__(self):
-        try:
-            if _confirm_or_prompt_or_command(self.pymux):
-                return False
-        except ValueError:
-            return False
-
-        try:
-            pane = self.pymux.arrangement.get_active_pane()
-        except Exception:
-            return False
-        return pane.display_scroll_buffer and pane.is_searching
+# Three filters for copy mode stood here: `InScrollBuffer`,
+# `InScrollBufferNotSearching` and `InScrollBufferSearching`. Each one
+# read `pane.display_scroll_buffer`, and nothing had set that since
+# copy mode moved into `ptterm`, so all three were always false and
+# every key they guarded did nothing.
+#
+# The keys of copy mode live with the copy buffer now, in
+# `ptterm.terminal.Terminal`. A filter here would have to ask that
+# widget anyway. Lillecarl/pymux#133.

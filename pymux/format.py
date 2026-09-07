@@ -252,7 +252,7 @@ tmux_variables: Dict[str, Callable[["Pymux", "Window", "Pane"], str]] = {
     "pane_current_path": _pane_current_path,
     "pane_start_path": _pane_current_path,
     "pane_dead": lambda p, w, pane: "1" if pane.process.is_terminated else "0",
-    "pane_in_mode": lambda p, w, pane: "1" if pane.display_scroll_buffer else "0",
+    "pane_in_mode": lambda p, w, pane: "1" if pane.is_copying else "0",
     "pane_synchronized": lambda p, w, pane: "1" if w.synchronize_panes else "0",
     "history_size": _history_size,
     "history_limit": lambda p, w, pane: str(p.history_limit),

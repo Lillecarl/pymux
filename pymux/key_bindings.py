@@ -5,15 +5,14 @@ import logging
 from typing import TYPE_CHECKING, Callable, Dict, Tuple
 
 from prompt_toolkit.application.current import get_app
-from prompt_toolkit.filters import Condition, Filter, has_focus, has_selection
+from prompt_toolkit.filters import Condition, Filter, has_focus
 from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent as E
 from prompt_toolkit.keys import Keys
-from prompt_toolkit.selection import SelectionType
 
 from .commands.commands import call_command_handler
 from .enums import COMMAND, PROMPT
-from .filters import HasPrefix, InScrollBufferNotSearching, WaitsForConfirmation
+from .filters import HasPrefix, WaitsForConfirmation
 from .key_mappings import pymux_key_to_prompt_toolkit_key_sequence
 
 if TYPE_CHECKING:
@@ -31,10 +30,6 @@ class PymuxKeyBindings:
 
     def __init__(self, pymux: "Pymux") -> None:
         self.pymux = pymux
-
-        def get_search_state():
-            "Return the currently active SearchState. (The one for the focused pane.)"
-            return pymux.arrangement.get_active_pane().search_state
 
         self.custom_key_bindings = KeyBindings()
 
@@ -106,7 +101,6 @@ class PymuxKeyBindings:
         waits_for_confirmation = WaitsForConfirmation(pymux)
         prompt_or_command_focus = has_focus(COMMAND) | has_focus(PROMPT)
         display_pane_numbers = Condition(lambda: pymux.display_pane_numbers)
-        in_scroll_buffer_not_searching = InScrollBufferNotSearching(pymux)
 
         @kb.add(Keys.Any, filter=has_prefix)
         def _(event: E) -> None:
@@ -146,45 +140,14 @@ class PymuxKeyBindings:
             client_state.confirm_command = None
             client_state.confirm_text = None
 
-        @kb.add("c-c", filter=in_scroll_buffer_not_searching)
-        @kb.add("enter", filter=in_scroll_buffer_not_searching)
-        @kb.add("q", filter=in_scroll_buffer_not_searching)
-        def _quit(event: E) -> None:
-            "Exit scroll buffer."
-            pane = pymux.arrangement.get_active_pane()
-            pane.exit_scroll_buffer()
-
-        @kb.add(" ", filter=in_scroll_buffer_not_searching)
-        def _enter_selection_mode(event: E) -> None:
-            "Enter selection mode when pressing space in copy mode."
-            event.current_buffer.start_selection(
-                selection_type=SelectionType.CHARACTERS
-            )
-
-        @kb.add("enter", filter=in_scroll_buffer_not_searching & has_selection)
-        def _copy_selection(event: E) -> None:
-            "Copy selection when pressing Enter."
-            clipboard_data = event.current_buffer.copy_selection()
-            event.app.clipboard.set_data(clipboard_data)
-
-        @kb.add("v", filter=in_scroll_buffer_not_searching & has_selection)
-        def _toggle_selection_type(event: E) -> None:
-            "Toggle between selection types."
-            selection_state = event.current_buffer.selection_state
-
-            if selection_state is not None:
-                types = [
-                    SelectionType.LINES,
-                    SelectionType.BLOCK,
-                    SelectionType.CHARACTERS,
-                ]
-
-                try:
-                    index = types.index(selection_state.type)
-                except ValueError:  # Not in list.
-                    index = 0
-
-                selection_state.type = types[(index + 1) % len(types)]
+        # Five bindings for copy mode stood here: leaving it, starting
+        # a selection, copying one and swapping its type. Every one of
+        # them was guarded by a filter that read a flag nothing had set
+        # since copy mode moved into `ptterm`, so none of them ever
+        # fired, and `pane.exit_scroll_buffer` does not exist.
+        #
+        # The keys of copy mode live with the copy buffer now, in
+        # `ptterm.terminal.Terminal`. Lillecarl/pymux#133.
 
         @Condition
         def popup_displayed() -> bool:
