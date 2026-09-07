@@ -122,8 +122,10 @@ def format_pymux_string(
 
 def _pane_pid(pymux, window, pane) -> str:
     "PID of the process running in the pane."
-    backend = getattr(pane.process, "backend", None)
-    pid = getattr(backend, "pid", None)
+    # A backend that has no number to give says so with `None`: a
+    # program at the other end of an ssh connection runs somewhere
+    # else, and one that has not started has no id yet.
+    pid = pane.process.backend.pid
     return str(pid) if pid else ""
 
 

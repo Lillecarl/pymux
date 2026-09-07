@@ -105,11 +105,10 @@ class PaneCursor(CursorShapeConfig):
         # this one may have asked. Then the shape it set is on the
         # terminal now, and saying nothing would leave it there.
         screen = pane.screen
-        if not getattr(screen, "cursor_style_asked", False):
+        if not screen.cursor_style_asked:
             return CursorShape.DEFAULT
 
-        style = getattr(screen, "cursor_style", 0)
-        return CURSOR_SHAPES.get(style, CursorShape._NEVER_CHANGE)
+        return CURSOR_SHAPES.get(screen.cursor_style, CursorShape._NEVER_CHANGE)
 
 
 class ClientState:
@@ -176,8 +175,13 @@ class ClientState:
         # Draw the images of the panes right after rendering. (The text
         # is on the screen by then; kitty draws images over it.)
         def after_render(_):
-            graphics = getattr(self.connection, "graphics", None)
-            if graphics is None or not graphics.supported:
+            # A client that runs in the process that started pymux has
+            # no connection, and there is nothing to draw images on.
+            if self.connection is None:
+                return
+
+            graphics = self.connection.graphics
+            if not graphics.supported:
                 return
             try:
                 graphics.render(self._graphics_views())
@@ -203,9 +207,6 @@ class ClientState:
         for pane, write_position in self.layout_manager.pane_write_positions.items():
             if pane.clock_mode or pane.terminal.is_copying:
                 continue
-            graphics = getattr(pane.screen, "graphics", None)
-            if graphics is None:
-                continue
             window = pane.terminal.terminal_window
             result.append(
                 PaneView(
@@ -216,7 +217,7 @@ class ClientState:
                     height=write_position.height,
                     vertical_scroll=window.vertical_scroll,
                     horizontal_scroll=window.horizontal_scroll,
-                    graphics=graphics,
+                    graphics=pane.screen.graphics,
                     screen=pane.screen,
                 )
             )
@@ -815,7 +816,7 @@ class Pymux:
         # the first time. Start it right away, so that panes in detached
         # sessions also run and produce output. (Like tmux does.)
         terminal_control = terminal.terminal_control
-        if not getattr(terminal_control, "_running", False):
+        if not terminal_control._running:
             process = terminal_control.process
             # Give the terminal a default size until a client attaches.
             process.set_size(80, 24)
@@ -890,8 +891,8 @@ class Pymux:
 
         self.overlay_pane = None
 
-        process = getattr(pane, "process", None)
-        if process is not None and not process.is_terminated:
+        process = pane.process
+        if not process.is_terminated:
             process.kill()
 
         self._sync_focus_everywhere()
@@ -953,8 +954,7 @@ class Pymux:
         pane = self.get_focused_pane()
         if pane is None:
             return 0
-        screen = getattr(pane, "screen", None)
-        return getattr(screen, "kitty_keyboard_flags", 0) or 0
+        return pane.screen.kitty_keyboard_flags
 
     def resize_pane_for_program(
         self, pane, lines: int | None, columns: int | None
@@ -1135,8 +1135,12 @@ class Pymux:
         command and leaves has no terminal of the user behind it, and
         it never asked one what it does.
         """
+        # A client that runs in the process that started pymux has no
+        # connection, so nothing ever asked its terminal what it can
+        # report. It counts as reporting nothing, which is what it
+        # already did.
         masks = [
-            getattr(connection, "kitty_source_flags", 0) or 0
+            0 if connection is None else connection.kitty_source_flags
             for connection in self._client_states
         ]
         if not masks:
@@ -1204,8 +1208,8 @@ class Pymux:
         # as the children run. Also, `kill-server` should not leave the
         # programs inside the panes running.)
         for pane in list(self.panes_by_id.values()):
-            process = getattr(pane, "process", None)
-            if process is not None and not process.is_terminated:
+            process = pane.process
+            if not process.is_terminated:
                 process.kill()
 
         for app in self.apps:
