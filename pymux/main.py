@@ -792,6 +792,10 @@ class Pymux:
             before_exec_func=before_exec,
             command=command_list,
             owns_whole_lines=owns_whole_lines,
+            # The `history-limit` option, which said how far copy mode
+            # could scroll and never reached the screen that holds the
+            # rows. A pane kept two thousand whatever the option said.
+            get_history_limit=lambda: self.history_limit,
         )
         pane = Pane(terminal)
 
