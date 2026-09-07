@@ -769,10 +769,16 @@ def unbind_key(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.key_bindings_manager.remove_custom_binding(key, needs_prefix=needs_prefix)
 
 
-@cmd("send-keys", options="[-t <target-pane>] [-l] [-R] <keys>...")
+@cmd("send-keys", options="[-t <target-pane>] [-l] [-R] [<keys>...]")
 def send_keys(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Send key strokes to the active process.
+
+    **The keys are optional, because `-R` needs none.** `send-keys -R`
+    puts a pane back when a program has left it in a state a person
+    cannot type out of, and asking for a key as well means sending one
+    to a terminal that is being reset. tmux takes it on its own.
+    Lillecarl/pymux#118.
     """
     if variables["-t"]:
         pane = _find_pane(pymux, variables["<target-pane>"])
