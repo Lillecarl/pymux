@@ -9,7 +9,7 @@ import re
 import struct
 import zlib
 
-from ptterm.sixel import decode_sixel
+from pyte.sixel import decode_sixel
 
 from pymux.sixel import encode_sixel, scale_rgba, to_rgba
 

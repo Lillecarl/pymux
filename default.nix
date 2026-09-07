@@ -73,9 +73,9 @@ let
   };
 
   # The terminfo entry that describes a pane, compiled from the table that
-  # ptterm also answers XTGETTCAP with. A program built on ncurses reads the
-  # database instead of asking, and without an entry of our own it reads the
-  # one for xterm-256color and never writes a curly underline.
+  # the screen also answers XTGETTCAP with. A program built on ncurses reads
+  # the database instead of asking, and without an entry of our own it reads
+  # the one for xterm-256color and never writes a curly underline.
   terminfo = runCommand "pymux-terminfo" {
     nativeBuildInputs = [
       (python.withPackages (ps: [ ptterm ]))
@@ -83,12 +83,14 @@ let
     ];
   } ''
     mkdir -p $out/share/terminfo
-    python -m ptterm.terminfo > pymux.ti
-    tic -x -o $out/share/terminfo pymux.ti
+    python -m pyte.terminfo > pyte.ti
+    tic -x -o $out/share/terminfo pyte.ti
 
     # An entry that does not compile leaves a pane naming a terminal that
-    # is not there, which is worse than naming xterm.
-    TERMINFO_DIRS=$out/share/terminfo: infocmp -x pymux > /dev/null
+    # is not there, which is worse than naming xterm. Both spellings are
+    # checked, because `TERM` may carry either.
+    TERMINFO_DIRS=$out/share/terminfo: infocmp -x pyte-256color > /dev/null
+    TERMINFO_DIRS=$out/share/terminfo: infocmp -x pyte > /dev/null
   '';
 
   # Only the module and the tests, not the whole repository. A copy of

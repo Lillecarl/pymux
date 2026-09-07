@@ -2,7 +2,7 @@
 Image output for the outer terminal of a client.
 
 The panes store the images that their programs transmit (see
-`ptterm.graphics` and `ptterm.sixel`), but a pane cannot draw pixels
+`pyte.images` and `pyte.sixel`), but a pane cannot draw pixels
 itself. This module draws them: after every render it re-emits the
 images of the visible panes to the outer terminal of one client.
 
@@ -35,7 +35,7 @@ import zlib
 from typing import Callable, Dict, Iterable, List, NamedTuple, Tuple
 
 from prompt_toolkit.output import ColorDepth
-from ptterm.graphics import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
+from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
 
 from .blocks import average_rgba, blocks_for, rows_for_cells
 from .log import logger
@@ -64,7 +64,7 @@ QUERY_SEQUENCE = "\x1b_Gi=%i,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\" % QUERY_IMAGE_ID
 CELL_SIZE_QUERY = "\x1b[16t"
 
 # The cell size to assume when the terminal does not report one. It
-# matches the size that `ptterm.graphics` assumes, so an image then
+# matches the size that `pyte.images` assumes, so an image then
 # keeps the pixel size that the pane gave it.
 DEFAULT_CELL_WIDTH = 10
 DEFAULT_CELL_HEIGHT = 20
@@ -386,7 +386,7 @@ class ClientGraphics:
         point at.
 
         A placeholder cell says which cell of which image it stands
-        for. `BetterScreen.placeholder_runs` gathers the neighbouring
+        for. `Screen.placeholder_runs` gathers the neighbouring
         cells into rectangles; each rectangle becomes one placement
         with the matching piece of the image.
         """

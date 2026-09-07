@@ -5,15 +5,15 @@ A program writes one character per cell instead of asking for a
 placement. The client reads those cells back and draws the matching
 piece of the image on the outer terminal.
 
-Each test builds a real `BetterScreen`, feeds it what such a program
+Each test builds a real `Screen`, feeds it what such a program
 sends, and checks the escape sequences that reach the terminal.
 """
 import base64
 import re
 
-from ptterm.placeholders import DIACRITICS, PLACEHOLDER
-from ptterm.screen import BetterScreen
-from ptterm.stream import BetterStream
+from pyte.placeholders import DIACRITICS, PLACEHOLDER
+from pyte.screen import Screen
+from pyte.streams import Stream
 
 from pymux.graphics import ClientGraphics, PaneView
 
@@ -26,8 +26,8 @@ def make_client():
 
 
 def make_screen(lines=24, columns=80):
-    screen = BetterScreen(lines, columns, write_process_input=lambda data: None)
-    stream = BetterStream(screen)
+    screen = Screen(lines, columns, write_process_input=lambda data: None)
+    stream = Stream(screen)
     stream.attach(screen)
     return screen, stream
 
@@ -219,7 +219,7 @@ def test_the_placeholders_do_not_reach_the_terminal_as_text():
 
 def test_a_view_without_a_screen_still_renders_the_plain_placements():
     "An embedder that gives no screen loses nothing else."
-    from ptterm.graphics import GraphicsPlacement
+    from pyte.images import GraphicsPlacement
 
     client, written = make_client()
     screen, stream = make_screen()

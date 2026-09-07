@@ -1,7 +1,7 @@
 """
 Tests for the kitty graphics output of a client (`pymux.graphics`).
 
-Each test builds the pane state with the real `ptterm.graphics`
+Each test builds the pane state with the real `pyte.images`
 classes, renders one or more frames, and checks the escape sequences
 that reach the outer terminal.
 """
@@ -9,7 +9,7 @@ import base64
 import re
 import zlib
 
-from ptterm.graphics import GraphicsImage, GraphicsPlacement, GraphicsState
+from pyte.images import GraphicsImage, GraphicsPlacement, GraphicsState
 
 from pymux.graphics import ClientGraphics, PaneView
 

@@ -65,7 +65,7 @@ def to_rgba(
 
     if image_format == 100:
         try:
-            from ptterm.png import decode_png
+            from pyte.png import decode_png
         except ImportError:
             return None
         decoded = decode_png(data)

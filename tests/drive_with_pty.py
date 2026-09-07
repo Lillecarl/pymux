@@ -53,9 +53,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from ptterm.screen import BetterScreen  # noqa: E402
-from ptterm.sixel import decode_sixel  # noqa: E402
-from ptterm.stream import BetterStream  # noqa: E402
+from pyte.screen import Screen  # noqa: E402
+from pyte.sixel import decode_sixel  # noqa: E402
+from pyte.streams import Stream  # noqa: E402
 
 from pymux.colors import TRUECOLOR_PROBE  # noqa: E402
 from pymux.graphics import CELL_SIZE_QUERY  # noqa: E402
@@ -317,8 +317,8 @@ def read_the_screen(seen, rows=24, columns=80):
 
     Returns a list of rows, each a string of `columns` characters.
     """
-    screen = BetterScreen(rows, columns, write_process_input=lambda answer: None)
-    BetterStream(screen).feed(seen.decode("utf-8", "replace"))
+    screen = Screen(rows, columns, write_process_input=lambda answer: None)
+    Stream(screen).feed(seen.decode("utf-8", "replace"))
 
     buffer = screen.page.data_buffer
     offset = screen.line_offset

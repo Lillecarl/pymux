@@ -5,7 +5,7 @@ kitty graphics protocol, and for the detection that picks the way.
 import re
 
 import pytest
-from ptterm.sixel import decode_sixel
+from pyte.sixel import decode_sixel
 
 from pymux import graphics as graphics_module
 from pymux.blocks import LOWER_HALF, UPPER_HALF
