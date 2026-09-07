@@ -70,6 +70,16 @@ class Z_INDEX:
     POPUP = 9
     OVERLAY = 10
 
+    #: A clock and a pane number are drawn inside the pane they belong
+    #: to, over the content of that pane. Nothing else draws in those
+    #: cells, so the only thing this height decides is what happens
+    #: when one of them meets the chrome above: a popup or an overlay
+    #: covers the panes, and a clock drawn at a hundred paints over
+    #: one. They are left where they were found, well clear of the
+    #: list, because no case has been seen where the two meet.
+    CLOCK = 100
+    PANE_NUMBER = 100
+
 
 #: Where the panes of one render were drawn. It hangs on the screen of
 #: that render, so two clients never read each other's.
@@ -234,9 +244,6 @@ _numbers = list(
     )
 )
 
-CLOCK_Z_INDEX = 100
-PANE_NUMBER_Z_INDEX = 100
-
 
 def _draw_number(
     screen, x_offset, y_offset, number, style="class:clock", transparent=False
@@ -311,7 +318,7 @@ class BigClock(Container):
                 handler=self._mouse_handler,
             )
 
-        screen.draw_with_z_index(z_index=CLOCK_Z_INDEX, draw_func=draw_func)
+        screen.draw_with_z_index(z_index=Z_INDEX.CLOCK, draw_func=draw_func)
 
     def _mouse_handler(self, mouse_event: MouseEvent) -> None:
         "Click callback."
@@ -379,7 +386,9 @@ class PaneNumber(Container):  # XXX: make FormattedTextControl
                     transparent=True,
                 )
 
-        screen.draw_with_z_index(z_index=PANE_NUMBER_Z_INDEX, draw_func=draw_func)
+        screen.draw_with_z_index(
+            z_index=Z_INDEX.PANE_NUMBER, draw_func=draw_func
+        )
 
     def get_children(self) -> List[Container]:
         return []
