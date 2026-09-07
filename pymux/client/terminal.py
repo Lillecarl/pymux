@@ -190,8 +190,23 @@ class TerminalClient(Client):
         with nonblocking(sys.stdin.fileno()):
             data = self._stdin_reader.read()
 
-        # Send input in chunks of 4k.
-        step = 4056
+        # Send the input in chunks, so that a long paste reaches the
+        # server as keystrokes rather than as one packet the server
+        # only dispatches when the whole of it has arrived.
+        #
+        # Nothing enforces the size. `_send_packet` sets the socket
+        # blocking and hands `send` whatever it is given, so this is a
+        # choice and not a limit. Four thousand and ninety six is a
+        # page, and the forty bytes under it are room for the JSON
+        # around the data: `{"cmd": "in", "data": ""}` is twenty five
+        # of them.
+        #
+        # The forty do not bound the packet. JSON escapes a control
+        # character as six bytes, and a paste is mostly control
+        # characters in no case at all, so a full chunk can still pass
+        # a page. It bounds how much arrives at once, which is what it
+        # is for.
+        step = 4096 - 40
         for i in range(0, len(data), step):
             self._send_packet(
                 {
