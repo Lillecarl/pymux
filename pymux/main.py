@@ -627,7 +627,7 @@ class Pymux:
         w = self.arrangement.get_active_window()
 
         if w and w.active_pane:
-            title = w.active_pane.screen.title
+            title = w.active_pane.screen.titles.window
         else:
             title = ""
 
@@ -1090,8 +1090,7 @@ class Pymux:
         """
         if pane is None:
             return ""
-        screen = getattr(pane, "screen", None)
-        return getattr(screen, "pointer_shape", "") or ""
+        return pane.screen.pointer_shapes.shape
 
     def sync_pointer_shape(self) -> None:
         """
