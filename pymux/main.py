@@ -6,7 +6,6 @@ import shlex
 import signal
 import sys
 import tempfile
-import threading
 import time
 import traceback
 import weakref
@@ -584,20 +583,27 @@ class Pymux:
                 client_state.last_time_text = text
                 client_state.app.invalidate()
 
-    def _start_auto_refresh_thread(self):
+    def _start_auto_refresh(self) -> None:
         """
-        Start the background thread that auto refreshes all clients according to
-        `self.status_interval`.
+        Refresh the clients every `status_interval` seconds, on the loop.
+
+        On the loop, and not on a thread of its own. The refresh reads
+        which window each client looks at, and `set_app` answers that
+        by writing an `AppSession` that every client shares. A thread
+        that writes it while a render reads it hands that render
+        another client's application. Lillecarl/pymux#155.
+
+        The callback arms the next one, so a `set-option
+        status-interval` reaches the tick after this one. The loop does
+        not have to run yet: the three callers arm this before they
+        start it.
         """
 
-        def run():
-            while True:
-                time.sleep(self.status_interval)
-                self.refresh_what_time_moves()
+        def tick() -> None:
+            self.refresh_what_time_moves()
+            self.loop.call_later(self.status_interval, tick)
 
-        t = threading.Thread(target=run)
-        t.daemon = True
-        t.start()
+        self.loop.call_later(self.status_interval, tick)
 
     @property
     def apps(self):
@@ -1393,8 +1399,7 @@ class Pymux:
 
         signal.signal(signal.SIGINT, handle_sigint)
 
-        # Start background threads.
-        self._start_auto_refresh_thread()
+        self._start_auto_refresh()
 
         # Run eventloop.
         try:
@@ -1448,7 +1453,7 @@ class Pymux:
         # through `termios`, which a server on Windows does not have.
         from .client.memory import MemoryClient
 
-        self._start_auto_refresh_thread()
+        self._start_auto_refresh()
 
         async def run() -> None:
             server_end, client_end = connect_in_memory()
@@ -1476,7 +1481,7 @@ class Pymux:
         This is mainly useful for debugging.
         """
         self._runs_standalone = True
-        self._start_auto_refresh_thread()
+        self._start_auto_refresh()
 
         client_state = self.add_client(
             input=create_input(),

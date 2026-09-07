@@ -1,19 +1,23 @@
 """
 The auto refresh draws a frame only when the text it draws changed.
 
-A background thread wakes every `status-interval` seconds. The clock in
-the status line is what it is for. A whole frame is 279,645 bytecode
+The loop asks for a refresh every `status-interval` seconds. The clock
+in the status line is what it is for. A whole frame is 279,645 bytecode
 instructions and the text that time moves is 2,371 of them, so the
-thread reads the text and asks for a frame only when it differs from
-what the last frame drew. Lillecarl/pymux#154.
+refresh reads the text and asks for a frame only when it differs from
+what the last frame drew. A tick that finds it the same costs 2,461.
+Lillecarl/pymux#154.
 
 A session with `full-screen on` draws no status line and no pane
 titlebar, so its text is empty and never differs. Lillecarl/pymux#151.
+
+The tests call the refresh. What arms it is one `call_later` that arms
+the next one, and it runs on the loop for the reason in
+Lillecarl/pymux#155.
 """
 import asyncio
 import io
 import sys
-import time
 
 import pytest
 from prompt_toolkit.application.current import set_app
@@ -25,13 +29,11 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 from pymux.main import Pymux
 from pymux.options import ALL_OPTIONS
 
-#: Short enough that a test finishes, long enough that the thread sleeps.
-INTERVAL = 0.01
-
-#: How many intervals a test waits before it counts.
-TICKS = 20
-
 ROWS, COLUMNS = 24, 80
+
+#: A status line with nothing in it that time moves, so that a test of
+#: the window list does not race the minute of the real clock.
+NO_CLOCK = "[#S]"
 
 
 class _Connection:
@@ -45,16 +47,15 @@ class _Connection:
 @pytest.fixture
 def session():
     """
-    A server with one client and one window, whose clock runs fast.
+    A server with one client and one window.
 
-    The client counts the frames its own application is asked for. Its
+    The client counts the frames its own application is asked for. That
     application never runs, so a frame is a request and no more.
     """
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
     pymux = Pymux()
-    pymux.status_interval = INTERVAL
     pymux.create_window("%s -c 'import time; time.sleep(30)'" % (sys.executable,))
 
     output = Vt100_Output(
@@ -70,7 +71,6 @@ def session():
 
         frames = []
         state.app.invalidate = lambda: frames.append(1)
-        pymux._start_auto_refresh_thread()
 
         try:
             yield pymux, state, frames
@@ -86,41 +86,56 @@ def set_option(pymux, name, value):
     ALL_OPTIONS[name].set_value(pymux, value)
 
 
-def the_text(pymux, state):
-    "What the thread reads, read the way the thread reads it."
+def the_text(state):
+    "What the refresh reads, read the way the refresh reads it."
     with set_app(state.app):
         return state.layout_manager.what_time_moves()
 
 
-def test_a_tick_that_finds_the_same_text_asks_for_no_frame(session):
-    "The clock says the same minute for fourteen of every fifteen ticks."
+def test_the_first_refresh_draws_what_no_frame_drew(session):
+    "Nothing has drawn the status line yet, so it has something to say."
     pymux, state, frames = session
 
-    # The first tick draws what no frame drew before it.
-    time.sleep(INTERVAL * TICKS)
+    pymux.refresh_what_time_moves()
+
     assert len(frames) == 1
 
 
-def test_a_tick_asks_for_a_frame_when_the_text_changed(session):
-    "`#W` in the status line names the window, so a rename shows."
+def test_a_refresh_that_finds_the_same_text_asks_for_no_frame(session):
+    "The clock says the same minute for fourteen of every fifteen ticks."
     pymux, state, frames = session
-    time.sleep(INTERVAL * TICKS)
+    set_option(pymux, "status-right", NO_CLOCK)
+    pymux.refresh_what_time_moves()
+    assert len(frames) == 1
+
+    pymux.refresh_what_time_moves()
+    pymux.refresh_what_time_moves()
+
+    assert len(frames) == 1
+
+
+def test_a_refresh_asks_for_a_frame_when_the_text_changed(session):
+    "`#W` in the window list names a window, so a rename shows."
+    pymux, state, frames = session
+    set_option(pymux, "status-right", NO_CLOCK)
+    pymux.refresh_what_time_moves()
     assert len(frames) == 1
 
     pymux.arrangement.windows[0].chosen_name = "renamed"
-    time.sleep(INTERVAL * TICKS)
+    pymux.refresh_what_time_moves()
+
     assert len(frames) == 2
 
 
-def test_a_full_screen_session_asks_for_none(session):
+def test_a_full_screen_session_asks_for_no_frame_at_all(session):
     "One pane over every cell. Nothing there moves with time."
     pymux, state, frames = session
     set_option(pymux, "full-screen", "on")
-    state.last_time_text = ()
-    frames.clear()
 
-    assert the_text(pymux, state) == ()
-    time.sleep(INTERVAL * TICKS)
+    assert the_text(state) == ()
+    pymux.refresh_what_time_moves()
+    pymux.refresh_what_time_moves()
+
     assert frames == []
 
 
@@ -132,21 +147,21 @@ def test_a_clock_inside_a_pane_asks_for_frames(session):
     """
     pymux, state, frames = session
     set_option(pymux, "full-screen", "on")
-    state.last_time_text = ()
-    frames.clear()
-    time.sleep(INTERVAL * TICKS)
+    pymux.refresh_what_time_moves()
     assert frames == []
 
     pymux.arrangement.windows[0].panes[0].clock_mode = True
-    time.sleep(INTERVAL * TICKS)
+    pymux.refresh_what_time_moves()
+
     assert len(frames) == 1
-    assert the_text(pymux, state) != ()
+    assert the_text(state) != ()
 
 
 def test_the_text_holds_the_clock_and_the_window_list(session):
-    "What the thread compares, spelled out."
+    "What the refresh compares, spelled out."
     pymux, state, frames = session
-    text = the_text(pymux, state)
+
+    text = the_text(state)
 
     assert any(":" in part for part in text), text  # The clock.
     assert any("python" in part or "bash" in part for part in text), text
