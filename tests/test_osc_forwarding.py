@@ -8,6 +8,8 @@ comes from a program in a pane, so it is checked first.
 """
 import pytest
 
+from pyte.osc import PointerShapes
+
 from pymux.main import Pymux
 from pymux.osc import MAX_OSC_LENGTH, build_osc
 
@@ -117,8 +119,17 @@ class FakeClientState:
 
 
 class FakeScreen:
+    """
+    Only the part of a screen that a forward reads.
+
+    The stack is the real `PointerShapes`, so a change to how a screen
+    holds a shape reaches this fake instead of going around it.
+    """
+
     def __init__(self, pointer_shape=""):
-        self.pointer_shape = pointer_shape
+        self.pointer_shapes = PointerShapes()
+        if pointer_shape:
+            self.pointer_shapes.stack.append(pointer_shape)
 
 
 class FakePane:
@@ -216,14 +227,14 @@ def test_a_client_that_never_saw_a_shape_is_not_told_to_reset_it():
     assert connections[0].written == []
 
 
-def test_a_pane_without_a_screen_asks_for_no_shape():
-    "A pane that never started has no screen to read."
+def test_no_pane_asks_for_no_shape():
+    """
+    A client that looks at no pane asks for no shape, and neither does
+    a pane whose program never named one.
+    """
     pymux, _connections = make_pymux()
     assert pymux.pointer_shape_of(None) == ""
-
-    pane = FakePane()
-    pane.process = None
-    assert pymux.pointer_shape_of(pane) == ""
+    assert pymux.pointer_shape_of(FakePane()) == ""
 
 
 def test_an_unsafe_payload_reaches_nobody():
