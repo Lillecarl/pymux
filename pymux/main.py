@@ -563,8 +563,20 @@ class Pymux:
 
         A pane that writes invalidates its own client. It does not need
         the clock. Lillecarl/pymux#117.
+
+        `clock-mode` is the third one, and it draws a clock inside the
+        pane. `rc.py` binds it to `ctrl-b t`. A full screen session
+        hides the status line, so that clock is the only thing left
+        that time moves.
         """
-        return self.show_status or self.show_pane_status
+        if self.show_status or self.show_pane_status:
+            return True
+
+        return any(
+            pane.clock_mode
+            for window in self.arrangement.windows
+            for pane in window.panes
+        )
 
     def _start_auto_refresh_thread(self):
         """

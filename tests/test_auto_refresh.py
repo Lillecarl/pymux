@@ -7,6 +7,7 @@ for. A session with `full-screen on` draws no status line and no pane
 titlebar, so nothing on that screen changes on its own, and the frame
 shows what the last one showed. Lillecarl/pymux#151.
 """
+import sys
 import time
 
 from pymux.main import Pymux
@@ -63,3 +64,26 @@ def test_a_session_with_no_decoration_at_all_asks_for_none():
     assert not pymux.something_moves_with_time
     time.sleep(INTERVAL * TICKS)
     assert frames == []
+
+
+def test_a_clock_inside_a_pane_asks_for_frames():
+    """
+    `clock-mode` draws a clock over the content of the pane, and
+    `ctrl-b t` turns it on. With the status line hidden, that clock is
+    the only thing on the screen that time moves.
+    """
+    pymux, frames = a_pymux(full_screen="on")
+    pymux.create_window("%s -c pass" % (sys.executable,))
+    pane = pymux.arrangement.get_active_window().active_pane
+    # A new window asks for a frame of its own. Count only the ticks.
+    frames.clear()
+    try:
+        time.sleep(INTERVAL * TICKS)
+        assert frames == []
+
+        pane.clock_mode = True
+        time.sleep(INTERVAL * TICKS)
+        assert frames
+    finally:
+        if not pane.process.is_terminated:
+            pane.process.kill()
