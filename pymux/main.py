@@ -410,7 +410,18 @@ class Pymux:
         self.remain_on_exit = False
         self.status_keys_vi_mode = False
         self.mode_keys_vi_mode = False
+        # How many lines above the screen a pane keeps. tmux keeps two
+        # thousand by default and this keeps the same, so a person who
+        # moves over finds the depth they had. People do configure
+        # more: ten thousand is common and kitty is often set to fifty
+        # thousand, which is why `ptterm/tests/measure_instructions.py`
+        # measures at all three. Lillecarl/pymux#8.
         self.history_limit = 2000
+
+        # How many seconds between two redraws of the status bar. Four
+        # is tmux's `status-interval`, and this keeps the same. It is
+        # what the clock in the status bar costs when nothing else is
+        # happening.
         self.status_interval = 4
         # What a pane is told it is. The entry of pyte describes what a
         # pane really does; a build without one falls back to xterm.
