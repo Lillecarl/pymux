@@ -31,6 +31,7 @@ from prompt_toolkit.styles import (
 )
 from ptterm import Terminal
 from pyte.environment import terminal_name
+from pyte.osc import Osc
 
 from .arrangement import Arrangement, Pane, Window
 from .commands.commands import call_command_handler, handle_command
@@ -1003,7 +1004,7 @@ class Pymux:
         sequence may not stop it.
         """
         try:
-            if code == "22":
+            if code == Osc.POINTER_SHAPE:
                 # The shape of the pointer is not a sequence to pass on
                 # as it arrives: it belongs to the pane, and the client
                 # has to see the shape of the pane it looks at. The
@@ -1012,7 +1013,7 @@ class Pymux:
                 self.sync_pointer_shape()
                 return
 
-            if code == "52":
+            if code == Osc.CLIPBOARD:
                 if not self.enable_clipboard:
                     return
                 # What a pane copies goes into the paste buffer of the
@@ -1022,7 +1023,7 @@ class Pymux:
                 # somewhere else.
                 self._mirror_clipboard(param)
 
-            if code == "99":
+            if code == Osc.NOTIFICATION:
                 # Give the notification an identifier that names this
                 # pane, so that the answer finds its way back.
                 param = self.notifications.outgoing(pane.pane_id, param)
