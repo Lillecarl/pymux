@@ -52,6 +52,14 @@ if TYPE_CHECKING:
 __all__ = ["LayoutManager"]
 
 
+#: The text on the titlebar of a pane. XXX: Make configurable.
+PANE_TITLE_FORMAT = " #T "
+
+#: What `clock-mode` draws inside a pane, as text. `BigClock` paints the
+#: hour and the minute in big numbers, and nothing else of it moves.
+CLOCK_FORMAT = "%H:%M"
+
+
 class Justify:
     "Justify enum for the status bar."
     LEFT = "left"
@@ -544,6 +552,41 @@ class LayoutManager:
 
     def _get_status_right_tokens(self) -> str:
         return format_pymux_string(self.pymux, self.pymux.status_right)
+
+    def what_time_moves(self) -> Tuple[str, ...]:
+        """
+        Every string on this client's screen that changes on its own.
+
+        The status line holds the clock, and a `#{...}` variable in it
+        can hold anything. `clock-mode` draws a clock inside a pane.
+        Nothing else on the screen changes unless something asks for a
+        frame, so a caller that finds this the same as the last frame
+        drew has nothing to draw. Lillecarl/pymux#154.
+
+        The caller sets its own application first. A `#{...}` variable
+        asks which window this client looks at.
+
+        An empty answer means this client shows nothing that time
+        moves. `full-screen on` is that case.
+        """
+        pymux = self.pymux
+        parts: List[str] = []
+
+        if pymux.show_status:
+            parts.append(self._get_status_left_tokens())
+            parts.append(self._get_status_right_tokens())
+            parts += [text for _, text, *_ in self._get_status_tokens()]
+
+        for window in pymux.arrangement.windows:
+            for pane in window.panes:
+                if pane.clock_mode:
+                    parts.append(datetime.datetime.now().strftime(CLOCK_FORMAT))
+                elif pymux.show_pane_status:
+                    parts.append(
+                        format_pymux_string(pymux, PANE_TITLE_FORMAT, pane=pane)
+                    )
+
+        return tuple(parts)
 
     def _get_align(self) -> WindowAlign:
         if self.pymux.status_justify == Justify.RIGHT:
@@ -1070,8 +1113,8 @@ def _create_container_for_process(
         return result + [
             (
                 "",
-                format_pymux_string(pymux, " #T ", pane=arrangement_pane),
-            )  # XXX: Make configurable.
+                format_pymux_string(pymux, PANE_TITLE_FORMAT, pane=arrangement_pane),
+            )
         ]
 
     def get_pane_index() -> str:

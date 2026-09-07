@@ -10,7 +10,7 @@ import threading
 import time
 import traceback
 import weakref
-from typing import Callable
+from typing import Callable, Tuple
 
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app, set_app
@@ -141,6 +141,11 @@ class ClientState:
 
         # Popup.
         self.display_popup = False
+
+        # What the last frame of this client drew of the strings that
+        # time moves. The auto refresh compares against it, and asks
+        # for a frame only when they differ. Lillecarl/pymux#154.
+        self.last_time_text: Tuple[str, ...] = ()
 
 
         # Input buffers.
@@ -550,33 +555,34 @@ class Pymux:
         "Whether a client draws the titlebar of a pane."
         return self.enable_pane_status and not self.full_screen
 
-    @property
-    def something_moves_with_time(self) -> bool:
+    def refresh_what_time_moves(self) -> None:
         """
-        Whether the screen holds something that changes on its own.
+        Ask for a frame from each client whose screen moved by itself.
 
-        The clock is the reason the auto refresh exists, and the
-        `#{...}` variables in the status line and in the titlebar of a
-        pane are the rest of it. A session that draws neither has
-        nothing that time can move, so a frame every four seconds draws
-        the same screen. Lillecarl/pymux#151.
+        The clock in the status line is the reason the auto refresh
+        exists. `#{...}` variables in the status line and in the
+        titlebar of a pane are the rest of it, and `clock-mode` draws a
+        clock inside a pane.
 
-        A pane that writes invalidates its own client. It does not need
+        A frame is 279,645 bytecode instructions, and the text that
+        time moves is 2,371 of them. So this reads the text and draws
+        only when it differs from what the last frame drew. A clock
+        that says `%H:%M` changes once a minute, and the interval is
+        four seconds, so fourteen of every fifteen ticks stop here.
+        Lillecarl/pymux#154.
+
+        A pane that writes invalidates its own client. It never needed
         the clock. Lillecarl/pymux#117.
-
-        `clock-mode` is the third one, and it draws a clock inside the
-        pane. `rc.py` binds it to `ctrl-b t`. A full screen session
-        hides the status line, so that clock is the only thing left
-        that time moves.
         """
-        if self.show_status or self.show_pane_status:
-            return True
+        for client_state in self._client_states.values():
+            # A `#{...}` variable asks which window this client looks
+            # at, so each client reads its own text.
+            with set_app(client_state.app):
+                text = client_state.layout_manager.what_time_moves()
 
-        return any(
-            pane.clock_mode
-            for window in self.arrangement.windows
-            for pane in window.panes
-        )
+            if text != client_state.last_time_text:
+                client_state.last_time_text = text
+                client_state.app.invalidate()
 
     def _start_auto_refresh_thread(self):
         """
@@ -587,8 +593,7 @@ class Pymux:
         def run():
             while True:
                 time.sleep(self.status_interval)
-                if self.something_moves_with_time:
-                    self.invalidate()
+                self.refresh_what_time_moves()
 
         t = threading.Thread(target=run)
         t.daemon = True
