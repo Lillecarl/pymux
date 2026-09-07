@@ -106,6 +106,62 @@ def test_the_keys_reach_the_program(pymux):
     assert written == "\r"
 
 
+#: What a keyboard sends for each key that `send-keys` can name.
+#:
+#: **These are the bytes a person's terminal really sends.** A key press
+#: never goes through the table that `send-keys` reads: ptterm hands the
+#: pane what the terminal sent, and the screen re-spells it for the
+#: modes the pane turned on. So the two roads to a pane have to end in
+#: the same bytes, and for 52 keys they did not. Lillecarl/pymux#119.
+THE_KEYS = [
+    ("Up", "\x1b[A"),
+    ("Down", "\x1b[B"),
+    ("Left", "\x1b[D"),
+    ("Right", "\x1b[C"),
+    ("Home", "\x1b[1~"),
+    ("End", "\x1b[4~"),
+    ("BSpace", "\x08"),
+    ("BTab", "\x1b[Z"),
+    ("DC", "\x1b[3~"),
+    ("IC", "\x1b[2~"),
+    ("PageUp", "\x1b[5~"),
+    ("PageDown", "\x1b[6~"),
+    ("F1", "\x1bOP"),
+    ("F2", "\x1bOQ"),
+    ("C-Up", "\x1b[1;5A"),
+    ("C-Left", "\x1b[1;5D"),
+    ("S-Up", "\x1b[1;2A"),
+    ("Tab", "\t"),
+    ("Escape", "\x1b"),
+    ("C-c", "\x03"),
+    # The carriage return and the line feed, which are two keys.
+    ("C-m", "\r"),
+    ("C-j", "\n"),
+    ("Enter", "\r"),
+]
+
+
+@pytest.mark.parametrize("name, expected", THE_KEYS)
+def test_a_key_sends_what_a_keyboard_sends(pymux, name, expected):
+    a_pane(pymux)
+    written, errors = send(pymux, name)
+    assert errors == []
+    assert written == expected
+
+
+def test_an_arrow_is_the_application_form_for_a_pane_that_asked(pymux):
+    """
+    "\\x1bOA" is the application cursor form, and DECCKM turns it on.
+
+    The pane above asks for it, so it gets it. A pane that asks for
+    nothing gets "\\x1b[A", which is the row for "Up" in the table
+    above. `send-keys Up` used to send the application form to both,
+    because the table held it as the plain answer.
+    """
+    a_pane(pymux, "\x1b[?1h")
+    assert send(pymux, "Up")[0] == "\x1bOA"
+
+
 def test_a_key_name_nobody_knows_goes_as_text(pymux):
     "tmux sends an argument it cannot name as the text it is."
     a_pane(pymux)

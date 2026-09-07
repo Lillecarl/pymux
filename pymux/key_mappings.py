@@ -1,7 +1,25 @@
 """
-Mapping between vt100 key sequences, the prompt_toolkit key constants and the
-Pymux namings. (Those namings are kept compatible with tmux.)
+The names tmux gives a key, and the bytes that key sends.
+
+Two things read this. `bind-key` names a key, so a binding needs the
+prompt_toolkit key that a press of it arrives as. And `send-keys` types
+into a pane, so it needs the bytes the pane would have read if a person
+had pressed the key.
+
+**A key press does not come through here.** ptterm hands the pane the
+bytes the terminal of the person really sent, and `Screen.encode_key`
+re-spells them for the modes the pane turned on. So this table is the
+one place a key becomes bytes without a keyboard, and the bytes it
+gives have to be the ones a keyboard would have given.
+
+They were not, for 52 of them. ptterm carried a second copy of this
+file, built the other way round, and `send-keys Up` sent the
+application cursor form to a pane that never asked for it while a press
+of the same key sent the plain one. One table now, and
+`tests/test_send_keys.py` reads the bytes. Lillecarl/pymux#119.
 """
+from typing import Dict, Tuple
+
 from prompt_toolkit.input.vt100_parser import ANSI_SEQUENCES
 from prompt_toolkit.keys import Keys
 
@@ -37,42 +55,59 @@ def pymux_key_to_prompt_toolkit_key_sequence(key):
             raise ValueError("Unknown key: %r" % (key,))
 
 
-# Create a mapping from prompt_toolkit keys to their ANSI sequences.
-# TODO: This is not completely correct yet. It doesn't take
-#       cursor/application mode into account. Create new tables for this.
-_PROMPT_TOOLKIT_KEY_TO_VT100 = dict(
-    (key, vt100_data) for vt100_data, key in ANSI_SEQUENCES.items()
-)
+def _keys_to_data() -> Dict[Keys, str]:
+    """
+    The bytes of each prompt_toolkit key, out of the table that reads
+    them.
+
+    **The first sequence of a key wins, and a key spelled as a tuple is
+    left out.** `ANSI_SEQUENCES` maps bytes to a key, and several runs
+    of bytes reach the same key: "\\r" and "\\x1b[27;6;13~" are both
+    `ControlM`. Inverting the whole thing keeps the last, so Enter went
+    out as the modified form nobody pressed. A tuple is a key that
+    arrives as two, such as escape and a letter, and it is not one key
+    at all.
+    """
+    result: Dict[Keys, str] = {}
+    for vt100_data, key in ANSI_SEQUENCES.items():
+        if not isinstance(key, tuple) and key not in result:
+            result[key] = vt100_data
+    return result
 
 
-def prompt_toolkit_key_to_vt100_key(key, application_mode=False):
+_PROMPT_TOOLKIT_KEY_TO_VT100 = _keys_to_data()
+
+
+def prompt_toolkit_key_to_vt100_key(key: str, application_mode: bool = False) -> str:
     """
-    Turn a prompt toolkit key. (E.g Keys.ControlB) into a Vt100 key sequence.
-    (E.g. \x1b[A.)
+    Turn a prompt_toolkit key, such as `Keys.ControlB`, into the bytes
+    a keyboard sends for it, such as "\\x1b[A".
+
+    `application_mode` is DECCKM, which a program turns on to get the
+    SS3 form of an arrow. Only the four arrows have one, and a program
+    that never asked for it must not be given it.
     """
-    application_mode_keys = {
+    application_mode_keys: Dict[str, str] = {
         Keys.Up: "\x1bOA",
         Keys.Left: "\x1bOD",
         Keys.Right: "\x1bOC",
         Keys.Down: "\x1bOB",
     }
 
-    if key == Keys.ControlJ:
-        # Required for redis-cli. This can be removed when prompt_toolkit stops
-        # replacing \r by \n.
-        return "\r"
+    if application_mode:
+        try:
+            return application_mode_keys[key]
+        except KeyError:
+            pass
 
-    if key == "\n":
-        return "\r"
-
-    elif application_mode and key in application_mode_keys:
-        return application_mode_keys.get(key)
-    else:
-        return _PROMPT_TOOLKIT_KEY_TO_VT100.get(key, key)
+    return _PROMPT_TOOLKIT_KEY_TO_VT100.get(key, key)
 
 
-PYMUX_TO_PROMPT_TOOLKIT_KEYS = {
-    "Space": (" "),
+PYMUX_TO_PROMPT_TOOLKIT_KEYS: Dict[str, Tuple[str, ...]] = {
+    # The comma is what makes this a tuple of one. Without it the value
+    # is the string, and a caller that walks the keys of a sequence
+    # walks the letters of a word instead.
+    "Space": (" ",),
     "C-a": (Keys.ControlA,),
     "C-b": (Keys.ControlB,),
     "C-c": (Keys.ControlC,),
@@ -290,7 +325,14 @@ PYMUX_TO_PROMPT_TOOLKIT_KEYS = {
     "DC": (Keys.Delete,),
     "IC": (Keys.Insert,),
     "End": (Keys.End,),
-    "Enter": (Keys.ControlJ,),
+    # Enter is the carriage return, and `ControlJ` is the line feed.
+    # A terminal sends "\r" when a person presses Enter, so a binding
+    # on it has to be on the key that "\r" arrives as, and `send-keys
+    # Enter` has to send "\r" as well. Naming the line feed here made
+    # both wrong, and a special case in `prompt_toolkit_key_to_vt100_key`
+    # answered "\r" for `ControlJ` to hide it. redis-cli is the program
+    # that found that. Lillecarl/pymux#119.
+    "Enter": (Keys.ControlM,),
     "Home": (Keys.Home,),
     "Escape": (Keys.Escape,),
     "Tab": (Keys.Tab,),
