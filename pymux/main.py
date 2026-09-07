@@ -104,7 +104,7 @@ class PaneCursor(CursorShapeConfig):
         # `DEFAULT` and not `_NEVER_CHANGE`, because the pane before
         # this one may have asked. Then the shape it set is on the
         # terminal now, and saying nothing would leave it there.
-        screen = pane.process.screen
+        screen = pane.screen
         if not getattr(screen, "cursor_style_asked", False):
             return CursorShape.DEFAULT
 
@@ -203,7 +203,7 @@ class ClientState:
         for pane, write_position in self.layout_manager.pane_write_positions.items():
             if pane.clock_mode or pane.terminal.is_copying:
                 continue
-            graphics = getattr(pane.process.screen, "graphics", None)
+            graphics = getattr(pane.screen, "graphics", None)
             if graphics is None:
                 continue
             window = pane.terminal.terminal_window
@@ -217,7 +217,7 @@ class ClientState:
                     vertical_scroll=window.vertical_scroll,
                     horizontal_scroll=window.horizontal_scroll,
                     graphics=graphics,
-                    screen=pane.process.screen,
+                    screen=pane.screen,
                 )
             )
         return result
@@ -623,8 +623,8 @@ class Pymux:
         """
         w = self.arrangement.get_active_window()
 
-        if w and w.active_process:
-            title = w.active_process.screen.title
+        if w and w.active_pane:
+            title = w.active_pane.screen.title
         else:
             title = ""
 
@@ -949,7 +949,7 @@ class Pymux:
         pane = self.get_focused_pane()
         if pane is None:
             return 0
-        screen = getattr(pane.process, "screen", None)
+        screen = getattr(pane, "screen", None)
         return getattr(screen, "kitty_keyboard_flags", 0) or 0
 
     def resize_pane_for_program(
@@ -1098,7 +1098,7 @@ class Pymux:
         """
         if pane is None:
             return ""
-        screen = getattr(pane.process, "screen", None)
+        screen = getattr(pane, "screen", None)
         return getattr(screen, "pointer_shape", "") or ""
 
     def sync_pointer_shape(self) -> None:
@@ -1166,7 +1166,7 @@ class Pymux:
         starts, and neither may stop for it.
         """
         try:
-            screen = pane.process.screen
+            screen = pane.screen
         except Exception:
             return
         try:

@@ -72,6 +72,11 @@ class Pane:
         return self.terminal.process
 
     @property
+    def screen(self):
+        "What the program in this pane has drawn."
+        return self.terminal.screen
+
+    @property
     def name(self) -> str:
         """
         The name for the window as displayed in the title bar and status bar.

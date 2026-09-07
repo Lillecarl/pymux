@@ -219,7 +219,7 @@ class PymuxKeyBindings:
                 if not get_app().layout.has_focus(pane.terminal):
                     # The keyboard is on the command line or a prompt.
                     return
-                pane.process.write_key_data(event.data)
+                pane.process.write_input(pane.screen.encode_key(event.data))
             except Exception:
                 logger.exception("Forwarding a key release failed.")
 

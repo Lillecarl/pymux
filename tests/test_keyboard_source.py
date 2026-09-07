@@ -28,15 +28,10 @@ class FakeScreen:
         self.synthesize_key_events = False
 
 
-class FakeProcess:
-    def __init__(self):
-        self.screen = FakeScreen()
-
-
 class FakePane:
     def __init__(self, pane_id):
         self.pane_id = pane_id
-        self.process = FakeProcess()
+        self.screen = FakeScreen()
 
 
 def make_pymux(*masks):
@@ -99,14 +94,14 @@ def test_every_pane_hears_the_mask():
 
     pymux.sync_keyboard_source_flags()
     for pane in panes:
-        assert pane.process.screen.keyboard_source_flags == 0b00011
+        assert pane.screen.keyboard_source_flags == 0b00011
 
 
 def test_a_pane_that_starts_later_hears_it_as_well():
     pymux, _ = make_pymux(0b00110)
     pane = FakePane(1)
     pymux.tell_pane_about_the_keyboard(pane)
-    assert pane.process.screen.keyboard_source_flags == 0b00110
+    assert pane.screen.keyboard_source_flags == 0b00110
 
 
 def test_a_client_that_leaves_raises_the_mask_of_a_pane():
@@ -114,10 +109,10 @@ def test_a_client_that_leaves_raises_the_mask_of_a_pane():
     pane = FakePane(1)
     pymux.panes_by_id[pane.pane_id] = pane
     pymux.sync_keyboard_source_flags()
-    assert pane.process.screen.keyboard_source_flags == 0
+    assert pane.screen.keyboard_source_flags == 0
 
     pymux.remove_client(connections[1])
-    assert pane.process.screen.keyboard_source_flags == 0b11111
+    assert pane.screen.keyboard_source_flags == 0b11111
 
 
 def test_a_pane_without_a_process_is_no_error():
@@ -144,7 +139,7 @@ def test_a_screen_that_knows_nothing_about_the_host_is_no_error():
         pane_id = 1
 
         def __init__(self):
-            self.process = type("P", (), {"screen": OldScreen()})()
+            self.screen = OldScreen()
 
     pymux, _ = make_pymux(0b11111)
     pymux.tell_pane_about_the_keyboard(OldPane())  # Does not raise.
@@ -164,11 +159,11 @@ def test_every_pane_hears_the_option():
     pymux.panes_by_id[pane.pane_id] = pane
 
     pymux.sync_keyboard_source_flags()
-    assert pane.process.screen.synthesize_key_events is True
+    assert pane.screen.synthesize_key_events is True
 
     pymux.synthesize_key_events = False
     pymux.sync_keyboard_source_flags()
-    assert pane.process.screen.synthesize_key_events is False
+    assert pane.screen.synthesize_key_events is False
 
 
 def test_the_option_alone_reaches_the_panes():
@@ -180,5 +175,5 @@ def test_the_option_alone_reaches_the_panes():
 
     pymux.synthesize_key_events = False
     pymux.sync_keyboard_source_flags()
-    assert pane.process.screen.synthesize_key_events is False
-    assert pane.process.screen.keyboard_source_flags == 0b11111
+    assert pane.screen.synthesize_key_events is False
+    assert pane.screen.keyboard_source_flags == 0b11111

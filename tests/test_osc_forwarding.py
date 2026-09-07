@@ -121,17 +121,12 @@ class FakeScreen:
         self.pointer_shape = pointer_shape
 
 
-class FakeProcess:
-    def __init__(self, pointer_shape=""):
-        self.screen = FakeScreen(pointer_shape)
-
-
 class FakePane:
     "A pane is named by its id when a notification answer comes back."
 
     def __init__(self, pane_id=7, pointer_shape=""):
         self.pane_id = pane_id
-        self.process = FakeProcess(pointer_shape)
+        self.screen = FakeScreen(pointer_shape)
 
 
 def make_pymux(focused=(), pane=None):

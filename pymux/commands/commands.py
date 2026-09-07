@@ -792,7 +792,7 @@ def send_keys(pymux: "Pymux", variables: _VariablesDict) -> None:
         # prompt_toolkit's `Screen` has no such method, so `send-keys
         # -R` raised `AttributeError` and reset nothing.
         # Lillecarl/pymux#118.
-        pane.process.screen.reset()
+        pane.screen.reset()
 
     keys = variables["<keys>"]
 
@@ -818,10 +818,10 @@ def send_keys(pymux: "Pymux", variables: _VariablesDict) -> None:
         # Lillecarl/pymux#85.
         for k in keys_sequence:
             data = prompt_toolkit_key_to_vt100_key(
-                k, application_mode=pane.process.screen.in_application_mode
+                k, application_mode=pane.screen.in_application_mode
             )
             if data:
-                pane.process.write_key_data(data)
+                pane.process.write_input(pane.screen.encode_key(data))
 
 
 @cmd("copy-mode", options="[-u]")
@@ -845,7 +845,7 @@ def paste_buffer(pymux: "Pymux", variables: _VariablesDict) -> None:
     reads it there and not from the application of one client.
     """
     pane = pymux.arrangement.get_active_pane()
-    pane.process.write_input(pymux.clipboard.get_data().text, paste=True)
+    pane.process.write_input(pane.screen.wrap_paste(pymux.clipboard.get_data().text))
 
 
 @cmd("source-file", options="<filename>")
@@ -917,7 +917,7 @@ def clear_history(pymux: "Pymux", variables: _VariablesDict) -> None:
     if pane.display_scroll_buffer:
         raise CommandException("Not available in copy mode")
     else:
-        pane.process.screen.clear_history()
+        pane.screen.clear_history()
 
 
 @cmd("list-keys")
@@ -990,7 +990,7 @@ def list_panes(pymux: "Pymux", variables: _VariablesDict) -> None:
                     i,
                     process.sx,
                     process.sy,
-                    min(pymux.history_limit, process.screen.line_offset + process.sy),
+                    min(pymux.history_limit, p.screen.line_offset + process.sy),
                     pymux.history_limit,
                     ("(active)" if p == active_pane else ""),
                 )
@@ -1154,7 +1154,7 @@ def capture_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
         pane = pymux.arrangement.get_active_pane()
 
     process = pane.process
-    screen = process.screen
+    screen = pane.screen
     page = screen.page
     data_buffer = page.data_buffer
 

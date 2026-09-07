@@ -70,7 +70,7 @@ def format_pymux_string(
         return pymux.session_name
 
     def title_of_pane() -> str:
-        return pane.process.screen.title
+        return pane.screen.title
 
     def hostname() -> str:
         return socket.gethostname()
@@ -147,7 +147,7 @@ def _history_size(pymux, window, pane) -> str:
     "Number of lines in the history."
     process = pane.process
     return str(
-        min(pymux.history_limit, process.screen.line_offset + process.sy)
+        min(pymux.history_limit, pane.screen.line_offset + process.sy)
     )
 
 
@@ -244,7 +244,7 @@ tmux_variables: Dict[str, Callable[["Pymux", "Window", "Pane"], str]] = {
     "pane_active": _pane_active,
     "pane_width": lambda p, w, pane: str(pane.process.sx),
     "pane_height": lambda p, w, pane: str(pane.process.sy),
-    "pane_title": lambda p, w, pane: pane.process.screen.title,
+    "pane_title": lambda p, w, pane: pane.screen.title,
     "pane_pid": _pane_pid,
     "pane_current_command": _pane_current_command,
     "pane_current_path": _pane_current_path,
