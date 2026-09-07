@@ -1138,13 +1138,22 @@ def close_popup(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.close_overlay()
 
 
-@cmd("capture-pane", options="[-p] [(-t <target-pane>)] [(-S <start>)] [(-E <end>)]")
+@cmd(
+    "capture-pane",
+    options="[-p] [-J] [(-t <target-pane>)] [(-S <start>)] [(-E <end>)]",
+)
 def capture_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Capture the content of a pane.
 
     Line numbers are tmux style: 0 is the first line of the visible pane,
     negative numbers are lines in the history.
+
+    **A line is a row of the pane, and `-J` makes it a line a program
+    wrote.** The pane cuts a line to fit its width, so a path or a
+    compiler message comes out in pieces without it. With `-J` the
+    pieces are joined and the numbers count the joined lines, which is
+    a different line 100 in the history. Lillecarl/pymux#135.
     """
     if variables["-t"]:
         pane = _find_pane(pymux, variables["<target-pane>"])
@@ -1158,25 +1167,37 @@ def capture_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     page = screen.page
     data_buffer = page.data_buffer
 
-    lines_count = screen.lines
-
     if not data_buffer:
         text = ""
     else:
-        # Collect all lines, from the top of the buffer until the bottom.
-        all_keys = sorted(data_buffer.keys())
-        total = max(all_keys) + 1
+        first_row = min(data_buffer)
+        last_row = max(data_buffer)
 
-        # Index 0 of `all_lines` is the first line in the buffer. The visible
-        # pane are the last `lines_count` lines.
-        visible_top = total - lines_count
+        if variables["-J"]:
+            # One entry per line a program wrote, with the rows it was
+            # laid out on joined back together.
+            lines = page.text_lines(first_row, last_row)
+            captured = [line.text for line in lines]
 
-        def to_tmux_line_number(buffer_index: int) -> int:
-            "Translate a buffer index into a tmux line number."
-            return buffer_index - visible_top
+            # Line zero is the line the first visible row falls in. A
+            # wrap can carry a line from the history onto the screen,
+            # and the whole of that line is line zero.
+            visible_top = next(
+                (
+                    index
+                    for index, line in enumerate(lines)
+                    if line.last >= screen.line_offset
+                ),
+                0,
+            )
+        else:
+            captured = [
+                page.text(row, row) for row in range(first_row, last_row + 1)
+            ]
+            visible_top = screen.line_offset - first_row
 
         def from_tmux_line_number(line_number: int) -> int:
-            "Translate a tmux line number into a buffer index."
+            "Translate a tmux line number into an index of `captured`."
             return visible_top + line_number
 
         # Determine the range. (tmux line numbers.)
@@ -1184,30 +1205,26 @@ def capture_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
         end_str = variables["<end>"]
 
         if start_str in (None, "", "-"):
-            first_buffer_index = all_keys[0]
+            first_index = 0
         else:
             try:
-                first_buffer_index = from_tmux_line_number(int(start_str))
+                first_index = from_tmux_line_number(int(start_str))
             except ValueError:
                 raise CommandException("Invalid start line: %s" % (start_str,))
-            first_buffer_index = max(first_buffer_index, all_keys[0])
+            first_index = max(first_index, 0)
 
         if end_str in (None, "", "-"):
-            last_buffer_index = all_keys[-1]
+            last_index = len(captured) - 1
         else:
             try:
-                last_buffer_index = from_tmux_line_number(int(end_str))
+                last_index = from_tmux_line_number(int(end_str))
             except ValueError:
                 raise CommandException("Invalid end line: %s" % (end_str,))
-            last_buffer_index = min(last_buffer_index, all_keys[-1])
+            last_index = min(last_index, len(captured) - 1)
 
-        lines = []
-        for buffer_index in range(first_buffer_index, last_buffer_index + 1):
-            line = data_buffer.get(buffer_index, {})
-            chars = [line[x].char for x in sorted(line.keys()) if x in line]
-            lines.append("".join(chars).rstrip())
-
-        text = "\n".join(lines)
+        text = "\n".join(
+            line.rstrip() for line in captured[first_index : last_index + 1]
+        )
 
     if variables["-p"]:
         pymux.print_command_line(text)
