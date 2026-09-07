@@ -1492,12 +1492,20 @@ def check_the_cursor_of_a_drawing_pane(tmp):
     it: something that redraws while the person is not typing.
     """
     program = tmp / "animate.sh"
-    # The same cell every time, so nothing but the cursor could change.
+    # One cell, and it really changes: a frame that changes nothing is
+    # written no longer, so a pane that draws the same character would
+    # make the client say nothing at all. That is the check below this
+    # one. Lillecarl/pymux#117.
     program.write_text(
         "printf '\\033[2J\\033[H'\n"
         "printf ANIMATING\n"
         "i=0\n"
-        "while [ $i -lt 40 ]; do printf '\\033[10;1Hx'; sleep 0.1; i=$((i+1)); done\n"
+        "while [ $i -lt 40 ]; do\n"
+        "  if [ $((i % 2)) -eq 0 ]; then c=-; else c=+; fi\n"
+        "  printf '\\033[10;1H%s' $c\n"
+        "  sleep 0.1\n"
+        "  i=$((i+1))\n"
+        "done\n"
         "sleep 5\n"
     )
 
@@ -1523,6 +1531,67 @@ def check_the_cursor_of_a_drawing_pane(tmp):
         assert b"\x1b[?2026h" in since, "no frame was held back"
 
         print("cursor of a drawing pane: ok")
+    except Exception:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+
+
+def check_a_pane_that_changes_nothing(tmp):
+    """
+    A frame that changes nothing writes nothing.
+
+    pymux renders whenever something may have changed. Two things ask
+    for it while a person does nothing at all: the pane rewrites a cell
+    with the character it already holds, and the auto refresh thread
+    asks every `status-interval` seconds so the clock in the status bar
+    stays right. Most of those frames hold the screen that is already
+    there.
+
+    Such a frame used to go out as "hide the cursor, reset the
+    attributes, show the cursor". That is not nothing. It wakes the
+    terminal, and a terminal does more on a read than draw what
+    arrived: xterm advances the phase of its blinking text, so the
+    blinking rows of a pane appeared or disappeared with nothing on
+    screen to explain it. Lillecarl/pymux#117.
+
+    The session is full screen, so nothing but the pane can draw and
+    the clock is not on the screen to move.
+    """
+    config = tmp / "quiet.conf"
+    config.write_text("set full-screen on\n")
+
+    program = tmp / "still.sh"
+    # The same character in the same cell, over and over.
+    program.write_text(
+        "printf '\\033[2J\\033[H'\n"
+        "printf STILL\n"
+        "i=0\n"
+        "while [ $i -lt 40 ]; do printf '\\033[10;1Hx'; sleep 0.1; i=$((i+1)); done\n"
+        "sleep 5\n"
+    )
+
+    terminal = Terminal(tmp, "still", command="sh %s" % program, config=config)
+    try:
+        terminal.wait_for_the_queries()
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"STILL")
+        # The "x" of the first turn is a change, and the ones after it
+        # are not. This waits for that first one to be drawn.
+        terminal.wait_for(b"x")
+
+        mark = terminal.mark()
+        # Longer than `status-interval`, so the auto refresh asks at
+        # least once inside the window.
+        terminal.drain(5.0)
+        since = terminal.since(mark)
+
+        assert since == b"", (
+            "the client wrote %r for a screen that did not change" % since
+        )
+
+        print("a pane that changes nothing: ok")
     except Exception:
         terminal.report()
         raise
@@ -1647,6 +1716,7 @@ def main() -> None:
     check_a_quoted_argument(tmp)
     check_a_non_breaking_space(tmp)
     check_the_cursor_of_a_drawing_pane(tmp)
+    check_a_pane_that_changes_nothing(tmp)
     check_libpymux(tmp)
     print("All pty checks passed.")
 
