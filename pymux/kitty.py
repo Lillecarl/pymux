@@ -46,6 +46,12 @@ _CTRL = 4
 # Key release event type.
 _EVENT_RELEASE = 3
 
+# The first code point of Unicode's Private Use Area. kitty numbers the
+# keys that have no character there -- the function keys, the keypad,
+# the lock keys and the media keys -- so a code this high is a key and
+# not text.
+_PRIVATE_USE_AREA = 0xE000
+
 # A complete key event: "CSI number ; modifier u" for text keys,
 # "CSI 1 ; modifier [ABCDEFHPQS]" for keys with a legacy CSI encoding,
 # and "CSI number ; modifier ~" for keys with a legacy tilde encoding.
@@ -352,7 +358,7 @@ def parse_kitty_key(prefix: str) -> _KeyResult | None:
                 return _DROP
             return keypad_key
 
-        if key >= 57344:
+        if key >= _PRIVATE_USE_AREA:
             # Other private use area keys (lock keys, media keys, ...)
             # have no prompt_toolkit representation. Drop them.
             return _DROP
