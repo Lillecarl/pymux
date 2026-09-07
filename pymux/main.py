@@ -550,6 +550,22 @@ class Pymux:
         "Whether a client draws the titlebar of a pane."
         return self.enable_pane_status and not self.full_screen
 
+    @property
+    def something_moves_with_time(self) -> bool:
+        """
+        Whether the screen holds something that changes on its own.
+
+        The clock is the reason the auto refresh exists, and the
+        `#{...}` variables in the status line and in the titlebar of a
+        pane are the rest of it. A session that draws neither has
+        nothing that time can move, so a frame every four seconds draws
+        the same screen. Lillecarl/pymux#151.
+
+        A pane that writes invalidates its own client. It does not need
+        the clock. Lillecarl/pymux#117.
+        """
+        return self.show_status or self.show_pane_status
+
     def _start_auto_refresh_thread(self):
         """
         Start the background thread that auto refreshes all clients according to
@@ -559,7 +575,8 @@ class Pymux:
         def run():
             while True:
                 time.sleep(self.status_interval)
-                self.invalidate()
+                if self.something_moves_with_time:
+                    self.invalidate()
 
         t = threading.Thread(target=run)
         t.daemon = True
