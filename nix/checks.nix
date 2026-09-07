@@ -272,7 +272,7 @@ in
     env = { inherit vttestInclude vttestTerminals; };
   } (seatSetup + ''
     export PYMUX_VTTEST=${vttest}/bin/vttest
-    export PYMUX_VTTEST_WALKER=${vttestWalker}
+    export PYMUX_VTTEST_WALKER=${vttestWalker}/drive_with_vttest.py
     export PYMUX_VTTEST_INCLUDE="$vttestInclude"
     export PYMUX_VTTEST_TERMINALS="$vttestTerminals"
     export PYMUX_VTTEST_OUT="$out"
