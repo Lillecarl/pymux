@@ -4,9 +4,12 @@
 # carry the X server, the two terminal emulators, the compositor and the
 # screenshot tools that only a test needs.
 #
-# `terminfo` and `testSources` come from `default.nix`. The package itself is
-# not an input: a pymux suite runs against the source in `testSources`, where
-# pyte and ptterm run their suites against the installed package.
+# `testSources` comes from `default.nix`. The package itself is not an input:
+# a pymux suite runs against the source in `testSources`, where pyte and
+# ptterm run their suites against the installed package.
+#
+# The entry of terminfo that a pane is told about needs no input either. It
+# rides inside `pyte`, which is in `pythonWithTests` already.
 #
 # `nix/suite.nix` says why a check is two derivations.
 {
@@ -31,7 +34,6 @@
   makeFontsConf,
   dejavu_fonts,
   perl,
-  terminfo,
   testSources,
 }:
 let
@@ -192,10 +194,6 @@ let
     export HOME="$TMPDIR"
     export LANG=C.UTF-8
     export PYTHONDONTWRITEBYTECODE=1
-
-    # The entry of terminfo that a pane is told about. The wrapper of the
-    # package sets this; a test runs the source, so it sets it here.
-    export PYMUX_TERMINFO=${terminfo}/share/terminfo
   '';
 
   # `inputs` adds to what a run may call, and `pythonWithTests` is in every

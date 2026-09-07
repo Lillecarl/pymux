@@ -61,7 +61,7 @@ from pymux.colors import TRUECOLOR_PROBE  # noqa: E402
 from pymux.graphics import CELL_SIZE_QUERY  # noqa: E402
 from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY  # noqa: E402
 from pymux.blocks import LOWER_HALF, UPPER_HALF  # noqa: E402
-from pymux.terminfo import terminal_name  # noqa: E402
+from pyte.environment import terminal_name  # noqa: E402
 
 REPO_ROOT = Path(__file__).parent.parent
 
@@ -746,12 +746,9 @@ def check_kitty_terminal(tmp):
         #    Its environment describes the pane, not the terminal that
         #    the client attached from: a pane takes 24 bit colour, and
         #    it is no kitty window.
-        # A pane is told what it really is. The name is "pymux" when
-        # the entry of terminfo was built and installed, and the name
-        # of xterm when it was not.
-        # A pane is told what it really is. The name is "pymux" when
-        # the entry of terminfo is there, and the name of xterm when
-        # it is not; the server and this check read the same rule.
+        # A pane is told what it really is. The name is "pyte" when the
+        # entry of terminfo is there, and the name of xterm when it is
+        # not; the server and this check read the same rule.
         terminal.wait_for(
             b"ENV<%s|truecolor||>" % terminal_name().encode("ascii")
         )

@@ -21,10 +21,6 @@
   prompt-toolkit,
   ptterm,
   docopt-ng,
-  makeWrapper,
-  python,
-  runCommand,
-  ncurses,
   callPackage,
   mesa,
 }:
@@ -37,16 +33,6 @@ let
     src = lib.cleanSource ./.;
 
     disabled = pythonOlder "3.11";
-
-    nativeBuildInputs = [ makeWrapper ];
-
-    # Where the entry that describes a pane lives. A pane that finds it
-    # says `TERM=pymux`; one that does not falls back to xterm.
-    makeWrapperArgs = [
-      "--set-default"
-      "PYMUX_TERMINFO"
-      "${terminfo}/share/terminfo"
-    ];
 
     propagatedBuildInputs = [
       prompt-toolkit
@@ -61,7 +47,7 @@ let
       "libpymux"
     ];
 
-    passthru = { inherit checks terminfo; };
+    passthru = { inherit checks; };
 
     meta = {
       description = "Pure Python terminal multiplexer (tmux alternative)";
@@ -71,27 +57,6 @@ let
       platforms = lib.platforms.unix;
     };
   };
-
-  # The terminfo entry that describes a pane, compiled from the table that
-  # the screen also answers XTGETTCAP with. A program built on ncurses reads
-  # the database instead of asking, and without an entry of our own it reads
-  # the one for xterm-256color and never writes a curly underline.
-  terminfo = runCommand "pymux-terminfo" {
-    nativeBuildInputs = [
-      (python.withPackages (ps: [ ptterm ]))
-      ncurses
-    ];
-  } ''
-    mkdir -p $out/share/terminfo
-    python -m pyte.terminfo > pyte.ti
-    tic -x -o $out/share/terminfo pyte.ti
-
-    # An entry that does not compile leaves a pane naming a terminal that
-    # is not there, which is worse than naming xterm. Both spellings are
-    # checked, because `TERM` may carry either.
-    TERMINFO_DIRS=$out/share/terminfo: infocmp -x pyte-256color > /dev/null
-    TERMINFO_DIRS=$out/share/terminfo: infocmp -x pyte > /dev/null
-  '';
 
   # Only the module and the tests, not the whole repository. A copy of
   # everything makes the test runs rebuild on every unrelated edit.
@@ -116,7 +81,6 @@ let
   # nixpkgs has marked broken, so it cannot be taken from the scope.
   checks = callPackage ./nix/checks.nix {
     inherit
-      terminfo
       testSources
       ptterm
       prompt-toolkit

@@ -30,17 +30,16 @@ from prompt_toolkit.styles import (
     SwapLightAndDarkStyleTransformation,
 )
 from ptterm import Terminal
+from pyte.environment import terminal_name
 
 from .arrangement import Arrangement, Pane, Window
 from .commands.commands import call_command_handler, handle_command
 from .commands.completer import create_command_completer
 from .enums import COMMAND, PROMPT
-from .environment import scrub_terminal_identity
 from .graphics import PaneView
 from .key_bindings import PymuxKeyBindings
 from .layout import Justify, LayoutManager
 from .log import logger
-from .terminfo import add_to_environment, terminal_name
 from .notifications import NotificationRoutes
 from .options import ALL_OPTIONS, ALL_WINDOW_OPTIONS
 from .osc import build_osc
@@ -412,8 +411,12 @@ class Pymux:
         self.mode_keys_vi_mode = False
         self.history_limit = 2000
         self.status_interval = 4
-        # What a pane is told it is. The entry of pymux describes what
-        # a pane really does; a build without one falls back to xterm.
+        # What a pane is told it is. The entry of pyte describes what a
+        # pane really does; a build without one falls back to xterm.
+        #
+        # `ptterm` already tells a pane this, so the option is here to
+        # let a person say something else. It is `default-terminal` in
+        # tmux, and it keeps that job.
         self.default_terminal = terminal_name()
         self.status_left = "[#S] "
         self.status_left_length = 20
@@ -746,31 +749,16 @@ class Pymux:
                 pass  # No such file or directory.
 
             # A pane is not the terminal that the client attached
-            # from: it answers the protocol queries for itself. Drop
-            # the variables that name the outer terminal, so that a
-            # program asks the pane instead of believing them.
-            scrub_terminal_identity(os.environ)
-
-            # Set terminal variable. A program built on ncurses reads
-            # the database instead of asking, so the entry that
-            # describes a pane goes on the path it searches.
-            os.environ["TERM"] = self.default_terminal
-            add_to_environment(os.environ)
-
-            # A pane takes 24 bit colour, whatever the terminal of the
-            # client takes. ptterm keeps the colour that a program
-            # writes, and every client renders it as deeply as its own
-            # terminal allows.
+            # from: it answers the protocol queries for itself. ptterm
+            # has already said so here, because it is the layer that
+            # owns both the screen and the process
+            # (Lillecarl/pymux#125). What is left is what only pymux
+            # knows.
             #
-            # Saying so matters. Without it a program falls back to the
-            # 256 colours of TERM and picks the nearest index itself,
-            # which it then writes as that index: a colour of a theme
-            # ends up as the palette entry beside it, and pymux can no
-            # longer tell what the program meant. (A dark background
-            # becomes plain black that way.) The value that a client
-            # happened to start the server with says nothing about the
-            # pane, so it is not inherited either.
-            os.environ["COLORTERM"] = "truecolor"
+            # The name is one of those. `default-terminal` is an option
+            # a person can set, and this hook runs after ptterm's, so
+            # what they set wins.
+            os.environ["TERM"] = self.default_terminal
 
             # Make sure to set the PYMUX environment variable.
             if self.socket_name:
