@@ -545,8 +545,8 @@ class ClientGraphics:
 
     def _transmit(self, outer_id: int, image) -> None:
         "Send the pixel data of one image to the outer terminal."
-        if image.format == 100:
-            keys = "f=100"
+        if image.format == PixelFormat.PNG:
+            keys = "f=%i" % PixelFormat.PNG
             payload = base64.b64encode(image.data).decode("ascii")
         else:
             # Compress: the data travels through the client socket.
