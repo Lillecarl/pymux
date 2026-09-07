@@ -5,7 +5,7 @@ import asyncio
 from ctypes import byref, create_string_buffer, windll
 from ctypes.wintypes import BOOL, DWORD
 
-from ptterm.backends.win32_pipes import OVERLAPPED
+from ptyhost.backends.win32_pipes import OVERLAPPED
 
 from .base import BrokenPipeError
 

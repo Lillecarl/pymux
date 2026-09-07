@@ -3,7 +3,7 @@ from asyncio import create_task, get_event_loop
 from ctypes import byref, windll
 from ctypes.wintypes import DWORD
 
-from ptterm.backends.win32_pipes import OVERLAPPED
+from ptyhost.backends.win32_pipes import OVERLAPPED
 
 from ..log import logger
 from .base import BrokenPipeError, PipeConnection
