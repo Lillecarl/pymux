@@ -550,35 +550,6 @@ class Pymux:
         "Whether a client draws the titlebar of a pane."
         return self.enable_pane_status and not self.full_screen
 
-    def pane_owns_whole_lines(self, pane) -> bool:
-        """
-        Whether every row this pane draws is a whole row of the terminal.
-
-        A DEC line attribute belongs to a line of the terminal the
-        person runs, so a pane may only put one on the wire when it
-        holds the whole line. Three things take a piece of a row away.
-
-        A second pane in the window, because a vertical split puts one
-        beside this one. The overlay, which floats over the layout. And
-        a terminal wider than the window, because the window is only as
-        wide as the narrowest client watching it and the background
-        fills the rest of every row.
-
-        The status line and the titlebar of a pane take rows of their
-        own, so neither of them matters here. A pane that is zoomed, and
-        a pane in a horizontal split, hold whole rows as well; both are
-        left out, because one pane in a window is the case that needs no
-        reading of the layout.
-        """
-        if self.overlay_pane is not None:
-            return False
-
-        app = get_app()
-        if app.output.get_size().columns != self.get_window_size().columns:
-            return False
-
-        return self.arrangement.get_active_window().panes == [pane]
-
     def _start_auto_refresh_thread(self):
         """
         Start the background thread that auto refreshes all clients according to
@@ -790,11 +761,6 @@ class Pymux:
         else:
             command_list = [self.default_shell]
 
-        @Condition
-        def owns_whole_lines() -> bool:
-            "Whether this pane holds every row it draws, for this client."
-            return self.pane_owns_whole_lines(pane)
-
         # Create new pane and terminal.
         terminal = Terminal(
             done_callback=done_callback,
@@ -804,7 +770,6 @@ class Pymux:
             may_resize=may_resize,
             before_exec_func=before_exec,
             command=command_list,
-            owns_whole_lines=owns_whole_lines,
             # The `history-limit` option, which said how far copy mode
             # could scroll and never reached the screen that holds the
             # rows. A pane kept two thousand whatever the option said.

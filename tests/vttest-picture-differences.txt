@@ -29,31 +29,48 @@
 # Only item 4 of vttest's main menu is recorded. Item 2 is measured and
 # not written down, because two runs of it do not yet agree.
 
-# Two things at once on these two screens, and only one of them is a
-# fault.
+# Item 4 of vttest is entirely about the DEC line attributes, and a
+# pane does not have them. "ESC # 3", "ESC # 4", "ESC # 5" and
+# "ESC # 6" draw a line at twice the width or twice the height on a
+# VT100. kitty, Ghostty and Alacritty implement none of them, esctest
+# has no test for them, and no recorded program in this repository
+# sends one. So a pane reads each of the four and draws the line the
+# plain way. Lillecarl/pymux#141.
 #
-# DECCOLM. vttest asks for 132 columns, and xterm answers by making its
-# window wider: the bare picture is 132 cells across and 1280 pixels
-# wide. A pane cannot do that. It has the cells the user gave it, and
-# nothing in the protocol lets a program in a pane resize the window of
-# the person running it, so the pymux picture stays 80 cells and 800
-# pixels. That is not a fault and there is nothing to fix: a
+# Every count below is that, and it is the whole of every count. What
+# a person sees: xterm draws each of these lines with glyphs twice as
+# big, and the pane draws the same characters at their ordinary size.
+# A double height line shows its text on both of its rows, because the
+# program writes the text once for each half.
+#
+# These are the biggest counts in this file by far, and they are the
+# least interesting. Six screens that are about one feature nobody
+# implements say nothing else about the pane.
+xterm 4 Test of double-sized characters #1 10841
+xterm 4 Test of double-sized characters #2 12737
+
+# The same, and DECCOLM as well. vttest asks for 132 columns, and
+# xterm answers by making its window wider: the bare picture is 132
+# cells across and 1280 pixels wide. A pane cannot do that. It has the
+# cells the user gave it, and nothing in the protocol lets a program in
+# a pane resize the window of the person running it, so the pymux
+# picture stays 80 cells and 800 pixels. That is not a fault either: a
 # multiplexer exists because the terminal belongs to the user.
 #
-# `compare` measures the 800 pixels the two pictures share, so the width
-# itself is not in the count. What is in it is the last cell of each
-# double sized row, which holds the wrong letter: Lillecarl/pymux#116.
-# A pane writes every cell of such a row, the cursor stops at the right
-# margin, and the last character of the row overwrites the cell that is
-# there. Both rows end in "line", so both show an "e".
-#
-# So these two counts fall when #116 is fixed, and they do not fall to
-# zero. Record them again then.
-xterm 4 Test of double-sized characters #3 1594
-xterm 4 Test of double-sized characters #4 1594
+# `compare` measures the 800 pixels the two pictures share, so the
+# width itself is not in the count.
+xterm 4 Test of double-sized characters #3 11514
+xterm 4 Test of double-sized characters #4 13410
 
-# The cursor, two columns to the left of where it belongs. xterm puts it
-# after "Push <RETURN>", which is column 52. ptterm's model says column
-# 52 on both sides, so the pane holds the right answer and what pymux
-# draws is two cells off. Lillecarl/pymux#115.
-xterm 4 Test of double-sized characters #6 371
+# The same again, on a screen that also blinks.
+xterm 4 Test of double-sized characters #5 15079
+
+# "Exactly half of the box should remain." vttest draws a box and makes
+# its rows double width, so xterm shows the half of it that fits. The
+# pane draws the whole box at its ordinary size.
+#
+# The cursor of this screen used to be two columns to the left of where
+# xterm puts it (Lillecarl/pymux#115). It is not any more: the top row
+# of the two pictures is identical to the pixel. The doubling was what
+# moved it.
+xterm 4 Test of double-sized characters #6 3960
