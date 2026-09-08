@@ -495,7 +495,17 @@ def test_shift_and_a_functional_key_is_that_key():
     called "ENTER" that nothing binds.
     """
     assert parse("\x1b[13;2u") == [(Keys.Enter, "\x1b[13;2u")]
-    assert parse("\x1b[9;2u") == [(Keys.Tab, "\x1b[9;2u")]
+
+
+def test_shift_and_tab_is_the_back_tab():
+    """
+    prompt_toolkit has a name for this key, and it is not Tab. A
+    legacy keyboard sends "CSI Z" for it, which reaches the same name
+    through prompt_toolkit's own table, so the two keyboards agree.
+    """
+    assert parse("\x1b[9;2u") == [(Keys.BackTab, "\x1b[9;2u")]
+    assert parse("\x1b[27;2;9~") == [(Keys.BackTab, "\x1b[27;2;9~")]
+    assert parse("\x1b[Z") == [(Keys.BackTab, "\x1b[Z")]
 
 
 def test_the_reason_says_what_kind_of_key_it_was():

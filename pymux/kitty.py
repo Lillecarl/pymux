@@ -38,6 +38,15 @@ from prompt_toolkit.input.vt100_parser import (
 from prompt_toolkit.key_binding.key_processor import _Flush
 from prompt_toolkit.keys import Keys
 
+from pyte.kitty_keys import (
+    FIRST_FUNCTIONAL_KEY,
+    EventType,
+    KeyCode,
+    KeyEvent,
+    Modifier,
+    parse_key_data,
+)
+
 logger = logging.getLogger(__name__)
 
 #: The bytes that introduce a control sequence. A key that arrives in
@@ -48,37 +57,22 @@ CSI = "\x1b["
 __all__ = ["DropReason", "Dropped", "KittyVt100Parser", "parse_kitty_key"]
 
 
-# Modifier bits of the protocol. (The encoded value is one plus the sum
-# of the set bits.)
-_SHIFT = 1
-_ALT = 2
-_CTRL = 4
+# The modifier bits, under the names this file has always used. pyte
+# owns the values, because it reads the sequences that carry them.
+_SHIFT = Modifier.SHIFT
+_ALT = Modifier.ALT
+_CTRL = Modifier.CTRL
 
-# Key release event type.
-_EVENT_RELEASE = 3
-
-# The first code point of Unicode's Private Use Area. kitty numbers the
-# keys that have no character there -- the function keys, the keypad,
-# the lock keys and the media keys -- so a code this high is a key and
-# not text.
-_PRIVATE_USE_AREA = 0xE000
-
-# A complete key event: "CSI number ; modifier u" for text keys,
-# "CSI 1 ; modifier [ABCDEFHPQS]" for keys with a legacy CSI encoding,
-# and "CSI number ; modifier ~" for keys with a legacy tilde encoding.
-# Sub-parameters carry alternate key codes and the event type; a third
-# parameter carries the text as code points.
-_KITTY_KEY_RE = re.compile(
-    r"""
-    \x1b\[
-    (?P<key>\d+)(?::[\d:]*)?              # key code, optional sub-parameters
-    (?:;(?P<mods>\d*)(?::(?P<event>\d+))?)?  # modifiers, optional event type
-    (?:;(?P<text>[\d:]*))?                # text as code points
-    (?P<final>[u~ABCDEFHPQS])             # final byte
-    \Z
-    """,
-    re.VERBOSE,
-)
+#: The shape of a complete key sequence, and nothing about what is in
+#: it. This is a gate and not a reader: it says whether `parse_key_data`
+#: is worth calling, and pulls no field out.
+#:
+#: It is here for speed. The parser of prompt_toolkit asks about every
+#: prefix of what it holds, so a payload it is still buffering -- a
+#: long OSC reply, a paste -- would be read from the start once per
+#: character it grows by. That took the pymux suite from 18 seconds to
+#: 228.
+_LOOKS_LIKE_A_KEY_RE = re.compile(r"^\x1b\[[\d;:]*[u~ABCDEFHPQS]$")
 
 # A prefix that could still become a kitty key sequence (or any other
 # CSI sequence with variable parameters).
@@ -359,58 +353,91 @@ _CTRL_FUNCTIONAL = {
 }
 
 
+def _a_reply(prefix: str) -> object | None:
+    """
+    The kind of terminal reply this sequence is, or None.
+
+    None of these is a key event, and every one of them must be
+    consumed all the same, or it reaches a pane as key presses.
+    """
+    if _FLAGS_REPLY_RE.match(prefix):
+        return _FLAGS_REPLY
+    if _DA1_REPLY_RE.match(prefix):
+        return _DA1_REPLY
+    if _CELL_SIZE_REPLY_RE.match(prefix):
+        return _CELL_SIZE_REPLY
+    if _MODE_REPLY_RE.match(prefix):
+        return _MODE_REPLY
+    if _STRING_RE.match(prefix):
+        return _STRING_REPLY
+    return None
+
+
 def parse_kitty_key(prefix: str) -> _KeyResult | None:
     """
-    Parse a complete kitty key sequence. Returns a key, a character or a
-    tuple of keys (the shapes that the prompt_toolkit parser supports),
-    `_KEY_RELEASE` for a key that came back up, a `Dropped` for a
-    sequence that names a key pymux cannot, and None when `prefix` is
-    not a kitty key sequence at all.
+    Parse one complete key sequence into something prompt_toolkit can
+    name.
+
+    Returns a key, a character or a tuple of keys (the shapes that the
+    prompt_toolkit parser supports), `_KEY_RELEASE` for a key that
+    came back up, a `Dropped` for a sequence that names a key pymux
+    cannot, and None when `prefix` is not a key sequence at all.
+
+    **The reading is pyte's.** `parse_key_data` knows every mode a
+    keyboard can be in, and this file used to carry a second reader
+    beside it: its own regex, its own modifier bits, its own keypad.
+    Two readers of the same bytes is what Lillecarl/pymux#119 cost 52
+    keys, so there is one, and what stays here is the naming: which
+    prompt_toolkit key a `KeyEvent` is. Lillecarl/pymux#176.
     """
-    match = _KITTY_KEY_RE.match(prefix)
-    if match is None:
-        # Terminal replies ("CSI ? <flags> u" and "CSI ? ... c") are not
-        # key events, but they must be consumed and reported.
-        if _FLAGS_REPLY_RE.match(prefix):
-            return _FLAGS_REPLY
-        if _DA1_REPLY_RE.match(prefix):
-            return _DA1_REPLY
-        if _CELL_SIZE_REPLY_RE.match(prefix):
-            return _CELL_SIZE_REPLY
-        if _MODE_REPLY_RE.match(prefix):
-            return _MODE_REPLY
-        if _STRING_RE.match(prefix):
-            return _STRING_REPLY
+    reply = _a_reply(prefix)
+    if reply is not None:
+        return reply
+
+    if not _LOOKS_LIKE_A_KEY_RE.match(prefix):
         return None
 
-    if match.group("event") == str(_EVENT_RELEASE):
+    events = [
+        item
+        for item in parse_key_data(prefix)
+        if isinstance(item, KeyEvent)
+    ]
+    if len(events) != 1:
+        # Not one key: an incomplete sequence, or something pyte passes
+        # through, or several keys that this parser never feeds at once.
+        return None
+    return _named(events[0])
+
+
+def _named(event: KeyEvent) -> _KeyResult | None:
+    "The prompt_toolkit key that one key event is."
+    if event.event == EventType.RELEASE:
         # A key that came back up. It is not a key press, so it does
         # not become one: it carries its own key, which only a pane
         # that asked for the event types reads. See
         # `KittyVt100Parser._call_handler`.
         return _KEY_RELEASE
 
-    key = int(match.group("key"))
-    mods = int(match.group("mods") or 1) - 1
-    final = match.group("final")
-    text = match.group("text") or ""
+    key, mods, final, text = event.code, event.mods, event.final, event.text
 
-    # Enter, Tab and Backspace are reported with their C0 code points.
     if final == "u":
-        if key == 27:
+        # Enter, Tab and Backspace carry their C0 code points.
+        if key == KeyCode.ESCAPE:
             return _apply_modifiers(Keys.Escape, mods)
-        if key == 13:
+        if key == KeyCode.ENTER:
             if mods & _CTRL:
                 # ctrl+enter is ctrl+j in the legacy encoding.
                 base: _KeyResult = Keys.ControlJ
                 return (Keys.Escape, base) if mods & _ALT else base
             return _apply_modifiers(Keys.Enter, mods)
-        if key == 9:
+        if key == KeyCode.TAB:
+            if mods & _SHIFT and not mods & (_CTRL | _ALT):
+                return Keys.BackTab
             if mods & _CTRL:
                 base = Keys.ControlI
                 return (Keys.Escape, base) if mods & _ALT else base
             return _apply_modifiers(Keys.Tab, mods)
-        if key == 127:
+        if key == KeyCode.BACKSPACE:
             if mods & _CTRL:
                 base = Keys.Backspace
                 return (Keys.Escape, base) if mods & _ALT else base
@@ -425,7 +452,7 @@ def parse_kitty_key(prefix: str) -> _KeyResult | None:
                 return Dropped(DropReason.KEYPAD_WITH_A_MODIFIER)
             return keypad_key
 
-        if key >= _PRIVATE_USE_AREA:
+        if key >= FIRST_FUNCTIONAL_KEY:
             # Other private use area keys (lock keys, media keys, ...)
             # have no prompt_toolkit representation. Drop them.
             return Dropped(DropReason.A_KEY_THAT_WRITES_NOTHING)
@@ -440,11 +467,8 @@ def parse_kitty_key(prefix: str) -> _KeyResult | None:
 
         # Use the reported text when present. (It accounts for the
         # shift modifier and the keyboard layout.)
-        if text and not (mods & _ALT):
-            return "".join(chr(int(code)) for code in text.split(":") if code)
-        if text and mods & _ALT:
-            plain = "".join(chr(int(code)) for code in text.split(":") if code)
-            return (Keys.Escape, plain)
+        if text:
+            return (Keys.Escape, text) if mods & _ALT else text
 
         if mods & _SHIFT and char.isalpha():
             char = char.upper()
