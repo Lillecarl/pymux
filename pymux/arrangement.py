@@ -163,11 +163,53 @@ class _Split(list):
 
 
 class HSplit(_Split):
-    """Horizontal split."""
+    """Panes stacked one above another."""
 
 
 class VSplit(_Split):
-    """Horizontal split."""
+    """Panes side by side, so this is the split that has a left and a right."""
+
+
+def _place_of(split: _Split, item: object) -> int:
+    """
+    Where this child sits in the split, by identity.
+
+    `list.index` asks whether two children are equal, and a split *is*
+    a list: two stacks holding the same panes would compare equal and
+    the first of them would answer for both.
+    """
+    for place, child in enumerate(split):
+        if child is item:
+            return place
+    raise ValueError("%r is not in %r" % (item, split))
+
+
+def _the_nearest_pane(item, want_last: bool) -> "Pane | None":
+    """
+    The pane of this column that is nearest to the one asking.
+
+    A neighbour may be a whole column of panes, and a title bar names
+    one pane. The one to name is the one that touches us: for a column
+    on our left that is its rightmost pane, and for a column on our
+    right its leftmost.
+
+    A stack has no side that is nearer, so it gives its top pane. That
+    is where a person's eye starts, and it does not move when the focus
+    inside that stack moves.
+    """
+    if isinstance(item, _Split):
+        if not item:
+            # Nothing leaves an empty split behind today. A title bar
+            # is drawn on every frame, so it may not be the thing that
+            # finds out that something has started to.
+            return None
+
+        side_by_side = isinstance(item, VSplit)
+        return _the_nearest_pane(
+            item[-1] if want_last and side_by_side else item[0], want_last
+        )
+
+    return item
 
 
 class Window:
@@ -466,6 +508,44 @@ class Window:
             parent = self._get_parent(item)
             if parent is None or parent is self.root:
                 return item
+            item = parent
+
+    def pane_to_the_left(self, pane: Pane) -> "Pane | None":
+        "The pane beside this one on the left, or `None` at the edge."
+        return self._neighbour(pane, -1)
+
+    def pane_to_the_right(self, pane: Pane) -> "Pane | None":
+        "The pane beside this one on the right, or `None` at the edge."
+        return self._neighbour(pane, +1)
+
+    def _neighbour(self, pane: Pane, step: int) -> "Pane | None":
+        """
+        The pane one step to the side of this one, in the tree.
+
+        **The tree answers this, and not the last render.** Moving the
+        focus is geometric: it reads where each pane was drawn and asks
+        which one is there. That is right for a person pressing a key,
+        and wrong for a title bar, which is drawn *during* a render and
+        would name the neighbours of the frame before. On the first
+        frame there are no positions at all. Lillecarl/pymux#207.
+
+        A `VSplit` holds its children side by side, so it is the only
+        split that has a left and a right. The walk goes up until it
+        finds one with a child on that side: a pane in a stack has no
+        neighbour of its own, and takes the stack's.
+        """
+        item: object = pane
+
+        while True:
+            parent = self._get_parent(item)
+            if parent is None:
+                return None
+
+            if isinstance(parent, VSplit):
+                where = _place_of(parent, item) + step
+                if 0 <= where < len(parent):
+                    return _the_nearest_pane(parent[where], want_last=step < 0)
+
             item = parent
 
     @property
