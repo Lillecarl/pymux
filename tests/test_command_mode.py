@@ -30,6 +30,7 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 from pymux.keys import KittyVt100Parser
 from pymux.main import Pymux
 from pymux.options import ALL_OPTIONS
+from pyte.sequences import Csi, csi
 
 ROWS, COLUMNS = 24, 80
 
@@ -218,7 +219,7 @@ async def test_a_spelled_out_escape_leaves_on_the_press():
     async with a_session() as (pymux, state):
         in_command_mode(state)
 
-        assert leaves_command_mode(pymux, state, None, typing="\x1b[27u")
+        assert leaves_command_mode(pymux, state, None, typing=csi(Csi.KITTY_KEYBOARD, 27))
 
 
 @in_a_loop
@@ -245,7 +246,7 @@ async def test_a_spelled_out_alt_key_does_not_leave():
         in_command_mode(state)
 
         # alt+f, as a terminal that disambiguates writes it.
-        assert not leaves_command_mode(pymux, state, None, typing="\x1b[102;3u")
+        assert not leaves_command_mode(pymux, state, None, typing=csi(Csi.KITTY_KEYBOARD, 102, 3))
 
 
 @in_a_loop

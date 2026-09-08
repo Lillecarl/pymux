@@ -84,6 +84,8 @@ import time
 from pathlib import Path
 from pyte import escape
 from pyte.sequences import csi
+from pyte.modes import PrivateMode
+from pyte.sequences import reset_mode
 
 REPO_ROOT = Path(__file__).parent.parent
 
@@ -149,8 +151,34 @@ def sgr(fixture):
     "Colours and attributes, on a screen that never scrolls."
     lines = [
         csi(escape.ED, 2) + csi(escape.CUP),
-        "\x1b[1mbold\x1b[22m \x1b[3mitalic\x1b[23m \x1b[4munderline\x1b[24m\r\n",
-        "\x1b[7mreverse\x1b[27m \x1b[9mstruck\x1b[29m \x1b[2mfaint\x1b[22m\r\n",
+        (
+            csi(escape.SGR, 1)
+            + "bold"
+            + csi(escape.SGR, 22)
+            + " "
+            + csi(escape.SGR, 3)
+            + "italic"
+            + csi(escape.SGR, 23)
+            + " "
+            + csi(escape.SGR, 4)
+            + "underline"
+            + csi(escape.SGR, 24)
+            + "\r\n"
+        ),
+        (
+            csi(escape.SGR, 7)
+            + "reverse"
+            + csi(escape.SGR, 27)
+            + " "
+            + csi(escape.SGR, 9)
+            + "struck"
+            + csi(escape.SGR, 29)
+            + " "
+            + csi(escape.SGR, 2)
+            + "faint"
+            + csi(escape.SGR, 22)
+            + "\r\n"
+        ),
     ]
     for number in range(8):
         lines.append("\x1b[3%dm%d\x1b[39m " % (number, number))
@@ -158,8 +186,23 @@ def sgr(fixture):
     for number in range(8):
         lines.append("\x1b[4%dm %d \x1b[49m" % (number, number))
     lines.append("\r\n")
-    lines.append("\x1b[38;5;208m256\x1b[39m \x1b[38;2;30;170;90mtruecolour\x1b[39m\r\n")
-    lines.append("\x1b[48;2;40;40;90m\x1b[38;2;250;250;120m on a colour \x1b[0m\r\n")
+    lines.append(
+        csi(escape.SGR, 38, 5, 208)
+        + "256"
+        + csi(escape.SGR, 39)
+        + " "
+        + csi(escape.SGR, 38, 2, 30, 170, 90)
+        + "truecolour"
+        + csi(escape.SGR, 39)
+        + "\r\n"
+    )
+    lines.append(
+        csi(escape.SGR, 48, 2, 40, 40, 90)
+        + csi(escape.SGR, 38, 2, 250, 250, 120)
+        + " on a colour "
+        + csi(escape.SGR, 0)
+        + "\r\n"
+    )
     fixture.extend(lines)
 
 
@@ -311,7 +354,7 @@ def fixture_bytes(name):
         # that blinks.
         return b"\x1b[?25l" + recording.read_bytes() + b"\x1b[?25l"
 
-    pieces = ["\x1b[?25l"]  # No cursor: it is not what this measures.
+    pieces = [reset_mode(PrivateMode.SHOW_CURSOR)]  # No cursor: it is not what this measures.
     FIXTURES[name](pieces)
     return "".join(pieces).encode("utf-8")
 
