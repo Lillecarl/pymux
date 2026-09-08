@@ -77,6 +77,18 @@ PALETTE_HEADER = 2
 #: The text on the titlebar of a pane. XXX: Make configurable.
 PANE_TITLE_FORMAT = " #T "
 
+#: How a title bar marks the name of the pane on each side of its own.
+#: The mark points outward, at the edge it sits on, so the name reads
+#: as "that way". Lillecarl/pymux#207.
+#:
+#: They are one cell wide. Every glyph of this kind is "ambiguous"
+#: width in Unicode, which a terminal in a CJK locale may draw as two,
+#: and then a bar is a cell wider than the arithmetic that laid it out.
+#: The ellipsis of a cut name is the same kind of character, so this
+#: adds no risk that the bar did not already take.
+LEFT_MARK = "◂"
+RIGHT_MARK = "▸"
+
 #: What `clock-mode` draws inside a pane, as text. `BigClock` paints the
 #: hour and the minute in big numbers, and nothing else of it moves.
 CLOCK_FORMAT = "%H:%M"
@@ -1421,7 +1433,10 @@ def _create_container_for_process(
         if pane is None:
             return []
 
-        return [("class:neighbour", " %s " % _short_name_of(pymux, pane))]
+        name = _short_name_of(pymux, pane)
+        if on_the_left:
+            return [("class:neighbour", "%s %s " % (LEFT_MARK, name))]
+        return [("class:neighbour", " %s %s" % (name, RIGHT_MARK))]
 
     def get_the_number_of_the_pane() -> StyleAndTextTuples:
         """

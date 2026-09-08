@@ -1,7 +1,7 @@
 """
 A bar in three parts: this pane's title, and its neighbours' names.
 
-    vim              bash              less
+      1 ◂ vim          bash          less ▸
 
 The middle is the pane's own title, centred over the pane. The two
 edges name the pane to the left and the pane to the right, and each one

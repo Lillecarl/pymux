@@ -12,6 +12,8 @@ naming. Lillecarl/pymux#207.
 
 from test_strip_draws import CHROME, a_client
 
+from pymux.layout import LEFT_MARK, RIGHT_MARK
+
 NAMES = ["alpha", "beta", "gamma"]
 
 #: Wide enough that three panes side by side each have a bar with room
@@ -66,12 +68,13 @@ def test_a_pane_names_the_pane_on_each_side():
         panes = a_row_of_named_panes(pymux)
         bar = bars_of(pymux, draw, panes)[1]
 
-        # The left edge: the pane's own number, then the name of the
-        # pane to its left. The numbers start at zero, as tmux's do.
-        assert bar.split()[:2] == ["1", "alpha"], repr(bar)
+        # The left edge: the pane's own number, then a mark pointing
+        # that way and the name of the pane on the left. The numbers
+        # start at zero, as tmux's do.
+        assert bar.split()[:3] == ["1", LEFT_MARK, "alpha"], repr(bar)
 
         # The right edge, and the pane's own title between them.
-        assert bar.rstrip().endswith("gamma"), repr(bar)
+        assert bar.rstrip().endswith("gamma " + RIGHT_MARK), repr(bar)
         assert "beta" in bar, repr(bar)
 
 
@@ -81,8 +84,8 @@ def test_the_pane_at_the_left_end_names_nothing_on_its_left():
         bar = bars_of(pymux, draw, panes)[0]
 
         assert "alpha" in bar, repr(bar)
-        assert "beta" not in bar[: len(bar) // 2], repr(bar)
-        assert bar.rstrip().endswith("beta"), repr(bar)
+        assert LEFT_MARK not in bar, repr(bar)
+        assert bar.rstrip().endswith("beta " + RIGHT_MARK), repr(bar)
 
 
 def test_the_pane_at_the_right_end_names_nothing_on_its_right():
@@ -90,7 +93,8 @@ def test_the_pane_at_the_right_end_names_nothing_on_its_right():
         panes = a_row_of_named_panes(pymux)
         bar = bars_of(pymux, draw, panes)[2]
 
-        assert bar.split()[:2] == ["2", "beta"], repr(bar)
+        assert bar.split()[:3] == ["2", LEFT_MARK, "beta"], repr(bar)
+        assert RIGHT_MARK not in bar, repr(bar)
         assert bar.rstrip().endswith("gamma"), repr(bar)
 
 
