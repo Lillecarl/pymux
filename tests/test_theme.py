@@ -41,10 +41,15 @@ ROWS, COLUMNS = 24, 80
 #: A pane that ends at once and holds a real screen while it lives.
 NOTHING = "%s -c pass" % (sys.executable,)
 
-#: Everything the grey theme replaces, which is every green rule of
-#: the default. It is written here and not read off the themes: a test
-#: that derives the list from the thing it judges says nothing.
-THE_GREEN_ONES = frozenset(
+#: Everything the grey theme replaces. It is written here and not read
+#: off the themes: a test that derives the list from the thing it
+#: judges says nothing.
+#:
+#: The last two are not green. A picture of the theme showed the pane
+#: index of the focused pane on pure red and its number on orange,
+#: which are the two loudest things on a screen whose whole point is
+#: that it is quiet. Lillecarl/pymux#161.
+THE_LOUD_ONES = frozenset(
     {
         "terminal.focused border",
         "terminal.focused titlebar",
@@ -58,6 +63,8 @@ THE_GREEN_ONES = frozenset(
         "search-toolbar.text",
         "search-match",
         "search-match.current",
+        "terminal.focused titlebar paneindex",
+        "panenumber focused",
     }
 )
 
@@ -188,23 +195,28 @@ def test_the_names_are_offered_for_completion():
     assert ALL_OPTIONS["theme"].get_all_values(pymux) == sorted(THEMES)
 
 
-def test_the_grey_theme_replaces_the_green_rules_and_no_others():
+def test_the_grey_theme_replaces_the_loud_rules_and_no_others():
     """
     Every rule the grey theme does not name is the default's, so a
     rule added to the default reaches both. Naming them here is what
-    says a green one was missed: a new green rule in the default shows
-    up as a rule the two agree on.
+    says a loud one was missed: a new coloured rule in the default
+    shows up as a rule the two agree on.
     """
     default = dict(THEMES["default"].style_rules)
     grey = dict(THEMES["grey"].style_rules)
 
     assert set(default) == set(grey)
-    assert {name for name in default if default[name] != grey[name]} == THE_GREEN_ONES
+    assert {name for name in default if default[name] != grey[name]} == THE_LOUD_ONES
 
 
-def test_no_rule_of_the_grey_theme_is_green():
-    "The ones it replaces, read back."
+def test_no_rule_of_the_grey_theme_is_loud():
+    """
+    The ones it replaces, read back. No green, and none of the three
+    colours a picture caught: pure red, orange, bright green.
+    """
     grey = dict(THEMES["grey"].style_rules)
 
-    for name in THE_GREEN_ONES:
+    for name in THE_LOUD_ONES:
         assert "green" not in grey[name]
+        for loud in ("#ff0000", "#aa8800", "#44ff44"):
+            assert loud not in grey[name]

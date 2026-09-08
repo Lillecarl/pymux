@@ -117,23 +117,38 @@ DEFAULT_RULES = {
 #: The green scheme pymux has always drawn.
 DEFAULT = a_theme(DEFAULT_RULES)
 
-#: The same scheme with the green taken out, in the blue grey the
-#: command palette and the completion menu already use.
+#: The same scheme with the loud colours taken out, in the blue grey
+#: the command palette and the completion menu already use.
 #:
 #: It is here so that a person who does not want the green has
 #: somewhere to go, and so that choosing a theme is proven by
 #: something other than the theme it starts on.
+#:
+#: **A picture is what says this is finished.** The green was the
+#: obvious half, and a photograph of it
+#: (`checks.pymux-chrome-pictures`) showed the pane index of the
+#: focused pane still on pure red and its number on orange: the two
+#: loudest things on the screen, in a scheme whose whole point is that
+#: it is quiet. Neither is green, so neither was on the first list.
+#: Lillecarl/pymux#161.
+#:
+#: What stays coloured is what carries a meaning rather than a mood: a
+#: pane that has ended is still on red, a confirmation is still on
+#: dark red, and the position in copy mode is still yellow. A theme
+#: chooses its chrome, not its warnings.
 GREY = a_theme(
     {
         **DEFAULT_RULES,
         "terminal.focused border": "#8787af bold",
         "terminal.focused titlebar": "bg:#5f5f87 #ffffff",
         "terminal.focused titlebar name": "bg:#8787af #ffffff",
+        "terminal.focused titlebar paneindex": "bg:#8787af #ffffff",
         "statusbar": "noreverse bg:#5f5f87 #ffffff",
         "statusbar window.current": "bg:#8787af #ffffff",
         "auto-suggestion": "bg:#4e4e5e #8888aa",
         "message": "bg:#8787af #ffffff",
         "clock": "bg:#5f5f87",
+        "panenumber focused": "bg:#5f5f87",
         "search-toolbar.prompt": "bg:#8787af #ffffff",
         "search-toolbar.text": "bg:#8787af #000000",
         "search-match": "#000000 bg:#8888aa",
