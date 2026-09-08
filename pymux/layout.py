@@ -8,7 +8,12 @@ from functools import partial
 from typing import TYPE_CHECKING, Callable, Dict, List, Tuple, Type
 
 from prompt_toolkit.application import Application, get_app
-from prompt_toolkit.filters import Condition, has_focus
+from prompt_toolkit.filters import (
+    Condition,
+    has_completions,
+    has_focus,
+    is_done,
+)
 from prompt_toolkit.formatted_text import HTML, FormattedText, StyleAndTextTuples
 from prompt_toolkit.layout.containers import (
     ConditionalContainer,
@@ -20,13 +25,15 @@ from prompt_toolkit.layout.containers import (
     VSplit,
     Window,
     WindowAlign,
+    ScrollOffsets,
     WritePosition,
     to_container,
 )
 from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.layout.dimension import is_dimension, to_dimension
-from prompt_toolkit.layout.menus import CompletionsMenu
+from prompt_toolkit.layout.margins import ScrollbarMargin
+from prompt_toolkit.layout.menus import CompletionsMenu, CompletionsMenuControl
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.processors import (
     AppendAutoSuggestion,
@@ -51,6 +58,17 @@ if TYPE_CHECKING:
 
 __all__ = ["LayoutManager"]
 
+
+#: How far a box floats from the top of the screen and from each
+#: side. The keys pop-up chose these, and the command palette takes
+#: the same ones because it is the same kind of box.
+#: Lillecarl/pymux#158.
+BOX_TOP = 5
+BOX_SIDE = 3
+
+#: What the palette holds above its completions: a title and the line
+#: a person types on.
+PALETTE_HEADER = 2
 
 #: The text on the titlebar of a pane. XXX: Make configurable.
 PANE_TITLE_FORMAT = " #T "
@@ -472,6 +490,14 @@ class LayoutManager:
         # The container of the overlay pane, and the pane it belongs to.
         self._overlay_for_pane: Tuple[arrangement.Pane, Container] | None = None
 
+        # The window a person types a command into, and the box that
+        # holds it when the palette is on. Both are built once and kept.
+        # A fresh `BufferControl` on every render is one that the layout
+        # never focused, so the cursor is drawn nowhere and the person
+        # cannot see where they are typing. Lillecarl/pymux#158.
+        self._command_window: Window | None = None
+        self._palette: Container | None = None
+
         self.layout = self._create_layout()
 
         # Keep track of render information.
@@ -641,8 +667,17 @@ class LayoutManager:
         same window. Only where it is drawn differs, so the key
         bindings of command mode and everything that reads the buffer
         stay as they were. Lillecarl/pymux#158.
+
+        **It is built once.** The layout focuses a control, and a fresh
+        one on every render is one it never focused: the cursor lands
+        nowhere and a person cannot see where they are typing. Only one
+        of the two places draws it, because the filter of each reads
+        the option.
         """
-        return Window(
+        if self._command_window is not None:
+            return self._command_window
+
+        self._command_window = Window(
             # Can be more if the command is multiline.
             height=D(min=1),
             style="class:commandline",
@@ -659,6 +694,7 @@ class LayoutManager:
             ),
             z_index=Z_INDEX.COMMAND_LINE,
         )
+        return self._command_window
 
     def _command_palette(self) -> Container:
         """
@@ -673,8 +709,13 @@ class LayoutManager:
         A title row says what the box is, the way the overlay pane says
         what it holds. tmux has no such thing; this is the room that
         Lillecarl/pymux#147, #148 and #48 are asking for.
+
+        Built once, for the reason `_command_line_window` gives.
         """
-        return HSplit(
+        if self._palette is not None:
+            return self._palette
+
+        self._palette = HSplit(
             [
                 Window(
                     height=1,
@@ -685,12 +726,46 @@ class LayoutManager:
                     style="class:commandpalette.titlebar",
                 ),
                 self._command_line_window(),
-                # No maximum height: the box says how tall. The one on
-                # the bottom bar stops at twelve rows because it hangs
-                # off the cursor and has the whole screen under it.
-                CompletionsMenu(z_index=Z_INDEX.POPUP),
+                self._palette_completions(),
             ],
             style="class:commandpalette",
+        )
+        return self._palette
+
+    def _palette_rows(self) -> int:
+        """
+        How many rows of completions fit under the box.
+
+        `get_window_size` answers the rows a pane may use, which is the
+        screen without the status line. The box starts `BOX_TOP`
+        rows down and holds a title and the input, so what is left is
+        what the completions may take.
+        """
+        rows = self.pymux.get_window_size().rows
+        return max(1, rows - BOX_TOP - PALETTE_HEADER)
+
+    def _palette_completions(self) -> Container:
+        """
+        The completions of the palette, filling the box.
+
+        This is `CompletionsMenu` with two of its numbers changed, so
+        it is written out rather than wrapped. That widget draws for a
+        menu that hangs under the cursor: as narrow as its longest
+        completion, and twelve rows at the most. Both are wrong in a
+        box. The box has a width to fill, which is where a completion
+        and what it means will sit side by side, and it has to stop
+        above the status line rather than run off the screen.
+        """
+        return ConditionalContainer(
+            content=Window(
+                content=CompletionsMenuControl(),
+                height=lambda: D(min=1, max=self._palette_rows()),
+                scroll_offsets=ScrollOffsets(top=1, bottom=1),
+                right_margins=[ScrollbarMargin(display_arrows=True)],
+                style="class:completion-menu",
+                z_index=Z_INDEX.POPUP,
+            ),
+            filter=has_completions & ~is_done,
         )
 
     def _create_layout(self) -> Container:
@@ -816,9 +891,9 @@ class LayoutManager:
                         content=self.popup_dialog,
                         filter=Condition(lambda: self.client_state.display_popup),
                     ),
-                    left=3,
-                    right=3,
-                    top=5,
+                    left=BOX_SIDE,
+                    right=BOX_SIDE,
+                    top=BOX_TOP,
                     bottom=5,
                     z_index=Z_INDEX.POPUP,
                 ),
@@ -831,10 +906,15 @@ class LayoutManager:
                         content=DynamicContainer(self._command_palette),
                         filter=has_focus(self.client_state.command_buffer) & palette,
                     ),
-                    left=3,
-                    right=3,
-                    top=5,
-                    bottom=5,
+                    left=BOX_SIDE,
+                    right=BOX_SIDE,
+                    top=BOX_TOP,
+                    # No bottom. A float that is given both ends fills
+                    # the space between them, and a box of two rows of
+                    # text in a slab fourteen rows tall is what that
+                    # looks like. With one end it takes the height of
+                    # what is in it and grows as the completions
+                    # arrive.
                     z_index=Z_INDEX.POPUP,
                 ),
                 # The menu that hangs off the cursor. The palette holds

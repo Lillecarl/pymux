@@ -54,12 +54,28 @@ ui_style = Style.from_dict(
         #    'search-toolbar.text focused':         'bold #000000',
         "search-match": "#000000 bg:#88aa88",
         "search-match.current": "#000000 bg:#aaffaa underline",
+        # The completions. prompt_toolkit draws them on light grey,
+        # which is a slab of daylight in the middle of a dark screen
+        # once a box holds a whole screenful of them. They take the
+        # colours of the box instead, and the row a person is on takes
+        # the colour of its title bar.
+        "completion-menu": "bg:#1c1c1c #d0d0d0",
+        "completion-menu.completion": "bg:#1c1c1c #d0d0d0",
+        "completion-menu.completion.current": "bg:#5f5f87 #ffffff",
+        "completion-menu.meta.completion": "bg:#262626 #a8a8a8",
+        "completion-menu.meta.completion.current": "bg:#5f5f87 #ffffff",
+        "scrollbar.background": "bg:#262626",
+        "scrollbar.button": "bg:#5f5f87",
         # The ":" command line as a box in the middle of the screen.
         # It borrows the shape of the overlay pane below: a title row
         # over a body. Lillecarl/pymux#158.
         "commandpalette": "bg:#1c1c1c",
         "commandpalette.titlebar": "bg:#5f5f87 #ffffff",
-        "commandpalette.title": "bold",
+        # The background is named again here. A fragment style is more
+        # precise than the style of the window it is drawn in, so
+        # `bold` alone left the title on the background of the box and
+        # cut a dark hole in the middle of the title bar.
+        "commandpalette.title": "bold bg:#5f5f87 #ffffff",
         # The overlay pane, which floats over the layout.
         "overlay": "bg:#1c1c1c",
         "overlay.titlebar": "bg:#5f5f87 #ffffff",

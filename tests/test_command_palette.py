@@ -22,7 +22,6 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.layout.containers import ConditionalContainer, Float
-from prompt_toolkit.layout.menus import CompletionsMenu
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
@@ -174,17 +173,33 @@ async def test_the_menu_under_the_cursor_stays_for_the_bar():
 
 
 @in_a_loop
-async def test_the_palette_holds_a_menu_with_no_height_of_its_own():
-    "The box says how tall. The bar's menu stops at twelve rows."
+async def test_the_completions_of_the_palette_stop_above_the_status_line():
+    """
+    The menu that hangs under the cursor is twelve rows at the most.
+    The one in the box takes what the box has, and stops there: a menu
+    that ran off the bottom drew over the status line and half a row.
+    """
     async with a_session() as (pymux, state):
-        ALL_OPTIONS["command-palette"].set_value(pymux, "on")
-        in_command_mode(state)
+        manager = state.layout_manager
+        with set_app(state.app):
+            rows = manager._palette_rows()
 
-        palette = state.layout_manager._command_palette()
-        menus = [
-            child
-            for child in palette.children
-            if isinstance(child, CompletionsMenu)
-        ]
-        assert len(menus) == 1
-        assert not menus[0].content.height.max_specified
+        # The box starts five rows down and holds a title and the
+        # input, so what is left of the pane is what the menu may take.
+        with set_app(state.app):
+            pane_rows = pymux.get_window_size().rows
+        assert rows == pane_rows - 5 - 2
+
+
+@in_a_loop
+async def test_the_command_line_window_is_built_once():
+    """
+    The layout focuses a control. A fresh one on every render is one it
+    never focused, and then the cursor is drawn nowhere and a person
+    cannot see where they are typing.
+    """
+    async with a_session() as (pymux, state):
+        manager = state.layout_manager
+
+        assert manager._command_line_window() is manager._command_line_window()
+        assert manager._command_palette() is manager._command_palette()
