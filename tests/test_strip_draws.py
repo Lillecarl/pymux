@@ -163,24 +163,29 @@ def test_a_lone_column_takes_half_the_window_and_no_more():
     pymux already draws wherever a window does not reach. That is what
     niri shows beyond a half width column too.
 
-    What must not be there is a border. Laying the columns out across
-    the whole window instead of across themselves filled the difference
-    with the padding character, which drew one down the middle of
-    nothing.
+    What must not be there is a border past the column's own. Laying the
+    columns out across the whole window instead of across themselves
+    filled the difference with the padding character, which drew one
+    down the middle of nothing.
+
+    **The column's share includes the border it owns**, so half of a 40
+    column window is 19 cells of pane and the border at cell 19.
+    Lillecarl/pymux#206.
     """
     rows = drawn(CHROME + ["set-window-option strip on"])
-    edge = COLUMNS // 2
+    share = COLUMNS // 2
+    border = share - 1
 
     # The title bar of the one column, and then nothing.
-    assert rows[0][:edge].strip(), a_dump(rows)
+    assert rows[0][:border].strip(), a_dump(rows)
 
-    # One cell past the column is the highlight of the focused pane's
-    # right border, which every layout draws at a pane's edge.
+    # The column's own right border, which the focused pane draws its
+    # highlight over.
     for number in range(0, ROWS - 1):
-        assert rows[number][edge] != " ", a_dump(rows)
+        assert rows[number][border] != " ", a_dump(rows)
 
         # Beyond it, background and nothing else.
-        assert set(rows[number][edge + 1 :]) <= {" ", "."}, a_dump(rows)
+        assert set(rows[number][share:]) <= {" ", "."}, a_dump(rows)
 
 
 # ----------------------------------------------------------------------

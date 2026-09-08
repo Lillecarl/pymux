@@ -1173,18 +1173,37 @@ def _create_strip(pymux: "Pymux", window) -> Container:
     `arrangement.HSplit` is a stack of panes, which is what a niri
     column is. `_create_split` already draws both, so nothing here
     knows about either.
+
+    **A column owns the border on its right.** The border comes out of
+    the column's share of the window rather than being added on top of
+    it, so a column takes the same room whatever the other columns do.
+    Without that, `VSplit` put a border between each pair on top of the
+    widths and two columns of half a window came to one cell more than
+    the window, every time: the strip always overflowed, so it always
+    scrolled, and the column a person was not on was always shaved.
+    Lillecarl/pymux#206.
+
+    Taking the borders off the window first would work too, and it is
+    what niri does with its gaps, but there are one fewer of them than
+    there are columns -- so every column's width would move when a
+    column opened or closed, which is the renegotiation a strip exists
+    to avoid. Lillecarl/pymux#198.
     """
 
     def width_of(column):
         """
-        How many cells this column takes.
+        How many cells this column's content takes.
 
         The fraction is of the window, and a window is as wide as the
-        client's terminal. At least one cell, so a column can always be
-        found.
+        client's terminal. The border on the right of the column comes
+        out of that, so the answer is one less than the column's share.
+
+        At least one cell of content, so a column can always be found
+        and always has somewhere to draw.
         """
         columns = pymux.get_window_size().columns
-        return D.exact(max(1, round(window.column_width(column) * columns)))
+        share = round(window.column_width(column) * columns)
+        return D.exact(max(1, share - BORDER_WIDTH))
 
     content = []
     for column in window.root:
@@ -1195,10 +1214,26 @@ def _create_strip(pymux: "Pymux", window) -> Container:
         else:
             raise TypeError("Got %r" % (column,))
 
-        content.append(SizedBox(child, width=partial(width_of, column)))
+        # The column and the border it owns, which together are exactly
+        # its share of the window. The border is a child and not
+        # `VSplit` padding, because padding goes *between* children:
+        # there is one fewer of it than there are columns, and the
+        # missing one is what made the strip overflow. It is the plain
+        # border and not the highlight -- the focused pane draws that
+        # over the top, at `right=-1`, which is this cell
+        # (`HighlightBordersIfActive`).
+        content.append(
+            VSplit(
+                [
+                    SizedBox(child, width=partial(width_of, column)),
+                    Window(width=BORDER_WIDTH, char=_border_vertical),
+                ]
+            )
+        )
 
     return ScrollableStrip(
-        VSplit(content, padding=1, padding_char=_border_vertical),
+        # No padding here: every column brought its own border.
+        VSplit(content),
         # Keep a little of the columns on either side of the focused
         # one on screen. That peeking is what says the strip goes on.
         scroll_offsets=ScrollOffsets(left=2, right=2),
@@ -1449,6 +1484,11 @@ class _ContainerProxy(Container):
     def get_children(self) -> List[Container]:
         return [self.content]
 
+
+#: How many cells a border between two panes takes. It is one, and it
+#: is named because a strip has to do arithmetic with it: a column's
+#: share of the window includes its own border. Lillecarl/pymux#206.
+BORDER_WIDTH = 1
 
 _focused_border_titlebar = "┃"
 _focused_border_vertical = "┃"
