@@ -233,9 +233,21 @@ class PymuxKeyBindings:
         )
 
         def key_handler(event: E) -> None:
-            "The actual key handler."
+            """
+            Run the command, and take the prefix off this client.
+
+            **The client is read before the command runs.** A command
+            can take this client away, and `detach-client` does. Asking
+            for it afterwards raised `ValueError` out of the key
+            handler, on a terminal that the client had already put
+            back. Lillecarl/pymux#109.
+
+            The object outlives the client, so writing to it after the
+            client has gone changes nothing that anybody reads.
+            """
+            client_state = self.pymux.get_client_state()
             call_command_handler(command, self.pymux, arguments)
-            self.pymux.get_client_state().has_prefix = False
+            client_state.has_prefix = False
 
         self.custom_key_bindings.add(*keys_sequence, filter=filter)(key_handler)
 
