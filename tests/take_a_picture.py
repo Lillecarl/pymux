@@ -82,6 +82,8 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from pyte import escape
+from pyte.sequences import csi
 
 REPO_ROOT = Path(__file__).parent.parent
 
@@ -146,7 +148,7 @@ HOLD = APPEAR_TIMEOUT + SETTLE_TIMEOUT + 10
 def sgr(fixture):
     "Colours and attributes, on a screen that never scrolls."
     lines = [
-        "\x1b[2J\x1b[H",
+        csi(escape.ED, 2) + csi(escape.CUP),
         "\x1b[1mbold\x1b[22m \x1b[3mitalic\x1b[23m \x1b[4munderline\x1b[24m\r\n",
         "\x1b[7mreverse\x1b[27m \x1b[9mstruck\x1b[29m \x1b[2mfaint\x1b[22m\r\n",
     ]
@@ -163,7 +165,7 @@ def sgr(fixture):
 
 def underlines(fixture):
     "The shapes of an underline, and the colour of one."
-    fixture.append("\x1b[2J\x1b[H")
+    fixture.append(csi(escape.ED, 2) + csi(escape.CUP))
     for shape, name in enumerate(
         ["none", "straight", "double", "curly", "dotted", "dashed"]
     ):
@@ -174,7 +176,7 @@ def underlines(fixture):
 
 def wide_characters(fixture):
     "Characters that take two cells, next to ones that take one."
-    fixture.append("\x1b[2J\x1b[H")
+    fixture.append(csi(escape.ED, 2) + csi(escape.CUP))
     fixture.append("abc 你好漢 def\r\n")
     fixture.append("ＡＢ ｶﾅ ghi\r\n")
     fixture.append("äéñ straight after\r\n")
@@ -182,7 +184,7 @@ def wide_characters(fixture):
 
 def box_drawing(fixture):
     "The line drawing set, which fills every edge of a cell."
-    fixture.append("\x1b[2J\x1b[H")
+    fixture.append(csi(escape.ED, 2) + csi(escape.CUP))
     fixture.append("┌" + "─" * 20 + "┐\r\n")
     for _ in range(3):
         fixture.append("│" + " " * 20 + "│\r\n")
