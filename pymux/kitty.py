@@ -26,7 +26,10 @@ for the colour and clipboard answers, and the `CSI ... t` window report
 for the cell size. Without this the replies would arrive as bursts of
 key presses, and land in whichever pane has the focus.
 """
+import logging
 import re
+from dataclasses import dataclass
+from enum import StrEnum
 
 from prompt_toolkit.input.vt100_parser import (
     Vt100Parser,
@@ -35,12 +38,14 @@ from prompt_toolkit.input.vt100_parser import (
 from prompt_toolkit.key_binding.key_processor import _Flush
 from prompt_toolkit.keys import Keys
 
+logger = logging.getLogger(__name__)
+
 #: The bytes that introduce a control sequence. A key that arrives in
 #: one is a key the outer terminal spelled out, and not a byte that
 #: something else could still continue.
 CSI = "\x1b["
 
-__all__ = ["KittyVt100Parser", "parse_kitty_key"]
+__all__ = ["DropReason", "Dropped", "KittyVt100Parser", "parse_kitty_key"]
 
 
 # Modifier bits of the protocol. (The encoded value is one plus the sum
@@ -101,6 +106,12 @@ _STRING_PREFIX_RE = re.compile(
 # An unterminated string sequence must not swallow the input forever.
 # The replies that we expect are a few dozen characters long.
 MAX_STRING_LENGTH = 1024
+
+#: How many key sequences with no name the parser remembers, so that a
+#: held key writes one line to the log and not one per repeat. A
+#: keyboard has fewer keys than this, and a set that grew without end
+#: would be a leak on a stream of nonsense.
+MAX_KEYS_TO_REMEMBER = 512
 
 # ctrl+<char> legacy control codes. (ctrl+[ is the escape character; it
 # is not in this table.)
@@ -179,9 +190,40 @@ _KEYPAD = {
     57420: Keys.Down,
 }
 
-# Sentinel returned for complete sequences that must be consumed without
-# producing a key press. (Release events, lock keys, media keys.)
-_DROP = object()
+@dataclass(frozen=True, slots=True)
+class Dropped:
+    """
+    A complete key sequence that pymux consumes and cannot name.
+
+    It carries why, because a key that does nothing and leaves no
+    trace gives a person no way to find out what happened. The parser
+    writes the reason and the sequence to the log.
+    Lillecarl/pymux#167.
+
+    **Not a tuple.** A tuple is how the parser spells a key that
+    arrives as several, so a `Dropped` that was one would be taken
+    apart and handed out as key presses.
+    """
+
+    reason: str
+
+
+class DropReason(StrEnum):
+    "Why pymux has no name for a key. The text goes in the log."
+
+    KEYPAD_WITH_A_MODIFIER = "a keypad key with ctrl or alt"
+    A_KEY_THAT_WRITES_NOTHING = (
+        "a key of the private use area: a lock key, a modifier key, a "
+        "media key or F13 upwards"
+    )
+    CTRL_AND_A_CHARACTER = "ctrl and a character that has no control code"
+    A_TILDE_KEY_WITH_NO_NAME = "a key of the tilde form that pymux cannot name"
+    A_LETTER_KEY_WITH_NO_NAME = (
+        "a key of the letter form that pymux cannot name"
+    )
+    A_MODIFIER_THIS_KEY_HAS_NO_NAME_FOR = (
+        "a modifier that this key has no name for"
+    )
 
 # Sentinels for terminal replies that are not key events: the reply of
 # the "CSI ? u" keyboard flags query, and a Primary/Secondary device
@@ -232,29 +274,46 @@ _MODE_REPLY_RE = re.compile(r"^\x1b\[\?\d+;\d+\$y$")
 
 
 def _ctrl_mapping(char: str) -> Keys | None:
-    "Legacy ctrl+<char> mapping."
+    """
+    Legacy ctrl+<char> mapping.
+
+    **One character, or nothing.** `"a" <= x <= "z"` says yes to "up"
+    as readily as to "u", and the name built from it named nothing.
+    """
+    if len(char) != 1:
+        return None
     lower = char.lower()
     if "a" <= lower <= "z":
         return getattr(Keys, "Control%s" % lower.upper())
     return _CTRL_KEYS.get(char)
 
 
-def _apply_modifiers(
-    key: str | Keys, mods: int
-) -> _KeyResult | None:
+def _apply_modifiers(key: str | Keys, mods: int) -> _KeyResult:
     """
-    Apply the modifier bits to a plain key. Returns None when the
-    combination has no prompt_toolkit representation.
+    Apply the modifier bits to a plain key. Returns a `Dropped` when
+    the combination has no prompt_toolkit representation.
+
+    **It never returns None.** None means "this is not a key sequence"
+    to `_get_match`, and the parser then takes the sequence apart and
+    hands the pieces out as key presses. ctrl+escape went that way, so
+    a pane read "[27;5u" as five keys.
+
+    **A functional key is told apart by its type, not by `str`.** Every
+    member of `Keys` is a string, so `isinstance(key, str)` says yes to
+    all of them, and `_CTRL_FUNCTIONAL` was never read. ctrl+Up asked
+    for `Keys.ControlUP`, which is not a name, and prompt_toolkit's own
+    table is the only reason nothing raised: it matches every sequence
+    that would have come here.
     """
     shift = bool(mods & _SHIFT)
     alt = bool(mods & _ALT)
     ctrl = bool(mods & _CTRL)
 
-    if isinstance(key, str):
+    if not isinstance(key, Keys):
         if ctrl:
             ctrl_key = _ctrl_mapping(key)
             if ctrl_key is None:
-                return None
+                return Dropped(DropReason.CTRL_AND_A_CHARACTER)
             key = ctrl_key
         elif shift and key.isalpha():
             key = key.upper()
@@ -263,7 +322,9 @@ def _apply_modifiers(
         if ctrl:
             ctrl_key = _CTRL_FUNCTIONAL.get(key)
             if ctrl_key is None:
-                return None
+                return Dropped(
+                    DropReason.A_MODIFIER_THIS_KEY_HAS_NO_NAME_FOR
+                )
             key = ctrl_key
 
     if alt:
@@ -302,9 +363,9 @@ def parse_kitty_key(prefix: str) -> _KeyResult | None:
     """
     Parse a complete kitty key sequence. Returns a key, a character or a
     tuple of keys (the shapes that the prompt_toolkit parser supports),
-    `_KEY_RELEASE` for a key that came back up, `_DROP` for sequences
-    to consume silently, and None when `prefix` is not a kitty key
-    sequence.
+    `_KEY_RELEASE` for a key that came back up, a `Dropped` for a
+    sequence that names a key pymux cannot, and None when `prefix` is
+    not a kitty key sequence at all.
     """
     match = _KITTY_KEY_RE.match(prefix)
     if match is None:
@@ -361,20 +422,20 @@ def parse_kitty_key(prefix: str) -> _KeyResult | None:
             if not isinstance(keypad_key, str):
                 return _apply_modifiers(keypad_key, mods)
             if mods & (_CTRL | _ALT):
-                return _DROP
+                return Dropped(DropReason.KEYPAD_WITH_A_MODIFIER)
             return keypad_key
 
         if key >= _PRIVATE_USE_AREA:
             # Other private use area keys (lock keys, media keys, ...)
             # have no prompt_toolkit representation. Drop them.
-            return _DROP
+            return Dropped(DropReason.A_KEY_THAT_WRITES_NOTHING)
 
         # Text key.
         char = chr(key)
         if mods & _CTRL:
             ctrl_key = _ctrl_mapping(char)
             if ctrl_key is None:
-                return _DROP
+                return Dropped(DropReason.CTRL_AND_A_CHARACTER)
             return (Keys.Escape, ctrl_key) if mods & _ALT else ctrl_key
 
         # Use the reported text when present. (It accounts for the
@@ -392,16 +453,14 @@ def parse_kitty_key(prefix: str) -> _KeyResult | None:
     if final == "~":
         tilde_key = _TILDE_KEYS.get(key)
         if tilde_key is None:
-            return _DROP
-        result = _apply_modifiers(tilde_key, mods)
-        return result if result is not None else _DROP
+            return Dropped(DropReason.A_TILDE_KEY_WITH_NO_NAME)
+        return _apply_modifiers(tilde_key, mods)
 
     # Letter form. (The number is always 1.)
     letter_key = _LETTER_KEYS.get(final)
     if key != 1 or letter_key is None:
-        return _DROP
-    result = _apply_modifiers(letter_key, mods)
-    return result if result is not None else _DROP
+        return Dropped(DropReason.A_LETTER_KEY_WITH_NO_NAME)
+    return _apply_modifiers(letter_key, mods)
 
 
 def _patch_prefix_cache() -> None:
@@ -455,7 +514,26 @@ class KittyVt100Parser(Vt100Parser):
         # Whether the key being handled arrived as several: alt and a
         # key is one such. See `_call_handler`.
         self._one_key_of_several = False
+        # The sequences already written to the log. A key that is held
+        # down repeats, and one line per repeat is a log nobody reads.
+        self._already_said: set[str] = set()
         super().__init__(feed_key_callback)
+
+    def _say_it_was_dropped(self, dropped: Dropped, sequence: str) -> None:
+        """
+        Write to the log that a key went nowhere, and why.
+
+        A key that does nothing and leaves no trace gives a person no
+        way to find out what happened. Once per sequence: a key that
+        is held down repeats. Lillecarl/pymux#167.
+        """
+        if sequence in self._already_said:
+            return
+        if len(self._already_said) < MAX_KEYS_TO_REMEMBER:
+            self._already_said.add(sequence)
+        logger.debug(
+            "No name here for the key %r: %s.", sequence, dropped.reason
+        )
 
     def _get_match(self, prefix: str) -> Keys | tuple | object | None:
         # prompt_toolkit's own table first: it knows richer variants
@@ -478,7 +556,8 @@ class KittyVt100Parser(Vt100Parser):
             finally:
                 self._one_key_of_several = False
             return
-        if key is _DROP:
+        if isinstance(key, Dropped):
+            self._say_it_was_dropped(key, insert_text)
             return
         if key in (
             _FLAGS_REPLY,

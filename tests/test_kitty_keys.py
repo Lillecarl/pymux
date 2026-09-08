@@ -5,10 +5,17 @@ Each test feeds a sequence (or a mix of sequences and plain text) into
 the parser and checks the key presses that reach the feed_key callback.
 That is the same path that the server uses for client input.
 """
+import logging
+
 from prompt_toolkit.key_binding.key_processor import _Flush
 from prompt_toolkit.keys import Keys
 
-from pymux.kitty import KittyVt100Parser
+from pymux.kitty import (
+    DropReason,
+    Dropped,
+    KittyVt100Parser,
+    parse_kitty_key,
+)
 
 
 def fed(data: str):
@@ -429,3 +436,110 @@ def test_the_escape_of_an_alt_key_ends_nothing():
 def test_alt_escape_ends_nothing():
     "The same holds when the key after alt is Escape itself."
     assert _Flush not in fed("\x1b[27;3u")
+
+
+# ----------------------------------------------------------------------
+# The keys pymux has no name for.
+
+
+def a_dropped_key(data: str) -> Dropped:
+    "Parse one sequence that pymux cannot name, and give the reason."
+    result = parse_kitty_key(data)
+    assert isinstance(result, Dropped), result
+    return result
+
+
+def test_a_key_with_no_name_is_eaten_and_not_taken_apart():
+    """
+    Nothing reaches a pane for a key pymux cannot name.
+
+    The other way is worse than doing nothing: a `None` here means
+    "not a key sequence", and the parser then hands the characters of
+    the sequence out one by one. Lillecarl/pymux#167.
+    """
+    assert parse("\x1b[57358u") == []  # caps lock
+    assert parse("\x1b[57428u") == []  # play
+
+
+def test_ctrl_escape_does_not_reach_a_pane_as_five_keys():
+    """
+    ctrl+escape has no prompt_toolkit name. It used to leave
+    `_apply_modifiers` as None, which is what the parser reads as "not
+    a key sequence", so a pane read "[27;5u".
+    """
+    assert parse("\x1b[27;5u") == []
+
+
+def test_a_functional_key_is_not_a_character():
+    """
+    Every member of `Keys` is a string, so a test on `str` says yes to
+    all of them. ctrl+Up then went looking for `Keys.ControlUP`, which
+    is not a name, and raised inside the parser.
+
+    prompt_toolkit's own table matches "CSI 1 ; 5 A", so nothing ever
+    got here through the parser. `_apply_modifiers` is asked directly.
+    """
+    from pymux.kitty import _apply_modifiers
+
+    assert _apply_modifiers(Keys.Up, 0b100) == Keys.ControlUp
+    assert _apply_modifiers(Keys.F5, 0b100) == Keys.ControlF5
+    assert _apply_modifiers(Keys.Up, 0) == Keys.Up
+    assert _apply_modifiers("u", 0b100) == Keys.ControlU
+
+
+def test_shift_and_a_functional_key_is_that_key():
+    """
+    The shift of a letter makes it upper case, and a functional key is
+    not a letter. It read as one: `Keys.Enter` is the string "enter",
+    `"enter".isalpha()` is true, and shift+Enter arrived as a key
+    called "ENTER" that nothing binds.
+    """
+    assert parse("\x1b[13;2u") == [(Keys.Enter, "\x1b[13;2u")]
+    assert parse("\x1b[9;2u") == [(Keys.Tab, "\x1b[9;2u")]
+
+
+def test_the_reason_says_what_kind_of_key_it_was():
+    assert (
+        a_dropped_key("\x1b[57358u").reason
+        == DropReason.A_KEY_THAT_WRITES_NOTHING
+    )
+    assert (
+        a_dropped_key("\x1b[57399;5u").reason
+        == DropReason.KEYPAD_WITH_A_MODIFIER
+    )
+    assert (
+        a_dropped_key("\x1b[233;5u").reason
+        == DropReason.CTRL_AND_A_CHARACTER
+    )
+    assert (
+        a_dropped_key("\x1b[99;5~").reason
+        == DropReason.A_TILDE_KEY_WITH_NO_NAME
+    )
+    assert (
+        a_dropped_key("\x1b[27;5u").reason
+        == DropReason.A_MODIFIER_THIS_KEY_HAS_NO_NAME_FOR
+    )
+
+
+def test_the_log_says_the_key_and_the_reason(caplog):
+    with caplog.at_level(logging.DEBUG, logger="pymux.kitty"):
+        fed("\x1b[57358u")
+    assert "\\x1b[57358u" in caplog.text
+    assert DropReason.A_KEY_THAT_WRITES_NOTHING in caplog.text
+
+
+def test_a_held_key_writes_one_line(caplog):
+    "A key that is held down repeats, and one line per repeat is noise."
+    parser = KittyVt100Parser(lambda key_press: None)
+    with caplog.at_level(logging.DEBUG, logger="pymux.kitty"):
+        for _ in range(20):
+            parser.feed_and_flush("\x1b[57358u")
+    assert len(caplog.records) == 1
+
+
+def test_two_keys_with_no_name_each_write_a_line(caplog):
+    parser = KittyVt100Parser(lambda key_press: None)
+    with caplog.at_level(logging.DEBUG, logger="pymux.kitty"):
+        parser.feed_and_flush("\x1b[57358u")
+        parser.feed_and_flush("\x1b[57428u")
+    assert len(caplog.records) == 2
