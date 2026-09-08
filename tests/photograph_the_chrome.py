@@ -131,10 +131,12 @@ FIXTURES = {
     # The column on the right is cut off, and that is the point of it.
     # Lillecarl/pymux#198.
     "strip": (
-        CHROME,
+        # `-g` says what every new window starts with, and it is the
+        # only way a configuration file can set a window option: the
+        # file is read before there is a window. Lillecarl/pymux#199.
+        CHROME + "set-window-option -g strip on\n",
         keys(
-            *a_command("set-window-option strip on"),
-            (0.6, PREFIX),
+            (FIRST_KEY, PREFIX),
             (0.4, b"%"),
             (0.6, PREFIX),
             (0.4, b"%"),

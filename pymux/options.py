@@ -40,6 +40,18 @@ class Option(ABC):
     def set_value(self, pymux, value):
         "Set option. This can raise SetOptionError."
 
+    def set_default(self, pymux, value):
+        """
+        Say what a new window starts with, without changing one.
+
+        `set-window-option -g` reaches this, and only a window option
+        has anything to say: a session option is already one value for
+        the whole session. Lillecarl/pymux#199.
+        """
+        raise SetOptionError(
+            "This option belongs to the session, so it is already global."
+        )
+
 
 class SetOptionError(Exception):
     """
@@ -62,11 +74,15 @@ class OnOffOption(Option):
     def get_all_values(self, pymux):
         return ["on", "off"]
 
-    def set_value(self, pymux, value):
+    def _read(self, value):
+        "The value as a boolean, or a `SetOptionError`."
         value = value.lower()
-
         if value not in ("on", "off"):
             raise SetOptionError('Expecting "yes" or "no".')
+        return value == "on"
+
+    def set_value(self, pymux, value):
+        chosen = self._read(value)
 
         if self.window_option:
             # There may be no window. A configuration file is read
@@ -79,12 +95,20 @@ class OnOffOption(Option):
             if not pymux.arrangement.windows:
                 raise SetOptionError(
                     "There is no window yet. A window option belongs to one "
-                    "window, so it cannot be set before there is a window."
+                    "window, so a configuration file has none to set. "
+                    'Use "-g" to say what every new window starts with.'
                 )
             w = pymux.arrangement.get_active_window()
-            setattr(w, self.attribute_name, (value == "on"))
+            setattr(w, self.attribute_name, chosen)
         else:
-            setattr(pymux, self.attribute_name, (value == "on"))
+            setattr(pymux, self.attribute_name, chosen)
+
+    def set_default(self, pymux, value):
+        "What every new window starts with. Changes no window that is open."
+        if not self.window_option:
+            return super().set_default(pymux, value)
+
+        pymux.arrangement.window_defaults[self.attribute_name] = self._read(value)
 
 
 class StringOption(Option):

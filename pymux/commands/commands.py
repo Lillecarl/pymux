@@ -999,15 +999,29 @@ def set_option(pymux: "Pymux", variables: _VariablesDict, window: bool = False) 
 
     if option:
         try:
-            option.set_value(pymux, value)
+            # `-g` says what every new window starts with, and changes
+            # no window that is open, which is what it means in tmux.
+            # It is the only way a configuration file can set a window
+            # option, because that file is read before there is a
+            # window. Lillecarl/pymux#199.
+            if variables.get("-g"):
+                option.set_default(pymux, value)
+            else:
+                option.set_value(pymux, value)
         except SetOptionError as e:
             raise CommandException(e.message)
     else:
         raise CommandException("Invalid option: %s" % (name,))
 
 
-@cmd("set-window-option", options="<option> <value>")
+@cmd("set-window-option", options="[-g] <option> <value>")
 def set_window_option(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Set a window option.
+
+    -g: say what every new window starts with, rather than changing
+        this one.
+    """
     set_option(pymux, variables, window=True)
 
 

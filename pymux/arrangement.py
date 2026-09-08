@@ -11,7 +11,7 @@ arranged by ordering them in HSplit/VSplit instances.
 import math
 import os
 from enum import Enum
-from typing import List
+from typing import Dict, List
 from weakref import WeakKeyDictionary, ref
 
 from prompt_toolkit.application import Application, get_app, get_app_or_none, set_app
@@ -714,6 +714,19 @@ class Arrangement:
         # `set-option base-index 0` brings the tmux default back.
         self.base_index = 1
 
+        # What a new window starts with, by the attribute the option
+        # writes. tmux calls these the global window options and
+        # `set-window-option -g` is how they are set.
+        #
+        # A window option belongs to one window, and a configuration
+        # file is read before there is a window, so without this there
+        # was no way for a configuration file to say what a window
+        # should be. Lillecarl/pymux#199.
+        #
+        # Like tmux, setting one changes no window that is already
+        # open. It says what the next one starts as.
+        self.window_defaults: Dict[str, object] = {}
+
         self._active_window_for_cli: "WeakKeyDictionary[Application, Window]" = (
             WeakKeyDictionary()
         )
@@ -860,6 +873,13 @@ class Arrangement:
         # Create new window and add it.
         w = Window(index)
         w.add_pane(pane)
+
+        # What a `set-window-option -g` asked every new window to be.
+        # After the pane, so that a default which reshapes the window
+        # around what is in it sees the pane. `strip` is that.
+        for attribute, value in self.window_defaults.items():
+            setattr(w, attribute, value)
+
         self.windows.append(w)
 
         # Sort windows by index.
