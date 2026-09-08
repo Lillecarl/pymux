@@ -535,20 +535,46 @@ def previous_layout(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 @cmd(
     "new-window",
-    options="[(-t <target-window>)] [(-n <name>)] [(-c <start-directory>)] "
-    "[-d] [-P] [(-F <format>)] [<executable>]",
+    options="[-a] [-b] [(-t <target-window>)] [(-n <name>)] "
+    "[(-c <start-directory>)] [-d] [-P] [(-F <format>)] [<executable>]",
 )
 def new_window(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Open a window, next to the one a person is on.
+
+    **Next to it, and not in the lowest gap.** A new window took the
+    first free index from `base-index` up, whatever window a person
+    was looking at: on window five of one, two, five, `ctrl+b c` gave
+    window three. A person who works across windows builds a map of
+    what is where, and a new window arriving at the far end of it is a
+    window they then have to go and find. Lillecarl/pymux#191.
+
+    With no gaps the two rules agree, which is why this went so long
+    without being noticed: the lowest free index is the one after the
+    last window.
+
+    `-a` and `-b` are tmux's, and name the side. `-t` names the window
+    to sit next to, and the active one is the default. tmux reads a
+    bare `-t` as the index to create at instead, and so does this.
+    """
     executable = variables["<executable>"]
     start_directory = variables["<start-directory>"]
     name = variables["<name>"]
     dont_select = variables["-d"]
 
     window = pymux.arrangement.get_active_window()
-    pymux.create_window(executable, start_directory=start_directory, name=name)
+    pymux.create_window(
+        executable,
+        start_directory=start_directory,
+        name=name,
+        index=_where_a_new_window_goes(pymux, variables),
+    )
 
-    # The newly created window is the last one in the list.
-    new_window = pymux.arrangement.windows[-1]
+    # **The one that is active, and not the last of the list.** A new
+    # window went at the end while it always took the highest index,
+    # and it can go anywhere now. `create_window` focuses it, which is
+    # the only thing that says which one it is.
+    new_window = pymux.arrangement.get_active_window()
 
     if dont_select:
         # Don't make the new window active.
@@ -561,6 +587,60 @@ def new_window(pymux: "Pymux", variables: _VariablesDict) -> None:
             window=new_window,
             pane=new_window.active_pane,
         )
+
+
+def _where_a_new_window_goes(pymux: "Pymux", variables: _VariablesDict) -> int | None:
+    """
+    The index a new window takes, from the options it was given.
+
+    Four answers, and the first that applies wins:
+
+    - `-b`, before the target: the target's own index. What is there
+      moves up.
+    - `-a`, after the target: one past it.
+    - `-t` on its own: the index to create at, which is how tmux reads
+      a bare target for this command.
+    - Nothing: after the active window, which is the one a person is
+      looking at.
+
+    `None` means the lowest free index, and nothing returns it any
+    more. It is still what `Arrangement.create_window` does without an
+    index, because a session that is restored builds its windows by
+    number and asks for none.
+
+    A target nobody can find is the active window. tmux errors there,
+    and a person who mistypes a window number while opening one does
+    not want the window not to open.
+    """
+    number = _an_index(variables["<target-window>"])
+
+    where = None
+    if number is not None:
+        where = pymux.arrangement.get_window_by_index(number)
+    if where is None:
+        where = pymux.arrangement.get_active_window()
+
+    if variables["-b"]:
+        return where.index
+    if variables["-a"]:
+        return where.index + 1
+    if number is not None:
+        return number
+    return where.index + 1
+
+
+def _an_index(target: "str | None") -> int | None:
+    """
+    The window number a target names, or None for one that is a name.
+
+    tmux takes a window by number, by name, or by one of its own
+    shorthands. Only the number places a window, so the rest read as
+    "no number" and leave the placement to the active window.
+    """
+    try:
+        return int(target)
+    except (TypeError, ValueError):
+        return None
 
 
 @cmd(

@@ -663,8 +663,46 @@ class Arrangement:
             if w.index == index:
                 return w
 
+    def lowest_free_index(self) -> int:
+        "The first index from `base_index` up that no window has."
+        taken = {w.index for w in self.windows}
+        index = self.base_index
+        while index in taken:
+            index += 1
+        return index
+
+    def make_room_at(self, index: int) -> None:
+        """
+        Free one index by moving the windows at and above it up.
+
+        Only the run that is in the way moves. The windows are walked
+        from `index` up while each one is there, and the first gap
+        stops the walk: a session numbered 1, 2, 3, 7 makes room at 2
+        by moving 2 and 3, and 7 stays where a person left it.
+
+        tmux says the same about its own "-a": "the new window is
+        inserted at the next index up from the specified target
+        window, moving windows up if necessary".
+        Lillecarl/pymux#191.
+        """
+        by_index = {w.index: w for w in self.windows}
+
+        in_the_way = []
+        while index in by_index:
+            in_the_way.append(by_index[index])
+            index += 1
+
+        # From the top down, so no window lands on one that has not
+        # moved yet.
+        for window in reversed(in_the_way):
+            window.index += 1
+
     def create_window(
-        self, pane: Pane, name: str | None = None, set_active: bool = True
+        self,
+        pane: Pane,
+        name: str | None = None,
+        set_active: bool = True,
+        index: int | None = None,
     ) -> None:
         """
         Create a new window that contains just this pane.
@@ -672,13 +710,14 @@ class Arrangement:
         :param pane: The :class:`.Pane` instance to put in the new window.
         :param name: If given, name for the new window.
         :param set_active: When True, focus the new window.
+        :param index: Where to put it. Without one it takes the lowest
+            free index, which is what a session with no gaps in it
+            gives anyway.
         """
-        # Take the first available index.
-        taken_indexes = [w.index for w in self.windows]
-
-        index = self.base_index
-        while index in taken_indexes:
-            index += 1
+        if index is None:
+            index = self.lowest_free_index()
+        else:
+            self.make_room_at(index)
 
         # Create new window and add it.
         w = Window(index)

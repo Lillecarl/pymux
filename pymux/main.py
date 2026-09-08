@@ -1299,13 +1299,17 @@ class Pymux:
         command: str | None = None,
         start_directory: str | None = None,
         name=None,
+        index: int | None = None,
     ):
         """
         Create a new :class:`pymux.arrangement.Window` in the arrangement.
+
+        `index` says where it goes. Without one it takes the lowest
+        free index. Lillecarl/pymux#191.
         """
         pane = self._create_pane(None, command, start_directory=start_directory)
 
-        self.arrangement.create_window(pane, name=name)
+        self.arrangement.create_window(pane, name=name, index=index)
         pane.focus()
         self.invalidate(Woke.A_WINDOW_OPENED)
 
