@@ -43,6 +43,8 @@ from prompt_toolkit.output.vt100_colors import (
     _256_colors,
     _get_closest_ansi_color,
 )
+from pyte import escape
+from pyte.sequences import csi
 
 __all__ = ["LOWER_HALF", "UPPER_HALF", "blocks_for", "rows_for_cells"]
 
@@ -51,6 +53,11 @@ UPPER_HALF = "▀"
 
 #: The bottom half, for a cell whose top half has nothing to show.
 LOWER_HALF = "▄"
+
+#: What ends every row, so that no row carries a colour into the text
+#: after it. Named here and not built per row: a row of an image is
+#: drawn for every row of every frame, and the answer never changes.
+RESET = csi(escape.SGR, 0)
 
 #: A pixel more transparent than this draws nothing.
 OPAQUE = 128
@@ -218,6 +225,6 @@ def blocks_for(
                 current = wanted
             parts.append(character)
 
-        lines.append(("".join(parts) + "\x1b[0m") if parts else "")
+        lines.append(("".join(parts) + RESET) if parts else "")
 
     return lines
