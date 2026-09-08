@@ -53,6 +53,7 @@ from .filters import WaitsForConfirmation
 from .format import format_pymux_string
 from .log import logger
 from .strip import ScrollableStrip
+from .titlebar import PaneTitleBar
 
 if TYPE_CHECKING:
     from prompt_toolkit.layout.controls import BufferControl, NotImplementedOrNone
@@ -1323,6 +1324,17 @@ def _create_split(
     return return_cls(content, padding=1, padding_char=padding_char)
 
 
+def _short_name_of(pymux: "Pymux", pane: arrangement.Pane) -> str:
+    """
+    A pane in a few cells, for the title bar of the pane beside it.
+
+    The program running in it, which is what `Pane.name` is, and a
+    person chose it if they renamed the pane. Its title is the fallback,
+    because a pane whose process has ended has no name left.
+    """
+    return pane.name or format_pymux_string(pymux, PANE_TITLE_FORMAT, pane=pane).strip()
+
+
 def _create_container_for_process(
     pymux: "Pymux",
     window: arrangement.Window,
@@ -1367,14 +1379,20 @@ def _create_container_for_process(
 
         if arrangement_pane.name:
             result.append(("class:name", " %s " % arrangement_pane.name))
-            result.append(("", " "))
 
-        return result + [
-            (
-                "",
-                format_pymux_string(pymux, PANE_TITLE_FORMAT, pane=arrangement_pane),
-            )
-        ]
+        # **Padded on both sides, and not on one.** The bar centres
+        # this, so a space that hangs off the end of it moves the title
+        # off the middle of the pane by half of that space. The title
+        # used to be drawn from the left, where a trailing space costs
+        # nothing. Lillecarl/pymux#207.
+        title = format_pymux_string(
+            pymux, PANE_TITLE_FORMAT, pane=arrangement_pane
+        ).strip()
+
+        if title:
+            result.append(("", " %s " % title))
+
+        return result
 
     def get_pane_index() -> str:
         try:
@@ -1384,6 +1402,41 @@ def _create_container_for_process(
             index = "/"
 
         return "%3s " % index
+
+    def a_neighbour(on_the_left: bool) -> StyleAndTextTuples:
+        """
+        The name of the pane on one side of this one.
+
+        Nothing when there is none. A zoomed pane covers the window,
+        so nothing is beside it either.
+        """
+        if zoom:
+            return []
+
+        if on_the_left:
+            pane = window.pane_to_the_left(arrangement_pane)
+        else:
+            pane = window.pane_to_the_right(arrangement_pane)
+
+        if pane is None:
+            return []
+
+        return [("class:neighbour", " %s " % _short_name_of(pymux, pane))]
+
+    def get_the_number_of_the_pane() -> StyleAndTextTuples:
+        """
+        The pane's own number, at the far left of its bar.
+
+        **It moved there from the right edge**, because the right edge
+        now belongs to the right neighbour. Lillecarl/pymux#207.
+        """
+        return [("class:paneindex", get_pane_index())]
+
+    def get_the_left_of_the_bar() -> StyleAndTextTuples:
+        return a_neighbour(on_the_left=True)
+
+    def get_the_right_of_the_bar() -> StyleAndTextTuples:
+        return a_neighbour(on_the_left=False)
 
     def on_click() -> None:
         "Click handler for the clock. When clicked, select this pane."
@@ -1406,24 +1459,19 @@ def _create_container_for_process(
             ),
             #
             floats=[
-                # The title bar.
+                # The title bar: this pane's title in the middle, and
+                # the panes beside it named at the edges.
+                # Lillecarl/pymux#207.
                 Float(
                     content=ConditionalContainer(
-                        content=VSplit(
-                            [
-                                Window(
-                                    height=1,
-                                    content=FormattedTextControl(
-                                        get_titlebar_text_fragments
-                                    ),
-                                ),
-                                Window(
-                                    height=1,
-                                    width=4,
-                                    content=FormattedTextControl(get_pane_index),
-                                    style="class:paneindex",
-                                ),
-                            ],
+                        content=Window(
+                            height=1,
+                            content=PaneTitleBar(
+                                get_number=get_the_number_of_the_pane,
+                                get_left=get_the_left_of_the_bar,
+                                get_middle=get_titlebar_text_fragments,
+                                get_right=get_the_right_of_the_bar,
+                            ),
                             style="class:titlebar",
                         ),
                         filter=Condition(lambda: pymux.show_pane_status),

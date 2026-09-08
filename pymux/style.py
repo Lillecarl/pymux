@@ -42,6 +42,10 @@ DEFAULT_RULES = {
     "terminal.focused titlebar": "bg:#448844 #ffffff",
     "terminal.focused titlebar name": "bg:#88aa44 #ffffff",
     "terminal.focused titlebar paneindex": "bg:#ff0000",
+    # The names of the panes on either side, which a title bar carries
+    # so that a strip can be navigated. They are not this pane, so they
+    # are dimmer than its own title. Lillecarl/pymux#207.
+    "titlebar neighbour": "#dddddd",
     #    'titlebar title':               '',
     #    'titlebar name':                '#ffffff noitalic',
     #    'focused-terminal titlebar name':       'bg:#88aa44',
