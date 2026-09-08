@@ -265,13 +265,14 @@ class ServerConnection:
                 "data": {"supported": self._kitty_supported},
             }
         )
-        # Enable the flags of the focused pane on this client's terminal
-        # as well. (Other clients are kept in sync through
-        # `Pymux.sync_kitty_flags`, which only sends on change.)
+        # Enable the flags on this client's terminal as well. (Other
+        # clients are kept in sync through `Pymux.sync_kitty_flags`,
+        # which only sends on change, so a client that attaches after
+        # the value settled would otherwise never hear it.)
         self._send_packet(
             {
                 "cmd": "kitty-keyboard",
-                "data": {"flags": self.pymux.get_focused_kitty_flags()},
+                "data": {"flags": self.pymux.keyboard_flags_for_a_client()},
             }
         )
 

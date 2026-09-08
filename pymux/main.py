@@ -30,6 +30,7 @@ from prompt_toolkit.styles import (
 )
 from ptterm import Terminal
 from pyte.environment import terminal_name
+from pyte.kitty_keys import KeyboardFlag
 from pyte.osc import Osc
 
 from .arrangement import Arrangement, Pane, Window
@@ -1195,13 +1196,36 @@ class Pymux:
             # host. It then claims what a pane asks for, as before.
             pass
 
+    def keyboard_flags_for_a_client(self) -> int:
+        """
+        What the terminal of a client is asked to report.
+
+        Two things ask. The pane in front of the person asks for what
+        its program pushed, and that has to reach the terminal or the
+        program does not get the keys it wants. **pymux asks as well.**
+        A bare Escape is also the first byte of every escape sequence,
+        so a terminal that does not disambiguate leaves the parser
+        holding it until a timeout says no more is coming: half a
+        second before the command line closes, and the same half second
+        before any alt key does anything. A terminal that
+        disambiguates sends "CSI 27 u", which starts nothing, so the
+        key arrives on the press.
+
+        The two are one set of flags, because one terminal sends the
+        keys of both. A pane reads what it asked for all the same: the
+        key data reaches it as the terminal wrote it, and
+        `Screen.encode_key` writes it again in the encoding of that
+        pane. Lillecarl/pymux#164.
+        """
+        return KeyboardFlag.DISAMBIGUATE | self.get_focused_kitty_flags()
+
     def sync_kitty_flags(self) -> None:
         """
-        Send the kitty keyboard protocol flags of the focused pane to
-        all clients, so that they can enable the protocol on their outer
-        terminals. (Only sends when the value changed.)
+        Send the kitty keyboard protocol flags to all clients, so that
+        they can enable the protocol on their outer terminals. (Only
+        sends when the value changed.)
         """
-        flags = self.get_focused_kitty_flags()
+        flags = self.keyboard_flags_for_a_client()
         if flags == self._kitty_flags_sent:
             return
         self._kitty_flags_sent = flags

@@ -8,6 +8,8 @@ makes up what a legacy keyboard cannot send, so a pane keeps both. It
 still has to know what the terminal of every client can report: a
 keyboard that sends its own key release may not get a second one.
 """
+from pyte.kitty_keys import KeyboardFlag
+
 from pymux.main import Pymux
 
 
@@ -177,3 +179,31 @@ def test_the_option_alone_reaches_the_panes():
     pymux.sync_keyboard_source_flags()
     assert pane.screen.synthesize_key_events is False
     assert pane.screen.keyboard_source_flags == 0b11111
+
+
+# ----------------------------------------------------------------------
+# What pymux asks the terminal of a client for.
+
+
+def test_pymux_asks_the_terminal_to_disambiguate():
+    """
+    A bare Escape is also the first byte of every escape sequence. A
+    terminal that disambiguates writes the key as "CSI 27 u" instead,
+    which can start nothing. pymux asks for that on its own account,
+    and not only when a pane wants it. Lillecarl/pymux#164.
+    """
+    assert Pymux().keyboard_flags_for_a_client() == KeyboardFlag.DISAMBIGUATE
+
+
+def test_what_a_pane_asks_for_reaches_the_terminal_as_well():
+    "One terminal sends the keys of both, so it takes one set of flags."
+
+    class PaneThatAsked:
+        class screen:
+            kitty_keyboard_flags = KeyboardFlag.REPORT_EVENT_TYPES
+
+    pymux = Pymux()
+    pymux.get_focused_pane = lambda: PaneThatAsked()
+    assert pymux.keyboard_flags_for_a_client() == (
+        KeyboardFlag.DISAMBIGUATE | KeyboardFlag.REPORT_EVENT_TYPES
+    )
