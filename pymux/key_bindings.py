@@ -5,7 +5,7 @@ import logging
 from typing import TYPE_CHECKING, Callable, Dict, Tuple
 
 from prompt_toolkit.application.current import get_app
-from prompt_toolkit.filters import Condition, Filter, has_focus
+from prompt_toolkit.filters import Condition, Filter, emacs_mode, has_focus
 from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent as E
 from prompt_toolkit.keys import Keys
@@ -107,12 +107,25 @@ class PymuxKeyBindings:
             "Ignore unknown Ctrl-B prefixed key sequences."
             pymux.get_client_state().has_prefix = False
 
+        @kb.add("escape", filter=prompt_or_command_focus & ~has_prefix & emacs_mode)
         @kb.add("c-c", filter=prompt_or_command_focus & ~has_prefix)
         @kb.add("c-g", filter=prompt_or_command_focus & ~has_prefix)
         #        @kb.add('backspace', filter=has_focus(COMMAND) & ~has_prefix &
         #                              Condition(lambda: cli.buffers[COMMAND].text == ''))
         def _leave_command_mode(event: E) -> None:
-            "Leave command mode."
+            """
+            Leave command mode.
+
+            **Escape only outside vi mode.** `status-keys vi` gives
+            Escape to vi, where it leaves insert mode and the command
+            line stays open. tmux draws the same line: Escape cancels
+            with emacs status keys and goes to normal mode with vi
+            ones. Lillecarl/pymux#157.
+
+            A bare Escape is safe to bind. prompt_toolkit reports one
+            only after its own timeout has ruled out a longer escape
+            sequence.
+            """
             pymux.leave_command_mode(append_to_history=False)
 
         @kb.add("y", filter=waits_for_confirmation)
