@@ -10,6 +10,21 @@ reach.
 The packets are the same ones. Only the transport differs, and both
 sides of the protocol run, so this route proves what the socket route
 proves, in one process instead of two.
+
+**One process is one SIGWINCH handler, and that is a real
+difference.** The server's `prompt_toolkit.Application` takes the
+signal for itself while it runs: `attach_winch_signal_handler` calls
+`loop.add_signal_handler`, which replaces whatever was there, and
+asyncio holds one callback per signal. On the socket route the server
+is another process and cannot reach this one's handler. Here it can,
+and it does, so this client stopped hearing that the terminal had
+changed size: a font size change in kitty moved nothing, because the
+size the server had was the one this client last reported.
+
+So the size is polled as well. prompt_toolkit does the same thing for
+the same reason -- `Application._poll_output_size` names "situations
+where `attach_winch_signal_handler` is not sufficient" and reads the
+size on a timer instead. Lillecarl/pymux#208.
 """
 
 import asyncio
@@ -25,6 +40,13 @@ from .terminal import TerminalClient
 __all__ = [
     "MemoryClient",
 ]
+
+#: How often this client reads the size of its terminal, in seconds.
+#: `Application.terminal_size_polling_interval` is the same number, and
+#: for the same reason: it is short enough that a person who drags a
+#: window does not wait for it, and one `ioctl` twice a second costs
+#: nothing.
+SIZE_INTERVAL = 0.5
 
 
 class MemoryClient(TerminalClient):
@@ -69,6 +91,11 @@ class MemoryClient(TerminalClient):
             except (NotImplementedError, ValueError):
                 pass  # No signals here. The size stays as it was.
 
+            # Held, so that nothing collects it while it waits. A task
+            # nobody holds dies in silence and takes its exception with
+            # it.
+            watcher = loop.create_task(self._watch_the_size())
+
             try:
                 while True:
                     try:
@@ -80,6 +107,7 @@ class MemoryClient(TerminalClient):
                         return
                     self._process(packet)
             finally:
+                watcher.cancel()
                 loop.remove_reader(stdin_fd)
                 try:
                     loop.remove_signal_handler(signal.SIGWINCH)
@@ -88,3 +116,25 @@ class MemoryClient(TerminalClient):
                 # Restore the keyboard mode of the outer terminal, also
                 # when the loop ends through an exception.
                 self._set_kitty_flags(0)
+
+    async def _watch_the_size(self) -> None:
+        """
+        Tell the server whenever the terminal has a new size.
+
+        The signal handler above does this too, and in this process the
+        server's application takes that signal away. So this is what
+        actually reports a resize, and the handler is what reports it
+        at once when nothing has taken the signal yet.
+
+        Only a change is sent. A packet on every turn would ask the
+        server to lay every window out twice a second.
+        """
+        last = self.the_size()
+
+        while True:
+            await asyncio.sleep(SIZE_INTERVAL)
+
+            size = self.the_size()
+            if size != last:
+                last = size
+                self._send_size()

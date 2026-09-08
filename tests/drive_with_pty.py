@@ -1444,6 +1444,136 @@ def check_a_full_screen_pane(tmp):
         terminal.close()
 
 
+#: The border between two columns. The plain one, and the one the
+#: focused pane draws over it: `HighlightBordersIfActive` puts its
+#: highlight one cell outside the pane, which is that same cell.
+BORDERS = "│┃"
+
+
+def check_a_strip_follows_a_resize(tmp):
+    """
+    A strip is laid out again when the terminal changes size.
+
+    Carl: "The strip window mode doesn't react when i resize the
+    outside terminal." The resize was a font size change in kitty,
+    which is a new number of rows and columns and nothing else.
+    Lillecarl/pymux#208.
+
+    **The unit harness cannot see this.**
+    `tests/test_the_strip_resizes.py` holds a size a test can change,
+    changes it, and drives `write_to_screen` again. It passes at every
+    size, which rules out the arithmetic and leaves the path this
+    check drives: the client hears SIGWINCH, tells the server, the
+    server resizes the window, and something asks for a frame.
+
+    Two answers, because they fail differently. `list-panes` says what
+    the server thinks each pane is, and the cells say what the client
+    drew. A server that resized while the client drew the old width
+    would pass the first and fail the second.
+    """
+    # A font size change moves both numbers, because the window keeps
+    # its pixels and the cells change size. So both move here.
+    rows, columns = 24, 80
+    fewer, narrower = 18, 60
+
+    #: Three columns of half a window are wider than the window, so
+    #: the strip overflows and scrolls. That is the state a person is
+    #: in when they change the font size, and a strip that exactly
+    #: fits could follow a resize while an overflowing one did not.
+    HOW_MANY = 3
+
+    config = tmp / "strip.conf"
+    # A window option cannot be set for a window that does not exist
+    # yet, and a configuration file is read before the first one. `-g`
+    # says what every new window starts with. Lillecarl/pymux#199.
+    config.write_text(
+        "set-option pane-border-status on\nset-window-option -g strip on\n"
+    )
+
+    def every_column_at(wide, high):
+        """
+        What every column of the strip is at that terminal size.
+
+        Half of the window less the border the column owns
+        (Lillecarl/pymux#206), and two rows shorter than the terminal:
+        one for the status line and one for the pane's title bar.
+        """
+        return ["%dx%d" % (wide // 2 - 1, high - 2)] * HOW_MANY
+
+    terminal = Terminal(
+        tmp,
+        "strip",
+        command="sleep 600",
+        rows=rows,
+        columns=columns,
+        config=config,
+    )
+
+    def sizes():
+        "What the server says each pane is, as `widthxheight` strings."
+        listed = run_cli(
+            terminal.sock_path, ["list-panes", "-F", "#{pane_width}x#{pane_height}"]
+        )
+        assert listed.returncode == 0, listed.stderr
+        return sorted(one.decode() for one in listed.stdout.split())
+
+    def border_column(mark, high, wide):
+        """
+        Which cell the first border was drawn in.
+
+        The middle row of the screen, which belongs to the panes: the
+        title bars are above it and the status line below.
+        """
+        screen = read_the_screen(terminal.since(mark), high, wide)
+        middle = screen[high // 2]
+
+        for x, char in enumerate(middle):
+            if char in BORDERS:
+                return x
+
+        raise Failed("no border on row %d of %r" % (high // 2, middle))
+
+    try:
+        terminal.wait_for_the_queries()
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.drain(2.0)
+
+        # The other columns, so that there is a strip to lay out.
+        for _ in range(HOW_MANY - 1):
+            opened = run_cli(terminal.sock_path, ["split-window", "-h", "sleep 600"])
+            assert opened.returncode == 0, opened.stderr
+
+        mark = terminal.mark()
+        terminal.drain(2.0)
+
+        assert sizes() == every_column_at(columns, rows), sizes()
+        assert border_column(mark, rows, columns) == columns // 2 - 1, (
+            "before the resize",
+            border_column(mark, rows, columns),
+        )
+
+        # The font size changed, which is all a resize is.
+        mark = terminal.mark()
+        terminal.resize(fewer, narrower)
+        terminal.drain(3.0)
+
+        assert sizes() == every_column_at(narrower, fewer), (
+            "the server did not resize the columns",
+            sizes(),
+        )
+        assert border_column(mark, fewer, narrower) == narrower // 2 - 1, (
+            "the client drew the columns at the old width",
+            border_column(mark, fewer, narrower),
+        )
+
+        print("a strip follows a resize: ok")
+    except Exception:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+
+
 def check_a_quoted_argument(tmp):
     """
     An argument with a space in it reaches the pane in one piece.
@@ -1924,6 +2054,7 @@ CHECKS = (
     check_an_overlay_pane,
     check_two_terminals_of_different_abilities,
     check_a_full_screen_pane,
+    check_a_strip_follows_a_resize,
     check_a_quoted_argument,
     check_a_non_breaking_space,
     check_the_cursor_of_a_drawing_pane,

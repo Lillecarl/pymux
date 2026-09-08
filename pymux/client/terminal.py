@@ -216,7 +216,11 @@ class TerminalClient(Client):
                 }
             )
 
+    def the_size(self):
+        "The rows and columns of the terminal this client draws on."
+        return _get_size(sys.stdout.fileno())
+
     def _send_size(self):
         "Report terminal size to server."
-        rows, cols = _get_size(sys.stdout.fileno())
+        rows, cols = self.the_size()
         self._send_packet({"cmd": "size", "data": [rows, cols]})
