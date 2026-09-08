@@ -199,9 +199,10 @@ def columns_of(pymux, how_many):
     """
     A strip of this many columns, and its panes from left to right.
 
-    They are collected as they are opened, because `Window.panes`
-    walks the root's own panes before the ones inside a stack and is
-    not the order the columns are in.
+    They are collected as they are opened. `Window.panes` is in that
+    order as well now (Lillecarl/pymux#210), and a test that read the
+    panes out of the arrangement would be asking the layout to confirm
+    itself.
     """
     window = pymux.arrangement.get_active_window()
     opened = [window.active_pane]

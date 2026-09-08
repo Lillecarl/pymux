@@ -488,14 +488,34 @@ class Window:
 
     @property
     def panes(self) -> List[Pane]:
-        "List with all panes from this Window."
-        result = []
+        """
+        Every pane of this window, in the order they are drawn.
 
-        for s in self.splits:
-            for item in s:
-                if isinstance(item, Pane):
-                    result.append(item)
+        **The order is what a person sees, and it used to be the order
+        of a walk.** This took each split's own panes before it went
+        into the splits inside it, so every pane that sat directly in
+        the root was numbered before every pane in a nested split,
+        whatever their place on the screen. A strip met that at once:
+        `Window.strip` wraps the window it is turning into a row, so
+        the first column is a nested split and its panes came last. A
+        picture of three columns showed the first one holding pane
+        number 2. Lillecarl/pymux#210.
 
+        `get_pane_index` reads this, and that number is what
+        `select-pane -t`, `display-panes` and every title bar say. So
+        it walks the tree in place: top-left first, the way tmux
+        numbers panes and the way an eye reads them.
+        """
+        result: List[Pane] = []
+
+        def collect(item) -> None:
+            if isinstance(item, Pane):
+                result.append(item)
+            else:
+                for child in item:
+                    collect(child)
+
+        collect(self.root)
         return result
 
     @property

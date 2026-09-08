@@ -33,10 +33,10 @@ def a_strip(columns=1):
     A strip with this many columns, active on the last.
 
     The panes come back in the order they were opened, which is the
-    order of the columns. `Window.panes` is not that order: it walks
-    the root's own panes before the ones inside a stack, so a test that
-    reached for `panes[0]` would get whichever pane that happened to
-    be.
+    order of the columns. `Window.panes` is in that order too now
+    (Lillecarl/pymux#210), and this still collects them as they are
+    opened: a test about where a split puts a pane should not be
+    reading its answer out of the thing it is judging.
     """
     window = Window()
     opened = [a_pane()]
