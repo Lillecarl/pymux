@@ -405,6 +405,12 @@ class Pymux:
         # titlebar without changing what the person asked for, so
         # turning it off gives them both back.
         self.full_screen = False
+        # Where the ":" command line is drawn. A box in the middle of
+        # the screen has room for a completion beside what it means,
+        # for a usage line, and for more than the twelve rows a menu
+        # under the cursor can reach. tmux has no such thing.
+        # Lillecarl/pymux#158.
+        self.command_palette = False
         self.enable_bell = True
         self.enable_clipboard = True
 

@@ -633,11 +633,72 @@ class LayoutManager:
         self._overlay_for_pane = (pane, container)
         return container
 
+    def _command_line_window(self) -> Window:
+        """
+        The window that holds what a person types after ":".
+
+        The bar at the bottom and the palette in the middle draw the
+        same window. Only where it is drawn differs, so the key
+        bindings of command mode and everything that reads the buffer
+        stay as they were. Lillecarl/pymux#158.
+        """
+        return Window(
+            # Can be more if the command is multiline.
+            height=D(min=1),
+            style="class:commandline",
+            dont_extend_height=True,
+            content=BufferControl(
+                buffer=self.client_state.command_buffer,
+                preview_search=True,
+                input_processors=[
+                    AppendAutoSuggestion(),
+                    BeforeInput(":", style="class:commandline-prompt"),
+                    ShowArg(),
+                    HighlightSelectionProcessor(),
+                ],
+            ),
+            z_index=Z_INDEX.COMMAND_LINE,
+        )
+
+    def _command_palette(self) -> Container:
+        """
+        The ":" command line as a box in the middle of the screen.
+
+        **The completions are inside the box.** The menu that a bottom
+        bar uses hangs off the cursor and stops at twelve rows, so a
+        palette that only moved the text would be a nicer box around
+        the same thin content. In here the menu takes the height of the
+        box, which is what makes the room worth having.
+
+        A title row says what the box is, the way the overlay pane says
+        what it holds. tmux has no such thing; this is the room that
+        Lillecarl/pymux#147, #148 and #48 are asking for.
+        """
+        return HSplit(
+            [
+                Window(
+                    height=1,
+                    align=WindowAlign.CENTER,
+                    content=FormattedTextControl(
+                        lambda: [("class:commandpalette.title", " Command ")]
+                    ),
+                    style="class:commandpalette.titlebar",
+                ),
+                self._command_line_window(),
+                # No maximum height: the box says how tall. The one on
+                # the bottom bar stops at twelve rows because it hangs
+                # off the cursor and has the whole screen under it.
+                CompletionsMenu(z_index=Z_INDEX.POPUP),
+            ],
+            style="class:commandpalette",
+        )
+
     def _create_layout(self) -> Container:
         """
         Generate the main prompt_toolkit layout.
         """
         waits_for_confirmation = WaitsForConfirmation(self.pymux)
+        palette = Condition(lambda: self.pymux.command_palette)
 
         return FloatContainer(
             content=HSplit(
@@ -723,27 +784,9 @@ class LayoutManager:
                             ),
                             # ':' prompt toolbar.
                             ConditionalContainer(
-                                content=Window(
-                                    height=D(
-                                        min=1
-                                    ),  # Can be more if the command is multiline.
-                                    style="class:commandline",
-                                    dont_extend_height=True,
-                                    content=BufferControl(
-                                        buffer=self.client_state.command_buffer,
-                                        preview_search=True,
-                                        input_processors=[
-                                            AppendAutoSuggestion(),
-                                            BeforeInput(
-                                                ":", style="class:commandline-prompt"
-                                            ),
-                                            ShowArg(),
-                                            HighlightSelectionProcessor(),
-                                        ],
-                                    ),
-                                    z_index=Z_INDEX.COMMAND_LINE,
-                                ),
-                                filter=has_focus(self.client_state.command_buffer),
+                                content=self._command_line_window(),
+                                filter=has_focus(self.client_state.command_buffer)
+                                & ~palette,
                             ),
                             # Other command-prompt commands toolbar.
                             ConditionalContainer(
@@ -779,8 +822,32 @@ class LayoutManager:
                     bottom=5,
                     z_index=Z_INDEX.POPUP,
                 ),
+                # The ":" command line as a box in the middle, when the
+                # person asked for one. The same inset as the keys
+                # pop-up above, because it is the same kind of box.
+                # Lillecarl/pymux#158.
                 Float(
-                    xcursor=True, ycursor=True, content=CompletionsMenu(max_height=12)
+                    content=ConditionalContainer(
+                        content=DynamicContainer(self._command_palette),
+                        filter=has_focus(self.client_state.command_buffer) & palette,
+                    ),
+                    left=3,
+                    right=3,
+                    top=5,
+                    bottom=5,
+                    z_index=Z_INDEX.POPUP,
+                ),
+                # The menu that hangs off the cursor. The palette holds
+                # its own, so this one steps aside for it.
+                Float(
+                    xcursor=True,
+                    ycursor=True,
+                    content=ConditionalContainer(
+                        content=CompletionsMenu(max_height=12),
+                        filter=~(
+                            has_focus(self.client_state.command_buffer) & palette
+                        ),
+                    ),
                 ),
                 # The overlay pane, in the middle of the screen. A
                 # `Float` with no side given is centred.

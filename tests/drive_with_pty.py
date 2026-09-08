@@ -1602,6 +1602,77 @@ def check_a_pane_that_changes_nothing(tmp):
         terminal.close()
 
 
+def check_the_command_palette(tmp):
+    """
+    `set command-palette on` draws the ":" line in the middle.
+
+    A float that renders in the wrong place is a wrong screen, and no
+    unit test sees it. This reads the cells: the ":" has to land inside
+    the box and nowhere near the bottom row, where the bar draws it.
+    Lillecarl/pymux#158.
+
+    The box takes the inset of the keys pop-up beside it: three columns
+    and five rows on every side. On a screen of 24 by 80 that is rows 5
+    to 18 and columns 3 to 76.
+    """
+    config = tmp / "palette.conf"
+    config.write_text("set command-palette on\n")
+
+    program = tmp / "palette_child.sh"
+    program.write_text("printf HOLDING\nsleep 60\n")
+
+    terminal = Terminal(
+        tmp, "palette", command="sh %s" % program, config=config
+    )
+    try:
+        terminal.wait_for_the_queries()
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"HOLDING")
+
+        # ctrl+b : opens command mode. Then a word with completions
+        # behind it, so the menu has something to draw.
+        terminal.write(b"\x02:")
+        terminal.drain(1.0)
+        terminal.write(b"new")
+        terminal.drain(2.0)
+
+        screen = read_the_screen(terminal.seen)
+        rows_with_the_prompt = [
+            number for number, row in enumerate(screen) if ":new" in row
+        ]
+        assert rows_with_the_prompt, (
+            "the command line drew nothing\n%s" % "\n".join(screen)
+        )
+
+        first = rows_with_the_prompt[0]
+        assert 5 <= first <= 18, (
+            "the command line landed on row %d, and the box is rows 5 to 18"
+            "\n%s" % (first, "\n".join(screen))
+        )
+
+        # The title says what the box is, and it is above the input.
+        titles = [
+            number for number, row in enumerate(screen) if "Command" in row
+        ]
+        assert titles and titles[0] == first - 1, (
+            "the title of the box is on row %r and the input on %d\n%s"
+            % (titles, first, "\n".join(screen))
+        )
+
+        # And the box starts where the keys pop-up starts.
+        assert screen[first].index(":new") >= 3, (
+            "the box reaches further left than three columns\n%s"
+            % "\n".join(screen)
+        )
+
+        print("command palette: ok")
+    except Exception:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+
+
 def check_a_detach_ends_the_client(tmp):
     """
     `ctrl+b d` gives the terminal back and ends the client process.
@@ -1782,6 +1853,7 @@ def main() -> None:
     check_a_non_breaking_space(tmp)
     check_the_cursor_of_a_drawing_pane(tmp)
     check_a_pane_that_changes_nothing(tmp)
+    check_the_command_palette(tmp)
     check_a_detach_ends_the_client(tmp)
     check_libpymux(tmp)
     print("All pty checks passed.")

@@ -189,6 +189,10 @@ ALL_OPTIONS = {
     # One pane over every cell, with nothing that pymux draws for
     # itself. It hides the two options above without changing them.
     "full-screen": OnOffOption("full_screen"),
+    # Draw the ":" command line as a box in the middle of the screen
+    # instead of a bar along the bottom. Off, because a person used to
+    # the bar should not have it move without asking.
+    "command-palette": OnOffOption("command_palette"),
     "status-keys": KeysOption("status_keys_vi_mode"),
     "mode-keys": KeysOption("mode_keys_vi_mode"),
     "default-terminal": StringOption(

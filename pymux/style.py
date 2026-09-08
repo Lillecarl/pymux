@@ -54,6 +54,12 @@ ui_style = Style.from_dict(
         #    'search-toolbar.text focused':         'bold #000000',
         "search-match": "#000000 bg:#88aa88",
         "search-match.current": "#000000 bg:#aaffaa underline",
+        # The ":" command line as a box in the middle of the screen.
+        # It borrows the shape of the overlay pane below: a title row
+        # over a body. Lillecarl/pymux#158.
+        "commandpalette": "bg:#1c1c1c",
+        "commandpalette.titlebar": "bg:#5f5f87 #ffffff",
+        "commandpalette.title": "bold",
         # The overlay pane, which floats over the layout.
         "overlay": "bg:#1c1c1c",
         "overlay.titlebar": "bg:#5f5f87 #ffffff",
