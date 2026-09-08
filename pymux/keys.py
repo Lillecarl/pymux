@@ -39,7 +39,7 @@ from prompt_toolkit.input.vt100_parser import (
     _IsPrefixOfLongerMatchCache,
 )
 from prompt_toolkit.key_binding.key_processor import _Flush
-from prompt_toolkit.keys import Keys
+from prompt_toolkit.keys import KeyName, Keys
 
 from pyte.keys import (
     FIRST_FUNCTIONAL_KEY,
@@ -76,6 +76,21 @@ _CTRL = Modifier.CTRL
 #: character it grows by. That took the pymux suite from 18 seconds to
 #: 228.
 _LOOKS_LIKE_A_KEY_RE = re.compile(r"^\x1b\[[\d;:]*[u~ABCDEFHPQS]$")
+
+#: A key whose modifier value is nine or more, which means a modifier
+#: above ctrl: super, hyper or meta in the numbering of the protocol.
+#: The value is one plus the sum of the bits, so ctrl and shift and
+#: alt together are eight.
+#:
+#: It is a gate, the same as the one above, and it decides which table
+#: reads the sequence rather than what the sequence means.
+_CARRIES_A_HIGH_MODIFIER_RE = re.compile(
+    r"^\x1b\[[\d:]*;(\d+)[\d:]*[u~ABCDEFHPQS]$"
+)
+
+#: The largest modifier value the legacy numbering can mean: shift and
+#: alt and ctrl together, which is one plus seven.
+_CTRL_ALT_SHIFT = 8
 
 # A prefix that could still become a kitty key sequence (or any other
 # CSI sequence with variable parameters).
@@ -130,6 +145,63 @@ _CTRL_KEYS = {
     "6": Keys.ControlCircumflex,
     "7": Keys.ControlUnderscore,
 }
+
+#: How each modifier is written in the name of a key.
+#:
+#: The order is the order of the bits in the protocol, and it is fixed
+#: so that one combination has one name. `c` and `s` are what
+#: prompt_toolkit already writes, so `c-s-a` built here is the same
+#: string as `Keys.ControlShiftA` and the two match each other.
+#:
+#: Alt is not here. prompt_toolkit spells it as two key presses, an
+#: escape and the key, and that is what pymux keeps: `super-a` behind
+#: an escape is alt and super on a.
+#:
+#: The locks are not here either. Caps lock on a letter is the
+#: capital, which is a character and not a key of its own.
+MODIFIER_NAMES = (
+    (Modifier.SHIFT, "s"),
+    (Modifier.CTRL, "c"),
+    (Modifier.SUPER, "super"),
+    (Modifier.HYPER, "hyper"),
+    (Modifier.META, "meta"),
+)
+
+#: The modifiers that no `Keys` member names, so a key that carries one
+#: needs a name made for it.
+MODIFIERS_WITH_NO_MEMBER = Modifier.SUPER | Modifier.HYPER | Modifier.META
+
+#: What the four keys that carry a C0 code are called in a name.
+#:
+#: Written out rather than read off the `Keys` member that names them.
+#: `Keys.Enter` is an alias of `ControlM`, so its value is "c-m", and
+#: "super-c-m" is a name nobody would guess or type.
+_CONTROL_KEY_NAMES = {
+    KeyCode.ESCAPE: "escape",
+    KeyCode.ENTER: "enter",
+    KeyCode.TAB: "tab",
+    KeyCode.BACKSPACE: "backspace",
+}
+
+
+def name_of(base: str, mods: int) -> KeyName:
+    """
+    The name of one key with its modifiers.
+
+    The name is built and not looked up, because there is no list to
+    look in: five modifiers over every key is more combinations than
+    anybody would write down. `KeyName` exists for exactly this, and a
+    name built here binds and matches like one prompt_toolkit ships.
+
+    `base` is the key without its modifiers, as it is written: a
+    letter, or the value of a `Keys` member such as "up" or "f5".
+    """
+    parts = [
+        name for modifier, name in MODIFIER_NAMES if mods & modifier
+    ]
+    parts.append(base)
+    return KeyName("-".join(parts))
+
 
 #: ctrl and shift on a letter. prompt_toolkit names these, and only a
 #: terminal that says more than the legacy encoding sends one: there,
@@ -421,6 +493,35 @@ def parse_kitty_key(prefix: str) -> _KeyResult | None:
     return _named(events[0])
 
 
+def _base_of(event: KeyEvent) -> str | None:
+    """
+    The key of an event without its modifiers, as a name writes it.
+
+    A letter or a digit is itself. A functional key is the value of
+    the `Keys` member that names it, so "up" and "f5". None for a key
+    that pymux cannot name at all, and then the modifiers cannot help.
+    """
+    if event.final == "u":
+        # These four are written out, and not read off the `Keys`
+        # member that names them. `Keys.Enter` is an alias of
+        # `ControlM`, so its value is "c-m", and "super-c-m" is a
+        # name nobody would guess or type.
+        control_key = _CONTROL_KEY_NAMES.get(event.code)
+        if control_key is not None:
+            return control_key
+        if event.code >= FIRST_FUNCTIONAL_KEY:
+            keypad = _KEYPAD.get(event.code)
+            if keypad is None:
+                return None
+            return keypad if isinstance(keypad, str) else str.__str__(keypad)
+        return chr(event.code).lower()
+    if event.final == "~":
+        tilde = _TILDE_KEYS.get(event.code)
+        return None if tilde is None else str.__str__(tilde)
+    letter = _LETTER_KEYS.get(event.final)
+    return None if letter is None else str.__str__(letter)
+
+
 def _named(event: KeyEvent) -> _KeyResult | None:
     "The prompt_toolkit key that one key event is."
     if event.event == EventType.RELEASE:
@@ -431,6 +532,17 @@ def _named(event: KeyEvent) -> _KeyResult | None:
         return _KEY_RELEASE
 
     key, mods, final, text = event.code, event.mods, event.final, event.text
+
+    if mods & MODIFIERS_WITH_NO_MEMBER:
+        # super, hyper or meta. No `Keys` member names one of these and
+        # no list could: five modifiers over every key is more
+        # combinations than anybody would write down. So the name is
+        # built, which is what `KeyName` is for. Lillecarl/pymux#181.
+        base = _base_of(event)
+        if base is None:
+            return Dropped(DropReason.A_KEY_THAT_WRITES_NOTHING)
+        named = name_of(base, mods & ~Modifier.ALT)
+        return (Keys.Escape, named) if mods & _ALT else named
 
     if final == "u":
         # Enter, Tab and Backspace carry their C0 code points.
@@ -581,8 +693,20 @@ class KittyVt100Parser(Vt100Parser):
         )
 
     def _get_match(self, prefix: str) -> Keys | tuple | object | None:
-        # prompt_toolkit's own table first: it knows richer variants
-        # (like shift+arrow) for the sequences that it covers.
+        # A modifier above ctrl is read here first, because the two
+        # tables count them differently. xterm has four, and the
+        # fourth is meta; the kitty protocol has eight, and the fourth
+        # is super. So "CSI 1;9A" is alt+Up to prompt_toolkit's table
+        # and super+Up to a terminal that speaks the protocol, and
+        # pymux asks every terminal to speak it. Lillecarl/pymux#182.
+        modifier = _CARRIES_A_HIGH_MODIFIER_RE.match(prefix)
+        if modifier is not None and int(modifier.group(1)) > _CTRL_ALT_SHIFT:
+            named = parse_kitty_key(prefix)
+            if named is not None:
+                return named
+
+        # prompt_toolkit's own table otherwise: it knows richer
+        # variants (like shift+arrow) for the sequences that it covers.
         result = super()._get_match(prefix)
         if result is not None:
             return result

@@ -501,6 +501,67 @@ def test_shift_and_a_functional_key_is_that_key():
     assert parse("\x1b[13;2u") == [(Keys.Enter, "\x1b[13;2u")]
 
 
+# ----------------------------------------------------------------------
+# super, hyper and meta, which no `Keys` member names.
+
+
+def test_super_hyper_and_meta_get_a_name_of_their_own():
+    """
+    Five modifiers over every key is more combinations than anybody
+    would write down, so the name is built rather than looked up.
+    `KeyName` is what prompt_toolkit gives an application for exactly
+    this. Lillecarl/pymux#181.
+    """
+    assert parse("\x1b[97;9u") == [("super-a", "\x1b[97;9u")]
+    assert parse("\x1b[97;17u") == [("hyper-a", "\x1b[97;17u")]
+    assert parse("\x1b[97;33u") == [("meta-a", "\x1b[97;33u")]
+
+
+def test_the_order_of_the_modifiers_in_a_name_is_fixed():
+    "One combination has one name, or a binding would miss it."
+    assert parse("\x1b[97;13u") == [("c-super-a", "\x1b[97;13u")]
+    assert parse("\x1b[97;10u") == [("s-super-a", "\x1b[97;10u")]
+
+
+def test_alt_stays_an_escape_in_front():
+    "prompt_toolkit spells alt as two key presses, and pymux keeps that."
+    assert parse("\x1b[97;11u") == [
+        (Keys.Escape, "\x1b[97;11u"),
+        ("super-a", ""),
+    ]
+
+
+def test_a_functional_key_is_named_by_its_own_name():
+    assert parse("\x1b[1;9A") == [("super-up", "\x1b[1;9A")]
+    assert parse("\x1b[15;9~") == [("super-f5", "\x1b[15;9~")]
+    assert parse("\x1b[13;9u") == [("super-enter", "\x1b[13;9u")]
+    assert parse("\x1b[27;9u") == [("super-escape", "\x1b[27;9u")]
+
+
+def test_a_high_modifier_is_read_here_and_not_from_the_table():
+    """
+    The two tables count the modifiers differently. xterm has four and
+    the fourth is meta; the protocol has eight and the fourth is super.
+    So "CSI 1;9A" is alt+Up to prompt_toolkit's table and super+Up to a
+    terminal that speaks the protocol, and pymux asks every terminal to
+    speak it. Lillecarl/pymux#182.
+    """
+    assert parse("\x1b[1;9A") == [("super-up", "\x1b[1;9A")]
+    # Below that, prompt_toolkit's table still answers, because it
+    # knows richer variants for what it covers.
+    assert parse("\x1b[1;2A") == [(Keys.ShiftUp, "\x1b[1;2A")]
+    assert parse("\x1b[1;5A") == [(Keys.ControlUp, "\x1b[1;5A")]
+    assert parse("\x1b[1;3A") == [(Keys.Escape, "\x1b[1;3A"), (Keys.Up, "")]
+
+
+def test_a_lock_is_not_a_key_of_its_own():
+    """
+    Caps lock on a letter is the capital, which is text. kitty keeps
+    the locks off text producing keys for that reason.
+    """
+    assert parse("\x1b[97;65u") == [("a", "\x1b[97;65u")]
+
+
 def test_control_and_shift_on_a_letter_is_its_own_key():
     """
     Only a terminal that says more than the legacy encoding can tell

@@ -21,13 +21,74 @@ of the same key sent the plain one. One table now, and
 from typing import Dict, Tuple
 
 from prompt_toolkit.input.vt100_parser import ANSI_SEQUENCES
-from prompt_toolkit.keys import Keys
+from prompt_toolkit.keys import KeyName, Keys
+from pyte.keys import Modifier
+
+from .keys import MODIFIERS_WITH_NO_MEMBER, name_of
 
 __all__ = [
     "pymux_key_to_prompt_toolkit_key_sequence",
     "prompt_toolkit_key_to_vt100_key",
     "PYMUX_TO_PROMPT_TOOLKIT_KEYS",
 ]
+
+
+#: What a person writes for each modifier, and the bit it means.
+#:
+#: tmux has no spelling for super, hyper or meta, so there is no muscle
+#: memory to keep here and the names are written out. "S-" and "C-"
+#: keep the tmux meaning they already have.
+THE_MODIFIERS_A_PERSON_WRITES = (
+    ("s-", Modifier.SHIFT),
+    ("c-", Modifier.CTRL),
+    ("super-", Modifier.SUPER),
+    ("hyper-", Modifier.HYPER),
+    ("meta-", Modifier.META),
+)
+
+
+#: The `Keys` member behind the base of a built name.
+#:
+#: Four of them are written out rather than read off the member, so
+#: they need naming here as well: `Keys.Enter` is an alias of
+#: `ControlM` and its value is "c-m", which is not a name anybody
+#: would type. See `_CONTROL_KEY_NAMES` in `keys.py`.
+_A_KEY_BY_ITS_NAME = {
+    **{str.__str__(key): key for key in Keys},
+    "escape": Keys.Escape,
+    "enter": Keys.Enter,
+    "tab": Keys.Tab,
+    "backspace": Keys.Backspace,
+}
+
+
+def _a_built_name(key: str) -> KeyName | None:
+    """
+    The key that a name with super, hyper or meta in it means.
+
+    None for anything else, and the tables below answer instead. Only
+    these three need building: everything the legacy encoding can
+    carry has a `Keys` member already.
+
+    The order the modifiers are written in does not matter to a
+    person, and it does to the name, so the name is rebuilt from what
+    was found rather than from what was typed.
+    """
+    rest = key.lower()
+    mods = 0
+    found = True
+    while found:
+        found = False
+        for spelling, modifier in THE_MODIFIERS_A_PERSON_WRITES:
+            if rest.startswith(spelling) and len(rest) > len(spelling):
+                mods |= modifier
+                rest = rest[len(spelling) :]
+                found = True
+                break
+
+    if not mods & MODIFIERS_WITH_NO_MEMBER:
+        return None
+    return name_of(rest, mods)
 
 
 def pymux_key_to_prompt_toolkit_key_sequence(key):
@@ -37,6 +98,13 @@ def pymux_key_to_prompt_toolkit_key_sequence(key):
 
     Raises `ValueError` if the key is not known.
     """
+    # super, hyper and meta, which no `Keys` member names and no list
+    # could. The name is built the same way the reader builds it, so
+    # the two meet in the middle. Lillecarl/pymux#181.
+    built = _a_built_name(key)
+    if built is not None:
+        return (built,)
+
     # Make the c-, m- and s- prefixes case insensitive.
     #
     # The shift one has to come first, or "C-S-a" loses its S to the
@@ -121,7 +189,54 @@ def prompt_toolkit_key_to_vt100_key(key: str, application_mode: bool = False) ->
         except KeyError:
             pass
 
-    return _PROMPT_TOOLKIT_KEY_TO_VT100.get(key, key)
+    if key in _PROMPT_TOOLKIT_KEY_TO_VT100:
+        return _PROMPT_TOOLKIT_KEY_TO_VT100[key]
+
+    legacy = _a_built_name_as_legacy_bytes(key)
+    if legacy is not None:
+        return legacy
+
+    return key
+
+
+def _a_built_name_as_legacy_bytes(key: str) -> str | None:
+    """
+    What a keyboard would have sent for a key named with super, hyper
+    or meta, and None when the name is not one of those.
+
+    The legacy encoding cannot carry those three at all, so what is
+    left is the key with the modifiers it can carry. `send-keys
+    Super-a` types an "a", which is what pressing that key on a
+    keyboard the pane can hear would have done.
+
+    This is the same trade `send-keys C-S-a` makes, and the same one
+    `pyte.keys` makes for a pane that asked for nothing.
+    """
+    if not isinstance(key, str) or "-" not in key:
+        return None
+    mods = 0
+    rest = key
+    while True:
+        for spelling, modifier in THE_MODIFIERS_A_PERSON_WRITES:
+            if rest.startswith(spelling) and len(rest) > len(spelling):
+                mods |= modifier
+                rest = rest[len(spelling) :]
+                break
+        else:
+            break
+
+    if not mods & MODIFIERS_WITH_NO_MEMBER:
+        return None
+    if mods & Modifier.CTRL and len(rest) == 1:
+        return prompt_toolkit_key_to_vt100_key("c-%s" % rest)
+    if mods & Modifier.SHIFT and len(rest) == 1:
+        return rest.upper()
+    if len(rest) == 1:
+        return rest
+    member = _A_KEY_BY_ITS_NAME.get(rest)
+    if member is None:
+        return None
+    return prompt_toolkit_key_to_vt100_key(member)
 
 
 #: ctrl and shift on a letter, which tmux spells "C-S-a".

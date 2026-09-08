@@ -165,6 +165,34 @@ def test_control_and_shift_on_a_letter_sends_what_a_keyboard_sends(pymux):
     assert written == "\x01"
 
 
+def test_a_key_with_super_can_be_bound_and_sent(pymux):
+    """
+    tmux has no spelling for super, hyper or meta, so pymux writes
+    them out. The order they are written in does not matter, and the
+    case does not either. Lillecarl/pymux#181.
+    """
+    a_pane(pymux)
+
+    for spelling in ("Super-a", "super-a", "SUPER-A"):
+        assert send(pymux, spelling) == ("a", [])
+    assert send(pymux, "Super-C-a") == ("\x01", [])
+    assert send(pymux, "C-Super-a") == ("\x01", [])
+
+
+def test_a_pane_gets_what_a_keyboard_it_can_hear_would_have_sent(pymux):
+    """
+    The legacy encoding cannot carry super, hyper or meta at all, so
+    what is left is the key with the modifiers it can carry. The same
+    trade `send-keys C-S-a` makes.
+    """
+    a_pane(pymux)
+
+    assert send(pymux, "Super-S-a") == ("A", [])
+    assert send(pymux, "Super-up") == ("\x1b[A", [])
+    assert send(pymux, "Super-enter") == ("\r", [])
+    assert send(pymux, "Hyper-escape") == ("\x1b", [])
+
+
 def test_the_shift_spelling_is_case_insensitive(pymux):
     "A person writes a key the way it reads."
     a_pane(pymux)
