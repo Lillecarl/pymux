@@ -23,6 +23,8 @@ pymux uses one. When it is, this belongs upstream, as a counterpart of
 like that class so the move is mechanical rather than a rewrite.
 """
 
+from typing import Callable
+
 from prompt_toolkit.application import get_app
 from prompt_toolkit.data_structures import Point
 from prompt_toolkit.filters import FilterOrBool, to_filter
@@ -54,6 +56,22 @@ class ScrollableStrip(Container):
     :param keep_focused_window_visible: Scroll so the focused window is
         on screen, or as much of it as fits.
     :param max_available_width: The cap above.
+    :param top_margin: How many rows at the top of the strip belong to
+        what hangs above a pane rather than to the panes themselves.
+
+        **A strip may not draw outside itself.** A pane's title bar is
+        a `Float` at `top=-1`, one row above the pane. Every other
+        layout lets it land on a row that something else reserved,
+        because a float is drawn onto the real screen last of all. A
+        strip draws onto a screen of its own and copies the result, so
+        by the time it copies, that row has not been drawn yet -- and
+        whatever owns it draws over the copy afterwards. A picture
+        found this; no test that reads a container on its own can.
+        Lillecarl/pymux#161.
+
+        So the row belongs to the strip. The content is laid out this
+        many rows down on the screen of its own, which puts a title bar
+        inside the strip's own area, and the caller reserves nothing.
     """
 
     def __init__(
@@ -62,11 +80,13 @@ class ScrollableStrip(Container):
         scroll_offsets: ScrollOffsets | None = None,
         keep_focused_window_visible: FilterOrBool = True,
         max_available_width: int = MAX_AVAILABLE_WIDTH,
+        top_margin: Callable[[], int] | int = 0,
     ) -> None:
         self.content = content
         self.scroll_offsets = scroll_offsets or ScrollOffsets(left=0, right=0)
         self.keep_focused_window_visible = to_filter(keep_focused_window_visible)
         self.max_available_width = max_available_width
+        self.top_margin = top_margin
 
         #: The first column of the strip that is on screen.
         self.horizontal_scroll = 0
@@ -93,16 +113,25 @@ class ScrollableStrip(Container):
             self.strip_width(width), max_available_height
         )
 
+    def margin(self) -> int:
+        "How many rows at the top belong to what hangs above a pane."
+        if callable(self.top_margin):
+            return max(0, self.top_margin())
+        return max(0, self.top_margin)
+
     def strip_width(self, visible_width: int) -> int:
         """
-        How wide the whole strip is.
+        How wide the whole strip is: what its columns add up to.
 
-        Never narrower than the screen: a strip that does not fill the
-        window would leave a band of nothing on the right, and there is
-        nothing to scroll to there.
+        It may be narrower than the screen, and then the rest of the
+        screen stays blank. That is what niri does with one window at
+        half width, and it is why this is the columns' own total rather
+        than the width of the window: a content laid out wider than its
+        columns fills the difference with whatever it pads with, which
+        drew a border down the middle of an empty half.
         """
         wanted = self.content.preferred_width(self.max_available_width).preferred
-        return max(visible_width, min(wanted, self.max_available_width))
+        return max(1, min(wanted, self.max_available_width))
 
     def write_to_screen(
         self,
@@ -121,6 +150,7 @@ class ScrollableStrip(Container):
         which is what says where to scroll to.
         """
         virtual_width = self.strip_width(write_position.width)
+        margin = self.margin()
 
         temp_screen = Screen(default_char=Char(char=" ", style=parent_style))
         temp_screen.show_cursor = screen.show_cursor
@@ -130,7 +160,10 @@ class ScrollableStrip(Container):
             temp_screen,
             temp_mouse_handlers,
             WritePosition(
-                xpos=0, ypos=0, width=virtual_width, height=write_position.height
+                xpos=0,
+                ypos=margin,
+                width=virtual_width,
+                height=max(0, write_position.height - margin),
             ),
             parent_style,
             erase_bg,
@@ -207,7 +240,13 @@ class ScrollableStrip(Container):
     def _copy_over_screen(
         self, screen: Screen, temp_screen: Screen, write_position: WritePosition
     ) -> None:
-        "The cells that are on screen, and the escapes that ride with them."
+        """
+        The cells that are on screen, and the escapes that ride with them.
+
+        Row for row: the content was laid out `margin` rows down on the
+        screen of its own, and this strip's own write position starts
+        at the same place. `top_margin` says why.
+        """
         xpos = write_position.xpos
         ypos = write_position.ypos
 

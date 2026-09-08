@@ -1025,6 +1025,21 @@ class DynamicBody(Container):
             )
         else:
             window = self.pymux.arrangement.get_active_window()
+
+            # A strip is a different rendering path and not a sixth
+            # layout: every other one divides the window between the
+            # panes, and a strip gives each column a width of its own
+            # and scrolls. Lillecarl/pymux#198.
+            #
+            # It reserves the row for the title bars itself, and
+            # nothing here reserves one for it. A strip copies a screen
+            # of its own onto the real one, so a row it does not own is
+            # drawn over after that copy and the title bars would be
+            # lost. `ScrollableStrip` says the rest.
+            # Lillecarl/pymux#161.
+            if window.strip:
+                return _create_strip(self.pymux, window)
+
             return HSplit(
                 [
                     # Some spacing for the top status bar.
@@ -1032,14 +1047,8 @@ class DynamicBody(Container):
                         content=Window(height=1),
                         filter=Condition(lambda: self.pymux.show_pane_status),
                     ),
-                    # The actual content. A strip is a different
-                    # rendering path and not a sixth layout: every
-                    # other one divides the window between the panes,
-                    # and a strip gives each column a width of its own
-                    # and scrolls. Lillecarl/pymux#198.
-                    _create_strip(self.pymux, window)
-                    if window.strip
-                    else _create_split(self.pymux, window, window.root),
+                    # The actual content.
+                    _create_split(self.pymux, window, window.root),
                 ]
             )
 
@@ -1172,6 +1181,12 @@ def _create_strip(pymux: "Pymux", window) -> Container:
         # Keep a little of the columns on either side of the focused
         # one on screen. That peeking is what says the strip goes on.
         scroll_offsets=ScrollOffsets(left=2, right=2),
+        # The row a title bar hangs in belongs to the strip, and the
+        # layout below reserves nothing for a strip window. A strip
+        # copies a screen of its own onto the real one, so a row it
+        # does not own is drawn over after the copy.
+        # `ScrollableStrip` says the rest.
+        top_margin=lambda: 1 if pymux.show_pane_status else 0,
     )
 
 
