@@ -1429,7 +1429,25 @@ class Pymux:
     def detach_client(self, app):
         """
         Detach the client that belongs to this CLI.
+
+        **Standalone quits instead.** It puts the user interface
+        straight on the terminal, with no client and no protocol, so
+        there is no connection to close and nothing for the session to
+        live on after the person leaves. Detaching there wrote no
+        teardown at all: the screen drew again and the panes kept
+        running, and a key that does nothing teaches a person that the
+        key does not exist.
+
+        `ctrl+b d` is the gesture for leaving and standalone has no
+        other one, so it means quit here. `run_integrated` already
+        reads it that way, for the same reason, and one key that says
+        one thing on all three routes is worth more than the
+        difference between them. Lillecarl/pymux#160.
         """
+        if self._runs_standalone:
+            self.stop()
+            return
+
         connection = self.get_connection()
         if connection:
             connection.detach_and_close()

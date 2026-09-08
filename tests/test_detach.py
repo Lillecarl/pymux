@@ -1,17 +1,20 @@
 """
-`ctrl+b d` detaches, and the key handler survives losing its client.
+What "detach-client" does on a route that has nothing to detach.
 
-A bound key runs its command and then takes the prefix off the client
-that pressed it. `detach-client` removes that client, so asking for it
-afterwards raised `ValueError` out of the key handler. The terminal was
-already back to the shell by then, so the traceback landed on top of
-the prompt. Lillecarl/pymux#109.
+`pymux standalone` puts the user interface straight on the terminal:
+no client, no protocol, no connection. `ctrl+b d` reached
+`Pymux.detach_client`, found no connection and did nothing at all. The
+screen drew again and the panes kept running, so the only way out was
+to end every pane or kill the process.
+
+Lillecarl/pymux#160.
 """
 import asyncio
+import functools
 import io
 import sys
+from contextlib import asynccontextmanager
 
-import pytest
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
@@ -23,111 +26,144 @@ from pymux.main import Pymux
 ROWS, COLUMNS = 24, 80
 
 
-class _Connection:
-    "What `Pymux` asks a connection for, and nothing else."
+def in_a_loop(test):
+    "pymux carries no anyio, so pytest here runs no coroutine test."
 
-    kitty_source_flags = 0
-    pointer_shape = None
-    graphics = None
+    @functools.wraps(test)
+    def run():
+        asyncio.run(test())
 
-    def __init__(self):
-        self.detached = False
-        self.pymux = None
-
-    def detach_and_close(self) -> None:
-        """
-        What `ServerConnection.detach_and_close` does to `Pymux`.
-
-        The real one closes the pipe as well, and nothing here reads
-        it. Taking the client away is the half that matters: the key
-        handler asks for it afterwards.
-        """
-        self.detached = True
-        self.pymux.remove_client(self)
+    return run
 
 
-@pytest.fixture
-def session():
-    "A server with one client and one window."
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+@asynccontextmanager
+async def a_standalone_session():
+    """
+    A `Pymux` set up the way `run_standalone` sets one up.
 
+    `run_standalone` itself is not called, because it ends in
+    `app.run()`, which does not return until the thing under test has
+    happened. Everything before that line is here.
+    """
     pymux = Pymux()
+    pymux._runs_standalone = True
     pymux.create_window("%s -c pass" % (sys.executable,))
-
     output = Vt100_Output(
         stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS)
     )
-    connection = _Connection()
-    connection.pymux = pymux
     with create_pipe_input() as pipe:
         state = pymux.add_client(
             output=output,
             input=pipe,
             color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=connection,
+            connection=None,
         )
         try:
-            yield pymux, state, connection
+            yield pymux, state
         finally:
             for window in list(pymux.arrangement.windows):
                 for pane in list(window.panes):
                     process = getattr(pane, "process", None)
                     if process is not None and not process.is_terminated:
                         process.kill()
-            loop.close()
 
 
-def press(pymux, key_name, command, arguments=()):
-    "Bind a key to a command and run what the binding runs."
-    manager = pymux.key_bindings_manager
-    manager.add_custom_binding(key_name, command, list(arguments), needs_prefix=True)
-    handler = manager.custom_bindings[(True, key_name)].handler
-    handler(None)
+@in_a_loop
+async def test_a_detach_ends_a_standalone_session():
+    async with a_standalone_session() as (pymux, state):
+        assert not pymux.done_f.done()
+
+        with set_app(state.app):
+            pymux.handle_command("detach-client")
+
+        assert pymux.done_f.done()
 
 
-def test_a_detach_tells_the_connection(session):
-    pymux, state, connection = session
-
-    with set_app(state.app):
-        press(pymux, "d", "detach-client")
-
-    assert connection.detached
-
-
-def test_a_detach_leaves_no_client_behind(session):
-    pymux, state, connection = session
-
-    with set_app(state.app):
-        press(pymux, "d", "detach-client")
-
-    assert state.app not in pymux.apps
-
-
-def test_a_closed_client_input_says_it_is_closed():
+@in_a_loop
+async def test_a_detach_asks_every_pane_to_stop():
     """
-    prompt_toolkit reads `input.closed` before it takes keys, and it
-    reads it after the pipe has gone: the key press that detached the
-    client is still on the loop. `__getattr__` forwarded that read to
-    `None` and raised `AttributeError` on the terminal of the person
-    who detached. Lillecarl/pymux#109.
+    The panes were running for the session, and the session has gone.
+
+    It is also what lets the process end: a pane that is still running
+    holds a `waitpid` in the executor of the loop, and the interpreter
+    waits for that thread. Lillecarl/pymux#109 is the same finding on
+    the integrated route.
+
+    The ask is what is read, and not `is_terminated`. That property is
+    the backend saying it saw the end of the pty, which happens when
+    the loop next runs, so reading it here would be a race and not a
+    test.
+
+    **The spy still kills.** A stub that only counts leaves the pane
+    running, its `waitpid` holds a thread in the executor of the loop,
+    and `asyncio.run` never returns: the test hangs rather than fails,
+    which is the same trap in the other direction.
     """
-    from pymux.server import _ClientInput
+    killed = []
 
-    client_input = _ClientInput(send_packet=lambda data: None)
-    assert not client_input.closed
+    async with a_standalone_session() as (pymux, state):
+        panes = list(pymux.panes_by_id.values())
+        assert panes
+        for pane in panes:
+            pane.process.kill = _a_spy_that_still_kills(
+                pane, pane.process.kill, killed
+            )
 
-    client_input.close()
+        with set_app(state.app):
+            pymux.handle_command("detach-client")
 
-    assert client_input.closed
+        assert killed == panes
 
 
-def test_the_prefix_comes_off_a_client_that_stays(session):
-    "The ordinary case: the command keeps the client, and the prefix goes."
-    pymux, state, connection = session
-    state.has_prefix = True
+def _a_spy_that_still_kills(pane, kill, killed):
+    "Write the pane down, then do what the caller asked for."
 
-    with set_app(state.app):
-        press(pymux, "n", "next-window")
+    def spy():
+        killed.append(pane)
+        kill()
 
-    assert not state.has_prefix
+    return spy
+
+
+@in_a_loop
+async def test_a_client_over_a_connection_still_detaches():
+    """
+    The other routes are untouched: a client with a connection has one
+    to close, and closing it is not the same as ending the session.
+    """
+    detached = []
+
+    class _Connection:
+        kitty_source_flags = 0
+        pointer_shape = None
+        graphics = None
+
+        def detach_and_close(self):
+            detached.append(True)
+
+        def set_pointer_shape(self, shape):
+            pass
+
+        def _send_packet(self, packet):
+            pass
+
+    pymux = Pymux()
+    pymux.create_window("%s -c pass" % (sys.executable,))
+    output = Vt100_Output(
+        stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS)
+    )
+    with create_pipe_input() as pipe:
+        state = pymux.add_client(
+            output=output,
+            input=pipe,
+            color_depth=ColorDepth.DEPTH_8_BIT,
+            connection=_Connection(),
+        )
+        try:
+            with set_app(state.app):
+                pymux.handle_command("detach-client")
+
+            assert detached == [True]
+            assert not pymux.done_f.done()
+        finally:
+            pymux.stop()
