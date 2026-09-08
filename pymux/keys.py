@@ -131,6 +131,15 @@ _CTRL_KEYS = {
     "7": Keys.ControlUnderscore,
 }
 
+#: ctrl and shift on a letter. prompt_toolkit names these, and only a
+#: terminal that says more than the legacy encoding sends one: there,
+#: ctrl+a and ctrl+shift+a are the same control code.
+#: Lillecarl/pymux#168.
+_CTRL_SHIFT_LETTERS = {
+    chr(ord("a") + i): getattr(Keys, "ControlShift%s" % chr(ord("A") + i))
+    for i in range(26)
+}
+
 # Keys that use the "CSI 1 ; modifier <letter>" form.
 _LETTER_KEYS = {
     "A": Keys.Up,
@@ -463,6 +472,15 @@ def _named(event: KeyEvent) -> _KeyResult | None:
         # Text key.
         char = chr(key)
         if mods & _CTRL:
+            if mods & _SHIFT:
+                # Only a terminal that says more than the legacy
+                # encoding can tell these apart: ctrl+a and
+                # ctrl+shift+a are one control code there. The shift
+                # used to be dropped, so a person could bind neither
+                # on its own. Lillecarl/pymux#168.
+                both = _CTRL_SHIFT_LETTERS.get(char.lower())
+                if both is not None:
+                    return (Keys.Escape, both) if mods & _ALT else both
             ctrl_key = _ctrl_mapping(char)
             if ctrl_key is None:
                 return Dropped(DropReason.CTRL_AND_A_CHARACTER)

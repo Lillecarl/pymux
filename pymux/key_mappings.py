@@ -37,8 +37,14 @@ def pymux_key_to_prompt_toolkit_key_sequence(key):
 
     Raises `ValueError` if the key is not known.
     """
-    # Make the c- and m- prefixes case insensitive.
-    if key.lower().startswith("m-c-"):
+    # Make the c-, m- and s- prefixes case insensitive.
+    #
+    # The shift one has to come first, or "C-S-a" loses its S to the
+    # branch that only knows "C-". A person writes a key the way it
+    # reads, and "c-s-a" has to name what "C-S-a" names.
+    if key.lower().startswith("c-s-"):
+        key = "C-S-" + key[4:]
+    elif key.lower().startswith("m-c-"):
         key = "M-C-" + key[4:]
     elif key.lower().startswith("c-"):
         key = "C-" + key[2:]
@@ -75,7 +81,22 @@ def _keys_to_data() -> Dict[Keys, str]:
     return result
 
 
-_PROMPT_TOOLKIT_KEY_TO_VT100 = _keys_to_data()
+#: What ctrl and shift on a letter send to a pane.
+#:
+#: The legacy encoding has no form of its own for these: ctrl+a and
+#: ctrl+shift+a are the same control code. So `send-keys C-S-a` sends
+#: what a legacy keyboard would have sent, which is ctrl+a.
+#:
+#: `ANSI_SEQUENCES` cannot answer, because nothing in it produces one
+#: of these keys: they reach pymux through the reader in `keys.py`,
+#: out of a terminal that speaks a newer encoding.
+#: Lillecarl/pymux#168.
+_CTRL_SHIFT_TO_VT100 = {
+    getattr(Keys, "ControlShift%s" % chr(ord("A") + i)): chr(i + 1)
+    for i in range(26)
+}
+
+_PROMPT_TOOLKIT_KEY_TO_VT100 = {**_keys_to_data(), **_CTRL_SHIFT_TO_VT100}
 
 
 def prompt_toolkit_key_to_vt100_key(key: str, application_mode: bool = False) -> str:
@@ -103,7 +124,23 @@ def prompt_toolkit_key_to_vt100_key(key: str, application_mode: bool = False) ->
     return _PROMPT_TOOLKIT_KEY_TO_VT100.get(key, key)
 
 
+#: ctrl and shift on a letter, which tmux spells "C-S-a".
+#:
+#: **A pane cannot be sent one of these.** `send-keys` needs the bytes
+#: a keyboard sends, and the legacy encoding has none for this: ctrl+a
+#: and ctrl+shift+a are one control code there. So a binding can name
+#: the key and `prompt_toolkit_key_to_vt100_key` gives what ctrl alone
+#: gives, which is what a legacy keyboard would have sent.
+#: Lillecarl/pymux#168.
+_CTRL_SHIFT_LETTERS: Dict[str, Tuple[str, ...]] = {
+    "C-S-%s" % chr(ord("a") + i): (
+        getattr(Keys, "ControlShift%s" % chr(ord("A") + i)),
+    )
+    for i in range(26)
+}
+
 PYMUX_TO_PROMPT_TOOLKIT_KEYS: Dict[str, Tuple[str, ...]] = {
+    **_CTRL_SHIFT_LETTERS,
     # The comma is what makes this a tuple of one. Without it the value
     # is the string, and a caller that walks the keys of a sequence
     # walks the letters of a word instead.

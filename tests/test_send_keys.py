@@ -149,6 +149,30 @@ def test_a_key_sends_what_a_keyboard_sends(pymux, name, expected):
     assert written == expected
 
 
+def test_control_and_shift_on_a_letter_sends_what_a_keyboard_sends(pymux):
+    """
+    A binding can name this key, and `send-keys` still has to give a
+    pane the bytes a keyboard would have given it. The legacy encoding
+    has no form of its own here -- ctrl+a and ctrl+shift+a are one
+    control code -- so the answer is the control code.
+    Lillecarl/pymux#168.
+    """
+    a_pane(pymux)
+
+    written, errors = send(pymux, "C-S-a")
+
+    assert errors == []
+    assert written == "\x01"
+
+
+def test_the_shift_spelling_is_case_insensitive(pymux):
+    "A person writes a key the way it reads."
+    a_pane(pymux)
+
+    assert send(pymux, "c-s-z")[0] == "\x1a"
+    assert send(pymux, "C-S-z")[0] == "\x1a"
+
+
 def test_an_arrow_is_the_application_form_for_a_pane_that_asked(pymux):
     """
     "\\x1bOA" is the application cursor form, and DECCKM turns it on.

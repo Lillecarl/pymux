@@ -77,8 +77,12 @@ def test_alt_text_key():
 
 
 def test_ctrl_shift_text_key():
-    # The legacy encoding has no shift for ctrl+letter combinations.
-    assert parse("\x1b[120;6u") == [(Keys.ControlX, "\x1b[120;6u")]
+    """
+    The legacy encoding has no shift for a ctrl+letter combination, so
+    this key used to arrive as ctrl+x and could not be bound on its
+    own. It has a name now. Lillecarl/pymux#168.
+    """
+    assert parse("\x1b[120;6u") == [(Keys.ControlShiftX, "\x1b[120;6u")]
 
 
 def test_alternate_key_codes_are_ignored():
@@ -495,6 +499,45 @@ def test_shift_and_a_functional_key_is_that_key():
     called "ENTER" that nothing binds.
     """
     assert parse("\x1b[13;2u") == [(Keys.Enter, "\x1b[13;2u")]
+
+
+def test_control_and_shift_on_a_letter_is_its_own_key():
+    """
+    Only a terminal that says more than the legacy encoding can tell
+    these apart: ctrl+a and ctrl+shift+a are the same control code
+    there. The shift used to be dropped, so a person could bind
+    neither on its own. Lillecarl/pymux#168.
+    """
+    assert parse("\x1b[97;6u") == [(Keys.ControlShiftA, "\x1b[97;6u")]
+    assert parse("\x1b[122;6u") == [(Keys.ControlShiftZ, "\x1b[122;6u")]
+    # The same key in xterm's modifyOtherKeys form.
+    assert parse("\x1b[27;6;97~") == [(Keys.ControlShiftA, "\x1b[27;6;97~")]
+
+
+def test_control_alone_is_still_control():
+    assert parse("\x1b[97;5u") == [(Keys.ControlA, "\x1b[97;5u")]
+    assert parse("\x01") == [(Keys.ControlA, "\x01")]
+
+
+def test_alt_reaches_control_and_shift_as_well():
+    assert parse("\x1b[97;8u") == [
+        (Keys.Escape, "\x1b[97;8u"),
+        (Keys.ControlShiftA, ""),
+    ]
+
+
+def test_control_and_shift_on_a_digit_is_left_where_it_was():
+    """
+    prompt_toolkit has `ControlShift1` upwards and pymux does not
+    reach for it. A digit with ctrl already goes to whatever control
+    code it carries, and which key made a character depends on the
+    layout, so the letters are the ones worth naming.
+
+    ctrl+shift+2 is the legacy ctrl+@, and ctrl+shift+1 has no control
+    code at all, so it goes nowhere and says so in the log.
+    """
+    assert parse("\x1b[50;6u") == [(Keys.ControlAt, "\x1b[50;6u")]
+    assert parse("\x1b[49;6u") == []
 
 
 def test_shift_and_tab_is_the_back_tab():
