@@ -6,11 +6,12 @@ every other pane smaller. `ScrollableStrip` is the other thing: the
 panes keep their widths, the row runs past the edge of the screen, and
 the view scrolls to the one a person is on. Lillecarl/pymux#198.
 
-**The tests read the cells.** A strip is a copy of one screen onto
-another with an offset, and every way it can be wrong -- an off-by-one
-in the slice, a pane drawn at the wrong place, a scroll that does not
-follow the focus -- shows as the wrong letters in a row. Asking the
-container what it thinks its scroll is would miss all of them.
+**The tests read the cells.** A strip lays its row out at an offset
+that puts part of it off the screen, and every way that can be wrong --
+an off-by-one in the offset, a pane drawn at the wrong place, a scroll
+that does not follow the focus -- shows as the wrong letters in a row.
+Asking the container what it thinks its scroll is would miss all of
+them.
 
 Each column is filled with a letter of its own, so a row of the screen
 says which part of the strip is on it.
