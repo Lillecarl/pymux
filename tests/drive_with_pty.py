@@ -1830,6 +1830,61 @@ def check_libpymux(tmp):
     print("libpymux: ok")
 
 
+#: Every check, in the order a whole run does them. Each one starts a
+#: server of its own, so the order is the order somebody wrote them in
+#: and not a chain.
+CHECKS = (
+    check_kitty_terminal,
+    check_sixel_terminal,
+    check_colorterm_terminal,
+    check_plain_terminal,
+    check_a_closing_split,
+    check_the_pointer_shape,
+    check_the_cursor_shape,
+    check_an_overlay_pane,
+    check_two_terminals_of_different_abilities,
+    check_a_full_screen_pane,
+    check_a_quoted_argument,
+    check_a_non_breaking_space,
+    check_the_cursor_of_a_drawing_pane,
+    check_a_pane_that_changes_nothing,
+    check_the_command_palette,
+    check_a_detach_ends_the_client,
+    check_libpymux,
+)
+
+
+def chosen_checks():
+    """
+    The checks this run does. `PYMUX_PTY_CHECKS` names them, comma
+    separated and without the `check_` in front:
+
+        PYMUX_PTY_CHECKS=a_pane_that_changes_nothing,the_command_palette
+
+    A whole run takes minutes and starts seventeen servers. One of
+    these checks is red about one run in thirteen, and hunting that
+    means running the one check many times. Lillecarl/pymux#180.
+
+    A name nobody knows is an error and not an empty run, because an
+    empty run passes and says the wrong thing.
+    """
+    by_name = {
+        check.__name__[len("check_"):]: check for check in CHECKS
+    }
+    asked = os.environ.get("PYMUX_PTY_CHECKS", "").strip()
+    if not asked:
+        return list(CHECKS)
+
+    wanted = [name.strip() for name in asked.split(",") if name.strip()]
+    unknown = [name for name in wanted if name not in by_name]
+    if unknown:
+        raise SystemExit(
+            "PYMUX_PTY_CHECKS names %s, and the checks are:\n  %s"
+            % (", ".join(unknown), "\n  ".join(by_name))
+        )
+    return [by_name[name] for name in wanted]
+
+
 def main() -> None:
     # The server inherits this, and a pane must not: it names the
     # terminal that started the server, which is not what a pane is.
@@ -1839,24 +1894,10 @@ def main() -> None:
     os.environ.pop("COLORTERM", None)
 
     tmp = Path(tempfile.mkdtemp(prefix="pymux-pty-test-"))
-    check_kitty_terminal(tmp)
-    check_sixel_terminal(tmp)
-    check_colorterm_terminal(tmp)
-    check_plain_terminal(tmp)
-    check_a_closing_split(tmp)
-    check_the_pointer_shape(tmp)
-    check_the_cursor_shape(tmp)
-    check_an_overlay_pane(tmp)
-    check_two_terminals_of_different_abilities(tmp)
-    check_a_full_screen_pane(tmp)
-    check_a_quoted_argument(tmp)
-    check_a_non_breaking_space(tmp)
-    check_the_cursor_of_a_drawing_pane(tmp)
-    check_a_pane_that_changes_nothing(tmp)
-    check_the_command_palette(tmp)
-    check_a_detach_ends_the_client(tmp)
-    check_libpymux(tmp)
-    print("All pty checks passed.")
+    checks = chosen_checks()
+    for check in checks:
+        check(tmp)
+    print("%d of %d pty checks passed." % (len(checks), len(CHECKS)))
 
 
 if __name__ == "__main__":

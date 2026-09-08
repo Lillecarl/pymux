@@ -85,6 +85,13 @@ let
     in
     if value == "" then "tests" else value;
 
+  # Which of the end to end checks run, comma separated and without the
+  # `check_` in front, for instance
+  # `PYMUX_PTY_CHECKS=a_pane_that_changes_nothing nix build --file . checks.pymux-pty`.
+  # A whole run starts seventeen servers, and hunting a check that is
+  # red by luck means running that one check many times.
+  ptyChecks = builtins.getEnv "PYMUX_PTY_CHECKS";
+
   # Which conformance tests run. It is a regular expression that the suite
   # matches against "Class.method", for instance
   # `PYMUX_ESCTEST_INCLUDE=BSTests nix build --file . checks.pymux-esctest`.
@@ -219,7 +226,10 @@ in
 
   # The end to end test. It opens a pty, starts a server and attaches a
   # client, so it needs a sandbox that gives it /dev/ptmx.
-  pty = runInSandbox { name = "pymux-pty-tests"; } ''
+  pty = runInSandbox {
+    name = "pymux-pty-tests";
+    env = { PYMUX_PTY_CHECKS = ptyChecks; };
+  } ''
     python tests/drive_with_pty.py
   '';
 
@@ -230,7 +240,10 @@ in
   # The two runs together say which side a fault is on. A check that
   # fails here and passes above is the transport; one that fails in
   # both is the server or the client.
-  integrated = runInSandbox { name = "pymux-integrated-tests"; } ''
+  integrated = runInSandbox {
+    name = "pymux-integrated-tests";
+    env = { PYMUX_PTY_CHECKS = ptyChecks; };
+  } ''
     export PYMUX_ROUTE=integrated
     python tests/drive_with_pty.py
   '';
