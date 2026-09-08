@@ -126,8 +126,25 @@ def pymux_key_to_prompt_toolkit_key_sequence(key):
     except KeyError:
         if len(key) == 1:
             return (key,)
-        else:
-            raise ValueError("Unknown key: %r" % (key,))
+
+        # **Alt and one character is escape and that character**, for
+        # any character and not only the ones the table writes out.
+        #
+        # The table names "M-a" to "M-z" and "M-0" to "M-9" one at a
+        # time, which left out every other single character: "M-J",
+        # which tmux binds, answered "Invalid key". A list of the ones
+        # somebody thought of is not the rule, and the rule is one
+        # line. Lillecarl/pymux#204.
+        #
+        # The table keeps those entries because it is also the list
+        # that completes a key (`commands/completer.py`,
+        # `options.py`). Writing out "M-A" to "M-Z" and every
+        # punctuation mark would make that list unreadable to save
+        # nothing.
+        if len(key) == 3 and key.startswith("M-"):
+            return (Keys.Escape, key[2])
+
+        raise ValueError("Unknown key: %r" % (key,))
 
 
 def _keys_to_data() -> Dict[Keys, str]:
