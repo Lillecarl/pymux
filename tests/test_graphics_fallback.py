@@ -14,6 +14,7 @@ from pymux.graphics import ClientGraphics
 from test_graphics_output import IMAGE_DATA, make_state, placement, view
 from pyte import escape
 from pyte.sequences import Csi, csi
+from pyte.sequences import apc
 
 
 def make_client(kitty=False, sixel=False, repaint=None):
@@ -38,7 +39,7 @@ def sixels(written):
 
 def test_the_graphics_query_reply_turns_on_kitty():
     client, _written = make_client()
-    client.handle_reply("\x1b_Gi=31;OK\x1b\\")
+    client.handle_reply(apc("Gi=31;OK"))
     assert client.kitty_supported
     assert not client.sixel_supported
 

@@ -12,6 +12,7 @@ from pymux.colors import (
 )
 from pyte import escape
 from pyte.sequences import Csi, csi
+from pyte.sequences import apc, dcs
 
 
 def detection(term="", colorterm="", forced=None):
@@ -35,18 +36,18 @@ def test_the_probe_sets_a_colour_and_asks_for_it_back():
     "reply",
     [
         # The semicolon form.
-        "\x1bP1$r38;2;1;2;3m\x1b\\",
+        dcs("1$r38;2;1;2;3m"),
         # The colon form, with the empty colour space id.
-        "\x1bP1$r38:2::1:2:3m\x1b\\",
+        dcs("1$r38:2::1:2:3m"),
         # The colon form without the colour space id.
-        "\x1bP1$r38:2:1:2:3m\x1b\\",
+        dcs("1$r38:2:1:2:3m"),
         # The colon form with a colour space id that is not empty.
-        "\x1bP1$r38:2:0:1:2:3m\x1b\\",
+        dcs("1$r38:2:0:1:2:3m"),
         # Other attributes around it.
-        "\x1bP1$r0;1;38;2;1;2;3;48;5;16m\x1b\\",
+        dcs("1$r0;1;38;2;1;2;3;48;5;16m"),
         # Terminals disagree about the validity digit.
-        "\x1bP0$r38;2;1;2;3m\x1b\\",
-        "\x1bP$r38;2;1;2;3m\x1b\\",
+        dcs("0$r38;2;1;2;3m"),
+        dcs("$r38;2;1;2;3m"),
         # The eight bit string terminator.
         "\x1bP1$r38;2;1;2;3m\x9c",
     ],
@@ -59,14 +60,14 @@ def test_a_reply_that_keeps_the_colour_means_truecolor(reply):
     "reply",
     [
         # The terminal reduced the colour to an index.
-        "\x1bP1$r38;5;16m\x1b\\",
+        dcs("1$r38;5;16m"),
         # It dropped the colour.
-        "\x1bP1$r0m\x1b\\",
+        dcs("1$r0m"),
         # It kept a colour, but not the one that was asked for.
-        "\x1bP1$r38;2;4;5;6m\x1b\\",
+        dcs("1$r38;2;4;5;6m"),
         # Not a DECRQSS reply at all.
         csi(escape.DA, 62, 1, 6, private='?'),
-        "\x1b_Gi=31;OK\x1b\\",
+        apc("Gi=31;OK"),
         "",
         # A reply that never ends.
         "\x1bP1$r38;2;1;2;3m",
@@ -80,7 +81,7 @@ def test_the_probe_reply_raises_the_depth():
     detect = detection(term="xterm-256color")
     assert detect.depth == ColorDepth.DEPTH_8_BIT
 
-    detect.handle_reply("\x1bP1$r38:2::1:2:3m\x1b\\")
+    detect.handle_reply(dcs("1$r38:2::1:2:3m"))
     assert detect.truecolor
     assert detect.depth == ColorDepth.DEPTH_24_BIT
 
@@ -88,7 +89,7 @@ def test_the_probe_reply_raises_the_depth():
 def test_an_unrelated_reply_changes_nothing():
     detect = detection(term="xterm-256color")
     detect.handle_reply(csi(Csi.XTWINOPS, 6, 20, 10))
-    detect.handle_reply("\x1b_Gi=31;OK\x1b\\")
+    detect.handle_reply(apc("Gi=31;OK"))
     assert not detect.truecolor
     assert detect.depth == ColorDepth.DEPTH_8_BIT
 
@@ -142,6 +143,6 @@ def test_a_forced_depth_beats_the_probe():
     detect = detection(
         term="xterm-256color", forced=ColorDepth.DEPTH_4_BIT
     )
-    detect.handle_reply("\x1bP1$r38;2;1;2;3m\x1b\\")
+    detect.handle_reply(dcs("1$r38;2;1;2;3m"))
     assert detect.truecolor  # The probe still came back.
     assert detect.depth == ColorDepth.DEPTH_4_BIT  # But the flag wins.

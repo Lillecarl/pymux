@@ -12,6 +12,7 @@ import zlib
 from pyte.images import GraphicsImage, GraphicsPlacement, GraphicsState
 
 from pymux.graphics import ClientGraphics, PaneView
+from pyte.sequences import apc
 
 # 2x2 pixels, RGB.
 IMAGE_DATA = bytes(range(12))
@@ -314,17 +315,17 @@ def test_the_query_reply_enables_the_output():
     client = ClientGraphics(written.append, lambda: None)
     assert not client.kitty_supported
 
-    client.handle_reply("\x1b_Gi=1;OK\x1b\\")  # Another image: not ours.
-    client.handle_reply("\x1b_Gi=311;OK\x1b\\")  # An id that only looks like it.
-    client.handle_reply("\x1b_Gi=31;ENOENT:no such image\x1b\\")
+    client.handle_reply(apc("Gi=1;OK"))  # Another image: not ours.
+    client.handle_reply(apc("Gi=311;OK"))  # An id that only looks like it.
+    client.handle_reply(apc("Gi=31;ENOENT:no such image"))
     assert not client.kitty_supported
 
-    client.handle_reply("\x1b_Gi=31;OK\x1b\\")
+    client.handle_reply(apc("Gi=31;OK"))
     assert client.kitty_supported
 
 
 def test_the_query_reply_is_recognised_with_extra_keys():
     written = []
     client = ClientGraphics(written.append, lambda: None)
-    client.handle_reply("\x1b_GI=2,i=31,p=1;OK\x1b\\")
+    client.handle_reply(apc("GI=2,i=31,p=1;OK"))
     assert client.kitty_supported

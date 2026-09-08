@@ -14,6 +14,7 @@ from pymux.main import Pymux
 from pymux.osc import MAX_OSC_LENGTH, build_osc
 from pyte import escape
 from pyte.sequences import csi
+from pyte.sequences import Terminator, osc
 
 
 def sequence(code, param):
@@ -43,7 +44,7 @@ def test_a_plain_payload_becomes_a_sequence(code, param):
 
 def test_a_payload_with_an_escape_byte_is_dropped():
     "An escape ends the sequence early, and what follows runs as a command."
-    assert build_osc("99", "i=1;done\x1b]0;owned\x07") is None
+    assert build_osc("99", "i=1;done" + osc("0", "owned", end=Terminator.BEL)) is None
     assert build_osc("22", "pointer" + csi(escape.ED, 2)) is None
 
 
@@ -241,7 +242,10 @@ def test_no_pane_asks_for_no_shape():
 
 def test_an_unsafe_payload_reaches_nobody():
     pymux, connections = make_pymux()
-    pymux.forward_osc(FakePane(), "99", "i=1;done\x1b]0;owned\x07")
+    pymux.forward_osc(FakePane(), "99", (
+        "i=1;done"
+        + osc("0", "owned", end=Terminator.BEL)
+    ))
     for connection in connections:
         assert connection.written == []
 

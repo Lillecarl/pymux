@@ -65,6 +65,8 @@ from pymux.graphics import CELL_SIZE_QUERY  # noqa: E402
 from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY  # noqa: E402
 from pymux.blocks import LOWER_HALF, UPPER_HALF  # noqa: E402
 from pyte.environment import terminal_name  # noqa: E402
+from pyte.osc import Osc
+from pyte.sequences import dcs, osc
 
 REPO_ROOT = Path(__file__).parent.parent
 
@@ -134,7 +136,7 @@ KITTY_IMAGE = (
 
 # The sixel image that the pane child draws: 20 by 12 pixels, red. With
 # the cell that a pane assumes that is two columns and one row.
-SIXEL_IMAGE = '\x1bP0;0;0q"1;1;20;12#4;2;100;0;0#4!20~-!20~\x1b\\'
+SIXEL_IMAGE = dcs('0;0;0q"1;1;20;12#4;2;100;0;0#4!20~-!20~')
 
 # Cell size that the sixel terminal reports, in pixels.
 CELL_WIDTH, CELL_HEIGHT = 8, 17
@@ -142,16 +144,16 @@ CELL_WIDTH, CELL_HEIGHT = 8, 17
 # The OSC sequences that the pane child sends. Only the terminal of the
 # user can serve them, so pymux passes them on. The query does not go:
 # a pane may write the clipboard, not read it.
-OSC_CLIPBOARD = "\x1b]52;c;aGVsbG8=\x1b\\"
-OSC_CLIPBOARD_QUERY = "\x1b]52;c;?\x1b\\"
+OSC_CLIPBOARD = osc(Osc.CLIPBOARD, "c", "aGVsbG8=")
+OSC_CLIPBOARD_QUERY = osc(Osc.CLIPBOARD, "c", "?")
 # The pane asks to be told when the user clicks the notification.
-OSC_NOTIFICATION = "\x1b]99;i=mine:a=report;done\x1b\\"
+OSC_NOTIFICATION = osc(Osc.NOTIFICATION, "i=mine:a=report", "done")
 # What pymux sends on: the identifier names the pane, not the program.
 OSC_NOTIFICATION_RE = rb"\x1b\]99;i=(\d+):a=report;done\x1b\\"
 # And the answer that comes back to the pane carries the name of the
 # program again.
-OSC_NOTIFICATION_ANSWER = "\x1b]99;i=mine\x1b\\"
-OSC_POINTER = "\x1b]22;pointer\x1b\\"
+OSC_NOTIFICATION_ANSWER = osc(Osc.NOTIFICATION, "i=mine")
+OSC_POINTER = osc(Osc.POINTER_SHAPE, "pointer")
 PANE_OSC = OSC_CLIPBOARD + OSC_CLIPBOARD_QUERY + OSC_NOTIFICATION + OSC_POINTER
 
 # A hyperlink belongs to the cells that carry it, so it does not travel
