@@ -54,7 +54,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from pyte.modes import PrivateMode  # noqa: E402
 from pyte.screen import Screen  # noqa: E402
+from pyte.sequences import set_mode  # noqa: E402
 from pyte.sixel import decode_sixel  # noqa: E402
 from pyte.streams import Stream  # noqa: E402
 
@@ -72,6 +74,11 @@ ROUTE = os.environ.get("PYMUX_ROUTE", "socket")
 
 #: What `ctrl+b d` sends: the prefix key, then the letter.
 DETACH = b"\x02d"
+
+#: What ends a frame that hid the cursor to draw. Without synchronised
+#: output every frame does, so this is how a check waits for one to
+#: finish rather than for a length of time. Lillecarl/pymux#187.
+SHOW_CURSOR = set_mode(PrivateMode.SHOW_CURSOR).encode("ascii")
 
 # "\x1b[97;5u" — kitty ctrl+a — as the pane reads it.
 CTRL_A_KITTY = b"\x1b[97;5u"
@@ -1655,6 +1662,18 @@ def check_a_pane_that_changes_nothing(tmp):
         # The "x" of the first turn is a change, and the ones after it
         # are not. This waits for that first one to be drawn.
         terminal.wait_for(b"x")
+        # **And for the frame that drew it to end.** A frame hides the
+        # cursor, draws, puts the cursor where the screen wants it and
+        # shows it again, and the "x" is in the middle of that. Marking
+        # there put the tail of the frame inside the window, and the
+        # tail of a frame that drew something is not a frame that drew
+        # nothing: the check went red about one run in thirteen with
+        # "\x1b[14A\x1b[C\x1b[0m\x1b[?25h", which is a cursor move, a
+        # reset and a show, and no drawing at all.
+        #
+        # A wait and not a sleep. The bytes say when the frame ended,
+        # so nothing here races. Lillecarl/pymux#187.
+        terminal.wait_for(SHOW_CURSOR)
 
         mark = terminal.mark()
         log_mark = terminal.log_mark()
