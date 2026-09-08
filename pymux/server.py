@@ -102,7 +102,13 @@ class ServerConnection:
         # that also understands the kitty keyboard protocol, and route
         # terminal replies to `_handle_kitty_reply`.
         self._pipeinput = _ClientInput(
-            self._send_packet, kitty_reply_callback=self._handle_kitty_reply
+            self._send_packet,
+            kitty_reply_callback=self._handle_kitty_reply,
+            # Whether this client's terminal counts the modifiers the
+            # way the protocol does. It is asked when a key arrives and
+            # not now, because the detection has not answered yet.
+            # Lillecarl/pymux#182.
+            speaks_the_protocol=self.keyboard_is_supported,
         )
 
         # The shape of the pointer that this client was told about. A
@@ -595,7 +601,12 @@ class _ClientInput:
     We only need this for turning the client into raw_mode/cooked_mode.
     """
 
-    def __init__(self, send_packet: Callable, kitty_reply_callback=None) -> None:
+    def __init__(
+        self,
+        send_packet: Callable,
+        kitty_reply_callback=None,
+        speaks_the_protocol=None,
+    ) -> None:
         self.send_packet = send_packet
         # Keep a reference to the context manager for the whole lifetime of
         # this object. `create_pipe_input()` returns a generator context
@@ -610,6 +621,7 @@ class _ClientInput:
         self._input.vt100_parser = KittyVt100Parser(
             lambda key_press: self._input._buffer.append(key_press),
             reply_callback=kitty_reply_callback,
+            speaks_the_protocol=speaks_the_protocol,
         )
 
     def close(self) -> None:

@@ -84,8 +84,11 @@ _LOOKS_LIKE_A_KEY_RE = re.compile(r"^\x1b\[[\d;:]*[u~ABCDEFHPQS]$")
 #:
 #: It is a gate, the same as the one above, and it decides which table
 #: reads the sequence rather than what the sequence means.
+#: The third parameter is in here so that the modifyOtherKeys form,
+#: "CSI 27 ; mods ; code ~", and the kitty form that carries the text
+#: of a key are both covered.
 _CARRIES_A_HIGH_MODIFIER_RE = re.compile(
-    r"^\x1b\[[\d:]*;(\d+)[\d:]*[u~ABCDEFHPQS]$"
+    r"^\x1b\[[\d:]*;(\d+)[\d:]*(?:;[\d:]*)?[u~ABCDEFHPQS]$"
 )
 
 #: The largest modifier value the legacy numbering can mean: shift and
@@ -666,8 +669,19 @@ class KittyVt100Parser(Vt100Parser):
         presses.
     """
 
-    def __init__(self, feed_key_callback, reply_callback=None) -> None:
+    def __init__(
+        self,
+        feed_key_callback,
+        reply_callback=None,
+        speaks_the_protocol=None,
+    ) -> None:
         self.reply_callback = reply_callback
+        # Whether the terminal counts the modifiers the way the
+        # protocol does. Asked when a key arrives and not once at the
+        # start, because the detection answers after this is built.
+        # None means nobody knows, which reads as no.
+        # Lillecarl/pymux#182.
+        self.speaks_the_protocol = speaks_the_protocol
         # Whether the key being handled arrived as several: alt and a
         # key is one such. See `_call_handler`.
         self._one_key_of_several = False
@@ -692,18 +706,44 @@ class KittyVt100Parser(Vt100Parser):
             "No name here for the key %r: %s.", sequence, dropped.reason
         )
 
+    def _counts_the_modifiers_of_the_protocol(self) -> bool:
+        """
+        Whether this terminal numbers the modifiers the protocol's way.
+
+        A terminal that speaks the protocol does. One that nobody has
+        asked, or that answered no, is read the older way, where the
+        fourth modifier is meta and there are no more after it.
+
+        Never raises. It runs on every key, and a keyboard may not stop
+        for a question about itself.
+        """
+        if self.speaks_the_protocol is None:
+            return False
+        try:
+            return bool(self.speaks_the_protocol())
+        except Exception:
+            logger.exception("Asking what the terminal reports failed.")
+            return False
+
     def _get_match(self, prefix: str) -> Keys | tuple | object | None:
-        # A modifier above ctrl is read here first, because the two
-        # tables count them differently. xterm has four, and the
-        # fourth is meta; the kitty protocol has eight, and the fourth
-        # is super. So "CSI 1;9A" is alt+Up to prompt_toolkit's table
-        # and super+Up to a terminal that speaks the protocol, and
-        # pymux asks every terminal to speak it. Lillecarl/pymux#182.
-        modifier = _CARRIES_A_HIGH_MODIFIER_RE.match(prefix)
-        if modifier is not None and int(modifier.group(1)) > _CTRL_ALT_SHIFT:
-            named = parse_kitty_key(prefix)
-            if named is not None:
-                return named
+        # A modifier above ctrl is read here first, but only from a
+        # terminal that counts them the way the protocol does. xterm
+        # has four and the fourth is meta; the protocol has eight and
+        # the fourth is super. So "CSI 1;9A" is meta+Up to one and
+        # super+Up to the other, and prompt_toolkit's table reads it as
+        # alt+Up, which is a third answer again.
+        #
+        # The detection already knows which terminal this is, so the
+        # question is asked rather than guessed. Lillecarl/pymux#182.
+        if self._counts_the_modifiers_of_the_protocol():
+            modifier = _CARRIES_A_HIGH_MODIFIER_RE.match(prefix)
+            if (
+                modifier is not None
+                and int(modifier.group(1)) > _CTRL_ALT_SHIFT
+            ):
+                named = parse_kitty_key(prefix)
+                if named is not None:
+                    return named
 
         # prompt_toolkit's own table otherwise: it knows richer
         # variants (like shift+arrow) for the sequences that it covers.

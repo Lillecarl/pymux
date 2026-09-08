@@ -18,10 +18,20 @@ from pymux.keys import (
 )
 
 
-def fed(data: str):
-    "Feed data, return everything the parser gave the callback."
+def fed(data: str, speaks_the_protocol: bool = True):
+    """
+    Feed data, return everything the parser gave the callback.
+
+    The terminal speaks the protocol unless a case says otherwise,
+    because that is the terminal these sequences come from. What
+    changes with it is only how a modifier above ctrl is counted; see
+    `test_a_terminal_that_does_not_speak_the_protocol_is_read_the_old_way`.
+    """
     pressed = []
-    parser = KittyVt100Parser(lambda key_press: pressed.append(key_press))
+    parser = KittyVt100Parser(
+        lambda key_press: pressed.append(key_press),
+        speaks_the_protocol=lambda: speaks_the_protocol,
+    )
     parser.feed_and_flush(data)
     return pressed
 
@@ -552,6 +562,29 @@ def test_a_high_modifier_is_read_here_and_not_from_the_table():
     assert parse("\x1b[1;2A") == [(Keys.ShiftUp, "\x1b[1;2A")]
     assert parse("\x1b[1;5A") == [(Keys.ControlUp, "\x1b[1;5A")]
     assert parse("\x1b[1;3A") == [(Keys.Escape, "\x1b[1;3A"), (Keys.Up, "")]
+
+
+def test_a_terminal_that_does_not_speak_the_protocol_is_read_the_old_way():
+    """
+    The detection knows which terminal this is, so the numbering is
+    asked rather than guessed. A terminal that answered no, or that
+    nobody has asked yet, counts four modifiers with meta fourth, and
+    prompt_toolkit's table is the one that knows those forms.
+    """
+    old = [
+        (key.key, key.data)
+        for key in fed("\x1b[1;9A", speaks_the_protocol=False)
+        if key is not _Flush
+    ]
+    assert old == [(Keys.Escape, "\x1b[1;9A"), (Keys.Up, "")]
+
+
+def test_a_parser_nobody_told_reads_the_old_way():
+    "None means nobody knows, and nobody knows reads as no."
+    pressed = []
+    parser = KittyVt100Parser(pressed.append)
+    parser.feed_and_flush("\x1b[1;9A")
+    assert [key.key for key in pressed] == [Keys.Escape, Keys.Up]
 
 
 def test_a_lock_is_not_a_key_of_its_own():
