@@ -318,11 +318,24 @@ class Window:
     def add_pane(self, pane: Pane, vsplit: bool = False) -> None:
         """
         Add another pane to this Window.
+
+        In a strip a horizontal split opens a new column beside the one
+        a person is on, rather than dividing the pane they are on. That
+        is the whole of what the mode is for: the panes already open
+        keep their widths and the row grows past the edge of the
+        screen. A vertical split still stacks inside the column, which
+        is what a niri column holds. Lillecarl/pymux#198.
         """
         split_cls = VSplit if vsplit else HSplit
 
         if self.active_pane is None:
             self.root.append(pane)
+        elif self._strip and vsplit:
+            column = self._column_of(self.active_pane)
+            self.root.insert(self.root.index(column) + 1, pane)
+            self.active_pane = pane
+            self.zoom = False
+            return
         else:
             parent = self._get_parent(self.active_pane)
             same_direction = isinstance(parent, split_cls)
@@ -338,6 +351,12 @@ class Window:
                 # Give the newly created split the same weight as the original
                 # pane that was at this position.
                 parent.weights[new_split] = parent.weights[self.active_pane]
+
+                # And, in a strip, the width of the column it became.
+                # A pane that is stacked into a column should not make
+                # that column change width under a person.
+                if self._strip and parent is self.root:
+                    self.column_widths[new_split] = self.column_width(self.active_pane)
 
         self.active_pane = pane
         self.zoom = False
@@ -404,6 +423,21 @@ class Window:
         for s in self.splits:
             if item in s:
                 return s
+
+    def _column_of(self, pane: Pane):
+        """
+        Which column of a strip holds this pane.
+
+        The columns are the children of the root, so this walks up from
+        the pane until the thing above it is the root. A pane that sits
+        in the root is its own column.
+        """
+        item = pane
+        while True:
+            parent = self._get_parent(item)
+            if parent is None or parent is self.root:
+                return item
+            item = parent
 
     @property
     def has_panes(self) -> bool:
