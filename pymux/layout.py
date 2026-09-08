@@ -52,6 +52,7 @@ from .enums import Woke
 from .filters import WaitsForConfirmation
 from .format import format_pymux_string
 from .log import logger
+from .strip import ScrollableStrip
 
 if TYPE_CHECKING:
     from prompt_toolkit.layout.controls import BufferControl, NotImplementedOrNone
@@ -1031,8 +1032,14 @@ class DynamicBody(Container):
                         content=Window(height=1),
                         filter=Condition(lambda: self.pymux.show_pane_status),
                     ),
-                    # The actual content.
-                    _create_split(self.pymux, window, window.root),
+                    # The actual content. A strip is a different
+                    # rendering path and not a sixth layout: every
+                    # other one divides the window between the panes,
+                    # and a strip gives each column a width of its own
+                    # and scrolls. Lillecarl/pymux#198.
+                    _create_strip(self.pymux, window)
+                    if window.strip
+                    else _create_split(self.pymux, window, window.root),
                 ]
             )
 
@@ -1121,6 +1128,51 @@ class SizedBox(Container):
 
     def get_children(self) -> List[Container]:
         return [self.content]
+
+
+def _create_strip(pymux: "Pymux", window) -> Container:
+    """
+    Create the container for a window that is laid out as a strip.
+
+    The columns are the children of the root, and each one is given a
+    width of its own rather than a weight, so the row is as wide as its
+    columns make it and not as wide as the screen.
+    `ScrollableStrip` shows the part of it that fits.
+
+    A column is whatever the child is. A `Pane` is one pane wide, and an
+    `arrangement.HSplit` is a stack of panes, which is what a niri
+    column is. `_create_split` already draws both, so nothing here
+    knows about either.
+    """
+
+    def width_of(column):
+        """
+        How many cells this column takes.
+
+        The fraction is of the window, and a window is as wide as the
+        client's terminal. At least one cell, so a column can always be
+        found.
+        """
+        columns = pymux.get_window_size().columns
+        return D.exact(max(1, round(window.column_width(column) * columns)))
+
+    content = []
+    for column in window.root:
+        if isinstance(column, (arrangement.VSplit, arrangement.HSplit)):
+            child = _create_split(pymux, window, column)
+        elif isinstance(column, arrangement.Pane):
+            child = _create_container_for_process(pymux, window, column)
+        else:
+            raise TypeError("Got %r" % (column,))
+
+        content.append(SizedBox(child, width=partial(width_of, column)))
+
+    return ScrollableStrip(
+        VSplit(content, padding=1, padding_char=_border_vertical),
+        # Keep a little of the columns on either side of the focused
+        # one on screen. That peeking is what says the strip goes on.
+        scroll_offsets=ScrollOffsets(left=2, right=2),
+    )
 
 
 def _create_split(

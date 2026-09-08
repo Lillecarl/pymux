@@ -294,4 +294,12 @@ ALL_OPTIONS = {
 
 ALL_WINDOW_OPTIONS = {
     "synchronize-panes": OnOffOption("synchronize_panes", window_option=True),
+    # Lay this window's panes out as a strip that may run past the
+    # edge of the screen, the way niri's scrollable tiling works,
+    # instead of dividing the window between them.
+    #
+    # It is one window's option and it is off, so nothing that does
+    # not ask for it changes. `select-layout` turns it off again.
+    # Lillecarl/pymux#198.
+    "strip": OnOffOption("strip", window_option=True),
 }

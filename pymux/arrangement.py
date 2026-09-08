@@ -27,6 +27,16 @@ __all__ = [
 ]
 
 
+#: How wide a column of a strip can be, as a fraction of the window.
+#: These are niri's own presets, and a key cycles between them.
+PRESET_COLUMN_WIDTHS = (1 / 3, 1 / 2, 2 / 3)
+
+#: What a column takes until somebody says otherwise. niri's default
+#: as well, and the reason a strip of two columns exactly fills the
+#: screen while a third one pushes past the edge.
+DEFAULT_COLUMN_WIDTH = 1 / 2
+
+
 class LayoutTypes(Enum):
     # The values are in lowercase with dashes, because that is what users can
     # use at the command line.
@@ -175,6 +185,19 @@ class Window:
         self.chosen_name: str | None = None
         self.previous_selected_layout: LayoutTypes | None = None
 
+        #: Lay the panes out as a strip that may be wider than the
+        #: screen, instead of dividing the screen between them. Read
+        #: and written through the `strip` property below, which keeps
+        #: the root in the shape a strip needs. Lillecarl/pymux#198.
+        self._strip = False
+
+        #: How wide each column of the strip is, as a fraction of the
+        #: window. A column with no entry takes
+        #: `DEFAULT_COLUMN_WIDTH`. The keys are the children of `root`,
+        #: weakly held, so a column that closes takes its width with
+        #: it.
+        self.column_widths: "WeakKeyDictionary[object, float]" = WeakKeyDictionary()
+
         #: When true, the current pane is zoomed in.
         self.zoom = False
 
@@ -184,6 +207,37 @@ class Window:
         # Give unique ID.
         Window._window_counter += 1
         self.window_id = Window._window_counter
+
+    @property
+    def strip(self) -> bool:
+        """
+        Whether the panes are a strip that may run past the screen.
+
+        Every other layout divides the window between the panes. A
+        strip gives each column a width of its own, lets the row grow
+        past the edge, and scrolls to the column a person is on, the
+        way niri's scrollable tiling works. Lillecarl/pymux#198.
+        """
+        return self._strip
+
+    @strip.setter
+    def strip(self, value: bool) -> None:
+        """
+        Turn the mode on or off, and keep the root in the right shape.
+
+        The columns of a strip are the children of `root`, so `root`
+        has to be the row itself. A window that was laid out any other
+        way becomes the first column of the strip, so nothing on screen
+        moves except the way it is laid out.
+        """
+        self._strip = bool(value)
+
+        if self._strip and not isinstance(self.root, VSplit):
+            self.root = VSplit([self.root]) if len(self.root) else VSplit()
+
+    def column_width(self, column) -> float:
+        "How wide one column of the strip is, as a fraction of the window."
+        return self.column_widths.get(column, DEFAULT_COLUMN_WIDTH)
 
     def invalidation_hash(self) -> str:
         """
@@ -206,9 +260,14 @@ class Window:
             else:
                 return "VSplit(%s)" % (",".join(result))
 
-        return "<window_id=%s,zoom=%s,children=%s>" % (
+        # `strip` is in it because turning the mode on changes how the
+        # same panes are laid out and nothing else, so without it the
+        # layout would not be rebuilt and the mode would take hold at
+        # the next unrelated change.
+        return "<window_id=%s,zoom=%s,strip=%s,children=%s>" % (
             self.window_id,
             self.zoom,
+            self.strip,
             _hash_for_split(self.root),
         )
 
@@ -415,7 +474,13 @@ class Window:
     def select_layout(self, layout_type: LayoutTypes) -> None:
         """
         Select one of the predefined layouts.
+
+        This turns a strip off. Each of these five divides the window
+        between the panes, which is the one thing a strip does not do,
+        so asking for one is asking to leave. Lillecarl/pymux#198.
         """
+        self.strip = False
+
         # When there is only one pane, always choose EVEN_HORIZONTAL,
         # Otherwise, we create VSplit/HSplit instances with an empty list of
         # children.
