@@ -21,6 +21,7 @@ from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
 from .colors import ColorDetection
+from .enums import Woke
 from .graphics import ClientGraphics
 from .keys import KittyVt100Parser
 from .log import logger
@@ -206,6 +207,9 @@ class ServerConnection:
         except Exception:
             logger.exception("Could not ask for a full repaint.")
             return
+        # Named here and not through `Pymux.invalidate`, because this
+        # wakes the one client that asked and not all of them.
+        logger.info("Drawing 1 of the clients: it asked for a full repaint")
         app.invalidate()
 
     def _handle_kitty_reply(self, data: str) -> None:
@@ -375,7 +379,7 @@ class ServerConnection:
         elif packet["cmd"] == "size":
             rows, columns = packet["data"]
             self.size = Size(rows=rows, columns=columns)
-            self.pymux.invalidate()
+            self.pymux.invalidate(Woke.A_CLIENT_RESIZED)
 
         # Start GUI. (Create CommandLineInterface front-end for pymux.)
         elif packet["cmd"] == "start-gui":

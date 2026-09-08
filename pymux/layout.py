@@ -47,6 +47,7 @@ from prompt_toolkit.widgets import Dialog, FormattedTextToolbar, SearchToolbar, 
 
 import pymux.arrangement as arrangement
 
+from .enums import Woke
 from .filters import WaitsForConfirmation
 from .format import format_pymux_string
 from .log import logger
@@ -539,7 +540,7 @@ class LayoutManager:
         def handler(mouse_event: MouseEvent) -> "NotImplementedOrNone":
             if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
                 self.pymux.arrangement.set_active_window(window)
-                self.pymux.invalidate()
+                self.pymux.invalidate(Woke.A_CLICK_CHOSE_A_WINDOW)
                 return None
             else:
                 return NotImplemented  # Event not handled here.
@@ -1277,7 +1278,7 @@ def _create_container_for_process(
         "Click handler for the clock. When clicked, select this pane."
         arrangement_pane.clock_mode = False
         pymux.arrangement.get_active_window().active_pane = arrangement_pane
-        pymux.invalidate()
+        pymux.invalidate(Woke.A_CLICK_LEFT_THE_CLOCK)
 
     return HighlightBordersIfActive(
         window,

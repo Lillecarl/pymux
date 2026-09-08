@@ -19,6 +19,7 @@ from prompt_toolkit.key_binding.vi_state import InputMode
 from pymux.arrangement import LayoutTypes
 from pymux.commands.aliases import ALIASES
 from pymux.commands.utils import wrap_argument
+from pymux.enums import Woke
 from pymux.format import format_pymux_string
 from pymux.key_mappings import (
     prompt_toolkit_key_to_vt100_key,
@@ -248,7 +249,7 @@ def cmd(name: str, options: str = "") -> Callable[[_F], _F]:
             func(pymux, received_options)
 
             # Invalidate all clients, not just the current CLI.
-            pymux.invalidate()
+            pymux.invalidate(Woke.A_COMMAND_RAN % name)
 
         COMMANDS_TO_HANDLERS[name] = command_wrapper
         COMMANDS_TO_HELP[name] = options
@@ -385,7 +386,7 @@ def break_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     dont_focus_window = variables["-d"]
 
     pymux.arrangement.break_pane(set_active=not dont_focus_window)
-    pymux.invalidate()
+    pymux.invalidate(Woke.A_PANE_BROKE_OUT)
 
 
 @cmd("select-pane", options="(-L|-R|-U|-D|-l|-t <pane-id>)")

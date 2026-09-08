@@ -36,7 +36,7 @@ from pyte.osc import Osc
 from .arrangement import Arrangement, Pane, Window
 from .commands.commands import call_command_handler, handle_command
 from .commands.completer import create_command_completer
-from .enums import COMMAND, PROMPT
+from .enums import COMMAND, PROMPT, Woke
 from .graphics import PaneView
 from .key_bindings import PymuxKeyBindings
 from .layout import Justify, LayoutManager
@@ -328,7 +328,7 @@ class ClientState:
         with set_app(app):
             # Redraw all CLIs. (Adding a new client could mean that the others
             # change size, so everything has to be redrawn.)
-            pymux.invalidate()
+            pymux.invalidate(Woke.A_CLIENT_ATTACHED)
 
             pymux.startup()
 
@@ -595,6 +595,14 @@ class Pymux:
 
             if text != client_state.last_time_text:
                 client_state.last_time_text = text
+                # Named here and not through `invalidate`, because this
+                # wakes the one client whose text moved and not all of
+                # them. `Woke` says why the log carries the reason.
+                logger.info(
+                    "Drawing 1 of the clients: the text that time moves "
+                    "changed to %r",
+                    text,
+                )
                 client_state.app.invalidate()
 
     def _start_auto_refresh(self) -> None:
@@ -739,7 +747,7 @@ class Pymux:
                 for client_state in self._client_states.values():
                     client_state.sync_focus()
 
-            self.invalidate()
+            self.invalidate(Woke.A_PANE_ENDED)
 
         def bell():
             "Sound bell on all clients."
@@ -896,7 +904,7 @@ class Pymux:
         self.overlay_width = width
         self.overlay_height = height
         self._sync_focus_everywhere()
-        self.invalidate()
+        self.invalidate(Woke.AN_OVERLAY_OPENED)
 
         return pane
 
@@ -915,7 +923,7 @@ class Pymux:
             process.kill()
 
         self._sync_focus_everywhere()
-        self.invalidate()
+        self.invalidate(Woke.AN_OVERLAY_CLOSED)
 
     def _sync_focus_everywhere(self) -> None:
         "Give every client the focus that its state asks for."
@@ -927,9 +935,12 @@ class Pymux:
                 # An application that never ran has no layout to focus.
                 logger.exception("Could not sync the focus of a client.")
 
-    def invalidate(self):
-        "Invalidate the UI for all clients."
-        logger.info("Invalidating %s applications", len(self.apps))
+    def invalidate(self, reason: str = Woke.AN_APPLICATION):
+        """
+        Ask every client for a frame. `Woke` says why the reason is
+        here, and holds every reason but the one that carries a name.
+        """
+        logger.info("Drawing %s of the clients: %s", len(self.apps), reason)
 
         for app in self.apps:
             app.invalidate()
@@ -1009,7 +1020,7 @@ class Pymux:
             if columns is not None and process.sx:
                 window.change_size_for_pane(pane, right=columns - process.sx)
 
-            self.invalidate()
+            self.invalidate(Woke.A_PANE_RESIZED)
         except Exception:
             logger.exception("Failed to resize a pane for the program in it.")
 
@@ -1302,7 +1313,7 @@ class Pymux:
 
         self.arrangement.create_window(pane, name=name)
         pane.focus()
-        self.invalidate()
+        self.invalidate(Woke.A_WINDOW_OPENED)
 
     def add_process(
         self,
@@ -1321,7 +1332,7 @@ class Pymux:
         pane = self._create_pane(window, command, start_directory=start_directory)
         window.add_pane(pane, vsplit=vsplit)
         pane.focus()
-        self.invalidate()
+        self.invalidate(Woke.A_PANE_WAS_SPLIT_OFF)
 
     def kill_pane(self, pane: Pane) -> None:
         """
@@ -1424,7 +1435,7 @@ class Pymux:
             connection.detach_and_close()
 
         # Redraw all clients -> Maybe their size has to change.
-        self.invalidate()
+        self.invalidate(Woke.A_CLIENT_DETACHED)
 
     def listen_on_socket(self, socket_name=None):
         """
