@@ -54,3 +54,4 @@ class Woke(StrEnum):
     A_THEME_WAS_CHOSEN = "a theme was chosen"
     A_COLUMN_CHANGED_WIDTH = "a column of the strip took another width"
     A_COLUMN_MOVED = "a column of the strip moved along the row"
+    A_PANE_CHANGED_COLUMN = "a pane joined another column of the strip, or left one"

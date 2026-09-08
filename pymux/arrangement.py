@@ -184,6 +184,17 @@ def _place_of(split: _Split, item: object) -> int:
     raise ValueError("%r is not in %r" % (item, split))
 
 
+def _panes_of(item) -> "List[Pane]":
+    "Every pane under this item, in the order they are drawn."
+    if isinstance(item, Pane):
+        return [item]
+
+    result: List[Pane] = []
+    for child in item:
+        result.extend(_panes_of(child))
+    return result
+
+
 def _the_nearest_pane(item, want_last: bool) -> "Pane | None":
     """
     The pane of this column that is nearest to the one asking.
@@ -334,6 +345,69 @@ class Window:
         self.root[where], self.root[there] = self.root[there], self.root[where]
         return True
 
+    def consume_or_expel(self, pane: Pane, step: int) -> bool:
+        """
+        Move one pane between the columns of a strip.
+
+        `step` is -1 for the left and +1 for the right. Returns whether
+        anything moved.
+
+        **One key does two jobs.** A pane that shares its column
+        leaves it, into a new column of its own on that side. A pane
+        that is alone in its column joins the next column on that
+        side, at the bottom. That is niri's
+        `consume-or-expel-window-left`, and the "or" is the point: a
+        person holds the key and the pane walks in and out of the
+        columns, without ever choosing which of the two moves they
+        meant. Lillecarl/pymux#213.
+
+        The two are each other's opposite, so walking one way and back
+        again puts the pane where it started.
+
+        A pane that is alone in the column at the end of the row has
+        nowhere to go, and stays. That is not an error, the way a key
+        held down at the edge of the row is not an error in niri.
+        """
+        column = self._column_of(pane)
+
+        if len(_panes_of(column)) > 1:
+            return self._expel(pane, column, step)
+        return self._consume(pane, column, step)
+
+    def _expel(self, pane: Pane, column, step: int) -> bool:
+        "Take a pane out of the column it shares, into one of its own."
+        where = _place_of(self.root, column)
+
+        self._take_out(pane)
+
+        # To the left of the column it left, or to the right of it.
+        # Taking the pane out cannot move the column: the column still
+        # holds a pane, so it is still there.
+        self.root.insert(where if step < 0 else where + 1, pane)
+        return True
+
+    def _consume(self, pane: Pane, column, step: int) -> bool:
+        "Put a pane that is alone in its column into the next column."
+        there = _place_of(self.root, column) + step
+
+        if not 0 <= there < len(self.root):
+            return False
+
+        joined = self.root[there]
+        self._take_out(column)
+
+        if isinstance(joined, Pane):
+            # A column of one pane becomes a stack of two, and keeps
+            # the width the column had.
+            stack = HSplit([joined, pane])
+            self.root.weights[stack] = self.root.weights[joined]
+            self.column_widths[stack] = self.column_width(joined)
+            self.root[_place_of(self.root, joined)] = stack
+        else:
+            joined.append(pane)
+
+        return True
+
     def invalidation_hash(self) -> str:
         """
         Return a hash (string) that can be used to determine when the layout
@@ -468,23 +542,39 @@ class Window:
                 else:
                     self.focus_next()
 
-            # Remove from the parent. When the parent becomes empty, remove the
-            # parent itself recursively.
-            p = self._get_parent(pane)
-            p.remove(pane)
+            self._take_out(pane)
 
-            while len(p) == 0 and p != self.root:
-                p2 = self._get_parent(p)
-                p2.remove(p)
-                p = p2
+    def _take_out(self, item) -> None:
+        """
+        Take one item out of the tree, and tidy up what it leaves.
 
-            # When the parent has only one item left, collapse into its parent.
-            while len(p) == 1 and p != self.root:
-                p2 = self._get_parent(p)
-                p2.weights[p[0]] = p2.weights[p]  # Keep dimensions.
-                i = p2.index(p)
-                p2[i] = p[0]
-                p = p2
+        A split with nothing left in it goes as well, and a split with
+        one child left becomes that child. The width and the weight of
+        a split that collapses move to the child that takes its place,
+        so a column does not change size because a pane left it.
+
+        It says nothing about the focus. `remove_pane` moves that
+        first, and a pane that is only changing column keeps it.
+        """
+        parent = self._get_parent(item)
+        parent.remove(item)
+
+        # An empty split is not a column of nothing: it is gone.
+        while len(parent) == 0 and parent is not self.root:
+            above = self._get_parent(parent)
+            above.remove(parent)
+            parent = above
+
+        # A split of one is that one.
+        while len(parent) == 1 and parent is not self.root:
+            above = self._get_parent(parent)
+            above.weights[parent[0]] = above.weights[parent]
+
+            if parent in self.column_widths:
+                self.column_widths[parent[0]] = self.column_widths[parent]
+
+            above[_place_of(above, parent)] = parent[0]
+            parent = above
 
     @property
     def panes(self) -> List[Pane]:
@@ -506,17 +596,7 @@ class Window:
         it walks the tree in place: top-left first, the way tmux
         numbers panes and the way an eye reads them.
         """
-        result: List[Pane] = []
-
-        def collect(item) -> None:
-            if isinstance(item, Pane):
-                result.append(item)
-            else:
-                for child in item:
-                    collect(child)
-
-        collect(self.root)
-        return result
+        return _panes_of(self.root)
 
     @property
     def splits(self) -> List[HSplit | VSplit]:
