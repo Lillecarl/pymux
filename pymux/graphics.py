@@ -42,6 +42,8 @@ from .blocks import average_rgba, blocks_for, rows_for_cells
 from .log import logger
 from .sixel import encode_sixel, scale_rgba, to_rgba
 from pyte.sequences import Csi, csi
+from pyte import escape
+from pyte.sequences import esc
 
 __all__ = [
     "CELL_SIZE_QUERY",
@@ -91,8 +93,8 @@ MAX_TOTAL_BYTES = 256 * 1024 * 1024
 # Save and restore the cursor around a batch. prompt_toolkit tracks the
 # cursor of the outer terminal itself, so it has to find it where it
 # left it.
-SAVE_CURSOR = "\x1b7"
-RESTORE_CURSOR = "\x1b8"
+SAVE_CURSOR = esc(escape.DECSC)
+RESTORE_CURSOR = esc(escape.DECRC)
 
 # The reply of the query: "ESC _ G i=31;OK ESC \". (Terminals add other
 # keys before the semicolon, so the image id is matched on its own.)
