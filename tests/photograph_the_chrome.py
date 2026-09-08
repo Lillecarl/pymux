@@ -157,6 +157,19 @@ FIXTURES = {
         CHROME,
         keys((FIRST_KEY, PREFIX), (0.4, b"t")),
     ),
+    # Two lines of a configuration file that fail. Every error is joined
+    # into one message and each names the file and the line, so the pair
+    # runs past the width of the screen.
+    #
+    # The message toolbar used to draw from its end, so the first of the
+    # two could not be read: a person fixed the one they could see and
+    # met the other on the next run. It wraps now, and no keys are
+    # pressed here because the message is up before anything is.
+    # Lillecarl/pymux#205, Lillecarl/pymux#38.
+    "startup-errors": (
+        CHROME + "not-a-command-alpha\nnot-a-command-beta\n",
+        "",
+    ),
 }
 
 

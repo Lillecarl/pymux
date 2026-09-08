@@ -44,7 +44,7 @@ from prompt_toolkit.layout.processors import (
 )
 from prompt_toolkit.layout.screen import Char, Screen
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
-from prompt_toolkit.widgets import Dialog, FormattedTextToolbar, SearchToolbar, TextArea
+from prompt_toolkit.widgets import Dialog, SearchToolbar, TextArea
 
 import pymux.arrangement as arrangement
 
@@ -422,9 +422,33 @@ class PaneNumber(Container):  # XXX: make FormattedTextControl
         return []
 
 
-class MessageToolbar(FormattedTextToolbar):
+#: How many rows a message may take. It is a pop-up over the panes, so
+#: it may not become a page: past this the end of a very long message
+#: is cut, which is the end a reader reaches last.
+MAX_MESSAGE_ROWS = 5
+
+
+class MessageToolbar(Window):
     """
     Pop-up (at the bottom) for showing error/status messages.
+
+    **It wraps, and it does not park a cursor at the end.** This was a
+    `FormattedTextToolbar`, which is a `Window` that does not wrap, and
+    the message carried a `[SetCursorPosition]` marker after the text. A
+    window scrolls to keep its cursor visible whether it has the focus
+    or not (`Window._scroll_without_linewrapping`), so a message wider
+    than the terminal was shown from its *end*.
+
+    That lost the front of it. `Pymux.report_startup_errors` joins every
+    failed line of a configuration file into one message, and each one
+    names the file and the line, so two of them pass the width of a
+    normal terminal easily -- and only the last could be read. A person
+    fixed that one, ran pymux again, and met the first.
+    Lillecarl/pymux#205, and the last step of Lillecarl/pymux#38.
+
+    Nothing is typed into a message, so the cursor had no work to do
+    there. The y/n toolbar keeps its marker: that one is a prompt, and
+    it is short.
     """
 
     def __init__(self, client_state):
@@ -438,21 +462,19 @@ class MessageToolbar(FormattedTextToolbar):
         def get_tokens():
             message = get_message()
             if message:
-                return FormattedText(
-                    [
-                        ("class:message", message),
-                        ("[SetCursorPosition]", ""),
-                        ("class:message", " "),
-                    ]
-                )
+                return FormattedText([("class:message", message + " ")])
             else:
                 return ""
 
-        @Condition
-        def is_visible() -> bool:
-            return bool(get_message())
-
-        super().__init__(get_tokens)
+        # The style rides on the fragments, the way it did before: the
+        # toolbar itself carried none, so the rows past the end of the
+        # message are the background and not a coloured bar.
+        super().__init__(
+            FormattedTextControl(get_tokens),
+            wrap_lines=True,
+            dont_extend_height=True,
+            height=D(min=1, max=MAX_MESSAGE_ROWS),
+        )
 
 
 class LayoutManager:
