@@ -622,14 +622,24 @@ class Arrangement:
         during a render: the renderer of one client may run while
         another client is the current one. A caller that already holds
         the application passes it here instead.
+
+        A client that has not looked yet lands on the window the session
+        was last on. It cached that window and returned `windows[0]`, so
+        the first answer and every answer after it differed as soon as
+        anything had made a window active. Lillecarl/pymux#193.
         """
         try:
             return self._active_window_for_cli[app]
         except KeyError:
-            self._active_window_for_cli[app] = (
-                self._last_active_window or self.windows[0]
-            )
-            return self.windows[0]
+            # The last active window can be gone. `remove_pane` moves a
+            # client off a window it empties, and a window with no
+            # client on it is emptied with nobody to move.
+            window = self._last_active_window
+            if window is None or window not in self.windows:
+                window = self.windows[0]
+
+            self._active_window_for_cli[app] = window
+            return window
 
     def set_active_window(self, window: Window) -> None:
         app = get_app()
