@@ -605,6 +605,23 @@ class _ClientInput:
                 pass
             self._input = None
 
+    @property
+    def closed(self) -> bool:
+        """
+        Whether this input is closed. A closed pipe is closed.
+
+        prompt_toolkit reads this before it takes keys, and it reads it
+        after the pipe has gone: the key press that detached the client
+        is still on the loop, and the application is still exiting.
+        `__getattr__` forwarded that read to `None` and raised
+        `AttributeError` on the terminal of the person who detached.
+        `typeahead_hash` below carries the same guard for the same
+        reason. Lillecarl/pymux#109.
+        """
+        if self._input is None:
+            return True
+        return self._input.closed
+
     def typeahead_hash(self) -> str:
         """
         The typeahead hash must keep working after the pipe is closed:

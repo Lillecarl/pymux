@@ -104,6 +104,24 @@ def test_a_detach_leaves_no_client_behind(session):
     assert state.app not in pymux.apps
 
 
+def test_a_closed_client_input_says_it_is_closed():
+    """
+    prompt_toolkit reads `input.closed` before it takes keys, and it
+    reads it after the pipe has gone: the key press that detached the
+    client is still on the loop. `__getattr__` forwarded that read to
+    `None` and raised `AttributeError` on the terminal of the person
+    who detached. Lillecarl/pymux#109.
+    """
+    from pymux.server import _ClientInput
+
+    client_input = _ClientInput(send_packet=lambda data: None)
+    assert not client_input.closed
+
+    client_input.close()
+
+    assert client_input.closed
+
+
 def test_the_prefix_comes_off_a_client_that_stays(session):
     "The ordinary case: the command keeps the client, and the prefix goes."
     pymux, state, connection = session
