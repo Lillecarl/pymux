@@ -1,5 +1,5 @@
 """
-Tests for the kitty keyboard protocol decoding in pymux.kitty.
+Tests for the kitty keyboard protocol decoding in pymux.keys.
 
 Each test feeds a sequence (or a mix of sequences and plain text) into
 the parser and checks the key presses that reach the feed_key callback.
@@ -10,7 +10,7 @@ import logging
 from prompt_toolkit.key_binding.key_processor import _Flush
 from prompt_toolkit.keys import Keys
 
-from pymux.kitty import (
+from pymux.keys import (
     DropReason,
     Dropped,
     KittyVt100Parser,
@@ -479,7 +479,7 @@ def test_a_functional_key_is_not_a_character():
     prompt_toolkit's own table matches "CSI 1 ; 5 A", so nothing ever
     got here through the parser. `_apply_modifiers` is asked directly.
     """
-    from pymux.kitty import _apply_modifiers
+    from pymux.keys import _apply_modifiers
 
     assert _apply_modifiers(Keys.Up, 0b100) == Keys.ControlUp
     assert _apply_modifiers(Keys.F5, 0b100) == Keys.ControlF5
@@ -532,7 +532,7 @@ def test_the_reason_says_what_kind_of_key_it_was():
 
 
 def test_the_log_says_the_key_and_the_reason(caplog):
-    with caplog.at_level(logging.DEBUG, logger="pymux.kitty"):
+    with caplog.at_level(logging.DEBUG, logger="pymux.keys"):
         fed("\x1b[57358u")
     assert "\\x1b[57358u" in caplog.text
     assert DropReason.A_KEY_THAT_WRITES_NOTHING in caplog.text
@@ -541,7 +541,7 @@ def test_the_log_says_the_key_and_the_reason(caplog):
 def test_a_held_key_writes_one_line(caplog):
     "A key that is held down repeats, and one line per repeat is noise."
     parser = KittyVt100Parser(lambda key_press: None)
-    with caplog.at_level(logging.DEBUG, logger="pymux.kitty"):
+    with caplog.at_level(logging.DEBUG, logger="pymux.keys"):
         for _ in range(20):
             parser.feed_and_flush("\x1b[57358u")
     assert len(caplog.records) == 1
@@ -549,7 +549,7 @@ def test_a_held_key_writes_one_line(caplog):
 
 def test_two_keys_with_no_name_each_write_a_line(caplog):
     parser = KittyVt100Parser(lambda key_press: None)
-    with caplog.at_level(logging.DEBUG, logger="pymux.kitty"):
+    with caplog.at_level(logging.DEBUG, logger="pymux.keys"):
         parser.feed_and_flush("\x1b[57358u")
         parser.feed_and_flush("\x1b[57428u")
     assert len(caplog.records) == 2

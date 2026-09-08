@@ -1,18 +1,21 @@
 """
-Kitty protocol support for the input of the outer terminal.
+The keyboard of the person, as a prompt_toolkit key press.
 
-Decodes the CSI u key encoding of the kitty keyboard protocol into
-prompt_toolkit key presses.
+The outer terminal sends the extended forms when the client asked for
+them, and for combinations that have no legacy encoding, such as
+ctrl+enter, even when it did not. prompt_toolkit's input parser knows
+the legacy encoding and none of the rest: without this the sequence
+arrives garbled, one key press per character.
 
-The outer terminal sends these sequences when the client enabled the
-protocol, and for key combinations that have no legacy encoding (like
-ctrl+enter) even when the protocol is not enabled. prompt_toolkit's
-input parser does not understand them: without this translation the
-sequence arrives garbled, one key press per character.
+**The reading is pyte's.** `pyte.keys.parse_key_data` knows every mode
+a keyboard can be in, and this file used to carry a second reader
+beside it. Two readers of the same bytes cost 52 wrong keys once
+(Lillecarl/pymux#119), so there is one. What is here is the naming:
+which prompt_toolkit key a `KeyEvent` is, which pyte cannot say
+because a toolkit sits above it.
 
-The parser below extends prompt_toolkit's `Vt100Parser`. Sequences that
-have no prompt_toolkit representation (lock keys, media keys) are
-consumed silently.
+The parser below extends prompt_toolkit's `Vt100Parser`. A key it
+cannot name is consumed and written to the log, with the reason.
 
 A key that came back up is not a key press, so it takes the key of a
 release (`Keys.KeyRelease`) and keeps the sequence that the terminal
@@ -38,7 +41,7 @@ from prompt_toolkit.input.vt100_parser import (
 from prompt_toolkit.key_binding.key_processor import _Flush
 from prompt_toolkit.keys import Keys
 
-from pyte.kitty_keys import (
+from pyte.keys import (
     FIRST_FUNCTIONAL_KEY,
     EventType,
     KeyCode,

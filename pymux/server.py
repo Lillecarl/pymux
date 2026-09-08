@@ -22,7 +22,7 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 
 from .colors import ColorDetection
 from .graphics import ClientGraphics
-from .kitty import KittyVt100Parser
+from .keys import KittyVt100Parser
 from .log import logger
 from .pipes import BrokenPipeError
 

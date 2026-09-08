@@ -30,7 +30,7 @@ from prompt_toolkit.styles import (
 )
 from ptterm import Terminal
 from pyte.environment import terminal_name
-from pyte.kitty_keys import KeyboardFlag
+from pyte.keys import KeyboardFlag
 from pyte.osc import Osc
 
 from .arrangement import Arrangement, Pane, Window

@@ -27,7 +27,7 @@ from prompt_toolkit.keys import Keys
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
-from pymux.kitty import KittyVt100Parser
+from pymux.keys import KittyVt100Parser
 from pymux.main import Pymux
 from pymux.options import ALL_OPTIONS
 
