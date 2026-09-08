@@ -37,6 +37,7 @@ Run with:
     nix build --file . checks.pymux-pty
     nix build --file . checks.pymux-integrated
 """
+import datetime
 import fcntl
 import os
 import re
@@ -288,14 +289,9 @@ class Failed(AssertionError):
     pass
 
 
-def drain(master_fd, seen, seconds=1.0):
-    "Read whatever arrives for a while. (For checks that expect nothing.)"
-    deadline = time.time() + seconds
-    while time.time() < deadline:
-        readable, _, _ = select.select([master_fd], [], [], 0.1)
-        if readable:
-            seen += os.read(master_fd, 65536)
-    return seen
+def _clock(when):
+    "A moment, spelled the way the server log spells one."
+    return datetime.datetime.fromtimestamp(when).strftime("%H:%M:%S,%f")[:-3]
 
 
 def run_cli(sock_path, args):
@@ -395,6 +391,11 @@ class Attached:
     master_fd: int
     seen: bytes
     stderr_path = None
+    server_log = None
+
+    #: Every read, as `(the clock when it landed, where it starts in
+    #: `seen`)`. `read_once` fills it, and `arrivals_since` reads it.
+    arrivals: list
 
     #: Where the last wait stopped. A wait starts from there, so a
     #: check that asks the same question twice waits twice.
@@ -433,9 +434,7 @@ class Attached:
                     "Timeout waiting for %r. Got: %r"
                     % (pattern, self.seen[start:][:2000])
                 )
-            readable, _, _ = select.select([self.master_fd], [], [], 0.1)
-            if readable:
-                self.seen += os.read(self.master_fd, 65536)
+            self.read_once()
 
     def wait_for_input(self, keys, timeout=15.0):
         """
@@ -455,12 +454,30 @@ class Attached:
                     "Timeout waiting for the pane to read %r. It read: %r"
                     % (keys, read[self.passed_keys:][:400])
                 )
-            readable, _, _ = select.select([self.master_fd], [], [], 0.1)
-            if readable:
-                self.seen += os.read(self.master_fd, 65536)
+            self.read_once()
+
+    def read_once(self) -> None:
+        """
+        Take whatever is waiting, once, and remember when it came.
+
+        **Every read of this class goes through here.** A check that
+        fails on bytes it did not want has to say when they arrived:
+        the server log names what woke a client at the moment it did,
+        and without a time nobody can line the two up.
+        Lillecarl/pymux#180.
+        """
+        readable, _, _ = select.select([self.master_fd], [], [], 0.1)
+        if not readable:
+            return
+        data = os.read(self.master_fd, 65536)
+        if data:
+            self.arrivals.append((time.time(), len(self.seen)))
+            self.seen += data
 
     def drain(self, seconds=1.0):
-        self.seen = drain(self.master_fd, self.seen, seconds)
+        deadline = time.time() + seconds
+        while time.time() < deadline:
+            self.read_once()
 
     def write(self, data):
         os.write(self.master_fd, data)
@@ -507,6 +524,59 @@ class Attached:
     def since(self, mark):
         "Everything that arrived after `mark`."
         return self.seen[mark:]
+
+    def arrivals_since(self, mark, start):
+        """
+        Each read past `mark`, as seconds after `start` and its bytes.
+
+        A frame is one read most of the time, so this is the list of
+        frames with the moment each one went out.
+        """
+        out = []
+        for index, (landed, offset) in enumerate(self.arrivals):
+            end = (
+                self.arrivals[index + 1][1]
+                if index + 1 < len(self.arrivals)
+                else len(self.seen)
+            )
+            if end <= mark:
+                continue
+            out.append((landed - start, self.seen[max(offset, mark):end]))
+        return out
+
+    def log_mark(self):
+        "How much of the server log is written, for `log_since`."
+        if self.server_log is None or not self.server_log.exists():
+            return 0
+        return len(self.server_log.read_text(errors="replace").splitlines())
+
+    def log_since(self, mark, limit=120):
+        "What the server logged past `mark`, newest kept."
+        if self.server_log is None or not self.server_log.exists():
+            return []
+        lines = self.server_log.read_text(errors="replace").splitlines()
+        return lines[mark:][-limit:]
+
+    def report_the_window(self, mark, log_mark, start):
+        """
+        Say what arrived in a window, and what the server was doing.
+
+        A check that expects nothing and gets something can only say
+        which bytes it saw, and bytes alone do not say which of the
+        things that ask for a frame asked for this one. This lines the
+        two up: when each read landed, and what the server logged
+        around it. Lillecarl/pymux#180.
+        """
+        print("--- what arrived, and when (from %s) ---" % _clock(start))
+        for at, data in self.arrivals_since(mark, start):
+            # Both clocks. The relative one says how far into the
+            # window a read is, and the wall clock is the one the log
+            # lines carry, which is what lines the two up at all.
+            print("  %5.2fs %s %r" % (at, _clock(start + at), data))
+        lines = self.log_since(log_mark)
+        if lines:
+            print("--- what the server was doing ---")
+            print("\n".join(lines))
 
     def report(self):
         print(self.seen[-4000:].decode("utf-8", "replace"))
@@ -557,6 +627,7 @@ class SecondClient(Attached):
             sock_path, self.stderr_path, colorterm
         )
         self.seen = b""
+        self.arrivals = []
         self.passed = 0
         self.passed_keys = 0
 
@@ -655,6 +726,7 @@ class Terminal(Attached):
                 self.sock_path, self.stderr_path, colorterm, rows=rows, columns=columns
             )
         self.seen = b""
+        self.arrivals = []
         self.passed = 0
         self.passed_keys = 0
 
@@ -1585,14 +1657,26 @@ def check_a_pane_that_changes_nothing(tmp):
         terminal.wait_for(b"x")
 
         mark = terminal.mark()
+        log_mark = terminal.log_mark()
+        started = time.time()
         # Longer than `status-interval`, so the auto refresh asks at
         # least once inside the window.
         terminal.drain(5.0)
         since = terminal.since(mark)
 
-        assert since == b"", (
-            "the client wrote %r for a screen that did not change" % since
-        )
+        if since != b"":
+            # **The bytes alone are not enough to act on.** This check
+            # was red about one run in thirteen and passed twelve times
+            # after it on the same code, and the report said which
+            # bytes went out and nothing else. So it says when they
+            # went out and what the server was doing at that moment.
+            # `Woke` names every reason but one, and the one it cannot
+            # name is a pane writing. Lillecarl/pymux#180.
+            terminal.report_the_window(mark, log_mark, started)
+            raise Failed(
+                "the client wrote %r for a screen that did not change"
+                % since
+            )
 
         print("a pane that changes nothing: ok")
     except Exception:
