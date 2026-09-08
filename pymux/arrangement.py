@@ -310,6 +310,30 @@ class Window:
             (where - 1 if back else where + 1) % len(widths)
         ]
 
+    def move_column(self, pane: Pane, step: int) -> bool:
+        """
+        Move the column that holds this pane along the row.
+
+        `step` is -1 for one place to the left and +1 for one to the
+        right. Returns whether it moved: a column at the end of the row
+        has nowhere to go, and that is not an error.
+
+        **It is a list reorder and nothing more.** The columns are the
+        children of the root, `column_widths` is keyed by the column
+        object so each column keeps the width it was given, and
+        `invalidation_hash` names every pane in the order they sit in,
+        so the layout is rebuilt. Lillecarl/pymux#202.
+        """
+        column = self._column_of(pane)
+        where = _place_of(self.root, column)
+        there = where + step
+
+        if not 0 <= there < len(self.root):
+            return False
+
+        self.root[where], self.root[there] = self.root[there], self.root[where]
+        return True
+
     def invalidation_hash(self) -> str:
         """
         Return a hash (string) that can be used to determine when the layout
