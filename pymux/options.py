@@ -65,14 +65,26 @@ class OnOffOption(Option):
     def set_value(self, pymux, value):
         value = value.lower()
 
-        if value in ("on", "off"):
-            if self.window_option:
-                w = pymux.arrangement.get_active_window()
-                setattr(w, self.attribute_name, (value == "on"))
-            else:
-                setattr(pymux, self.attribute_name, (value == "on"))
-        else:
+        if value not in ("on", "off"):
             raise SetOptionError('Expecting "yes" or "no".')
+
+        if self.window_option:
+            # There may be no window. A configuration file is read
+            # before the first one is made, so `set-window-option` in
+            # one asked the arrangement for a window it did not have
+            # and got an `IndexError` out of `windows[0]`. That is not
+            # a `SetOptionError`, so it left `source-file` and took the
+            # startup with it: pymux drew nothing at all.
+            # Lillecarl/pymux#199.
+            if not pymux.arrangement.windows:
+                raise SetOptionError(
+                    "There is no window yet. A window option belongs to one "
+                    "window, so it cannot be set before there is a window."
+                )
+            w = pymux.arrangement.get_active_window()
+            setattr(w, self.attribute_name, (value == "on"))
+        else:
+            setattr(pymux, self.attribute_name, (value == "on"))
 
 
 class StringOption(Option):
