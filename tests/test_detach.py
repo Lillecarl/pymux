@@ -9,6 +9,7 @@ to end every pane or kill the process.
 
 Lillecarl/pymux#160.
 """
+
 import asyncio
 import functools
 import io
@@ -105,9 +106,7 @@ async def test_a_detach_asks_every_pane_to_stop():
         panes = list(pymux.panes_by_id.values())
         assert panes
         for pane in panes:
-            pane.process.kill = _a_spy_that_still_kills(
-                pane, pane.process.kill, killed
-            )
+            pane.process.kill = _a_spy_that_still_kills(pane, pane.process.kill, killed)
 
         with set_app(state.app):
             pymux.handle_command("detach-client")

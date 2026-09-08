@@ -28,6 +28,7 @@ rule: translate a capability down, do not take it away.
 The placements of the previous frame are remembered, so an unchanged
 screen emits nothing.
 """
+
 import base64
 import random
 import re
@@ -98,9 +99,7 @@ RESTORE_CURSOR = esc(escape.DECRC)
 
 # The reply of the query: "ESC _ G i=31;OK ESC \". (Terminals add other
 # keys before the semicolon, so the image id is matched on its own.)
-_QUERY_REPLY_RE = re.compile(
-    r"^\x1b_G(?:[^;]*,)?i=%i(?:,[^;]*)?;OK" % QUERY_IMAGE_ID
-)
+_QUERY_REPLY_RE = re.compile(r"^\x1b_G(?:[^;]*,)?i=%i(?:,[^;]*)?;OK" % QUERY_IMAGE_ID)
 
 
 # Reply of the cell size query: "CSI 6 ; height ; width t". The 6 is
@@ -328,9 +327,7 @@ class ClientGraphics:
         self._write_raw(SAVE_CURSOR + "".join(commands) + RESTORE_CURSOR)
         self._flush()
 
-    def _collect(
-        self, views: Iterable[PaneView]
-    ) -> Dict[Tuple[int, int], _Placement]:
+    def _collect(self, views: Iterable[PaneView]) -> Dict[Tuple[int, int], _Placement]:
         "The placements that this frame should show."
         desired: Dict[Tuple[int, int], _Placement] = {}
         live_keys = set()
@@ -355,9 +352,7 @@ class ClientGraphics:
                     source,
                 ) = placement
 
-                outer_id = self._outer_image_id(
-                    view.pane_id, pane_placement, image
-                )
+                outer_id = self._outer_image_id(view.pane_id, pane_placement, image)
                 if outer_id is None:
                     continue
 
@@ -410,9 +405,7 @@ class ClientGraphics:
         first_row = view.vertical_scroll
         last_row = first_row + view.height - 1
         for run in screen.placeholder_runs(first_row, last_row):
-            placement = view.graphics.virtual_placement(
-                run.image_id, run.placement_id
-            )
+            placement = view.graphics.virtual_placement(run.image_id, run.placement_id)
             if placement is None or not placement.columns or not placement.rows:
                 continue
             image = view.graphics.images_by_id.get(run.image_id)
@@ -558,13 +551,10 @@ class ClientGraphics:
                 image.width,
                 image.height,
             )
-            payload = base64.b64encode(zlib.compress(image.data, 1)).decode(
-                "ascii"
-            )
+            payload = base64.b64encode(zlib.compress(image.data, 1)).decode("ascii")
 
         chunks = [
-            payload[i : i + CHUNK_SIZE]
-            for i in range(0, len(payload), CHUNK_SIZE)
+            payload[i : i + CHUNK_SIZE] for i in range(0, len(payload), CHUNK_SIZE)
         ] or [""]
 
         for index, chunk in enumerate(chunks):
@@ -687,8 +677,10 @@ class ClientGraphics:
                 data = self._sixel_for(key, image, source, columns, rows)
                 if data is None:
                     continue
-                desired[(view.pane_id, placement.image_id, slot)] = (
-                    "\x1b[%i;%iH%s" % (y + 1, x + 1, data)
+                desired[(view.pane_id, placement.image_id, slot)] = "\x1b[%i;%iH%s" % (
+                    y + 1,
+                    x + 1,
+                    data,
                 )
 
         return desired, live

@@ -7,6 +7,7 @@ in a layout beside other panes, and making one taller makes another
 shorter, so a program only gets its way when the person allows it with
 "set-option allow-program-resize on".
 """
+
 from pymux.arrangement import Arrangement, Pane
 from pymux.main import Pymux
 

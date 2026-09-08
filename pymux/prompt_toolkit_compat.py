@@ -4,6 +4,7 @@ Compatibility fixes for prompt_toolkit.
 These make the layout of a render cheaper. (TODO: upstream these to
 prompt_toolkit.)
 """
+
 from typing import Generator, List, Sequence, TypeVar
 
 from prompt_toolkit import utils as pt_utils

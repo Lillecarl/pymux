@@ -10,6 +10,7 @@ unix socket in `posix.py`, a pair of queues in `memory.py`. Both sides
 speak the same packets, so a difference between the two routes is a
 difference of the transport and nothing else.
 """
+
 import json
 import os
 import signal

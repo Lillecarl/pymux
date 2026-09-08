@@ -2,6 +2,7 @@
 Tests for what a client draws when its terminal does not speak the
 kitty graphics protocol, and for the detection that picks the way.
 """
+
 import re
 
 import pytest
@@ -28,9 +29,7 @@ def make_client(kitty=False, sixel=False, repaint=None):
 
 def sixels(written):
     "The sixel sequences that were written, with their cursor position."
-    return re.findall(
-        r"\x1b\[(\d+);(\d+)H(\x1bP[^\x1b]*\x1b\\)", "".join(written)
-    )
+    return re.findall(r"\x1b\[(\d+);(\d+)H(\x1bP[^\x1b]*\x1b\\)", "".join(written))
 
 
 # ----------------------------------------------------------------------
@@ -46,14 +45,14 @@ def test_the_graphics_query_reply_turns_on_kitty():
 
 def test_device_attributes_with_four_turn_on_sixel():
     client, _written = make_client()
-    client.handle_reply(csi(escape.DA, 62, 1, 4, 6, private='?'))
+    client.handle_reply(csi(escape.DA, 62, 1, 4, 6, private="?"))
     assert client.sixel_supported
     assert client.supported
 
 
 def test_device_attributes_without_four_leave_sixel_off():
     client, _written = make_client()
-    client.handle_reply(csi(escape.DA, 62, 1, 6, private='?'))
+    client.handle_reply(csi(escape.DA, 62, 1, 6, private="?"))
     assert not client.sixel_supported
     # It still draws: half blocks need nothing but colour.
     assert client.supported
@@ -62,7 +61,7 @@ def test_device_attributes_without_four_leave_sixel_off():
 
 def test_a_forty_in_the_attributes_is_not_a_four():
     client, _written = make_client()
-    client.handle_reply(csi(escape.DA, 62, 40, 46, private='?'))
+    client.handle_reply(csi(escape.DA, 62, 40, 46, private="?"))
     assert not client.sixel_supported
 
 
@@ -83,7 +82,7 @@ def test_an_impossible_cell_size_is_ignored():
 def test_a_terminal_that_answers_nothing_draws_half_blocks():
     "It used to draw nothing at all. Every client shows something now."
     client, written = make_client()
-    client.handle_reply(csi(escape.DA, 62, 1, 6, private='?'))
+    client.handle_reply(csi(escape.DA, 62, 1, 6, private="?"))
     client.render([view(make_state(placement()))])
     joined = "".join(written)
     assert UPPER_HALF in joined or LOWER_HALF in joined
@@ -133,10 +132,8 @@ def test_the_sixel_batch_saves_and_restores_the_cursor():
 def test_the_half_blocks_land_on_the_cells_of_the_placement():
     "One cursor move for each row, at the left edge of the placement."
     client, written = make_client()
-    client.handle_reply(csi(escape.DA, 62, 1, 6, private='?'))
-    client.render(
-        [view(make_state(placement(columns=3, rows=2)), x=4, y=2)]
-    )
+    client.handle_reply(csi(escape.DA, 62, 1, 6, private="?"))
+    client.render([view(make_state(placement(columns=3, rows=2)), x=4, y=2)])
     joined = "".join(written)
     moves = re.findall(r"\x1b\[(\d+);(\d+)H", joined)
     assert moves == [("3", "5"), ("4", "5")]
@@ -144,7 +141,7 @@ def test_the_half_blocks_land_on_the_cells_of_the_placement():
 
 def test_the_half_blocks_save_and_restore_the_cursor():
     client, written = make_client()
-    client.handle_reply(csi(escape.DA, 62, 1, 6, private='?'))
+    client.handle_reply(csi(escape.DA, 62, 1, 6, private="?"))
     client.render([view(make_state(placement()))])
     assert written[-1].startswith("\x1b7")
     assert written[-1].endswith("\x1b8")
@@ -152,7 +149,7 @@ def test_the_half_blocks_save_and_restore_the_cursor():
 
 def test_a_second_frame_that_did_not_change_writes_nothing():
     client, written = make_client()
-    client.handle_reply(csi(escape.DA, 62, 1, 6, private='?'))
+    client.handle_reply(csi(escape.DA, 62, 1, 6, private="?"))
     views = [view(make_state(placement()))]
     client.render(views)
     assert written
@@ -207,9 +204,7 @@ def test_a_cropped_placement_is_encoded_smaller():
     client, written = make_client(sixel=True)
     client.cell_width, client.cell_height = 1, 1
     # Two of the four columns of the placement fit in the pane.
-    client.render(
-        [view(make_state(placement(x=2, columns=4, rows=2)), width=4)]
-    )
+    client.render([view(make_state(placement(x=2, columns=4, rows=2)), width=4)])
     _row, _column, sequence = sixels(written)[0]
     width, _height, _pixels = decode_sixel(sequence[2:-2])
     assert width == 2

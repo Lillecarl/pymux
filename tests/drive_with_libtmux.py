@@ -9,6 +9,7 @@ Run with:
 
     nix develop --file . shell --command python3 tests/drive_with_libtmux.py
 """
+
 import stat
 import sys
 import tempfile
@@ -24,9 +25,7 @@ def make_tmux_shim(directory: Path) -> Path:
     Create a `tmux` executable that runs pymux.
     """
     shim = directory / "tmux"
-    shim.write_text(
-        "#!/bin/sh\nexec %s -m pymux \"$@\"\n" % (sys.executable,)
-    )
+    shim.write_text('#!/bin/sh\nexec %s -m pymux "$@"\n' % (sys.executable,))
     shim.chmod(shim.stat().st_mode | stat.S_IXUSR)
     return shim
 

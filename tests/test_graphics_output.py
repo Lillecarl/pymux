@@ -5,6 +5,7 @@ Each test builds the pane state with the real `pyte.images`
 classes, renders one or more frames, and checks the escape sequences
 that reach the outer terminal.
 """
+
 import base64
 import re
 import zlib
@@ -180,23 +181,19 @@ def test_a_placement_above_the_pane_is_cropped():
     image_id = outer_id(written)
     # One of the two rows is left: the top half of the image is cut.
     assert puts(written) == [
-        "\x1b[1;1H\x1b_Ga=p,i=%i,p=1,c=2,r=1,C=1,q=2,x=0,y=1,w=2,h=1\x1b\\"
-        % image_id
+        "\x1b[1;1H\x1b_Ga=p,i=%i,p=1,c=2,r=1,C=1,q=2,x=0,y=1,w=2,h=1\x1b\\" % image_id
     ]
 
 
 def test_a_placement_over_the_right_edge_is_cropped():
     client, written = make_client()
-    client.render(
-        [view(make_state(placement(x=2, columns=4, rows=2)), width=4)]
-    )
+    client.render([view(make_state(placement(x=2, columns=4, rows=2)), width=4)])
 
     image_id = outer_id(written)
     # Two of the four columns fit. The image is 2 pixels wide, so half
     # a pixel per column: the width rounds up to one pixel.
     assert puts(written) == [
-        "\x1b[1;3H\x1b_Ga=p,i=%i,p=1,c=2,r=2,C=1,q=2,x=0,y=0,w=1,h=2\x1b\\"
-        % image_id
+        "\x1b[1;3H\x1b_Ga=p,i=%i,p=1,c=2,r=2,C=1,q=2,x=0,y=0,w=1,h=2\x1b\\" % image_id
     ]
 
 

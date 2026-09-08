@@ -40,6 +40,7 @@ Three variables reach this file from `pymux/nix/checks.nix`.
 `PYMUX_VTERM_HARNESS` names the built `t/harness`, and nothing works
 without it. `PYMUX_VTERM_TMP` is a directory to work in.
 """
+
 import os
 import subprocess
 import sys

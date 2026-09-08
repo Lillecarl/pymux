@@ -432,9 +432,7 @@ class ServerConnection:
             self._create_app(start=False)
             if pane_id is not None:
                 with set_app(self.client_state.app):
-                    self.pymux.arrangement.set_active_window_from_pane_id(
-                        int(pane_id)
-                    )
+                    self.pymux.arrangement.set_active_window_from_pane_id(int(pane_id))
 
         pymux = self.pymux
         pymux.command_output = []
@@ -517,9 +515,7 @@ class ServerConnection:
                     # traceback on, and nobody to press ENTER, which is
                     # what prompt_toolkit does with an exception in the
                     # event loop. Let asyncio log it instead.
-                    await client_state.app.run_async(
-                        set_exception_handler=False
-                    )
+                    await client_state.app.run_async(set_exception_handler=False)
                 except asyncio.CancelledError:
                     raise
                 except Exception:

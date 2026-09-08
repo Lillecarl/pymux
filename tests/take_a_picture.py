@@ -75,6 +75,7 @@ command:
     nix build --file . checks.pymux-pictures.run
     cp result/picture-differences.txt pymux/tests/picture-differences.txt
 """
+
 import json
 import os
 import shutil
@@ -354,7 +355,9 @@ def fixture_bytes(name):
         # that blinks.
         return b"\x1b[?25l" + recording.read_bytes() + b"\x1b[?25l"
 
-    pieces = [reset_mode(PrivateMode.SHOW_CURSOR)]  # No cursor: it is not what this measures.
+    pieces = [
+        reset_mode(PrivateMode.SHOW_CURSOR)
+    ]  # No cursor: it is not what this measures.
     FIXTURES[name](pieces)
     return "".join(pieces).encode("utf-8")
 
@@ -411,19 +414,31 @@ def xterm_argv(command):
     """
     return [
         "xterm",
-        "-geometry", "%dx%d+0+0" % (COLUMNS, ROWS),
-        "-fa", "DejaVu Sans Mono",
-        "-fs", "12",
-        "-bg", "black",
-        "-fg", "white",
+        "-geometry",
+        "%dx%d+0+0" % (COLUMNS, ROWS),
+        "-fa",
+        "DejaVu Sans Mono",
+        "-fs",
+        "12",
+        "-bg",
+        "black",
+        "-fg",
+        "white",
         # As for foot: a cursor that never blinks cannot be measured.
         "-bc",
-        "-b", "0",  # No internal border.
-        "-bw", "0",  # No window border.
+        "-b",
+        "0",  # No internal border.
+        "-bw",
+        "0",  # No window border.
         "+sb",  # No scrollbar.
-        "-xrm", "xterm*cursorBlink: false",
-        "-xrm", "xterm*allowWindowOps: false",
-        "-e", "sh", "-c", command,
+        "-xrm",
+        "xterm*cursorBlink: false",
+        "-xrm",
+        "xterm*allowWindowOps: false",
+        "-e",
+        "sh",
+        "-c",
+        command,
     ]
 
 
@@ -454,7 +469,9 @@ def foot_argv(command):
         "--override=cursor.unfocused-style=unchanged",
         "--override=main.pad=0x0",
         "--override=scrollback.lines=0",
-        "sh", "-c", command,
+        "sh",
+        "-c",
+        command,
     ]
 
 
@@ -472,17 +489,29 @@ def kitty_argv(command):
     """
     return [
         "kitty",
-        "--config", "NONE",
-        "-o", "font_family=DejaVu Sans Mono",
-        "-o", "font_size=12",
-        "-o", "background=#000000",
-        "-o", "foreground=#ffffff",
-        "-o", "window_padding_width=0",
-        "-o", "scrollback_lines=0",
-        "-o", "shell_integration=no",
-        "-o", "cursor_blink_interval=0.5",
-        "-o", "cursor_stop_blinking_after=0",
-        "sh", "-c", command,
+        "--config",
+        "NONE",
+        "-o",
+        "font_family=DejaVu Sans Mono",
+        "-o",
+        "font_size=12",
+        "-o",
+        "background=#000000",
+        "-o",
+        "foreground=#ffffff",
+        "-o",
+        "window_padding_width=0",
+        "-o",
+        "scrollback_lines=0",
+        "-o",
+        "shell_integration=no",
+        "-o",
+        "cursor_blink_interval=0.5",
+        "-o",
+        "cursor_stop_blinking_after=0",
+        "sh",
+        "-c",
+        command,
     ]
 
 
@@ -570,9 +599,7 @@ class Seat:
                 command,
                 work,
                 log_path,
-                lambda take_one, ended: _burst(
-                    path, take_one, ended, what, log_path
-                ),
+                lambda take_one, ended: _burst(path, take_one, ended, what, log_path),
             )
         return self.running(
             terminal,
@@ -715,9 +742,7 @@ class XSeat(Seat):
             if new:
                 return sorted(new)[-1].decode()
             time.sleep(0.2)
-        raise RuntimeError(
-            "no %s window appeared on %s" % (window_class, self.number)
-        )
+        raise RuntimeError("no %s window appeared on %s" % (window_class, self.number))
 
     def _take(self, window, path):
         subprocess.run(
@@ -747,9 +772,7 @@ class XSeat(Seat):
             window = self._wait_for_a_new_window(
                 terminal.window_class, already, process, log_path
             )
-            return director(
-                lambda where: self._take(window, where), process.poll
-            )
+            return director(lambda where: self._take(window, where), process.poll)
         finally:
             _end(process)
             log.close()
@@ -942,9 +965,12 @@ def pymux_command(program_path, socket_path, config_path, log_path, error_path):
     # No "--" before the command: the mode word takes what follows it
     # as the program of the first pane, and a "--" reaches the pane as
     # the first word of that program (Lillecarl/pymux#41).
-    return (
-        "exec python3 -m pymux -S %s -f %s --log %s integrated sh %s 2>%s"
-        % (socket_path, config_path, log_path, program_path, error_path)
+    return "exec python3 -m pymux -S %s -f %s --log %s integrated sh %s 2>%s" % (
+        socket_path,
+        config_path,
+        log_path,
+        program_path,
+        error_path,
     )
 
 
@@ -1134,9 +1160,7 @@ def main():
 
         for terminal in terminals:
             for name in names:
-                found = compare_one(
-                    terminal, seats[terminal.seat], name, work, out
-                )
+                found = compare_one(terminal, seats[terminal.seat], name, work, out)
                 seen[(terminal.name, name)] = found
                 print(
                     "%s %s: %d pixels differ" % (terminal.name, name, found),
@@ -1184,13 +1208,9 @@ def main():
     # all says zero on both sides, which is an answer and not a fault.
     for key, (bare, through) in sorted(blinks.items()):
         if bare and not through:
-            wrong.append(
-                "%s %s: the cursor blinks bare and not in a pane" % key
-            )
+            wrong.append("%s %s: the cursor blinks bare and not in a pane" % key)
         elif through and not bare:
-            wrong.append(
-                "%s %s: the cursor blinks in a pane and not bare" % key
-            )
+            wrong.append("%s %s: the cursor blinks in a pane and not bare" % key)
 
     # "The same on both sides" is satisfied by a cursor that never
     # blinks anywhere, so on its own it would pass while measuring

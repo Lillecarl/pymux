@@ -5,6 +5,7 @@ Each test feeds a sequence (or a mix of sequences and plain text) into
 the parser and checks the key presses that reach the feed_key callback.
 That is the same path that the server uses for client input.
 """
+
 import logging
 
 from prompt_toolkit.key_binding.key_processor import _Flush
@@ -175,9 +176,7 @@ def test_sequence_split_over_chunks():
     parser.feed("\x1b[97;")
     parser.feed("5u")
     parser.flush()
-    assert [(kp.key, kp.data) for kp in pressed] == [
-        (Keys.ControlA, "\x1b[97;5u")
-    ]
+    assert [(kp.key, kp.data) for kp in pressed] == [(Keys.ControlA, "\x1b[97;5u")]
 
 
 def test_escape_key_alone_still_works():
@@ -646,22 +645,10 @@ def test_shift_and_tab_is_the_back_tab():
 
 
 def test_the_reason_says_what_kind_of_key_it_was():
-    assert (
-        a_dropped_key("\x1b[57358u").reason
-        == DropReason.A_KEY_THAT_WRITES_NOTHING
-    )
-    assert (
-        a_dropped_key("\x1b[57399;5u").reason
-        == DropReason.KEYPAD_WITH_A_MODIFIER
-    )
-    assert (
-        a_dropped_key("\x1b[233;5u").reason
-        == DropReason.CTRL_AND_A_CHARACTER
-    )
-    assert (
-        a_dropped_key("\x1b[99;5~").reason
-        == DropReason.A_TILDE_KEY_WITH_NO_NAME
-    )
+    assert a_dropped_key("\x1b[57358u").reason == DropReason.A_KEY_THAT_WRITES_NOTHING
+    assert a_dropped_key("\x1b[57399;5u").reason == DropReason.KEYPAD_WITH_A_MODIFIER
+    assert a_dropped_key("\x1b[233;5u").reason == DropReason.CTRL_AND_A_CHARACTER
+    assert a_dropped_key("\x1b[99;5~").reason == DropReason.A_TILDE_KEY_WITH_NO_NAME
     assert (
         a_dropped_key("\x1b[27;5u").reason
         == DropReason.A_MODIFIER_THIS_KEY_HAS_NO_NAME_FOR

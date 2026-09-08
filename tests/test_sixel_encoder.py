@@ -5,6 +5,7 @@ Most of them run the encoded image back through the decoder of ptterm,
 which is an independent implementation: what the encoder writes has to
 mean what it was given.
 """
+
 import re
 import struct
 import zlib
@@ -165,9 +166,7 @@ def test_an_unknown_format_has_no_pixels():
 
 def test_png_data_is_decoded():
     png = _png(2, 1, [(10, 20, 30), (40, 50, 60)])
-    assert to_rgba(100, 2, 1, png) == bytes(
-        [10, 20, 30, 255, 40, 50, 60, 255]
-    )
+    assert to_rgba(100, 2, 1, png) == bytes([10, 20, 30, 255, 40, 50, 60, 255])
 
 
 def test_broken_png_data_has_no_pixels():

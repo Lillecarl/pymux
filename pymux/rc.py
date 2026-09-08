@@ -1,6 +1,7 @@
 """
 Initial configuration.
 """
+
 __all__ = ["STARTUP_COMMANDS"]
 
 STARTUP_COMMANDS = """

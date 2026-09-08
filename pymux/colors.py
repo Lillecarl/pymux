@@ -16,6 +16,7 @@ answers when it stays quiet:
 
 A command line flag beats all of it: the user knows their terminal.
 """
+
 import re
 
 from prompt_toolkit.output import ColorDepth
@@ -75,9 +76,9 @@ def reports_truecolor(reply: str) -> bool:
     if found is None:
         return False
 
-    numbers = [
-        int(part) for part in re.split(r"[:;]", found.group(1)) if part != ""
-    ][:4]
+    numbers = [int(part) for part in re.split(r"[:;]", found.group(1)) if part != ""][
+        :4
+    ]
     probe = [PROBE_RED, PROBE_GREEN, PROBE_BLUE]
 
     # The colon form may carry a colour space id before the three

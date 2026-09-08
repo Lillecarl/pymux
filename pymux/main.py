@@ -147,7 +147,6 @@ class ClientState:
         # for a frame only when they differ. Lillecarl/pymux#154.
         self.last_time_text: Tuple[str, ...] = ()
 
-
         # Input buffers.
         self.command_buffer = Buffer(
             name=COMMAND,
@@ -599,8 +598,7 @@ class Pymux:
                 # wakes the one client whose text moved and not all of
                 # them. `Woke` says why the log carries the reason.
                 logger.info(
-                    "Drawing 1 of the clients: the text that time moves "
-                    "changed to %r",
+                    "Drawing 1 of the clients: the text that time moves changed to %r",
                     text,
                 )
                 client_state.app.invalidate()
@@ -1094,9 +1092,7 @@ class Pymux:
         if not data:
             return
         try:
-            text = base64.b64decode(data.encode("ascii")).decode(
-                "utf-8", "replace"
-            )
+            text = base64.b64decode(data.encode("ascii")).decode("utf-8", "replace")
         except Exception:
             return  # Not base64. `build_osc` drops it as well.
         self.clipboard.set_data(ClipboardData(text))
@@ -1224,9 +1220,7 @@ class Pymux:
         try:
             screen.keyboard_source_flags = self.keyboard_source_flags()
             screen.synthesize_key_events = self.synthesize_key_events
-            screen.extended_keys_allowed = (
-                self.extended_keys is not ExtendedKeys.OFF
-            )
+            screen.extended_keys_allowed = self.extended_keys is not ExtendedKeys.OFF
         except AttributeError:
             # An older ptterm knows nothing about the keyboard of the
             # host. It then claims what a pane asks for, as before.
@@ -1598,7 +1592,11 @@ class Pymux:
 
     def add_client(self, output, input, color_depth, connection) -> ClientState:
         client_state = ClientState(
-            self, connection=connection, input=input, output=output, color_depth=color_depth
+            self,
+            connection=connection,
+            input=input,
+            output=output,
+            color_depth=color_depth,
         )
 
         self._client_states[connection] = client_state

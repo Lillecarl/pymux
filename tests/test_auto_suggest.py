@@ -9,6 +9,7 @@ its own key bindings gets the grey text and no way to accept it.
 
 Lillecarl/pymux#163.
 """
+
 import asyncio
 import functools
 import io
@@ -166,9 +167,7 @@ async def test_nothing_here_can_take_the_right_arrow_of_a_pane():
 
 def _the_binding_would_fire(state) -> bool:
     "Whether the right arrow reaches the suggestion binding now."
-    for binding in state.app.key_bindings.get_bindings_for_keys(
-        (Keys.Right,)
-    ):
+    for binding in state.app.key_bindings.get_bindings_for_keys((Keys.Right,)):
         if binding.handler.__module__.endswith("auto_suggest"):
             return bool(binding.filter())
     raise AssertionError("nothing binds the right arrow to a suggestion")

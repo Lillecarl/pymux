@@ -6,6 +6,7 @@ strings it asks for, the rows it reads back, the commands it builds and
 the quoting it puts around them. `drive_with_pty.py` runs the same
 library against a server that is really there.
 """
+
 import json
 import socket
 import threading

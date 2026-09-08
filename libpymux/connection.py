@@ -9,6 +9,7 @@ output, the errors and the exit code, and then it closes. So every
 call here opens a socket of its own, the same way the command line of
 pymux does.
 """
+
 import getpass
 import glob
 import json

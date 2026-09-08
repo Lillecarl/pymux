@@ -2,6 +2,7 @@
 """
 The layout engine. This builds the prompt_toolkit layout.
 """
+
 import datetime
 import weakref
 from functools import partial
@@ -81,6 +82,7 @@ CLOCK_FORMAT = "%H:%M"
 
 class Justify:
     "Justify enum for the status bar."
+
     LEFT = "left"
     CENTER = "center"
     RIGHT = "right"
@@ -413,9 +415,7 @@ class PaneNumber(Container):  # XXX: make FormattedTextControl
                     transparent=True,
                 )
 
-        screen.draw_with_z_index(
-            z_index=Z_INDEX.PANE_NUMBER, draw_func=draw_func
-        )
+        screen.draw_with_z_index(z_index=Z_INDEX.PANE_NUMBER, draw_func=draw_func)
 
     def get_children(self) -> List[Container]:
         return []
@@ -502,6 +502,7 @@ class LayoutManager:
         self.layout = self._create_layout()
 
         # Keep track of render information.
+
     @property
     def pane_write_positions(self) -> Dict[arrangement.Pane, WritePosition]:
         """
@@ -925,9 +926,7 @@ class LayoutManager:
                     ycursor=True,
                     content=ConditionalContainer(
                         content=CompletionsMenu(max_height=12),
-                        filter=~(
-                            has_focus(self.client_state.command_buffer) & palette
-                        ),
+                        filter=~(has_focus(self.client_state.command_buffer) & palette),
                     ),
                 ),
                 # The overlay pane, in the middle of the screen. A
@@ -935,9 +934,7 @@ class LayoutManager:
                 Float(
                     content=ConditionalContainer(
                         content=DynamicContainer(self._overlay_container),
-                        filter=Condition(
-                            lambda: self.pymux.overlay_pane is not None
-                        ),
+                        filter=Condition(lambda: self.pymux.overlay_pane is not None),
                     ),
                     width=lambda: overlay_size(
                         self.pymux.overlay_width,
@@ -1523,9 +1520,7 @@ def _move_focus(pymux: "Pymux", get_x, get_y) -> None:
         return
 
     try:
-        write_pos = client_state.layout_manager.pane_write_positions[
-            window.active_pane
-        ]
+        write_pos = client_state.layout_manager.pane_write_positions[window.active_pane]
     except KeyError:
         pass
     else:

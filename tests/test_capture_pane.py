@@ -9,6 +9,7 @@ The two modes number their lines apart, and they have to: line -1 of
 the rows is the row above the screen, and line -1 of the lines is the
 line above the screen, which can be several rows. Lillecarl/pymux#135.
 """
+
 import sys
 
 import pytest

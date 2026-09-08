@@ -11,6 +11,7 @@ therefore reduces the colours with a median cut, and it leaves the
 pixels that are more transparent than half undrawn, which the sixel
 "P2 = 1" mode keeps clear.
 """
+
 from typing import Dict, List, Sequence, Tuple
 
 from pyte.images import PixelFormat
@@ -37,9 +38,7 @@ _DATA_LOW = 0x3F  # "?"
 _MIN_RUN = 4
 
 
-def to_rgba(
-    image_format: int, width: int, height: int, data: bytes
-) -> bytes | None:
+def to_rgba(image_format: int, width: int, height: int, data: bytes) -> bytes | None:
     """
     The RGBA bytes of a pane image, or None when the format is one that
     this module cannot read.

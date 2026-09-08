@@ -140,7 +140,9 @@ def _usage_doc(name: str, options: str) -> str:
     (docopt-ng only accepts glued options like `-F#{...}` when the option is
     declared to take an argument there.)
     """
-    usage = "Usage:\n    %s %s" % (name, options) if options else "Usage:\n    %s" % name
+    usage = (
+        "Usage:\n    %s %s" % (name, options) if options else "Usage:\n    %s" % name
+    )
 
     declarations = []
     for flag, placeholder in re.findall(r"-([a-zA-Z0-9]) (<[^>]+>)", options):
@@ -182,11 +184,7 @@ def cmd(name: str, options: str = "") -> Callable[[_F], _F]:
         count = len(arguments)
         while i < count:
             arg = arguments[i]
-            if (
-                arg.startswith("-")
-                and len(arg) >= 2
-                and not arg.startswith("--")
-            ):
+            if arg.startswith("-") and len(arg) >= 2 and not arg.startswith("--"):
                 flag = arg[1:2]
                 rest = arg[2:]
                 takes_value = flag in value_flags
@@ -194,9 +192,7 @@ def cmd(name: str, options: str = "") -> Callable[[_F], _F]:
 
                 # Is this option repeated later on?
                 repeated = any(
-                    a.startswith("-")
-                    and not a.startswith("--")
-                    and a[1:2] == flag
+                    a.startswith("-") and not a.startswith("--") and a[1:2] == flag
                     for a in arguments[i + 1 :]
                 )
                 if repeated:
@@ -406,9 +402,7 @@ def select_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
             w.active_pane = pane
 
     elif variables["-l"]:
-        pymux.arrangement.get_active_window().rotate(
-            with_pane_after_only=True
-        )
+        pymux.arrangement.get_active_window().rotate(with_pane_after_only=True)
 
     else:
         if variables["-L"]:
@@ -475,7 +469,9 @@ def kill_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     if variables["-t"]:
         pane = _find_pane(pymux, variables["<target-pane>"])
         if pane is None:
-            raise CommandException("Can't find pane: %s" % (variables["<target-pane>"],))
+            raise CommandException(
+                "Can't find pane: %s" % (variables["<target-pane>"],)
+            )
     else:
         pane = pymux.arrangement.get_active_pane()
     pymux.kill_pane(pane)
@@ -784,7 +780,9 @@ def send_keys(pymux: "Pymux", variables: _VariablesDict) -> None:
     if variables["-t"]:
         pane = _find_pane(pymux, variables["<target-pane>"])
         if pane is None:
-            raise CommandException("Can't find pane: %s" % (variables["<target-pane>"],))
+            raise CommandException(
+                "Can't find pane: %s" % (variables["<target-pane>"],)
+            )
     else:
         pane = pymux.arrangement.get_active_pane()
 
@@ -1165,7 +1163,9 @@ def capture_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     if variables["-t"]:
         pane = _find_pane(pymux, variables["<target-pane>"])
         if pane is None:
-            raise CommandException("Can't find pane: %s" % (variables["<target-pane>"],))
+            raise CommandException(
+                "Can't find pane: %s" % (variables["<target-pane>"],)
+            )
     else:
         pane = pymux.arrangement.get_active_pane()
 
@@ -1198,9 +1198,7 @@ def capture_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
                 0,
             )
         else:
-            captured = [
-                page.text(row, row) for row in range(first_row, last_row + 1)
-            ]
+            captured = [page.text(row, row) for row in range(first_row, last_row + 1)]
             visible_top = screen.line_offset - first_row
 
         def from_tmux_line_number(line_number: int) -> int:
@@ -1236,9 +1234,7 @@ def capture_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     if variables["-p"]:
         pymux.print_command_line(text)
     else:
-        pymux.get_client_state().layout_manager.display_popup(
-            "capture-pane", text
-        )
+        pymux.get_client_state().layout_manager.display_popup("capture-pane", text)
 
 
 @cmd("show-buffer")

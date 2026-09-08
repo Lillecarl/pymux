@@ -12,6 +12,7 @@ The two draw the same window, so nothing about command mode changes but
 where it is. What the tests below read is which container the layout
 would draw, and that is the filter of each one.
 """
+
 import asyncio
 import functools
 import io

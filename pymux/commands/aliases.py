@@ -2,6 +2,7 @@
 Aliases for all commands.
 (On purpose kept compatible with tmux.)
 """
+
 __all__ = ["ALIASES"]
 
 

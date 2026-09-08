@@ -1,6 +1,7 @@
 """
 Pymux string formatting.
 """
+
 import datetime
 import os
 import re
@@ -148,9 +149,7 @@ def _pane_current_path(pymux, window, pane) -> str:
 def _history_size(pymux, window, pane) -> str:
     "Number of lines in the history."
     process = pane.process
-    return str(
-        min(pymux.history_limit, pane.screen.line_offset + process.sy)
-    )
+    return str(min(pymux.history_limit, pane.screen.line_offset + process.sy))
 
 
 def _pane_active(pymux, window, pane) -> str:

@@ -114,6 +114,7 @@ Every run writes the list it saw and the log that says why:
     less result/vterm.log
     cp result/failures.txt pymux/tests/vterm-failures.txt
 """
+
 import os
 import re
 import subprocess
@@ -166,9 +167,9 @@ NOT_OURS = (
     ),
     (
         r"^(30state_pen|32state_flow)\.test$",
-        "the file asks about state that a wire does not carry. \"?pen\" "
+        'the file asks about state that a wire does not carry. "?pen" '
         "is the style the next character will take, and nothing has "
-        "been drawn with it yet; \"?lineinfo\" is whether a line "
+        'been drawn with it yet; "?lineinfo" is whether a line '
         "continues the one above. Both are real questions, and "
         "checks.ptterm-vterm is where they are asked.",
     ),
@@ -307,8 +308,7 @@ def check_the_exclusions(names, include: str) -> int:
         print("vterm: left out %s," % (", ".join(matched) or "nothing"))
         print("vterm:     because %s" % reason)
         if not matched:
-            print("vterm: NOT_OURS leaves out %r, and no file has that name."
-                  % pattern)
+            print("vterm: NOT_OURS leaves out %r, and no file has that name." % pattern)
             status = 1
 
     both = sorted({entry.split(":")[0] for entry in known} & set(out))
@@ -317,8 +317,10 @@ def check_the_exclusions(names, include: str) -> int:
         status = 1
 
     if status:
-        print("\nvterm: NOT_OURS in %s no longer describes the suite."
-              % Path(__file__).name)
+        print(
+            "\nvterm: NOT_OURS in %s no longer describes the suite."
+            % Path(__file__).name
+        )
     return status
 
 
@@ -370,9 +372,11 @@ def main() -> int:
     status = check_the_exclusions(names, include)
 
     for name in sorted(set(broken)):
-        print("vterm: %s expected lines the middle man cannot emit, or it "
-              "raised. Read the log: this is a fault here and not a "
-              "difference." % name)
+        print(
+            "vterm: %s expected lines the middle man cannot emit, or it "
+            "raised. Read the log: this is a fault here and not a "
+            "difference." % name
+        )
         status = 1
 
     return report(failed, include) or status

@@ -11,6 +11,7 @@ The packets are the same ones. Only the transport differs, and both
 sides of the protocol run, so this route proves what the socket route
 proves, in one process instead of two.
 """
+
 import asyncio
 import json
 import signal

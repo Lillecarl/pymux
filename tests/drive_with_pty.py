@@ -37,6 +37,7 @@ Run with:
     nix build --file . checks.pymux-pty
     nix build --file . checks.pymux-integrated
 """
+
 import datetime
 import fcntl
 import os
@@ -127,12 +128,11 @@ def keys_read(data: bytes) -> bytes:
         for blob in re.findall(rb"<<([0-9a-f]*)>>", data)
     )
 
+
 # The kitty image that the pane child transmits: 2x2 pixels, RGB. It
 # is placed over three columns and two rows.
 IMAGE_PAYLOAD = "AAECAwQFBgcICQoL"
-KITTY_IMAGE = (
-    "\x1b_Ga=T,f=24,s=2,v=2,i=7,c=3,r=2,C=1;" + IMAGE_PAYLOAD + "\x1b\\"
-)
+KITTY_IMAGE = "\x1b_Ga=T,f=24,s=2,v=2,i=7,c=3,r=2,C=1;" + IMAGE_PAYLOAD + "\x1b\\"
 
 # The sixel image that the pane child draws: 20 by 12 pixels, red. With
 # the cell that a pane assumes that is two columns and one row.
@@ -333,9 +333,7 @@ def read_the_screen(seen, rows=24, columns=80):
     lines = []
     for y in range(offset, offset + rows):
         row = buffer[y]
-        lines.append(
-            "".join((row[x].char or " ") for x in range(columns))
-        )
+        lines.append("".join((row[x].char or " ") for x in range(columns)))
     return lines
 
 
@@ -360,9 +358,7 @@ def run_on_a_pty(args, stderr_path, colorterm="", rows=24, columns=80):
     a pane is two rows shorter than this.
     """
     master_fd, slave_fd = os.openpty()
-    fcntl.ioctl(
-        slave_fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0)
-    )
+    fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
 
     stderr = open(stderr_path, "wb")
     process = subprocess.Popen(
@@ -461,7 +457,7 @@ class Attached:
             if time.time() > deadline:
                 raise Failed(
                     "Timeout waiting for the pane to read %r. It read: %r"
-                    % (keys, read[self.passed_keys:][:400])
+                    % (keys, read[self.passed_keys :][:400])
                 )
             self.read_once()
 
@@ -509,7 +505,8 @@ class Attached:
         have done.
         """
         fcntl.ioctl(
-            self.master_fd, termios.TIOCSWINSZ,
+            self.master_fd,
+            termios.TIOCSWINSZ,
             struct.pack("HHHH", rows, columns, 0, 0),
         )
         self.client.send_signal(signal.SIGWINCH)
@@ -550,7 +547,7 @@ class Attached:
             )
             if end <= mark:
                 continue
-            out.append((landed - start, self.seen[max(offset, mark):end]))
+            out.append((landed - start, self.seen[max(offset, mark) : end]))
         return out
 
     def log_mark(self):
@@ -591,8 +588,7 @@ class Attached:
         print(self.seen[-4000:].decode("utf-8", "replace"))
         if self.stderr_path is not None and self.stderr_path.exists():
             print(
-                "--- client stderr ---\n"
-                + self.stderr_path.read_text(errors="replace")
+                "--- client stderr ---\n" + self.stderr_path.read_text(errors="replace")
             )
         log = getattr(self, "server_log", None)
         if log is not None and log.exists():
@@ -763,9 +759,9 @@ def check_the_osc_sequences(terminal, tail):
     """
     assert OSC_CLIPBOARD.encode() in tail, "the clipboard write did not arrive"
     assert OSC_POINTER.encode() in tail, "the pointer shape did not arrive"
-    assert (
-        OSC_CLIPBOARD_QUERY.encode() not in tail
-    ), "the pane read the clipboard of the user"
+    assert OSC_CLIPBOARD_QUERY.encode() not in tail, (
+        "the pane read the clipboard of the user"
+    )
 
     found = re.search(OSC_NOTIFICATION_RE, tail)
     assert found, "the notification did not arrive"
@@ -781,7 +777,7 @@ def check_the_hyperlink(terminal):
     """
     opened = ("\x1b]8;;%s\x1b\\" % HYPERLINK_TARGET).encode()
     assert opened in terminal.seen, "the hyperlink never opened"
-    after = terminal.seen[terminal.seen.index(opened) + len(opened):]
+    after = terminal.seen[terminal.seen.index(opened) + len(opened) :]
     assert b"L" in after[:40], "no text after the link opened"
     assert b"\x1b]8;;\x1b\\" in after, "the hyperlink never closed"
     assert terminal.seen.count(HYPERLINK_TARGET.encode()) == 1, (
@@ -833,9 +829,7 @@ def check_kitty_terminal(tmp):
         # A pane is told what it really is. The name is "pyte" when the
         # entry of terminfo is there, and the name of xterm when it is
         # not; the server and this check read the same rule.
-        terminal.wait_for(
-            b"ENV<%s|truecolor||>" % terminal_name().encode("ascii")
-        )
+        terminal.wait_for(b"ENV<%s|truecolor||>" % terminal_name().encode("ascii"))
         #    A hyperlink belongs to a cell, so the pane keeps it and the
         #    renderer opens it again on the terminal of the user.
         terminal.wait_for(b"plain")
@@ -843,9 +837,9 @@ def check_kitty_terminal(tmp):
         check_the_underline(terminal)
 
         assert b"a=T" not in terminal.seen, "graphics command leaked as text"
-        assert (
-            IMAGE_PAYLOAD.encode() not in terminal.seen
-        ), "graphics payload leaked as text"
+        assert IMAGE_PAYLOAD.encode() not in terminal.seen, (
+            "graphics payload leaked as text"
+        )
 
         # 4. The server re-transmits the image and puts it on screen.
         terminal.wait_for(b"\x1b_Ga=t,i=")
@@ -856,9 +850,7 @@ def check_kitty_terminal(tmp):
         assert transmit, "no image transmission on the outer terminal"
         image_id = transmit.group(1)
         put = re.search(
-            rb"\x1b\[(\d+);(\d+)H\x1b_Ga=p,i="
-            + image_id
-            + rb",p=1,c=3,r=2,C=1,q=2",
+            rb"\x1b\[(\d+);(\d+)H\x1b_Ga=p,i=" + image_id + rb",p=1,c=3,r=2,C=1,q=2",
             terminal.seen,
         )
         assert put, "no placement on the outer terminal"
@@ -907,9 +899,7 @@ def check_kitty_terminal(tmp):
         # 8. The user clicks the notification. The answer goes to the
         #    pane that asked, under the name that the pane chose.
         terminal.write(b"\x1b]99;i=" + identifier + b"\x1b\\")
-        terminal.wait_for(
-            ("<<%s>>" % OSC_NOTIFICATION_ANSWER.encode().hex()).encode()
-        )
+        terminal.wait_for(("<<%s>>" % OSC_NOTIFICATION_ANSWER.encode().hex()).encode())
 
         # 9. A reply of the outer terminal does not reach the pane. The
         #    pane echoes everything it reads between "<<" and ">>", so
@@ -919,9 +909,9 @@ def check_kitty_terminal(tmp):
         terminal.write(b"\x1b]11;rgb:dead/beef/cafe\x1b\\")
         terminal.write(b"\x1b]10;rgb:1234/5678/9abc\x07")
         terminal.drain(1.0)
-        assert (
-            b"<<" not in terminal.since(quiet)
-        ), "a reply of the terminal reached the pane"
+        assert b"<<" not in terminal.since(quiet), (
+            "a reply of the terminal reached the pane"
+        )
 
         # 10. The server goes away: the client resets the flags.
         run_cli(terminal.sock_path, ["kill-server"])
@@ -942,9 +932,7 @@ def check_sixel_terminal(tmp):
 
         # Answer only the cell size and the device attributes. The "4"
         # says sixel; nothing answers the kitty or the colour query.
-        terminal.write(
-            ("\x1b[6;%i;%it" % (CELL_HEIGHT, CELL_WIDTH)).encode()
-        )
+        terminal.write(("\x1b[6;%i;%it" % (CELL_HEIGHT, CELL_WIDTH)).encode())
         terminal.write(b"\x1b[?62;1;4;6c")
 
         terminal.wait_for(b"READY")
@@ -958,9 +946,7 @@ def check_sixel_terminal(tmp):
         # two columns and one row; the terminal draws that as
         # 2 * 8 by 1 * 17 pixels.
         terminal.wait_for(b"\x1bP0;1;0q")
-        found = re.search(
-            rb"\x1b\[(\d+);(\d+)H\x1bP([^\x1b]*)\x1b\\", terminal.seen
-        )
+        found = re.search(rb"\x1b\[(\d+);(\d+)H\x1bP([^\x1b]*)\x1b\\", terminal.seen)
         assert found, "no sixel image on the outer terminal"
         decoded = decode_sixel(found.group(3).decode("latin-1"))
         assert decoded is not None, "the sixel image does not decode"
@@ -1072,9 +1058,9 @@ def check_a_closing_split(tmp):
         terminal.drain(3.0)
         tail = terminal.since(quiet)
 
-        assert (
-            b"\x1b[?1049l" not in tail
-        ), "the client left the alternate screen after a split closed"
+        assert b"\x1b[?1049l" not in tail, (
+            "the client left the alternate screen after a split closed"
+        )
         assert len(tail) < 200000, (
             "the client repainted without end after a split closed: %i bytes"
             % len(tail)
@@ -1170,9 +1156,7 @@ def check_the_cursor_shape(tmp):
         # person chose.
         terminal.drain(1.0)
         asked = re.findall(rb"\x1b\[[0-9]* q", terminal.seen)
-        assert asked == [], (
-            "a pane that asked for no shape named one: %r" % asked
-        )
+        assert asked == [], "a pane that asked for no shape named one: %r" % asked
 
         # A second pane, which asks for a bar that does not blink.
         child = tmp / "cursor-child.py"
@@ -1262,9 +1246,9 @@ def check_an_overlay_pane(tmp):
         quiet = terminal.mark()
         terminal.drain(2.0)
         after = terminal.since(quiet)
-        assert (
-            b"\x1b[?1049l" not in after
-        ), "the client left the alternate screen after the overlay closed"
+        assert b"\x1b[?1049l" not in after, (
+            "the client left the alternate screen after the overlay closed"
+        )
         assert len(after) < 200000, (
             "the client repainted without end after the overlay closed: %i bytes"
             % len(after)
@@ -1607,8 +1591,7 @@ def check_the_cursor_of_a_drawing_pane(tmp):
 
         toggles = len(re.findall(rb"\x1b\[\?25[lh]", since))
         assert toggles == 0, (
-            "the client touched the cursor %d times while the pane drew"
-            % toggles
+            "the client touched the cursor %d times while the pane drew" % toggles
         )
 
         # And it held each frame back instead.
@@ -1694,10 +1677,7 @@ def check_a_pane_that_changes_nothing(tmp):
             # `Woke` names every reason but one, and the one it cannot
             # name is a pane writing. Lillecarl/pymux#180.
             terminal.report_the_window(mark, log_mark, started)
-            raise Failed(
-                "the client wrote %r for a screen that did not change"
-                % since
-            )
+            raise Failed("the client wrote %r for a screen that did not change" % since)
 
         print("a pane that changes nothing: ok")
     except Exception:
@@ -1726,9 +1706,7 @@ def check_the_command_palette(tmp):
     program = tmp / "palette_child.sh"
     program.write_text("printf HOLDING\nsleep 60\n")
 
-    terminal = Terminal(
-        tmp, "palette", command="sh %s" % program, config=config
-    )
+    terminal = Terminal(tmp, "palette", command="sh %s" % program, config=config)
     try:
         terminal.wait_for_the_queries()
         terminal.write(b"\x1b[?62;1;6c")
@@ -1745,8 +1723,8 @@ def check_the_command_palette(tmp):
         rows_with_the_prompt = [
             number for number, row in enumerate(screen) if ":new" in row
         ]
-        assert rows_with_the_prompt, (
-            "the command line drew nothing\n%s" % "\n".join(screen)
+        assert rows_with_the_prompt, "the command line drew nothing\n%s" % "\n".join(
+            screen
         )
 
         first = rows_with_the_prompt[0]
@@ -1756,9 +1734,7 @@ def check_the_command_palette(tmp):
         )
 
         # The title says what the box is, and it is above the input.
-        titles = [
-            number for number, row in enumerate(screen) if "Command" in row
-        ]
+        titles = [number for number, row in enumerate(screen) if "Command" in row]
         assert titles and titles[0] == first - 1, (
             "the title of the box is on row %r and the input on %d\n%s"
             % (titles, first, "\n".join(screen))
@@ -1766,8 +1742,7 @@ def check_the_command_palette(tmp):
 
         # And the box starts where the keys pop-up starts.
         assert screen[first].index(":new") >= 3, (
-            "the box reaches further left than three columns\n%s"
-            % "\n".join(screen)
+            "the box reaches further left than three columns\n%s" % "\n".join(screen)
         )
 
         print("command palette: ok")
@@ -1828,8 +1803,8 @@ def check_a_detach_ends_the_client(tmp):
                 "the session outlived the process that held it"
             )
         else:
-            assert answers.returncode == 0, (
-                "the detach took the session down: %r" % (answers.stderr,)
+            assert answers.returncode == 0, "the detach took the session down: %r" % (
+                answers.stderr,
             )
 
         print("a detach ends the client: ok")
@@ -1973,9 +1948,7 @@ def chosen_checks():
     A name nobody knows is an error and not an empty run, because an
     empty run passes and says the wrong thing.
     """
-    by_name = {
-        check.__name__[len("check_"):]: check for check in CHECKS
-    }
+    by_name = {check.__name__[len("check_") :]: check for check in CHECKS}
     asked = os.environ.get("PYMUX_PTY_CHECKS", "").strip()
     if not asked:
         return list(CHECKS)

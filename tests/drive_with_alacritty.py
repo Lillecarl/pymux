@@ -202,6 +202,7 @@ the check, the same way the conformance lists work:
     less result/alacritty.log
     cp result/failures.txt pymux/tests/alacritty-failures.txt
 """
+
 import json
 import os
 import re

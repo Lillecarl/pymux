@@ -1,6 +1,7 @@
 """
 All configurable options which can be changed through "set-option" commands.
 """
+
 from abc import ABC, abstractmethod
 from enum import StrEnum
 
@@ -195,7 +196,7 @@ class ExtendedKeysOption(Option):
             chosen = ExtendedKeys(value)
         except ValueError:
             raise SetOptionError(
-                'Expecting one of: %s.'
+                "Expecting one of: %s."
                 % ", ".join('"%s"' % one for one in ExtendedKeys)
             )
         setattr(pymux, self.attribute_name, chosen)

@@ -18,6 +18,7 @@ application cursor form to a pane that never asked for it while a press
 of the same key sent the plain one. One table now, and
 `tests/test_send_keys.py` reads the bytes. Lillecarl/pymux#119.
 """
+
 from typing import Dict, Tuple
 
 from prompt_toolkit.input.vt100_parser import ANSI_SEQUENCES
@@ -160,8 +161,7 @@ def _keys_to_data() -> Dict[Keys, str]:
 #: out of a terminal that speaks a newer encoding.
 #: Lillecarl/pymux#168.
 _CTRL_SHIFT_TO_VT100 = {
-    getattr(Keys, "ControlShift%s" % chr(ord("A") + i)): chr(i + 1)
-    for i in range(26)
+    getattr(Keys, "ControlShift%s" % chr(ord("A") + i)): chr(i + 1) for i in range(26)
 }
 
 _PROMPT_TOOLKIT_KEY_TO_VT100 = {**_keys_to_data(), **_CTRL_SHIFT_TO_VT100}
@@ -248,9 +248,7 @@ def _a_built_name_as_legacy_bytes(key: str) -> str | None:
 #: gives, which is what a legacy keyboard would have sent.
 #: Lillecarl/pymux#168.
 _CTRL_SHIFT_LETTERS: Dict[str, Tuple[str, ...]] = {
-    "C-S-%s" % chr(ord("a") + i): (
-        getattr(Keys, "ControlShift%s" % chr(ord("A") + i)),
-    )
+    "C-S-%s" % chr(ord("a") + i): (getattr(Keys, "ControlShift%s" % chr(ord("A") + i)),)
     for i in range(26)
 }
 

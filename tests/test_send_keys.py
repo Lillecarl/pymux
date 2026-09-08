@@ -8,6 +8,7 @@ nothing: it called `reset` on prompt_toolkit's `Screen`, which has no
 such method, so the call after it never ran. Nothing tested it.
 Lillecarl/pymux#118.
 """
+
 import sys
 
 import pytest
@@ -73,7 +74,10 @@ def test_a_reset_puts_the_cursor_home(pymux):
 
     send(pymux, "-R")
 
-    assert (pane.screen.pt_cursor_position.y, pane.screen.pt_cursor_position.x) == (0, 0)
+    assert (pane.screen.pt_cursor_position.y, pane.screen.pt_cursor_position.x) == (
+        0,
+        0,
+    )
 
 
 def test_a_reset_takes_back_a_mode_a_program_set(pymux):

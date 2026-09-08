@@ -16,6 +16,7 @@ Python writes to `sys.stderr` whenever a record reaches a logger with no
 handler. So the answer is to give the logger a handler, always, and
 `configure` is what does it.
 """
+
 import logging
 import os
 from pathlib import Path

@@ -11,6 +11,7 @@ what a server reads over the socket, and `shlex.quote` is what keeps an
 argument with a space in it in one piece on the way there.
 `Pymux._create_pane` takes it apart again with `shlex.split`.
 """
+
 import pytest
 
 from pymux.entry_points.run_pymux import parse_arguments

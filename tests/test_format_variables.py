@@ -7,6 +7,7 @@ and a broken variable can sit there for as long as nobody looks.
 `pane_synchronized` did: it took two arguments where every other takes
 three.
 """
+
 import sys
 
 import pytest

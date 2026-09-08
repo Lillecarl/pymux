@@ -9,6 +9,7 @@ nobody tells it otherwise.
 The option is read on every prune, not once when the pane starts, so a
 change reaches a pane that is already running. tmux works the same way.
 """
+
 import sys
 
 import pytest

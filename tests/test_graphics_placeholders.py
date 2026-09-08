@@ -8,6 +8,7 @@ piece of the image on the outer terminal.
 Each test builds a real `Screen`, feeds it what such a program
 sends, and checks the escape sequences that reach the terminal.
 """
+
 import base64
 import re
 
@@ -42,8 +43,7 @@ def transmit_virtual(stream, image_id=5, width=40, height=40):
     "What a program sends before it writes the placeholder cells."
     data = base64.b64encode(rgb_image(width, height)).decode()
     stream.feed(
-        "\x1b_Ga=T,U=1,f=24,s=%i,v=%i,i=%i;%s\x1b\\"
-        % (width, height, image_id, data)
+        "\x1b_Ga=T,U=1,f=24,s=%i,v=%i,i=%i;%s\x1b\\" % (width, height, image_id, data)
     )
 
 
@@ -87,9 +87,7 @@ def puts(written):
 
 
 def keys_of(put):
-    return dict(
-        part.split("=", 1) for part in put[2].split(",") if "=" in part
-    )
+    return dict(part.split("=", 1) for part in put[2].split(",") if "=" in part)
 
 
 # ----------------------------------------------------------------------
@@ -226,9 +224,7 @@ def test_a_view_without_a_screen_still_renders_the_plain_placements():
     client, written = make_client()
     screen, stream = make_screen()
     transmit_virtual(stream)
-    screen.graphics.placements.append(
-        GraphicsPlacement(5, 0, 0, 0, 4, 2, 0, False)
-    )
+    screen.graphics.placements.append(GraphicsPlacement(5, 0, 0, 0, 4, 2, 0, False))
 
     client.render(
         [PaneView(1, 0, 0, 80, 24, 0, 0, screen.graphics)]  # No screen.

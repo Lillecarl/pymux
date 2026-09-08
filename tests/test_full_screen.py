@@ -9,6 +9,7 @@ over them.
 `tests/drive_with_pty.py::check_a_full_screen_pane` measures the cells
 themselves, over a real pty.
 """
+
 from pymux.main import Pymux
 from pymux.options import ALL_OPTIONS
 

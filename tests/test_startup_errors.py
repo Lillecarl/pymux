@@ -11,6 +11,7 @@ That cost an hour once: `set -g status off` is the tmux spelling, pymux
 takes `set-option <option> <value>` with no flags, and the line never
 ran. Lillecarl/pymux#38.
 """
+
 from pymux.commands.commands import call_command_handler
 from pymux.main import Pymux
 
@@ -139,9 +140,7 @@ def test_a_missing_file_is_still_an_error_of_its_own(tmp_path):
 
     pymux = Pymux()
     try:
-        call_command_handler(
-            "source-file", pymux, [str(tmp_path / "not-there.conf")]
-        )
+        call_command_handler("source-file", pymux, [str(tmp_path / "not-there.conf")])
     except CommandException:  # pragma: no cover - it is caught below
         raise AssertionError("the handler should catch this itself")
     assert len(pymux.startup_errors) == 1

@@ -7,6 +7,7 @@ level abstraction of the Pymux window layout.
 An arrangement consists of a list of windows. And a window has a list of panes,
 arranged by ordering them in HSplit/VSplit instances.
 """
+
 import math
 import os
 from enum import Enum

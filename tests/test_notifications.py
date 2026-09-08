@@ -6,6 +6,7 @@ user answers by that name, but the answer arrives at the client, which
 serves every pane. pymux therefore renames a notification on the way
 out and puts the name of the program back on the way in.
 """
+
 from pymux.notifications import (
     NotificationRoutes,
     read_identifier,

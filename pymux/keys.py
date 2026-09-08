@@ -29,6 +29,7 @@ for the colour and clipboard answers, and the `CSI ... t` window report
 for the cell size. Without this the replies would arrive as bursts of
 key presses, and land in whichever pane has the focus.
 """
+
 import logging
 import re
 from dataclasses import dataclass
@@ -199,9 +200,7 @@ def name_of(base: str, mods: int) -> KeyName:
     `base` is the key without its modifiers, as it is written: a
     letter, or the value of a `Keys` member such as "up" or "f5".
     """
-    parts = [
-        name for modifier, name in MODIFIER_NAMES if mods & modifier
-    ]
+    parts = [name for modifier, name in MODIFIER_NAMES if mods & modifier]
     parts.append(base)
     return KeyName("-".join(parts))
 
@@ -271,6 +270,7 @@ _KEYPAD = {
     57420: Keys.Down,
 }
 
+
 @dataclass(frozen=True, slots=True)
 class Dropped:
     """
@@ -299,12 +299,9 @@ class DropReason(StrEnum):
     )
     CTRL_AND_A_CHARACTER = "ctrl and a character that has no control code"
     A_TILDE_KEY_WITH_NO_NAME = "a key of the tilde form that pymux cannot name"
-    A_LETTER_KEY_WITH_NO_NAME = (
-        "a key of the letter form that pymux cannot name"
-    )
-    A_MODIFIER_THIS_KEY_HAS_NO_NAME_FOR = (
-        "a modifier that this key has no name for"
-    )
+    A_LETTER_KEY_WITH_NO_NAME = "a key of the letter form that pymux cannot name"
+    A_MODIFIER_THIS_KEY_HAS_NO_NAME_FOR = "a modifier that this key has no name for"
+
 
 # Sentinels for terminal replies that are not key events: the reply of
 # the "CSI ? u" keyboard flags query, and a Primary/Secondary device
@@ -403,9 +400,7 @@ def _apply_modifiers(key: str | Keys, mods: int) -> _KeyResult:
         if ctrl:
             ctrl_key = _CTRL_FUNCTIONAL.get(key)
             if ctrl_key is None:
-                return Dropped(
-                    DropReason.A_MODIFIER_THIS_KEY_HAS_NO_NAME_FOR
-                )
+                return Dropped(DropReason.A_MODIFIER_THIS_KEY_HAS_NO_NAME_FOR)
             key = ctrl_key
 
     if alt:
@@ -484,11 +479,7 @@ def parse_kitty_key(prefix: str) -> _KeyResult | None:
     if not _LOOKS_LIKE_A_KEY_RE.match(prefix):
         return None
 
-    events = [
-        item
-        for item in parse_key_data(prefix)
-        if isinstance(item, KeyEvent)
-    ]
+    events = [item for item in parse_key_data(prefix) if isinstance(item, KeyEvent)]
     if len(events) != 1:
         # Not one key: an incomplete sequence, or something pyte passes
         # through, or several keys that this parser never feeds at once.
@@ -640,10 +631,7 @@ def _patch_prefix_cache() -> None:
         if _KITTY_PREFIX_RE.match(prefix):
             self[prefix] = True
             return True
-        if (
-            len(prefix) <= MAX_STRING_LENGTH
-            and _STRING_PREFIX_RE.match(prefix)
-        ):
+        if len(prefix) <= MAX_STRING_LENGTH and _STRING_PREFIX_RE.match(prefix):
             # Don't cache: the cache would grow with every payload.
             return True
         return original(self, prefix)
@@ -702,9 +690,7 @@ class KittyVt100Parser(Vt100Parser):
             return
         if len(self._already_said) < MAX_KEYS_TO_REMEMBER:
             self._already_said.add(sequence)
-        logger.debug(
-            "No name here for the key %r: %s.", sequence, dropped.reason
-        )
+        logger.debug("No name here for the key %r: %s.", sequence, dropped.reason)
 
     def _counts_the_modifiers_of_the_protocol(self) -> bool:
         """
@@ -737,10 +723,7 @@ class KittyVt100Parser(Vt100Parser):
         # question is asked rather than guessed. Lillecarl/pymux#182.
         if self._counts_the_modifiers_of_the_protocol():
             modifier = _CARRIES_A_HIGH_MODIFIER_RE.match(prefix)
-            if (
-                modifier is not None
-                and int(modifier.group(1)) > _CTRL_ALT_SHIFT
-            ):
+            if modifier is not None and int(modifier.group(1)) > _CTRL_ALT_SHIFT:
                 named = parse_kitty_key(prefix)
                 if named is not None:
                     return named
@@ -752,9 +735,7 @@ class KittyVt100Parser(Vt100Parser):
             return result
         return parse_kitty_key(prefix)
 
-    def _call_handler(
-        self, key: str | Keys | tuple, insert_text: str
-    ) -> None:
+    def _call_handler(self, key: str | Keys | tuple, insert_text: str) -> None:
         if isinstance(key, tuple):
             # A key that arrives as several, such as alt and a letter.
             # The escape in one of those is not the Escape key, so it

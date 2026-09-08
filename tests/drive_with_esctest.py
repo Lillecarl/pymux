@@ -47,6 +47,7 @@ check does nothing when it is not set. `PYMUX_ESCTEST_INCLUDE` is the
 regular expression of test names to run. `PYMUX_ESCTEST_OUT` names the
 directory to write the list and the log into.
 """
+
 import os
 import re
 import sys
@@ -118,7 +119,7 @@ NOT_OURS = (
 #: every test after it: 514 of 568 tests failed that way, against 348
 #: when each starts clean. Throwing away what is left over before each
 #: test keeps every verdict about that test alone.
-RUNNER = '''
+RUNNER = """
 import os, re, select, sys, tty
 
 # Nobody reads the pane after this, and a traceback drawn on it goes
@@ -195,7 +196,7 @@ sys.stdout.write("\\x1bc\\r\\n%s-%d\\r\\n" % ("ESCTEST-FINISHED", failed))
 sys.stdout.flush()
 while sys.stdin.read(1):
     pass
-'''
+"""
 
 
 def read_baseline():
@@ -326,13 +327,19 @@ def report(log: str, include: str) -> int:
     chosen = {name for name in known if re.search(include, name)}
     out = left_out(log)
 
-    print("esctest: %d tests ran, %d failed, %d left out"
-          % (len(ran), len(failed), len(out)))
+    print(
+        "esctest: %d tests ran, %d failed, %d left out"
+        % (len(ran), len(failed), len(out))
+    )
     for pattern, reason in NOT_OURS:
-        print("esctest: left out %s, because %s"
-              % (", ".join(sorted(name for name in out
-                                  if re.search(pattern, name))) or "nothing",
-                 reason))
+        print(
+            "esctest: left out %s, because %s"
+            % (
+                ", ".join(sorted(name for name in out if re.search(pattern, name)))
+                or "nothing",
+                reason,
+            )
+        )
 
     if not ran:
         print("esctest: the suite ran nothing at all")
@@ -347,8 +354,11 @@ def report(log: str, include: str) -> int:
     # chooses too few tests to say either, so it says neither.
     stale = []
     if include == ".*":
-        stale = [pattern for pattern, _ in NOT_OURS
-                 if not any(re.search(pattern, name) for name in out)]
+        stale = [
+            pattern
+            for pattern, _ in NOT_OURS
+            if not any(re.search(pattern, name) for name in out)
+        ]
     both = sorted(out & known)
 
     for name in new:
@@ -358,14 +368,15 @@ def report(log: str, include: str) -> int:
     for name in missing:
         print("esctest: named in the list, but the suite never ran it: " + name)
     for pattern in stale:
-        print("esctest: NOT_OURS leaves out %r, and no test has that name."
-              % pattern)
+        print("esctest: NOT_OURS leaves out %r, and no test has that name." % pattern)
     for name in both:
         print("esctest: left out, and named in the list as well: " + name)
 
     if stale or both:
-        print("\nesctest: NOT_OURS in %s no longer describes the suite."
-              % Path(__file__).name)
+        print(
+            "\nesctest: NOT_OURS in %s no longer describes the suite."
+            % Path(__file__).name
+        )
         return 1
 
     if new or fixed or missing:

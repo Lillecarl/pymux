@@ -10,6 +10,7 @@ So a person who started a second server and attached could land on
 either one. They usually landed on the old one, and every change in the
 new server looked like it had done nothing.
 """
+
 import os
 import socket
 import time
@@ -56,9 +57,7 @@ def _names():
 
 
 def test_the_newest_server_comes_first(sockets):
-    sockets(
-        ["pymux.sock.someone.0", "pymux.sock.someone.1", "pymux.sock.someone.2"]
-    )
+    sockets(["pymux.sock.someone.0", "pymux.sock.someone.1", "pymux.sock.someone.2"])
     assert _names() == [
         "pymux.sock.someone.2",
         "pymux.sock.someone.1",

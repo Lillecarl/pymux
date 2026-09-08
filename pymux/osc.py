@@ -11,6 +11,7 @@ is checked first. A program in a pane writes what it wants, and a
 payload that carries an escape byte can drive the terminal of the user
 instead of only naming a clipboard or a notification.
 """
+
 import string
 
 __all__ = [

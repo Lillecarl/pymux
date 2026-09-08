@@ -9,6 +9,7 @@ for a key press. A pymux server has no terminal of its own and nobody
 to press a key, so that answer fails and reports again. One lost task
 then repaints the terminal of every client without end.
 """
+
 import asyncio
 import inspect
 

@@ -84,6 +84,7 @@ on its own. `tests/vttest-picture-differences.txt` records each
 difference that stands and says why, and a run is judged against it in
 both directions.
 """
+
 import os
 import shlex
 import shutil
@@ -532,9 +533,12 @@ def compare_one(terminal, seat, work, out):
 
     try:
         bare = one_side(
-            terminal, seat, "bare",
+            terminal,
+            seat,
+            "bare",
             lambda walker: "exec sh %s" % shlex.quote(str(walker)),
-            work, room,
+            work,
+            room,
         )
         through = one_side(terminal, seat, "pymux", in_a_pane, work, room)
     except RuntimeError as reason:
@@ -591,14 +595,23 @@ def first_difference(bare, through):
     for number, (one, other) in enumerate(zip(bare, through), start=1):
         if one != other:
             return "screen %d is %r bare and %r with pymux" % (
-                number, one, other,
+                number,
+                one,
+                other,
             )
-    longer, shorter = ("bare", "pymux") if len(bare) > len(through) else (
-        "pymux", "bare",
+    longer, shorter = (
+        ("bare", "pymux")
+        if len(bare) > len(through)
+        else (
+            "pymux",
+            "bare",
+        )
     )
     return "%s drew %d screens and %s drew %d" % (
-        longer, max(len(bare), len(through)),
-        shorter, min(len(bare), len(through)),
+        longer,
+        max(len(bare), len(through)),
+        shorter,
+        min(len(bare), len(through)),
     )
 
 

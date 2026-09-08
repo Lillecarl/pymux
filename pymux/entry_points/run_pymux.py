@@ -34,6 +34,7 @@ Options:
     --ansicolor    : Use only the 16 ANSI colors.
     --version      : Print version and exit.
 """
+
 import argparse
 import getpass
 import logging
@@ -289,9 +290,7 @@ def run() -> None:
         # When a command was given (e.g. 'pymux standalone htop'), run it in
         # the first pane.
         mux = Pymux(source_file=filename, startup_command=command)
-        mux.run_standalone(
-            color_depth=color_depth or ColorDepth.DEPTH_8_BIT
-        )
+        mux.run_standalone(color_depth=color_depth or ColorDepth.DEPTH_8_BIT)
 
     elif mode == "integrated":
         if socket_name_from_env:
@@ -445,9 +444,9 @@ def _send_command(socket_name: str, command: str, pane_id=None) -> int:
         return client.run_command(command, pane_id)
 
 
-def _flag_args(args: List[str], flags_with_value: Tuple[str, ...]) -> Tuple[
-    Set[str], Dict[str, str], List[str]
-]:
+def _flag_args(
+    args: List[str], flags_with_value: Tuple[str, ...]
+) -> Tuple[Set[str], Dict[str, str], List[str]]:
     """
     Parse a list of short flags, given either glued to their value
     (e.g. `-sname`) or as a separate argument (e.g. `-s name`).
@@ -499,9 +498,7 @@ def _wait_for_server(socket_name: str, timeout: float = 5.0) -> bool:
     return False
 
 
-def _new_session(
-    socket_name: str, command: str, args: List[str], pane_id=None
-) -> int:
+def _new_session(socket_name: str, command: str, args: List[str], pane_id=None) -> int:
     """
     Handle `new-session`. Start a new server when there is no server yet.
     Otherwise, pass the command to the running server. (Which will report

@@ -16,6 +16,7 @@ the server itself.
 `Server.cmd()` runs any pymux command, so nothing the command line can
 do is out of reach.
 """
+
 from .connection import (
     CommandError,
     CommandResult,

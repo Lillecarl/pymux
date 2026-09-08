@@ -35,8 +35,8 @@ more.
 ## Reaching a server
 
 ```python
-Server.first()                  # the one that is running
-Server.list()                   # every one of this user
+Server.first()  # the one that is running
+Server.list()  # every one of this user
 Server("/tmp/pymux.sock.me.7")  # a socket by name
 ```
 
@@ -49,9 +49,9 @@ Every object reads its fields once, through a format string, and keeps
 what it read. It does not follow the server on its own.
 
 ```python
-pane.width          # what it was when the pane was read
-pane.refresh()      # read the fields again
-server.panes        # the panes as they are now
+pane.width  # what it was when the pane was read
+pane.refresh()  # read the fields again
+server.panes  # the panes as they are now
 ```
 
 So a loop that watches something reads the collection again each time.
@@ -64,8 +64,8 @@ reach.
 
 ```python
 server.cmd("list-windows")
-server.cmd(["send-keys", "-t", "%1", "-l", "two words"])   # quoted for you
-server.cmd("has-session -t nope", check=False)             # no exception
+server.cmd(["send-keys", "-t", "%1", "-l", "two words"])  # quoted for you
+server.cmd("has-session -t nope", check=False)  # no exception
 ```
 
 Pass a list and each argument is quoted. Pass a string and it goes as it

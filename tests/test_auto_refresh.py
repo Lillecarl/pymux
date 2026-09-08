@@ -15,6 +15,7 @@ The tests call the refresh. What arms it is one `call_later` that arms
 the next one, and it runs on the loop for the reason in
 Lillecarl/pymux#155.
 """
+
 import asyncio
 import io
 import sys

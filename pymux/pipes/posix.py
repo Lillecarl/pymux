@@ -15,7 +15,9 @@ __all__ = [
 
 
 def bind_and_listen_on_posix_socket(
-    socket_name: str, accept_callback: Callable, loop: asyncio.AbstractEventLoop | None = None
+    socket_name: str,
+    accept_callback: Callable,
+    loop: asyncio.AbstractEventLoop | None = None,
 ):
     """
     :param accept_callback: Called with `PosixSocketConnection` when a new
@@ -189,7 +191,7 @@ def _read_chunk_from_socket(socket, loop):
             # error: "OSError: [Errno 9] Bad file descriptor."
             # This doesn't seem very harmful, and we can just try again.
             logger.warning(
-                "Got OSError while reading data from client: %s. " "Trying again.", e
+                "Got OSError while reading data from client: %s. Trying again.", e
             )
             f.set_result(b"")
             return

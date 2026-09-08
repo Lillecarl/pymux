@@ -17,6 +17,7 @@ for this on purpose: every answer carries the identifier.
 An OSC 99 without an identifier is passed on untouched. The answer to
 one carries "i=0", which names nothing, so there is nothing to route.
 """
+
 import re
 from collections import OrderedDict
 from typing import Tuple

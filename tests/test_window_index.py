@@ -4,6 +4,7 @@ The first window is number one.
 tmux starts at zero, but a keyboard starts at one. `set-option
 base-index 0` brings the tmux default back.
 """
+
 from pymux.arrangement import Arrangement, Pane
 
 

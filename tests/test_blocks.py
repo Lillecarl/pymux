@@ -5,6 +5,7 @@ One cell carries two pixels. The foreground paints the top half and the
 background paints the bottom, so a grid of cells holds an image at twice
 the vertical resolution.
 """
+
 import pytest
 from prompt_toolkit.output import ColorDepth
 
@@ -105,9 +106,7 @@ def test_a_run_of_one_colour_writes_the_sequence_once():
 
 def test_a_cell_that_was_stepped_over_breaks_the_run():
     "Nothing was written on that cell, so no colour reaches across it."
-    lines = blocks_for(
-        rgba(RED, CLEAR, RED, GREEN, CLEAR, GREEN), columns=3, rows=1
-    )
+    lines = blocks_for(rgba(RED, CLEAR, RED, GREEN, CLEAR, GREEN), columns=3, rows=1)
     assert "\x1b[1C" in lines[0]
     assert lines[0].count("\x1b[38") == 2
 
@@ -146,9 +145,7 @@ def test_two_hundred_and_fifty_six_colours_take_an_index():
 def test_sixteen_colours_take_the_plain_codes():
     # The same colour above and below, so the two codes name one
     # colour and the background is the foreground plus ten.
-    lines = blocks_for(
-        rgba(RED, RED), columns=1, rows=1, depth=ColorDepth.DEPTH_4_BIT
-    )
+    lines = blocks_for(rgba(RED, RED), columns=1, rows=1, depth=ColorDepth.DEPTH_4_BIT)
     assert ";5;" not in lines[0]
     assert ";2;" not in lines[0]
     codes = lines[0].split("m")[0].lstrip("\x1b[").split(";")
@@ -163,8 +160,10 @@ def test_sixteen_colours_take_the_plain_codes():
 def test_the_average_of_a_block_of_pixels():
     "Four pixels into one: the colour of the area, not one corner."
     pixels = rgba(
-        (0, 0, 0, 255), (100, 0, 0, 255),
-        (0, 0, 0, 255), (100, 0, 0, 255),
+        (0, 0, 0, 255),
+        (100, 0, 0, 255),
+        (0, 0, 0, 255),
+        (100, 0, 0, 255),
     )
     out = average_rgba(pixels, 2, 2, 1, 1)
     assert out[0] == 50

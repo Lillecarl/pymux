@@ -6,6 +6,7 @@ A pane cannot serve the clipboard, a desktop notification or the shape
 of the pointer. pymux writes those to the outer terminal. The payload
 comes from a program in a pane, so it is checked first.
 """
+
 import pytest
 
 from pyte.osc import PointerShapes
@@ -242,10 +243,9 @@ def test_no_pane_asks_for_no_shape():
 
 def test_an_unsafe_payload_reaches_nobody():
     pymux, connections = make_pymux()
-    pymux.forward_osc(FakePane(), "99", (
-        "i=1;done"
-        + osc("0", "owned", end=Terminator.BEL)
-    ))
+    pymux.forward_osc(
+        FakePane(), "99", ("i=1;done" + osc("0", "owned", end=Terminator.BEL))
+    )
     for connection in connections:
         assert connection.written == []
 

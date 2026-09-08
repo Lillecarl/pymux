@@ -1,6 +1,7 @@
 """
 The color scheme.
 """
+
 from prompt_toolkit.styles import Priority, Style
 
 __all__ = ["ui_style"]

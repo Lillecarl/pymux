@@ -2,6 +2,7 @@
 The faster `take_using_weights` must give the same sequence as the one
 of prompt_toolkit.
 """
+
 import itertools
 
 import pytest

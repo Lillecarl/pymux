@@ -2,6 +2,7 @@
 Platform specific (Windows+posix) implementations for inter process
 communication through pipes between the Pymux server and clients.
 """
+
 from prompt_toolkit.utils import is_windows
 
 from .base import BrokenPipeError, PipeConnection

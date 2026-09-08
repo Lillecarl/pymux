@@ -30,6 +30,7 @@ and the nearest neighbour that the sixel path uses throws most of the
 picture away at that size. This averages the pixels that fall into each
 cell instead, weighted by how opaque they are.
 """
+
 from typing import List, Tuple
 
 from prompt_toolkit.output import ColorDepth

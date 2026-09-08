@@ -1,6 +1,7 @@
 """
 The background of dots must keep its pattern.
 """
+
 from prompt_toolkit.layout.screen import Screen, WritePosition
 
 from pymux.layout import Background

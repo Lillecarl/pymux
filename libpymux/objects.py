@@ -11,6 +11,7 @@ the way libtmux reads them from `tmux -F`. An object holds what it read
 and does not follow the server on its own. Call `refresh()` for the
 fields again, or read the collection again for the objects.
 """
+
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple, Union
 
 from .connection import CommandResult, Connection, ServerNotRunning, socket_paths
@@ -190,9 +191,7 @@ class Pane(_Object):
 
     # -- what it does --------------------------------------------------
 
-    def send_keys(
-        self, text: str, enter: bool = True, literal: bool = True
-    ) -> None:
+    def send_keys(self, text: str, enter: bool = True, literal: bool = True) -> None:
         """
         Send text to the program in this pane.
 
@@ -215,9 +214,7 @@ class Pane(_Object):
         'Send one named key, such as "C-c" or "Escape".'
         self.server.cmd(["send-keys", "-t", self.id, name])
 
-    def capture(
-        self, start: Optional[int] = None, end: Optional[int] = None
-    ) -> str:
+    def capture(self, start: Optional[int] = None, end: Optional[int] = None) -> str:
         """
         Read the content of this pane back as text.
 

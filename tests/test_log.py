@@ -9,6 +9,7 @@ background task then paints its traceback over the frame.
 
 Lillecarl/pymux#36.
 """
+
 import io
 import logging
 import sys
@@ -116,9 +117,7 @@ def test_nothing_reaches_the_terminal(tmp_path, monkeypatch):
     assert caught.getvalue() == ""
 
 
-def test_nothing_reaches_the_terminal_when_no_file_can_be_opened(
-    tmp_path, monkeypatch
-):
+def test_nothing_reaches_the_terminal_when_no_file_can_be_opened(tmp_path, monkeypatch):
     "A log that cannot be written is dropped, and not painted."
     caught = io.StringIO()
     monkeypatch.setattr(sys, "stderr", caught)

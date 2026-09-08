@@ -1,6 +1,7 @@
 """
 Tests for the colour depth detection (`pymux.colors`).
 """
+
 import pytest
 from prompt_toolkit.output import ColorDepth
 
@@ -66,7 +67,7 @@ def test_a_reply_that_keeps_the_colour_means_truecolor(reply):
         # It kept a colour, but not the one that was asked for.
         dcs("1$r38;2;4;5;6m"),
         # Not a DECRQSS reply at all.
-        csi(escape.DA, 62, 1, 6, private='?'),
+        csi(escape.DA, 62, 1, 6, private="?"),
         apc("Gi=31;OK"),
         "",
         # A reply that never ends.
@@ -140,9 +141,7 @@ def test_a_forced_depth_beats_the_environment():
 
 
 def test_a_forced_depth_beats_the_probe():
-    detect = detection(
-        term="xterm-256color", forced=ColorDepth.DEPTH_4_BIT
-    )
+    detect = detection(term="xterm-256color", forced=ColorDepth.DEPTH_4_BIT)
     detect.handle_reply(dcs("1$r38;2;1;2;3m"))
     assert detect.truecolor  # The probe still came back.
     assert detect.depth == ColorDepth.DEPTH_4_BIT  # But the flag wins.

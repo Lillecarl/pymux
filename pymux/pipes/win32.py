@@ -1,6 +1,7 @@
 """
 Common Win32 pipe operations.
 """
+
 import asyncio
 from ctypes import byref, create_string_buffer, windll
 from ctypes.wintypes import BOOL, DWORD
