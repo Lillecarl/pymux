@@ -2,6 +2,7 @@
 All configurable options which can be changed through "set-option" commands.
 """
 from abc import ABC, abstractmethod
+from enum import StrEnum
 
 from .key_mappings import (
     PYMUX_TO_PROMPT_TOOLKIT_KEYS,
@@ -14,6 +15,7 @@ __all__ = [
     "Option",
     "SetOptionError",
     "OnOffOption",
+    "ExtendedKeys",
     "ALL_OPTIONS",
     "ALL_WINDOW_OPTIONS",
 ]
@@ -160,6 +162,46 @@ class KeysOption(Option):
             raise SetOptionError('Expecting "vi" or "emacs".')
 
 
+class ExtendedKeys(StrEnum):
+    """
+    How much of the keyboard a session uses.
+
+    `OFF` is the escape hatch. A program that misbehaves under the
+    extended encodings has somewhere to go, and so does a person who
+    attaches with a terminal that claims more than it does: the whole
+    session steps down for as long as they choose, and steps back up
+    without restarting anything.
+
+    `ALWAYS` is for a terminal that speaks the protocol and does not
+    answer the query that asks. There are some.
+    """
+
+    OFF = "off"
+    ON = "on"
+    ALWAYS = "always"
+
+
+class ExtendedKeysOption(Option):
+    "How much of the keyboard a session uses."
+
+    def __init__(self, attribute_name):
+        self.attribute_name = attribute_name
+
+    def get_all_values(self, pymux):
+        return [str(one) for one in ExtendedKeys]
+
+    def set_value(self, pymux, value):
+        try:
+            chosen = ExtendedKeys(value)
+        except ValueError:
+            raise SetOptionError(
+                'Expecting one of: %s.'
+                % ", ".join('"%s"' % one for one in ExtendedKeys)
+            )
+        setattr(pymux, self.attribute_name, chosen)
+        pymux.sync_the_keyboard()
+
+
 class JustifyOption(Option):
     def __init__(self, attribute_name):
         self.attribute_name = attribute_name
@@ -211,6 +253,11 @@ ALL_OPTIONS = {
     # cannot send, so that a pane gets the keyboard protocol whole from
     # any terminal.
     "synthesize-key-events": OnOffOption("synthesize_key_events"),
+    # How much of the keyboard this session uses. "off" is the escape
+    # hatch: for a program that misbehaves under the extended
+    # encodings, and for a person attaching with a terminal that
+    # claims more than it does. Lillecarl/pymux#173.
+    "extended-keys": ExtendedKeysOption("extended_keys"),
     # May a program inside a pane resize that pane? Off by default: a
     # pane sits in a layout, and making one taller makes another
     # shorter.

@@ -42,7 +42,7 @@ from .key_bindings import PymuxKeyBindings
 from .layout import Justify, LayoutManager
 from .log import logger
 from .notifications import NotificationRoutes
-from .options import ALL_OPTIONS, ALL_WINDOW_OPTIONS
+from .options import ALL_OPTIONS, ALL_WINDOW_OPTIONS, ExtendedKeys
 from .osc import build_osc
 from .pipes import bind_and_listen_on_socket, connect_in_memory
 from .prompt_toolkit_compat import apply_prompt_toolkit_compat_fixes
@@ -481,6 +481,13 @@ class Pymux:
         #: from any terminal; without it, a pane hears that it does
         #: not have it. ("synthesize-key-events".)
         self.synthesize_key_events = True
+
+        #: How much of the keyboard this session uses.
+        #: ("extended-keys".) `OFF` is the escape hatch, for a program
+        #: that misbehaves under the extended encodings and for a
+        #: person attaching with a terminal that claims more than it
+        #: does. Lillecarl/pymux#173.
+        self.extended_keys = ExtendedKeys.ON
 
         # May a program inside a pane resize that pane? DECSLPP and the
         # window resize sequences ask for it. Off, because a pane sits
@@ -1170,12 +1177,27 @@ class Pymux:
         really gets, and that answer needs this. (Only walks the panes
         when something changed.)
         """
-        state = (self.keyboard_source_flags(), self.synthesize_key_events)
+        state = (
+            self.keyboard_source_flags(),
+            self.synthesize_key_events,
+            self.extended_keys,
+        )
         if state == self._keyboard_state_sent:
             return
         self._keyboard_state_sent = state
         for pane in list(self.panes_by_id.values()):
             self.tell_pane_about_the_keyboard(pane)
+
+    def sync_the_keyboard(self) -> None:
+        """
+        Tell the panes and the clients everything about the keyboard.
+
+        `set-option extended-keys` calls this, because that option
+        moves both halves at once: what a pane may ask for, and what
+        the terminal of a client is put into. Lillecarl/pymux#173.
+        """
+        self.sync_keyboard_source_flags()
+        self.sync_kitty_flags()
 
     def tell_pane_about_the_keyboard(self, pane) -> None:
         """
@@ -1191,6 +1213,9 @@ class Pymux:
         try:
             screen.keyboard_source_flags = self.keyboard_source_flags()
             screen.synthesize_key_events = self.synthesize_key_events
+            screen.extended_keys_allowed = (
+                self.extended_keys is not ExtendedKeys.OFF
+            )
         except AttributeError:
             # An older ptterm knows nothing about the keyboard of the
             # host. It then claims what a pane asks for, as before.
@@ -1216,7 +1241,13 @@ class Pymux:
         key data reaches it as the terminal wrote it, and
         `Screen.encode_key` writes it again in the encoding of that
         pane. Lillecarl/pymux#164.
+
+        `set-option extended-keys off` asks for nothing at all, and
+        the client then writes "CSI = 0 ; 1 u" to put the terminal
+        back in the legacy encoding. Lillecarl/pymux#173.
         """
+        if self.extended_keys is ExtendedKeys.OFF:
+            return 0
         return KeyboardFlag.DISAMBIGUATE | self.get_focused_kitty_flags()
 
     def sync_kitty_flags(self) -> None:

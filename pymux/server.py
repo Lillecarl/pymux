@@ -24,6 +24,7 @@ from .colors import ColorDetection
 from .graphics import ClientGraphics
 from .keys import KittyVt100Parser
 from .log import logger
+from .options import ExtendedKeys
 from .pipes import BrokenPipeError
 
 if TYPE_CHECKING:
@@ -262,7 +263,7 @@ class ServerConnection:
         self._send_packet(
             {
                 "cmd": "kitty-keyboard",
-                "data": {"supported": self._kitty_supported},
+                "data": {"supported": self.keyboard_is_supported()},
             }
         )
         # Enable the flags on this client's terminal as well. (Other
@@ -275,6 +276,20 @@ class ServerConnection:
                 "data": {"flags": self.pymux.keyboard_flags_for_a_client()},
             }
         )
+
+    def keyboard_is_supported(self) -> bool:
+        """
+        Whether this client's terminal may be put into the protocol.
+
+        The detection decides it, and one option overrides the
+        detection. `set-option extended-keys always` is for a terminal
+        that speaks the protocol and does not answer the query that
+        asks; there are some, and a person who knows theirs is one can
+        say so. Lillecarl/pymux#173.
+        """
+        if self.pymux.extended_keys is ExtendedKeys.ALWAYS:
+            return True
+        return self._kitty_supported
 
     def _route_notification(self, param: str) -> None:
         """

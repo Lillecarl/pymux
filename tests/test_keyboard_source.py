@@ -8,9 +8,11 @@ makes up what a legacy keyboard cannot send, so a pane keeps both. It
 still has to know what the terminal of every client can report: a
 keyboard that sends its own key release may not get a second one.
 """
+import pytest
 from pyte.keys import KeyboardFlag
 
 from pymux.main import Pymux
+from pymux.options import ALL_OPTIONS, ExtendedKeys, SetOptionError
 
 
 class FakeConnection:
@@ -28,6 +30,7 @@ class FakeScreen:
     def __init__(self):
         self.keyboard_source_flags = 0
         self.synthesize_key_events = False
+        self.extended_keys_allowed = True
 
 
 class FakePane:
@@ -207,3 +210,62 @@ def test_what_a_pane_asks_for_reaches_the_terminal_as_well():
     assert pymux.keyboard_flags_for_a_client() == (
         KeyboardFlag.DISAMBIGUATE | KeyboardFlag.REPORT_EVENT_TYPES
     )
+
+
+# ----------------------------------------------------------------------
+# The escape hatch.
+
+
+def test_extended_keys_is_on_to_begin_with():
+    assert Pymux().extended_keys is ExtendedKeys.ON
+
+
+def test_off_asks_the_terminal_for_nothing():
+    """
+    A person attaching with a terminal that claims more than it does
+    steps the whole session down, and the client writes
+    "CSI = 0 ; 1 u" to put it back in the legacy encoding.
+    Lillecarl/pymux#173.
+    """
+    pymux, _ = make_pymux(0b11111)
+    ALL_OPTIONS["extended-keys"].set_value(pymux, "off")
+
+    assert pymux.keyboard_flags_for_a_client() == 0
+
+
+def test_off_tells_every_pane_as_well():
+    "Asking the terminal for nothing is half of it. A pane hears too."
+    pymux, _ = make_pymux(0b11111)
+    pane = FakePane(1)
+    pymux.panes_by_id[pane.pane_id] = pane
+
+    ALL_OPTIONS["extended-keys"].set_value(pymux, "off")
+
+    assert pane.screen.extended_keys_allowed is False
+
+
+def test_turning_it_back_on_reaches_the_panes():
+    "The session steps back up without restarting anything."
+    pymux, _ = make_pymux(0b11111)
+    pane = FakePane(1)
+    pymux.panes_by_id[pane.pane_id] = pane
+    ALL_OPTIONS["extended-keys"].set_value(pymux, "off")
+
+    ALL_OPTIONS["extended-keys"].set_value(pymux, "on")
+
+    assert pane.screen.extended_keys_allowed is True
+    assert pymux.keyboard_flags_for_a_client() == KeyboardFlag.DISAMBIGUATE
+
+
+def test_always_still_asks_the_terminal():
+    "It changes what a client believes about its terminal, not the flags."
+    pymux, _ = make_pymux(0b11111)
+    ALL_OPTIONS["extended-keys"].set_value(pymux, "always")
+
+    assert pymux.keyboard_flags_for_a_client() == KeyboardFlag.DISAMBIGUATE
+
+
+def test_a_value_nobody_defines_is_an_error():
+    pymux, _ = make_pymux(0)
+    with pytest.raises(SetOptionError):
+        ALL_OPTIONS["extended-keys"].set_value(pymux, "sometimes")
