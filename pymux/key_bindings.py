@@ -7,6 +7,9 @@ from typing import TYPE_CHECKING, Callable, Dict, Tuple
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.filters import Condition, Filter, emacs_mode, has_focus
 from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
+from prompt_toolkit.key_binding.bindings.auto_suggest import (
+    load_auto_suggest_bindings,
+)
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent as E
 from prompt_toolkit.keys import Keys
 
@@ -36,6 +39,17 @@ class PymuxKeyBindings:
         self.key_bindings = merge_key_bindings(
             [
                 self._load_builtins(),
+                # The right arrow accepts what the command line is
+                # suggesting. prompt_toolkit writes the binding and
+                # loads it from `PromptSession` alone, so an
+                # application that builds its own bindings draws the
+                # grey text and gives a person no way to take it.
+                #
+                # **It comes after the rest**, which upstream asks for
+                # in the docstring of that function: the vi bindings
+                # have a right arrow of their own, and the suggestion
+                # has to win while there is one. Lillecarl/pymux#163.
+                load_auto_suggest_bindings(),
                 self.custom_key_bindings,
             ]
         )
