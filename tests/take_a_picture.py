@@ -1063,6 +1063,22 @@ def main():
     seen = {}
     blinks = {}
 
+    # Where an X server puts the socket of its display.
+    #
+    # **Two display servers run here at once**, because a terminal
+    # needs X or Wayland and this check has both kinds: Xvfb for
+    # xterm, and cage, which brings Xwayland with it. A build sandbox
+    # has no such directory and a server cannot make one --
+    # "_XSERVTransmkdir: ERROR: euid != 0" -- so each server falls
+    # back to the abstract socket alone, neither can see that the
+    # other took display zero, and xterm connects to whichever
+    # answers: "xterm: Xt error: Can't open display: :0".
+    #
+    # With the directory there, the first server writes X0 into it and
+    # the second one sees it and takes the next number.
+    # Lillecarl/pymux#177.
+    Path("/tmp/.X11-unix").mkdir(parents=True, exist_ok=True)
+
     # One seat for each kind of display server that a terminal here
     # needs, and none for a kind that nothing needs.
     seats = {}
