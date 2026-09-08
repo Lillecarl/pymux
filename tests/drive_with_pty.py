@@ -69,6 +69,9 @@ REPO_ROOT = Path(__file__).parent.parent
 #: "socket" or "integrated". See the docstring of this file.
 ROUTE = os.environ.get("PYMUX_ROUTE", "socket")
 
+#: What `ctrl+b d` sends: the prefix key, then the letter.
+DETACH = b"\x02d"
+
 # "\x1b[97;5u" — kitty ctrl+a — as the pane reads it.
 CTRL_A_KITTY = b"\x1b[97;5u"
 
@@ -1599,6 +1602,68 @@ def check_a_pane_that_changes_nothing(tmp):
         terminal.close()
 
 
+def check_a_detach_ends_the_client(tmp):
+    """
+    `ctrl+b d` gives the terminal back and ends the client process.
+
+    On the socket route the client is a process of its own and the
+    server is a daemon, so the session outlives the detach. On the
+    integrated route both halves are one process, so the detach ends
+    the session with them: nothing is left to hold it.
+
+    Two faults made this hang on the integrated route. The key handler
+    asked for the client that `detach-client` had just taken away,
+    which raised `ValueError` on top of the prompt. And nothing stopped
+    the server, so a pane held a `waitpid` in the executor of the loop
+    and the interpreter could not exit. The person saw their shell
+    again with no prompt under it. Lillecarl/pymux#109.
+
+    The pane holds a program that outlives the check, on purpose. A
+    pane that ends on its own would end the session for another reason
+    and prove nothing.
+    """
+    program = tmp / "detach_child.sh"
+    program.write_text("printf HOLDING\nsleep 60\n")
+
+    terminal = Terminal(tmp, "detach", command="sh %s" % program)
+    try:
+        terminal.wait_for_the_queries()
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"HOLDING")
+
+        terminal.write(DETACH)
+        try:
+            code = terminal.client.wait(timeout=20)
+        except subprocess.TimeoutExpired:
+            raise AssertionError(
+                "the client was still running 20 seconds after the detach"
+            )
+        assert code == 0, "the client left with %r" % (code,)
+
+        errors = Path(terminal.stderr_path).read_bytes()
+        assert b"Traceback" not in errors, (
+            "the detach wrote a traceback on the terminal:\n%s"
+            % errors.decode("utf-8", "replace")[-2000:]
+        )
+
+        answers = run_cli(terminal.sock_path, ["has-session"])
+        if ROUTE == "integrated":
+            assert answers.returncode != 0, (
+                "the session outlived the process that held it"
+            )
+        else:
+            assert answers.returncode == 0, (
+                "the detach took the session down: %r" % (answers.stderr,)
+            )
+
+        print("a detach ends the client: ok")
+    except Exception:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+
+
 def check_libpymux(tmp):
     """
     libpymux against a server that is really there.
@@ -1717,6 +1782,7 @@ def main() -> None:
     check_a_non_breaking_space(tmp)
     check_the_cursor_of_a_drawing_pane(tmp)
     check_a_pane_that_changes_nothing(tmp)
+    check_a_detach_ends_the_client(tmp)
     check_libpymux(tmp)
     print("All pty checks passed.")
 

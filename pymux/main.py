@@ -1473,6 +1473,17 @@ class Pymux:
         try:
             self.loop.run_until_complete(run())
         finally:
+            # The client has gone, and the server is in this process,
+            # so nothing is left for the session to live on. `ctrl+b d`
+            # means quit here, and that is the one honest reading.
+            #
+            # It is also what lets the process exit at all. A pane that
+            # is still running holds a `waitpid` in the executor of the
+            # loop, and the interpreter waits for that thread. Without
+            # this the client put the terminal back and the person was
+            # left looking at their shell with no prompt.
+            # Lillecarl/pymux#109.
+            self.stop()
             self._remove_socket()
 
     def run_standalone(self, color_depth):
