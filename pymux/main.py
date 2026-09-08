@@ -25,7 +25,9 @@ from prompt_toolkit.key_binding.vi_state import InputMode
 from prompt_toolkit.layout.layout import Layout
 from prompt_toolkit.output.defaults import create_output
 from prompt_toolkit.styles import (
+    BaseStyle,
     ConditionalStyleTransformation,
+    DynamicStyle,
     SwapLightAndDarkStyleTransformation,
 )
 from ptterm import Terminal
@@ -48,7 +50,7 @@ from .pipes import bind_and_listen_on_socket, connect_in_memory
 from .prompt_toolkit_compat import apply_prompt_toolkit_compat_fixes
 from .rc import STARTUP_COMMANDS
 from .server import ServerConnection
-from .style import ui_style
+from .style import DEFAULT_THEME, THEMES
 from .utils import get_default_shell
 
 __all__ = [
@@ -285,7 +287,9 @@ class ClientState:
             key_bindings=pymux.key_bindings_manager.key_bindings,
             mouse_support=Condition(lambda: pymux.enable_mouse_support),
             full_screen=True,
-            style=self.pymux.style,
+            # Read on every render, so a theme chosen while a client is
+            # attached reaches it without rebuilding the application.
+            style=DynamicStyle(lambda: self.pymux.style),
             style_transformation=ConditionalStyleTransformation(
                 SwapLightAndDarkStyleTransformation(),
                 Condition(lambda: self.pymux.swap_dark_and_light),
@@ -555,7 +559,16 @@ class Pymux:
         self.overlay_width = None
         self.overlay_height = None
 
-        self.style = ui_style
+        # Which colour scheme every client draws with.
+        # `set-option theme <name>` picks another one. The name is what
+        # is kept, because that is what a person set and can read back;
+        # the scheme is derived from it. Lillecarl/pymux#194.
+        self.theme = DEFAULT_THEME
+
+    @property
+    def style(self) -> BaseStyle:
+        "The colour scheme of the theme this session is on."
+        return THEMES[self.theme]
 
     @property
     def show_status(self) -> bool:

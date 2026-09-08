@@ -5,11 +5,13 @@ All configurable options which can be changed through "set-option" commands.
 from abc import ABC, abstractmethod
 from enum import StrEnum
 
+from .enums import Woke
 from .key_mappings import (
     PYMUX_TO_PROMPT_TOOLKIT_KEYS,
     pymux_key_to_prompt_toolkit_key_sequence,
 )
 from .layout import Justify
+from .style import THEMES
 from .utils import get_default_shell
 
 __all__ = [
@@ -203,6 +205,25 @@ class ExtendedKeysOption(Option):
         pymux.sync_the_keyboard()
 
 
+class ThemeOption(Option):
+    """
+    Which colour scheme every client draws with.
+
+    The clients follow at once. Each application reads `pymux.style`
+    on every render, so nothing has to be rebuilt; they only have to
+    be asked for a frame.
+    """
+
+    def get_all_values(self, pymux):
+        return sorted(THEMES)
+
+    def set_value(self, pymux, value):
+        if value not in THEMES:
+            raise SetOptionError("Expecting one of: %s." % ", ".join(sorted(THEMES)))
+        pymux.theme = value
+        pymux.invalidate(Woke.A_THEME_WAS_CHOSEN)
+
+
 class JustifyOption(Option):
     def __init__(self, attribute_name):
         self.attribute_name = attribute_name
@@ -236,6 +257,9 @@ ALL_OPTIONS = {
     # instead of a bar along the bottom. Off, because a person used to
     # the bar should not have it move without asking.
     "command-palette": OnOffOption("command_palette"),
+    # Which colour scheme the clients draw with. `pymux/style.py`
+    # holds them. Lillecarl/pymux#194.
+    "theme": ThemeOption(),
     "status-keys": KeysOption("status_keys_vi_mode"),
     "mode-keys": KeysOption("mode_keys_vi_mode"),
     "default-terminal": StringOption(
