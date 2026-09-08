@@ -146,6 +146,15 @@ let
     in
     if value == "" then "^4 " else value;
 
+  # Which pictures of pymux's own chrome to take, and in which
+  # terminals, for instance
+  # `PYMUX_CHROME=palette nix build --file . checks.pymux-chrome-pictures`.
+  # Every fixture in every terminal by default: there are six of them
+  # and each one is a single picture, where the comparison check takes
+  # two of everything.
+  chromeSelection = builtins.getEnv "PYMUX_CHROME";
+  chromeTerminals = builtins.getEnv "PYMUX_CHROME_TERMINALS";
+
   # xterm is the one, and `tests/photograph_vttest.py` says why: it is the
   # only one of the three that draws the DEC line attributes at all.
   vttestTerminals =
@@ -207,7 +216,12 @@ let
   # one of them. `env` names the variables that a run reads, and a change to
   # one of them rebuilds the check, which is what makes the knobs above work.
   runInSandbox =
-    { name, inputs ? [ ], env ? { }, setup ? "" }:
+    {
+      name,
+      inputs ? [ ],
+      env ? { },
+      setup ? "",
+    }:
     command:
     suite {
       inherit name env;
@@ -217,21 +231,29 @@ let
 in
 {
   # The unit tests of pymux.
-  unit = runInSandbox {
-    name = "pymux-unit";
-    env = { inherit selection; };
-  } ''
-    python -m pytest $selection -q -p no:cacheprovider
-  '';
+  unit =
+    runInSandbox
+      {
+        name = "pymux-unit";
+        env = { inherit selection; };
+      }
+      ''
+        python -m pytest $selection -q -p no:cacheprovider
+      '';
 
   # The end to end test. It opens a pty, starts a server and attaches a
   # client, so it needs a sandbox that gives it /dev/ptmx.
-  pty = runInSandbox {
-    name = "pymux-pty-tests";
-    env = { PYMUX_PTY_CHECKS = ptyChecks; };
-  } ''
-    python tests/drive_with_pty.py
-  '';
+  pty =
+    runInSandbox
+      {
+        name = "pymux-pty-tests";
+        env = {
+          PYMUX_PTY_CHECKS = ptyChecks;
+        };
+      }
+      ''
+        python tests/drive_with_pty.py
+      '';
 
   # The same test, over the other route. `pymux integrated` puts the
   # server and the client in one process and carries the packets in
@@ -240,13 +262,18 @@ in
   # The two runs together say which side a fault is on. A check that
   # fails here and passes above is the transport; one that fails in
   # both is the server or the client.
-  integrated = runInSandbox {
-    name = "pymux-integrated-tests";
-    env = { PYMUX_PTY_CHECKS = ptyChecks; };
-  } ''
-    export PYMUX_ROUTE=integrated
-    python tests/drive_with_pty.py
-  '';
+  integrated =
+    runInSandbox
+      {
+        name = "pymux-integrated-tests";
+        env = {
+          PYMUX_PTY_CHECKS = ptyChecks;
+        };
+      }
+      ''
+        export PYMUX_ROUTE=integrated
+        python tests/drive_with_pty.py
+      '';
 
   # The picture of a real terminal, with pymux in it and without it.
   #
@@ -257,15 +284,21 @@ in
   #
   # The result is a directory, so a run always leaves its pictures behind:
   # `result/<terminal>/<fixture>/{bare,pymux,difference}.png`.
-  pictures = runInSandbox {
-    name = "pymux-pictures";
-    inputs = seatInputs;
-    env = { inherit pictureSelection; };
-  } (seatSetup + ''
-    export PYMUX_PICTURES="$pictureSelection"
-    export PYMUX_PICTURES_OUT="$out"
-    python tests/take_a_picture.py
-  '');
+  pictures =
+    runInSandbox
+      {
+        name = "pymux-pictures";
+        inputs = seatInputs;
+        env = { inherit pictureSelection; };
+      }
+      (
+        seatSetup
+        + ''
+          export PYMUX_PICTURES="$pictureSelection"
+          export PYMUX_PICTURES_OUT="$out"
+          python tests/take_a_picture.py
+        ''
+      );
 
   # The same picture, of vttest.
   #
@@ -279,34 +312,76 @@ in
   # It is not a gate. One item of the main menu, in one terminal, is
   # what it does by default, because the whole of vttest twice over is
   # twenty minutes for each terminal.
-  vttestPictures = runInSandbox {
-    name = "pymux-vttest-pictures";
-    inputs = seatInputs ++ [ vttest ];
-    env = { inherit vttestInclude vttestTerminals; };
-  } (seatSetup + ''
-    export PYMUX_VTTEST=${vttest}/bin/vttest
-    export PYMUX_VTTEST_WALKER=${vttestWalker}/drive_with_vttest.py
-    export PYMUX_VTTEST_INCLUDE="$vttestInclude"
-    export PYMUX_VTTEST_TERMINALS="$vttestTerminals"
-    export PYMUX_VTTEST_OUT="$out"
-    python tests/photograph_vttest.py
-  '');
+  vttestPictures =
+    runInSandbox
+      {
+        name = "pymux-vttest-pictures";
+        inputs = seatInputs ++ [ vttest ];
+        env = { inherit vttestInclude vttestTerminals; };
+      }
+      (
+        seatSetup
+        + ''
+          export PYMUX_VTTEST=${vttest}/bin/vttest
+          export PYMUX_VTTEST_WALKER=${vttestWalker}/drive_with_vttest.py
+          export PYMUX_VTTEST_INCLUDE="$vttestInclude"
+          export PYMUX_VTTEST_TERMINALS="$vttestTerminals"
+          export PYMUX_VTTEST_OUT="$out"
+          python tests/photograph_vttest.py
+        ''
+      );
+
+  # A picture of what pymux draws around a pane.
+  #
+  # `pictures` above writes `set full-screen on` before every fixture,
+  # which is what takes pymux's own chrome off the screen. So nothing
+  # has ever photographed the status line, a pane title bar or the
+  # command palette, and nothing could: a headless compositor owns no
+  # input device, so nothing could press a key to open any of it.
+  # `tests/drive_in_a_terminal.py` is the way round, and
+  # `tests/photograph_the_chrome.py` is the harness around it.
+  # Lillecarl/pymux#161.
+  #
+  # It is not a gate, and it judges nothing. A picture of chrome has no
+  # bare side to subtract, because the chrome is the thing pymux adds.
+  # Judging it needs a recorded image, and recording one before
+  # anybody has looked would record whatever it draws today, faults
+  # and all. Reading the pictures is the work.
+  chromePictures =
+    runInSandbox
+      {
+        name = "pymux-chrome-pictures";
+        inputs = seatInputs;
+        env = { inherit chromeSelection chromeTerminals; };
+      }
+      (
+        seatSetup
+        + ''
+          export PYMUX_CHROME="$chromeSelection"
+          export PYMUX_CHROME_TERMINALS="$chromeTerminals"
+          export PYMUX_CHROME_OUT="$out"
+          python tests/photograph_the_chrome.py
+        ''
+      );
 
   # The conformance suite, run in a pane. It is not a pass or fail of its
   # own: most of it fails, and each failure names a real difference from
   # xterm. The run is judged against the list in
   # `tests/esctest-failures.txt`, and a difference either way is what
   # fails the check.
-  esctest = runInSandbox {
-    name = "pymux-esctest";
-    inputs = [ esctest2 ];
-    env = { inherit esctestInclude; };
-  } ''
-    export PYMUX_ESCTEST=${esctest2}/share/esctest2
-    export PYMUX_ESCTEST_INCLUDE="$esctestInclude"
-    export PYMUX_ESCTEST_OUT="$out"
-    python tests/drive_with_esctest.py
-  '';
+  esctest =
+    runInSandbox
+      {
+        name = "pymux-esctest";
+        inputs = [ esctest2 ];
+        env = { inherit esctestInclude; };
+      }
+      ''
+        export PYMUX_ESCTEST=${esctest2}/share/esctest2
+        export PYMUX_ESCTEST_INCLUDE="$esctestInclude"
+        export PYMUX_ESCTEST_OUT="$out"
+        python tests/drive_with_esctest.py
+      '';
 
   # The test suite of libvterm, with pymux in the middle of it.
   #
@@ -318,22 +393,25 @@ in
   # So the judge is libvterm's own `t/harness`, built as it stands, and
   # nothing of ours decides anything. `tests/drive_with_vterm.py` says which
   # files can run this way and why the rest cannot.
-  vterm = runInSandbox {
-    name = "pymux-vterm";
-    inputs = [
-      perl
-      vtermSuite.harness
-    ];
-    env = { inherit vtermInclude vtermTrace; };
-  } ''
-    export PYMUX_VTERM=${vtermSuite.tests}/share/libvterm-tests
-    export PYMUX_VTERM_HARNESS=${vtermSuite.harness}/bin/libvterm-harness
-    export PYMUX_VTERM_INCLUDE="$vtermInclude"
-    export PYMUX_VTERM_TRACE="$vtermTrace"
-    export PYMUX_VTERM_TMP="$TMPDIR"
-    export PYMUX_VTERM_OUT="$out"
-    python tests/drive_with_vterm.py
-  '';
+  vterm =
+    runInSandbox
+      {
+        name = "pymux-vterm";
+        inputs = [
+          perl
+          vtermSuite.harness
+        ];
+        env = { inherit vtermInclude vtermTrace; };
+      }
+      ''
+        export PYMUX_VTERM=${vtermSuite.tests}/share/libvterm-tests
+        export PYMUX_VTERM_HARNESS=${vtermSuite.harness}/bin/libvterm-harness
+        export PYMUX_VTERM_INCLUDE="$vtermInclude"
+        export PYMUX_VTERM_TRACE="$vtermTrace"
+        export PYMUX_VTERM_TMP="$TMPDIR"
+        export PYMUX_VTERM_OUT="$out"
+        python tests/drive_with_vterm.py
+      '';
 
   # The reference tests of Alacritty, with pymux in the middle of them.
   #
@@ -346,17 +424,20 @@ in
   # not libvterm's, so `tests/middleman.py` is shared and only the judging
   # differs. `tests/drive_with_alacritty.py` says which tests can run and
   # why the rest cannot.
-  alacritty = runInSandbox {
-    name = "pymux-alacritty";
-    env = { inherit alacrittyInclude alacrittyTrace alacrittyWire; };
-  } ''
-    export PYMUX_ALACRITTY=${alacrittySuite}/share/alacritty-ref
-    export PYMUX_ALACRITTY_JUDGE=${judges.rust}/bin/alacritty-ref
-    export PYMUX_ALACRITTY_INCLUDE="$alacrittyInclude"
-    export PYMUX_ALACRITTY_TRACE="$alacrittyTrace"
-    export PYMUX_ALACRITTY_WIRE="$alacrittyWire"
-    export PYMUX_ALACRITTY_TMP="$TMPDIR"
-    export PYMUX_ALACRITTY_OUT="$out"
-    python tests/drive_with_alacritty.py
-  '';
+  alacritty =
+    runInSandbox
+      {
+        name = "pymux-alacritty";
+        env = { inherit alacrittyInclude alacrittyTrace alacrittyWire; };
+      }
+      ''
+        export PYMUX_ALACRITTY=${alacrittySuite}/share/alacritty-ref
+        export PYMUX_ALACRITTY_JUDGE=${judges.rust}/bin/alacritty-ref
+        export PYMUX_ALACRITTY_INCLUDE="$alacrittyInclude"
+        export PYMUX_ALACRITTY_TRACE="$alacrittyTrace"
+        export PYMUX_ALACRITTY_WIRE="$alacrittyWire"
+        export PYMUX_ALACRITTY_TMP="$TMPDIR"
+        export PYMUX_ALACRITTY_OUT="$out"
+        python tests/drive_with_alacritty.py
+      '';
 }

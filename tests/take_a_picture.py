@@ -585,12 +585,17 @@ class Seat:
         """
         raise NotImplementedError
 
-    def picture_of(self, terminal, command, work, path, log_path, frames=1):
+    def picture_of(
+        self, terminal, command, work, path, log_path, frames=1, not_before=0.0
+    ):
         """
         Run one command in one terminal and leave its picture at `path`.
 
         `frames` above one takes a burst instead of waiting for the
         screen to settle, and gives back the list of pictures.
+
+        `not_before` holds the settle off, for a run whose keys have
+        not been pressed yet. `_settle` says why.
         """
         what = "%s of %s" % (self.subject, terminal.name)
         if frames > 1:
@@ -607,7 +612,7 @@ class Seat:
             work,
             log_path,
             lambda take_one, ended: _settle(
-                work, path, take_one, ended, what, log_path
+                work, path, take_one, ended, what, log_path, not_before
             ),
         )
 
@@ -617,16 +622,23 @@ class Seat:
     subject = "the picture"
 
 
-def _settle(work, path, take_one, ended, what, log_path):
+def _settle(work, path, take_one, ended, what, log_path, not_before=0.0):
     """
     Take pictures until two in a row are the same, and keep the last.
 
     A fixed wait would be a race on a slow machine and a delay on a
     fast one. `ended` gives back the exit code when whatever draws has
     gone, and `None` while it is still there.
+
+    `not_before` is for a run whose keys have not been pressed yet. A
+    screen that is waiting for a key is perfectly still, so two
+    pictures of it are the same and this would keep the screen from
+    before the keys and call it settled. Nothing that only writes bytes
+    needs it. Lillecarl/pymux#161.
     """
     previous = work / "settle.png"
-    deadline = time.time() + SETTLE_TIMEOUT
+    started = time.time()
+    deadline = started + SETTLE_TIMEOUT + not_before
     take_one(previous)
     while time.time() < deadline:
         time.sleep(0.4)
@@ -637,7 +649,7 @@ def _settle(work, path, take_one, ended, what, log_path):
                 % (what, gone, _tail(log_path))
             )
         take_one(path)
-        if differences(previous, path) == 0:
+        if differences(previous, path) == 0 and time.time() - started >= not_before:
             return
         shutil.copy(path, previous)
     raise RuntimeError("%s never settled\n%s" % (what, _tail(log_path)))

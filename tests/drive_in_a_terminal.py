@@ -70,6 +70,33 @@ def set_the_size(fd, rows, columns):
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
 
 
+def stop_the_echo(fd):
+    """
+    Take the echo off this pty.
+
+    A program that draws a screen turns the echo off itself, and this
+    is about the moment before it does. The terminal answers the
+    queries that program sends, those answers arrive here as input, and
+    a pty that echoes puts them on the screen as text. `\x1b[?62;4;22c`
+    written across the top row is what that looks like, and it is still
+    there when the picture is taken.
+
+    `take_a_picture.py` writes `stty -echo` into every program it runs
+    for the same reason. The pty belongs to this side, so it belongs
+    here and not in each script.
+    """
+    try:
+        attributes = termios.tcgetattr(fd)
+    except termios.error:
+        return
+
+    attributes[3] &= ~(termios.ECHO | termios.ECHONL)
+    try:
+        termios.tcsetattr(fd, termios.TCSANOW, attributes)
+    except termios.error:
+        pass
+
+
 def read_the_keys(path):
     """
     The steps of a keys file, as (seconds to wait, bytes) pairs.
@@ -118,6 +145,7 @@ def relay(argv, steps, hold):
             os._exit(126)
 
     set_the_size(master, rows, columns)
+    stop_the_echo(master)
 
     started = time.monotonic()
     when = started
