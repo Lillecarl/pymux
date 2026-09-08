@@ -708,6 +708,37 @@ def select_layout(pymux: "Pymux", variables: _VariablesDict) -> None:
         pymux.arrangement.get_active_window().select_layout(layout_type_obj)
 
 
+@cmd("switch-column-width", options="[-p]")
+def switch_column_width(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Give this column of the strip the next preset width.
+
+    -p: the previous one instead.
+
+    The presets are a third, a half and two thirds of the window, which
+    are niri's own. This is the strip's answer to `resize-pane`: a
+    person picks between a few widths that fit together rather than
+    nudging a border. Lillecarl/pymux#198.
+
+    No key is bound to it. tmux has no equivalent command, so there is
+    nothing to keep for muscle memory and nothing to collide with, and
+    which key it should be is a choice rather than a default.
+    """
+    window = pymux.arrangement.get_active_window()
+
+    if not window.strip:
+        raise CommandException(
+            "This window is not a strip. `set-window-option strip on` first."
+        )
+
+    pane = window.active_pane
+    if pane is None:
+        raise CommandException("There is no pane here.")
+
+    window.switch_column_width(pane, back=variables["-p"])
+    pymux.invalidate(Woke.A_COLUMN_CHANGED_WIDTH)
+
+
 @cmd("rename-window", options="<name>")
 def rename_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     """

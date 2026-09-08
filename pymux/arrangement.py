@@ -239,6 +239,35 @@ class Window:
         "How wide one column of the strip is, as a fraction of the window."
         return self.column_widths.get(column, DEFAULT_COLUMN_WIDTH)
 
+    def switch_column_width(self, pane: Pane, back: bool = False) -> None:
+        """
+        Give the column that holds this pane the next preset width.
+
+        The presets are niri's, and so is cycling rather than resizing
+        by a step: a person picks between a few widths that fit
+        together, instead of nudging a border until it looks right. The
+        step is what a divided layout offers and `resize-pane` still
+        does. Lillecarl/pymux#198.
+
+        A width nobody chose is the default, and the cycle starts from
+        wherever that sits in the list.
+        """
+        column = self._column_of(pane)
+        widths = PRESET_COLUMN_WIDTHS
+        now = self.column_width(column)
+
+        try:
+            where = widths.index(now)
+        except ValueError:
+            # A width that is not one of the presets, which `fixed`
+            # would give. Step onto the list rather than staying off
+            # it, from the end a person asked for.
+            where = len(widths) - 1 if back else -1
+
+        self.column_widths[column] = widths[
+            (where - 1 if back else where + 1) % len(widths)
+        ]
+
     def invalidation_hash(self) -> str:
         """
         Return a hash (string) that can be used to determine when the layout

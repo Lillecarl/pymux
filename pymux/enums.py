@@ -52,3 +52,4 @@ class Woke(StrEnum):
     A_CLICK_CHOSE_A_WINDOW = "a click chose a window"
     A_CLICK_LEFT_THE_CLOCK = "a click left the clock"
     A_THEME_WAS_CHOSEN = "a theme was chosen"
+    A_COLUMN_CHANGED_WIDTH = "a column of the strip took another width"
