@@ -39,8 +39,13 @@ import sys
 import time
 from pathlib import Path
 
+# `tests/`, for the harness beside this file, and the directory above
+# it, for `pymux` itself. Running a script puts the script's own
+# directory on the path and not the one it was started from.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from pymux.style import THEMES  # noqa: E402
 from take_a_picture import (  # noqa: E402
     HOLD,
     SEATS,
@@ -135,7 +140,41 @@ FIXTURES = {
             (0.4, b"%"),
         ),
     ),
+    # The pane numbers, which `display-panes` puts up for a moment.
+    "pane-numbers": (
+        CHROME,
+        keys(
+            (FIRST_KEY, PREFIX),
+            (0.4, b"%"),
+            (0.6, PREFIX),
+            (0.4, b"q"),
+        ),
+    ),
+    # The clock, which a pane draws over itself.
+    "clock": (
+        CHROME,
+        keys((FIRST_KEY, PREFIX), (0.4, b"t")),
+    ),
 }
+
+
+#: One picture for each theme, so a theme that is added later gets one
+#: without anybody remembering to add it. `pymux/pymux/style.py` holds
+#: them. Lillecarl/pymux#194, Lillecarl/pymux#195.
+#:
+#: The keys open a second pane and stop there. One picture then holds
+#: the status line, the focused title bar, the unfocused one and the
+#: focused pane's border, which is most of what a theme colours.
+#:
+#: **The command line is not opened, on purpose.** It takes the focus,
+#: so every pane draws as unfocused, and it covers the status line. A
+#: picture with it open showed two themes as the same grey, because
+#: nothing a theme colours differently was on the screen.
+for _name in THEMES:
+    FIXTURES["theme-%s" % _name] = (
+        CHROME + "set-option theme %s\n" % _name,
+        keys((FIRST_KEY, PREFIX), (0.4, b"%")),
+    )
 
 
 def every_fixture():
