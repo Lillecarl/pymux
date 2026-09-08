@@ -10,6 +10,8 @@ from pymux.colors import (
     depth_from_environment,
     reports_truecolor,
 )
+from pyte import escape
+from pyte.sequences import Csi, csi
 
 
 def detection(term="", colorterm="", forced=None):
@@ -63,7 +65,7 @@ def test_a_reply_that_keeps_the_colour_means_truecolor(reply):
         # It kept a colour, but not the one that was asked for.
         "\x1bP1$r38;2;4;5;6m\x1b\\",
         # Not a DECRQSS reply at all.
-        "\x1b[?62;1;6c",
+        csi(escape.DA, 62, 1, 6, private='?'),
         "\x1b_Gi=31;OK\x1b\\",
         "",
         # A reply that never ends.
@@ -85,7 +87,7 @@ def test_the_probe_reply_raises_the_depth():
 
 def test_an_unrelated_reply_changes_nothing():
     detect = detection(term="xterm-256color")
-    detect.handle_reply("\x1b[6;20;10t")
+    detect.handle_reply(csi(Csi.XTWINOPS, 6, 20, 10))
     detect.handle_reply("\x1b_Gi=31;OK\x1b\\")
     assert not detect.truecolor
     assert detect.depth == ColorDepth.DEPTH_8_BIT

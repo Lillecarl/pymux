@@ -14,6 +14,9 @@ import pytest
 
 from pymux.commands.commands import call_command_handler
 from pymux.main import Pymux
+from pyte import escape
+from pyte.modes import PrivateMode
+from pyte.sequences import Csi, csi, set_mode
 
 COLUMNS = 20
 LINES = 5
@@ -75,7 +78,7 @@ def test_a_reset_puts_the_cursor_home(pymux):
 
 def test_a_reset_takes_back_a_mode_a_program_set(pymux):
     "DECSCNM turns the whole pane over, and a person cannot type it off."
-    pane = a_pane(pymux, "\x1b[?5h")
+    pane = a_pane(pymux, set_mode(PrivateMode.REVERSE_VIDEO))
     assert pane.screen.has_reverse_video
 
     send(pymux, "-R")
@@ -85,7 +88,7 @@ def test_a_reset_takes_back_a_mode_a_program_set(pymux):
 
 def test_a_reset_leaves_the_alternate_screen(pymux):
     "A program that died inside vim leaves the pane on the other screen."
-    pane = a_pane(pymux, "\x1b[?1049h")
+    pane = a_pane(pymux, set_mode(PrivateMode.ALTERNATE_SCREEN_WITH_CURSOR))
     assert pane.screen.in_alternate_screen
 
     send(pymux, "-R")
@@ -114,23 +117,23 @@ def test_the_keys_reach_the_program(pymux):
 #: modes the pane turned on. So the two roads to a pane have to end in
 #: the same bytes, and for 52 keys they did not. Lillecarl/pymux#119.
 THE_KEYS = [
-    ("Up", "\x1b[A"),
-    ("Down", "\x1b[B"),
-    ("Left", "\x1b[D"),
-    ("Right", "\x1b[C"),
+    ("Up", csi(escape.CUU)),
+    ("Down", csi(escape.CUD)),
+    ("Left", csi(escape.CUB)),
+    ("Right", csi(escape.CUF)),
     ("Home", "\x1b[1~"),
     ("End", "\x1b[4~"),
     ("BSpace", "\x08"),
-    ("BTab", "\x1b[Z"),
+    ("BTab", csi(Csi.CBT)),
     ("DC", "\x1b[3~"),
     ("IC", "\x1b[2~"),
     ("PageUp", "\x1b[5~"),
     ("PageDown", "\x1b[6~"),
     ("F1", "\x1bOP"),
     ("F2", "\x1bOQ"),
-    ("C-Up", "\x1b[1;5A"),
-    ("C-Left", "\x1b[1;5D"),
-    ("S-Up", "\x1b[1;2A"),
+    ("C-Up", csi(escape.CUU, 1, 5)),
+    ("C-Left", csi(escape.CUB, 1, 5)),
+    ("S-Up", csi(escape.CUU, 1, 2)),
     ("Tab", "\t"),
     ("Escape", "\x1b"),
     ("C-c", "\x03"),
@@ -210,7 +213,7 @@ def test_an_arrow_is_the_application_form_for_a_pane_that_asked(pymux):
     above. `send-keys Up` used to send the application form to both,
     because the table held it as the plain answer.
     """
-    a_pane(pymux, "\x1b[?1h")
+    a_pane(pymux, set_mode(PrivateMode.APPLICATION_CURSOR_KEYS))
     assert send(pymux, "Up")[0] == "\x1bOA"
 
 

@@ -16,6 +16,8 @@ from pyte.screen import Screen
 from pyte.streams import Stream
 
 from pymux.graphics import ClientGraphics, PaneView
+from pyte import escape
+from pyte.sequences import csi
 
 
 def make_client():
@@ -59,7 +61,7 @@ def cells(image_id, row, columns):
     text = "\x1b[38;2;%i;%i;%im" % (red, green, blue)
     for column in range(columns):
         text += PLACEHOLDER + mark(row) + mark(column)
-    return text + "\x1b[0m"
+    return text + csi(escape.SGR, 0)
 
 
 def view(screen, **kw):

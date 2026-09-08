@@ -12,6 +12,8 @@ from pymux.blocks import LOWER_HALF, UPPER_HALF
 from pymux.graphics import ClientGraphics
 
 from test_graphics_output import IMAGE_DATA, make_state, placement, view
+from pyte import escape
+from pyte.sequences import Csi, csi
 
 
 def make_client(kitty=False, sixel=False, repaint=None):
@@ -43,14 +45,14 @@ def test_the_graphics_query_reply_turns_on_kitty():
 
 def test_device_attributes_with_four_turn_on_sixel():
     client, _written = make_client()
-    client.handle_reply("\x1b[?62;1;4;6c")
+    client.handle_reply(csi(escape.DA, 62, 1, 4, 6, private='?'))
     assert client.sixel_supported
     assert client.supported
 
 
 def test_device_attributes_without_four_leave_sixel_off():
     client, _written = make_client()
-    client.handle_reply("\x1b[?62;1;6c")
+    client.handle_reply(csi(escape.DA, 62, 1, 6, private='?'))
     assert not client.sixel_supported
     # It still draws: half blocks need nothing but colour.
     assert client.supported
@@ -59,28 +61,28 @@ def test_device_attributes_without_four_leave_sixel_off():
 
 def test_a_forty_in_the_attributes_is_not_a_four():
     client, _written = make_client()
-    client.handle_reply("\x1b[?62;40;46c")
+    client.handle_reply(csi(escape.DA, 62, 40, 46, private='?'))
     assert not client.sixel_supported
 
 
 def test_the_cell_size_report_is_read():
     client, _written = make_client()
     assert (client.cell_width, client.cell_height) == (10, 20)
-    client.handle_reply("\x1b[6;17;8t")  # Height first, then width.
+    client.handle_reply(csi(Csi.XTWINOPS, 6, 17, 8))  # Height first, then width.
     assert (client.cell_width, client.cell_height) == (8, 17)
 
 
 def test_an_impossible_cell_size_is_ignored():
     client, _written = make_client()
-    client.handle_reply("\x1b[6;0;0t")
-    client.handle_reply("\x1b[6;9999;9999t")
+    client.handle_reply(csi(Csi.XTWINOPS, 6, 0, 0))
+    client.handle_reply(csi(Csi.XTWINOPS, 6, 9999, 9999))
     assert (client.cell_width, client.cell_height) == (10, 20)
 
 
 def test_a_terminal_that_answers_nothing_draws_half_blocks():
     "It used to draw nothing at all. Every client shows something now."
     client, written = make_client()
-    client.handle_reply("\x1b[?62;1;6c")
+    client.handle_reply(csi(escape.DA, 62, 1, 6, private='?'))
     client.render([view(make_state(placement()))])
     joined = "".join(written)
     assert UPPER_HALF in joined or LOWER_HALF in joined
@@ -130,7 +132,7 @@ def test_the_sixel_batch_saves_and_restores_the_cursor():
 def test_the_half_blocks_land_on_the_cells_of_the_placement():
     "One cursor move for each row, at the left edge of the placement."
     client, written = make_client()
-    client.handle_reply("\x1b[?62;1;6c")
+    client.handle_reply(csi(escape.DA, 62, 1, 6, private='?'))
     client.render(
         [view(make_state(placement(columns=3, rows=2)), x=4, y=2)]
     )
@@ -141,7 +143,7 @@ def test_the_half_blocks_land_on_the_cells_of_the_placement():
 
 def test_the_half_blocks_save_and_restore_the_cursor():
     client, written = make_client()
-    client.handle_reply("\x1b[?62;1;6c")
+    client.handle_reply(csi(escape.DA, 62, 1, 6, private='?'))
     client.render([view(make_state(placement()))])
     assert written[-1].startswith("\x1b7")
     assert written[-1].endswith("\x1b8")
@@ -149,7 +151,7 @@ def test_the_half_blocks_save_and_restore_the_cursor():
 
 def test_a_second_frame_that_did_not_change_writes_nothing():
     client, written = make_client()
-    client.handle_reply("\x1b[?62;1;6c")
+    client.handle_reply(csi(escape.DA, 62, 1, 6, private='?'))
     views = [view(make_state(placement()))]
     client.render(views)
     assert written

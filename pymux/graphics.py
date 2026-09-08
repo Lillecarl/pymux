@@ -41,6 +41,7 @@ from pyte.terminfo import DeviceExtension
 from .blocks import average_rgba, blocks_for, rows_for_cells
 from .log import logger
 from .sixel import encode_sixel, scale_rgba, to_rgba
+from pyte.sequences import Csi, csi
 
 __all__ = [
     "CELL_SIZE_QUERY",
@@ -67,7 +68,7 @@ QUERY_SEQUENCE = "\x1b_Gi=%i,s=1,v=1,a=q,t=d,f=%i;AAAA\x1b\\" % (
 # is xterm's window operation for it, which `pyte.parameters.WindowOp`
 # calls REPORT_CELL_SIZE_PIXELS. Sixel needs it: the pixels of a sixel
 # image are the cells, so the image has to match the cell size.
-CELL_SIZE_QUERY = "\x1b[16t"
+CELL_SIZE_QUERY = csi(Csi.XTWINOPS, 16)
 
 # The cell size to assume when the terminal does not report one. It
 # matches the size that `pyte.images` assumes, so an image then
