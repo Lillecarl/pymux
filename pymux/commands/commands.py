@@ -987,8 +987,17 @@ def source_file(pymux: "Pymux", variables: _VariablesDict) -> None:
             pymux.sourcing = None
 
 
-@cmd("set-option", options="<option> <value>")
+@cmd("set-option", options="[-g] <option> <value>")
 def set_option(pymux: "Pymux", variables: _VariablesDict, window: bool = False) -> None:
+    """
+    Set an option.
+
+    -g: for a window option, say what every new window starts with.
+        For a session option it changes nothing, because pymux has one
+        session and every session option is already global. `set -g`
+        is the most common line in a tmux configuration, and `pymux -V`
+        says pymux speaks tmux 3.4, so it has to be a line pymux takes.
+    """
     name = variables["<option>"]
     value = variables["<value>"]
 
@@ -1004,7 +1013,11 @@ def set_option(pymux: "Pymux", variables: _VariablesDict, window: bool = False) 
             # It is the only way a configuration file can set a window
             # option, because that file is read before there is a
             # window. Lillecarl/pymux#199.
-            if variables.get("-g"):
+            #
+            # It means nothing for a session option: pymux has one
+            # session, so every session option is already global. That
+            # is why the flag is read here and not by the option.
+            if window and variables.get("-g"):
                 option.set_default(pymux, value)
             else:
                 option.set_value(pymux, value)

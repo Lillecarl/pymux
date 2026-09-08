@@ -131,6 +131,32 @@ def test_a_session_option_has_no_global_form():
         ALL_OPTIONS["status"].set_default(pymux, "off")
 
 
+def test_dash_g_on_a_session_option_just_sets_it():
+    """
+    `set -g` is the most common line in a tmux configuration, and
+    `pymux -V` says pymux speaks tmux 3.4, so it has to be a line pymux
+    takes. It changes nothing about what it means: pymux has one
+    session, so a session option is already global.
+    """
+    pymux = Pymux()
+    assert pymux.enable_status is True
+
+    assert run(pymux, "set-option -g status off") == []
+
+    assert pymux.enable_status is False
+
+
+def test_the_tmux_spelling_of_it_works_too():
+    "`set` and `setw` are what a person writes."
+    pymux = Pymux()
+
+    assert run(pymux, "set -g status off") == []
+    assert run(pymux, "setw -g strip on") == []
+
+    assert pymux.enable_status is False
+    assert pymux.arrangement.window_defaults == {"strip": True}
+
+
 def test_a_value_that_is_not_on_or_off_is_refused_with_dash_g_too():
     pymux = Pymux()
 

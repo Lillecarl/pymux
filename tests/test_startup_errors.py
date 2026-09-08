@@ -8,8 +8,11 @@ while a `run-command` packet is being handled. So both answers were
 dropped and the file looked as though it had run.
 
 That cost an hour once: `set -g status off` is the tmux spelling, pymux
-takes `set-option <option> <value>` with no flags, and the line never
+took `set-option <option> <value>` with no flags, and the line never
 ran. Lillecarl/pymux#38.
+
+pymux takes `-g` now, so that line works and is no longer the example
+of one that fails. `test_window_defaults.py` says what it does.
 """
 
 from pymux.commands.commands import call_command_handler
@@ -34,19 +37,22 @@ def test_a_file_that_is_right_keeps_nothing(tmp_path):
     assert errors == []
 
 
-def test_the_tmux_spelling_of_a_global_option_is_reported(tmp_path):
-    """
-    The line that started this.
+def test_the_tmux_spelling_of_a_global_option_runs(tmp_path):
+    "The line that started this. It works now, so it reports nothing."
+    pymux, errors = source(tmp_path, "set -g status off\n")
+    assert errors == []
+    assert pymux.enable_status is False
 
-    pymux takes `set-option <option> <value>` and has no `-g`, because
-    there is one session per server. So the line carries three words for
-    two slots and docopt rejects it with the usage string. That message
-    says nothing about which word was wrong, which is the argument of
+
+def test_a_line_with_a_word_too_many_is_reported(tmp_path):
+    """
+    docopt rejects it with the usage string. That message says nothing
+    about which word was wrong, which is the argument of
     Lillecarl/pymux#48. What matters here is that it is said at all.
     """
-    _pymux, errors = source(tmp_path, "set -g status off\n")
+    _pymux, errors = source(tmp_path, "set status off please\n")
     assert len(errors) == 1
-    assert "set-option <option> <value>" in errors[0]
+    assert "set-option" in errors[0]
 
 
 def test_a_command_that_does_not_exist_is_reported(tmp_path):
@@ -62,7 +68,7 @@ def test_a_bad_value_is_reported(tmp_path):
 
 def test_every_failing_line_is_reported(tmp_path):
     _pymux, errors = source(
-        tmp_path, "set -g status off\nnot-a-command\nset status off\n"
+        tmp_path, "set status maybe\nnot-a-command\nset status off\n"
     )
     assert len(errors) == 2
 
@@ -73,12 +79,12 @@ def test_every_failing_line_is_reported(tmp_path):
 
 def test_the_message_names_the_file_and_the_line(tmp_path):
     "Without it a person reads the complaint and hunts for the line."
-    _pymux, errors = source(tmp_path, "set status off\nset -g status off\n")
+    _pymux, errors = source(tmp_path, "set status off\nset status maybe\n")
     assert errors[0].startswith("%s line 2: " % (tmp_path / "pymux.conf"))
 
 
 def test_a_comment_and_a_blank_line_do_not_shift_the_count(tmp_path):
-    _pymux, errors = source(tmp_path, "# a comment\n\nset -g status off\n")
+    _pymux, errors = source(tmp_path, "# a comment\n\nset status maybe\n")
     assert "line 3: " in errors[0]
 
 
@@ -92,7 +98,7 @@ def test_the_first_client_is_told(tmp_path):
     class AClientState:
         message = None
 
-    pymux, errors = source(tmp_path, "set -g status off\n")
+    pymux, errors = source(tmp_path, "set status maybe\n")
     errors_before = list(errors)
     assert errors_before
 
@@ -107,7 +113,7 @@ def test_the_second_client_is_not_told(tmp_path):
     class AClientState:
         message = None
 
-    pymux, _errors = source(tmp_path, "set -g status off\n")
+    pymux, _errors = source(tmp_path, "set status maybe\n")
     first, second = AClientState(), AClientState()
     pymux.report_startup_errors(first)
     pymux.report_startup_errors(second)
@@ -130,7 +136,7 @@ def test_a_client_with_nothing_to_report_gets_no_message(tmp_path):
 
 
 def test_the_place_is_cleared_after_the_file(tmp_path):
-    pymux, _errors = source(tmp_path, "set -g status off\n")
+    pymux, _errors = source(tmp_path, "set status maybe\n")
     assert pymux.sourcing is None
 
 
