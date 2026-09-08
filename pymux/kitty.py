@@ -32,7 +32,13 @@ from prompt_toolkit.input.vt100_parser import (
     Vt100Parser,
     _IsPrefixOfLongerMatchCache,
 )
+from prompt_toolkit.key_binding.key_processor import _Flush
 from prompt_toolkit.keys import Keys
+
+#: The bytes that introduce a control sequence. A key that arrives in
+#: one is a key the outer terminal spelled out, and not a byte that
+#: something else could still continue.
+CSI = "\x1b["
 
 __all__ = ["KittyVt100Parser", "parse_kitty_key"]
 
@@ -446,6 +452,9 @@ class KittyVt100Parser(Vt100Parser):
 
     def __init__(self, feed_key_callback, reply_callback=None) -> None:
         self.reply_callback = reply_callback
+        # Whether the key being handled arrived as several: alt and a
+        # key is one such. See `_call_handler`.
+        self._one_key_of_several = False
         super().__init__(feed_key_callback)
 
     def _get_match(self, prefix: str) -> Keys | tuple | object | None:
@@ -459,6 +468,16 @@ class KittyVt100Parser(Vt100Parser):
     def _call_handler(
         self, key: str | Keys | tuple, insert_text: str
     ) -> None:
+        if isinstance(key, tuple):
+            # A key that arrives as several, such as alt and a letter.
+            # The escape in one of those is not the Escape key, so it
+            # must not end the buffer. See below.
+            self._one_key_of_several = True
+            try:
+                super()._call_handler(key, insert_text)
+            finally:
+                self._one_key_of_several = False
+            return
         if key is _DROP:
             return
         if key in (
@@ -481,3 +500,25 @@ class KittyVt100Parser(Vt100Parser):
             super()._call_handler(Keys.KeyRelease, insert_text)
             return
         super()._call_handler(key, insert_text)
+        if (
+            key is Keys.Escape
+            and not self._one_key_of_several
+            and insert_text.startswith(CSI)
+        ):
+            # The outer terminal spelled this Escape out as "CSI 27 u",
+            # so it is the Escape key and not the first byte of a
+            # sequence. Say so, by ending the key buffer here.
+            #
+            # Without it a person waits. A binding may start with
+            # escape -- "M-Up" and "M-1" are two that pymux gives a
+            # person -- so the key processor holds a bare Escape for
+            # `timeoutlen`, which is one second, in case a second key
+            # completes one of them. That is why the command line took
+            # two presses of Escape to close: the second press is what
+            # told the processor that no such key was coming.
+            #
+            # A terminal that disambiguates writes alt and a key as one
+            # sequence of its own, so a bare Escape can complete
+            # nothing, and nothing is lost by saying it now.
+            # Lillecarl/pymux#164.
+            self.feed_key_callback(_Flush)

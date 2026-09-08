@@ -5,17 +5,28 @@ Each test feeds a sequence (or a mix of sequences and plain text) into
 the parser and checks the key presses that reach the feed_key callback.
 That is the same path that the server uses for client input.
 """
+from prompt_toolkit.key_binding.key_processor import _Flush
 from prompt_toolkit.keys import Keys
 
 from pymux.kitty import KittyVt100Parser
 
 
-def parse(data: str):
-    "Feed data, return the list of (key, data) tuples."
+def fed(data: str):
+    "Feed data, return everything the parser gave the callback."
     pressed = []
     parser = KittyVt100Parser(lambda key_press: pressed.append(key_press))
     parser.feed_and_flush(data)
-    return [(kp.key, kp.data) for kp in pressed]
+    return pressed
+
+
+def parse(data: str):
+    """
+    Feed data, return the list of (key, data) tuples.
+
+    The end of the key buffer is not a key, so it is not here. The
+    tests below that are about it call `fed`.
+    """
+    return [(kp.key, kp.data) for kp in fed(data) if kp is not _Flush]
 
 
 def test_ctrl_a():
@@ -382,3 +393,39 @@ def test_a_mode_reply_goes_to_reply_callback():
     parser.feed_and_flush("\x1b[?2026;2$y")
     assert pressed == []
     assert replies == ["\x1b[?2026;2$y"]
+
+
+def test_a_spelled_out_escape_ends_the_key_buffer():
+    """
+    A terminal that disambiguates writes the Escape key as "CSI 27 u",
+    and that sequence can complete nothing. So the key ends the buffer
+    and the binding on it runs at once.
+
+    Without it a person waits `timeoutlen`, which is one second: a
+    binding may start with escape, and the key processor holds a bare
+    Escape in case a second key completes one. That is what made the
+    command line take two presses of Escape to close.
+    Lillecarl/pymux#164.
+    """
+    assert fed("\x1b[27u")[-1] is _Flush
+
+
+def test_a_legacy_escape_ends_nothing():
+    "A terminal that did not disambiguate says nothing new."
+    assert _Flush not in fed("\x1b")
+
+
+def test_the_escape_of_an_alt_key_ends_nothing():
+    """
+    alt and a key arrive as two key presses, and the first is an
+    escape. It is not the Escape key, and a flush between the two
+    would run the binding on a bare Escape instead.
+    """
+    assert parse("\x1b[102;3u") == [(Keys.Escape, "\x1b[102;3u"), ("f", "")]
+    assert _Flush not in fed("\x1b[102;3u")
+    assert _Flush not in fed("\x1bf")
+
+
+def test_alt_escape_ends_nothing():
+    "The same holds when the key after alt is Escape itself."
+    assert _Flush not in fed("\x1b[27;3u")

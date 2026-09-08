@@ -27,6 +27,7 @@ from prompt_toolkit.keys import Keys
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
+from pymux.kitty import KittyVt100Parser
 from pymux.main import Pymux
 from pymux.options import ALL_OPTIONS
 
@@ -68,6 +69,11 @@ async def a_session():
         stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS)
     )
     with create_pipe_input() as pipe:
+        # The parser the server puts on a client's input. It is the one
+        # that reads the key encoding of the kitty keyboard protocol,
+        # so a test that feeds bytes has to have it. See
+        # `pymux.server._ClientInput`.
+        pipe.vt100_parser = KittyVt100Parser(pipe._buffer.append)
         state = pymux.add_client(
             output=output,
             input=pipe,
@@ -108,9 +114,30 @@ def press(state, *keys):
         state.app.key_processor.process_keys()
 
 
-def leaves_command_mode(pymux, state, key) -> bool:
+def type_bytes(state, data: str):
+    """
+    Feed the bytes a keyboard sends, and let the application act.
+
+    **Nothing flushes here.** So the binding runs only if the parser
+    and the key processor decided on the key by themselves, which is
+    what a person sees as "it closed" against "it closed a second
+    later". `press` above is the other case: it flushes, which is the
+    timeout arriving.
+    """
+    with set_app(state.app):
+        state.app.input.send_text(data)
+        keys = state.app.input.read_keys()
+        state.app.key_processor.feed_multiple(keys)
+        state.app.key_processor.process_keys()
+
+
+def leaves_command_mode(pymux, state, key, typing=None) -> bool:
     """
     Press a key, and say whether it left command mode.
+
+    With `typing`, the bytes of that key go in instead and no flush
+    follows, so the answer is whether the key left command mode on the
+    press.
 
     It watches `leave_command_mode` rather than the focus. An
     application that never ran has nothing to focus back to, so the
@@ -126,7 +153,10 @@ def leaves_command_mode(pymux, state, key) -> bool:
 
     pymux.leave_command_mode = watched
     try:
-        press(state, key)
+        if typing is None:
+            press(state, key)
+        else:
+            type_bytes(state, typing)
     finally:
         pymux.leave_command_mode = real
     return bool(left)
@@ -172,6 +202,50 @@ async def test_escape_does_nothing_outside_command_mode():
     "The pane has the keyboard, so Escape belongs to the program in it."
     async with a_session() as (pymux, state):
         assert not leaves_command_mode(pymux, state, Keys.Escape)
+
+
+@in_a_loop
+async def test_a_spelled_out_escape_leaves_on_the_press():
+    """
+    The command line took two presses of Escape to close, and the
+    second press was only a way of saying "no other key is coming".
+
+    A terminal that disambiguates says it in the key itself: it writes
+    the Escape key as "CSI 27 u", and no other key can follow that.
+    Nothing flushes in this test, so the binding runs on the press or
+    it does not run at all. Lillecarl/pymux#164.
+    """
+    async with a_session() as (pymux, state):
+        in_command_mode(state)
+
+        assert leaves_command_mode(pymux, state, None, typing="\x1b[27u")
+
+
+@in_a_loop
+async def test_a_legacy_escape_still_waits():
+    """
+    One byte is the Escape key and the start of every escape sequence,
+    and nothing tells the two apart as they arrive. So a terminal that
+    did not disambiguate still waits for the timeout, and must.
+    """
+    async with a_session() as (pymux, state):
+        in_command_mode(state)
+
+        assert not leaves_command_mode(pymux, state, None, typing="\x1b")
+
+
+@in_a_loop
+async def test_a_spelled_out_alt_key_does_not_leave():
+    """
+    alt and a letter arrive as an escape and then the letter. The
+    escape of one is not the Escape key, so it must not close the box
+    before the letter arrives.
+    """
+    async with a_session() as (pymux, state):
+        in_command_mode(state)
+
+        # alt+f, as a terminal that disambiguates writes it.
+        assert not leaves_command_mode(pymux, state, None, typing="\x1b[102;3u")
 
 
 @in_a_loop
