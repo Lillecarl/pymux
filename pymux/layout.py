@@ -1231,13 +1231,10 @@ def _create_strip(pymux: "Pymux", window) -> Container:
             )
         )
 
-    return ScrollableStrip(
-        # No padding here: every column brought its own border.
-        VSplit(content),
-        # Keep a little of the columns on either side of the focused
-        # one on screen. That peeking is what says the strip goes on.
-        scroll_offsets=ScrollOffsets(left=2, right=2),
-    )
+    # The strip is given the columns themselves, so that it can measure
+    # them rather than read the geometry back off a screen it drew to
+    # one side. Lillecarl/pymux#209.
+    return ScrollableStrip(content)
 
 
 def _create_split(

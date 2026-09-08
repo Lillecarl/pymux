@@ -47,9 +47,15 @@ def a_column(letter, width, height=HEIGHT):
 
 
 def a_strip(widths, **kwargs):
-    "A strip of columns of these widths, and the columns themselves."
+    """
+    A strip of columns of these widths, and the columns themselves.
+
+    The strip is given the columns and not a container holding them,
+    because it measures them: a column is the unit it scrolls to.
+    Lillecarl/pymux#209.
+    """
     columns = [a_column(LETTERS[i], width) for i, width in enumerate(widths)]
-    return ScrollableStrip(VSplit(columns, padding=0), **kwargs), columns
+    return ScrollableStrip(columns, **kwargs), columns
 
 
 def rendered(strip, columns, visible, focus=0, scroll=None):
@@ -159,27 +165,38 @@ def test_a_focus_that_is_already_on_screen_moves_nothing():
     assert rendered(strip, columns, visible=8, scroll=2, focus=1) == "aabbbbcc"
 
 
-def test_an_offset_keeps_the_columns_beside_it_peeking():
+def test_a_column_on_screen_is_not_dragged_into_the_middle():
     """
-    This is what a niri screen looks like: the focused column sits in
-    the middle and the ones on either side are cut off at the edges, so
-    a person can see that there is more of the strip both ways.
+    **There is no peeking any more**, and this is the test that used to
+    ask for it. A sliver of the columns on either side said that
+    something was out there and nothing about what; the title bar names
+    them instead. Lillecarl/pymux#207.
 
-    Without an offset the focused column is already on screen at scroll
-    zero, and nothing moves.
+    It cost more than it gave. The offset was measured against the
+    focused *pane*, which is one cell narrower than its column, so it
+    dragged the view sideways every time the focus landed on a column
+    that was already perfectly visible -- and walking right and back
+    left the strip somewhere it had never been. Lillecarl/pymux#209.
+
+    Columns one and two are both on screen at scroll zero, so focusing
+    either of them shows the same thing.
     """
-    strip, columns = a_strip(
-        [4, 4, 4, 4], scroll_offsets=ScrollOffsets(left=2, right=2)
-    )
+    strip, columns = a_strip([4, 4, 4, 4])
 
-    assert rendered(strip, columns, visible=8, scroll=0, focus=1) == "aabbbbcc"
+    assert rendered(strip, columns, visible=8, scroll=0, focus=0) == "aaaabbbb"
+    assert rendered(strip, columns, visible=8, scroll=0, focus=1) == "aaaabbbb"
 
 
-def test_an_offset_cannot_push_the_strip_past_its_end():
-    "There is nothing to peek at beyond the last column."
-    strip, columns = a_strip([4, 4, 4], scroll_offsets=ScrollOffsets(left=2, right=2))
+def test_the_view_never_goes_past_the_end_of_the_strip():
+    """
+    Whatever the focus asks for. A strip of twelve seen through eight
+    cannot scroll past four.
+    """
+    strip, columns = a_strip([4, 4, 4])
 
     assert rendered(strip, columns, visible=8, scroll=0, focus=2) == "bbbbcccc"
+    # Asked for more than there is, and clamped to the end.
+    assert rendered(strip, columns, visible=8, scroll=99, focus=2) == "bbbbcccc"
 
 
 def test_a_column_wider_than_the_screen_shows_its_left_edge():

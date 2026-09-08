@@ -24,11 +24,9 @@ Six of them were, one at a time, each after something broke -- the
 cells, the zero width escapes, the mouse handlers, where each window
 went, the cursor, the menus. Then pymux's own record of where it drew
 each pane turned out to be a seventh, and moving between panes did
-nothing at all, because that record is kept on the screen too and the
-screen it was kept on was thrown away. A title bar is a float one row
-above its pane, which is outside the copy again. `ScrollablePane` still
-carries a TODO about a window that is only partly visible reporting its
-whole width.
+nothing at all. A title bar is a float one row above its pane, which is
+outside the copy again. `ScrollablePane` still carries a TODO about a
+window that is only partly visible reporting its whole width.
 
 None of that exists here. There is one coordinate space, the real one,
 and nothing to translate. A pane that has scrolled off the left is
@@ -42,26 +40,41 @@ container tree as an argument and not through the screen, so a screen
 that translated cells would still leave every caller recording
 positions in a second coordinate space. One space or the world.
 
-The cost, and it is real: the content is laid out twice. The scroll
-follows the focused pane, and where that pane is can only be known by
-laying the row out. So a measuring pass draws onto a screen that is
-thrown away, purely to read positions off it, and then the row is drawn
-once for real. It happens on a strip window and nowhere else.
+**The strip is given its columns, and measures them.** It used to be
+given one container and read the geometry back off a screen it drew to
+a side: a measuring pass, so that it could find the focused pane's
+write position and scroll to it. Three faults came out of that, and one
+change closes all three. Lillecarl/pymux#209.
 
-The renderer clips what it reads to the size of the output, in both
-directions, so a cell off the screen costs the write and nothing more.
-It does compare a whole row when it looks for what changed, so a column
-that is off the screen and busy marks its rows as changed. The inner
-loop then finds every visible cell equal and emits nothing.
+- It measured the focused **pane**, and the thing to scroll to is the
+  **column**. A column is its panes and the border it owns, so the pane
+  is one cell narrower, and every answer was one cell short. That is
+  the off-by-one a person saw.
+- Reading a render back to decide the next render is the loop
+  `ScrollablePane` was doing, one level up. The strip builds the
+  columns; it can ask them.
+- A column may be a stack of panes, and then the focused pane is one of
+  several. Walking the containers finds the column that holds it, so a
+  stack needs nothing said about it.
+
+**The scroll moves only when it has to**, which is the property that
+was missing. A column already wholly on screen leaves the view alone,
+so walking right and back again is a round trip. The old policy was a
+clamp recomputed from the focused pane every frame, with a peek offset
+on each side, and the offset dragged the view two cells sideways every
+time the focus landed on a column that was already perfectly visible.
+
+There are no peek offsets now. A sliver of the next column said that
+something was out there and nothing about what; the title bar names it
+instead. Lillecarl/pymux#207.
 """
 
 from prompt_toolkit.application import get_app
-from prompt_toolkit.filters import FilterOrBool, to_filter
 from prompt_toolkit.key_binding import KeyBindingsBase
-from prompt_toolkit.layout.containers import Container, ScrollOffsets
+from prompt_toolkit.layout.containers import Container, VSplit, to_container
 from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers
-from prompt_toolkit.layout.screen import Char, Screen, WritePosition
+from prompt_toolkit.layout.screen import Screen, WritePosition
 
 __all__ = ["ScrollableStrip"]
 
@@ -73,36 +86,29 @@ MAX_AVAILABLE_WIDTH = 10_000
 
 class ScrollableStrip(Container):
     """
-    Show a window onto content that may be wider than the write position.
+    Show a window onto a row of columns that may be wider than the
+    write position.
 
-    :param content: The content container. Its preferred width is the
-        width of the strip, and it is laid out at that width rather
-        than at the width of the screen.
-    :param scroll_offsets: How much of the strip to keep beyond the
-        focused pane, so that the next one peeks at the edge. Only
-        `left` and `right` are read.
-    :param keep_focused_window_visible: Scroll so the focused window is
-        on screen, or as much of it as fits.
+    :param columns: One container for each column, in the order they
+        sit in. A column is whatever it holds: one pane, a stack of
+        them, and the border it owns.
     :param max_available_width: The cap above.
     """
 
     def __init__(
         self,
-        content: Container,
-        scroll_offsets: ScrollOffsets | None = None,
-        keep_focused_window_visible: FilterOrBool = True,
+        columns: list,
         max_available_width: int = MAX_AVAILABLE_WIDTH,
     ) -> None:
-        self.content = content
-        self.scroll_offsets = scroll_offsets or ScrollOffsets(left=0, right=0)
-        self.keep_focused_window_visible = to_filter(keep_focused_window_visible)
+        self.columns = [to_container(column) for column in columns]
+        self.content = VSplit(self.columns)
         self.max_available_width = max_available_width
 
         #: The first column of the strip that is on screen.
         self.horizontal_scroll = 0
 
     def __repr__(self) -> str:
-        return "ScrollableStrip(%r)" % (self.content,)
+        return "ScrollableStrip(%r)" % (self.columns,)
 
     def reset(self) -> None:
         self.content.reset()
@@ -123,7 +129,11 @@ class ScrollableStrip(Container):
             self.strip_width(width), max_available_height
         )
 
-    def strip_width(self, visible_width: int) -> int:
+    def width_of(self, column: Container) -> int:
+        "How many cells one column takes, the border it owns included."
+        return column.preferred_width(self.max_available_width).preferred
+
+    def strip_width(self, visible_width: int = 0) -> int:
         """
         How wide the whole strip is: what its columns add up to.
 
@@ -131,7 +141,7 @@ class ScrollableStrip(Container):
         screen stays as it was. That is what niri does with one window
         at half width.
         """
-        wanted = self.content.preferred_width(self.max_available_width).preferred
+        wanted = sum(self.width_of(column) for column in self.columns)
         return max(1, min(wanted, self.max_available_width))
 
     def write_to_screen(
@@ -143,10 +153,10 @@ class ScrollableStrip(Container):
         erase_bg: bool,
         z_index: int | None,
     ) -> None:
-        "Scroll to the focused pane, then draw the row where it belongs."
-        virtual_width = self.strip_width(write_position.width)
+        "Scroll to the focused column, then draw the row where it goes."
+        virtual_width = self.strip_width()
 
-        self._scroll_to_the_focus(write_position, virtual_width, parent_style)
+        self._scroll_to_the_focus(write_position.width, virtual_width)
 
         self.content.write_to_screen(
             screen,
@@ -175,84 +185,61 @@ class ScrollableStrip(Container):
             height=write_position.height,
         )
 
-    def _scroll_to_the_focus(
-        self, write_position: WritePosition, virtual_width: int, parent_style: str
-    ) -> None:
+    # ------------------------------------------------------------------
+    # Where the focus is, and where the view goes because of it.
+
+    def _the_focused_column(self) -> int | None:
         """
-        Move the scroll so that the focused pane is on screen.
+        Which column holds the focus, by its place in the row.
 
-        Where a pane sits is only known once the row has been laid out,
-        and the row cannot be laid out until the scroll is known. So
-        this lays it out on a screen that is thrown away, reads the
-        position off that, and leaves the real drawing to the caller.
-
-        Nothing of this pass is kept. It draws cells nobody reads and
-        hangs its bookkeeping on a screen nobody keeps, which is
-        exactly what makes it safe to do twice.
+        `None` when nothing here has it, and then the view stays where
+        it is. That is the case while a command line or a dialog holds
+        the keyboard.
         """
-        if not self.keep_focused_window_visible():
-            return
-
         focused = get_app().layout.current_window
 
-        measuring = Screen(default_char=Char(char=" ", style=parent_style))
-        self.content.write_to_screen(
-            measuring,
-            MouseHandlers(),
-            WritePosition(
-                xpos=0, ypos=0, width=virtual_width, height=write_position.height
-            ),
-            parent_style,
-            False,
-            None,
-        )
+        for index, column in enumerate(self.columns):
+            if _holds(column, focused):
+                return index
+        return None
 
-        try:
-            where = measuring.visible_windows_to_write_positions[focused]
-        except KeyError:
-            return  # Nothing here has the focus. Leave the scroll alone.
-
-        self._make_window_visible(
-            write_position.width, virtual_width, where.xpos, where.width
-        )
-
-    def _make_window_visible(
-        self, visible_width: int, virtual_width: int, xpos: int, width: int
-    ) -> None:
+    def _where_the_column_is(self, index: int) -> tuple[int, int]:
         """
-        Choose the scroll that shows the window at `xpos`, `width`.
+        One column's edges, counted from the start of the strip.
 
-        The position is the window's place in the row, counted from the
-        start of the row.
-
-        A window wider than the screen cannot be shown whole, so its
-        left edge wins: that is where a prompt is, and where a person
-        reading a pane starts.
+        The columns before it say where it starts, which is exact
+        because every column asks for a width and gets it.
         """
-        min_scroll = 0
-        max_scroll = max(0, virtual_width - visible_width)
+        start = sum(self.width_of(column) for column in self.columns[:index])
+        return start, start + self.width_of(self.columns[index])
 
-        offsets = self.scroll_offsets
+    def _scroll_to_the_focus(self, visible_width: int, virtual_width: int) -> None:
+        """
+        Move the view, if the focused column is not wholly inside it.
 
-        if width <= visible_width:
-            # Room for the next pane to peek, but never so much that
-            # the focused one is pushed off itself.
-            on_the_right = min(xpos + width - visible_width + offsets.right, xpos)
-            on_the_left = max(xpos - offsets.left, 0)
-        else:
-            on_the_right = xpos
-            on_the_left = xpos
+        **A column already on screen leaves the view alone.** That is
+        what makes moving the focus a round trip: walk right and back,
+        and the strip is where it started. The old policy re-derived
+        the scroll from the focused pane on every frame, so it could
+        not say "nothing to do", and a peek offset pulled the view
+        sideways every time.
+        """
+        index = self._the_focused_column()
+        if index is not None:
+            start, end = self._where_the_column_is(index)
 
-        min_scroll = max(min_scroll, on_the_right)
-        max_scroll = min(max_scroll, on_the_left)
+            if start < self.horizontal_scroll:
+                self.horizontal_scroll = start
+            elif end > self.horizontal_scroll + visible_width:
+                # A column wider than the view cannot be shown whole,
+                # and then its left edge wins: that is where a prompt
+                # is, and where a person reading a pane starts.
+                self.horizontal_scroll = max(start, end - visible_width)
 
-        # Asking to peek past the last column crosses these. The end of
-        # the strip wins: there is nothing beyond it to show.
-        if min_scroll > max_scroll:
-            min_scroll = max_scroll
-
+        # Never past the end of the strip, whatever the focus asked
+        # for. A narrowing can leave the view beyond it.
         self.horizontal_scroll = max(
-            min_scroll, min(max_scroll, self.horizontal_scroll)
+            0, min(self.horizontal_scroll, max(0, virtual_width - visible_width))
         )
 
     def is_modal(self) -> bool:
@@ -263,3 +250,10 @@ class ScrollableStrip(Container):
 
     def get_children(self) -> list[Container]:
         return [self.content]
+
+
+def _holds(container: Container, window) -> bool:
+    "Whether this container is that window, or holds it somewhere below."
+    if container is window:
+        return True
+    return any(_holds(child, window) for child in container.get_children())
