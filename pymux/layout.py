@@ -575,6 +575,41 @@ class LayoutManager:
             return {}
         return pane_write_positions(screen)
 
+    @property
+    def the_room_this_client_has(self) -> Size:
+        """
+        How much of this client's own terminal a window may use.
+
+        The status line comes off the bottom, the way it does for the
+        plane. **This is not the plane**: the plane is one size for
+        every client watching a window, and this is one client's
+        screen. They differ as soon as two clients of different sizes
+        watch the same window, and everything a person sees at their
+        own size -- the box the command palette draws in, the overlay,
+        how much of the plane fits -- reads this one.
+        """
+        size = self.client_state.app.output.get_size()
+        rows = size.rows - (1 if self.pymux.show_status else 0)
+        return Size(rows=max(1, rows), columns=size.columns)
+
+    def the_room_for_the_body(self) -> Size:
+        """
+        How big the part of the screen that holds the windows is.
+
+        The smaller of the plane and this client, on each axis. A
+        client bigger than the plane draws background around it, which
+        is what every client but the smallest one does today. A client
+        smaller than the plane shows part of it and its view scrolls,
+        which is what `window-size largest` is for.
+        """
+        plane = self.pymux.the_size_of_the_plane()
+        mine = self.the_room_this_client_has
+
+        return Size(
+            rows=min(plane.rows, mine.rows),
+            columns=min(plane.columns, mine.columns),
+        )
+
     def the_pane_container(self) -> "PlanContainer | None":
         """
         The container that drew the panes of the window this client
@@ -843,12 +878,12 @@ class LayoutManager:
         """
         How many rows of completions fit under the box.
 
-        `get_window_size` answers the rows a pane may use, which is the
-        screen without the status line. The box starts `BOX_TOP`
-        rows down and holds a title and the input, so what is left is
-        what the completions may take.
+        The box is drawn on this client's own screen, so it is this
+        client's rows that bound it and not the plane's. The box
+        starts `BOX_TOP` rows down and holds a title and the input, so
+        what is left is what the completions may take.
         """
-        rows = self.pymux.get_window_size().rows
+        rows = self.the_room_this_client_has.rows
         return max(1, rows - BOX_TOP - PALETTE_HEADER)
 
     def _palette_completions(self) -> Container:
@@ -890,8 +925,8 @@ class LayoutManager:
                         Background(),
                         floats=[
                             Float(
-                                width=lambda: self.pymux.get_window_size().columns,
-                                height=lambda: self.pymux.get_window_size().rows,
+                                width=lambda: self.the_room_for_the_body().columns,
+                                height=lambda: self.the_room_for_the_body().rows,
                                 content=self._body,
                             )
                         ],
@@ -1043,11 +1078,11 @@ class LayoutManager:
                     ),
                     width=lambda: overlay_size(
                         self.pymux.overlay_width,
-                        self.pymux.get_window_size().columns,
+                        self.the_room_this_client_has.columns,
                     ),
                     height=lambda: overlay_size(
                         self.pymux.overlay_height,
-                        self.pymux.get_window_size().rows,
+                        self.the_room_this_client_has.rows,
                     ),
                     z_index=Z_INDEX.OVERLAY,
                 ),
@@ -1269,6 +1304,7 @@ def _create_the_panes(pymux: "Pymux", window, view: View) -> Container:
         containers,
         _tell_the_pane_its_size,
         view=view,
+        room=partial(the_room_for_the_panes, pymux, window),
     )
 
 
@@ -1356,14 +1392,18 @@ def the_gaps_of(pymux: "Pymux", window) -> Gaps:
 
 def the_room_for_the_panes(pymux: "Pymux", window) -> Size:
     """
-    How much of the window the panes get.
+    How much of the plane the panes get.
 
     The rows the chrome takes come off first, because a plan holds
     panes and the chrome draws in the gaps between them: one row for
     the bar above the top pane, and one for the bar below the bottom
     one where that is drawn. Lillecarl/pymux#217.
+
+    **This is the size a plan is measured for**, and it is the plane's
+    and not a client's. A client smaller than this sees part of the
+    plan through a view of its own.
     """
-    size = pymux.get_window_size()
+    size = pymux.the_size_of_the_plane(window)
 
     rows = size.rows
     if pymux.show_pane_status:

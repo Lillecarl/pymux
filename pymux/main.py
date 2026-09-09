@@ -693,36 +693,60 @@ class Pymux:
         else:
             return "Pymux"
 
-    def get_window_size(self):
+    def the_size_of_the_plane(self, window=None):
         """
-        Get the size to be used for the DynamicBody.
-        This will be the smallest size of all clients.
+        How big the plane of that window is, in cells.
+
+        **A plane is shared and a view is not.** A pane has one pty, so
+        it has one size however many clients look at it (decision 10 of
+        `docs/layout-engine-plan.md`), and this is that one size. A
+        client bigger than the plane draws background around it, and a
+        client smaller than it moves its view over it.
+
+        The smallest client watching the window decides, which is
+        tmux's `window-size smallest` and what pymux has always done.
+        Slice 5 of Lillecarl/pymux#217 makes it an option.
+
+        The status line comes off the bottom, because it is not part of
+        any window. `layout.the_room_for_the_panes` takes the rows the
+        chrome around the panes wants off what is left.
+
+        **Nobody watching is eighty by twenty**, and no status row
+        comes off it. A window exists before a client attaches to it,
+        and the program in a pane needs a size from the first byte it
+        writes.
+        """
+        sizes = self.the_screens_watching(window)
+
+        if not sizes:
+            return Size(rows=20, columns=80)
+
+        return Size(
+            rows=min(size.rows for size in sizes) - (1 if self.show_status else 0),
+            columns=min(size.columns for size in sizes),
+        )
+
+    def the_screens_watching(self, window=None) -> list[Size]:
+        """
+        The terminal of each client watching that window.
+
+        The active window of the session by default. A client shows one
+        window at a time, and a client on another window says nothing
+        about how big this one should be.
         """
 
         def active_window_for_app(app):
             with set_app(app):
                 return self.arrangement.get_active_window()
 
-        active_window = self.arrangement.get_active_window()
+        if window is None:
+            window = self.arrangement.get_active_window()
 
-        # Get sizes for connections watching the same window.
-        apps = [
-            client_state.app
+        return [
+            client_state.app.output.get_size()
             for client_state in self._client_states.values()
-            if active_window_for_app(client_state.app) == active_window
+            if active_window_for_app(client_state.app) == window
         ]
-        sizes = [app.output.get_size() for app in apps]
-
-        rows = [s.rows for s in sizes]
-        columns = [s.columns for s in sizes]
-
-        if rows and columns:
-            return Size(
-                rows=min(rows) - (1 if self.show_status else 0),
-                columns=min(columns),
-            )
-        else:
-            return Size(rows=20, columns=80)
 
     def _create_pane(
         self,

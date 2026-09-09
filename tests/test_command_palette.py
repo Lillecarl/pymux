@@ -186,10 +186,11 @@ async def test_the_completions_of_the_palette_stop_above_the_status_line():
             rows = manager._palette_rows()
 
         # The box starts five rows down and holds a title and the
-        # input, so what is left of the pane is what the menu may take.
-        with set_app(state.app):
-            pane_rows = pymux.get_window_size().rows
-        assert rows == pane_rows - 5 - 2
+        # input, so what is left of the screen is what the menu may
+        # take. **This client's screen, not the plane**: the box is
+        # drawn on the terminal in front of the person typing in it.
+        screen_rows = state.app.output.get_size().rows - 1  # The status line.
+        assert rows == screen_rows - 5 - 2
 
 
 @in_a_loop

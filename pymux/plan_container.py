@@ -64,6 +64,13 @@ class PlanContainer(Container):
         shape, and a view of its own went back to the origin every
         time. Without one, this makes its own and a person scrolls a
         strip that forgets.
+    :param room: How big the plane is, as a callable. **A plan is
+        measured for the plane and drawn in the view**, and those are
+        two sizes as soon as two clients of different sizes watch one
+        window: a pane has one pty, so it has one size, and a client
+        too small to see all of it scrolls. Without one the write
+        position is the plane, which is what every client had while
+        the plane was the smallest of them.
     """
 
     def __init__(
@@ -72,12 +79,14 @@ class PlanContainer(Container):
         containers: dict,
         tell_its_size=None,
         view: View | None = None,
+        room=None,
     ) -> None:
         self.layout = layout
         self.containers = {
             pane: to_container(container) for pane, container in containers.items()
         }
         self.tell_its_size = tell_its_size
+        self.room = room
 
         #: Where this client looks at the plane, and how much of it it
         #: can see. A frame writes the size before it reads it, so a
@@ -88,11 +97,11 @@ class PlanContainer(Container):
         #: it to read. `None` before the first frame.
         self.plan: Plan | None = None
 
-        #: The size that plan was measured for. A title bar drawn in
-        #: this frame reads the plan rather than working it out again,
-        #: and this is what says the plan is still the answer: a client
-        #: that resized between two frames has a plan of the size it
-        #: was. Lillecarl/pymux#217.
+        #: The size of the plane that plan was measured for. A title
+        #: bar drawn in this frame reads the plan rather than working
+        #: it out again, and this is what says the plan is still the
+        #: answer: a client that resized between two frames has a plan
+        #: of the size it was. Lillecarl/pymux#217.
         self.measured_for: Size | None = None
 
     def __repr__(self) -> str:
@@ -126,12 +135,13 @@ class PlanContainer(Container):
         z_index: int | None,
     ) -> None:
         "Measure the plan, move the view onto the focus, and draw."
-        available = Size(rows=write_position.height, columns=write_position.width)
+        seen = Size(rows=write_position.height, columns=write_position.width)
+        plane = seen if self.room is None else self.room()
 
-        self.plan = self.layout.measure(available)
-        self.measured_for = available
+        self.plan = self.layout.measure(plane)
+        self.measured_for = plane
 
-        self.view.size = available
+        self.view.size = seen
         self.view.offset = self.layout.look_at(
             self.plan, self.view, self.focused_pane()
         )
