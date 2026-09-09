@@ -20,6 +20,7 @@
   pytest,
   hypothesis,
   wcwidth,
+  pyinstrument,
   callPackage,
   xorg-server,
   xterm,
@@ -71,6 +72,11 @@ let
     hypothesis
     pytest
     wcwidth
+    # The profiler. It is in every suite's python rather than in one,
+    # because it is instrumentation: a person reaching for it wants it
+    # where they already are, and it costs nothing until something
+    # imports it.
+    pyinstrument
   ]);
 
   # Knobs that reach the evaluation through the environment. They work
@@ -134,6 +140,18 @@ let
   # Which picture fixtures run. It is a piece of a name, for instance
   # `PYMUX_PICTURES=underlines nix build --file . checks.pymux-pictures`.
   pictureSelection = builtins.getEnv "PYMUX_PICTURES";
+
+  # Which shapes the frame measurement takes, and how far a count may
+  # move from its budget, for instance
+  # `PYMUX_FRAME_INCLUDE=strip nix build --file . checks.pymux-frame-instructions`.
+  frameInclude = builtins.getEnv "PYMUX_FRAME_INCLUDE";
+  frameTolerance = builtins.getEnv "PYMUX_FRAME_TOLERANCE";
+
+  # How big a window the profiler draws, and how many frames of it, for
+  # instance
+  # `PYMUX_PROFILE_PANES=16 nix build --file . checks.pymux-profile.run`.
+  profilePanes = builtins.getEnv "PYMUX_PROFILE_PANES";
+  profileFrames = builtins.getEnv "PYMUX_PROFILE_FRAMES";
 
   # Which item of vttest's main menu gets photographed, and in which
   # terminals, for instance
@@ -239,6 +257,55 @@ in
       }
       ''
         python -m pytest $selection -q -p no:cacheprovider
+      '';
+
+  # What it costs to lay a window out and draw the frame around its
+  # panes, in bytecode instructions.
+  #
+  # Every other check here asks whether pymux draws the right cells. A
+  # change that makes a frame ten times more expensive passes all of
+  # them, and nobody notices until pymux feels wrong under a hand.
+  #
+  # The unit is not a second. A second belongs to the machine that
+  # counted it, and this sandbox runs beside other jobs. An instruction
+  # count is the same on every machine and under any load, so a budget
+  # file can hold it.
+  #
+  # `PYTHONHASHSEED` is pinned because the order of a set decides a
+  # branch, and a branch decides a count.
+  frame =
+    runInSandbox
+      {
+        name = "pymux-frame-instructions";
+        env = { inherit frameInclude frameTolerance; };
+        setup = ''
+          export PYMUX_FRAME_INCLUDE="$frameInclude"
+          export PYMUX_FRAME_TOLERANCE="$frameTolerance"
+          export PYMUX_FRAME_OUT="$out"
+          export PYTHONHASHSEED=0
+        '';
+      }
+      ''
+        python tests/measure_a_frame.py
+      '';
+
+  # Where the time of a frame goes. Not a gate, and it judges nothing:
+  # a sampling profiler reports wall clock, and this sandbox runs
+  # beside other jobs. `tests/profile_a_frame.py` says what it runs and
+  # how to read it. It needs a pty, because it runs real panes.
+  profile =
+    runInSandbox
+      {
+        name = "pymux-profile";
+        env = { inherit profilePanes profileFrames; };
+        setup = ''
+          export PYMUX_PROFILE_PANES="$profilePanes"
+          export PYMUX_PROFILE_FRAMES="$profileFrames"
+          export PYMUX_PROFILE_OUT="$out"
+        '';
+      }
+      ''
+        python tests/profile_a_frame.py
       '';
 
   # The end to end test. It opens a pty, starts a server and attaches a
