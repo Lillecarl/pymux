@@ -1734,7 +1734,20 @@ class Pymux:
         return client_state
 
     def remove_client(self, connection):
+        """
+        Forget a client that has gone, and everything of it.
+
+        **Both lists, not one.** `connections` used to keep every
+        connection the server had ever accepted, so a person who
+        attached and detached each morning left a `ServerConnection`
+        behind each time, with its pipe input and its parser. Nothing
+        drew for them -- `_send_packet` answers a closed connection
+        with nothing -- so the cost was memory and a longer walk for
+        every broadcast. Lillecarl/pymux#226.
+        """
         if connection in self._client_states:
             del self._client_states[connection]
+        if connection in self.connections:
+            self.connections.remove(connection)
         # One client fewer can mean that the rest speak more.
         self.sync_keyboard_source_flags()
