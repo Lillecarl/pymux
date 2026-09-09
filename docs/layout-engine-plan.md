@@ -167,9 +167,25 @@ subclass is held to. For any model and any available size:
   perpendicular band overlaps A's.
 - `neighbour(A, d)` is never A.
 - Walking one direction repeatedly terminates and visits no slot twice.
-- Every slot is reachable from every other by some walk.
 - Numbering is a permutation of the panes, and stable across a
   `measure` that changed nothing.
+
+**Reachability is a tiling's promise, not the plane's.** "Every slot is
+reachable from every other by some walk" was in this list and is false
+for the bare plane: two rectangles set diagonally have no cardinal
+neighbour at all, in either direction, which is decision 7 working as
+agreed. It is true of any layout whose cuts run the whole way across,
+because something on this side of a cut is always across from
+something on that side. So it is held over `Divided` and `Strip` and
+not over `Plane`. `test_a_diagonal_pair_are_not_neighbours` is the
+counterexample, beside the symmetry one.
+
+**A third plausible promise is false as well**: "a slot to the left of
+another comes earlier in reading order". A full width pane between two
+rows breaks it, and the tree does the same thing today, so the
+numbering is right and the promise is wrong.
+`test_reading_order_follows_the_splits_and_not_the_rows` holds the
+shape.
 
 **The symmetry invariant is false and must not be written.** "If B is
 right of A then A is left of B" fails for any layout with variable-size
@@ -288,7 +304,9 @@ Two smaller rules that follow:
 ## The slices, in order
 
 1. **`Rect`, `Slot`, `Plan`, the services, and the property tests.** Pure code,
-   no wiring, testable alone.
+   no wiring, testable alone. **Landed**: `pymux/plane.py` and
+   `tests/test_the_plane.py`, with `every_promise_holds(plan)` for the
+   slices after it to hold their own `measure` to.
 2. **`Strip` emits a plan, and the title bars plus `select-pane -L|-R`
    read it.** The probe. `Strip` already computes every number it needs
    (`width_of`, `_where_the_column_is`), and the title bar is where the
@@ -304,10 +322,43 @@ Two smaller rules that follow:
 Slices 1 to 3 are worth doing whether or not the rest follows, because
 they delete the two-answers problem for one layout.
 
+## Popups, and floating windows
+
+Carl asked, and the answer decides one word in the invariants: "of
+course popups should be allowed on top of other rectangles ... it's
+absolutely breaking if we can't popup overlays where we want them."
+
+**Nothing here can stop one.** Three layers reach the screen, and a
+plan is only the third:
+
+1. Chrome floats: the status bar, the message toolbar, the title bars
+   and the `list-keys` dialog. `Float`s over the whole layout,
+   `Z_INDEX` 5 to 9 (`layout.py:113`).
+2. The overlay pane: `display-popup -E`, a real pane with a pty.
+   `Pymux.overlay_pane` (`main.py:557`) hangs off the session and is
+   **not in the window tree**, so no plan has ever held it.
+3. The tiled panes, which is what a plan holds.
+
+So "no two slots overlap" is a rule about the tiling and not about the
+screen, and it keeps its words.
+
+**A popup is anchored to the screen and a floating window is anchored
+to the plane.** They are two features, not one. A popup is centred on
+the client and never scrolls, which is what it is for, and it stays
+where it is. A floating window is a pane a person parks somewhere and
+leaves there, so it moves with the view and can be dragged. Carl:
+floating window support "everywhere" makes sense, so it belongs to
+**`Plane` and not to `Masonry`**: every subclass gets it.
+
+`Plan` therefore grows a second list when float mode is built --
+ordered back to front, allowed to overlap, and not part of `rects`.
+Slice 1 does not add the field, because an empty list nobody writes is
+dead weight, and the module says where it goes.
+
 ## Out of scope, on purpose
 
-- Overlapping panes as a feature. A floating pane is a different thing,
-  and `display-popup` is already that.
+- Overlapping panes **inside the tiling**. Floats are the section
+  above, and they are a layer, not a relaxed rule.
 - niri's numbered horizontal planes. **pymux already has them:**
   `Arrangement.windows` is a numbered set with one visible at a time,
   which is a niri workspace exactly. A subclass can make switching them
