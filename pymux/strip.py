@@ -49,37 +49,13 @@ something was out there and nothing about what; the title bar names it
 instead. Lillecarl/pymux#207.
 """
 
-from typing import NamedTuple
-
 from prompt_toolkit.data_structures import Point, Size
 
 from . import arrangement
 from .plane import Line, Pane, Plan, Rect, Side, Slot
+from .tiling import BORDER_HORIZONTAL, BORDER_VERTICAL, Gaps, lay_out
 
-__all__ = ["BORDER_WIDTH", "Gaps", "Strip"]
-
-#: The cell a column keeps for the border on its right. It lives here
-#: because a column's width is measured around it.
-BORDER_WIDTH = 1
-
-#: What a layout draws in the gaps it leaves. The focused pane draws
-#: its own heavier border over the top of these, as a float.
-BORDER_VERTICAL = "│"
-BORDER_HORIZONTAL = "─"
-
-
-class Gaps(NamedTuple):
-    """
-    The cells a layout leaves between the things it lays out.
-
-    Both are chrome, so a plan puts a hole there rather than giving
-    the cells to a pane. `layout.py` decides the numbers, because it
-    is what draws in them: two rows between stacked panes when the bar
-    below a pane is drawn, and one when it is not.
-    """
-
-    between_columns: int = BORDER_WIDTH
-    between_panes: int = 1
+__all__ = ["Strip"]
 
 
 class Strip:
@@ -152,7 +128,7 @@ class Strip:
 
         for column in self.window.root:
             width = self.content_width(column, available.columns)
-            _lay_out(
+            lay_out(
                 column,
                 Rect(x=x, y=0, width=width, height=available.rows),
                 self.gaps,
@@ -258,65 +234,3 @@ class Strip:
 
         row = plan.plane.width + self.gaps.between_columns
         return Point(x=max(0, min(x, max(0, row - size.columns))), y=0)
-
-
-def _lay_out(item, rect: Rect, gaps: Gaps, into: list) -> None:
-    """
-    Put every pane of this item on the plane, inside that rectangle.
-
-    A pane is one slot. A split divides its rectangle between its
-    children, leaving a gap between each pair for the chrome that goes
-    there. It is the same walk `layout._create_split` does, and it will
-    serve `Divided` as it stands.
-    """
-    if isinstance(item, arrangement.Pane):
-        into.append((Slot(item), rect))
-        return
-
-    sideways = isinstance(item, arrangement.VSplit)
-    gap = gaps.between_columns if sideways else gaps.between_panes
-    room = (rect.width if sideways else rect.height) - gap * (len(item) - 1)
-    shares = _shares(room, [item.weights[child] for child in item])
-
-    at = rect.x if sideways else rect.y
-    for child, share in zip(item, shares):
-        if sideways:
-            _lay_out(child, Rect(at, rect.y, share, rect.height), gaps, into)
-        else:
-            _lay_out(child, Rect(rect.x, at, rect.width, share), gaps, into)
-        at += share + gap
-
-
-def _shares(total: int, weights: list[int]) -> list[int]:
-    """
-    How many cells each child of a split takes.
-
-    A weight is a share of the whole, and after one frame it is the
-    size that frame drew: `_create_split` writes the real width and
-    height back into the weights, so that `resize-pane +1` means one
-    row. So at rest this hands each child the size it already has and
-    nothing moves.
-
-    The cells that do not divide evenly go to the children the
-    division shortchanged most, and a tie goes to the one nearer the
-    start.
-
-    **Every child gets at least one cell**, because a rectangle with no
-    cells is a rectangle nothing can be drawn in. A stack too tall for
-    the room therefore runs past it, which the plane allows: it is
-    unbounded, and a view is what is bounded.
-    """
-    count = len(weights)
-    total = max(total, count)
-    whole = sum(weights) or count
-
-    exact = [total * weight / whole for weight in weights]
-    shares = [max(1, int(share)) for share in exact]
-
-    spare = total - sum(shares)
-    if spare > 0:
-        wanting = sorted(range(count), key=lambda i: (int(exact[i]) - exact[i], i))
-        for i in wanting[:spare]:
-            shares[i] += 1
-
-    return shares

@@ -20,13 +20,8 @@ from test_the_plane import every_promise_holds, everything_is_reachable
 
 from pymux.arrangement import Pane, Window
 from pymux.plane import Side
-from pymux.strip import (
-    BORDER_HORIZONTAL,
-    BORDER_VERTICAL,
-    BORDER_WIDTH,
-    Gaps,
-    Strip,
-)
+from pymux.strip import Strip
+from pymux.tiling import BORDER_HORIZONTAL, BORDER_VERTICAL, BORDER_WIDTH, Gaps
 
 #: A window big enough that a column is wide and a stack is deep.
 SIZE = Size(rows=24, columns=80)

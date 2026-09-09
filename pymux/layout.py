@@ -56,7 +56,8 @@ from .format import format_pymux_string
 from .log import logger
 from .plan_container import PlanContainer
 from .plane import Plan, Side
-from .strip import BORDER_HORIZONTAL, BORDER_VERTICAL, BORDER_WIDTH, Gaps, Strip
+from .strip import Strip
+from .tiling import BORDER_HORIZONTAL, BORDER_VERTICAL, BORDER_WIDTH, Gaps
 from .titlebar import PaneTitleBar
 
 if TYPE_CHECKING:
