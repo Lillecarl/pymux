@@ -348,6 +348,32 @@ def _side_by_side(wanted, found):
     return "\n".join(lines)
 
 
+def on_a_pty(argv, stderr_path, env=None, rows=24, columns=80):
+    """
+    Run any program on a pty of its own. Returns the master side, the
+    process and the stderr file.
+
+    `run_on_a_pty` is this with pymux's own argv and environment.
+    Anything that wants to put the *same* program on a bare pty, with
+    no pymux between it and the master, comes here instead: that is
+    what a measurement compares against. Lillecarl/pymux#140.
+    """
+    master_fd, slave_fd = os.openpty()
+    fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
+
+    stderr = open(stderr_path, "wb")
+    process = subprocess.Popen(
+        [str(one) for one in argv],
+        cwd=str(REPO_ROOT),
+        stdin=slave_fd,
+        stdout=slave_fd,
+        stderr=stderr,
+        env={**os.environ, **(env or {})},
+    )
+    os.close(slave_fd)
+    return master_fd, process, stderr
+
+
 def run_on_a_pty(args, stderr_path, colorterm="", rows=24, columns=80):
     """
     Run a pymux command on a pty of its own. Returns the master side,
@@ -357,27 +383,19 @@ def run_on_a_pty(args, stderr_path, colorterm="", rows=24, columns=80):
     row for its title and the session takes one for the status line, so
     a pane is two rows shorter than this.
     """
-    master_fd, slave_fd = os.openpty()
-    fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
-
-    stderr = open(stderr_path, "wb")
-    process = subprocess.Popen(
+    return on_a_pty(
         [sys.executable, "-m", "pymux"] + [str(a) for a in args],
-        cwd=str(REPO_ROOT),
-        stdin=slave_fd,
-        stdout=slave_fd,
-        stderr=stderr,
+        stderr_path,
         env={
-            **os.environ,
             "TERM": "xterm-256color",
             "LANG": "C.UTF-8",
             # The tests decide what the environment says about
             # colour; the shell that runs them must not.
             "COLORTERM": colorterm,
         },
+        rows=rows,
+        columns=columns,
     )
-    os.close(slave_fd)
-    return master_fd, process, stderr
 
 
 def attach_client(sock_path, stderr_path, colorterm="", rows=24, columns=80):

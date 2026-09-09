@@ -165,6 +165,13 @@ let
   leaksTrace = builtins.getEnv "PYMUX_LEAKS_TRACE";
   leaksRoute = builtins.getEnv "PYMUX_LEAKS_ROUTE";
 
+  # How many keystrokes the latency measurement takes, how far apart,
+  # and over which route.
+  # `PYMUX_LATENCY_SAMPLES=500 nix build --file . checks.pymux-latency.run`.
+  latencySamples = builtins.getEnv "PYMUX_LATENCY_SAMPLES";
+  latencyPace = builtins.getEnv "PYMUX_LATENCY_PACE";
+  latencyRoute = builtins.getEnv "PYMUX_ROUTE";
+
   # Which item of vttest's main menu gets photographed, and in which
   # terminals, for instance
   # `PYMUX_VTTEST_INCLUDE='^9 ' nix build --file . checks.pymux-vttest-pictures.run`.
@@ -362,6 +369,32 @@ in
       }
       ''
         python tests/profile_a_frame.py
+      '';
+
+  # What pymux costs a keystroke, in milliseconds, against the same
+  # program on a bare pty. Not a gate, and it judges nothing, for the
+  # reason the profile above does not: a wall clock belongs to the
+  # machine that read it. `tests/measure_latency.py` says what the
+  # three numbers are and why the tail is the one to read. It needs a
+  # pty on both sides.
+  latency =
+    runInSandbox
+      {
+        name = "pymux-latency";
+        env = { inherit latencySamples latencyPace latencyRoute; };
+        setup = ''
+          export PYMUX_LATENCY_SAMPLES="$latencySamples"
+          export PYMUX_LATENCY_PACE="$latencyPace"
+          # Only when it was asked for. `drive_with_pty.py` defaults to
+          # the socket route, and an empty value defeats the default
+          # rather than choosing it.
+          if [ -n "$latencyRoute" ]; then
+            export PYMUX_ROUTE="$latencyRoute"
+          fi
+        '';
+      }
+      ''
+        python tests/measure_latency.py
       '';
 
   # The end to end test. It opens a pty, starts a server and attaches a
