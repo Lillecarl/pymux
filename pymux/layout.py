@@ -54,8 +54,9 @@ from .enums import Woke
 from .filters import WaitsForConfirmation
 from .format import format_pymux_string
 from .log import logger
+from .plan_container import PlanContainer
 from .plane import Plan, Side
-from .strip import BORDER_WIDTH, Gaps, ScrollableStrip, Strip
+from .strip import BORDER_HORIZONTAL, BORDER_VERTICAL, BORDER_WIDTH, Gaps, Strip
 from .titlebar import PaneTitleBar
 
 if TYPE_CHECKING:
@@ -1194,77 +1195,36 @@ def _create_strip(pymux: "Pymux", window) -> Container:
     """
     Create the container for a window that is laid out as a strip.
 
-    The columns are the children of the root, and each one is given a
-    width of its own rather than a weight, so the row is as wide as its
-    columns make it and not as wide as the screen.
-    `ScrollableStrip` shows the part of it that fits.
+    **The strip says where every pane is, and the container draws
+    them.** `Strip.measure` hands over a plan -- a rectangle for each
+    pane, on a plane that may be wider than the screen -- and
+    `PlanContainer` puts each pane's container at its rectangle, less
+    the offset of the view. Nothing here divides anything.
+    Lillecarl/pymux#217.
 
-    A column is whatever the child is. A `Pane` is one pane wide, and an
-    `arrangement.HSplit` is a stack of panes, which is what a niri
-    column is. `_create_split` already draws both, so nothing here
-    knows about either.
+    A column is whatever the child of the root is: a `Pane`, or a
+    stack of them, which is what a niri column holds. It makes no
+    difference here, because this builds one container per pane and
+    the plan says where each one goes.
 
-    **A column owns the border on its right.** The border comes out of
-    the column's share of the window rather than being added on top of
-    it, so a column takes the same room whatever the other columns do.
-    Without that, `VSplit` put a border between each pair on top of the
-    widths and two columns of half a window came to one cell more than
-    the window, every time: the strip always overflowed, so it always
-    scrolled, and the column a person was not on was always shaved.
+    **A column owns the border on its right**, and the layout draws it:
+    Carl, "individual panes should not be aware of borders ... the
+    layout is responsible for drawing the borders either way". The
+    border comes out of the column's share of the window rather than
+    being added on top of it, so a column takes the same room whatever
+    the other columns do. Without that, two columns of half a window
+    came to one cell more than the window, every time.
     Lillecarl/pymux#206.
-
-    Taking the borders off the window first would work too, and it is
-    what niri does with its gaps, but there are one fewer of them than
-    there are columns -- so every column's width would move when a
-    column opened or closed, which is the renegotiation a strip exists
-    to avoid. Lillecarl/pymux#198.
     """
+    containers = {
+        pane: _create_container_for_process(pymux, window, pane)
+        for pane in window.panes
+    }
 
-    def width_of(column):
-        """
-        How many cells this column's content takes.
-
-        The fraction is of the window, and a window is as wide as the
-        client's terminal. The border on the right of the column comes
-        out of that, so the answer is one less than the column's share.
-
-        At least one cell of content, so a column can always be found
-        and always has somewhere to draw.
-        """
-        columns = pymux.get_window_size().columns
-        share = round(window.column_width(column) * columns)
-        return D.exact(max(1, share - BORDER_WIDTH))
-
-    content = []
-    for column in window.root:
-        if isinstance(column, (arrangement.VSplit, arrangement.HSplit)):
-            child = _create_split(pymux, window, column)
-        elif isinstance(column, arrangement.Pane):
-            child = _create_container_for_process(pymux, window, column)
-        else:
-            raise TypeError("Got %r" % (column,))
-
-        # The column and the border it owns, which together are exactly
-        # its share of the window. The border is a child and not
-        # `VSplit` padding, because padding goes *between* children:
-        # there is one fewer of it than there are columns, and the
-        # missing one is what made the strip overflow. It is the plain
-        # border and not the highlight -- the focused pane draws that
-        # over the top, at `right=-1`, which is this cell
-        # (`HighlightBordersIfActive`).
-        content.append(
-            VSplit(
-                [
-                    SizedBox(child, width=partial(width_of, column)),
-                    Window(width=BORDER_WIDTH, char=_border_vertical),
-                ]
-            )
-        )
-
-    # The strip is given the columns themselves, so that it can measure
-    # them rather than read the geometry back off a screen it drew to
-    # one side. Lillecarl/pymux#209.
-    return ScrollableStrip(content)
+    return PlanContainer(
+        Strip(window, partial(the_gaps_of, pymux, window)),
+        containers,
+    )
 
 
 def _the_bar_below_is_drawn(pymux: "Pymux", window) -> bool:
@@ -1283,6 +1243,21 @@ def _the_bar_below_is_drawn(pymux: "Pymux", window) -> bool:
     return pymux.show_pane_status and window.has_a_stack()
 
 
+def the_gaps_of(pymux: "Pymux", window) -> Gaps:
+    """
+    The cells this window leaves between the things in it.
+
+    One for the border a column owns, and two rows between stacked
+    panes when a pane draws a bar below it and the pane under it draws
+    one above. `_create_split` leaves the same rows for the same
+    reason. Lillecarl/pymux#211.
+    """
+    return Gaps(
+        between_columns=BORDER_WIDTH,
+        between_panes=2 if _the_bar_below_is_drawn(pymux, window) else 1,
+    )
+
+
 def the_plan_of(pymux: "Pymux", window) -> Plan:
     """
     Where the panes of this window are, in cells.
@@ -1293,16 +1268,20 @@ def the_plan_of(pymux: "Pymux", window) -> Plan:
 
     **Measured on demand**, so a frame that asks about four sides of
     ten panes measures forty times. It is cheap arithmetic over a few
-    rectangles, and it stops when `PlanContainer` draws the plan: the
-    container measures once and everything else reads what it holds.
+    rectangles, and it is the same arithmetic the container that draws
+    does, over the same window: what it draws is what a title bar
+    reads. They become one measurement when `Divided` answers this way
+    too, and this function goes.
     """
     size = pymux.get_window_size()
-    below = _the_bar_below_is_drawn(pymux, window)
 
-    rows = size.rows - (1 if pymux.show_pane_status else 0) - (1 if below else 0)
-    gaps = Gaps(between_columns=BORDER_WIDTH, between_panes=2 if below else 1)
+    rows = size.rows
+    if pymux.show_pane_status:
+        rows -= 1
+    if _the_bar_below_is_drawn(pymux, window):
+        rows -= 1
 
-    return Strip(window, gaps).measure(
+    return Strip(window, the_gaps_of(pymux, window)).measure(
         Size(rows=max(1, rows), columns=size.columns),
     )
 
@@ -1436,11 +1415,11 @@ def _create_split(
 
     if is_vsplit:
         return_cls = VSplit
-        padding_char = _border_vertical
+        padding_char = BORDER_VERTICAL
         padding: AnyDimension = 1
     else:
         return_cls = HSplit
-        padding_char = _border_horizontal
+        padding_char = BORDER_HORIZONTAL
 
         # Two rows between stacked panes when the bar below is drawn:
         # the lower pane hangs its title bar in the second, and the
@@ -1733,8 +1712,6 @@ _focused_border_right_top = "┓"
 _focused_border_left_bottom = "┗"
 _focused_border_right_bottom = "┛"
 
-_border_vertical = "│"
-_border_horizontal = "─"
 _border_left_bottom = "└"
 _border_right_bottom = "┘"
 _border_left_top = "┌"

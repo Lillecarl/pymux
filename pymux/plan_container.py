@@ -26,7 +26,7 @@ from prompt_toolkit.key_binding import KeyBindingsBase
 from prompt_toolkit.layout.containers import Container, to_container
 from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers
-from prompt_toolkit.layout.screen import Screen, WritePosition
+from prompt_toolkit.layout.screen import Char, Screen, WritePosition
 
 from .plane import Pane, Plan
 
@@ -98,6 +98,8 @@ class PlanContainer(Container):
             self.plan, self.offset, available, self.focused_pane()
         )
 
+        self._draw_the_chrome(screen, write_position, parent_style)
+
         for slot, rect in self.plan.rects.items():
             container = self.containers.get(slot.shown)
             if container is None:
@@ -119,6 +121,37 @@ class PlanContainer(Container):
                 erase_bg,
                 z_index,
             )
+
+    def _draw_the_chrome(
+        self, screen: Screen, write_position: WritePosition, parent_style: str
+    ) -> None:
+        """
+        Fill the gaps the layout left, with what it says goes there.
+
+        **A pane knows nothing about borders**, so this is where they
+        are drawn, before the panes: a pane draws over its own
+        rectangle, and a bar over the gap above or below it, and both
+        win where they meet a line.
+
+        Nothing is clipped. A line outside the write position is
+        written into a dictionary that the renderer never reads, the
+        same as a pane that has scrolled off.
+        """
+        chrome = getattr(self.layout, "chrome", None)
+        if chrome is None or self.plan is None:
+            return
+
+        style = (parent_style + " class:border").strip()
+
+        for line in chrome(self.plan):
+            char = Char(line.char, style)
+            top = write_position.ypos + line.rect.y - self.offset.y
+            left = write_position.xpos + line.rect.x - self.offset.x
+
+            for y in range(top, top + line.rect.height):
+                row = screen.data_buffer[y]
+                for x in range(left, left + line.rect.width):
+                    row[x] = char
 
     def focused_pane(self) -> Pane | None:
         """

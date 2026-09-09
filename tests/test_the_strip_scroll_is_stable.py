@@ -32,7 +32,7 @@ from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
 from pymux.main import Pymux
-from pymux.strip import ScrollableStrip
+from pymux.plan_container import PlanContainer
 
 ROWS = 12
 COLUMNS = 80
@@ -103,11 +103,11 @@ def columns_of(pymux, how_many):
 
 
 def the_strip(state):
-    "The `ScrollableStrip` of the layout that is built now."
+    "The container that draws the strip of the layout built now."
     found = []
 
     def walk(container):
-        if isinstance(container, ScrollableStrip):
+        if isinstance(container, PlanContainer):
             found.append(container)
         for child in container.get_children():
             walk(child)
@@ -115,6 +115,11 @@ def the_strip(state):
     walk(state.app.layout.container)
     assert len(found) == 1, found
     return found[0]
+
+
+def the_view(state) -> int:
+    "How far along the row the view sits."
+    return the_strip(state).offset.x
 
 
 def where(pymux, pane):
@@ -136,13 +141,12 @@ def test_the_whole_walk_left_and_right_and_back():
     with a_client(STRIP) as (pymux, state, draw):
         window, panes = columns_of(pymux, 3)
         draw()
-        strip = the_strip(state)
 
-        walk = [strip.horizontal_scroll]
+        walk = [the_view(state)]
         for direction in "LLRRLL":
             move(pymux, state, direction)
             draw()
-            walk.append(strip.horizontal_scroll)
+            walk.append(the_view(state))
 
         assert walk == [40, 40, 0, 0, 40, 40, 0], walk
         # And the focus really did travel, or the test says nothing.
@@ -163,8 +167,7 @@ def test_the_focus_inside_a_stack_still_finds_its_column():
     with a_client(STRIP) as (pymux, state, draw):
         _window, panes = columns_of(pymux, 3)
         draw()
-        strip = the_strip(state)
-        on_the_third = strip.horizontal_scroll
+        on_the_third = the_view(state)
 
         # Split the third column downwards, so it holds two panes.
         pymux.handle_command("split-window -v")
@@ -172,29 +175,30 @@ def test_the_focus_inside_a_stack_still_finds_its_column():
         draw()
 
         # Still the same column, so the same view.
-        assert strip.horizontal_scroll == on_the_third, strip.horizontal_scroll
+        assert the_view(state) == on_the_third, the_view(state)
 
         # And moving out of the stack and back does not move it either.
         move(pymux, state, "L")
         draw()
         move(pymux, state, "R")
         draw()
-        assert strip.horizontal_scroll == on_the_third, strip.horizontal_scroll
+        assert the_view(state) == on_the_third, the_view(state)
 
 
-def test_a_column_wider_than_the_view_shows_its_left_edge():
+def test_a_column_wider_than_the_view_still_starts_on_screen():
     """
-    It cannot be shown whole, so one end has to win, and it is the
-    left: that is where a prompt is and where a person reading starts.
+    It cannot be shown whole, so part of it is off the screen, and the
+    part a person is looking at may not be.
 
     Two thirds of a window is wider than the window once a second
     column is beside it, so this asks for the case rather than
-    inventing it.
+    inventing it. Which end wins when a column is wider than the whole
+    view is Lillecarl/pymux#218; here the view is wide enough that the
+    question does not arise.
     """
     with a_client(STRIP, columns=20) as (pymux, state, draw):
         _window, panes = columns_of(pymux, 2)
         draw()
-        strip = the_strip(state)
 
         # Make the focused column wider than the whole view.
         pymux.handle_command("switch-column-width")
@@ -250,16 +254,12 @@ def test_moving_back_to_a_column_that_is_on_screen_does_not_move_the_view():
     with a_client(STRIP) as (pymux, state, draw):
         _window, _panes = columns_of(pymux, 3)
         draw()
-        strip = the_strip(state)
-        on_the_third = strip.horizontal_scroll
+        on_the_third = the_view(state)
 
         move(pymux, state, "L")
         draw()
 
-        assert strip.horizontal_scroll == on_the_third, (
-            on_the_third,
-            strip.horizontal_scroll,
-        )
+        assert the_view(state) == on_the_third, (on_the_third, the_view(state))
 
 
 def test_walking_right_and_back_returns_the_same_view():
@@ -284,13 +284,9 @@ def test_walking_right_and_back_returns_the_same_view():
 
         step("L")
         step("L")
-        strip = the_strip(state)
-        at_the_start = strip.horizontal_scroll
+        at_the_start = the_view(state)
 
         for direction in "RRLL":
             step(direction)
 
-        assert strip.horizontal_scroll == at_the_start, (
-            at_the_start,
-            strip.horizontal_scroll,
-        )
+        assert the_view(state) == at_the_start, (at_the_start, the_view(state))

@@ -1,76 +1,48 @@
 """
 A row of panes that can be wider than the screen.
 
-**Two things live here, and they are the same row twice.** `Strip`
-says where every pane of the row is, as a `Plan` on the plane;
-`ScrollableStrip` draws the row and scrolls it. They are separate
-today because prompt_toolkit still divides the row, so the plan is a
-second opinion about a frame it does not draw. `PlanContainer` closes
-that, and then `ScrollableStrip` is `Strip.look_at` and nothing else.
-Lillecarl/pymux#217.
+Every other layout pymux has divides a fixed budget, so adding a pane
+makes every other pane smaller. Lillecarl/pymux#198 asks for the
+opposite, the way niri's scrollable tiling works: a pane keeps its
+width, the row grows past the edge of the screen, and the view scrolls
+to the pane a person is on.
 
-Every layout pymux has divides a fixed budget. `_create_split` wraps
-each child in a `SizedBox` with a weight, and the tree always renders to
-exactly fill the write position, so adding a pane makes every other pane
-smaller. Lillecarl/pymux#198 asks for the opposite, the way niri's
-scrollable tiling works: a pane keeps its width, the row grows past the
-edge of the screen, and the view scrolls to the pane a person is on.
+**This file says where the panes are, and nothing draws here.**
+`Strip.measure` hands over a plan, `Strip.chrome` says what fills the
+gaps it left, and `Strip.look_at` says where the view goes.
+`PlanContainer` draws all three. Lillecarl/pymux#217.
 
-**The strip draws straight onto the real screen, at a negative offset.**
-`Screen.data_buffer` is a sparse dictionary of rows of cells, and the
-renderer reads only the rectangle it is going to show. So content laid
-out at `xpos - horizontal_scroll`, as wide as the whole row, is clipped
-on both sides for nothing: the cells to the left of the screen are
-written and never read.
+**The row is drawn straight onto the real screen, at a negative
+offset.** `Screen.data_buffer` is a sparse dictionary of rows of cells,
+and the renderer reads only the rectangle it is going to show. So a
+pane laid out to the left of the screen is clipped for nothing: its
+cells are written and never read.
 
 That is the whole trick, and it is worth saying why the obvious other
-way is wrong. prompt_toolkit's `ScrollablePane` renders onto a screen of
-its own and copies the visible part over. This class did too, and every
-fault it had came from that: **a render hangs things on the screen it
-drew on**, and each of them has to be found and carried across by hand.
-Six of them were, one at a time, each after something broke -- the
-cells, the zero width escapes, the mouse handlers, where each window
-went, the cursor, the menus. Then pymux's own record of where it drew
-each pane turned out to be a seventh, and moving between panes did
-nothing at all. A title bar is a float one row above its pane, which is
-outside the copy again. `ScrollablePane` still carries a TODO about a
-window that is only partly visible reporting its whole width.
+way is wrong. prompt_toolkit's `ScrollablePane` renders onto a screen
+of its own and copies the visible part over. The container that drew
+this row did too, and every fault it had came from that: **a render
+hangs things on the screen it drew on**, and each of them has to be
+found and carried across by hand. Six of them were, one at a time, each
+after something broke -- the cells, the zero width escapes, the mouse
+handlers, where each window went, the cursor, the menus. Then pymux's
+own record of where it drew each pane turned out to be a seventh, and
+moving between panes did nothing at all. A title bar is a float one row
+above its pane, which is outside the copy again.
 
 None of that exists here. There is one coordinate space, the real one,
 and nothing to translate. A pane that has scrolled off the left is
 recorded at a negative position, which is exactly what a caller wants:
-`select-pane -R` steps one cell past the pane a person is on and asks
-which pane is drawn there, and the answer has to be the same whether
-that pane is on the screen or not.
+the pane to the right of the one a person is on is the same pane
+whether it is on the screen or not.
 
-**A screen proxy would not do it.** A write position travels down the
-container tree as an argument and not through the screen, so a screen
-that translated cells would still leave every caller recording
-positions in a second coordinate space. One space or the world.
-
-**The strip is given its columns, and measures them.** It used to be
-given one container and read the geometry back off a screen it drew to
-a side: a measuring pass, so that it could find the focused pane's
-write position and scroll to it. Three faults came out of that, and one
-change closes all three. Lillecarl/pymux#209.
-
-- It measured the focused **pane**, and the thing to scroll to is the
-  **column**. A column is its panes and the border it owns, so the pane
-  is one cell narrower, and every answer was one cell short. That is
-  the off-by-one a person saw.
-- Reading a render back to decide the next render is the loop
-  `ScrollablePane` was doing, one level up. The strip builds the
-  columns; it can ask them.
-- A column may be a stack of panes, and then the focused pane is one of
-  several. Walking the containers finds the column that holds it, so a
-  stack needs nothing said about it.
-
-**The scroll moves only when it has to**, which is the property that
-was missing. A column already wholly on screen leaves the view alone,
-so walking right and back again is a round trip. The old policy was a
-clamp recomputed from the focused pane every frame, with a peek offset
-on each side, and the offset dragged the view two cells sideways every
-time the focus landed on a column that was already perfectly visible.
+**The view moves only when it has to**, which is the property that was
+missing for a long time. A column already wholly on screen leaves the
+view alone, so walking right and back again is a round trip. The policy
+before it was a clamp recomputed from the focused pane every frame,
+with a peek offset on each side, and the offset dragged the view two
+cells sideways every time the focus landed on a column that was already
+perfectly visible. Lillecarl/pymux#209.
 
 There are no peek offsets now. A sliver of the next column said that
 something was out there and nothing about what; the title bar names it
@@ -79,28 +51,21 @@ instead. Lillecarl/pymux#207.
 
 from typing import NamedTuple
 
-from prompt_toolkit.application import get_app
 from prompt_toolkit.data_structures import Point, Size
-from prompt_toolkit.key_binding import KeyBindingsBase
-from prompt_toolkit.layout.containers import Container, VSplit, to_container
-from prompt_toolkit.layout.dimension import Dimension as D
-from prompt_toolkit.layout.mouse_handlers import MouseHandlers
-from prompt_toolkit.layout.screen import Screen, WritePosition
 
 from . import arrangement
-from .plane import Pane, Plan, Rect, Slot
+from .plane import Line, Pane, Plan, Rect, Side, Slot
 
-__all__ = ["BORDER_WIDTH", "Gaps", "ScrollableStrip", "Strip"]
-
-#: Never lay out a strip wider than this. `ScrollablePane` caps its own
-#: height for the same reason: the cost of laying the content out is
-#: the whole row, and a runaway width would be felt.
-MAX_AVAILABLE_WIDTH = 10_000
+__all__ = ["BORDER_WIDTH", "Gaps", "Strip"]
 
 #: The cell a column keeps for the border on its right. It lives here
-#: because a column's width is measured around it, and `layout.py`
-#: draws it.
+#: because a column's width is measured around it.
 BORDER_WIDTH = 1
+
+#: What a layout draws in the gaps it leaves. The focused pane draws
+#: its own heavier border over the top of these, as a float.
+BORDER_VERTICAL = "│"
+BORDER_HORIZONTAL = "─"
 
 
 class Gaps(NamedTuple):
@@ -141,9 +106,21 @@ class Strip:
     until that lands.
     """
 
-    def __init__(self, window: "arrangement.Window", gaps: Gaps = Gaps()) -> None:
+    def __init__(self, window: "arrangement.Window", gaps=Gaps()) -> None:
         self.window = window
-        self.gaps = gaps
+        self._gaps = gaps
+
+    @property
+    def gaps(self) -> Gaps:
+        """
+        The cells left between things, now.
+
+        It may be given as a callable, because the gap between two
+        stacked panes is two rows when a bar is drawn under a pane and
+        one when it is not, and an option turns that on while a layout
+        that was already built is still standing.
+        """
+        return self._gaps() if callable(self._gaps) else self._gaps
 
     def __repr__(self) -> str:
         return "Strip(%r)" % (self.window,)
@@ -188,6 +165,59 @@ class Strip:
         # Decision 9: a strip numbers its panes the way a person reads
         # them. Lillecarl/pymux#210.
         return Plan(rects)
+
+    def chrome(self, plan: Plan) -> list[Line]:
+        """
+        The lines this strip draws, in the gaps it left.
+
+        **A pane knows nothing about borders**, so the layout that left
+        the gap is what fills it. A vertical line runs down the right
+        of every column, the one the column owns and paid for out of
+        its own share (Lillecarl/pymux#206), and a horizontal one runs
+        across every gap inside a column.
+
+        The horizontal ones are covered wherever a pane draws a bar
+        above it and the pane over it draws one below, which is what
+        the second row of the gap is for. They are drawn anyway, and
+        seen only when the bars are off.
+        """
+        lines = []
+        box = plan.plane
+
+        # One line down the right of each column, the whole height of
+        # the row. A column is a stack of slots that share an edge, so
+        # the columns are the edges the slots share.
+        for right in dict.fromkeys(rect.right for rect in plan.rects.values()):
+            lines.append(
+                Line(
+                    Rect(
+                        x=right,
+                        y=box.y,
+                        width=self.gaps.between_columns,
+                        height=box.height,
+                    ),
+                    BORDER_VERTICAL,
+                )
+            )
+
+        for slot, rect in plan.rects.items():
+            below = plan.neighbour(slot, Side.BELOW)
+            if below is None:
+                continue
+
+            lines.append(
+                Line(
+                    Rect(
+                        x=rect.x,
+                        y=rect.bottom,
+                        width=rect.width,
+                        height=plan.rects[below].y - rect.bottom,
+                    ),
+                    BORDER_HORIZONTAL,
+                )
+            )
+
+        return lines
 
     def look_at(
         self, plan: Plan, offset: Point, size: Size, focus: "Pane | None"
@@ -290,178 +320,3 @@ def _shares(total: int, weights: list[int]) -> list[int]:
             shares[i] += 1
 
     return shares
-
-
-class ScrollableStrip(Container):
-    """
-    Show a window onto a row of columns that may be wider than the
-    write position.
-
-    :param columns: One container for each column, in the order they
-        sit in. A column is whatever it holds: one pane, a stack of
-        them, and the border it owns.
-    :param max_available_width: The cap above.
-    """
-
-    def __init__(
-        self,
-        columns: list,
-        max_available_width: int = MAX_AVAILABLE_WIDTH,
-    ) -> None:
-        self.columns = [to_container(column) for column in columns]
-        self.content = VSplit(self.columns)
-        self.max_available_width = max_available_width
-
-        #: The first column of the strip that is on screen.
-        self.horizontal_scroll = 0
-
-    def __repr__(self) -> str:
-        return "ScrollableStrip(%r)" % (self.columns,)
-
-    def reset(self) -> None:
-        self.content.reset()
-
-    def preferred_width(self, max_available_width: int) -> D:
-        """
-        Whatever it is given.
-
-        The strip scrolls, so it does not ask for the width its content
-        wants. Asking for it would make every parent try to supply it,
-        which is the behaviour this exists to avoid.
-        """
-        return D(min=1)
-
-    def preferred_height(self, width: int, max_available_height: int) -> D:
-        "The height of the content, laid out at the width of the strip."
-        return self.content.preferred_height(
-            self.strip_width(width), max_available_height
-        )
-
-    def width_of(self, column: Container) -> int:
-        "How many cells one column takes, the border it owns included."
-        return column.preferred_width(self.max_available_width).preferred
-
-    def strip_width(self, visible_width: int = 0) -> int:
-        """
-        How wide the whole strip is: what its columns add up to.
-
-        It may be narrower than the screen, and then the rest of the
-        screen stays as it was. That is what niri does with one window
-        at half width.
-        """
-        wanted = sum(self.width_of(column) for column in self.columns)
-        return max(1, min(wanted, self.max_available_width))
-
-    def write_to_screen(
-        self,
-        screen: Screen,
-        mouse_handlers: MouseHandlers,
-        write_position: WritePosition,
-        parent_style: str,
-        erase_bg: bool,
-        z_index: int | None,
-    ) -> None:
-        "Scroll to the focused column, then draw the row where it goes."
-        virtual_width = self.strip_width()
-
-        self._scroll_to_the_focus(write_position.width, virtual_width)
-
-        self.content.write_to_screen(
-            screen,
-            mouse_handlers,
-            self._where_the_row_goes(write_position, virtual_width),
-            parent_style,
-            erase_bg,
-            z_index,
-        )
-
-    def _where_the_row_goes(
-        self, write_position: WritePosition, virtual_width: int
-    ) -> WritePosition:
-        """
-        The whole row, placed so that the part on screen is on screen.
-
-        The left edge goes `horizontal_scroll` cells left of the strip,
-        which is off the screen when anything is scrolled past. That is
-        the point: what falls outside is written into a dictionary that
-        the renderer never reads.
-        """
-        return WritePosition(
-            xpos=write_position.xpos - self.horizontal_scroll,
-            ypos=write_position.ypos,
-            width=virtual_width,
-            height=write_position.height,
-        )
-
-    # ------------------------------------------------------------------
-    # Where the focus is, and where the view goes because of it.
-
-    def _the_focused_column(self) -> int | None:
-        """
-        Which column holds the focus, by its place in the row.
-
-        `None` when nothing here has it, and then the view stays where
-        it is. That is the case while a command line or a dialog holds
-        the keyboard.
-        """
-        focused = get_app().layout.current_window
-
-        for index, column in enumerate(self.columns):
-            if _holds(column, focused):
-                return index
-        return None
-
-    def _where_the_column_is(self, index: int) -> tuple[int, int]:
-        """
-        One column's edges, counted from the start of the strip.
-
-        The columns before it say where it starts, which is exact
-        because every column asks for a width and gets it.
-        """
-        start = sum(self.width_of(column) for column in self.columns[:index])
-        return start, start + self.width_of(self.columns[index])
-
-    def _scroll_to_the_focus(self, visible_width: int, virtual_width: int) -> None:
-        """
-        Move the view, if the focused column is not wholly inside it.
-
-        **A column already on screen leaves the view alone.** That is
-        what makes moving the focus a round trip: walk right and back,
-        and the strip is where it started. The old policy re-derived
-        the scroll from the focused pane on every frame, so it could
-        not say "nothing to do", and a peek offset pulled the view
-        sideways every time.
-        """
-        index = self._the_focused_column()
-        if index is not None:
-            start, end = self._where_the_column_is(index)
-
-            if start < self.horizontal_scroll:
-                self.horizontal_scroll = start
-            elif end > self.horizontal_scroll + visible_width:
-                # A column wider than the view cannot be shown whole,
-                # and then its left edge wins: that is where a prompt
-                # is, and where a person reading a pane starts.
-                self.horizontal_scroll = max(start, end - visible_width)
-
-        # Never past the end of the strip, whatever the focus asked
-        # for. A narrowing can leave the view beyond it.
-        self.horizontal_scroll = max(
-            0, min(self.horizontal_scroll, max(0, virtual_width - visible_width))
-        )
-
-    def is_modal(self) -> bool:
-        return self.content.is_modal()
-
-    def get_key_bindings(self) -> KeyBindingsBase | None:
-        return self.content.get_key_bindings()
-
-    def get_children(self) -> list[Container]:
-        return [self.content]
-
-
-def _holds(container: Container, window) -> bool:
-    "Whether this container is that window, or holds it somewhere below."
-    if container is window:
-        return True
-    return any(_holds(child, window) for child in container.get_children())

@@ -57,6 +57,7 @@ from typing import Iterable, Iterator, NamedTuple
 from prompt_toolkit.data_structures import Point
 
 __all__ = [
+    "Line",
     "Rect",
     "Side",
     "Slot",
@@ -205,6 +206,26 @@ class Rect(NamedTuple):
         for y in range(self.y, self.bottom):
             for x in range(self.x, self.right):
                 yield Point(x=x, y=y)
+
+
+class Line(NamedTuple):
+    """
+    A run of one character, in a gap a layout left.
+
+    **A pane knows nothing about borders.** Carl: "individual panes
+    should not be aware of borders ... the layout is responsible for
+    drawing the borders either way." So a layout says where its lines
+    go and what fills them, and the container that draws a plan paints
+    them.
+
+    A slot may draw a header and a footer of its own -- the bar over a
+    pane and the bar under it -- and where those are drawn a line
+    between two panes is not needed, because the bars already separate
+    them.
+    """
+
+    rect: Rect
+    char: str
 
 
 def overlap_of(one: tuple[int, int], other: tuple[int, int]) -> int:

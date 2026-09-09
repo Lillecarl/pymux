@@ -20,7 +20,13 @@ from test_the_plane import every_promise_holds, everything_is_reachable
 
 from pymux.arrangement import Pane, Window
 from pymux.plane import Side
-from pymux.strip import BORDER_WIDTH, Gaps, Strip
+from pymux.strip import (
+    BORDER_HORIZONTAL,
+    BORDER_VERTICAL,
+    BORDER_WIDTH,
+    Gaps,
+    Strip,
+)
 
 #: A window big enough that a column is wide and a stack is deep.
 SIZE = Size(rows=24, columns=80)
@@ -224,6 +230,65 @@ def test_a_strip_numbers_its_panes_the_way_a_person_reads_them():
 
     assert plan.order == panes
     assert plan.reading_order() == panes
+
+
+# ----------------------------------------------------------------------
+# The lines the strip draws.
+
+
+def lines_of(window, size=SIZE, gaps=Gaps()):
+    strip = Strip(window, gaps)
+    return strip.chrome(strip.measure(size))
+
+
+def test_every_column_has_a_line_down_its_right():
+    "The border it owns, and paid for out of its own share."
+    window, _ = a_strip((1, 1))
+    down = [line for line in lines_of(window) if line.char == BORDER_VERTICAL]
+
+    assert [line.rect.x for line in down] == [39, 79]
+    assert {line.rect.width for line in down} == {BORDER_WIDTH}
+
+
+def test_a_line_down_a_column_runs_the_whole_height():
+    """
+    A column of stacked panes has one line beside it, not one for each
+    pane: the panes stop at the gap between them and the line does
+    not.
+    """
+    window, _ = a_strip((3,))
+    down = [line for line in lines_of(window) if line.char == BORDER_VERTICAL]
+
+    assert len(down) == 1
+    assert (down[0].rect.y, down[0].rect.height) == (0, SIZE.rows)
+
+
+def test_a_stack_has_a_line_across_every_gap_in_it():
+    window, panes = a_strip((2,))
+    plan = a_plan(window)
+    across = [line for line in lines_of(window) if line.char == BORDER_HORIZONTAL]
+
+    assert len(across) == 1
+    assert across[0].rect.y == where(plan, panes[0]).bottom
+    assert across[0].rect.height == Gaps().between_panes
+
+
+def test_the_line_across_a_stack_grows_with_the_gap():
+    "Two rows when a pane draws a bar below it and the next one above."
+    window, _ = a_strip((2,))
+    across = [
+        line
+        for line in lines_of(window, gaps=Gaps(between_panes=2))
+        if line.char == BORDER_HORIZONTAL
+    ]
+
+    assert across[0].rect.height == 2
+
+
+def test_a_row_of_lone_panes_has_no_line_across_it():
+    window, _ = a_strip((1, 1))
+
+    assert not [line for line in lines_of(window) if line.char == BORDER_HORIZONTAL]
 
 
 # ----------------------------------------------------------------------

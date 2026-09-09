@@ -28,7 +28,7 @@ from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import DummyOutput
 
 from pymux.plan_container import PlanContainer
-from pymux.plane import Plan, Rect, Slot
+from pymux.plane import Line, Plan, Rect, Slot
 
 HEIGHT = 2
 
@@ -188,6 +188,74 @@ def test_the_view_moves_down_as_well_as_sideways():
 
 
 # ----------------------------------------------------------------------
+# The lines the layout puts in its gaps.
+
+
+class _WithChrome(_Fixed):
+    "A layout that draws something in the gap it left."
+
+    def __init__(self, plan, lines, offset=Point(x=0, y=0)):
+        super().__init__(plan, offset)
+        self.lines = lines
+
+    def chrome(self, plan):
+        return self.lines
+
+
+def drawn_with_chrome(plan, containers, lines, visible, rows=HEIGHT, row=0):
+    container = PlanContainer(_WithChrome(plan, lines), containers)
+
+    with create_pipe_input() as pipe:
+        app = Application(layout=Layout(container), input=pipe, output=DummyOutput())
+        with set_app(app):
+            screen = Screen()
+            container.write_to_screen(
+                screen,
+                MouseHandlers(),
+                WritePosition(xpos=0, ypos=0, width=visible, height=rows),
+                "",
+                False,
+                None,
+            )
+
+    return "".join(screen.data_buffer[row][x].char for x in range(visible))
+
+
+def test_the_layout_fills_the_gap_it_left():
+    """
+    A pane knows nothing about borders. Carl: "individual panes should
+    not be aware of borders ... the layout is responsible for drawing
+    the borders either way."
+    """
+    plan, containers = a_row([4, 4], gap=1)
+    line = Line(Rect(x=4, y=0, width=1, height=HEIGHT), "|")
+
+    assert drawn_with_chrome(plan, containers, [line], visible=9) == "aaaa|bbbb"
+
+
+def test_a_pane_is_drawn_over_a_line():
+    "The panes go on last, so a line under one is not seen."
+    plan, containers = a_row([4, 4])
+    line = Line(Rect(x=0, y=0, width=8, height=HEIGHT), "|")
+
+    assert drawn_with_chrome(plan, containers, [line], visible=8) == "aaaabbbb"
+
+
+def test_a_line_outside_the_view_is_not_drawn_on_it():
+    plan, containers = a_row([4], gap=1)
+    line = Line(Rect(x=4, y=0, width=1, height=HEIGHT), "|")
+
+    assert drawn_with_chrome(plan, containers, [line], visible=4) == "aaaa"
+
+
+def test_a_layout_with_no_chrome_draws_none():
+    "A layout need not have lines. `_Fixed` has no `chrome` at all."
+    plan, containers = a_row([4, 4], gap=1)
+
+    assert drawn(plan, containers, visible=9) == "aaaa bbbb"
+
+
+# ----------------------------------------------------------------------
 # A stack draws the pane a person sees.
 
 
@@ -256,3 +324,49 @@ def test_a_pane_with_no_container_is_not_drawn():
     containers.pop(list(containers)[0])
 
     assert drawn(plan, containers, visible=8) == "    bbbb"
+
+
+def test_a_pane_is_told_where_it_ended_up():
+    "A click has to reach the pane that was drawn under it."
+    plan, containers = a_row([4, 4, 4])
+    container = PlanContainer(_Fixed(plan, Point(x=4, y=0)), containers)
+    panes = list(containers)
+
+    with create_pipe_input() as pipe:
+        app = Application(layout=Layout(container), input=pipe, output=DummyOutput())
+        with set_app(app):
+            screen = Screen()
+            container.write_to_screen(
+                screen,
+                MouseHandlers(),
+                WritePosition(xpos=0, ypos=0, width=8, height=HEIGHT),
+                "",
+                False,
+                None,
+            )
+
+    where = screen.visible_windows_to_write_positions
+    # The view is four cells along, so the first pane was drawn four
+    # cells to the left of the screen.
+    assert where[containers[panes[0]]].xpos == -4
+    assert where[containers[panes[1]]].xpos == 0
+
+
+def test_the_container_asks_for_no_size_of_its_own():
+    """
+    The view scrolls, so any size will do. Asking for the size the plan
+    wants is what every other layout does, and what this exists to
+    avoid.
+    """
+    plan, containers = a_row([4, 4, 4])
+    container = PlanContainer(_Fixed(plan), containers)
+
+    assert container.preferred_width(80).preferred <= 80
+    assert container.preferred_height(80, 24).preferred <= 24
+
+
+def test_a_row_is_as_wide_as_the_screen_whatever_the_plan_is():
+    plan, containers = a_row([4, 4, 4])
+
+    for visible in (1, 3, 7, 12, 40):
+        assert len(drawn(plan, containers, visible=visible)) == visible
