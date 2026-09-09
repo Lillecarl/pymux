@@ -28,29 +28,54 @@ the tree instead. The second symptom is that every general feature has
 been paid for twice, once for divided layouts and once for the strip:
 Lillecarl/pymux#206, #198, #210, #211.
 
-## The one decision that must not be got wrong
+## The name
 
-**A plan is derived, never authored -- except by a subclass whose model
-is a plan.**
+**`Plane`, and never `Layout`.** The building block is *a plane that
+supports views*, and that is what the base class is called. Carl:
+"the masonry name suggests things needs to stay next to eachother,
+that's pretty much what managedmasonry would be doing, the real base is
+more practically an 'unbounded plane'". So `Masonry` names the subclass
+that actually packs rectangles against each other, which is what the
+word means.
 
-Masonry as *storage* (the base owns `{pane: rect}` and subclasses mutate
-it) recreates the bug we are deleting. A divided layout is constraint
-solving: open, close and resize all redistribute among siblings, and
-that needs a tree. Rects cannot replace it, because inferring which
-panes share an edge from rects alone is ambiguous -- which is why i3
-keeps a tree rather than inferring one. So `Divided` holds a tree
-whatever we do, and if the base *also* owns the rects then the tree is a
-shadow model to keep in sync.
+`Layout` is taken twice over. prompt_toolkit owns
+`prompt_toolkit.layout.Layout` -- the container tree, the focus,
+`current_window`, `walk_through_modal_area` -- and pymux has `layout.py`
+and `LayoutManager` besides. Two different jobs: prompt_toolkit's
+`Layout` answers *what has focus*, and ours answers *where things are*.
+Both keep existing, and they meet in one place, the container that draws
+a plan.
 
-Masonry as *projection*: each subclass owns its own model and projects
-it to a plan. Everything downstream speaks `Plan` and nothing else, and
-**masonry becomes the subclass with the fewest restrictions rather than
-the base.**
+## One rule that must not be broken
 
-The restriction lives in the projection, not in a class chain.
-`Divided` *cannot* produce an overlapping or gappy plan, because its
-projection is a tiling of a tree. That is a stronger guarantee than a
-permissive base with a subclass that checks afterwards.
+**A constrained subclass never lets an unconstrained mutation through.**
+
+`Plane.place(pane, rect)` is meaningful on the bare plane and must not
+be reachable on `Divided`, or somebody calls it and quietly breaks the
+tiling. Either the mutators are private and each subclass exposes its
+own, or a constraint refuses them.
+
+That is the whole of it, and it is worth recording that a longer rule
+was considered and dropped. I argued for a while that each subclass
+should own a private model and merely *project* a plan, on the grounds
+that `Divided` needs a tree and inheriting a rect store would give it
+two models. Two things killed that argument:
+
+- **i3 keeps a tree for what we have excluded.** Its tree exists for
+  nested containers and recursive tabbed and stacked modes. Decision 4
+  below rules both out, and the tree's main job goes with them.
+- **Adjacency is only ambiguous on arbitrary rectangles.** `Divided`
+  guarantees an exact tiling, and on a tiling adjacency is exact: my
+  right-hand neighbours are the rectangles whose left edge equals my
+  right edge. Resize needs nothing more.
+
+The one job a tree still did is **proportional rescaling**: when a
+client goes from 80 columns to 100, a tiling must redistribute, and
+scaling rectangles accumulates rounding drift over repeated resizes. So
+`Divided` keeps a **fraction per pane** as its own constraint
+parameter, and derives cells from fractions on every measure. Cells stay
+the truth in the plan; the fraction is the constraint's business, which
+is where the behaviour belongs.
 
 ## The decisions, all locked
 
@@ -60,7 +85,8 @@ permissive base with a subclass that checks afterwards.
    set of boundaries. A lattice buys nothing for neighbour queries --
    ray casting is exact and cheap on free rectangles, which is what sway
    does. What a lattice buys is automatic tiling under resize, and
-   `Divided` gets that from its tree.
+   `Divided` gets that from its own fractions and from the fact that
+   adjacency on a tiling is exact.
 3. **No two *visible* panes overlap.** Holes are allowed.
 4. **A container stacks, and nothing else.** More than one pane in a
    rectangle means tabbed: one visible, the rest hidden behind it.
@@ -88,8 +114,8 @@ permissive base with a subclass that checks afterwards.
    separate cheap path that tests band overlap instead of casting.
 9. **Numbering is insertion order in the base, overridable.** `Divided`
    and `Strip` override with reading order (Lillecarl/pymux#210).
-   Numbers therefore change on a *mode* switch, and `display-panes`
-   under masonry shows numbers that are not in reading order. Carl has
+   Numbers therefore change on a *mode* switch, and `display-panes` on
+   a bare plane shows numbers that are not in reading order. Carl has
    made that trade for stability while rectangles move.
 10. **Views are attached to planes.** A plane has a size; each view is
     one client's terminal. A view smaller than the plane sees part of
@@ -159,8 +185,11 @@ Three data types and one base class.
 of them reimplements one: `at(point)`, `neighbour(pane, direction)`,
 `trace(origin, angle)`, `reading_order()`.
 
-    class Layout:
-        def measure(self, available: Size) -> Plan     # the only place rects are made
+    class Plane:
+        "An unbounded plane, and views onto it. Usable as it stands."
+
+        def measure(self, available: Size) -> Plan     # the plan it holds
+        def place(self, pane, rect) -> None            # free: not for a constraint
         def adopt(self, plan, panes) -> None           # switching mode
         def open(self, pane, beside, near) -> None
         def close(self, pane) -> None
@@ -169,16 +198,22 @@ of them reimplements one: `at(point)`, `neighbour(pane, direction)`,
         def look_at(self, plan, view, focus) -> Point  # default: leave it, clamped
         def order(self, plan) -> list[Pane]            # default: insertion order
 
-Subclasses, siblings rather than a chain:
+**The base is not abstract. It is the plane itself**, and every other
+one is a constraint on it:
 
-    Layout
-      Masonry          free rectangles; the model *is* a plan
-        ManagedMasonry masonry++: a reflow policy on top
-      Divided          a tree; the plane equals `available`
+    Plane              anything, anywhere. Holds its rectangles
+      Masonry          packs them against each other, and keeps it tidy
+      Divided          an exact tiling of `available`, from fractions
       Strip            a row of columns; the plane may be wider
 
 The five `select-layout` presets are configurations of `Divided`, not
 subclasses.
+
+A constraint overrides `measure` to recompute its rectangles from its
+own parameters, so the stored plan is a cache it rewrites wholesale. The
+bare plane is the one that *persists* rectangles between frames, because
+a pane has to stay where a person put it. **That asymmetry is the only
+one in the hierarchy, and it is deliberate.**
 
 **`adopt` is what mode switching becomes.** It already happens twice
 today, ad hoc: `Window.strip = True` wraps the root, and
@@ -237,7 +272,7 @@ Two smaller rules that follow:
    existing suite.
 5. **`View` per client, with an offset**, and the `window-size` policy
    as a real option.
-6. **`Masonry`, then `ManagedMasonry`.**
+6. **`Plane` on its own, then `Masonry`.**
 
 Slices 1 to 3 are worth doing whether or not the rest follows, because
 they delete the two-answers problem for one layout.
