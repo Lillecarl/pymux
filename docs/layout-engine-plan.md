@@ -147,12 +147,12 @@ is where the behaviour belongs.
     look at it** -- the plan is shared, never per client.
 11. **The window-size policy belongs to bounded layouts.**
     `smallest`, `largest`, `latest` as options and `manual` as a
-    command, spelled as tmux spells them. Today pymux hard-codes
-    `smallest` (`main.py:696`) with no way to say otherwise, which is a
-    gap regardless of this work. `window-size largest` falls out for
-    free once views are separate from planes, and better than tmux's,
-    because a client too small to see the whole plane can move its view
-    instead of being stuck at the top left.
+    command, spelled as tmux spells them. Landed in slice 5, as a
+    window option: `set-window-option window-size <one of the four>`,
+    and `resize-window -x -y` for the manual size. `largest` fell out
+    for free once views were separate from planes, and it is better
+    than tmux's, because a client too small to see the whole plane
+    moves its view instead of being stuck at the top left.
 12. **Snapshot locations are saved view offsets.** A dictionary of named
     points per view. They work in every subclass, including the ones
     that do not scroll.
@@ -364,9 +364,12 @@ every cell of them was spelled first. So `PlanContainer` draws nothing
 whose rectangle does not reach the view: a strip of sixteen columns
 went from 168k bytecode instructions a frame to 89k, and a divided
 window whose panes run past the bottom from 53k to 41k.
-Lillecarl/pymux#224 holds the reasoning, and the rest of that issue --
-that a client should not be woken by a pane it cannot see -- waits for
-the views of slice 5.
+Lillecarl/pymux#224 holds the reasoning. The rest of that issue -- that
+a client should not be woken by a pane it cannot see -- has its
+predicate now, in `View.shows`, and still needs a way to say which pane
+woke a client: `Pymux.invalidate` takes a reason and no pane, and a
+pane that writes wakes its client through prompt_toolkit rather than
+through `invalidate` at all.
 
 Two smaller rules that follow:
 
@@ -436,20 +439,63 @@ Two smaller rules that follow:
      fourth column-width preset beside it. A zoomed pane keeps the row
      its title bar hangs in, which it did not have before.
 5. **`View` per client, with an offset**, and the `window-size` policy
-   as a real option.
+   as a real option. **Landed**: `View` in `pymux/plane.py`, one per
+   client and window on `DynamicBody`, and `window-size` with all four
+   of tmux's values. `tests/test_two_clients_of_different_sizes.py` is
+   where the whole slice is judged.
+
+   Five things are worth carrying forward from it.
+
+   - **`get_window_size` was two questions.** How big is the plane, and
+     how big is this client's screen. They are the same number only
+     while every client is the same size, and three call sites wanted
+     the second one: the box the command palette draws in, the overlay,
+     and the part of the screen that holds the windows. They are
+     `Pymux.the_size_of_the_plane` and
+     `LayoutManager.the_room_this_client_has` now, and the body is the
+     smaller of the two on each axis.
+   - **A view has to outlive the containers.** It was on
+     `PlanContainer`, which `DynamicBody` builds again whenever the
+     arrangement changes shape, so a scrolled strip went back to the
+     origin on every split. The fault hid behind the rule that moves
+     the view: a focused column that does not fit at the origin is
+     scrolled to again, so most splits looked right.
+   - **The three rules moved out of `Strip`** into `View.moved_onto`,
+     and `Divided` uses them too. So a divided window bigger than its
+     view scrolls, which happens under `largest` and also when a window
+     is divided between more panes than it has rows. `Strip` gained the
+     vertical case for free.
+   - **`window-size manual` is the window's own size**, and no status
+     row comes off it. Every other policy reads a client's terminal,
+     where the status line is not part of any window. That is the one
+     trap in the four.
+   - **A frame costs about half a percent more**: divided 16 panes
+     40708 to 40891 instructions, strip 16 panes 88974 to 89145. That
+     is `View.moved_onto` and one call through `room()`. The walk over
+     the clients is the same walk `get_window_size` did.
 6. **`Plane` on its own, then `Masonry`.**
 
-Slices 1 to 4 are landed. **The two-answers problem is gone**: one
+Slices 1 to 5 are landed. **The two-answers problem is gone**: one
 object per window says where the panes are, and the container, the
-title bars and the direction keys all read it.
+title bars and the direction keys all read it. **The plane and the
+view are separate**: one plan, one size per pane, and as many views as
+there are clients.
 
-**Where slice 5 starts.** `PlanContainer.offset` is one view, held by
-the container of one client, and `Strip.look_at` moves it. A `View` is
-that offset plus a size and the marks, one per client, and
-`pymux.get_window_size` (`main.py:696`) is the hard-coded `smallest`
-policy that `window-size` replaces. Nothing else in `layout.py` forks
-on which layout a window is in any more, which is what makes the next
-slice small.
+**Where slice 6 starts.** Every layout still reads
+`arrangement.Window`: the tree, the weights and the column widths live
+there, and `Divided` and `Strip` measure them rather than owning them.
+`Plane` is the layout with no tree at all -- rectangles a person put
+somewhere, kept between frames -- so it is the first one that has
+nowhere to read from, and writing it is what says where the tree
+belongs. `Masonry` comes after it.
+
+Two things slice 5 left for whoever picks them up. The second half of
+Lillecarl/pymux#224 -- waking only the clients that can see a change --
+now has its predicate in `View.shows`, but `Pymux.invalidate` takes a
+reason and no pane, and a pane that writes wakes its client through
+prompt_toolkit rather than through `invalidate`. And
+Lillecarl/pymux#225 holds the `resize-window` flags that are not `-x`
+and `-y`.
 
 ## Popups, and floating windows
 
