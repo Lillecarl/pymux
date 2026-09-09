@@ -15,7 +15,7 @@ prompt_toolkit actually draws.
 
 from hypothesis import given
 from hypothesis import strategies as st
-from prompt_toolkit.data_structures import Size
+from prompt_toolkit.data_structures import Point, Size
 from test_the_plane import every_promise_holds, everything_is_reachable
 
 from pymux.arrangement import Pane, Window
@@ -224,6 +224,98 @@ def test_a_strip_numbers_its_panes_the_way_a_person_reads_them():
 
     assert plan.order == panes
     assert plan.reading_order() == panes
+
+
+# ----------------------------------------------------------------------
+# Where the view goes.
+#
+# `test_strip.py` asks the same questions of `ScrollableStrip` by
+# reading cells. These ask the layout on its own, which is where the
+# rule lives now: the container draws what it is told.
+
+
+def looking_at(window, focus, offset=0, columns=SIZE.columns, size=SIZE):
+    "Where the view lands, given where it was and what has the focus."
+    strip = Strip(window)
+    plan = strip.measure(size)
+
+    return strip.look_at(plan, Point(x=offset, y=0), Size(size.rows, columns), focus).x
+
+
+def test_a_column_already_on_screen_moves_nothing():
+    """
+    What makes moving the focus a round trip: walk right and back, and
+    the strip is where it started. Lillecarl/pymux#207.
+    """
+    window, panes = a_strip((1, 1, 1))
+
+    assert looking_at(window, panes[1], offset=40) == 40
+
+
+def test_the_view_follows_the_focus_to_the_right():
+    window, panes = a_strip((1, 1, 1))
+
+    # Three columns of forty cells, and a window eighty wide. The
+    # third ends at 120, so the view stops at 40.
+    assert looking_at(window, panes[2], offset=0) == 40
+
+
+def test_the_view_follows_the_focus_back_to_the_left():
+    window, panes = a_strip((1, 1, 1))
+
+    assert looking_at(window, panes[0], offset=40) == 0
+
+
+def test_a_column_owns_the_border_the_view_has_to_show():
+    """
+    A column is its panes and the border on its right, so the view
+    goes one cell further than the pane needs. Without that the border
+    of the focused column sits just off the screen.
+    """
+    window, panes = a_strip((1, 1))
+
+    # Two columns fit exactly at eighty. At seventy nine the second
+    # column's border is the cell that does not, so the view moves by
+    # one and not by none.
+    assert looking_at(window, panes[1], offset=0, columns=79) == 1
+
+
+def test_the_view_never_passes_the_end_of_the_row():
+    window, panes = a_strip((1, 1))
+
+    assert looking_at(window, panes[0], offset=99) == 0
+
+
+def test_the_view_never_starts_before_the_row():
+    window, panes = a_strip((1, 1, 1))
+
+    assert looking_at(window, panes[0], offset=-5) == 0
+
+
+def test_a_column_wider_than_the_view_shows_its_right_edge():
+    """
+    Which is what the rule does, and not what it says it does.
+
+    `ScrollableStrip._scroll_to_the_focus` carries a comment saying
+    the left edge wins, and the test that judges it reads eight cells
+    that hold the same letter whichever edge is shown. This says the
+    behaviour out loud so that changing it is a decision and not an
+    accident. Lillecarl/pymux#218.
+    """
+    window, panes = a_strip((1, 1))
+    window.column_widths[window.root[1]] = 1.0
+
+    # The second column is the whole window wide, at 40 to 119, and
+    # the view is forty cells. Its left edge is at 40 and its right at
+    # 120, so showing the end means showing 80 to 119.
+    assert looking_at(window, panes[1], offset=0, columns=40) == 80
+
+
+def test_nothing_focused_leaves_the_view_where_it_is():
+    "A command line or a dialog has the keyboard, and the view holds."
+    window, _ = a_strip((1, 1, 1))
+
+    assert looking_at(window, None, offset=20) == 20
 
 
 # ----------------------------------------------------------------------

@@ -80,7 +80,7 @@ instead. Lillecarl/pymux#207.
 from typing import NamedTuple
 
 from prompt_toolkit.application import get_app
-from prompt_toolkit.data_structures import Size
+from prompt_toolkit.data_structures import Point, Size
 from prompt_toolkit.key_binding import KeyBindingsBase
 from prompt_toolkit.layout.containers import Container, VSplit, to_container
 from prompt_toolkit.layout.dimension import Dimension as D
@@ -88,7 +88,7 @@ from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Screen, WritePosition
 
 from . import arrangement
-from .plane import Plan, Rect, Slot
+from .plane import Pane, Plan, Rect, Slot
 
 __all__ = ["BORDER_WIDTH", "Gaps", "ScrollableStrip", "Strip"]
 
@@ -188,6 +188,46 @@ class Strip:
         # Decision 9: a strip numbers its panes the way a person reads
         # them. Lillecarl/pymux#210.
         return Plan(rects)
+
+    def look_at(
+        self, plan: Plan, offset: Point, size: Size, focus: "Pane | None"
+    ) -> Point:
+        """
+        Where the view goes: far enough that the focused column is on
+        it, and not one cell further.
+
+        **A column already on screen leaves the view alone.** That is
+        what makes moving the focus a round trip: walk right and back,
+        and the strip is where it started. Lillecarl/pymux#207.
+
+        A column is its panes and the border it owns, so the column
+        ends one cell past the pane's rectangle. The view never passes
+        the end of the row either, whatever the focus asks for: a
+        column that closes can leave it out there.
+        """
+        x = offset.x
+
+        if focus is not None:
+            rect = plan.rect_of(focus)
+            start, end = rect.x, rect.right + self.gaps.between_columns
+
+            if start < x:
+                x = start
+            elif end > x + size.columns:
+                # Far enough right that the column's end is on screen,
+                # and no further than its start.
+                #
+                # **A column wider than the view shows its right edge**,
+                # because then its end is further than its start. The
+                # rule this was moved from says in a comment that the
+                # left edge wins, and does this; the test that claims
+                # to judge it cannot tell the two apart, because every
+                # cell it reads holds the same letter either way.
+                # Lillecarl/pymux#218.
+                x = max(start, end - size.columns)
+
+        row = plan.plane.width + self.gaps.between_columns
+        return Point(x=max(0, min(x, max(0, row - size.columns))), y=0)
 
 
 def _lay_out(item, rect: Rect, gaps: Gaps, into: list) -> None:
