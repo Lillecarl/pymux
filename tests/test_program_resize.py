@@ -9,6 +9,7 @@ shorter, so a program only gets its way when the person allows it with
 """
 
 from pymux.arrangement import Arrangement, Pane
+from pymux.layout import the_plan_of
 from pymux.main import Pymux
 
 
@@ -44,11 +45,6 @@ def _pymux(allow=False):
     window = pymux.arrangement.windows[-1]
     window.add_pane(second, vsplit=False)
 
-    # A weight is about a cell, and both panes hold 24 lines. Starting
-    # at one would clamp every change: no weight may fall below one.
-    for pane in (first, second):
-        window.root.weights[pane] = 24
-
     return pymux, window, first, second
 
 
@@ -56,6 +52,20 @@ def _weights(window):
     "The weights of the split that holds the panes, in order."
     split = window.root
     return [split.weights[child] for child in split]
+
+
+def _rows(pymux, window):
+    """
+    How many rows each pane really has, top to bottom.
+
+    **The cells are what a resize is about, and the weights are how it
+    is written down.** A weight is a share of a split, so a delta means
+    nothing until the weights say what each pane measures now; the
+    layout writes that first (`the_weights_become_the_cells`) and this
+    reads what came out. Lillecarl/pymux#217.
+    """
+    plan = the_plan_of(pymux, window)
+    return [plan.rect_of(pane).height for pane in window.panes]
 
 
 def test_a_pane_keeps_its_size_while_the_option_is_off():
@@ -67,20 +77,24 @@ def test_a_pane_keeps_its_size_while_the_option_is_off():
 
 def test_a_taller_pane_takes_the_room_from_its_neighbour():
     pymux, window, first, _second = _pymux(allow=True)
-    before = _weights(window)
+    before = _rows(pymux, window)
+
+    # The program holds 24 lines and asks for 30, so it asks for six
+    # more than it has, and its neighbour gives up exactly those six.
     pymux.resize_pane_for_program(first, 30, None)
-    after = _weights(window)
-    # The pane asked for six lines more than the 24 it has, and its
-    # neighbour gives up exactly those six.
+
+    after = _rows(pymux, window)
     assert after == [before[0] + 6, before[1] - 6]
     assert sum(after) == sum(before)
 
 
 def test_a_shorter_pane_gives_the_room_back():
     pymux, window, first, _second = _pymux(allow=True)
-    before = _weights(window)
+    before = _rows(pymux, window)
+
     pymux.resize_pane_for_program(first, 20, None)
-    after = _weights(window)
+
+    after = _rows(pymux, window)
     assert after == [before[0] - 4, before[1] + 4]
     assert sum(after) == sum(before)
 
@@ -101,8 +115,8 @@ def test_a_pane_that_is_gone_changes_nothing():
     assert _weights(window) == before
 
 
-def test_a_weight_never_falls_below_one():
+def test_a_pane_never_loses_its_last_row():
     "A pane that asks for everything still leaves its neighbour a line."
     pymux, window, first, _second = _pymux(allow=True)
     pymux.resize_pane_for_program(first, 10000, None)
-    assert min(_weights(window)) >= 1
+    assert min(_rows(pymux, window)) >= 1

@@ -24,6 +24,7 @@ __all__ = [
     "VSplit",
     "Window",
     "Arrangement",
+    "panes_of",
 ]
 
 
@@ -184,14 +185,14 @@ def _place_of(split: _Split, item: object) -> int:
     raise ValueError("%r is not in %r" % (item, split))
 
 
-def _panes_of(item) -> "List[Pane]":
+def panes_of(item) -> "List[Pane]":
     "Every pane under this item, in the order they are drawn."
     if isinstance(item, Pane):
         return [item]
 
     result: List[Pane] = []
     for child in item:
-        result.extend(_panes_of(child))
+        result.extend(panes_of(child))
     return result
 
 
@@ -372,7 +373,7 @@ class Window:
         """
         column = self._column_of(pane)
 
-        if len(_panes_of(column)) > 1:
+        if len(panes_of(column)) > 1:
             return self._expel(pane, column, step)
         return self._consume(pane, column, step)
 
@@ -598,7 +599,7 @@ class Window:
         it walks the tree in place: top-left first, the way tmux
         numbers panes and the way an eye reads them.
         """
-        return _panes_of(self.root)
+        return panes_of(self.root)
 
     @property
     def splits(self) -> List[HSplit | VSplit]:

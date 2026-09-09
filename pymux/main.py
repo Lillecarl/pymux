@@ -41,7 +41,7 @@ from .commands.completer import create_command_completer
 from .enums import COMMAND, PROMPT, Woke
 from .graphics import PaneView
 from .key_bindings import PymuxKeyBindings
-from .layout import Justify, LayoutManager
+from .layout import Justify, LayoutManager, the_pane_resizes
 from .log import logger
 from .notifications import NotificationRoutes
 from .options import ALL_OPTIONS, ALL_WINDOW_OPTIONS, ExtendedKeys
@@ -1027,9 +1027,9 @@ class Pymux:
 
             process = pane.process
             if lines is not None and process.sy:
-                window.change_size_for_pane(pane, down=lines - process.sy)
+                the_pane_resizes(self, window, pane, down=lines - process.sy)
             if columns is not None and process.sx:
-                window.change_size_for_pane(pane, right=columns - process.sx)
+                the_pane_resizes(self, window, pane, right=columns - process.sx)
 
             self.invalidate(Woke.A_PANE_RESIZED)
         except Exception:

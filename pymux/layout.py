@@ -6,7 +6,7 @@ The layout engine. This builds the prompt_toolkit layout.
 import datetime
 import weakref
 from functools import partial
-from typing import TYPE_CHECKING, Callable, Dict, List, Tuple, Type
+from typing import TYPE_CHECKING, Callable, Dict, List, Tuple
 
 from prompt_toolkit.application import Application, get_app
 from prompt_toolkit.data_structures import Size
@@ -32,9 +32,7 @@ from prompt_toolkit.layout.containers import (
     to_container,
 )
 from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
-from prompt_toolkit.layout.dimension import AnyDimension
 from prompt_toolkit.layout.dimension import Dimension as D
-from prompt_toolkit.layout.dimension import is_dimension, to_dimension
 from prompt_toolkit.layout.margins import ScrollbarMargin
 from prompt_toolkit.layout.menus import CompletionsMenu, CompletionsMenuControl
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers
@@ -54,10 +52,11 @@ from .enums import Woke
 from .filters import WaitsForConfirmation
 from .format import format_pymux_string
 from .log import logger
+from .divided import Divided
 from .plan_container import PlanContainer
-from .plane import Plan, Side
+from .plane import Plan, Side, bounding_box
 from .strip import Strip
-from .tiling import BORDER_HORIZONTAL, BORDER_VERTICAL, BORDER_WIDTH, Gaps
+from .tiling import BORDER_WIDTH, Gaps
 from .titlebar import PaneTitleBar
 
 if TYPE_CHECKING:
@@ -1071,18 +1070,12 @@ class DynamicBody(Container):
         else:
             window = self.pymux.arrangement.get_active_window()
 
-            # A strip is not a sixth layout: every other one divides the
-            # window between the panes, and a strip gives each column a
-            # width of its own and scrolls. Lillecarl/pymux#198.
-            #
-            # Everything around it stays the same, and that is the
-            # point. A strip draws onto this screen, in this screen's
-            # coordinates, so the row reserved below is the row its
-            # title bars hang in, exactly as in every other layout.
-            if window.strip:
-                content = _create_strip(self.pymux, window)
-            else:
-                content = _create_split(self.pymux, window, window.root)
+            # Every layout draws the same way: it says where the panes
+            # are and one container puts them there. A strip draws onto
+            # this screen, in this screen's coordinates, so the row
+            # reserved below is the row its title bars hang in, exactly
+            # as in every other layout.
+            content = _create_the_panes(self.pymux, window)
 
             return HSplit(
                 [
@@ -1137,95 +1130,58 @@ class DynamicBody(Container):
         return [body]
 
 
-class SizedBox(Container):
+def _create_the_panes(pymux: "Pymux", window) -> Container:
     """
-    Container whith enforces a given width/height without taking the children
-    into account (even if no width/height is given).
+    The container that draws every pane of a window.
 
-    :param content: `Container`.
-    :param report_write_position_callback: `None` or a callable for reporting
-        back the dimensions used while drawing.
-    """
+    **The layout says where every pane is, and this draws them.**
+    `measure` hands over a plan -- a rectangle for each pane, on a
+    plane that may be bigger than the screen -- and `PlanContainer`
+    puts each pane's container at its rectangle, less the offset of the
+    view. Nothing here divides anything, and there is one of these
+    whatever layout the window is in. Lillecarl/pymux#217.
 
-    def __init__(
-        self,
-        content,
-        width=None,
-        height=None,
-        report_write_position_callback: Callable | None = None,
-    ):
-        assert is_dimension(width)
-        assert is_dimension(height)
-
-        self.content = to_container(content)
-        self.width = width
-        self.height = height
-        self.report_write_position_callback = report_write_position_callback
-
-    def reset(self) -> None:
-        self.content.reset()
-
-    def preferred_width(self, max_available_width: int) -> D:
-        return to_dimension(self.width)
-
-    def preferred_height(self, width: int, max_available_height: int) -> D:
-        return to_dimension(self.height)
-
-    def write_to_screen(
-        self,
-        screen: Screen,
-        mouse_handlers: MouseHandlers,
-        write_position: WritePosition,
-        parent_style: str,
-        erase_bg: bool,
-        z_index: int | None,
-    ) -> None:
-        # Report dimensions.
-        if self.report_write_position_callback:
-            self.report_write_position_callback(write_position)
-
-        self.content.write_to_screen(
-            screen, mouse_handlers, write_position, parent_style, erase_bg, z_index
-        )
-
-    def get_children(self) -> List[Container]:
-        return [self.content]
-
-
-def _create_strip(pymux: "Pymux", window) -> Container:
-    """
-    Create the container for a window that is laid out as a strip.
-
-    **The strip says where every pane is, and the container draws
-    them.** `Strip.measure` hands over a plan -- a rectangle for each
-    pane, on a plane that may be wider than the screen -- and
-    `PlanContainer` puts each pane's container at its rectangle, less
-    the offset of the view. Nothing here divides anything.
-    Lillecarl/pymux#217.
-
-    A column is whatever the child of the root is: a `Pane`, or a
-    stack of them, which is what a niri column holds. It makes no
-    difference here, because this builds one container per pane and
-    the plan says where each one goes.
-
-    **A column owns the border on its right**, and the layout draws it:
+    **A pane knows nothing about borders**, and the layout draws them:
     Carl, "individual panes should not be aware of borders ... the
-    layout is responsible for drawing the borders either way". The
-    border comes out of the column's share of the window rather than
-    being added on top of it, so a column takes the same room whatever
-    the other columns do. Without that, two columns of half a window
-    came to one cell more than the window, every time.
-    Lillecarl/pymux#206.
+    layout is responsible for drawing the borders either way". In a
+    strip the border a column owns comes out of that column's share of
+    the window rather than being added on top of it, so a column takes
+    the same room whatever the other columns do. Without that, two
+    columns of half a window came to one cell more than the window,
+    every time. Lillecarl/pymux#206.
     """
     containers = {
         pane: _create_container_for_process(pymux, window, pane)
         for pane in window.panes
     }
 
-    return PlanContainer(
-        Strip(window, partial(the_gaps_of, pymux, window)),
-        containers,
-    )
+    return PlanContainer(the_layout_of(pymux, window), containers)
+
+
+def the_layout_of(pymux: "Pymux", window):
+    """
+    What says where the panes of this window are.
+
+    One object, and everything asks it: the container that draws, the
+    title bars, and the key that moves the focus. That is the whole of
+    Lillecarl/pymux#217 -- "which pane is beside this one" had two
+    answers, one read off the last frame and one walked out of the
+    tree, and they did not agree.
+
+    A strip is not a sixth layout: every other one divides the window
+    between the panes, and a strip gives each column a width of its own
+    and scrolls. Lillecarl/pymux#198.
+
+    The gaps are passed as a callable, because the gap between two
+    stacked panes is two rows when a bar is drawn under a pane and one
+    when it is not, and an option turns that on while the layout built
+    here is still standing.
+    """
+    gaps = partial(the_gaps_of, pymux, window)
+
+    if window.strip:
+        return Strip(window, gaps)
+    return Divided(window, gaps)
 
 
 def _the_bar_below_is_drawn(pymux: "Pymux", window) -> bool:
@@ -1263,16 +1219,15 @@ def the_plan_of(pymux: "Pymux", window) -> Plan:
     """
     Where the panes of this window are, in cells.
 
-    Only a strip answers this way today. The rows the chrome takes come
-    off the window first, because a plan holds panes and the chrome
-    draws in the gaps between them. Lillecarl/pymux#217.
+    The rows the chrome takes come off the window first, because a plan
+    holds panes and the chrome draws in the gaps between them.
+    Lillecarl/pymux#217.
 
     **Measured on demand**, so a frame that asks about four sides of
     ten panes measures forty times. It is cheap arithmetic over a few
     rectangles, and it is the same arithmetic the container that draws
     does, over the same window: what it draws is what a title bar
-    reads. They become one measurement when `Divided` answers this way
-    too, and this function goes.
+    reads.
     """
     size = pymux.get_window_size()
 
@@ -1282,9 +1237,58 @@ def the_plan_of(pymux: "Pymux", window) -> Plan:
     if _the_bar_below_is_drawn(pymux, window):
         rows -= 1
 
-    return Strip(window, the_gaps_of(pymux, window)).measure(
+    return the_layout_of(pymux, window).measure(
         Size(rows=max(1, rows), columns=size.columns),
     )
+
+
+def the_weights_become_the_cells(pymux: "Pymux", window) -> None:
+    """
+    Write the size each thing has now into the weight that decides it.
+
+    **This is what makes `resize-pane -U 1` mean one row.** A weight is
+    a share of a split and not a number of cells, so a delta of one
+    added to a share of one means nothing on a screen. Measure first,
+    write the cells each child holds into its weight, and then a delta
+    of one is one cell -- the weights add up to the room, so each
+    child's share of it comes out as the number itself.
+
+    The render used to do this on every frame
+    (`report_write_position_callback`), which is how the arrangement
+    came to hold four kinds of geometry at once. The plan decides now,
+    and this is the one place that writes a weight back.
+
+    tmux does the opposite and pays for it: `layout_resize_adjust`
+    keeps absolute cells and moves them by a delta, so its rounding
+    drifts over repeated resizes.
+    """
+    plan = the_plan_of(pymux, window)
+
+    for split in window.splits:
+        sideways = isinstance(split, arrangement.VSplit)
+
+        for child in split:
+            held = [plan.rect_of(pane) for pane in arrangement.panes_of(child)]
+            if not held:
+                continue
+
+            box = bounding_box(held)
+            split.weights[child] = box.width if sideways else box.height
+
+
+def the_pane_resizes(
+    pymux: "Pymux", window, pane: arrangement.Pane, up=0, right=0, down=0, left=0
+) -> None:
+    """
+    Make one pane bigger or smaller, by that many cells on each side.
+
+    **One door**, because a resize is two steps and the first one is
+    easy to forget: the weights have to say what the panes measure now
+    before a delta means anything. `resize-pane` and a program asking
+    for a size both come through here.
+    """
+    the_weights_become_the_cells(pymux, window)
+    window.change_size_for_pane(pane, up=up, right=right, down=down, left=left)
 
 
 def the_pane_beside(
@@ -1293,26 +1297,22 @@ def the_pane_beside(
     """
     The pane on one side of this one. **One answer, for one window.**
 
-    Two mechanisms answer this today and they do not agree.
-    `select-pane -L` reads where the panes were drawn last frame, and a
+    Two mechanisms answered this and they did not agree.
+    `select-pane -L` read where the panes were drawn last frame, and a
     title bar cannot use that because it is drawn *during* a frame, so
-    it walks the arrangement's tree instead. The tree names the top of
-    a stack beside us; the frame names whichever pane the active one's
-    own row runs into. Lillecarl/pymux#217.
+    it walked the arrangement's tree instead. The tree named the top of
+    a stack beside us; the frame named whichever pane the active one's
+    own row ran into. Lillecarl/pymux#217.
 
-    A strip answers from its plan, which is neither: it names the pane
-    that shares most of our edge. Every other layout still walks the
-    tree, until `Divided` emits a plan as well.
+    The plan answers, which is neither: it names the slot that shares
+    most of our edge, and then the pane that slot shows.
 
     **A zoomed pane has nothing beside it**, because it covers the
-    window. That is what both mechanisms already do, and saying it once
-    here keeps them saying it.
+    window. That is what both mechanisms already did, and saying it
+    once here keeps them saying it.
     """
     if window.zoom:
         return None
-
-    if not window.strip:
-        return _from_the_tree(window, pane, side)
 
     plan = the_plan_of(pymux, window)
 
@@ -1326,112 +1326,6 @@ def the_pane_beside(
 
     beside = plan.neighbour(slot, side)
     return None if beside is None else beside.shown
-
-
-def _from_the_tree(window, pane: arrangement.Pane, side: Side):
-    "The older answer: a walk of the arrangement's tree."
-    return {
-        Side.LEFT: window.pane_to_the_left,
-        Side.RIGHT: window.pane_to_the_right,
-        Side.ABOVE: window.pane_above,
-        Side.BELOW: window.pane_below,
-    }[side](pane)
-
-
-def _create_split(
-    pymux: "Pymux", window, split: arrangement.HSplit | arrangement.VSplit
-) -> Container:
-    """
-    Create a prompt_toolkit `Container` instance for the given pymux split.
-    """
-    is_vsplit = isinstance(split, arrangement.VSplit)
-
-    def get_average_weight() -> int:
-        """Calculate average weight of the children. Return 1 if none of
-        the children has a weight specified yet."""
-        weights = 0
-        count = 0
-
-        for i in split:
-            if i in split.weights:
-                weights += split.weights[i]
-                count += 1
-
-        if weights:
-            return max(1, weights // count)
-        else:
-            return 1
-
-    def report_write_position_callback(item, write_position):
-        """
-        When the layout is rendered, store the actial dimensions as
-        weights in the arrangement.VSplit/HSplit classes.
-
-        This is required because when a pane is resized with an increase of +1,
-        we want to be sure that this corresponds exactly with one row or
-        column. So, that updating weights corresponds exactly 1/1 to updating
-        the size of the panes.
-        """
-        if is_vsplit:
-            split.weights[item] = write_position.width
-        else:
-            split.weights[item] = write_position.height
-
-    def get_size(item) -> D:
-        return D(weight=split.weights.get(item) or average_weight)
-
-    content = []
-    average_weight = get_average_weight()
-
-    for i, item in enumerate(split):
-        # Create function for calculating dimensions for child.
-        width = height = None
-        if is_vsplit:
-            width = partial(get_size, item)
-        else:
-            height = partial(get_size, item)
-
-        # Create child.
-        if isinstance(item, (arrangement.VSplit, arrangement.HSplit)):
-            child = _create_split(pymux, window, item)
-        elif isinstance(item, arrangement.Pane):
-            child = _create_container_for_process(pymux, window, item)
-        else:
-            raise TypeError("Got %r" % (item,))
-
-        # Wrap child in `SizedBox` to enforce dimensions and sync back.
-        content.append(
-            SizedBox(
-                child,
-                width=width,
-                height=height,
-                report_write_position_callback=partial(
-                    report_write_position_callback, item
-                ),
-            )
-        )
-
-    # Create prompt_toolkit Container.
-    return_cls: Type[HSplit] | Type[VSplit]
-
-    if is_vsplit:
-        return_cls = VSplit
-        padding_char = BORDER_VERTICAL
-        padding: AnyDimension = 1
-    else:
-        return_cls = HSplit
-        padding_char = BORDER_HORIZONTAL
-
-        # Two rows between stacked panes when the bar below is drawn:
-        # the lower pane hangs its title bar in the second, and the
-        # upper one hangs the bar below in the first. One row when it
-        # is not, which is every layout that has no stack in it.
-        def padding_between_the_panes() -> D:
-            return D.exact(2 if _the_bar_below_is_drawn(pymux, window) else 1)
-
-        padding = padding_between_the_panes
-
-    return return_cls(content, padding=padding, padding_char=padding_char)
 
 
 def _short_name_of(pymux: "Pymux", pane: arrangement.Pane) -> str:
@@ -1821,90 +1715,40 @@ class TracePaneWritePosition(_ContainerProxy):  # XXX: replace with SizedBox
 
 def focus_left(pymux: "Pymux") -> None:
     "Move focus to the left."
-    if _the_plan_moved_the_focus(pymux, Side.LEFT):
-        return
-
-    _move_focus(
-        pymux,
-        lambda wp: wp.xpos - 2,  # 2 in order to skip over the border.
-        lambda wp: wp.ypos,
-    )
+    _move_focus(pymux, Side.LEFT)
 
 
 def focus_right(pymux: "Pymux") -> None:
     "Move focus to the right."
-    if _the_plan_moved_the_focus(pymux, Side.RIGHT):
-        return
-
-    _move_focus(pymux, lambda wp: wp.xpos + wp.width + 1, lambda wp: wp.ypos)
+    _move_focus(pymux, Side.RIGHT)
 
 
 def focus_down(pymux: "Pymux") -> None:
     "Move focus down."
-    if _the_plan_moved_the_focus(pymux, Side.BELOW):
-        return
-
-    _move_focus(pymux, lambda wp: wp.xpos, lambda wp: wp.ypos + wp.height + 2)
-    # 2 in order to skip over the border. Only required when the
-    # pane-status is not shown, but a border instead.
+    _move_focus(pymux, Side.BELOW)
 
 
 def focus_up(pymux: "Pymux") -> None:
     "Move focus up."
-    if _the_plan_moved_the_focus(pymux, Side.ABOVE):
-        return
-
-    _move_focus(pymux, lambda wp: wp.xpos, lambda wp: wp.ypos - 2)
+    _move_focus(pymux, Side.ABOVE)
 
 
-def _the_plan_moved_the_focus(pymux: "Pymux", side: Side) -> bool:
+def _move_focus(pymux: "Pymux", side: Side) -> None:
     """
-    Move the focus with the plan, where there is one.
+    Move the focus one pane that way, and stay where it is at the edge.
 
-    Returns whether the plan answered, and an answer of "nothing is
-    over there" counts: the layout has said so, and probing the last
-    frame after it would be the second mechanism again. A layout with
-    no plan yet returns False, and `_move_focus` reads the frame the
-    way it always has.
-
-    **The same words as the title bar**, which is the point of
-    Lillecarl/pymux#217: a key and a bar that name different panes are
-    two bugs waiting, and they cannot now.
+    **The plan says which pane that is, and the same words as the title
+    bar do.** This read the last frame instead: where each pane was
+    drawn, then two cells past its edge, then whichever pane held that
+    cell. A key and a bar that name different panes are two bugs
+    waiting, and before the first frame the key did nothing at all.
+    Lillecarl/pymux#217.
     """
     window = pymux.arrangement.get_active_window()
 
-    if not window.strip or window.zoom or window.active_pane is None:
-        return False
+    if window.active_pane is None:
+        return
 
     beside = the_pane_beside(pymux, window, window.active_pane, side)
     if beside is not None:
         window.active_pane = beside
-
-    return True
-
-
-def _move_focus(pymux: "Pymux", get_x, get_y) -> None:
-    "Move focus of the active window."
-    window = pymux.arrangement.get_active_window()
-
-    try:
-        client_state = pymux.get_client_state()
-    except ValueError:
-        return
-
-    try:
-        write_pos = client_state.layout_manager.pane_write_positions[window.active_pane]
-    except KeyError:
-        pass
-    else:
-        x = get_x(write_pos)
-        y = get_y(write_pos)
-
-        # Look for the pane at this position.
-        for (
-            pane,
-            wp,
-        ) in client_state.layout_manager.pane_write_positions.items():
-            if wp.xpos <= x < wp.xpos + wp.width and wp.ypos <= y < wp.ypos + wp.height:
-                window.active_pane = pane
-                return

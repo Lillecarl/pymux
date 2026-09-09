@@ -25,7 +25,13 @@ from pymux.key_mappings import (
     prompt_toolkit_key_to_vt100_key,
     pymux_key_to_prompt_toolkit_key_sequence,
 )
-from pymux.layout import focus_down, focus_left, focus_right, focus_up
+from pymux.layout import (
+    focus_down,
+    focus_left,
+    focus_right,
+    focus_up,
+    the_pane_resizes,
+)
 from pymux.log import logger
 from pymux.options import SetOptionError
 
@@ -865,8 +871,10 @@ def resize_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
 
     w = pymux.arrangement.get_active_window()
 
-    if w:
-        w.change_size_for_active_pane(up=up, right=right, down=down, left=left)
+    if w and w.active_pane is not None:
+        the_pane_resizes(
+            pymux, w, w.active_pane, up=up, right=right, down=down, left=left
+        )
 
         # Zoom in/out.
         if variables["-Z"]:
