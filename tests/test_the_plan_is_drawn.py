@@ -326,11 +326,9 @@ def test_a_pane_with_no_container_is_not_drawn():
     assert drawn(plan, containers, visible=8) == "    bbbb"
 
 
-def test_a_pane_is_told_where_it_ended_up():
-    "A click has to reach the pane that was drawn under it."
-    plan, containers = a_row([4, 4, 4])
-    container = PlanContainer(_Fixed(plan, Point(x=4, y=0)), containers)
-    panes = list(containers)
+def _drawn_at(plan, containers, offset, visible=8):
+    "Where each pane's container was drawn, on the screen."
+    container = PlanContainer(_Fixed(plan, offset), containers)
 
     with create_pipe_input() as pipe:
         app = Application(layout=Layout(container), input=pipe, output=DummyOutput())
@@ -339,16 +337,43 @@ def test_a_pane_is_told_where_it_ended_up():
             container.write_to_screen(
                 screen,
                 MouseHandlers(),
-                WritePosition(xpos=0, ypos=0, width=8, height=HEIGHT),
+                WritePosition(xpos=0, ypos=0, width=visible, height=HEIGHT),
                 "",
                 False,
                 None,
             )
 
-    where = screen.visible_windows_to_write_positions
-    # The view is four cells along, so the first pane was drawn four
-    # cells to the left of the screen.
-    assert where[containers[panes[0]]].xpos == -4
+    return screen.visible_windows_to_write_positions
+
+
+def test_a_pane_is_told_where_it_ended_up():
+    "A click has to reach the pane that was drawn under it."
+    plan, containers = a_row([4, 4, 4])
+    panes = list(containers)
+
+    where = _drawn_at(plan, containers, Point(x=2, y=0))
+
+    # The view is two cells along, so the first pane was drawn two
+    # cells to the left of the screen, and half of it is on.
+    assert where[containers[panes[0]]].xpos == -2
+    assert where[containers[panes[1]]].xpos == 2
+
+
+def test_a_pane_with_no_part_of_it_in_the_view_is_not_drawn():
+    """
+    Building the rows of a pane nobody can see costs more than the
+    cells it throws away, so it is not written at all.
+    Lillecarl/pymux#224.
+
+    A pane that is *partly* in the view is written whole and clipped,
+    which is what the plane rests on, and the test above holds that.
+    """
+    plan, containers = a_row([4, 4, 4])
+    panes = list(containers)
+
+    where = _drawn_at(plan, containers, Point(x=4, y=0))
+
+    assert containers[panes[0]] not in where
     assert where[containers[panes[1]]].xpos == 0
 
 

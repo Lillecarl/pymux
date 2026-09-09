@@ -214,25 +214,32 @@ def columns_of(pymux, how_many):
     return window, opened
 
 
-def test_a_strip_records_where_it_drew_each_column():
+def test_a_strip_records_where_it_drew_the_columns_it_drew():
     """
-    The property `select-pane -R` needs, and the one a strip used to
-    break. Moving is geometric: it steps one cell past the active
-    pane's right edge and asks which pane is drawn there. So every
-    column has to be recorded, in the screen's own coordinates, in the
-    order they are drawn, whether or not it is on the screen.
+    Where each column landed on the screen, which is what a mouse click
+    has to reach.
 
-    Three columns are wider than this window, and the focus is on the
-    last of them, so the first is off the left edge. It is recorded at
-    a negative position, which is what makes it reachable: a position
-    off the screen is still a position.
+    Three columns are wider than this window and the focus is on the
+    last of them, so the first is off the left edge. **It is not
+    recorded, because it is not drawn**: no part of its rectangle is in
+    the view, and building the rows of a pane nobody can see costs more
+    than the cells it throws away. Lillecarl/pymux#224.
+
+    That used to be the opposite. `select-pane -R` stepped one cell
+    past the active pane's right edge and asked which pane was drawn
+    there, so every column had to be recorded whether it was on the
+    screen or not, and a position off the screen was still a position.
+    The plan answers that question now, so nothing needs the position
+    of a pane that was never drawn. Lillecarl/pymux#217.
     """
     with a_client(STRIP) as (pymux, draw):
         _, columns = columns_of(pymux, 3)
         draw()
 
         drawn_at = pymux.get_client_state().layout_manager.pane_write_positions
-        where = [drawn_at[column] for column in columns]
+
+        assert columns[0] not in drawn_at, drawn_at
+        where = [drawn_at[column] for column in columns[1:]]
 
         xs = [position.xpos for position in where]
         assert xs == sorted(xs), xs
@@ -241,9 +248,10 @@ def test_a_strip_records_where_it_drew_each_column():
         for left, right in zip(where, where[1:]):
             assert right.xpos == left.xpos + left.width + 1, xs
 
-        # The first is off the left edge, and the focused one is on.
-        assert xs[0] < 0, xs
-        assert 0 <= xs[-1] and xs[-1] + where[-1].width <= COLUMNS, xs
+        # The leftmost one drawn starts at the left of the screen, and
+        # the focused one ends on it.
+        assert xs[0] == 0, xs
+        assert xs[-1] + where[-1].width <= COLUMNS, xs
 
 
 def test_moving_right_reaches_the_next_column():

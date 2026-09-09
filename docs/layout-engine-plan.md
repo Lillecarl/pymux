@@ -357,6 +357,17 @@ needed no change to prompt_toolkit. We are not fighting the drawing. We
 are fighting the *measuring*: `preferred_width`/`preferred_height` and
 the divide-by-weight pass, which assume the children fit.
 
+**"Clips for free" holds for a pane that is partly in the view, and
+not for one that is wholly outside it.** The cells cost a dictionary
+write, but the rows they came from were built out of the screen and
+every cell of them was spelled first. So `PlanContainer` draws nothing
+whose rectangle does not reach the view: a strip of sixteen columns
+went from 168k bytecode instructions a frame to 89k, and a divided
+window whose panes run past the bottom from 53k to 41k.
+Lillecarl/pymux#224 holds the reasoning, and the rest of that issue --
+that a client should not be woken by a pane it cannot see -- waits for
+the views of slice 5.
+
 Two smaller rules that follow:
 
 - **The cursor** is hidden while the focused pane is out of view. The

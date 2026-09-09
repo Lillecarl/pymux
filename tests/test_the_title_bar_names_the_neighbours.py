@@ -44,12 +44,19 @@ def bars_of(pymux, draw, panes):
     A bar is a float over its own pane, so where the pane was drawn is
     where its bar is. Reading a fixed slice of the row instead would
     depend on how the window was divided.
+
+    `None` for a pane the frame did not draw. A pane with no part of it
+    in the view is not written at all (Lillecarl/pymux#224), so it has
+    no bar on the screen -- which does not stop the bars that *are*
+    drawn from naming it.
     """
     rows = draw()
     drawn_at = pymux.get_client_state().layout_manager.pane_write_positions
 
     return [
-        rows[0][drawn_at[pane].xpos : drawn_at[pane].xpos + drawn_at[pane].width]
+        None
+        if pane not in drawn_at
+        else rows[0][drawn_at[pane].xpos : drawn_at[pane].xpos + drawn_at[pane].width]
         for pane in panes
     ]
 
@@ -159,6 +166,11 @@ def test_a_strip_names_a_column_that_is_off_the_screen():
         assert "alpha" in bar, repr(bar)
         assert "gamma" in bar, repr(bar)
 
-        # And the one it names on the left is off the screen.
+        # And the one it names on the left is not on the screen at all:
+        # no part of it is in the view, so the frame did not draw it.
+        # **That is the point.** A bar names a neighbour out of the
+        # plan, so it can name a pane that was never drawn -- where the
+        # frame was once the only thing that could answer.
+        # Lillecarl/pymux#217, Lillecarl/pymux#224.
         drawn_at = state.layout_manager.pane_write_positions
-        assert drawn_at[panes[0]].xpos < 0, drawn_at[panes[0]]
+        assert panes[0] not in drawn_at, drawn_at

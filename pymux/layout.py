@@ -1230,7 +1230,24 @@ def _create_the_panes(pymux: "Pymux", window) -> Container:
         for pane in window.panes
     }
 
-    return PlanContainer(the_layout_of(pymux, window), containers)
+    return PlanContainer(
+        the_layout_of(pymux, window), containers, _tell_the_pane_its_size
+    )
+
+
+def _tell_the_pane_its_size(pane: arrangement.Pane, rect) -> None:
+    """
+    Give a pane the size of its rectangle.
+
+    **The plan sizes a pane, and the drawing no longer has to.** A
+    pane that is drawn hears the same numbers again from
+    prompt_toolkit, which costs nothing because neither the pty nor
+    the screen acts on a size it already has. A pane that is *not*
+    drawn -- scrolled out of the view, or behind another in a stack --
+    hears them only here, and the program in it needs them: it writes
+    for the screen it thinks it has. Lillecarl/pymux#224.
+    """
+    pane.terminal.set_size(rect.width, rect.height)
 
 
 def the_layout_of(pymux: "Pymux", window):

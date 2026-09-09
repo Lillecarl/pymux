@@ -128,12 +128,16 @@ def test_a_divided_window_is_drawn_where_its_plan_says_too():
         assert len(the_offsets(pymux, the_plan(pymux))) == 1
 
 
-def test_the_plan_agrees_about_a_column_that_is_off_the_screen():
+def test_the_plan_holds_a_column_the_frame_never_drew():
     """
     The case the frame alone cannot answer, and the reason for all of
-    this. A strip scrolls, so a column can be drawn at a negative
-    position -- and the plan, which knows nothing about the screen,
-    still has to put it in the same place relative to everything else.
+    this. A strip scrolls, so a column can be off the screen -- and the
+    plan, which knows nothing about the screen, still puts it in the
+    same place relative to everything else.
+
+    The frame does not hold it at all: no part of it is in the view, so
+    it is not drawn (Lillecarl/pymux#224). Everything that asks where
+    that pane is asks the plan.
     """
     with a_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
         panes = a_row_of_panes(pymux)
@@ -147,8 +151,12 @@ def test_the_plan_agrees_about_a_column_that_is_off_the_screen():
         state.sync_focus()
         draw()
 
-        assert the_frame(pymux)[panes[0]].xpos < 0
-        assert len(the_offsets(pymux, the_plan(pymux))) == 1
+        plan = the_plan(pymux)
+
+        assert panes[0] not in the_frame(pymux)
+        # And the plan puts it left of the column that is drawn.
+        assert plan.rect_of(panes[0]).right <= plan.rect_of(panes[1]).x
+        assert len(the_offsets(pymux, plan)) == 1
 
 
 def test_the_plan_uses_the_size_the_window_was_given():

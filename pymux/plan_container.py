@@ -7,12 +7,18 @@ on the plane (`look_at`); this puts each pane's container at its
 rectangle, less the view's offset. Lillecarl/pymux#217.
 
 **There is one coordinate space, the real one.** A pane that has
-scrolled off the left is written at a negative position, and the
+scrolled half off the left is written at a negative position, and the
 renderer reads only the rectangle it is going to show, so the cells
-outside it cost a dictionary write and nothing else.
+outside it are written into a dictionary nobody reads.
 `pymux/strip.py` says at length why the other way -- draw on a screen
 of your own and copy the visible part over -- costs six kinds of bug,
 one for each thing that hangs on a screen.
+
+**A pane with no part of it in the view is not written at all.** The
+clipping above is what makes a half-visible pane free; a pane that is
+wholly outside is a different thing, because building its rows and
+spelling its cells happens before any of them is thrown away.
+Lillecarl/pymux#224.
 
 **It holds the plan it drew.** A title bar is drawn *during* a frame,
 inside one of these panes, so anything drawn in a frame can ask this
@@ -28,7 +34,7 @@ from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Char, Screen, WritePosition
 
-from .plane import Pane, Plan
+from .plane import Pane, Plan, Rect
 
 __all__ = ["PlanContainer"]
 
@@ -44,13 +50,22 @@ class PlanContainer(Container):
     :param containers: One container for each pane, by pane. A slot
         holding a stack draws the pane it shows and no other, so the
         containers of the panes behind it are never asked to draw.
+    :param tell_its_size: Called as `(pane, rect)` for every pane of
+        the plan on every frame, drawn or not. **The plan is what sizes
+        a pane**, and that has to be true of a pane it does not draw:
+        the program in it needs the size it will be shown at, or it
+        writes for a screen of the wrong shape until somebody looks at
+        it. Decision 6 of `docs/layout-engine-plan.md`, and the fault
+        the end to end checks caught when this container started
+        skipping what nobody can see.
     """
 
-    def __init__(self, layout, containers: dict) -> None:
+    def __init__(self, layout, containers: dict, tell_its_size=None) -> None:
         self.layout = layout
         self.containers = {
             pane: to_container(container) for pane, container in containers.items()
         }
+        self.tell_its_size = tell_its_size
 
         #: Where the view sits on the plane: the plane coordinate that
         #: the top left of the write position shows.
@@ -106,9 +121,41 @@ class PlanContainer(Container):
             self.plan, self.offset, available, self.focused_pane()
         )
 
-        self._draw_the_chrome(screen, write_position, parent_style)
+        view = Rect(
+            x=self.offset.x,
+            y=self.offset.y,
+            width=write_position.width,
+            height=write_position.height,
+        )
+
+        self._draw_the_chrome(screen, write_position, parent_style, view)
 
         for slot, rect in self.plan.rects.items():
+            if self.tell_its_size is not None:
+                # Every pane of the slot, shown or not, because a
+                # hidden pane that already has the size it will be
+                # shown at is revealed without a resize.
+                for pane in slot.panes:
+                    self.tell_its_size(pane, rect)
+
+            if not rect.overlaps(view):
+                # **A pane no part of which is in the view is not
+                # drawn.** Writing it costs far more than the cells it
+                # throws away: every row of it is built out of the
+                # screen first, and every cell of those rows is
+                # spelled. A strip of sixteen columns showed two of
+                # them and paid three times what sixteen visible panes
+                # of a divided window cost. Lillecarl/pymux#224.
+                #
+                # A pane that is *partly* in the view is drawn whole
+                # and clipped, which is what the plane rests on.
+                #
+                # The cursor follows: nothing sets `show_cursor` unless
+                # a window drew one, so a focused pane out of the view
+                # leaves the cursor hidden. That is the decision
+                # Lillecarl/pymux#201 made inside `ScrollablePane`.
+                continue
+
             container = self.containers.get(slot.shown)
             if container is None:
                 # A pane the caller gave no container for. Nothing can
@@ -131,7 +178,11 @@ class PlanContainer(Container):
             )
 
     def _draw_the_chrome(
-        self, screen: Screen, write_position: WritePosition, parent_style: str
+        self,
+        screen: Screen,
+        write_position: WritePosition,
+        parent_style: str,
+        view: Rect,
     ) -> None:
         """
         Fill the gaps the layout left, with what it says goes there.
@@ -141,9 +192,11 @@ class PlanContainer(Container):
         rectangle, and a bar over the gap above or below it, and both
         win where they meet a line.
 
-        Nothing is clipped. A line outside the write position is
-        written into a dictionary that the renderer never reads, the
-        same as a pane that has scrolled off.
+        A line that reaches into the view is written whole and the part
+        outside it lands in a dictionary the renderer never reads. A
+        line with no part of it in the view is not written at all: a
+        strip draws one down the right of every column, and the columns
+        it has scrolled past are most of them. Lillecarl/pymux#224.
         """
         chrome = getattr(self.layout, "chrome", None)
         if chrome is None or self.plan is None:
@@ -152,6 +205,9 @@ class PlanContainer(Container):
         style = (parent_style + " class:border").strip()
 
         for line in chrome(self.plan):
+            if not line.rect.overlaps(view):
+                continue
+
             char = Char(line.char, style)
             top = write_position.ypos + line.rect.y - self.offset.y
             left = write_position.xpos + line.rect.x - self.offset.x

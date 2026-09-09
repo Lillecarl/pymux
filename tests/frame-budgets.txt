@@ -9,39 +9,39 @@
 #     nix build --file . checks.pymux-frame-instructions.run
 #     cp result/frame-budgets.txt pymux/tests/frame-budgets.txt
 divided 1 panes (chrome)           20
-divided 1 panes (frame)            17220
+divided 1 panes (frame)            17307
 divided 1 panes (measure)          784
 divided 1 panes (neighbours cold)  4284
 divided 1 panes (neighbours)       1175
 divided 1 panes (plans)            1
 divided 16 panes (chrome)          20
-divided 16 panes (frame)           53248
+divided 16 panes (frame)           40708
 divided 16 panes (measure)         11493
 divided 16 panes (neighbours cold) 954422
 divided 16 panes (neighbours)      218777
 divided 16 panes (plans)           1
 divided 4 panes (chrome)           20
-divided 4 panes (frame)            27125
+divided 4 panes (frame)            27611
 divided 4 panes (measure)          3023
 divided 4 panes (neighbours cold)  62660
 divided 4 panes (neighbours)       14295
 divided 4 panes (plans)            1
 strip 1 panes (chrome)             315
-strip 1 panes (frame)              12445
+strip 1 panes (frame)              12599
 strip 1 panes (measure)            1228
 strip 1 panes (neighbours cold)    6232
 strip 1 panes (neighbours)         1351
 strip 1 panes (plans)              1
 strip 16 panes (chrome)            42540
-strip 16 panes (frame)             168401
+strip 16 panes (frame)             88974
 strip 16 panes (measure)           21980
 strip 16 panes (neighbours cold)   1606340
 strip 16 panes (neighbours)        199591
 strip 16 panes (plans)             1
 strip 4 panes (chrome)             2826
-strip 4 panes (frame)              39119
+strip 4 panes (frame)              29862
 strip 4 panes (measure)            4028
 strip 4 panes (neighbours cold)    78296
 strip 4 panes (neighbours)         13867
 strip 4 panes (plans)              1
-zoomed 16 panes (frame)            17307
+zoomed 16 panes (frame)            17394
