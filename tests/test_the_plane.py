@@ -290,17 +290,20 @@ def test_a_tiling_leaves_no_hole(plan):
     assert covered == box.width * box.height
 
 
-@given(TILINGS)
-def test_every_slot_of_a_tiling_is_reachable(plan):
+def everything_is_reachable(plan: Plan) -> bool:
     """
-    A person can reach every pane with the four direction keys.
+    Whether the four direction keys reach every slot of the plan.
 
-    **This is a tiling's promise and not the plane's.** On a bare
-    plane two rectangles set diagonally have no neighbour at all, so
-    nothing reaches the second one. It holds here because a cut runs
-    the whole way across, so something on this side of it is across
-    from something on that side.
+    **This is not a promise the plane makes.** On a bare plane two
+    rectangles set diagonally have no neighbour at all, so nothing
+    reaches the second one. It holds wherever a cut runs the whole way
+    across, because then something on this side of it is across from
+    something on that side, so a tiling and a strip are both held to
+    it.
     """
+    if not plan.slots:
+        return True
+
     first = plan.slots[0]
     reached = {id(first)}
     edge = [first]
@@ -315,7 +318,13 @@ def test_every_slot_of_a_tiling_is_reachable(plan):
         else:
             edge.pop()
 
-    assert len(reached) == len(plan.slots)
+    return len(reached) == len(plan.slots)
+
+
+@given(TILINGS)
+def test_every_slot_of_a_tiling_is_reachable(plan):
+    "A person can reach every pane with the four direction keys."
+    assert everything_is_reachable(plan)
 
 
 # ----------------------------------------------------------------------
@@ -693,6 +702,22 @@ def test_a_pane_added_to_a_slot_stacks_behind_the_one_shown():
 
     assert slot.stacked
     assert slot.shown is first
+
+
+def test_a_pane_added_behind_the_one_shown_leaves_it_shown():
+    """
+    The path that can break the promise above: `after` puts a pane
+    earlier in the stack, so the place of the one being shown moves
+    and the slot has to move with it.
+    """
+    first, second, third = _Pane("first"), _Pane("second"), _Pane("third")
+    slot = Slot(first, second)
+    slot.show(second)
+
+    slot.add(third, after=first)
+
+    assert slot.panes == [first, third, second]
+    assert slot.shown is second
 
 
 def test_closing_the_pane_a_person_is_on_shows_the_one_behind_it():

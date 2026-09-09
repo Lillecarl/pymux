@@ -11,8 +11,9 @@ of the tree. A plane answers it once.
 rectangle needs no permission from a screen size. A view is what is
 bounded, and a view comes later (slice 5).
 
-This module is the bottom of that work and it is pure: no toolkit, no
-pty, no widget. It holds three things and no behaviour.
+This module is the bottom of that work, and it takes two NamedTuples
+from prompt_toolkit and nothing else: no widget, no pty, no screen. It
+holds three things and no behaviour.
 
     Rect     a rectangle of cells on the plane
     Slot     one rectangle's worth of it, and the panes in it
@@ -56,7 +57,6 @@ from typing import Iterable, Iterator, NamedTuple
 from prompt_toolkit.data_structures import Point
 
 __all__ = [
-    "Pane",
     "Rect",
     "Side",
     "Slot",
@@ -64,8 +64,12 @@ __all__ = [
 ]
 
 
-#: What a slot holds. Any object with an identity, because nothing
-#: here asks a pane for anything.
+#: What a slot holds, as an annotation: any object with an identity,
+#: because nothing here asks a pane for anything.
+#:
+#: **This is not `arrangement.Pane`**, and it is not exported, so that
+#: nobody imports the word from here and gets `object`. It says what
+#: the annotations below mean and no more.
 Pane = object
 
 
@@ -112,9 +116,9 @@ class Side(Enum):
 
         **`Plan.neighbour` is the exact answer and this is not.**
         `math.cos` of a right angle is not zero, so a ray cast this
-        way drifts by about one cell in ten thousand million. That is
-        the whole reason the four cardinal directions have a path of
-        their own.
+        way drifts sideways. It drifts far less than a cell over any
+        screen, and it is still the reason the four directions a key
+        is bound to have a path of their own.
         """
         return math.atan2(self.value[1], self.value[0])
 
