@@ -50,7 +50,7 @@ a plan.
 
 **A constrained subclass never lets an unconstrained mutation through.**
 
-`Plane.place(pane, rect)` is meaningful on the bare plane and must not
+`Plane.place(slot, rect)` is meaningful on the bare plane and must not
 be reachable on `Divided`, or somebody calls it and quietly breaks the
 tiling. Either the mutators are private and each subclass exposes its
 own, or a constraint refuses them.
@@ -87,23 +87,42 @@ is where the behaviour belongs.
    does. What a lattice buys is automatic tiling under resize, and
    `Divided` gets that from its own fractions and from the fact that
    adjacency on a tiling is exact.
-3. **No two *visible* panes overlap.** Holes are allowed.
-4. **A container stacks, and nothing else.** More than one pane in a
+3. **Things stay exactly where they are put, and nothing overlaps.**
+   Carl: "Yes on Plane things stay exactly where you put them, the only
+   thing we don't allow is overlapping". So the bare plane persists its
+   rectangles between frames, and holes are allowed.
+4. **A slot stacks, and nothing else.** More than one pane in a
    rectangle means tabbed: one visible, the rest hidden behind it.
    Splitting stays a structure that produces *more* rectangles. A niri
    column with two visible windows is two rectangles that `Strip` stacks
    vertically -- which is what pymux does today -- and a tabbed column
-   is one rectangle holding two panes. **No recursion**: a container
-   never holds an internal layout.
-5. **Visibility flag, not a slot object.** The plan keys on panes and
-   carries which are visible. This adds no concept to the base; a
-   subclass that wants group moves may model a slot privately.
-6. **A hidden pane gets the whole rectangle.** A pty needs a size, and
-   giving a hidden pane the size it will have means revealing it costs
-   no `SIGWINCH` and no redraw.
-7. **Neighbours: strict by default.** Among visible rectangles strictly
-   beyond my edge in that direction whose perpendicular span overlaps
-   mine, take the smallest gap; ties by largest overlap, then insertion
+   is one slot holding two panes. **No recursion**: a slot never holds
+   an internal layout.
+5. **A slot is a real object, not a flag.** Carl: "tabstacking on
+   rectangles is handled by an invisible wrapper element that owns 1 or
+   more terminals". **So a rectangle belongs to a slot, and a slot owns
+   one or more panes and shows one of them.**
+
+   I had recorded the other spelling -- the plan keyed on panes with a
+   visible set -- on my own recommendation, because it added no concept.
+   The slot is better for two reasons I under-weighted:
+
+   - **The overlap invariant loses a qualifier.** "No two slots
+     overlap" needs no word about visibility, so the property test is
+     about the plan's own shape and nothing else.
+   - **Moving a stack is one operation on one object**, and tab
+     stacking is exactly where a person expects to move the whole
+     thing -- niri moves a tabbed column as a unit.
+
+   The cost is real and worth knowing: **a pane no longer has a
+   rectangle of its own.** Everything that asks where a pane is goes
+   through its slot. That change is pervasive but mechanical.
+6. **Every pane of a slot gets the slot's rectangle**, shown or not. A
+   pty needs a size, and giving a hidden pane the size it will have
+   means revealing it costs no `SIGWINCH` and no redraw.
+7. **Neighbours: strict by default.** Among slots strictly beyond my
+   edge in that direction whose perpendicular span overlaps mine, take
+   the smallest gap; ties by largest overlap, then insertion
    order. If nothing overlaps my span, the answer is nothing -- no
    diagonal jump. tmux is strict here and it is the less surprising
    behaviour.
@@ -138,16 +157,17 @@ is where the behaviour belongs.
 This is what makes it solid. Not the base class -- the invariants every
 subclass is held to. For any model and any available size:
 
-- No two visible rectangles overlap.
+- **No two slots overlap.** No qualifier about visibility: a slot is
+  the thing that has a rectangle, so this is about the plan's own shape.
 - Every rectangle is at least one cell by one cell.
+- Every slot owns at least one pane and shows exactly one of them.
 - The plane's bounding box contains every rectangle and is no larger
   than it needs to be.
 - `neighbour(A, d)` is strictly in direction `d` from A and its
   perpendicular band overlaps A's.
 - `neighbour(A, d)` is never A.
-- Walking one direction repeatedly terminates and visits no rectangle
-  twice.
-- Every visible rectangle is reachable from every other by some walk.
+- Walking one direction repeatedly terminates and visits no slot twice.
+- Every slot is reachable from every other by some walk.
 - Numbering is a permutation of the panes, and stable across a
   `measure` that changed nothing.
 
@@ -172,29 +192,36 @@ hypothesis is already in the check inputs.
 Three data types and one base class.
 
     Rect     a cell rectangle on the plane; x and y may be negative
-    Plan     rects: dict[Pane, Rect]
-             visible: set[Pane]          -- at most one per rectangle
-             plane: Rect                 -- the bounding box
-             order: list[Pane]           -- numbering
-    View     offset: Point               -- plane coordinate at the
+    Slot     panes:   list[Pane]         -- one or more
+             showing: int                -- which one a person sees
+    Plan     rects:   dict[Slot, Rect]   -- a slot is what has a rectangle
+             plane:   Rect               -- the bounding box
+             order:   list[Pane]         -- numbering, over panes
+    View     offset:  Point              -- plane coordinate at the
                                             client's top left
-             size: Size                  -- the client's terminal
-             marks: dict[str, Point]     -- snapshot locations
+             size:    Size               -- the client's terminal
+             marks:   dict[str, Point]   -- snapshot locations
 
 `Plan` carries the services, so every subclass gets them free and none
-of them reimplements one: `at(point)`, `neighbour(pane, direction)`,
-`trace(origin, angle)`, `reading_order()`.
+of them reimplements one: `at(point)`, `slot_of(pane)`,
+`neighbour(slot, direction)`, `trace(origin, angle)`,
+`reading_order()`.
+
+**Numbering is over panes, not slots**, because a pane number is what
+`select-pane -t 1` takes and what a title bar draws. A slot contributes
+its panes in stack order, so a hidden pane has a number too and
+selecting it shows it.
 
     class Plane:
         "An unbounded plane, and views onto it. Usable as it stands."
 
         def measure(self, available: Size) -> Plan     # the plan it holds
-        def place(self, pane, rect) -> None            # free: not for a constraint
+        def place(self, slot, rect) -> None            # free: not for a constraint
         def adopt(self, plan, panes) -> None           # switching mode
-        def open(self, pane, beside, near) -> None
+        def open(self, pane, beside, near) -> None     # a new slot, or a new tab
         def close(self, pane) -> None
-        def move(self, pane, direction) -> bool
-        def resize(self, pane, dx, dy) -> bool
+        def move(self, slot, direction) -> bool
+        def resize(self, slot, dx, dy) -> bool
         def look_at(self, plan, view, focus) -> Point  # default: leave it, clamped
         def order(self, plan) -> list[Pane]            # default: insertion order
 
@@ -221,7 +248,7 @@ today, ad hoc: `Window.strip = True` wraps the root, and
 generalises what is there.
 
 Drawing is one generic container, `PlanContainer`, doing for two axes
-what `ScrollableStrip` does for one: for each visible pane, write to the
+what `ScrollableStrip` does for one: for each slot's shown pane, write to the
 screen at `rect - view.offset`. `pymux/pymux/strip.py` collapses into
 `Strip.look_at` plus that container.
 
@@ -260,7 +287,7 @@ Two smaller rules that follow:
 
 ## The slices, in order
 
-1. **`Rect`, `Plan`, the services, and the property tests.** Pure code,
+1. **`Rect`, `Slot`, `Plan`, the services, and the property tests.** Pure code,
    no wiring, testable alone.
 2. **`Strip` emits a plan, and the title bars plus `select-pane -L|-R`
    read it.** The probe. `Strip` already computes every number it needs
