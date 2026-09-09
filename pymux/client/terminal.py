@@ -20,7 +20,7 @@ from prompt_toolkit.input.posix_utils import PosixStdinReader
 from prompt_toolkit.input.vt100 import cooked_mode, raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output, _get_size
 
-from pymux.colors import TRUECOLOR_PROBE
+from pymux.colors import COLOR_QUERIES, TRUECOLOR_PROBE
 from pymux.graphics import CELL_SIZE_QUERY
 from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
 from pymux.utils import nonblocking
@@ -35,9 +35,10 @@ __all__ = [
 #:
 #: The replies arrive as input and the server reads them: keyboard
 #: flags, the kitty graphics protocol, the cell size, the colour depth,
-#: and last the device attributes, which also say whether sixel works.
-#: Every terminal answers the device attributes query, so a feature
-#: that did not answer before it is not supported.
+#: the two colours the terminal draws with, and last the device
+#: attributes, which also say whether sixel works. Every terminal
+#: answers the device attributes query, so a feature that did not
+#: answer before it is not supported.
 #:
 #: The keyboard query asks for every flag first, so that the reply says
 #: which ones the terminal took. A terminal that speaks a part of the
@@ -55,6 +56,7 @@ DETECTION_QUERIES = (
     + GRAPHICS_QUERY.encode("ascii")
     + CELL_SIZE_QUERY.encode("ascii")
     + TRUECOLOR_PROBE.encode("ascii")
+    + COLOR_QUERIES.encode("ascii")
     + b"\x1b[c"
 )
 

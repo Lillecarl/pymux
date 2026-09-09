@@ -1,19 +1,30 @@
 """
-Tests for the colour depth detection (`pymux.colors`).
+What a client asks its own terminal about colour (`pymux.colors`).
+
+Two questions, and neither is about the session: how many colours the
+terminal takes, and which two it draws with when nothing says
+otherwise.
 """
+
+import asyncio
 
 import pytest
 from prompt_toolkit.output import ColorDepth
 
 from pymux.colors import (
+    COLOR_QUERIES,
     TRUECOLOR_PROBE,
     ColorDetection,
+    DefaultColors,
     depth_from_environment,
     reports_truecolor,
 )
+from pymux.client.terminal import DETECTION_QUERIES
+from pymux.server import ServerConnection
 from pyte import escape
-from pyte.sequences import Csi, csi
-from pyte.sequences import apc, dcs
+from pyte.colors import Color
+from pyte.sequences import Csi, apc, csi, dcs, osc
+from test_server_tasks import FakePipe, FakePymux
 
 
 def detection(term="", colorterm="", forced=None):
@@ -145,3 +156,122 @@ def test_a_forced_depth_beats_the_probe():
     detect.handle_reply(dcs("1$r38;2;1;2;3m"))
     assert detect.truecolor  # The probe still came back.
     assert detect.depth == ColorDepth.DEPTH_4_BIT  # But the flag wins.
+
+
+# ----------------------------------------------------------------------
+# Which two colours the terminal draws with.
+#
+# The other half of what a client asks its terminal: not how many
+# colours it takes, but which two it uses when nothing says otherwise.
+# pymux draws its status line and its title bars over that background,
+# so what it is decides whether its own colours land or fight.
+# Lillecarl/pymux#223.
+
+
+def test_the_queries_ask_for_the_foreground_and_the_background():
+    assert COLOR_QUERIES == osc("10", "?") + osc("11", "?")
+
+
+def test_a_fresh_terminal_has_said_nothing():
+    colors = DefaultColors()
+    assert colors.foreground is None
+    assert colors.background is None
+
+
+def test_a_background_reply_is_read():
+    colors = DefaultColors()
+
+    assert colors.handle_osc_reply("11", "rgb:1e1e/1e1e/2e2e")
+
+    assert colors.background == Color(0x1E, 0x1E, 0x2E)
+    assert colors.foreground is None
+
+
+def test_a_foreground_reply_is_read():
+    colors = DefaultColors()
+
+    assert colors.handle_osc_reply("10", "#ffffff")
+
+    assert colors.foreground == Color(0xFF, 0xFF, 0xFF)
+
+
+def test_the_second_reply_of_a_colour_replaces_the_first():
+    "A terminal whose theme changed says so the same way it answered."
+    colors = DefaultColors()
+    colors.handle_osc_reply("11", "rgb:0000/0000/0000")
+    colors.handle_osc_reply("11", "rgb:ffff/ffff/ffff")
+
+    assert colors.background == Color(0xFF, 0xFF, 0xFF)
+
+
+@pytest.mark.parametrize(
+    "code, payload",
+    [
+        # A colour pymux does not draw with: the cursor, and the
+        # selection. `DYNAMIC_COLOR_CODES` numbers them and this reads
+        # neither.
+        ("12", "rgb:ffff/0000/0000"),
+        ("17", "rgb:ffff/0000/0000"),
+        # Another code entirely.
+        ("99", "i=1"),
+        # A spec XParseColor does not name.
+        ("11", "aubergine"),
+        ("11", ""),
+    ],
+)
+def test_a_reply_this_cannot_read_changes_nothing(code, payload):
+    colors = DefaultColors()
+
+    assert not colors.handle_osc_reply(code, payload)
+
+    assert colors.background is None
+    assert colors.foreground is None
+
+
+# ----------------------------------------------------------------------
+# And the reply reaches the client it belongs to.
+
+
+def test_the_detection_asks_the_outer_terminal_for_its_colours():
+    "Before the device attributes, which is the fence of the detection."
+    queries = DETECTION_QUERIES.decode("ascii")
+
+    assert COLOR_QUERIES in queries
+    assert queries.index(COLOR_QUERIES) < queries.index("\x1b[c")
+
+
+def test_a_reply_lands_on_the_connection_that_carried_it():
+    """
+    Each client asks its own terminal and keeps its own answer, so two
+    people on one session can be on a light terminal and a dark one.
+    """
+
+    async def check():
+        one = ServerConnection(FakePymux(), FakePipe())
+        other = ServerConnection(FakePymux(), FakePipe())
+
+        one._handle_kitty_reply(osc("11", "rgb:1e1e/1e1e/2e2e"))
+        other._handle_kitty_reply(osc("11", "rgb:ffff/ffff/ffff"))
+
+        assert one.default_colors.background == Color(0x1E, 0x1E, 0x2E)
+        assert other.default_colors.background == Color(0xFF, 0xFF, 0xFF)
+
+        one._close_connection()
+        other._close_connection()
+
+    asyncio.run(check())
+
+
+def test_a_colour_arriving_after_the_detection_is_still_read():
+    "A terminal whose theme changes while a person is attached says so."
+
+    async def check():
+        connection = ServerConnection(FakePymux(), FakePipe())
+        assert not connection._kitty_detection_pending
+
+        connection._handle_kitty_reply(osc("11", "rgb:0000/0000/0000"))
+
+        assert connection.default_colors.background == Color(0, 0, 0)
+        connection._close_connection()
+
+    asyncio.run(check())

@@ -20,7 +20,7 @@ from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
-from .colors import ColorDetection
+from .colors import ColorDetection, DefaultColors
 from .enums import Woke
 from .graphics import ClientGraphics
 from .keys import KittyVt100Parser
@@ -97,6 +97,13 @@ class ServerConnection:
         # answers it: the probe reply arrives before the device
         # attributes reply that closes the detection.
         self.colors = ColorDetection()
+
+        #: The two colours the outer terminal draws with by itself.
+        #: The same handshake asks for them, and either one stays
+        #: `None` when the terminal does not say. **Only a client can
+        #: find this out**, which is why it is here and not on the
+        #: session. Lillecarl/pymux#223.
+        self.default_colors = DefaultColors()
 
         # The client input is parsed by the application that reads from
         # the pipe input (see `_ClientInput`). Give that input a parser
@@ -227,6 +234,12 @@ class ServerConnection:
         if osc is not None:
             if osc.group(1) == "99":
                 self._route_notification(osc.group(2))
+            else:
+                # The two colours the terminal draws with. It answers
+                # each on the code that asked, so this reads them
+                # whenever they arrive: a terminal that reports a theme
+                # change later says it the same way.
+                self.default_colors.handle_osc_reply(osc.group(1), osc.group(2))
             return
 
         if not self._kitty_detection_pending:

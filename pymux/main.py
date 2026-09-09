@@ -36,6 +36,7 @@ from pyte.keys import KeyboardFlag
 from pyte.osc import Osc
 
 from .arrangement import Arrangement, Pane, Window
+from .colors import DefaultColors
 from .commands.commands import call_command_handler, handle_command
 from .commands.completer import create_command_completer
 from .enums import COMMAND, PROMPT, WindowSize, Woke
@@ -199,6 +200,24 @@ class ClientState:
                 logger.exception("Drawing the pane images failed.")
 
         self.app.after_render += after_render
+
+    @property
+    def default_colors(self) -> DefaultColors:
+        """
+        The two colours this client's own terminal draws with.
+
+        Either may be `None`: a terminal that does not answer `OSC 11`
+        says nothing, and so does a client with no connection, which is
+        the one that runs in the process that started pymux.
+
+        **This is a fact about one terminal**, which is why a client
+        holds it and the session does not. Two people on one session
+        can be on a light terminal and a dark one.
+        Lillecarl/pymux#223.
+        """
+        if self.connection is None:
+            return DefaultColors()
+        return self.connection.default_colors
 
     def _graphics_views(self):
         """
