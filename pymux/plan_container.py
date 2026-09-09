@@ -27,14 +27,14 @@ answer, which is the whole point of the work.
 """
 
 from prompt_toolkit.application import get_app
-from prompt_toolkit.data_structures import Point, Size
+from prompt_toolkit.data_structures import Size
 from prompt_toolkit.key_binding import KeyBindingsBase
 from prompt_toolkit.layout.containers import Container, to_container
 from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Char, Screen, WritePosition
 
-from .plane import Pane, Plan, Rect
+from .plane import Pane, Plan, Rect, View
 
 __all__ = ["PlanContainer"]
 
@@ -45,8 +45,8 @@ class PlanContainer(Container):
 
     :param layout: What says where the panes are. It answers
         `measure(available)` with a `Plan`, and
-        `look_at(plan, offset, size, focus)` with the plane coordinate
-        that goes at the top left of the view.
+        `look_at(plan, view, focus)` with the plane coordinate that
+        goes at the top left of the view.
     :param containers: One container for each pane, by pane. A slot
         holding a stack draws the pane it shows and no other, so the
         containers of the panes behind it are never asked to draw.
@@ -67,9 +67,10 @@ class PlanContainer(Container):
         }
         self.tell_its_size = tell_its_size
 
-        #: Where the view sits on the plane: the plane coordinate that
-        #: the top left of the write position shows.
-        self.offset = Point(x=0, y=0)
+        #: Where this client looks at the plane, and how much of it it
+        #: can see. A frame writes the size before it reads it, so a
+        #: fresh view says nothing until one is drawn.
+        self.view = View()
 
         #: The plan of the frame being drawn, for anything drawn inside
         #: it to read. `None` before the first frame.
@@ -117,16 +118,12 @@ class PlanContainer(Container):
 
         self.plan = self.layout.measure(available)
         self.measured_for = available
-        self.offset = self.layout.look_at(
-            self.plan, self.offset, available, self.focused_pane()
-        )
 
-        view = Rect(
-            x=self.offset.x,
-            y=self.offset.y,
-            width=write_position.width,
-            height=write_position.height,
+        self.view.size = available
+        self.view.offset = self.layout.look_at(
+            self.plan, self.view, self.focused_pane()
         )
+        view = self.view.rect
 
         self._draw_the_chrome(screen, write_position, parent_style, view)
 
@@ -167,8 +164,8 @@ class PlanContainer(Container):
                 screen,
                 mouse_handlers,
                 WritePosition(
-                    xpos=write_position.xpos + rect.x - self.offset.x,
-                    ypos=write_position.ypos + rect.y - self.offset.y,
+                    xpos=write_position.xpos + rect.x - self.view.offset.x,
+                    ypos=write_position.ypos + rect.y - self.view.offset.y,
                     width=rect.width,
                     height=rect.height,
                 ),
@@ -209,8 +206,8 @@ class PlanContainer(Container):
                 continue
 
             char = Char(line.char, style)
-            top = write_position.ypos + line.rect.y - self.offset.y
-            left = write_position.xpos + line.rect.x - self.offset.x
+            top = write_position.ypos + line.rect.y - self.view.offset.y
+            left = write_position.xpos + line.rect.x - self.view.offset.x
 
             for y in range(top, top + line.rect.height):
                 row = screen.data_buffer[y]

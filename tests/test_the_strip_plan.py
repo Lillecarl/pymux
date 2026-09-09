@@ -19,7 +19,7 @@ from prompt_toolkit.data_structures import Point, Size
 from test_the_plane import every_promise_holds, everything_is_reachable
 
 from pymux.arrangement import Pane, Window
-from pymux.plane import Side
+from pymux.plane import Side, View
 from pymux.strip import Strip
 from pymux.tiling import BORDER_HORIZONTAL, BORDER_VERTICAL, BORDER_WIDTH, Gaps
 
@@ -298,8 +298,9 @@ def looking_at(window, focus, offset=0, columns=SIZE.columns, size=SIZE):
     "Where the view lands, given where it was and what has the focus."
     strip = Strip(window)
     plan = strip.measure(size)
+    view = View(Point(x=offset, y=0), Size(rows=size.rows, columns=columns))
 
-    return strip.look_at(plan, Point(x=offset, y=0), Size(size.rows, columns), focus).x
+    return strip.look_at(plan, view, focus).x
 
 
 def test_a_column_already_on_screen_moves_nothing():

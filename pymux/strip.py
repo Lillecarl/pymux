@@ -52,7 +52,7 @@ instead. Lillecarl/pymux#207.
 from prompt_toolkit.data_structures import Point, Size
 
 from . import arrangement
-from .plane import Line, Pane, Plan, Rect, Side, Slot
+from .plane import Line, Pane, Plan, Rect, Side, Slot, View
 from .tiling import BORDER_HORIZONTAL, BORDER_VERTICAL, Gaps, lay_out
 
 __all__ = ["Strip"]
@@ -191,47 +191,33 @@ class Strip:
 
         return lines
 
-    def look_at(
-        self, plan: Plan, offset: Point, size: Size, focus: "Pane | None"
-    ) -> Point:
+    def look_at(self, plan: Plan, view: View, focus: "Pane | None") -> Point:
         """
         Where the view goes: the focused column's left edge at the
         left of the view, and never past the end of the row.
 
-        **A column already wholly on screen leaves the view alone.**
-        That is what makes moving the focus a round trip: walk right
-        and back, and the strip is where it started.
-        Lillecarl/pymux#207.
+        **A column is its panes and the border it owns**, so the column
+        ends one cell past the pane's rectangle and the row ends one
+        cell past the last of them. That widening is all this adds:
+        `View.moved_onto` holds the three rules, and every layout
+        answers by the same ones.
 
-        A column is its panes and the border it owns, so the column
-        ends one cell past the pane's rectangle. The view never passes
-        the end of the row either, whatever the focus asks for: a
-        column that closes can leave it out there.
-
-        **A column wider than the view shows its left edge**, and the
-        right of it is cut. Carl: "left should generally be preferred
-        for terminals since that's where ~100% of applications begin
-        writing text, it's even likely that a missing right column
-        doesn't miss anything." Lillecarl/pymux#218. Nothing on the
-        screen says that the column is cut, which is
-        Lillecarl/pymux#222.
+        Two of them matter most here. A column already wholly on screen
+        leaves the view alone, which is what makes moving the focus a
+        round trip (Lillecarl/pymux#207). A column wider than the view
+        shows its left edge and the right of it is cut, because that is
+        where applications write (Lillecarl/pymux#218); nothing on the
+        screen says the column is cut, which is Lillecarl/pymux#222.
         """
-        x = offset.x
+        gap = self.gaps.between_columns
+        box = plan.plane
+        row = Rect(x=box.x, y=box.y, width=box.width + gap, height=box.height)
 
+        column = None
         if focus is not None:
             rect = plan.rect_of(focus)
-            start, end = rect.x, rect.right + self.gaps.between_columns
+            column = Rect(
+                x=rect.x, y=rect.y, width=rect.width + gap, height=rect.height
+            )
 
-            if start < x or end > x + size.columns:
-                # The column's left edge, at the left of the view.
-                #
-                # That is what this did already for every column that
-                # fits, because `max(start, end - size)` is `start`
-                # whenever the column is narrower than the view. The
-                # only column it treated differently was one too wide
-                # to show whole, and that one is the case the rule is
-                # about. Lillecarl/pymux#218.
-                x = start
-
-        row = plan.plane.width + self.gaps.between_columns
-        return Point(x=max(0, min(x, max(0, row - size.columns))), y=0)
+        return view.moved_onto(column, row)

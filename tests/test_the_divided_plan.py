@@ -18,6 +18,7 @@ from test_the_plane import every_promise_holds, everything_is_reachable
 
 from pymux.arrangement import Pane, Window
 from pymux.divided import Divided
+from pymux.plane import View
 from pymux.tiling import BORDER_HORIZONTAL, BORDER_VERTICAL, BORDER_WIDTH, Gaps
 
 #: A window big enough that a pane is wide and a stack is deep.
@@ -212,14 +213,35 @@ def test_a_gap_holds_no_pane():
 # What it says about the view.
 
 
-def test_the_view_never_moves():
-    "A tiling is measured to fit, so there is nothing to scroll to."
+def test_a_view_as_big_as_the_plane_never_moves():
+    """
+    A tiling is measured to fit, so there is nothing to scroll to, and
+    a view that has wandered comes back to the origin.
+    """
     window, panes = a_window([True, True])
     plan = a_plan(window)
     layout = Divided(window)
+    view = View(Point(x=5, y=5), SIZE)
 
     for pane in panes + [None]:
-        assert layout.look_at(plan, Point(x=5, y=5), SIZE, pane) == Point(x=0, y=0)
+        assert layout.look_at(plan, view, pane) == Point(x=0, y=0)
+
+
+def test_a_view_smaller_than_the_plane_follows_the_focus():
+    """
+    `window-size largest` measures the plane for the biggest client,
+    so a smaller one moves its view over it rather than being stuck at
+    the top left.
+    """
+    window, panes = a_window([True, True])
+    plan = a_plan(window)
+    layout = Divided(window)
+    view = View(Point(x=0, y=0), Size(rows=SIZE.rows, columns=SIZE.columns // 4))
+
+    on_the_right = layout.look_at(plan, view, panes[1])
+    assert on_the_right.x == plan.rect_of(panes[1]).x
+    # And it stays on the plane.
+    assert on_the_right.x <= plan.plane.right - view.size.columns
 
 
 # ----------------------------------------------------------------------

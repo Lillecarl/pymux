@@ -119,7 +119,7 @@ def the_strip(state):
 
 def the_view(state) -> int:
     "How far along the row the view sits."
-    return the_strip(state).offset.x
+    return the_strip(state).view.offset.x
 
 
 def where(pymux, pane):

@@ -62,7 +62,7 @@ class _Fixed:
     def measure(self, available: Size) -> Plan:
         return self.plan
 
-    def look_at(self, plan, offset, size, focus) -> Point:
+    def look_at(self, plan, view, focus) -> Point:
         return self.offset
 
 

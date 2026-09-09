@@ -21,7 +21,7 @@ row its title bar hangs in.
 
 from prompt_toolkit.data_structures import Point, Size
 
-from .plane import Line, Pane, Plan, Rect, Slot
+from .plane import Line, Pane, Plan, Rect, Slot, View
 
 __all__ = ["Zoomed"]
 
@@ -56,7 +56,7 @@ class Zoomed:
         return "Zoomed(%r, %r)" % (self.inner, self.pane)
 
     def measure(self, available: Size) -> Plan:
-        "One slot, the size of the view."
+        "One slot, the size of the plane."
         return Plan(
             {
                 Slot(self.pane): Rect(
@@ -74,8 +74,13 @@ class Zoomed:
         """
         return []
 
-    def look_at(
-        self, plan: Plan, offset: Point, size: Size, focus: "Pane | None"
-    ) -> Point:
-        "The origin: the pane is exactly the view."
+    def look_at(self, plan: Plan, view: View, focus: "Pane | None") -> Point:
+        """
+        The origin: the pane is the whole plane.
+
+        There is one slot and it starts there, so there is nowhere
+        else to go. A client too small to see all of a pane sized for
+        a bigger one sees the top left of it, which is the rule every
+        layout follows. Lillecarl/pymux#218.
+        """
         return Point(x=0, y=0)

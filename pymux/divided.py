@@ -15,16 +15,18 @@ because nothing but a resize command ever writes a weight. The price is
 that `resize-pane +1` has to say what size it wants rather than nudge a
 number, and `layout.the_weights_of` is where that is paid.
 
-**A divided layout fills the view exactly**, so it never scrolls and
-`look_at` is the origin. That is the whole difference from `Strip`,
-which gives each column a width of its own and lets the row run past
-the edge.
+**A divided layout fills the plane exactly**, so a view as big as the
+plane sees all of it and never scrolls. That is the whole difference
+from `Strip`, which gives each column a width of its own and lets the
+row run past the edge. It is not a promise that the view never moves:
+a client smaller than the plane has one that does, and `look_at` says
+by which rule.
 """
 
 from prompt_toolkit.data_structures import Point, Size
 
 from . import arrangement
-from .plane import Line, Pane, Plan, Rect
+from .plane import Line, Pane, Plan, Rect, View
 from .tiling import Gaps, lay_out
 
 __all__ = ["Divided"]
@@ -127,14 +129,26 @@ class Divided:
         """
         return self._lines
 
-    def look_at(
-        self, plan: Plan, offset: Point, size: Size, focus: "Pane | None"
-    ) -> Point:
+    def look_at(self, plan: Plan, view: View, focus: "Pane | None") -> Point:
         """
-        The origin, always.
+        The origin, whenever the view is as big as the plane.
 
-        A tiling is measured to fit the view, so there is nothing off
-        the edge to scroll to. `Strip` is the layout that answers this
-        question with work.
+        A tiling is measured to fit the plane, so most of the time
+        there is nothing off the edge to scroll to and this answers
+        the origin. Two cases are not most of the time, and both are
+        real:
+
+        - A client smaller than the plane. `window-size largest` says
+          the plane is the biggest client's, so a smaller one moves
+          its view over it instead of being stuck at the top left,
+          which is what tmux leaves a person with.
+        - A window divided between more panes than it has rows. Every
+          pane keeps a row (`tiling.shares`), so the tiling runs past
+          the bottom, and the panes down there are worth reaching.
+
+        `View.moved_onto` holds the rules, and `Strip` uses the same
+        ones over a wider row.
         """
-        return Point(x=0, y=0)
+        return view.moved_onto(
+            None if focus is None else plan.rect_of(focus), plan.plane
+        )
