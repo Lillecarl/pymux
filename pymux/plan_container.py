@@ -20,6 +20,15 @@ wholly outside is a different thing, because building its rows and
 spelling its cells happens before any of them is thrown away.
 Lillecarl/pymux#224.
 
+**A pane that is half in the view is tinted**, so that a person can
+see it is cut. That is the one case where what they see is not what
+the program wrote, and the cells say nothing about it on their own.
+The tint is not here: `View.cuts` is the question, and the answer goes
+into the style of the pane itself (`layout.the_pane_is_cut`). Marking
+the cells afterwards cannot work, because the panes are drawn in a
+later pass of `Screen.draw_all_floats` than this method runs in.
+Lillecarl/pymux#222.
+
 **It holds the plan it drew.** A title bar is drawn *during* a frame,
 inside one of these panes, so anything drawn in a frame can ask this
 what the frame is: `select-pane -L` and a title bar then read the same

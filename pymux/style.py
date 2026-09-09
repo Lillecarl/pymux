@@ -69,6 +69,20 @@ DEFAULT_RULES = {
     "auto-suggestion": "bg:#4e5e4e #88aa88",
     "message": "bg:#bbee88 #222222",
     "background": "#888888",
+    # The part of a pane that runs off the edge of the view. A strip
+    # is a row that may be wider than the screen, so a column can be
+    # cut, and nothing else on the screen says so. Carl: "the
+    # rightmost visible column [should have] some slightly tinted
+    # background to indicate that it's cut-off."
+    # Lillecarl/pymux#222.
+    #
+    # **One colour, and it should be derived.** A tint over a
+    # background pymux did not choose is a guess: this lifts a dark
+    # terminal and darkens a light one by the same amount, which is
+    # right on one of them. The client knows the real background now
+    # (`OSC 11`, Lillecarl/pymux#223); deriving the tint from it is
+    # the second half of that issue.
+    "cut": "bg:#303030",
     "clock": "bg:#88aa00",
     "panenumber": "bg:#888888",
     "panenumber focused": "bg:#aa8800",

@@ -203,6 +203,23 @@ class Rect(NamedTuple):
             and other.y < self.bottom
         )
 
+    def encloses(self, other: Rect) -> bool:
+        """
+        True when every cell of that rectangle is one of this one's.
+
+        A rectangle of no cells is enclosed by anything, which is what
+        `range` says about an empty range and the answer a caller
+        wants: there is nothing of it outside.
+        """
+        if other.width <= 0 or other.height <= 0:
+            return True
+        return (
+            self.x <= other.x
+            and other.right <= self.right
+            and self.y <= other.y
+            and other.bottom <= self.bottom
+        )
+
     def cells(self) -> Iterator[Point]:
         "Every cell of this rectangle, a row at a time."
         for y in range(self.y, self.bottom):
@@ -283,6 +300,18 @@ class View:
         a client is worth waking. Lillecarl/pymux#224.
         """
         return self.rect.overlaps(rect)
+
+    def cuts(self, rect: Rect) -> bool:
+        """
+        Whether this view shows part of that rectangle and not all of
+        it.
+
+        **A cut pane is the one case where what a person sees is not
+        what the program wrote**, and the cells give nothing away: a
+        pane whose program wrote nothing past the cut looks exactly
+        like a pane that ends there. Lillecarl/pymux#222.
+        """
+        return self.shows(rect) and not self.rect.encloses(rect)
 
     def moved_onto(self, rect: "Rect | None", plane: Rect) -> Point:
         """

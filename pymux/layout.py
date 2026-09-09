@@ -99,6 +99,19 @@ RIGHT_MARK = "▸"
 ABOVE_MARK = "▴"
 BELOW_MARK = "▾"
 
+#: What marks a pane that runs off the edge of the view. It goes into
+#: the style of the pane itself, so every cell the program left at the
+#: default background takes the tint the theme names (`style.py`) and
+#: every cell it coloured itself keeps that colour: a parent's class is
+#: less precise than a cell's own `bg:`.
+#:
+#: **That is the cheap half of a choice, and it is deliberate.** The
+#: other reading is to blend the tint into whatever each cell holds,
+#: which costs arithmetic on every cell of the column on every frame:
+#: marking them by hand came to 14,620 bytecode instructions a frame,
+#: 43% on top of the frame it marked. Lillecarl/pymux#222.
+THE_CUT_IS_TINTED = "class:cut"
+
 #: What `clock-mode` draws inside a pane, as text. `BigClock` paints the
 #: hour and the minute in big numbers, and nothing else of it moves.
 CLOCK_FORMAT = "%H:%M"
@@ -1453,6 +1466,39 @@ def the_plan_of(pymux: "Pymux", window) -> Plan:
     return plan
 
 
+def the_pane_is_cut(pymux: "Pymux", pane: arrangement.Pane) -> bool:
+    """
+    Whether this pane runs off the edge of the view this client has.
+
+    **A cut pane is the one case where what a person sees is not what
+    the program wrote**, and the cells give nothing away: a pane whose
+    program wrote nothing past the cut looks exactly like a pane that
+    ends there. So the pane is tinted, and this is the question.
+    Lillecarl/pymux#222.
+
+    It reads the frame that is being drawn, because that is the only
+    frame whose answer is worth anything: the view has a size then,
+    and a plan to hold it against. Before the first frame, and for a
+    pane of another window, the answer is no -- nothing is drawn, so
+    nothing is cut.
+    """
+    try:
+        manager = pymux.get_client_state().layout_manager
+    except ValueError:
+        return False
+
+    container = manager.the_pane_container()
+    if container is None or container.plan is None:
+        return False
+
+    try:
+        rect = container.plan.rect_of(pane)
+    except KeyError:
+        return False
+
+    return container.view.cuts(rect)
+
+
 def _the_plan_of_the_frame(manager, window, size: Size) -> "Plan | None":
     """
     The plan the container of this frame measured, when it is still the
@@ -1615,6 +1661,12 @@ def _create_container_for_process(
             result = "class:terminal.focused"
         else:
             result = "class:terminal"
+
+        if the_pane_is_cut(pymux, arrangement_pane):
+            # A pane that runs off the edge of the view is tinted, so
+            # that a person can see it is cut. Lillecarl/pymux#222.
+            result += " " + THE_CUT_IS_TINTED
+
         return result
 
     def get_titlebar_text_fragments() -> StyleAndTextTuples:

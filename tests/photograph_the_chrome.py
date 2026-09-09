@@ -151,8 +151,24 @@ FIXTURES = {
         CHROME,
         keys((FIRST_KEY, PREFIX), (0.4, b"%"), *a_command("resize-pane -Z")),
     ),
+    # A strip whose second column is two thirds of the window, with the
+    # focus on the first. The pair does not fit, so the second one runs
+    # off the right edge and is tinted: **the one case where what a
+    # person sees is not what the program wrote**, and the only thing
+    # on the screen that says so. Lillecarl/pymux#222.
+    #
+    # The `strip` fixture below cuts nothing. Half a window each means
+    # two columns fit exactly, which is why a half is the default.
+    "strip-cut": (
+        CHROME + "set-window-option -g strip on\n",
+        keys(
+            (FIRST_KEY, PREFIX),
+            (0.4, b"%"),
+            *a_command("switch-column-width"),
+            *a_command("select-pane -L"),
+        ),
+    ),
     # A strip of three columns, which runs past the edge of the screen.
-    # The column on the right is cut off, and that is the point of it.
     # Lillecarl/pymux#198.
     "strip": (
         # `-g` says what every new window starts with, and it is the
