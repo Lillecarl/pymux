@@ -545,6 +545,17 @@ class LayoutManager:
         self._command_window: Window | None = None
         self._palette: Container | None = None
 
+        # The part of the screen that holds the windows. It is kept
+        # because it is what knows the container that drew the panes,
+        # and a title bar drawn inside that frame asks for its plan.
+        self._body = DynamicBody(self.pymux)
+
+        #: The plan of the frame being drawn: the window, the size it
+        #: was measured for, and the plan itself. Everything drawn in
+        #: one frame asks the same question, so it is worked out once.
+        #: `forget_the_plan` says when it goes. Lillecarl/pymux#217.
+        self._plan_of_the_frame: "Tuple[object, Size, Plan] | None" = None
+
         self.layout = self._create_layout()
 
         # Keep track of render information.
@@ -564,11 +575,59 @@ class LayoutManager:
             return {}
         return pane_write_positions(screen)
 
-    def reset_write_positions(self) -> None:
+    def the_pane_container(self) -> "PlanContainer | None":
         """
-        Nothing to clear: every render writes to a new screen, and the
-        positions go with it. Kept because the render hook calls it.
+        The container that drew the panes of the window this client
+        shows, or `None` before it has built one.
+
+        It holds the plan of the frame it drew, which is what a title
+        bar reads instead of measuring the window again.
         """
+        return self._body.the_panes()
+
+    def the_plan_of_this_frame(self, window, size: Size) -> "Plan | None":
+        """
+        The plan already worked out for this window, this frame.
+
+        `None` when there is none, or when it was worked out for
+        another window or another size. A frame asks this question
+        four times for every pane it draws -- what is to my left, my
+        right, above and below -- and the answer is one plan.
+        """
+        if self._plan_of_the_frame is None:
+            return None
+
+        drawn_for, drawn_at, plan = self._plan_of_the_frame
+        if drawn_for is not window or drawn_at != size:
+            return None
+
+        return plan
+
+    def remember_the_plan(self, window, size: Size, plan: Plan) -> None:
+        "Keep this plan for the rest of the frame."
+        self._plan_of_the_frame = (window, size, plan)
+
+    def forget_the_plan(self) -> None:
+        """
+        Throw away the plan of the frame just drawn.
+
+        **Anything that changes a window calls this**, through
+        `Pymux.invalidate`, and so does the start of every frame. A
+        plan is only an answer while the window it measured is the
+        window that is there.
+        """
+        self._plan_of_the_frame = None
+
+    def before_a_frame(self) -> None:
+        """
+        Get ready to draw.
+
+        There are no write positions to clear: every render writes to a
+        new screen and the positions go with it. What does have to go
+        is the plan of the frame before this one, so that the first
+        question of this frame measures the window as it is now.
+        """
+        self.forget_the_plan()
 
     def display_popup(self, title: str, content: str) -> None:
         """
@@ -833,7 +892,7 @@ class LayoutManager:
                             Float(
                                 width=lambda: self.pymux.get_window_size().columns,
                                 height=lambda: self.pymux.get_window_size().rows,
-                                content=DynamicBody(self.pymux),
+                                content=self._body,
                             )
                         ],
                     ),
@@ -1034,6 +1093,14 @@ class DynamicBody(Container):
             Application, Tuple[str, Container]
         ] = weakref.WeakKeyDictionary()  # Maps Application to (hash, Container)
 
+        #: The container that draws the panes, per client. It holds the
+        #: plan of the frame it drew, and everything drawn inside that
+        #: frame reads it rather than measuring again.
+        #: Lillecarl/pymux#217.
+        self._panes_for_app: weakref.WeakKeyDictionary[Application, PlanContainer] = (
+            weakref.WeakKeyDictionary()
+        )
+
     def _get_body(self) -> Container:
         "Return the Container object for the current CLI."
         new_hash = self.pymux.arrangement.invalidation_hash()
@@ -1051,6 +1118,22 @@ class DynamicBody(Container):
         self._bodies_for_app[app] = (new_hash, new_layout)
         return new_layout
 
+    def the_panes(self) -> "PlanContainer | None":
+        """
+        The container that draws the panes of this client's window.
+
+        **It is asked for through `_get_body`**, so a body whose
+        arrangement changed shape is rebuilt first and what comes back
+        is never a container for a window that has moved on. A fresh
+        container has drawn nothing, so its plan is `None` and a
+        caller measures instead.
+        """
+        if not self.pymux.arrangement.windows:
+            return None
+
+        self._get_body()
+        return self._panes_for_app.get(get_app())
+
     def _build_layout(self) -> Container:
         "Rebuild a new Container object and return that."
         logger.info("Rebuilding layout.")
@@ -1066,6 +1149,9 @@ class DynamicBody(Container):
         # layout that wraps another and shows one pane of it, so a
         # zoomed pane keeps the row its title bar hangs in and a zoomed
         # strip is still a strip. Lillecarl/pymux#215.
+        panes = _create_the_panes(self.pymux, window)
+        self._panes_for_app[get_app()] = panes
+
         return HSplit(
             [
                 # Some spacing for the top status bar.
@@ -1074,7 +1160,7 @@ class DynamicBody(Container):
                     filter=Condition(lambda: self.pymux.show_pane_status),
                 ),
                 # The actual content.
-                _create_the_panes(self.pymux, window),
+                panes,
                 # And the row the bottom pane hangs its bar below in.
                 # Only when there is a stack, because only then is
                 # there anything to name. Lillecarl/pymux#211.
@@ -1214,19 +1300,14 @@ def the_gaps_of(pymux: "Pymux", window) -> Gaps:
     )
 
 
-def the_plan_of(pymux: "Pymux", window) -> Plan:
+def the_room_for_the_panes(pymux: "Pymux", window) -> Size:
     """
-    Where the panes of this window are, in cells.
+    How much of the window the panes get.
 
-    The rows the chrome takes come off the window first, because a plan
-    holds panes and the chrome draws in the gaps between them.
-    Lillecarl/pymux#217.
-
-    **Measured on demand**, so a frame that asks about four sides of
-    ten panes measures forty times. It is cheap arithmetic over a few
-    rectangles, and it is the same arithmetic the container that draws
-    does, over the same window: what it draws is what a title bar
-    reads.
+    The rows the chrome takes come off first, because a plan holds
+    panes and the chrome draws in the gaps between them: one row for
+    the bar above the top pane, and one for the bar below the bottom
+    one where that is drawn. Lillecarl/pymux#217.
     """
     size = pymux.get_window_size()
 
@@ -1236,9 +1317,76 @@ def the_plan_of(pymux: "Pymux", window) -> Plan:
     if _the_bar_below_is_drawn(pymux, window):
         rows -= 1
 
-    return the_layout_of(pymux, window).measure(
-        Size(rows=max(1, rows), columns=size.columns),
-    )
+    return Size(rows=max(1, rows), columns=size.columns)
+
+
+def the_plan_of(pymux: "Pymux", window) -> Plan:
+    """
+    Where the panes of this window are, in cells.
+
+    **The frame's own plan, when there is one.** A title bar is drawn
+    inside the frame that the container measured, so the answer it
+    wants is the plan already on the container -- and asking for it is
+    the difference between one measurement per frame and one per
+    question. A window of sixteen panes asks sixty-four of them (four
+    sides each), and measuring each time cost seventeen times the whole
+    frame: 950k bytecode instructions against 55k, paid on every
+    frame. `tests/measure_a_frame.py` is where that number comes from.
+
+    **Measured fresh when there is no frame to read**, which is what
+    makes a direction key work before anything is drawn. That is the
+    property slice 2 of Lillecarl/pymux#217 added, and it is held by
+    `test_a_key_moves_the_focus_before_anything_is_drawn`.
+    """
+    size = the_room_for_the_panes(pymux, window)
+
+    try:
+        manager = pymux.get_client_state().layout_manager
+    except ValueError:
+        # No client, so no frame and nowhere to keep an answer. A
+        # command from the command line runs on a client like that.
+        return the_layout_of(pymux, window).measure(size)
+
+    known = manager.the_plan_of_this_frame(window, size)
+    if known is not None:
+        return known
+
+    plan = _the_plan_of_the_frame(manager, window, size)
+    if plan is None:
+        plan = the_layout_of(pymux, window).measure(size)
+
+    manager.remember_the_plan(window, size, plan)
+    return plan
+
+
+def _the_plan_of_the_frame(manager, window, size: Size) -> "Plan | None":
+    """
+    The plan the container of this frame measured, when it is still the
+    answer.
+
+    A title bar is drawn inside that frame, so this is the plan it is
+    being drawn against, and reading it means the frame is measured
+    once rather than once per pane.
+
+    Two things have to hold, and each rules out a plan that would lie:
+
+    - The container is the one for *this* window, and it measured for
+      this size. A client that resized between two frames has a plan
+      of the size it was.
+    - The arrangement has not changed shape since. That one is free:
+      `DynamicBody` rebuilds its body when the invalidation hash
+      moves, and a fresh container has drawn nothing, so a pane
+      opening, closing or zooming falls through to a fresh
+      measurement.
+    """
+    container = manager.the_pane_container()
+    if container is None or container.measured_for != size:
+        return None
+
+    if getattr(container.layout, "window", None) is not window:
+        return None
+
+    return container.plan
 
 
 def the_weights_become_the_cells(pymux: "Pymux", window) -> None:

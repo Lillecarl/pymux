@@ -41,6 +41,17 @@ class Zoomed:
         self.inner = inner
         self.pane = pane
 
+    @property
+    def window(self):
+        """
+        The window this lays out, which is the one underneath.
+
+        A wrapper answers for what it wraps, so that anything asking
+        which window a layout belongs to gets the same answer whether
+        the window is zoomed or not.
+        """
+        return self.inner.window
+
     def __repr__(self) -> str:
         return "Zoomed(%r, %r)" % (self.inner, self.pane)
 

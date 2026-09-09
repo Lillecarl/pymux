@@ -171,10 +171,10 @@ class ClientState:
 
         self.app = self._create_app()
 
-        # Clear write positions right before rendering. (They are populated
-        # during rendering).
+        # Whatever the frame before this one left behind goes now: the
+        # plan it measured is an answer about the window as it was.
         def before_render(_):
-            self.layout_manager.reset_write_positions()
+            self.layout_manager.before_a_frame()
 
         self.app.before_render += before_render
 
@@ -952,6 +952,13 @@ class Pymux:
         here, and holds every reason but the one that carries a name.
         """
         logger.info("Drawing %s of the clients: %s", len(self.apps), reason)
+
+        # Whatever changed may have changed where the panes are, so no
+        # client may answer that from the frame it drew before this.
+        # The plan is worked out again on the next frame, which is what
+        # this asks for. Lillecarl/pymux#217.
+        for client_state in self._client_states.values():
+            client_state.layout_manager.forget_the_plan()
 
         for app in self.apps:
             app.invalidate()

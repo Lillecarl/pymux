@@ -60,6 +60,13 @@ class PlanContainer(Container):
         #: it to read. `None` before the first frame.
         self.plan: Plan | None = None
 
+        #: The size that plan was measured for. A title bar drawn in
+        #: this frame reads the plan rather than working it out again,
+        #: and this is what says the plan is still the answer: a client
+        #: that resized between two frames has a plan of the size it
+        #: was. Lillecarl/pymux#217.
+        self.measured_for: Size | None = None
+
     def __repr__(self) -> str:
         return "PlanContainer(%r)" % (self.layout,)
 
@@ -94,6 +101,7 @@ class PlanContainer(Container):
         available = Size(rows=write_position.height, columns=write_position.width)
 
         self.plan = self.layout.measure(available)
+        self.measured_for = available
         self.offset = self.layout.look_at(
             self.plan, self.offset, available, self.focused_pane()
         )
