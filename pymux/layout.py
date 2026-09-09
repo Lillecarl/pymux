@@ -1692,9 +1692,17 @@ def _create_container_for_process(
                             ),
                             style="class:titlebar",
                         ),
-                        filter=Condition(
-                            lambda: _the_bar_below_is_drawn(pymux, window)
-                        ),
+                        # **Only where this pane has a neighbour above
+                        # or below it.** The row belongs to the window,
+                        # because the bottom pane of a stack needs one
+                        # under it, but a pane with nothing to name has
+                        # nothing to draw: an empty bar still fills its
+                        # row with the title bar style, which put a
+                        # coloured band under a pane that is not
+                        # stacked at all. Carl, on the picture: "we
+                        # only want that bar if the rectangle is
+                        # split". Lillecarl/pymux#219.
+                        filter=Condition(lambda: bool(get_the_bar_below())),
                     ),
                     left=0,
                     right=0,

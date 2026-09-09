@@ -132,6 +132,34 @@ def test_a_stack_keeps_two_rows_between_its_panes():
         assert bottom.ypos == top.ypos + top.height + 2, (top, bottom)
 
 
+def test_a_pane_with_nothing_above_or_below_it_draws_no_bar():
+    """
+    A window can hold a stack in one column and a lone pane beside it.
+    The lone pane has nothing to name, and an empty bar is not nothing:
+    it fills its row with the title bar style, which drew a coloured
+    band under a pane that is not stacked at all.
+
+    Carl, on a picture of it: "we only want that bar if the rectangle
+    is split". Lillecarl/pymux#219.
+
+    The row is still there, because the window keeps one for the stack
+    beside it. What is in it under this pane is the background.
+    """
+    with a_client(CHROME, columns=COLUMNS) as (pymux, draw):
+        window = pymux.arrangement.get_active_window()
+        alone = window.active_pane
+        alone.chosen_name = "alone"
+
+        # A column of its own beside it, split into a stack, so the
+        # window keeps the row and this pane is not in the stack.
+        pymux.handle_command("split-window -h")
+        pymux.handle_command("split-window -v")
+
+        (bar,) = bars_under(pymux, draw, [alone])
+
+        assert not bar.strip(), repr(bar)
+
+
 def test_the_bottom_pane_of_a_stack_has_a_row_under_it():
     """
     The row is kept under the whole layout, not only between panes.
