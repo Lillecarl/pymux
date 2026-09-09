@@ -69,17 +69,13 @@ class Strip:
 
     **It reads the arrangement, for now.** The tree, the column widths
     and the weights still live in `arrangement.Window`, so this
-    measures them rather than owning them. When `Divided` lands as
-    well, the tree becomes these classes' own state and this reads
-    nothing.
+    measures them rather than owning them. `Divided` reads the same
+    tree, and the plan file says the tree moves in here later.
 
-    **The plan predicts the frame, for now.** prompt_toolkit still
-    divides the row, and this works out the same numbers a second
-    time, which is exactly the duplication the work is removing:
-    `PlanContainer` draws the plan next, and then the plan is the truth
-    and nothing can disagree with it.
-    `tests/test_the_plan_matches_the_frame.py` holds the two together
-    until that lands.
+    **The plan is the truth.** `PlanContainer` draws it, so nothing
+    works the numbers out a second time and nothing can disagree with
+    it. `tests/test_the_plan_and_the_frame.py` holds what was drawn
+    against what was measured.
     """
 
     def __init__(self, window: "arrangement.Window", gaps=Gaps()) -> None:

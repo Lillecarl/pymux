@@ -1,12 +1,12 @@
 """
 The plan and the frame: they agree, and the plan answers first.
 
-**This is the test that makes slice 2 a probe.** `Strip.measure` works
-out where every pane of a strip is, and prompt_toolkit works the same
-thing out again while it draws. Two answers to one question is what
-Lillecarl/pymux#217 exists to remove, and until `PlanContainer` draws
-the plan there is nothing to stop the two drifting apart. This file is
-that stop.
+**This was the test that made slice 2 a probe**, while prompt_toolkit
+still divided the row and `Strip.measure` worked the same numbers out a
+second time. `PlanContainer` draws the plan now, so the two cannot
+drift; what this still holds is the chain from the measurement to the
+cells, which is where an offset gets lost or a chrome row gets counted
+twice.
 
 A frame records where it drew each pane (`pane_write_positions`), so
 the two are directly comparable. They are not in the same coordinates:
@@ -99,20 +99,30 @@ def test_the_plan_divides_a_stack_the_way_the_frame_does():
 
 def test_the_plan_follows_a_resize():
     """
-    A person drags a border, and the two still agree.
+    A person drags a border, and the frame follows.
 
-    The weights carry the answer: a frame writes the real height of
-    each pane back into them, and the plan reads them. Two frames,
-    because the weights of the frame just drawn are what the next one
-    divides by.
+    The weights carry the answer, and the resize writes them: it
+    measures the plan, puts the cells each pane holds into its weight,
+    and then applies the delta, so one row asked for is one row given.
     """
     with a_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
-        a_row_of_panes(pymux, count=2)
+        panes = a_row_of_panes(pymux, count=2)
         pymux.handle_command("split-window -v")
         draw()
 
+        was = the_plan(pymux).rect_of(panes[-1]).height
         pymux.handle_command("resize-pane -U 3")
         draw()
+
+        assert the_plan(pymux).rect_of(panes[-1]).height == was - 3
+        assert len(the_offsets(pymux, the_plan(pymux))) == 1
+
+
+def test_a_divided_window_is_drawn_where_its_plan_says_too():
+    "The layout pymux uses unless a person asks for something else."
+    with a_client(CHROME, rows=ROWS, columns=COLUMNS) as (pymux, draw):
+        a_row_of_panes(pymux, count=2)
+        pymux.handle_command("split-window -v")
         draw()
 
         assert len(the_offsets(pymux, the_plan(pymux))) == 1

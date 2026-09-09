@@ -258,6 +258,11 @@ one is a constraint on it:
     Zoomed(inner)      a wrapper: one pane fills the view, and the
                        layout it wraps keeps its own state untouched
 
+`Divided`, `Strip` and `Zoomed` exist. `Plane` and `Masonry` do not
+yet, so the three of them are three classes with the same four methods
+and no base class -- and that is on purpose until slice 6, because a
+base class written before the third subclass is a guess.
+
 **Inheritance follows a persistent rule, never an arrangement.** That
 is the line, and tmux draws it in the same place. A rule about how
 space is shared or where a new pane goes lives for as long as the
@@ -391,28 +396,49 @@ Two smaller rules that follow:
    `pymux/plan_container.py`, `Strip.chrome`, `Strip.look_at`.
    `ScrollableStrip` is deleted and `strip.py` draws nothing.
    The layout draws the borders; a pane knows nothing about them.
-4. **`Divided` emits a plan**, with the presets on top as functions,
-   held to the existing suite. `_lay_out` in `strip.py` already does
-   the walk it needs -- weights, both axes, a gap between children --
-   so the work is the presets, `resize-pane`, and deleting the tree
-   branch of `the_pane_beside`. `Zoomed(inner)` belongs here too: it
-   is small, it closes Lillecarl/pymux#215, and it is the shape tmux
-   uses.
+4. **`Divided` emits a plan**, and every window draws through
+   `PlanContainer`. **Landed**: `pymux/divided.py`,
+   `pymux/zoomed.py`, and the walk both layouts share in
+   `pymux/tiling.py`. `_create_split`, `SizedBox`, the callback that
+   wrote the drawn size back into the weights, `_move_focus` and the
+   tree walk in `arrangement.py` are all gone.
+
+   Four things are worth carrying forward from it.
+
+   - **The presets needed no move.** They are already one-off
+     functions in effect: `Window.select_layout` builds a tree and
+     returns, and `previous_selected_layout` is read only to cycle,
+     which is exactly what tmux's `lastlayout` is for. An arrangement
+     that arranges the arrangement belongs in `arrangement.py`, so
+     nothing moved and no `MainVertical` class exists.
+   - **The resize inverted, and `the_weights_become_the_cells` is the
+     price.** Nothing reports the drawn size any more, so a delta of
+     one means nothing until the weights say what the panes measure
+     now. `the_pane_resizes` measures, writes, then applies the
+     delta, and `resize-pane` and a program asking for a size both
+     come through it.
+   - **A split answers with the room it really took.** Every pane
+     keeps a cell, so a window shrunk far enough runs past its own
+     edge; the next child then has to start past what the one before
+     it really used, or two slots share cells.
+   - **Zoom is a wrapper and it closed Lillecarl/pymux#215** with the
+     fourth column-width preset beside it. A zoomed pane keeps the row
+     its title bar hangs in, which it did not have before.
 5. **`View` per client, with an offset**, and the `window-size` policy
    as a real option.
 6. **`Plane` on its own, then `Masonry`.**
 
-Slices 1 to 3 are landed, and they were worth doing whether or not the
-rest follows: the two-answers problem is gone for one layout, and the
-promises every later layout is held to are written down.
+Slices 1 to 4 are landed. **The two-answers problem is gone**: one
+object per window says where the panes are, and the container, the
+title bars and the direction keys all read it.
 
-**Where slice 4 starts.** `the_pane_beside` and `the_plan_of`
-(`pymux/layout.py`) fork on `window.strip`, and the other branch is
-the tree walk. `_create_split` and `SizedBox` are what `Divided`
-replaces. `every_promise_holds(plan)` in `tests/test_the_plane.py` is
-what holds it, and `tests/test_the_plan_and_the_frame.py` is the
-pattern for keeping a new plan honest against the frame while both
-exist.
+**Where slice 5 starts.** `PlanContainer.offset` is one view, held by
+the container of one client, and `Strip.look_at` moves it. A `View` is
+that offset plus a size and the marks, one per client, and
+`pymux.get_window_size` (`main.py:696`) is the hard-coded `smallest`
+policy that `window-size` replaces. Nothing else in `layout.py` forks
+on which layout a window is in any more, which is what makes the next
+slice small.
 
 ## Popups, and floating windows
 
