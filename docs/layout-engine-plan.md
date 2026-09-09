@@ -314,19 +314,35 @@ Two smaller rules that follow:
    `tests/test_the_plane.py`, with `every_promise_holds(plan)` for the
    slices after it to hold their own `measure` to.
 2. **`Strip` emits a plan, and the title bars plus `select-pane -L|-R`
-   read it.** The probe. `Strip` already computes every number it needs
-   (`width_of`, `_where_the_column_is`), and the title bar is where the
-   two-answers problem is worst. If projection works on the hardest
-   layout we already have, it works.
-3. **`PlanContainer`, and `Strip` draws through it.** `strip.py` shrinks.
+   read it.** The probe. **Landed**: `Strip.measure` in
+   `pymux/strip.py`, and `layout.the_pane_beside` is the one question
+   both ask. Two things a person sees changed, both in a strip: a
+   direction key works before the first frame, and the pane named
+   beside a stack is the one sharing most of the edge.
+3. **`PlanContainer`, and `Strip` draws through it.** **Landed**:
+   `pymux/plan_container.py`, `Strip.chrome`, `Strip.look_at`.
+   `ScrollableStrip` is deleted and `strip.py` draws nothing.
+   The layout draws the borders; a pane knows nothing about them.
 4. **`Divided` emits a plan**, with the five presets on top, held to the
-   existing suite.
+   existing suite. `_lay_out` in `strip.py` already does the walk it
+   needs -- weights, both axes, a gap between children -- so the work
+   is the presets, `resize-pane`, and deleting the tree branch of
+   `the_pane_beside`.
 5. **`View` per client, with an offset**, and the `window-size` policy
    as a real option.
 6. **`Plane` on its own, then `Masonry`.**
 
-Slices 1 to 3 are worth doing whether or not the rest follows, because
-they delete the two-answers problem for one layout.
+Slices 1 to 3 are landed, and they were worth doing whether or not the
+rest follows: the two-answers problem is gone for one layout, and the
+promises every later layout is held to are written down.
+
+**Where slice 4 starts.** `the_pane_beside` and `the_plan_of`
+(`pymux/layout.py`) fork on `window.strip`, and the other branch is
+the tree walk. `_create_split` and `SizedBox` are what `Divided`
+replaces. `every_promise_holds(plan)` in `tests/test_the_plane.py` is
+what holds it, and `tests/test_the_plan_and_the_frame.py` is the
+pattern for keeping a new plan honest against the frame while both
+exist.
 
 ## Popups, and floating windows
 
