@@ -3,6 +3,7 @@ from enum import StrEnum
 __all__ = [
     "COMMAND",
     "PROMPT",
+    "WindowSize",
     "Woke",
 ]
 
@@ -12,6 +13,30 @@ COMMAND = "COMMAND"
 
 #: Name of the input for a "command-prompt" command.
 PROMPT = "PROMPT"
+
+
+class WindowSize(StrEnum):
+    """
+    Who decides how big a window's plane is.
+
+    A plane is shared and a view is not: a pane has one pty, so it has
+    one size however many clients look at it. This says which client's
+    terminal that one size comes from. Decision 11 of
+    `docs/layout-engine-plan.md`, and tmux spells the four the same
+    way.
+
+    `SMALLEST` is the default and what pymux always did. Every client
+    sees the whole window, and the biggest of them draws background
+    around it.
+
+    `LARGEST` is the one views make worth having. tmux leaves a client
+    too small to see the whole window stuck at the top left of it;
+    here that client moves its view over the plane instead, so it
+    reaches every pane.
+    """
+
+    SMALLEST = "smallest"
+    LARGEST = "largest"
 
 
 class Woke(StrEnum):

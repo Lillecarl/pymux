@@ -1,0 +1,311 @@
+"""
+Two clients, two sizes, one window. Slice 5 of Lillecarl/pymux#217.
+
+**A plane is shared and a view is not.** A pane has one pty, so it has
+one size however many clients look at it -- decision 10 of
+`docs/layout-engine-plan.md`. `window-size` says whose terminal that
+one size comes from, and each client then sees as much of the plane as
+it can through a view of its own.
+
+- `smallest`, the default and what pymux always did: every client sees
+  the whole window, and a bigger one draws background around it.
+- `largest`: the window is the biggest client's, and a smaller one
+  moves its view over it. tmux has the same option and leaves its
+  smaller client stuck at the top left of the window.
+
+This is the only file with two clients of different sizes in it, and
+everything slice 5 did is judged here. The rest of the suite has one
+client, where the plane and the view are the same rectangle and every
+question about the difference is unaskable.
+"""
+
+import io
+from contextlib import contextmanager
+
+from prompt_toolkit.application.current import set_app
+from prompt_toolkit.data_structures import Size
+from prompt_toolkit.input import create_pipe_input
+from prompt_toolkit.layout.mouse_handlers import MouseHandlers
+from prompt_toolkit.layout.screen import Screen, WritePosition
+from prompt_toolkit.output import ColorDepth
+from prompt_toolkit.output.vt100 import Vt100_Output
+
+from pymux.enums import WindowSize
+from pymux.main import Pymux
+from pymux.plan_container import PlanContainer
+
+#: One client with room, and one without. The columns differ by enough
+#: that a pane of the big plane cannot fit in the small client.
+BIG = Size(rows=24, columns=100)
+SMALL = Size(rows=12, columns=40)
+
+
+class _Connection:
+    "Two clients need two of these: the server keys on the connection."
+
+    kitty_source_flags = 0
+    pointer_shape = None
+    graphics = None
+
+    def set_pointer_shape(self, shape):
+        pass
+
+    def _send_packet(self, packet):
+        pass
+
+
+class _Client:
+    "A client, and the frame it draws."
+
+    def __init__(self, pymux, state, size) -> None:
+        self.pymux = pymux
+        self.state = state
+        self.size = size
+
+    def draw(self) -> Screen:
+        with set_app(self.state.app):
+            screen = Screen()
+            self.state.app.layout.container.write_to_screen(
+                screen,
+                MouseHandlers(),
+                WritePosition(
+                    xpos=0, ypos=0, width=self.size.columns, height=self.size.rows
+                ),
+                "",
+                False,
+                None,
+            )
+            screen.draw_all_floats()
+            self.state.app.renderer._last_screen = screen
+            return screen
+
+    @property
+    def panes(self) -> PlanContainer:
+        "The container that drew this client's panes."
+        found = []
+
+        def walk(container):
+            if isinstance(container, PlanContainer):
+                found.append(container)
+            for child in container.get_children():
+                walk(child)
+
+        with set_app(self.state.app):
+            walk(self.state.app.layout.container)
+
+        assert len(found) == 1, found
+        return found[0]
+
+    @property
+    def view(self):
+        return self.panes.view
+
+    def run(self, command: str) -> None:
+        with set_app(self.state.app):
+            self.pymux.handle_command(command)
+            self.state.sync_focus()
+
+
+@contextmanager
+def two_clients(commands=()):
+    """
+    A session with a big client and a small one, both on one window.
+
+    The commands run on the big client, which is the one that opens
+    the window, so both are watching it.
+    """
+    pymux = Pymux()
+    opened = []
+
+    with create_pipe_input() as pipe:
+
+        def attach(size):
+            output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: size)
+            state = pymux.add_client(
+                output=output,
+                input=pipe,
+                color_depth=ColorDepth.DEPTH_8_BIT,
+                connection=_Connection(),
+            )
+            client = _Client(pymux, state, size)
+            opened.append(client)
+            return client
+
+        big = attach(BIG)
+        with set_app(big.state.app):
+            for command in commands:
+                pymux.handle_command(command)
+
+        small = attach(SMALL)
+
+        try:
+            yield pymux, big, small
+        finally:
+            for window in list(pymux.arrangement.windows):
+                for pane in list(window.panes):
+                    process = getattr(pane, "process", None)
+                    if process is not None and not process.is_terminated:
+                        process.kill()
+
+
+def the_window(pymux):
+    return pymux.arrangement.windows[0]
+
+
+def the_plane(pymux):
+    "How big the plane of the one window is."
+    return pymux.the_size_of_the_plane(the_window(pymux))
+
+
+# ----------------------------------------------------------------------
+# Which client decides.
+
+
+def test_the_smallest_client_decides_by_default():
+    "Which is what pymux always did, and now it is an option."
+    with two_clients() as (pymux, _big, _small):
+        assert the_plane(pymux).columns == SMALL.columns
+        assert the_plane(pymux).rows == SMALL.rows - 1  # The status line.
+
+
+def test_the_largest_client_decides_when_it_is_asked_to():
+    with two_clients(["set-window-option window-size largest"]) as (pymux, _b, _s):
+        assert the_plane(pymux).columns == BIG.columns
+        assert the_plane(pymux).rows == BIG.rows - 1
+
+
+def test_a_word_that_is_not_a_policy_is_refused():
+    with two_clients() as (pymux, big, _small):
+        with set_app(big.state.app):
+            pymux.handle_command("set-window-option window-size enormous")
+            assert big.state.message is not None
+
+        assert the_plane(pymux).columns == SMALL.columns
+
+
+def test_the_policy_belongs_to_one_window():
+    """
+    Two windows of a session can be watched by different clients, so
+    the policy is a window option and a new window starts on the
+    default.
+    """
+    with two_clients(["set-window-option window-size largest"]) as (pymux, big, _s):
+        big.run("new-window")
+
+        first, second = pymux.arrangement.windows
+        assert first.window_size is WindowSize.LARGEST
+        assert second.window_size is WindowSize.SMALLEST
+
+
+def test_a_default_says_what_every_new_window_starts_with():
+    "Which is what `-g` is for, and it changes no window that is open."
+    with two_clients() as (pymux, big, _small):
+        big.run("set-window-option -g window-size largest")
+
+        first = the_window(pymux)
+        big.run("new-window")
+        _, second = pymux.arrangement.windows
+
+        assert first.window_size is WindowSize.SMALLEST
+        assert second.window_size is WindowSize.LARGEST
+
+
+# ----------------------------------------------------------------------
+# What each client then sees.
+
+
+def test_the_plan_is_the_same_for_both_clients():
+    """
+    **The plan is shared, never per client.** A pane has one pty, so
+    the rectangle it is drawn in is one rectangle, and only the part of
+    it each client can see differs. Decision 10.
+    """
+    with two_clients(["set-window-option window-size largest"]) as (pymux, big, small):
+        big.run("split-window -h")
+        big.draw()
+        small.draw()
+
+        assert big.panes.measured_for == small.panes.measured_for
+        assert big.panes.plan.rects.values().__len__() == 2
+
+        for pane in the_window(pymux).panes:
+            assert big.panes.plan.rect_of(pane) == small.panes.plan.rect_of(pane)
+
+
+def test_a_client_smaller_than_the_plane_sees_part_of_it():
+    with two_clients(["set-window-option window-size largest"]) as (pymux, big, small):
+        big.draw()
+        small.draw()
+
+        assert big.view.size.columns == BIG.columns
+        assert small.view.size.columns == SMALL.columns
+        assert small.view.size.columns < the_plane(pymux).columns
+
+
+def test_the_small_client_scrolls_to_the_pane_it_is_on():
+    """
+    The reason `largest` is worth having. tmux leaves a client too
+    small to see the whole window at its top left; here the view moves,
+    so every pane is reachable from the small terminal as well.
+    """
+    with two_clients(["set-window-option window-size largest"]) as (pymux, big, small):
+        big.run("split-window -h")
+        big.draw()
+        small.draw()
+
+        left, right = the_window(pymux).panes
+        assert small.view.offset.x == 0
+
+        small.run("select-pane -R")
+        small.draw()
+
+        assert small.view.offset.x == small.panes.plan.rect_of(right).x
+        assert small.view.shows(small.panes.plan.rect_of(right))
+        assert not small.view.shows(small.panes.plan.rect_of(left))
+
+
+def test_the_big_client_does_not_move_when_the_small_one_scrolls():
+    "A view belongs to one client. Nothing a person does moves another's."
+    with two_clients(["set-window-option window-size largest"]) as (pymux, big, small):
+        big.run("split-window -h")
+        big.draw()
+        small.draw()
+
+        small.run("select-pane -R")
+        small.draw()
+        big.draw()
+
+        assert big.view.offset.x == 0
+        # And the big client still shows every pane.
+        for pane in the_window(pymux).panes:
+            assert big.view.shows(big.panes.plan.rect_of(pane))
+
+
+def test_a_pane_is_sized_for_the_plane_and_not_for_a_client():
+    """
+    One pty, one size. The program in a pane writes for the plane, and
+    the small client shows as much of that as it has room for.
+    """
+    with two_clients(["set-window-option window-size largest"]) as (pymux, big, small):
+        big.draw()
+        small.draw()
+
+        (pane,) = the_window(pymux).panes
+        assert big.panes.plan.rect_of(pane).width == the_plane(pymux).columns
+        assert pane.screen.columns == the_plane(pymux).columns
+
+
+# ----------------------------------------------------------------------
+# And the default policy is unchanged.
+
+
+def test_under_smallest_every_client_sees_the_whole_plane():
+    with two_clients() as (pymux, big, small):
+        big.run("split-window -h")
+        big.draw()
+        small.draw()
+
+        for client in (big, small):
+            for pane in the_window(pymux).panes:
+                assert client.view.shows(client.panes.plan.rect_of(pane))
+            assert client.view.offset.x == 0

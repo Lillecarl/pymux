@@ -5,7 +5,7 @@ All configurable options which can be changed through "set-option" commands.
 from abc import ABC, abstractmethod
 from enum import StrEnum
 
-from .enums import Woke
+from .enums import WindowSize, Woke
 from .key_mappings import (
     PYMUX_TO_PROMPT_TOOLKIT_KEYS,
     pymux_key_to_prompt_toolkit_key_sequence,
@@ -241,6 +241,42 @@ class ExtendedKeysOption(Option):
         pymux.sync_the_keyboard()
 
 
+class WindowSizeOption(Option):
+    """
+    Which client's terminal decides how big a window's plane is.
+
+    A window option, because two windows of one session can be watched
+    by different clients. Decision 11 of `docs/layout-engine-plan.md`.
+    """
+
+    def get_all_values(self, pymux):
+        return [str(one) for one in WindowSize]
+
+    def _read(self, value):
+        try:
+            return WindowSize(value)
+        except ValueError:
+            raise SetOptionError(
+                "Expecting one of: %s." % ", ".join('"%s"' % one for one in WindowSize)
+            ) from None
+
+    def set_value(self, pymux, value):
+        chosen = self._read(value)
+
+        if not pymux.arrangement.windows:
+            raise SetOptionError(
+                "There is no window yet. A window option belongs to one "
+                "window, so a configuration file has none to set. "
+                'Use "-g" to say what every new window starts with.'
+            )
+
+        pymux.arrangement.get_active_window().window_size = chosen
+
+    def set_default(self, pymux, value):
+        "What every new window starts with. Changes no window that is open."
+        pymux.arrangement.window_defaults["window_size"] = self._read(value)
+
+
 class ThemeOption(Option):
     """
     Which colour scheme every client draws with.
@@ -338,4 +374,11 @@ ALL_WINDOW_OPTIONS = {
     # not ask for it changes. `select-layout` turns it off again.
     # Lillecarl/pymux#198.
     "strip": OnOffOption("strip", window_option=True),
+    # Which client's terminal decides how big this window's plane is,
+    # when more than one watches it. "smallest" is what pymux always
+    # did: every client sees the whole window, and a bigger one draws
+    # background around it. "largest" gives the window to the biggest
+    # client, and a smaller one moves its own view over it.
+    # Lillecarl/pymux#217.
+    "window-size": WindowSizeOption(),
 }

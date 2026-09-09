@@ -17,6 +17,8 @@ from weakref import WeakKeyDictionary, ref
 from prompt_toolkit.application import Application, get_app, get_app_or_none, set_app
 from ptterm import Terminal
 
+from .enums import WindowSize
+
 __all__ = [
     "LayoutTypes",
     "Pane",
@@ -231,6 +233,12 @@ class Window:
         #: weakly held, so a column that closes takes its width with
         #: it.
         self.column_widths: "WeakKeyDictionary[object, float]" = WeakKeyDictionary()
+
+        #: Which client's terminal decides how big this window's plane
+        #: is, when more than one watches it. `set-window-option
+        #: window-size` writes it. Decision 11 of
+        #: `docs/layout-engine-plan.md`.
+        self.window_size = WindowSize.SMALLEST
 
         #: When true, the current pane is zoomed in.
         self.zoom = False

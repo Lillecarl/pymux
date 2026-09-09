@@ -38,7 +38,7 @@ from pyte.osc import Osc
 from .arrangement import Arrangement, Pane, Window
 from .commands.commands import call_command_handler, handle_command
 from .commands.completer import create_command_completer
-from .enums import COMMAND, PROMPT, Woke
+from .enums import COMMAND, PROMPT, WindowSize, Woke
 from .graphics import PaneView
 from .key_bindings import PymuxKeyBindings
 from .layout import Justify, LayoutManager, the_pane_resizes
@@ -703,9 +703,11 @@ class Pymux:
         client bigger than the plane draws background around it, and a
         client smaller than it moves its view over it.
 
-        The smallest client watching the window decides, which is
-        tmux's `window-size smallest` and what pymux has always done.
-        Slice 5 of Lillecarl/pymux#217 makes it an option.
+        **The window's `window-size` option decides which client.**
+        `smallest` is the default and what pymux always did; `largest`
+        gives the plane to the biggest client watching, and a smaller
+        one moves its view over it. tmux has the same option and
+        leaves its smaller client stuck at the top left instead.
 
         The status line comes off the bottom, because it is not part of
         any window. `layout.the_room_for_the_panes` takes the rows the
@@ -716,14 +718,19 @@ class Pymux:
         and the program in a pane needs a size from the first byte it
         writes.
         """
+        if window is None:
+            window = self.arrangement.get_active_window()
+
         sizes = self.the_screens_watching(window)
 
         if not sizes:
             return Size(rows=20, columns=80)
 
+        pick = max if window.window_size is WindowSize.LARGEST else min
+
         return Size(
-            rows=min(size.rows for size in sizes) - (1 if self.show_status else 0),
-            columns=min(size.columns for size in sizes),
+            rows=pick(size.rows for size in sizes) - (1 if self.show_status else 0),
+            columns=pick(size.columns for size in sizes),
         )
 
     def the_screens_watching(self, window=None) -> list[Size]:
