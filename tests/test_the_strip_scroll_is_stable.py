@@ -192,9 +192,14 @@ def test_a_column_wider_than_the_view_still_starts_on_screen():
 
     Two thirds of a window is wider than the window once a second
     column is beside it, so this asks for the case rather than
-    inventing it. Which end wins when a column is wider than the whole
-    view is Lillecarl/pymux#218; here the view is wide enough that the
-    question does not arise.
+    inventing it.
+
+    **The left edge is the one that is kept**, and it is kept whether
+    the column fits or not: Lillecarl/pymux#218. So this holds for a
+    column wider than the whole view as well, and
+    `test_a_column_wider_than_the_view_shows_its_left_edge`
+    (`test_the_strip_plan.py`) reads the offset that says which end it
+    is.
     """
     with a_client(STRIP, columns=20) as (pymux, state, draw):
         _window, panes = columns_of(pymux, 2)

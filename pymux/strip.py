@@ -195,17 +195,26 @@ class Strip:
         self, plan: Plan, offset: Point, size: Size, focus: "Pane | None"
     ) -> Point:
         """
-        Where the view goes: far enough that the focused column is on
-        it, and not one cell further.
+        Where the view goes: the focused column's left edge at the
+        left of the view, and never past the end of the row.
 
-        **A column already on screen leaves the view alone.** That is
-        what makes moving the focus a round trip: walk right and back,
-        and the strip is where it started. Lillecarl/pymux#207.
+        **A column already wholly on screen leaves the view alone.**
+        That is what makes moving the focus a round trip: walk right
+        and back, and the strip is where it started.
+        Lillecarl/pymux#207.
 
         A column is its panes and the border it owns, so the column
         ends one cell past the pane's rectangle. The view never passes
         the end of the row either, whatever the focus asks for: a
         column that closes can leave it out there.
+
+        **A column wider than the view shows its left edge**, and the
+        right of it is cut. Carl: "left should generally be preferred
+        for terminals since that's where ~100% of applications begin
+        writing text, it's even likely that a missing right column
+        doesn't miss anything." Lillecarl/pymux#218. Nothing on the
+        screen says that the column is cut, which is
+        Lillecarl/pymux#222.
         """
         x = offset.x
 
@@ -213,20 +222,16 @@ class Strip:
             rect = plan.rect_of(focus)
             start, end = rect.x, rect.right + self.gaps.between_columns
 
-            if start < x:
-                x = start
-            elif end > x + size.columns:
-                # Far enough right that the column's end is on screen,
-                # and no further than its start.
+            if start < x or end > x + size.columns:
+                # The column's left edge, at the left of the view.
                 #
-                # **A column wider than the view shows its right edge**,
-                # because then its end is further than its start. The
-                # rule this was moved from says in a comment that the
-                # left edge wins, and does this; the test that claims
-                # to judge it cannot tell the two apart, because every
-                # cell it reads holds the same letter either way.
-                # Lillecarl/pymux#218.
-                x = max(start, end - size.columns)
+                # That is what this did already for every column that
+                # fits, because `max(start, end - size)` is `start`
+                # whenever the column is narrower than the view. The
+                # only column it treated differently was one too wide
+                # to show whole, and that one is the case the rule is
+                # about. Lillecarl/pymux#218.
+                x = start
 
         row = plan.plane.width + self.gaps.between_columns
         return Point(x=max(0, min(x, max(0, row - size.columns))), y=0)

@@ -352,23 +352,41 @@ def test_the_view_never_starts_before_the_row():
     assert looking_at(window, panes[0], offset=-5) == 0
 
 
-def test_a_column_wider_than_the_view_shows_its_right_edge():
+def test_a_column_wider_than_the_view_shows_its_left_edge():
     """
-    Which is what the rule does, and not what it says it does.
+    It cannot be shown whole, so one end is cut, and the left end is
+    the one to keep.
 
-    `ScrollableStrip._scroll_to_the_focus` carries a comment saying
-    the left edge wins, and the test that judges it reads eight cells
-    that hold the same letter whichever edge is shown. This says the
-    behaviour out loud so that changing it is a decision and not an
-    accident. Lillecarl/pymux#218.
+    Carl: "left should generally be preferred for terminals since
+    that's where ~100% of applications begin writing text, it's even
+    likely that a missing right column doesn't miss anything."
+    Lillecarl/pymux#218.
+
+    The rule this was moved from said the same in a comment and did
+    the opposite, and the test that judged it could not tell: every
+    cell it read held the same letter either way. This reads the
+    offset, so it can.
     """
     window, panes = a_strip((1, 1))
     window.column_widths[window.root[1]] = 1.0
 
     # The second column is the whole window wide, at 40 to 119, and
-    # the view is forty cells. Its left edge is at 40 and its right at
-    # 120, so showing the end means showing 80 to 119.
-    assert looking_at(window, panes[1], offset=0, columns=40) == 80
+    # the view is forty cells. Its left edge is at 40, so that is
+    # where the view goes, and cells 80 to 119 of it are cut.
+    assert looking_at(window, panes[1], offset=0, columns=40) == 40
+
+
+def test_a_column_that_fits_is_still_shown_whole():
+    "The rule only changes for a column that cannot be shown whole."
+    window, panes = a_strip((1, 1))
+
+    # Two columns of half an eighty cell window, so the second runs
+    # from 40 to 79 and needs the view at nothing but the origin.
+    assert looking_at(window, panes[1], offset=0, columns=80) == 0
+
+    # And in a view of sixty cells it does not fit at the origin, so
+    # the view moves far enough to show its end and no further.
+    assert looking_at(window, panes[1], offset=0, columns=60) == 20
 
 
 def test_nothing_focused_leaves_the_view_where_it_is():
