@@ -195,18 +195,20 @@ def _panes_of(item) -> "List[Pane]":
     return result
 
 
-def _the_nearest_pane(item, want_last: bool) -> "Pane | None":
+def _the_nearest_pane(item, want_last: bool, along: type) -> "Pane | None":
     """
-    The pane of this column that is nearest to the one asking.
+    The pane of this neighbour that is nearest to the one asking.
 
-    A neighbour may be a whole column of panes, and a title bar names
-    one pane. The one to name is the one that touches us: for a column
-    on our left that is its rightmost pane, and for a column on our
-    right its leftmost.
+    A neighbour may be a whole split of panes, and a bar names one
+    pane. The one to name is the one that touches us: for a column on
+    our left that is its rightmost pane, and for a column on our right
+    its leftmost. `along` is the split that runs in the direction we
+    are looking, so `VSplit` for a left and right and `HSplit` for an
+    above and below.
 
-    A stack has no side that is nearer, so it gives its top pane. That
-    is where a person's eye starts, and it does not move when the focus
-    inside that stack moves.
+    A split that runs the other way has no end that is nearer, so it
+    gives its first pane. That is where a person's eye starts, and it
+    does not move when the focus inside that split moves.
     """
     if isinstance(item, _Split):
         if not item:
@@ -215,9 +217,9 @@ def _the_nearest_pane(item, want_last: bool) -> "Pane | None":
             # finds out that something has started to.
             return None
 
-        side_by_side = isinstance(item, VSplit)
+        same_way = isinstance(item, along)
         return _the_nearest_pane(
-            item[-1] if want_last and side_by_side else item[0], want_last
+            item[-1] if want_last and same_way else item[0], want_last, along
         )
 
     return item
@@ -636,15 +638,35 @@ class Window:
 
     def pane_to_the_left(self, pane: Pane) -> "Pane | None":
         "The pane beside this one on the left, or `None` at the edge."
-        return self._neighbour(pane, -1)
+        return self._neighbour(pane, -1, VSplit)
 
     def pane_to_the_right(self, pane: Pane) -> "Pane | None":
         "The pane beside this one on the right, or `None` at the edge."
-        return self._neighbour(pane, +1)
+        return self._neighbour(pane, +1, VSplit)
 
-    def _neighbour(self, pane: Pane, step: int) -> "Pane | None":
+    def pane_above(self, pane: Pane) -> "Pane | None":
+        "The pane over this one, or `None` at the top of the stack."
+        return self._neighbour(pane, -1, HSplit)
+
+    def pane_below(self, pane: Pane) -> "Pane | None":
+        "The pane under this one, or `None` at the bottom of the stack."
+        return self._neighbour(pane, +1, HSplit)
+
+    def has_a_stack(self) -> bool:
         """
-        The pane one step to the side of this one, in the tree.
+        Whether any pane of this window has one above or below it.
+
+        The bar under a pane names those two, so a window with no stack
+        in it has nothing to put there and does not reserve the row.
+        Lillecarl/pymux#211.
+        """
+        return any(
+            isinstance(split, HSplit) and len(split) > 1 for split in self.splits
+        )
+
+    def _neighbour(self, pane: Pane, step: int, along: type) -> "Pane | None":
+        """
+        The pane one step from this one, in the tree.
 
         **The tree answers this, and not the last render.** Moving the
         focus is geometric: it reads where each pane was drawn and asks
@@ -653,10 +675,13 @@ class Window:
         would name the neighbours of the frame before. On the first
         frame there are no positions at all. Lillecarl/pymux#207.
 
-        A `VSplit` holds its children side by side, so it is the only
-        split that has a left and a right. The walk goes up until it
-        finds one with a child on that side: a pane in a stack has no
-        neighbour of its own, and takes the stack's.
+        `along` is the split that runs the way we are looking. A
+        `VSplit` holds its children side by side, so it is the one that
+        has a left and a right, and an `HSplit` stacks them, so it is
+        the one that has an above and a below. The walk goes up until
+        it finds a split of that kind with a child on that side: a pane
+        in a stack has no pane of its own to its left, and takes the
+        stack's.
         """
         item: object = pane
 
@@ -665,10 +690,12 @@ class Window:
             if parent is None:
                 return None
 
-            if isinstance(parent, VSplit):
+            if isinstance(parent, along):
                 where = _place_of(parent, item) + step
                 if 0 <= where < len(parent):
-                    return _the_nearest_pane(parent[where], want_last=step < 0)
+                    return _the_nearest_pane(
+                        parent[where], want_last=step < 0, along=along
+                    )
 
             item = parent
 
