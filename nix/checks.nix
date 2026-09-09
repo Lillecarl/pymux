@@ -163,6 +163,7 @@ let
   leaksTolerance = builtins.getEnv "PYMUX_LEAKS_TOLERANCE";
   leaksBytes = builtins.getEnv "PYMUX_LEAKS_BYTES";
   leaksTrace = builtins.getEnv "PYMUX_LEAKS_TRACE";
+  leaksRoute = builtins.getEnv "PYMUX_LEAKS_ROUTE";
 
   # Which item of vttest's main menu gets photographed, and in which
   # terminals, for instance
@@ -325,6 +326,7 @@ in
             leaksTolerance
             leaksBytes
             leaksTrace
+            leaksRoute
             ;
         };
         setup = ''
@@ -335,6 +337,7 @@ in
           export PYMUX_LEAKS_TOLERANCE="$leaksTolerance"
           export PYMUX_LEAKS_BYTES="$leaksBytes"
           export PYMUX_LEAKS_TRACE="$leaksTrace"
+          export PYMUX_LEAKS_ROUTE="$leaksRoute"
           export PYTHONHASHSEED=0
         '';
       }
