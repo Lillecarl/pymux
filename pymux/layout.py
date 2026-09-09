@@ -9,6 +9,7 @@ from functools import partial
 from typing import TYPE_CHECKING, Callable, Dict, List, Tuple, Type
 
 from prompt_toolkit.application import Application, get_app
+from prompt_toolkit.data_structures import Size
 from prompt_toolkit.filters import (
     Condition,
     has_completions,
@@ -53,7 +54,8 @@ from .enums import Woke
 from .filters import WaitsForConfirmation
 from .format import format_pymux_string
 from .log import logger
-from .strip import ScrollableStrip
+from .plane import Plan, Side
+from .strip import BORDER_WIDTH, Gaps, ScrollableStrip, Strip
 from .titlebar import PaneTitleBar
 
 if TYPE_CHECKING:
@@ -1281,6 +1283,81 @@ def _the_bar_below_is_drawn(pymux: "Pymux", window) -> bool:
     return pymux.show_pane_status and window.has_a_stack()
 
 
+def the_plan_of(pymux: "Pymux", window) -> Plan:
+    """
+    Where the panes of this window are, in cells.
+
+    Only a strip answers this way today. The rows the chrome takes come
+    off the window first, because a plan holds panes and the chrome
+    draws in the gaps between them. Lillecarl/pymux#217.
+
+    **Measured on demand**, so a frame that asks about four sides of
+    ten panes measures forty times. It is cheap arithmetic over a few
+    rectangles, and it stops when `PlanContainer` draws the plan: the
+    container measures once and everything else reads what it holds.
+    """
+    size = pymux.get_window_size()
+    below = _the_bar_below_is_drawn(pymux, window)
+
+    rows = size.rows - (1 if pymux.show_pane_status else 0) - (1 if below else 0)
+    gaps = Gaps(between_columns=BORDER_WIDTH, between_panes=2 if below else 1)
+
+    return Strip(window, gaps).measure(
+        Size(rows=max(1, rows), columns=size.columns),
+    )
+
+
+def the_pane_beside(
+    pymux: "Pymux", window, pane: arrangement.Pane, side: Side
+) -> "arrangement.Pane | None":
+    """
+    The pane on one side of this one. **One answer, for one window.**
+
+    Two mechanisms answer this today and they do not agree.
+    `select-pane -L` reads where the panes were drawn last frame, and a
+    title bar cannot use that because it is drawn *during* a frame, so
+    it walks the arrangement's tree instead. The tree names the top of
+    a stack beside us; the frame names whichever pane the active one's
+    own row runs into. Lillecarl/pymux#217.
+
+    A strip answers from its plan, which is neither: it names the pane
+    that shares most of our edge. Every other layout still walks the
+    tree, until `Divided` emits a plan as well.
+
+    **A zoomed pane has nothing beside it**, because it covers the
+    window. That is what both mechanisms already do, and saying it once
+    here keeps them saying it.
+    """
+    if window.zoom:
+        return None
+
+    if not window.strip:
+        return _from_the_tree(window, pane, side)
+
+    plan = the_plan_of(pymux, window)
+
+    try:
+        slot = plan.slot_of(pane)
+    except KeyError:
+        # A pane that is not in this window's plan: it closed, or it
+        # belongs to another window. A bar is drawn on every frame, so
+        # it may not be the thing that finds that out.
+        return None
+
+    beside = plan.neighbour(slot, side)
+    return None if beside is None else beside.shown
+
+
+def _from_the_tree(window, pane: arrangement.Pane, side: Side):
+    "The older answer: a walk of the arrangement's tree."
+    return {
+        Side.LEFT: window.pane_to_the_left,
+        Side.RIGHT: window.pane_to_the_right,
+        Side.ABOVE: window.pane_above,
+        Side.BELOW: window.pane_below,
+    }[side](pane)
+
+
 def _create_split(
     pymux: "Pymux", window, split: arrangement.HSplit | arrangement.VSplit
 ) -> Container:
@@ -1466,10 +1543,12 @@ def _create_container_for_process(
         if zoom:
             return []
 
-        if on_the_left:
-            pane = window.pane_to_the_left(arrangement_pane)
-        else:
-            pane = window.pane_to_the_right(arrangement_pane)
+        pane = the_pane_beside(
+            pymux,
+            window,
+            arrangement_pane,
+            Side.LEFT if on_the_left else Side.RIGHT,
+        )
 
         if pane is None:
             return []
@@ -1508,8 +1587,8 @@ def _create_container_for_process(
         if zoom:
             return []
 
-        above = window.pane_above(arrangement_pane)
-        below = window.pane_below(arrangement_pane)
+        above = the_pane_beside(pymux, window, arrangement_pane, Side.ABOVE)
+        below = the_pane_beside(pymux, window, arrangement_pane, Side.BELOW)
         result: StyleAndTextTuples = []
 
         if above is not None:
@@ -1646,11 +1725,6 @@ class _ContainerProxy(Container):
         return [self.content]
 
 
-#: How many cells a border between two panes takes. It is one, and it
-#: is named because a strip has to do arithmetic with it: a column's
-#: share of the window includes its own border. Lillecarl/pymux#206.
-BORDER_WIDTH = 1
-
 _focused_border_titlebar = "┃"
 _focused_border_vertical = "┃"
 _focused_border_horizontal = "━"
@@ -1769,6 +1843,9 @@ class TracePaneWritePosition(_ContainerProxy):  # XXX: replace with SizedBox
 
 def focus_left(pymux: "Pymux") -> None:
     "Move focus to the left."
+    if _the_plan_moved_the_focus(pymux, Side.LEFT):
+        return
+
     _move_focus(
         pymux,
         lambda wp: wp.xpos - 2,  # 2 in order to skip over the border.
@@ -1778,11 +1855,17 @@ def focus_left(pymux: "Pymux") -> None:
 
 def focus_right(pymux: "Pymux") -> None:
     "Move focus to the right."
+    if _the_plan_moved_the_focus(pymux, Side.RIGHT):
+        return
+
     _move_focus(pymux, lambda wp: wp.xpos + wp.width + 1, lambda wp: wp.ypos)
 
 
 def focus_down(pymux: "Pymux") -> None:
     "Move focus down."
+    if _the_plan_moved_the_focus(pymux, Side.BELOW):
+        return
+
     _move_focus(pymux, lambda wp: wp.xpos, lambda wp: wp.ypos + wp.height + 2)
     # 2 in order to skip over the border. Only required when the
     # pane-status is not shown, but a border instead.
@@ -1790,7 +1873,36 @@ def focus_down(pymux: "Pymux") -> None:
 
 def focus_up(pymux: "Pymux") -> None:
     "Move focus up."
+    if _the_plan_moved_the_focus(pymux, Side.ABOVE):
+        return
+
     _move_focus(pymux, lambda wp: wp.xpos, lambda wp: wp.ypos - 2)
+
+
+def _the_plan_moved_the_focus(pymux: "Pymux", side: Side) -> bool:
+    """
+    Move the focus with the plan, where there is one.
+
+    Returns whether the plan answered, and an answer of "nothing is
+    over there" counts: the layout has said so, and probing the last
+    frame after it would be the second mechanism again. A layout with
+    no plan yet returns False, and `_move_focus` reads the frame the
+    way it always has.
+
+    **The same words as the title bar**, which is the point of
+    Lillecarl/pymux#217: a key and a bar that name different panes are
+    two bugs waiting, and they cannot now.
+    """
+    window = pymux.arrangement.get_active_window()
+
+    if not window.strip or window.zoom or window.active_pane is None:
+        return False
+
+    beside = the_pane_beside(pymux, window, window.active_pane, side)
+    if beside is not None:
+        window.active_pane = beside
+
+    return True
 
 
 def _move_focus(pymux: "Pymux", get_x, get_y) -> None:

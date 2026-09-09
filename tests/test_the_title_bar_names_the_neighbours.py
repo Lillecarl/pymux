@@ -142,6 +142,15 @@ def test_a_strip_names_a_column_that_is_off_the_screen():
         panes = a_row_of_named_panes(pymux)
         state = pymux.get_client_state()
 
+        # A frame first, so that the strip has scrolled to the column
+        # the focus is on. **It used to be enough to press the key**,
+        # because the key did nothing at all until something had been
+        # drawn: `select-pane` read where the panes were drawn, and
+        # nothing had been. A strip answers from its plan now, so the
+        # key works from the first keystroke and the scrolling is the
+        # frame's job alone. Lillecarl/pymux#217.
+        draw()
+
         # Onto the middle column, the way a key does it.
         pymux.handle_command("select-pane -L")
         state.sync_focus()
