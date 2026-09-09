@@ -153,6 +153,17 @@ let
   profilePanes = builtins.getEnv "PYMUX_PROFILE_PANES";
   profileFrames = builtins.getEnv "PYMUX_PROFILE_FRAMES";
 
+  # How much work the leak check does, and which recordings it feeds.
+  # A leak shows at any volume, so the gate feeds a little: two rounds
+  # of eight panes at 128 kB each. A few hundred megabytes is
+  # `PYMUX_LEAKS_BYTES=1000000 PYMUX_LEAKS_ROUNDS=20 nix build --file . checks.pymux-leaks`.
+  leaksRounds = builtins.getEnv "PYMUX_LEAKS_ROUNDS";
+  leaksPanes = builtins.getEnv "PYMUX_LEAKS_PANES";
+  leaksInclude = builtins.getEnv "PYMUX_LEAKS_INCLUDE";
+  leaksTolerance = builtins.getEnv "PYMUX_LEAKS_TOLERANCE";
+  leaksBytes = builtins.getEnv "PYMUX_LEAKS_BYTES";
+  leaksTrace = builtins.getEnv "PYMUX_LEAKS_TRACE";
+
   # Which item of vttest's main menu gets photographed, and in which
   # terminals, for instance
   # `PYMUX_VTTEST_INCLUDE='^9 ' nix build --file . checks.pymux-vttest-pictures.run`.
@@ -287,6 +298,48 @@ in
       }
       ''
         python tests/measure_a_frame.py
+      '';
+
+  # What pymux still holds after a pane, a window or a client has gone.
+  #
+  # A multiplexer is a program a person leaves running for weeks, so a
+  # pane's worth of objects kept on every `kill-pane` is a leak nobody
+  # sees until the machine swaps. Nothing else here asks the question.
+  #
+  # It needs no pty and no seat: the clients are in-process and the
+  # bytes go into the same `Stream.feed` a pty would call.
+  # `tests/what_leaks.py` says what a round does and how to read a red
+  # run.
+  #
+  # `PYTHONHASHSEED` is pinned because the order of a set decides which
+  # referrer a chain names first.
+  leaks =
+    runInSandbox
+      {
+        name = "pymux-leaks";
+        env = {
+          inherit
+            leaksRounds
+            leaksPanes
+            leaksInclude
+            leaksTolerance
+            leaksBytes
+            leaksTrace
+            ;
+        };
+        setup = ''
+          export PYMUX_LEAKS_RECORDINGS=${alacrittySuite}/share/alacritty-ref
+          export PYMUX_LEAKS_ROUNDS="$leaksRounds"
+          export PYMUX_LEAKS_PANES="$leaksPanes"
+          export PYMUX_LEAKS_INCLUDE="$leaksInclude"
+          export PYMUX_LEAKS_TOLERANCE="$leaksTolerance"
+          export PYMUX_LEAKS_BYTES="$leaksBytes"
+          export PYMUX_LEAKS_TRACE="$leaksTrace"
+          export PYTHONHASHSEED=0
+        '';
+      }
+      ''
+        python tests/what_leaks.py
       '';
 
   # Where the time of a frame goes. Not a gate, and it judges nothing:
