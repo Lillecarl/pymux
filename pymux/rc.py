@@ -70,6 +70,26 @@ bind-key ] paste-buffer
 bind-key ? list-keys
 bind-key PPage copy-mode -u
 
+# The strip. tmux has none of these, so there is no muscle memory to
+# keep and the keys are a choice. Lillecarl/pymux#212.
+#
+# niri's own keys are Mod+BracketLeft and Mod+BracketRight for
+# consume-or-expel, which behind a prefix are `{` and `}`. Those are
+# tmux's `swap-pane`, and tmux's keys stay tmux's, so the pane moves on
+# `<` and `>` instead: they point the way the pane goes.
+#
+# A column moves on `H` and `L`, which are vim's far left and far
+# right, one case up from the `h` and `l` that resize a pane.
+#
+# `W` cycles the width of a column. One key is enough, because it is a
+# cycle of three presets and not a step, and niri binds one key for the
+# same reason.
+bind-key < consume-or-expel -L
+bind-key > consume-or-expel -R
+bind-key H move-column -L
+bind-key L move-column -R
+bind-key W switch-column-width
+
 # Layouts.
 bind-key M-1 select-layout even-horizontal
 bind-key M-2 select-layout even-vertical
