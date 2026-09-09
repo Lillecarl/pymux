@@ -550,7 +550,19 @@ class ServerConnection:
                     # traceback on, and nobody to press ENTER, which is
                     # what prompt_toolkit does with an exception in the
                     # event loop. Let asyncio log it instead.
-                    await client_state.app.run_async(set_exception_handler=False)
+                    await client_state.app.run_async(
+                        set_exception_handler=False,
+                        # **A server's application has no terminal of
+                        # its own to be resized.** Each client reports
+                        # its size in a packet, and SIGWINCH is one
+                        # process-wide handler that only one
+                        # application can hold: two of them save and
+                        # restore it in the wrong order, and the last
+                        # restore puts back an application that has
+                        # already gone, with its whole layout behind
+                        # it. Lillecarl/pymux#231.
+                        handle_sigwinch=False,
+                    )
                 except asyncio.CancelledError:
                     raise
                 except Exception:

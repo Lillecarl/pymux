@@ -11,20 +11,27 @@ The packets are the same ones. Only the transport differs, and both
 sides of the protocol run, so this route proves what the socket route
 proves, in one process instead of two.
 
-**One process is one SIGWINCH handler, and that is a real
-difference.** The server's `prompt_toolkit.Application` takes the
-signal for itself while it runs: `attach_winch_signal_handler` calls
+**One process is one SIGWINCH handler, and that used to be a real
+difference.** The server's `prompt_toolkit.Application` took the signal
+for itself while it ran: `attach_winch_signal_handler` calls
 `loop.add_signal_handler`, which replaces whatever was there, and
 asyncio holds one callback per signal. On the socket route the server
-is another process and cannot reach this one's handler. Here it can,
-and it does, so this client stopped hearing that the terminal had
+is another process and cannot reach this one's handler. Here it could,
+and it did, so this client stopped hearing that the terminal had
 changed size: a font size change in kitty moved nothing, because the
 size the server had was the one this client last reported.
+Lillecarl/pymux#208.
 
-So the size is polled as well. prompt_toolkit does the same thing for
-the same reason -- `Application._poll_output_size` names "situations
-where `attach_winch_signal_handler` is not sufficient" and reads the
-size on a timer instead. Lillecarl/pymux#208.
+**A server's application now says it does not want the signal**, which
+is the honest statement of the same fact: it has no terminal of its own
+to be resized, and every client reports its size in a packet.
+`run_async(handle_sigwinch=False)` in `ServerConnection._create_app`,
+and the flag is Lillecarl/pymux#231.
+
+The size is polled as well, and that stays. prompt_toolkit polls for a
+reason of its own -- `Application._poll_output_size` names "situations
+where `attach_winch_signal_handler` is not sufficient" -- and a size
+that is read on a timer costs nothing and covers what a signal misses.
 """
 
 import asyncio
