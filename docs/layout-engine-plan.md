@@ -255,8 +255,28 @@ one is a constraint on it:
       Divided          an exact tiling of `available`, from fractions
       Strip            a row of columns; the plane may be wider
 
-The five `select-layout` presets are configurations of `Divided`, not
-subclasses.
+    Zoomed(inner)      a wrapper: one pane fills the view, and the
+                       layout it wraps keeps its own state untouched
+
+**Inheritance follows a persistent rule, never an arrangement.** That
+is the line, and tmux draws it in the same place. A rule about how
+space is shared or where a new pane goes lives for as long as the
+window does, and that is a class: `Divided` and `Strip` differ that
+way, and a dwm-style master and stack that keeps arranging itself
+would be a third. An *arrangement* runs once and is then finished, and
+that is a function.
+
+**The `select-layout` presets are arrangements, not modes.**
+`tmux/layout-set.c` says so in its own header -- "these are one-off and
+generate a layout tree" -- and the code holds it up: `layout_set_select`
+runs `arrange(w)` and stores `w->lastlayout`, which is read in exactly
+two places, both of them a person asking for a preset again
+(`select-layout` with no argument, and `-n`/`-p` cycling). A split, a
+resize or a pane closing never re-applies one. `main-horizontal` reads
+`main-pane-height` when it runs and never again. So `Divided` does not
+remember which preset it is, and asking what `main-vertical` does when
+a pane opens is a question tmux does not answer, because by then there
+is no `main-vertical`.
 
 A constraint overrides `measure` to recompute its rectangles from its
 own parameters, so the stored plan is a cache it rewrites wholesale. The
@@ -268,6 +288,54 @@ one in the hierarchy, and it is deliberate.**
 today, ad hoc: `Window.strip = True` wraps the root, and
 `select_layout` rebuilds the tree. Making it a base-class method
 generalises what is there.
+
+## What tmux does, read out of tmux
+
+Carl asked, before slice 4: check how tmux behaves in its modes, and
+what "zoomed" means. Read at `578e07fc`.
+
+**tmux keeps one thing: a tree of cells with absolute sizes.**
+`layout_cell` is `LEFTRIGHT`, `TOPBOTTOM` or `WINDOWPANE` and carries
+cells, not fractions. A window resize adjusts that tree in place by a
+delta (`layout_resize` -> `layout_resize_adjust`), so **tmux
+accumulates the rounding drift** that our fraction per pane exists to
+avoid. Ours can be better here, and the price is that `resize-pane +1`
+has to set the fraction from the cells it wants, not the other way
+round -- which is what `switch_column_width` already does for a strip.
+
+**tmux's layout is allowed to be bigger than the window.** The comment
+in `layout_resize` says a window can be smaller than its layout and
+"redrawing this is handled at a higher level", and `resize_window`
+clamps the *window* up to the layout rather than the layout down.
+`main-horizontal` even asks for `(n * (PANE_MINIMUM + 1)) - 1` columns
+and grows the window to fit. So the awkward half of an unbounded plane
+is already in tmux; a plane makes it ordinary instead.
+
+**Zoomed means one pane fills the window, and it is a layout swap.**
+`window_zoom` saves every pane's cell and the root
+(`saved_layout_cell`, `saved_layout_root`), then calls
+`layout_init(w, wp)` for a fresh one-pane layout; `window_unzoom` puts
+them all back. Not full screen -- full *window*, so the status bar and
+the chrome stay. Three details worth copying:
+
+- It refuses when the window has one pane (`window_count_panes` == 1).
+- A resize while zoomed unzooms, resizes the saved layout, and
+  re-zooms (`resize.c`), so the layout underneath stays right.
+- Moving the focus to a pane that is not visible unzooms
+  (`window.c:721`).
+
+**That is exactly `Zoomed(inner)`**, and it is why zoom is a wrapper
+and not a flag. pymux's flag is what makes Lillecarl/pymux#215: a
+zoomed strip is not a strip, because `_build_layout` tests
+`window.zoom` before `window.strip`.
+
+**tmux has floating panes now, and they are our floats.** A cell can
+be `LAYOUT_CELL_FLOATING`; `layout_cell_is_tiled` gates every tiling
+sum, so a float hangs off the root and no arithmetic counts it. The
+window keeps a separate `z_index` list for the order, and a float
+marked `PANE_FLOATOVERZOOM` is re-created over a zoomed pane and keeps
+any move it made while it was there. A tiling, a list of floats and a
+z-order, which is the shape agreed above.
 
 Drawing is one generic container, `PlanContainer`, doing for two axes
 what `ScrollableStrip` does for one: for each slot's shown pane, write to the
@@ -323,11 +391,13 @@ Two smaller rules that follow:
    `pymux/plan_container.py`, `Strip.chrome`, `Strip.look_at`.
    `ScrollableStrip` is deleted and `strip.py` draws nothing.
    The layout draws the borders; a pane knows nothing about them.
-4. **`Divided` emits a plan**, with the five presets on top, held to the
-   existing suite. `_lay_out` in `strip.py` already does the walk it
-   needs -- weights, both axes, a gap between children -- so the work
-   is the presets, `resize-pane`, and deleting the tree branch of
-   `the_pane_beside`.
+4. **`Divided` emits a plan**, with the presets on top as functions,
+   held to the existing suite. `_lay_out` in `strip.py` already does
+   the walk it needs -- weights, both axes, a gap between children --
+   so the work is the presets, `resize-pane`, and deleting the tree
+   branch of `the_pane_beside`. `Zoomed(inner)` belongs here too: it
+   is small, it closes Lillecarl/pymux#215, and it is the shape tmux
+   uses.
 5. **`View` per client, with an offset**, and the `window-size` policy
    as a real option.
 6. **`Plane` on its own, then `Masonry`.**
