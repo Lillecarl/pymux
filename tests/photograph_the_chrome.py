@@ -127,6 +127,30 @@ FIXTURES = {
         CHROME + "set-option command-palette on\n",
         keys((FIRST_KEY, PREFIX), (0.4, b":"), (0.4, b"list-panes")),
     ),
+    # Both splits at once: a pane on the left, and two stacked on the
+    # right. This is the default layout, and it is the one picture that
+    # holds every line it draws -- the border down the middle, which
+    # runs the whole height because the split that left it does, and
+    # the border across the right column, which stops where that
+    # column does. The stack also means every pane draws the bar below
+    # it. Lillecarl/pymux#217, Lillecarl/pymux#211.
+    "divided": (
+        CHROME,
+        keys(
+            (FIRST_KEY, PREFIX),
+            (0.4, b"%"),
+            (0.6, PREFIX),
+            (0.4, b'"'),
+        ),
+    ),
+    # One pane filling the window, with the other two behind it. Zoom
+    # is a layout that wraps the layout underneath, so the pane keeps
+    # the row its title bar hangs in and the bar carries the "Z".
+    # Lillecarl/pymux#215.
+    "zoomed": (
+        CHROME,
+        keys((FIRST_KEY, PREFIX), (0.4, b"%"), *a_command("resize-pane -Z")),
+    ),
     # A strip of three columns, which runs past the edge of the screen.
     # The column on the right is cut off, and that is the point of it.
     # Lillecarl/pymux#198.
