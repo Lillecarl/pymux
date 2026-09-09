@@ -15,6 +15,7 @@ from typing import Dict, List
 from weakref import WeakKeyDictionary, ref
 
 from prompt_toolkit.application import Application, get_app, get_app_or_none, set_app
+from prompt_toolkit.data_structures import Size
 from ptterm import Terminal
 
 from .enums import WindowSize
@@ -239,6 +240,12 @@ class Window:
         #: window-size` writes it. Decision 11 of
         #: `docs/layout-engine-plan.md`.
         self.window_size = WindowSize.SMALLEST
+
+        #: How big a person said this window is, in cells, or `None`.
+        #: `resize-window` writes it and turns `window_size` to
+        #: `MANUAL`; nothing reads it under any other policy. It is the
+        #: window's own size, so no status row comes off it.
+        self.manual_size: Size | None = None
 
         #: When true, the current pane is zoomed in.
         self.zoom = False

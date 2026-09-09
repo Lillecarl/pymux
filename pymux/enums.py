@@ -37,11 +37,17 @@ class WindowSize(StrEnum):
     `LATEST` follows whoever last used a client, which is what a person
     with a laptop and a desktop on one session wants: the terminal
     they are typing in gets the window.
+
+    `MANUAL` is a size a person set, and no client changes it.
+    `resize-window` sets one and turns this on. **A manual size is the
+    window's own**, so no status row comes off it: `resize-window -x
+    100 -y 40` means a window of a hundred by forty.
     """
 
     SMALLEST = "smallest"
     LARGEST = "largest"
     LATEST = "latest"
+    MANUAL = "manual"
 
 
 class Woke(StrEnum):

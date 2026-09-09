@@ -717,14 +717,17 @@ class Pymux:
 
         **The window's `window-size` option decides which client.**
         `smallest` is the default and what pymux always did; `largest`
-        gives the plane to the biggest client watching, and `latest` to
-        whoever used one last. tmux has the same three, and leaves a
-        client too small to see the whole window stuck at the top left
-        of it; here that client moves its view instead.
+        gives the plane to the biggest client watching, `latest` to
+        whoever used one last, and `manual` to nobody. tmux has the
+        same four, and leaves a client too small to see the whole
+        window stuck at the top left of it; here that client moves its
+        view instead.
 
-        The status line comes off the bottom, because it is not part of
-        any window. `layout.the_room_for_the_panes` takes the rows the
-        chrome around the panes wants off what is left.
+        The status line comes off the bottom of a client's terminal,
+        because it is not part of any window.
+        `layout.the_room_for_the_panes` takes the rows the chrome
+        around the panes wants off what is left. **A manual size is
+        already the window's own**, so nothing comes off it.
 
         **Nobody watching is eighty by twenty**, and no status row
         comes off it. A window exists before a client attaches to it,
@@ -733,6 +736,9 @@ class Pymux:
         """
         if window is None:
             window = self.arrangement.get_active_window()
+
+        if window.window_size is WindowSize.MANUAL and window.manual_size is not None:
+            return window.manual_size
 
         clients = self.the_clients_watching(window)
 

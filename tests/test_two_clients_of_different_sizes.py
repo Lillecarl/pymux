@@ -14,6 +14,8 @@ it can through a view of its own.
   smaller client stuck at the top left of the window.
 - `latest`: the window belongs to whichever terminal somebody last
   typed in.
+- `manual`: a size a person named with `resize-window`, and no client
+  changes it.
 
 This is the only file with two clients of different sizes in it, and
 everything slice 5 did is judged here. The rest of the suite has one
@@ -208,6 +210,78 @@ def test_a_key_press_is_what_uses_a_client():
         assert big.state.last_used > before
         assert big.state.last_used > small.state.last_used
         assert the_plane(pymux).columns == BIG.columns
+
+
+def test_a_manual_size_follows_no_client():
+    """
+    **The size is the window's own**, so no status row comes off it.
+    `-x 100 -y 40` is a hundred cells by forty, and neither client
+    changes it.
+    """
+    with two_clients() as (pymux, big, _small):
+        big.run("resize-window -x 120 -y 40")
+
+        assert the_window(pymux).window_size is WindowSize.MANUAL
+        assert the_plane(pymux) == Size(rows=40, columns=120)
+
+
+def test_an_axis_that_is_not_given_keeps_what_it_had():
+    with two_clients() as (pymux, big, _small):
+        big.run("resize-window -x 120")
+
+        assert the_plane(pymux).columns == 120
+        assert the_plane(pymux).rows == SMALL.rows - 1
+
+
+def test_manual_with_no_size_freezes_the_window_as_it_is():
+    """
+    A person who says `manual` and nothing else means "stop following
+    the clients", not "pick a size for me". tmux does the same.
+    """
+    with two_clients() as (pymux, big, _small):
+        was = the_plane(pymux)
+        big.run("set-window-option window-size manual")
+
+        assert the_plane(pymux) == was
+        # And it stays there when a client would have changed it.
+        big.run("set-window-option window-size manual")
+        assert the_plane(pymux) == was
+
+
+def test_a_window_bigger_than_every_client_is_still_reachable():
+    """
+    Which is what makes a manual size safe here and awkward in tmux.
+    Both clients scroll their own view over a window neither can show.
+    """
+    with two_clients(["resize-window -x 200 -y 40"]) as (pymux, big, small):
+        big.run("split-window -h")
+        big.draw()
+        small.draw()
+
+        _left, right = the_window(pymux).panes
+
+        for client in (big, small):
+            assert client.view.size.columns < the_plane(pymux).columns
+            client.run("select-pane -R")
+            client.draw()
+            assert client.view.shows(client.panes.plan.rect_of(right))
+
+
+def test_a_size_that_is_not_a_number_is_refused():
+    with two_clients() as (pymux, big, _small):
+        was = the_plane(pymux)
+        big.run("resize-window -x wide")
+
+        assert big.state.message is not None
+        assert the_plane(pymux) == was
+
+
+def test_a_window_of_no_cells_is_refused():
+    with two_clients() as (pymux, big, _small):
+        big.run("resize-window -x 0")
+
+        assert big.state.message is not None
+        assert the_window(pymux).window_size is WindowSize.SMALLEST
 
 
 def test_a_word_that_is_not_a_policy_is_refused():

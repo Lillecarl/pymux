@@ -13,13 +13,14 @@ from typing import (
 
 import docopt
 from prompt_toolkit.application.current import get_app
+from prompt_toolkit.data_structures import Size
 from prompt_toolkit.document import Document
 from prompt_toolkit.key_binding.vi_state import InputMode
 
 from pymux.arrangement import LayoutTypes
 from pymux.commands.aliases import ALIASES
 from pymux.commands.utils import wrap_argument
-from pymux.enums import Woke
+from pymux.enums import WindowSize, Woke
 from pymux.format import format_pymux_string
 from pymux.key_mappings import (
     prompt_toolkit_key_to_vt100_key,
@@ -879,6 +880,53 @@ def resize_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
         # Zoom in/out.
         if variables["-Z"]:
             w.zoom = not w.zoom
+
+
+@cmd("resize-window", options="[(-x <columns>)] [(-y <rows>)]")
+def resize_window(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Say how big this window is, and stop following the clients.
+
+    -x: how many columns. -y: how many rows.
+
+    **This is the `manual` half of `window-size`**, and running it
+    turns that option on: a person who names a size means it to stay.
+    Decision 11 of `docs/layout-engine-plan.md`.
+
+    A client bigger than the window draws background around it, and a
+    client smaller than it moves its view over it, which is what every
+    policy does. So a window may be made bigger than any terminal
+    watching, and every pane of it is still reachable.
+
+    **The size is the window's own**, so nothing comes off it for the
+    status line: `-x 100 -y 40` is a hundred cells by forty. An axis
+    that is not given keeps what it has.
+
+    tmux also takes `-U`, `-D`, `-L`, `-R` to nudge one edge, and `-A`
+    and `-a` for the largest and smallest client. The four policies of
+    `window-size` say the last two, and the nudges are
+    Lillecarl/pymux#225.
+    """
+    window = pymux.arrangement.get_active_window()
+    now = pymux.the_size_of_the_plane(window)
+
+    def asked_for(name, then):
+        given = variables["<%s>" % (name,)]
+        if given is None:
+            return then
+        try:
+            wanted = int(given)
+        except ValueError:
+            raise CommandException("Expecting an integer.")
+        if wanted < 1:
+            raise CommandException("A window is at least one cell.")
+        return wanted
+
+    window.manual_size = Size(
+        rows=asked_for("rows", now.rows),
+        columns=asked_for("columns", now.columns),
+    )
+    window.window_size = WindowSize.MANUAL
 
 
 @cmd("detach-client")

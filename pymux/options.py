@@ -270,7 +270,16 @@ class WindowSizeOption(Option):
                 'Use "-g" to say what every new window starts with.'
             )
 
-        pymux.arrangement.get_active_window().window_size = chosen
+        window = pymux.arrangement.get_active_window()
+
+        if chosen is WindowSize.MANUAL and window.manual_size is None:
+            # **`manual` with no size freezes the window as it is.** A
+            # person who says it and nothing else means "stop following
+            # the clients", not "pick a size for me", and tmux does the
+            # same. `resize-window` is how a size is named.
+            window.manual_size = pymux.the_size_of_the_plane(window)
+
+        window.window_size = chosen
 
     def set_default(self, pymux, value):
         "What every new window starts with. Changes no window that is open."
