@@ -250,6 +250,37 @@ def move(pymux, state, direction):
     state.sync_focus()
 
 
+def test_opening_a_pane_leaves_the_row_where_a_person_scrolled_it():
+    """
+    The containers are built again whenever the arrangement changes
+    shape, and the view used to be one of them, so it went back to the
+    origin every time.
+
+    The trap is that the view is often put back by the rule that moves
+    it: a focused column that does not fit at the origin is scrolled
+    to again. So this scrolls right, moves the focus **back to a
+    column that the origin also shows**, and then splits. Nothing then
+    asks the view to move, and only a view that was kept stays.
+    """
+    with a_client(STRIP) as (pymux, state, draw):
+        _window, _panes = columns_of(pymux, 3)
+        draw()
+
+        # Three half-width columns: at 40 the second and third show, at
+        # 0 the first and second do. So the second is on screen either
+        # way, and moving to it moves nothing.
+        move(pymux, state, "L")
+        draw()
+        scrolled = the_view(state)
+        assert scrolled == 40, scrolled
+
+        pymux.handle_command("split-window -v")
+        state.sync_focus()
+        draw()
+
+        assert the_view(state) == scrolled, (scrolled, the_view(state))
+
+
 def test_moving_back_to_a_column_that_is_on_screen_does_not_move_the_view():
     """
     The reported fault. Three columns are wider than the screen, so

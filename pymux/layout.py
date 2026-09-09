@@ -54,7 +54,7 @@ from .format import format_pymux_string
 from .log import logger
 from .divided import Divided
 from .plan_container import PlanContainer
-from .plane import Plan, Side, bounding_box
+from .plane import Plan, Side, View, bounding_box
 from .strip import Strip
 from .tiling import BORDER_WIDTH, Gaps
 from .zoomed import Zoomed
@@ -1101,6 +1101,21 @@ class DynamicBody(Container):
             weakref.WeakKeyDictionary()
         )
 
+        #: Where this client looks at each window's plane, by window.
+        #:
+        #: **A view outlives the container that moves it.** The
+        #: containers are built again whenever the arrangement changes
+        #: shape, and a view held by one of them went back to the
+        #: origin every time: a person who scrolled a strip and then
+        #: split a pane found the row somewhere else. The view belongs
+        #: to the client and the window, which is what it is a view of.
+        #:
+        #: One per window, because a window is a plane. Switching
+        #: window and switching back leaves the strip where it was.
+        self._views: weakref.WeakKeyDictionary[object, View] = (
+            weakref.WeakKeyDictionary()
+        )
+
     def _get_body(self) -> Container:
         "Return the Container object for the current CLI."
         new_hash = self.pymux.arrangement.invalidation_hash()
@@ -1134,6 +1149,20 @@ class DynamicBody(Container):
         self._get_body()
         return self._panes_for_app.get(get_app())
 
+    def the_view_of(self, window) -> View:
+        """
+        Where this client looks at that window's plane.
+
+        A fresh one is at the origin with no size, and the first frame
+        writes the size. Nothing else makes one, so a window a person
+        never looked at costs nothing.
+        """
+        view = self._views.get(window)
+        if view is None:
+            view = View()
+            self._views[window] = view
+        return view
+
     def _build_layout(self) -> Container:
         "Rebuild a new Container object and return that."
         logger.info("Rebuilding layout.")
@@ -1149,7 +1178,7 @@ class DynamicBody(Container):
         # layout that wraps another and shows one pane of it, so a
         # zoomed pane keeps the row its title bar hangs in and a zoomed
         # strip is still a strip. Lillecarl/pymux#215.
-        panes = _create_the_panes(self.pymux, window)
+        panes = _create_the_panes(self.pymux, window, self.the_view_of(window))
         self._panes_for_app[get_app()] = panes
 
         return HSplit(
@@ -1205,7 +1234,7 @@ class DynamicBody(Container):
         return [body]
 
 
-def _create_the_panes(pymux: "Pymux", window) -> Container:
+def _create_the_panes(pymux: "Pymux", window, view: View) -> Container:
     """
     The container that draws every pane of a window.
 
@@ -1224,6 +1253,11 @@ def _create_the_panes(pymux: "Pymux", window) -> Container:
     the same room whatever the other columns do. Without that, two
     columns of half a window came to one cell more than the window,
     every time. Lillecarl/pymux#206.
+
+    **The view is given, not made here.** It belongs to the client and
+    the window, and it outlives every container this builds, so a
+    strip a person scrolled stays where they left it when a pane opens
+    or closes.
     """
     containers = {
         pane: _create_container_for_process(pymux, window, pane)
@@ -1231,7 +1265,10 @@ def _create_the_panes(pymux: "Pymux", window) -> Container:
     }
 
     return PlanContainer(
-        the_layout_of(pymux, window), containers, _tell_the_pane_its_size
+        the_layout_of(pymux, window),
+        containers,
+        _tell_the_pane_its_size,
+        view=view,
     )
 
 

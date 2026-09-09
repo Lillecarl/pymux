@@ -58,9 +58,21 @@ class PlanContainer(Container):
         it. Decision 6 of `docs/layout-engine-plan.md`, and the fault
         the end to end checks caught when this container started
         skipping what nobody can see.
+    :param view: Where this client looks at the plane. **It outlives
+        this container**, which is why a caller owns it: the
+        containers are built again whenever the arrangement changes
+        shape, and a view of its own went back to the origin every
+        time. Without one, this makes its own and a person scrolls a
+        strip that forgets.
     """
 
-    def __init__(self, layout, containers: dict, tell_its_size=None) -> None:
+    def __init__(
+        self,
+        layout,
+        containers: dict,
+        tell_its_size=None,
+        view: View | None = None,
+    ) -> None:
         self.layout = layout
         self.containers = {
             pane: to_container(container) for pane, container in containers.items()
@@ -70,7 +82,7 @@ class PlanContainer(Container):
         #: Where this client looks at the plane, and how much of it it
         #: can see. A frame writes the size before it reads it, so a
         #: fresh view says nothing until one is drawn.
-        self.view = View()
+        self.view = View() if view is None else view
 
         #: The plan of the frame being drawn, for anything drawn inside
         #: it to read. `None` before the first frame.
