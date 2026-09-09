@@ -168,6 +168,13 @@ let
   # How many keystrokes the latency measurement takes, how far apart,
   # and over which route.
   # `PYMUX_LATENCY_SAMPLES=500 nix build --file . checks.pymux-latency.run`.
+  # What one keystroke costs in bytecode, and how far a stage may move
+  # before the gate fails.
+  # `PYMUX_KEYSTROKE_INCLUDE=render nix build --file . checks.pymux-keystroke`.
+  keystrokeInclude = builtins.getEnv "PYMUX_KEYSTROKE_INCLUDE";
+  keystrokeTolerance = builtins.getEnv "PYMUX_KEYSTROKE_TOLERANCE";
+  keystrokeTimed = builtins.getEnv "PYMUX_KEYSTROKE_TIMED";
+
   latencySamples = builtins.getEnv "PYMUX_LATENCY_SAMPLES";
   latencyPace = builtins.getEnv "PYMUX_LATENCY_PACE";
   latencyRoute = builtins.getEnv "PYMUX_ROUTE";
@@ -369,6 +376,32 @@ in
       }
       ''
         python tests/profile_a_frame.py
+      '';
+
+  # The same keystroke counted rather than timed, which is what makes
+  # it a gate: bytecode is exact and the same on every machine, so a
+  # path that grew fails a build. It covers the two ends that nothing
+  # else counts -- the key going out to the pty, and the renderer's
+  # diff coming back. `tests/measure_a_keystroke.py` says why nothing
+  # here runs the event loop.
+  #
+  # `PYTHONHASHSEED` is pinned for the reason the other counters pin
+  # it: the order of a set decides a branch.
+  keystroke =
+    runInSandbox
+      {
+        name = "pymux-keystroke";
+        env = { inherit keystrokeInclude keystrokeTolerance keystrokeTimed; };
+        setup = ''
+          export PYMUX_KEYSTROKE_INCLUDE="$keystrokeInclude"
+          export PYMUX_KEYSTROKE_TOLERANCE="$keystrokeTolerance"
+          export PYMUX_KEYSTROKE_TIMED="$keystrokeTimed"
+          export PYMUX_KEYSTROKE_OUT="$out"
+          export PYTHONHASHSEED=0
+        '';
+      }
+      ''
+        python tests/measure_a_keystroke.py
       '';
 
   # What pymux costs a keystroke, in milliseconds, against the same
