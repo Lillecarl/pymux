@@ -1,13 +1,14 @@
 """
 Choosing how wide a column of a strip is.
 
-`switch-column-width` gives the column the next of three preset widths:
-a third, a half and two thirds of the window. Those are niri's own, and
-so is cycling rather than resizing by a step. A person picks between a
-few widths that fit together instead of nudging a border until it looks
-right, which is what `resize-pane` still does for a divided layout.
+`switch-column-width` gives the column the next preset width: a third,
+a half, two thirds, and the whole window. The first three are niri's
+own, and so is cycling rather than resizing by a step. A person picks
+between a few widths that fit together instead of nudging a border
+until it looks right, which is what `resize-pane` still does for a
+divided layout.
 
-Lillecarl/pymux#198.
+Lillecarl/pymux#198, and the fourth width is Lillecarl/pymux#215.
 """
 
 import pytest
@@ -43,9 +44,26 @@ def width_now(window):
     return window.column_width(window._column_of(window.active_pane))
 
 
-def test_the_presets_are_the_ones_niri_ships():
-    assert PRESET_COLUMN_WIDTHS == (1 / 3, 1 / 2, 2 / 3)
+def test_the_presets_are_the_ones_niri_ships_and_a_full_one():
+    assert PRESET_COLUMN_WIDTHS == (1 / 3, 1 / 2, 2 / 3, 1.0)
     assert DEFAULT_COLUMN_WIDTH == 1 / 2
+
+
+def test_a_column_can_be_the_whole_window_without_leaving_the_strip():
+    """
+    Carl asked how a person makes a column full width in a strip, and
+    the answer was that they could not: the cycle stopped at two
+    thirds, and `resize-pane -Z` leaves the row rather than widening a
+    column of it. Lillecarl/pymux#215.
+    """
+    window = a_strip(2)
+
+    window.switch_column_width(window.active_pane)
+    window.switch_column_width(window.active_pane)
+
+    assert width_now(window) == 1.0
+    # And the other column is still there, one scroll away.
+    assert len(window.root) == 2
 
 
 def test_the_next_width_after_the_default_is_two_thirds():

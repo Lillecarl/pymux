@@ -29,8 +29,16 @@ __all__ = [
 
 
 #: How wide a column of a strip can be, as a fraction of the window.
-#: These are niri's own presets, and a key cycles between them.
-PRESET_COLUMN_WIDTHS = (1 / 3, 1 / 2, 2 / 3)
+#: The first three are niri's own presets, and a key cycles between
+#: them.
+#:
+#: **The whole window is the fourth**, because a person working in one
+#: pane wants it wide and `resize-pane -Z` is the wrong answer: zoom
+#: leaves the row, and a strip is for staying in it with the
+#: neighbours one scroll away. It is not a special case either -- the
+#: view already shows one column and part of the next when a column is
+#: wider than it fits. Lillecarl/pymux#215.
+PRESET_COLUMN_WIDTHS = (1 / 3, 1 / 2, 2 / 3, 1.0)
 
 #: What a column takes until somebody says otherwise. niri's default
 #: as well, and the reason a strip of two columns exactly fills the
