@@ -20,7 +20,7 @@ it is the arrangement's, and this measures it.
 from typing import NamedTuple
 
 from . import arrangement
-from .plane import Line, Rect, Slot
+from .plane import Line, Rect, Slot, bounding_box
 
 __all__ = ["BORDER_WIDTH", "Gaps", "lay_out", "shares"]
 
@@ -50,7 +50,7 @@ class Gaps(NamedTuple):
 
 def lay_out(
     item, rect: Rect, gaps: Gaps, into: list, lines: list | None = None
-) -> None:
+) -> Rect:
     """
     Put every pane of this item on the plane, inside that rectangle.
 
@@ -62,10 +62,20 @@ def lay_out(
     each gap, running the whole way across the split that left it. That
     is what a border between two panes is, and drawing it here is what
     keeps it where the gap is.
+
+    **It answers with the room it really took**, which is the rectangle
+    it was given or more. Every pane keeps at least one cell
+    (`shares`), so a split of more panes than cells runs past the end
+    of its rectangle, and the next child has to start past *that* and
+    not where the arithmetic said. Without it a window shrunk far
+    enough lays one pane on top of another, and no two slots
+    overlapping is the promise everything else rests on. The plane is
+    unbounded, so running past the end is allowed and a view is what
+    cuts it.
     """
     if not isinstance(item, (arrangement.VSplit, arrangement.HSplit)):
         into.append((Slot(item), rect))
-        return
+        return rect
 
     sideways = isinstance(item, arrangement.VSplit)
     gap = gaps.between_columns if sideways else gaps.between_panes
@@ -73,13 +83,21 @@ def lay_out(
     parts = shares(room, [item.weights[child] for child in item])
 
     at = rect.x if sideways else rect.y
+    taken = [rect]
+
     for place, (child, share) in enumerate(zip(item, parts)):
         if sideways:
-            lay_out(child, Rect(at, rect.y, share, rect.height), gaps, into, lines)
+            used = lay_out(
+                child, Rect(at, rect.y, share, rect.height), gaps, into, lines
+            )
+            at = max(at + share, used.right)
         else:
-            lay_out(child, Rect(rect.x, at, rect.width, share), gaps, into, lines)
+            used = lay_out(
+                child, Rect(rect.x, at, rect.width, share), gaps, into, lines
+            )
+            at = max(at + share, used.bottom)
 
-        at += share
+        taken.append(used)
 
         # The gap after this child, which the next one starts past.
         # The last child has none: a split ends where its rectangle
@@ -92,6 +110,8 @@ def lay_out(
                 lines.append(Line(Rect(rect.x, at, rect.width, gap), BORDER_HORIZONTAL))
 
         at += gap
+
+    return bounding_box(taken)
 
 
 def shares(total: int, weights: list[int]) -> list[int]:
