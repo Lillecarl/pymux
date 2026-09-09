@@ -14,7 +14,7 @@ from typing import (
     cast,
 )
 
-from prompt_toolkit.application.current import set_app
+from prompt_toolkit.application.current import create_app_session, set_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.output import ColorDepth
@@ -337,6 +337,28 @@ class ServerConnection:
             logger.exception("Giving a notification answer to a pane failed.")
 
     async def _start_reading(self) -> None:
+        """
+        Read this client's packets until the connection ends.
+
+        **This is where the client's `AppSession` lives.** `set_app`
+        saves and restores one attribute of one session object, so two
+        clients sharing a session save and restore each other's
+        application: the last one to exit puts back a value that is two
+        attachments stale, and the application it names is then held by
+        a module-level `ContextVar` for as long as the server runs,
+        with its layout, its panes and their scrollbacks behind it.
+        Lillecarl/pymux#230.
+
+        A session of its own is what prompt_toolkit does for the same
+        job -- `contrib/ssh/server.py` wraps each client the same way --
+        and this coroutine is the right place for it: it lives exactly
+        as long as the connection, and every task the connection spawns
+        is started from inside it, so each one inherits the session.
+        """
+        with create_app_session():
+            await self._read_until_it_ends()
+
+    async def _read_until_it_ends(self) -> None:
         while True:
             try:
                 data = await self.pipe_connection.read()
