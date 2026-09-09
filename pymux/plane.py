@@ -8,16 +8,17 @@ one" has two answers, one read off the last frame and one walked out
 of the tree. A plane answers it once.
 
 **The plane is unbounded.** `x` and `y` may be negative, and a
-rectangle needs no permission from a screen size. A view is what is
-bounded, and a view comes later (slice 5).
+rectangle needs no permission from a screen size. `View` is what is
+bounded: one client's terminal, over part of the plane.
 
 This module is the bottom of that work, and it takes two NamedTuples
 from prompt_toolkit and nothing else: no widget, no pty, no screen. It
-holds three things and no behaviour.
+holds four things and almost no behaviour.
 
     Rect     a rectangle of cells on the plane
     Slot     one rectangle's worth of it, and the panes in it
     Plan     where every slot is, for one frame, and the services
+    View     where one client looks, and how much it can see
 
 **A pane is any object with an identity.** Nothing here asks a pane
 for anything, so nothing here imports one. `pymux.arrangement` passes
@@ -54,7 +55,7 @@ import math
 from enum import Enum
 from typing import Iterable, Iterator, NamedTuple
 
-from prompt_toolkit.data_structures import Point
+from prompt_toolkit.data_structures import Point, Size
 
 __all__ = [
     "Line",
@@ -62,6 +63,7 @@ __all__ = [
     "Side",
     "Slot",
     "Plan",
+    "View",
 ]
 
 
@@ -226,6 +228,113 @@ class Line(NamedTuple):
 
     rect: Rect
     char: str
+
+
+class View:
+    """
+    The part of the plane one client can see.
+
+    **A plan is shared, and a view is not.** A pane has one pty, so it
+    has one size however many clients look at it -- decision 10 of
+    `docs/layout-engine-plan.md`. Two clients of different sizes
+    therefore see two different parts of the same plan, and nothing a
+    view does changes a plan.
+
+    **A view outlives a frame.** The container that draws moves it onto
+    the pane a person is typing in, and `LayoutManager` keeps one per
+    window, so a strip stays where a person scrolled it when a pane
+    opens or closes and the containers are built again.
+
+    **No marks yet.** Decision 12 gives a view a dictionary of named
+    offsets to jump back to. Nothing asks for one, so it is not here.
+    """
+
+    def __init__(
+        self,
+        offset: Point = Point(x=0, y=0),
+        size: Size = Size(rows=0, columns=0),
+    ) -> None:
+        #: The plane coordinate the top left of this view shows.
+        self.offset = offset
+
+        #: How many cells of the plane this view can show. It is the
+        #: client's terminal, less what the chrome around the panes
+        #: takes, and a frame writes it before it reads it.
+        self.size = size
+
+    def __repr__(self) -> str:
+        return "View(%r, %r)" % (self.offset, self.size)
+
+    @property
+    def rect(self) -> Rect:
+        "This view as a rectangle of the plane."
+        return Rect(
+            x=self.offset.x,
+            y=self.offset.y,
+            width=self.size.columns,
+            height=self.size.rows,
+        )
+
+    def shows(self, rect: Rect) -> bool:
+        """
+        Whether any cell of that rectangle is in this view.
+
+        This is what says a pane is worth drawing, and later what says
+        a client is worth waking. Lillecarl/pymux#224.
+        """
+        return self.rect.overlaps(rect)
+
+    def moved_onto(self, rect: "Rect | None", plane: Rect) -> Point:
+        """
+        Where this view goes to show that rectangle, on that plane.
+
+        `rect` is the thing a person is looking at, and `None` means
+        there is nothing to follow: a command line or a dialog holds
+        the keyboard, and the view then only stays on the plane.
+
+        **A rectangle already wholly inside the view moves nothing.**
+        That is what makes walking to a pane and back a round trip,
+        rather than dragging the view a little every time the focus
+        lands somewhere it can already see. Lillecarl/pymux#207.
+
+        **A rectangle too big to show whole shows its start.** Carl:
+        "left should generally be preferred for terminals since that's
+        where ~100% of applications begin writing text, it's even
+        likely that a missing right column doesn't miss anything."
+        Lillecarl/pymux#218. The same rule holds down the page, for
+        the same reason.
+
+        Every layout shares this. A tiling measured to fit its view
+        gets the origin out of it, because the plane is then the view.
+        """
+        x, y = self.offset.x, self.offset.y
+
+        if rect is not None:
+            x = _towards(x, self.size.columns, rect.x, rect.right)
+            y = _towards(y, self.size.rows, rect.y, rect.bottom)
+
+        return Point(
+            x=_inside(x, self.size.columns, plane.x, plane.right),
+            y=_inside(y, self.size.rows, plane.y, plane.bottom),
+        )
+
+
+def _towards(at: int, size: int, start: int, end: int) -> int:
+    "Where one edge of a view goes, to show that band of the plane."
+    if start < at or end > at + size:
+        return start
+    return at
+
+
+def _inside(at: int, size: int, low: int, high: int) -> int:
+    """
+    That edge, brought back onto the plane.
+
+    A plane smaller than the view leaves nowhere to go, and the answer
+    is its own start. `max` of the two bounds says so, and it is why
+    this is not one `min` and one `max`.
+    """
+    return max(low, min(at, max(low, high - size)))
 
 
 def overlap_of(one: tuple[int, int], other: tuple[int, int]) -> int:
