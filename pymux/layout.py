@@ -31,6 +31,7 @@ from prompt_toolkit.layout.containers import (
     to_container,
 )
 from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
+from prompt_toolkit.layout.dimension import AnyDimension
 from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.layout.dimension import is_dimension, to_dimension
 from prompt_toolkit.layout.margins import ScrollbarMargin
@@ -88,6 +89,11 @@ PANE_TITLE_FORMAT = " #T "
 #: adds no risk that the bar did not already take.
 LEFT_MARK = "◂"
 RIGHT_MARK = "▸"
+
+#: And the same two, turned. They name the pane above and the pane
+#: below on the bar under a pane. Lillecarl/pymux#211.
+ABOVE_MARK = "▴"
+BELOW_MARK = "▾"
 
 #: What `clock-mode` draws inside a pane, as text. `BigClock` paints the
 #: hour and the minute in big numbers, and nothing else of it moves.
@@ -1083,6 +1089,15 @@ class DynamicBody(Container):
                     ),
                     # The actual content.
                     content,
+                    # And the row the bottom pane hangs its bar below
+                    # in. Only when there is a stack, because only then
+                    # is there anything to name. Lillecarl/pymux#211.
+                    ConditionalContainer(
+                        content=Window(height=1),
+                        filter=Condition(
+                            lambda: _the_bar_below_is_drawn(self.pymux, window)
+                        ),
+                    ),
                 ]
             )
 
@@ -1250,6 +1265,22 @@ def _create_strip(pymux: "Pymux", window) -> Container:
     return ScrollableStrip(content)
 
 
+def _the_bar_below_is_drawn(pymux: "Pymux", window) -> bool:
+    """
+    Whether every pane of this window keeps a row under it.
+
+    The bar under a pane names the pane above and the pane below it, so
+    a window with no stack in it has nothing to put there and does not
+    pay the row. A single pane and a plain row of panes look exactly as
+    they did. Lillecarl/pymux#211.
+
+    **Three places have to give the same answer**, or the rows drift:
+    the padding between stacked panes, the row kept under the whole
+    layout, and the float that draws the bar.
+    """
+    return pymux.show_pane_status and window.has_a_stack()
+
+
 def _create_split(
     pymux: "Pymux", window, split: arrangement.HSplit | arrangement.VSplit
 ) -> Container:
@@ -1329,11 +1360,21 @@ def _create_split(
     if is_vsplit:
         return_cls = VSplit
         padding_char = _border_vertical
+        padding: AnyDimension = 1
     else:
         return_cls = HSplit
         padding_char = _border_horizontal
 
-    return return_cls(content, padding=1, padding_char=padding_char)
+        # Two rows between stacked panes when the bar below is drawn:
+        # the lower pane hangs its title bar in the second, and the
+        # upper one hangs the bar below in the first. One row when it
+        # is not, which is every layout that has no stack in it.
+        def padding_between_the_panes() -> D:
+            return D.exact(2 if _the_bar_below_is_drawn(pymux, window) else 1)
+
+        padding = padding_between_the_panes
+
+    return return_cls(content, padding=padding, padding_char=padding_char)
 
 
 def _short_name_of(pymux: "Pymux", pane: arrangement.Pane) -> str:
@@ -1453,6 +1494,41 @@ def _create_container_for_process(
     def get_the_right_of_the_bar() -> StyleAndTextTuples:
         return a_neighbour(on_the_left=False)
 
+    def get_the_bar_below() -> StyleAndTextTuples:
+        """
+        What is above this pane and what is below it, in the middle.
+
+        The bar over a pane names the panes beside it at its two edges,
+        and there is no room on it for two more names. So the panes a
+        stack puts above and below go on a bar of their own, under the
+        pane, and they go in the middle of it together: two marks that
+        point the way they mean, and one gap between them.
+        Lillecarl/pymux#211.
+        """
+        if zoom:
+            return []
+
+        above = window.pane_above(arrangement_pane)
+        below = window.pane_below(arrangement_pane)
+        result: StyleAndTextTuples = []
+
+        if above is not None:
+            name = _short_name_of(pymux, above)
+            result.append(("class:neighbour", "%s %s" % (ABOVE_MARK, name)))
+
+        if above is not None and below is not None:
+            result.append(("", "   "))
+
+        if below is not None:
+            name = _short_name_of(pymux, below)
+            result.append(("class:neighbour", "%s %s" % (BELOW_MARK, name)))
+
+        return result
+
+    def nothing() -> StyleAndTextTuples:
+        "The three parts the bar below does not have."
+        return []
+
     def on_click() -> None:
         "Click handler for the clock. When clicked, select this pane."
         arrangement_pane.clock_mode = False
@@ -1494,6 +1570,31 @@ def _create_container_for_process(
                     left=0,
                     right=0,
                     top=-1,
+                    height=1,
+                    z_index=Z_INDEX.WINDOW_TITLE_BAR,
+                ),
+                # The bar below: the panes above and below this one.
+                # There is no room for them on the bar above, which has
+                # four parts already. Lillecarl/pymux#211.
+                Float(
+                    content=ConditionalContainer(
+                        content=Window(
+                            height=1,
+                            content=PaneTitleBar(
+                                get_number=nothing,
+                                get_left=nothing,
+                                get_middle=get_the_bar_below,
+                                get_right=nothing,
+                            ),
+                            style="class:titlebar",
+                        ),
+                        filter=Condition(
+                            lambda: _the_bar_below_is_drawn(pymux, window)
+                        ),
+                    ),
+                    left=0,
+                    right=0,
+                    bottom=-1,
                     height=1,
                     z_index=Z_INDEX.WINDOW_TITLE_BAR,
                 ),
