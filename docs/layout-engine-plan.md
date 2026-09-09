@@ -133,6 +133,11 @@ is where the behaviour belongs.
    separate cheap path that tests band overlap instead of casting.
 9. **Numbering is insertion order in the base, overridable.** `Divided`
    and `Strip` override with reading order (Lillecarl/pymux#210).
+   **It counts the panes a person sees**, one per slot: Carl, on the
+   tabbed case, "in a stack the visible pane is the only thing to be
+   concerned with (at least for now)". So a stack is one number, a
+   hidden pane has none, and a number does not move when somebody
+   switches tab.
    Numbers therefore change on a *mode* switch, and `display-panes` on
    a bare plane shows numbers that are not in reading order. Carl has
    made that trade for stability while rectangles move.
@@ -225,8 +230,9 @@ of them reimplements one: `at(point)`, `slot_of(pane)`,
 
 **Numbering is over panes, not slots**, because a pane number is what
 `select-pane -t 1` takes and what a title bar draws. A slot contributes
-its panes in stack order, so a hidden pane has a number too and
-selecting it shows it.
+**the one pane it shows**, so a stack is one number and a hidden pane
+has none until it is shown. It keeps its rectangle either way, so its
+pty already has the size it will be shown at.
 
     class Plane:
         "An unbounded plane, and views onto it. Usable as it stands."

@@ -347,12 +347,15 @@ class Plan:
     frame, and everything that draws, moves the focus or names a
     neighbour reads this and nothing else.
 
-    `order` is the numbering, and it is **over panes, not slots**,
-    because a pane number is what `select-pane -t 1` takes and what a
-    title bar draws. A slot contributes its panes in stack order, so a
-    hidden pane has a number too and choosing it shows it. The default
-    is insertion order, which is what the bare plane promises;
-    `Strip` and `Divided` will pass `reading_order()` instead
+    `order` is the numbering, and it is **over the panes a person can
+    see**: one for each slot, the one that slot shows. A pane number is
+    what `select-pane -t 1` takes and what a title bar draws, and Carl:
+    "in a stack the visible pane is the only thing to be concerned with
+    (at least for now)". So a hidden pane has no number, and a stack is
+    one thing on the screen and one thing in the numbering.
+
+    The default is insertion order, which is what the bare plane
+    promises; `Strip` and `Divided` pass `reading_order()` instead
     (Lillecarl/pymux#210).
     """
 
@@ -377,7 +380,7 @@ class Plan:
         #: the plane ends.
         self.plane: Rect = bounding_box(self.rects.values())
 
-        self.order: list[Pane] = list(order) if order is not None else list(self.panes)
+        self.order: list[Pane] = list(order) if order is not None else list(self.shown)
 
     # ------------------------------------------------------------------
     # What is on it.
@@ -389,8 +392,18 @@ class Plan:
 
     @property
     def panes(self) -> list[Pane]:
-        "Every pane, insertion order, and stack order inside a slot."
+        """
+        Every pane on the plan, the hidden ones as well.
+
+        This is what a plan *holds*. What a person sees is `shown`, and
+        that is what the numbering counts.
+        """
         return [pane for slot in self.rects for pane in slot.panes]
+
+    @property
+    def shown(self) -> list[Pane]:
+        "The one pane of each slot a person can see."
+        return [slot.shown for slot in self.rects]
 
     def at(self, point: Point) -> Slot | None:
         """
@@ -497,7 +510,9 @@ class Plan:
 
     def reading_order(self) -> list[Pane]:
         """
-        Every pane in the order a person reads the screen.
+        The panes a person sees, in the order they read them.
+
+        One for each slot, because a stack is one thing on the screen.
 
         Columns first, left to right, and top to bottom inside a
         column. That is the order `Window.panes` already walks out of
@@ -513,7 +528,7 @@ class Plan:
         no straight line divides -- a pinwheel, which no split makes
         and only a bare plane can hold -- reads top left first.
         """
-        return [pane for slot in _read(list(self.rects.items())) for pane in slot.panes]
+        return [slot.shown for slot in _read(list(self.rects.items()))]
 
     def __repr__(self) -> str:
         return "Plan(%r)" % (self.rects,)

@@ -268,8 +268,8 @@ def every_promise_holds(plan: Plan) -> None:
 
             a_walk(plan, slot, side)
 
-    assert _the_same_panes(plan.order, plan.panes), "the numbering lost a pane"
-    assert _the_same_panes(plan.reading_order(), plan.panes), "reading lost a pane"
+    assert _the_same_panes(plan.order, plan.shown), "the numbering lost a pane"
+    assert _the_same_panes(plan.reading_order(), plan.shown), "reading lost a pane"
 
 
 @given(PLANS)
@@ -602,17 +602,26 @@ def test_reading_order_is_not_the_order_the_slots_went_on():
     assert names(plan.reading_order()) == ["A", "B"]
 
 
-def test_a_tabbed_slot_reads_out_its_whole_stack():
+def test_a_tabbed_slot_reads_out_the_pane_a_person_sees():
     """
-    A hidden pane has a number too, so that choosing it can show it.
-    The stack reads in its own order, where it sits.
+    A stack is one thing on the screen, so it is one thing in the
+    numbering. Carl: "in a stack the visible pane is the only thing to
+    be concerned with (at least for now)."
+
+    The hidden pane is still on the plan, and still has the slot's
+    rectangle, so its pty has the size it will be shown at. It has no
+    number until it is the one being shown.
     """
     left, behind, front = _Pane("left"), _Pane("behind"), _Pane("front")
     stack = Slot(behind, front)
     stack.show(front)
     plan = Plan({Slot(left): Rect(0, 0, 4, 6), stack: Rect(4, 0, 4, 6)})
 
-    assert names(plan.reading_order()) == ["left", "behind", "front"]
+    assert names(plan.reading_order()) == ["left", "front"]
+    assert names(plan.order) == ["left", "front"]
+
+    # And the one behind is still there, with a rectangle of its own.
+    assert plan.rect_of(behind) == Rect(4, 0, 4, 6)
 
 
 def test_reading_order_follows_the_splits_and_not_the_rows():
