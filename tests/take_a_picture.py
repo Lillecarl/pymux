@@ -568,6 +568,21 @@ class Seat:
     def stop(self):
         "Close it."
 
+    def trouble(self) -> str:
+        """
+        Why this seat cannot be drawn on, or nothing when it can.
+
+        A display server that dies in the middle of a run takes every
+        picture after it, and the terminal is the one that complains:
+        "xterm: Xt error: Can't open display: :0". That names the
+        display and not the reason, and the server's own log is in the
+        working directory rather than the room, so the message a person
+        reads holds nothing that says what happened.
+
+        Lillecarl/pymux#216.
+        """
+        return ""
+
     def running(self, terminal, command, work, log_path, director):
         """
         Run one command in one terminal, and let `director` photograph it.
@@ -692,13 +707,26 @@ class XSeat(Seat):
     def __init__(self):
         self.number = None
         self._process = None
+        self._log = None
+
+    def trouble(self) -> str:
+        "Whether the one server this seat runs is still there."
+        if self._process is None or self._process.poll() is None:
+            return ""
+
+        return "the X server of the %s seat ended with %s\n%s" % (
+            self.name,
+            self._process.returncode,
+            _tail(self._log),
+        )
 
     def start(self, work):
         read_fd, write_fd = os.pipe()
+        self._log = work / "xvfb.log"
         self._process = subprocess.Popen(
             ["Xvfb", "-displayfd", str(write_fd), "-screen", "0", SCREEN],
             pass_fds=(write_fd,),
-            stdout=open(work / "xvfb.log", "wb"),
+            stdout=open(self._log, "wb"),
             stderr=subprocess.STDOUT,
         )
         os.close(write_fd)
@@ -986,11 +1014,22 @@ def pymux_command(program_path, socket_path, config_path, log_path, error_path):
     )
 
 
-def every_log(room):
-    "The end of every log in this room, for a run that could not finish."
-    return "\n".join(
-        _tail(path) for path in sorted(room.glob("*.log")) if path.stat().st_size
-    )
+def every_log(room, seat=None):
+    """
+    The end of every log in this room, for a run that could not finish.
+
+    The seat's own log is not in the room -- one server serves every
+    picture, so its log lives beside the run -- and it is the one that
+    says why a terminal could not open a display. So a seat that has
+    died puts its reason in front of the rest.
+    """
+    logs = [_tail(path) for path in sorted(room.glob("*.log")) if path.stat().st_size]
+
+    trouble = seat.trouble() if seat is not None else ""
+    if trouble:
+        logs.insert(0, trouble)
+
+    return "\n".join(logs)
 
 
 def compare_one(terminal, seat, name, work, out):
@@ -1034,7 +1073,7 @@ def compare_one(terminal, seat, name, work, out):
             room / "pymux.log",
         )
     except RuntimeError as reason:
-        raise RuntimeError("%s\n%s" % (reason, every_log(room))) from None
+        raise RuntimeError("%s\n%s" % (reason, every_log(room, seat))) from None
 
     return differences(bare, through, room / "difference.png")
 
@@ -1084,7 +1123,7 @@ def blink_of(terminal, seat, name, work, out):
                 frames=BLINK_FRAMES,
             )
         except RuntimeError as reason:
-            raise RuntimeError("%s\n%s" % (reason, every_log(room))) from None
+            raise RuntimeError("%s\n%s" % (reason, every_log(room, seat))) from None
 
         changed = sum(
             1
