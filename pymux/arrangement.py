@@ -204,36 +204,6 @@ def panes_of(item) -> "List[Pane]":
     return result
 
 
-def _the_nearest_pane(item, want_last: bool, along: type) -> "Pane | None":
-    """
-    The pane of this neighbour that is nearest to the one asking.
-
-    A neighbour may be a whole split of panes, and a bar names one
-    pane. The one to name is the one that touches us: for a column on
-    our left that is its rightmost pane, and for a column on our right
-    its leftmost. `along` is the split that runs in the direction we
-    are looking, so `VSplit` for a left and right and `HSplit` for an
-    above and below.
-
-    A split that runs the other way has no end that is nearer, so it
-    gives its first pane. That is where a person's eye starts, and it
-    does not move when the focus inside that split moves.
-    """
-    if isinstance(item, _Split):
-        if not item:
-            # Nothing leaves an empty split behind today. A title bar
-            # is drawn on every frame, so it may not be the thing that
-            # finds out that something has started to.
-            return None
-
-        same_way = isinstance(item, along)
-        return _the_nearest_pane(
-            item[-1] if want_last and same_way else item[0], want_last, along
-        )
-
-    return item
-
-
 class Window:
     """
     Pymux window.
@@ -645,22 +615,6 @@ class Window:
                 return item
             item = parent
 
-    def pane_to_the_left(self, pane: Pane) -> "Pane | None":
-        "The pane beside this one on the left, or `None` at the edge."
-        return self._neighbour(pane, -1, VSplit)
-
-    def pane_to_the_right(self, pane: Pane) -> "Pane | None":
-        "The pane beside this one on the right, or `None` at the edge."
-        return self._neighbour(pane, +1, VSplit)
-
-    def pane_above(self, pane: Pane) -> "Pane | None":
-        "The pane over this one, or `None` at the top of the stack."
-        return self._neighbour(pane, -1, HSplit)
-
-    def pane_below(self, pane: Pane) -> "Pane | None":
-        "The pane under this one, or `None` at the bottom of the stack."
-        return self._neighbour(pane, +1, HSplit)
-
     def has_a_stack(self) -> bool:
         """
         Whether any pane of this window has one above or below it.
@@ -672,41 +626,6 @@ class Window:
         return any(
             isinstance(split, HSplit) and len(split) > 1 for split in self.splits
         )
-
-    def _neighbour(self, pane: Pane, step: int, along: type) -> "Pane | None":
-        """
-        The pane one step from this one, in the tree.
-
-        **The tree answers this, and not the last render.** Moving the
-        focus is geometric: it reads where each pane was drawn and asks
-        which one is there. That is right for a person pressing a key,
-        and wrong for a title bar, which is drawn *during* a render and
-        would name the neighbours of the frame before. On the first
-        frame there are no positions at all. Lillecarl/pymux#207.
-
-        `along` is the split that runs the way we are looking. A
-        `VSplit` holds its children side by side, so it is the one that
-        has a left and a right, and an `HSplit` stacks them, so it is
-        the one that has an above and a below. The walk goes up until
-        it finds a split of that kind with a child on that side: a pane
-        in a stack has no pane of its own to its left, and takes the
-        stack's.
-        """
-        item: object = pane
-
-        while True:
-            parent = self._get_parent(item)
-            if parent is None:
-                return None
-
-            if isinstance(parent, along):
-                where = _place_of(parent, item) + step
-                if 0 <= where < len(parent):
-                    return _the_nearest_pane(
-                        parent[where], want_last=step < 0, along=along
-                    )
-
-            item = parent
 
     @property
     def has_panes(self) -> bool:
