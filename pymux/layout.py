@@ -57,6 +57,7 @@ from .plan_container import PlanContainer
 from .plane import Plan, Side, bounding_box
 from .strip import Strip
 from .tiling import BORDER_WIDTH, Gaps
+from .zoomed import Zoomed
 from .titlebar import PaneTitleBar
 
 if TYPE_CHECKING:
@@ -1058,45 +1059,33 @@ class DynamicBody(Container):
             # No Pymux windows in the arrangement.
             return Window()
 
-        active_window = self.pymux.arrangement.get_active_window()
+        window = self.pymux.arrangement.get_active_window()
 
-        # When zoomed, only show the current pane, otherwise show all of them.
-        if active_window.zoom:
-            return to_container(
-                _create_container_for_process(
-                    self.pymux, active_window, active_window.active_pane, zoom=True
-                )
-            )
-        else:
-            window = self.pymux.arrangement.get_active_window()
-
-            # Every layout draws the same way: it says where the panes
-            # are and one container puts them there. A strip draws onto
-            # this screen, in this screen's coordinates, so the row
-            # reserved below is the row its title bars hang in, exactly
-            # as in every other layout.
-            content = _create_the_panes(self.pymux, window)
-
-            return HSplit(
-                [
-                    # Some spacing for the top status bar.
-                    ConditionalContainer(
-                        content=Window(height=1),
-                        filter=Condition(lambda: self.pymux.show_pane_status),
+        # Every layout draws the same way: it says where the panes are
+        # and one container puts them there. Zoom included, which is a
+        # layout that wraps another and shows one pane of it, so a
+        # zoomed pane keeps the row its title bar hangs in and a zoomed
+        # strip is still a strip. Lillecarl/pymux#215.
+        return HSplit(
+            [
+                # Some spacing for the top status bar.
+                ConditionalContainer(
+                    content=Window(height=1),
+                    filter=Condition(lambda: self.pymux.show_pane_status),
+                ),
+                # The actual content.
+                _create_the_panes(self.pymux, window),
+                # And the row the bottom pane hangs its bar below in.
+                # Only when there is a stack, because only then is
+                # there anything to name. Lillecarl/pymux#211.
+                ConditionalContainer(
+                    content=Window(height=1),
+                    filter=Condition(
+                        lambda: _the_bar_below_is_drawn(self.pymux, window)
                     ),
-                    # The actual content.
-                    content,
-                    # And the row the bottom pane hangs its bar below
-                    # in. Only when there is a stack, because only then
-                    # is there anything to name. Lillecarl/pymux#211.
-                    ConditionalContainer(
-                        content=Window(height=1),
-                        filter=Condition(
-                            lambda: _the_bar_below_is_drawn(self.pymux, window)
-                        ),
-                    ),
-                ]
-            )
+                ),
+            ]
+        )
 
     def reset(self) -> None:
         for invalidation_hash, body in self._bodies_for_app.values():
@@ -1172,16 +1161,22 @@ def the_layout_of(pymux: "Pymux", window):
     between the panes, and a strip gives each column a width of its own
     and scrolls. Lillecarl/pymux#198.
 
+    **Zoom wraps whichever of them the window is in**, and that is why
+    it is a wrapper. The branch here used to test `window.zoom` first,
+    so a zoomed strip was not a strip: the row stopped existing for
+    that frame instead of being covered. Lillecarl/pymux#215.
+
     The gaps are passed as a callable, because the gap between two
     stacked panes is two rows when a bar is drawn under a pane and one
     when it is not, and an option turns that on while the layout built
     here is still standing.
     """
     gaps = partial(the_gaps_of, pymux, window)
+    inner = Strip(window, gaps) if window.strip else Divided(window, gaps)
 
-    if window.strip:
-        return Strip(window, gaps)
-    return Divided(window, gaps)
+    if window.zoom and window.active_pane is not None:
+        return Zoomed(inner, window.active_pane)
+    return inner
 
 
 def _the_bar_below_is_drawn(pymux: "Pymux", window) -> bool:
@@ -1193,11 +1188,15 @@ def _the_bar_below_is_drawn(pymux: "Pymux", window) -> bool:
     pay the row. A single pane and a plain row of panes look exactly as
     they did. Lillecarl/pymux#211.
 
+    **A zoomed window has no stack on the screen**, whatever its tree
+    holds: one pane covers everything, and nothing is above or below
+    it. So it does not pay the row either.
+
     **Three places have to give the same answer**, or the rows drift:
-    the padding between stacked panes, the row kept under the whole
+    the gap between stacked panes, the row kept under the whole
     layout, and the float that draws the bar.
     """
-    return pymux.show_pane_status and window.has_a_stack()
+    return pymux.show_pane_status and not window.zoom and window.has_a_stack()
 
 
 def the_gaps_of(pymux: "Pymux", window) -> Gaps:
@@ -1343,11 +1342,21 @@ def _create_container_for_process(
     pymux: "Pymux",
     window: arrangement.Window,
     arrangement_pane: arrangement.Pane,
-    zoom: bool = False,
 ):
     """
     Create a `Container` with a titlebar for a process.
     """
+
+    def is_zoomed() -> bool:
+        """
+        Whether this pane is the one filling the window now.
+
+        **Asked every frame, and not fixed when the container is
+        built.** Zoom is a layout that wraps another one, so the same
+        container draws whether the window is zoomed or not, and the
+        mark on the bar has to follow.
+        """
+        return window.zoom and window.active_pane is arrangement_pane
 
     @Condition
     def clock_is_visible() -> bool:
@@ -1369,7 +1378,7 @@ def _create_container_for_process(
     def get_titlebar_text_fragments() -> StyleAndTextTuples:
         result: StyleAndTextTuples = []
 
-        if zoom:
+        if is_zoomed():
             result.append(("class:titlebar-zoom", " Z "))
 
         if arrangement_pane.process.is_terminated:
@@ -1412,11 +1421,8 @@ def _create_container_for_process(
         The name of the pane on one side of this one.
 
         Nothing when there is none. A zoomed pane covers the window,
-        so nothing is beside it either.
+        so nothing is beside it either, and `the_pane_beside` says so.
         """
-        if zoom:
-            return []
-
         pane = the_pane_beside(
             pymux,
             window,
@@ -1458,9 +1464,6 @@ def _create_container_for_process(
         point the way they mean, and one gap between them.
         Lillecarl/pymux#211.
         """
-        if zoom:
-            return []
-
         above = the_pane_beside(pymux, window, arrangement_pane, Side.ABOVE)
         below = the_pane_beside(pymux, window, arrangement_pane, Side.BELOW)
         result: StyleAndTextTuples = []
