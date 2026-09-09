@@ -69,6 +69,7 @@ import os
 import re
 import sys
 import time
+from collections import Counter
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -86,6 +87,10 @@ from instructions import count_instructions  # noqa: E402
 
 from pymux.main import Pymux  # noqa: E402
 
+#: The tool slot the walk below registers as. It is the one
+#: `instructions.py` uses, and the two never run at the same time.
+_TOOL = sys.monitoring.PROFILER_ID
+
 HERE = Path(__file__).parent
 
 #: The counts this check expects, one stage per line.
@@ -98,8 +103,18 @@ DEFAULT_TOLERANCE = 5.0
 #: needs one, because it is exact; a clock needs a few hundred.
 TIMED = int(os.environ.get("PYMUX_KEYSTROKE_TIMED") or 300)
 
+#: How many functions the log names for each stage. They are
+#: instrumentation and nothing judges them, so this is about what a
+#: person reads.
+WHERE = int(os.environ.get("PYMUX_KEYSTROKE_WHERE") or 12)
+
 #: The client's terminal.
 SIZE = Size(rows=24, columns=80)
+
+#: The order a keystroke happens in, which is the order everything
+#: here measures in. A press, the program's answer, and the frame that
+#: shows it.
+ORDER = ("key", "parse", "render")
 
 #: What the program in the pane answers with, and what a person typed.
 #: One cell either way, which is the steady state a keystroke is: a
@@ -208,16 +223,84 @@ def the_stages(pymux, state):
 
 def settle(state, stages):
     """
-    Draw once before anything is counted.
+    Run a whole keystroke before anything is counted.
 
-    The renderer holds the last frame and diffs against it, and it
-    holds nothing at all to begin with, so the first render paints the
-    whole screen. That is a real number and it is not this one: a
-    keystroke lands on a screen that is already drawn.
+    **Every stage of this is once-only work that a keystroke does not
+    pay**, and each one was found by an arithmetic that did not add up.
+
+    The renderer holds the last frame and diffs against it, and holds
+    nothing at all to begin with, so the first render paints the whole
+    screen rather than one cell.
+
+    The first key press builds the merged key bindings for the whole
+    layout, and `_CombinedRegistry` then keeps them under the controls
+    it found. Counted without this, the press came to 266,429
+    instructions and 468 microseconds -- a rate of half a billion
+    instructions a second, where the render in the same run says 132
+    million. A number that fast is not a measurement, it is two
+    different pieces of work being compared.
+
+    A budget on the cold path would also be a budget that a person
+    pays once a session and never again, which is not what this file
+    is for.
     """
     with set_app(state.app):
-        stages["parse"]()
-        stages["render"]()
+        for name in ORDER:
+            if name in stages:
+                stages[name]()
+
+
+def where_the_instructions_are(work, most=WHERE):
+    """
+    Which functions the instructions of one stage went to.
+
+    `count_instructions` gives a total, and a total says a stage grew
+    without saying where. This is the same walk keyed by the code
+    object, so a number a person does not like points at a function.
+    `measure_footprint.py` does the same thing for bytes.
+
+    It is instrumentation and nothing judges it: the budgets hold the
+    totals, because a total is what a change to any one of these
+    moves.
+    """
+    counted: Counter = Counter()
+
+    def one_instruction(code, offset):
+        counted[code] += 1
+
+    sys.monitoring.use_tool_id(_TOOL, "pymux-keystroke-where")
+    try:
+        sys.monitoring.register_callback(
+            _TOOL, sys.monitoring.events.INSTRUCTION, one_instruction
+        )
+        sys.monitoring.set_events(_TOOL, sys.monitoring.events.INSTRUCTION)
+        try:
+            work()
+        finally:
+            sys.monitoring.set_events(_TOOL, 0)
+            sys.monitoring.register_callback(
+                _TOOL, sys.monitoring.events.INSTRUCTION, None
+            )
+    finally:
+        sys.monitoring.free_tool_id(_TOOL)
+
+    return [(_where(code), count) for code, count in counted.most_common(most)]
+
+
+def _where(code) -> str:
+    """
+    A function, as a reader can use it.
+
+    A path in the store is a hundred characters of hash before the part
+    that says which file, so only the package and what is under it
+    stays.
+    """
+    parts = Path(code.co_filename).parts
+    if "site-packages" in parts:
+        parts = parts[parts.index("site-packages") + 1 :]
+    else:
+        parts = parts[-2:]
+    return "%s:%d %s" % ("/".join(parts), code.co_firstlineno, code.co_qualname)
 
 
 def counted(state, stages):
@@ -237,18 +320,33 @@ def timed(state, stages, rounds):
     into Python on every instruction and turns the interpreter's
     specialisation off, so work measured while it counts takes many
     times longer than the same work alone.
+
+    **A whole cycle each round, in the order a keystroke happens in.**
+    This ran each stage three hundred times in a row at first, and the
+    key came out ten times cheaper than the instruction count said it
+    was. The reason is the answer to Lillecarl/pymux#233:
+    `_CombinedRegistry` caches the merged key bindings under the
+    controls of the layout, and a render rebuilds those, so the press
+    after a render pays for the merge and the press after a press does
+    not. Three hundred presses in a row measure the second kind, and a
+    person only ever makes the first.
     """
-    found = {}
+    order = [name for name in ORDER if name in stages]
+    totals = {name: 0.0 for name in order}
+
     with set_app(state.app):
-        for name, work in stages.items():
-            # A warm round, so that nothing is being imported or
-            # branched for the first time inside the clock.
-            work()
-            started = time.perf_counter()
-            for _ in range(rounds):
-                work()
-            found[name] = (time.perf_counter() - started) / rounds * 1e6
-    return found
+        # A warm round, so that nothing is imported or branched for
+        # the first time inside the clock.
+        for name in order:
+            stages[name]()
+
+        for _ in range(rounds):
+            for name in order:
+                started = time.perf_counter()
+                stages[name]()
+                totals[name] += time.perf_counter() - started
+
+    return {name: totals[name] / rounds * 1e6 for name in order}
 
 
 def read_budgets():
@@ -297,9 +395,15 @@ def main() -> int:
         counts = counted(state, stages)
         microseconds = timed(state, stages, TIMED)
 
+        where = {}
+        if WHERE:
+            with set_app(state.app):
+                for name, work in stages.items():
+                    where[name] = where_the_instructions_are(work)
+
     print("\n--- what one keystroke costs ---")
     print("%-12s %14s %12s" % ("", "instructions", "in-process"))
-    for name in ("key", "parse", "render"):
+    for name in ORDER:
         if name in counts:
             print("%-12s %14d %10.1f us" % (name, counts[name], microseconds[name]))
 
@@ -307,6 +411,12 @@ def main() -> int:
         "%-12s %14d %10.1f us"
         % ("all of it", sum(counts.values()), sum(microseconds.values()))
     )
+
+    for name in ORDER:
+        if name in where:
+            print("\n--- where the instructions of %s are ---" % (name,))
+            for place, count in where[name]:
+                print("  %8d  %s" % (count, place))
 
     print(
         "\n**The in-process time is not the latency.** It holds no socket,"
