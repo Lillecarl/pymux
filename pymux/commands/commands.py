@@ -882,12 +882,21 @@ def resize_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
             w.zoom = not w.zoom
 
 
-@cmd("resize-window", options="[(-x <columns>)] [(-y <rows>)]")
+@cmd(
+    "resize-window",
+    options=(
+        "[(-x <columns>)] [(-y <rows>)] "
+        "[(-L <left>)] [(-U <up>)] [(-D <down>)] [(-R <right>)]"
+    ),
+)
 def resize_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Say how big this window is, and stop following the clients.
 
     -x: how many columns. -y: how many rows.
+
+    -L, -R: that many columns narrower or wider. -U, -D: that many
+    rows shorter or taller.
 
     **This is the `manual` half of `window-size`**, and running it
     turns that option on: a person who names a size means it to stay.
@@ -902,30 +911,49 @@ def resize_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     status line: `-x 100 -y 40` is a hundred cells by forty. An axis
     that is not given keeps what it has.
 
-    tmux also takes `-U`, `-D`, `-L`, `-R` to nudge one edge, and `-A`
-    and `-a` for the largest and smallest client. The four policies of
-    `window-size` say the last two, and the nudges are
+    **A nudge counts from the size the window has now**, which is why
+    it is the one a person binds to a key: naming an absolute size
+    means knowing what the size is, so "a little wider" would be a
+    look at the status line and then a command.
+
+    An absolute and a nudge together are read in that order, so
+    `-x 80 -R 10` is ninety columns. tmux takes one nudge at a time;
+    several here cost nothing and say more.
+
+    **A nudge stops at one cell and does not complain.** A key held
+    down at the edge does nothing, the way it does nothing in
+    `move-column`. An absolute size below one is a person asking for
+    something that cannot exist, and that raises.
+
+    tmux also takes `-A` and `-a` for the largest and smallest client.
+    The four policies of `window-size` already say that and keep
+    saying it, so whether those are worth having at all is
     Lillecarl/pymux#225.
     """
     window = pymux.arrangement.get_active_window()
     now = pymux.the_size_of_the_plane(window)
 
-    def asked_for(name, then):
+    def a_number(name, instead):
         given = variables["<%s>" % (name,)]
         if given is None:
-            return then
+            return instead
         try:
-            wanted = int(given)
+            return int(given)
         except ValueError:
             raise CommandException("Expecting an integer.")
+
+    def asked_for(name, then):
+        wanted = a_number(name, then)
         if wanted < 1:
             raise CommandException("A window is at least one cell.")
         return wanted
 
-    window.manual_size = Size(
-        rows=asked_for("rows", now.rows),
-        columns=asked_for("columns", now.columns),
-    )
+    columns = asked_for("columns", now.columns) + a_number("right", 0)
+    rows = asked_for("rows", now.rows) + a_number("down", 0)
+    columns -= a_number("left", 0)
+    rows -= a_number("up", 0)
+
+    window.manual_size = Size(rows=max(1, rows), columns=max(1, columns))
     window.window_size = WindowSize.MANUAL
 
 

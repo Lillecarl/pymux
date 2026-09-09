@@ -248,6 +248,48 @@ def test_manual_with_no_size_freezes_the_window_as_it_is():
         assert the_plane(pymux) == was
 
 
+def test_a_nudge_counts_from_the_size_the_window_has_now():
+    """
+    Which is the whole point of a nudge, and why it is the one a
+    person binds to a key: an absolute size means knowing the size
+    first. Lillecarl/pymux#225.
+    """
+    with two_clients() as (pymux, big, _small):
+        was = the_plane(pymux)
+        big.run("resize-window -R 10 -D 4")
+
+        assert the_window(pymux).window_size is WindowSize.MANUAL
+        assert the_plane(pymux) == Size(rows=was.rows + 4, columns=was.columns + 10)
+
+
+def test_the_other_two_nudges_go_the_other_way():
+    with two_clients() as (pymux, big, _small):
+        was = the_plane(pymux)
+        big.run("resize-window -L 3 -U 2")
+
+        assert the_plane(pymux) == Size(rows=was.rows - 2, columns=was.columns - 3)
+
+
+def test_an_absolute_size_and_a_nudge_are_read_in_that_order():
+    with two_clients() as (pymux, big, _small):
+        big.run("resize-window -x 80 -R 10")
+
+        assert the_plane(pymux).columns == 90
+
+
+def test_a_nudge_stops_at_one_cell_and_does_not_complain():
+    """
+    A key held down at the edge does nothing, the way it does nothing
+    in `move-column`. An absolute size below one is a different thing:
+    a person asking for something that cannot exist, and that raises.
+    """
+    with two_clients() as (pymux, big, _small):
+        big.run("resize-window -L 500 -U 500")
+
+        assert big.state.message is None
+        assert the_plane(pymux) == Size(rows=1, columns=1)
+
+
 def test_a_window_bigger_than_every_client_is_still_reachable():
     """
     Which is what makes a manual size safe here and awkward in tmux.
