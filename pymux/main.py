@@ -144,6 +144,10 @@ class ClientState:
         # Popup.
         self.display_popup = False
 
+        #: When a person last used this client, as a turn of
+        #: `Pymux.a_client_was_used`. `window-size latest` reads it.
+        self.last_used = 0
+
         # What the last frame of this client drew of the strings that
         # time moves. The auto refresh compares against it, and asks
         # for a frame only when they differ. Lillecarl/pymux#154.
@@ -319,9 +323,12 @@ class ClientState:
         # rendering output. (Nobody reads that fast in real-time.)
         app.max_render_postpone_time = 0.1  # Second.
 
-        # Hide message when a key has been pressed.
+        # Hide message when a key has been pressed, and note that a
+        # person is using this client: `window-size latest` follows
+        # whichever terminal somebody last typed in.
         def key_pressed(_):
             self.message = None
+            pymux.a_client_was_used(self)
 
         app.key_processor.before_key_press += key_pressed
 
@@ -399,6 +406,11 @@ class Pymux:
         session_name: str | None = None,
     ):
         self._client_states = {}  # connection -> client_state
+
+        #: How many times a client has been used, over the session.
+        #: `a_client_was_used` bumps it and stamps the client, and
+        #: `window-size latest` reads the stamps.
+        self._uses = 0
 
         # Options
         self.enable_mouse_support = True
@@ -705,9 +717,10 @@ class Pymux:
 
         **The window's `window-size` option decides which client.**
         `smallest` is the default and what pymux always did; `largest`
-        gives the plane to the biggest client watching, and a smaller
-        one moves its view over it. tmux has the same option and
-        leaves its smaller client stuck at the top left instead.
+        gives the plane to the biggest client watching, and `latest` to
+        whoever used one last. tmux has the same three, and leaves a
+        client too small to see the whole window stuck at the top left
+        of it; here that client moves its view instead.
 
         The status line comes off the bottom, because it is not part of
         any window. `layout.the_room_for_the_panes` takes the rows the
@@ -721,21 +734,42 @@ class Pymux:
         if window is None:
             window = self.arrangement.get_active_window()
 
-        sizes = self.the_screens_watching(window)
+        clients = self.the_clients_watching(window)
 
-        if not sizes:
+        if not clients:
             return Size(rows=20, columns=80)
 
-        pick = max if window.window_size is WindowSize.LARGEST else min
+        if window.window_size is WindowSize.LATEST:
+            newest = max(clients, key=lambda client: client.last_used)
+            size = newest.app.output.get_size()
+        else:
+            pick = max if window.window_size is WindowSize.LARGEST else min
+            sizes = [client.app.output.get_size() for client in clients]
+            size = Size(
+                rows=pick(one.rows for one in sizes),
+                columns=pick(one.columns for one in sizes),
+            )
 
         return Size(
-            rows=pick(size.rows for size in sizes) - (1 if self.show_status else 0),
-            columns=pick(size.columns for size in sizes),
+            rows=size.rows - (1 if self.show_status else 0),
+            columns=size.columns,
         )
 
-    def the_screens_watching(self, window=None) -> list[Size]:
+    def a_client_was_used(self, client_state) -> None:
         """
-        The terminal of each client watching that window.
+        Note that a person just used this client.
+
+        `window-size latest` reads it: the plane belongs to whichever
+        terminal somebody last typed in. A counter and not a clock,
+        because two key presses in one millisecond still have an order
+        and a clock may not say which came first.
+        """
+        self._uses += 1
+        client_state.last_used = self._uses
+
+    def the_clients_watching(self, window=None) -> "list[ClientState]":
+        """
+        Every client that is looking at that window.
 
         The active window of the session by default. A client shows one
         window at a time, and a client on another window says nothing
@@ -750,7 +784,7 @@ class Pymux:
             window = self.arrangement.get_active_window()
 
         return [
-            client_state.app.output.get_size()
+            client_state
             for client_state in self._client_states.values()
             if active_window_for_app(client_state.app) == window
         ]
@@ -1655,6 +1689,11 @@ class Pymux:
         )
 
         self._client_states[connection] = client_state
+
+        # Attaching counts as using it, so `window-size latest` has an
+        # answer before anybody has pressed a key. tmux stamps a client
+        # on attach for the same reason.
+        self.a_client_was_used(client_state)
 
         # The configuration file was read while this client was being
         # built, so nothing could be told about a line that failed.

@@ -33,10 +33,15 @@ class WindowSize(StrEnum):
     too small to see the whole window stuck at the top left of it;
     here that client moves its view over the plane instead, so it
     reaches every pane.
+
+    `LATEST` follows whoever last used a client, which is what a person
+    with a laptop and a desktop on one session wants: the terminal
+    they are typing in gets the window.
     """
 
     SMALLEST = "smallest"
     LARGEST = "largest"
+    LATEST = "latest"
 
 
 class Woke(StrEnum):

@@ -12,6 +12,8 @@ it can through a view of its own.
 - `largest`: the window is the biggest client's, and a smaller one
   moves its view over it. tmux has the same option and leaves its
   smaller client stuck at the top left of the window.
+- `latest`: the window belongs to whichever terminal somebody last
+  typed in.
 
 This is the only file with two clients of different sizes in it, and
 everything slice 5 did is judged here. The rest of the suite has one
@@ -172,6 +174,40 @@ def test_the_largest_client_decides_when_it_is_asked_to():
     with two_clients(["set-window-option window-size largest"]) as (pymux, _b, _s):
         assert the_plane(pymux).columns == BIG.columns
         assert the_plane(pymux).rows == BIG.rows - 1
+
+
+def test_the_latest_client_to_be_used_decides():
+    """
+    What a person with a laptop and a desktop on one session wants:
+    the terminal they are typing in gets the window.
+
+    Attaching counts as using, so the small client -- which attached
+    second -- holds the window until somebody touches the big one.
+    """
+    with two_clients(["set-window-option window-size latest"]) as (pymux, big, small):
+        assert the_plane(pymux).columns == SMALL.columns
+
+        pymux.a_client_was_used(big.state)
+        assert the_plane(pymux).columns == BIG.columns
+
+        pymux.a_client_was_used(small.state)
+        assert the_plane(pymux).columns == SMALL.columns
+
+
+def test_a_key_press_is_what_uses_a_client():
+    """
+    The wiring, which is what `latest` rests on: a key press on a
+    client stamps it. The event is fired rather than a key fed,
+    because feeding one starts a timeout task and this test has no
+    loop; what is judged is that the handler is on the event.
+    """
+    with two_clients(["set-window-option window-size latest"]) as (pymux, big, small):
+        before = big.state.last_used
+        big.state.app.key_processor.before_key_press.fire()
+
+        assert big.state.last_used > before
+        assert big.state.last_used > small.state.last_used
+        assert the_plane(pymux).columns == BIG.columns
 
 
 def test_a_word_that_is_not_a_policy_is_refused():
