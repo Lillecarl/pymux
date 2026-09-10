@@ -22,6 +22,9 @@
   wcwidth,
   pyinstrument,
   asyncssh,
+  # TEMPORARY for the Lillecarl/pymux#258 scratch measurement. Remove
+  # with `tests/measure_wire_sizes.py` and the `wire` check below.
+  msgpack,
   callPackage,
   xorg-server,
   xterm,
@@ -91,6 +94,8 @@ let
     # server that stands in for sshd in `tests/test_the_ssh_client.py`.
     # Lillecarl/pymux#90.
     asyncssh
+    # TEMPORARY for the scratch wire measurement. See above.
+    msgpack
   ]);
 
   # Knobs that reach the evaluation through the environment. They work
@@ -166,6 +171,15 @@ let
   # `PYMUX_PROFILE_PANES=16 nix build --file . checks.pymux-profile.run`.
   profilePanes = builtins.getEnv "PYMUX_PROFILE_PANES";
   profileFrames = builtins.getEnv "PYMUX_PROFILE_FRAMES";
+  profileRows = builtins.getEnv "PYMUX_PROFILE_ROWS";
+  profileColumns = builtins.getEnv "PYMUX_PROFILE_COLUMNS";
+  profilePhases = builtins.getEnv "PYMUX_PROFILE_PHASES";
+  # The real program the animated phase runs, and for how long, for
+  # instance
+  # `PYMUX_PROFILE_ANIMATED="cmatrix -u 2" PYMUX_PROFILE_ANIMATED_SECONDS=5
+  #  nix build --file . checks.pymux-profile.run`.
+  profileAnimated = builtins.getEnv "PYMUX_PROFILE_ANIMATED";
+  profileAnimatedSeconds = builtins.getEnv "PYMUX_PROFILE_ANIMATED_SECONDS";
 
   # Which animating programs the busy check runs, for how long each,
   # and the most of one core a background pane may take. One of them
@@ -447,10 +461,29 @@ in
     runInSandbox
       {
         name = "pymux-profile";
-        env = { inherit profilePanes profileFrames; };
+        # The animated phase runs a real program in the pane. Which one
+        # is `PYMUX_PROFILE_ANIMATED`, and cmatrix is the one to reach
+        # for first: it is the worst case the busy check measures.
+        inputs = [ cmatrix ];
+        env = {
+          inherit
+            profilePanes
+            profileFrames
+            profileRows
+            profileColumns
+            profilePhases
+            profileAnimated
+            profileAnimatedSeconds
+            ;
+        };
         setup = ''
           export PYMUX_PROFILE_PANES="$profilePanes"
           export PYMUX_PROFILE_FRAMES="$profileFrames"
+          export PYMUX_PROFILE_ROWS="$profileRows"
+          export PYMUX_PROFILE_COLUMNS="$profileColumns"
+          export PYMUX_PROFILE_PHASES="$profilePhases"
+          export PYMUX_PROFILE_ANIMATED="$profileAnimated"
+          export PYMUX_PROFILE_ANIMATED_SECONDS="$profileAnimatedSeconds"
           export PYMUX_PROFILE_OUT="$out"
         '';
       }
@@ -535,6 +568,18 @@ in
       }
       ''
         python tests/measure_latency.py
+      '';
+
+  # TEMPORARY scratch measurement for Lillecarl/pymux#258. Not a
+  # gate, judges nothing: it prints what crosses the wire, in bytes.
+  # Remove it when the investigation lands or is abandoned.
+  wire =
+    runInSandbox
+      {
+        name = "pymux-wire";
+      }
+      ''
+        python tests/measure_wire_sizes.py
       '';
 
   # The end to end test. It opens a pty, starts a server and attaches a
