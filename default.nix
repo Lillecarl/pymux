@@ -20,7 +20,7 @@
   pythonOlder,
   prompt-toolkit,
   ptterm,
-  docopt-ng,
+  argcomplete,
   pyinstrument,
   # `-S ssh://host/path` reaches a server on another machine. It is
   # here and not only in the checks for the reason pyinstrument is: a
@@ -47,7 +47,7 @@ let
     propagatedBuildInputs = [
       prompt-toolkit
       ptterm
-      docopt-ng
+      argcomplete
       pyinstrument
       asyncssh
     ];
@@ -96,7 +96,7 @@ let
       testSources
       ptterm
       prompt-toolkit
-      docopt-ng
+      argcomplete
       mesa
       ;
   };

@@ -305,7 +305,60 @@ def parse_arguments(
     return a, mode, command
 
 
+def _completion_parser() -> argparse.ArgumentParser:
+    """
+    The command line of pymux, as a parser that can complete it.
+
+    The real parse of the entry point collects everything after the
+    options and hands it to a server as one string, so it cannot say
+    what a command takes. This one holds every command of the server
+    under it, with the options each takes, and argcomplete answers
+    through it. It parses nothing on its own.
+    """
+    from pymux.commands.commands import add_commands_to
+
+    parser = argparse.ArgumentParser(
+        prog="pymux",
+        description="pymux: Pure Python terminal multiplexer.",
+        add_help=False,
+        allow_abbrev=False,
+    )
+    _add_options(parser, suppress_defaults=False)
+    modes = parser.add_subparsers(metavar="COMMAND")
+    # `list-sessions` and `ls` come from the command tree below, with
+    # the options the command takes; what is left here is the four
+    # starts that run a server or a client.
+    for name in ("standalone", "integrated", "start-server", "attach"):
+        mode_parser = modes.add_parser(
+            name,
+            help="Run a server, or attach to one. See `pymux --help`.",
+        )
+        _add_options(mode_parser, suppress_defaults=True)
+    add_commands_to(modes)
+    return parser
+
+
+def _answer_a_completion() -> None:
+    """
+    Answer a shell completion, when this start is one.
+
+    argcomplete is imported here and not at the top of the module: it
+    is dozens of modules, and the shell reaches this only on a Tab.
+    """
+    import argcomplete
+
+    from pymux.commands.commands import _shlex_that_keeps_a_hash
+
+    _shlex_that_keeps_a_hash()
+    argcomplete.autocomplete(
+        _completion_parser(), exclude=("-h", "--help", "-V", "--version")
+    )
+
+
 def run() -> None:
+    if os.environ.get("_ARGCOMPLETE"):
+        _answer_a_completion()
+
     a, mode, command = parse_arguments()
 
     socket_name = a.socket or os.environ.get("PYMUX")

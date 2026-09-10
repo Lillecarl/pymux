@@ -16,7 +16,7 @@
   python,
   ptterm,
   prompt-toolkit,
-  docopt-ng,
+  argcomplete,
   pytest,
   hypothesis,
   wcwidth,
@@ -81,7 +81,7 @@ let
   pythonWithTests = python.withPackages (ps: [
     ptterm
     prompt-toolkit
-    docopt-ng
+    argcomplete
     hypothesis
     pytest
     wcwidth

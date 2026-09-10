@@ -22,10 +22,11 @@ setup(
     install_requires=[
         "prompt_toolkit>=3.0.0,<3.1.0",
         "ptterm",
-        # docopt-ng is the maintained fork of docopt. (Same API, imported as
-        # 'docopt'.) It is used for parsing the options of the internal
-        # pymux commands, e.g. 'split-window'.
-        "docopt-ng>=0.9.0",
+        # The shell completes the command line through argcomplete: the
+        # generated scripts of `share/bash-completion` and friends make
+        # the shell ask `pymux`, and it answers from the parsers of the
+        # commands. Lillecarl/pymux#48.
+        "argcomplete>=3.0.0",
         # `pymux profile` asks a running server where its time went.
         # A person wants that on the server they already have, not on
         # one they built with extras.

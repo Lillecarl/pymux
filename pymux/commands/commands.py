@@ -1,5 +1,6 @@
+import argparse
+import inspect
 import os
-import re
 import shlex
 from typing import (
     TYPE_CHECKING,
@@ -8,10 +9,7 @@ from typing import (
     Dict,
     List,
     Optional,
-    TypeVar,
 )
-
-import docopt
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.document import Document
@@ -54,13 +52,21 @@ __all__ = [
 _VariablesList = List[str]
 _VariablesDict = Dict[str, Any]
 _PymuxHandler = Callable[["Pymux", _VariablesList], None]
-_PymuxDictHandler = Callable[["Pymux", _VariablesDict], None]
 
 # Global mapping of pymux commands to their handlers.
 COMMANDS_TO_HANDLERS: Dict[str, _PymuxHandler] = {}
 
 COMMANDS_TO_HELP: Dict[str, str] = {}
 COMMANDS_TO_OPTION_FLAGS: Dict[str, List[str]] = {}
+
+#: The argparse parser of each command. The completers read it: the shell
+#: through argcomplete, and the command bar through
+#: `pymux/commands/completer.py`. Lillecarl/pymux#48.
+COMMANDS_TO_PARSERS: Dict[str, argparse.ArgumentParser] = {}
+
+#: The first line of the docstring of each command. A completion shows it
+#: beside the name, and so does `help` of the command line.
+COMMANDS_TO_DESCRIPTIONS: Dict[str, str] = {}
 
 
 def has_command_handler(command: str) -> bool:
@@ -139,134 +145,125 @@ def call_command_handler(
             pymux.add_command_error("pymux: %s" % (e.message,))
 
 
-_F = TypeVar("_F", bound=_PymuxDictHandler)
+#
+# The parser tree.
+#
+# Every command declares what it takes with argparse's own API, in a
+# declarer next to its handler. argparse parses with the tree, the
+# shell completes through it, and the command bar of a client reads
+# it. One description of a command, and three readers of it.
+# Lillecarl/pymux#48.
+#
+
+#: The declarers, in the order their commands were written.
+DECLARERS: List[Callable[[Any], None]] = []
 
 
-def _usage_doc(name: str, options: str) -> str:
+def declarer(func: Callable[[Any], None]) -> Callable[[Any], None]:
+    "Collect the declarer of a command."
+    DECLARERS.append(func)
+    return func
+
+
+def _command(
+    subparsers: Any, handler: Any, name: str | None = None, *aliases: str
+) -> Any:
     """
-    Build the docopt document for a command.
-
-    Every `-x <placeholder>` option is also declared in an `Options:` section.
-    (docopt-ng only accepts glued options like `-F#{...}` when the option is
-    declared to take an argument there.)
+    The parser of one command: named after its handler, described by
+    the first line of its docstring.
     """
-    usage = (
-        "Usage:\n    %s %s" % (name, options) if options else "Usage:\n    %s" % name
+    if name is None:
+        name = handler.__name__.replace("_", "-")
+    parser = subparsers.add_parser(
+        name,
+        aliases=list(aliases),
+        help=(inspect.getdoc(handler) or "").partition("\n")[0],
+        # `-h` is an option of `split-window`, and no command answers
+        # a help flag on its own: the help of the command bar and of
+        # the shell come from this tree, not from a `-h`.
+        add_help=False,
     )
-
-    declarations = []
-    for flag, placeholder in re.findall(r"-([a-zA-Z0-9]) (<[^>]+>)", options):
-        declarations.append("    -%s %s" % (flag, placeholder))
-
-    if declarations:
-        usage += "\n\nOptions:\n" + "\n".join(declarations)
-
-    return usage
+    parser.set_defaults(_handler=handler)
+    return parser
 
 
-def cmd(name: str, options: str = "") -> Callable[[_F], _F]:
+class _BadLine(Exception):
+    "What a parser says about a line it cannot read."
+
+    def __init__(self, message: str) -> None:
+        self.message = message
+
+
+class _Parser(argparse.ArgumentParser):
+    "An argparse parser that raises instead of exiting."
+
+    def error(self, message: str) -> None:
+        raise _BadLine(message)
+
+
+def add_commands_to(subparsers: Any) -> None:
     """
-    Decorator for all commands.
+    Mount every command of the server on a subparsers action.
 
-    Commands will receive (pymux, variables) as input.
-    Commands can raise CommandException.
+    The shell completes the command line of pymux through one parser
+    that holds the options of the entry point and every command under
+    it. This is what fills the tree under it. It parses nothing on its
+    own.
     """
-    usage = _usage_doc(name, options)
-    value_options = re.findall(r"-([a-zA-Z0-9]) (<[^>]+>)", options)
-    value_flags = {flag for flag, _ in value_options}
+    for declare in DECLARERS:
+        declare(subparsers)
 
-    # Validate options.
-    if options:
-        try:
-            docopt.docopt(usage, [])
-        except SystemExit:
-            pass
 
-    @staticmethod
-    def _normalize_arguments(arguments: _VariablesList) -> _VariablesList:
-        """
-        Keep only the last occurrence of every option. (Like tmux, which
-        accepts repeated options. libtmux sometimes sends an option twice:
-        glued and as a separate argument.)
-        """
-        result: _VariablesList = []
-        i = 0
-        count = len(arguments)
-        while i < count:
-            arg = arguments[i]
-            if arg.startswith("-") and len(arg) >= 2 and not arg.startswith("--"):
-                flag = arg[1:2]
-                rest = arg[2:]
-                takes_value = flag in value_flags
-                has_inline_value = bool(rest)
+def _variables_of(parser: argparse.ArgumentParser, namespace: argparse.Namespace) -> _VariablesDict:
+    """
+    What the handlers read, in the shape docopt used to give.
 
-                # Is this option repeated later on?
-                repeated = any(
-                    a.startswith("-") and not a.startswith("--") and a[1:2] == flag
-                    for a in arguments[i + 1 :]
-                )
-                if repeated:
-                    # Skip this occurrence, and its separate value if any.
-                    i += 1
-                    if (
-                        takes_value
-                        and not has_inline_value
-                        and i < count
-                        and not arguments[i].startswith("-")
-                    ):
-                        i += 1
-                    continue
+    A value option is there under both spellings, `-t` and
+    `<target-pane>`, so a handler that asks whether `-t` was given and
+    a handler that reads the value ask the same dictionary. A
+    positional is there as `<name>`. The names argparse gives, the
+    dests, are there as themselves: that is the spelling a handler
+    that is written against argparse reads.
+    """
+    variables: _VariablesDict = {}
+    for action in parser._actions:
+        if action.dest in ("help",):
+            continue
+        value = getattr(namespace, action.dest, None)
+        variables[action.dest] = value
+        if action.metavar:
+            spelled = str(action.metavar).strip("<>")
+            variables["<%s>" % (spelled,)] = value
+        for option in action.option_strings:
+            if len(option) == 2:
+                variables[option] = bool(value) if action.nargs == 0 else value
+    return variables
 
-            result.append(arg)
-            i += 1
-        return result
 
-    def decorator(func: _F) -> _F:
-        def command_wrapper(pymux: "Pymux", arguments: _VariablesList) -> None:
-            arguments = _normalize_arguments(arguments)
+def _shlex_that_keeps_a_hash() -> None:
+    """
+    Stop argcomplete reading a `#` as the start of a comment.
 
-            # Hack to make the 'bind-key' option work.
-            # (bind-key expects a variable number of arguments.)
-            if name == "bind-key" and "--" not in arguments:
-                # Insert a double dash after the first non-option.
-                for i, p in enumerate(arguments):
-                    if not p.startswith("-"):
-                        arguments.insert(i + 1, "--")
-                        break
+    A command line is not a script, and no part of one is a comment.
+    argcomplete lexes the line with a vendored `shlex` whose
+    `commenters` is `#`, so everything from the first `#` is dropped,
+    and `pymux list-panes -F "#{pane_id}"<TAB>` completed an empty
+    word. No shell reads it that way: bash treats `#` as a comment
+    only at the start of a word, and `#` is in no `COMP_WORDBREAKS`.
 
-            # Parse options.
-            try:
-                received_options: Dict[str, str] = docopt.docopt(
-                    usage,
-                    arguments,
-                    default_help=False,
-                )  # Don't interpret the '-h' option as help.
-            except SystemExit:
-                raise CommandException("Usage: %s %s" % (name, options))
+    The fix upstream is one line in `split_line`, and until it is
+    there, every program that completes a format string has to install
+    this correction for itself.
+    """
+    from argcomplete.packages import _shlex
 
-            # When an option takes an argument, docopt-ng reports it under
-            # the short name (e.g. '-t') and omits the `<placeholder>` name.
-            # Expose it under both names, so that the handlers can use the
-            # `<placeholder>` name, whether or not the option was given.
-            for flag, placeholder in value_options:
-                received_options[placeholder] = received_options.get("-" + flag)
+    class _Uncommented(_shlex.shlex):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            self.commenters = ""
 
-            # Call handler.
-            func(pymux, received_options)
-
-            # Invalidate all clients, not just the current CLI.
-            pymux.invalidate(Woke.A_COMMAND_RAN % name)
-
-        COMMANDS_TO_HANDLERS[name] = command_wrapper
-        COMMANDS_TO_HELP[name] = options
-
-        # Get list of option flags.
-        flags = re.findall(r"-[a-zA-Z0-9]\b", options)
-        COMMANDS_TO_OPTION_FLAGS[name] = flags
-
-        return func
-
-    return decorator
+    # `lexers.py` binds this same module object, so the change reaches it.
+    _shlex.shlex = _Uncommented
 
 
 class CommandException(Exception):
@@ -387,7 +384,6 @@ def _pane_matches_session_name(pymux: "Pymux", target: str) -> bool:
 #
 
 
-@cmd("break-pane", options="[-d]")
 def break_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     dont_focus_window = variables["-d"]
 
@@ -395,7 +391,6 @@ def break_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.invalidate(Woke.A_PANE_BROKE_OUT)
 
 
-@cmd("select-pane", options="(-L|-R|-U|-D|-l|-t <pane-id>)")
 def select_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     if variables["-t"]:
         pane_id = variables["<pane-id>"]
@@ -427,7 +422,6 @@ def select_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
         h(pymux)
 
 
-@cmd("select-window", options="(-t <target-window>)")
 def select_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Select a window. E.g:  select-window -t :3  or  select-window -t @1001
@@ -441,7 +435,6 @@ def select_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.arrangement.set_active_window(w)
 
 
-@cmd("move-window", options="(-t <dst-window>)")
 def move_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Move window to a new index.
@@ -461,7 +454,6 @@ def move_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.arrangement.move_window(w, new_index)
 
 
-@cmd("rotate-window", options="[-D|-U]")
 def rotate_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     if variables["-D"]:
         pymux.arrangement.rotate_window(count=-1)
@@ -469,12 +461,10 @@ def rotate_window(pymux: "Pymux", variables: _VariablesDict) -> None:
         pymux.arrangement.rotate_window()
 
 
-@cmd("swap-pane", options="(-D|-U)")
 def swap_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.arrangement.get_active_window().rotate(with_pane_after_only=variables["-U"])
 
 
-@cmd("kill-pane", options="[-t <target-pane>]")
 def kill_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     if variables["-t"]:
         pane = _find_pane(pymux, variables["<target-pane>"])
@@ -487,7 +477,6 @@ def kill_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.kill_pane(pane)
 
 
-@cmd("kill-window", options="[-t <target-window>]")
 def kill_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     "Kill all panes in the current window."
     if variables["-t"]:
@@ -503,7 +492,6 @@ def kill_window(pymux: "Pymux", variables: _VariablesDict) -> None:
         pymux.kill_pane(pane)
 
 
-@cmd("suspend-client")
 def suspend_client(pymux: "Pymux", variables: _VariablesDict) -> None:
     connection = pymux.get_connection()
 
@@ -511,14 +499,12 @@ def suspend_client(pymux: "Pymux", variables: _VariablesDict) -> None:
         connection.suspend_client_to_background()
 
 
-@cmd("clock-mode")
 def clock_mode(pymux: "Pymux", variables: _VariablesDict) -> None:
     pane = pymux.arrangement.get_active_pane()
     if pane:
         pane.clock_mode = not pane.clock_mode
 
 
-@cmd("last-pane")
 def last_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     w = pymux.arrangement.get_active_window()
     prev_active_pane = w.previous_active_pane
@@ -527,7 +513,6 @@ def last_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
         w.active_pane = prev_active_pane
 
 
-@cmd("next-layout")
 def next_layout(pymux: "Pymux", variables: _VariablesDict) -> None:
     "Select next layout."
     pane = pymux.arrangement.get_active_window()
@@ -535,7 +520,6 @@ def next_layout(pymux: "Pymux", variables: _VariablesDict) -> None:
         pane.select_next_layout()
 
 
-@cmd("previous-layout")
 def previous_layout(pymux: "Pymux", variables: _VariablesDict) -> None:
     "Select previous layout."
     pane = pymux.arrangement.get_active_window()
@@ -543,11 +527,6 @@ def previous_layout(pymux: "Pymux", variables: _VariablesDict) -> None:
         pane.select_previous_layout()
 
 
-@cmd(
-    "new-window",
-    options="[-a] [-b] [(-t <target-window>)] [(-n <name>)] "
-    "[(-c <start-directory>)] [-d] [-P] [(-F <format>)] [<executable>]",
-)
 def new_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Open a window, next to the one a person is on.
@@ -653,11 +632,6 @@ def _an_index(target: "str | None") -> int | None:
         return None
 
 
-@cmd(
-    "split-window",
-    options="[-v|-h] [(-t <target-window>)] [(-c <start-directory>)] "
-    "[-d] [-P] [(-F <format>)] [<executable>]",
-)
 def split_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Split horizontally or vertically.
@@ -685,7 +659,6 @@ def split_window(pymux: "Pymux", variables: _VariablesDict) -> None:
         )
 
 
-@cmd("last-window")
 def _(pymux: "Pymux", variables: _VariablesDict) -> None:
     "Go to previous active window."
     w = pymux.arrangement.get_previous_active_window()
@@ -694,19 +667,16 @@ def _(pymux: "Pymux", variables: _VariablesDict) -> None:
         pymux.arrangement.set_active_window(w)
 
 
-@cmd("next-window")
 def next_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     "Focus the next window."
     pymux.arrangement.focus_next_window()
 
 
-@cmd("previous-window")
 def previous_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     "Focus the previous window."
     pymux.arrangement.focus_previous_window()
 
 
-@cmd("select-layout", options="<layout-type>")
 def select_layout(pymux: "Pymux", variables: _VariablesDict) -> None:
     layout_type = variables["<layout-type>"]
 
@@ -718,7 +688,6 @@ def select_layout(pymux: "Pymux", variables: _VariablesDict) -> None:
         pymux.arrangement.get_active_window().select_layout(layout_type_obj)
 
 
-@cmd("switch-column-width", options="[-p]")
 def switch_column_width(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Give this column of the strip the next preset width.
@@ -749,7 +718,6 @@ def switch_column_width(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.invalidate(Woke.A_COLUMN_CHANGED_WIDTH)
 
 
-@cmd("move-column", options="(-L|-R)")
 def move_column(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Move this column of the strip one place along the row.
@@ -791,7 +759,6 @@ def move_column(pymux: "Pymux", variables: _VariablesDict) -> None:
         pymux.invalidate(Woke.A_COLUMN_MOVED)
 
 
-@cmd("consume-or-expel", options="(-L|-R)")
 def consume_or_expel(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Move this pane into the next column of the strip, or out of its own.
@@ -834,7 +801,6 @@ def consume_or_expel(pymux: "Pymux", variables: _VariablesDict) -> None:
         pymux.invalidate(Woke.A_PANE_CHANGED_COLUMN)
 
 
-@cmd("rename-window", options="<name>")
 def rename_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Rename the active window.
@@ -842,7 +808,6 @@ def rename_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.arrangement.get_active_window().chosen_name = variables["<name>"]
 
 
-@cmd("rename-pane", options="<name>")
 def rename_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Rename the active pane.
@@ -850,7 +815,6 @@ def rename_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.arrangement.get_active_pane().chosen_name = variables["<name>"]
 
 
-@cmd("rename-session", options="<name>")
 def rename_session(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Rename this session.
@@ -858,9 +822,6 @@ def rename_session(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.session_name = variables["<name>"]
 
 
-@cmd(
-    "resize-pane", options="[(-L <left>)] [(-U <up>)] [(-D <down>)] [(-R <right>)] [-Z]"
-)
 def resize_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Resize/zoom the active pane.
@@ -885,13 +846,6 @@ def resize_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
             w.zoom = not w.zoom
 
 
-@cmd(
-    "resize-window",
-    options=(
-        "[(-x <columns>)] [(-y <rows>)] "
-        "[(-L <left>)] [(-U <up>)] [(-D <down>)] [(-R <right>)]"
-    ),
-)
 def resize_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Say how big this window is, and stop following the clients.
@@ -960,7 +914,6 @@ def resize_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     window.window_size = WindowSize.MANUAL
 
 
-@cmd("detach-client")
 def detach_client(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Detach client.
@@ -968,7 +921,6 @@ def detach_client(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.detach_client(get_app())
 
 
-@cmd("confirm-before", options="[(-p <message>)] <command>")
 def confirm_before(pymux: "Pymux", variables: _VariablesDict) -> None:
     client_state = pymux.get_client_state()
 
@@ -976,7 +928,6 @@ def confirm_before(pymux: "Pymux", variables: _VariablesDict) -> None:
     client_state.confirm_command = variables["<command>"]
 
 
-@cmd("open-url", options="[-c] <url>")
 def open_url(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Open a URL in the browser of a client.
@@ -1016,10 +967,6 @@ def ask_the_person(
     get_app().vi_state.input_mode = InputMode.INSERT
 
 
-@cmd(
-    "compose-key",
-    options="[(-p <message>)] [(-I <default>)]",
-)
 def compose_key(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Compose a key this keyboard cannot type, and send it to the pane.
@@ -1045,7 +992,6 @@ def compose_key(pymux: "Pymux", variables: _VariablesDict) -> None:
     )
 
 
-@cmd("command-prompt", options="[(-p <message>)] [(-I <default>)] [<command>]")
 def command_prompt(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Enter command prompt.
@@ -1070,7 +1016,6 @@ def command_prompt(pymux: "Pymux", variables: _VariablesDict) -> None:
     get_app().vi_state.input_mode = InputMode.INSERT
 
 
-@cmd("send-prefix")
 def send_prefix(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Send prefix to active pane.
@@ -1086,7 +1031,6 @@ def send_prefix(pymux: "Pymux", variables: _VariablesDict) -> None:
         send_a_key(pane, an_event_however_it_is_written(key), key)
 
 
-@cmd("bind-key", options="[-n] <key> [--] <command> [<arguments>...]")
 def bind_key(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Bind a key sequence.
@@ -1105,7 +1049,6 @@ def bind_key(pymux: "Pymux", variables: _VariablesDict) -> None:
         raise CommandException("Invalid key: %r" % (key,))
 
 
-@cmd("unbind-key", options="[-n] <key>")
 def unbind_key(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Remove key binding.
@@ -1119,7 +1062,6 @@ def unbind_key(pymux: "Pymux", variables: _VariablesDict) -> None:
         raise CommandException("Invalid key: %r" % (key,))
 
 
-@cmd("send-keys", options="[-t <target-pane>] [-l] [-R] [<keys>...]")
 def send_keys(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Send key strokes to the active process.
@@ -1195,7 +1137,6 @@ def _why_not(written: str, cannot: Unhearable) -> str:
     )
 
 
-@cmd("copy-mode", options="[-u]")
 def copy_mode(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Enter copy mode.
@@ -1206,7 +1147,6 @@ def copy_mode(pymux: "Pymux", variables: _VariablesDict) -> None:
     pane.enter_copy_mode()
 
 
-@cmd("paste-buffer")
 def paste_buffer(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Paste the buffer of the session into the pane.
@@ -1219,7 +1159,6 @@ def paste_buffer(pymux: "Pymux", variables: _VariablesDict) -> None:
     pane.process.write_input(pane.screen.wrap_paste(pymux.clipboard.get_data().text))
 
 
-@cmd("source-file", options="<filename>")
 def source_file(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Source configuration file.
@@ -1242,7 +1181,6 @@ def source_file(pymux: "Pymux", variables: _VariablesDict) -> None:
             pymux.sourcing = None
 
 
-@cmd("set-option", options="[-g] <option> <value>")
 def set_option(pymux: "Pymux", variables: _VariablesDict, window: bool = False) -> None:
     """
     Set an option.
@@ -1282,7 +1220,6 @@ def set_option(pymux: "Pymux", variables: _VariablesDict, window: bool = False) 
         raise CommandException("Invalid option: %s" % (name,))
 
 
-@cmd("set-window-option", options="[-g] <option> <value>")
 def set_window_option(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Set a window option.
@@ -1293,13 +1230,11 @@ def set_window_option(pymux: "Pymux", variables: _VariablesDict) -> None:
     set_option(pymux, variables, window=True)
 
 
-@cmd("display-panes")
 def display_panes(pymux: "Pymux", variables: _VariablesDict) -> None:
     "Display the pane numbers."
     pymux.display_pane_numbers = True
 
 
-@cmd("display-message", options="<message>")
 def display_message(pymux: "Pymux", variables: _VariablesDict) -> None:
     "Display a message."
     message = variables["<message>"]
@@ -1307,7 +1242,6 @@ def display_message(pymux: "Pymux", variables: _VariablesDict) -> None:
     client_state.message = message
 
 
-@cmd("clear-history")
 def clear_history(pymux: "Pymux", variables: _VariablesDict) -> None:
     "Clear scrollback buffer."
     pane = pymux.arrangement.get_active_pane()
@@ -1318,7 +1252,6 @@ def clear_history(pymux: "Pymux", variables: _VariablesDict) -> None:
         pane.screen.clear_history()
 
 
-@cmd("list-keys")
 def list_keys(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Display all configured key bindings.
@@ -1344,7 +1277,6 @@ def list_keys(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.get_client_state().layout_manager.display_popup("list-keys", result_str)
 
 
-@cmd("list-panes", options="[-a] [(-t <target-pane>)] [(-F <format>)]")
 def list_panes(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Display a list of all the panes.
@@ -1399,7 +1331,6 @@ def list_panes(pymux: "Pymux", variables: _VariablesDict) -> None:
         pymux.get_client_state().layout_manager.display_popup("list-keys", result_str)
 
 
-@cmd("list-windows", options="[-a] [(-t <target-window>)] [(-F <format>)]")
 def list_windows(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Display a list of windows. (With `-F`, the formatted window information
@@ -1432,7 +1363,6 @@ def list_windows(pymux: "Pymux", variables: _VariablesDict) -> None:
         )
 
 
-@cmd("list-sessions", options="[-a] [(-F <format>)]")
 def list_sessions(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     List sessions. (Pymux has one session per server. With `-F`, the
@@ -1454,7 +1384,6 @@ def list_sessions(pymux: "Pymux", variables: _VariablesDict) -> None:
         )
 
 
-@cmd("has-session", options="[(-t <target-session>)]")
 def has_session(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Check whether the session exists. Raise a CommandException (which makes
@@ -1465,7 +1394,6 @@ def has_session(pymux: "Pymux", variables: _VariablesDict) -> None:
         raise CommandException("can't find session: %s" % (target,))
 
 
-@cmd("new-session", options="[(-s <session-name>)] [-d] [-P] [(-F <format>)]")
 def new_session(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Create a new session.
@@ -1486,7 +1414,6 @@ def new_session(pymux: "Pymux", variables: _VariablesDict) -> None:
         )
 
 
-@cmd("kill-session")
 def kill_session(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Kill this session. (This terminates the server, like `tmux kill-session`
@@ -1495,7 +1422,6 @@ def kill_session(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.stop()
 
 
-@cmd("kill-server")
 def kill_server(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Kill the server. (Pymux has one session per server. Same as
@@ -1504,7 +1430,6 @@ def kill_server(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.stop()
 
 
-@cmd("dump-stacks")
 def dump_stacks(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Write down what this server is doing now, and say where.
@@ -1518,7 +1443,6 @@ def dump_stacks(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.show_message("Wrote a dump to %s" % (path,))
 
 
-@cmd("counters")
 def counters(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Say what this server has done, and how often.
@@ -1531,7 +1455,6 @@ def counters(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.get_client_state().layout_manager.display_popup("counters", said)
 
 
-@cmd("profile", options="[<seconds>]")
 def profile(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Watch this server for a few seconds, and write down where its time
@@ -1562,10 +1485,6 @@ def profile(pymux: "Pymux", variables: _VariablesDict) -> None:
     )
 
 
-@cmd(
-    "display-popup",
-    options="[-E] [(-w <width>)] [(-h <height>)] [(-T <title>)] [<executable>]",
-)
 def display_popup(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Open an overlay pane in the middle of the screen.
@@ -1586,7 +1505,6 @@ def display_popup(pymux: "Pymux", variables: _VariablesDict) -> None:
     )
 
 
-@cmd("close-popup")
 def close_popup(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Close the overlay pane, and kill what runs in it.
@@ -1594,10 +1512,6 @@ def close_popup(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.close_overlay()
 
 
-@cmd(
-    "capture-pane",
-    options="[-p] [-J] [(-t <target-pane>)] [(-S <start>)] [(-E <end>)]",
-)
 def capture_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Capture the content of a pane.
@@ -1688,7 +1602,6 @@ def capture_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
         pymux.get_client_state().layout_manager.display_popup("capture-pane", text)
 
 
-@cmd("show-buffer")
 def show_buffer(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Display the clipboard content.
@@ -1712,6 +1625,492 @@ def _print_object_format(
     pymux.print_command_line(
         format_pymux_string(pymux, format_str, window=window, pane=pane)
     )
+
+
+#
+# What each command takes.
+#
+# One declarer per command, with argparse's own API. The tree is built
+# from them once, below, and it is what argparse parses with, what the
+# shell completes through, and what the command bar of a client reads.
+#
+
+@declarer
+def _declare_break_pane(subparsers: Any) -> None:
+    parser = _command(subparsers, break_pane)
+    parser.add_argument("-d", action="store_true", help="Leave the new window unfocused.")
+
+
+@declarer
+def _declare_select_pane(subparsers: Any) -> None:
+    parser = _command(subparsers, select_pane)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("-L", action="store_true", help="Focus the pane to the left.")
+    group.add_argument("-R", action="store_true", help="Focus the pane to the right.")
+    group.add_argument("-U", action="store_true", help="Focus the pane above.")
+    group.add_argument("-D", action="store_true", help="Focus the pane below.")
+    group.add_argument("-l", action="store_true", help="Rotate the panes of the window once.")
+    group.add_argument("-t", metavar="<pane-id>", help="The pane to focus.")
+
+
+@declarer
+def _declare_select_window(subparsers: Any) -> None:
+    parser = _command(subparsers, select_window)
+    parser.add_argument("-t", metavar="<target-window>", required=True, help="The window to focus.")
+
+
+@declarer
+def _declare_move_window(subparsers: Any) -> None:
+    parser = _command(subparsers, move_window)
+    parser.add_argument("-t", metavar="<dst-window>", required=True, help="The index to move to.")
+
+
+@declarer
+def _declare_rotate_window(subparsers: Any) -> None:
+    parser = _command(subparsers, rotate_window)
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("-D", action="store_true", help="Rotate the other way.")
+    group.add_argument("-U", action="store_true")
+
+
+@declarer
+def _declare_swap_pane(subparsers: Any) -> None:
+    parser = _command(subparsers, swap_pane)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("-D", action="store_true")
+    group.add_argument("-U", action="store_true", help="Swap with the pane below.")
+
+
+@declarer
+def _declare_kill_pane(subparsers: Any) -> None:
+    parser = _command(subparsers, kill_pane)
+    parser.add_argument("-t", metavar="<target-pane>", help="The pane to kill.")
+
+
+@declarer
+def _declare_kill_window(subparsers: Any) -> None:
+    parser = _command(subparsers, kill_window)
+    parser.add_argument("-t", metavar="<target-window>", help="The window to kill.")
+
+
+@declarer
+def _declare_suspend_client(subparsers: Any) -> None:
+    _command(subparsers, suspend_client)
+
+
+@declarer
+def _declare_clock_mode(subparsers: Any) -> None:
+    _command(subparsers, clock_mode)
+
+
+@declarer
+def _declare_last_pane(subparsers: Any) -> None:
+    _command(subparsers, last_pane)
+
+
+@declarer
+def _declare_next_layout(subparsers: Any) -> None:
+    _command(subparsers, next_layout)
+
+
+@declarer
+def _declare_previous_layout(subparsers: Any) -> None:
+    _command(subparsers, previous_layout)
+
+
+@declarer
+def _declare_new_window(subparsers: Any) -> None:
+    parser = _command(subparsers, new_window)
+    parser.add_argument("-a", action="store_true", help="After the target window.")
+    parser.add_argument("-b", action="store_true", help="Before the target window.")
+    parser.add_argument("-t", metavar="<target-window>", help="The window to sit next to, or the index to create at.")
+    parser.add_argument("-n", metavar="<name>", help="The name of the window.")
+    parser.add_argument("-c", metavar="<start-directory>", help="Where the program starts.")
+    parser.add_argument("-d", action="store_true", help="Leave the new window unfocused.")
+    parser.add_argument("-P", action="store_true", help="Print information about the new window.")
+    parser.add_argument("-F", metavar="<format>", help="The format to print with -P.")
+    parser.add_argument("executable", nargs="?", metavar="<executable>")
+
+
+@declarer
+def _declare_split_window(subparsers: Any) -> None:
+    parser = _command(subparsers, split_window)
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("-v", action="store_true", help="Split top over bottom.")
+    group.add_argument("-h", action="store_true", help="Split side by side.")
+    parser.add_argument("-t", metavar="<target-window>", help="The window to split.")
+    parser.add_argument("-c", metavar="<start-directory>", help="Where the program starts.")
+    parser.add_argument("-d", action="store_true", help="Leave the new pane unfocused.")
+    parser.add_argument("-P", action="store_true", help="Print information about the new pane.")
+    parser.add_argument("-F", metavar="<format>", help="The format to print with -P.")
+    parser.add_argument("executable", nargs="?", metavar="<executable>")
+
+
+@declarer
+def _declare_last_window(subparsers: Any) -> None:
+    _command(subparsers, _, name="last-window")
+
+
+@declarer
+def _declare_next_window(subparsers: Any) -> None:
+    _command(subparsers, next_window)
+
+
+@declarer
+def _declare_previous_window(subparsers: Any) -> None:
+    _command(subparsers, previous_window)
+
+
+@declarer
+def _declare_select_layout(subparsers: Any) -> None:
+    parser = _command(subparsers, select_layout)
+    parser.add_argument("layout_type", metavar="<layout-type>", help="The layout to arrange the panes in.")
+
+
+@declarer
+def _declare_switch_column_width(subparsers: Any) -> None:
+    parser = _command(subparsers, switch_column_width)
+    parser.add_argument("-p", action="store_true", help="The previous width instead.")
+
+
+@declarer
+def _declare_move_column(subparsers: Any) -> None:
+    parser = _command(subparsers, move_column)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("-L", action="store_true", help="Move the column one place to the left.")
+    group.add_argument("-R", action="store_true", help="Move the column one place to the right.")
+
+
+@declarer
+def _declare_consume_or_expel(subparsers: Any) -> None:
+    parser = _command(subparsers, consume_or_expel)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("-L", action="store_true", help="Move the pane into the column to the left.")
+    group.add_argument("-R", action="store_true", help="Move the pane into the column to the right.")
+
+
+@declarer
+def _declare_rename_window(subparsers: Any) -> None:
+    parser = _command(subparsers, rename_window)
+    parser.add_argument("name", metavar="<name>", help="The new name of the window.")
+
+
+@declarer
+def _declare_rename_pane(subparsers: Any) -> None:
+    parser = _command(subparsers, rename_pane)
+    parser.add_argument("name", metavar="<name>", help="The new name of the pane.")
+
+
+@declarer
+def _declare_rename_session(subparsers: Any) -> None:
+    parser = _command(subparsers, rename_session)
+    parser.add_argument("name", metavar="<name>", help="The new name of the session.")
+
+
+@declarer
+def _declare_resize_pane(subparsers: Any) -> None:
+    parser = _command(subparsers, resize_pane)
+    parser.add_argument("-L", metavar="<left>", help="That many columns narrower.")
+    parser.add_argument("-U", metavar="<up>", help="That many rows shorter.")
+    parser.add_argument("-D", metavar="<down>", help="That many rows taller.")
+    parser.add_argument("-R", metavar="<right>", help="That many columns wider.")
+    parser.add_argument("-Z", action="store_true", help="Zoom the pane in or out.")
+
+
+@declarer
+def _declare_resize_window(subparsers: Any) -> None:
+    parser = _command(subparsers, resize_window)
+    parser.add_argument("-x", metavar="<columns>", help="How many columns the window is.")
+    parser.add_argument("-y", metavar="<rows>", help="How many rows the window is.")
+    parser.add_argument("-L", metavar="<left>", help="That many columns narrower.")
+    parser.add_argument("-U", metavar="<up>", help="That many rows shorter.")
+    parser.add_argument("-D", metavar="<down>", help="That many rows taller.")
+    parser.add_argument("-R", metavar="<right>", help="That many columns wider.")
+
+
+@declarer
+def _declare_detach_client(subparsers: Any) -> None:
+    _command(subparsers, detach_client)
+
+
+@declarer
+def _declare_confirm_before(subparsers: Any) -> None:
+    parser = _command(subparsers, confirm_before)
+    parser.add_argument("-p", metavar="<message>", help="The question to ask.")
+    parser.add_argument("command", metavar="<command>", help="The command to run when the answer is yes.")
+
+
+@declarer
+def _declare_open_url(subparsers: Any) -> None:
+    parser = _command(subparsers, open_url)
+    parser.add_argument("-c", action="store_true", help="Open without asking again.")
+    parser.add_argument("url", metavar="<url>")
+
+
+@declarer
+def _declare_compose_key(subparsers: Any) -> None:
+    parser = _command(subparsers, compose_key)
+    parser.add_argument("-p", metavar="<message>", help="The question to ask.")
+    parser.add_argument("-I", metavar="<default>", help="What the answer starts with.")
+
+
+@declarer
+def _declare_command_prompt(subparsers: Any) -> None:
+    parser = _command(subparsers, command_prompt)
+    parser.add_argument("-p", metavar="<message>", help="The question to ask.")
+    parser.add_argument("-I", metavar="<default>", help="What the answer starts with.")
+    parser.add_argument("command", nargs="?", metavar="<command>")
+
+
+@declarer
+def _declare_send_prefix(subparsers: Any) -> None:
+    _command(subparsers, send_prefix)
+
+
+@declarer
+def _declare_bind_key(subparsers: Any) -> None:
+    parser = _command(subparsers, bind_key)
+    parser.add_argument("-n", action="store_true", help="Bind without the prefix.")
+    parser.add_argument("key", metavar="<key>", help="The key to bind.")
+    # Everything from the bound command on is a remainder, so an
+    # option of the bound command is never read as an option of
+    # bind-key. The wrapper splits it into the command and its
+    # arguments; the metavar only says what it is in a usage line.
+    parser.add_argument("arguments", nargs=argparse.REMAINDER, metavar="<arguments>")
+
+
+@declarer
+def _declare_unbind_key(subparsers: Any) -> None:
+    parser = _command(subparsers, unbind_key)
+    parser.add_argument("-n", action="store_true", help="Remove a binding that needs no prefix.")
+    parser.add_argument("key", metavar="<key>")
+
+
+@declarer
+def _declare_send_keys(subparsers: Any) -> None:
+    parser = _command(subparsers, send_keys)
+    parser.add_argument("-t", metavar="<target-pane>", help="The pane to send to.")
+    parser.add_argument("-l", action="store_true", help="Send the keys as text, not key names.")
+    parser.add_argument("-R", action="store_true", help="Reset the terminal of the pane first.")
+    parser.add_argument("keys", nargs=argparse.REMAINDER, metavar="<keys>")
+
+
+@declarer
+def _declare_copy_mode(subparsers: Any) -> None:
+    parser = _command(subparsers, copy_mode)
+    parser.add_argument("-u", action="store_true", help="Accepted for tmux. Pymux does not page up yet.")
+
+
+@declarer
+def _declare_paste_buffer(subparsers: Any) -> None:
+    _command(subparsers, paste_buffer)
+
+
+@declarer
+def _declare_source_file(subparsers: Any) -> None:
+    parser = _command(subparsers, source_file)
+    parser.add_argument("filename", metavar="<filename>", help="The configuration file to read.")
+
+
+@declarer
+def _declare_set_option(subparsers: Any) -> None:
+    parser = _command(subparsers, set_option)
+    parser.add_argument("-g", action="store_true", help="For a window option: what every new window starts with.")
+    parser.add_argument("option", metavar="<option>")
+    parser.add_argument("value", metavar="<value>")
+
+
+@declarer
+def _declare_set_window_option(subparsers: Any) -> None:
+    parser = _command(subparsers, set_window_option)
+    parser.add_argument("-g", action="store_true", help="What every new window starts with.")
+    parser.add_argument("option", metavar="<option>")
+    parser.add_argument("value", metavar="<value>")
+
+
+@declarer
+def _declare_display_panes(subparsers: Any) -> None:
+    _command(subparsers, display_panes)
+
+
+@declarer
+def _declare_display_message(subparsers: Any) -> None:
+    parser = _command(subparsers, display_message)
+    parser.add_argument("message", metavar="<message>")
+
+
+@declarer
+def _declare_clear_history(subparsers: Any) -> None:
+    _command(subparsers, clear_history)
+
+
+@declarer
+def _declare_list_keys(subparsers: Any) -> None:
+    _command(subparsers, list_keys)
+
+
+@declarer
+def _declare_list_panes(subparsers: Any) -> None:
+    parser = _command(subparsers, list_panes)
+    parser.add_argument("-a", action="store_true", help="The panes of every window, not of the active one.")
+    parser.add_argument("-t", metavar="<target-pane>", help="The pane whose window to list.")
+    parser.add_argument("-F", metavar="<format>", help="Print this format for every pane.")
+
+
+@declarer
+def _declare_list_windows(subparsers: Any) -> None:
+    parser = _command(subparsers, list_windows)
+    parser.add_argument("-a", action="store_true", help="Every window, not only of the session.")
+    parser.add_argument("-t", metavar="<target-window>", help="The window to list.")
+    parser.add_argument("-F", metavar="<format>", help="Print this format for every window.")
+
+
+@declarer
+def _declare_list_sessions(subparsers: Any) -> None:
+    parser = _command(subparsers, list_sessions, "ls")
+    parser.add_argument("-a", action="store_true", help="Accepted for tmux. Pymux has one session per server.")
+    parser.add_argument("-F", metavar="<format>", help="Print this format for the session.")
+
+
+@declarer
+def _declare_has_session(subparsers: Any) -> None:
+    parser = _command(subparsers, has_session)
+    parser.add_argument("-t", metavar="<target-session>", help="The session to look for.")
+
+
+@declarer
+def _declare_new_session(subparsers: Any) -> None:
+    parser = _command(subparsers, new_session)
+    parser.add_argument("-s", metavar="<session-name>", help="The name of the session.")
+    parser.add_argument("-d", action="store_true", help="Do not attach.")
+    parser.add_argument("-P", action="store_true", help="Print information about the session.")
+    parser.add_argument("-F", metavar="<format>", help="The format to print with -P.")
+
+
+@declarer
+def _declare_kill_session(subparsers: Any) -> None:
+    _command(subparsers, kill_session)
+
+
+@declarer
+def _declare_kill_server(subparsers: Any) -> None:
+    _command(subparsers, kill_server)
+
+
+@declarer
+def _declare_dump_stacks(subparsers: Any) -> None:
+    _command(subparsers, dump_stacks)
+
+
+@declarer
+def _declare_counters(subparsers: Any) -> None:
+    _command(subparsers, counters)
+
+
+@declarer
+def _declare_profile(subparsers: Any) -> None:
+    parser = _command(subparsers, profile)
+    parser.add_argument("seconds", nargs="?", metavar="<seconds>", help="How long to watch, in seconds.")
+
+
+@declarer
+def _declare_display_popup(subparsers: Any) -> None:
+    parser = _command(subparsers, display_popup)
+    parser.add_argument("-E", action="store_true", help="Accepted for tmux. The overlay always closes when its program ends.")
+    parser.add_argument("-w", metavar="<width>", help="How many cells wide, or a share like '60%%'.")
+    parser.add_argument("-h", metavar="<height>", help="How many cells high, or a share like '60%%'.")
+    parser.add_argument("-T", metavar="<title>", help="The name on the title bar.")
+    parser.add_argument("executable", nargs="?", metavar="<executable>", help="The program to run.")
+
+
+@declarer
+def _declare_close_popup(subparsers: Any) -> None:
+    _command(subparsers, close_popup)
+
+
+@declarer
+def _declare_capture_pane(subparsers: Any) -> None:
+    parser = _command(subparsers, capture_pane)
+    parser.add_argument("-p", action="store_true", help="Print to the output of the command line, not a pop-up.")
+    parser.add_argument("-J", action="store_true", help="Join the pieces a wrapped line was cut into.")
+    parser.add_argument("-t", metavar="<target-pane>", help="The pane to capture.")
+    parser.add_argument("-S", metavar="<start>", help="The first line. 0 is the top of the pane, negative is history.")
+    parser.add_argument("-E", metavar="<end>", help="The last line.")
+
+
+@declarer
+def _declare_show_buffer(subparsers: Any) -> None:
+    _command(subparsers, show_buffer)
+
+
+#
+# The tree, and the registries read from it.
+#
+
+
+def _build_the_tree() -> Any:
+    "Every command of the server, under one root."
+    parser = argparse.ArgumentParser(prog="pymux", add_help=False, allow_abbrev=False)
+    subparsers = parser.add_subparsers(metavar="COMMAND", parser_class=_Parser)
+    add_commands_to(subparsers)
+    return parser, subparsers
+
+
+_TREE, _SUBPARSERS = _build_the_tree()
+
+
+def _the_options(parser: argparse.ArgumentParser) -> str:
+    "What the usage line says after the name of the command."
+    text = parser.format_usage()
+    prefix = "usage: %s " % (parser.prog,)
+    return text[len(prefix) :].strip() if text.startswith(prefix) else text.strip()
+
+
+def _the_wrapper(name: str, parser: argparse.ArgumentParser) -> _PymuxHandler:
+    def command_wrapper(pymux: "Pymux", arguments: _VariablesList) -> None:
+        try:
+            namespace = parser.parse_args(list(arguments))
+        except _BadLine as e:
+            # The complaint names the part that is wrong, and the
+            # usage line beside it names the command: a line of a
+            # configuration file that fails is read far from here.
+            raise CommandException(
+                "%s (%s)" % (e.message, parser.format_usage().strip())
+            )
+
+        variables = _variables_of(parser, namespace)
+
+        if name == "bind-key":
+            # The command that is bound, and everything it takes. A
+            # `--` the caller wrote is dropped: it separates, and
+            # neither side is an option of bind-key.
+            rest = variables["arguments"] or []
+            if rest and rest[0] == "--":
+                rest = rest[1:]
+            variables["<command>"] = rest[0] if rest else None
+            variables["<arguments>"] = rest[1:] if rest else []
+
+        # Call handler.
+        namespace._handler(pymux, variables)
+
+        # Invalidate all clients, not just the current CLI.
+        pymux.invalidate(Woke.A_COMMAND_RAN % name)
+
+    return command_wrapper
+
+
+for _name, _parser in _SUBPARSERS.choices.items():
+    COMMANDS_TO_HANDLERS[_name] = _the_wrapper(_name, _parser)
+    COMMANDS_TO_PARSERS[_name] = _parser
+    _handler = _parser.get_default("_handler")
+    COMMANDS_TO_DESCRIPTIONS[_name] = (inspect.getdoc(_handler) or "").partition("\n")[0]
+    COMMANDS_TO_HELP[_name] = _the_options(_parser)
+    COMMANDS_TO_OPTION_FLAGS[_name] = [
+        option
+        for action in _parser._actions
+        for option in action.option_strings
+        if len(option) == 2
+    ]
 
 
 # Check whether all aliases point to real commands.
