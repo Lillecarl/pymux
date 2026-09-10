@@ -16,6 +16,7 @@
 # there is a python binding that nixpkgs has marked broken.
 {
   lib,
+  python,
   buildPythonApplication,
   pythonOlder,
   prompt-toolkit,
@@ -27,6 +28,7 @@
   # person attaches from the pymux they installed, not from one they
   # built with extras. Lillecarl/pymux#90.
   asyncssh,
+  installShellFiles,
   callPackage,
   mesa,
 }:
@@ -51,6 +53,19 @@ let
       pyinstrument
       asyncssh
     ];
+
+    # The completion scripts of bash, zsh and fish, written from
+    # argcomplete and put where a shell loads them. The script that
+    # answers a Tab is generic: it makes the shell ask `pymux`, and
+    # pymux answers from its parser tree. Lillecarl/pymux#48.
+    nativeBuildInputs = [ installShellFiles ];
+    postInstall = ''
+      ${python.interpreter} ${./nix/render-completions.py} pymux "$PWD/rendered"
+      installShellCompletion --cmd pymux \
+        --bash rendered/bash \
+        --zsh rendered/zsh \
+        --fish rendered/fish
+    '';
 
     # The suites run as `checks.unit`, `checks.pty` and the rest, against the source.
     doCheck = false;

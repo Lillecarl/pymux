@@ -166,7 +166,7 @@ def declarer(func: Callable[[Any], None]) -> Callable[[Any], None]:
 
 
 def _command(
-    subparsers: Any, handler: Any, name: str | None = None, *aliases: str
+    subparsers: Any, handler: Any, *, name: str | None = None, aliases: tuple = ()
 ) -> Any:
     """
     The parser of one command: named after its handler, described by
@@ -1967,7 +1967,7 @@ def _declare_list_windows(subparsers: Any) -> None:
 
 @declarer
 def _declare_list_sessions(subparsers: Any) -> None:
-    parser = _command(subparsers, list_sessions, "ls")
+    parser = _command(subparsers, list_sessions, aliases=("ls",))
     parser.add_argument("-a", action="store_true", help="Accepted for tmux. Pymux has one session per server.")
     parser.add_argument("-F", metavar="<format>", help="Print this format for the session.")
 

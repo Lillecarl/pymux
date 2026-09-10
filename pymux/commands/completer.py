@@ -1,3 +1,17 @@
+"""
+What completes a command as it is typed.
+
+The parser tree of the commands is the one description of what a
+command takes, and this completer is one of its three readers: the
+words typed so far are walked against the parser of the command, and
+what the next word can be is read off the action it would land in.
+
+The values that only the running server knows — the names of the
+options, the words an option takes, the layout names and the keys —
+are attached by dest name in `_VALUE_COMPLETERS` below. Everything
+else, the flags and their help lines, comes from the tree.
+"""
+
 from functools import partial
 
 from prompt_toolkit.completion import Completer, Completion, WordCompleter
@@ -7,7 +21,7 @@ from pymux.arrangement import LayoutTypes
 from pymux.key_spelling import KeyCompleter
 
 from .aliases import ALIASES
-from .commands import COMMANDS_TO_HANDLERS, get_option_flags_for_command
+from .commands import COMMANDS_TO_HANDLERS, COMMANDS_TO_PARSERS
 from .utils import wrap_argument
 
 __all__ = ["create_command_completer"]
@@ -71,56 +85,155 @@ _layout_type_completer = WordCompleter(sorted(t.value for t in LayoutTypes), WOR
 _keys_completer = KeyCompleter(offer_the_prefix=False)
 
 
-def get_completions_for_parts(parts, last_part, complete_event, pymux):
-    completer = None
+def _value_completer_for(command, dest, parser, slots, pymux):
+    """
+    The completer of a value, or None when the words are not its business.
 
+    `slots` holds the words already in positional places, which is how
+    `set-option` knows which option a value belongs to.
+    """
+    if command in ("set-option", "set-window-option"):
+        options = pymux.options if command == "set-option" else pymux.window_options
+
+        if dest == "option":
+            return WordCompleter(sorted(options.keys()), sentence=True)
+        if dest == "value" and slots:
+            option = options.get(slots[-1])
+            if option:
+                return WordCompleter(
+                    sorted(option.get_all_values(pymux)), sentence=True
+                )
+
+    elif command == "select-layout" and dest == "layout_type":
+        return _layout_type_completer
+
+    elif command == "compose-key" and dest == "default":
+        return _keys_completer
+
+    elif command == "bind-key" and dest == "key":
+        return _keys_completer
+
+    return None
+
+
+def _flags_completer(parser, last_part):
+    "The flags of a command that match what is typed, with their help."
+    choices = {}
+    for action in parser._actions:
+        for option in action.option_strings:
+            if option in choices or not option.startswith(last_part):
+                continue
+            if action.nargs != 0 and action.metavar:
+                choices[option] = "%s <%s>" % (
+                    option,
+                    str(action.metavar).strip("<>"),
+                )
+            else:
+                choices[option] = (action.help or "").strip()
+    if not choices:
+        return None
+    return WordCompleter(choices, WORD=True, sentence=True)
+
+
+def _where_the_word_goes(parser, parts, last_part):
+    """
+    What the word being typed will land in, read off the parser.
+
+    Returns one of:
+
+    - `("flags", partial)` — it starts a flag.
+    - `(action, slots)` — it completes the value of the option, or
+      fills the positional; `slots` holds the words already in
+      positional places.
+    - `(None, slots)` — nothing to offer from the tree.
+    """
+    if last_part.startswith("-"):
+        return ("flags", last_part)
+
+    flags = {}
+    for action in parser._actions:
+        for option in action.option_strings:
+            flags[option] = action
+
+    positionals = [a for a in parser._actions if not a.option_strings]
+
+    slots: list = []
+    pending = None
+    for word in parts:
+        if pending is not None:
+            # This word is the value of the option before it.
+            slots.append(word)
+            pending = None
+            continue
+        action = flags.get(word)
+        if action is not None and action.nargs != 0:
+            pending = action
+            continue
+        if action is not None or word == "--":
+            continue
+        slots.append(word)
+
+    if pending is not None:
+        return (pending, slots)
+
+    if not positionals:
+        return (None, slots)
+
+    # One positional takes one word, and the last one takes the rest.
+    index = min(len(slots), len(positionals) - 1)
+    return (positionals[index], slots)
+
+
+def get_completions_for_parts(parts, last_part, complete_event, pymux):
     # Resolve aliases.
     if len(parts) > 0:
         parts = [ALIASES.get(parts[0], parts[0])] + parts[1:]
 
     if len(parts) == 0:
         # New command.
-        completer = _command_completer
+        yield from _command_completer.get_completions(
+            Document(last_part), complete_event
+        )
+        return
 
-    elif len(parts) >= 1 and last_part.startswith("-"):
-        flags = get_option_flags_for_command(parts[0])
-        completer = WordCompleter(sorted(flags), WORD=True)
+    parser = COMMANDS_TO_PARSERS.get(parts[0])
+    if parser is None:
+        return
 
-    elif len(parts) == 1 and parts[0] in ("set-option", "set-window-option"):
-        options = pymux.options if parts[0] == "set-option" else pymux.window_options
+    what, slots = _where_the_word_goes(parser, parts[1:], last_part)
 
-        completer = WordCompleter(sorted(options.keys()), sentence=True)
-
-    elif len(parts) == 2 and parts[0] in ("set-option", "set-window-option"):
-        options = pymux.options if parts[0] == "set-option" else pymux.window_options
-
-        option = options.get(parts[1])
-        if option:
-            completer = WordCompleter(
-                sorted(option.get_all_values(pymux)), sentence=True
+    if what == "flags":
+        completer = _flags_completer(parser, last_part)
+        if completer:
+            yield from completer.get_completions(
+                Document(last_part), complete_event
             )
+        return
 
-    elif len(parts) == 1 and parts[0] == "select-layout":
-        completer = _layout_type_completer
+    if what is None:
+        return
 
-    elif len(parts) == 1 and parts[0] == "send-keys":
-        completer = _keys_completer
+    if parts[0] == "bind-key" and not what.option_strings and what.dest == "arguments":
+        # The command that is bound, and then its own arguments. The
+        # same question again, one word further in. The first word in
+        # `slots` is the key that was typed, and it is not part of the
+        # question.
+        yield from get_completions_for_parts(slots[1:], last_part, complete_event, pymux)
+        return
 
-    elif parts[0] == "bind-key":
-        if len(parts) == 1:
-            completer = _keys_completer
+    if parts[0] == "send-keys" and not what.option_strings and what.dest == "keys":
+        # The keys are names to offer while they are the first thing
+        # after the command and no `-l` says they are text.
+        if not slots and "-l" not in parts[1:]:
+            yield from _keys_completer.get_completions(
+                Document(last_part), complete_event
+            )
+        return
 
-        elif len(parts) == 2:
-            completer = _command_completer
-
-    # Recursive, for bind-key options.
-    if parts and parts[0] == "bind-key" and len(parts) > 2:
-        for c in get_completions_for_parts(parts[2:], last_part, complete_event, pymux):
-            yield c
-
+    dest = what.dest
+    completer = _value_completer_for(parts[0], dest, parser, slots, pymux)
     if completer:
-        for c in completer.get_completions(Document(last_part), complete_event):
-            yield c
+        yield from completer.get_completions(Document(last_part), complete_event)
 
 
 class ShlexCompleter(Completer):
