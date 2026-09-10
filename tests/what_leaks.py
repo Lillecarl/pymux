@@ -278,6 +278,20 @@ async def settle(panes, seconds: float = 10.0) -> bool:
     the honest answer to "what holds this", and the honest reading of
     it is "the teardown has not finished", not "pymux leaks".
 
+    **And then the queue.** A callback that asyncio has queued holds
+    everything it closes over until it runs, which is the next turn.
+    `Process._read` puts the parsing of a pane nobody looks at there,
+    so a round that stopped between the queueing and the running found
+    the pane held by its own pending work. It reads as this, and it is
+    the same "the teardown has not finished":
+
+        small application: held by cell <- tuple of 1
+        <- function Application.invalidate.<locals>.redraw
+        <- Handle <- deque <- _UnixSelectorEventLoop
+
+    A `deque` in the loop is `_ready`. Waiting for it to empty is not
+    hiding anything: a queued callback is one that is about to run.
+
     False when a pane never reported itself terminated. That is worth
     saying rather than hiding: a check that timed out has measured
     nothing.
@@ -286,10 +300,20 @@ async def settle(panes, seconds: float = 10.0) -> bool:
 
     while time.monotonic() < deadline:
         if all(pane.process.is_terminated for pane in panes):
-            return True
+            break
         await asyncio.sleep(0.01)
+    else:
+        return False
 
-    return False
+    loop = asyncio.get_running_loop()
+    while time.monotonic() < deadline:
+        # One turn of this loop is one turn of the event loop, so a
+        # callback that queues another one still finishes.
+        if not getattr(loop, "_ready", None):
+            return True
+        await asyncio.sleep(0)
+
+    return True
 
 
 async def a_round(session: Session, recordings) -> bool:

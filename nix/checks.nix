@@ -35,6 +35,15 @@
   makeFontsConf,
   dejavu_fonts,
   perl,
+  # The programs that animate. A pane nobody looks at should cost the
+  # parsing of its bytes and nothing else, and only a real terminal
+  # program writes the way that measures it: a screenful at a steady
+  # rate, forever. A writer in a `python -c` loop does not reproduce
+  # the fault these caught. Lillecarl/pymux#253.
+  cmatrix,
+  tty-clock,
+  nyancat,
+  pipes,
   testSources,
 }:
 let
@@ -152,6 +161,14 @@ let
   # `PYMUX_PROFILE_PANES=16 nix build --file . checks.pymux-profile.run`.
   profilePanes = builtins.getEnv "PYMUX_PROFILE_PANES";
   profileFrames = builtins.getEnv "PYMUX_PROFILE_FRAMES";
+
+  # Which animating programs the busy check runs, for how long each,
+  # and the most of one core a background pane may take. One of them
+  # is
+  # `PYMUX_BUSY_PROGRAMS=cmatrix nix build --file . checks.pymux-busy.run`.
+  busyPrograms = builtins.getEnv "PYMUX_BUSY_PROGRAMS";
+  busySeconds = builtins.getEnv "PYMUX_BUSY_SECONDS";
+  busyCeiling = builtins.getEnv "PYMUX_BUSY_CEILING";
 
   # How much work the leak check does, and which recordings it feeds.
   # A leak shows at any volume, so the gate feeds a little: two rounds
@@ -364,6 +381,48 @@ in
       }
       ''
         python tests/what_leaks.py
+      '';
+
+  # What a pane that animates costs when nobody is looking at it.
+  #
+  # A window nobody looks at is not drawn, so its cost should be the
+  # parsing of its bytes and nothing else. cmatrix in a background
+  # window pegged a core and drew five frames in five seconds while it
+  # did, because `ptyhost` polled for an idle loop that never comes.
+  # Lillecarl/pymux#253.
+  #
+  # **The programs are real ones, and that is the point.** The first
+  # shape of this measured a writer in a `python -c` loop and saw 7%
+  # of a core either way, which would have called the bug fixed. What
+  # reproduces it is a program that writes a screenful at a steady
+  # rate, and something animating in the window that *is* watched.
+  # `tests/what_a_busy_pane_costs.py` says why both halves matter.
+  #
+  # It needs a pty: the programs run on one, and cmatrix reads
+  # terminfo.
+  #
+  # The unit is a fraction of one core, which is a second, which
+  # belongs to the machine that counted it. So the ceiling is loose on
+  # purpose -- the fault is eight-fold. It is not a budget to tune.
+  busy =
+    runInSandbox
+      {
+        name = "pymux-busy";
+        inputs = [
+          cmatrix
+          tty-clock
+          nyancat
+          pipes
+        ];
+        env = { inherit busyPrograms busySeconds busyCeiling; };
+        setup = ''
+          export PYMUX_BUSY_PROGRAMS="$busyPrograms"
+          export PYMUX_BUSY_SECONDS="$busySeconds"
+          export PYMUX_BUSY_CEILING="$busyCeiling"
+        '';
+      }
+      ''
+        python tests/what_a_busy_pane_costs.py
       '';
 
   # Where the time of a frame goes. Not a gate, and it judges nothing:
