@@ -199,6 +199,37 @@ async def test_off_opens_nothing():
         assert state.confirm_text is None
 
 
+@in_a_loop
+async def test_ask_asks_on_every_client_of_a_broadcast():
+    with over_a_connection() as session:
+        pymux = session.pymux
+        a, _ = await session.attach("a", A_SIZE)
+        b, _ = await session.attach("b", A_SIZE)
+        pymux.open_url_mode = "ask"
+        pymux.open_url_target = "broadcast"
+
+        pymux.handle_command("open-url %s" % URL)
+
+        for state in (a, b):
+            assert URL in state.confirm_text
+            assert state.confirm_command == "open-url -c %s" % URL
+
+
+@in_a_loop
+async def test_a_confirmed_command_opens_without_asking():
+    packets = []
+    with over_a_connection(read_a_packet=packets.append) as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", A_SIZE)
+        pymux.open_url_mode = "ask"
+
+        pymux.handle_command("open-url -c %s" % URL)
+        await once(lambda: opens(packets), 5.0, "the command never opened anything")
+
+        assert opens(packets) == [{"cmd": "open", "data": URL}]
+        assert state.confirm_text is None
+
+
 # ----------------------------------------------------------------------
 # What a pane asks for.
 
@@ -360,6 +391,37 @@ async def test_the_shim_rides_the_path_of_a_new_pane():
             assert os.environ["BROWSER"] == os.path.join(
                 pymux._open_url_shim_dir, "pymux-open-url"
             )
+
+
+@in_a_loop
+async def test_a_pane_that_starts_with_the_shim_finds_the_opener():
+    "The whole hook, from the option through the fork to the program."
+    with in_this_process() as session:
+        pymux = session.pymux
+        pymux.open_url_shim = True
+        state, _ = await session.attach("only", A_SIZE)
+
+        # The pane of this route starts narrow, and long output wraps
+        # over rows and gets cut before a client's size reaches it. So
+        # the pane prints one short line that is the whole verdict: is
+        # $BROWSER the opener of the shim directory, and is that
+        # directory the first thing on PATH?
+        program = (
+            "%s -c 'import os, time; p = os.environ[\"PATH\"].split(\":\")[0];"
+            " b = os.environ.get(\"BROWSER\");"
+            " print(\"M=\" + str(b == p + \"/pymux-open-url\")); time.sleep(30)'"
+        ) % (sys.executable,)
+        with set_app(state.app):
+            pymux.create_window(program)
+        pane = pymux.arrangement.get_active_window().panes[0]
+
+        page_text = lambda: pane.screen.page.text(0, 23)
+        await once(
+            lambda: "M=" in page_text(),
+            5.0,
+            "the pane never printed its environment",
+        )
+        assert "M=True" in page_text()
 
 
 @in_a_loop
