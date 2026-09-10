@@ -132,6 +132,17 @@ def pymux_key_to_prompt_toolkit_key_sequence(key):
         raise ValueError("Unknown key: %r" % (key,))
 
 
+#: What the Linux console sends for F1 to F5, and nothing else does.
+#:
+#: It is a real form and a terminal that sends it means F5, so reading
+#: it is right. Sending it is not: it is the first sequence
+#: `ANSI_SEQUENCES` lists for F5, so `send-keys F5` went out as
+#: "\x1b[[E", which only the Linux console makes. F1 to F4 have the SS3
+#: form ahead of it and F6 upwards have no such form at all, so F5 was
+#: the one key of the twelve that went out wrong.
+_THE_LINUX_CONSOLE_FORM = "\x1b[["
+
+
 def _keys_to_data() -> Dict[Keys, str]:
     """
     The bytes of each prompt_toolkit key, out of the table that reads
@@ -144,9 +155,14 @@ def _keys_to_data() -> Dict[Keys, str]:
     out as the modified form nobody pressed. A tuple is a key that
     arrives as two, such as escape and a letter, and it is not one key
     at all.
+
+    The Linux console forms are left out as well, for the reason above
+    them.
     """
     result: Dict[Keys, str] = {}
     for vt100_data, key in ANSI_SEQUENCES.items():
+        if vt100_data.startswith(_THE_LINUX_CONSOLE_FORM):
+            continue
         if not isinstance(key, tuple) and key not in result:
             result[key] = vt100_data
     return result

@@ -133,8 +133,26 @@ THE_KEYS = [
     ("IC", "\x1b[2~"),
     ("PageUp", "\x1b[5~"),
     ("PageDown", "\x1b[6~"),
+    # The whole function row. F1 to F4 have an SS3 form and F5 upwards
+    # do not, which is what a terminal sends and what the pane expects.
+    #
+    # **F5 went out as "\x1b[[E", which only the Linux console makes.**
+    # `ANSI_SEQUENCES` lists that form first for F5, and the inversion
+    # takes the first. F1 to F4 have the SS3 form ahead of it and F6
+    # upwards have no such form, so F5 was the one key of the twelve
+    # that was wrong, and only a walk over all of them says so.
     ("F1", "\x1bOP"),
     ("F2", "\x1bOQ"),
+    ("F3", "\x1bOR"),
+    ("F4", "\x1bOS"),
+    ("F5", "\x1b[15~"),
+    ("F6", "\x1b[17~"),
+    ("F7", "\x1b[18~"),
+    ("F8", "\x1b[19~"),
+    ("F9", "\x1b[20~"),
+    ("F10", "\x1b[21~"),
+    ("F11", "\x1b[23~"),
+    ("F12", "\x1b[24~"),
     ("C-Up", csi(escape.CUU, 1, 5)),
     ("C-Left", csi(escape.CUB, 1, 5)),
     ("S-Up", csi(escape.CUU, 1, 2)),
