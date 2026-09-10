@@ -46,6 +46,7 @@ from . import introspect
 from .key_bindings import PymuxKeyBindings
 from .key_spelling import why_a_pane_cannot_read
 from .layout import Justify, LayoutManager, the_pane_resizes
+from . import log
 from .log import logger
 from .notifications import NotificationRoutes
 from .options import ALL_OPTIONS, ALL_WINDOW_OPTIONS, ExtendedKeys
@@ -764,6 +765,23 @@ class Pymux:
         what it costs and why it is off.
         """
         self._allow_remote_debugging = introspect.let_a_debugger_attach(allowed)
+
+    @property
+    def log_level(self) -> str:
+        return log.the_level()
+
+    @log_level.setter
+    def log_level(self, name: str) -> None:
+        """
+        Held by the logger and not by this object, so it is a property.
+
+        A server can be told this while it runs, which is the only time
+        it helps: `--log-level` is read before the server starts, and by
+        then the thing worth logging has not happened yet.
+        Lillecarl/pymux#252.
+        """
+        log.set_the_level(name)
+        logger.info("The log level is %s from now on.", name)
 
     def the_server_starts(self) -> None:
         """

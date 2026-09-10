@@ -72,10 +72,16 @@ MODES_WITH_A_FIRST_PANE = ("standalone", "integrated")
 
 
 def _how_much_to_log(chosen: str | None) -> int:
-    "What `--log-level` asked for, or INFO. `pymux/log.py` says why INFO."
+    """
+    What `--log-level` asked for, or INFO. `pymux/log.py` says why INFO.
+
+    The names are `log.LEVELS`, which is also what `set-option
+    log-level` takes, so the flag and the option say the same words and
+    reach the same place.
+    """
     if not chosen:
         return logging.INFO
-    return getattr(logging, chosen.upper())
+    return log.LEVELS[chosen]
 
 
 def config_paths(environ=None) -> List[str]:
@@ -192,12 +198,13 @@ def _add_options(parser: argparse.ArgumentParser, suppress_defaults: bool) -> No
         "--log-level",
         dest="log_level",
         metavar="LEVEL",
-        choices=["debug", "info", "warning", "error"],
+        choices=sorted(log.LEVELS),
         default=default,
         help=(
             "How much to log. 'debug' adds a line for every frame the "
             "server draws, which is what a person debugging one wants "
-            "and nobody else does."
+            "and nobody else does. 'set-option log-level debug' says "
+            "the same to a server that is already running."
         ),
     )
     parser.add_argument(

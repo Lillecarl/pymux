@@ -35,6 +35,14 @@ the same finding with nothing written down at all.
 
 **The file has a size.** A person debugging wants the last few minutes,
 not the last four days.
+
+## And the level moves while the server runs
+
+`--log-level` is read once, before the server starts. That is the wrong
+time: the moment a person wants debug logging is when a server is
+already misbehaving, and a restart loses the thing they wanted to look
+at. `set-option log-level debug` reaches a running server, and
+`the_level` is what `show-options` reads back. Lillecarl/pymux#252.
 """
 
 import logging
@@ -42,7 +50,26 @@ import logging.handlers
 import os
 from pathlib import Path
 
-__all__ = ["logger", "configure", "default_logfile", "the_logfile"]
+__all__ = [
+    "logger",
+    "configure",
+    "default_logfile",
+    "the_logfile",
+    "the_level",
+    "set_the_level",
+    "LEVELS",
+]
+
+#: The levels a person may name, and what each one means to `logging`.
+#: Nothing below INFO and nothing above ERROR: a server that logs
+#: nothing at all cannot be debugged, and CRITICAL says nothing that
+#: ERROR does not.
+LEVELS = {
+    "debug": logging.DEBUG,
+    "info": logging.INFO,
+    "warning": logging.WARNING,
+    "error": logging.ERROR,
+}
 
 
 logger = logging.getLogger(__package__)
@@ -66,6 +93,25 @@ _logfile: Path | None = None
 def the_logfile() -> Path | None:
     "The file this process logs to, or `None` when nothing configured one."
     return _logfile
+
+
+def the_level() -> str:
+    """
+    The level this process logs at, by the name a person writes.
+
+    A level `logging` knows and `LEVELS` does not reads back as the
+    number, which is honest: something set it that this did not.
+    """
+    now = logger.getEffectiveLevel()
+    for name, level in LEVELS.items():
+        if level == now:
+            return name
+    return str(now)
+
+
+def set_the_level(name: str) -> None:
+    "Log at this level from now on. Raises `KeyError` for an unknown name."
+    logger.setLevel(LEVELS[name])
 
 
 def default_logfile() -> Path:

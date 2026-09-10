@@ -42,7 +42,7 @@ from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .log import logger, the_logfile
+from .log import logger, the_level, the_logfile
 
 if TYPE_CHECKING:
     from pymux.main import Pymux
@@ -389,7 +389,11 @@ def _the_server(pymux: "Pymux") -> str:
             ),
             "%d clients, %d windows, %d panes"
             % (len(pymux.apps), len(windows), len(panes)),
-            "log %s" % (the_logfile() or "nowhere",),
+            # And the level, because `set-option log-level debug`
+            # reaches a running server and pymux has no `show-options`
+            # to read it back with. A person who turned it up and
+            # forgot needs somewhere to find out. Lillecarl/pymux#252.
+            "log %s, at %s" % (the_logfile() or "nowhere", the_level()),
             "a debugger may attach: %s"
             % ("yes" if pymux.allow_remote_debugging else "no"),
         ]

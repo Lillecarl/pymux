@@ -9,6 +9,7 @@ from .enums import WindowSize, Woke
 from .key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS
 from .key_spelling import a_key_however_it_is_written
 from .layout import Justify
+from . import log
 from .style import THEMES
 from .utils import get_default_shell
 
@@ -303,6 +304,27 @@ class ThemeOption(Option):
         pymux.invalidate(Woke.A_THEME_WAS_CHOSEN)
 
 
+class LogLevelOption(Option):
+    """
+    How much this server writes to its log, from now on.
+
+    It reaches a server that is already running, which is the only time
+    it is any use: a person turns debug logging on because something is
+    already wrong, and a restart takes the thing they wanted to look at
+    with it. Lillecarl/pymux#252.
+    """
+
+    def get_all_values(self, pymux):
+        return sorted(log.LEVELS)
+
+    def set_value(self, pymux, value):
+        if value not in log.LEVELS:
+            raise SetOptionError(
+                "Expecting one of: %s." % ", ".join(sorted(log.LEVELS))
+            )
+        pymux.log_level = value
+
+
 class JustifyOption(Option):
     def __init__(self, attribute_name):
         self.attribute_name = attribute_name
@@ -325,6 +347,9 @@ ALL_OPTIONS = {
     # `pymux/introspect.py` says what answers most questions without it.
     "allow-remote-debugging": OnOffOption("allow_remote_debugging"),
     "base-index": BaseIndexOption(),
+    # How much this server writes to its log, changed while it runs.
+    # `--log-level` says the same thing before it starts.
+    "log-level": LogLevelOption(),
     "bell": OnOffOption("enable_bell"),
     "set-clipboard": OnOffOption("enable_clipboard"),
     "history-limit": PositiveIntOption(
