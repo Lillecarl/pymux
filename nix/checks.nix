@@ -179,6 +179,13 @@ let
   latencyPace = builtins.getEnv "PYMUX_LATENCY_PACE";
   latencyRoute = builtins.getEnv "PYMUX_ROUTE";
 
+  # How many keystrokes the turn count takes, how far apart, and how
+  # many of them name the callback of every turn.
+  # `PYMUX_TURNS_SAMPLES=1000 nix build --file . checks.pymux-turns.run`.
+  turnsSamples = builtins.getEnv "PYMUX_TURNS_SAMPLES";
+  turnsPace = builtins.getEnv "PYMUX_TURNS_PACE";
+  turnsTrace = builtins.getEnv "PYMUX_TURNS_TRACE";
+
   # Which item of vttest's main menu gets photographed, and in which
   # terminals, for instance
   # `PYMUX_VTTEST_INCLUDE='^9 ' nix build --file . checks.pymux-vttest-pictures.run`.
@@ -402,6 +409,33 @@ in
       }
       ''
         python tests/measure_a_keystroke.py
+      '';
+
+  # How many turns of the event loop one keystroke costs.
+  #
+  # The keystroke budgets count work and cannot see waiting; the latency
+  # numbers see the waiting and belong to the machine that read them. A
+  # turn of the loop is the number in between: it goes up when pymux
+  # hands control back, and the code decides it rather than the machine.
+  # `tests/count_the_turns.py` says where the two cuts are.
+  #
+  # It holds the shortest keystroke of the run and judges nothing else.
+  # The program in the pane is another process, so under load its answer
+  # can miss a poll and pay for a second redraw; that adds turns and
+  # never takes one away. Lillecarl/pymux#232.
+  turns =
+    runInSandbox
+      {
+        name = "pymux-turns";
+        env = { inherit turnsSamples turnsPace turnsTrace; };
+        setup = ''
+          export PYMUX_TURNS_SAMPLES="$turnsSamples"
+          export PYMUX_TURNS_PACE="$turnsPace"
+          export PYMUX_TURNS_TRACE="$turnsTrace"
+        '';
+      }
+      ''
+        python tests/count_the_turns.py
       '';
 
   # What pymux costs a keystroke, in milliseconds, against the same
