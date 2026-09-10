@@ -62,21 +62,12 @@ renderer ever wrote, and call it a leak.
 
 ## Two routes, because a client can arrive two ways
 
-**in-process**: `Pymux.add_client`, with no socket, no
-`ServerConnection` and no tasks. It covers the panes, the screens, the
-windows and the layout, which is where the objects and the bytes are.
-
-**connection**: a real `ServerConnection` over the queues of
-`pipes.memory`, which is the transport of `pymux integrated`. Its
-background tasks, its `_ClientInput` and the `ClientState` the server
-makes for it are all the real ones, and a detach is what a person
-walking away is -- the client end closes and the server tears its side
-down. This is the route where the one leak this repository has already
-had lived: `test_server_tasks.py` exists because a `ServerConnection`
-task was collected while still pending. Lillecarl/pymux#226.
-
-A round cannot tell them apart, so a leak that only one route has
-shows up as the same round passing on one and failing on the other.
+`a_session.py` builds both, and a round cannot tell them apart: a leak
+that only one route has shows up as the same round passing on one and
+failing on the other. The connection route is where the one leak this
+repository has already had lived -- `test_server_tasks.py` exists
+because a `ServerConnection` task was collected while still pending.
+Lillecarl/pymux#226.
 
 ## What it answers with
 
@@ -100,19 +91,13 @@ the first kept too, and a healthy type is zero on both.
 """
 
 import asyncio
-import contextvars
 import gc
-import io
-import json
 import os
 import sys
 import time
 import tracemalloc
-import weakref
 from collections import Counter
-from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Callable, Dict, NamedTuple
 
 sys.path.insert(0, str(Path(__file__).parent))
 # And pymux itself, which the sandbox copies beside `tests` rather than
@@ -120,18 +105,12 @@ sys.path.insert(0, str(Path(__file__).parent))
 # not the directory above it.
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
+from a_session import Session, the_routes  # noqa: E402
 from prompt_toolkit.application.current import set_app  # noqa: E402
 from prompt_toolkit.data_structures import Size  # noqa: E402
-from prompt_toolkit.input import create_pipe_input  # noqa: E402
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers  # noqa: E402
 from prompt_toolkit.layout.screen import Screen, WritePosition  # noqa: E402
-from prompt_toolkit.output import ColorDepth  # noqa: E402
-from prompt_toolkit.output.vt100 import Vt100_Output  # noqa: E402
 from what_holds_it import why_it_is_alive  # noqa: E402
-
-from pymux.main import Pymux  # noqa: E402
-from pymux.pipes.memory import connect_in_memory  # noqa: E402
-from pymux.server import ServerConnection  # noqa: E402
 
 #: How much a type may grow over one side before the check fails, as a
 #: number of objects.
@@ -199,39 +178,6 @@ NOT_A_LEAK = frozenset(["Char", "_Char"])
 WORST = 25
 
 
-class _Connection:
-    "What `Pymux` asks a connection for, and nothing else."
-
-    kitty_source_flags = 0
-    pointer_shape = None
-    graphics = None
-
-    def set_pointer_shape(self, shape):
-        pass
-
-    def _send_packet(self, packet):
-        pass
-
-
-class _Sink(io.TextIOBase):
-    """
-    Somewhere for a client's output to go.
-
-    A real client writes to a socket and forgets. An `io.StringIO`
-    would keep every byte the renderer ever wrote and read as the
-    largest leak in the run.
-    """
-
-    def write(self, data: str) -> int:
-        return len(data)
-
-    def flush(self) -> None:
-        pass
-
-    def isatty(self) -> bool:
-        return True
-
-
 def the_recordings() -> list[tuple[str, str]]:
     """
     Every recording, by name, as text.
@@ -265,254 +211,7 @@ def the_recordings() -> list[tuple[str, str]]:
     return found
 
 
-class Session(NamedTuple):
-    """
-    What a round drives: a server, a way in, a way out, and what it
-    made.
-
-    There are two of these, one per route, and a round cannot tell them
-    apart. `in_this_process` calls `Pymux.add_client` directly;
-    `over_a_connection` puts a real `ServerConnection` between the two
-    halves. Everything else a round does is the same either way, which
-    is the point: the difference between the routes is the transport
-    and nothing else. Lillecarl/pymux#226.
-    """
-
-    #: The server.
-    pymux: Any
-
-    #: `await attach(name, size)` -> the client state and its size.
-    attach: Callable
-
-    #: `await detach(state)`: what a person walking away does.
-    detach: Callable
-
-    #: `watch(name, obj)` -> obj, remembered by a weak reference.
-    watch: Callable
-
-    #: Every watched object, by name.
-    watched: Dict[str, "weakref.ref | None"]
-
-
-def _watcher(watched: dict) -> Callable:
-    "A `watch` that remembers into this dictionary."
-
-    def watch(name, obj):
-        try:
-            watched[name] = weakref.ref(obj)
-        except TypeError:
-            # Not every object takes a weak reference. One that does
-            # not cannot be watched, and saying so is better than
-            # pretending it passed.
-            watched[name] = None
-        return obj
-
-    return watch
-
-
-@contextmanager
-def in_this_process():
-    """
-    A session whose clients are attached with `Pymux.add_client`.
-
-    No socket, no `ServerConnection`, no tasks: this is the route that
-    a test takes and the one the server takes for nobody. It covers the
-    panes, the screens, the windows and the layout, which is where the
-    objects and the bytes are.
-    """
-    pymux = Pymux()
-    watched: dict[str, "weakref.ref | None"] = {}
-    watch = _watcher(watched)
-
-    with create_pipe_input() as pipe:
-
-        async def attach(name, size):
-            output = Vt100_Output(stdout=_Sink(), get_size=lambda: size)
-            state = pymux.add_client(
-                output=output,
-                input=pipe,
-                color_depth=ColorDepth.DEPTH_8_BIT,
-                connection=_Connection(),
-            )
-            watch("%s client" % name, state)
-            watch("%s application" % name, state.app)
-            watch("%s layout manager" % name, state.layout_manager)
-            return state, size
-
-        async def detach(state):
-            pymux.remove_client(state.connection)
-
-        try:
-            yield Session(pymux, attach, detach, watch, watched)
-        finally:
-            pymux.stop()
-
-
-async def _drain(end) -> None:
-    """
-    Read what the server writes to this client, and forget it.
-
-    A real client draws the packets it is sent. Nobody has to read them
-    here, but somebody has to take them off the queue: the queue of a
-    memory connection has no limit, so a client that never reads is a
-    growing list of every frame the server ever drew, and this check
-    would call it the largest leak in the run.
-    """
-    while True:
-        try:
-            await end.read()
-        except Exception:
-            return
-
-
-async def _once(question, seconds: float, complaint: str):
-    "Wait for something the loop has to do first, or say it never did."
-    deadline = time.monotonic() + seconds
-    while time.monotonic() < deadline:
-        answer = question()
-        if answer:
-            return answer
-        await asyncio.sleep(0.005)
-    raise SystemExit(complaint)
-
-
-@contextmanager
-def over_a_connection():
-    """
-    A session whose clients attach the way a real one does.
-
-    The transport is `pipes.memory`, which is what `pymux integrated`
-    uses: two queues rather than a unix socket. Everything else of the
-    socket route is the real thing -- the `ServerConnection`, its
-    background tasks, its `_ClientInput` and the `ClientState` the
-    server makes for it -- and none of an operating system's is, so
-    this runs in a build sandbox. Lillecarl/pymux#226.
-
-    Three things live here that the other route never makes, and each
-    one could keep a client alive after it detached:
-
-    - `ServerConnection._tasks`, the background coroutines. A task that
-      never finishes keeps its connection.
-    - `Pymux._client_states` and `Pymux.connections`, both keyed by or
-      holding the connection.
-    - The `_ClientInput` pipe input, whose parser holds callbacks back
-      into the connection.
-
-    A detach here is what a person walking away is: the client end
-    closes, the server's read of it ends, and the server tears its side
-    down. Nothing calls `remove_client` by hand.
-    """
-    pymux = Pymux()
-    watched: dict[str, "weakref.ref | None"] = {}
-    watch = _watcher(watched)
-
-    #: The client half of each attached client, by the id of its state:
-    #: the end of the connection it reads, and the task that drains it.
-    ends: dict = {}
-
-    async def attach(name, size):
-        server_end, client_end = connect_in_memory()
-
-        # A context of its own, which is what both real routes do:
-        # `connection_cb` for the socket and `run_integrated` for the
-        # queues. A `prompt_toolkit.Application` becomes active in it.
-        context = contextvars.copy_context()
-        connection = context.run(lambda: ServerConnection(pymux, server_end))
-
-        # The transport holds the connection, and the transport is
-        # this function. Both real routes do this line.
-        pymux.connections.append(connection)
-
-        watch("%s connection" % name, connection)
-        watch("%s connection input" % name, connection._pipeinput)
-
-        drain = asyncio.create_task(_drain(client_end))
-
-        # What `client/terminal.py` sends when it attaches, in the
-        # order it sends it.
-        client_end.write_nowait(
-            json.dumps({"cmd": "size", "data": [size.rows, size.columns]})
-        )
-        client_end.write_nowait(
-            json.dumps(
-                {
-                    "cmd": "start-gui",
-                    "detach-others": False,
-                    "color-depth": ColorDepth.DEPTH_8_BIT,
-                    "term": "xterm-256color",
-                    "colorterm": "",
-                    "data": "",
-                }
-            )
-        )
-
-        state = await _once(
-            lambda: connection.client_state,
-            5.0,
-            "the server never made a client for this connection",
-        )
-        ends[id(state)] = (client_end, drain)
-
-        watch("%s client" % name, state)
-        watch("%s application" % name, state.app)
-        watch("%s layout manager" % name, state.layout_manager)
-        return state, size
-
-    async def detach(state):
-        """
-        Close the client end, and wait for the server to finish.
-
-        The read loop of the connection wakes with a broken pipe, which
-        is what `detach_and_close` is for. Waiting for it is the same
-        rule `settle` holds for a pane: the freeing happens on the
-        loop, and a check that looked before it finished would call
-        every connection a leak.
-        """
-        connection = state.connection
-        client_end, drain = ends.pop(id(state))
-
-        client_end.close()
-        await _once(
-            lambda: connection._closed,
-            5.0,
-            "the connection never closed after its client went",
-        )
-
-        # **And then wait for the work it started.** `_close_connection`
-        # asks the application to exit and cancels the tasks of the
-        # connection, and both of those are requests: the application
-        # stops on a later turn of the loop, not on this one. Until it
-        # has, it is still the current application of its context, and
-        # it holds the layout, which holds every pane's widget. A check
-        # that looked here would report the whole session as a leak.
-        # Same rule as `settle`, one layer up.
-        await _once(
-            lambda: not connection._tasks,
-            5.0,
-            "the connection still had background work after it closed",
-        )
-
-        # Nothing puts an end marker on the queue this reads, so the
-        # drain is waiting on a queue that will never fill again.
-        drain.cancel()
-
-    try:
-        yield Session(pymux, attach, detach, watch, watched)
-    finally:
-        for client_end, drain in ends.values():
-            client_end.close()
-            drain.cancel()
-        ends.clear()
-        pymux.stop()
-
-
-#: The routes a round can attach over, by the name the knob takes.
-ROUTES = {
-    "in-process": in_this_process,
-    "connection": over_a_connection,
-}
-
-#: Which of them to run. Empty means all of them.
+#: Which route to run. Empty means all of them.
 ROUTE = os.environ.get("PYMUX_LEAKS_ROUTE", "")
 
 
@@ -743,8 +442,8 @@ async def run(rounds: int, recordings) -> list[str]:
     alive = []
 
     for _round in range(rounds):
-        for name, a_session in the_routes():
-            with a_session() as session:
+        for name, a_route in the_routes(ROUTE, "PYMUX_LEAKS_ROUTE"):
+            with a_route() as session:
                 if not await a_round(session, recordings):
                     alive.append(
                         "a pane never reported itself terminated, so this "
@@ -755,18 +454,6 @@ async def run(rounds: int, recordings) -> list[str]:
                 )
 
     return alive
-
-
-def the_routes() -> list[tuple[str, Callable]]:
-    "The routes this run covers, by name."
-    if not ROUTE:
-        return list(ROUTES.items())
-    if ROUTE not in ROUTES:
-        raise SystemExit(
-            "PYMUX_LEAKS_ROUTE is one of %s, not %r"
-            % (", ".join(sorted(ROUTES)), ROUTE)
-        )
-    return [(ROUTE, ROUTES[ROUTE])]
 
 
 async def main() -> int:
