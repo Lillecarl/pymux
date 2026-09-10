@@ -317,10 +317,13 @@ def _completion_parser() -> argparse.ArgumentParser:
     """
     from pymux.commands.commands import add_commands_to
 
+    # Help and version are options of the real parse, so a
+    # completion offers them; nothing is excluded. The commands
+    # under this declare their own flags, and `-h` of `split-window`
+    # is one of them.
     parser = argparse.ArgumentParser(
         prog="pymux",
         description="pymux: Pure Python terminal multiplexer.",
-        add_help=False,
         allow_abbrev=False,
     )
     _add_options(parser, suppress_defaults=False)
@@ -350,9 +353,7 @@ def _answer_a_completion() -> None:
     from pymux.commands.commands import _shlex_that_keeps_a_hash
 
     _shlex_that_keeps_a_hash()
-    argcomplete.autocomplete(
-        _completion_parser(), exclude=("-h", "--help", "-V", "--version")
-    )
+    argcomplete.autocomplete(_completion_parser())
 
 
 def run() -> None:

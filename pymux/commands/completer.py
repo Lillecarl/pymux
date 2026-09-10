@@ -12,6 +12,7 @@ are attached by dest name in `_VALUE_COMPLETERS` below. Everything
 else, the flags and their help lines, comes from the tree.
 """
 
+import argparse
 from functools import partial
 
 from prompt_toolkit.completion import Completer, Completion, WordCompleter
@@ -23,6 +24,11 @@ from pymux.key_spelling import KeyCompleter
 from .aliases import ALIASES
 from .commands import COMMANDS_TO_HANDLERS, COMMANDS_TO_PARSERS
 from .utils import wrap_argument
+
+#: The nargs of a positional that takes the rest of the line. The
+#: option of a command that `bind-key` runs lands in one, however much
+#: it looks like an option of `bind-key`.
+REMAINDER = argparse.REMAINDER
 
 __all__ = ["create_command_completer"]
 
@@ -62,12 +68,12 @@ class CommandCompleter(Completer):
         # The completion however, inserts the full name.
         if not found:
             for c in self._aliases_completer.get_completions(document, complete_event):
-                full_name = ALIASES.get(c.display)
+                full_name = ALIASES.get(c.text)
 
                 yield Completion(
                     full_name,
                     start_position=c.start_position,
-                    display="%s (%s)" % (c.display, full_name),
+                    display="%s (%s)" % (c.text, full_name),
                 )
 
 
@@ -123,16 +129,15 @@ def _flags_completer(parser, last_part):
         for option in action.option_strings:
             if option in choices or not option.startswith(last_part):
                 continue
-            if action.nargs != 0 and action.metavar:
-                choices[option] = "%s <%s>" % (
-                    option,
-                    str(action.metavar).strip("<>"),
-                )
+            if action.help:
+                choices[option] = action.help
+            elif action.nargs != 0 and action.metavar:
+                choices[option] = "<%s>" % (str(action.metavar).strip("<>"),)
             else:
-                choices[option] = (action.help or "").strip()
+                choices[option] = ""
     if not choices:
         return None
-    return WordCompleter(choices, WORD=True, sentence=True)
+    return WordCompleter(sorted(choices), meta_dict=choices, sentence=True)
 
 
 def _where_the_word_goes(parser, parts, last_part):
@@ -141,15 +146,12 @@ def _where_the_word_goes(parser, parts, last_part):
 
     Returns one of:
 
-    - `("flags", partial)` — it starts a flag.
+    - `("flags", partial)` — it starts a flag of this command.
     - `(action, slots)` — it completes the value of the option, or
       fills the positional; `slots` holds the words already in
       positional places.
     - `(None, slots)` — nothing to offer from the tree.
     """
-    if last_part.startswith("-"):
-        return ("flags", last_part)
-
     flags = {}
     for action in parser._actions:
         for option in action.option_strings:
@@ -174,14 +176,24 @@ def _where_the_word_goes(parser, parts, last_part):
         slots.append(word)
 
     if pending is not None:
+        # The value of an option, even when it starts with a dash:
+        # `capture-pane -S -5` is a line number, not a flag.
         return (pending, slots)
 
     if not positionals:
+        if last_part.startswith("-"):
+            return ("flags", last_part)
         return (None, slots)
 
     # One positional takes one word, and the last one takes the rest.
     index = min(len(slots), len(positionals) - 1)
-    return (positionals[index], slots)
+    landing = positionals[index]
+    # A dash starts a flag, unless what it would land in takes the
+    # rest of the line: the option of a command that `bind-key` runs
+    # starts with a dash, and it is not an option of `bind-key`.
+    if last_part.startswith("-") and landing.nargs != REMAINDER:
+        return ("flags", last_part)
+    return (landing, slots)
 
 
 def get_completions_for_parts(parts, last_part, complete_event, pymux):
