@@ -1306,7 +1306,7 @@ class DynamicBody(Container):
 
     def _build_layout(self) -> Container:
         "Rebuild a new Container object and return that."
-        logger.info("Rebuilding layout.")
+        logger.debug("Rebuilding layout.")
 
         if not self.pymux.arrangement.windows:
             # No Pymux windows in the arrangement.

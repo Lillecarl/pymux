@@ -8,6 +8,11 @@ writes to `sys.stderr`, which is that terminal. One exception in a
 background task then paints its traceback over the frame.
 
 Lillecarl/pymux#36.
+
+It also runs for weeks, so a log that grows is a log that fills a disk.
+One left running for four days reached 86 MB, because the level was
+DEBUG and a server writes a line for every frame it draws -- eleven a
+second on a session where the panes animate. Lillecarl/pymux#248.
 """
 
 import io
@@ -17,6 +22,7 @@ import sys
 import pytest
 
 from pymux import log
+from pymux.entry_points.run_pymux import _how_much_to_log
 
 
 @pytest.fixture(autouse=True)
@@ -147,3 +153,71 @@ def test_a_root_handler_does_not_take_the_messages(tmp_path, monkeypatch):
     finally:
         root.removeHandler(handler)
         handler.close()
+
+
+# ----------------------------------------------------------------------
+# How loud it is, and how big it gets.
+
+
+def test_a_server_nobody_asked_to_debug_logs_at_info(tmp_path):
+    "DEBUG writes a line for every frame, and a server draws eleven a second."
+    log.configure(str(tmp_path / "server.log"))
+
+    assert log.logger.level == logging.INFO
+
+
+def test_the_file_has_an_end(tmp_path):
+    log.configure(str(tmp_path / "server.log"))
+
+    handler = log.logger.handlers[-1]
+    assert isinstance(handler, logging.handlers.RotatingFileHandler)
+    assert handler.maxBytes == log.HOW_BIG
+    assert handler.backupCount == log.HOW_MANY
+
+
+def test_it_starts_again_rather_than_growing(tmp_path, monkeypatch):
+    "The rotation is real, and not only configured."
+    monkeypatch.setattr(log, "HOW_BIG", 2000)
+    monkeypatch.setattr(log, "HOW_MANY", 2)
+    log.configure(str(tmp_path / "server.log"), logging.DEBUG)
+
+    for number in range(400):
+        log.logger.debug("a line that is long enough to fill this up: %d", number)
+
+    written = sorted(path.name for path in tmp_path.iterdir())
+    assert written == ["server.log", "server.log.1", "server.log.2"]
+    for name in written:
+        assert (tmp_path / name).stat().st_size < 4000
+
+
+def test_the_log_says_where_it_went(tmp_path):
+    "`pymux/introspect.py` writes its dumps beside it, so it has to be found."
+    path = log.configure(str(tmp_path / "server.log"))
+
+    assert log.the_logfile() == path
+
+
+def test_a_level_nobody_named_is_info():
+    assert _how_much_to_log(None) == logging.INFO
+    assert _how_much_to_log("") == logging.INFO
+
+
+def test_a_person_debugging_asks_for_it():
+    assert _how_much_to_log("debug") == logging.DEBUG
+    assert _how_much_to_log("warning") == logging.WARNING
+
+
+def test_a_frame_is_not_logged_at_info():
+    """
+    The lines are good ones -- `Woke` exists so that a frame drawn for
+    no reason can be traced to what asked for it (Lillecarl/pymux#180).
+    They are just not what a person wants by default, and `pymux
+    counters` gives the same finding with nothing written down.
+    """
+    import inspect
+
+    from pymux.main import Pymux
+
+    said = inspect.getsource(Pymux.invalidate)
+    assert "logger.debug(" in said
+    assert "logger.info(" not in said

@@ -90,7 +90,7 @@ def handle_command(pymux: "Pymux", input_string: str) -> None:
     unquoted semicolon. E.g. `send-keys -t %5 -R ; clear-history -t %5`.
     """
     input_string = input_string.strip()
-    logger.info("handle command: %s %s.", input_string, type(input_string))
+    logger.debug("handle command: %s", input_string)
 
     if input_string and not input_string.startswith("#"):  # Ignore comments.
         try:

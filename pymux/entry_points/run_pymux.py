@@ -71,6 +71,13 @@ MODES = (
 MODES_WITH_A_FIRST_PANE = ("standalone", "integrated")
 
 
+def _how_much_to_log(chosen: str | None) -> int:
+    "What `--log-level` asked for, or INFO. `pymux/log.py` says why INFO."
+    if not chosen:
+        return logging.INFO
+    return getattr(logging, chosen.upper())
+
+
 def config_paths(environ=None) -> List[str]:
     """
     Where pymux looks for a configuration file, best first.
@@ -180,6 +187,18 @@ def _add_options(parser: argparse.ArgumentParser, suppress_defaults: bool) -> No
         metavar="FILE",
         default=default,
         help="Logfile.",
+    )
+    parser.add_argument(
+        "--log-level",
+        dest="log_level",
+        metavar="LEVEL",
+        choices=["debug", "info", "warning", "error"],
+        default=default,
+        help=(
+            "How much to log. 'debug' adds a line for every frame the "
+            "server draws, which is what a person debugging one wants "
+            "and nobody else does."
+        ),
     )
     parser.add_argument(
         "--truecolor",
@@ -326,7 +345,7 @@ def run() -> None:
     #
     # `start-server` sets this up for itself below, after it has forked.
     if mode != "start-server":
-        log.configure(a.logfile)
+        log.configure(a.logfile, _how_much_to_log(a.log_level))
 
     if a.show_tmux_version:
         # Like `tmux -V`. Tools like libtmux parse this to know which tmux
@@ -387,10 +406,11 @@ def run() -> None:
         # A daemon has no terminal to spoil, so its log may go to
         # stdout. `daemonize` sends that to /dev/null, and a person who
         # wants to read it runs the server in the foreground.
+        wanted = _how_much_to_log(a.log_level)
         if a.logfile:
-            log.configure(a.logfile)
+            log.configure(a.logfile, wanted)
         else:
-            logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+            logging.basicConfig(stream=sys.stdout, level=wanted)
 
         # Create 'Pymux'. (Do this after the logging setup, so that crashes
         # in Pymux() can be logged.)

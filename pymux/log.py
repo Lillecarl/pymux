@@ -15,9 +15,30 @@ server to `/dev/null`.
 Python writes to `sys.stderr` whenever a record reaches a logger with no
 handler. So the answer is to give the logger a handler, always, and
 `configure` is what does it.
+
+## A file with an end, and a level that is not DEBUG
+
+A server runs for weeks, so a log that grows is a log that fills a disk.
+One left running for four days reached **86 MB**, because the level was
+DEBUG and a server writes a line for every frame it draws: eleven lines
+a second with nobody typing, on a session where the panes animate.
+Lillecarl/pymux#248.
+
+Two things follow, and neither of them is "log less".
+
+**The per-frame lines are DEBUG**, and a server that nobody asked to
+debug is at INFO. The lines themselves are good ones -- `Woke` exists so
+that a frame drawn for no reason can be traced to what asked for it
+(Lillecarl/pymux#180), and it is what made a live server readable. They
+are just not what a person wants by default, and `pymux counters` gives
+the same finding with nothing written down at all.
+
+**The file has a size.** A person debugging wants the last few minutes,
+not the last four days.
 """
 
 import logging
+import logging.handlers
 import os
 from pathlib import Path
 
@@ -25,6 +46,16 @@ __all__ = ["logger", "configure", "default_logfile", "the_logfile"]
 
 
 logger = logging.getLogger(__package__)
+
+#: How large the log may get before it starts again, and how many of the
+#: old ones to keep.
+#:
+#: At DEBUG a busy server writes about a kilobyte a second, so this is
+#: something like a day of it -- long enough for a fault that happens
+#: overnight, and bounded, which is the whole point. At INFO a server
+#: writes a line when something happens, and never reaches it.
+HOW_BIG = 8 * 1024 * 1024
+HOW_MANY = 3
 
 #: The file this process logs to, once `configure` has chosen one.
 #: `introspect` writes its dumps into the same directory, because a
@@ -50,7 +81,7 @@ def default_logfile() -> Path:
     return Path(os.path.expanduser(state)) / "pymux" / "server.log"
 
 
-def configure(logfile: str | None = None, level: int = logging.DEBUG) -> Path | None:
+def configure(logfile: str | None = None, level: int = logging.INFO) -> Path | None:
     """
     Send the log of pymux somewhere that is not the terminal.
 
@@ -58,6 +89,10 @@ def configure(logfile: str | None = None, level: int = logging.DEBUG) -> Path | 
     `default_logfile`, and the file is opened on the first message: a run
     that logs nothing leaves nothing behind, and a run that logs
     something leaves it where a person can read it.
+
+    `level` is INFO and not DEBUG, and the file starts again when it
+    reaches `HOW_BIG`. The module docstring says what a server left
+    running for four days cost without either.
 
     Returns the file that the log goes to, or `None` when no file could
     be opened. A log that cannot be written is dropped and never falls
@@ -69,7 +104,9 @@ def configure(logfile: str | None = None, level: int = logging.DEBUG) -> Path | 
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         # `delay` opens the file when the first record arrives.
-        handler = logging.FileHandler(path, delay=True)
+        handler = logging.handlers.RotatingFileHandler(
+            path, maxBytes=HOW_BIG, backupCount=HOW_MANY, delay=True
+        )
         handler.setFormatter(
             logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
         )

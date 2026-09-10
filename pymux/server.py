@@ -216,7 +216,7 @@ class ServerConnection:
             return
         # Named here and not through `Pymux.invalidate`, because this
         # wakes the one client that asked and not all of them.
-        logger.info("Drawing 1 of the clients: it asked for a full repaint")
+        logger.debug("Drawing 1 of the clients: it asked for a full repaint")
         app.invalidate()
 
     def _handle_kitty_reply(self, data: str) -> None:

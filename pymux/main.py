@@ -701,7 +701,7 @@ class Pymux:
                 # Named here and not through `invalidate`, because this
                 # wakes the one client whose text moved and not all of
                 # them. `Woke` says why the log carries the reason.
-                logger.info(
+                logger.debug(
                     "Drawing 1 of the clients: the text that time moves changed to %r",
                     text,
                 )
@@ -1127,7 +1127,11 @@ class Pymux:
         here, and holds every reason but the one that carries a name.
         """
         self.counters.invalidated(reason)
-        logger.info("Drawing %s of the clients: %s", len(self.apps), reason)
+        # DEBUG: a server draws eleven frames a second when a pane
+        # animates, and a line each is what made one log 86 MB in four
+        # days. `pymux counters` holds the same reasons with nothing
+        # written down. Lillecarl/pymux#248.
+        logger.debug("Drawing %s of the clients: %s", len(self.apps), reason)
 
         # Whatever changed may have changed where the panes are, so no
         # client may answer that from the frame it drew before this.
@@ -1675,7 +1679,8 @@ class Pymux:
         #        if '.' in self.socket_name:
         #            self.session_name = self.socket_name.rpartition('.')[-1]
 
-        logger.info("Listening on %r." % self.socket_name)
+        # `bind_and_listen_on_socket` already said it. Two lines were
+        # half the log of a server that started well.
         return self.socket_name
 
     def run_server(self):
