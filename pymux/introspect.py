@@ -38,6 +38,7 @@ import sys
 import threading
 import time
 import traceback
+from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -47,6 +48,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 __all__ = [
+    "Counters",
     "a_dump",
     "answer_a_signal",
     "the_stacks_file",
@@ -57,6 +59,46 @@ __all__ = [
 #: process. A signal handler cannot open a file: it runs between two
 #: bytecodes, or inside a C call, and it may not allocate.
 _stacks_file = None
+
+
+class Counters:
+    """
+    What this server has done since it started.
+
+    **The cheap half of a diagnosis, and the half a stack cannot give.**
+    A stack says where the server is in one instant. These say what it
+    has been doing for an hour: "eleven frames a second, and every one
+    of them because an application asked" is a whole finding, and it
+    names the fault before anybody reads a line of Python.
+
+    It was read out of the log the first time, which cost an 86 MB file
+    (Lillecarl/pymux#248). These are the same numbers with nothing
+    written down.
+
+    Two counts and no more, because each one has to be free. A server
+    pays for them on every frame.
+    """
+
+    def __init__(self) -> None:
+        self.started = time.time()
+
+        #: How many times each `Woke` reason asked for a frame. The
+        #: reason is the whole value of this: a count of invalidates
+        #: says a server is busy, and the reasons say what is doing it.
+        self.invalidates: "Counter[str]" = Counter()
+
+        #: Frames that reached a client, and how many characters they
+        #: were. A frame that went out is one a client had to draw, so
+        #: this is the work of the whole route and not only of here.
+        self.frames = 0
+        self.frame_bytes = 0
+
+    def invalidated(self, reason: str) -> None:
+        self.invalidates[reason] += 1
+
+    def a_frame_went_out(self, characters: int) -> None:
+        self.frames += 1
+        self.frame_bytes += characters
 
 
 def where_a_dump_goes() -> Path:
@@ -105,6 +147,65 @@ def answer_a_signal() -> Path | None:
     return path
 
 
+#: `prctl` numbers, from `linux/prctl.h`. ctypes has no header to read.
+_PR_SET_PTRACER = 0x59616D61
+_PR_SET_PTRACER_ANY = -1
+
+
+def let_a_debugger_attach(allowed: bool) -> bool:
+    """
+    Say whether another process of this user may attach to this server,
+    and answer with what the kernel took.
+
+    Python 3.14 can attach a debugger to a running process: `python -m
+    pdb -p <pid>`, and `sys.remote_exec` under it (PEP 768). py-spy
+    reads a process the same way. Both need `ptrace` of the target, and
+    a machine with `kernel.yama.ptrace_scope` at 1 gives that only to an
+    ancestor. `PR_SET_PTRACER` is how a process says otherwise.
+
+    **Off unless a person asks, because it is not a small permission.**
+    `PR_SET_PTRACER_ANY` lets any process running as this user read this
+    one's memory and write to it, and a pymux server holds the
+    scrollback of every pane. `pymux dump-stacks` and `SIGUSR1` need
+    none of that, and they answer most questions.
+
+    False on a kernel with no `prctl` and on anything that is not Linux,
+    which is the honest answer rather than a failure: the server keeps
+    running, and nothing can attach.
+    """
+    # Here, not at the top: a server that nobody debugs should not load
+    # ctypes at all.
+    import ctypes
+
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        took = libc.prctl(
+            _PR_SET_PTRACER,
+            ctypes.c_ulong(_PR_SET_PTRACER_ANY if allowed else 0),
+            0,
+            0,
+            0,
+        )
+    except (AttributeError, OSError, TypeError):
+        logger.info("This system has no prctl, so nothing can attach to it.")
+        return False
+
+    if took != 0:
+        logger.warning("The kernel refused PR_SET_PTRACER: %d", ctypes.get_errno())
+        return False
+
+    if allowed:
+        logger.warning(
+            "Any process of this user may now attach to this server: "
+            "`python -m pdb -p %d`. It can read every pane's scrollback.",
+            os.getpid(),
+        )
+    else:
+        logger.info("Nothing outside this server may attach to it.")
+
+    return allowed
+
+
 def a_dump(pymux: "Pymux") -> Path:
     """
     Write down what this server is doing now, and answer with the file.
@@ -119,11 +220,116 @@ def a_dump(pymux: "Pymux") -> Path:
     return path
 
 
+#: How long `pymux profile` watches, in seconds, when nobody says.
+#:
+#: Long enough to hold a few hundred samples at a millisecond, short
+#: enough that a person waits for it rather than forgetting it is on.
+HOW_LONG_TO_WATCH = 5.0
+
+#: How often the profiler takes the stack, in seconds. The same
+#: interval `tests/profile_a_frame.py` uses.
+HOW_OFTEN_TO_LOOK = 0.001
+
+
+def start_watching(pymux: "Pymux", seconds: float = HOW_LONG_TO_WATCH) -> Path:
+    """
+    Watch this server for a few seconds, and answer with the file it
+    will land in.
+
+    **It returns at once and the server keeps running.** A profile of a
+    server has to be taken while the server serves; stopping it to look
+    at it would measure a different program. The loop is asked to stop
+    the profiler later, so this call costs the client nothing.
+
+    **`async_mode="disabled"`, which is the one that sees everything.**
+    pyinstrument's default attributes the time of an `await` to the
+    function that awaited, and it can only do that for the async context
+    it started in. This starts inside the task that is running the
+    command, and that task ends immediately -- so the default would
+    report the whole server as `<out-of-context>`. Disabled interleaves
+    every coroutine and the loop's own machinery, which is exactly what
+    "where does this server's time go" asks for.
+
+    The tasks are written beside it, taken at the end. Between them they
+    are the whole async picture: the profile says which code burned the
+    processor, and the tasks say what everything else was waiting for.
+    """
+    # Here, not at the top of the file: a server that never profiles
+    # anything should not pay to import this.
+    from pyinstrument import Profiler
+
+    where = where_a_dump_goes()
+    where.mkdir(parents=True, exist_ok=True)
+    stem = "profile-%d-%s" % (os.getpid(), _now())
+    written = where / ("%s.txt" % (stem,))
+
+    counters = pymux.counters
+    before = (counters.frames, counters.frame_bytes, Counter(counters.invalidates))
+
+    profiler = Profiler(interval=HOW_OFTEN_TO_LOOK, async_mode="disabled")
+    profiler.start()
+
+    def stop() -> None:
+        profiler.stop()
+        try:
+            written.write_text(
+                "\n".join(
+                    [
+                        _the_server(pymux),
+                        "",
+                        _over_the_window(counters, before, seconds),
+                        "",
+                        profiler.output_text(unicode=True, color=False, show_all=False),
+                        "",
+                        _the_tasks(pymux),
+                        "",
+                    ]
+                )
+            )
+            (where / ("%s.html" % (stem,))).write_text(profiler.output_html())
+        except Exception:
+            logger.exception("Could not write the profile of this server.")
+            return
+
+        logger.info("Watched this server for %.1fs, and wrote %s", seconds, written)
+
+    pymux.loop.call_later(seconds, stop)
+    return written
+
+
+def _over_the_window(counters: "Counters", before, seconds: float) -> str:
+    "What the server did while the profiler watched, and nothing before."
+    frames, frame_bytes, invalidates = before
+    moved = Counter(counters.invalidates)
+    moved.subtract(invalidates)
+
+    lines = [
+        "--- what it did over these %.1f seconds ---" % (seconds,),
+        "",
+        "%-46s %10s %9s" % ("", "total", "per second"),
+        "%-46s %10d %9.2f"
+        % (
+            "frames out",
+            counters.frames - frames,
+            (counters.frames - frames) / seconds,
+        ),
+        "",
+        "%-46s %10s %9s" % ("what asked for a frame", "total", "per second"),
+    ]
+    for reason, times in moved.most_common():
+        if times > 0:
+            lines.append("%-46s %10d %9.2f" % (reason[:46], times, times / seconds))
+
+    return "\n".join(lines)
+
+
 def what_it_is_doing(pymux: "Pymux") -> str:
     "The whole answer, as text."
     return "\n".join(
         [
             _the_server(pymux),
+            "",
+            the_counters(pymux),
             "",
             _the_threads(),
             "",
@@ -131,6 +337,37 @@ def what_it_is_doing(pymux: "Pymux") -> str:
             "",
         ]
     )
+
+
+def the_counters(pymux: "Pymux") -> str:
+    """
+    What this server has done, and how often.
+
+    A rate and not only a total: a server that has been up for four days
+    has large totals whatever it is doing, and the question is always
+    what it is doing **now** compared to what it should be.
+    """
+    counters = pymux.counters
+    seconds = max(1e-9, time.time() - counters.started)
+
+    lines = [
+        "--- what it has done, over %s ---" % (_for_how_long(seconds),),
+        "",
+        "%-46s %10s %9s" % ("", "total", "per second"),
+        "%-46s %10d %9.2f" % ("frames out", counters.frames, counters.frames / seconds),
+        "%-46s %10d %9.0f"
+        % ("characters in them", counters.frame_bytes, counters.frame_bytes / seconds),
+        "",
+        "%-46s %10s %9s" % ("what asked for a frame", "total", "per second"),
+    ]
+
+    for reason, times in counters.invalidates.most_common():
+        lines.append("%-46s %10d %9.2f" % (reason[:46], times, times / seconds))
+
+    if not counters.invalidates:
+        lines.append("nothing has.")
+
+    return "\n".join(lines)
 
 
 def _now() -> str:
@@ -153,6 +390,8 @@ def _the_server(pymux: "Pymux") -> str:
             "%d clients, %d windows, %d panes"
             % (len(pymux.apps), len(windows), len(panes)),
             "log %s" % (the_logfile() or "nowhere",),
+            "a debugger may attach: %s"
+            % ("yes" if pymux.allow_remote_debugging else "no"),
         ]
     )
 

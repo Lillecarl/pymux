@@ -26,6 +26,10 @@ setup(
         # 'docopt'.) It is used for parsing the options of the internal
         # pymux commands, e.g. 'split-window'.
         "docopt-ng>=0.9.0",
+        # `pymux profile` asks a running server where its time went.
+        # A person wants that on the server they already have, not on
+        # one they built with extras.
+        "pyinstrument>=4.0.0",
     ],
     entry_points={
         "console_scripts": [

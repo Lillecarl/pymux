@@ -529,7 +529,7 @@ class ServerConnection:
             after the command handler ran.)
         """
         output = Vt100_Output(
-            cast(TextIO, _SocketStdout(self._send_packet)),
+            cast(TextIO, _SocketStdout(self._send_packet, self.pymux.counters)),
             lambda: self.size,
             term=term,
         )
@@ -625,8 +625,9 @@ class _SocketStdout:
     client.
     """
 
-    def __init__(self, send_packet: Callable) -> None:
+    def __init__(self, send_packet: Callable, counters=None) -> None:
         self.send_packet = send_packet
+        self.counters = counters
         self._buffer: List[str] = []
 
     def write(self, data: str) -> int:
@@ -634,8 +635,15 @@ class _SocketStdout:
         return len(data)
 
     def flush(self) -> None:
-        data = {"cmd": "out", "data": "".join(self._buffer)}
-        self.send_packet(data)
+        # One flush is one frame: the renderer writes a whole frame and
+        # then flushes it. So this is where a server can count what it
+        # actually sent, which the invalidates cannot say -- several of
+        # those become one frame.
+        written = "".join(self._buffer)
+        if self.counters is not None:
+            self.counters.a_frame_went_out(len(written))
+
+        self.send_packet({"cmd": "out", "data": written})
         self._buffer = []
 
     def isatty(self) -> bool:

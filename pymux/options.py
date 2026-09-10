@@ -318,6 +318,12 @@ class JustifyOption(Option):
 
 
 ALL_OPTIONS = {
+    # Whether another process of this user may attach a debugger to this
+    # server: `python -m pdb -p <pid>`, or py-spy. Off, and it stays off
+    # unless a person asks: it lets anything they run read this server's
+    # memory, and a server holds every pane's scrollback.
+    # `pymux/introspect.py` says what answers most questions without it.
+    "allow-remote-debugging": OnOffOption("allow_remote_debugging"),
     "base-index": BaseIndexOption(),
     "bell": OnOffOption("enable_bell"),
     "set-clipboard": OnOffOption("enable_clipboard"),

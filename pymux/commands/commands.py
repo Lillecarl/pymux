@@ -1506,6 +1506,50 @@ def dump_stacks(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.show_message("Wrote a dump to %s" % (path,))
 
 
+@cmd("counters")
+def counters(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Say what this server has done, and how often.
+
+    The half a stack cannot give: a stack says where the server is in
+    one instant, and this says what it has been doing for an hour.
+    """
+    said = introspect.the_counters(pymux)
+    pymux.print_command_line(said)
+    pymux.get_client_state().layout_manager.display_popup("counters", said)
+
+
+@cmd("profile", options="[<seconds>]")
+def profile(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Watch this server for a few seconds, and write down where its time
+    went.
+
+    **Where the time of an await goes, and not only of a call.**
+    pyinstrument attributes the time of a coroutine that is waiting to
+    the frame that awaits, so a server that spends its life in
+    `epoll_wait` still says which work the waiting was for.
+    """
+    try:
+        seconds = float(variables["<seconds>"] or introspect.HOW_LONG_TO_WATCH)
+    except ValueError:
+        raise CommandException(
+            "Not a number of seconds: %r" % (variables["<seconds>"],)
+        )
+
+    try:
+        path = introspect.start_watching(pymux, seconds)
+    except ImportError:
+        raise CommandException(
+            "pyinstrument is not installed, so this server cannot profile itself."
+        )
+
+    pymux.print_command_line(str(path))
+    pymux.show_message(
+        "Watching for %.1f seconds. It lands in %s" % (seconds, path.name)
+    )
+
+
 @cmd(
     "display-popup",
     options="[-E] [(-w <width>)] [(-h <height>)] [(-T <title>)] [<executable>]",

@@ -616,6 +616,16 @@ class Pymux:
         # Time when this server was started.
         self.created = time.time()
 
+        #: What this server has done since it started. `pymux counters`
+        #: reads it, and `pymux/introspect.py` says why the reasons
+        #: matter more than the totals.
+        self.counters = introspect.Counters()
+
+        #: Whether another process of this user may attach a debugger.
+        #: Set through `set-option allow-remote-debugging`, and the
+        #: property below is what tells the kernel.
+        self._allow_remote_debugging = False
+
         if session_name is not None:
             self.session_name = session_name
 
@@ -696,6 +706,19 @@ class Pymux:
                     text,
                 )
                 client_state.app.invalidate()
+
+    @property
+    def allow_remote_debugging(self) -> bool:
+        return self._allow_remote_debugging
+
+    @allow_remote_debugging.setter
+    def allow_remote_debugging(self, allowed: bool) -> None:
+        """
+        A setting the kernel has to be told about, so it is a property
+        and not an attribute. `introspect.let_a_debugger_attach` says
+        what it costs and why it is off.
+        """
+        self._allow_remote_debugging = introspect.let_a_debugger_attach(allowed)
 
     def the_server_starts(self) -> None:
         """
@@ -1103,6 +1126,7 @@ class Pymux:
         Ask every client for a frame. `Woke` says why the reason is
         here, and holds every reason but the one that carries a name.
         """
+        self.counters.invalidated(reason)
         logger.info("Drawing %s of the clients: %s", len(self.apps), reason)
 
         # Whatever changed may have changed where the panes are, so no

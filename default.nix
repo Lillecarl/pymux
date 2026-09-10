@@ -21,6 +21,7 @@
   prompt-toolkit,
   ptterm,
   docopt-ng,
+  pyinstrument,
   callPackage,
   mesa,
 }:
@@ -34,10 +35,15 @@ let
 
     disabled = pythonOlder "3.11";
 
+    # pyinstrument is here and not only in the checks, because `pymux
+    # profile` asks a running server where its time goes and a person
+    # only wants that on the server they already have.
+    # Lillecarl/pymux#249.
     propagatedBuildInputs = [
       prompt-toolkit
       ptterm
       docopt-ng
+      pyinstrument
     ];
 
     # The suites run as `checks.unit`, `checks.pty` and the rest, against the source.
