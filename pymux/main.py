@@ -1203,6 +1203,12 @@ class Pymux:
         for client_state in self._client_states.values():
             client_state.layout_manager.forget_the_plan()
 
+        # **Before the invalidates, and here rather than on the path a
+        # pane's write takes.** A window switch and a `set-option`
+        # both come through here, and they are the only two things
+        # that change the answer. A pane that writes does not.
+        self.sync_the_frame_rate()
+
         for app in self.apps:
             app.invalidate()
 
@@ -1213,6 +1219,30 @@ class Pymux:
         self.sync_pointer_shape()
         # "set-option synthesize-key-events" takes effect here.
         self.sync_keyboard_source_flags()
+
+    def sync_the_frame_rate(self) -> None:
+        """
+        Cap each client at the frame rate of the window it looks at.
+
+        `Application.min_redraw_interval` is prompt_toolkit's own knob
+        and it is the right one: a redraw that arrives too soon is not
+        dropped, it is held until the interval is up and then drawn. So
+        a cap loses no frame, it only refuses to draw the same thing
+        twice in a thirtieth of a second.
+
+        Never raises: this runs on the invalidate path, also for
+        headless servers without a running prompt_toolkit application.
+        """
+        for client_state in self._client_states.values():
+            try:
+                with set_app(client_state.app):
+                    window = self.arrangement.get_active_window()
+            except Exception:
+                # No window yet, or no application that ever ran.
+                continue
+
+            rate = getattr(window, "frame_rate", 0)
+            client_state.app.min_redraw_interval = (1.0 / rate) if rate else None
 
     def get_focused_pane(self):
         """

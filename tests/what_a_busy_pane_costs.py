@@ -84,6 +84,10 @@ HOW_LONG = float(os.environ.get("PYMUX_BUSY_SECONDS") or 5.0)
 #: below the other, which is what a gate on a wall clock should be.
 CEILING = float(os.environ.get("PYMUX_BUSY_CEILING") or 0.5)
 
+#: The caps to compare, for a pane somebody is looking at. `0` is no
+#: cap, which is what pymux did before `frame-rate` existed.
+WHICH_CAPS = [int(one) for one in (os.environ.get("PYMUX_BUSY_CAPS") or "0 30").split()]
+
 
 def the_programs() -> list:
     "The programs this run covers, by name."
@@ -143,6 +147,49 @@ async def what_it_costs(name: str) -> tuple:
         return cost, pymux.counters.frames - frames
 
 
+async def what_it_costs_watched(name: str, rate: int) -> tuple:
+    """
+    Run this program in the window the client *does* look at, capped at
+    `rate` frames a second, and measure.
+
+    This is where `frame-rate` bites. The table above is the other
+    case, where the window is not drawn at all and the cap has nothing
+    to refuse.
+    """
+    command = " ".join(THE_PROGRAMS[name])
+
+    with over_a_connection() as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", A_SIZE)
+
+        with set_app(state.app):
+            pymux.create_window(command)
+            pymux.handle_command("set-window-option frame-rate %d" % rate)
+        await asyncio.sleep(1.5)
+
+        before = time.process_time()
+        frames = pymux.counters.frames
+        await asyncio.sleep(HOW_LONG)
+
+        cost = (time.process_time() - before) / HOW_LONG
+        return cost, (pymux.counters.frames - frames) / HOW_LONG
+
+
+async def the_cap() -> None:
+    "What the cap buys for a pane somebody is looking at."
+    print()
+    print("--- what a pane somebody looks at costs, by frame-rate ---")
+    print()
+    print("%-12s %8s %14s %12s" % ("program", "cap", "of one core", "frames/s"))
+
+    for name in the_programs():
+        if shutil.which(THE_PROGRAMS[name][0]) is None:
+            continue
+        for rate in WHICH_CAPS:
+            cost, fps = await what_it_costs_watched(name, rate)
+            print("%-12s %8s %13.0f%% %12.1f" % (name, rate or "none", 100 * cost, fps))
+
+
 async def main() -> None:
     print("--- what a pane nobody looks at costs ---")
     print()
@@ -169,6 +216,8 @@ async def main() -> None:
         raise SystemExit(1)
 
     print("Every one of them stayed under %.0f%% of a core." % (100 * CEILING,))
+
+    await the_cap()
 
 
 asyncio.run(main())

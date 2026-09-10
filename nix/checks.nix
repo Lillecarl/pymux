@@ -169,6 +169,7 @@ let
   busyPrograms = builtins.getEnv "PYMUX_BUSY_PROGRAMS";
   busySeconds = builtins.getEnv "PYMUX_BUSY_SECONDS";
   busyCeiling = builtins.getEnv "PYMUX_BUSY_CEILING";
+  busyCaps = builtins.getEnv "PYMUX_BUSY_CAPS";
 
   # How much work the leak check does, and which recordings it feeds.
   # A leak shows at any volume, so the gate feeds a little: two rounds
@@ -414,11 +415,19 @@ in
           nyancat
           pipes
         ];
-        env = { inherit busyPrograms busySeconds busyCeiling; };
+        env = {
+          inherit
+            busyPrograms
+            busySeconds
+            busyCeiling
+            busyCaps
+            ;
+        };
         setup = ''
           export PYMUX_BUSY_PROGRAMS="$busyPrograms"
           export PYMUX_BUSY_SECONDS="$busySeconds"
           export PYMUX_BUSY_CEILING="$busyCeiling"
+          export PYMUX_BUSY_CAPS="$busyCaps"
         '';
       }
       ''

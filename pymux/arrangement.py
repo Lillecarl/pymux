@@ -48,6 +48,22 @@ PRESET_COLUMN_WIDTHS = (1 / 3, 1 / 2, 2 / 3, 1.0)
 #: screen while a third one pushes past the edge.
 DEFAULT_COLUMN_WIDTH = 1 / 2
 
+#: The most frames a second a client draws, until somebody says
+#: otherwise. Zero means as many as it can.
+#:
+#: **Thirty, because a frame is expensive and an eye is not fast.** A
+#: frame at 187x59 costs about 19 ms of CPU, nearly all of it building
+#: cells that a diff then throws away (Lillecarl/pymux#254). A pane
+#: that animates asks for one on every write, and three of them
+#: together asked for seventeen a second. Thirty is above what a person
+#: reads text at and below what a program writes at, so it costs
+#: nothing anybody sees and refuses the frames nobody does.
+#:
+#: It is not a latency cap. A keystroke's frame is drawn at once
+#: whenever the last one was more than a thirtieth of a second ago,
+#: which at a human typing speed is always.
+DEFAULT_FRAME_RATE = 30
+
 
 class LayoutTypes(Enum):
     # The values are in lowercase with dashes, because that is what users can
@@ -252,6 +268,16 @@ class Window:
 
         #: When True, send input to all panes simultaniously.
         self.synchronize_panes = False
+
+        #: The most frames a second a client draws while it looks at
+        #: this window. Zero means as many as it can.
+        #:
+        #: A window is where this belongs, because a window is what a
+        #: client looks at and what holds the programs that animate.
+        #: One with cmatrix in it can be told to draw ten times a
+        #: second while the one a person is reading stays sharp.
+        #: Lillecarl/pymux#254.
+        self.frame_rate = DEFAULT_FRAME_RATE
 
         # Give unique ID.
         Window._window_counter += 1

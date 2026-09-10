@@ -131,28 +131,51 @@ class PositiveIntOption(Option):
     Positive integer option, the attribute is set as a Pymux attribute.
     """
 
-    def __init__(self, attribute_name, possible_values=None):
+    def __init__(self, attribute_name, possible_values=None, window_option=False):
         self.attribute_name = attribute_name
         self.possible_values = ["%s" % i for i in (possible_values or [])]
+        self.window_option = window_option
+
+    def _held_by(self, pymux):
+        "The object this option is written on."
+        if not self.window_option:
+            return pymux
+
+        # `OnOffOption.set_value` says why there may be no window.
+        if not pymux.arrangement.windows:
+            raise SetOptionError(
+                "There is no window yet. A window option belongs to one "
+                "window, so a configuration file has none to set. "
+                'Use "-g" to say what every new window starts with.'
+            )
+        return pymux.arrangement.get_active_window()
 
     def get_all_values(self, pymux):
-        return sorted(
-            set(self.possible_values + ["%s" % getattr(pymux, self.attribute_name)])
-        )
-
-    def set_value(self, pymux, value):
-        """
-        Take a string, and return an integer. Raise SetOptionError when the
-        given text does not parse to a positive integer.
-        """
         try:
-            value = int(value)
-            if value < 0:
+            now = getattr(self._held_by(pymux), self.attribute_name)
+        except SetOptionError:
+            return sorted(set(self.possible_values))
+        return sorted(set(self.possible_values + ["%s" % now]))
+
+    def _read(self, value):
+        "The value as a positive integer, or a `SetOptionError`."
+        try:
+            number = int(value)
+            if number < 0:
                 raise ValueError
         except ValueError:
             raise SetOptionError("Expecting an integer.")
-        else:
-            setattr(pymux, self.attribute_name, value)
+        return number
+
+    def set_value(self, pymux, value):
+        setattr(self._held_by(pymux), self.attribute_name, self._read(value))
+
+    def set_default(self, pymux, value):
+        "What every new window starts with. Changes no window that is open."
+        if not self.window_option:
+            return super().set_default(pymux, value)
+
+        pymux.arrangement.window_defaults[self.attribute_name] = self._read(value)
 
 
 class KeyPrefixOption(Option):
@@ -419,4 +442,11 @@ ALL_WINDOW_OPTIONS = {
     # client, and a smaller one moves its own view over it.
     # Lillecarl/pymux#217.
     "window-size": WindowSizeOption(),
+    # The most frames a second a client draws while it looks at this
+    # window. Zero is as many as it can, which is what pymux did
+    # before there was an option. `arrangement.DEFAULT_FRAME_RATE`
+    # says why thirty. Lillecarl/pymux#254.
+    "frame-rate": PositiveIntOption(
+        "frame_rate", [0, 10, 30, 60, 120], window_option=True
+    ),
 }
