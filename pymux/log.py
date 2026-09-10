@@ -21,10 +21,20 @@ import logging
 import os
 from pathlib import Path
 
-__all__ = ["logger", "configure", "default_logfile"]
+__all__ = ["logger", "configure", "default_logfile", "the_logfile"]
 
 
 logger = logging.getLogger(__package__)
+
+#: The file this process logs to, once `configure` has chosen one.
+#: `introspect` writes its dumps into the same directory, because a
+#: dump is read with the log around it.
+_logfile: Path | None = None
+
+
+def the_logfile() -> Path | None:
+    "The file this process logs to, or `None` when nothing configured one."
+    return _logfile
 
 
 def default_logfile() -> Path:
@@ -70,9 +80,12 @@ def configure(logfile: str | None = None, level: int = logging.DEBUG) -> Path | 
         logger.addHandler(logging.NullHandler())
         return None
 
+    global _logfile
+
     logger.addHandler(handler)
     logger.setLevel(level)
     # The root logger reaches `sys.stderr` through `basicConfig`, and
     # nothing here should. The handler above is the whole path.
     logger.propagate = False
+    _logfile = path
     return path

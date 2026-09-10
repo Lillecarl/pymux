@@ -42,6 +42,7 @@ from .commands.commands import call_command_handler, handle_command
 from .commands.completer import create_command_completer
 from .enums import COMMAND, PROMPT, WindowSize, Woke
 from .graphics import PaneView
+from . import introspect
 from .key_bindings import PymuxKeyBindings
 from .key_spelling import why_a_pane_cannot_read
 from .layout import Justify, LayoutManager, the_pane_resizes
@@ -695,6 +696,17 @@ class Pymux:
                     text,
                 )
                 client_state.app.invalidate()
+
+    def the_server_starts(self) -> None:
+        """
+        What every route does before its loop turns.
+
+        Three of them start a server -- the socket, `integrated` and
+        `standalone` -- and each one needs the clock ticking and the
+        signal taken.
+        """
+        self._start_auto_refresh()
+        introspect.answer_a_signal()
 
     def _start_auto_refresh(self) -> None:
         """
@@ -1651,7 +1663,7 @@ class Pymux:
 
         signal.signal(signal.SIGINT, handle_sigint)
 
-        self._start_auto_refresh()
+        self.the_server_starts()
 
         # Run eventloop.
         try:
@@ -1705,7 +1717,7 @@ class Pymux:
         # through `termios`, which a server on Windows does not have.
         from .client.memory import MemoryClient
 
-        self._start_auto_refresh()
+        self.the_server_starts()
 
         async def run() -> None:
             server_end, client_end = connect_in_memory()
@@ -1744,7 +1756,7 @@ class Pymux:
         This is mainly useful for debugging.
         """
         self._runs_standalone = True
-        self._start_auto_refresh()
+        self.the_server_starts()
 
         client_state = self.add_client(
             input=create_input(),

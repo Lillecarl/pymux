@@ -17,6 +17,7 @@ from prompt_toolkit.data_structures import Size
 from prompt_toolkit.document import Document
 from prompt_toolkit.key_binding.vi_state import InputMode
 
+from pymux import introspect
 from pymux.arrangement import LayoutTypes
 from pymux.commands.aliases import ALIASES
 from pymux.commands.utils import wrap_argument
@@ -1489,6 +1490,20 @@ def kill_server(pymux: "Pymux", variables: _VariablesDict) -> None:
     `kill-session`.)
     """
     pymux.stop()
+
+
+@cmd("dump-stacks")
+def dump_stacks(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Write down what this server is doing now, and say where.
+
+    Every thread, every asyncio task and what each one waits for.
+    `pymux/introspect.py` says why a server answers for itself, and what
+    `SIGUSR1` gives instead when the loop is too wedged to read this.
+    """
+    path = introspect.a_dump(pymux)
+    pymux.print_command_line(str(path))
+    pymux.show_message("Wrote a dump to %s" % (path,))
 
 
 @cmd(
