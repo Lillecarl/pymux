@@ -26,6 +26,11 @@ logger = logging.getLogger(__name__)
 
 __all__ = ["PymuxKeyBindings"]
 
+#: One binding: the keys it answers to, and whether the prefix comes
+#: first. The keys are prompt_toolkit's, so every spelling of one key
+#: gives the same one.
+_ABinding = Tuple[bool, Tuple[str, ...]]
+
 
 class PymuxKeyBindings:
     """
@@ -61,9 +66,15 @@ class PymuxKeyBindings:
         # Load initial bindings.
         self._load_prefix_binding()
 
-        # Custom user configured key bindings.
-        # { (needs_prefix, key) -> CustomBinding }
-        self.custom_bindings: Dict[Tuple[bool, str], CustomBinding] = {}
+        #: The bindings a person made, by the key each one reaches.
+        #:
+        #: **Not by the name they wrote.** One key has many names:
+        #: "ctrl+a", "C-a" and "c-a" all reach `Keys.ControlA`, so a
+        #: dictionary keyed by the text held one key three times, and
+        #: `unbind-key` under a second spelling removed nothing while
+        #: `bind-key` under it left two handlers on one key.
+        #: Lillecarl/pymux#235.
+        self.custom_bindings: Dict[_ABinding, CustomBinding] = {}
 
     def _load_prefix_binding(self) -> None:
         """
@@ -243,12 +254,12 @@ class PymuxKeyBindings:
         :param key_name: Pymux key name, for instance "C-a", "M-x" or
             "ctrl+home".
         """
-        # Unbind previous key.
-        self.remove_custom_binding(key_name, needs_prefix=needs_prefix)
-
         # Translate the name into a prompt_toolkit key sequence, in
         # either spelling. (Can raise ValueError.)
         keys_sequence = a_key_however_it_is_written(key_name)
+
+        # Unbind the key, under whichever name it was bound.
+        self.remove_custom_binding(key_name, needs_prefix=needs_prefix)
 
         # Create handler and add to Registry.
         filter: Filter
@@ -280,18 +291,31 @@ class PymuxKeyBindings:
 
         self.custom_key_bindings.add(*keys_sequence, filter=filter)(key_handler)
 
-        # Store key in `custom_bindings` in order to be able to call
-        # "unbind-key" later on.
-        k = (needs_prefix, key_name)
-        self.custom_bindings[k] = CustomBinding(key_handler, command, arguments)
+        self.custom_bindings[needs_prefix, keys_sequence] = CustomBinding(
+            key_handler, command, arguments, key_name
+        )
+
+    def the_binding_on(
+        self, key_name: str, needs_prefix: bool = False
+    ) -> "CustomBinding | None":
+        """
+        What a key runs, under any name for that key, or None.
+
+        Raises `ValueError` when the name reads as no key at all.
+        """
+        return self.custom_bindings.get(
+            (needs_prefix, a_key_however_it_is_written(key_name))
+        )
 
     def remove_custom_binding(self, key_name: str, needs_prefix: bool = False) -> None:
         """
-        Remove custom key binding for a key.
+        Remove the binding on a key, under any name for that key.
+
+        Raises `ValueError` when the name reads as no key at all.
 
         :param key_name: Pymux key name, for instance "C-A".
         """
-        k = (needs_prefix, key_name)
+        k = (needs_prefix, a_key_however_it_is_written(key_name))
 
         if k in self.custom_bindings:
             self.custom_key_bindings.remove(self.custom_bindings[k].handler)
@@ -304,8 +328,15 @@ class CustomBinding:
     """
 
     def __init__(
-        self, handler: Callable[[E], None], command: str, arguments: list
+        self,
+        handler: Callable[[E], None],
+        command: str,
+        arguments: list,
+        written: str,
     ) -> None:
         self.handler = handler
         self.command = command
         self.arguments = arguments
+        #: The name the person wrote. The binding is not held under it,
+        #: so this is what `list-keys` shows and nothing more.
+        self.written = written

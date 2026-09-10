@@ -1100,7 +1100,10 @@ def unbind_key(pymux: "Pymux", variables: _VariablesDict) -> None:
     key = variables["<key>"]
     needs_prefix = not variables["-n"]
 
-    pymux.key_bindings_manager.remove_custom_binding(key, needs_prefix=needs_prefix)
+    try:
+        pymux.key_bindings_manager.remove_custom_binding(key, needs_prefix=needs_prefix)
+    except ValueError:
+        raise CommandException("Invalid key: %r" % (key,))
 
 
 @cmd("send-keys", options="[-t <target-pane>] [-l] [-R] [<keys>...]")
@@ -1311,13 +1314,13 @@ def list_keys(pymux: "Pymux", variables: _VariablesDict) -> None:
     result = []
 
     for k, custom_binding in pymux.key_bindings_manager.custom_bindings.items():
-        needs_prefix, key = k
+        needs_prefix, _keys = k
 
         result.append(
             "bind-key %3s %-10s %s %s"
             % (
                 ("-n" if needs_prefix else ""),
-                key,
+                custom_binding.written,
                 custom_binding.command,
                 " ".join(map(wrap_argument, custom_binding.arguments)),
             )
