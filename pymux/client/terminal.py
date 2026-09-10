@@ -159,12 +159,11 @@ class TerminalClient(Client):
 
         elif packet["cmd"] == "open":
             # The server asks this machine, not the machine of the
-            # server, to open the URL. `webbrowser` picks the way this
-            # platform does it: "open" on macOS, "xdg-open" or what
-            # $BROWSER names on Linux, "startfile" on Windows. A browser
-            # that fails to open stays silent: this client has no
-            # screen of its own to say it on.
-            webbrowser.open(packet["data"])
+            # server, to open the URL. A machine with no browser says
+            # so back, where the request was made visible.
+            url = packet["data"]
+            if not self._open_url(url):
+                self._send_packet({"cmd": "open-failed", "data": url})
 
         elif packet["cmd"] == "kitty-keyboard":
             # Kitty keyboard protocol instructions for the outer
@@ -208,6 +207,31 @@ class TerminalClient(Client):
             return  # Never enabled anything.
         self._kitty_flags = flags
         os.write(sys.stdout.fileno(), ("\x1b[=%d;1u" % flags).encode())
+
+    def _open_url(self, url: str) -> bool:
+        """
+        Ask this platform to open the URL in a browser, the way
+        `webbrowser` picks: "open" on macOS, "xdg-open" or what $BROWSER
+        names on Linux, "startfile" on Windows.
+
+        True is a best effort: an opener can still fail after it
+        started. A Linux machine without a display says False without
+        trying, because the openers it does have say yes and fail
+        anyway: `xdg-open` starts, finds no display and exits, and
+        `webbrowser.open` counts the start as success. Knowing sooner
+        is worth more than the chance of a `BROWSER` that names a
+        browser which runs without a display.
+        """
+        if (
+            os.name == "posix"
+            and sys.platform != "darwin"
+            and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+        ):
+            return False
+        try:
+            return bool(webbrowser.open(url))
+        except Exception:
+            return False
 
     def _process_stdin(self):
         """

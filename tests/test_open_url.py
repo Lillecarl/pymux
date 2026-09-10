@@ -10,13 +10,15 @@ own at the bottom.
 
 import asyncio
 import base64
+import contextlib
 import json
+import os
 import sys
 import webbrowser
 
 import pytest
 
-from a_session import once, over_a_connection
+from a_session import once, over_a_connection, in_this_process
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from pymux.client.terminal import TerminalClient
@@ -38,6 +40,31 @@ def opens(packets):
     return [
         json.loads(packet) for packet in packets if json.loads(packet).get("cmd") == "open"
     ]
+
+
+@contextlib.contextmanager
+def an_environment(**values):
+    """
+    The environment with what is given set, and what is None gone.
+
+    The async tests cannot take the `monkeypatch` fixture: the loop
+    they run in is not pytest's, and `in_a_loop` passes no arguments
+    through. So they say what the environment holds by hand.
+    """
+    saved = {name: os.environ.get(name) for name in values}
+    for name, value in values.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
+    try:
+        yield
+    finally:
+        for name, value in saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
 
 
 def a_pane(pymux, state):
@@ -232,8 +259,81 @@ def test_an_open_url_option_takes_its_words_only():
 
 def test_the_client_asks_its_platform_to_open(monkeypatch):
     opened = []
-    monkeypatch.setattr(webbrowser, "open", opened.append)
+    monkeypatch.setenv("DISPLAY", ":0")
+    monkeypatch.setattr(webbrowser, "open", lambda url: opened.append(url) or True)
 
     TerminalClient()._process(json.dumps({"cmd": "open", "data": URL}).encode("utf-8"))
 
     assert opened == [URL]
+
+
+def test_the_client_reports_a_browser_it_could_not_open(monkeypatch):
+    sent = []
+    client = TerminalClient()
+    monkeypatch.setattr(client, "_send_packet", sent.append)
+    monkeypatch.setattr(webbrowser, "open", lambda url: False)
+    monkeypatch.delenv("DISPLAY", raising=False)
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+
+    client._process(json.dumps({"cmd": "open", "data": URL}).encode("utf-8"))
+
+    assert sent == [{"cmd": "open-failed", "data": URL}]
+
+
+def test_the_client_reports_a_browser_that_raised(monkeypatch):
+    sent = []
+    client = TerminalClient()
+    monkeypatch.setattr(client, "_send_packet", sent.append)
+
+    def broken(url):
+        raise webbrowser.Error("could not locate a browser")
+
+    monkeypatch.setattr(webbrowser, "open", broken)
+    monkeypatch.setenv("DISPLAY", ":0")
+
+    client._process(json.dumps({"cmd": "open", "data": URL}).encode("utf-8"))
+
+    assert sent == [{"cmd": "open-failed", "data": URL}]
+
+
+def test_the_client_reports_nothing_when_a_browser_opened(monkeypatch):
+    sent = []
+    client = TerminalClient()
+    monkeypatch.setattr(client, "_send_packet", sent.append)
+    monkeypatch.setattr(webbrowser, "open", lambda url: True)
+    monkeypatch.setenv("DISPLAY", ":0")
+
+    client._process(json.dumps({"cmd": "open", "data": URL}).encode("utf-8"))
+
+    assert sent == []
+
+
+def test_a_machine_without_a_display_tries_no_browser(monkeypatch):
+    asked = []
+    sent = []
+    client = TerminalClient()
+    monkeypatch.setattr(client, "_send_packet", sent.append)
+    monkeypatch.setattr(webbrowser, "open", asked.append)
+    monkeypatch.delenv("DISPLAY", raising=False)
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+
+    client._process(json.dumps({"cmd": "open", "data": URL}).encode("utf-8"))
+
+    assert asked == []  # A text browser in $BROWSER cannot run either.
+    assert sent == [{"cmd": "open-failed", "data": URL}]
+
+
+# ----------------------------------------------------------------------
+# What a server says when a client reports back.
+
+
+@in_a_loop
+async def test_a_client_that_could_not_open_says_so_in_its_status_line():
+    with over_a_connection() as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", A_SIZE)
+        connection = state.connection
+
+        connection._process(json.dumps({"cmd": "open-failed", "data": URL}))
+
+        assert state.message == "Could not open %s in a browser on this machine." % URL

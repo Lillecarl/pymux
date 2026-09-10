@@ -435,6 +435,15 @@ class ServerConnection:
 
             self._create_app(color_depth=self.colors.depth, term=term)
 
+        # A URL that the client of this connection could not open. The
+        # request went out as a status line here, so the answer goes
+        # there too, and it names the URL to copy.
+        elif packet["cmd"] == "open-failed":
+            if self.client_state is not None:
+                self.client_state.message = (
+                    "Could not open %s in a browser on this machine." % (packet["data"],)
+                )
+
     def _send_packet(self, data: object) -> None:
         """
         Send packet to client.
