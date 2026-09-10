@@ -55,18 +55,15 @@ longest, so the auto refresh cannot tick inside a keystroke.
 
 ## What the distribution says, and why the gate is the smallest of it
 
-**On an idle machine it is eight turns, five hundred times out of five
-hundred.** Under sixteen processes of `yes`, it is eight about six times
-in ten and eleven the rest, and the traces say what the three extra
-turns are.
+**On an idle machine it is seven turns, three hundred times out of three
+hundred.** Under sixteen processes of `yes`, it grows by the cost of one
+more redraw and the traces say why.
 
 A keystroke asks for a frame twice. The key press invalidates, and the
 pane's answer invalidates. When the answer lands before the loop polls
-again, one redraw carries both, and that is the eight. When it misses
+again, one redraw carries both, and that is the seven. When it misses
 that poll, the redraw of the key press runs by itself and draws nothing
--- no packet leaves -- and the answer then pays for a second one. Three
-turns is what prompt_toolkit's postponed redraw costs, twice instead of
-once.
+-- no packet leaves -- and the answer then pays for a second one.
 
 So the number is not a race and it is not a single value either. **The
 smallest count is the one the code decides**: load can only add the
@@ -134,13 +131,19 @@ PATIENCE = 10.0
 #:     the application takes the key, and writes
 #:       it to the pane's pty                      1
 #:     the pane answers, and the screen changes    1
-#:     prompt_toolkit postpones the redraw         3
+#:     prompt_toolkit postpones the redraw         2
 #:     the frame goes out as an "out" packet       1
 #:     the client's reader takes it                1
 #:
+#: It was eight until prompt-toolkit `28f2b7c1`. The postponement asks
+#: "is the loop idle yet" and reposted itself with
+#: `call_soon_threadsafe`, whose write to the loop's self-pipe put a
+#: reader into `_ready` -- so its own question answered "no" every time.
+#: Lillecarl/pymux#247.
+#:
 #: A run that says another number is not wrong. Read the traces, and
 #: write the new one here with what moved it.
-THE_BEST = 8
+THE_BEST = 7
 
 #: The client's terminal.
 SIZE = Size(rows=24, columns=80)
