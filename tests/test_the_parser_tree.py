@@ -210,6 +210,34 @@ def test_bind_key_offers_a_key_then_the_command_then_its_arguments():
     assert args == ["-g"]
 
 
+def test_a_bare_tab_after_a_command_lists_its_flags():
+    """
+    The only way to learn what a command takes used to be to know one
+    of its flags and type the dash first. An empty word is the
+    question, and the flags are the answer. Lillecarl/pymux#148.
+    """
+    pymux = Pymux()
+    offered = [offered[0] for offered in _offered(["split-window"], "", pymux)]
+    assert "-v" in offered
+    assert "-h" in offered
+    assert "-c" in offered
+
+
+def test_a_bare_tab_after_set_option_lists_option_names_instead():
+    "The positional that has an answer of its own keeps it."
+    pymux = Pymux()
+    offered = [offered[0] for offered in _offered(["set-option"], "", pymux)]
+    assert "status" in offered
+    assert "-g" not in offered
+
+
+def test_a_bare_tab_after_select_pane_lists_its_flags():
+    pymux = Pymux()
+    offered = [offered[0] for offered in _offered(["select-pane"], "", pymux)]
+    assert "-L" in offered
+    assert "-t" in offered
+
+
 def test_send_keys_offers_key_names_until_l_says_text():
     pymux = Pymux()
     keys = [offered[0] for offered in _offered(["send-keys"], "C", pymux)]

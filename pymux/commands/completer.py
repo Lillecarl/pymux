@@ -223,6 +223,10 @@ def get_completions_for_parts(parts, last_part, complete_event, pymux):
         return
 
     if what is None:
+        # A command with no positional of its own: an empty word asks
+        # what it takes, and the flags are the answer.
+        if not last_part:
+            yield from _the_flags(parser, complete_event)
         return
 
     if parts[0] == "bind-key" and not what.option_strings and what.dest == "arguments":
@@ -244,8 +248,22 @@ def get_completions_for_parts(parts, last_part, complete_event, pymux):
 
     dest = what.dest
     completer = _value_completer_for(parts[0], dest, parser, slots, pymux)
+    if completer is None and not last_part:
+        # An empty word over a positional that has no answer of its
+        # own asks what the command takes. `set-option` answers with
+        # the names of the options; `split-window` has nothing to
+        # say about a program to run, so the flags are the answer.
+        # Lillecarl/pymux#148.
+        yield from _the_flags(parser, complete_event)
+        return
     if completer:
         yield from completer.get_completions(Document(last_part), complete_event)
+
+
+def _the_flags(parser, complete_event):
+    completer = _flags_completer(parser, "")
+    if completer:
+        yield from completer.get_completions(Document(""), complete_event)
 
 
 class ShlexCompleter(Completer):
