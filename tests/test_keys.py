@@ -137,6 +137,19 @@ def test_tilde_keys():
     assert parse("\x1b[15;5~") == [(Keys.ControlF5, "\x1b[15;5~")]
 
 
+def test_f3_arrives_as_a_number_and_not_as_a_letter():
+    """
+    kitty numbers F3 in the "~" form, because "CSI R" is the cursor
+    position report. So a modified F3 from any terminal that speaks the
+    protocol used to reach nothing: prompt_toolkit's table knows plain
+    "CSI 13~" from rxvt and stops there, and pyte read the number as a
+    tilde key that pymux has no name for. Lillecarl/pymux#242.
+    """
+    assert parse("\x1b[13~") == [(Keys.F3, "\x1b[13~")]
+    assert parse("\x1b[13;5~") == [(Keys.ControlF3, "\x1b[13;5~")]
+    assert parse("\x1b[13;9~") == [("super-f3", "\x1b[13;9~")]
+
+
 def test_keypad_keys():
     assert parse("\x1b[57413u") == [("+", "\x1b[57413u")]
     assert parse("\x1b[57414u") == [(Keys.Enter, "\x1b[57414u")]
