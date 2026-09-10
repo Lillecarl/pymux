@@ -25,7 +25,7 @@ from prompt_toolkit.input.vt100_parser import ANSI_SEQUENCES
 from prompt_toolkit.keys import KeyName, Keys
 from pyte.keys import Modifier
 
-from .keys import MODIFIERS_WITH_NO_MEMBER, name_of
+from .keys import A_KEY_BY_ITS_NAME, MODIFIERS_WITH_NO_MEMBER, name_of
 
 __all__ = [
     "pymux_key_to_prompt_toolkit_key_sequence",
@@ -46,21 +46,6 @@ THE_MODIFIERS_A_PERSON_WRITES = (
     ("hyper-", Modifier.HYPER),
     ("meta-", Modifier.META),
 )
-
-
-#: The `Keys` member behind the base of a built name.
-#:
-#: Four of them are written out rather than read off the member, so
-#: they need naming here as well: `Keys.Enter` is an alias of
-#: `ControlM` and its value is "c-m", which is not a name anybody
-#: would type. See `_CONTROL_KEY_NAMES` in `keys.py`.
-_A_KEY_BY_ITS_NAME = {
-    **{str.__str__(key): key for key in Keys},
-    "escape": Keys.Escape,
-    "enter": Keys.Enter,
-    "tab": Keys.Tab,
-    "backspace": Keys.Backspace,
-}
 
 
 def _a_built_name(key: str) -> KeyName | None:
@@ -250,7 +235,7 @@ def _a_built_name_as_legacy_bytes(key: str) -> str | None:
         return rest.upper()
     if len(rest) == 1:
         return rest
-    member = _A_KEY_BY_ITS_NAME.get(rest)
+    member = A_KEY_BY_ITS_NAME.get(rest)
     if member is None:
         return None
     return prompt_toolkit_key_to_vt100_key(member)

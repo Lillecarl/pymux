@@ -58,7 +58,16 @@ logger = logging.getLogger(__name__)
 #: something else could still continue.
 CSI = "\x1b["
 
-__all__ = ["DropReason", "Dropped", "KittyVt100Parser", "parse_kitty_key"]
+__all__ = [
+    "A_KEY_BY_ITS_NAME",
+    "DropReason",
+    "Dropped",
+    "KEYS_A_KEYBOARD_SPELLS_OUT",
+    "KittyVt100Parser",
+    "THE_NAME_OF_A_KEY",
+    "parse_kitty_key",
+    "the_key_named",
+]
 
 
 # The modifier bits, under the names this file has always used. pyte
@@ -188,6 +197,38 @@ _CONTROL_KEY_NAMES = {
 }
 
 
+#: The `Keys` member behind a base name, for every key that has one.
+#:
+#: A `Keys` member is a string, and its value is the name: `Keys.Home`
+#: is "home" and `Keys.F5` is "f5". So the table is the members, read
+#: back the way `_base_of` writes them.
+#:
+#: The four above are written in as well, because their members do not
+#: name them. `Keys.Enter` is an alias of `ControlM` and its value is
+#: "c-m", which is not a name anybody would type.
+A_KEY_BY_ITS_NAME = {
+    **{str.__str__(key): key for key in Keys},
+    "escape": Keys.Escape,
+    "enter": Keys.Enter,
+    "tab": Keys.Tab,
+    "backspace": Keys.Backspace,
+}
+
+
+#: The base name of a `Keys` member: the table above, read the other
+#: way, with the four written-out names winning.
+#:
+#: A member that is an alias reads back as the key it is an alias of.
+#: `Keys.Enter` is `ControlM` and reads back as "c-m", `Keys.Backspace`
+#: is `ControlH` and reads back as "c-h". Neither is a name a person
+#: would write, and neither reaches the branch of `the_key_named` that
+#: knows what ctrl on that key means.
+THE_NAME_OF_A_KEY = {
+    **{key: str.__str__(key) for key in Keys},
+    **{A_KEY_BY_ITS_NAME[name]: name for name in _CONTROL_KEY_NAMES.values()},
+}
+
+
 def name_of(base: str, mods: int) -> KeyName:
     """
     The name of one key with its modifiers.
@@ -243,6 +284,22 @@ _TILDE_KEYS = {
     23: Keys.F11,
     24: Keys.F12,
 }
+
+#: The keys a terminal spells out, rather than sending a character:
+#: the arrows, Home and End, Insert and Delete, the two page keys and
+#: the function row.
+#:
+#: **These are the keys a keyboard can leave out.** A laptop with no
+#: Home key cannot make one, and a program that asks for it then cannot
+#: be answered at all. That is what Lillecarl/pymux#220 is for, so a
+#: completer offers these first.
+#:
+#: It is the two tables above, read for their keys. A list written
+#: beside them would be a second list to keep right, which is what
+#: Lillecarl/pymux#234 cost ctrl+Home.
+KEYS_A_KEYBOARD_SPELLS_OUT = frozenset(
+    str.__str__(key) for key in (*_TILDE_KEYS.values(), *_LETTER_KEYS.values())
+)
 
 # Keypad keys (private use area). Plain key presses map to their base
 # key; modified keypad keys are dropped.
@@ -378,10 +435,10 @@ def _apply_modifiers(key: str | Keys, mods: int) -> _KeyResult:
 
     **A functional key is told apart by its type, not by `str`.** Every
     member of `Keys` is a string, so `isinstance(key, str)` says yes to
-    all of them, and `_CTRL_FUNCTIONAL` was never read. ctrl+Up asked
-    for `Keys.ControlUP`, which is not a name, and prompt_toolkit's own
-    table is the only reason nothing raised: it matches every sequence
-    that would have come here.
+    all of them, and the modified form of a functional key was never
+    read. ctrl+Up asked for `Keys.ControlUP`, which is not a name, and
+    prompt_toolkit's own table is the only reason nothing raised: it
+    matches every sequence that would have come here.
     """
     shift = bool(mods & _SHIFT)
     alt = bool(mods & _ALT)
@@ -395,44 +452,123 @@ def _apply_modifiers(key: str | Keys, mods: int) -> _KeyResult:
             key = ctrl_key
         elif shift and key.isalpha():
             key = key.upper()
-    else:
-        # Functional key.
-        if ctrl:
-            ctrl_key = _CTRL_FUNCTIONAL.get(key)
-            if ctrl_key is None:
-                return Dropped(DropReason.A_MODIFIER_THIS_KEY_HAS_NO_NAME_FOR)
-            key = ctrl_key
+    elif ctrl or shift:
+        modified = _the_modified_form_of(key, ctrl, shift)
+        if modified is None:
+            return Dropped(DropReason.A_MODIFIER_THIS_KEY_HAS_NO_NAME_FOR)
+        key = modified
 
     if alt:
         return (Keys.Escape, key)
     return key
 
 
-# ctrl+<functional key> variants that prompt_toolkit knows.
-_CTRL_FUNCTIONAL = {
-    Keys.Left: Keys.ControlLeft,
-    Keys.Right: Keys.ControlRight,
-    Keys.Up: Keys.ControlUp,
-    Keys.Down: Keys.ControlDown,
-    Keys.Home: Keys.ControlHome,
-    Keys.End: Keys.ControlEnd,
-    Keys.Insert: Keys.ControlInsert,
-    Keys.Delete: Keys.ControlDelete,
-    Keys.PageUp: Keys.ControlPageUp,
-    Keys.PageDown: Keys.ControlPageDown,
-    Keys.F1: Keys.ControlF1,
-    Keys.F2: Keys.ControlF2,
-    Keys.F3: Keys.ControlF3,
-    Keys.F4: Keys.ControlF4,
-    Keys.F5: Keys.ControlF5,
-    Keys.F6: Keys.ControlF6,
-    Keys.F7: Keys.ControlF7,
-    Keys.F8: Keys.ControlF8,
-    Keys.F9: Keys.ControlF9,
-    Keys.F10: Keys.ControlF10,
-    Keys.F11: Keys.ControlF11,
-    Keys.F12: Keys.ControlF12,
-}
+def _the_modified_form_of(key: Keys, ctrl: bool, shift: bool) -> Keys | None:
+    """
+    The `Keys` member for a functional key with ctrl or shift on it,
+    and None when the toolkit names no such key.
+
+    **prompt_toolkit writes the modifiers into the name**, so the
+    member is built rather than looked up: `Keys.ControlShiftLeft`,
+    `Keys.ControlF13`, `Keys.ShiftDelete`. A table of the combinations
+    was here instead, it named twenty-two, and it left out the whole
+    of shift and everything above F12. Lillecarl/pymux#234.
+
+    The order is the most it can carry first. A key that has no form
+    for both keeps the ctrl and drops the shift, which is the trade the
+    legacy encoding makes anyway. A key that has no form for shift
+    alone keeps the key: a program reading F5 is better served than one
+    reading nothing.
+    """
+    wanted = ["Control" * ctrl + "Shift" * shift]
+    if ctrl and shift:
+        wanted.append("Control")
+    if shift and not ctrl:
+        wanted.append("")
+
+    for prefix in wanted:
+        modified = getattr(Keys, prefix + key.name, None)
+        if modified is not None:
+            return modified
+    return None
+
+
+def _with_alt(key: str | Keys, mods: int) -> _KeyResult:
+    """
+    Alt on a key, which prompt_toolkit spells as two key presses.
+
+    There is no `Keys` member for alt and no name for it either: an
+    escape and the key is what the toolkit binds and what its parser
+    feeds. So alt is the last thing applied, after the key it is on has
+    its own name.
+    """
+    return (Keys.Escape, key) if mods & _ALT else key
+
+
+def the_key_named(base: str, mods: int) -> _KeyResult:
+    """
+    The prompt_toolkit key that one key with its modifiers is.
+
+    `base` is the key without its modifiers, as `_base_of` writes it: a
+    character, or the value of a `Keys` member such as "up" or "f5", or
+    one of the four C0 keys by name. `mods` is the bits of
+    `pyte.keys.Modifier`.
+
+    Returns a key, a character, a tuple of two for alt, or a `Dropped`
+    for a combination that prompt_toolkit cannot name.
+
+    **This is the one translation, and both directions read it.** A key
+    arriving off the wire comes here through `_named`, which reads the
+    sequence and hands over the base and the bits. A key a person
+    writes comes here through `key_spelling.py`, which reads the name
+    and hands over the same two. Two translations of the same thing is
+    what Lillecarl/pymux#119 cost 52 wrong keys, and what
+    Lillecarl/pymux#234 cost ctrl+Home: the written form had a table of
+    its own, and the table stopped at the four arrows.
+    """
+    if mods & MODIFIERS_WITH_NO_MEMBER:
+        # super, hyper or meta. No `Keys` member names one of these and
+        # no list could: five modifiers over every key is more
+        # combinations than anybody would write down. So the name is
+        # built, which is what `KeyName` is for. Lillecarl/pymux#181.
+        return _with_alt(name_of(base, mods & ~Modifier.ALT), mods)
+
+    if base == "escape":
+        return _apply_modifiers(Keys.Escape, mods)
+
+    if base == "enter":
+        if mods & _CTRL:
+            # ctrl+enter is ctrl+j in the legacy encoding.
+            return _with_alt(Keys.ControlJ, mods)
+        return _apply_modifiers(Keys.Enter, mods)
+
+    if base == "tab":
+        if mods & _SHIFT and not mods & (_CTRL | _ALT):
+            return Keys.BackTab
+        if mods & _CTRL:
+            return _with_alt(Keys.ControlI, mods)
+        return _apply_modifiers(Keys.Tab, mods)
+
+    if base == "backspace":
+        if mods & _CTRL:
+            return _with_alt(Keys.Backspace, mods)
+        return _apply_modifiers(Keys.Backspace, mods)
+
+    if len(base) == 1:
+        if mods & _CTRL and mods & _SHIFT:
+            # Only a terminal that says more than the legacy encoding
+            # can tell these apart: ctrl+a and ctrl+shift+a are one
+            # control code there. The shift used to be dropped, so a
+            # person could bind neither on its own. Lillecarl/pymux#168.
+            both = _CTRL_SHIFT_LETTERS.get(base.lower())
+            if both is not None:
+                return _with_alt(both, mods)
+        return _apply_modifiers(base, mods)
+
+    member = A_KEY_BY_ITS_NAME.get(base)
+    if member is None:
+        return Dropped(DropReason.A_KEY_THAT_WRITES_NOTHING)
+    return _apply_modifiers(member, mods)
 
 
 def _a_reply(prefix: str) -> object | None:
@@ -528,40 +664,21 @@ def _named(event: KeyEvent) -> _KeyResult | None:
     key, mods, final, text = event.code, event.mods, event.final, event.text
 
     if mods & MODIFIERS_WITH_NO_MEMBER:
-        # super, hyper or meta. No `Keys` member names one of these and
-        # no list could: five modifiers over every key is more
-        # combinations than anybody would write down. So the name is
-        # built, which is what `KeyName` is for. Lillecarl/pymux#181.
+        # super, hyper or meta, which get a built name. It comes first
+        # because it reads the unshifted key, so none of the three
+        # readings below may take the key away from it.
         base = _base_of(event)
         if base is None:
             return Dropped(DropReason.A_KEY_THAT_WRITES_NOTHING)
-        named = name_of(base, mods & ~Modifier.ALT)
-        return (Keys.Escape, named) if mods & _ALT else named
+        return the_key_named(base, mods)
 
+    # Three things that only a key off the wire can be, and that a name
+    # therefore never says. Each one is read here, before the base and
+    # the bits go to the one translation.
     if final == "u":
-        # Enter, Tab and Backspace carry their C0 code points.
-        if key == KeyCode.ESCAPE:
-            return _apply_modifiers(Keys.Escape, mods)
-        if key == KeyCode.ENTER:
-            if mods & _CTRL:
-                # ctrl+enter is ctrl+j in the legacy encoding.
-                base: _KeyResult = Keys.ControlJ
-                return (Keys.Escape, base) if mods & _ALT else base
-            return _apply_modifiers(Keys.Enter, mods)
-        if key == KeyCode.TAB:
-            if mods & _SHIFT and not mods & (_CTRL | _ALT):
-                return Keys.BackTab
-            if mods & _CTRL:
-                base = Keys.ControlI
-                return (Keys.Escape, base) if mods & _ALT else base
-            return _apply_modifiers(Keys.Tab, mods)
-        if key == KeyCode.BACKSPACE:
-            if mods & _CTRL:
-                base = Keys.Backspace
-                return (Keys.Escape, base) if mods & _ALT else base
-            return _apply_modifiers(Keys.Backspace, mods)
-
-        # Keypad keys.
+        # The keypad, which carries its keys in the private use area. A
+        # plain press is the key it prints; with ctrl or alt it has no
+        # prompt_toolkit form at all.
         if key in _KEYPAD:
             keypad_key = _KEYPAD[key]
             if not isinstance(keypad_key, str):
@@ -575,43 +692,27 @@ def _named(event: KeyEvent) -> _KeyResult | None:
             # have no prompt_toolkit representation. Drop them.
             return Dropped(DropReason.A_KEY_THAT_WRITES_NOTHING)
 
-        # Text key.
-        char = chr(key)
-        if mods & _CTRL:
-            if mods & _SHIFT:
-                # Only a terminal that says more than the legacy
-                # encoding can tell these apart: ctrl+a and
-                # ctrl+shift+a are one control code there. The shift
-                # used to be dropped, so a person could bind neither
-                # on its own. Lillecarl/pymux#168.
-                both = _CTRL_SHIFT_LETTERS.get(char.lower())
-                if both is not None:
-                    return (Keys.Escape, both) if mods & _ALT else both
-            ctrl_key = _ctrl_mapping(char)
-            if ctrl_key is None:
-                return Dropped(DropReason.CTRL_AND_A_CHARACTER)
-            return (Keys.Escape, ctrl_key) if mods & _ALT else ctrl_key
+        # The text the terminal reported for this key, which accounts
+        # for the shift modifier and the keyboard layout. Nothing else
+        # knows the layout, so this wins over the base.
+        #
+        # Not for ctrl, which has a control code and not text.
+        if text and not mods & _CTRL:
+            return _with_alt(text, mods)
 
-        # Use the reported text when present. (It accounts for the
-        # shift modifier and the keyboard layout.)
-        if text:
-            return (Keys.Escape, text) if mods & _ALT else text
-
-        if mods & _SHIFT and char.isalpha():
-            char = char.upper()
-        return (Keys.Escape, char) if mods & _ALT else char
-
-    if final == "~":
-        tilde_key = _TILDE_KEYS.get(key)
-        if tilde_key is None:
+    elif final == "~":
+        if _TILDE_KEYS.get(key) is None:
             return Dropped(DropReason.A_TILDE_KEY_WITH_NO_NAME)
-        return _apply_modifiers(tilde_key, mods)
 
-    # Letter form. (The number is always 1.)
-    letter_key = _LETTER_KEYS.get(final)
-    if key != 1 or letter_key is None:
+    elif _LETTER_KEYS.get(final) is None or key != 1:
+        # The letter form names ten keys, and carries the number one
+        # and nothing else.
         return Dropped(DropReason.A_LETTER_KEY_WITH_NO_NAME)
-    return _apply_modifiers(letter_key, mods)
+
+    base = _base_of(event)
+    if base is None:
+        return Dropped(DropReason.A_KEY_THAT_WRITES_NOTHING)
+    return the_key_named(base, mods)
 
 
 def _patch_prefix_cache() -> None:
