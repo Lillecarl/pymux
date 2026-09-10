@@ -22,10 +22,8 @@ from pymux.commands.aliases import ALIASES
 from pymux.commands.utils import wrap_argument
 from pymux.enums import WindowSize, Woke
 from pymux.format import format_pymux_string
-from pymux.key_mappings import (
-    prompt_toolkit_key_to_vt100_key,
-    pymux_key_to_prompt_toolkit_key_sequence,
-)
+from pymux.key_mappings import prompt_toolkit_key_to_vt100_key
+from pymux.key_spelling import a_key_however_it_is_written
 from pymux.layout import (
     focus_down,
     focus_left,
@@ -1087,9 +1085,12 @@ def send_keys(pymux: "Pymux", variables: _VariablesDict) -> None:
         return
 
     for key in keys:
-        # Translate key from pymux key to prompt_toolkit key.
+        # Translate the name into a prompt_toolkit key, in either
+        # spelling. "C-Home" reads as no key at all and used to be sent
+        # as six letters, which is what Lillecarl/pymux#234 found;
+        # "ctrl+home" reads as the key. Both work now.
         try:
-            keys_sequence = pymux_key_to_prompt_toolkit_key_sequence(key)
+            keys_sequence = a_key_however_it_is_written(key)
         except ValueError:
             # Not a known key name. Like tmux, send this argument as
             # literal text.

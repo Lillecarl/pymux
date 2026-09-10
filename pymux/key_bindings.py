@@ -17,7 +17,7 @@ from prompt_toolkit.keys import Keys
 from .commands.commands import call_command_handler
 from .enums import COMMAND, PROMPT
 from .filters import HasPrefix, WaitsForConfirmation
-from .key_mappings import pymux_key_to_prompt_toolkit_key_sequence
+from .key_spelling import a_key_however_it_is_written
 
 if TYPE_CHECKING:
     from pymux.main import Pymux
@@ -240,14 +240,15 @@ class PymuxKeyBindings:
         Add custom binding (for the "bind-key" command.)
         Raises ValueError if the give `key_name` is an invalid name.
 
-        :param key_name: Pymux key name, for instance "C-a" or "M-x".
+        :param key_name: Pymux key name, for instance "C-a", "M-x" or
+            "ctrl+home".
         """
         # Unbind previous key.
         self.remove_custom_binding(key_name, needs_prefix=needs_prefix)
 
-        # Translate the pymux key name into a prompt_toolkit key sequence.
-        # (Can raise ValueError.)
-        keys_sequence = pymux_key_to_prompt_toolkit_key_sequence(key_name)
+        # Translate the name into a prompt_toolkit key sequence, in
+        # either spelling. (Can raise ValueError.)
+        keys_sequence = a_key_however_it_is_written(key_name)
 
         # Create handler and add to Registry.
         filter: Filter

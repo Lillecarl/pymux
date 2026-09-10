@@ -6,10 +6,8 @@ from abc import ABC, abstractmethod
 from enum import StrEnum
 
 from .enums import WindowSize, Woke
-from .key_mappings import (
-    PYMUX_TO_PROMPT_TOOLKIT_KEYS,
-    pymux_key_to_prompt_toolkit_key_sequence,
-)
+from .key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS
+from .key_spelling import a_key_however_it_is_written
 from .layout import Justify
 from .style import THEMES
 from .utils import get_default_shell
@@ -163,7 +161,7 @@ class KeyPrefixOption(Option):
     def set_value(self, pymux, value):
         # Translate prefix to prompt_toolkit
         try:
-            keys = pymux_key_to_prompt_toolkit_key_sequence(value)
+            keys = a_key_however_it_is_written(value)
         except ValueError:
             raise SetOptionError("Invalid key: %r" % (value,))
         else:

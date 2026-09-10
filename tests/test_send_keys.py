@@ -221,6 +221,42 @@ def test_an_arrow_is_the_application_form_for_a_pane_that_asked(pymux):
     assert send(pymux, "Up")[0] == "\x1bOA"
 
 
+#: The keys a laptop keyboard leaves out, in both spellings.
+#:
+#: **`send-keys C-Home` used to type the six letters into the pane.**
+#: The table `send-keys` read names `C-Left`, `C-Right`, `C-Up` and
+#: `C-Down` and no other modified functional key, so ctrl worked on
+#: four keys and on none of the other twenty-two. And an argument that
+#: names no key is sent as the text it is, the way tmux does, so
+#: nothing failed and nothing said so. Lillecarl/pymux#234.
+#:
+#: This is the key Lillecarl/pymux#220 exists for: a keyboard with no
+#: Home key cannot answer a program that asks for ctrl+Home.
+THE_KEYS_A_KEYBOARD_LEAVES_OUT = [
+    ("C-Home", "\x1b[1;5H"),
+    ("ctrl+home", "\x1b[1;5H"),
+    ("C-End", "\x1b[1;5F"),
+    ("ctrl+end", "\x1b[1;5F"),
+    ("C-DC", "\x1b[3;5~"),
+    ("ctrl+delete", "\x1b[3;5~"),
+    ("C-PPage", "\x1b[5;5~"),
+    ("ctrl+pageup", "\x1b[5;5~"),
+    ("C-F5", "\x1b[15;5~"),
+    ("ctrl+f5", "\x1b[15;5~"),
+    ("S-Home", "\x1b[1;2H"),
+    ("shift+home", "\x1b[1;2H"),
+    ("ctrl+shift+end", "\x1b[1;6F"),
+]
+
+
+@pytest.mark.parametrize("name, expected", THE_KEYS_A_KEYBOARD_LEAVES_OUT)
+def test_a_modified_key_the_older_table_never_named(pymux, name, expected):
+    a_pane(pymux)
+    written, errors = send(pymux, name)
+    assert errors == []
+    assert written == expected
+
+
 def test_a_key_name_nobody_knows_goes_as_text(pymux):
     "tmux sends an argument it cannot name as the text it is."
     a_pane(pymux)
