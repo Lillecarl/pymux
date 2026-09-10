@@ -367,7 +367,7 @@ class ClientState:
                 SwapLightAndDarkStyleTransformation(),
                 Condition(lambda: self.pymux.swap_dark_and_light),
             ),
-            on_invalidate=(lambda _: pymux.invalidate()),
+            on_invalidate=pymux.a_client_asked_for_a_frame,
         )
 
         # Synchronize the Vi state with the CLI object.
@@ -671,7 +671,7 @@ class Pymux:
         "Whether a client draws the titlebar of a pane."
         return self.enable_pane_status and not self.full_screen
 
-    def refresh_what_time_moves(self) -> None:
+    def refresh_what_time_moves(self, but_not=None) -> None:
         """
         Ask for a frame from each client whose screen moved by itself.
 
@@ -689,8 +689,15 @@ class Pymux:
 
         A pane that writes invalidates its own client. It never needed
         the clock. Lillecarl/pymux#117.
+
+        `but_not` is the application that already asked for a frame, so
+        that `a_client_asked_for_a_frame` can ask about the others and
+        leave that one alone.
         """
         for client_state in self._client_states.values():
+            if client_state.app is but_not:
+                continue
+
             # A `#{...}` variable asks which window this client looks
             # at, so each client reads its own text.
             with set_app(client_state.app):
@@ -706,6 +713,38 @@ class Pymux:
                     text,
                 )
                 client_state.app.invalidate()
+
+    def a_client_asked_for_a_frame(self, app) -> None:
+        """
+        What one client's own invalidate means for the other clients.
+
+        A pane that writes arrives here. prompt_toolkit invalidates the
+        application whose layout holds that pane, and no other one:
+        `Application._update_invalidate_events` attaches its handler to
+        the controls it walks, and a client's layout holds the window
+        it looks at. So the wake of the clients that can see the change
+        already happened before this runs.
+
+        Two things are left for the clients that cannot see it, and
+        both are why this is not simply nothing. Lillecarl/pymux#224.
+
+        - Every client's status line names the other windows, through
+          `window-status-format`. `what_time_moves` reads exactly that
+          text, so the clients whose window list moved wake and the
+          rest do not.
+        - The three syncs below. A program pushes kitty keyboard flags
+          or asks for a pointer by writing, and this is the path that
+          notices.
+
+        With one client there are no others, so the common case pays
+        for the syncs and nothing else.
+        """
+        self.counters.invalidated(Woke.AN_APPLICATION)
+        self.refresh_what_time_moves(but_not=app)
+
+        self.sync_kitty_flags()
+        self.sync_pointer_shape()
+        self.sync_keyboard_source_flags()
 
     @property
     def allow_remote_debugging(self) -> bool:

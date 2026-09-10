@@ -61,11 +61,10 @@ class Woke(StrEnum):
     the client, at the moment it did. Lillecarl/pymux#180.
 
     `AN_APPLICATION` is the one reason pymux cannot name, and it is the
-    default for that reason. Every invalidate runs through
-    `on_invalidate` and comes back here, and so does a pane that
-    writes, because prompt_toolkit invalidates an application from the
-    events of the window that has the focus. So a run of frames with
-    no named reason before them is a pane writing.
+    default for that reason. It is what `a_client_asked_for_a_frame`
+    counts: one client's application invalidated itself, which is what
+    a pane that writes does. So a run of frames with no named reason
+    before them is a pane writing.
     """
 
     AN_APPLICATION = "an application asked for a frame"

@@ -365,11 +365,15 @@ whose rectangle does not reach the view: a strip of sixteen columns
 went from 168k bytecode instructions a frame to 89k, and a divided
 window whose panes run past the bottom from 53k to 41k.
 Lillecarl/pymux#224 holds the reasoning. The rest of that issue -- that
-a client should not be woken by a pane it cannot see -- has its
-predicate now, in `View.shows`, and still needs a way to say which pane
-woke a client: `Pymux.invalidate` takes a reason and no pane, and a
-pane that writes wakes its client through prompt_toolkit rather than
-through `invalidate` at all.
+a client should not be woken by a pane it cannot see -- is done, and
+not by `View.shows`. **The thing that looked like the obstacle was the
+answer.** A pane that writes wakes its client through prompt_toolkit
+and not through `invalidate`, and prompt_toolkit attaches its handler
+to the controls of the layout it walks. A client's layout holds the
+window that client looks at, so that wake is already "the clients that
+can see it". What was wrong was `Pymux.invalidate` being called back
+from every application's `on_invalidate`, which spread it again.
+`Pymux.a_client_asked_for_a_frame` replaces that.
 
 Two smaller rules that follow:
 
@@ -489,13 +493,11 @@ somewhere, kept between frames -- so it is the first one that has
 nowhere to read from, and writing it is what says where the tree
 belongs. `Masonry` comes after it.
 
-Two things slice 5 left for whoever picks them up. The second half of
-Lillecarl/pymux#224 -- waking only the clients that can see a change --
-now has its predicate in `View.shows`, but `Pymux.invalidate` takes a
-reason and no pane, and a pane that writes wakes its client through
-prompt_toolkit rather than through `invalidate`. And
-Lillecarl/pymux#225 holds the `resize-window` flags that are not `-x`
-and `-y`.
+One thing slice 5 left for whoever picks it up: Lillecarl/pymux#225
+holds the `resize-window` flags that are not `-x` and `-y`. The second
+half of Lillecarl/pymux#224 -- waking only the clients that can see a
+change -- is done, and `View.shows` was not what did it. The section
+above says what did.
 
 ## Popups, and floating windows
 
