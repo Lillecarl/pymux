@@ -4,7 +4,7 @@ from prompt_toolkit.completion import Completer, Completion, WordCompleter
 from prompt_toolkit.document import Document
 
 from pymux.arrangement import LayoutTypes
-from pymux.key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS
+from pymux.key_spelling import KeyCompleter
 
 from .aliases import ALIASES
 from .commands import COMMANDS_TO_HANDLERS, get_option_flags_for_command
@@ -59,9 +59,16 @@ class CommandCompleter(Completer):
 
 _command_completer = CommandCompleter()
 _layout_type_completer = WordCompleter(sorted(t.value for t in LayoutTypes), WORD=True)
-_keys_completer = WordCompleter(
-    sorted(PYMUX_TO_PROMPT_TOOLKIT_KEYS.keys()), ignore_case=True, WORD=True
-)
+#: What completes the key of `bind-key` and `send-keys`.
+#:
+#: Both read a chord as well as a tmux name, so both offer the chord:
+#: a list of the older spelling beside a command that takes either is a
+#: person never finding out about ctrl+Home. Lillecarl/pymux#234.
+#:
+#: Not the prefix. `bind-key` says whether a binding needs it with
+#: `-n`, and `send-keys` sends to a pane, where `send-prefix` is the
+#: command that sends the prefix on. Neither takes it as part of a key.
+_keys_completer = KeyCompleter(offer_the_prefix=False)
 
 
 def get_completions_for_parts(parts, last_part, complete_event, pymux):
