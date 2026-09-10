@@ -22,8 +22,12 @@ from pymux.commands.aliases import ALIASES
 from pymux.commands.utils import wrap_argument
 from pymux.enums import WindowSize, Woke
 from pymux.format import format_pymux_string
-from pymux.key_mappings import prompt_toolkit_key_to_vt100_key
-from pymux.key_spelling import KeyCompleter, a_key_however_it_is_written
+from pymux.key_spelling import (
+    KeyCompleter,
+    an_event_however_it_is_written,
+)
+from pymux.keys import THE_CODE_AND_FORM_OF
+from pyte.keys import Modifier, Unhearable
 from pymux.layout import (
     focus_down,
     focus_left,
@@ -1058,11 +1062,15 @@ def send_prefix(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Send prefix to active pane.
     """
-    process = pymux.arrangement.get_active_pane().process
+    pane = pymux.arrangement.get_active_pane()
 
-    for k in pymux.key_bindings_manager.prefix:
-        vt100_data = prompt_toolkit_key_to_vt100_key(k)
-        process.write_input(vt100_data)
+    # The prefix is held as prompt_toolkit names, because that is what
+    # binds it, and those re-spell as chords: "c-b" is "ctrl+b". So the
+    # one command that sends a key pymux keeps for itself goes the same
+    # road as `send-keys`, and says the same thing when a pane cannot
+    # hear it. Lillecarl/pymux#237.
+    for key in pymux.key_bindings_manager.prefix:
+        send_a_key(pane, an_event_however_it_is_written(key), key)
 
 
 @cmd("bind-key", options="[-n] <key> [--] <command> [<arguments>...]")
@@ -1136,29 +1144,66 @@ def send_keys(pymux: "Pymux", variables: _VariablesDict) -> None:
         return
 
     for key in keys:
-        # Translate the name into a prompt_toolkit key, in either
-        # spelling. "C-Home" reads as no key at all and used to be sent
-        # as six letters, which is what Lillecarl/pymux#234 found;
-        # "ctrl+home" reads as the key. Both work now.
+        # Read the name into a key, in either spelling.
         try:
-            keys_sequence = a_key_however_it_is_written(key)
+            event = an_event_however_it_is_written(key)
         except ValueError:
             # Not a known key name. Like tmux, send this argument as
             # literal text.
             pane.process.write_input(key)
             continue
 
-        # Translate prompt_toolkit key to VT100 key. The name of a key
-        # is the toolkit's and the bytes are the protocol, so the
-        # translation belongs here and not to the process: a `Process`
-        # takes bytes and knows nothing about a key.
-        # Lillecarl/pymux#85.
-        for k in keys_sequence:
-            data = prompt_toolkit_key_to_vt100_key(
-                k, application_mode=pane.screen.in_application_mode
-            )
-            if data:
-                pane.process.write_input(pane.screen.encode_key(data))
+        send_a_key(pane, event, key)
+
+
+def send_a_key(pane, event, written: str) -> None:
+    """
+    Write one key to a pane, or say that the pane cannot read it.
+
+    **The pane decides what it can read, so the pane is asked.** A
+    legacy pane turns super+a into "a" and ctrl+shift+a into ctrl+a,
+    and used to be sent those in silence. Nobody typing `send-keys
+    super+a` means "type an a". Lillecarl/pymux#237.
+    """
+    try:
+        pane.process.write_input(pane.screen.encode_key_event(event, exactly=True))
+    except Unhearable as cannot:
+        raise CommandException(_why_not(written, cannot))
+
+
+def _why_not(written: str, cannot: Unhearable) -> str:
+    "Why a pane could not read a key, in a line a person can act on."
+    if not cannot.encoded:
+        return (
+            "The program in this pane cannot read %s at all. It reads the "
+            "legacy encoding, which has no form for that key." % (written,)
+        )
+    lost = "+".join(
+        modifier.name.lower() for modifier in Modifier if cannot.lost & modifier
+    )
+    return (
+        "The program in this pane cannot read %s: it reads the legacy "
+        "encoding, which has no %s on that key, so it would read %s instead."
+        % (
+            written,
+            lost,
+            _named(cannot.event._replace(mods=cannot.event.mods & ~cannot.lost)),
+        )
+    )
+
+
+def _named(event) -> str:
+    "A key event, written the way a person writes one."
+    parts = [modifier.name.lower() for modifier in Modifier if event.mods & modifier]
+    name = THE_NAME_OF_THE_CODE.get((event.code, event.final))
+    parts.append(name or chr(event.code))
+    return "+".join(parts)
+
+
+#: The name of a key, by the number and form that carry it. It is
+#: `THE_CODE_AND_FORM_OF` read the other way, so a message names a key
+#: the way a person would write it back.
+THE_NAME_OF_THE_CODE = {where: name for name, where in THE_CODE_AND_FORM_OF.items()}
 
 
 @cmd("copy-mode", options="[-u]")

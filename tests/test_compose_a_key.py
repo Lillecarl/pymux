@@ -257,7 +257,7 @@ async def test_the_box_says_what_it_is_asking_for_once():
     [
         ("ctrl+home", "\x1b[1;5H"),
         ("C-Home", "\x1b[1;5H"),
-        ("Home", "\x1b[1~"),
+        ("Home", "\x1b[H"),
         ("f5", "\x1b[15~"),
         ("ctrl+shift+end", "\x1b[1;6F"),
         # A sequence: two presses, in order.

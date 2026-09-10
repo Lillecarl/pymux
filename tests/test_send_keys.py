@@ -125,9 +125,16 @@ THE_KEYS = [
     ("Down", csi(escape.CUD)),
     ("Left", csi(escape.CUB)),
     ("Right", csi(escape.CUF)),
-    ("Home", "\x1b[1~"),
-    ("End", "\x1b[4~"),
-    ("BSpace", "\x08"),
+    # Home and End go out in the letter form, which is what xterm
+    # sends and what their modified forms already used: ctrl+Home is
+    # "\x1b[1;5H". The tilde form was the first of four that
+    # `ANSI_SEQUENCES` lists, and the inversion took the first, so
+    # plain Home and ctrl+Home disagreed about which key they were.
+    ("Home", "\x1b[H"),
+    ("End", "\x1b[F"),
+    # And the backspace key sends a delete, which is what a fresh pty
+    # reports as its erase character. DECBKM is what asks for "\x08".
+    ("BSpace", "\x7f"),
     ("BTab", csi(Csi.CBT)),
     ("DC", "\x1b[3~"),
     ("IC", "\x1b[2~"),
@@ -174,56 +181,72 @@ def test_a_key_sends_what_a_keyboard_sends(pymux, name, expected):
     assert written == expected
 
 
-def test_control_and_shift_on_a_letter_sends_what_a_keyboard_sends(pymux):
+#: The keys a pane in the legacy encoding has no form for.
+#:
+#: **Each of these used to be sent as a different key, in silence.**
+#: ctrl+shift+a went as ctrl+a, super+a went as "a", and a person had
+#: no way to find out. Lillecarl/pymux#168 wrote the first trade down
+#: as intended; Carl asked for the opposite on Lillecarl/pymux#237, and
+#: he is right. If you meant ctrl+a, write ctrl+a.
+THE_KEYS_A_LEGACY_PANE_CANNOT_READ = [
+    ("C-S-a", "shift"),
+    ("c-s-z", "shift"),
+    ("Super-a", "super"),
+    ("SUPER-A", "super"),
+    ("Super-S-a", "super"),
+    ("Super-up", "super"),
+    ("Super-enter", "super"),
+    ("Hyper-escape", "hyper"),
+    ("ctrl+shift+a", "shift"),
+    ("super+a", "super"),
+    # Ctrl has a legacy form and super does not, so this one is
+    # refused for the super alone.
+    ("Super-C-a", "super"),
+]
+
+
+@pytest.mark.parametrize("name, lost", THE_KEYS_A_LEGACY_PANE_CANNOT_READ)
+def test_a_key_the_pane_cannot_read_is_refused(pymux, name, lost):
+    a_pane(pymux)
+
+    written, errors = send(pymux, name)
+
+    assert written == ""
+    assert len(errors) == 1
+    assert lost in errors[0]
+    assert name in errors[0]
+
+
+@pytest.mark.parametrize(
+    "name, expected",
+    [
+        ("C-S-a", "\x1b[97;6u"),
+        ("super+a", "\x1b[97;9u"),
+        ("Hyper-escape", "\x1b[27;17u"),
+        ("ctrl+shift+a", "\x1b[97;6u"),
+    ],
+)
+def test_the_same_keys_reach_a_pane_that_asked_for_them(pymux, name, expected):
     """
-    A binding can name this key, and `send-keys` still has to give a
-    pane the bytes a keyboard would have given it. The legacy encoding
-    has no form of its own here -- ctrl+a and ctrl+shift+a are one
-    control code -- so the answer is the control code.
-    Lillecarl/pymux#168.
+    Nothing about the key changed. The pane did, and that is the whole
+    point: what can be sent belongs to the pane.
+    """
+    a_pane(pymux, "\x1b[>1u")
+
+    assert send(pymux, name) == (expected, [])
+
+
+def test_the_modifiers_a_legacy_pane_can_read_still_go(pymux):
+    """
+    ctrl is a control code and alt is an escape in front of the key.
+    Both are ambiguous there, and ambiguous is not the same as absent.
     """
     a_pane(pymux)
 
-    written, errors = send(pymux, "C-S-a")
-
-    assert errors == []
-    assert written == "\x01"
-
-
-def test_a_key_with_super_can_be_bound_and_sent(pymux):
-    """
-    tmux has no spelling for super, hyper or meta, so pymux writes
-    them out. The order they are written in does not matter, and the
-    case does not either. Lillecarl/pymux#181.
-    """
-    a_pane(pymux)
-
-    for spelling in ("Super-a", "super-a", "SUPER-A"):
-        assert send(pymux, spelling) == ("a", [])
-    assert send(pymux, "Super-C-a") == ("\x01", [])
-    assert send(pymux, "C-Super-a") == ("\x01", [])
-
-
-def test_a_pane_gets_what_a_keyboard_it_can_hear_would_have_sent(pymux):
-    """
-    The legacy encoding cannot carry super, hyper or meta at all, so
-    what is left is the key with the modifiers it can carry. The same
-    trade `send-keys C-S-a` makes.
-    """
-    a_pane(pymux)
-
-    assert send(pymux, "Super-S-a") == ("A", [])
-    assert send(pymux, "Super-up") == ("\x1b[A", [])
-    assert send(pymux, "Super-enter") == ("\r", [])
-    assert send(pymux, "Hyper-escape") == ("\x1b", [])
-
-
-def test_the_shift_spelling_is_case_insensitive(pymux):
-    "A person writes a key the way it reads."
-    a_pane(pymux)
-
-    assert send(pymux, "c-s-z")[0] == "\x1a"
-    assert send(pymux, "C-S-z")[0] == "\x1a"
+    assert send(pymux, "C-a") == ("\x01", [])
+    assert send(pymux, "M-a") == ("\x1ba", [])
+    assert send(pymux, "M-C-a") == ("\x1b\x01", [])
+    assert send(pymux, "shift+a") == ("A", [])
 
 
 def test_an_arrow_is_the_application_form_for_a_pane_that_asked(pymux):
