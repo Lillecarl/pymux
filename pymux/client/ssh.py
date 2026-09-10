@@ -16,13 +16,17 @@ middle is openssh's. With the client opening the socket itself the pane
 is drawn here, so everything this machine has stays reachable: its
 clipboard, its files, and the keyboard that is really attached.
 
+**Nothing runs on the other machine.** Not a shell, not a pymux, not
+even to find out which socket to open: `ssh://host` with no path lists
+the sockets over SFTP, which is a subsystem of sshd itself. So the far
+side needs a pymux server and an sshd, and nothing else.
+
 **It connects when it attaches, not when it is made.** The connection
 has to live in the loop that reads it, and `create_client` is called
 outside one.
 
-This does not start a server. `ssh://` names a socket that is already
-there; spawning one needs a command on the far side before the socket
-exists, which is the other half of Lillecarl/pymux#90.
+This does not start a server. `ssh://` names a machine that is already
+running one; spawning one is the other half of Lillecarl/pymux#90.
 """
 
 from __future__ import annotations
@@ -53,11 +57,27 @@ THE_SCHEME = "ssh://"
 SIZE_INTERVAL = 0.5
 
 
+#: Where a server binds when nobody named a socket, and the shape of
+#: the name it takes. `pipes/posix.py` builds it, and
+#: `client/posix.py` globs the same thing to list the servers here.
+#:
+#: `/tmp` and not `tempfile.gettempdir()`, because the directory
+#: belongs to the other machine. It is what `TMPDIR` unset means, which
+#: is what a login shell almost always has.
+THE_SOCKET_DIRECTORY = "/tmp"
+THE_SOCKET_NAMES = "pymux.sock.%s.*"
+
+
 class SshTarget(NamedTuple):
-    "A machine, and the path of a socket on it."
+    """
+    A machine, and the path of a socket on it.
+
+    `path` is `None` when the address named none. It is filled in after
+    connecting, because finding it means asking the other machine.
+    """
 
     host: str
-    path: str
+    path: str | None
     username: str | None
     port: int | None
 
@@ -69,31 +89,23 @@ def is_an_ssh_url(name: str | None) -> bool:
 
 def the_default_socket(username: str) -> str:
     """
-    Where the first server of this user listens.
+    Where the first server of a user listens.
 
-    **A guess, and the only one that can be made from here.** A server
-    with no name takes the lowest free number, so the first one on a
-    machine is always `.0`, and most machines have exactly one. Reading
-    which sockets are really there means globbing a directory on the
-    far side, which needs a command run over the connection -- the
-    other half of Lillecarl/pymux#90.
-
-    The directory is `/tmp` and not `tempfile.gettempdir()`, because
-    the answer belongs to the other machine and this one cannot ask.
-    Name the path when that is wrong.
+    The fallback, for a machine whose sshd does not offer SFTP. A
+    server with no name takes the lowest free number, so the first one
+    is always `.0`, and most machines have exactly one.
+    `SshClient._the_socket` is what asks rather than guesses.
     """
-    return "/tmp/pymux.sock.%s.0" % (username,)
+    return "%s/pymux.sock.%s.0" % (THE_SOCKET_DIRECTORY, username)
 
 
 def the_ssh_target(url: str) -> SshTarget:
     """
     Read `ssh://[user@]host[:port][/path/to/socket]`.
 
-    With no path it is the first server of the user who logs in, which
-    `the_default_socket` says how to find and why it is a guess.
+    With no path the socket is found after connecting, so the path is
+    `None` here and `SshClient._the_socket` fills it in.
     """
-    import getpass
-
     parsed = urlparse(url)
 
     if parsed.scheme != "ssh":
@@ -101,16 +113,14 @@ def the_ssh_target(url: str) -> SshTarget:
     if not parsed.hostname:
         raise ValueError("%r names no machine." % (url,))
 
-    username = parsed.username
-
     path = parsed.path
     if not path or path == "/":
-        path = the_default_socket(username or getpass.getuser())
+        path = None
 
     return SshTarget(
         host=parsed.hostname,
         path=path,
-        username=username,
+        username=parsed.username,
         port=parsed.port,
     )
 
@@ -138,6 +148,9 @@ class SshClient(TerminalClient):
         #: Nothing here passes any, so a real run reads the agent, the
         #: keys in `~/.ssh` and `known_hosts`, the way `ssh` does.
         self.connect_with = connect_with
+        #: The socket that was really opened, once it has been. It is
+        #: the address's path, or the one the listing found.
+        self.path = self.target.path
         self._writer = None
 
     # ------------------------------------------------------------------
@@ -171,9 +184,77 @@ class SshClient(TerminalClient):
             asking.setdefault("username", target.username)
 
         connection = await asyncssh.connect(target.host, **asking)
-        reader, writer = await connection.open_unix_connection(target.path)
+        try:
+            path = target.path or await self._the_socket(connection)
+            reader, writer = await connection.open_unix_connection(path)
+        except Exception:
+            connection.close()
+            raise
+
+        self.path = path
         self._writer = writer
         return connection, reader
+
+    async def _the_socket(self, connection) -> str:
+        """
+        Which socket to open, when the address named none.
+
+        **Nothing runs on the other machine.** The listing goes over
+        SFTP, which is a subsystem of sshd itself and not a program
+        anybody has to install; the channel to the socket is
+        `direct-streamlocal@openssh.com`, which is sshd as well. So a
+        remote machine needs a pymux server and an sshd, and nothing
+        else at all.
+
+        The newest server, which is what `pymux attach` with no `-S`
+        means on this machine: `client/posix.py` sorts the same names
+        by the same time, because nothing writes to a socket file after
+        the bind, so its time is the time the server started.
+
+        The user is the one that was really authenticated, which is
+        better than a guess here: `~/.ssh/config` can name a different
+        one, and asyncssh has already applied it.
+        """
+        import stat as the_stat
+
+        username = connection.get_extra_info("username")
+        pattern = "%s/%s" % (
+            THE_SOCKET_DIRECTORY,
+            THE_SOCKET_NAMES % (username,),
+        )
+
+        try:
+            async with connection.start_sftp_client() as sftp:
+                found = await sftp.glob_sftpname(pattern)
+        except Exception:
+            # No SFTP subsystem, or nothing matched. Fall back to where
+            # the first server of a user listens, which is right on a
+            # machine that has one.
+            return the_default_socket(username)
+
+        sockets = [
+            one
+            for one in found
+            if one.attrs.permissions and the_stat.S_ISSOCK(one.attrs.permissions)
+        ]
+        if not sockets:
+            return the_default_socket(username)
+
+        newest = max(sockets, key=lambda one: one.attrs.mtime or 0)
+        name = newest.filename
+        if isinstance(name, bytes):
+            name = name.decode("utf-8", "replace")
+
+        # `glob` answers with the path it was given, which was absolute.
+        return (
+            name
+            if name.startswith("/")
+            else "%s/%s"
+            % (
+                THE_SOCKET_DIRECTORY,
+                name,
+            )
+        )
 
     # ------------------------------------------------------------------
     # What a person runs.

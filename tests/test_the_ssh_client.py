@@ -57,27 +57,25 @@ def test_a_path_with_more_than_one_part_survives():
     assert target.path == "/run/user/1000/pymux/sock"
 
 
-def test_no_path_means_the_first_server_of_the_user():
+def test_no_path_is_answered_after_connecting():
     """
-    `ssh://host` is the whole address a person wants to type. The first
-    server of a user is always socket 0, because a server with no name
-    takes the lowest free number.
+    `ssh://host` is the whole address a person wants to type. Which
+    socket that is depends on the other machine, so it is not decided
+    here.
     """
-    assert the_ssh_target("ssh://carl@dynhetz").path == "/tmp/pymux.sock.carl.0"
-    assert the_ssh_target("ssh://carl@dynhetz/").path == "/tmp/pymux.sock.carl.0"
-
-
-def test_no_path_and_no_user_means_the_user_here():
-    "`ssh` logs in as the user running it, so the socket is theirs."
-    import getpass
-
-    assert the_ssh_target("ssh://dynhetz").path == "/tmp/pymux.sock.%s.0" % (
-        getpass.getuser(),
-    )
+    assert the_ssh_target("ssh://carl@dynhetz").path is None
+    assert the_ssh_target("ssh://carl@dynhetz/").path is None
 
 
 def test_a_named_path_still_wins():
     assert the_ssh_target("ssh://carl@dynhetz/run/sock").path == "/run/sock"
+
+
+def test_the_fallback_is_the_first_server_of_the_user():
+    "For a machine whose sshd offers no SFTP to list with."
+    from pymux.client.ssh import the_default_socket
+
+    assert the_default_socket("carl") == "/tmp/pymux.sock.carl.0"
 
 
 def test_an_address_with_no_machine_is_refused():
@@ -162,6 +160,9 @@ async def an_ssh_server(where: Path, socket_path: str):
         server_factory=OneSocket,
         server_host_keys=[str(host_key)],
         authorized_client_keys=str(client_pub),
+        # The subsystem that lists the sockets when the address named
+        # none. sshd offers it; nothing is installed for it.
+        sftp_factory=True,
     )
     port = server.get_addresses()[0][1]
     return server, port, str(client_key)
@@ -207,6 +208,58 @@ async def test_a_command_reaches_a_server_over_ssh(tmp_path=None):
                 if not pane.process.is_terminated:
                     pane.process.kill()
 
+    assert exit_code == 0
+    assert "".join(said).strip() == pymux.session_name, said
+
+
+@in_a_loop
+async def test_an_address_with_no_path_finds_the_socket_itself():
+    """
+    `ssh://host` alone, and nothing runs on the far side to answer it.
+
+    The socket is deliberately **not** number zero, so a fallback to
+    "the first server of this user" would open nothing. What passes
+    this test is the SFTP listing.
+    """
+    import getpass
+    import tempfile
+
+    where = Path(tempfile.mkdtemp())
+    # Where a real server binds, because that is what the listing
+    # looks for. Seven, so that the guess would miss.
+    socket_path = "/tmp/pymux.sock.%s.7" % (getpass.getuser(),)
+    Path(socket_path).unlink(missing_ok=True)
+
+    pymux = Pymux()
+    pymux.listen_on_socket(socket_path)
+    pymux.create_window(A_PANE)
+    await asyncio.sleep(0.5)
+
+    server, port, client_key = await an_ssh_server(where, socket_path)
+
+    client = SshClient(
+        "ssh://127.0.0.1:%d" % (port,),
+        known_hosts=None,
+        client_keys=[client_key],
+        username=getpass.getuser(),
+    )
+    assert client.target.path is None, "the address named no socket"
+
+    said = []
+    try:
+        exit_code = await _what_it_says(
+            client, "list-sessions -F '#{session_name}'", said
+        )
+    finally:
+        server.close()
+        pymux.stop()
+        for window in list(pymux.arrangement.windows):
+            for pane in list(window.panes):
+                if not pane.process.is_terminated:
+                    pane.process.kill()
+        Path(socket_path).unlink(missing_ok=True)
+
+    assert client.path == socket_path, client.path
     assert exit_code == 0
     assert "".join(said).strip() == pymux.session_name, said
 
