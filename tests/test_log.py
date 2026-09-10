@@ -221,3 +221,21 @@ def test_a_frame_is_not_logged_at_info():
     said = inspect.getsource(Pymux.invalidate)
     assert "logger.debug(" in said
     assert "logger.info(" not in said
+
+
+def test_a_pane_that_writes_is_still_logged():
+    """
+    The line that says a pane is animating.
+
+    A pane's write does not come through `Pymux.invalidate` any more --
+    it wakes only the clients that can see it (Lillecarl/pymux#224) --
+    so the line that found eleven frames a second has to be on the path
+    that a write does take.
+    """
+    import inspect
+
+    from pymux.main import Pymux
+
+    said = inspect.getsource(Pymux.a_client_asked_for_a_frame)
+    assert "logger.debug(" in said
+    assert "logger.info(" not in said

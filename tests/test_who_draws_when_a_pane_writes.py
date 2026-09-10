@@ -95,7 +95,10 @@ async def test_a_pane_in_a_window_nobody_looks_at_draws_nothing():
         # And the same writes into the pane this client does look at
         # draw a frame each, so the zero above is not a dead harness.
         await five_writes(shown.panes[0], "somebody is looking\r\n")
-        assert state.app.render_counter == drawn + TIMES
+        # More than none. Not `== TIMES`: a loaded machine coalesces
+        # two writes into one frame, and this is a control and not a
+        # measurement of the coalescing.
+        assert state.app.render_counter > drawn
 
 
 @in_a_loop
@@ -115,20 +118,25 @@ async def test_a_pane_does_not_wake_a_client_looking_elsewhere():
         drawn_by_b = b.app.render_counter
         await five_writes(window_of_a.panes[0], "a pane of the other window\r\n")
 
-        assert a.app.render_counter == drawn_by_a + TIMES
+        assert a.app.render_counter > drawn_by_a
         assert b.app.render_counter == drawn_by_b
 
 
 @in_a_loop
 async def test_a_title_a_pane_writes_reaches_the_other_client():
     """
-    The reason the wake cannot simply go.
+    The wake still happens. It was narrowed and not removed.
 
-    Every client's status line names every window, and the titlebar of
-    a pane carries `#T`, which is the title the program in it wrote.
-    So a pane that writes a title changes what a client looking at
-    another window has to draw. `what_time_moves` reads exactly that
-    text, and only a client whose text moved wakes.
+    This is the widest text `what_time_moves` reads: every pane of
+    every window, through `#T`. The default `window-status-format` is
+    `#I:#W#F` and carries no `#T`, so this title alone does not change
+    what B draws -- what does is `#W` moving, which is the name of the
+    program in the pane, or a `window-status-format` a person wrote
+    with `#T` in it. Lillecarl/pymux#251 holds the breadth.
+
+    So this test does not say the wake was needed here. It says the
+    wake is still there, and it fails for anybody who deletes it rather
+    than narrowing it.
     """
     with over_a_connection() as session:
         pymux = session.pymux

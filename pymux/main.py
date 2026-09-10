@@ -740,6 +740,12 @@ class Pymux:
         for the syncs and nothing else.
         """
         self.counters.invalidated(Woke.AN_APPLICATION)
+        # DEBUG: this is the line that says a pane is animating. A
+        # server drew eleven frames a second with nobody typing, and a
+        # line each is what made one log 86 MB in four days.
+        # Lillecarl/pymux#248.
+        logger.debug("Drawing 1 of the clients: %s", Woke.AN_APPLICATION)
+
         self.refresh_what_time_moves(but_not=app)
 
         self.sync_kitty_flags()
