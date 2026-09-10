@@ -362,6 +362,31 @@ class JustifyOption(Option):
             raise SetOptionError("Invalid justify option.")
 
 
+class ChoiceOption(Option):
+    """
+    An option whose value is one word of a few.
+
+    `StringOption` takes anything; this one takes the words it was
+    given, and nothing else. A word that is not one of them would
+    change nothing and say nothing, which is the worst answer a
+    configuration mistake can get.
+    """
+
+    def __init__(self, attribute_name, choices):
+        self.attribute_name = attribute_name
+        self.choices = tuple(choices)
+
+    def get_all_values(self, pymux):
+        return sorted(set(self.choices + (getattr(pymux, self.attribute_name),)))
+
+    def set_value(self, pymux, value):
+        if value not in self.choices:
+            raise SetOptionError(
+                "Expecting one of: %s." % ", ".join(sorted(self.choices))
+            )
+        setattr(pymux, self.attribute_name, value)
+
+
 ALL_OPTIONS = {
     # Whether another process of this user may attach a debugger to this
     # server: `python -m pdb -p <pid>`, or py-spy. Off, and it stays off
@@ -375,6 +400,14 @@ ALL_OPTIONS = {
     "log-level": LogLevelOption(),
     "bell": OnOffOption("enable_bell"),
     "set-clipboard": OnOffOption("enable_clipboard"),
+    # Where the browser that "open-url" opens lands on. "last" is the
+    # client somebody used last, by the stamp that `window-size
+    # latest` reads; "broadcast" is every attached client.
+    "open-url-target": ChoiceOption("open_url_target", ["last", "broadcast"]),
+    # What happens to an open request. "open" sends it, "ask" shows
+    # "(y/n)" in the command bar of the clients it would land on, and
+    # "off" drops it.
+    "open-url-mode": ChoiceOption("open_url_mode", ["open", "ask", "off"]),
     "history-limit": PositiveIntOption(
         "history_limit", [200, 500, 1000, 2000, 5000, 10000]
     ),

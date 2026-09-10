@@ -50,7 +50,7 @@ from . import log
 from .log import logger
 from .notifications import NotificationRoutes
 from .options import ALL_OPTIONS, ALL_WINDOW_OPTIONS, ExtendedKeys
-from .osc import build_osc
+from .osc import build_osc, open_url_of
 from .pipes import bind_and_listen_on_socket, connect_in_memory
 from .prompt_toolkit_compat import apply_prompt_toolkit_compat_fixes
 from .rc import STARTUP_COMMANDS
@@ -499,6 +499,8 @@ class Pymux:
         self.command_palette = False
         self.enable_bell = True
         self.enable_clipboard = True
+        self.open_url_target = "last"
+        self.open_url_mode = "open"
 
         # The paste buffer of the session. Copy mode writes it, a pane
         # that writes the clipboard of the user writes it too, and
@@ -1322,6 +1324,53 @@ class Pymux:
                 return window
         return None
 
+    def the_clients_to_open_on(self) -> "list[ClientState]":
+        """
+        The clients that receive what "open-url" opens.
+
+        `open-url-target last` is the client a person used last, by the
+        same stamp that `window-size latest` reads. Nothing attached
+        means nobody, and the person who asked hears so.
+        """
+        clients = list(self._client_states.values())
+        if self.open_url_target != "broadcast" and clients:
+            return [max(clients, key=lambda client: client.last_used)]
+        return clients
+
+    def open_url(self, url: str, confirmed: bool = False) -> None:
+        """
+        Open a URL in the browser of a client, or ask first.
+
+        `open-url-mode` decides: "open" sends the packet, "ask" shows
+        the question in the command bar of every client it would land
+        on -- a yes runs "open-url -c", so the question is asked once
+        -- and "off" drops it.
+
+        The packet goes to the client and not to the server, because
+        the browser of the user runs on the machine of the client. The
+        client picks the way its platform opens one: "open" on macOS,
+        "xdg-open" or what $BROWSER names on Linux.
+        """
+        if self.open_url_mode == "off":
+            logger.info("Not opening %s: open-url-mode is off.", url)
+            return
+
+        clients = self.the_clients_to_open_on()
+        if not clients:
+            self.add_command_error("Nobody is attached to open %s." % (url,))
+            return
+
+        if self.open_url_mode == "ask" and not confirmed:
+            command = "open-url -c %s" % (shlex.quote(url),)
+            for client_state in clients:
+                client_state.confirm_text = "Open %s in the browser? (y/n)" % (url,)
+                client_state.confirm_command = command
+            return
+
+        for client_state in clients:
+            client_state.connection._send_packet({"cmd": "open", "data": url})
+            client_state.message = "Opened %s in the browser of this machine." % (url,)
+
     def forward_osc(self, pane, code: str, param: str) -> None:
         """
         Write an OSC sequence of a pane to the terminals of the
@@ -1343,6 +1392,16 @@ class Pymux:
                 # screen of the pane holds it; this only asks every
                 # client to look again.
                 self.sync_pointer_shape()
+                return
+
+            if code == Osc.TERMINAL_EXTENSION:
+                # iTerm2's namespace. The one subcommand a pane may use
+                # is the one this session can serve; nothing else of
+                # the namespace goes out, because a payload that was
+                # not checked must not reach the terminal of the user.
+                url = open_url_of(param)
+                if url is not None:
+                    self.open_url(url)
                 return
 
             if code == Osc.CLIPBOARD:

@@ -976,6 +976,18 @@ def confirm_before(pymux: "Pymux", variables: _VariablesDict) -> None:
     client_state.confirm_command = variables["<command>"]
 
 
+@cmd("open-url", options="[-c] <url>")
+def open_url(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Open a URL in the browser of a client.
+
+    The client that gets it follows `open-url-target`, and whether it
+    asks first follows `open-url-mode`. "-c" is the answer of a
+    confirmation: it opens without asking again.
+    """
+    pymux.open_url(variables["<url>"], confirmed=bool(variables["-c"]))
+
+
 def ask_the_person(
     pymux: "Pymux",
     message: str,

@@ -15,6 +15,7 @@ import json
 import os
 import signal
 import sys
+import webbrowser
 
 from prompt_toolkit.input.posix_utils import PosixStdinReader
 from prompt_toolkit.input.vt100 import cooked_mode, raw_mode
@@ -155,6 +156,15 @@ class TerminalClient(Client):
             # Suspend client process to background.
             if hasattr(signal, "SIGTSTP"):
                 os.kill(os.getpid(), signal.SIGTSTP)
+
+        elif packet["cmd"] == "open":
+            # The server asks this machine, not the machine of the
+            # server, to open the URL. `webbrowser` picks the way this
+            # platform does it: "open" on macOS, "xdg-open" or what
+            # $BROWSER names on Linux, "startfile" on Windows. A browser
+            # that fails to open stays silent: this client has no
+            # screen of its own to say it on.
+            webbrowser.open(packet["data"])
 
         elif packet["cmd"] == "kitty-keyboard":
             # Kitty keyboard protocol instructions for the outer
