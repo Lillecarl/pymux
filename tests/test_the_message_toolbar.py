@@ -24,9 +24,19 @@ FIRST = "/home/someone/.config/pymux/pymux.conf line 1: first thing wrong"
 SECOND = "/home/someone/.config/pymux/pymux.conf line 2: second thing wrong"
 
 
+#: A status line with nothing in it that time moves.
+#:
+#: Three of these tests compare two screens, and each screen comes from
+#: a server of its own. The default `status-right` draws a clock, so two
+#: servers built either side of a second differ by a row that has
+#: nothing to do with a message. `test_auto_refresh.py` empties it for
+#: the same reason.
+NO_CLOCK = ("set-option status-right ''",)
+
+
 def drawn_with_a_message(message, columns=40):
     "Every row of the screen while `message` is up."
-    with a_client(columns=columns) as (pymux, draw):
+    with a_client(commands=NO_CLOCK, columns=columns) as (pymux, draw):
         pymux.get_client_state().message = message
         return draw()
 
