@@ -32,6 +32,7 @@ key presses, and land in whichever pane has the focus.
 
 import logging
 import re
+from typing import Tuple
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -64,7 +65,9 @@ __all__ = [
     "Dropped",
     "KEYS_A_KEYBOARD_SPELLS_OUT",
     "KittyVt100Parser",
+    "THE_CODE_AND_FORM_OF",
     "THE_NAME_OF_A_KEY",
+    "an_event_named",
     "parse_kitty_key",
     "the_key_named",
 ]
@@ -491,6 +494,79 @@ def _the_modified_form_of(key: Keys, ctrl: bool, shift: bool) -> Keys | None:
         if modified is not None:
             return modified
     return None
+
+
+def _the_code_and_final_of_a_name() -> dict:
+    """
+    The number and form of every key that has a name: `_base_of` read
+    the other way.
+
+    The three tables that name a key off the wire are inverted rather
+    than written again. A character is not here; its number is its code
+    point.
+    """
+    named = {name: (int(code), "u") for code, name in _CONTROL_KEY_NAMES.items()}
+    for code, key in _TILDE_KEYS.items():
+        named[str.__str__(key)] = (code, "~")
+    for final, key in _LETTER_KEYS.items():
+        # The letter form always carries one: the final byte is the key.
+        named[str.__str__(key)] = (1, final)
+    return named
+
+
+THE_CODE_AND_FORM_OF = _the_code_and_final_of_a_name()
+
+
+def _the_modifiers_written_into(name: str) -> Tuple[int, str]:
+    '`name_of` read back: "s-tab" is shift on tab.'
+    mods = 0
+    found = True
+    while found:
+        found = False
+        for modifier, spelling in MODIFIER_NAMES:
+            prefix = spelling + "-"
+            if len(name) > len(prefix) and name.startswith(prefix):
+                mods |= modifier
+                name = name[len(prefix) :]
+                found = True
+                break
+    return mods, name
+
+
+def an_event_named(base: str, mods: int) -> KeyEvent:
+    """
+    The key event that a base key name and its modifiers are.
+
+    `base` is what `_base_of` writes, and this is its inverse.
+
+    **A name goes to a pane as an event, never as bytes.** The round
+    trip through the legacy encoding dropped whatever that encoding
+    cannot carry, and a key with no legacy form came out as its own
+    name. Lillecarl/pymux#237.
+
+    Raises `ValueError` for a name that no key has.
+    """
+    known = THE_CODE_AND_FORM_OF.get(base)
+    if known is not None:
+        code, final = known
+        return KeyEvent(code, mods, final)
+
+    carried, rest = _the_modifiers_written_into(base)
+    if carried:
+        # A base that carries its own modifiers, which is how the
+        # toolkit names a few keys: `Keys.BackTab` is "s-tab". The
+        # chord may hold more, and the two sets join.
+        return an_event_named(rest, mods | carried)
+
+    if len(base) == 1:
+        # A character key. The protocol carries the key of the layout,
+        # which is the unshifted one, and the shift is a modifier
+        # beside it rather than a capital.
+        if base.isupper():
+            return KeyEvent(ord(base.lower()), mods | Modifier.SHIFT, "u")
+        return KeyEvent(ord(base), mods, "u")
+
+    raise ValueError("No key is named %r." % (base,))
 
 
 def _with_alt(key: str | Keys, mods: int) -> _KeyResult:

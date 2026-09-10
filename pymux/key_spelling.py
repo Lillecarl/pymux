@@ -38,10 +38,11 @@ import re
 from typing import Dict, Sequence, Tuple
 
 from prompt_toolkit.completion import Completer, Completion
-from pyte.keys import Modifier
+from pyte.keys import KeyEvent, Modifier
 
 from .key_mappings import (
     PYMUX_TO_PROMPT_TOOLKIT_KEYS,
+    THE_MODIFIERS_A_PERSON_WRITES,
     pymux_key_to_prompt_toolkit_key_sequence,
 )
 from .keys import (
@@ -49,6 +50,7 @@ from .keys import (
     KEYS_A_KEYBOARD_SPELLS_OUT,
     THE_NAME_OF_A_KEY,
     Dropped,
+    an_event_named,
     the_key_named,
 )
 
@@ -62,8 +64,11 @@ __all__ = [
     "TOGETHER",
     "a_chord",
     "a_key_however_it_is_written",
+    "an_event",
+    "an_event_however_it_is_written",
     "as_a_chord",
     "keys_of",
+    "the_events_of",
 ]
 
 
@@ -196,25 +201,8 @@ def a_chord(text: str) -> Tuple[str, ...]:
     Raises `ValueError` for a name that no key has, and for a
     combination prompt_toolkit cannot spell.
     """
-    parts = text.split(TOGETHER)
-
-    if len(parts) >= 2 and parts[-1] == "":
-        if parts[-2] == "":
-            # The plus key itself, which is written "+", and with
-            # modifiers "ctrl++". Splitting leaves two empty parts
-            # where the key was.
-            parts = parts[:-2] + [TOGETHER]
-        else:
-            raise ValueError("%r names no key after the %r." % (text, TOGETHER))
-
-    mods = 0
-    for part in parts[:-1]:
-        modifier = MODIFIERS_A_PERSON_WRITES.get(part.lower())
-        if modifier is None:
-            raise ValueError("%r is not a modifier, in %r." % (part, text))
-        mods |= modifier
-
-    key = the_key_named(_the_base_named(parts[-1]), mods)
+    mods, base = _the_modifiers_and_base_of(text)
+    key = the_key_named(base, mods)
     if isinstance(key, Dropped):
         raise ValueError("No name here for the key %r: %s." % (text, key.reason))
     return key if isinstance(key, tuple) else (key,)
@@ -257,26 +245,112 @@ def keys_of(text: str, prefix: Sequence[str] = ()) -> Tuple[str, ...]:
     return tuple(keys)
 
 
-#: The letter tmux writes for each modifier, and the word this
-#: spelling writes.
+def _the_modifiers_and_base_of(text: str) -> Tuple[int, str]:
+    """
+    The modifier bits and the base key that one chord names.
+
+    Raises `ValueError` for a name that no key has, and for a word that
+    is not a modifier.
+    """
+    parts = text.split(TOGETHER)
+
+    if len(parts) >= 2 and parts[-1] == "":
+        if parts[-2] == "":
+            # The plus key itself, which is written "+", and with
+            # modifiers "ctrl++". Splitting leaves two empty parts
+            # where the key was.
+            parts = parts[:-2] + [TOGETHER]
+        else:
+            raise ValueError("%r names no key after the %r." % (text, TOGETHER))
+
+    mods = 0
+    for part in parts[:-1]:
+        modifier = MODIFIERS_A_PERSON_WRITES.get(part.lower())
+        if modifier is None:
+            raise ValueError("%r is not a modifier, in %r." % (part, text))
+        mods |= modifier
+
+    return mods, _the_base_named(parts[-1])
+
+
+def an_event(text: str) -> KeyEvent:
+    """
+    The key event that one chord is, such as "ctrl+shift+a".
+
+    **The form a key goes to a pane in.** The other reading, into
+    prompt_toolkit keys, is for binding and never reaches a pane. The
+    two used to be one road, through the legacy encoding, which lost
+    everything that encoding cannot carry. Lillecarl/pymux#237.
+
+    Raises `ValueError` for a name that no key has.
+    """
+    mods, base = _the_modifiers_and_base_of(text)
+    return an_event_named(base, mods)
+
+
+def the_events_of(text: str, prefix: Sequence[KeyEvent] = ()) -> Tuple[KeyEvent, ...]:
+    """
+    Every key event this text names, in the order they are pressed.
+
+    The counterpart of `keys_of`, for the road to a pane.
+    """
+    events: list[KeyEvent] = []
+
+    for step in text.split(AFTER):
+        if not step:
+            continue
+        if step.lower() == THE_PREFIX:
+            if not prefix:
+                raise ValueError(
+                    "%r names the prefix, and no prefix was given." % (text,)
+                )
+            events.extend(prefix)
+            continue
+        events.append(an_event(step))
+
+    if not events:
+        raise ValueError("%r names no key." % (text,))
+    return tuple(events)
+
+
+#: How the older spelling writes each modifier, and the word this one
+#: writes.
 #:
-#: tmux's "M-" is alt. It is the one place the two spellings disagree
-#: about a word, and it is why "meta" here is `Modifier.META` and not
-#: alt: the letter is tmux's and the word is the protocol's.
-THE_SAME_MODIFIER = {"C": "ctrl", "M": "alt", "S": "shift"}
+#: The prefixes are the ones `key_mappings.py` reads, so the two agree
+#: by construction, and the words are the members of `Modifier`, so
+#: they agree with the chord table above.
+#:
+#: "M-" is the one that has to be written in. tmux means alt by it, and
+#: the protocol's meta is a different bit, so the letter is tmux's and
+#: the word is the protocol's. That is also why "meta+" here is
+#: `Modifier.META` and not alt.
+THE_SAME_MODIFIER = {
+    **{
+        spelling: modifier.name.lower()
+        for spelling, modifier in THE_MODIFIERS_A_PERSON_WRITES
+    },
+    "m-": "alt",
+}
 
 
 def as_a_chord(name: str) -> str:
     """
-    A tmux key name, written as a chord.
+    A key name in the older spelling, written as a chord.
 
-    "C-S-a" is "ctrl+shift+a" and "M-C-Left" is "alt+ctrl+Left". A name
-    with no modifier letter in it is already a chord of one key.
+    "C-S-a" is "ctrl+shift+a", "M-C-Left" is "alt+ctrl+Left" and
+    "Super-a" is "super+a". A name with no modifier prefix on it is
+    already a chord of one key.
     """
     modifiers = []
-    while len(name) > 2 and name[1] == "-" and name[0] in THE_SAME_MODIFIER:
-        modifiers.append(THE_SAME_MODIFIER[name[0]])
-        name = name[2:]
+    found = True
+    while found:
+        found = False
+        for spelling, word in THE_SAME_MODIFIER.items():
+            if len(name) > len(spelling) and name.lower().startswith(spelling):
+                modifiers.append(word)
+                name = name[len(spelling) :]
+                found = True
+                break
     return "".join(modifier + TOGETHER for modifier in modifiers) + name
 
 
@@ -313,6 +387,22 @@ def a_key_however_it_is_written(text: str) -> Tuple[str, ...]:
         return pymux_key_to_prompt_toolkit_key_sequence(text)
     except ValueError:
         return a_chord(as_a_chord(text))
+
+
+def an_event_however_it_is_written(text: str) -> KeyEvent:
+    """
+    The key event of one key, in either spelling.
+
+    The road to a pane; `a_key_however_it_is_written` is the road to a
+    binding. The tmux table is not consulted and need not be: every
+    name in it is a chord once the modifier letters are re-spelled.
+
+    Raises `ValueError` when no reading of it names a key.
+    """
+    try:
+        return an_event(text)
+    except ValueError:
+        return an_event(as_a_chord(text))
 
 
 def _the_other_names_of() -> Dict[str, list]:
