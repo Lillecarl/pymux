@@ -408,6 +408,11 @@ ALL_OPTIONS = {
     # "(y/n)" in the command bar of the clients it would land on, and
     # "off" drops it.
     "open-url-mode": ChoiceOption("open_url_mode", ["open", "ask", "off"]),
+    # Put the opener of this session on the PATH of a pane, as
+    # "xdg-open", and name it in $BROWSER, so that a program in a pane
+    # opens a browser here without knowing pymux. A pane that runs
+    # already keeps the PATH it was born with; only new panes see it.
+    "open-url-shim": OnOffOption("open_url_shim"),
     "history-limit": PositiveIntOption(
         "history_limit", [200, 500, 1000, 2000, 5000, 10000]
     ),

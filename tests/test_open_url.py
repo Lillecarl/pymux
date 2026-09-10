@@ -324,6 +324,57 @@ def test_a_machine_without_a_display_tries_no_browser(monkeypatch):
 
 
 # ----------------------------------------------------------------------
+# The shim.
+
+
+@in_a_loop
+async def test_the_shim_names_the_opener_of_the_session():
+    with in_this_process() as session:
+        pymux = session.pymux
+        pymux.open_url_shim = True
+        pymux._ensure_the_open_url_shim()
+
+        directory = pymux._open_url_shim_dir
+        script = os.path.join(directory, "pymux-open-url")
+        assert os.access(script, os.X_OK)
+        assert os.path.islink(os.path.join(directory, "xdg-open"))
+        with open(script) as f:
+            assert f.read() == '#!/bin/sh\nexec pymux open-url -- "$@"\n'
+
+        # A pane that starts again asks for nothing new.
+        pymux._ensure_the_open_url_shim()
+        assert pymux._open_url_shim_dir == directory
+
+
+@in_a_loop
+async def test_the_shim_rides_the_path_of_a_new_pane():
+    with in_this_process() as session:
+        pymux = session.pymux
+        pymux.open_url_shim = True
+        pymux._ensure_the_open_url_shim()
+
+        with an_environment(PATH="/usr/bin", BROWSER=None):
+            pymux._shim_the_environment_of_a_pane()
+
+            assert os.environ["PATH"].startswith(pymux._open_url_shim_dir + os.pathsep)
+            assert os.environ["BROWSER"] == os.path.join(
+                pymux._open_url_shim_dir, "pymux-open-url"
+            )
+
+
+@in_a_loop
+async def test_the_shim_leaves_a_pane_alone_when_it_is_off():
+    with in_this_process() as session:
+        pymux = session.pymux
+
+        with an_environment(PATH="/usr/bin", BROWSER=None):
+            pymux._shim_the_environment_of_a_pane()
+
+            assert os.environ["PATH"] == "/usr/bin"
+            assert "BROWSER" not in os.environ
+
+
+# ----------------------------------------------------------------------
 # What a server says when a client reports back.
 
 

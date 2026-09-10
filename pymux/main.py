@@ -501,6 +501,8 @@ class Pymux:
         self.enable_clipboard = True
         self.open_url_target = "last"
         self.open_url_mode = "open"
+        self.open_url_shim = False
+        self._open_url_shim_dir = None
 
         # The paste buffer of the session. Copy mode writes it, a pane
         # that writes the clipboard of the user writes it too, and
@@ -1060,6 +1062,11 @@ class Pymux:
             if self.socket_name:
                 os.environ["PYMUX"] = "%s,%i" % (self.socket_name, pane.pane_id)
 
+            # The shim, when it is on, reaches the opener of this
+            # session before anything else on the PATH of the pane,
+            # and names it for what reads $BROWSER.
+            self._shim_the_environment_of_a_pane()
+
         if command:
             # `shlex.split` and not `str.split`: a command reaches this as
             # one string, and the quoting inside it is what says where one
@@ -1072,6 +1079,12 @@ class Pymux:
             command_list = shlex.split(command)
         else:
             command_list = [self.default_shell]
+
+        # The shim directory has to exist in this process, before the
+        # fork: a directory made in the child is made once per pane,
+        # and two panes starting together would race for it.
+        if self.open_url_shim:
+            self._ensure_the_open_url_shim()
 
         # Create new pane and terminal.
         terminal = Terminal(
@@ -1370,6 +1383,43 @@ class Pymux:
         for client_state in clients:
             client_state.connection._send_packet({"cmd": "open", "data": url})
             client_state.message = "Opened %s in the browser of this machine." % (url,)
+
+    def _ensure_the_open_url_shim(self) -> None:
+        """
+        Make the directory that puts the opener of this session on the
+        PATH of a pane.
+
+        It holds one script, `pymux-open-url`, which asks this session
+        to open what it was given, and a link to it under the name
+        `xdg-open`. A program in a pane calls `xdg-open` without
+        knowing pymux, and what reads $BROWSER finds the script by
+        name too. Nothing answers for `open` on macOS: too much calls
+        it for files, and a name that opens files must not open URLs.
+
+        Only a pane that starts afterwards sees it: a running pane
+        keeps the PATH it was born with.
+        """
+        if self._open_url_shim_dir is not None:
+            return
+        self._open_url_shim_dir = tempfile.mkdtemp(prefix="pymux-open-url-")
+        script = os.path.join(self._open_url_shim_dir, "pymux-open-url")
+        with open(script, "w") as f:
+            f.write("#!/bin/sh\nexec pymux open-url -- \"$@\"\n")
+        os.chmod(script, 0o755)
+        os.symlink("pymux-open-url", os.path.join(self._open_url_shim_dir, "xdg-open"))
+
+    def _shim_the_environment_of_a_pane(self) -> None:
+        """
+        Put the shim on the PATH of a pane, and name the opener in
+        $BROWSER. Runs in the fork, before the program of the pane.
+        """
+        if self.open_url_shim and self._open_url_shim_dir:
+            os.environ["PATH"] = (
+                self._open_url_shim_dir + os.pathsep + os.environ["PATH"]
+            )
+            os.environ["BROWSER"] = os.path.join(
+                self._open_url_shim_dir, "pymux-open-url"
+            )
 
     def forward_osc(self, pane, code: str, param: str) -> None:
         """
