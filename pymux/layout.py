@@ -766,6 +766,21 @@ class LayoutManager:
 
         An empty answer means this client shows nothing that time
         moves. `full-screen on` is that case.
+
+        **The panes are this client's window's, and no others.** It
+        used to read `#T` for every pane of every window. That was free
+        on the four second tick and is not: a pane's write asks the
+        other clients this question now (Lillecarl/pymux#224), so a
+        session of eight windows read eight windows of titles every
+        time any pane wrote.
+
+        Narrowing it loses nothing, because `_get_status_tokens` above
+        already formats `window-status-format` for every window. So
+        whatever this client draws *about* another window -- its name,
+        its flags, and `#T` if a person put it in that format -- is
+        already in `parts`. What is left is the titlebars of the panes
+        this client can see, and a `clock-mode` pane, and both of those
+        are in the window it looks at. Lillecarl/pymux#251.
         """
         pymux = self.pymux
         parts: List[str] = []
@@ -775,16 +790,23 @@ class LayoutManager:
             parts.append(self._get_status_right_tokens())
             parts += [text for _, text, *_ in self._get_status_tokens()]
 
-        for window in pymux.arrangement.windows:
-            for pane in window.panes:
-                if pane.clock_mode:
-                    parts.append(datetime.datetime.now().strftime(CLOCK_FORMAT))
-                elif pymux.show_pane_status:
-                    parts.append(
-                        format_pymux_string(pymux, PANE_TITLE_FORMAT, pane=pane)
-                    )
+        for pane in self._the_panes_in_view():
+            if pane.clock_mode:
+                parts.append(datetime.datetime.now().strftime(CLOCK_FORMAT))
+            elif pymux.show_pane_status:
+                parts.append(format_pymux_string(pymux, PANE_TITLE_FORMAT, pane=pane))
 
         return tuple(parts)
+
+    def _the_panes_in_view(self) -> List:
+        "The panes of the window this client looks at, or none."
+        try:
+            return list(self.pymux.arrangement.get_active_window().panes)
+        except IndexError:
+            # `get_active_window_for` ends at `windows[0]`, and there
+            # may be no window at all: the refresh ticks before the
+            # first one is made.
+            return []
 
     def _get_align(self) -> WindowAlign:
         if self.pymux.status_justify == Justify.RIGHT:

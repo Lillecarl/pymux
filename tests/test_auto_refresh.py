@@ -93,6 +93,17 @@ def the_text(state):
         return state.layout_manager.what_time_moves()
 
 
+def in_view(pymux, state):
+    """
+    The window this client looks at.
+
+    Not `windows[0]`: `add_client` runs `startup()`, which makes a
+    window of its own and makes it active.
+    """
+    with set_app(state.app):
+        return pymux.arrangement.get_active_window()
+
+
 def test_the_first_refresh_draws_what_no_frame_drew(session):
     "Nothing has drawn the status line yet, so it has something to say."
     pymux, state, frames = session
@@ -151,7 +162,12 @@ def test_a_clock_inside_a_pane_asks_for_frames(session):
     pymux.refresh_what_time_moves()
     assert frames == []
 
-    pymux.arrangement.windows[0].panes[0].clock_mode = True
+    # **The window this client looks at**, and not `windows[0]`.
+    # `add_client` runs `startup()`, which makes a window of its own
+    # and makes it active, so `windows[0]` is a window nobody is
+    # looking at. This test used to set the clock there and pass,
+    # because the refresh read every window. Lillecarl/pymux#251.
+    in_view(pymux, state).panes[0].clock_mode = True
     pymux.refresh_what_time_moves()
 
     assert len(frames) == 1
@@ -166,3 +182,73 @@ def test_the_text_holds_the_clock_and_the_window_list(session):
 
     assert any(":" in part for part in text), text  # The clock.
     assert any("python" in part or "bash" in part for part in text), text
+
+
+# ----------------------------------------------------------------------
+# How wide the question is. Lillecarl/pymux#251.
+#
+# A pane's write asks the other clients this now, so reading every pane
+# of every window costs on every write and not once every four seconds.
+
+
+def out_of_view(pymux, state):
+    "A window this client is not looking at. There is always one."
+    shown = in_view(pymux, state)
+    others = [w for w in pymux.arrangement.windows if w is not shown]
+    assert others, "the fixture is meant to leave a window out of view"
+    return others[0]
+
+
+def test_a_title_in_a_window_out_of_view_is_not_read(session):
+    """
+    The titlebars this client draws are its own window's. Another
+    window reaches its screen through `window-status-format`, which
+    `_get_status_tokens` already formats.
+    """
+    pymux, state, frames = session
+    other = out_of_view(pymux, state)
+
+    before = the_text(state)
+    other.panes[0].screen.titles.window = "a name nobody can see"
+
+    assert the_text(state) == before
+
+
+def test_a_title_in_the_window_in_view_is_read(session):
+    "The control: the same title, in the window this client looks at."
+    pymux, state, frames = session
+    set_option(pymux, "pane-border-status", "on")
+
+    before = the_text(state)
+    in_view(pymux, state).panes[0].screen.titles.window = "a name in view"
+
+    assert the_text(state) != before
+
+
+def test_the_window_list_still_carries_the_other_windows(session):
+    """
+    Narrowing the panes must not narrow the window list: a window that
+    is renamed still changes what every client draws.
+    """
+    pymux, state, frames = session
+    other = out_of_view(pymux, state)
+
+    before = the_text(state)
+    other.chosen_name = "renamed"
+
+    assert the_text(state) != before
+
+
+def test_a_clock_in_a_window_out_of_view_asks_for_nothing(session):
+    "A clock that is not drawn is not a reason to draw."
+    pymux, state, frames = session
+    set_option(pymux, "full-screen", "on")
+    other = out_of_view(pymux, state)
+
+    pymux.refresh_what_time_moves()
+    frames.clear()
+
+    other.panes[0].clock_mode = True
+    pymux.refresh_what_time_moves()
+
+    assert frames == []

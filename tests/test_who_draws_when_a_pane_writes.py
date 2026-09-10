@@ -127,16 +127,16 @@ async def test_a_title_a_pane_writes_reaches_the_other_client():
     """
     The wake still happens. It was narrowed and not removed.
 
-    This is the widest text `what_time_moves` reads: every pane of
-    every window, through `#T`. The default `window-status-format` is
-    `#I:#W#F` and carries no `#T`, so this title alone does not change
-    what B draws -- what does is `#W` moving, which is the name of the
-    program in the pane, or a `window-status-format` a person wrote
-    with `#T` in it. Lillecarl/pymux#251 holds the breadth.
+    **The status line has to actually carry the title**, or there is
+    nothing for B to draw and nothing to wake it for. The default
+    `window-status-format` is `#I:#W#F`, which carries no `#T`, so this
+    sets one that does. `format_pymux_string` resolves `#T` in a window
+    format against that window's active pane, so a title the pane
+    writes lands in B's window list.
 
-    So this test does not say the wake was needed here. It says the
-    wake is still there, and it fails for anybody who deletes it rather
-    than narrowing it.
+    That is the contract: a client whose text moved is woken by a pane
+    it cannot see, and one whose text did not is left alone. The test
+    above is the other half. Lillecarl/pymux#251.
     """
     with over_a_connection() as session:
         pymux = session.pymux
@@ -145,6 +145,10 @@ async def test_a_title_a_pane_writes_reaches_the_other_client():
 
         b, _ = await session.attach("b", A_SIZE)
         await a_window_of_its_own(pymux, b)
+
+        with set_app(b.app):
+            pymux.handle_command("set-option window-status-format '#I:#W#F #T'")
+        await asyncio.sleep(LONG_ENOUGH)
 
         window_of_a = looks_at(pymux, a)
         drawn_by_b = b.app.render_counter
