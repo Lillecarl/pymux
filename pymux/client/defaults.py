@@ -7,6 +7,16 @@ __all__ = [
 
 
 def create_client(socket_name):
+    # A machine, and not a path on this one. The import is here so that
+    # a server never loads asyncssh: only a client that was given an
+    # `ssh://` address needs it. Lillecarl/pymux#90.
+    from .ssh import is_an_ssh_url
+
+    if is_an_ssh_url(socket_name):
+        from .ssh import SshClient
+
+        return SshClient(socket_name)
+
     if is_windows():
         from .windows import WindowsClient
 

@@ -21,6 +21,7 @@
   hypothesis,
   wcwidth,
   pyinstrument,
+  asyncssh,
   callPackage,
   xorg-server,
   xterm,
@@ -86,6 +87,10 @@ let
     # where they already are, and it costs nothing until something
     # imports it.
     pyinstrument
+    # Both ends of the ssh route: the client pymux ships, and the
+    # server that stands in for sshd in `tests/test_the_ssh_client.py`.
+    # Lillecarl/pymux#90.
+    asyncssh
   ]);
 
   # Knobs that reach the evaluation through the environment. They work

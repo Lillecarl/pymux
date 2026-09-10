@@ -30,6 +30,10 @@ setup(
         # A person wants that on the server they already have, not on
         # one they built with extras.
         "pyinstrument>=4.0.0",
+        # `-S ssh://host/path` reaches a server on another machine, over
+        # a `direct-streamlocal@openssh.com` channel to its unix socket.
+        # Lillecarl/pymux#90.
+        "asyncssh>=2.14.0",
     ],
     entry_points={
         "console_scripts": [

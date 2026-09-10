@@ -79,17 +79,30 @@ class TerminalClient(Client):
         self._kitty_supported = False
         self._kitty_flags = None
 
-        # Input reader.
-        #     Some terminals, like lxterminal send non UTF-8 input sequences,
-        #     even when the input encoding is supposed to be UTF-8. This
-        #     happens in the case of mouse clicks in the right area of a wide
-        #     terminal. Apparently, these are some binary blobs in between the
-        #     UTF-8 input.)
-        #     We should not replace these, because this would break the
-        #     decoding otherwise. (Also don't pass errors='ignore', because
-        #     that doesn't work for parsing mouse input escape sequences, which
-        #     consist of a fixed number of bytes.)
-        self._stdin_reader = PosixStdinReader(sys.stdin.fileno(), errors="replace")
+        self.__stdin_reader = None
+
+    @property
+    def _stdin_reader(self) -> PosixStdinReader:
+        """
+        The keyboard, opened when something first reads it.
+
+        **Not in `__init__`.** A client that only runs a command never
+        reads the keyboard, and asking for `sys.stdin.fileno()` is not
+        free: a pymux command in a script, in a cron job, or under a
+        test runner that replaced stdin has no such file, and building
+        the client raised before it had sent anything.
+
+        Some terminals, like lxterminal, send non UTF-8 input sequences
+        even when the input encoding is supposed to be UTF-8. This
+        happens for mouse clicks in the right area of a wide terminal:
+        binary blobs in between the UTF-8. They must not be replaced,
+        because that breaks the decoding of what follows, and
+        `errors="ignore"` does not work either, because a mouse
+        sequence is a fixed number of bytes.
+        """
+        if self.__stdin_reader is None:
+            self.__stdin_reader = PosixStdinReader(sys.stdin.fileno(), errors="replace")
+        return self.__stdin_reader
 
     def _send_packet(self, data):
         "Send one packet to the server. (The transport gives this.)"

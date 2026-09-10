@@ -25,7 +25,10 @@ Modes:
 
 Options:
     -S SOCKET      : Unix socket path. A number is accepted as well; the
-                     socket will be created in the temp directory.
+                     socket will be created in the temp directory. And
+                     ssh://[user@]host[:port]/path names a socket on
+                     another machine: the panes run there and are drawn
+                     here.
     -f FILE        : Path to configuration file. Without it, the first of
                      '$XDG_CONFIG_HOME/pymux/pymux.conf' and
                      '~/.pymux.conf' that is there.
@@ -52,6 +55,7 @@ from prompt_toolkit.output import ColorDepth
 
 from pymux import __version__, log
 from pymux.client import create_client, list_clients
+from pymux.client.ssh import is_an_ssh_url
 from pymux.main import Pymux
 from pymux.utils import daemonize
 
@@ -168,7 +172,9 @@ def _add_options(parser: argparse.ArgumentParser, suppress_defaults: bool) -> No
         dest="socket",
         metavar="SOCKET",
         default=default,
-        help="Unix socket path. (A number is accepted as well.)",
+        help="Unix socket path. A number is accepted as well, and so is "
+        "ssh://[user@]host[:port]/path, which reaches a server on that "
+        "machine and draws its panes here.",
     )
     parser.add_argument(
         "-f",
@@ -323,6 +329,13 @@ def run() -> None:
         color_depth = ColorDepth.DEPTH_24_BIT
     else:
         color_depth = None
+
+    # A machine is somewhere to attach to, never somewhere to listen.
+    # `listen_on_socket` would try to bind a path called "ssh:" and
+    # fail somewhere further in. Lillecarl/pymux#90.
+    if is_an_ssh_url(socket_name) and mode in ("integrated", "start-server"):
+        print("A server listens on this machine, so -S has to name a path here.")
+        sys.exit(1)
 
     # Expand socket name. (Make it possible to just accept numbers.)
     if socket_name and socket_name.isdigit():
@@ -557,7 +570,19 @@ def _flag_args(
 
 
 def _wait_for_server(socket_name: str, timeout: float = 5.0) -> bool:
-    "Wait until the server accepts connections on this socket."
+    """
+    Wait until the server accepts connections on this socket.
+
+    **A machine is not a path.** `ssh://host/path` names a socket on
+    another machine, and no file of that name is here, so the test
+    below would say no server forever: `pymux -S ssh://... kill-server`
+    said "no server running" and stopped. There is nothing to wait for
+    on this machine, and the client says soon enough whether the far
+    side answers. Lillecarl/pymux#90.
+    """
+    if is_an_ssh_url(socket_name):
+        return True
+
     deadline = time.time() + timeout
     while time.time() < deadline:
         if os.path.exists(socket_name):

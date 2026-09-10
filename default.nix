@@ -22,6 +22,11 @@
   ptterm,
   docopt-ng,
   pyinstrument,
+  # `-S ssh://host/path` reaches a server on another machine. It is
+  # here and not only in the checks for the reason pyinstrument is: a
+  # person attaches from the pymux they installed, not from one they
+  # built with extras. Lillecarl/pymux#90.
+  asyncssh,
   callPackage,
   mesa,
 }:
@@ -44,6 +49,7 @@ let
       ptterm
       docopt-ng
       pyinstrument
+      asyncssh
     ];
 
     # The suites run as `checks.unit`, `checks.pty` and the rest, against the source.
