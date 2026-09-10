@@ -558,6 +558,12 @@ class LayoutManager:
         self._command_window: Window | None = None
         self._palette: Container | None = None
 
+        # And the same two for the prompt: the line a person answers a
+        # question on, and the box that holds it when the question
+        # knows its answers. Lillecarl/pymux#220.
+        self._prompt_window_container: Window | None = None
+        self._key_prompt: Container | None = None
+
         # The part of the screen that holds the windows. It is kept
         # because it is what knows the container that drew the panes,
         # and a title bar drawn inside that frame asks for its plan.
@@ -778,6 +784,11 @@ class LayoutManager:
             return WindowAlign.LEFT
 
     def _before_prompt_command_tokens(self) -> StyleAndTextTuples:
+        if self.client_state.prompt_completer is not None:
+            # The box says what it is asking for, on the row above the
+            # line. Saying it twice is one row wasted and one thing to
+            # read. Lillecarl/pymux#220.
+            return []
         return [("class:commandline.prompt", "%s " % (self.client_state.prompt_text,))]
 
     def _overlay_container(self) -> Container:
@@ -851,6 +862,32 @@ class LayoutManager:
         )
         return self._command_window
 
+    def _prompt_window(self) -> Container:
+        """
+        The window that holds the answer to a `command-prompt`.
+
+        The bar at the bottom and the box in the middle draw the same
+        window, for the same reason the ":" line does, and it is built
+        once for the same reason as well.
+        """
+        if self._prompt_window_container is not None:
+            return self._prompt_window_container
+
+        self._prompt_window_container = Window(
+            height=1,
+            style="class:commandline",
+            content=BufferControl(
+                buffer=self.client_state.prompt_buffer,
+                input_processors=[
+                    BeforeInput(self._before_prompt_command_tokens),
+                    AppendAutoSuggestion(),
+                    HighlightSelectionProcessor(),
+                ],
+            ),
+            z_index=Z_INDEX.COMMAND_LINE,
+        )
+        return self._prompt_window_container
+
     def _command_palette(self) -> Container:
         """
         The ":" command line as a box in the middle of the screen.
@@ -870,22 +907,57 @@ class LayoutManager:
         if self._palette is not None:
             return self._palette
 
-        self._palette = HSplit(
+        self._palette = self._a_box(lambda: " Command ", self._command_line_window())
+        return self._palette
+
+    def _a_box(self, title, window: Container) -> Container:
+        """
+        A box in the middle of the screen: a title, a line to type in,
+        and the completions filling what is left.
+
+        Two things draw one. The ":" command line does, when a person
+        asked for a palette; and a prompt that knows its answers does,
+        which today is the box that composes a key.
+        Lillecarl/pymux#220.
+
+        `title` is asked each frame, so a box can say what it is asking
+        for rather than what kind of box it is.
+        """
+        return HSplit(
             [
                 Window(
                     height=1,
                     align=WindowAlign.CENTER,
                     content=FormattedTextControl(
-                        lambda: [("class:commandpalette.title", " Command ")]
+                        lambda: [("class:commandpalette.title", title())]
                     ),
                     style="class:commandpalette.titlebar",
                 ),
-                self._command_line_window(),
+                window,
                 self._palette_completions(),
             ],
             style="class:commandpalette",
         )
-        return self._palette
+
+    def _key_box(self) -> Container:
+        """
+        The prompt as a box, for a question that knows its answers.
+
+        The line inside it is the same `prompt_buffer` the bottom
+        toolbar uses. Only the room around it is different, and the
+        room is what the completions need: a person composing
+        "ctrl+shift+f5" is reading the list, not typing from memory.
+
+        Built once, for the reason `_command_line_window` gives.
+        """
+        if self._key_prompt is not None:
+            return self._key_prompt
+
+        self._key_prompt = self._a_box(
+            lambda: " %s " % (self.client_state.prompt_text or "Key",),
+            self._prompt_window(),
+        )
+        return self._key_prompt
 
     def _palette_rows(self) -> int:
         """
@@ -929,6 +1001,14 @@ class LayoutManager:
         """
         waits_for_confirmation = WaitsForConfirmation(self.pymux)
         palette = Condition(lambda: self.pymux.command_palette)
+        # A prompt that knows its answers draws in a box, because the
+        # completions are what need the room. Lillecarl/pymux#220.
+        asks_for_a_key = Condition(
+            lambda: self.client_state.prompt_completer is not None
+        )
+        in_a_box = (has_focus(self.client_state.command_buffer) & palette) | (
+            has_focus(self.client_state.prompt_buffer) & asks_for_a_key
+        )
 
         return FloatContainer(
             content=HSplit(
@@ -1020,22 +1100,9 @@ class LayoutManager:
                             ),
                             # Other command-prompt commands toolbar.
                             ConditionalContainer(
-                                content=Window(
-                                    height=1,
-                                    style="class:commandline",
-                                    content=BufferControl(
-                                        buffer=self.client_state.prompt_buffer,
-                                        input_processors=[
-                                            BeforeInput(
-                                                self._before_prompt_command_tokens
-                                            ),
-                                            AppendAutoSuggestion(),
-                                            HighlightSelectionProcessor(),
-                                        ],
-                                    ),
-                                    z_index=Z_INDEX.COMMAND_LINE,
-                                ),
-                                filter=has_focus(self.client_state.prompt_buffer),
+                                content=self._prompt_window(),
+                                filter=has_focus(self.client_state.prompt_buffer)
+                                & ~asks_for_a_key,
                             ),
                         ]
                     ),
@@ -1072,14 +1139,29 @@ class LayoutManager:
                     # arrive.
                     z_index=Z_INDEX.POPUP,
                 ),
-                # The menu that hangs off the cursor. The palette holds
-                # its own, so this one steps aside for it.
+                # The prompt as a box, when the question knows its
+                # answers. The same inset as the two boxes above,
+                # because it is the same kind of box.
+                # Lillecarl/pymux#220.
+                Float(
+                    content=ConditionalContainer(
+                        content=DynamicContainer(self._key_box),
+                        filter=has_focus(self.client_state.prompt_buffer)
+                        & asks_for_a_key,
+                    ),
+                    left=BOX_SIDE,
+                    right=BOX_SIDE,
+                    top=BOX_TOP,
+                    z_index=Z_INDEX.POPUP,
+                ),
+                # The menu that hangs off the cursor. A box holds its
+                # own, so this one steps aside for either of them.
                 Float(
                     xcursor=True,
                     ycursor=True,
                     content=ConditionalContainer(
                         content=CompletionsMenu(max_height=12),
-                        filter=~(has_focus(self.client_state.command_buffer) & palette),
+                        filter=~in_a_box,
                     ),
                 ),
                 # The overlay pane, in the middle of the screen. A

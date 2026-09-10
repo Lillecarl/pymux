@@ -16,6 +16,7 @@ from prompt_toolkit.application.current import get_app, set_app
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.clipboard import ClipboardData, InMemoryClipboard
+from prompt_toolkit.completion import Completer, DynamicCompleter
 from prompt_toolkit.cursor_shapes import CursorShape, CursorShapeConfig
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.enums import EditingMode
@@ -142,6 +143,21 @@ class ClientState:
         self.prompt_text = None
         self.prompt_command = None
 
+        #: What completes the prompt, when anything does.
+        #:
+        #: A prompt that asks for a key knows what the answers are, and
+        #: a prompt that asks for a window name does not. So the
+        #: completer belongs to the question and not to the buffer, and
+        #: `command-prompt -K` is what puts one there.
+        #:
+        #: **It also says the prompt draws in a box.** The completions
+        #: are what needs the room: the menu that hangs off the cursor
+        #: stops at twelve rows, and in the box it takes the height of
+        #: the box. That is the argument `_command_palette` makes for
+        #: the ":" line, and it is the same argument here.
+        #: Lillecarl/pymux#220.
+        self.prompt_completer: Completer | None = None
+
         # Popup.
         self.display_popup = False
 
@@ -169,6 +185,12 @@ class ClientState:
             accept_handler=self._handle_prompt_command,
             multiline=False,
             auto_suggest=AutoSuggestFromHistory(),
+            # A person composing a key wants to see the keys while they
+            # type, which is the whole point of the box. A prompt with
+            # no completer completes nothing, so this costs the others
+            # nothing.
+            complete_while_typing=True,
+            completer=DynamicCompleter(lambda: self.prompt_completer),
         )
 
         # Layout.
@@ -1464,6 +1486,10 @@ class Pymux:
 
         client_state.prompt_command = ""
         client_state.confirm_command = ""
+        # The completer belongs to the question, and the question is
+        # over. It also says whether the prompt draws in a box, so a
+        # completer left behind would put the next one in one.
+        client_state.prompt_completer = None
 
         client_state.app.layout.focus_previous()
 

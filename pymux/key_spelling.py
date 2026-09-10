@@ -393,7 +393,16 @@ class KeyCompleter(Completer):
 
     A modifier already held is not offered a second time, under any of
     its spellings: "ctrl+control" is one modifier written twice.
+
+    `offer_the_prefix` says whether "prefix" is one of the answers. It
+    is a step of the grammar, so a box that composes a binding wants
+    it. A box that sends a key to a pane does not: the prefix is what
+    pymux keeps for itself, and `send-prefix` is the command that sends
+    it on.
     """
+
+    def __init__(self, offer_the_prefix: bool = True) -> None:
+        self.offer_the_prefix = offer_the_prefix
 
     def get_completions(self, document, complete_event):
         step = document.text_before_cursor.rsplit(AFTER, 1)[-1]
@@ -409,7 +418,7 @@ class KeyCompleter(Completer):
             if name.lower().startswith(lowered):
                 yield Completion(name, start_position=start, display_meta=meta)
 
-        if not written:
+        if self.offer_the_prefix and not written:
             # The prefix is a step of its own and never a modifier, so
             # it is offered only where a step starts.
             yield from offer(THE_PREFIX, "the prefix key of this server")

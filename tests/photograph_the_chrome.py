@@ -127,6 +127,12 @@ FIXTURES = {
         CHROME + "set-option command-palette on\n",
         keys((FIRST_KEY, PREFIX), (0.4, b":"), (0.4, b"list-panes")),
     ),
+    # The box that composes a key, with a modifier written and the keys
+    # a keyboard leaves out under it. Lillecarl/pymux#220.
+    "compose-a-key": (
+        CHROME,
+        keys(*a_command("compose-key"), (0.8, b"ctrl+")),
+    ),
     # Both splits at once: a pane on the left, and two stacked on the
     # right. This is the default layout, and it is the one picture that
     # holds every line it draws -- the border down the middle, which

@@ -103,15 +103,26 @@ def a_float_is_drawn(state, wanted: Float) -> bool:
         return True
 
 
+def the_float_of(state, name: str) -> Float:
+    """
+    The float that draws the box `name` builds.
+
+    Three boxes share the same inset -- the keys pop-up, the command
+    palette and the box that composes a key -- so the inset cannot tell
+    them apart. Each is a `DynamicContainer` over the method that
+    builds it, and that method's name can.
+    """
+    for one in the_floats(state):
+        inner = getattr(one.content, "content", None)
+        builder = getattr(inner, "get_container", None)
+        if builder is not None and builder.__name__ == name:
+            return one
+    raise AssertionError("the layout draws no %s" % (name,))
+
+
 def the_palette_float(state) -> Float:
     "The float that holds the box in the middle."
-    for one in the_floats(state):
-        if one.top == 5 and one.left == 3 and one.xcursor is not True:
-            # The keys pop-up has the same inset, so the two are told
-            # apart by which one is a `DynamicContainer`.
-            if type(one.content.content).__name__ == "DynamicContainer":
-                return one
-    raise AssertionError("the layout holds no command palette float")
+    return the_float_of(state, "_command_palette")
 
 
 def the_cursor_menu_float(state) -> Float:

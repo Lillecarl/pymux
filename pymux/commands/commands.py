@@ -23,7 +23,7 @@ from pymux.commands.utils import wrap_argument
 from pymux.enums import WindowSize, Woke
 from pymux.format import format_pymux_string
 from pymux.key_mappings import prompt_toolkit_key_to_vt100_key
-from pymux.key_spelling import a_key_however_it_is_written
+from pymux.key_spelling import KeyCompleter, a_key_however_it_is_written
 from pymux.layout import (
     focus_down,
     focus_left,
@@ -971,6 +971,63 @@ def confirm_before(pymux: "Pymux", variables: _VariablesDict) -> None:
     client_state.confirm_command = variables["<command>"]
 
 
+def ask_the_person(
+    pymux: "Pymux",
+    message: str,
+    command: str,
+    default: str = "",
+    completer=None,
+) -> None:
+    """
+    Ask a question on the prompt, and run `command` with the answer in
+    place of "%%".
+
+    `completer` is what completes the answer, when the question knows
+    what the answers are. A question that has one draws in a box, and
+    the completions fill it.
+    """
+    client_state = pymux.get_client_state()
+
+    client_state.prompt_text = message
+    client_state.prompt_command = command
+    client_state.prompt_completer = completer
+
+    client_state.prompt_mode = True
+    client_state.prompt_buffer.reset(Document(format_pymux_string(pymux, default)))
+
+    get_app().layout.focus(client_state.prompt_buffer)
+    get_app().vi_state.input_mode = InputMode.INSERT
+
+
+@cmd(
+    "compose-key",
+    options="[(-p <message>)] [(-I <default>)]",
+)
+def compose_key(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Compose a key this keyboard cannot type, and send it to the pane.
+
+    A laptop with no Home key, no Insert and no function row cannot
+    answer a program that asks for one, and the fn chords differ per
+    machine and per external keyboard. pymux is the layer in the
+    middle, and it can send the key.
+
+    The box completes the key names, so a person reads the list rather
+    than remembering the spelling. "ctrl+home" and "C-Home" both read,
+    and so does a sequence: "escape a" is two presses.
+    Lillecarl/pymux#220.
+    """
+    ask_the_person(
+        pymux,
+        variables["<message>"] or "Send key",
+        "send-keys %%",
+        variables["<default>"] or "",
+        # Not the prefix. It is a step of the grammar, and it is the
+        # one key pymux keeps for itself; `send-prefix` sends it on.
+        KeyCompleter(offer_the_prefix=False),
+    )
+
+
 @cmd("command-prompt", options="[(-p <message>)] [(-I <default>)] [<command>]")
 def command_prompt(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
@@ -980,25 +1037,19 @@ def command_prompt(pymux: "Pymux", variables: _VariablesDict) -> None:
 
     if variables["<command>"]:
         # When a 'command' has been given.
-        client_state.prompt_text = (
-            variables["<message>"] or "(%s)" % variables["<command>"].split()[0]
+        ask_the_person(
+            pymux,
+            variables["<message>"] or "(%s)" % variables["<command>"].split()[0],
+            variables["<command>"],
+            variables["<default>"] or "",
         )
-        client_state.prompt_command = variables["<command>"]
+        return
 
-        client_state.prompt_mode = True
-        client_state.prompt_buffer.reset(
-            Document(format_pymux_string(pymux, variables["<default>"] or ""))
-        )
+    # Show the ':' prompt.
+    client_state.prompt_text = ""
+    client_state.prompt_command = ""
 
-        get_app().layout.focus(client_state.prompt_buffer)
-    else:
-        # Show the ':' prompt.
-        client_state.prompt_text = ""
-        client_state.prompt_command = ""
-
-        get_app().layout.focus(client_state.command_buffer)
-
-    # Go to insert mode.
+    get_app().layout.focus(client_state.command_buffer)
     get_app().vi_state.input_mode = InputMode.INSERT
 
 
