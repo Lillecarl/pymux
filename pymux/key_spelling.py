@@ -38,7 +38,7 @@ import re
 from typing import Dict, Sequence, Tuple
 
 from prompt_toolkit.completion import Completer, Completion
-from pyte.keys import KeyEvent, Modifier
+from pyte.keys import FIRST_FUNCTIONAL_KEY, KeyEvent, Modifier
 
 from .key_mappings import (
     PYMUX_TO_PROMPT_TOOLKIT_KEYS,
@@ -48,6 +48,7 @@ from .key_mappings import (
 from .keys import (
     A_KEY_BY_ITS_NAME,
     KEYS_A_KEYBOARD_SPELLS_OUT,
+    THE_CODE_AND_FORM_OF,
     THE_NAME_OF_A_KEY,
     Dropped,
     an_event_named,
@@ -64,11 +65,13 @@ __all__ = [
     "TOGETHER",
     "a_chord",
     "a_key_however_it_is_written",
+    "a_key_written_out",
     "an_event",
     "an_event_however_it_is_written",
     "as_a_chord",
     "keys_of",
     "the_events_of",
+    "why_a_pane_cannot_read",
 ]
 
 
@@ -403,6 +406,65 @@ def an_event_however_it_is_written(text: str) -> KeyEvent:
         return an_event(text)
     except ValueError:
         return an_event(as_a_chord(text))
+
+
+#: The name of a key, by the number and form that carry it:
+#: `THE_CODE_AND_FORM_OF` read the other way.
+THE_NAME_OF_THE_CODE = {where: name for name, where in THE_CODE_AND_FORM_OF.items()}
+
+
+#: The order a person writes the modifiers in, which is not the order
+#: of the bits. Fixed, so that one combination has one name.
+THE_ORDER_THEY_ARE_WRITTEN = (
+    Modifier.CTRL,
+    Modifier.ALT,
+    Modifier.SHIFT,
+    Modifier.SUPER,
+    Modifier.HYPER,
+    Modifier.META,
+)
+
+
+def the_modifiers_written_out(mods: int) -> str:
+    return TOGETHER.join(
+        modifier.name.lower()
+        for modifier in THE_ORDER_THEY_ARE_WRITTEN
+        if mods & modifier
+    )
+
+
+def a_key_written_out(event: KeyEvent) -> str:
+    "A key event, written the way a person writes one."
+    name = THE_NAME_OF_THE_CODE.get((event.code, event.final))
+    if name is None:
+        # A key of the private use area writes no character, so `chr`
+        # of it is one no keyboard has. Its number is all there is.
+        name = (
+            chr(event.code)
+            if event.code < FIRST_FUNCTIONAL_KEY
+            else "the key numbered %d" % (event.code,)
+        )
+    written = the_modifiers_written_out(event.mods)
+    return written + TOGETHER + name if written else name
+
+
+def why_a_pane_cannot_read(event: KeyEvent, lost: int, encoded: str) -> str:
+    "Why a key did not reach a pane whole, in a line a person can act on."
+    key = a_key_written_out(event)
+    if not encoded:
+        return (
+            "%s cannot reach this pane at all: the program in it reads the "
+            "legacy encoding, which has no form for that key." % (key,)
+        )
+    return (
+        "%s reaches this pane as %s: the program in it reads the legacy "
+        "encoding, which has no %s on that key."
+        % (
+            key,
+            a_key_written_out(event._replace(mods=event.mods & ~lost)),
+            the_modifiers_written_out(lost),
+        )
+    )
 
 
 def _the_other_names_of() -> Dict[str, list]:

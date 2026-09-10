@@ -43,6 +43,7 @@ from .commands.completer import create_command_completer
 from .enums import COMMAND, PROMPT, WindowSize, Woke
 from .graphics import PaneView
 from .key_bindings import PymuxKeyBindings
+from .key_spelling import why_a_pane_cannot_read
 from .layout import Justify, LayoutManager, the_pane_resizes
 from .log import logger
 from .notifications import NotificationRoutes
@@ -113,6 +114,32 @@ class PaneCursor(CursorShapeConfig):
             return CursorShape.DEFAULT
 
         return CURSOR_SHAPES.get(screen.cursor_style, CursorShape._NEVER_CHANGE)
+
+
+#: How many keys one pane remembers saying it could not read. A held
+#: key repeats, and one line per repeat is a log nobody reads. A
+#: keyboard has fewer keys than this.
+MAX_KEYS_TO_REMEMBER = 512
+
+
+def _say_a_key_did_not_fit():
+    """
+    A reporter for one pane, for a key it reads as something else.
+
+    **Once per key, not once per repeat.** The same shape
+    `KittyVt100Parser._say_it_was_dropped` uses for a key pymux itself
+    cannot name, so the two failures read alike. Lillecarl/pymux#238.
+    """
+    already_said: set = set()
+
+    def say(event, lost: int, encoded: str) -> None:
+        if event in already_said:
+            return
+        if len(already_said) < MAX_KEYS_TO_REMEMBER:
+            already_said.add(event)
+        logger.info("%s", why_a_pane_cannot_read(event, lost, encoded))
+
+    return say
 
 
 class ClientState:
@@ -959,6 +986,7 @@ class Pymux:
             # could scroll and never reached the screen that holds the
             # rows. A pane kept two thousand whatever the option said.
             get_history_limit=lambda: self.history_limit,
+            unreadable_key_func=_say_a_key_did_not_fit(),
         )
         pane = Pane(terminal)
 

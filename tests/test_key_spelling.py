@@ -30,10 +30,14 @@ from pymux.key_spelling import (
     KeyCompleter,
     a_chord,
     a_key_however_it_is_written,
+    a_key_written_out,
+    an_event,
     as_a_chord,
     keys_of,
+    why_a_pane_cannot_read,
 )
 from pymux.keys import KEYS_A_KEYBOARD_SPELLS_OUT
+from pyte.keys import FIRST_FUNCTIONAL_KEY, KeyEvent, Modifier
 
 # ----------------------------------------------------------------------
 # Everything the older spelling reaches.
@@ -340,6 +344,44 @@ def test_it_offers_no_name_that_carries_its_own_modifier():
     """
     for completion in offered(""):
         assert "-" not in completion.text or completion.text == "s-tab"
+
+
+# ----------------------------------------------------------------------
+# Saying why a key did not fit. Lillecarl/pymux#238.
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["ctrl+shift+a", "super+a", "alt+f5", "ctrl+home", "shift+delete", "a", "Space"],
+)
+def test_a_key_is_written_the_way_it_was_read(name):
+    "The name in a message is one a person could write back."
+    assert an_event(a_key_written_out(an_event(name))) == an_event(name)
+
+
+def test_the_modifiers_read_in_the_order_a_person_writes_them():
+    "Not the order of the bits, where shift comes before ctrl."
+    assert a_key_written_out(an_event("shift+ctrl+a")) == "ctrl+shift+a"
+
+
+def test_a_key_that_writes_no_character_is_named_by_its_number():
+    "`chr` of one is a character no keyboard has, so it says nothing."
+    event = KeyEvent(FIRST_FUNCTIONAL_KEY + 20, 0, "u")
+
+    assert "57364" in a_key_written_out(event)
+
+
+def test_the_reason_names_the_key_the_pane_reads_instead():
+    said = why_a_pane_cannot_read(an_event("super+a"), Modifier.SUPER, "a")
+
+    assert said.startswith("super+a reaches this pane as a:")
+    assert "no super on that key" in said
+
+
+def test_the_reason_for_a_key_with_no_form_says_so():
+    event = KeyEvent(FIRST_FUNCTIONAL_KEY + 20, 0, "u")
+
+    assert "cannot reach this pane at all" in why_a_pane_cannot_read(event, 0, "")
 
 
 # ----------------------------------------------------------------------

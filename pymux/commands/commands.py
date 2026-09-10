@@ -25,9 +25,9 @@ from pymux.format import format_pymux_string
 from pymux.key_spelling import (
     KeyCompleter,
     an_event_however_it_is_written,
+    why_a_pane_cannot_read,
 )
-from pymux.keys import THE_CODE_AND_FORM_OF
-from pyte.keys import Modifier, Unhearable
+from pyte.keys import Unhearable
 from pymux.layout import (
     focus_down,
     focus_left,
@@ -1172,38 +1172,11 @@ def send_a_key(pane, event, written: str) -> None:
 
 
 def _why_not(written: str, cannot: Unhearable) -> str:
-    "Why a pane could not read a key, in a line a person can act on."
-    if not cannot.encoded:
-        return (
-            "The program in this pane cannot read %s at all. It reads the "
-            "legacy encoding, which has no form for that key." % (written,)
-        )
-    lost = "+".join(
-        modifier.name.lower() for modifier in Modifier if cannot.lost & modifier
+    "Why a pane could not read a key, naming what a person wrote."
+    return "%s: %s" % (
+        written,
+        why_a_pane_cannot_read(cannot.event, cannot.lost, cannot.encoded),
     )
-    return (
-        "The program in this pane cannot read %s: it reads the legacy "
-        "encoding, which has no %s on that key, so it would read %s instead."
-        % (
-            written,
-            lost,
-            _named(cannot.event._replace(mods=cannot.event.mods & ~cannot.lost)),
-        )
-    )
-
-
-def _named(event) -> str:
-    "A key event, written the way a person writes one."
-    parts = [modifier.name.lower() for modifier in Modifier if event.mods & modifier]
-    name = THE_NAME_OF_THE_CODE.get((event.code, event.final))
-    parts.append(name or chr(event.code))
-    return "+".join(parts)
-
-
-#: The name of a key, by the number and form that carry it. It is
-#: `THE_CODE_AND_FORM_OF` read the other way, so a message names a key
-#: the way a person would write it back.
-THE_NAME_OF_THE_CODE = {where: name for name, where in THE_CODE_AND_FORM_OF.items()}
 
 
 @cmd("copy-mode", options="[-u]")
