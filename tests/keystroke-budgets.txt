@@ -5,6 +5,6 @@
 # This is what the run saw. To make it what the check expects:
 #     nix build --file . checks.pymux-keystroke.run
 #     cp result/keystroke-budgets.txt pymux/tests/keystroke-budgets.txt
-key 68117
+key 23740
 parse 263
-render 230568
+render 234135

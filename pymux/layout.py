@@ -550,6 +550,17 @@ class LayoutManager:
         # The container of the overlay pane, and the pane it belongs to.
         self._overlay_for_pane: Tuple[arrangement.Pane, Container] | None = None
 
+        #: What a `DynamicContainer` gets when there is nothing to draw.
+        #:
+        #: **One window, and never a fresh one.** A bare `Window()`
+        #: makes a `DummyControl` of its own, and prompt_toolkit keys
+        #: the key bindings of the whole application by the set of
+        #: controls it can find (`_CombinedRegistry._key_bindings`).
+        #: A new control on every walk is a cache key nothing matches,
+        #: so every key press rebuilt the whole binding table.
+        #: Lillecarl/pymux#233.
+        self._nothing_to_draw = Window()
+
         # The window a person types a command into, and the box that
         # holds it when the palette is on. Both are built once and kept.
         # A fresh `BufferControl` on every render is one that the layout
@@ -801,7 +812,7 @@ class LayoutManager:
         pane = self.pymux.overlay_pane
 
         if pane is None:
-            return Window()
+            return self._nothing_to_draw
 
         if self._overlay_for_pane is not None and self._overlay_for_pane[0] is pane:
             return self._overlay_for_pane[1]
