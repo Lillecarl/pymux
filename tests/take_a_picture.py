@@ -76,6 +76,7 @@ command:
     cp result/picture-differences.txt pymux/tests/picture-differences.txt
 """
 
+import base64
 import json
 import os
 import shutil
@@ -426,7 +427,9 @@ def xterm_argv(command, background="black", foreground="white"):
         "-xrm",
         "xterm*cursorBlink: false",
         "-xrm",
-        "xterm*allowWindowOps: false",
+        # The fixture ends in an OSC 52, and xterm drops the clipboard
+        # escape while this is off: no clipboard, no fence.
+        "xterm*allowWindowOps: true",
         "-e",
         "sh",
         "-c",
@@ -554,7 +557,7 @@ LIGHT_TERMINALS = [
 # The two runs.
 
 
-def write_the_program(path, fixture_path):
+def write_the_program(path, fixture_path, payload):
     """
     The program that both runs execute, as a shell script.
 
@@ -577,12 +580,22 @@ def write_the_program(path, fixture_path):
     and stays on the other, and everything below it sits one row lower.
     Every fixture written by hand clears the screen itself; a recording
     of a program that does not is what found this.
+
+    The last thing it writes is the fence: an OSC 52, the clipboard
+    escape, carrying a payload that is this run's alone. The escape
+    draws nothing, and the clipboard holds what the terminal decoded
+    it to only when the outermost terminal has acted on the bytes --
+    the bare side straight, the pane side through pymux -- which is
+    the evidence the settle waits for. A settle that starts before the
+    bytes are written can settle on the screen from before them, both
+    sides alike, agreeing on nothing. Lillecarl/pymux#281.
     """
     path.write_text(
         "stty -echo\n"
         "printf '\\033[2J\\033[H'\n"
         "cat %s\n"
-        "exec sleep %d\n" % (fixture_path, HOLD)
+        "printf '\\033]52;c;%s\\007'\n"
+        "exec sleep %d\n" % (fixture_path, payload, HOLD)
     )
 
 
@@ -641,8 +654,15 @@ def compare_one(terminal, seat, name, work, out):
     fixture_path = work / ("%s.bin" % name)
     fixture_path.write_bytes(fixture_bytes(name))
 
+    # The fence. The escape carries base64, and the clipboard holds
+    # what the terminal decoded it to: readable bytes, this run's
+    # alone, so a fence a run before left in the clipboard cannot
+    # stand in for this one.
+    token = os.urandom(8).hex()
+    payload = base64.b64encode(token.encode()).decode()
+
     program_path = work / ("%s.sh" % name)
-    write_the_program(program_path, fixture_path)
+    write_the_program(program_path, fixture_path, payload)
 
     config_path = work / "full-screen.conf"
     config_path.write_text("set full-screen on\n")
@@ -656,6 +676,13 @@ def compare_one(terminal, seat, name, work, out):
             work,
             bare,
             room / "bare.log",
+            # The terminal has the bytes when its clipboard holds the
+            # token; a settle before that can settle on the screen from
+            # before them, both sides alike, agreeing on nothing. The
+            # wayland seat's reader is the piece Lillecarl/pymux#281
+            # still owes, so the pictures of foot and kitty settle the
+            # old way until it is here.
+            not_before=token if seat.reads_the_fence else 0.0,
         )
         seat.picture_of(
             terminal,
@@ -672,6 +699,7 @@ def compare_one(terminal, seat, name, work, out):
             work,
             through,
             room / "pymux.log",
+            not_before=token if seat.reads_the_fence else 0.0,
         )
     except RuntimeError as reason:
         raise RuntimeError("%s\n%s" % (reason, every_log(room, seat))) from None

@@ -18,6 +18,10 @@
   prompt-toolkit,
   # The shared rig. The picture scripts borrow its seats.
   pyterm-pytest,
+  # The reader of the clipboard fence: wl-paste on the compositor the
+  # seat started, xclip on the X server it started.
+  wl-clipboard,
+  xclip,
   argcomplete,
   pytest,
   hypothesis,
@@ -296,6 +300,11 @@ let
     kitty
     grim
     imagemagick
+    # The fence a picture waits for is an OSC 52 in the clipboard of
+    # the terminal, and the seat reads it back: wl-paste on the
+    # compositor it started, xclip on the X server it started.
+    wl-clipboard
+    xclip
   ];
 
   # kitty draws with OpenGL and a build sandbox has no graphics card, so

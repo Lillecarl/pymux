@@ -41,6 +41,9 @@
   installShellFiles,
   callPackage,
   mesa,
+  # Only the checks use these: the readers of the clipboard fence.
+  wl-clipboard,
+  xclip,
 }:
 let
   package = buildPythonApplication {
@@ -126,6 +129,8 @@ let
       pyterm-pytest
       argcomplete
       mesa
+      wl-clipboard
+      xclip
       ;
   };
 in
