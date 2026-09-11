@@ -235,11 +235,14 @@ class ServerConnection:
             if osc.group(1) == "99":
                 self._route_notification(osc.group(2))
             else:
-                # The two colours the terminal draws with. It answers
-                # each on the code that asked, so this reads them
-                # whenever they arrive: a terminal that reports a theme
-                # change later says it the same way.
-                self.default_colors.handle_osc_reply(osc.group(1), osc.group(2))
+                # The colours the terminal draws with, defaults and
+                # palette alike. It answers each on the code that
+                # asked, so this reads them whenever they arrive: a
+                # terminal that reports a theme change later says it
+                # the same way. Anything learned is what the panes
+                # answer their programs with, so they are told again.
+                if self.default_colors.handle_osc_reply(osc.group(1), osc.group(2)):
+                    self.pymux.sync_color_bases()
             return
 
         if not self._kitty_detection_pending:

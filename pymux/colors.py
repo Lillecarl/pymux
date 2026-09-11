@@ -39,11 +39,12 @@ terminal is -- and nothing here decides what to do about it.
 """
 
 import re
+from typing import List
 
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.utils import is_dumb_terminal
-from pyte.colors import Color, parse_color
-from pyte.osc import DYNAMIC_COLOR_CODES, QUERY
+from pyte.colors import Color, DEFAULT_COLORS, PALETTE, parse_color
+from pyte.osc import DYNAMIC_COLOR_CODES, QUERY, ColorBase, Osc
 from pyte.sequences import osc
 
 __all__ = [
@@ -76,13 +77,22 @@ _COLOR_CODES = tuple(
 )
 
 #: Ask the outer terminal which two colours it draws with when nothing
-#: says otherwise. Each reply comes back on the same code, with an
+#: says otherwise, and which sixteen it paints the palette's first
+#: entries with. Each reply comes back on the same code, with an
 #: `XParseColor` spec in place of the question mark.
+#:
+#: The cube and the grey ramp beyond sixteen are convention: every
+#: terminal that numbers 256 colours paints them the same way, so they
+#: are not asked about. The sixteen ANSI colours are the ones a theme
+#: decides, and they are what a pane has to know to answer its
+#: programs with what the person sees. Lillecarl/pymux#283.
 #:
 #: A terminal that does not answer says nothing and holds nothing up:
 #: the device attributes reply closes the detection, and these go out
 #: before it.
-COLOR_QUERIES = "".join(osc(code, QUERY) for code in _COLOR_CODES)
+COLOR_QUERIES = "".join(osc(code, QUERY) for code in _COLOR_CODES) + "".join(
+    osc(Osc.PALETTE_COLOR, "%i;?" % index) for index in range(16)
+)
 
 # The reply of a DECRQSS request: "DCS <valid> $ r <answer> ST". The
 # validity digit is not read: terminals disagree about which value
@@ -187,6 +197,13 @@ class DefaultColors:
         #: draws its own chrome over.
         self.background: Color | None = None
 
+        #: The sixteen colours the terminal paints the palette's first
+        #: entries with, learned from the same handshake. An entry that
+        #: the terminal did not say stays `None`, and a pane then
+        #: answers with the conventional one. The cube beyond sixteen
+        #: is convention in every terminal, so it is not asked about.
+        self.ansi: List[Color | None] = [None] * 16
+
     def __repr__(self) -> str:
         return "DefaultColors(foreground=%r, background=%r)" % (
             self.foreground,
@@ -195,13 +212,16 @@ class DefaultColors:
 
     def handle_osc_reply(self, code: str, payload: str) -> bool:
         """
-        Read one OSC reply, and say whether it was one of these two.
+        Read one OSC reply, and say whether it learned a colour.
 
         The caller has already split the code from the payload, because
         it routes other codes of its own. A reply this cannot read --
         another code, or a spec `XParseColor` does not name -- changes
         nothing and answers false.
         """
+        if code == Osc.PALETTE_COLOR:
+            return self._learn_ansi(payload.strip())
+
         name = DYNAMIC_COLOR_CODES.get(code)
         if name not in _WANTED_COLORS:
             return False
@@ -212,6 +232,46 @@ class DefaultColors:
 
         setattr(self, name, color)
         return True
+
+    def _learn_ansi(self, payload: str) -> bool:
+        """
+        Read one palette reply: "index ; spec".
+
+        The ask named the first sixteen only, so an index beyond them
+        is a reply nobody asked for and reads nothing. An index that
+        did learn a colour answers true, because the panes should be
+        told again.
+        """
+        index, _, spec = payload.partition(";")
+        if not index.isdigit() or int(index) >= len(self.ansi):
+            return False
+        color = parse_color(spec.strip())
+        if color is None:
+            return False
+        self.ansi[int(index)] = color
+        return True
+
+    def color_base(self) -> ColorBase:
+        """
+        What a pane starts with when this terminal is the one drawing
+        it: the sixteen colours that were learned over the
+        conventional cube, and the two defaults that were learned over
+        the ones `pyte.colors` reports. An entry the terminal did not
+        say leaves the conventional one standing.
+
+        This is the answer a pane gives a program that asks, and it
+        describes the theme that the person in front of this terminal
+        is looking at. Lillecarl/pymux#283.
+        """
+        palette = [
+            learned or PALETTE[index] for index, learned in enumerate(self.ansi)
+        ] + list(PALETTE[16:])
+        defaults = dict(DEFAULT_COLORS)
+        if self.foreground is not None:
+            defaults["foreground"] = self.foreground
+        if self.background is not None:
+            defaults["background"] = self.background
+        return ColorBase(palette, defaults)
 
 
 def depth_from_environment(term: str, colorterm: str) -> ColorDepth:

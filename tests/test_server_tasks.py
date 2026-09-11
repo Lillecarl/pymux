@@ -35,9 +35,13 @@ class FakePipe:
 class FakePymux:
     def __init__(self):
         self.removed = []
+        self.color_base_syncs = 0
 
     def remove_client(self, connection):
         self.removed.append(connection)
+
+    def sync_color_bases(self):
+        self.color_base_syncs += 1
 
 
 def make_connection():

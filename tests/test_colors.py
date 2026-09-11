@@ -22,7 +22,8 @@ from pymux.colors import (
 from pymux.client.terminal import DETECTION_QUERIES
 from pymux.server import ServerConnection
 from pyte import escape
-from pyte.colors import Color
+from pyte.colors import DEFAULT_COLORS, PALETTE, Color
+from pyte.osc import COLOR_BASE
 from pyte.sequences import Csi, apc, csi, dcs, osc
 from test_server_tasks import FakePipe, FakePymux
 
@@ -168,8 +169,11 @@ def test_a_forced_depth_beats_the_probe():
 # Lillecarl/pymux#223.
 
 
-def test_the_queries_ask_for_the_foreground_and_the_background():
-    assert COLOR_QUERIES == osc("10", "?") + osc("11", "?")
+def test_the_queries_ask_for_the_two_defaults_and_the_sixteen_ansi():
+    "The cube beyond sixteen is convention, so it is not asked about."
+    assert COLOR_QUERIES == osc("10", "?") + osc("11", "?") + "".join(
+        osc("4", "%i;?" % index) for index in range(16)
+    )
 
 
 def test_a_fresh_terminal_has_said_nothing():
@@ -229,6 +233,67 @@ def test_a_reply_this_cannot_read_changes_nothing(code, payload):
 
 
 # ----------------------------------------------------------------------
+# The sixteen colours the terminal paints the palette with.
+#
+# The pane answers the queries of its program with what this terminal
+# paints, so the handshake asks for the theme that the person is
+# looking at. Lillecarl/pymux#283.
+
+
+def test_an_ansi_reply_is_read():
+    colors = DefaultColors()
+
+    assert colors.handle_osc_reply("4", "1;rgb:ffff/0000/0000")
+
+    assert colors.ansi[1] == Color(0xFF, 0x00, 0x00)
+
+
+def test_an_ansi_reply_beyond_the_sixteen_changes_nothing():
+    # The ask named the first sixteen only. A cube entry is convention
+    # in every terminal, and a reply for it is one nobody asked for.
+    colors = DefaultColors()
+
+    assert not colors.handle_osc_reply("4", "20;rgb:ffff/0000/0000")
+    assert not colors.handle_osc_reply("4", "aubergine;rgb:ffff/0000/0000")
+
+
+def test_a_color_base_carries_the_learned_sixteen_over_the_cube():
+    colors = DefaultColors()
+    red = Color(0xFF, 0x00, 0x00)
+    blue = Color(0x00, 0x00, 0xFF)
+    colors.handle_osc_reply("4", "1;%s" % red.spec)
+    colors.handle_osc_reply("4", "14;%s" % blue.spec)
+
+    base = colors.color_base()
+
+    assert base.palette[:16] == [
+        red if index == 1 else blue if index == 14 else PALETTE[index]
+        for index in range(16)
+    ]
+    assert base.palette[16:] == list(PALETTE[16:])
+
+
+def test_a_color_base_carries_the_learned_defaults():
+    colors = DefaultColors()
+    colors.handle_osc_reply("10", "rgb:ffff/0000/0000")
+    colors.handle_osc_reply("11", "rgb:0000/0000/ffff")
+
+    base = colors.color_base()
+
+    assert base.defaults["foreground"] == Color(0xFF, 0x00, 0x00)
+    assert base.defaults["background"] == Color(0x00, 0x00, 0xFF)
+    assert base.defaults["cursor"] == DEFAULT_COLORS["cursor"]
+
+
+def test_a_color_base_with_nothing_learned_is_the_conventional_one():
+    base = DefaultColors().color_base()
+
+    assert base.palette == list(PALETTE)
+    assert base.defaults == DEFAULT_COLORS
+    assert base == COLOR_BASE
+
+
+# ----------------------------------------------------------------------
 # And the reply reaches the client it belongs to.
 
 
@@ -272,6 +337,43 @@ def test_a_colour_arriving_after_the_detection_is_still_read():
         connection._handle_kitty_reply(osc("11", "rgb:0000/0000/0000"))
 
         assert connection.default_colors.background == Color(0, 0, 0)
+        connection._close_connection()
+
+    asyncio.run(check())
+
+
+# ----------------------------------------------------------------------
+# And what the panes answer with follows.
+
+def test_a_learned_colour_tells_the_panes_again():
+    "The panes answer their programs with what this terminal paints."
+
+    async def check():
+        pymux = FakePymux()
+        connection = ServerConnection(pymux, FakePipe())
+
+        connection._handle_kitty_reply(osc("4", "1;rgb:ffff/0000/0000"))
+        connection._handle_kitty_reply(osc("11", "rgb:0000/0000/0000"))
+
+        assert pymux.color_base_syncs == 2
+        connection._close_connection()
+
+    asyncio.run(check())
+
+
+def test_a_reply_that_learns_nothing_tells_the_panes_nothing():
+    "A reply this cannot read does not send the panes walking."
+
+    async def check():
+        pymux = FakePymux()
+        connection = ServerConnection(pymux, FakePipe())
+
+        connection._handle_kitty_reply(osc("4", "20;rgb:ffff/0000/0000"))
+        # The cursor is a colour pymux does not draw with, and an
+        # index beyond the sixteen is one nobody asked for.
+        connection._handle_kitty_reply(osc("12", "rgb:ffff/0000/0000"))
+
+        assert pymux.color_base_syncs == 0
         connection._close_connection()
 
     asyncio.run(check())

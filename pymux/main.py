@@ -1132,6 +1132,7 @@ class Pymux:
 
         # A pane that starts now missed the last walk of the panes.
         self.tell_pane_about_the_keyboard(pane)
+        self.tell_pane_about_the_colours(pane)
 
         logger.info("Created process %r.", command_list)
 
@@ -1644,6 +1645,59 @@ class Pymux:
             # An older ptterm knows nothing about the keyboard of the
             # host. It then claims what a pane asks for, as before.
             pass
+
+    def tell_pane_about_the_colours(self, pane) -> None:
+        """
+        Tell one pane what the terminal of the latest client draws
+        with. Never raises: a pane that starts without a client, or
+        whose embedder knows no `set_color_base`, answers from the
+        table `pyte` reports, as before. Lillecarl/pymux#283.
+        """
+        base = self.color_base_of_the_latest_client()
+        if base is None:
+            return
+        try:
+            pane.screen.set_color_base(base)
+        except Exception:
+            return
+
+    def sync_color_bases(self) -> None:
+        """
+        Tell every pane what the terminal of the latest client draws
+        with.
+
+        A pane answers the colour queries of its program with the
+        theme of that terminal, so what a program learns is what the
+        person in front of it sees. The latest is the client a person
+        used last, by the stamp that `window-size latest` reads -- the
+        same rule that decides where a browser opens.
+
+        Nothing attached, or a client that answered nothing, leaves
+        every pane on the table `pyte` reports. Lillecarl/pymux#283.
+        """
+        for pane in list(self.panes_by_id.values()):
+            self.tell_pane_about_the_colours(pane)
+
+    def color_base_of_the_latest_client(self):
+        """
+        The colour base of the client a person used last, or `None`
+        when nobody is attached. The fake CLI of a socket command is
+        never it, for the reason `clients_to_open_on` names.
+        """
+        clients = [
+            client
+            for client in self._client_states.values()
+            if not client.temporary
+        ]
+        if not clients:
+            return None
+        latest = max(clients, key=lambda client: client.last_used)
+        try:
+            return latest.default_colors.color_base()
+        except AttributeError:
+            # A connection that never asked its terminal -- the
+            # in-process one -- has no colours to hand over.
+            return None
 
     def keyboard_flags_for_a_client(self) -> int:
         """
