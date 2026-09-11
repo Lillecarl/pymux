@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from pymux.client.ssh import SshClient, is_an_ssh_url, the_ssh_target
+from pymux.client.ssh import SshClient, is_ssh_url, ssh_target
 from pymux.main import Pymux
 
 from session import in_a_loop
@@ -38,7 +38,7 @@ A_PANE = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
 
 
 def test_it_reads_a_host_and_a_path():
-    target = the_ssh_target("ssh://dynhetz/tmp/pymux.sock.carl.0")
+    target = ssh_target("ssh://dynhetz/tmp/pymux.sock.carl.0")
 
     assert target.host == "dynhetz"
     assert target.path == "/tmp/pymux.sock.carl.0"
@@ -47,14 +47,14 @@ def test_it_reads_a_host_and_a_path():
 
 
 def test_it_reads_a_user_and_a_port():
-    target = the_ssh_target("ssh://carl@dynhetz:2222/tmp/sock")
+    target = ssh_target("ssh://carl@dynhetz:2222/tmp/sock")
 
     assert (target.username, target.host, target.port) == ("carl", "dynhetz", 2222)
     assert target.path == "/tmp/sock"
 
 
 def test_a_path_with_more_than_one_part_survives():
-    target = the_ssh_target("ssh://host/run/user/1000/pymux/sock")
+    target = ssh_target("ssh://host/run/user/1000/pymux/sock")
     assert target.path == "/run/user/1000/pymux/sock"
 
 
@@ -64,36 +64,36 @@ def test_no_path_is_answered_after_connecting():
     socket that is depends on the other machine, so it is not decided
     here.
     """
-    assert the_ssh_target("ssh://carl@dynhetz").path is None
-    assert the_ssh_target("ssh://carl@dynhetz/").path is None
+    assert ssh_target("ssh://carl@dynhetz").path is None
+    assert ssh_target("ssh://carl@dynhetz/").path is None
 
 
 def test_a_named_path_still_wins():
-    assert the_ssh_target("ssh://carl@dynhetz/run/sock").path == "/run/sock"
+    assert ssh_target("ssh://carl@dynhetz/run/sock").path == "/run/sock"
 
 
 def test_the_fallback_is_the_first_server_of_the_user():
     "For a machine whose sshd offers no SFTP to list with."
-    from pymux.client.ssh import the_default_socket
+    from pymux.client.ssh import default_socket
 
-    assert the_default_socket("carl") == "/tmp/pymux.sock.carl.0"
+    assert default_socket("carl") == "/tmp/pymux.sock.carl.0"
 
 
 def test_an_address_with_no_machine_is_refused():
     with pytest.raises(ValueError):
-        the_ssh_target("ssh:///tmp/sock")
+        ssh_target("ssh:///tmp/sock")
 
 
 def test_a_path_is_not_an_address():
     with pytest.raises(ValueError):
-        the_ssh_target("/tmp/pymux.sock.carl.0")
+        ssh_target("/tmp/pymux.sock.carl.0")
 
 
 def test_what_counts_as_an_address():
-    assert is_an_ssh_url("ssh://host/tmp/sock")
-    assert not is_an_ssh_url("/tmp/pymux.sock.carl.0")
-    assert not is_an_ssh_url("")
-    assert not is_an_ssh_url(None)
+    assert is_ssh_url("ssh://host/tmp/sock")
+    assert not is_ssh_url("/tmp/pymux.sock.carl.0")
+    assert not is_ssh_url("")
+    assert not is_ssh_url(None)
 
 
 def test_the_client_factory_picks_this_one():

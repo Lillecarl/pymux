@@ -55,7 +55,7 @@ from prompt_toolkit.output import ColorDepth
 
 from pymux import __version__, log
 from pymux.client import create_client, list_clients
-from pymux.client.ssh import is_an_ssh_url
+from pymux.client.ssh import is_ssh_url
 from pymux.main import Pymux
 from pymux.utils import daemonize
 
@@ -387,7 +387,7 @@ def run() -> None:
     # A machine is somewhere to attach to, never somewhere to listen.
     # `listen_on_socket` would try to bind a path called "ssh:" and
     # fail somewhere further in. Lillecarl/pymux#90.
-    if is_an_ssh_url(socket_name) and mode in ("integrated", "start-server"):
+    if is_ssh_url(socket_name) and mode in ("integrated", "start-server"):
         print("A server listens on this machine, so -S has to name a path here.")
         sys.exit(1)
 
@@ -634,7 +634,7 @@ def _wait_for_server(socket_name: str, timeout: float = 5.0) -> bool:
     on this machine, and the client says soon enough whether the far
     side answers. Lillecarl/pymux#90.
     """
-    if is_an_ssh_url(socket_name):
+    if is_ssh_url(socket_name):
         return True
 
     deadline = time.time() + timeout

@@ -45,12 +45,12 @@ from .terminal import TerminalClient
 __all__ = [
     "SshClient",
     "SshTarget",
-    "is_an_ssh_url",
-    "the_ssh_target",
+    "is_ssh_url",
+    "ssh_target",
 ]
 
 #: What `-S` starts with when it names a machine rather than a path.
-THE_SCHEME = "ssh://"
+SCHEME = "ssh://"
 
 #: How often to tell the server the terminal has a new size, in
 #: seconds. `client/memory.py` says why a poll and not only a signal.
@@ -64,8 +64,8 @@ SIZE_INTERVAL = 0.5
 #: `/tmp` and not `tempfile.gettempdir()`, because the directory
 #: belongs to the other machine. It is what `TMPDIR` unset means, which
 #: is what a login shell almost always has.
-THE_SOCKET_DIRECTORY = "/tmp"
-THE_SOCKET_NAMES = "pymux.sock.%s.*"
+SOCKET_DIRECTORY = "/tmp"
+SOCKET_NAMES = "pymux.sock.%s.*"
 
 
 class SshTarget(NamedTuple):
@@ -82,29 +82,29 @@ class SshTarget(NamedTuple):
     port: int | None
 
 
-def is_an_ssh_url(name: str | None) -> bool:
+def is_ssh_url(name: str | None) -> bool:
     "Whether this `-S` names a machine."
-    return bool(name) and str(name).startswith(THE_SCHEME)
+    return bool(name) and str(name).startswith(SCHEME)
 
 
-def the_default_socket(username: str) -> str:
+def default_socket(username: str) -> str:
     """
     Where the first server of a user listens.
 
     The fallback, for a machine whose sshd does not offer SFTP. A
     server with no name takes the lowest free number, so the first one
     is always `.0`, and most machines have exactly one.
-    `SshClient._the_socket` is what asks rather than guesses.
+    `SshClient._socket` is what asks rather than guesses.
     """
-    return "%s/pymux.sock.%s.0" % (THE_SOCKET_DIRECTORY, username)
+    return "%s/pymux.sock.%s.0" % (SOCKET_DIRECTORY, username)
 
 
-def the_ssh_target(url: str) -> SshTarget:
+def ssh_target(url: str) -> SshTarget:
     """
     Read `ssh://[user@]host[:port][/path/to/socket]`.
 
     With no path the socket is found after connecting, so the path is
-    `None` here and `SshClient._the_socket` fills it in.
+    `None` here and `SshClient._socket` fills it in.
     """
     parsed = urlparse(url)
 
@@ -143,7 +143,7 @@ class SshClient(TerminalClient):
 
     def __init__(self, socket_name: str, **connect_with) -> None:
         super().__init__()
-        self.target = the_ssh_target(socket_name)
+        self.target = ssh_target(socket_name)
         #: What a test overrides: a key to use, and no `known_hosts`.
         #: Nothing here passes any, so a real run reads the agent, the
         #: keys in `~/.ssh` and `known_hosts`, the way `ssh` does.
@@ -185,7 +185,7 @@ class SshClient(TerminalClient):
 
         connection = await asyncssh.connect(target.host, **asking)
         try:
-            path = target.path or await self._the_socket(connection)
+            path = target.path or await self._socket(connection)
             reader, writer = await connection.open_unix_connection(path)
         except Exception:
             connection.close()
@@ -195,7 +195,7 @@ class SshClient(TerminalClient):
         self._writer = writer
         return connection, reader
 
-    async def _the_socket(self, connection) -> str:
+    async def _socket(self, connection) -> str:
         """
         Which socket to open, when the address named none.
 
@@ -215,12 +215,12 @@ class SshClient(TerminalClient):
         better than a guess here: `~/.ssh/config` can name a different
         one, and asyncssh has already applied it.
         """
-        import stat as the_stat
+        import stat
 
         username = connection.get_extra_info("username")
         pattern = "%s/%s" % (
-            THE_SOCKET_DIRECTORY,
-            THE_SOCKET_NAMES % (username,),
+            SOCKET_DIRECTORY,
+            SOCKET_NAMES % (username,),
         )
 
         try:
@@ -230,15 +230,15 @@ class SshClient(TerminalClient):
             # No SFTP subsystem, or nothing matched. Fall back to where
             # the first server of a user listens, which is right on a
             # machine that has one.
-            return the_default_socket(username)
+            return default_socket(username)
 
         sockets = [
             one
             for one in found
-            if one.attrs.permissions and the_stat.S_ISSOCK(one.attrs.permissions)
+            if one.attrs.permissions and stat.S_ISSOCK(one.attrs.permissions)
         ]
         if not sockets:
-            return the_default_socket(username)
+            return default_socket(username)
 
         newest = max(sockets, key=lambda one: one.attrs.mtime or 0)
         name = newest.filename
@@ -251,7 +251,7 @@ class SshClient(TerminalClient):
             if name.startswith("/")
             else "%s/%s"
             % (
-                THE_SOCKET_DIRECTORY,
+                SOCKET_DIRECTORY,
                 name,
             )
         )
