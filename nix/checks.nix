@@ -16,6 +16,8 @@
   python,
   ptterm,
   prompt-toolkit,
+  # The shared rig. The picture scripts borrow its seats.
+  pyterm-pytest,
   argcomplete,
   pytest,
   hypothesis,
@@ -87,6 +89,7 @@ let
   pythonWithTests = python.withPackages (ps: [
     ptterm
     prompt-toolkit
+    pyterm-pytest
     argcomplete
     hypothesis
     pytest

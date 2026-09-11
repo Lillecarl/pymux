@@ -21,6 +21,8 @@
   pythonOlder,
   prompt-toolkit,
   ptterm,
+  # The shared rig, whose seats the picture scripts borrow.
+  pyterm-pytest,
   argcomplete,
   pyinstrument,
   # `-S ssh://host/path` reaches a server on another machine. It is
@@ -121,6 +123,7 @@ let
       testSources
       ptterm
       prompt-toolkit
+      pyterm-pytest
       argcomplete
       mesa
       ;
