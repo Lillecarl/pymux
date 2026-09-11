@@ -25,7 +25,7 @@ from prompt_toolkit.input.vt100_parser import ANSI_SEQUENCES
 from prompt_toolkit.keys import KeyName, Keys
 from pyte.keys import Modifier
 
-from .keys import A_KEY_BY_ITS_NAME, MODIFIERS_WITH_NO_MEMBER, name_of
+from .keys import KEY_BY_ITS_NAME, MODIFIERS_WITH_NO_MEMBER, name_of
 
 __all__ = [
     "pymux_key_to_prompt_toolkit_key_sequence",
@@ -39,7 +39,7 @@ __all__ = [
 #: tmux has no spelling for super, hyper or meta, so there is no muscle
 #: memory to keep here and the names are written out. "S-" and "C-"
 #: keep the tmux meaning they already have.
-THE_MODIFIERS_A_PERSON_WRITES = (
+MODIFIERS_BY_TMUX_SPELLING = (
     ("s-", Modifier.SHIFT),
     ("c-", Modifier.CTRL),
     ("super-", Modifier.SUPER),
@@ -48,7 +48,7 @@ THE_MODIFIERS_A_PERSON_WRITES = (
 )
 
 
-def _a_built_name(key: str) -> KeyName | None:
+def _built_name(key: str) -> KeyName | None:
     """
     The key that a name with super, hyper or meta in it means.
 
@@ -65,7 +65,7 @@ def _a_built_name(key: str) -> KeyName | None:
     found = True
     while found:
         found = False
-        for spelling, modifier in THE_MODIFIERS_A_PERSON_WRITES:
+        for spelling, modifier in MODIFIERS_BY_TMUX_SPELLING:
             if rest.startswith(spelling) and len(rest) > len(spelling):
                 mods |= modifier
                 rest = rest[len(spelling) :]
@@ -87,7 +87,7 @@ def pymux_key_to_prompt_toolkit_key_sequence(key):
     # super, hyper and meta, which no `Keys` member names and no list
     # could. The name is built the same way the reader builds it, so
     # the two meet in the middle. Lillecarl/pymux#181.
-    built = _a_built_name(key)
+    built = _built_name(key)
     if built is not None:
         return (built,)
 
@@ -140,7 +140,7 @@ def pymux_key_to_prompt_toolkit_key_sequence(key):
 #: "\x1b[[E", which only the Linux console makes. F1 to F4 have the SS3
 #: form ahead of it and F6 upwards have no such form at all, so F5 was
 #: the one key of the twelve that went out wrong.
-_THE_LINUX_CONSOLE_FORM = "\x1b[["
+_LINUX_CONSOLE_FORM = "\x1b[["
 
 
 def _keys_to_data() -> Dict[Keys, str]:
@@ -161,7 +161,7 @@ def _keys_to_data() -> Dict[Keys, str]:
     """
     result: Dict[Keys, str] = {}
     for vt100_data, key in ANSI_SEQUENCES.items():
-        if vt100_data.startswith(_THE_LINUX_CONSOLE_FORM):
+        if vt100_data.startswith(_LINUX_CONSOLE_FORM):
             continue
         if not isinstance(key, tuple) and key not in result:
             result[key] = vt100_data
@@ -210,14 +210,14 @@ def prompt_toolkit_key_to_vt100_key(key: str, application_mode: bool = False) ->
     if key in _PROMPT_TOOLKIT_KEY_TO_VT100:
         return _PROMPT_TOOLKIT_KEY_TO_VT100[key]
 
-    legacy = _a_built_name_as_legacy_bytes(key)
+    legacy = _built_name_as_legacy_bytes(key)
     if legacy is not None:
         return legacy
 
     return key
 
 
-def _a_built_name_as_legacy_bytes(key: str) -> str | None:
+def _built_name_as_legacy_bytes(key: str) -> str | None:
     """
     What a keyboard would have sent for a key named with super, hyper
     or meta, and None when the name is not one of those.
@@ -235,7 +235,7 @@ def _a_built_name_as_legacy_bytes(key: str) -> str | None:
     mods = 0
     rest = key
     while True:
-        for spelling, modifier in THE_MODIFIERS_A_PERSON_WRITES:
+        for spelling, modifier in MODIFIERS_BY_TMUX_SPELLING:
             if rest.startswith(spelling) and len(rest) > len(spelling):
                 mods |= modifier
                 rest = rest[len(spelling) :]
@@ -251,7 +251,7 @@ def _a_built_name_as_legacy_bytes(key: str) -> str | None:
         return rest.upper()
     if len(rest) == 1:
         return rest
-    member = A_KEY_BY_ITS_NAME.get(rest)
+    member = KEY_BY_ITS_NAME.get(rest)
     if member is None:
         return None
     return prompt_toolkit_key_to_vt100_key(member)

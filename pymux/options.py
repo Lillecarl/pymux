@@ -7,7 +7,7 @@ from enum import StrEnum
 
 from .enums import WindowSize, Woke
 from .key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS
-from .key_spelling import a_key_however_it_is_written
+from .key_spelling import key_however_it_is_written
 from .layout import Justify
 from . import log
 from .style import THEMES
@@ -185,7 +185,7 @@ class KeyPrefixOption(Option):
     def set_value(self, pymux, value):
         # Translate prefix to prompt_toolkit
         try:
-            keys = a_key_however_it_is_written(value)
+            keys = key_however_it_is_written(value)
         except ValueError:
             raise SetOptionError("Invalid key: %r" % (value,))
         else:

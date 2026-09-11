@@ -23,7 +23,7 @@ from pymux.enums import WindowSize, Woke
 from pymux.format import format_pymux_string
 from pymux.key_spelling import (
     KeyCompleter,
-    an_event_however_it_is_written,
+    event_however_it_is_written,
     why_a_pane_cannot_read,
 )
 from pyte.keys import Unhearable
@@ -1061,7 +1061,7 @@ def send_prefix(pymux: "Pymux", variables: _VariablesDict) -> None:
     # road as `send-keys`, and says the same thing when a pane cannot
     # hear it. Lillecarl/pymux#237.
     for key in pymux.key_bindings_manager.prefix:
-        send_a_key(pane, an_event_however_it_is_written(key), key)
+        send_a_key(pane, event_however_it_is_written(key), key)
 
 
 def bind_key(pymux: "Pymux", variables: _VariablesDict) -> None:
@@ -1137,7 +1137,7 @@ def send_keys(pymux: "Pymux", variables: _VariablesDict) -> None:
     for key in keys:
         # Read the name into a key, in either spelling.
         try:
-            event = an_event_however_it_is_written(key)
+            event = event_however_it_is_written(key)
         except ValueError:
             # Not a known key name. Like tmux, send this argument as
             # literal text.

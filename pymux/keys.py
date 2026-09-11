@@ -60,16 +60,16 @@ logger = logging.getLogger(__name__)
 CSI = "\x1b["
 
 __all__ = [
-    "A_KEY_BY_ITS_NAME",
+    "KEY_BY_ITS_NAME",
     "DropReason",
     "Dropped",
     "KEYS_A_KEYBOARD_SPELLS_OUT",
     "KittyVt100Parser",
-    "THE_CODE_AND_FORM_OF",
-    "THE_NAME_OF_A_KEY",
-    "an_event_named",
+    "CODE_AND_FORM_OF",
+    "NAME_OF_A_KEY",
+    "event_named",
     "parse_kitty_key",
-    "the_key_named",
+    "key_named",
 ]
 
 
@@ -209,7 +209,7 @@ _CONTROL_KEY_NAMES = {
 #: The four above are written in as well, because their members do not
 #: name them. `Keys.Enter` is an alias of `ControlM` and its value is
 #: "c-m", which is not a name anybody would type.
-A_KEY_BY_ITS_NAME = {
+KEY_BY_ITS_NAME = {
     **{str.__str__(key): key for key in Keys},
     "escape": Keys.Escape,
     "enter": Keys.Enter,
@@ -224,11 +224,11 @@ A_KEY_BY_ITS_NAME = {
 #: A member that is an alias reads back as the key it is an alias of.
 #: `Keys.Enter` is `ControlM` and reads back as "c-m", `Keys.Backspace`
 #: is `ControlH` and reads back as "c-h". Neither is a name a person
-#: would write, and neither reaches the branch of `the_key_named` that
+#: would write, and neither reaches the branch of `key_named` that
 #: knows what ctrl on that key means.
-THE_NAME_OF_A_KEY = {
+NAME_OF_A_KEY = {
     **{key: str.__str__(key) for key in Keys},
-    **{A_KEY_BY_ITS_NAME[name]: name for name in _CONTROL_KEY_NAMES.values()},
+    **{KEY_BY_ITS_NAME[name]: name for name in _CONTROL_KEY_NAMES.values()},
 }
 
 
@@ -353,14 +353,14 @@ class DropReason(StrEnum):
     "Why pymux has no name for a key. The text goes in the log."
 
     KEYPAD_WITH_A_MODIFIER = "a keypad key with ctrl or alt"
-    A_KEY_THAT_WRITES_NOTHING = (
+    KEY_THAT_WRITES_NOTHING = (
         "a key of the private use area: a lock key, a modifier key, a "
         "media key or F13 upwards"
     )
     CTRL_AND_A_CHARACTER = "ctrl and a character that has no control code"
-    A_TILDE_KEY_WITH_NO_NAME = "a key of the tilde form that pymux cannot name"
-    A_LETTER_KEY_WITH_NO_NAME = "a key of the letter form that pymux cannot name"
-    A_MODIFIER_THIS_KEY_HAS_NO_NAME_FOR = "a modifier that this key has no name for"
+    TILDE_KEY_WITH_NO_NAME = "a key of the tilde form that pymux cannot name"
+    LETTER_KEY_WITH_NO_NAME = "a key of the letter form that pymux cannot name"
+    MODIFIER_THIS_KEY_HAS_NO_NAME_FOR = "a modifier that this key has no name for"
 
 
 # Sentinels for terminal replies that are not key events: the reply of
@@ -456,9 +456,9 @@ def _apply_modifiers(key: str | Keys, mods: int) -> _KeyResult:
         elif shift and key.isalpha():
             key = key.upper()
     elif ctrl or shift:
-        modified = _the_modified_form_of(key, ctrl, shift)
+        modified = _modified_form_of(key, ctrl, shift)
         if modified is None:
-            return Dropped(DropReason.A_MODIFIER_THIS_KEY_HAS_NO_NAME_FOR)
+            return Dropped(DropReason.MODIFIER_THIS_KEY_HAS_NO_NAME_FOR)
         key = modified
 
     if alt:
@@ -466,7 +466,7 @@ def _apply_modifiers(key: str | Keys, mods: int) -> _KeyResult:
     return key
 
 
-def _the_modified_form_of(key: Keys, ctrl: bool, shift: bool) -> Keys | None:
+def _modified_form_of(key: Keys, ctrl: bool, shift: bool) -> Keys | None:
     """
     The `Keys` member for a functional key with ctrl or shift on it,
     and None when the toolkit names no such key.
@@ -496,7 +496,7 @@ def _the_modified_form_of(key: Keys, ctrl: bool, shift: bool) -> Keys | None:
     return None
 
 
-def _the_code_and_final_of_a_name() -> dict:
+def _code_and_final_of_a_name() -> dict:
     """
     The number and form of every key that has a name: `_base_of` read
     the other way.
@@ -514,10 +514,10 @@ def _the_code_and_final_of_a_name() -> dict:
     return named
 
 
-THE_CODE_AND_FORM_OF = _the_code_and_final_of_a_name()
+CODE_AND_FORM_OF = _code_and_final_of_a_name()
 
 
-def _the_modifiers_written_into(name: str) -> Tuple[int, str]:
+def _modifiers_written_into(name: str) -> Tuple[int, str]:
     '`name_of` read back: "s-tab" is shift on tab.'
     mods = 0
     found = True
@@ -533,7 +533,7 @@ def _the_modifiers_written_into(name: str) -> Tuple[int, str]:
     return mods, name
 
 
-def an_event_named(base: str, mods: int) -> KeyEvent:
+def event_named(base: str, mods: int) -> KeyEvent:
     """
     The key event that a base key name and its modifiers are.
 
@@ -546,17 +546,17 @@ def an_event_named(base: str, mods: int) -> KeyEvent:
 
     Raises `ValueError` for a name that no key has.
     """
-    known = THE_CODE_AND_FORM_OF.get(base)
+    known = CODE_AND_FORM_OF.get(base)
     if known is not None:
         code, final = known
         return KeyEvent(code, mods, final)
 
-    carried, rest = _the_modifiers_written_into(base)
+    carried, rest = _modifiers_written_into(base)
     if carried:
         # A base that carries its own modifiers, which is how the
         # toolkit names a few keys: `Keys.BackTab` is "s-tab". The
         # chord may hold more, and the two sets join.
-        return an_event_named(rest, mods | carried)
+        return event_named(rest, mods | carried)
 
     if len(base) == 1:
         # A character key. The protocol carries the key of the layout,
@@ -581,7 +581,7 @@ def _with_alt(key: str | Keys, mods: int) -> _KeyResult:
     return (Keys.Escape, key) if mods & _ALT else key
 
 
-def the_key_named(base: str, mods: int) -> _KeyResult:
+def key_named(base: str, mods: int) -> _KeyResult:
     """
     The prompt_toolkit key that one key with its modifiers is.
 
@@ -641,13 +641,13 @@ def the_key_named(base: str, mods: int) -> _KeyResult:
                 return _with_alt(both, mods)
         return _apply_modifiers(base, mods)
 
-    member = A_KEY_BY_ITS_NAME.get(base)
+    member = KEY_BY_ITS_NAME.get(base)
     if member is None:
-        return Dropped(DropReason.A_KEY_THAT_WRITES_NOTHING)
+        return Dropped(DropReason.KEY_THAT_WRITES_NOTHING)
     return _apply_modifiers(member, mods)
 
 
-def _a_reply(prefix: str) -> object | None:
+def _reply(prefix: str) -> object | None:
     """
     The kind of terminal reply this sequence is, or None.
 
@@ -684,7 +684,7 @@ def parse_kitty_key(prefix: str) -> _KeyResult | None:
     keys, so there is one, and what stays here is the naming: which
     prompt_toolkit key a `KeyEvent` is. Lillecarl/pymux#176.
     """
-    reply = _a_reply(prefix)
+    reply = _reply(prefix)
     if reply is not None:
         return reply
 
@@ -745,8 +745,8 @@ def _named(event: KeyEvent) -> _KeyResult | None:
         # readings below may take the key away from it.
         base = _base_of(event)
         if base is None:
-            return Dropped(DropReason.A_KEY_THAT_WRITES_NOTHING)
-        return the_key_named(base, mods)
+            return Dropped(DropReason.KEY_THAT_WRITES_NOTHING)
+        return key_named(base, mods)
 
     # Three things that only a key off the wire can be, and that a name
     # therefore never says. Each one is read here, before the base and
@@ -766,7 +766,7 @@ def _named(event: KeyEvent) -> _KeyResult | None:
         if key >= FIRST_FUNCTIONAL_KEY:
             # Other private use area keys (lock keys, media keys, ...)
             # have no prompt_toolkit representation. Drop them.
-            return Dropped(DropReason.A_KEY_THAT_WRITES_NOTHING)
+            return Dropped(DropReason.KEY_THAT_WRITES_NOTHING)
 
         # The text the terminal reported for this key, which accounts
         # for the shift modifier and the keyboard layout. Nothing else
@@ -778,17 +778,17 @@ def _named(event: KeyEvent) -> _KeyResult | None:
 
     elif final == "~":
         if _TILDE_KEYS.get(key) is None:
-            return Dropped(DropReason.A_TILDE_KEY_WITH_NO_NAME)
+            return Dropped(DropReason.TILDE_KEY_WITH_NO_NAME)
 
     elif _LETTER_KEYS.get(final) is None or key != 1:
         # The letter form names ten keys, and carries the number one
         # and nothing else.
-        return Dropped(DropReason.A_LETTER_KEY_WITH_NO_NAME)
+        return Dropped(DropReason.LETTER_KEY_WITH_NO_NAME)
 
     base = _base_of(event)
     if base is None:
-        return Dropped(DropReason.A_KEY_THAT_WRITES_NOTHING)
-    return the_key_named(base, mods)
+        return Dropped(DropReason.KEY_THAT_WRITES_NOTHING)
+    return key_named(base, mods)
 
 
 def _patch_prefix_cache() -> None:

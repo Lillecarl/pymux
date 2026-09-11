@@ -17,7 +17,7 @@ from prompt_toolkit.keys import Keys
 from .commands.commands import call_command_handler
 from .enums import COMMAND, PROMPT
 from .filters import HasPrefix, WaitsForConfirmation
-from .key_spelling import a_key_however_it_is_written
+from .key_spelling import key_however_it_is_written
 
 if TYPE_CHECKING:
     from pymux.main import Pymux
@@ -256,7 +256,7 @@ class PymuxKeyBindings:
         """
         # Translate the name into a prompt_toolkit key sequence, in
         # either spelling. (Can raise ValueError.)
-        keys_sequence = a_key_however_it_is_written(key_name)
+        keys_sequence = key_however_it_is_written(key_name)
 
         # Unbind the key, under whichever name it was bound.
         self.remove_custom_binding(key_name, needs_prefix=needs_prefix)
@@ -304,7 +304,7 @@ class PymuxKeyBindings:
         Raises `ValueError` when the name reads as no key at all.
         """
         return self.custom_bindings.get(
-            (needs_prefix, a_key_however_it_is_written(key_name))
+            (needs_prefix, key_however_it_is_written(key_name))
         )
 
     def remove_custom_binding(self, key_name: str, needs_prefix: bool = False) -> None:
@@ -315,7 +315,7 @@ class PymuxKeyBindings:
 
         :param key_name: Pymux key name, for instance "C-A".
         """
-        k = (needs_prefix, a_key_however_it_is_written(key_name))
+        k = (needs_prefix, key_however_it_is_written(key_name))
 
         if k in self.custom_bindings:
             self.custom_key_bindings.remove(self.custom_bindings[k].handler)

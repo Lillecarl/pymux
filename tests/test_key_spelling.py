@@ -25,14 +25,14 @@ from pymux.key_mappings import (
 from pymux.key_spelling import (
     AFTER,
     MODIFIERS_A_PERSON_WRITES,
-    THE_PREFIX,
+    PREFIX,
     TOGETHER,
     KeyCompleter,
-    a_chord,
-    a_key_however_it_is_written,
-    a_key_written_out,
-    an_event,
-    as_a_chord,
+    chord,
+    key_however_it_is_written,
+    key_written_out,
+    event,
+    as_chord,
     keys_of,
     why_a_pane_cannot_read,
 )
@@ -52,7 +52,7 @@ def test_a_chord_reaches_what_the_tmux_name_reaches(name):
     written as a walk over the table and not as a list of examples, so
     a key added to the table is covered the day it is added.
     """
-    assert a_chord(as_a_chord(name)) == PYMUX_TO_PROMPT_TOOLKIT_KEYS[name]
+    assert chord(as_chord(name)) == PYMUX_TO_PROMPT_TOOLKIT_KEYS[name]
 
 
 @pytest.mark.parametrize(
@@ -69,10 +69,10 @@ def test_a_chord_reaches_what_the_tmux_name_reaches(name):
 )
 def test_the_names_tmux_gives_a_key_still_read(written, name):
     "A configuration written for tmux keeps working, one key at a time."
-    assert a_chord(written) == a_chord(name.replace("s-", "shift+"))
+    assert chord(written) == chord(name.replace("s-", "shift+"))
 
 
-def test_a_tmux_modifier_is_not_a_chord():
+def test_a_tmux_modifier_is_not_chord():
     """
     "C-a" does not read here, and it must not.
 
@@ -82,9 +82,9 @@ def test_a_tmux_modifier_is_not_a_chord():
     spelling; this reads the chord; a caller that wants both asks both.
     """
     with pytest.raises(ValueError):
-        a_chord("C-a")
+        chord("C-a")
     with pytest.raises(ValueError):
-        a_chord("M-x")
+        chord("M-x")
 
 
 # ----------------------------------------------------------------------
@@ -116,7 +116,7 @@ def test_a_modifier_on_a_key_the_older_table_never_named(written, key):
     and `C-Down` and no other modified functional key, so ctrl worked
     on four keys and on none of the other twenty-two.
     """
-    assert a_chord(written) == (key,)
+    assert chord(written) == (key,)
 
 
 @pytest.mark.parametrize("written", ["ctrl+home", "ctrl+f5", "shift+left"])
@@ -127,7 +127,7 @@ def test_the_key_it_names_has_bytes_to_send(written):
     Every one of these had bytes all along. Only the name was missing,
     which is why the fault was invisible.
     """
-    (key,) = a_chord(written)
+    (key,) = chord(written)
     assert prompt_toolkit_key_to_vt100_key(key).startswith("\x1b[")
 
 
@@ -137,7 +137,7 @@ def test_the_key_it_names_has_bytes_to_send(written):
 
 def test_the_modifiers_go_in_any_order():
     "A person writes what they hold down, not what this file sorts."
-    assert a_chord("ctrl+shift+a") == a_chord("shift+ctrl+a")
+    assert chord("ctrl+shift+a") == chord("shift+ctrl+a")
 
 
 def test_alt_is_an_escape_and_the_key():
@@ -145,8 +145,8 @@ def test_alt_is_an_escape_and_the_key():
     prompt_toolkit has no member for alt and no name for it: it spells
     alt as two key presses and binds it that way.
     """
-    assert a_chord("alt+a") == (Keys.Escape, "a")
-    assert a_chord("alt+f1") == (Keys.Escape, Keys.F1)
+    assert chord("alt+a") == (Keys.Escape, "a")
+    assert chord("alt+f1") == (Keys.Escape, Keys.F1)
 
 
 def test_meta_is_not_alt():
@@ -154,14 +154,14 @@ def test_meta_is_not_alt():
     tmux writes "M-" for alt. The protocol has both, and they are
     different bits, so this spelling keeps them apart.
     """
-    assert a_chord("meta+a") != a_chord("alt+a")
-    assert a_chord("meta+a") == ("meta-a",)
+    assert chord("meta+a") != chord("alt+a")
+    assert chord("meta+a") == ("meta-a",)
 
 
 def test_super_hyper_and_meta_get_a_built_name():
     "No `Keys` member names one of these. Lillecarl/pymux#181."
-    assert a_chord("super+a") == ("super-a",)
-    assert a_chord("hyper+shift+up") == ("s-hyper-up",)
+    assert chord("super+a") == ("super-a",)
+    assert chord("hyper+shift+up") == ("s-hyper-up",)
 
 
 @pytest.mark.parametrize(
@@ -170,26 +170,26 @@ def test_super_hyper_and_meta_get_a_built_name():
 )
 def test_the_word_a_keyboard_prints_on_the_key(written, same_as):
     'A Mac prints "option" and "command". Nobody has to translate.'
-    assert a_chord(written) == a_chord(same_as)
+    assert chord(written) == chord(same_as)
 
 
 def test_shift_on_a_letter_is_the_capital():
-    assert a_chord("shift+a") == ("A",)
-    assert a_chord("A") == ("A",)
+    assert chord("shift+a") == ("A",)
+    assert chord("A") == ("A",)
 
 
 def test_the_four_keys_that_carry_a_control_code():
     "Enter, Tab, Backspace and Escape, and what ctrl means on each."
-    assert a_chord("ctrl+enter") == (Keys.ControlJ,)
-    assert a_chord("shift+tab") == (Keys.BackTab,)
-    assert a_chord("ctrl+tab") == (Keys.ControlI,)
-    assert a_chord("ctrl+backspace") == (Keys.Backspace,)
+    assert chord("ctrl+enter") == (Keys.ControlJ,)
+    assert chord("shift+tab") == (Keys.BackTab,)
+    assert chord("ctrl+tab") == (Keys.ControlI,)
+    assert chord("ctrl+backspace") == (Keys.Backspace,)
 
 
 def test_the_plus_key_itself():
     "The character that joins a chord is also a key a person presses."
-    assert a_chord(TOGETHER) == ("+",)
-    assert a_chord("shift" + TOGETHER + TOGETHER) == ("+",)
+    assert chord(TOGETHER) == ("+",)
+    assert chord("shift" + TOGETHER + TOGETHER) == ("+",)
 
 
 # ----------------------------------------------------------------------
@@ -282,7 +282,7 @@ def test_the_keys_a_keyboard_can_leave_out_come_first():
     Lillecarl/pymux#220.
     """
     names = [completion.text for completion in offered("")]
-    assert names[0] == THE_PREFIX
+    assert names[0] == PREFIX
     head = names[1 : 1 + len(KEYS_A_KEYBOARD_SPELLS_OUT)]
     assert set(head) == KEYS_A_KEYBOARD_SPELLS_OUT
 
@@ -317,8 +317,8 @@ def test_a_modifier_is_not_offered_again_under_another_name():
 
 
 def test_the_prefix_is_offered_only_where_a_step_starts():
-    assert THE_PREFIX in [completion.text for completion in offered("pre")]
-    assert THE_PREFIX not in [completion.text for completion in offered("ctrl+pre")]
+    assert PREFIX in [completion.text for completion in offered("pre")]
+    assert PREFIX not in [completion.text for completion in offered("ctrl+pre")]
 
 
 def test_everything_it_offers_reads():
@@ -328,12 +328,12 @@ def test_everything_it_offers_reads():
     read back.
     """
     for completion in offered(""):
-        if completion.text == THE_PREFIX:
+        if completion.text == PREFIX:
             continue
         if completion.text in MODIFIERS_A_PERSON_WRITES:
-            assert a_chord(completion.text + TOGETHER + "a")
+            assert chord(completion.text + TOGETHER + "a")
         else:
-            assert a_chord(completion.text)
+            assert chord(completion.text)
 
 
 def test_it_offers_no_name_that_carries_its_own_modifier():
@@ -356,23 +356,23 @@ def test_it_offers_no_name_that_carries_its_own_modifier():
 )
 def test_a_key_is_written_the_way_it_was_read(name):
     "The name in a message is one a person could write back."
-    assert an_event(a_key_written_out(an_event(name))) == an_event(name)
+    assert event(key_written_out(event(name))) == event(name)
 
 
 def test_the_modifiers_read_in_the_order_a_person_writes_them():
     "Not the order of the bits, where shift comes before ctrl."
-    assert a_key_written_out(an_event("shift+ctrl+a")) == "ctrl+shift+a"
+    assert key_written_out(event("shift+ctrl+a")) == "ctrl+shift+a"
 
 
 def test_a_key_that_writes_no_character_is_named_by_its_number():
     "`chr` of one is a character no keyboard has, so it says nothing."
     event = KeyEvent(FIRST_FUNCTIONAL_KEY + 20, 0, "u")
 
-    assert "57364" in a_key_written_out(event)
+    assert "57364" in key_written_out(event)
 
 
 def test_the_reason_names_the_key_the_pane_reads_instead():
-    said = why_a_pane_cannot_read(an_event("super+a"), Modifier.SUPER, "a")
+    said = why_a_pane_cannot_read(event("super+a"), Modifier.SUPER, "a")
 
     assert said.startswith("super+a reaches this pane as a:")
     assert "no super on that key" in said
@@ -394,7 +394,7 @@ def test_the_tmux_vocabulary_reads_unchanged(name):
     The reading that matters most: nothing a configuration file already
     says may change meaning.
     """
-    assert a_key_however_it_is_written(name) == PYMUX_TO_PROMPT_TOOLKIT_KEYS[name]
+    assert key_however_it_is_written(name) == PYMUX_TO_PROMPT_TOOLKIT_KEYS[name]
 
 
 @pytest.mark.parametrize(
@@ -418,11 +418,11 @@ def test_a_tmux_name_that_no_table_holds(name, key):
     The tmux name is re-spelled as a chord, which only happens for a
     name the table refused. So it adds keys and changes none.
     """
-    assert a_key_however_it_is_written(name) == (key,)
+    assert key_however_it_is_written(name) == (key,)
 
 
 def test_the_chord_spelling_reads_here_too():
-    assert a_key_however_it_is_written("ctrl+home") == (Keys.ControlHome,)
+    assert key_however_it_is_written("ctrl+home") == (Keys.ControlHome,)
 
 
 def test_what_is_not_a_key_is_still_not_a_key():
@@ -432,7 +432,7 @@ def test_what_is_not_a_key_is_still_not_a_key():
     """
     for text in ["Hello", "M-Hello", "a b", ""]:
         with pytest.raises(ValueError):
-            a_key_however_it_is_written(text)
+            key_however_it_is_written(text)
 
 
 def test_it_offers_across_the_whole_grammar():

@@ -21,7 +21,7 @@ C-b` reads exactly as one chord would.
     alt+f5              the modifiers go in any order
     Home  DC  PPage     the names tmux gives a key still read
 
-**The chord is built and not looked up.** `keys.the_key_named` is the
+**The chord is built and not looked up.** `keys.key_named` is the
 one translation from a base key and its modifier bits to the key
 prompt_toolkit binds, and the reader of a real key press uses the same
 one. A second table of every combination is what Lillecarl/pymux#234
@@ -42,35 +42,35 @@ from pyte.keys import FIRST_FUNCTIONAL_KEY, KeyEvent, Modifier
 
 from .key_mappings import (
     PYMUX_TO_PROMPT_TOOLKIT_KEYS,
-    THE_MODIFIERS_A_PERSON_WRITES,
+    MODIFIERS_BY_TMUX_SPELLING,
     pymux_key_to_prompt_toolkit_key_sequence,
 )
 from .keys import (
-    A_KEY_BY_ITS_NAME,
+    KEY_BY_ITS_NAME,
     KEYS_A_KEYBOARD_SPELLS_OUT,
-    THE_CODE_AND_FORM_OF,
-    THE_NAME_OF_A_KEY,
+    CODE_AND_FORM_OF,
+    NAME_OF_A_KEY,
     Dropped,
-    an_event_named,
-    the_key_named,
+    event_named,
+    key_named,
 )
 
 __all__ = [
     "AFTER",
     "KeyCompleter",
     "MODIFIERS_A_PERSON_WRITES",
-    "THE_ALIASES",
-    "THE_PREFIX",
-    "THE_SAME_MODIFIER",
+    "ALIASES",
+    "PREFIX",
+    "SAME_MODIFIER",
     "TOGETHER",
-    "a_chord",
-    "a_key_however_it_is_written",
-    "a_key_written_out",
-    "an_event",
-    "an_event_however_it_is_written",
-    "as_a_chord",
+    "chord",
+    "key_however_it_is_written",
+    "key_written_out",
+    "event",
+    "event_however_it_is_written",
+    "as_chord",
     "keys_of",
-    "the_events_of",
+    "events_of",
     "why_a_pane_cannot_read",
 ]
 
@@ -96,7 +96,7 @@ AFTER = " "
 #: It is a step and never a modifier. A person presses the prefix, lets
 #: it go, and then presses the next key, so "prefix b" says what
 #: happens and "prefix+b" does not.
-THE_PREFIX = "prefix"
+PREFIX = "prefix"
 
 
 #: The two modifiers that are not part of a key name.
@@ -104,7 +104,7 @@ THE_PREFIX = "prefix"
 #: Caps lock on a letter is the capital, which is a character and not a
 #: key of its own, and num lock is the same for the keypad. Neither can
 #: be held down with a key the way ctrl can.
-_THE_LOCKS = Modifier.CAPS_LOCK | Modifier.NUM_LOCK
+_LOCKS = Modifier.CAPS_LOCK | Modifier.NUM_LOCK
 
 
 #: What a person writes for each modifier, and the bit it means.
@@ -116,13 +116,13 @@ _THE_LOCKS = Modifier.CAPS_LOCK | Modifier.NUM_LOCK
 #:
 #: **"meta" is not alt here**, although tmux's "M-" is. The protocol
 #: has both and they are different bits, so "alt" is alt and "meta" is
-#: meta. `THE_MODIFIERS_A_PERSON_WRITES` in `key_mappings.py` keeps the
+#: meta. `MODIFIERS_BY_TMUX_SPELLING` in `key_mappings.py` keeps the
 #: tmux reading for the tmux spelling.
 MODIFIERS_A_PERSON_WRITES: Dict[str, Modifier] = {
     **{
         modifier.name.lower(): modifier
         for modifier in Modifier
-        if not modifier & _THE_LOCKS
+        if not modifier & _LOCKS
     },
     "control": Modifier.CTRL,
     "option": Modifier.ALT,
@@ -133,7 +133,7 @@ MODIFIERS_A_PERSON_WRITES: Dict[str, Modifier] = {
 }
 
 
-def _the_aliases() -> Dict[str, str]:
+def _aliases() -> Dict[str, str]:
     """
     The base keys tmux gives a name of its own, and the name the
     toolkit uses.
@@ -148,13 +148,13 @@ def _the_aliases() -> Dict[str, str]:
     for name, sequence in PYMUX_TO_PROMPT_TOOLKIT_KEYS.items():
         if len(sequence) != 1 or "-" in name:
             continue
-        base = THE_NAME_OF_A_KEY.get(sequence[0], sequence[0])
+        base = NAME_OF_A_KEY.get(sequence[0], sequence[0])
         if name.lower() != base:
             aliases[name.lower()] = base
     return aliases
 
 
-THE_ALIASES = _the_aliases()
+ALIASES = _aliases()
 
 
 def _is_a_base_name(name: str) -> bool:
@@ -174,17 +174,17 @@ def _is_a_base_name(name: str) -> bool:
     return "-" not in name and "<" not in name
 
 
-def _the_base_named(text: str) -> str:
+def _base_named(text: str) -> str:
     """
     The base key a written name means, without any modifiers.
 
     Raises `ValueError` when no key has that name.
     """
     lowered = text.lower()
-    alias = THE_ALIASES.get(lowered)
+    alias = ALIASES.get(lowered)
     if alias is not None:
         return alias
-    if lowered in A_KEY_BY_ITS_NAME and _is_a_base_name(lowered):
+    if lowered in KEY_BY_ITS_NAME and _is_a_base_name(lowered):
         return lowered
     if len(text) == 1:
         # A character key is itself, and its case is kept: "A" is a
@@ -193,7 +193,7 @@ def _the_base_named(text: str) -> str:
     raise ValueError("No key is named %r." % (text,))
 
 
-def a_chord(text: str) -> Tuple[str, ...]:
+def chord(text: str) -> Tuple[str, ...]:
     """
     The prompt_toolkit keys of one press, such as "ctrl+shift+a".
 
@@ -204,8 +204,8 @@ def a_chord(text: str) -> Tuple[str, ...]:
     Raises `ValueError` for a name that no key has, and for a
     combination prompt_toolkit cannot spell.
     """
-    mods, base = _the_modifiers_and_base_of(text)
-    key = the_key_named(base, mods)
+    mods, base = _modifiers_and_base_of(text)
+    key = key_named(base, mods)
     if isinstance(key, Dropped):
         raise ValueError("No name here for the key %r: %s." % (text, key.reason))
     return key if isinstance(key, tuple) else (key,)
@@ -234,21 +234,21 @@ def keys_of(text: str, prefix: Sequence[str] = ()) -> Tuple[str, ...]:
             # Two spaces, or a space at either end. A person writing a
             # sequence should not have to count them.
             continue
-        if step.lower() == THE_PREFIX:
+        if step.lower() == PREFIX:
             if not prefix:
                 raise ValueError(
                     "%r names the prefix, and no prefix was given." % (text,)
                 )
             keys.extend(prefix)
             continue
-        keys.extend(a_chord(step))
+        keys.extend(chord(step))
 
     if not keys:
         raise ValueError("%r names no key." % (text,))
     return tuple(keys)
 
 
-def _the_modifiers_and_base_of(text: str) -> Tuple[int, str]:
+def _modifiers_and_base_of(text: str) -> Tuple[int, str]:
     """
     The modifier bits and the base key that one chord names.
 
@@ -273,10 +273,10 @@ def _the_modifiers_and_base_of(text: str) -> Tuple[int, str]:
             raise ValueError("%r is not a modifier, in %r." % (part, text))
         mods |= modifier
 
-    return mods, _the_base_named(parts[-1])
+    return mods, _base_named(parts[-1])
 
 
-def an_event(text: str) -> KeyEvent:
+def event(text: str) -> KeyEvent:
     """
     The key event that one chord is, such as "ctrl+shift+a".
 
@@ -287,11 +287,11 @@ def an_event(text: str) -> KeyEvent:
 
     Raises `ValueError` for a name that no key has.
     """
-    mods, base = _the_modifiers_and_base_of(text)
-    return an_event_named(base, mods)
+    mods, base = _modifiers_and_base_of(text)
+    return event_named(base, mods)
 
 
-def the_events_of(text: str, prefix: Sequence[KeyEvent] = ()) -> Tuple[KeyEvent, ...]:
+def events_of(text: str, prefix: Sequence[KeyEvent] = ()) -> Tuple[KeyEvent, ...]:
     """
     Every key event this text names, in the order they are pressed.
 
@@ -302,14 +302,14 @@ def the_events_of(text: str, prefix: Sequence[KeyEvent] = ()) -> Tuple[KeyEvent,
     for step in text.split(AFTER):
         if not step:
             continue
-        if step.lower() == THE_PREFIX:
+        if step.lower() == PREFIX:
             if not prefix:
                 raise ValueError(
                     "%r names the prefix, and no prefix was given." % (text,)
                 )
             events.extend(prefix)
             continue
-        events.append(an_event(step))
+        events.append(event(step))
 
     if not events:
         raise ValueError("%r names no key." % (text,))
@@ -327,16 +327,16 @@ def the_events_of(text: str, prefix: Sequence[KeyEvent] = ()) -> Tuple[KeyEvent,
 #: the protocol's meta is a different bit, so the letter is tmux's and
 #: the word is the protocol's. That is also why "meta+" here is
 #: `Modifier.META` and not alt.
-THE_SAME_MODIFIER = {
+SAME_MODIFIER = {
     **{
         spelling: modifier.name.lower()
-        for spelling, modifier in THE_MODIFIERS_A_PERSON_WRITES
+        for spelling, modifier in MODIFIERS_BY_TMUX_SPELLING
     },
     "m-": "alt",
 }
 
 
-def as_a_chord(name: str) -> str:
+def as_chord(name: str) -> str:
     """
     A key name in the older spelling, written as a chord.
 
@@ -348,7 +348,7 @@ def as_a_chord(name: str) -> str:
     found = True
     while found:
         found = False
-        for spelling, word in THE_SAME_MODIFIER.items():
+        for spelling, word in SAME_MODIFIER.items():
             if len(name) > len(spelling) and name.lower().startswith(spelling):
                 modifiers.append(word)
                 name = name[len(spelling) :]
@@ -357,7 +357,7 @@ def as_a_chord(name: str) -> str:
     return "".join(modifier + TOGETHER for modifier in modifiers) + name
 
 
-def a_key_however_it_is_written(text: str) -> Tuple[str, ...]:
+def key_however_it_is_written(text: str) -> Tuple[str, ...]:
     """
     The prompt_toolkit keys of one key, in either spelling.
 
@@ -382,40 +382,40 @@ def a_key_however_it_is_written(text: str) -> Tuple[str, ...]:
     Raises `ValueError` when no reading of it names a key.
     """
     try:
-        return a_chord(text)
+        return chord(text)
     except ValueError:
         pass
 
     try:
         return pymux_key_to_prompt_toolkit_key_sequence(text)
     except ValueError:
-        return a_chord(as_a_chord(text))
+        return chord(as_chord(text))
 
 
-def an_event_however_it_is_written(text: str) -> KeyEvent:
+def event_however_it_is_written(text: str) -> KeyEvent:
     """
     The key event of one key, in either spelling.
 
-    The road to a pane; `a_key_however_it_is_written` is the road to a
+    The road to a pane; `key_however_it_is_written` is the road to a
     binding. The tmux table is not consulted and need not be: every
     name in it is a chord once the modifier letters are re-spelled.
 
     Raises `ValueError` when no reading of it names a key.
     """
     try:
-        return an_event(text)
+        return event(text)
     except ValueError:
-        return an_event(as_a_chord(text))
+        return event(as_chord(text))
 
 
 #: The name of a key, by the number and form that carry it:
-#: `THE_CODE_AND_FORM_OF` read the other way.
-THE_NAME_OF_THE_CODE = {where: name for name, where in THE_CODE_AND_FORM_OF.items()}
+#: `CODE_AND_FORM_OF` read the other way.
+NAME_OF_THE_CODE = {where: name for name, where in CODE_AND_FORM_OF.items()}
 
 
 #: The order a person writes the modifiers in, which is not the order
 #: of the bits. Fixed, so that one combination has one name.
-THE_ORDER_THEY_ARE_WRITTEN = (
+ORDER_THEY_ARE_WRITTEN = (
     Modifier.CTRL,
     Modifier.ALT,
     Modifier.SHIFT,
@@ -425,17 +425,17 @@ THE_ORDER_THEY_ARE_WRITTEN = (
 )
 
 
-def the_modifiers_written_out(mods: int) -> str:
+def modifiers_written_out(mods: int) -> str:
     return TOGETHER.join(
         modifier.name.lower()
-        for modifier in THE_ORDER_THEY_ARE_WRITTEN
+        for modifier in ORDER_THEY_ARE_WRITTEN
         if mods & modifier
     )
 
 
-def a_key_written_out(event: KeyEvent) -> str:
+def key_written_out(event: KeyEvent) -> str:
     "A key event, written the way a person writes one."
-    name = THE_NAME_OF_THE_CODE.get((event.code, event.final))
+    name = NAME_OF_THE_CODE.get((event.code, event.final))
     if name is None:
         # A key of the private use area writes no character, so `chr`
         # of it is one no keyboard has. Its number is all there is.
@@ -444,13 +444,13 @@ def a_key_written_out(event: KeyEvent) -> str:
             if event.code < FIRST_FUNCTIONAL_KEY
             else "the key numbered %d" % (event.code,)
         )
-    written = the_modifiers_written_out(event.mods)
+    written = modifiers_written_out(event.mods)
     return written + TOGETHER + name if written else name
 
 
 def why_a_pane_cannot_read(event: KeyEvent, lost: int, encoded: str) -> str:
     "Why a key did not reach a pane whole, in a line a person can act on."
-    key = a_key_written_out(event)
+    key = key_written_out(event)
     if not encoded:
         return (
             "%s cannot reach this pane at all: the program in it reads the "
@@ -461,39 +461,39 @@ def why_a_pane_cannot_read(event: KeyEvent, lost: int, encoded: str) -> str:
         "encoding, which has no %s on that key."
         % (
             key,
-            a_key_written_out(event._replace(mods=event.mods & ~lost)),
-            the_modifiers_written_out(lost),
+            key_written_out(event._replace(mods=event.mods & ~lost)),
+            modifiers_written_out(lost),
         )
     )
 
 
-def _the_other_names_of() -> Dict[str, list]:
+def _other_names_of() -> Dict[str, list]:
     "Every tmux name of a base key, under the name the toolkit uses."
     others: Dict[str, list] = {}
-    for alias, base in THE_ALIASES.items():
+    for alias, base in ALIASES.items():
         others.setdefault(base, []).append(alias)
     return others
 
 
-_THE_OTHER_NAMES_OF = _the_other_names_of()
+_OTHER_NAMES_OF = _other_names_of()
 
 #: A name and the number at the end of it, so that "f2" sorts before
 #: "f10". Sorting the strings puts "f1", "f10", "f11" and then "f2",
 #: which is a list nobody can read.
-_A_NUMBER_AT_THE_END = re.compile(r"^(.*?)(\d*)$")
+_NUMBER_AT_THE_END = re.compile(r"^(.*?)(\d*)$")
 
 
 def _in_reading_order(names) -> list:
     "The names sorted the way a person reads them."
 
     def parts(name: str):
-        head, digits = _A_NUMBER_AT_THE_END.match(name).groups()
+        head, digits = _NUMBER_AT_THE_END.match(name).groups()
         return head, int(digits) if digits else 0
 
     return sorted(names, key=parts)
 
 
-def _the_names_offered() -> list:
+def _names_offered() -> list:
     """
     Every name a completer offers, with what to say beside it, in the
     order they are offered.
@@ -503,7 +503,7 @@ def _the_names_offered() -> list:
     a person comes here for and they come first. The rest are reachable
     and are not in the way.
 
-    Not every name that parses is offered. `A_KEY_BY_ITS_NAME` holds
+    Not every name that parses is offered. `KEY_BY_ITS_NAME` holds
     every `Keys` member, and most of them are a key that already
     carries a modifier ("c-a", "s-up") or a thing that is not a key at
     all ("<any>", "<bracketed-paste>"). A chord writes the modifier
@@ -511,13 +511,13 @@ def _the_names_offered() -> list:
     two ways to write one key and a list twice as long.
     """
     plain = [
-        name for name in A_KEY_BY_ITS_NAME if _is_a_base_name(name) and len(name) > 1
+        name for name in KEY_BY_ITS_NAME if _is_a_base_name(name) and len(name) > 1
     ]
     spelled_out = _in_reading_order(KEYS_A_KEYBOARD_SPELLS_OUT)
     rest = _in_reading_order(set(plain) - KEYS_A_KEYBOARD_SPELLS_OUT)
 
     offered = [
-        (name, ", ".join(_THE_OTHER_NAMES_OF.get(name, [])))
+        (name, ", ".join(_OTHER_NAMES_OF.get(name, [])))
         for name in spelled_out + rest
     ]
     # The names tmux gives the same keys, last: they still read, and a
@@ -525,12 +525,12 @@ def _the_names_offered() -> list:
     # spelling of a key that is already in the list.
     offered += [
         (alias, "the same key as %r" % (base,))
-        for alias, base in sorted(THE_ALIASES.items())
+        for alias, base in sorted(ALIASES.items())
     ]
     return offered
 
 
-_THE_NAMES_OFFERED = _the_names_offered()
+_NAMES_OFFERED = _names_offered()
 
 
 class KeyCompleter(Completer):
@@ -573,9 +573,9 @@ class KeyCompleter(Completer):
         if self.offer_the_prefix and not written:
             # The prefix is a step of its own and never a modifier, so
             # it is offered only where a step starts.
-            yield from offer(THE_PREFIX, "the prefix key of this server")
+            yield from offer(PREFIX, "the prefix key of this server")
 
-        for name, meta in _THE_NAMES_OFFERED:
+        for name, meta in _NAMES_OFFERED:
             yield from offer(name, meta)
 
         for name, modifier in MODIFIERS_A_PERSON_WRITES.items():

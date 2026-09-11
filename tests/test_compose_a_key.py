@@ -25,7 +25,7 @@ from prompt_toolkit.layout.containers import ConditionalContainer, Float
 
 from session import a_session, in_a_loop
 from pymux.commands.commands import call_command_handler
-from pymux.key_spelling import THE_PREFIX, KeyCompleter
+from pymux.key_spelling import PREFIX, KeyCompleter
 
 
 def the_float_of(state, name: str) -> Float:
@@ -290,5 +290,5 @@ def test_the_box_does_not_offer_the_prefix():
             Document(""), None
         )
     ]
-    assert THE_PREFIX not in offered
+    assert PREFIX not in offered
     assert offered

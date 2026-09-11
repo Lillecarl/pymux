@@ -658,13 +658,13 @@ def test_shift_and_tab_is_the_back_tab():
 
 
 def test_the_reason_says_what_kind_of_key_it_was():
-    assert a_dropped_key("\x1b[57358u").reason == DropReason.A_KEY_THAT_WRITES_NOTHING
+    assert a_dropped_key("\x1b[57358u").reason == DropReason.KEY_THAT_WRITES_NOTHING
     assert a_dropped_key("\x1b[57399;5u").reason == DropReason.KEYPAD_WITH_A_MODIFIER
     assert a_dropped_key("\x1b[233;5u").reason == DropReason.CTRL_AND_A_CHARACTER
-    assert a_dropped_key("\x1b[99;5~").reason == DropReason.A_TILDE_KEY_WITH_NO_NAME
+    assert a_dropped_key("\x1b[99;5~").reason == DropReason.TILDE_KEY_WITH_NO_NAME
     assert (
         a_dropped_key("\x1b[27;5u").reason
-        == DropReason.A_MODIFIER_THIS_KEY_HAS_NO_NAME_FOR
+        == DropReason.MODIFIER_THIS_KEY_HAS_NO_NAME_FOR
     )
 
 
@@ -672,7 +672,7 @@ def test_the_log_says_the_key_and_the_reason(caplog):
     with caplog.at_level(logging.DEBUG, logger="pymux.keys"):
         fed("\x1b[57358u")
     assert "\\x1b[57358u" in caplog.text
-    assert DropReason.A_KEY_THAT_WRITES_NOTHING in caplog.text
+    assert DropReason.KEY_THAT_WRITES_NOTHING in caplog.text
 
 
 def test_a_held_key_writes_one_line(caplog):
