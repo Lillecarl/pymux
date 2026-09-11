@@ -33,7 +33,7 @@ sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pymux.style import THEMES  # noqa: E402
 from pymux.style_pygments import names  # noqa: E402
-from photograph_the_chrome import CHROME, FIRST_KEY, PREFIX, keys, main  # noqa: E402
+from photograph_the_chrome import CHROME, PREFIX, keys, main  # noqa: E402
 from take_a_picture import LIGHT_TERMINALS, TERMINALS  # noqa: E402
 
 #: Where the pictures go. The check points this at `$out`.
@@ -57,7 +57,7 @@ def demo_keys():
     like in use rather than at rest.
     """
     return keys(
-        (FIRST_KEY, PREFIX),
+        (0.0, PREFIX),
         (0.4, b"%"),
         (0.8, ("python %s\n" % (shlex.quote(str(DEMO)),)).encode("ascii")),
     )

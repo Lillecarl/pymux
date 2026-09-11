@@ -19,6 +19,12 @@ Lillecarl/pymux#161.
                                                      │
                                                 a picture
 
+The keys are fenced the way `middleman.py` fences a write. The pane
+runs the forwarder, the fence goes down the fifo behind the keys, and
+the relay touches the fence file when the fence comes back. The
+picture waits for that file: it is of a frame pymux finished, and not
+of a moment that happened to be quiet. Lillecarl/pymux#275.
+
 **This judges nothing.** It keeps a picture of each fixture for a
 person to read, the way `photograph_vttest.py` does. A picture of
 chrome has nothing to subtract: there is no bare side, because the
@@ -48,6 +54,7 @@ sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pymux.style import THEMES  # noqa: E402
 from pyterm_pytest.seats import SEATS  # noqa: E402
 
+from middleman import FORWARDER  # noqa: E402
 from take_a_picture import HOLD, TERMINALS, every_log  # noqa: E402
 
 #: Where the pictures go. The check points this at `$out`.
@@ -70,18 +77,13 @@ CHROME = "set-option status on\nset-option pane-border-status on\n"
 #: `%` splits it left and right.
 PREFIX = b"\x02"
 
-#: How long after the relay starts the first key is pressed. The
-#: terminal has to be up and pymux has to have drawn once, and a key
-#: pressed into a pymux that is still starting reaches nothing.
-FIRST_KEY = 3.0
-
-
 def keys(*steps):
     """
     A keys file from (seconds to wait, bytes) pairs.
 
-    The first wait is `FIRST_KEY`, and the rest are counted from the
-    step before them. `drive_in_a_terminal.py` says the format.
+    The first wait is counted from pymux's first frame, which the
+    relay waits for. The rest are counted from the step before them.
+    `drive_in_a_terminal.py` says the format.
     """
     return "".join("%s %r\n" % (delay, one) for delay, one in steps)
 
@@ -95,7 +97,7 @@ def create_command(text):
     belongs to a window. Lillecarl/pymux#199.
     """
     return [
-        (FIRST_KEY, PREFIX),
+        (0.6, PREFIX),
         (0.4, b":"),
         (0.6, text.encode("ascii") + b"\r"),
     ]
@@ -108,21 +110,21 @@ FIXTURES = {
     "bare": (CHROME, ""),
     # Two panes side by side, so a focused title bar and an unfocused
     # one are both in the picture, in their two colours.
-    "two-panes": (CHROME, keys((FIRST_KEY, PREFIX), (0.4, b"%"))),
+    "two-panes": (CHROME, keys((0.0, PREFIX), (0.4, b"%"))),
     # A pane over a pane, which is the other border and the other
     # arrangement of the two title bars.
-    "stacked-panes": (CHROME, keys((FIRST_KEY, PREFIX), (0.4, b'"'))),
+    "stacked-panes": (CHROME, keys((0.0, PREFIX), (0.4, b'"'))),
     # The command line as a bar along the bottom, which is what pymux
     # draws by default. It is left open, so the picture holds it.
     "command-line": (
         CHROME,
-        keys((FIRST_KEY, PREFIX), (0.4, b":"), (0.4, b"list-panes")),
+        keys((0.0, PREFIX), (0.4, b":"), (0.4, b"list-panes")),
     ),
     # And as a box in the middle of the screen. Lillecarl/pymux#158
     # built it, and a picture of it is what found four faults in it.
     "command-palette": (
         CHROME + "set-option command-palette on\n",
-        keys((FIRST_KEY, PREFIX), (0.4, b":"), (0.4, b"list-panes")),
+        keys((0.0, PREFIX), (0.4, b":"), (0.4, b"list-panes")),
     ),
     # The box that composes a key, with a modifier written and the keys
     # a keyboard leaves out under it. Lillecarl/pymux#220.
@@ -140,7 +142,7 @@ FIXTURES = {
     "divided": (
         CHROME,
         keys(
-            (FIRST_KEY, PREFIX),
+            (0.0, PREFIX),
             (0.4, b"%"),
             (0.6, PREFIX),
             (0.4, b'"'),
@@ -152,7 +154,7 @@ FIXTURES = {
     # Lillecarl/pymux#215.
     "zoomed": (
         CHROME,
-        keys((FIRST_KEY, PREFIX), (0.4, b"%"), *create_command("resize-pane -Z")),
+        keys((0.0, PREFIX), (0.4, b"%"), *create_command("resize-pane -Z")),
     ),
     # A strip whose second column is two thirds of the window, with the
     # focus on the first. The pair does not fit, so the second one runs
@@ -165,7 +167,7 @@ FIXTURES = {
     "strip-cut": (
         CHROME + "set-window-option -g strip on\n",
         keys(
-            (FIRST_KEY, PREFIX),
+            (0.0, PREFIX),
             (0.4, b"%"),
             *create_command("switch-column-width"),
             *create_command("select-pane -L"),
@@ -179,7 +181,7 @@ FIXTURES = {
         # file is read before there is a window. Lillecarl/pymux#199.
         CHROME + "set-window-option -g strip on\n",
         keys(
-            (FIRST_KEY, PREFIX),
+            (0.0, PREFIX),
             (0.4, b"%"),
             (0.6, PREFIX),
             (0.4, b"%"),
@@ -189,7 +191,7 @@ FIXTURES = {
     "pane-numbers": (
         CHROME,
         keys(
-            (FIRST_KEY, PREFIX),
+            (0.0, PREFIX),
             (0.4, b"%"),
             (0.6, PREFIX),
             (0.4, b"q"),
@@ -198,7 +200,7 @@ FIXTURES = {
     # The clock, which a pane draws over itself.
     "clock": (
         CHROME,
-        keys((FIRST_KEY, PREFIX), (0.4, b"t")),
+        keys((0.0, PREFIX), (0.4, b"t")),
     ),
     # An overlay pane, floating in the middle of the screen over two
     # panes. Its body runs a program, so its default-background cells
@@ -208,7 +210,7 @@ FIXTURES = {
     "overlay": (
         CHROME,
         keys(
-            (FIRST_KEY, PREFIX),
+            (0.0, PREFIX),
             (0.4, b"%"),
             (0.6, PREFIX),
             (0.4, b"g"),
@@ -245,7 +247,7 @@ FIXTURES = {
 for _name in THEMES:
     FIXTURES["theme-%s" % _name] = (
         CHROME + "set-option theme %s\n" % _name,
-        keys((FIRST_KEY, PREFIX), (0.4, b"%")),
+        keys((0.0, PREFIX), (0.4, b"%")),
     )
 
 #: One theme from pygments, so the derivation of a whole scheme from
@@ -254,7 +256,7 @@ for _name in THEMES:
 #: `set-option theme pygments:<name>`. Lillecarl/pymux#194.
 FIXTURES["theme-pygments-dracula"] = (
     CHROME + "set-option theme pygments:dracula\n",
-    keys((FIRST_KEY, PREFIX), (0.4, b"%")),
+    keys((0.0, PREFIX), (0.4, b"%")),
 )
 
 
@@ -262,7 +264,17 @@ def every_fixture():
     return sorted(FIXTURES)
 
 
-def chrome_command(keys_path, socket_path, config_path, log_path, error_path):
+def chrome_command(
+    keys_path,
+    socket_path,
+    config_path,
+    log_path,
+    error_path,
+    fifo_path,
+    size_path,
+    forwarder_path,
+    fence_path,
+):
     """
     The command the terminal runs: the relay, and pymux under it.
 
@@ -270,35 +282,39 @@ def chrome_command(keys_path, socket_path, config_path, log_path, error_path):
     It shares a terminal with the client in the integrated mode, so
     anything it writes there lands in the picture
     (Lillecarl/pymux#36), and the relay would copy a traceback onto
-    the screen along with everything else.
+    the screen along with everything else. The relay's stderr goes to
+    a file for the same reason, and the file is in the room, where
+    `every_log` reads it.
 
     The integrated mode holds the server and the client in one
     process, so the picture is of the pymux this check built and not of
-    a server that was already running.
+    a server that was already running. The pane runs the forwarder,
+    which copies the fifo to its own output: that is the road the
+    fence travels.
     """
-    inside = "exec python3 -m pymux -S %s -f %s --log %s integrated sleep %d 2>%s" % (
-        shlex.quote(str(socket_path)),
-        shlex.quote(str(config_path)),
-        shlex.quote(str(log_path)),
-        HOLD,
-        shlex.quote(str(error_path)),
+    relay_error = Path(error_path).parent / "relay-error.log"
+    inside = (
+        "exec python3 -m pymux -S %s -f %s --log %s"
+        " integrated python3 %s %s %s 2>%s"
+        % (
+            shlex.quote(str(socket_path)),
+            shlex.quote(str(config_path)),
+            shlex.quote(str(log_path)),
+            shlex.quote(str(forwarder_path)),
+            shlex.quote(str(fifo_path)),
+            shlex.quote(str(size_path)),
+            shlex.quote(str(error_path)),
+        )
     )
-    return "exec python3 %s %s %d -- sh -c %s" % (
+    return "exec python3 %s %s %d %s %s 2>%s -- sh -c %s" % (
         shlex.quote(str(RELAY)),
         shlex.quote(str(keys_path)),
         HOLD,
+        shlex.quote(str(fifo_path)),
+        shlex.quote(str(fence_path)),
+        shlex.quote(str(relay_error)),
         shlex.quote(inside),
     )
-
-
-def last_key_at(keys):
-    "When the last key of a script is pressed, in seconds from the start."
-    when = 0.0
-    for line in keys.splitlines():
-        line = line.split("#", 1)[0].strip()
-        if line:
-            when += float(line.split(None, 1)[0])
-    return when
 
 
 def picture_of(terminal, seat, name, work, out, fixtures=None):
@@ -316,6 +332,16 @@ def picture_of(terminal, seat, name, work, out, fixtures=None):
     keys_path = work / ("%s.keys" % name)
     keys_path.write_text(keys)
 
+    # The pane runs the forwarder, which copies the fifo to its own
+    # output: the fence goes down the fifo behind the keys and comes
+    # back on the wire when pymux has done with them. middleman.py
+    # says why. Every name carries the terminal's and the fixture's,
+    # the way the socket's does: a run before left its own behind.
+    forwarder_path = work / "chrome-forwarder.py"
+    forwarder_path.write_text(FORWARDER)
+    fifo_path = work / ("%s-%s.fifo" % (terminal.name, name))
+    size_path = work / ("%s-%s-pane-size.txt" % (terminal.name, name))
+
     seat.picture_of(
         terminal,
         chrome_command(
@@ -327,13 +353,19 @@ def picture_of(terminal, seat, name, work, out, fixtures=None):
             config_path,
             room / "pymux-server.log",
             room / "pymux-stderr.log",
+            fifo_path,
+            size_path,
+            forwarder_path,
+            # The file the relay touches when the fence comes back.
+            room / "fence",
         ),
         work,
         room / "pymux.png",
         room / "pymux.log",
-        # Nothing moves while pymux waits for a key, so a settle would
-        # keep the screen from before the keys and call it finished.
-        not_before=last_key_at(keys) + 1.0,
+        # The relay touches the fence when pymux has done with the
+        # keys. A settle before that keeps the screen from before the
+        # keys and calls it finished.
+        not_before=room / "fence",
     )
 
     return room / "pymux.png"

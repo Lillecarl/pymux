@@ -17,6 +17,7 @@ compositor, and this is the part of it that can be judged without one.
 import os
 import pty
 import select
+import shlex
 import subprocess
 import sys
 import termios
@@ -204,6 +205,122 @@ def test_it_asks_for_a_program_to_run(tmp_path):
     done = subprocess.run([sys.executable, RELAY, str(keys), "1"], capture_output=True)
 
     assert done.returncode != 0
+
+
+# ----------------------------------------------------------------------
+# The fence.
+
+
+def run_fenced(tmp_path, keys_text, pane):
+    """
+    Run the relay with the fence args, and give back what it copied,
+    the fence file, and the relay's stderr.
+
+    The pane is the body of the `sh -c` that runs in it. The relay
+    stops as soon as the fence file is there, so a test that passes
+    does not wait out the hold.
+    """
+    from middleman import FORWARDER
+
+    forwarder = tmp_path / "forwarder.py"
+    forwarder.write_text(FORWARDER)
+
+    fifo = tmp_path / "payload.fifo"
+    os.mkfifo(fifo)
+    fence_seen = tmp_path / "fence"
+    keys = create_keys_file(tmp_path, keys_text)
+
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            RELAY,
+            str(keys),
+            str(HOLD),
+            str(fifo),
+            str(fence_seen),
+            "--",
+            "sh",
+            "-c",
+            pane
+            % (
+                shlex.quote(str(forwarder)),
+                shlex.quote(str(fifo)),
+                shlex.quote(str(tmp_path / "pane-size")),
+            ),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    seen = b""
+    deadline = time.monotonic() + PATIENCE
+    try:
+        while time.monotonic() < deadline and not fence_seen.exists():
+            fd = process.stdout.fileno()
+            if not select.select([fd], [], [], 0.2)[0]:
+                if process.poll() is not None:
+                    break
+                continue
+            piece = os.read(fd, 65536)
+            if not piece:
+                break
+            seen += piece
+    finally:
+        process.kill()
+        error = process.communicate()[1]
+
+    return seen, fence_seen, error
+
+
+def test_the_fence_comes_back_and_is_taken_out(tmp_path):
+    """
+    The fence proves the keys were consumed, and the terminal never
+    sees it: what the relay copies is the frame, and not the
+    scaffolding. Lillecarl/pymux#275.
+    """
+    pane = (
+        "stty -echo; printf 'up.'; (sleep 0.3; printf 'framed.') &"
+        " exec python3 %s %s %s"
+    )
+    seen, fence_seen, error = run_fenced(tmp_path, '0.1 b"hello\\n"\n', pane)
+
+    assert error == b"", error
+    assert fence_seen.exists()
+    assert b"up." in seen
+    assert b"framed." in seen
+    assert b"52;" not in seen
+    assert b"ZmVuY2U" not in seen
+
+
+def test_a_pane_that_never_takes_the_fifo_is_a_fault(tmp_path):
+    """
+    A pymux that never starts its pane is a run that photographs
+    nothing, and this is where it says so instead of blocking.
+    """
+    keys = create_keys_file(tmp_path, "")
+    fifo = tmp_path / "payload.fifo"
+    os.mkfifo(fifo)
+    fence_seen = tmp_path / "fence"
+
+    done = subprocess.run(
+        [
+            sys.executable,
+            RELAY,
+            str(keys),
+            "1",
+            str(fifo),
+            str(fence_seen),
+            "--",
+            "sleep",
+            "30",
+        ],
+        capture_output=True,
+        timeout=PATIENCE,
+    )
+
+    assert done.returncode != 0
+    assert b"never took" in done.stderr
+    assert not fence_seen.exists()
 
 
 def test_the_hold_is_a_bound(tmp_path):
