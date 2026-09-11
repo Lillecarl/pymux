@@ -16,6 +16,7 @@ import pytest
 from prompt_toolkit.document import Document
 
 from pymux.commands.commands import (
+    COMMANDS_TO_DESCRIPTIONS,
     COMMANDS_TO_HANDLERS,
     COMMANDS_TO_PARSERS,
     _variables_of,
@@ -245,6 +246,41 @@ def test_send_keys_offers_key_names_until_l_says_text():
 
     literal = _offered(["send-keys", "-l"], "C", pymux)
     assert literal == []
+
+
+# ----------------------------------------------------------------------
+# What a command says it does.
+
+
+def test_every_command_says_what_it_does():
+    "The palette and the completion of the shell read it."
+    assert set(COMMANDS_TO_DESCRIPTIONS) == set(COMMANDS_TO_HANDLERS)
+    empty = sorted(
+        name for name, said in COMMANDS_TO_DESCRIPTIONS.items() if not said.strip()
+    )
+    assert empty == []
+    unfinished = sorted(
+        name
+        for name, said in COMMANDS_TO_DESCRIPTIONS.items()
+        if not said.rstrip().endswith((".", ":", ")", "`"))
+    )
+    assert unfinished == []
+
+
+def test_the_palette_says_what_a_command_does():
+    pymux = Pymux()
+    offered = dict(_offered([], "split-w", pymux))
+    assert "Split this window into two panes, side by side or stacked." in (
+        offered["split-window"]
+    )
+
+
+def test_an_alias_says_what_the_command_it_names_does():
+    pymux = Pymux()
+    offered = dict(_offered([], "selectp", pymux))
+    assert "Focus a pane beside this one, or rotate the panes of the window." in (
+        offered["select-pane"]
+    )
 
 
 # ----------------------------------------------------------------------

@@ -22,7 +22,11 @@ from pymux.arrangement import LayoutTypes
 from pymux.key_spelling import KeyCompleter
 
 from .aliases import ALIASES
-from .commands import COMMANDS_TO_HANDLERS, COMMANDS_TO_PARSERS
+from .commands import (
+    COMMANDS_TO_DESCRIPTIONS,
+    COMMANDS_TO_HANDLERS,
+    COMMANDS_TO_PARSERS,
+)
 from .utils import wrap_argument
 
 #: The nargs of a positional that takes the rest of the line. The
@@ -39,13 +43,16 @@ def create_command_completer(pymux):
 
 class CommandCompleter(Completer):
     """
-    Completer for command names.
+    Completer for command names, with what each one does beside it.
     """
 
     def __init__(self):
-        # Completer for full command names.
+        # Completer for full command names. The description beside a
+        # name is the first line of the docstring of its handler,
+        # which the palette reads.
         self._command_completer = WordCompleter(
             sorted(COMMANDS_TO_HANDLERS.keys()),
+            meta_dict=dict(COMMANDS_TO_DESCRIPTIONS),
             ignore_case=True,
             WORD=True,
             match_middle=True,
@@ -65,7 +72,8 @@ class CommandCompleter(Completer):
             yield c
 
         # When no matches are found, complete aliases instead.
-        # The completion however, inserts the full name.
+        # The completion however, inserts the full name, and says what
+        # that does.
         if not found:
             for c in self._aliases_completer.get_completions(document, complete_event):
                 full_name = ALIASES.get(c.text)
@@ -74,6 +82,7 @@ class CommandCompleter(Completer):
                     full_name,
                     start_position=c.start_position,
                     display="%s (%s)" % (c.text, full_name),
+                    display_meta=COMMANDS_TO_DESCRIPTIONS.get(full_name, ""),
                 )
 
 

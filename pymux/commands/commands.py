@@ -385,6 +385,9 @@ def _pane_matches_session_name(pymux: "Pymux", target: str) -> bool:
 
 
 def break_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Take the active pane out of its window, into one of its own.
+    """
     dont_focus_window = variables["-d"]
 
     pymux.arrangement.break_pane(set_active=not dont_focus_window)
@@ -392,6 +395,9 @@ def break_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 
 def select_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Focus a pane beside this one, or rotate the panes of the window.
+    """
     if variables["-t"]:
         pane_id = variables["<pane-id>"]
         w = pymux.arrangement.get_active_window()
@@ -424,7 +430,8 @@ def select_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 def select_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
-    Select a window. E.g:  select-window -t :3  or  select-window -t @1001
+    Focus a window by index, by id, or by the pane that holds it.
+    E.g:  select-window -t :3  or  select-window -t @1001
     """
     window_id = variables["<target-window>"]
 
@@ -437,7 +444,7 @@ def select_window(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 def move_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
-    Move window to a new index.
+    Move this window to another index.
     """
     dst_window = variables["<dst-window>"]
     try:
@@ -455,6 +462,9 @@ def move_window(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 
 def rotate_window(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Rotate the panes of the window.
+    """
     if variables["-D"]:
         pymux.arrangement.rotate_window(count=-1)
     else:
@@ -462,10 +472,16 @@ def rotate_window(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 
 def swap_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Swap the active pane with the one above or below.
+    """
     pymux.arrangement.get_active_window().rotate(with_pane_after_only=variables["-U"])
 
 
 def kill_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Kill a pane, or the active one.
+    """
     if variables["-t"]:
         pane = _find_pane(pymux, variables["<target-pane>"])
         if pane is None:
@@ -493,6 +509,9 @@ def kill_window(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 
 def suspend_client(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Suspend this client, the way ctrl+z suspends a program in a shell.
+    """
     connection = pymux.get_connection()
 
     if connection:
@@ -500,12 +519,18 @@ def suspend_client(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 
 def clock_mode(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Show a clock in the active pane, or put the program back.
+    """
     pane = pymux.arrangement.get_active_pane()
     if pane:
         pane.clock_mode = not pane.clock_mode
 
 
 def last_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Focus the pane that was active before this one.
+    """
     w = pymux.arrangement.get_active_window()
     prev_active_pane = w.previous_active_pane
 
@@ -634,7 +659,7 @@ def _an_index(target: "str | None") -> int | None:
 
 def split_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
-    Split horizontally or vertically.
+    Split this window into two panes, side by side or stacked.
     """
     executable = variables["<executable>"]
     start_directory = variables["<start-directory>"]
@@ -678,6 +703,9 @@ def previous_window(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 
 def select_layout(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Arrange the panes of the window in a named layout.
+    """
     layout_type = variables["<layout-type>"]
 
     try:
@@ -824,7 +852,7 @@ def rename_session(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 def resize_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
-    Resize/zoom the active pane.
+    Resize the active pane, or zoom it.
     """
     try:
         left = int(variables["<left>"] or 0)
@@ -916,12 +944,17 @@ def resize_window(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 def detach_client(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
-    Detach client.
+    Detach this client from the session.
+
+    The session and its panes stay with the server.
     """
     pymux.detach_client(get_app())
 
 
 def confirm_before(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Ask on the command line before running a command.
+    """
     client_state = pymux.get_client_state()
 
     client_state.confirm_text = variables["<message>"] or ""
@@ -994,7 +1027,7 @@ def compose_key(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 def command_prompt(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
-    Enter command prompt.
+    Open the command line, or ask a question with a command behind it.
     """
     client_state = pymux.get_client_state()
 
@@ -1018,7 +1051,7 @@ def command_prompt(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 def send_prefix(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
-    Send prefix to active pane.
+    Send the prefix on to the pane, so a program can read it.
     """
     pane = pymux.arrangement.get_active_pane()
 
@@ -1033,7 +1066,7 @@ def send_prefix(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 def bind_key(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
-    Bind a key sequence.
+    Bind a key sequence to a command.
     -n: Not necessary to use the prefix.
     """
     key = variables["<key>"]
@@ -1051,7 +1084,7 @@ def bind_key(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 def unbind_key(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
-    Remove key binding.
+    Remove a key binding.
     """
     key = variables["<key>"]
     needs_prefix = not variables["-n"]
@@ -1064,7 +1097,7 @@ def unbind_key(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 def send_keys(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
-    Send key strokes to the active process.
+    Send keys to a pane, as key names or as text.
 
     **The keys are optional, because `-R` needs none.** `send-keys -R`
     puts a pane back when a program has left it in a state a person
@@ -1161,7 +1194,7 @@ def paste_buffer(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 def source_file(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
-    Source configuration file.
+    Read a configuration file.
     """
     filename = os.path.expanduser(variables["<filename>"])
     try:
@@ -1183,7 +1216,7 @@ def source_file(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 def set_option(pymux: "Pymux", variables: _VariablesDict, window: bool = False) -> None:
     """
-    Set an option.
+    Set an option, of the session or of a window.
 
     -g: for a window option, say what every new window starts with.
         For a session option it changes nothing, because pymux has one
@@ -1236,14 +1269,14 @@ def display_panes(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 
 def display_message(pymux: "Pymux", variables: _VariablesDict) -> None:
-    "Display a message."
+    "Show a message on the status line."
     message = variables["<message>"]
     client_state = pymux.get_client_state()
     client_state.message = message
 
 
 def clear_history(pymux: "Pymux", variables: _VariablesDict) -> None:
-    "Clear scrollback buffer."
+    "Clear the scrollback of the pane."
     pane = pymux.arrangement.get_active_pane()
 
     if pane.is_copying:
@@ -1333,8 +1366,10 @@ def list_panes(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 def list_windows(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
-    Display a list of windows. (With `-F`, the formatted window information
-    is printed to the output of the pymux command line. Like tmux.)
+    List the windows of the session.
+
+    With `-F`, the formatted window information is printed to the
+    output of the pymux command line. (Like tmux.)
     """
     if variables["-F"]:
         format_str = variables["<format>"] or "#{window_id}"
@@ -1365,9 +1400,10 @@ def list_windows(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 def list_sessions(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
-    List sessions. (Pymux has one session per server. With `-F`, the
-    formatted session information is printed to the output of the pymux
-    command line. Like tmux.)
+    List the session of this server.
+
+    With `-F`, the formatted session information is printed to the
+    output of the pymux command line. (Like tmux.)
     """
     if variables["-F"]:
         format_str = variables["<format>"]
@@ -1386,8 +1422,10 @@ def list_sessions(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 def has_session(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
-    Check whether the session exists. Raise a CommandException (which makes
-    the pymux command line return a non-zero exit code) when it doesn't.
+    Check whether the session exists.
+
+    A session that is not there answers a non-zero exit code on the
+    command line, which is what a script reads.
     """
     target = variables["<target-session>"] or ""
     if not _pane_matches_session_name(pymux, target):
@@ -1416,16 +1454,19 @@ def new_session(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 def kill_session(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
-    Kill this session. (This terminates the server, like `tmux kill-session`
-    for the last session.)
+    Kill this session, and the server that runs it.
+
+    This is the way the last `tmux kill-session` ends its server.
     """
     pymux.stop()
 
 
 def kill_server(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
-    Kill the server. (Pymux has one session per server. Same as
-    `kill-session`.)
+    Kill the server, and the session that runs in it.
+
+    Pymux has one session per server, so this is the same as
+    `kill-session`.
     """
     pymux.stop()
 
@@ -1457,8 +1498,7 @@ def counters(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 def profile(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
-    Watch this server for a few seconds, and write down where its time
-    went.
+    Watch this server for a few seconds, and write down where its time went.
 
     **Where the time of an await goes, and not only of a call.**
     pyinstrument attributes the time of a coroutine that is waiting to
