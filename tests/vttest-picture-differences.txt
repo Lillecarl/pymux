@@ -26,8 +26,9 @@
 # the geometry that `take_a_picture.py` asks each terminal for. Change
 # any of them and every count has to be recorded again.
 #
-# Only item 4 of vttest's main menu is recorded. Item 2 is measured and
-# not written down, because two runs of it do not yet agree.
+# Item 4 of vttest's main menu is recorded, and item 9. Item 2 is
+# measured and not written down, because two runs of it do not yet
+# agree.
 
 # Item 4 of vttest is entirely about the DEC line attributes, and a
 # pane does not have them. "ESC # 3", "ESC # 4", "ESC # 5" and
@@ -74,3 +75,21 @@ xterm 4 Test of double-sized characters #5 15079
 # of the two pictures is identical to the pixel. The doubling was what
 # moved it.
 xterm 4 Test of double-sized characters #6 3960
+
+# Item 9 is the screens that expose xterm's own bugs, one screen per
+# bug, and the pane is not xterm: its emulator answers each question
+# its own way, and the difference pictures are grey across most of the
+# screen because the bug's behaviour is what the screen is of. The
+# scroll region moves whole lines in the pane the way the emulator
+# defines it; a double-wide line is drawn at ordinary size, so a
+# cursor moving off one lands a row's width from where xterm puts it.
+# Every count is the emulator's answer, not a fault of pymux, and the
+# pictures to read are the run's `differ/` directory.
+# Lillecarl/pymux#280.
+xterm 9 Test of known bugs / 2 Bug B: Scrolling region #1 2844
+xterm 9 Test of known bugs / 2 Bug B: Scrolling region #2 3117
+xterm 9 Test of known bugs / 5 Bug E: Cursor move from double- to single-wide line #1 15713
+xterm 9 Test of known bugs / 8 Erase right half of double width lines #2 2787
+xterm 9 Test of known bugs / 8 Erase right half of double width lines #4 2598
+xterm 9 Test of known bugs / 8 Erase right half of double width lines #5 5333
+xterm 9 Test of known bugs / 8 Erase right half of double width lines #6 2598
