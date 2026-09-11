@@ -78,15 +78,15 @@ def test_unbinding_a_name_that_reads_as_no_key_is_an_error(pymux):
 
 def test_a_caller_asks_for_a_binding_by_any_name_of_its_key(pymux):
     """
-    `the_binding_on` is the one way in, so nothing outside has to know
+    `binding_on` is the one way in, so nothing outside has to know
     the shape of the dictionary key. `nix/home-manager-judge.py` did,
     and the gate caught it.
     """
     run(pymux, "bind-key -n ctrl+a new-window")
     manager = pymux.key_bindings_manager
 
-    assert manager.the_binding_on("C-a").command == "new-window"
-    assert manager.the_binding_on("c-a", needs_prefix=True) is None
+    assert manager.binding_on("C-a").command == "new-window"
+    assert manager.binding_on("c-a", needs_prefix=True) is None
 
 
 def test_list_keys_shows_the_name_the_person_wrote(pymux):

@@ -295,7 +295,7 @@ class PymuxKeyBindings:
             key_handler, command, arguments, key_name
         )
 
-    def the_binding_on(
+    def binding_on(
         self, key_name: str, needs_prefix: bool = False
     ) -> "CustomBinding | None":
         """
