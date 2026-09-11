@@ -780,7 +780,7 @@ class Pymux:
 
     @property
     def log_level(self) -> str:
-        return log.the_level()
+        return log.level()
 
     @log_level.setter
     def log_level(self, name: str) -> None:
@@ -792,7 +792,7 @@ class Pymux:
         then the thing worth logging has not happened yet.
         Lillecarl/pymux#252.
         """
-        log.set_the_level(name)
+        log.set_level(name)
         logger.info("The log level is %s from now on.", name)
 
     def the_server_starts(self) -> None:

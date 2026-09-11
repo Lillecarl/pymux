@@ -78,7 +78,7 @@ def test_the_server_says_its_level_when_asked_what_it_is_doing():
 def test_a_level_nothing_here_set_reads_back_as_its_number():
     "Honest about a level that something else chose."
     log.logger.setLevel(logging.CRITICAL)
-    assert log.the_level() == str(logging.CRITICAL)
+    assert log.level() == str(logging.CRITICAL)
 
 
 def test_the_flag_and_the_option_take_the_same_words():

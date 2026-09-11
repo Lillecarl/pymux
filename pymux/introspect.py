@@ -42,7 +42,7 @@ from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .log import logger, the_level, the_logfile
+from .log import logger, level, logfile
 
 if TYPE_CHECKING:
     from pymux.main import Pymux
@@ -103,7 +103,7 @@ class Counters:
 
 def where_a_dump_goes() -> Path:
     "The directory a dump is written to: the one the log is in."
-    return (the_logfile() or Path.home() / ".local/state/pymux/server.log").parent
+    return (logfile() or Path.home() / ".local/state/pymux/server.log").parent
 
 
 def the_stacks_file() -> Path:
@@ -393,7 +393,7 @@ def _the_server(pymux: "Pymux") -> str:
             # reaches a running server and pymux has no `show-options`
             # to read it back with. A person who turned it up and
             # forgot needs somewhere to find out. Lillecarl/pymux#252.
-            "log %s, at %s" % (the_logfile() or "nowhere", the_level()),
+            "log %s, at %s" % (logfile() or "nowhere", level()),
             "a debugger may attach: %s"
             % ("yes" if pymux.allow_remote_debugging else "no"),
         ]

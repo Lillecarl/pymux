@@ -194,7 +194,7 @@ def test_the_log_says_where_it_went(tmp_path):
     "`pymux/introspect.py` writes its dumps beside it, so it has to be found."
     path = log.configure(str(tmp_path / "server.log"))
 
-    assert log.the_logfile() == path
+    assert log.logfile() == path
 
 
 def test_a_level_nobody_named_is_info():

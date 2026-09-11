@@ -42,7 +42,7 @@ not the last four days.
 time: the moment a person wants debug logging is when a server is
 already misbehaving, and a restart loses the thing they wanted to look
 at. `set-option log-level debug` reaches a running server, and
-`the_level` is what `show-options` reads back. Lillecarl/pymux#252.
+`level` is what `show-options` reads back. Lillecarl/pymux#252.
 """
 
 import logging
@@ -54,9 +54,9 @@ __all__ = [
     "logger",
     "configure",
     "default_logfile",
-    "the_logfile",
-    "the_level",
-    "set_the_level",
+    "logfile",
+    "level",
+    "set_level",
     "LEVELS",
 ]
 
@@ -90,12 +90,12 @@ HOW_MANY = 3
 _logfile: Path | None = None
 
 
-def the_logfile() -> Path | None:
+def logfile() -> Path | None:
     "The file this process logs to, or `None` when nothing configured one."
     return _logfile
 
 
-def the_level() -> str:
+def level() -> str:
     """
     The level this process logs at, by the name a person writes.
 
@@ -109,7 +109,7 @@ def the_level() -> str:
     return str(now)
 
 
-def set_the_level(name: str) -> None:
+def set_level(name: str) -> None:
     "Log at this level from now on. Raises `KeyError` for an unknown name."
     logger.setLevel(LEVELS[name])
 
