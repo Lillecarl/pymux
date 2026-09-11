@@ -264,8 +264,19 @@ def chrome_command(
     fence travels.
     """
     relay_error = Path(error_path).parent / "relay-error.log"
+    # xterm hands its children the invoking user's login shell in
+    # $SHELL, whatever this harness was started with, and in the build
+    # sandbox that passwd shell is /noshell: every pane died at exec
+    # and the keys typed after it went nowhere. The shell the harness
+    # itself carries is the one pymux gives a pane.
+    the_shell = os.environ.get("SHELL")
     inside = (
-        "exec python3 -m pymux -S %s -f %s --log %s"
+        (
+            "export SHELL=%s\n" % shlex.quote(the_shell)
+            if the_shell is not None
+            else ""
+        )
+        + "exec python3 -m pymux -S %s -f %s --log %s"
         " integrated python3 %s %s %s 2>%s"
         % (
             shlex.quote(str(socket_path)),

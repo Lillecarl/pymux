@@ -56,6 +56,7 @@
   grim,
   imagemagick,
   makeFontsConf,
+  runtimeShell,
   dejavu_fonts,
   perl,
   # The programs that animate. A pane nobody looks at should cost the
@@ -324,6 +325,11 @@ let
   # llvmpipe draws instead. It has to be told where the driver and the EGL
   # description are: nothing here reads /run/opengl-driver.
   seatSetup = ''
+    # A pane's shell comes from $SHELL, and the sandbox user's own one
+    # is /noshell: every pane that runs a program typed into a shell
+    # dies at exec and the keys typed after it are lost. The shell the
+    # derivation built with is the one every pane gets.
+    export SHELL=${runtimeShell}
     # Where the wayland seat's keyboard holder finds its generated
     # bindings.
     export PYTERM_WAYLAND_PROTOCOLS=${waylandProtocols}
