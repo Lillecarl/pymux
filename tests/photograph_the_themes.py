@@ -12,6 +12,9 @@ side. Lillecarl/pymux#194, Lillecarl/pymux#195.
 
 `PYMUX_THEMES` narrows the run to the fixtures whose name holds that
 text, and `PYMUX_THEMES_TERMINALS` to the terminals whose name does.
+Six terminals run: the three dark ones, and the same three on a light
+background, because a theme that read on the black it was written on
+may be unreadable on white.
 
 Nothing here is judged. The pictures are for a person, the same way
 the ones of chrome are.
@@ -31,6 +34,7 @@ sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pymux.style import THEMES  # noqa: E402
 from pymux.style_pygments import the_names  # noqa: E402
 from photograph_the_chrome import CHROME, FIRST_KEY, PREFIX, keys, main  # noqa: E402
+from take_a_picture import LIGHT_TERMINALS, TERMINALS  # noqa: E402
 
 #: Where the pictures go. The check points this at `$out`.
 PICTURES = Path(os.environ.get("PYMUX_THEMES_OUT", "theme-pictures"))
@@ -80,5 +84,9 @@ if __name__ == "__main__":
             only=ONLY,
             only_terminals=ONLY_TERMINALS,
             out=PICTURES,
+            # The dark three and the light three. A theme that reads on
+            # the black it was written on may be unreadable on white,
+            # and the light schemes of pygments want the other end.
+            terminals=TERMINALS + LIGHT_TERMINALS,
         )
     )

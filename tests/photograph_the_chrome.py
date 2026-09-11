@@ -342,7 +342,7 @@ def picture_of(terminal, seat, name, work, out, fixtures=None):
     return room / "pymux.png"
 
 
-def main(fixtures=None, only=None, only_terminals=None, out=None):
+def main(fixtures=None, only=None, only_terminals=None, out=None, terminals=None):
     """
     Photograph every fixture, in every terminal.
 
@@ -358,6 +358,8 @@ def main(fixtures=None, only=None, only_terminals=None, out=None):
         only_terminals = ONLY_TERMINALS
     if out is None:
         out = PICTURES
+    if terminals is None:
+        terminals = TERMINALS
 
     work = Path(os.environ.get("TMPDIR", "/tmp")) / "pymux-chrome"
     work.mkdir(parents=True, exist_ok=True)
@@ -365,9 +367,9 @@ def main(fixtures=None, only=None, only_terminals=None, out=None):
 
     names = [name for name in sorted(fixtures) if only in name]
     if not names:
-        raise SystemExit("no fixture holds %r" % ONLY)
+        raise SystemExit("no fixture holds %r" % only)
 
-    terminals = [t for t in TERMINALS if only_terminals in t.name]
+    terminals = [t for t in terminals if only_terminals in t.name]
     if not terminals:
         raise SystemExit("no terminal holds %r" % ONLY_TERMINALS)
 

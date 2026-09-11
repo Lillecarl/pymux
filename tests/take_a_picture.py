@@ -82,6 +82,7 @@ import shutil
 import subprocess
 import sys
 import time
+from functools import partial
 from pathlib import Path
 from pyte import escape
 from pyte.sequences import csi
@@ -404,7 +405,7 @@ class Terminal:
         return self._argv(command)
 
 
-def xterm_argv(command):
+def xterm_argv(command, background="black", foreground="white"):
     """
     xterm, with everything that could move a pixel turned off.
 
@@ -421,9 +422,9 @@ def xterm_argv(command):
         "-fs",
         "12",
         "-bg",
-        "black",
+        background,
         "-fg",
-        "white",
+        foreground,
         # As for foot: a cursor that never blinks cannot be measured.
         "-bc",
         "-b",
@@ -442,7 +443,7 @@ def xterm_argv(command):
     ]
 
 
-def foot_argv(command):
+def foot_argv(command, background="000000", foreground="ffffff"):
     """
     foot, a terminal that speaks Wayland and no X at all.
 
@@ -457,8 +458,8 @@ def foot_argv(command):
         # line on its own screen saying so. Anything a terminal writes
         # there before the program runs is one more thing that has to
         # come out the same on both sides.
-        "--override=colors-dark.background=000000",
-        "--override=colors-dark.foreground=ffffff",
+        "--override=colors-dark.background=%s" % (background,),
+        "--override=colors-dark.foreground=%s" % (foreground,),
         # A cursor that never blinks cannot be measured. Every fixture
         # but the blink ones hides it, so this changes nothing for them.
         #
@@ -475,7 +476,7 @@ def foot_argv(command):
     ]
 
 
-def kitty_argv(command):
+def kitty_argv(command, background="#000000", foreground="#ffffff"):
     """
     kitty, which is the terminal the faults get reported from.
 
@@ -496,9 +497,9 @@ def kitty_argv(command):
         "-o",
         "font_size=12",
         "-o",
-        "background=#000000",
+        "background=%s" % (background,),
         "-o",
-        "foreground=#ffffff",
+        "foreground=%s" % (foreground,),
         "-o",
         "window_padding_width=0",
         "-o",
@@ -525,6 +526,34 @@ TERMINALS = [
         seat="wayland",
         # kitty draws with OpenGL, and a build sandbox has no graphics
         # card. llvmpipe is what draws instead.
+        environment={"LIBGL_ALWAYS_SOFTWARE": "1"},
+    ),
+]
+
+#: The same three on a light background. The pictures of every theme
+#: run them beside the dark ones, because a theme that read well on
+#: the black it was written on may be unreadable on white, and the
+#: light schemes of pygments want a light terminal to be read on.
+#: `tests/photograph_the_themes.py` takes both lists.
+LIGHT_TERMINALS = [
+    Terminal(
+        "xterm-light",
+        "xterm",
+        partial(xterm_argv, background="white", foreground="black"),
+        seat="x",
+        window_class="XTerm",
+    ),
+    Terminal(
+        "foot-light",
+        "foot",
+        partial(foot_argv, background="ffffff", foreground="000000"),
+        seat="wayland",
+    ),
+    Terminal(
+        "kitty-light",
+        "kitty",
+        partial(kitty_argv, background="#ffffff", foreground="#000000"),
+        seat="wayland",
         environment={"LIBGL_ALWAYS_SOFTWARE": "1"},
     ),
 ]
