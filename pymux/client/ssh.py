@@ -371,12 +371,12 @@ class SshClient(TerminalClient):
         a terminal that sends no signal, and what `client/memory.py`
         needs for a reason of its own.
         """
-        last = self.the_size()
+        last = self.size()
 
         while True:
             await asyncio.sleep(SIZE_INTERVAL)
 
-            size = self.the_size()
+            size = self.size()
             if size != last:
                 last = size
                 self._send_size()

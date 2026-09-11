@@ -136,12 +136,12 @@ class MemoryClient(TerminalClient):
         Only a change is sent. A packet on every turn would ask the
         server to lay every window out twice a second.
         """
-        last = self.the_size()
+        last = self.size()
 
         while True:
             await asyncio.sleep(SIZE_INTERVAL)
 
-            size = self.the_size()
+            size = self.size()
             if size != last:
                 last = size
                 self._send_size()
