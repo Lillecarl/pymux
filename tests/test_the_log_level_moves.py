@@ -68,11 +68,11 @@ def test_the_server_says_its_level_when_asked_what_it_is_doing():
     pymux has no `show-options`, so a person who turned debug on and
     forgot has nowhere else to read it back.
     """
-    from pymux.introspect import _the_server
+    from pymux.introspect import _server
 
     pymux = Pymux()
     pymux.log_level = "debug"
-    assert "at debug" in _the_server(pymux)
+    assert "at debug" in _server(pymux)
 
 
 def test_a_level_nothing_here_set_reads_back_as_its_number():

@@ -299,7 +299,7 @@ class WindowSizeOption(Option):
             # person who says it and nothing else means "stop following
             # the clients", not "pick a size for me", and tmux does the
             # same. `resize-window` is how a size is named.
-            window.manual_size = pymux.the_size_of_the_plane(window)
+            window.manual_size = pymux.size_of_the_plane(window)
 
         window.window_size = chosen
 
@@ -341,7 +341,7 @@ class ThemeOption(Option):
         elif value not in THEMES:
             raise SetOptionError("Expecting one of: %s." % ", ".join(sorted(THEMES)))
         pymux.theme = value
-        pymux.invalidate(Woke.A_THEME_WAS_CHOSEN)
+        pymux.invalidate(Woke.THEME_WAS_CHOSEN)
 
 
 class LogLevelOption(Option):

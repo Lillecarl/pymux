@@ -145,7 +145,7 @@ def the_window(pymux):
 
 def the_plane(pymux):
     "How big the plane of the one window is."
-    return pymux.the_size_of_the_plane(the_window(pymux))
+    return pymux.size_of_the_plane(the_window(pymux))
 
 
 # ----------------------------------------------------------------------
@@ -176,10 +176,10 @@ def test_the_latest_client_to_be_used_decides():
     with two_clients(["set-window-option window-size latest"]) as (pymux, big, small):
         assert the_plane(pymux).columns == SMALL.columns
 
-        pymux.a_client_was_used(big.state)
+        pymux.client_was_used(big.state)
         assert the_plane(pymux).columns == BIG.columns
 
-        pymux.a_client_was_used(small.state)
+        pymux.client_was_used(small.state)
         assert the_plane(pymux).columns == SMALL.columns
 
 

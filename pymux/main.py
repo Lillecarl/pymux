@@ -191,7 +191,7 @@ class ClientState:
         self.display_popup = False
 
         #: When a person last used this client, as a turn of
-        #: `Pymux.a_client_was_used`. `window-size latest` reads it.
+        #: `Pymux.client_was_used`. `window-size latest` reads it.
         self.last_used = 0
 
         #: True for the fake CLI that runs a command that arrived over
@@ -376,7 +376,7 @@ class ClientState:
                 SwapLightAndDarkStyleTransformation(),
                 Condition(lambda: self.pymux.swap_dark_and_light),
             ),
-            on_invalidate=pymux.a_client_asked_for_a_frame,
+            on_invalidate=pymux.client_asked_for_a_frame,
         )
 
         # Synchronize the Vi state with the CLI object.
@@ -406,7 +406,7 @@ class ClientState:
         # whichever terminal somebody last typed in.
         def key_pressed(_):
             self.message = None
-            pymux.a_client_was_used(self)
+            pymux.client_was_used(self)
 
         app.key_processor.before_key_press += key_pressed
 
@@ -416,7 +416,7 @@ class ClientState:
         with set_app(app):
             # Redraw all CLIs. (Adding a new client could mean that the others
             # change size, so everything has to be redrawn.)
-            pymux.invalidate(Woke.A_CLIENT_ATTACHED)
+            pymux.invalidate(Woke.CLIENT_ATTACHED)
 
             pymux.startup()
 
@@ -486,7 +486,7 @@ class Pymux:
         self._client_states = {}  # connection -> client_state
 
         #: How many times a client has been used, over the session.
-        #: `a_client_was_used` bumps it and stamps the client, and
+        #: `client_was_used` bumps it and stamps the client, and
         #: `window-size latest` reads the stamps.
         self._uses = 0
 
@@ -704,7 +704,7 @@ class Pymux:
         the clock. Lillecarl/pymux#117.
 
         `but_not` is the application that already asked for a frame, so
-        that `a_client_asked_for_a_frame` can ask about the others and
+        that `client_asked_for_a_frame` can ask about the others and
         leave that one alone.
         """
         for client_state in self._client_states.values():
@@ -727,7 +727,7 @@ class Pymux:
                 )
                 client_state.app.invalidate()
 
-    def a_client_asked_for_a_frame(self, app) -> None:
+    def client_asked_for_a_frame(self, app) -> None:
         """
         What one client's own invalidate means for the other clients.
 
@@ -752,12 +752,12 @@ class Pymux:
         With one client there are no others, so the common case pays
         for the syncs and nothing else.
         """
-        self.counters.invalidated(Woke.AN_APPLICATION)
+        self.counters.invalidated(Woke.APPLICATION)
         # DEBUG: this is the line that says a pane is animating. A
         # server drew eleven frames a second with nobody typing, and a
         # line each is what made one log 86 MB in four days.
         # Lillecarl/pymux#248.
-        logger.debug("Drawing 1 of the clients: %s", Woke.AN_APPLICATION)
+        logger.debug("Drawing 1 of the clients: %s", Woke.APPLICATION)
 
         self.refresh_what_time_moves(but_not=app)
 
@@ -795,7 +795,7 @@ class Pymux:
         log.set_level(name)
         logger.info("The log level is %s from now on.", name)
 
-    def the_server_starts(self) -> None:
+    def server_starts(self) -> None:
         """
         What every route does before its loop turns.
 
@@ -883,7 +883,7 @@ class Pymux:
         else:
             return "Pymux"
 
-    def the_size_of_the_plane(self, window=None):
+    def size_of_the_plane(self, window=None):
         """
         How big the plane of that window is, in cells.
 
@@ -918,7 +918,7 @@ class Pymux:
         if window.window_size is WindowSize.MANUAL and window.manual_size is not None:
             return window.manual_size
 
-        clients = self.the_clients_watching(window)
+        clients = self.clients_watching(window)
 
         if not clients:
             return Size(rows=20, columns=80)
@@ -939,7 +939,7 @@ class Pymux:
             columns=size.columns,
         )
 
-    def a_client_was_used(self, client_state) -> None:
+    def client_was_used(self, client_state) -> None:
         """
         Note that a person just used this client.
 
@@ -951,7 +951,7 @@ class Pymux:
         self._uses += 1
         client_state.last_used = self._uses
 
-    def the_clients_watching(self, window=None) -> "list[ClientState]":
+    def clients_watching(self, window=None) -> "list[ClientState]":
         """
         Every client that is looking at that window.
 
@@ -1008,7 +1008,7 @@ class Pymux:
                 for client_state in self._client_states.values():
                     client_state.sync_focus()
 
-            self.invalidate(Woke.A_PANE_ENDED)
+            self.invalidate(Woke.PANE_ENDED)
 
         def bell():
             "Sound bell on all clients."
@@ -1177,7 +1177,7 @@ class Pymux:
         self.overlay_width = width
         self.overlay_height = height
         self._sync_focus_everywhere()
-        self.invalidate(Woke.AN_OVERLAY_OPENED)
+        self.invalidate(Woke.OVERLAY_OPENED)
 
         return pane
 
@@ -1196,7 +1196,7 @@ class Pymux:
             process.kill()
 
         self._sync_focus_everywhere()
-        self.invalidate(Woke.AN_OVERLAY_CLOSED)
+        self.invalidate(Woke.OVERLAY_CLOSED)
 
     def _sync_focus_everywhere(self) -> None:
         "Give every client the focus that its state asks for."
@@ -1208,7 +1208,7 @@ class Pymux:
                 # An application that never ran has no layout to focus.
                 logger.exception("Could not sync the focus of a client.")
 
-    def invalidate(self, reason: str = Woke.AN_APPLICATION):
+    def invalidate(self, reason: str = Woke.APPLICATION):
         """
         Ask every client for a frame. `Woke` says why the reason is
         here, and holds every reason but the one that carries a name.
@@ -1335,7 +1335,7 @@ class Pymux:
             if columns is not None and process.sx:
                 change_pane_size(self, window, pane, right=columns - process.sx)
 
-            self.invalidate(Woke.A_PANE_RESIZED)
+            self.invalidate(Woke.PANE_RESIZED)
         except Exception:
             logger.exception("Failed to resize a pane for the program in it.")
 
@@ -1346,7 +1346,7 @@ class Pymux:
                 return window
         return None
 
-    def the_clients_to_open_on(self) -> "list[ClientState]":
+    def clients_to_open_on(self) -> "list[ClientState]":
         """
         The clients that receive what "open-url" opens.
 
@@ -1384,7 +1384,7 @@ class Pymux:
             logger.info("Not opening %s: open-url-mode is off.", url)
             return
 
-        clients = self.the_clients_to_open_on()
+        clients = self.clients_to_open_on()
         if not clients:
             self.add_command_error("Nobody is attached to open %s." % (url,))
             return
@@ -1729,7 +1729,7 @@ class Pymux:
 
         self.arrangement.create_window(pane, name=name, index=index)
         pane.focus()
-        self.invalidate(Woke.A_WINDOW_OPENED)
+        self.invalidate(Woke.WINDOW_OPENED)
 
     def add_process(
         self,
@@ -1748,7 +1748,7 @@ class Pymux:
         pane = self._create_pane(window, command, start_directory=start_directory)
         window.add_pane(pane, vsplit=vsplit)
         pane.focus()
-        self.invalidate(Woke.A_PANE_WAS_SPLIT_OFF)
+        self.invalidate(Woke.PANE_WAS_SPLIT_OFF)
 
     def kill_pane(self, pane: Pane) -> None:
         """
@@ -1873,7 +1873,7 @@ class Pymux:
             connection.detach_and_close()
 
         # Redraw all clients -> Maybe their size has to change.
-        self.invalidate(Woke.A_CLIENT_DETACHED)
+        self.invalidate(Woke.CLIENT_DETACHED)
 
     def listen_on_socket(self, socket_name=None):
         """
@@ -1910,7 +1910,7 @@ class Pymux:
 
         signal.signal(signal.SIGINT, handle_sigint)
 
-        self.the_server_starts()
+        self.server_starts()
 
         # Run eventloop.
         try:
@@ -1964,7 +1964,7 @@ class Pymux:
         # through `termios`, which a server on Windows does not have.
         from .client.memory import MemoryClient
 
-        self.the_server_starts()
+        self.server_starts()
 
         async def run() -> None:
             server_end, client_end = connect_in_memory()
@@ -2003,7 +2003,7 @@ class Pymux:
         This is mainly useful for debugging.
         """
         self._runs_standalone = True
-        self.the_server_starts()
+        self.server_starts()
 
         client_state = self.add_client(
             input=create_input(),
@@ -2037,7 +2037,7 @@ class Pymux:
         # not: nobody is using that terminal, and it is gone before the
         # answer comes back.
         if not temporary:
-            self.a_client_was_used(client_state)
+            self.client_was_used(client_state)
 
         # The configuration file was read while this client was being
         # built, so nothing could be told about a line that failed.

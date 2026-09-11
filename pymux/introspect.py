@@ -275,13 +275,13 @@ def start_watching(pymux: "Pymux", seconds: float = HOW_LONG_TO_WATCH) -> Path:
             written.write_text(
                 "\n".join(
                     [
-                        _the_server(pymux),
+                        _server(pymux),
                         "",
                         _over_the_window(counters, before, seconds),
                         "",
                         profiler.output_text(unicode=True, color=False, show_all=False),
                         "",
-                        _the_tasks(pymux),
+                        _tasks(pymux),
                         "",
                     ]
                 )
@@ -327,13 +327,13 @@ def what_it_is_doing(pymux: "Pymux") -> str:
     "The whole answer, as text."
     return "\n".join(
         [
-            _the_server(pymux),
+            _server(pymux),
             "",
             counters(pymux),
             "",
-            _the_threads(),
+            _threads(),
             "",
-            _the_tasks(pymux),
+            _tasks(pymux),
             "",
         ]
     )
@@ -374,7 +374,7 @@ def _now() -> str:
     return time.strftime("%Y%m%d-%H%M%S")
 
 
-def _the_server(pymux: "Pymux") -> str:
+def _server(pymux: "Pymux") -> str:
     "One paragraph: which server this is, and how big it has got."
     windows = list(pymux.arrangement.windows)
     panes = [pane for window in windows for pane in window.panes]
@@ -411,7 +411,7 @@ def _for_how_long(seconds: float) -> str:
     return "%dm %ds" % (minutes, seconds)
 
 
-def _the_threads() -> str:
+def _threads() -> str:
     """
     Every thread of this process, and where it is.
 
@@ -434,7 +434,7 @@ def _the_threads() -> str:
     return "\n".join(lines)
 
 
-def _the_tasks(pymux: "Pymux") -> str:
+def _tasks(pymux: "Pymux") -> str:
     """
     Every asyncio task, and what it waits for.
 

@@ -184,7 +184,7 @@ class _Pymux:
     def __init__(self) -> None:
         self.state = None
 
-    def the_size_of_the_plane(self, window=None) -> Size:
+    def size_of_the_plane(self, window=None) -> Size:
         return Size(rows=ROWS, columns=COLUMNS)
 
     def get_client_state(self):

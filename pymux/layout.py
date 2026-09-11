@@ -632,7 +632,7 @@ class LayoutManager:
         smaller than the plane shows part of it and its view scrolls,
         which is what `window-size largest` is for.
         """
-        plane = self.pymux.the_size_of_the_plane()
+        plane = self.pymux.size_of_the_plane()
         mine = self.room_this_client_has
 
         return Size(
@@ -711,7 +711,7 @@ class LayoutManager:
         def handler(mouse_event: MouseEvent) -> "NotImplementedOrNone":
             if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
                 self.pymux.arrangement.set_active_window(window)
-                self.pymux.invalidate(Woke.A_CLICK_CHOSE_A_WINDOW)
+                self.pymux.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
                 return None
             else:
                 return NotImplemented  # Event not handled here.
@@ -1531,7 +1531,7 @@ def room_for_the_panes(pymux: "Pymux", window) -> Size:
     and not a client's. A client smaller than this sees part of the
     plan through a view of its own.
     """
-    size = pymux.the_size_of_the_plane(window)
+    size = pymux.size_of_the_plane(window)
 
     rows = size.rows
     if pymux.show_pane_status:
@@ -1898,7 +1898,7 @@ def _create_container_for_process(
         "Click handler for the clock. When clicked, select this pane."
         arrangement_pane.clock_mode = False
         pymux.arrangement.get_active_window().active_pane = arrangement_pane
-        pymux.invalidate(Woke.A_CLICK_LEFT_THE_CLOCK)
+        pymux.invalidate(Woke.CLICK_LEFT_THE_CLOCK)
 
     return HighlightBordersIfActive(
         window,

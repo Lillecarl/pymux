@@ -414,7 +414,7 @@ class ServerConnection:
         elif packet["cmd"] == "size":
             rows, columns = packet["data"]
             self.size = Size(rows=rows, columns=columns)
-            self.pymux.invalidate(Woke.A_CLIENT_RESIZED)
+            self.pymux.invalidate(Woke.CLIENT_RESIZED)
 
         # Start GUI. (Create CommandLineInterface front-end for pymux.)
         elif packet["cmd"] == "start-gui":

@@ -103,12 +103,12 @@ async def test_last_targets_the_client_used_last():
         b, _ = await session.attach("b", A_SIZE)
 
         # Attaching counts as using, so b is the last one until a types.
-        assert pymux.the_clients_to_open_on() == [b]
+        assert pymux.clients_to_open_on() == [b]
         session.typed(a, "x")
         await once(
             lambda: a.last_used > b.last_used, 5.0, "the typing never counted"
         )
-        assert pymux.the_clients_to_open_on() == [a]
+        assert pymux.clients_to_open_on() == [a]
 
         pymux.handle_command("open-url %s" % URL)
 

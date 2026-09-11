@@ -181,14 +181,14 @@ def test_the_counters_name_what_asked_for_each_frame(a_server):
     pymux, state = a_server
 
     with set_app(state.app):
-        pymux.invalidate(Woke.A_CLIENT_RESIZED)
-        pymux.invalidate(Woke.A_CLIENT_RESIZED)
-        pymux.invalidate(Woke.AN_APPLICATION)
+        pymux.invalidate(Woke.CLIENT_RESIZED)
+        pymux.invalidate(Woke.CLIENT_RESIZED)
+        pymux.invalidate(Woke.APPLICATION)
 
     said = introspect.counters(pymux)
 
-    assert pymux.counters.invalidates[Woke.A_CLIENT_RESIZED] == 2
-    assert str(Woke.A_CLIENT_RESIZED)[:46] in said
+    assert pymux.counters.invalidates[Woke.CLIENT_RESIZED] == 2
+    assert str(Woke.CLIENT_RESIZED)[:46] in said
     assert "what asked for a frame" in said
 
 
@@ -280,5 +280,5 @@ def test_every_route_that_starts_a_server_takes_the_signal():
     """
     source = inspect.getsource(Pymux)
 
-    assert source.count("self.the_server_starts()") == 3
-    assert "introspect.answer_a_signal()" in inspect.getsource(Pymux.the_server_starts)
+    assert source.count("self.server_starts()") == 3
+    assert "introspect.answer_a_signal()" in inspect.getsource(Pymux.server_starts)

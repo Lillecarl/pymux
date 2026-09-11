@@ -60,33 +60,33 @@ class Woke(StrEnum):
     The reason is what makes such a run readable: it names what woke
     the client, at the moment it did. Lillecarl/pymux#180.
 
-    `AN_APPLICATION` is the one reason pymux cannot name, and it is the
-    default for that reason. It is what `a_client_asked_for_a_frame`
+    `APPLICATION` is the one reason pymux cannot name, and it is the
+    default for that reason. It is what `client_asked_for_a_frame`
     counts: one client's application invalidated itself, which is what
     a pane that writes does. So a run of frames with no named reason
     before them is a pane writing.
     """
 
-    AN_APPLICATION = "an application asked for a frame"
+    APPLICATION = "an application asked for a frame"
 
     #: This one takes the name of the command, so it is a format
-    #: string: `Woke.A_COMMAND_RAN % "kill-pane"`. The name is worth
+    #: string: `Woke.COMMAND_RAN % "kill-pane"`. The name is worth
     #: carrying, and the words around it are still written once.
-    A_COMMAND_RAN = "the command %s ran"
+    COMMAND_RAN = "the command %s ran"
 
-    A_CLIENT_ATTACHED = "a client attached"
-    A_CLIENT_DETACHED = "a client detached"
-    A_CLIENT_RESIZED = "a client reported its size"
-    A_PANE_ENDED = "a pane ended"
-    A_PANE_RESIZED = "a program in a pane asked for a size"
-    A_WINDOW_OPENED = "a window opened"
-    A_PANE_WAS_SPLIT_OFF = "a pane was split off"
-    A_PANE_BROKE_OUT = "a pane broke out into a window"
-    AN_OVERLAY_OPENED = "an overlay opened"
-    AN_OVERLAY_CLOSED = "an overlay closed"
-    A_CLICK_CHOSE_A_WINDOW = "a click chose a window"
-    A_CLICK_LEFT_THE_CLOCK = "a click left the clock"
-    A_THEME_WAS_CHOSEN = "a theme was chosen"
-    A_COLUMN_CHANGED_WIDTH = "a column of the strip took another width"
-    A_COLUMN_MOVED = "a column of the strip moved along the row"
-    A_PANE_CHANGED_COLUMN = "a pane joined another column of the strip, or left one"
+    CLIENT_ATTACHED = "a client attached"
+    CLIENT_DETACHED = "a client detached"
+    CLIENT_RESIZED = "a client reported its size"
+    PANE_ENDED = "a pane ended"
+    PANE_RESIZED = "a program in a pane asked for a size"
+    WINDOW_OPENED = "a window opened"
+    PANE_WAS_SPLIT_OFF = "a pane was split off"
+    PANE_BROKE_OUT = "a pane broke out into a window"
+    OVERLAY_OPENED = "an overlay opened"
+    OVERLAY_CLOSED = "an overlay closed"
+    CLICK_CHOSE_A_WINDOW = "a click chose a window"
+    CLICK_LEFT_THE_CLOCK = "a click left the clock"
+    THEME_WAS_CHOSEN = "a theme was chosen"
+    COLUMN_CHANGED_WIDTH = "a column of the strip took another width"
+    COLUMN_MOVED = "a column of the strip moved along the row"
+    PANE_CHANGED_COLUMN = "a pane joined another column of the strip, or left one"

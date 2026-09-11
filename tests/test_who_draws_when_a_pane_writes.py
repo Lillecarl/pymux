@@ -9,7 +9,7 @@ handler to the controls of the layout it walks, and a client's layout
 holds only the window that client looks at. So a window nobody looks at
 costs nothing.
 
-The second half is `Pymux.a_client_asked_for_a_frame`. One client's
+The second half is `Pymux.client_asked_for_a_frame`. One client's
 invalidate used to ask every client for a frame, so a busy pane in one
 window drew frames for a client looking at another one. It now asks the
 others only for the text that names every window, which is the one

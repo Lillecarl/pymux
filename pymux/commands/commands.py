@@ -391,7 +391,7 @@ def break_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     dont_focus_window = variables["-d"]
 
     pymux.arrangement.break_pane(set_active=not dont_focus_window)
-    pymux.invalidate(Woke.A_PANE_BROKE_OUT)
+    pymux.invalidate(Woke.PANE_BROKE_OUT)
 
 
 def select_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
@@ -626,7 +626,7 @@ def _where_a_new_window_goes(pymux: "Pymux", variables: _VariablesDict) -> int |
     and a person who mistypes a window number while opening one does
     not want the window not to open.
     """
-    number = _an_index(variables["<target-window>"])
+    number = _index(variables["<target-window>"])
 
     where = None
     if number is not None:
@@ -643,7 +643,7 @@ def _where_a_new_window_goes(pymux: "Pymux", variables: _VariablesDict) -> int |
     return where.index + 1
 
 
-def _an_index(target: "str | None") -> int | None:
+def _index(target: "str | None") -> int | None:
     """
     The window number a target names, or None for one that is a name.
 
@@ -743,7 +743,7 @@ def switch_column_width(pymux: "Pymux", variables: _VariablesDict) -> None:
         raise CommandException("There is no pane here.")
 
     window.switch_column_width(pane, back=variables["-p"])
-    pymux.invalidate(Woke.A_COLUMN_CHANGED_WIDTH)
+    pymux.invalidate(Woke.COLUMN_CHANGED_WIDTH)
 
 
 def move_column(pymux: "Pymux", variables: _VariablesDict) -> None:
@@ -784,7 +784,7 @@ def move_column(pymux: "Pymux", variables: _VariablesDict) -> None:
         raise CommandException("There is no pane here.")
 
     if window.move_column(pane, -1 if variables["-L"] else 1):
-        pymux.invalidate(Woke.A_COLUMN_MOVED)
+        pymux.invalidate(Woke.COLUMN_MOVED)
 
 
 def consume_or_expel(pymux: "Pymux", variables: _VariablesDict) -> None:
@@ -826,7 +826,7 @@ def consume_or_expel(pymux: "Pymux", variables: _VariablesDict) -> None:
         raise CommandException("There is no pane here.")
 
     if window.consume_or_expel(pane, -1 if variables["-L"] else 1):
-        pymux.invalidate(Woke.A_PANE_CHANGED_COLUMN)
+        pymux.invalidate(Woke.PANE_CHANGED_COLUMN)
 
 
 def rename_window(pymux: "Pymux", variables: _VariablesDict) -> None:
@@ -916,9 +916,9 @@ def resize_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     Lillecarl/pymux#225.
     """
     window = pymux.arrangement.get_active_window()
-    now = pymux.the_size_of_the_plane(window)
+    now = pymux.size_of_the_plane(window)
 
-    def a_number(name, instead):
+    def number(name, instead):
         given = variables["<%s>" % (name,)]
         if given is None:
             return instead
@@ -928,15 +928,15 @@ def resize_window(pymux: "Pymux", variables: _VariablesDict) -> None:
             raise CommandException("Expecting an integer.")
 
     def asked_for(name, then):
-        wanted = a_number(name, then)
+        wanted = number(name, then)
         if wanted < 1:
             raise CommandException("A window is at least one cell.")
         return wanted
 
-    columns = asked_for("columns", now.columns) + a_number("right", 0)
-    rows = asked_for("rows", now.rows) + a_number("down", 0)
-    columns -= a_number("left", 0)
-    rows -= a_number("up", 0)
+    columns = asked_for("columns", now.columns) + number("right", 0)
+    rows = asked_for("rows", now.rows) + number("down", 0)
+    columns -= number("left", 0)
+    rows -= number("up", 0)
 
     window.manual_size = Size(rows=max(1, rows), columns=max(1, columns))
     window.window_size = WindowSize.MANUAL
@@ -2099,14 +2099,14 @@ def _build_the_tree() -> Any:
 _TREE, _SUBPARSERS = _build_the_tree()
 
 
-def _the_options(parser: argparse.ArgumentParser) -> str:
+def _options(parser: argparse.ArgumentParser) -> str:
     "What the usage line says after the name of the command."
     text = parser.format_usage()
     prefix = "usage: %s " % (parser.prog,)
     return text[len(prefix) :].strip() if text.startswith(prefix) else text.strip()
 
 
-def _the_wrapper(name: str, parser: argparse.ArgumentParser) -> _PymuxHandler:
+def _wrapper(name: str, parser: argparse.ArgumentParser) -> _PymuxHandler:
     def command_wrapper(pymux: "Pymux", arguments: _VariablesList) -> None:
         try:
             namespace = parser.parse_args(list(arguments))
@@ -2134,17 +2134,17 @@ def _the_wrapper(name: str, parser: argparse.ArgumentParser) -> _PymuxHandler:
         namespace._handler(pymux, variables)
 
         # Invalidate all clients, not just the current CLI.
-        pymux.invalidate(Woke.A_COMMAND_RAN % name)
+        pymux.invalidate(Woke.COMMAND_RAN % name)
 
     return command_wrapper
 
 
 for _name, _parser in _SUBPARSERS.choices.items():
-    COMMANDS_TO_HANDLERS[_name] = _the_wrapper(_name, _parser)
+    COMMANDS_TO_HANDLERS[_name] = _wrapper(_name, _parser)
     COMMANDS_TO_PARSERS[_name] = _parser
     _handler = _parser.get_default("_handler")
     COMMANDS_TO_DESCRIPTIONS[_name] = (inspect.getdoc(_handler) or "").partition("\n")[0]
-    COMMANDS_TO_HELP[_name] = _the_options(_parser)
+    COMMANDS_TO_HELP[_name] = _options(_parser)
     COMMANDS_TO_OPTION_FLAGS[_name] = [
         option
         for action in _parser._actions
