@@ -24,6 +24,10 @@
   asyncssh,
   # `set-option theme pygments:<name>`, in `test_pygments_themes.py`.
   pygments,
+  # The four flavours of the pastel, which pygments finds by entry
+  # point once the package is there: `catppuccin-mocha` and friends.
+  # Lillecarl/pymux#195.
+  catppuccin,
   # TEMPORARY for the Lillecarl/pymux#258 scratch measurement. Remove
   # with `tests/measure_wire_sizes.py` and the `wire` check below.
   msgpack,
@@ -98,6 +102,8 @@ let
     asyncssh
     # The themes of `set-option theme pygments:<name>`.
     pygments
+    # The pastel among them, by entry point. Lillecarl/pymux#195.
+    catppuccin
     # TEMPORARY for the scratch wire measurement. See above.
     msgpack
   ]);
@@ -246,6 +252,12 @@ let
   # two of everything.
   chromeSelection = builtins.getEnv "PYMUX_CHROME";
   chromeTerminals = builtins.getEnv "PYMUX_CHROME_TERMINALS";
+
+  # The same for the pictures of every theme, which
+  # `tests/photograph_the_themes.py` takes: one demo application in a
+  # pane, under every theme the option takes.
+  themesSelection = builtins.getEnv "PYMUX_THEMES";
+  themesTerminals = builtins.getEnv "PYMUX_THEMES_TERMINALS";
 
   # xterm is the one, and `tests/photograph_vttest.py` says why: it is the
   # only one of the three that draws the DEC line attributes at all.
@@ -706,6 +718,28 @@ in
           export PYMUX_CHROME_TERMINALS="$chromeTerminals"
           export PYMUX_CHROME_OUT="$out"
           python tests/photograph_the_chrome.py
+        ''
+      );
+
+  # Every theme, with the demo application in the pane. The chrome
+  # check above photographs the two hand themes; this walks everything
+  # `set-option theme` takes, the pastel's four flavours among them,
+  # and leaves the gallery in `$out`. It judges nothing either.
+  # Lillecarl/pymux#194, Lillecarl/pymux#195.
+  themePictures =
+    runInSandbox
+      {
+        name = "pymux-theme-pictures";
+        inputs = seatInputs;
+        env = { inherit themesSelection themesTerminals; };
+      }
+      (
+        seatSetup
+        + ''
+          export PYMUX_THEMES="$themesSelection"
+          export PYMUX_THEMES_TERMINALS="$themesTerminals"
+          export PYMUX_THEMES_OUT="$out"
+          python tests/photograph_the_themes.py
         ''
       );
 

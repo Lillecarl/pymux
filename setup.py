@@ -40,6 +40,12 @@ setup(
         # beside them. Lillecarl/pymux#194.
         "pygments>=2.15.0",
     ],
+    extras_require={
+        # The four flavours of the pastel, found by pygments through
+        # the entry points the package carries. Optional: pymux runs
+        # without it. Lillecarl/pymux#195.
+        "catppuccin": ["catppuccin[pygments]>=2.0.0"],
+    },
     entry_points={
         "console_scripts": [
             "pymux = pymux.entry_points.run_pymux:run",

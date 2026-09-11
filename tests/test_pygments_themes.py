@@ -84,6 +84,34 @@ def test_a_name_nobody_offers_is_refused():
         a_pygments_theme("nosuchtheme")
 
 
+def test_every_name_the_option_offers_builds_a_theme():
+    """
+    All fifty-three: the styles pygments ships, and the four flavours
+    of the pastel beside them. A derivation that crashed on one of
+    them would leave a name the option lists and the session cannot
+    draw, so the whole list builds or the test says which one does
+    not.
+    """
+    for name in the_names():
+        assert a_pygments_theme(name) is not None
+
+
+def test_the_pastel_names_the_colours_of_the_scheme():
+    """
+    catppuccin-mocha: surface #181825, mauve for the accent, the
+    muted lavender of its comments for the quiet text. Its `Error`
+    and `Generic.Error` tokens are the plain foreground, but the
+    deleted-diff token carries the flavour's red, and the pane that
+    ends is drawn on that. Lillecarl/pymux#195.
+    """
+    theme = a_pygments_theme("catppuccin-mocha")
+
+    assert the_attrs(theme, "commandpalette").bgcolor == "181825"
+    assert the_attrs(theme, "statusbar").bgcolor == "cba6f7"
+    assert the_attrs(theme, "completion-menu").color == "cdd6f4"
+    assert the_attrs(theme, "terminated").bgcolor == "f38ba8"
+
+
 def test_the_option_offers_the_names_and_refuses_the_others():
     pymux = Pymux()
 

@@ -304,12 +304,14 @@ def last_key_at(keys):
     return when
 
 
-def picture_of(terminal, seat, name, work, out):
+def picture_of(terminal, seat, name, work, out, fixtures=None):
     "One fixture, in one terminal, left as a picture."
     room = out / terminal.name / name
     room.mkdir(parents=True, exist_ok=True)
 
-    config, keys = FIXTURES[name]
+    if fixtures is None:
+        fixtures = FIXTURES
+    config, keys = fixtures[name]
 
     config_path = work / ("%s.conf" % name)
     config_path.write_text(config)
@@ -340,17 +342,32 @@ def picture_of(terminal, seat, name, work, out):
     return room / "pymux.png"
 
 
-def main():
+def main(fixtures=None, only=None, only_terminals=None, out=None):
+    """
+    Photograph every fixture, in every terminal.
+
+    The arguments are the knobs of the run, and default to this
+    module's own: `photograph_the_themes.py` passes its own fixtures
+    and its own knob names, and the same machinery takes the pictures.
+    """
+    if fixtures is None:
+        fixtures = FIXTURES
+    if only is None:
+        only = ONLY
+    if only_terminals is None:
+        only_terminals = ONLY_TERMINALS
+    if out is None:
+        out = PICTURES
+
     work = Path(os.environ.get("TMPDIR", "/tmp")) / "pymux-chrome"
     work.mkdir(parents=True, exist_ok=True)
-    out = PICTURES
     out.mkdir(parents=True, exist_ok=True)
 
-    names = [name for name in every_fixture() if ONLY in name]
+    names = [name for name in sorted(fixtures) if only in name]
     if not names:
         raise SystemExit("no fixture holds %r" % ONLY)
 
-    terminals = [t for t in TERMINALS if ONLY_TERMINALS in t.name]
+    terminals = [t for t in TERMINALS if only_terminals in t.name]
     if not terminals:
         raise SystemExit("no terminal holds %r" % ONLY_TERMINALS)
 
@@ -374,7 +391,9 @@ def main():
             for name in names:
                 started = time.time()
                 try:
-                    path = picture_of(terminal, seats[terminal.seat], name, work, out)
+                    path = picture_of(
+                        terminal, seats[terminal.seat], name, work, out, fixtures
+                    )
                 except RuntimeError as reason:
                     room = out / terminal.name / name
                     print(

@@ -31,6 +31,11 @@
   # `set-option theme pygments:<name>` takes one of the styles pygments
   # carries. Lillecarl/pymux#194.
   pygments,
+  # The four flavours of the pastel, found by pygments through its
+  # entry points. Optional in the packaging; this package carries it,
+  # because a person who installs pymux wants its themes to work.
+  # Lillecarl/pymux#195.
+  catppuccin,
   installShellFiles,
   callPackage,
   mesa,
@@ -56,6 +61,7 @@ let
       pyinstrument
       asyncssh
       pygments
+      catppuccin
     ];
 
     # The completion scripts of bash, zsh and fish, written from

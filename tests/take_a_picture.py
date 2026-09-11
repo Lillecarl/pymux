@@ -667,6 +667,13 @@ def _settle(work, path, take_one, ended, what, log_path, not_before=0.0):
         if differences(previous, path) == 0 and time.time() - started >= not_before:
             return
         shutil.copy(path, previous)
+    # What would not settle, left where a person reads the logs: the
+    # last two frames that kept differing, so "never settled" says
+    # what moved and not only that it moved.
+    if log_path is not None:
+        room = Path(log_path).parent
+        shutil.copy(previous, room / "settle-previous.png")
+        shutil.copy(path, room / "settle-last.png")
     raise RuntimeError("%s never settled\n%s" % (what, _tail(log_path)))
 
 
