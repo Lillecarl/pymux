@@ -32,7 +32,7 @@ from pymux.layout import (
     focus_left,
     focus_right,
     focus_up,
-    the_pane_resizes,
+    change_pane_size,
 )
 from pymux.log import logger
 from pymux.options import SetOptionError
@@ -865,7 +865,7 @@ def resize_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     w = pymux.arrangement.get_active_window()
 
     if w and w.active_pane is not None:
-        the_pane_resizes(
+        change_pane_size(
             pymux, w, w.active_pane, up=up, right=right, down=down, left=left
         )
 

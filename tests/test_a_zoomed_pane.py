@@ -16,7 +16,7 @@ from prompt_toolkit.data_structures import Size
 from test_strip_draws import CHROME, a_client, a_dump
 
 from pymux.divided import Divided
-from pymux.layout import the_layout_of, the_pane_beside, the_plan_of
+from pymux.layout import layout_of, pane_beside, plan_of
 from pymux.plane import Side
 from pymux.strip import Strip
 from pymux.zoomed import Zoomed
@@ -38,10 +38,10 @@ def test_zoom_wraps_the_layout_and_keeps_it():
     with a_client(CHROME) as (pymux, draw):
         window, _first, _second = two_panes(pymux)
 
-        assert isinstance(the_layout_of(pymux, window), Divided)
+        assert isinstance(layout_of(pymux, window), Divided)
 
         window.zoom = True
-        layout = the_layout_of(pymux, window)
+        layout = layout_of(pymux, window)
 
         assert isinstance(layout, Zoomed)
         assert isinstance(layout.inner, Divided)
@@ -56,7 +56,7 @@ def test_a_zoomed_strip_is_still_a_strip_underneath():
         window, _first, _second = two_panes(pymux)
         window.zoom = True
 
-        layout = the_layout_of(pymux, window)
+        layout = layout_of(pymux, window)
 
         assert isinstance(layout, Zoomed)
         assert isinstance(layout.inner, Strip)
@@ -67,7 +67,7 @@ def test_the_zoomed_pane_is_the_whole_window():
         window, _first, second = two_panes(pymux)
         window.zoom = True
 
-        plan = the_plan_of(pymux, window)
+        plan = plan_of(pymux, window)
 
         assert len(plan.rects) == 1
         assert plan.rect_of(second) == plan.plane
@@ -82,7 +82,7 @@ def test_nothing_is_beside_a_zoomed_pane():
         window.zoom = True
 
         for side in Side:
-            assert the_pane_beside(pymux, window, second, side) is None
+            assert pane_beside(pymux, window, second, side) is None
 
 
 def test_only_the_zoomed_pane_is_drawn():
@@ -140,9 +140,9 @@ def test_a_zoomed_stack_pays_for_no_bar_below():
     with a_client(CHROME) as (pymux, draw):
         window, _first, _second = two_panes(pymux, "split-window -v")
 
-        stacked = the_plan_of(pymux, window).plane.height
+        stacked = plan_of(pymux, window).plane.height
         window.zoom = True
-        zoomed = the_plan_of(pymux, window).plane.height
+        zoomed = plan_of(pymux, window).plane.height
 
         assert zoomed == stacked + 1
 
@@ -151,12 +151,12 @@ def test_the_window_comes_back_the_way_it_was_left():
     "Unzooming is dropping the wrapper, and nothing under it moved."
     with a_client(STRIP) as (pymux, draw):
         window, first, second = two_panes(pymux)
-        before = the_plan_of(pymux, window)
+        before = plan_of(pymux, window)
 
         window.zoom = True
-        the_plan_of(pymux, window)
+        plan_of(pymux, window)
         window.zoom = False
-        after = the_plan_of(pymux, window)
+        after = plan_of(pymux, window)
 
         assert [after.rect_of(pane) for pane in (first, second)] == [
             before.rect_of(pane) for pane in (first, second)
@@ -169,7 +169,7 @@ def test_a_zoomed_window_of_one_pane_is_that_pane():
         window = pymux.arrangement.get_active_window()
         window.zoom = True
 
-        plan = the_plan_of(pymux, window)
+        plan = plan_of(pymux, window)
 
         assert len(plan.rects) == 1
         assert plan.plane == plan.rect_of(window.active_pane)
@@ -181,7 +181,7 @@ def test_the_layout_measures_what_it_is_given():
         window, _first, second = two_panes(pymux)
         window.zoom = True
 
-        plan = the_layout_of(pymux, window).measure(Size(rows=7, columns=13))
+        plan = layout_of(pymux, window).measure(Size(rows=7, columns=13))
 
         assert plan.rect_of(second).width == 13
         assert plan.rect_of(second).height == 7

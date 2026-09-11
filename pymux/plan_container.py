@@ -24,7 +24,7 @@ Lillecarl/pymux#224.
 see it is cut. That is the one case where what they see is not what
 the program wrote, and the cells say nothing about it on their own.
 The tint is not here: `View.cuts` is the question, and the answer goes
-into the style of the pane itself (`layout.the_pane_is_cut`). Marking
+into the style of the pane itself (`layout.pane_is_cut`). Marking
 the cells afterwards cannot work, because the panes are drawn in a
 later pass of `Screen.draw_all_floats` than this method runs in.
 Lillecarl/pymux#222.

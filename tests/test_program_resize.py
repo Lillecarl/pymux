@@ -9,7 +9,7 @@ shorter, so a program only gets its way when the person allows it with
 """
 
 from pymux.arrangement import Arrangement, Pane
-from pymux.layout import the_plan_of
+from pymux.layout import plan_of
 from pymux.main import Pymux
 
 
@@ -61,10 +61,10 @@ def _rows(pymux, window):
     **The cells are what a resize is about, and the weights are how it
     is written down.** A weight is a share of a split, so a delta means
     nothing until the weights say what each pane measures now; the
-    layout writes that first (`the_weights_become_the_cells`) and this
+    layout writes that first (`write_sizes_into_weights`) and this
     reads what came out. Lillecarl/pymux#217.
     """
-    plan = the_plan_of(pymux, window)
+    plan = plan_of(pymux, window)
     return [plan.rect_of(pane).height for pane in window.panes]
 
 

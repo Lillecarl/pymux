@@ -19,7 +19,7 @@ pane**. An offset that is not shared is a real disagreement.
 from prompt_toolkit.data_structures import Size
 from test_strip_draws import CHROME, a_client
 
-from pymux.layout import the_plan_of
+from pymux.layout import plan_of
 
 #: Wide enough for two columns of half a window, so a third runs past
 #: the edge and the strip has something to scroll.
@@ -71,7 +71,7 @@ def the_offsets(pymux, plan):
 
 def the_plan(pymux):
     window = pymux.arrangement.get_active_window()
-    return the_plan_of(pymux, window)
+    return plan_of(pymux, window)
 
 
 def test_the_plan_puts_the_columns_where_the_frame_does():

@@ -45,7 +45,7 @@ from .graphics import PaneView
 from . import introspect
 from .key_bindings import PymuxKeyBindings
 from .key_spelling import why_a_pane_cannot_read
-from .layout import Justify, LayoutManager, the_pane_resizes
+from .layout import Justify, LayoutManager, change_pane_size
 from . import log
 from .log import logger
 from .notifications import NotificationRoutes
@@ -903,7 +903,7 @@ class Pymux:
 
         The status line comes off the bottom of a client's terminal,
         because it is not part of any window.
-        `layout.the_room_for_the_panes` takes the rows the chrome
+        `layout.room_for_the_panes` takes the rows the chrome
         around the panes wants off what is left. **A manual size is
         already the window's own**, so nothing comes off it.
 
@@ -1331,9 +1331,9 @@ class Pymux:
 
             process = pane.process
             if lines is not None and process.sy:
-                the_pane_resizes(self, window, pane, down=lines - process.sy)
+                change_pane_size(self, window, pane, down=lines - process.sy)
             if columns is not None and process.sx:
-                the_pane_resizes(self, window, pane, right=columns - process.sx)
+                change_pane_size(self, window, pane, right=columns - process.sx)
 
             self.invalidate(Woke.A_PANE_RESIZED)
         except Exception:

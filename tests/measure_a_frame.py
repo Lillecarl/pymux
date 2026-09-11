@@ -30,7 +30,7 @@ Four numbers per shape:
   my left, right, above and below -- for every pane of the window.
   **This is the number to watch.** A bar is drawn for every pane on
   every frame, so this is paid as often as the frame is, and each
-  question goes through `the_plan_of`.
+  question goes through `plan_of`.
 
 And one count that is not a cost:
 
@@ -92,9 +92,9 @@ from prompt_toolkit.output import DummyOutput  # noqa: E402
 from pymux.arrangement import Pane, Window as ArrangementWindow  # noqa: E402
 from pymux.divided import Divided  # noqa: E402
 from pymux.layout import (  # noqa: E402
-    the_layout_of,
-    the_pane_beside,
-    the_room_for_the_panes,
+    layout_of,
+    pane_beside,
+    room_for_the_panes,
 )
 from pymux.plan_container import PlanContainer  # noqa: E402
 from pymux.plane import Side  # noqa: E402
@@ -126,7 +126,7 @@ class _Terminal:
 
 class _Manager:
     """
-    What `the_plan_of` asks a client's layout manager, and no more.
+    What `plan_of` asks a client's layout manager, and no more.
 
     The real one is `layout.LayoutManager`, and these three methods are
     the same three: the container that drew the frame, and the plan of
@@ -140,10 +140,10 @@ class _Manager:
         self._container = container
         self._plan_of_the_frame = None
 
-    def the_pane_container(self):
+    def pane_container(self):
         return self._container
 
-    def the_plan_of_this_frame(self, window, size):
+    def plan_of_this_frame(self, window, size):
         if self._plan_of_the_frame is None:
             return None
 
@@ -190,7 +190,7 @@ class _Pymux:
     def get_client_state(self):
         if self.state is None:
             # What a real server says when nothing is attached, and
-            # what `the_plan_of` catches.
+            # what `plan_of` catches.
             raise ValueError("no client is attached")
         return self.state
 
@@ -220,7 +220,7 @@ def a_window(count: int, strip: bool = False):
 def a_container(pymux, window, panes):
     "The container that draws this window, with an empty pane in each."
     return PlanContainer(
-        the_layout_of(pymux, window), {pane: Window() for pane in panes}
+        layout_of(pymux, window), {pane: Window() for pane in panes}
     )
 
 
@@ -266,7 +266,7 @@ def the_neighbours(pymux, window, panes):
     def work():
         for pane in panes:
             for side in Side:
-                the_pane_beside(pymux, window, pane, side)
+                pane_beside(pymux, window, pane, side)
 
     return work
 
@@ -277,7 +277,7 @@ def counted_plans():
     Count how many plans are measured inside this block.
 
     Every layout is patched, because the question is how many plans a
-    frame builds and not which class built them. `the_pane_beside`
+    frame builds and not which class built them. `pane_beside`
     builds one of its own for each question it answers, so this is
     where work done twice shows up.
     """
@@ -327,8 +327,8 @@ def measurements(include: str):
         for what, strip in (("divided", False), ("strip", True)):
             shape = "%s %d panes" % (what, count)
             window, panes = a_window(count, strip)
-            room = the_room_for_the_panes(pymux, window)
-            layout = the_layout_of(pymux, window)
+            room = room_for_the_panes(pymux, window)
+            layout = layout_of(pymux, window)
             plan = layout.measure(room)
 
             container = a_container(pymux, window, panes)
@@ -350,7 +350,7 @@ def measurements(include: str):
     # wrapper costs nothing.
     window, panes = a_window(max(COUNTS))
     window.zoom = True
-    room = the_room_for_the_panes(pymux, window)
+    room = room_for_the_panes(pymux, window)
     take(
         "zoomed %d panes (frame)" % max(COUNTS),
         a_frame(a_container(pymux, window, panes), room),
@@ -378,7 +378,7 @@ def plans_of_a_frame(pymux, include: str):
 
             window, panes = a_window(count, strip)
             container = a_container(pymux, window, panes)
-            room = the_room_for_the_panes(pymux, window)
+            room = room_for_the_panes(pymux, window)
             pymux.state = _ClientState(container)
 
             try:

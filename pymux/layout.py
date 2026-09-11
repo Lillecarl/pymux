@@ -110,7 +110,7 @@ BELOW_MARK = "▾"
 #: which costs arithmetic on every cell of the column on every frame:
 #: marking them by hand came to 14,620 bytecode instructions a frame,
 #: 43% on top of the frame it marked. Lillecarl/pymux#222.
-THE_CUT_IS_TINTED = "class:cut"
+CUT_IS_TINTED = "class:cut"
 
 #: What `clock-mode` draws inside a pane, as text. `BigClock` paints the
 #: hour and the minute in big numbers, and nothing else of it moves.
@@ -606,7 +606,7 @@ class LayoutManager:
         return pane_write_positions(screen)
 
     @property
-    def the_room_this_client_has(self) -> Size:
+    def room_this_client_has(self) -> Size:
         """
         How much of this client's own terminal a window may use.
 
@@ -622,7 +622,7 @@ class LayoutManager:
         rows = size.rows - (1 if self.pymux.show_status else 0)
         return Size(rows=max(1, rows), columns=size.columns)
 
-    def the_room_for_the_body(self) -> Size:
+    def room_for_the_body(self) -> Size:
         """
         How big the part of the screen that holds the windows is.
 
@@ -633,14 +633,14 @@ class LayoutManager:
         which is what `window-size largest` is for.
         """
         plane = self.pymux.the_size_of_the_plane()
-        mine = self.the_room_this_client_has
+        mine = self.room_this_client_has
 
         return Size(
             rows=min(plane.rows, mine.rows),
             columns=min(plane.columns, mine.columns),
         )
 
-    def the_pane_container(self) -> "PlanContainer | None":
+    def pane_container(self) -> "PlanContainer | None":
         """
         The container that drew the panes of the window this client
         shows, or `None` before it has built one.
@@ -648,9 +648,9 @@ class LayoutManager:
         It holds the plan of the frame it drew, which is what a title
         bar reads instead of measuring the window again.
         """
-        return self._body.the_panes()
+        return self._body.panes()
 
-    def the_plan_of_this_frame(self, window, size: Size) -> "Plan | None":
+    def plan_of_this_frame(self, window, size: Size) -> "Plan | None":
         """
         The plan already worked out for this window, this frame.
 
@@ -940,10 +940,10 @@ class LayoutManager:
         if self._palette is not None:
             return self._palette
 
-        self._palette = self._a_box(lambda: " Command ", self._command_line_window())
+        self._palette = self._box(lambda: " Command ", self._command_line_window())
         return self._palette
 
-    def _a_box(self, title, window: Container) -> Container:
+    def _box(self, title, window: Container) -> Container:
         """
         A box in the middle of the screen: a title, a line to type in,
         and the completions filling what is left.
@@ -986,7 +986,7 @@ class LayoutManager:
         if self._key_prompt is not None:
             return self._key_prompt
 
-        self._key_prompt = self._a_box(
+        self._key_prompt = self._box(
             lambda: " %s " % (self.client_state.prompt_text or "Key",),
             self._prompt_window(),
         )
@@ -1001,7 +1001,7 @@ class LayoutManager:
         starts `BOX_TOP` rows down and holds a title and the input, so
         what is left is what the completions may take.
         """
-        rows = self.the_room_this_client_has.rows
+        rows = self.room_this_client_has.rows
         return max(1, rows - BOX_TOP - PALETTE_HEADER)
 
     def _palette_completions(self) -> Container:
@@ -1051,8 +1051,8 @@ class LayoutManager:
                         Background(),
                         floats=[
                             Float(
-                                width=lambda: self.the_room_for_the_body().columns,
-                                height=lambda: self.the_room_for_the_body().rows,
+                                width=lambda: self.room_for_the_body().columns,
+                                height=lambda: self.room_for_the_body().rows,
                                 content=self._body,
                             )
                         ],
@@ -1206,11 +1206,11 @@ class LayoutManager:
                     ),
                     width=lambda: overlay_size(
                         self.pymux.overlay_width,
-                        self.the_room_this_client_has.columns,
+                        self.room_this_client_has.columns,
                     ),
                     height=lambda: overlay_size(
                         self.pymux.overlay_height,
-                        self.the_room_this_client_has.rows,
+                        self.room_this_client_has.rows,
                     ),
                     z_index=Z_INDEX.OVERLAY,
                 ),
@@ -1296,7 +1296,7 @@ class DynamicBody(Container):
         self._bodies_for_app[app] = (new_hash, new_layout)
         return new_layout
 
-    def the_panes(self) -> "PlanContainer | None":
+    def panes(self) -> "PlanContainer | None":
         """
         The container that draws the panes of this client's window.
 
@@ -1312,7 +1312,7 @@ class DynamicBody(Container):
         self._get_body()
         return self._panes_for_app.get(get_app())
 
-    def the_view_of(self, window) -> View:
+    def view_of(self, window) -> View:
         """
         Where this client looks at that window's plane.
 
@@ -1341,7 +1341,7 @@ class DynamicBody(Container):
         # layout that wraps another and shows one pane of it, so a
         # zoomed pane keeps the row its title bar hangs in and a zoomed
         # strip is still a strip. Lillecarl/pymux#215.
-        panes = _create_the_panes(self.pymux, window, self.the_view_of(window))
+        panes = _create_the_panes(self.pymux, window, self.view_of(window))
         self._panes_for_app[get_app()] = panes
 
         return HSplit(
@@ -1359,7 +1359,7 @@ class DynamicBody(Container):
                 ConditionalContainer(
                     content=Window(height=1),
                     filter=Condition(
-                        lambda: _the_bar_below_is_drawn(self.pymux, window)
+                        lambda: _bar_below_is_drawn(self.pymux, window)
                     ),
                 ),
             ]
@@ -1428,11 +1428,11 @@ def _create_the_panes(pymux: "Pymux", window, view: View) -> Container:
     }
 
     return PlanContainer(
-        the_layout_of(pymux, window),
+        layout_of(pymux, window),
         containers,
         _tell_the_pane_its_size,
         view=view,
-        room=partial(the_room_for_the_panes, pymux, window),
+        room=partial(room_for_the_panes, pymux, window),
     )
 
 
@@ -1451,7 +1451,7 @@ def _tell_the_pane_its_size(pane: arrangement.Pane, rect) -> None:
     pane.terminal.set_size(rect.width, rect.height)
 
 
-def the_layout_of(pymux: "Pymux", window):
+def layout_of(pymux: "Pymux", window):
     """
     What says where the panes of this window are.
 
@@ -1475,7 +1475,7 @@ def the_layout_of(pymux: "Pymux", window):
     when it is not, and an option turns that on while the layout built
     here is still standing.
     """
-    gaps = partial(the_gaps_of, pymux, window)
+    gaps = partial(gaps_of, pymux, window)
     inner = Strip(window, gaps) if window.strip else Divided(window, gaps)
 
     if window.zoom and window.active_pane is not None:
@@ -1483,7 +1483,7 @@ def the_layout_of(pymux: "Pymux", window):
     return inner
 
 
-def _the_bar_below_is_drawn(pymux: "Pymux", window) -> bool:
+def _bar_below_is_drawn(pymux: "Pymux", window) -> bool:
     """
     Whether every pane of this window keeps a row under it.
 
@@ -1503,7 +1503,7 @@ def _the_bar_below_is_drawn(pymux: "Pymux", window) -> bool:
     return pymux.show_pane_status and not window.zoom and window.has_a_stack()
 
 
-def the_gaps_of(pymux: "Pymux", window) -> Gaps:
+def gaps_of(pymux: "Pymux", window) -> Gaps:
     """
     The cells this window leaves between the things in it.
 
@@ -1514,11 +1514,11 @@ def the_gaps_of(pymux: "Pymux", window) -> Gaps:
     """
     return Gaps(
         between_columns=BORDER_WIDTH,
-        between_panes=2 if _the_bar_below_is_drawn(pymux, window) else 1,
+        between_panes=2 if _bar_below_is_drawn(pymux, window) else 1,
     )
 
 
-def the_room_for_the_panes(pymux: "Pymux", window) -> Size:
+def room_for_the_panes(pymux: "Pymux", window) -> Size:
     """
     How much of the plane the panes get.
 
@@ -1536,13 +1536,13 @@ def the_room_for_the_panes(pymux: "Pymux", window) -> Size:
     rows = size.rows
     if pymux.show_pane_status:
         rows -= 1
-    if _the_bar_below_is_drawn(pymux, window):
+    if _bar_below_is_drawn(pymux, window):
         rows -= 1
 
     return Size(rows=max(1, rows), columns=size.columns)
 
 
-def the_plan_of(pymux: "Pymux", window) -> Plan:
+def plan_of(pymux: "Pymux", window) -> Plan:
     """
     Where the panes of this window are, in cells.
 
@@ -1560,28 +1560,28 @@ def the_plan_of(pymux: "Pymux", window) -> Plan:
     property slice 2 of Lillecarl/pymux#217 added, and it is held by
     `test_a_key_moves_the_focus_before_anything_is_drawn`.
     """
-    size = the_room_for_the_panes(pymux, window)
+    size = room_for_the_panes(pymux, window)
 
     try:
         manager = pymux.get_client_state().layout_manager
     except ValueError:
         # No client, so no frame and nowhere to keep an answer. A
         # command from the command line runs on a client like that.
-        return the_layout_of(pymux, window).measure(size)
+        return layout_of(pymux, window).measure(size)
 
-    known = manager.the_plan_of_this_frame(window, size)
+    known = manager.plan_of_this_frame(window, size)
     if known is not None:
         return known
 
-    plan = _the_plan_of_the_frame(manager, window, size)
+    plan = _plan_of_the_frame(manager, window, size)
     if plan is None:
-        plan = the_layout_of(pymux, window).measure(size)
+        plan = layout_of(pymux, window).measure(size)
 
     manager.remember_the_plan(window, size, plan)
     return plan
 
 
-def the_pane_is_cut(pymux: "Pymux", pane: arrangement.Pane) -> bool:
+def pane_is_cut(pymux: "Pymux", pane: arrangement.Pane) -> bool:
     """
     Whether this pane runs off the edge of the view this client has.
 
@@ -1602,7 +1602,7 @@ def the_pane_is_cut(pymux: "Pymux", pane: arrangement.Pane) -> bool:
     except ValueError:
         return False
 
-    container = manager.the_pane_container()
+    container = manager.pane_container()
     if container is None or container.plan is None:
         return False
 
@@ -1614,7 +1614,7 @@ def the_pane_is_cut(pymux: "Pymux", pane: arrangement.Pane) -> bool:
     return container.view.cuts(rect)
 
 
-def _the_plan_of_the_frame(manager, window, size: Size) -> "Plan | None":
+def _plan_of_the_frame(manager, window, size: Size) -> "Plan | None":
     """
     The plan the container of this frame measured, when it is still the
     answer.
@@ -1634,7 +1634,7 @@ def _the_plan_of_the_frame(manager, window, size: Size) -> "Plan | None":
       opening, closing or zooming falls through to a fresh
       measurement.
     """
-    container = manager.the_pane_container()
+    container = manager.pane_container()
     if container is None or container.measured_for != size:
         return None
 
@@ -1644,7 +1644,7 @@ def _the_plan_of_the_frame(manager, window, size: Size) -> "Plan | None":
     return container.plan
 
 
-def the_weights_become_the_cells(pymux: "Pymux", window) -> None:
+def write_sizes_into_weights(pymux: "Pymux", window) -> None:
     """
     Write the size each thing has now into the weight that decides it.
 
@@ -1664,7 +1664,7 @@ def the_weights_become_the_cells(pymux: "Pymux", window) -> None:
     keeps absolute cells and moves them by a delta, so its rounding
     drifts over repeated resizes.
     """
-    plan = the_plan_of(pymux, window)
+    plan = plan_of(pymux, window)
 
     for split in window.splits:
         sideways = isinstance(split, arrangement.VSplit)
@@ -1678,7 +1678,7 @@ def the_weights_become_the_cells(pymux: "Pymux", window) -> None:
             split.weights[child] = box.width if sideways else box.height
 
 
-def the_pane_resizes(
+def change_pane_size(
     pymux: "Pymux", window, pane: arrangement.Pane, up=0, right=0, down=0, left=0
 ) -> None:
     """
@@ -1689,11 +1689,11 @@ def the_pane_resizes(
     before a delta means anything. `resize-pane` and a program asking
     for a size both come through here.
     """
-    the_weights_become_the_cells(pymux, window)
+    write_sizes_into_weights(pymux, window)
     window.change_size_for_pane(pane, up=up, right=right, down=down, left=left)
 
 
-def the_pane_beside(
+def pane_beside(
     pymux: "Pymux", window, pane: arrangement.Pane, side: Side
 ) -> "arrangement.Pane | None":
     """
@@ -1716,7 +1716,7 @@ def the_pane_beside(
     if window.zoom:
         return None
 
-    plan = the_plan_of(pymux, window)
+    plan = plan_of(pymux, window)
 
     try:
         slot = plan.slot_of(pane)
@@ -1777,10 +1777,10 @@ def _create_container_for_process(
         else:
             result = "class:terminal"
 
-        if the_pane_is_cut(pymux, arrangement_pane):
+        if pane_is_cut(pymux, arrangement_pane):
             # A pane that runs off the edge of the view is tinted, so
             # that a person can see it is cut. Lillecarl/pymux#222.
-            result += " " + THE_CUT_IS_TINTED
+            result += " " + CUT_IS_TINTED
 
         return result
 
@@ -1825,14 +1825,14 @@ def _create_container_for_process(
 
         return "%3s " % index
 
-    def a_neighbour(on_the_left: bool) -> StyleAndTextTuples:
+    def neighbour(on_the_left: bool) -> StyleAndTextTuples:
         """
         The name of the pane on one side of this one.
 
         Nothing when there is none. A zoomed pane covers the window,
-        so nothing is beside it either, and `the_pane_beside` says so.
+        so nothing is beside it either, and `pane_beside` says so.
         """
-        pane = the_pane_beside(
+        pane = pane_beside(
             pymux,
             window,
             arrangement_pane,
@@ -1857,10 +1857,10 @@ def _create_container_for_process(
         return [("class:paneindex", get_pane_index())]
 
     def get_the_left_of_the_bar() -> StyleAndTextTuples:
-        return a_neighbour(on_the_left=True)
+        return neighbour(on_the_left=True)
 
     def get_the_right_of_the_bar() -> StyleAndTextTuples:
-        return a_neighbour(on_the_left=False)
+        return neighbour(on_the_left=False)
 
     def get_the_bar_below() -> StyleAndTextTuples:
         """
@@ -1873,8 +1873,8 @@ def _create_container_for_process(
         point the way they mean, and one gap between them.
         Lillecarl/pymux#211.
         """
-        above = the_pane_beside(pymux, window, arrangement_pane, Side.ABOVE)
-        below = the_pane_beside(pymux, window, arrangement_pane, Side.BELOW)
+        above = pane_beside(pymux, window, arrangement_pane, Side.ABOVE)
+        below = pane_beside(pymux, window, arrangement_pane, Side.BELOW)
         result: StyleAndTextTuples = []
 
         if above is not None:
@@ -2169,6 +2169,6 @@ def _move_focus(pymux: "Pymux", side: Side) -> None:
     if window.active_pane is None:
         return
 
-    beside = the_pane_beside(pymux, window, window.active_pane, side)
+    beside = pane_beside(pymux, window, window.active_pane, side)
     if beside is not None:
         window.active_pane = beside

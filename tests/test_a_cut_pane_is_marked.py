@@ -44,7 +44,7 @@ from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
 from session import Connection
-from pymux.layout import THE_CUT_IS_TINTED
+from pymux.layout import CUT_IS_TINTED
 from pymux.main import Pymux
 from pymux.plan_container import PlanContainer
 
@@ -95,7 +95,7 @@ def a_client(commands=(), rows=ROWS, columns=COLUMNS):
                         process.kill()
 
 
-def the_panes(state) -> PlanContainer:
+def panes_of(state) -> PlanContainer:
     found = []
 
     def walk(container):
@@ -117,7 +117,7 @@ def marked(screen, row: int) -> str:
     not, so a row reads as a picture.
     """
     return "".join(
-        "#" if THE_CUT_IS_TINTED in screen.data_buffer[row][x].style else " "
+        "#" if CUT_IS_TINTED in screen.data_buffer[row][x].style else " "
         for x in range(COLUMNS)
     )
 
@@ -153,7 +153,7 @@ def test_the_column_that_runs_off_the_edge_is_marked():
         a_wide_column(pymux, state)
         screen = draw()
 
-        panes = the_panes(state)
+        panes = panes_of(state)
         left, right = pymux.arrangement.get_active_window().panes
         cut = panes.plan.rect_of(right)
 
@@ -182,13 +182,13 @@ def test_the_tint_sits_before_what_the_pane_wrote():
         a_wide_column(pymux, state)
         screen = draw()
 
-        cut = the_panes(state).plan.rect_of(
+        cut = panes_of(state).plan.rect_of(
             pymux.arrangement.get_active_window().panes[1]
         )
         style = screen.data_buffer[ROWS // 2][cut.x].style
 
-        assert THE_CUT_IS_TINTED in style
+        assert CUT_IS_TINTED in style
         # The pane's own class is still there, and the tint is beside
         # it rather than on top of it.
         assert "class:terminal" in style
-        assert style.index("class:terminal") < style.index(THE_CUT_IS_TINTED)
+        assert style.index("class:terminal") < style.index(CUT_IS_TINTED)

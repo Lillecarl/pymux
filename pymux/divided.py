@@ -13,7 +13,7 @@ time. tmux keeps absolute cells and moves them by a delta on every
 resize (`layout_resize_adjust`), so its rounding drifts; ours cannot,
 because nothing but a resize command ever writes a weight. The price is
 that `resize-pane +1` has to say what size it wants rather than nudge a
-number, and `layout.the_weights_of` is where that is paid.
+    number, and `layout.write_sizes_into_weights` is where that is paid.
 
 **A divided layout fills the plane exactly**, so a view as big as the
 plane sees all of it and never scrolls. That is the whole difference
