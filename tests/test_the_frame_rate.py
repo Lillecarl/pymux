@@ -19,7 +19,7 @@ from prompt_toolkit.application.current import set_app
 from pymux.arrangement import DEFAULT_FRAME_RATE
 from pymux.main import Pymux
 from pymux.options import ALL_WINDOW_OPTIONS, SetOptionError
-from test_command_mode import a_session, in_a_loop
+from a_session import a_session, in_a_loop
 
 A_PANE = "%s -c pass" % (sys.executable,)
 

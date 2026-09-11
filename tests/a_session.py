@@ -264,7 +264,7 @@ async def a_session(pymux=None, window=NOTHING):
     wants to type, run a command or hold two clients uses
     `in_this_process` instead.
     """
-    async with in_this_process(pymux) as session:
+    with in_this_process(pymux) as session:
         if window is not None:
             session.pymux.create_window(window)
         state, _size = await session.attach("the client", A_SIZE)

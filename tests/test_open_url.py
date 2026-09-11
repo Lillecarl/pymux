@@ -18,13 +18,12 @@ import webbrowser
 
 import pytest
 
-from a_session import once, over_a_connection, in_this_process
+from a_session import in_a_loop, once, over_a_connection, in_this_process
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from pymux.client.terminal import TerminalClient
 from pymux.osc import open_url_of
 from pymux.options import ALL_OPTIONS, SetOptionError
-from test_command_mode import in_a_loop
 
 URL = "https://example.com/auth"
 

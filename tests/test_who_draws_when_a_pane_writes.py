@@ -27,10 +27,9 @@ if somebody takes the wake away rather than narrowing it.
 import asyncio
 import sys
 
-from a_session import over_a_connection
+from a_session import in_a_loop, over_a_connection
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
-from test_command_mode import in_a_loop
 
 #: A pane that is still there when the test looks at it. A program that
 #: exits takes its pane, and then its window, with it.

@@ -10,78 +10,12 @@ its own key bindings gets the grey text and no way to accept it.
 Lillecarl/pymux#163.
 """
 
-import asyncio
-import functools
-import io
-import sys
-from contextlib import asynccontextmanager
-
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.auto_suggest import Suggestion
-from prompt_toolkit.data_structures import Size
 from prompt_toolkit.key_binding.key_processor import KeyPress
 from prompt_toolkit.keys import Keys
-from prompt_toolkit.output import ColorDepth
-from prompt_toolkit.input import create_pipe_input
-from prompt_toolkit.output.vt100 import Vt100_Output
 
-from pymux.main import Pymux
-
-ROWS, COLUMNS = 24, 80
-
-
-class _Connection:
-    """
-    What `Pymux` asks a connection for.
-
-    A key press invalidates, and an invalidate tells every connection
-    about the pointer and the keyboard, so this stub needs more than
-    the ones in the tests that press no key.
-    """
-
-    kitty_source_flags = 0
-    pointer_shape = None
-    graphics = None
-
-    def set_pointer_shape(self, shape):
-        pass
-
-    def _send_packet(self, packet):
-        pass
-
-
-def in_a_loop(test):
-    "pymux carries no anyio, so pytest here runs no coroutine test."
-
-    @functools.wraps(test)
-    def run():
-        asyncio.run(test())
-
-    return run
-
-
-@asynccontextmanager
-async def a_session():
-    pymux = Pymux()
-    pymux.create_window("%s -c pass" % (sys.executable,))
-    output = Vt100_Output(
-        stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS)
-    )
-    with create_pipe_input() as pipe:
-        state = pymux.add_client(
-            output=output,
-            input=pipe,
-            color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=_Connection(),
-        )
-        try:
-            yield pymux, state
-        finally:
-            for window in list(pymux.arrangement.windows):
-                for pane in list(window.panes):
-                    process = getattr(pane, "process", None)
-                    if process is not None and not process.is_terminated:
-                        process.kill()
+from a_session import a_session, in_a_loop
 
 
 def press(state, key):

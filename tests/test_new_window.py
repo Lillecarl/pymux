@@ -18,48 +18,11 @@ answered with the first window.
 Lillecarl/pymux#191.
 """
 
-import asyncio
-import functools
-import io
-import sys
 from contextlib import asynccontextmanager
 
 from prompt_toolkit.application.current import set_app
-from prompt_toolkit.data_structures import Size
-from prompt_toolkit.input import create_pipe_input
-from prompt_toolkit.output import ColorDepth
-from prompt_toolkit.output.vt100 import Vt100_Output
 
-from pymux.main import Pymux
-
-ROWS, COLUMNS = 24, 80
-
-#: A pane that ends at once and holds a real screen while it lives.
-NOTHING = "%s -c pass" % (sys.executable,)
-
-
-class _Connection:
-    "What `Pymux` asks a connection for, and nothing else."
-
-    kitty_source_flags = 0
-    pointer_shape = None
-    graphics = None
-
-    def set_pointer_shape(self, shape):
-        pass
-
-    def _send_packet(self, packet):
-        pass
-
-
-def in_a_loop(test):
-    "pymux carries no anyio, so pytest here runs no coroutine test."
-
-    @functools.wraps(test)
-    def run():
-        asyncio.run(test())
-
-    return run
+from a_session import A_SIZE, NOTHING, in_a_loop, in_this_process
 
 
 @asynccontextmanager
@@ -68,39 +31,24 @@ async def a_session(*indexes):
     A server whose windows carry these indexes, active on the last.
 
     The windows are made and then numbered, because making one at an
-    index is the thing under test and a fixture may not use it.
+    index is the thing under test and a fixture may not use it. It
+    counts rather than creates one of its own first: the real server
+    gives its first client a window at startup, and a fixture that
+    made one too would have one more than it asked for.
     """
-    pymux = Pymux()
-    output = Vt100_Output(
-        stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS)
-    )
-    with create_pipe_input() as pipe:
-        state = pymux.add_client(
-            output=output,
-            input=pipe,
-            color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=_Connection(),
-        )
-        try:
-            with set_app(state.app):
-                # **It counts rather than creates.** A client attaching
-                # to a server with no window is given one, so a fixture
-                # that made one of its own would have two.
-                while len(pymux.arrangement.windows) < len(indexes):
-                    pymux.create_window(NOTHING)
-                assert len(pymux.arrangement.windows) == len(indexes)
+    with in_this_process() as session:
+        pymux = session.pymux
+        state, _ = await session.attach("the client", A_SIZE)
+        with set_app(state.app):
+            while len(pymux.arrangement.windows) < len(indexes):
+                pymux.create_window(NOTHING)
+            assert len(pymux.arrangement.windows) == len(indexes)
 
-                for window, index in zip(pymux.arrangement.windows, indexes):
-                    window.index = index
-                pymux.arrangement.windows.sort(key=lambda w: w.index)
-                pymux.arrangement.set_active_window(pymux.arrangement.windows[-1])
-                yield pymux, state
-        finally:
-            for window in list(pymux.arrangement.windows):
-                for pane in list(window.panes):
-                    process = getattr(pane, "process", None)
-                    if process is not None and not process.is_terminated:
-                        process.kill()
+            for window, index in zip(pymux.arrangement.windows, indexes):
+                window.index = index
+            pymux.arrangement.windows.sort(key=lambda w: w.index)
+            pymux.arrangement.set_active_window(pymux.arrangement.windows[-1])
+            yield pymux, state
 
 
 def indexes(pymux):

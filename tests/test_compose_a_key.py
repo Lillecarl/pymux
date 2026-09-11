@@ -18,79 +18,14 @@ is which container the layout would draw, which is the filter of each
 float, and what reaches the pane when the answer is accepted.
 """
 
-import asyncio
-import functools
-import io
-import sys
-from contextlib import asynccontextmanager
-
 import pytest
 from prompt_toolkit.application.current import set_app
-from prompt_toolkit.data_structures import Size
 from prompt_toolkit.document import Document
-from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.layout.containers import ConditionalContainer, Float
-from prompt_toolkit.output import ColorDepth
-from prompt_toolkit.output.vt100 import Vt100_Output
 
+from a_session import a_session, in_a_loop
 from pymux.commands.commands import call_command_handler
 from pymux.key_spelling import THE_PREFIX, KeyCompleter
-from pymux.main import Pymux
-
-ROWS, COLUMNS = 24, 80
-
-
-class _Connection:
-    "What `Pymux` asks a connection for, and nothing else."
-
-    kitty_source_flags = 0
-    pointer_shape = None
-    graphics = None
-
-    def set_pointer_shape(self, *arguments, **named):
-        "Nothing here draws a pointer, and the failure fills the log."
-
-
-def in_a_loop(test):
-    """
-    Run this test in an event loop of its own.
-
-    Focusing the prompt starts a background task, and prompt_toolkit
-    asks the running loop for one. Lillecarl/pymux#87 is the move that
-    would remove this.
-    """
-
-    @functools.wraps(test)
-    def run(*arguments, **named):
-        asyncio.run(test(*arguments, **named))
-
-    return run
-
-
-@asynccontextmanager
-async def a_session():
-    "A server with one client and one window."
-    pymux = Pymux()
-    pymux.create_window("%s -c pass" % (sys.executable,))
-
-    output = Vt100_Output(
-        stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS)
-    )
-    with create_pipe_input() as pipe:
-        state = pymux.add_client(
-            output=output,
-            input=pipe,
-            color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=_Connection(),
-        )
-        try:
-            yield pymux, state
-        finally:
-            for window in list(pymux.arrangement.windows):
-                for pane in list(window.panes):
-                    process = getattr(pane, "process", None)
-                    if process is not None and not process.is_terminated:
-                        process.kill()
 
 
 def the_float_of(state, name: str) -> Float:

@@ -13,83 +13,14 @@ The tests are coroutines. Focusing the command line starts a background
 task, and prompt_toolkit asks the running loop for one.
 """
 
-import asyncio
-import functools
-import io
-import sys
-from contextlib import asynccontextmanager
-
 from prompt_toolkit.application.current import set_app
-from prompt_toolkit.data_structures import Size
 from prompt_toolkit.enums import EditingMode
-from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.key_binding.key_processor import _Flush, KeyPress
 from prompt_toolkit.keys import Keys
-from prompt_toolkit.output import ColorDepth
-from prompt_toolkit.output.vt100 import Vt100_Output
 
-from pymux.keys import KittyVt100Parser
-from pymux.main import Pymux
+from a_session import a_session, in_a_loop
 from pymux.options import ALL_OPTIONS
 from pyte.sequences import Csi, csi
-
-ROWS, COLUMNS = 24, 80
-
-
-class _Connection:
-    "What `Pymux` asks a connection for, and nothing else."
-
-    kitty_source_flags = 0
-    pointer_shape = None
-    graphics = None
-
-
-def in_a_loop(test):
-    """
-    Run this test in an event loop of its own.
-
-    pymux does not carry anyio and does not turn on `anyio_mode`, so
-    pytest here answers a coroutine test with "async def functions are
-    not natively supported". Lillecarl/pymux#87 is the move that would
-    make this decorator go away.
-    """
-
-    @functools.wraps(test)
-    def run():
-        asyncio.run(test())
-
-    return run
-
-
-@asynccontextmanager
-async def a_session():
-    "A server with one client and one window."
-    pymux = Pymux()
-    pymux.create_window("%s -c pass" % (sys.executable,))
-
-    output = Vt100_Output(
-        stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS)
-    )
-    with create_pipe_input() as pipe:
-        # The parser the server puts on a client's input. It is the one
-        # that reads the key encoding of the kitty keyboard protocol,
-        # so a test that feeds bytes has to have it. See
-        # `pymux.server._ClientInput`.
-        pipe.vt100_parser = KittyVt100Parser(pipe._buffer.append)
-        state = pymux.add_client(
-            output=output,
-            input=pipe,
-            color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=_Connection(),
-        )
-        try:
-            yield pymux, state
-        finally:
-            for window in list(pymux.arrangement.windows):
-                for pane in list(window.panes):
-                    process = getattr(pane, "process", None)
-                    if process is not None and not process.is_terminated:
-                        process.kill()
 
 
 def in_command_mode(state):

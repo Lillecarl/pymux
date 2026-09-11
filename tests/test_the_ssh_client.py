@@ -27,7 +27,8 @@ from pathlib import Path
 import pytest
 from pymux.client.ssh import SshClient, is_an_ssh_url, the_ssh_target
 from pymux.main import Pymux
-from test_command_mode import in_a_loop
+
+from a_session import in_a_loop
 
 A_PANE = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
 
