@@ -98,7 +98,9 @@ from pyterm_pytest.seats import (
     SEATS,
     SETTLE_TIMEOUT,
     _tail,
+    changed_region,
     differences,
+    fully_overlaps,
 )
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -252,25 +254,26 @@ FIXTURES = {
 # is what happens while something keeps drawing.
 
 
-#: Each one redraws the way an application with a spinner does, always
-#: writing the same cell, so the only thing that can differ between two
-#: pictures is the cursor.
+#: The fixture draws once and then holds the screen. The only thing
+#: that can change a pixel after that is the cursor. A redraw loop
+#: stood here once, for a burst taken on the clock, and it is gone by
+#: measurement: the compositor damages on every frame the terminal
+#: submits, whether a pixel differs or not, so the loop's rewrites
+#: spent the burst's frames on pictures of nothing -- a burst of eight
+#: covered eight tenths of a second and held one blink inside it.
 BLINK_FIXTURES = {
     "cursor-blink": (
         "printf '\\033[2J\\033[H'\n"
         "printf 'the cursor is after this: '\n"
-        "i=0\n"
-        "while [ $i -lt %d ]; do"
-        " printf '\\033[10;1Hx'; sleep 0.1; i=$((i+1)); done\n"
+        "printf '\\033[10;1Hx'\n"
         "sleep 5\n"
     ),
 }
 
 
 def blink_program(name):
-    "The program of one blink fixture, long enough to outlast the burst."
-    redraws = int((BLINK_START + BLINK_FRAMES * BLINK_GAP + 2) / 0.1)
-    return BLINK_FIXTURES[name] % redraws
+    "The program of one blink fixture."
+    return BLINK_FIXTURES[name]
 
 
 # ----------------------------------------------------------------------
@@ -457,11 +460,17 @@ def foot_argv(command, background="000000", foreground="ffffff"):
         # A cursor that never blinks cannot be measured. Every fixture
         # but the blink ones hides it, so this changes nothing for them.
         #
-        # A terminal stops blinking when its window loses focus, and a
-        # window on a headless display server never has any. So the
-        # cursor of an unfocused window is asked to stay as it is.
+        # A terminal stops blinking when its window loses focus. The
+        # seat's keyboard holder gives the window focus, but a blink
+        # that stops when the holder dies would still differ between
+        # the sides, so the cursor of an unfocused window is asked to
+        # stay as it is.
         "--override=cursor.blink=yes",
         "--override=cursor.unfocused-style=unchanged",
+        # The fence a fixture ends in is an OSC 52 write, and foot
+        # gates it behind this without the option. The focus itself is
+        # the holder's doing; the seat waits for it.
+        "--override=security.osc52=enabled",
         "--override=main.pad=0x0",
         "--override=scrollback.lines=0",
         "sh",
@@ -594,6 +603,13 @@ def write_the_program(path, fixture_path, payload):
         "stty -echo\n"
         "printf '\\033[2J\\033[H'\n"
         "cat %s\n"
+        # The wait before the fence: foot's window is focused when the
+        # compositor sends the keyboard enter, which is after the
+        # surface maps, and this shell starts before any of that. The
+        # escape foot sees while it is unfocused is refused, and the
+        # clipboard holds nothing. Measured: a fence without the wait
+        # never comes, one after a second always has.
+        "sleep 1\n"
         "printf '\\033]52;c;%s\\007'\n"
         "exec sleep %d\n" % (fixture_path, payload, HOLD)
     )
@@ -678,10 +694,9 @@ def compare_one(terminal, seat, name, work, out):
             room / "bare.log",
             # The terminal has the bytes when its clipboard holds the
             # token; a settle before that can settle on the screen from
-            # before them, both sides alike, agreeing on nothing. The
-            # wayland seat's reader is the piece Lillecarl/pymux#281
-            # still owes, so the pictures of foot and kitty settle the
-            # old way until it is here.
+            # before them, both sides alike, agreeing on nothing. Both
+            # seats read one now; the guard stays for a seat that
+            # cannot yet.
             not_before=token if seat.reads_the_fence else 0.0,
         )
         seat.picture_of(
@@ -709,15 +724,19 @@ def compare_one(terminal, seat, name, work, out):
 
 def blink_of(terminal, seat, name, work, out):
     """
-    Run one blink fixture both ways and say how often each side changed.
+    Run one blink fixture both ways and say how the cursor moved.
 
     The fixture writes the same cell over and over, so the only thing
-    that can differ between two pictures is the cursor. The number is
-    how many of the consecutive pairs differ: zero is a cursor that does
-    not blink, and anything above it is one that does.
+    that can differ between two pictures is the cursor. The frames
+    come from the seat's burst: a seat that hears the screen takes one
+    at every change, and one that cannot samples the clock. Either
+    way the answer is a run of changes between frames that stay the
+    same cell -- the cursor going and coming. Two in a row is a blink
+    out and back; one change alone says nothing, and zero says the
+    cursor held still.
 
-    What matters is that the two sides agree. A terminal that is set up
-    not to blink says zero twice, which is an answer and not a fault.
+    What matters is that the two sides agree. A terminal whose cursor
+    never blinks says zero twice, which is an answer and not a fault.
     """
     room = out / terminal.name / name
     room.mkdir(parents=True, exist_ok=True)
@@ -743,23 +762,33 @@ def blink_of(terminal, seat, name, work, out):
         ),
     ):
         try:
-            shots = seat.picture_of(
+            shots = seat.burst_frames(
                 terminal,
                 command,
                 work,
                 room / ("%s.png" % side),
                 room / ("%s.log" % side),
-                frames=BLINK_FRAMES,
+                BLINK_FRAMES,
             )
         except RuntimeError as reason:
             raise RuntimeError("%s\n%s" % (reason, every_log(room, seat))) from None
 
-        changed = sum(
-            1
-            for first, second in zip(shots, shots[1:])
-            if differences(first, second) != 0
-        )
-        answers.append(changed)
+        # A change counts when it is the cursor: the same cell, again
+        # and again. Anything else that moved makes its own box, and a
+        # run of boxes that do not hold one another is more than a
+        # cursor at work.
+        boxes = []
+        for number, (first, second) in enumerate(zip(shots, shots[1:])):
+            count, box = changed_region(
+                first, second, room / ("%s-diff-%d.png" % (side, number))
+            )
+            if box is not None:
+                boxes.append(box)
+        run = longest = 0
+        for first, second in zip(boxes, boxes[1:]):
+            run = run + 1 if fully_overlaps(first, second) else 0
+            longest = max(longest, run)
+        answers.append(longest)
 
     return tuple(answers)
 
@@ -857,8 +886,8 @@ def main():
                 )
                 blinks[(terminal.name, name)] = (bare, through)
                 print(
-                    "%s %s: %d of %d pictures changed bare, %d with pymux"
-                    % (terminal.name, name, bare, BLINK_FRAMES - 1, through),
+                    "%s %s: the cursor changed one cell %d times bare, "
+                    "%d with pymux" % (terminal.name, name, bare, through),
                     flush=True,
                 )
     finally:
@@ -882,25 +911,22 @@ def main():
                 % (key[0], key[1], found, expected)
             )
 
-    # A cursor has to behave the same in a pane as without one. The
-    # count itself is not judged: how often a terminal blinks in two
-    # seconds is the terminal's business, and one that does not blink at
-    # all says zero on both sides, which is an answer and not a fault.
+    # A cursor has to behave the same in a pane as without one. How
+    # often a terminal blinks is the terminal's business, and one that
+    # does not blink at all says zero on both sides, which is an
+    # answer and not a fault.
     for key, (bare, through) in sorted(blinks.items()):
-        if bare and not through:
+        if bare >= 2 and through < 2:
             wrong.append("%s %s: the cursor blinks bare and not in a pane" % key)
-        elif through and not bare:
+        elif through >= 2 and bare < 2:
             wrong.append("%s %s: the cursor blinks in a pane and not bare" % key)
 
     # "The same on both sides" is satisfied by a cursor that never
     # blinks anywhere, so on its own it would pass while measuring
-    # nothing. xterm and foot do exactly that here: neither blinks a
-    # cursor in a window with no focus, and a headless display server
-    # gives none.
-    #
-    # So one terminal has to blink, or the comparison above said
-    # nothing at all. kitty is the one that does.
-    if blinks and not any(bare for bare, _ in blinks.values()):
+    # nothing. One terminal has to blink, or the comparison above said
+    # nothing at all: kitty's cursor blinks on its own clock, and
+    # nothing here needs a window's focus to see it.
+    if blinks and not any(bare >= 2 for bare, _ in blinks.values()):
         wrong.append(
             "no terminal blinked a cursor, so nothing was compared. "
             "A blink fixture needs a terminal that blinks one: see "

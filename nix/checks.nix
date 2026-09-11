@@ -18,10 +18,12 @@
   prompt-toolkit,
   # The shared rig. The picture scripts borrow its seats.
   pyterm-pytest,
+  pywayland,
   # The reader of the clipboard fence: wl-paste on the compositor the
   # seat started, xclip on the X server it started.
   wl-clipboard,
   xclip,
+  waylandProtocols,
   argcomplete,
   pytest,
   hypothesis,
@@ -41,7 +43,12 @@
   xorg-server,
   xterm,
   xdotool,
-  cage,
+  # sway-unwrapped, not sway: the wrapper of the second falls back to
+  # dbus-run-session when it finds no session bus, and the sandbox has
+  # neither a bus nor the daemon's configuration. The seat runs no
+  # session anyway.
+  sway-unwrapped,
+  swaybg,
   foot,
   kitty,
   mesa,
@@ -94,6 +101,9 @@ let
     ptterm
     prompt-toolkit
     pyterm-pytest
+    # The wayland seat's keyboard holder runs under the python of the
+    # suite that starts it.
+    pywayland
     argcomplete
     hypothesis
     pytest
@@ -289,10 +299,13 @@ let
     xorg-server
     xterm
     xdotool
-    # The Wayland seat: a kiosk compositor that gives its one window the
-    # whole output, a terminal that speaks nothing else, and the tool that
-    # takes a picture of that output.
-    cage
+    # The Wayland seat: a compositor arranged to be a kiosk by its
+    # configuration, a terminal that speaks nothing else, and the tool
+    # that takes a picture of that output. sway replaced cage because
+    # it offers the clipboard protocol the fence reader reads through,
+    # which cage never did.
+    sway-unwrapped
+    swaybg
     foot
     # kitty is the terminal the faults get reported from, so it is the one
     # to measure. It draws with OpenGL, which llvmpipe serves without a
@@ -311,6 +324,9 @@ let
   # llvmpipe draws instead. It has to be told where the driver and the EGL
   # description are: nothing here reads /run/opengl-driver.
   seatSetup = ''
+    # Where the wayland seat's keyboard holder finds its generated
+    # bindings.
+    export PYTERM_WAYLAND_PROTOCOLS=${waylandProtocols}
     export FONTCONFIG_FILE=${fontsConf}
     export LIBGL_ALWAYS_SOFTWARE=1
     export LIBGL_DRIVERS_PATH=${mesa}/lib/dri

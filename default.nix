@@ -132,6 +132,7 @@ let
       wl-clipboard
       xclip
       ;
+    waylandProtocols = pyterm-pytest.waylandProtocols;
   };
 in
 package
