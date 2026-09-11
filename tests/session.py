@@ -71,7 +71,7 @@ class Connection:
 
 #: The size a fake CLI reports. Nothing draws in it; a window that
 #: sizes itself by the latest client must never read it.
-A_SIZE = Size(rows=24, columns=80)
+DEFAULT_SIZE = Size(rows=24, columns=80)
 
 #: A command whose pane ends at once and holds a real screen while it
 #: lives. The window the plain sessions make runs it.
@@ -230,7 +230,7 @@ def in_this_process(pymux=None):
             it made comes back, so a test can ask what the command did
             to it before it is taken away.
             """
-            output = Vt100_Output(stdout=_Sink(), get_size=lambda: A_SIZE)
+            output = Vt100_Output(stdout=_Sink(), get_size=lambda: DEFAULT_SIZE)
             state = pymux.add_client(
                 output=output,
                 input=pipe,
@@ -267,7 +267,7 @@ async def create_session(pymux=None, window=NOTHING):
     with in_this_process(pymux) as session:
         if window is not None:
             session.pymux.create_window(window)
-        state, _size = await session.attach("the client", A_SIZE)
+        state, _size = await session.attach("the client", DEFAULT_SIZE)
         yield session.pymux, state
 
 

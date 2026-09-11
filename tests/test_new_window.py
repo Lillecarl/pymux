@@ -22,7 +22,7 @@ from contextlib import asynccontextmanager
 
 from prompt_toolkit.application.current import set_app
 
-from session import A_SIZE, NOTHING, in_a_loop, in_this_process
+from session import DEFAULT_SIZE, NOTHING, in_a_loop, in_this_process
 
 
 @asynccontextmanager
@@ -38,7 +38,7 @@ async def create_session(*indexes):
     """
     with in_this_process() as session:
         pymux = session.pymux
-        state, _ = await session.attach("the client", A_SIZE)
+        state, _ = await session.attach("the client", DEFAULT_SIZE)
         with set_app(state.app):
             while len(pymux.arrangement.windows) < len(indexes):
                 pymux.create_window(NOTHING)

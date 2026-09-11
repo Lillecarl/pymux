@@ -21,13 +21,13 @@ from pymux.main import Pymux
 from pymux.options import ALL_WINDOW_OPTIONS, SetOptionError
 from session import create_session, in_a_loop
 
-A_PANE = "%s -c pass" % (sys.executable,)
+PANE_COMMAND = "%s -c pass" % (sys.executable,)
 
 
 @pytest.fixture
 def pymux():
     mux = Pymux()
-    mux.create_window(A_PANE)
+    mux.create_window(PANE_COMMAND)
     return mux
 
 
@@ -75,7 +75,7 @@ def test_the_global_form_says_what_a_new_window_starts_with(pymux):
 
     assert the_window(pymux).frame_rate == was, "it changed a window that was open"
 
-    pymux.create_window(A_PANE)
+    pymux.create_window(PANE_COMMAND)
     assert pymux.arrangement.windows[-1].frame_rate == 15
 
 
@@ -124,7 +124,7 @@ async def test_a_client_follows_the_window_it_looks_at():
             first = mux.arrangement.get_active_window()
             mux.handle_command("set-window-option frame-rate 10")
 
-            mux.create_window(A_PANE)
+            mux.create_window(PANE_COMMAND)
             mux.handle_command("set-window-option frame-rate 60")
 
         assert state.app.min_redraw_interval == pytest.approx(1 / 60)

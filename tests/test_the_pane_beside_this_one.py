@@ -37,11 +37,11 @@ class _Fake:
     "Enough of a pane for the arrangement to hold it."
 
 
-def a_pane():
+def create_pane():
     return Pane(terminal=_Fake())
 
 
-def a_window(root):
+def create_window(root):
     "A window laid out exactly this way, however that was reached."
     window = Window()
     window.root = root
@@ -55,10 +55,10 @@ def beside(window, pane, side: Side, layout=Divided, size=SIZE):
     return None if slot is None else slot.shown
 
 
-def a_row(how_many):
+def create_row(how_many):
     "A row of panes side by side, and the panes in order."
-    panes = [a_pane() for _ in range(how_many)]
-    return a_window(VSplit(panes)), panes
+    panes = [create_pane() for _ in range(how_many)]
+    return create_window(VSplit(panes)), panes
 
 
 # ----------------------------------------------------------------------
@@ -66,14 +66,14 @@ def a_row(how_many):
 
 
 def test_the_middle_of_a_row_has_a_pane_on_each_side():
-    window, panes = a_row(3)
+    window, panes = create_row(3)
 
     assert beside(window, panes[1], Side.LEFT) is panes[0]
     assert beside(window, panes[1], Side.RIGHT) is panes[2]
 
 
 def test_the_ends_of_a_row_have_one_side_each():
-    window, panes = a_row(3)
+    window, panes = create_row(3)
 
     assert beside(window, panes[0], Side.LEFT) is None
     assert beside(window, panes[0], Side.RIGHT) is panes[1]
@@ -83,7 +83,7 @@ def test_the_ends_of_a_row_have_one_side_each():
 
 
 def test_a_lone_pane_has_neither():
-    window, panes = a_row(1)
+    window, panes = create_row(1)
 
     assert beside(window, panes[0], Side.LEFT) is None
     assert beside(window, panes[0], Side.RIGHT) is None
@@ -92,7 +92,7 @@ def test_a_lone_pane_has_neither():
 def test_a_pane_that_is_the_whole_window_has_neither():
     "A window with no split at all, which is what a new one is."
     window = Window()
-    window.add_pane(a_pane())
+    window.add_pane(create_pane())
 
     assert beside(window, window.active_pane, Side.LEFT) is None
     assert beside(window, window.active_pane, Side.RIGHT) is None
@@ -108,8 +108,8 @@ def test_a_pane_in_a_stack_takes_the_stack_s_neighbours():
     the left of another. The pane beside the stack runs the whole
     height of it, so it is across from every pane in it.
     """
-    left, top, bottom, right = a_pane(), a_pane(), a_pane(), a_pane()
-    window = a_window(VSplit([left, HSplit([top, bottom]), right]))
+    left, top, bottom, right = create_pane(), create_pane(), create_pane(), create_pane()
+    window = create_window(VSplit([left, HSplit([top, bottom]), right]))
 
     for pane in (top, bottom):
         assert beside(window, pane, Side.LEFT) is left
@@ -126,8 +126,8 @@ def test_a_stack_beside_us_is_named_by_the_pane_sharing_most_of_our_edge():
     "whichever pane my own row runs into", which nothing could ask
     during a frame. Neither is here now.
     """
-    top, bottom, alone = a_pane(), a_pane(), a_pane()
-    window = a_window(VSplit([HSplit([top, bottom]), alone]))
+    top, bottom, alone = create_pane(), create_pane(), create_pane()
+    window = create_window(VSplit([HSplit([top, bottom]), alone]))
 
     # An even stack in 24 rows gives the top pane the odd row, so it
     # shares one more row with us than the bottom one does.
@@ -136,8 +136,8 @@ def test_a_stack_beside_us_is_named_by_the_pane_sharing_most_of_our_edge():
 
 def test_the_pane_beside_us_follows_the_edge_we_share():
     "The other half of the same rule, said with a stack that is uneven."
-    top, bottom, alone = a_pane(), a_pane(), a_pane()
-    window = a_window(VSplit([HSplit([top, bottom]), alone]))
+    top, bottom, alone = create_pane(), create_pane(), create_pane()
+    window = create_window(VSplit([HSplit([top, bottom]), alone]))
     window.root[0].weights[top] = 1
     window.root[0].weights[bottom] = 10
 
@@ -154,8 +154,8 @@ def test_a_row_beside_us_gives_the_pane_that_touches_us():
     a column on our left, and the leftmost of a column on our right.
     That is the nearest one, and nearest wins before anything else.
     """
-    first, second, middle, third, fourth = (a_pane() for _ in range(5))
-    window = a_window(
+    first, second, middle, third, fourth = (create_pane() for _ in range(5))
+    window = create_window(
         VSplit([VSplit([first, second]), middle, VSplit([third, fourth])])
     )
 
@@ -170,12 +170,12 @@ def test_a_row_beside_us_gives_the_pane_that_touches_us():
 def test_splitting_a_strip_gives_each_column_its_neighbours():
     "What `split-window -h` builds, three times over."
     window = Window()
-    opened = [a_pane()]
+    opened = [create_pane()]
     window.add_pane(opened[0])
     window.strip = True
 
     for _ in range(2):
-        opened.append(a_pane())
+        opened.append(create_pane())
         window.add_pane(opened[-1], vsplit=True)
 
     assert beside(window, opened[1], Side.LEFT, Strip) is opened[0]

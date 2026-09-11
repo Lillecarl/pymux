@@ -36,7 +36,7 @@ def pymux():
                     process.kill()
 
 
-def a_pane(mux, data: str):
+def create_pane(mux, data: str):
     "The active pane, sized, with `data` written on it."
     pane = mux.arrangement.get_active_window().active_pane
     pane.screen.resize(LINES, COLUMNS)
@@ -58,28 +58,28 @@ LONG = "a line longer than that pane"
 
 
 def test_a_capture_of_the_rows_holds_the_cut(pymux):
-    a_pane(pymux, LONG)
+    create_pane(pymux, LONG)
     assert capture(pymux).splitlines() == ["a line longer than t", "hat pane"]
 
 
 def test_a_capture_of_the_lines_joins_the_cut(pymux):
-    a_pane(pymux, LONG)
+    create_pane(pymux, LONG)
     assert capture(pymux, "-J").splitlines() == [LONG]
 
 
 def test_the_rows_and_the_lines_agree_on_a_line_that_fits(pymux):
     "Nothing wrapped, so joining changes nothing."
-    a_pane(pymux, "one\r\ntwo")
+    create_pane(pymux, "one\r\ntwo")
     assert capture(pymux) == capture(pymux, "-J") == "one\ntwo"
 
 
 def test_line_zero_of_the_rows_is_the_first_row_of_the_screen(pymux):
-    a_pane(pymux, "".join("line %d\r\n" % number for number in range(9)))
+    create_pane(pymux, "".join("line %d\r\n" % number for number in range(9)))
     assert capture(pymux, "-S", "0", "-E", "0") == "line 5"
 
 
 def test_a_negative_line_reaches_into_the_history(pymux):
-    a_pane(pymux, "".join("line %d\r\n" % number for number in range(9)))
+    create_pane(pymux, "".join("line %d\r\n" % number for number in range(9)))
     assert capture(pymux, "-S", "-2", "-E", "-1") == "line 3\nline 4"
 
 
@@ -89,7 +89,7 @@ def test_a_line_that_a_wrap_carried_onto_the_screen_is_whole(pymux):
     it. Asking for the screen gives the whole line, because the line
     is what `-J` counts.
     """
-    a_pane(
+    create_pane(
         pymux,
         "".join("line %d\r\n" % number for number in range(3)) + LONG + "\r\nlast",
     )
@@ -102,7 +102,7 @@ def test_a_line_that_a_wrap_carried_onto_the_screen_is_whole(pymux):
 
 
 def test_a_line_number_that_is_not_a_number_is_an_error(pymux):
-    a_pane(pymux, "one")
+    create_pane(pymux, "one")
     errors = []
     pymux.add_command_error = errors.append
     pymux.show_message = lambda message: None

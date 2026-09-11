@@ -18,11 +18,11 @@ class _Fake:
     "Enough of a pane for the arrangement to hold it."
 
 
-def a_pane():
+def create_pane():
     return Pane(terminal=_Fake())
 
 
-def a_strip(columns=1):
+def create_strip(columns=1):
     """
     A strip with this many columns of one pane, active on the last.
 
@@ -30,12 +30,12 @@ def a_strip(columns=1):
     wraps whatever the window was.
     """
     window = Window()
-    opened = [a_pane()]
+    opened = [create_pane()]
     window.add_pane(opened[0])
     window.strip = True
 
     for _ in range(columns - 1):
-        opened.append(a_pane())
+        opened.append(create_pane())
         window.add_pane(opened[-1], vsplit=True)
 
     return window, opened
@@ -65,7 +65,7 @@ def _panes(item):
 
 
 def test_a_lone_pane_joins_the_column_on_its_left():
-    window, opened = a_strip(2)
+    window, opened = create_strip(2)
     first, second = opened
 
     assert window.consume_or_expel(second, -1)
@@ -74,7 +74,7 @@ def test_a_lone_pane_joins_the_column_on_its_left():
 
 
 def test_a_lone_pane_joins_the_column_on_its_right():
-    window, opened = a_strip(2)
+    window, opened = create_strip(2)
     first, second = opened
 
     assert window.consume_or_expel(first, +1)
@@ -84,7 +84,7 @@ def test_a_lone_pane_joins_the_column_on_its_right():
 
 def test_it_joins_at_the_bottom_of_the_column():
     "One rule, so a person knows where the pane will land."
-    window, opened = a_strip(3)
+    window, opened = create_strip(3)
     first, second, third = opened
     window.consume_or_expel(second, -1)
 
@@ -94,7 +94,7 @@ def test_it_joins_at_the_bottom_of_the_column():
 
 
 def test_the_strip_is_one_column_shorter_afterwards():
-    window, opened = a_strip(3)
+    window, opened = create_strip(3)
 
     window.consume_or_expel(opened[2], -1)
 
@@ -102,7 +102,7 @@ def test_the_strip_is_one_column_shorter_afterwards():
 
 
 def test_the_pane_keeps_the_focus_when_it_moves():
-    window, opened = a_strip(2)
+    window, opened = create_strip(2)
     window.active_pane = opened[1]
 
     window.consume_or_expel(opened[1], -1)
@@ -112,14 +112,14 @@ def test_the_pane_keeps_the_focus_when_it_moves():
 
 def test_a_lone_pane_at_the_end_of_the_row_stays():
     "A key held down at the edge does nothing, and does not raise."
-    window, opened = a_strip(2)
+    window, opened = create_strip(2)
 
     assert not window.consume_or_expel(opened[0], -1)
     assert order_of(window) == [[opened[0]], [opened[1]]]
 
 
 def test_the_only_pane_of_the_window_stays():
-    window, opened = a_strip(1)
+    window, opened = create_strip(1)
 
     assert not window.consume_or_expel(opened[0], -1)
     assert not window.consume_or_expel(opened[0], +1)
@@ -131,7 +131,7 @@ def test_the_column_that_is_joined_keeps_its_width():
     is keyed by the object that holds the column, and a bare pane
     becomes a stack, so the width has to move with it.
     """
-    window, opened = a_strip(2)
+    window, opened = create_strip(2)
     first, second = opened
     window.column_widths[window.root[0]] = 1 / 3
 
@@ -145,7 +145,7 @@ def test_the_column_that_is_joined_keeps_its_width():
 
 
 def test_a_shared_pane_leaves_into_a_column_on_its_left():
-    window, opened = a_strip(2)
+    window, opened = create_strip(2)
     first, second = opened
     window.consume_or_expel(second, -1)
 
@@ -155,7 +155,7 @@ def test_a_shared_pane_leaves_into_a_column_on_its_left():
 
 
 def test_a_shared_pane_leaves_into_a_column_on_its_right():
-    window, opened = a_strip(2)
+    window, opened = create_strip(2)
     first, second = opened
     window.consume_or_expel(second, -1)
 
@@ -166,7 +166,7 @@ def test_a_shared_pane_leaves_into_a_column_on_its_right():
 
 def test_leaving_undoes_joining():
     "The round trip, which is what makes the key one a person holds."
-    window, opened = a_strip(3)
+    window, opened = create_strip(3)
     before = order_of(window)
 
     window.consume_or_expel(opened[1], -1)
@@ -177,7 +177,7 @@ def test_leaving_undoes_joining():
 
 def test_a_pane_may_leave_a_column_at_the_end_of_the_row():
     "There is always room for a column of its own, at either end."
-    window, opened = a_strip(2)
+    window, opened = create_strip(2)
     first, second = opened
     window.consume_or_expel(second, -1)
 
@@ -187,7 +187,7 @@ def test_a_pane_may_leave_a_column_at_the_end_of_the_row():
 
 def test_the_column_it_left_collapses_to_the_pane_that_is_left():
     "A stack of one is that one, so the tree does not grow scar tissue."
-    window, opened = a_strip(2)
+    window, opened = create_strip(2)
     first, second = opened
     window.consume_or_expel(second, -1)
 
@@ -205,7 +205,7 @@ def test_a_pane_walks_to_the_end_of_the_row_and_comes_back():
     in the column on its left or gives it a column of its own further
     left, and neither can go on for ever.
     """
-    window, opened = a_strip(3)
+    window, opened = create_strip(3)
     before = order_of(window)
     walker = opened[1]
 
@@ -225,7 +225,7 @@ def test_a_pane_walks_to_the_end_of_the_row_and_comes_back():
 
 def test_the_columns_stay_the_children_of_the_root():
     "A strip is a row of columns, and nothing here may change that."
-    window, opened = a_strip(3)
+    window, opened = create_strip(3)
 
     window.consume_or_expel(opened[2], -1)
 
@@ -236,7 +236,7 @@ def test_the_columns_stay_the_children_of_the_root():
 
 def test_the_panes_are_numbered_from_the_left_afterwards():
     "`Window.panes` is what a title bar and `select-pane -t` read."
-    window, opened = a_strip(3)
+    window, opened = create_strip(3)
     first, second, third = opened
 
     window.consume_or_expel(third, -1)

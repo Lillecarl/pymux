@@ -33,9 +33,9 @@ from prompt_toolkit.data_structures import Size
 
 #: A pane that is still there when the test looks at it. A program that
 #: exits takes its pane, and then its window, with it.
-A_PANE_THAT_STAYS = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
+PANE_THAT_STAYS = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
 
-A_SIZE = Size(rows=24, columns=80)
+SIZE = Size(rows=24, columns=80)
 
 #: How many times each test writes. More than one, so that a frame that
 #: is only the postponed one shows up as fewer frames than writes.
@@ -66,10 +66,10 @@ def looks_at(pymux, state):
         return pymux.arrangement.get_active_window()
 
 
-async def a_window_of_its_own(pymux, state):
+async def create_window_of_its_own(pymux, state):
     "A new window, made by this client, so this client looks at it."
     with set_app(state.app):
-        pymux.create_window(A_PANE_THAT_STAYS)
+        pymux.create_window(PANE_THAT_STAYS)
     await asyncio.sleep(LONG_ENOUGH)
 
 
@@ -77,9 +77,9 @@ async def a_window_of_its_own(pymux, state):
 async def test_a_pane_in_a_window_nobody_looks_at_draws_nothing():
     with over_a_connection() as session:
         pymux = session.pymux
-        state, _ = await session.attach("only", A_SIZE)
-        await a_window_of_its_own(pymux, state)
-        await a_window_of_its_own(pymux, state)
+        state, _ = await session.attach("only", SIZE)
+        await create_window_of_its_own(pymux, state)
+        await create_window_of_its_own(pymux, state)
 
         shown = looks_at(pymux, state)
         hidden = [w for w in pymux.arrangement.windows if w is not shown][0]
@@ -104,11 +104,11 @@ async def test_a_pane_in_a_window_nobody_looks_at_draws_nothing():
 async def test_a_pane_does_not_wake_a_client_looking_elsewhere():
     with over_a_connection() as session:
         pymux = session.pymux
-        a, _ = await session.attach("a", A_SIZE)
-        await a_window_of_its_own(pymux, a)
+        a, _ = await session.attach("a", SIZE)
+        await create_window_of_its_own(pymux, a)
 
-        b, _ = await session.attach("b", A_SIZE)
-        await a_window_of_its_own(pymux, b)
+        b, _ = await session.attach("b", SIZE)
+        await create_window_of_its_own(pymux, b)
 
         window_of_a = looks_at(pymux, a)
         assert looks_at(pymux, b) is not window_of_a
@@ -139,11 +139,11 @@ async def test_a_title_a_pane_writes_reaches_the_other_client():
     """
     with over_a_connection() as session:
         pymux = session.pymux
-        a, _ = await session.attach("a", A_SIZE)
-        await a_window_of_its_own(pymux, a)
+        a, _ = await session.attach("a", SIZE)
+        await create_window_of_its_own(pymux, a)
 
-        b, _ = await session.attach("b", A_SIZE)
-        await a_window_of_its_own(pymux, b)
+        b, _ = await session.attach("b", SIZE)
+        await create_window_of_its_own(pymux, b)
 
         with set_app(b.app):
             pymux.handle_command("set-option window-status-format '#I:#W#F #T'")

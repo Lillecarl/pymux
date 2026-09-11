@@ -66,7 +66,7 @@ class _Fixed:
         return self.offset
 
 
-def a_pane(letter: str, width: int, height: int = HEIGHT):
+def create_pane(letter: str, width: int, height: int = HEIGHT):
     "A pane, and a window that fills itself with one letter."
     return _Pane(letter), Window(
         content=FormattedTextControl([("", "\n".join([letter * width] * height))]),
@@ -86,7 +86,7 @@ def a_row(widths, height=HEIGHT, gap=0):
     x = 0
 
     for letter, width in zip(LETTERS, widths):
-        pane, container = a_pane(letter, width, height)
+        pane, container = create_pane(letter, width, height)
         rects[Slot(pane)] = Rect(x=x, y=0, width=width, height=height)
         containers[pane] = container
         x += width + gap
@@ -175,7 +175,7 @@ def test_a_pane_behind_the_origin_is_clipped_and_not_lost():
 
 def test_the_view_moves_down_as_well_as_sideways():
     "Which is what this container has that `ScrollableStrip` does not."
-    pane, container = a_pane("a", 4, height=4)
+    pane, container = create_pane("a", 4, height=4)
     plan = Plan({Slot(pane): Rect(x=0, y=2, width=4, height=4)})
 
     on_the_plane = drawn(plan, {pane: container}, visible=4, rows=4, row=2)
@@ -260,8 +260,8 @@ def test_a_layout_with_no_chrome_draws_none():
 
 
 def test_a_slot_draws_the_pane_it_shows_and_no_other():
-    behind, its_container = a_pane("a", 4)
-    front, other = a_pane("b", 4)
+    behind, its_container = create_pane("a", 4)
+    front, other = create_pane("b", 4)
     slot = Slot(behind, front)
     plan = Plan({slot: Rect(x=0, y=0, width=4, height=HEIGHT)})
     containers = {behind: its_container, front: other}

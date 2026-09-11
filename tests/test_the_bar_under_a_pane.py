@@ -17,7 +17,7 @@ NAMES = ["top", "middle", "bottom"]
 COLUMNS = 60
 
 
-def a_stack_of_named_panes(pymux, names=NAMES):
+def create_stack_of_named_panes(pymux, names=NAMES):
     "One pane for each name, stacked, named from the top down."
     window = pymux.arrangement.get_active_window()
     panes = [window.active_pane]
@@ -56,7 +56,7 @@ def bars_under(pymux, draw, panes):
 
 def test_a_pane_in_the_middle_names_the_one_above_and_the_one_below():
     with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
-        panes = a_stack_of_named_panes(pymux)
+        panes = create_stack_of_named_panes(pymux)
         bar = bars_under(pymux, draw, panes)[1]
 
         assert bar.split() == [ABOVE_MARK, "top", BELOW_MARK, "bottom"], repr(bar)
@@ -64,7 +64,7 @@ def test_a_pane_in_the_middle_names_the_one_above_and_the_one_below():
 
 def test_the_top_of_a_stack_names_only_what_is_below():
     with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
-        panes = a_stack_of_named_panes(pymux)
+        panes = create_stack_of_named_panes(pymux)
         bar = bars_under(pymux, draw, panes)[0]
 
         assert bar.split() == [BELOW_MARK, "middle"], repr(bar)
@@ -73,7 +73,7 @@ def test_the_top_of_a_stack_names_only_what_is_below():
 
 def test_the_bottom_of_a_stack_names_only_what_is_above():
     with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
-        panes = a_stack_of_named_panes(pymux)
+        panes = create_stack_of_named_panes(pymux)
         bar = bars_under(pymux, draw, panes)[2]
 
         assert bar.split() == [ABOVE_MARK, "middle"], repr(bar)
@@ -83,7 +83,7 @@ def test_the_bottom_of_a_stack_names_only_what_is_above():
 def test_the_names_sit_in_the_middle_of_the_bar():
     "Two marks and one gap, centred as one thing."
     with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
-        panes = a_stack_of_named_panes(pymux)
+        panes = create_stack_of_named_panes(pymux)
         bar = bars_under(pymux, draw, panes)[1]
 
         left = len(bar) - len(bar.lstrip())
@@ -123,7 +123,7 @@ def test_a_stack_keeps_two_rows_between_its_panes():
     it belongs to, and the bar below names two others.
     """
     with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
-        panes = a_stack_of_named_panes(pymux, NAMES[:2])
+        panes = create_stack_of_named_panes(pymux, NAMES[:2])
         draw()
         drawn_at = pymux.get_client_state().layout_manager.pane_write_positions
 
@@ -168,7 +168,7 @@ def test_the_bottom_pane_of_a_stack_has_a_row_under_it():
     with no stack: its own bar, and then the status bar.
     """
     with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
-        panes = a_stack_of_named_panes(pymux, NAMES[:2])
+        panes = create_stack_of_named_panes(pymux, NAMES[:2])
         draw()
         drawn_at = pymux.get_client_state().layout_manager.pane_write_positions
 

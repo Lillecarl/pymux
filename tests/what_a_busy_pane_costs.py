@@ -75,7 +75,7 @@ THE_WATCHED_PROGRAM = (
 
 #: The size of Carl's terminal when it was reported. A bigger screen is
 #: more cells to parse, so the number is worth pinning.
-A_SIZE = Size(rows=59, columns=187)
+SIZE = Size(rows=59, columns=187)
 
 HOW_LONG = float(os.environ.get("PYMUX_BUSY_SECONDS") or 5.0)
 
@@ -120,7 +120,7 @@ async def what_it_costs(name: str) -> tuple:
 
     with over_a_connection() as session:
         pymux = session.pymux
-        state, _ = await session.attach("only", A_SIZE)
+        state, _ = await session.attach("only", SIZE)
 
         with set_app(state.app):
             pymux.create_window(THE_WATCHED_PROGRAM)
@@ -160,7 +160,7 @@ async def what_it_costs_watched(name: str, rate: int) -> tuple:
 
     with over_a_connection() as session:
         pymux = session.pymux
-        state, _ = await session.attach("only", A_SIZE)
+        state, _ = await session.attach("only", SIZE)
 
         with set_app(state.app):
             pymux.create_window(command)

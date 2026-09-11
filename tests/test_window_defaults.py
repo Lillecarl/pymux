@@ -24,14 +24,14 @@ class _Fake:
     "Enough of a pane for the arrangement to hold it."
 
 
-def a_pane():
+def create_pane():
     return Pane(terminal=_Fake())
 
 
-def an_arrangement(windows=0):
+def create_arrangement(windows=0):
     arrangement = Arrangement()
     for _ in range(windows):
-        arrangement.create_window(a_pane(), set_active=False)
+        arrangement.create_window(create_pane(), set_active=False)
     return arrangement
 
 
@@ -40,24 +40,24 @@ def an_arrangement(windows=0):
 
 
 def test_a_window_starts_with_nothing_asked_for():
-    arrangement = an_arrangement(1)
+    arrangement = create_arrangement(1)
 
     assert arrangement.windows[0].synchronize_panes is False
     assert arrangement.windows[0].strip is False
 
 
 def test_a_default_reaches_the_next_window():
-    arrangement = an_arrangement()
+    arrangement = create_arrangement()
     arrangement.window_defaults["synchronize_panes"] = True
 
-    arrangement.create_window(a_pane(), set_active=False)
+    arrangement.create_window(create_pane(), set_active=False)
 
     assert arrangement.windows[0].synchronize_panes is True
 
 
 def test_a_default_leaves_the_windows_that_are_open():
     "Which is what `-g` means in tmux."
-    arrangement = an_arrangement(1)
+    arrangement = create_arrangement(1)
     was = arrangement.windows[0]
 
     arrangement.window_defaults["synchronize_panes"] = True
@@ -71,10 +71,10 @@ def test_a_default_that_reshapes_the_window_sees_the_pane():
     window becomes the first column. Applied before the pane it would
     have had nothing to wrap.
     """
-    arrangement = an_arrangement()
+    arrangement = create_arrangement()
     arrangement.window_defaults["strip"] = True
 
-    arrangement.create_window(a_pane(), set_active=False)
+    arrangement.create_window(create_pane(), set_active=False)
 
     window = arrangement.windows[0]
     assert window.strip is True

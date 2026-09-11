@@ -28,15 +28,15 @@ class _Fake:
     "Enough of a pane for the arrangement to hold it."
 
 
-def a_pane():
+def create_pane():
     return Pane(terminal=_Fake())
 
 
-def a_window(panes=1):
+def create_window(panes=1):
     "A window with this many panes, laid out the way pymux starts."
     window = Window()
     for _ in range(panes):
-        window.add_pane(a_pane())
+        window.add_pane(create_pane())
     return window
 
 
@@ -45,18 +45,18 @@ def a_window(panes=1):
 
 
 def test_a_window_is_not_a_strip():
-    assert a_window().strip is False
+    assert create_window().strip is False
 
 
 def test_the_root_of_a_window_is_what_it_always_was():
     "Nothing about the shape of a window changes until it is asked for."
-    window = a_window(2)
+    window = create_window(2)
 
     assert isinstance(window.root, HSplit)
 
 
 def test_a_strip_can_be_turned_off_again():
-    window = a_window(2)
+    window = create_window(2)
     window.strip = True
 
     window.strip = False
@@ -70,7 +70,7 @@ def test_choosing_a_layout_leaves_the_strip():
     one thing a strip does not do, so asking for one is asking to
     leave.
     """
-    window = a_window(3)
+    window = create_window(3)
     window.strip = True
 
     window.select_layout(LayoutTypes.TILED)
@@ -84,7 +84,7 @@ def test_choosing_a_layout_leaves_the_strip():
 
 def test_turning_it_on_makes_the_root_the_row():
     "The columns of a strip are the children of the root."
-    window = a_window(2)
+    window = create_window(2)
 
     window.strip = True
 
@@ -93,7 +93,7 @@ def test_turning_it_on_makes_the_root_the_row():
 
 def test_what_was_in_the_window_becomes_one_column():
     "So nothing on screen moves except the way it is laid out."
-    window = a_window(2)
+    window = create_window(2)
     was = window.root
 
     window.strip = True
@@ -103,7 +103,7 @@ def test_what_was_in_the_window_becomes_one_column():
 
 def test_a_root_that_is_already_a_row_is_left_alone():
     "Two panes, because one of them is always laid out the other way."
-    window = a_window(2)
+    window = create_window(2)
     window.select_layout(LayoutTypes.EVEN_VERTICAL)
     assert isinstance(window.root, VSplit)
     was = list(window.root)
@@ -124,7 +124,7 @@ def test_a_window_with_no_pane_becomes_an_empty_row():
 
 
 def test_every_pane_is_still_there():
-    window = a_window(3)
+    window = create_window(3)
     panes = window.panes
 
     window.strip = True
@@ -141,7 +141,7 @@ def test_a_column_takes_half_the_window():
     niri's own default, and the reason two columns exactly fill the
     screen while a third one pushes past the edge.
     """
-    window = a_window(2)
+    window = create_window(2)
     window.strip = True
 
     assert window.column_width(window.root[0]) == DEFAULT_COLUMN_WIDTH
@@ -149,7 +149,7 @@ def test_a_column_takes_half_the_window():
 
 
 def test_a_column_can_be_given_a_width_of_its_own():
-    window = a_window(2)
+    window = create_window(2)
     window.strip = True
     column = window.root[0]
 
@@ -168,7 +168,7 @@ def test_turning_it_on_changes_the_hash_that_rebuilds_the_layout():
     nothing else. Without it in the hash the layout would not be
     rebuilt, and the mode would take hold at the next unrelated change.
     """
-    window = a_window(2)
+    window = create_window(2)
     before = window.invalidation_hash()
 
     window.strip = True

@@ -25,17 +25,17 @@ class _Fake:
     "Enough of a pane for the arrangement to hold it."
 
 
-def a_pane():
+def create_pane():
     return Pane(terminal=_Fake())
 
 
-def a_strip(columns=1):
+def create_strip(columns=1):
     "A strip with this many columns, active on the last."
     window = Window()
-    window.add_pane(a_pane())
+    window.add_pane(create_pane())
     window.strip = True
     for _ in range(columns - 1):
-        window.add_pane(a_pane(), vsplit=True)
+        window.add_pane(create_pane(), vsplit=True)
     return window
 
 
@@ -56,7 +56,7 @@ def test_a_column_can_be_the_whole_window_without_leaving_the_strip():
     thirds, and `resize-pane -Z` leaves the row rather than widening a
     column of it. Lillecarl/pymux#215.
     """
-    window = a_strip(2)
+    window = create_strip(2)
 
     window.switch_column_width(window.active_pane)
     window.switch_column_width(window.active_pane)
@@ -68,7 +68,7 @@ def test_a_column_can_be_the_whole_window_without_leaving_the_strip():
 
 def test_the_next_width_after_the_default_is_two_thirds():
     "The default is the middle preset, so forward is the wide one."
-    window = a_strip(2)
+    window = create_strip(2)
 
     window.switch_column_width(window.active_pane)
 
@@ -76,7 +76,7 @@ def test_the_next_width_after_the_default_is_two_thirds():
 
 
 def test_the_previous_width_from_the_default_is_a_third():
-    window = a_strip(2)
+    window = create_strip(2)
 
     window.switch_column_width(window.active_pane, back=True)
 
@@ -84,7 +84,7 @@ def test_the_previous_width_from_the_default_is_a_third():
 
 
 def test_the_widths_come_round_again():
-    window = a_strip(2)
+    window = create_strip(2)
     seen = []
 
     for _ in range(len(PRESET_COLUMN_WIDTHS) + 1):
@@ -95,7 +95,7 @@ def test_the_widths_come_round_again():
 
 
 def test_going_back_undoes_going_forward():
-    window = a_strip(2)
+    window = create_strip(2)
 
     window.switch_column_width(window.active_pane)
     window.switch_column_width(window.active_pane, back=True)
@@ -109,7 +109,7 @@ def test_a_width_that_is_not_a_preset_steps_onto_the_list(back):
     A column set to something of its own, which a fixed width would
     give. It joins the cycle rather than being stuck outside it.
     """
-    window = a_strip(2)
+    window = create_strip(2)
     window.column_widths[window._column_of(window.active_pane)] = 0.42
 
     window.switch_column_width(window.active_pane, back=back)
@@ -118,7 +118,7 @@ def test_a_width_that_is_not_a_preset_steps_onto_the_list(back):
 
 
 def test_only_the_column_a_person_is_on_changes():
-    window = a_strip(3)
+    window = create_strip(3)
     others = [
         window.column_width(column)
         for column in window.root
@@ -136,8 +136,8 @@ def test_only_the_column_a_person_is_on_changes():
 
 def test_a_pane_in_a_stack_changes_the_whole_column():
     "A stack is one column, and a column has one width."
-    window = a_strip(2)
-    window.add_pane(a_pane(), vsplit=False)
+    window = create_strip(2)
+    window.add_pane(create_pane(), vsplit=False)
     column = window._column_of(window.active_pane)
 
     window.switch_column_width(window.active_pane)

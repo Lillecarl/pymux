@@ -195,7 +195,7 @@ class _Pymux:
         return self.state
 
 
-def a_window(count: int, strip: bool = False):
+def create_window(count: int, strip: bool = False):
     """
     A window of `count` panes, and the panes in it.
 
@@ -326,7 +326,7 @@ def measurements(include: str):
     for count in COUNTS:
         for what, strip in (("divided", False), ("strip", True)):
             shape = "%s %d panes" % (what, count)
-            window, panes = a_window(count, strip)
+            window, panes = create_window(count, strip)
             room = room_for_the_panes(pymux, window)
             layout = layout_of(pymux, window)
             plan = layout.measure(room)
@@ -348,7 +348,7 @@ def measurements(include: str):
     # A zoomed window lays out one pane, whatever it holds. This is the
     # only measurement of a wrapper, and it is here to say that the
     # wrapper costs nothing.
-    window, panes = a_window(max(COUNTS))
+    window, panes = create_window(max(COUNTS))
     window.zoom = True
     room = room_for_the_panes(pymux, window)
     take(
@@ -376,7 +376,7 @@ def plans_of_a_frame(pymux, include: str):
             if include and not re.search(include, name):
                 continue
 
-            window, panes = a_window(count, strip)
+            window, panes = create_window(count, strip)
             container = a_container(pymux, window, panes)
             room = room_for_the_panes(pymux, window)
             pymux.state = _ClientState(container)
@@ -458,7 +458,7 @@ def main() -> int:
     for name, work, state in found:
         pymux.state = state
         try:
-            with an_application(a_container(pymux, *a_window(1))):
+            with an_application(a_container(pymux, *create_window(1))):
                 judge(name, count_instructions(work))
         finally:
             pymux.state = None

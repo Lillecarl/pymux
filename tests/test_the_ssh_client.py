@@ -30,7 +30,7 @@ from pymux.main import Pymux
 
 from session import in_a_loop
 
-A_PANE = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
+PANE_COMMAND = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
 
 
 # ----------------------------------------------------------------------
@@ -182,7 +182,7 @@ async def test_a_command_reaches_a_server_over_ssh(tmp_path=None):
 
     pymux = Pymux()
     pymux.listen_on_socket(socket_path)
-    pymux.create_window(A_PANE)
+    pymux.create_window(PANE_COMMAND)
     await asyncio.sleep(0.5)
 
     server, port, client_key = await an_ssh_server(where, socket_path)
@@ -233,7 +233,7 @@ async def test_an_address_with_no_path_finds_the_socket_itself():
 
     pymux = Pymux()
     pymux.listen_on_socket(socket_path)
-    pymux.create_window(A_PANE)
+    pymux.create_window(PANE_COMMAND)
     await asyncio.sleep(0.5)
 
     server, port, client_key = await an_ssh_server(where, socket_path)

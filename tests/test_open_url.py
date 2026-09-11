@@ -29,9 +29,9 @@ URL = "https://example.com/auth"
 
 #: A pane that is still there when the test looks at it. A program that
 #: exits takes its pane, and then its window, with it.
-A_PANE_THAT_STAYS = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
+PANE_THAT_STAYS = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
 
-A_SIZE = Size(rows=24, columns=80)
+SIZE = Size(rows=24, columns=80)
 
 
 def opens(packets):
@@ -66,10 +66,10 @@ def an_environment(**values):
                 os.environ[name] = value
 
 
-def a_pane(pymux, state):
+def create_pane(pymux, state):
     "A window with a pane in it, so a pane can ask for something."
     with set_app(state.app):
-        pymux.create_window(A_PANE_THAT_STAYS)
+        pymux.create_window(PANE_THAT_STAYS)
     return pymux.arrangement.get_active_window().panes[0]
 
 
@@ -82,7 +82,7 @@ async def test_the_command_opens_on_the_client():
     packets = []
     with over_a_connection(read_a_packet=packets.append) as session:
         pymux = session.pymux
-        state, _ = await session.attach("only", A_SIZE)
+        state, _ = await session.attach("only", SIZE)
 
         pymux.handle_command("open-url %s" % URL)
 
@@ -99,8 +99,8 @@ async def test_last_targets_the_client_used_last():
     packets = []
     with over_a_connection(read_a_packet=packets.append) as session:
         pymux = session.pymux
-        a, _ = await session.attach("a", A_SIZE)
-        b, _ = await session.attach("b", A_SIZE)
+        a, _ = await session.attach("a", SIZE)
+        b, _ = await session.attach("b", SIZE)
 
         # Attaching counts as using, so b is the last one until a types.
         assert pymux.clients_to_open_on() == [b]
@@ -122,8 +122,8 @@ async def test_broadcast_reaches_every_client():
     packets = []
     with over_a_connection(read_a_packet=packets.append) as session:
         pymux = session.pymux
-        await session.attach("a", A_SIZE)
-        await session.attach("b", A_SIZE)
+        await session.attach("a", SIZE)
+        await session.attach("b", SIZE)
         pymux.open_url_target = "broadcast"
 
         pymux.handle_command("open-url %s" % URL)
@@ -147,7 +147,7 @@ async def test_a_command_from_a_pane_opens_in_the_browser_of_the_client():
     packets = []
     with over_a_connection(read_a_packet=packets.append) as session:
         pymux = session.pymux
-        state, _ = await session.attach("only", A_SIZE)
+        state, _ = await session.attach("only", SIZE)
 
         got = await session.a_command("open-url %s" % URL)
 
@@ -176,7 +176,7 @@ async def test_the_fake_cli_of_a_command_is_not_a_client_anybody_used():
     """
     with in_this_process() as session:
         pymux = session.pymux
-        state, _ = await session.attach("only", A_SIZE)
+        state, _ = await session.attach("only", SIZE)
 
         temp = session.a_command("open-url %s" % URL)
 
@@ -199,7 +199,7 @@ async def test_ask_asks_and_opens_nothing():
     packets = []
     with over_a_connection(read_a_packet=packets.append) as session:
         pymux = session.pymux
-        state, _ = await session.attach("only", A_SIZE)
+        state, _ = await session.attach("only", SIZE)
         pymux.open_url_mode = "ask"
 
         pymux.handle_command("open-url %s" % URL)
@@ -214,7 +214,7 @@ async def test_a_yes_opens():
     packets = []
     with over_a_connection(read_a_packet=packets.append) as session:
         pymux = session.pymux
-        state, _ = await session.attach("only", A_SIZE)
+        state, _ = await session.attach("only", SIZE)
         pymux.open_url_mode = "ask"
         pymux.handle_command("open-url %s" % URL)
 
@@ -230,7 +230,7 @@ async def test_a_no_opens_nothing():
     packets = []
     with over_a_connection(read_a_packet=packets.append) as session:
         pymux = session.pymux
-        state, _ = await session.attach("only", A_SIZE)
+        state, _ = await session.attach("only", SIZE)
         pymux.open_url_mode = "ask"
         pymux.handle_command("open-url %s" % URL)
 
@@ -245,7 +245,7 @@ async def test_off_opens_nothing():
     packets = []
     with over_a_connection(read_a_packet=packets.append) as session:
         pymux = session.pymux
-        state, _ = await session.attach("only", A_SIZE)
+        state, _ = await session.attach("only", SIZE)
         pymux.open_url_mode = "off"
 
         pymux.handle_command("open-url %s" % URL)
@@ -258,8 +258,8 @@ async def test_off_opens_nothing():
 async def test_ask_asks_on_every_client_of_a_broadcast():
     with over_a_connection() as session:
         pymux = session.pymux
-        a, _ = await session.attach("a", A_SIZE)
-        b, _ = await session.attach("b", A_SIZE)
+        a, _ = await session.attach("a", SIZE)
+        b, _ = await session.attach("b", SIZE)
         pymux.open_url_mode = "ask"
         pymux.open_url_target = "broadcast"
 
@@ -275,7 +275,7 @@ async def test_a_confirmed_command_opens_without_asking():
     packets = []
     with over_a_connection(read_a_packet=packets.append) as session:
         pymux = session.pymux
-        state, _ = await session.attach("only", A_SIZE)
+        state, _ = await session.attach("only", SIZE)
         pymux.open_url_mode = "ask"
 
         pymux.handle_command("open-url -c %s" % URL)
@@ -294,8 +294,8 @@ async def test_an_openurl_of_a_pane_opens():
     packets = []
     with over_a_connection(read_a_packet=packets.append) as session:
         pymux = session.pymux
-        state, _ = await session.attach("only", A_SIZE)
-        pane = a_pane(pymux, state)
+        state, _ = await session.attach("only", SIZE)
+        pane = create_pane(pymux, state)
 
         payload = "OpenURL=:" + base64.b64encode(URL.encode()).decode()
         pymux.forward_osc(pane, "1337", payload)
@@ -309,8 +309,8 @@ async def test_another_subcommand_of_1337_opens_nothing():
     packets = []
     with over_a_connection(read_a_packet=packets.append) as session:
         pymux = session.pymux
-        state, _ = await session.attach("only", A_SIZE)
-        pane = a_pane(pymux, state)
+        state, _ = await session.attach("only", SIZE)
+        pane = create_pane(pymux, state)
 
         pymux.forward_osc(pane, "1337", "File=name=t.png;inline=1:AAAA")
         await asyncio.sleep(0.3)
@@ -454,7 +454,7 @@ async def test_a_pane_that_starts_with_the_shim_finds_the_opener():
     with in_this_process() as session:
         pymux = session.pymux
         pymux.open_url_shim = True
-        state, _ = await session.attach("only", A_SIZE)
+        state, _ = await session.attach("only", SIZE)
 
         # The pane of this route starts narrow, and long output wraps
         # over rows and gets cut before a client's size reaches it. So
@@ -499,7 +499,7 @@ async def test_the_shim_leaves_a_pane_alone_when_it_is_off():
 async def test_a_client_that_could_not_open_says_so_in_its_status_line():
     with over_a_connection() as session:
         pymux = session.pymux
-        state, _ = await session.attach("only", A_SIZE)
+        state, _ = await session.attach("only", SIZE)
         connection = state.connection
 
         connection._process(json.dumps({"cmd": "open-failed", "data": URL}))
