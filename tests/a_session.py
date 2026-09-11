@@ -18,15 +18,21 @@ down. Lillecarl/pymux#226.
 
 `what_leaks.py` drives both and asks what survived. `count_the_turns.py`
 drives the connection route and counts what the event loop did.
+
+`a_session` is the plain session on top of the in-process route: one
+client, one window, the shape most tests want. `in_a_loop` runs a
+coroutine test while pymux carries no anyio.
 """
 
 import asyncio
 import contextvars
 import io
 import json
+import sys
 import time
 import weakref
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
+from functools import wraps
 from typing import Any, Callable, Dict, NamedTuple
 
 from prompt_toolkit.application.current import set_app
@@ -35,13 +41,22 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
+from pymux.keys import KittyVt100Parser
 from pymux.main import Pymux
 from pymux.pipes.memory import connect_in_memory
 from pymux.server import ServerConnection
 
 
-class _Connection:
-    "What `Pymux` asks a connection for, and nothing else."
+class Connection:
+    """
+    What `Pymux` asks a connection for, and nothing else.
+
+    A key press invalidates, and an invalidate tells every connection
+    about the pointer and the keyboard, so a stub that a test feeds
+    keys through needs both methods here; the tests that press no key
+    never call them. This is the one such stub, and every in-process
+    session in the suite builds one.
+    """
 
     kitty_source_flags = 0
     pointer_shape = None
@@ -57,6 +72,10 @@ class _Connection:
 #: The size a fake CLI reports. Nothing draws in it; a window that
 #: sizes itself by the latest client must never read it.
 A_SIZE = Size(rows=24, columns=80)
+
+#: A command whose pane ends at once and holds a real screen while it
+#: lives. The window the plain sessions make runs it.
+NOTHING = "%s -c pass" % (sys.executable,)
 
 
 class _Sink(io.TextIOBase):
@@ -146,6 +165,23 @@ async def once(question, seconds: float, complaint: str):
     raise SystemExit(complaint)
 
 
+def in_a_loop(test):
+    """
+    Run this test in an event loop of its own.
+
+    pymux does not carry anyio and does not turn on `anyio_mode`, so
+    pytest here answers a coroutine test with "async def functions are
+    not natively supported". Lillecarl/pymux#87 is the move that would
+    make this decorator go away.
+    """
+
+    @wraps(test)
+    def run(*arguments, **named):
+        asyncio.run(test(*arguments, **named))
+
+    return run
+
+
 @contextmanager
 def in_this_process(pymux=None):
     """
@@ -161,6 +197,12 @@ def in_this_process(pymux=None):
     watch = _watcher(watched)
 
     with create_pipe_input() as pipe:
+        # The parser the server puts on a client's input. It is the one
+        # that reads the key encoding of the kitty keyboard protocol,
+        # so a test that feeds bytes has to have it, and a driver
+        # cannot tell the routes apart without it. See
+        # `pymux.server._ClientInput`.
+        pipe.vt100_parser = KittyVt100Parser(pipe._buffer.append)
 
         async def attach(name, size):
             output = Vt100_Output(stdout=_Sink(), get_size=lambda: size)
@@ -168,7 +210,7 @@ def in_this_process(pymux=None):
                 output=output,
                 input=pipe,
                 color_depth=ColorDepth.DEPTH_8_BIT,
-                connection=_Connection(),
+                connection=Connection(),
             )
             watch("%s client" % name, state)
             watch("%s application" % name, state.app)
@@ -193,7 +235,7 @@ def in_this_process(pymux=None):
                 output=output,
                 input=pipe,
                 color_depth=ColorDepth.DEPTH_8_BIT,
-                connection=_Connection(),
+                connection=Connection(),
                 temporary=True,
             )
             watch("command client", state)
@@ -208,6 +250,25 @@ def in_this_process(pymux=None):
             yield Session(pymux, attach, detach, typed, a_command, watch, watched)
         finally:
             pymux.stop()
+
+
+@asynccontextmanager
+async def a_session(pymux=None, window=NOTHING):
+    """
+    A server with one client and one window, the plain session.
+
+    The window runs `NOTHING` before the client arrives, so the client
+    attaches to it the way a person's terminal attaches to a running
+    one. `window=None` skips it, for a test that counts windows
+    itself. It yields the server and the client state; a driver that
+    wants to type, run a command or hold two clients uses
+    `in_this_process` instead.
+    """
+    async with in_this_process(pymux) as session:
+        if window is not None:
+            session.pymux.create_window(window)
+        state, _size = await session.attach("the client", A_SIZE)
+        yield session.pymux, state
 
 
 @contextmanager
