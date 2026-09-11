@@ -32,7 +32,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pymux.style import THEMES  # noqa: E402
-from pymux.style_pygments import the_names  # noqa: E402
+from pymux.style_pygments import names  # noqa: E402
 from photograph_the_chrome import CHROME, FIRST_KEY, PREFIX, keys, main  # noqa: E402
 from take_a_picture import LIGHT_TERMINALS, TERMINALS  # noqa: E402
 
@@ -71,7 +71,7 @@ for _name in sorted(THEMES):
         CHROME + "set-option theme %s\n" % _name,
         the_demo_keys(),
     )
-for _name in the_names():
+for _name in names():
     FIXTURES["theme-pygments-%s" % _name] = (
         CHROME + "set-option theme pygments:%s\n" % _name,
         the_demo_keys(),

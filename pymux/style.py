@@ -2,7 +2,7 @@
 The colour schemes, and the one a session draws with.
 
 `set-option theme <name>` chooses one. `THEMES` holds them by name, and
-`a_theme` is how one is written: every theme needs
+`create_theme` is how one is written: every theme needs
 `Priority.MOST_PRECISE`, because these rules overlap on purpose and the
 most precise one has to win.
 
@@ -23,7 +23,7 @@ from prompt_toolkit.styles import BaseStyle, Priority, Style
 __all__ = ["DEFAULT_THEME", "THEMES"]
 
 
-def a_theme(rules: dict[str, str]) -> Style:
+def create_theme(rules: dict[str, str]) -> Style:
     """
     One colour scheme.
 
@@ -205,7 +205,7 @@ ROLES = {
 }
 
 #: The green scheme pymux has always drawn.
-DEFAULT = a_theme(derive(ROLES))
+DEFAULT = create_theme(derive(ROLES))
 
 #: The same scheme with the loud colours taken out, in the blue grey
 #: the command palette and the completion menu already use.
@@ -226,7 +226,7 @@ DEFAULT = a_theme(derive(ROLES))
 #: pane that has ended is still on red, a confirmation is still on
 #: dark red, and the position in copy mode is still yellow. A theme
 #: chooses its chrome, not its warnings.
-GREY = a_theme(
+GREY = create_theme(
     derive(
         {
             **ROLES,
@@ -262,7 +262,7 @@ THEMES: dict[str, BaseStyle] = {
 DEFAULT_THEME = "default"
 
 
-def the_theme(name: str) -> BaseStyle:
+def theme(name: str) -> BaseStyle:
     """
     The scheme of one theme name, from whatever source it names.
 
@@ -272,7 +272,7 @@ def the_theme(name: str) -> BaseStyle:
     """
     source, _, rest = name.partition(":")
     if source == "pygments":
-        from pymux.style_pygments import a_pygments_theme
+        from pymux.style_pygments import pygments_theme
 
-        return a_pygments_theme(rest)
+        return pygments_theme(rest)
     return THEMES[name]

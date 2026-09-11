@@ -55,7 +55,7 @@ from .pipes import bind_and_listen_on_socket, connect_in_memory
 from .prompt_toolkit_compat import apply_prompt_toolkit_compat_fixes
 from .rc import STARTUP_COMMANDS
 from .server import ServerConnection
-from .style import DEFAULT_THEME, THEMES, the_theme
+from .style import DEFAULT_THEME, THEMES, theme
 from .utils import get_default_shell
 
 __all__ = [
@@ -672,7 +672,7 @@ class Pymux:
     @property
     def style(self) -> BaseStyle:
         "The colour scheme of the theme this session is on."
-        return the_theme(self.theme)
+        return theme(self.theme)
 
     @property
     def show_status(self) -> bool:

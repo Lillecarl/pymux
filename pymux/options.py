@@ -322,21 +322,21 @@ class ThemeOption(Option):
     """
 
     def get_all_values(self, pymux):
-        from pymux.style_pygments import the_names
+        from pymux.style_pygments import names
 
         return sorted(THEMES) + [
-            "pygments:%s" % (name,) for name in the_names()
+            "pygments:%s" % (name,) for name in names()
         ]
 
     def set_value(self, pymux, value):
         source, _, rest = value.partition(":")
         if source == "pygments":
-            from pymux.style_pygments import the_names
+            from pymux.style_pygments import names
 
-            if rest not in the_names():
+            if rest not in names():
                 raise SetOptionError(
                     "Expecting the name of a pygments style, like: %s."
-                    % (", ".join(the_names()[:6]),)
+                    % (", ".join(names()[:6]),)
                 )
         elif value not in THEMES:
             raise SetOptionError("Expecting one of: %s." % ", ".join(sorted(THEMES)))

@@ -32,12 +32,12 @@ from functools import lru_cache
 from prompt_toolkit.styles import BaseStyle
 from prompt_toolkit.styles.named_colors import NAMED_COLORS
 
-from pymux.style import a_theme, derive
+from pymux.style import create_theme, derive
 
-__all__ = ["a_pygments_theme", "the_names"]
+__all__ = ["pygments_theme", "names"]
 
 
-def the_names() -> list[str]:
+def names() -> list[str]:
     """
     Every style pygments offers, by the name
     `set-option theme pygments:<name>` takes.
@@ -47,7 +47,7 @@ def the_names() -> list[str]:
     return sorted(get_all_styles())
 
 
-def a_pygments_theme(name: str) -> BaseStyle:
+def pygments_theme(name: str) -> BaseStyle:
     """
     The pymux theme of one pygments style.
 
@@ -60,13 +60,13 @@ def a_pygments_theme(name: str) -> BaseStyle:
 
     try:
         style_cls = get_style_by_name(name)
-    except ClassNotFound as a_missing_name:
-        raise KeyError(name) from a_missing_name
+    except ClassNotFound as missing_name:
+        raise KeyError(name) from missing_name
 
-    return a_theme(derive(_roles(style_cls)))
+    return create_theme(derive(_roles(style_cls)))
 
 
-a_pygments_theme = lru_cache(maxsize=None)(a_pygments_theme)
+pygments_theme = lru_cache(maxsize=None)(pygments_theme)
 
 
 def _roles(style_cls) -> dict[str, str]:
@@ -77,7 +77,7 @@ def _roles(style_cls) -> dict[str, str]:
     """
     from pygments.token import Token
 
-    def a_color(token, fallback=None, accept_bg=False):
+    def color(token, fallback=None, accept_bg=False):
         """
         The colour in the fragment of one token, ignoring its weight.
 
@@ -99,19 +99,19 @@ def _roles(style_cls) -> dict[str, str]:
         return fallback
 
     surface = _hex(style_cls.background_color) if style_cls.background_color else "#000000"
-    text = a_color(Token) or a_color(Token.Text) or _readable(surface)
-    muted = a_color(Token.Comment, fallback=_blend(text, surface, 0.45))
-    focus = a_color(Token.Keyword, fallback=_blend(text, surface, 0.25))
-    focus_strong = a_color(Token.Name.Function, fallback=focus)
-    error = a_color(Token.Generic.Error, fallback=None)
+    text = color(Token) or color(Token.Text) or _readable(surface)
+    muted = color(Token.Comment, fallback=_blend(text, surface, 0.45))
+    focus = color(Token.Keyword, fallback=_blend(text, surface, 0.25))
+    focus_strong = color(Token.Name.Function, fallback=focus)
+    error = color(Token.Generic.Error, fallback=None)
     if error is None or error == text:
         # The chain runs to the deleted-diff token and past it. A
         # `bg:` colour counts here, and only here: solarized hides
         # its error red in `Token.Error bg:#dc322f`, and a red slab is
         # the same signal as red text.
         error = (
-            a_color(Token.Generic.Deleted, fallback=None)
-            or a_color(Token.Error, fallback=None, accept_bg=True)
+            color(Token.Generic.Deleted, fallback=None)
+            or color(Token.Error, fallback=None, accept_bg=True)
             or "#ff0000"
         )
     highlight = _hex(style_cls.highlight_color) if style_cls.highlight_color else _blend(
@@ -203,14 +203,14 @@ def _readable(a: str) -> str:
     light enough to mistake for white by one measure and is still
     nearly four times closer to black than to white.
     """
-    def the_contrast(other):
+    def contrast(other):
         base = _lightness(other) / 255.0
         base = base / 12.92 if base <= 0.04045 else ((base + 0.055) / 1.055) ** 2.4
         over = _lightness(a) / 255.0
         over = over / 12.92 if over <= 0.04045 else ((over + 0.055) / 1.055) ** 2.4
         return (max(base, over) + 0.05) / (min(base, over) + 0.05)
 
-    return "#000000" if the_contrast("#000000") >= the_contrast("#ffffff") else "#ffffff"
+    return "#000000" if contrast("#000000") >= contrast("#ffffff") else "#ffffff"
 
 
 def _other_of(a: str) -> str:
