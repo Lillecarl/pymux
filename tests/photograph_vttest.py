@@ -101,6 +101,7 @@ from pyterm_pytest.seats import (
     differences,
 )
 
+from recorded import read_verdicts, write_list
 from take_a_picture import TERMINALS, every_log, pymux_command
 
 #: Where the pictures go. The check points this at `$out`.
@@ -622,39 +623,35 @@ def read_the_recorded():
     a blinking one. Both are text here, because both are compared
     against what a run said and neither is arithmetic.
 
-    A comment is a line that starts with a hash, not a line with a hash
-    anywhere. The name of a screen ends in one: "#3" is the third
-    screen of that menu item, and the walk numbers them that way so
-    that one screen more in an item does not rename every screen after
-    it.
+    The name of a screen ends in one: "#3" is the third screen of that
+    menu item, and the walk numbers them that way so that one screen
+    more in an item does not rename every screen after it.
     """
-    if not RECORDED.exists():
-        return {}
     standing = {}
-    for line in RECORDED.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        terminal, rest = line.split(None, 1)
-        identity, verdict = rest.rsplit(None, 1)
+    for name, verdict in read_verdicts(RECORDED).items():
+        terminal, identity = name.split(None, 1)
         standing[(terminal, identity)] = verdict
     return standing
 
 
 def write_the_recorded(path, found):
     "The list of differences a run saw, ready to be recorded."
-    lines = [
-        "# Every difference between a picture of vttest with pymux in the",
-        "# chain and one without it. A line is a terminal, the screen by the",
-        "# menu path that reached it, and the verdict: how many pixels differ",
-        "# for a still screen, and a word for a blinking one.",
-        "# `tests/photograph_vttest.py` says what this is and how to write it.",
-        "",
+    header = "\n".join(
+        [
+            "# Every difference between a picture of vttest with pymux in the",
+            "# chain and one without it. A line is a terminal, the screen by the",
+            "# menu path that reached it, and the verdict: how many pixels differ",
+            "# for a still screen, and a word for a blinking one.",
+            "# `tests/photograph_vttest.py` says what this is and how to write it.",
+            "",
+        ]
+    )
+    rows = [
+        ("%s %s" % (terminal, identity), verdict)
+        for (terminal, identity), (verdict, default) in sorted(found.items())
+        if verdict != default
     ]
-    for (terminal, identity), (verdict, default) in sorted(found.items()):
-        if verdict != default:
-            lines.append("%s %s %s" % (terminal, identity, verdict))
-    path.write_text("\n".join(lines) + "\n")
+    write_list(path, header, rows)
 
 
 def main():

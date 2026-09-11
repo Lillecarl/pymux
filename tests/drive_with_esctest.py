@@ -57,6 +57,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tests.drive_with_pty import Failed, Terminal, run_cli  # noqa: E402
+from tests.recorded import how_to_record, read_names  # noqa: E402
 
 HERE = Path(__file__).parent
 
@@ -199,16 +200,6 @@ while sys.stdin.read(1):
 """
 
 
-def read_baseline():
-    "The tests that are known to fail, as a set of names."
-    names = set()
-    for line in BASELINE.read_text().splitlines():
-        line = line.strip()
-        if line and not line.startswith("#"):
-            names.add(line)
-    return names
-
-
 def keep(directory: Path, failed, log: str) -> None:
     """
     Keep the list of failures and the log that says why.
@@ -218,17 +209,23 @@ def keep(directory: Path, failed, log: str) -> None:
     do not say what a pane did wrong.
     """
     directory.mkdir(parents=True, exist_ok=True)
+    header = "\n".join(
+        [
+            "# The esctest2 tests that failed in this run. Every name here is a",
+            "# real difference between a pymux pane and xterm.",
+            "#",
+            "# ptterm/tests/esctest-failures.txt is the same list for ptterm on a",
+            "# pty of its own. A name here and not there is what the pane adds.",
+            "#",
+        ]
+        + how_to_record(
+            "pymux-esctest",
+            "failures.txt",
+            "pymux/tests/esctest-failures.txt",
+        )
+    ) + "\n"
     (directory / "failures.txt").write_text(
-        "# The esctest2 tests that failed in this run. Every name here is a\n"
-        "# real difference between a pymux pane and xterm.\n"
-        "#\n"
-        "# ptterm/tests/esctest-failures.txt is the same list for ptterm on a\n"
-        "# pty of its own. A name here and not there is what the pane adds.\n"
-        "#\n"
-        "# This is what the run saw. To make it what the check expects:\n"
-        "#     nix build --file . checks.pymux-esctest.run\n"
-        "#     cp result/failures.txt pymux/tests/esctest-failures.txt\n"
-        + "".join(name + "\n" for name in sorted(failed))
+        header + "".join(name + "\n" for name in sorted(failed))
     )
     (directory / "esctest.log").write_text(log)
 
@@ -323,7 +320,7 @@ def report(log: str, include: str) -> int:
     """
     ran = tests_that_ran(log)
     failed = failures_in(log)
-    known = read_baseline()
+    known = read_names(BASELINE)
     chosen = {name for name in known if re.search(include, name)}
     out = left_out(log)
 

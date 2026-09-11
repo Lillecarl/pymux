@@ -79,6 +79,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
 from instructions import count_instructions  # noqa: E402
+from recorded import how_to_record, moved, read_counts, write_list  # noqa: E402
 from prompt_toolkit.application import Application  # noqa: E402
 from prompt_toolkit.application.current import set_app  # noqa: E402
 from prompt_toolkit.data_structures import Size  # noqa: E402
@@ -394,32 +395,21 @@ def plans_of_create_frame(pymux, include: str):
     return found
 
 
-def read_budgets(path: Path):
-    "The recorded count of each measurement."
-    budgets = {}
-    if not path.is_file():
-        return budgets
-    for line in path.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        name, count = line.rsplit(None, 1)
-        budgets[name] = int(count)
-    return budgets
-
-
-HEADER = """\
-# What it costs pymux to lay a window out and draw the frame around its
-# panes, in bytecode instructions. `tests/measure_a_frame.py` says why
-# the unit is not a second, and what each measurement covers.
-#
-# The "(plans)" lines are not instructions. They count how many plans
-# one frame measures, and a frame needs one.
-#
-# This is what the run saw. To make it what the check expects:
-#     nix build --file . checks.pymux-frame-instructions.run
-#     cp result/frame-budgets.txt pymux/tests/frame-budgets.txt
-"""
+HEADER = "\n".join(
+    [
+        "# What it costs pymux to lay a window out and draw the frame around its",
+        "# panes, in bytecode instructions. `tests/measure_a_frame.py` says why",
+        "# the unit is not a second, and what each measurement covers.",
+        "#",
+        '# The "(plans)" lines are not instructions. They count how many plans',
+        "# one frame measures, and a frame needs one.",
+    ]
+    + how_to_record(
+        "pymux-frame-instructions",
+        "frame-budgets.txt",
+        "pymux/tests/frame-budgets.txt",
+    )
+) + "\n"
 
 
 def main() -> int:
@@ -444,16 +434,16 @@ def main() -> int:
             wrong.append(name)
             return
 
-        moved = 100.0 * (counted - budget) / budget
-        mark = "ok " if abs(moved) <= tolerance else "OFF"
+        distance = moved(counted, budget)
+        mark = "ok " if abs(distance) <= tolerance else "OFF"
         print(
             "%-34s %12d  budget %12d  %+6.2f%%  %s"
-            % (name, counted, budget, moved, mark)
+            % (name, counted, budget, distance, mark)
         )
-        if abs(moved) > tolerance:
+        if abs(distance) > tolerance:
             wrong.append(name)
 
-    budgets = read_budgets(BUDGETS)
+    budgets = read_counts(BUDGETS)
 
     for name, work, state in found:
         pymux.state = state
@@ -469,10 +459,7 @@ def main() -> int:
 
     out = os.environ.get("PYMUX_FRAME_OUT", "")
     if out:
-        report = HEADER + "".join(
-            "%-34s %d\n" % (name, counts[name]) for name in sorted(counts)
-        )
-        (Path(out) / "frame-budgets.txt").write_text(report)
+        write_list(Path(out) / "frame-budgets.txt", HEADER, counts.items())
 
     if include:
         print(

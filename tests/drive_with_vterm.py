@@ -122,6 +122,10 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent))
+
+from recorded import how_to_record, lines as recorded_lines  # noqa: E402
+
 HERE = Path(__file__).parent
 
 #: The program that puts pymux between the suite and libvterm.
@@ -182,12 +186,7 @@ class Failed(AssertionError):
 
 def read_baseline() -> Counter:
     "The assertions that are known to fail, counted."
-    found: Counter = Counter()
-    for line in BASELINE.read_text().splitlines():
-        line = line.strip()
-        if line and not line.startswith("#"):
-            found[line] += 1
-    return found
+    return Counter(recorded_lines(BASELINE))
 
 
 def test_files(directory: Path):
@@ -240,23 +239,29 @@ def failures_in(name: str, output: str) -> Counter:
 def keep(directory: Path, failed: Counter, log: str) -> None:
     "Keep the list of failures and the log that says why."
     directory.mkdir(parents=True, exist_ok=True)
-    lines = []
+    names = []
     for name in sorted(failed):
-        lines.extend([name] * failed[name])
+        names.extend([name] * failed[name])
+    header = "\n".join(
+        [
+            "# The libvterm assertions that failed with pymux in the middle.",
+            "# Each line names the test file, the line in it, and the",
+            "# assertion. Each one is a difference between what pymux emits",
+            "# and what the program in the pane asked for.",
+            "#",
+            "# ptterm/tests/vterm-failures.txt is the same list for ptterm",
+            "# alone, judged on its own model. A name here and not there is",
+            "# what the wire loses.",
+            "#",
+        ]
+        + how_to_record(
+            "pymux-vterm",
+            "failures.txt",
+            "pymux/tests/vterm-failures.txt",
+        )
+    ) + "\n"
     (directory / "failures.txt").write_text(
-        "# The libvterm assertions that failed with pymux in the middle.\n"
-        "# Each line names the test file, the line in it, and the\n"
-        "# assertion. Each one is a difference between what pymux emits\n"
-        "# and what the program in the pane asked for.\n"
-        "#\n"
-        "# ptterm/tests/vterm-failures.txt is the same list for ptterm\n"
-        "# alone, judged on its own model. A name here and not there is\n"
-        "# what the wire loses.\n"
-        "#\n"
-        "# This is what the run saw. To make it what the check expects:\n"
-        "#     nix build --file . checks.pymux-vterm.run\n"
-        "#     cp result/failures.txt pymux/tests/vterm-failures.txt\n"
-        + "".join(line + "\n" for line in lines)
+        header + "".join(line + "\n" for line in names)
     )
     (directory / "vterm.log").write_text(log)
 

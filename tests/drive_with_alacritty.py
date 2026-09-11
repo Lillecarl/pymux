@@ -338,16 +338,16 @@ def wire(tmp: Path, name: str, directory: Path) -> bytes:
 def run_one(tmp: Path, judge: str, name: str, directory: Path):
     "Run one reference test. Returns whether it agreed, and what it said."
     try:
-        wire = wire(tmp, name, directory)
+        ours = wire(tmp, name, directory)
     except Exception:
         return False, "the pane could not run it:\n" + traceback.format_exc()
 
-    _trace("%s: %d bytes of wire to the judge" % (name, len(wire)))
-    _keep_the_wire(name, wire)
+    _trace("%s: %d bytes of wire to the judge" % (name, len(ours)))
+    _keep_the_wire(name, ours)
     try:
         done = subprocess.run(
             [judge, str(directory)],
-            input=wire,
+            input=ours,
             capture_output=True,
             timeout=JUDGE_TIMEOUT,
         )

@@ -77,6 +77,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
 from prompt_toolkit.application.current import set_app  # noqa: E402
+from recorded import how_to_record, moved, read_counts, write_list  # noqa: E402
 from prompt_toolkit.data_structures import Size  # noqa: E402
 from prompt_toolkit.input import create_pipe_input  # noqa: E402
 from prompt_toolkit.key_binding.key_processor import KeyPress  # noqa: E402
@@ -336,34 +337,24 @@ def timed(state, stages, rounds):
     return {name: totals[name] / rounds * 1e6 for name in order}
 
 
-def read_budgets():
-    if not BUDGETS.is_file():
-        return {}
-    budgets = {}
-    for line in BUDGETS.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        name, _space, count = line.rpartition(" ")
-        budgets[name.strip()] = int(count)
-    return budgets
-
-
 def write_budgets(counts):
     out = os.environ.get("PYMUX_KEYSTROKE_OUT", "")
     if not out:
         return
-    lines = [
-        "# What one keystroke costs pymux, in bytecode instructions.\n",
-        "# `tests/measure_a_keystroke.py` says what each stage covers\n",
-        "# and why the number is the same on every machine.\n",
-        "#\n",
-        "# This is what the run saw. To make it what the check expects:\n",
-        "#     nix build --file . checks.pymux-keystroke.run\n",
-        "#     cp result/keystroke-budgets.txt pymux/tests/keystroke-budgets.txt\n",
-    ]
-    lines += ["%s %d\n" % (name, counts[name]) for name in sorted(counts)]
-    (Path(out) / "keystroke-budgets.txt").write_text("".join(lines))
+    header = "\n".join(
+        [
+            "# What one keystroke costs pymux, in bytecode instructions.",
+            "# `tests/measure_a_keystroke.py` says what each stage covers",
+            "# and why the number is the same on every machine.",
+            "#",
+        ]
+        + how_to_record(
+            "pymux-keystroke",
+            "keystroke-budgets.txt",
+            "pymux/tests/keystroke-budgets.txt",
+        )
+    ) + "\n"
+    write_list(Path(out) / "keystroke-budgets.txt", header, counts.items())
 
 
 def main() -> int:
@@ -371,21 +362,21 @@ def main() -> int:
     tolerance = float(os.environ.get("PYMUX_KEYSTROKE_TOLERANCE") or DEFAULT_TOLERANCE)
 
     with create_client() as (pymux, state):
-        stages = stages(pymux, state)
+        picked = stages(pymux, state)
         if include:
-            stages = {n: w for n, w in stages.items() if re.search(include, n)}
-        if not stages:
+            picked = {n: w for n, w in picked.items() if re.search(include, n)}
+        if not picked:
             print("Nothing matched %r." % (include,))
             return 1
 
-        settle(state, stages)
-        counts = counted(state, stages)
-        microseconds = timed(state, stages, TIMED)
+        settle(state, picked)
+        counts = counted(state, picked)
+        microseconds = timed(state, picked, TIMED)
 
         where = {}
         if WHERE:
             with set_app(state.app):
-                for name, work in stages.items():
+                for name, work in picked.items():
                     where[name] = where_the_instructions_are(work)
 
     print("\n--- what one keystroke costs ---")
@@ -414,18 +405,18 @@ def main() -> int:
 
     write_budgets(counts)
 
-    budgets = read_budgets()
+    budgets = read_counts(BUDGETS)
     over = []
     for name, count in sorted(counts.items()):
         budget = budgets.get(name)
         if budget is None:
             over.append("%s has no budget, and this run took %d" % (name, count))
             continue
-        moved = abs(count - budget) * 100.0 / max(1, budget)
-        if moved > tolerance:
+        distance = abs(moved(count, budget))
+        if distance > tolerance:
             over.append(
                 "%s takes %d, and its budget is %d: %.1f%% away"
-                % (name, count, budget, moved)
+                % (name, count, budget, distance)
             )
 
     if over:

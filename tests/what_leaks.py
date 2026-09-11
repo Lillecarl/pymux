@@ -178,7 +178,7 @@ NOT_A_LEAK = frozenset(["Char", "_Char"])
 WORST = 25
 
 
-def recordings() -> list[tuple[str, str]]:
+def load_recordings() -> list[tuple[str, str]]:
     """
     Every recording, by name, as text.
 
@@ -481,7 +481,7 @@ async def run(rounds: int, recordings) -> list[str]:
 
 
 async def main() -> int:
-    recordings = recordings()
+    recordings = load_recordings()
     total = sum(len(data) for _name, data in recordings)
     each = min(total, BYTES)
 
