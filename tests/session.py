@@ -193,6 +193,10 @@ def in_this_process(pymux=None):
     objects and the bytes are.
     """
     pymux = pymux if pymux is not None else Pymux()
+    # The clock a screen shows is pinned, so no test races the minute
+    # it runs in. This is what test-mode is for. A Pymux a caller
+    # brought is the caller's to pin.
+    pymux.test_mode = True
     watched: dict[str, "weakref.ref | None"] = {}
     watch = _watcher(watched)
 
@@ -305,6 +309,10 @@ def over_a_connection(pymux=None, read_a_packet=None):
     reads the moment there. It defaults to dropping them.
     """
     pymux = pymux if pymux is not None else Pymux()
+    # The clock a screen shows is pinned, so no test races the minute
+    # it runs in. This is what test-mode is for. A Pymux a caller
+    # brought is the caller's to pin.
+    pymux.test_mode = True
     watched: dict[str, "weakref.ref | None"] = {}
     watch = _watcher(watched)
 

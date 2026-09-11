@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import contextvars
+import datetime
 import os
 import shlex
 import signal
@@ -550,6 +551,7 @@ class Pymux:
         self.default_shell = get_default_shell()
         self.swap_dark_and_light = False
         self.paint_screen = False
+        self.test_mode = False
 
         self.options = ALL_OPTIONS
         self.window_options = ALL_WINDOW_OPTIONS
@@ -1347,6 +1349,19 @@ class Pymux:
             if pane in window.panes:
                 return window
         return None
+
+    def displayed_now(self) -> datetime.datetime:
+        """
+        The time that a screen shows, as of now.
+
+        In test-mode it is always 13:37 on the 14th of March, of the
+        year it really is. Every clock a person reads goes through
+        here, so a picture of a pane holds still under the reader.
+        """
+        now = datetime.datetime.now()
+        if self.test_mode:
+            now = now.replace(month=3, day=14, hour=13, minute=37, second=0, microsecond=0)
+        return now
 
     def clients_to_open_on(self) -> "list[ClientState]":
         """

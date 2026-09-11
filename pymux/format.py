@@ -91,10 +91,11 @@ def format_pymux_string(
         "##": literal,
     }
 
-    # Date/time formatting.
+    # Date/time formatting. The clock that test-mode pins runs here
+    # as well, so a formatted status line holds still too.
     if "%" in string:
         try:
-            string = datetime.datetime.now().strftime(string)
+            string = pymux.displayed_now().strftime(string)
         except ValueError:  # strftime format ends with raw %
             string = "<ValueError>"
 

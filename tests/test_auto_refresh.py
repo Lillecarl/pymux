@@ -17,6 +17,7 @@ Lillecarl/pymux#155.
 """
 
 import asyncio
+import datetime
 import io
 import sys
 
@@ -28,6 +29,7 @@ from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
 from session import Connection
+from pymux.format import format_pymux_string
 from pymux.main import Pymux
 from pymux.options import ALL_OPTIONS
 
@@ -50,6 +52,10 @@ def session():
     asyncio.set_event_loop(loop)
 
     pymux = Pymux()
+    # The clock a screen shows is pinned, so no test here races the
+    # minute it runs in. This is what test-mode is for; the clock
+    # tests read it through `displayed_now`, which says so.
+    pymux.test_mode = True
     pymux.create_window("%s -c 'import time; time.sleep(30)'" % (sys.executable,))
 
     output = Vt100_Output(
@@ -245,3 +251,64 @@ def test_a_clock_in_a_window_out_of_view_asks_for_nothing(session):
     pymux.refresh_what_time_moves()
 
     assert frames == []
+
+
+# ----------------------------------------------------------------------
+# Test-mode pins the clock.
+#
+# The point is a screen that does not change while nobody types: with
+# the clock pinned, a picture of a pane cannot race the minute it was
+# taken in.
+
+
+def test_the_clock_of_a_pane_shows_the_pinned_time(session):
+    pymux, state, frames = session
+    set_option(pymux, "full-screen", "on")
+    set_option(pymux, "test-mode", "on")
+    in_view(pymux, state).panes[0].clock_mode = True
+    pymux.refresh_what_time_moves()
+
+    said = text(state)
+    assert any("13:37" in part for part in said), said
+
+
+def test_the_pinned_clock_asks_for_one_frame_and_then_no_more(session):
+    pymux, state, frames = session
+    set_option(pymux, "full-screen", "on")
+    set_option(pymux, "test-mode", "on")
+    in_view(pymux, state).panes[0].clock_mode = True
+
+    pymux.refresh_what_time_moves()
+    assert len(frames) == 1
+
+    frames.clear()
+    pymux.refresh_what_time_moves()
+    assert frames == []
+
+
+def test_the_format_strings_show_the_pinned_date_and_the_pinned_time(session):
+    pymux, state, frames = session
+    set_option(pymux, "test-mode", "on")
+
+    said = format_pymux_string(pymux, "%H:%M on %d/%m in %Y")
+
+    assert said == "13:37 on 14/03 in %i" % datetime.date.today().year
+
+
+def test_the_clock_runs_on_while_test_mode_is_off():
+    pymux = Pymux()
+    assert pymux.test_mode is False
+
+    now = pymux.displayed_now()
+    assert (now.hour, now.minute) == (datetime.datetime.now().hour, datetime.datetime.now().minute)
+
+
+def test_the_pinned_time_keeps_the_year_it_really_is():
+    pymux = Pymux()
+    set_option(pymux, "test-mode", "on")
+
+    now = pymux.displayed_now()
+
+    assert (now.hour, now.minute) == (13, 37)
+    assert (now.month, now.day) == (3, 14)
+    assert now.year == datetime.date.today().year

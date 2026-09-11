@@ -488,6 +488,13 @@ ALL_OPTIONS = {
     # the same idea; with this on, the asking is unnecessary rather
     # than wrong. Lillecarl/pymux#273.
     "paint-screen": OnOffOption("paint_screen"),
+    # Show 13:37 on the 14th of March, of the year it really is,
+    # everywhere pymux displays a clock: the status line's format
+    # strings, a pane in clock-mode, and the frame token that says
+    # when a clock changed. Off by default. The point is a screen that
+    # does not change while nobody types: a picture of a pane cannot
+    # race the clock. Lillecarl/pymux#273's galleries photograph them.
+    "test-mode": OnOffOption("test_mode"),
 }
 
 

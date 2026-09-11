@@ -345,7 +345,8 @@ class BigClock(Container):
     WIDTH = 28
     HEIGHT = 5
 
-    def __init__(self, on_click: Callable[[], None]):
+    def __init__(self, pymux: "Pymux", on_click: Callable[[], None]):
+        self.pymux = pymux
         self.on_click = on_click
 
     def reset(self):
@@ -372,8 +373,9 @@ class BigClock(Container):
                 for x in range(xpos, xpos + self.WIDTH):
                     row[x] = bg
 
-            # Display time.
-            now = datetime.datetime.now()
+            # Display time. Test-mode pins the clock, so a picture
+            # of a pane in clock-mode cannot race it.
+            now = self.pymux.displayed_now()
             _draw_number(screen, xpos + 0, ypos, now.hour // 10)
             _draw_number(screen, xpos + 6, ypos, now.hour % 10)
             _draw_number(screen, xpos + 16, ypos, now.minute // 10)
@@ -802,7 +804,7 @@ class LayoutManager:
 
         for pane in self._panes_in_view():
             if pane.clock_mode:
-                parts.append(datetime.datetime.now().strftime(CLOCK_FORMAT))
+                parts.append(pymux.displayed_now().strftime(CLOCK_FORMAT))
             elif pymux.show_pane_status:
                 parts.append(format_pymux_string(pymux, PANE_TITLE_FORMAT, pane=pane))
 
@@ -1990,7 +1992,7 @@ def _create_container_for_process(
                 # The clock.
                 Float(
                     content=ConditionalContainer(
-                        BigClock(on_click), filter=clock_is_visible
+                        BigClock(pymux, on_click), filter=clock_is_visible
                     )
                 ),
                 # Pane number.
