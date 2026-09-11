@@ -15,7 +15,7 @@ from prompt_toolkit.auto_suggest import Suggestion
 from prompt_toolkit.key_binding.key_processor import KeyPress
 from prompt_toolkit.keys import Keys
 
-from session import a_session, in_a_loop
+from session import create_session, in_a_loop
 
 
 def press(state, key):
@@ -41,7 +41,7 @@ def suggesting(state, typed, rest):
 
 @in_a_loop
 async def test_the_right_arrow_accepts_the_suggestion():
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         suggesting(state, "new-", "window")
 
         press(state, Keys.Right)
@@ -53,7 +53,7 @@ async def test_the_right_arrow_accepts_the_suggestion():
 async def test_control_e_and_control_f_accept_it_as_well():
     "The same binding names all three, and a person may reach for any."
     for key in (Keys.ControlE, Keys.ControlF):
-        async with a_session() as (pymux, state):
+        async with create_session() as (pymux, state):
             suggesting(state, "kill-", "pane")
 
             press(state, key)
@@ -64,7 +64,7 @@ async def test_control_e_and_control_f_accept_it_as_well():
 @in_a_loop
 async def test_the_right_arrow_still_moves_with_no_suggestion():
     "The filter wants a suggestion, so without one the key is the key."
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         with set_app(state.app):
             state.app.layout.focus(state.command_buffer)
             state.command_buffer.text = "abc"
@@ -87,7 +87,7 @@ async def test_nothing_here_can_take_the_right_arrow_of_a_pane():
     pane holds a terminal control, so `current_buffer` is a buffer
     nothing typed into and it carries no suggestion.
     """
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         with set_app(state.app):
             # A suggestion on the command line, and the pane focused.
             state.command_buffer.text = "new-"

@@ -26,7 +26,7 @@ from session import A_SIZE, NOTHING, in_a_loop, in_this_process
 
 
 @asynccontextmanager
-async def a_session(*indexes):
+async def create_session(*indexes):
     """
     A server whose windows carry these indexes, active on the last.
 
@@ -63,7 +63,7 @@ def run(pymux, command):
 @in_a_loop
 async def test_a_new_window_lands_next_to_the_one_a_person_is_on():
     "The report: on five of one, two, five, it gave three."
-    async with a_session(1, 2, 5) as (pymux, _):
+    async with create_session(1, 2, 5) as (pymux, _):
         run(pymux, "new-window")
 
         assert indexes(pymux) == [1, 2, 5, 6]
@@ -71,7 +71,7 @@ async def test_a_new_window_lands_next_to_the_one_a_person_is_on():
 
 @in_a_loop
 async def test_it_makes_room_when_the_next_index_is_taken():
-    async with a_session(1, 2, 3) as (pymux, _):
+    async with create_session(1, 2, 3) as (pymux, _):
         pymux.arrangement.set_active_window(pymux.arrangement.windows[0])
 
         run(pymux, "new-window")
@@ -83,7 +83,7 @@ async def test_it_makes_room_when_the_next_index_is_taken():
 @in_a_loop
 async def test_a_session_with_no_gaps_is_what_it_always_was():
     "Which is why nobody saw this for so long."
-    async with a_session(1, 2, 3) as (pymux, _):
+    async with create_session(1, 2, 3) as (pymux, _):
         run(pymux, "new-window")
 
         assert indexes(pymux) == [1, 2, 3, 4]
@@ -92,7 +92,7 @@ async def test_a_session_with_no_gaps_is_what_it_always_was():
 @in_a_loop
 async def test_only_the_run_that_is_in_the_way_moves():
     "A gap stops the walk, so a window put out of the way stays there."
-    async with a_session(1, 2, 3, 7) as (pymux, _):
+    async with create_session(1, 2, 3, 7) as (pymux, _):
         pymux.arrangement.set_active_window(pymux.arrangement.windows[0])
 
         run(pymux, "new-window")
@@ -103,7 +103,7 @@ async def test_only_the_run_that_is_in_the_way_moves():
 @in_a_loop
 async def test_before_the_active_window():
     "It takes that window's index, and that window moves up."
-    async with a_session(1, 2, 5) as (pymux, _):
+    async with create_session(1, 2, 5) as (pymux, _):
         run(pymux, "new-window -b")
 
         assert indexes(pymux) == [1, 2, 5, 6]
@@ -112,7 +112,7 @@ async def test_before_the_active_window():
 
 @in_a_loop
 async def test_after_a_window_that_is_not_the_active_one():
-    async with a_session(1, 2, 5) as (pymux, _):
+    async with create_session(1, 2, 5) as (pymux, _):
         run(pymux, "new-window -a -t 1")
 
         assert indexes(pymux) == [1, 2, 3, 5]
@@ -122,7 +122,7 @@ async def test_after_a_window_that_is_not_the_active_one():
 @in_a_loop
 async def test_a_bare_target_names_the_index_to_open_at():
     "Which is how tmux reads one for this command."
-    async with a_session(1, 2, 5) as (pymux, _):
+    async with create_session(1, 2, 5) as (pymux, _):
         run(pymux, "new-window -t 9")
 
         assert indexes(pymux) == [1, 2, 5, 9]
@@ -134,7 +134,7 @@ async def test_a_target_nobody_can_find_falls_back_to_the_active_window():
     tmux errors there. A person who mistypes a window number while
     opening one does not want the window not to open.
     """
-    async with a_session(1, 2, 5) as (pymux, _):
+    async with create_session(1, 2, 5) as (pymux, _):
         run(pymux, "new-window -a -t nosuchwindow")
 
         assert indexes(pymux) == [1, 2, 5, 6]
@@ -146,7 +146,7 @@ async def test_the_window_that_is_reported_is_the_one_that_opened():
     It read the last of the list, which was the new one only while a
     new window always took the highest index.
     """
-    async with a_session(1, 2, 3) as (pymux, _):
+    async with create_session(1, 2, 3) as (pymux, _):
         pymux.arrangement.set_active_window(pymux.arrangement.windows[0])
 
         run(pymux, "new-window")
@@ -157,7 +157,7 @@ async def test_the_window_that_is_reported_is_the_one_that_opened():
 @in_a_loop
 async def test_dash_d_leaves_the_window_a_person_was_on():
     "And the new one still lands where it would have."
-    async with a_session(1, 2, 5) as (pymux, _):
+    async with create_session(1, 2, 5) as (pymux, _):
         run(pymux, "new-window -d")
 
         assert indexes(pymux) == [1, 2, 5, 6]

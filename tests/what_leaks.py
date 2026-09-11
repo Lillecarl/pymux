@@ -62,7 +62,7 @@ renderer ever wrote, and call it a leak.
 
 ## Two routes, because a client can arrive two ways
 
-`a_session.py` builds both, and a round cannot tell them apart: a leak
+`session.py` builds both, and a round cannot tell them apart: a leak
 that only one route has shows up as the same round passing on one and
 failing on the other. The connection route is where the one leak this
 repository has already had lived -- `test_server_tasks.py` exists

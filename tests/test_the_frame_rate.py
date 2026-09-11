@@ -19,7 +19,7 @@ from prompt_toolkit.application.current import set_app
 from pymux.arrangement import DEFAULT_FRAME_RATE
 from pymux.main import Pymux
 from pymux.options import ALL_WINDOW_OPTIONS, SetOptionError
-from session import a_session, in_a_loop
+from session import create_session, in_a_loop
 
 A_PANE = "%s -c pass" % (sys.executable,)
 
@@ -100,7 +100,7 @@ async def test_the_cap_reaches_the_application():
     redraw that arrives too soon rather than dropping it. So a cap
     loses no frame.
     """
-    async with a_session() as (mux, state):
+    async with create_session() as (mux, state):
         with set_app(state.app):
             mux.handle_command("set-window-option frame-rate 10")
 
@@ -109,7 +109,7 @@ async def test_the_cap_reaches_the_application():
 
 @in_a_loop
 async def test_no_cap_leaves_the_application_uncapped():
-    async with a_session() as (mux, state):
+    async with create_session() as (mux, state):
         with set_app(state.app):
             mux.handle_command("set-window-option frame-rate 0")
 
@@ -119,7 +119,7 @@ async def test_no_cap_leaves_the_application_uncapped():
 @in_a_loop
 async def test_a_client_follows_the_window_it_looks_at():
     "The whole reason it is a window option and not a session one."
-    async with a_session() as (mux, state):
+    async with create_session() as (mux, state):
         with set_app(state.app):
             first = mux.arrangement.get_active_window()
             mux.handle_command("set-window-option frame-rate 10")

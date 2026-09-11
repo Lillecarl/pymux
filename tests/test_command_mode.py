@@ -18,7 +18,7 @@ from prompt_toolkit.enums import EditingMode
 from prompt_toolkit.key_binding.key_processor import _Flush, KeyPress
 from prompt_toolkit.keys import Keys
 
-from session import a_session, in_a_loop
+from session import create_session, in_a_loop
 from pymux.options import ALL_OPTIONS
 from pyte.sequences import Csi, csi
 
@@ -97,7 +97,7 @@ def leaves_command_mode(pymux, state, key, typing=None) -> bool:
 
 @in_a_loop
 async def test_escape_leaves_command_mode():
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         in_command_mode(state)
 
         assert leaves_command_mode(pymux, state, Keys.Escape)
@@ -106,7 +106,7 @@ async def test_escape_leaves_command_mode():
 @in_a_loop
 async def test_escape_throws_away_what_was_typed():
     "Leaving is leaving. The line does not wait with the text in it."
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         in_command_mode(state)
 
         leaves_command_mode(pymux, state, Keys.Escape)
@@ -116,7 +116,7 @@ async def test_escape_throws_away_what_was_typed():
 
 @in_a_loop
 async def test_control_c_still_leaves_command_mode():
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         in_command_mode(state)
 
         assert leaves_command_mode(pymux, state, Keys.ControlC)
@@ -124,7 +124,7 @@ async def test_control_c_still_leaves_command_mode():
 
 @in_a_loop
 async def test_control_g_still_leaves_command_mode():
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         in_command_mode(state)
 
         assert leaves_command_mode(pymux, state, Keys.ControlG)
@@ -133,7 +133,7 @@ async def test_control_g_still_leaves_command_mode():
 @in_a_loop
 async def test_escape_does_nothing_outside_command_mode():
     "The pane has the keyboard, so Escape belongs to the program in it."
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         assert not leaves_command_mode(pymux, state, Keys.Escape)
 
 
@@ -148,7 +148,7 @@ async def test_a_spelled_out_escape_leaves_on_the_press():
     Nothing flushes in this test, so the binding runs on the press or
     it does not run at all. Lillecarl/pymux#164.
     """
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         in_command_mode(state)
 
         assert leaves_command_mode(
@@ -163,7 +163,7 @@ async def test_a_legacy_escape_still_waits():
     and nothing tells the two apart as they arrive. So a terminal that
     did not disambiguate still waits for the timeout, and must.
     """
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         in_command_mode(state)
 
         assert not leaves_command_mode(pymux, state, None, typing="\x1b")
@@ -176,7 +176,7 @@ async def test_a_spelled_out_alt_key_does_not_leave():
     escape of one is not the Escape key, so it must not close the box
     before the letter arrives.
     """
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         in_command_mode(state)
 
         # alt+f, as a terminal that disambiguates writes it.
@@ -191,7 +191,7 @@ async def test_escape_stays_with_vi_when_the_status_keys_are_vi():
     `status-keys vi` gives Escape to vi, where it leaves insert mode.
     The command line stays open, which is what tmux does too.
     """
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         ALL_OPTIONS["status-keys"].set_value(pymux, "vi")
         in_command_mode(state)
         # `sync_vi_state` puts the option on the application before

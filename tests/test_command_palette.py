@@ -16,7 +16,7 @@ would draw, and that is the filter of each one.
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.layout.containers import ConditionalContainer, Float
 
-from session import a_session, in_a_loop
+from session import create_session, in_a_loop
 from pymux.options import ALL_OPTIONS
 
 
@@ -73,7 +73,7 @@ def the_cursor_menu_float(state) -> Float:
 @in_a_loop
 async def test_the_palette_is_off_to_begin_with():
     "A person used to the bar does not have it move without asking."
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         assert not pymux.command_palette
 
         in_command_mode(state)
@@ -83,7 +83,7 @@ async def test_the_palette_is_off_to_begin_with():
 
 @in_a_loop
 async def test_the_option_draws_the_palette():
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         ALL_OPTIONS["command-palette"].set_value(pymux, "on")
 
         in_command_mode(state)
@@ -94,7 +94,7 @@ async def test_the_option_draws_the_palette():
 @in_a_loop
 async def test_the_palette_is_drawn_only_in_command_mode():
     "The option says where the command line goes, not that it is open."
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         ALL_OPTIONS["command-palette"].set_value(pymux, "on")
 
         assert not a_float_is_drawn(state, the_palette_float(state))
@@ -106,7 +106,7 @@ async def test_the_menu_under_the_cursor_steps_aside_for_the_palette():
     The palette holds a menu of its own, and that one takes the height
     of the box. Two menus at once would be one too many.
     """
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         ALL_OPTIONS["command-palette"].set_value(pymux, "on")
         in_command_mode(state)
 
@@ -115,7 +115,7 @@ async def test_the_menu_under_the_cursor_steps_aside_for_the_palette():
 
 @in_a_loop
 async def test_the_menu_under_the_cursor_stays_for_the_bar():
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         in_command_mode(state)
 
         assert a_float_is_drawn(state, the_cursor_menu_float(state))
@@ -128,7 +128,7 @@ async def test_the_completions_of_the_palette_stop_above_the_status_line():
     The one in the box takes what the box has, and stops there: a menu
     that ran off the bottom drew over the status line and half a row.
     """
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         manager = state.layout_manager
         with set_app(state.app):
             rows = manager._palette_rows()
@@ -148,7 +148,7 @@ async def test_the_command_line_window_is_built_once():
     never focused, and then the cursor is drawn nowhere and a person
     cannot see where they are typing.
     """
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         manager = state.layout_manager
 
         assert manager._command_line_window() is manager._command_line_window()

@@ -19,8 +19,8 @@ down. Lillecarl/pymux#226.
 `what_leaks.py` drives both and asks what survived. `count_the_turns.py`
 drives the connection route and counts what the event loop did.
 
-`a_session` is the plain session on top of the in-process route: one
-client, one window, the shape most tests want. `in_a_loop` runs a
+`create_session` is the plain session on top of the in-process route:
+one client, one window, the shape most tests want. `in_a_loop` runs a
 coroutine test while pymux carries no anyio.
 """
 
@@ -253,7 +253,7 @@ def in_this_process(pymux=None):
 
 
 @asynccontextmanager
-async def a_session(pymux=None, window=NOTHING):
+async def create_session(pymux=None, window=NOTHING):
     """
     A server with one client and one window, the plain session.
 

@@ -14,7 +14,7 @@ for one. Lillecarl/pymux#214.
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.filters import is_searching
 from prompt_toolkit.keys import Keys
-from session import a_session, in_a_loop
+from session import create_session, in_a_loop
 from test_command_mode import press
 
 #: Text that is in the popup more than once, so that there is a second
@@ -65,7 +65,7 @@ async def test_the_key_the_popup_promises_opens_the_search():
     whatever editing mode a person is in, because it does not say
     "unless".
     """
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         a_popup(pymux, state)
 
         press(state, "/")
@@ -75,7 +75,7 @@ async def test_the_key_the_popup_promises_opens_the_search():
 
 @in_a_loop
 async def test_the_search_opens_with_vi_mode_keys_too():
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         a_popup(pymux, state, vi=True)
 
         press(state, "/")
@@ -118,7 +118,7 @@ def matches_in(popup):
 @in_a_loop
 async def test_accepting_a_search_lands_on_the_first_match():
     "So that the tests below can say which match the cursor is on."
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         popup = a_popup(pymux, state)
 
         type_a_search(state, MANY)
@@ -133,7 +133,7 @@ async def test_a_second_match_is_one_key_away():
     somebody searches once and then walks through, so the second match
     may not cost a retyped query.
     """
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         popup = a_popup(pymux, state)
         type_a_search(state, MANY)
 
@@ -144,7 +144,7 @@ async def test_a_second_match_is_one_key_away():
 
 @in_a_loop
 async def test_the_match_before_is_one_key_away_as_well():
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         popup = a_popup(pymux, state)
         type_a_search(state, MANY)
         press(state, "n")
@@ -166,7 +166,7 @@ async def test_a_count_moves_that_many_matches():
     here and moves one match, which is emacs's own behaviour and not a
     fault of the popup.
     """
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         popup = a_popup(pymux, state)
         type_a_search(state, MANY)
 
@@ -179,7 +179,7 @@ async def test_a_count_moves_that_many_matches():
 @in_a_loop
 async def test_repeating_a_search_needs_no_search_field():
     "The search field is closed while a person walks the matches."
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         a_popup(pymux, state)
         type_a_search(state, MANY)
 
@@ -194,7 +194,7 @@ async def test_repeating_a_search_needs_no_search_field():
 
 @in_a_loop
 async def test_copy_mode_opens_a_search_on_the_same_key():
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         in_copy_mode(pymux, state)
 
         press(state, "/")
@@ -217,7 +217,7 @@ async def test_copy_mode_holds_its_scrollback_read_only():
     harness writes none. That test belongs with copy mode, in
     `ptterm`, where a pane's content is what the harness controls.
     """
-    async with a_session() as (pymux, state):
+    async with create_session() as (pymux, state):
         copy_buffer = in_copy_mode(pymux, state)
 
         assert copy_buffer.read_only()
