@@ -749,11 +749,16 @@ in
         ''
       );
 
-  # Every theme, with the demo application in the pane. The chrome
-  # check above photographs the two hand themes; this walks everything
-  # `set-option theme` takes, the pastel's four flavours among them,
-  # and leaves the gallery in `$out`. It judges nothing either.
-  # Lillecarl/pymux#194, Lillecarl/pymux#195.
+  # Every theme, with the demo application in the pane. This walks
+  # everything `set-option theme` takes, the pastel's four flavours
+  # among them, and leaves the gallery in `$out`. It judges nothing
+  # either. It is also the one place a theme is photographed: every
+  # fixture here carries the chrome harness's own setup, so each
+  # picture is the chrome coloured by its theme, and a theme that left
+  # the chrome hardcoded would show in every one of them. The chrome
+  # check used to photograph the two hand themes beside these; the
+  # second copy went, drift and all. Lillecarl/pymux#194,
+  # Lillecarl/pymux#195, Lillecarl/pymux#278.
   themePictures =
     runInSandbox
       {

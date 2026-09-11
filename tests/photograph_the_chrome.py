@@ -51,7 +51,6 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pymux.style import THEMES  # noqa: E402
 from pyterm_pytest.seats import SEATS  # noqa: E402
 
 from middleman import FORWARDER  # noqa: E402
@@ -230,34 +229,6 @@ FIXTURES = {
         "",
     ),
 }
-
-
-#: One picture for each theme, so a theme that is added later gets one
-#: without anybody remembering to add it. `pymux/pymux/style.py` holds
-#: them. Lillecarl/pymux#194, Lillecarl/pymux#195.
-#:
-#: The keys open a second pane and stop there. One picture then holds
-#: the status line, the focused title bar, the unfocused one and the
-#: focused pane's border, which is most of what a theme colours.
-#:
-#: **The command line is not opened, on purpose.** It takes the focus,
-#: so every pane draws as unfocused, and it covers the status line. A
-#: picture with it open showed two themes as the same grey, because
-#: nothing a theme colours differently was on the screen.
-for _name in THEMES:
-    FIXTURES["theme-%s" % _name] = (
-        CHROME + "set-option theme %s\n" % _name,
-        keys((0.0, PREFIX), (0.4, b"%")),
-    )
-
-#: One theme from pygments, so the derivation of a whole scheme from
-#: the handful of colours a style carries is judged as a picture, like
-#: the hand themes. A pygments theme reaches the server by name:
-#: `set-option theme pygments:<name>`. Lillecarl/pymux#194.
-FIXTURES["theme-pygments-dracula"] = (
-    CHROME + "set-option theme pygments:dracula\n",
-    keys((0.0, PREFIX), (0.4, b"%")),
-)
 
 
 def every_fixture():
