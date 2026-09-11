@@ -197,7 +197,14 @@ class Background(Container):
 
     (This is implemented as a Container, rather than a UIControl wrapped in a
     Window, because it can be done very effecient this way.)
+
+    `paint_screen` colours the whole area with the theme's background as
+    well; the dots keep their colour, because the pattern is what says a
+    client here disagrees. Lillecarl/pymux#273.
     """
+
+    def __init__(self, painted=lambda: False) -> None:
+        self._painted = painted
 
     def reset(self) -> None:
         pass
@@ -218,8 +225,11 @@ class Background(Container):
         z_index: int | None,
     ) -> None:
         "Fill the whole area of write_position with dots."
-        default_char = Char(" ", "class:background")
-        dot = Char(".", "class:background")
+        whole = "class:background"
+        if self._painted():
+            whole += " class:painted"
+        default_char = Char(" ", whole)
+        dot = Char(".", whole)
 
         ypos = write_position.ypos
         xpos = write_position.xpos
@@ -1048,7 +1058,7 @@ class LayoutManager:
                 [
                     # The main window.
                     FloatContainer(
-                        Background(),
+                        Background(painted=Condition(lambda: self.pymux.paint_screen)),
                         floats=[
                             Float(
                                 width=lambda: self.room_for_the_body().columns,
@@ -1776,6 +1786,12 @@ def _create_container_for_process(
             result = "class:terminal.focused"
         else:
             result = "class:terminal"
+
+        if pymux.paint_screen:
+            # The theme's background behind every cell the program left
+            # at a default one, so the terminal's own colours are never
+            # seen. Lillecarl/pymux#273.
+            result += " class:painted"
 
         if pane_is_cut(pymux, arrangement_pane):
             # A pane that runs off the edge of the view is tinted, so

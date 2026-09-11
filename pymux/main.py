@@ -549,6 +549,7 @@ class Pymux:
         self.status_justify = Justify.LEFT
         self.default_shell = get_default_shell()
         self.swap_dark_and_light = False
+        self.paint_screen = False
 
         self.options = ALL_OPTIONS
         self.window_options = ALL_WINDOW_OPTIONS

@@ -84,6 +84,14 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         # right on one of them. The client knows the real background now
         # (`OSC 11`, Lillecarl/pymux#223); deriving the tint from it is
         # the second half of that issue.
+        # The pane painted with the theme's own background, which
+        # `paint-screen` turns on. The pane's container wears the
+        # class, and prompt-toolkit draws it behind every cell the
+        # program left at a default background -- the same mechanism
+        # that once drew a slab of chrome behind an overlay pane's
+        # output, wanted this time. A program that names its own
+        # colours everywhere never sees it. Lillecarl/pymux#273.
+        "painted": "bg:%s" % (r["pane"],),
         "cut": "bg:%s" % (r["cut"],),
         "clock": "bg:%s" % (r["warn-bright"],),
         "panenumber": "bg:%s" % (r["border"],),
@@ -162,6 +170,11 @@ ROLES = {
     # An unfocused pane's border, title bar and number, and the fill of
     # the layout behind the panes.
     "border": "#888888",
+    # The background a pane draws behind its cells when `paint-screen`
+    # is on: the scheme's own colour, so the terminal's background is
+    # never seen and a theme is the colour of the whole screen.
+    # Lillecarl/pymux#273.
+    "pane": "#000000",
     # A focused pane's title bar, and its name inside it. `alarm` is
     # the pane index, the loudest thing on the screen.
     "focus": "#448844",

@@ -477,6 +477,17 @@ ALL_OPTIONS = {
     "allow-program-resize": OnOffOption("allow_program_resize"),
     # Prompt-toolkit/pymux specific.
     "swap-light-and-dark-colors": OnOffOption("swap_dark_and_light"),
+    # Draw the theme's own background behind every cell of a pane, so
+    # the terminal's background is never seen and a theme is the
+    # colour of the whole screen. Off by default: a program that
+    # relies on the terminal's background through its default cells --
+    # an image viewer, a sixel client -- keeps seeing the terminal
+    # while this is off, and the terminal's ANSI palette stays the
+    # terminal's either way. A client that asks the terminal its
+    # background (OSC 11, Lillecarl/pymux#223) is the softer cousin of
+    # the same idea; with this on, the asking is unnecessary rather
+    # than wrong. Lillecarl/pymux#273.
+    "paint-screen": OnOffOption("paint_screen"),
 }
 
 

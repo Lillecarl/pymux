@@ -179,6 +179,7 @@ RULES = {
     "auto-suggestion": "bg:#4e5e4e #88aa88",
     "message": "bg:#bbee88 #222222",
     "background": "#888888",
+    "painted": "bg:#000000",
     "cut": "bg:#303030",
     "clock": "bg:#88aa00",
     "panenumber": "bg:#888888",
@@ -272,6 +273,24 @@ def test_the_roles_produce_the_rules_grey_drew():
     }
 
     assert derive({**ROLES, **GREY_ROLES}) == rules_with_grey_replaced
+
+
+def test_the_pane_painting_is_the_option():
+    """
+    The rule is in every theme; the pane's container wears it only
+    while `paint-screen` is on, and the default is off: a program that
+    relies on the terminal's background through its default cells
+    keeps seeing the terminal until a person asks for the whole
+    screen. Lillecarl/pymux#273.
+    """
+    pymux = Pymux()
+    assert pymux.paint_screen is False
+
+    ALL_OPTIONS["paint-screen"].set_value(pymux, "on")
+    assert pymux.paint_screen is True
+
+    ALL_OPTIONS["paint-screen"].set_value(pymux, "off")
+    assert pymux.paint_screen is False
 
 
 def test_the_body_of_an_overlay_pane_draws_like_a_pane():

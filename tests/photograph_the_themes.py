@@ -77,6 +77,20 @@ for _name in names():
         demo_keys(),
     )
 
+#: The takeover's own picture. `paint-screen` draws the scheme's
+#: background behind every cell the program left at a default one, so
+#: the terminal's own colours are never seen: mocha fills the light
+#: three as it fills the dark one, where without the option a light
+#: terminal keeps its white. The theme's own picture in the loop above
+#: is the off half of the pair, same theme, same keys.
+#: Lillecarl/pymux#273.
+FIXTURES["painted-screen"] = (
+    CHROME
+    + "set-option theme pygments:catppuccin-mocha\n"
+    + "set-option paint-screen on\n",
+    demo_keys(),
+)
+
 if __name__ == "__main__":
     raise SystemExit(
         main(

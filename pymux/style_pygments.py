@@ -124,6 +124,10 @@ def _roles(style_cls) -> dict[str, str]:
     return {
         "surface": surface,
         "surface-raised": _blend(surface, text, 0.07),
+        # The scheme's own background is the pane's: with
+        # `paint-screen` on, a pygments scheme colours the whole
+        # screen, not only the bars. Lillecarl/pymux#273.
+        "pane": surface,
         "text": text,
         "text-bright": _readable(surface),
         "text-dark": _other_of(surface),
