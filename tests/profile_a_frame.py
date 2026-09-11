@@ -77,7 +77,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
-from a_session import Connection, over_a_connection  # noqa: E402
+from session import Connection, over_a_connection  # noqa: E402
 from prompt_toolkit.application.current import set_app  # noqa: E402
 from prompt_toolkit.data_structures import Size  # noqa: E402
 from prompt_toolkit.input import create_pipe_input  # noqa: E402

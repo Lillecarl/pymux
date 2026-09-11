@@ -43,7 +43,7 @@ from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
-from a_session import Connection
+from session import Connection
 from pymux.layout import THE_CUT_IS_TINTED
 from pymux.main import Pymux
 from pymux.plan_container import PlanContainer

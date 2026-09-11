@@ -16,7 +16,7 @@ would draw, and that is the filter of each one.
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.layout.containers import ConditionalContainer, Float
 
-from a_session import a_session, in_a_loop
+from session import a_session, in_a_loop
 from pymux.options import ALL_OPTIONS
 
 

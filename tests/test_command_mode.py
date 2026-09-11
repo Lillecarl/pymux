@@ -18,7 +18,7 @@ from prompt_toolkit.enums import EditingMode
 from prompt_toolkit.key_binding.key_processor import _Flush, KeyPress
 from prompt_toolkit.keys import Keys
 
-from a_session import a_session, in_a_loop
+from session import a_session, in_a_loop
 from pymux.options import ALL_OPTIONS
 from pyte.sequences import Csi, csi
 

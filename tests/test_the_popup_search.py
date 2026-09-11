@@ -14,7 +14,7 @@ for one. Lillecarl/pymux#214.
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.filters import is_searching
 from prompt_toolkit.keys import Keys
-from a_session import a_session, in_a_loop
+from session import a_session, in_a_loop
 from test_command_mode import press
 
 #: Text that is in the popup more than once, so that there is a second

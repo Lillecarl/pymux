@@ -14,7 +14,7 @@ Lillecarl/pymux#233.
 
 from prompt_toolkit.application.current import set_app
 
-from a_session import a_session, in_a_loop
+from session import a_session, in_a_loop
 
 
 def the_controls(app):

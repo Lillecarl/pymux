@@ -27,7 +27,7 @@ if somebody takes the wake away rather than narrowing it.
 import asyncio
 import sys
 
-from a_session import in_a_loop, over_a_connection
+from session import in_a_loop, over_a_connection
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 

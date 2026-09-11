@@ -22,7 +22,7 @@ from contextlib import asynccontextmanager
 
 from prompt_toolkit.application.current import set_app
 
-from a_session import A_SIZE, NOTHING, in_a_loop, in_this_process
+from session import A_SIZE, NOTHING, in_a_loop, in_this_process
 
 
 @asynccontextmanager

@@ -18,7 +18,7 @@ import webbrowser
 
 import pytest
 
-from a_session import in_a_loop, once, over_a_connection, in_this_process
+from session import in_a_loop, once, over_a_connection, in_this_process
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from pymux.client.terminal import TerminalClient

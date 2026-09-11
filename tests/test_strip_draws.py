@@ -33,7 +33,7 @@ from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
-from a_session import Connection
+from session import Connection
 from pymux.main import Pymux
 
 ROWS, COLUMNS = 12, 40

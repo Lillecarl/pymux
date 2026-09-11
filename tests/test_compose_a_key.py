@@ -23,7 +23,7 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.document import Document
 from prompt_toolkit.layout.containers import ConditionalContainer, Float
 
-from a_session import a_session, in_a_loop
+from session import a_session, in_a_loop
 from pymux.commands.commands import call_command_handler
 from pymux.key_spelling import THE_PREFIX, KeyCompleter
 

@@ -93,7 +93,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 # not the directory above it.
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
-from a_session import over_a_connection  # noqa: E402
+from session import over_a_connection  # noqa: E402
 from measure_latency import MARKERS, THE_CHILD  # noqa: E402
 from prompt_toolkit.application.current import set_app  # noqa: E402
 from prompt_toolkit.data_structures import Size  # noqa: E402

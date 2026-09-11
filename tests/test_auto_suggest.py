@@ -15,7 +15,7 @@ from prompt_toolkit.auto_suggest import Suggestion
 from prompt_toolkit.key_binding.key_processor import KeyPress
 from prompt_toolkit.keys import Keys
 
-from a_session import a_session, in_a_loop
+from session import a_session, in_a_loop
 
 
 def press(state, key):

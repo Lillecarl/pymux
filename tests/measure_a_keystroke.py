@@ -83,7 +83,7 @@ from prompt_toolkit.key_binding.key_processor import KeyPress  # noqa: E402
 from prompt_toolkit.output import ColorDepth  # noqa: E402
 from prompt_toolkit.output.vt100 import Vt100_Output  # noqa: E402
 
-from a_session import Connection  # noqa: E402
+from session import Connection  # noqa: E402
 from instructions import count_instructions  # noqa: E402
 
 from pymux.main import Pymux  # noqa: E402
