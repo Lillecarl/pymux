@@ -17,7 +17,7 @@ pane**. An offset that is not shared is a real disagreement.
 """
 
 from prompt_toolkit.data_structures import Size
-from test_strip_draws import CHROME, a_client
+from test_strip_draws import CHROME, create_client
 
 from pymux.layout import plan_of
 
@@ -75,7 +75,7 @@ def the_plan(pymux):
 
 
 def test_the_plan_puts_the_columns_where_the_frame_does():
-    with a_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
+    with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
         a_row_of_panes(pymux)
         draw()
 
@@ -88,7 +88,7 @@ def test_the_plan_divides_a_stack_the_way_the_frame_does():
     column out by weight, and the cells that do not divide evenly have
     to fall the same way on both sides.
     """
-    with a_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
+    with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
         a_row_of_panes(pymux, count=2)
         pymux.handle_command("split-window -v")
         pymux.handle_command("split-window -v")
@@ -105,7 +105,7 @@ def test_the_plan_follows_a_resize():
     measures the plan, puts the cells each pane holds into its weight,
     and then applies the delta, so one row asked for is one row given.
     """
-    with a_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
+    with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
         panes = a_row_of_panes(pymux, count=2)
         pymux.handle_command("split-window -v")
         draw()
@@ -120,7 +120,7 @@ def test_the_plan_follows_a_resize():
 
 def test_a_divided_window_is_drawn_where_its_plan_says_too():
     "The layout pymux uses unless a person asks for something else."
-    with a_client(CHROME, rows=ROWS, columns=COLUMNS) as (pymux, draw):
+    with create_client(CHROME, rows=ROWS, columns=COLUMNS) as (pymux, draw):
         a_row_of_panes(pymux, count=2)
         pymux.handle_command("split-window -v")
         draw()
@@ -139,7 +139,7 @@ def test_the_plan_holds_a_column_the_frame_never_drew():
     it is not drawn (Lillecarl/pymux#224). Everything that asks where
     that pane is asks the plan.
     """
-    with a_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
+    with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
         panes = a_row_of_panes(pymux)
         state = pymux.get_client_state()
 
@@ -161,7 +161,7 @@ def test_the_plan_holds_a_column_the_frame_never_drew():
 
 def test_the_plan_uses_the_size_the_window_was_given():
     "So that a client of another size cannot be what it measured."
-    with a_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
+    with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
         a_row_of_panes(pymux, count=1)
         draw()
 
@@ -185,7 +185,7 @@ def test_a_key_moves_the_focus_before_anything_is_drawn():
     This is a change a person sees, and it is what the whole of
     Lillecarl/pymux#217 is for.
     """
-    with a_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, _draw):
+    with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, _draw):
         panes = a_row_of_panes(pymux)
         window = pymux.arrangement.get_active_window()
         assert window.active_pane is panes[-1]

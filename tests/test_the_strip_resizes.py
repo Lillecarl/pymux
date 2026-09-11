@@ -45,7 +45,7 @@ class _Screen:
 
 
 @contextmanager
-def a_client(commands=(), rows=ROWS, columns=NARROW):
+def create_client(commands=(), rows=ROWS, columns=NARROW):
     "A server with one client, a way to draw, and a way to resize."
     pymux = Pymux()
     terminal = _Screen(rows, columns)
@@ -118,7 +118,7 @@ def test_two_default_columns_fill_the_window_exactly():
     Half a window each, borders included, so the strip does not
     overflow and nothing is shaved. Lillecarl/pymux#206.
     """
-    with a_client(STRIP) as (pymux, _terminal, draw):
+    with create_client(STRIP) as (pymux, _terminal, draw):
         _window, panes = columns_of(pymux, 2)
         draw()
 
@@ -130,7 +130,7 @@ def test_two_default_columns_fill_the_window_exactly():
 
 def test_a_wider_terminal_makes_every_column_wider():
     "The reported bug. A column is a fraction, so it has to follow."
-    with a_client(STRIP) as (pymux, terminal, draw):
+    with create_client(STRIP) as (pymux, terminal, draw):
         _window, panes = columns_of(pymux, 2)
         draw()
         before = widths(pymux, panes)
@@ -143,7 +143,7 @@ def test_a_wider_terminal_makes_every_column_wider():
 
 
 def test_a_narrower_terminal_makes_every_column_narrower():
-    with a_client(STRIP, columns=WIDE) as (pymux, terminal, draw):
+    with create_client(STRIP, columns=WIDE) as (pymux, terminal, draw):
         _window, panes = columns_of(pymux, 2)
         draw()
 
@@ -158,7 +158,7 @@ def test_the_panes_are_told_the_new_size():
     A column that is drawn wider has to tell the program in it, or the
     program keeps writing at the old width.
     """
-    with a_client(STRIP) as (pymux, terminal, draw):
+    with create_client(STRIP) as (pymux, terminal, draw):
         _window, panes = columns_of(pymux, 2)
         draw()
 

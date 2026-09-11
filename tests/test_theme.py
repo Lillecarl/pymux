@@ -81,7 +81,7 @@ def in_a_loop(test):
 
 
 @asynccontextmanager
-async def a_client():
+async def create_client():
     "A server with one client attached, and the client's application."
     pymux = Pymux()
     output = Vt100_Output(
@@ -116,7 +116,7 @@ def bar_of(app):
 
 @in_a_loop
 async def test_a_client_draws_with_the_theme_it_starts_on():
-    async with a_client() as (pymux, app):
+    async with create_client() as (pymux, app):
         assert pymux.theme == DEFAULT_THEME
         assert bar_of(app) == "ansigreen"
 
@@ -124,7 +124,7 @@ async def test_a_client_draws_with_the_theme_it_starts_on():
 @in_a_loop
 async def test_choosing_a_theme_reaches_a_client_that_is_attached():
     "The application reads the scheme again on every render."
-    async with a_client() as (pymux, app):
+    async with create_client() as (pymux, app):
         pymux.handle_command("set-option theme grey")
 
         assert pymux.theme == "grey"
@@ -133,7 +133,7 @@ async def test_choosing_a_theme_reaches_a_client_that_is_attached():
 
 @in_a_loop
 async def test_choosing_the_theme_back_puts_the_green_back():
-    async with a_client() as (pymux, app):
+    async with create_client() as (pymux, app):
         pymux.handle_command("set-option theme grey")
         pymux.handle_command("set-option theme default")
 
@@ -143,7 +143,7 @@ async def test_choosing_the_theme_back_puts_the_green_back():
 @in_a_loop
 async def test_every_theme_reaches_a_client():
     "Whatever is registered, and not only the two this file names."
-    async with a_client() as (pymux, app):
+    async with create_client() as (pymux, app):
         for name, theme in THEMES.items():
             pymux.handle_command("set-option theme %s" % name)
 

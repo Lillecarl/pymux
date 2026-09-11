@@ -16,7 +16,7 @@ place the difference exists: the whole message reaches
 `client_state.message` either way.
 """
 
-from test_strip_draws import ROWS, a_client
+from test_strip_draws import ROWS, create_client
 
 #: Two complaints of the shape a configuration file makes, each long
 #: enough that the pair cannot fit on one row of the test's screen.
@@ -36,7 +36,7 @@ NO_CLOCK = ("set-option status-right ''",)
 
 def drawn_with_a_message(message, columns=40):
     "Every row of the screen while `message` is up."
-    with a_client(commands=NO_CLOCK, columns=columns) as (pymux, draw):
+    with create_client(commands=NO_CLOCK, columns=columns) as (pymux, draw):
         pymux.get_client_state().message = message
         return draw()
 

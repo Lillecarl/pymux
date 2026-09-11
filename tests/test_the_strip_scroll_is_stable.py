@@ -42,7 +42,7 @@ STRIP = ["set-option pane-border-status on", "set-window-option strip on"]
 
 
 @contextmanager
-def a_client(commands=(), rows=ROWS, columns=COLUMNS):
+def create_client(commands=(), rows=ROWS, columns=COLUMNS):
     pymux = Pymux()
     output = Vt100_Output(
         stdout=io.StringIO(), get_size=lambda: Size(rows=rows, columns=columns)
@@ -127,7 +127,7 @@ def test_the_whole_walk_left_and_right_and_back():
     40, 38, 0, 1, 40 -- two cells of peek measured against a pane one
     cell narrower than its column. Lillecarl/pymux#209.
     """
-    with a_client(STRIP) as (pymux, state, draw):
+    with create_client(STRIP) as (pymux, state, draw):
         window, panes = columns_of(pymux, 3)
         draw()
 
@@ -153,7 +153,7 @@ def test_the_focus_inside_a_stack_still_finds_its_column():
     x-extent happens to equal its column's content, so it was never
     tested and never owned. Lillecarl/pymux#209.
     """
-    with a_client(STRIP) as (pymux, state, draw):
+    with create_client(STRIP) as (pymux, state, draw):
         _window, panes = columns_of(pymux, 3)
         draw()
         on_the_third = the_view(state)
@@ -190,7 +190,7 @@ def test_a_column_wider_than_the_view_still_starts_on_screen():
     (`test_the_strip_plan.py`) reads the offset that says which end it
     is.
     """
-    with a_client(STRIP, columns=20) as (pymux, state, draw):
+    with create_client(STRIP, columns=20) as (pymux, state, draw):
         _window, panes = columns_of(pymux, 2)
         draw()
 
@@ -210,7 +210,7 @@ def test_the_focused_column_is_wholly_on_screen():
     Its border is its right edge, and the column is not on screen
     until that is.
     """
-    with a_client(STRIP) as (pymux, state, draw):
+    with create_client(STRIP) as (pymux, state, draw):
         _window, panes = columns_of(pymux, 3)
         draw()
 
@@ -251,7 +251,7 @@ def test_opening_a_pane_leaves_the_row_where_a_person_scrolled_it():
     column that the origin also shows**, and then splits. Nothing then
     asks the view to move, and only a view that was kept stays.
     """
-    with a_client(STRIP) as (pymux, state, draw):
+    with create_client(STRIP) as (pymux, state, draw):
         _window, _panes = columns_of(pymux, 3)
         draw()
 
@@ -276,7 +276,7 @@ def test_moving_back_to_a_column_that_is_on_screen_does_not_move_the_view():
     landing on the third scrolls. The second is then wholly on screen,
     and moving to it may not scroll again.
     """
-    with a_client(STRIP) as (pymux, state, draw):
+    with create_client(STRIP) as (pymux, state, draw):
         _window, _panes = columns_of(pymux, 3)
         draw()
         on_the_third = the_view(state)
@@ -295,7 +295,7 @@ def test_walking_right_and_back_returns_the_same_view():
     geometric: it reads where each pane was drawn last time, so two
     moves with no frame between them ask a stale question.
     """
-    with a_client(STRIP) as (pymux, state, draw):
+    with create_client(STRIP) as (pymux, state, draw):
         _window, _panes = columns_of(pymux, 3)
 
         def step(direction):

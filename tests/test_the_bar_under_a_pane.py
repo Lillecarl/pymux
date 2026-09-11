@@ -8,7 +8,7 @@ between stacked panes, the row kept under the whole layout, and the
 float that draws the bar. Lillecarl/pymux#211.
 """
 
-from test_strip_draws import CHROME, ROWS, a_client
+from test_strip_draws import CHROME, ROWS, create_client
 
 from pymux.layout import ABOVE_MARK, BELOW_MARK
 
@@ -55,7 +55,7 @@ def bars_under(pymux, draw, panes):
 
 
 def test_a_pane_in_the_middle_names_the_one_above_and_the_one_below():
-    with a_client(CHROME, columns=COLUMNS) as (pymux, draw):
+    with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
         panes = a_stack_of_named_panes(pymux)
         bar = bars_under(pymux, draw, panes)[1]
 
@@ -63,7 +63,7 @@ def test_a_pane_in_the_middle_names_the_one_above_and_the_one_below():
 
 
 def test_the_top_of_a_stack_names_only_what_is_below():
-    with a_client(CHROME, columns=COLUMNS) as (pymux, draw):
+    with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
         panes = a_stack_of_named_panes(pymux)
         bar = bars_under(pymux, draw, panes)[0]
 
@@ -72,7 +72,7 @@ def test_the_top_of_a_stack_names_only_what_is_below():
 
 
 def test_the_bottom_of_a_stack_names_only_what_is_above():
-    with a_client(CHROME, columns=COLUMNS) as (pymux, draw):
+    with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
         panes = a_stack_of_named_panes(pymux)
         bar = bars_under(pymux, draw, panes)[2]
 
@@ -82,7 +82,7 @@ def test_the_bottom_of_a_stack_names_only_what_is_above():
 
 def test_the_names_sit_in_the_middle_of_the_bar():
     "Two marks and one gap, centred as one thing."
-    with a_client(CHROME, columns=COLUMNS) as (pymux, draw):
+    with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
         panes = a_stack_of_named_panes(pymux)
         bar = bars_under(pymux, draw, panes)[1]
 
@@ -105,7 +105,7 @@ def test_a_window_with_no_stack_keeps_no_row_under_its_panes():
     The last row of the screen is pymux's own status bar, so a pane
     that gives up nothing ends on the row before it.
     """
-    with a_client(CHROME, columns=COLUMNS) as (pymux, draw):
+    with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
         pymux.handle_command("split-window -h")
         pane = pymux.arrangement.get_active_window().active_pane
         draw()
@@ -122,7 +122,7 @@ def test_a_stack_keeps_two_rows_between_its_panes():
     pane's bar below. They cannot share: the title bar names the pane
     it belongs to, and the bar below names two others.
     """
-    with a_client(CHROME, columns=COLUMNS) as (pymux, draw):
+    with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
         panes = a_stack_of_named_panes(pymux, NAMES[:2])
         draw()
         drawn_at = pymux.get_client_state().layout_manager.pane_write_positions
@@ -145,7 +145,7 @@ def test_a_pane_with_nothing_above_or_below_it_draws_no_bar():
     The row is still there, because the window keeps one for the stack
     beside it. What is in it under this pane is the background.
     """
-    with a_client(CHROME, columns=COLUMNS) as (pymux, draw):
+    with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
         window = pymux.arrangement.get_active_window()
         alone = window.active_pane
         alone.chosen_name = "alone"
@@ -167,7 +167,7 @@ def test_the_bottom_pane_of_a_stack_has_a_row_under_it():
     So the bottom pane ends one row higher than a pane in a window
     with no stack: its own bar, and then the status bar.
     """
-    with a_client(CHROME, columns=COLUMNS) as (pymux, draw):
+    with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
         panes = a_stack_of_named_panes(pymux, NAMES[:2])
         draw()
         drawn_at = pymux.get_client_state().layout_manager.pane_write_positions

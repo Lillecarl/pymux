@@ -55,7 +55,7 @@ STRIP = ["set-option pane-border-status on", "set-window-option strip on"]
 
 
 @contextmanager
-def a_client(commands=(), rows=ROWS, columns=COLUMNS):
+def create_client(commands=(), rows=ROWS, columns=COLUMNS):
     pymux = Pymux()
     output = Vt100_Output(
         stdout=io.StringIO(), get_size=lambda: Size(rows=rows, columns=columns)
@@ -140,7 +140,7 @@ def a_wide_column(pymux, state):
 
 def test_nothing_is_marked_when_every_column_fits():
     "Two columns of half a window each, which is the default."
-    with a_client(STRIP) as (pymux, state, draw):
+    with create_client(STRIP) as (pymux, state, draw):
         pymux.handle_command("split-window -h")
         state.sync_focus()
         screen = draw()
@@ -149,7 +149,7 @@ def test_nothing_is_marked_when_every_column_fits():
 
 
 def test_the_column_that_runs_off_the_edge_is_marked():
-    with a_client(STRIP) as (pymux, state, draw):
+    with create_client(STRIP) as (pymux, state, draw):
         a_wide_column(pymux, state)
         screen = draw()
 
@@ -178,7 +178,7 @@ def test_the_tint_sits_before_what_the_pane_wrote():
     the right wins. A cell the program coloured keeps its colour; one
     it left alone takes the tint.
     """
-    with a_client(STRIP) as (pymux, state, draw):
+    with create_client(STRIP) as (pymux, state, draw):
         a_wide_column(pymux, state)
         screen = draw()
 

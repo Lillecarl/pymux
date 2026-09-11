@@ -10,7 +10,7 @@ Every pane is given a name, so a bar says out loud which panes it is
 naming. Lillecarl/pymux#207.
 """
 
-from test_strip_draws import CHROME, a_client
+from test_strip_draws import CHROME, create_client
 
 from pymux.layout import LEFT_MARK, RIGHT_MARK
 
@@ -22,7 +22,7 @@ NAMES = ["alpha", "beta", "gamma"]
 COLUMNS = 120
 
 
-def a_row_of_named_panes(pymux, names=NAMES):
+def create_row_of_named_panes(pymux, names=NAMES):
     "One pane for each name, side by side, named in order."
     window = pymux.arrangement.get_active_window()
     panes = [window.active_pane]
@@ -71,8 +71,8 @@ def middle_of(bar, name):
 
 
 def test_a_pane_names_the_pane_on_each_side():
-    with a_client(CHROME, columns=COLUMNS) as (pymux, draw):
-        panes = a_row_of_named_panes(pymux)
+    with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
+        panes = create_row_of_named_panes(pymux)
         bar = bars_of(pymux, draw, panes)[1]
 
         # The left edge: the pane's own number, then a mark pointing
@@ -86,8 +86,8 @@ def test_a_pane_names_the_pane_on_each_side():
 
 
 def test_the_pane_at_the_left_end_names_nothing_on_its_left():
-    with a_client(CHROME, columns=COLUMNS) as (pymux, draw):
-        panes = a_row_of_named_panes(pymux)
+    with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
+        panes = create_row_of_named_panes(pymux)
         bar = bars_of(pymux, draw, panes)[0]
 
         assert "alpha" in bar, repr(bar)
@@ -96,8 +96,8 @@ def test_the_pane_at_the_left_end_names_nothing_on_its_left():
 
 
 def test_the_pane_at_the_right_end_names_nothing_on_its_right():
-    with a_client(CHROME, columns=COLUMNS) as (pymux, draw):
-        panes = a_row_of_named_panes(pymux)
+    with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
+        panes = create_row_of_named_panes(pymux)
         bar = bars_of(pymux, draw, panes)[2]
 
         assert bar.split()[:3] == ["2", LEFT_MARK, "beta"], repr(bar)
@@ -106,8 +106,8 @@ def test_the_pane_at_the_right_end_names_nothing_on_its_right():
 
 
 def test_a_lone_pane_names_neither_side():
-    with a_client(CHROME, columns=COLUMNS) as (pymux, draw):
-        panes = a_row_of_named_panes(pymux, ["alone"])
+    with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
+        panes = create_row_of_named_panes(pymux, ["alone"])
         bar = bars_of(pymux, draw, panes)[0]
 
         assert middle_of(bar, "alone") <= 1, repr(bar)
@@ -122,8 +122,8 @@ def test_the_pane_s_own_name_is_in_the_middle_of_its_bar():
     Centred over the pane, and not over what the neighbours left of
     it: a name growing on one side may not slide the title sideways.
     """
-    with a_client(CHROME, columns=COLUMNS) as (pymux, draw):
-        panes = a_row_of_named_panes(pymux)
+    with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
+        panes = create_row_of_named_panes(pymux)
         bars = bars_of(pymux, draw, panes)
 
         for bar, name in zip(bars, NAMES):
@@ -142,11 +142,11 @@ def test_a_strip_names_a_column_that_is_off_the_screen():
     side of the middle one is always on the screen. The one asked
     about here is the other.
     """
-    with a_client(CHROME + ["set-window-option strip on"], columns=COLUMNS) as (
+    with create_client(CHROME + ["set-window-option strip on"], columns=COLUMNS) as (
         pymux,
         draw,
     ):
-        panes = a_row_of_named_panes(pymux)
+        panes = create_row_of_named_panes(pymux)
         state = pymux.get_client_state()
 
         # A frame first, so that the strip has scrolled to the column

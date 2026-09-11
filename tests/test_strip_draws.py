@@ -44,7 +44,7 @@ QUIET = "%s -c 'import time; time.sleep(600)'" % (sys.executable,)
 
 
 @contextmanager
-def a_client(commands=(), rows=ROWS, columns=COLUMNS):
+def create_client(commands=(), rows=ROWS, columns=COLUMNS):
     """
     A server with one client, and a way to draw what it draws.
 
@@ -108,11 +108,11 @@ def a_client(commands=(), rows=ROWS, columns=COLUMNS):
 
 def drawn(commands=(), rows=ROWS, columns=COLUMNS):
     "Every row of the screen a client draws, as strings."
-    with a_client(commands, rows, columns) as (_, draw):
+    with create_client(commands, rows, columns) as (_, draw):
         return draw()
 
 
-def a_dump(rows):
+def dump(rows):
     "Every row, numbered, for a test that has something to explain."
     return "\n".join("%3d %r" % (number, row) for number, row in sorted(rows.items()))
 
@@ -124,7 +124,7 @@ def test_a_pane_has_a_title_bar():
     "What the strip has to keep. Every other layout draws this."
     rows = drawn(CHROME)
 
-    assert rows[0].strip(), a_dump(rows)
+    assert rows[0].strip(), dump(rows)
 
 
 def test_a_strip_keeps_the_title_bar():
@@ -135,7 +135,7 @@ def test_a_strip_keeps_the_title_bar():
     """
     rows = drawn(CHROME + ["set-window-option strip on"])
 
-    assert rows[0].strip(), a_dump(rows)
+    assert rows[0].strip(), dump(rows)
 
 
 def test_a_lone_column_takes_half_the_window_and_no_more():
@@ -162,15 +162,15 @@ def test_a_lone_column_takes_half_the_window_and_no_more():
     border = share - 1
 
     # The title bar of the one column, and then nothing.
-    assert rows[0][:border].strip(), a_dump(rows)
+    assert rows[0][:border].strip(), dump(rows)
 
     # The column's own right border, which the focused pane draws its
     # highlight over.
     for number in range(0, ROWS - 1):
-        assert rows[number][border] != " ", a_dump(rows)
+        assert rows[number][border] != " ", dump(rows)
 
         # Beyond it, background and nothing else.
-        assert set(rows[number][share:]) <= {" ", "."}, a_dump(rows)
+        assert set(rows[number][share:]) <= {" ", "."}, dump(rows)
 
 
 # ----------------------------------------------------------------------
@@ -217,7 +217,7 @@ def test_a_strip_records_where_it_drew_the_columns_it_drew():
     The plan answers that question now, so nothing needs the position
     of a pane that was never drawn. Lillecarl/pymux#217.
     """
-    with a_client(STRIP) as (pymux, draw):
+    with create_client(STRIP) as (pymux, draw):
         _, columns = columns_of(pymux, 3)
         draw()
 
@@ -244,7 +244,7 @@ def test_moving_right_reaches_the_next_column():
     `select-pane -R` steps one cell past the active pane's right edge
     and looks for the pane drawn there.
     """
-    with a_client(STRIP) as (pymux, draw):
+    with create_client(STRIP) as (pymux, draw):
         window, columns = columns_of(pymux, 2)
         draw()
 
@@ -255,7 +255,7 @@ def test_moving_right_reaches_the_next_column():
 
 
 def test_moving_left_comes_back():
-    with a_client(STRIP) as (pymux, draw):
+    with create_client(STRIP) as (pymux, draw):
         window, columns = columns_of(pymux, 2)
         draw()
 
@@ -270,7 +270,7 @@ def test_moving_right_reaches_a_column_that_is_off_the_screen():
     the right edge. It is drawn all the same, at a position the
     renderer never reads, and that is what makes it reachable.
     """
-    with a_client(STRIP) as (pymux, draw):
+    with create_client(STRIP) as (pymux, draw):
         window, columns = columns_of(pymux, 3)
         draw()
 
@@ -283,7 +283,7 @@ def test_moving_right_reaches_a_column_that_is_off_the_screen():
 
 def test_the_next_pane_still_works_in_a_strip():
     "`ctrl+b o`, which walks the panes rather than the geometry."
-    with a_client(STRIP) as (pymux, draw):
+    with create_client(STRIP) as (pymux, draw):
         window, columns = columns_of(pymux, 2)
         draw()
 

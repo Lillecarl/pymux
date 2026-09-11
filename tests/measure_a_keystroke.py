@@ -125,7 +125,7 @@ THE_KEY = "a"
 
 
 @contextmanager
-def a_client():
+def create_client():
     """
     One session, one pane, one client, and no loop turning.
 
@@ -370,7 +370,7 @@ def main() -> int:
     include = os.environ.get("PYMUX_KEYSTROKE_INCLUDE", "")
     tolerance = float(os.environ.get("PYMUX_KEYSTROKE_TOLERANCE") or DEFAULT_TOLERANCE)
 
-    with a_client() as (pymux, state):
+    with create_client() as (pymux, state):
         stages = the_stages(pymux, state)
         if include:
             stages = {n: w for n, w in stages.items() if re.search(include, n)}

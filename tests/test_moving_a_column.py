@@ -14,10 +14,10 @@ the panes on either side (Lillecarl/pymux#207), so a move renames
 three bars, and nothing in the move says so.
 """
 
-from test_strip_draws import CHROME, a_client
+from test_strip_draws import CHROME, create_client
 from test_the_title_bar_names_the_neighbours import (
     COLUMNS,
-    a_row_of_named_panes,
+    create_row_of_named_panes,
     bars_of,
 )
 
@@ -30,22 +30,22 @@ class _Fake:
     "Enough of a pane for the arrangement to hold it."
 
 
-def a_pane():
+def create_pane():
     return Pane(terminal=_Fake())
 
 
-def a_strip(columns=3):
+def create_strip(columns=3):
     """
     A strip of this many columns, and its panes in the order they sit
     in. The focus is on the last one, which is the one just opened.
     """
     window = Window()
-    opened = [a_pane()]
+    opened = [create_pane()]
     window.add_pane(opened[0])
     window.strip = True
 
     for _ in range(columns - 1):
-        opened.append(a_pane())
+        opened.append(create_pane())
         window.add_pane(opened[-1], vsplit=True)
 
     return window, opened
@@ -75,14 +75,14 @@ def order_of(window):
 
 
 def test_a_column_moves_to_the_left():
-    window, panes = a_strip(3)
+    window, panes = create_strip(3)
 
     assert window.move_column(panes[2], -1) is True
     assert order_of(window) == [[panes[0]], [panes[2]], [panes[1]]]
 
 
 def test_a_column_moves_to_the_right():
-    window, panes = a_strip(3)
+    window, panes = create_strip(3)
 
     assert window.move_column(panes[0], +1) is True
     assert order_of(window) == [[panes[1]], [panes[0]], [panes[2]]]
@@ -94,7 +94,7 @@ def test_a_column_at_the_end_of_the_row_stays_there():
     down at the edge of the row does nothing, the way it does nothing
     in niri.
     """
-    window, panes = a_strip(3)
+    window, panes = create_strip(3)
 
     assert window.move_column(panes[0], -1) is False
     assert window.move_column(panes[2], +1) is False
@@ -107,10 +107,10 @@ def test_a_pane_in_a_stack_moves_the_whole_column():
     stack is a different move, and `break-pane` is the command for
     that kind of thing.
     """
-    window, panes = a_strip(2)
+    window, panes = create_strip(2)
 
     # Stack a second pane under the second column.
-    stacked = a_pane()
+    stacked = create_pane()
     window.add_pane(stacked, vsplit=False)
 
     window.move_column(stacked, -1)
@@ -123,7 +123,7 @@ def test_a_column_keeps_its_width_when_it_moves():
     `column_widths` is keyed by the column object, so nothing has to
     carry the width across.
     """
-    window, panes = a_strip(2)
+    window, panes = create_strip(2)
     window.switch_column_width(panes[1])
     was = window.column_width(panes[1])
 
@@ -139,7 +139,7 @@ def test_the_layout_is_rebuilt_after_a_move():
     A hash of the shape alone would leave the panes where they were
     drawn.
     """
-    window, panes = a_strip(2)
+    window, panes = create_strip(2)
     before = window.invalidation_hash()
 
     window.move_column(panes[1], -1)
@@ -157,8 +157,8 @@ def test_moving_a_column_renames_the_title_bars():
     renames them. Nothing in the move does that: the names are read
     off the tree on every render. Lillecarl/pymux#207.
     """
-    with a_client(STRIP, columns=COLUMNS) as (pymux, draw):
-        panes = a_row_of_named_panes(pymux)
+    with create_client(STRIP, columns=COLUMNS) as (pymux, draw):
+        panes = create_row_of_named_panes(pymux)
         moved = panes[2]
 
         def halves():
@@ -184,8 +184,8 @@ def test_moving_a_column_outside_a_strip_is_refused():
     Every other layout divides the window, so there is no row to move
     a column along. `switch-column-width` refuses the same way.
     """
-    with a_client(CHROME, columns=COLUMNS) as (pymux, draw):
-        a_row_of_named_panes(pymux)
+    with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
+        create_row_of_named_panes(pymux)
         draw()
 
         pymux.handle_command("move-column -L")

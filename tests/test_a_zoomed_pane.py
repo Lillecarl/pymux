@@ -13,7 +13,7 @@ well: `window_zoom` saves the tree and `window_unzoom` puts it back.
 """
 
 from prompt_toolkit.data_structures import Size
-from test_strip_draws import CHROME, a_client, a_dump
+from test_strip_draws import CHROME, create_client, dump
 
 from pymux.divided import Divided
 from pymux.layout import layout_of, pane_beside, plan_of
@@ -35,7 +35,7 @@ def two_panes(pymux, command="split-window -h"):
 
 
 def test_zoom_wraps_the_layout_and_keeps_it():
-    with a_client(CHROME) as (pymux, draw):
+    with create_client(CHROME) as (pymux, draw):
         window, _first, _second = two_panes(pymux)
 
         assert isinstance(layout_of(pymux, window), Divided)
@@ -52,7 +52,7 @@ def test_a_zoomed_strip_is_still_a_strip_underneath():
     The fault Carl asked about. The branch tested `zoom` before
     `strip`, so zooming a column threw the row away for that frame.
     """
-    with a_client(STRIP) as (pymux, draw):
+    with create_client(STRIP) as (pymux, draw):
         window, _first, _second = two_panes(pymux)
         window.zoom = True
 
@@ -63,7 +63,7 @@ def test_a_zoomed_strip_is_still_a_strip_underneath():
 
 
 def test_the_zoomed_pane_is_the_whole_window():
-    with a_client(CHROME) as (pymux, draw):
+    with create_client(CHROME) as (pymux, draw):
         window, _first, second = two_panes(pymux)
         window.zoom = True
 
@@ -77,7 +77,7 @@ def test_the_zoomed_pane_is_the_whole_window():
 
 
 def test_nothing_is_beside_a_zoomed_pane():
-    with a_client(CHROME) as (pymux, draw):
+    with create_client(CHROME) as (pymux, draw):
         window, _first, second = two_panes(pymux)
         window.zoom = True
 
@@ -87,7 +87,7 @@ def test_nothing_is_beside_a_zoomed_pane():
 
 def test_only_the_zoomed_pane_is_drawn():
     "The other pane is behind it, so no cell of it reaches the screen."
-    with a_client(CHROME) as (pymux, draw):
+    with create_client(CHROME) as (pymux, draw):
         window, first, second = two_panes(pymux)
         first.chosen_name = "hidden"
         second.chosen_name = "shown"
@@ -96,8 +96,8 @@ def test_only_the_zoomed_pane_is_drawn():
         rows = draw()
 
         every_cell = "".join(rows.values())
-        assert "shown" in every_cell, a_dump(rows)
-        assert "hidden" not in every_cell, a_dump(rows)
+        assert "shown" in every_cell, dump(rows)
+        assert "hidden" not in every_cell, dump(rows)
 
 
 def test_a_zoomed_pane_keeps_its_title_bar():
@@ -107,20 +107,20 @@ def test_a_zoomed_pane_keeps_its_title_bar():
     Before, the zoom branch returned the pane's own container with
     nothing around it, and the float at `top=-1` fell off the screen.
     """
-    with a_client(CHROME) as (pymux, draw):
+    with create_client(CHROME) as (pymux, draw):
         window, _first, second = two_panes(pymux)
         second.chosen_name = "shown"
         window.zoom = True
 
         rows = draw()
 
-        assert "shown" in rows[0], a_dump(rows)
-        assert " Z " in rows[0], a_dump(rows)
+        assert "shown" in rows[0], dump(rows)
+        assert " Z " in rows[0], dump(rows)
 
 
 def test_the_mark_goes_when_the_zoom_does():
     "The same container draws both ways, so the bar has to follow."
-    with a_client(CHROME) as (pymux, draw):
+    with create_client(CHROME) as (pymux, draw):
         window, _first, _second = two_panes(pymux)
         window.zoom = True
         draw()
@@ -128,7 +128,7 @@ def test_the_mark_goes_when_the_zoom_does():
         window.zoom = False
         rows = draw()
 
-        assert " Z " not in "".join(rows.values()), a_dump(rows)
+        assert " Z " not in "".join(rows.values()), dump(rows)
 
 
 def test_a_zoomed_stack_pays_for_no_bar_below():
@@ -137,7 +137,7 @@ def test_a_zoomed_stack_pays_for_no_bar_below():
     zoomed pane has neither. So the row is not reserved and the pane
     is one row taller.
     """
-    with a_client(CHROME) as (pymux, draw):
+    with create_client(CHROME) as (pymux, draw):
         window, _first, _second = two_panes(pymux, "split-window -v")
 
         stacked = plan_of(pymux, window).plane.height
@@ -149,7 +149,7 @@ def test_a_zoomed_stack_pays_for_no_bar_below():
 
 def test_the_window_comes_back_the_way_it_was_left():
     "Unzooming is dropping the wrapper, and nothing under it moved."
-    with a_client(STRIP) as (pymux, draw):
+    with create_client(STRIP) as (pymux, draw):
         window, first, second = two_panes(pymux)
         before = plan_of(pymux, window)
 
@@ -165,7 +165,7 @@ def test_the_window_comes_back_the_way_it_was_left():
 
 def test_a_zoomed_window_of_one_pane_is_that_pane():
     "Nothing refuses a zoom of one pane, and nothing needs to."
-    with a_client(CHROME) as (pymux, draw):
+    with create_client(CHROME) as (pymux, draw):
         window = pymux.arrangement.get_active_window()
         window.zoom = True
 
@@ -177,7 +177,7 @@ def test_a_zoomed_window_of_one_pane_is_that_pane():
 
 def test_the_layout_measures_what_it_is_given():
     "A zoomed pane is the view, whatever size the view is."
-    with a_client(CHROME) as (pymux, draw):
+    with create_client(CHROME) as (pymux, draw):
         window, _first, second = two_panes(pymux)
         window.zoom = True
 
