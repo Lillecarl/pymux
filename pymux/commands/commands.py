@@ -1479,7 +1479,7 @@ def dump_stacks(pymux: "Pymux", variables: _VariablesDict) -> None:
     `pymux/introspect.py` says why a server answers for itself, and what
     `SIGUSR1` gives instead when the loop is too wedged to read this.
     """
-    path = introspect.a_dump(pymux)
+    path = introspect.write_dump(pymux)
     pymux.print_command_line(str(path))
     pymux.show_message("Wrote a dump to %s" % (path,))
 
@@ -1491,7 +1491,7 @@ def counters(pymux: "Pymux", variables: _VariablesDict) -> None:
     The half a stack cannot give: a stack says where the server is in
     one instant, and this says what it has been doing for an hour.
     """
-    said = introspect.the_counters(pymux)
+    said = introspect.counters(pymux)
     pymux.print_command_line(said)
     pymux.get_client_state().layout_manager.display_popup("counters", said)
 

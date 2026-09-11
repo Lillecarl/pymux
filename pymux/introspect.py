@@ -49,9 +49,9 @@ if TYPE_CHECKING:
 
 __all__ = [
     "Counters",
-    "a_dump",
+    "write_dump",
     "answer_a_signal",
-    "the_stacks_file",
+    "stacks_file",
     "where_a_dump_goes",
 ]
 
@@ -106,7 +106,7 @@ def where_a_dump_goes() -> Path:
     return (logfile() or Path.home() / ".local/state/pymux/server.log").parent
 
 
-def the_stacks_file() -> Path:
+def stacks_file() -> Path:
     "Where a `SIGUSR1` writes."
     return where_a_dump_goes() / ("stacks-%d.log" % (os.getpid(),))
 
@@ -131,7 +131,7 @@ def answer_a_signal() -> Path | None:
     """
     global _stacks_file
 
-    path = the_stacks_file()
+    path = stacks_file()
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         _stacks_file = open(path, "a", buffering=1)
@@ -206,7 +206,7 @@ def let_a_debugger_attach(allowed: bool) -> bool:
     return allowed
 
 
-def a_dump(pymux: "Pymux") -> Path:
+def write_dump(pymux: "Pymux") -> Path:
     """
     Write down what this server is doing now, and answer with the file.
 
@@ -329,7 +329,7 @@ def what_it_is_doing(pymux: "Pymux") -> str:
         [
             _the_server(pymux),
             "",
-            the_counters(pymux),
+            counters(pymux),
             "",
             _the_threads(),
             "",
@@ -339,7 +339,7 @@ def what_it_is_doing(pymux: "Pymux") -> str:
     )
 
 
-def the_counters(pymux: "Pymux") -> str:
+def counters(pymux: "Pymux") -> str:
     """
     What this server has done, and how often.
 

@@ -71,7 +71,7 @@ def a_server(tmp_path, monkeypatch):
 def test_a_dump_goes_beside_the_log(a_server, tmp_path):
     "A dump is read with the log around it, so it lives in the same place."
     pymux, _state = a_server
-    path = introspect.a_dump(pymux)
+    path = introspect.write_dump(pymux)
 
     assert path.parent == tmp_path
     assert path.is_file()
@@ -185,7 +185,7 @@ def test_the_counters_name_what_asked_for_each_frame(a_server):
         pymux.invalidate(Woke.A_CLIENT_RESIZED)
         pymux.invalidate(Woke.AN_APPLICATION)
 
-    said = introspect.the_counters(pymux)
+    said = introspect.counters(pymux)
 
     assert pymux.counters.invalidates[Woke.A_CLIENT_RESIZED] == 2
     assert str(Woke.A_CLIENT_RESIZED)[:46] in said
