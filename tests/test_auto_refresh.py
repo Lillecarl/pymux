@@ -80,7 +80,7 @@ def set_option(pymux, name, value):
     ALL_OPTIONS[name].set_value(pymux, value)
 
 
-def the_text(state):
+def text(state):
     "What the refresh reads, read the way the refresh reads it."
     with set_app(state.app):
         return state.layout_manager.what_time_moves()
@@ -137,7 +137,7 @@ def test_a_full_screen_session_asks_for_no_frame_at_all(session):
     pymux, state, frames = session
     set_option(pymux, "full-screen", "on")
 
-    assert the_text(state) == ()
+    assert text(state) == ()
     pymux.refresh_what_time_moves()
     pymux.refresh_what_time_moves()
 
@@ -164,17 +164,17 @@ def test_a_clock_inside_a_pane_asks_for_frames(session):
     pymux.refresh_what_time_moves()
 
     assert len(frames) == 1
-    assert the_text(state) != ()
+    assert text(state) != ()
 
 
 def test_the_text_holds_the_clock_and_the_window_list(session):
     "What the refresh compares, spelled out."
     pymux, state, frames = session
 
-    text = the_text(state)
+    said = text(state)
 
-    assert any(":" in part for part in text), text  # The clock.
-    assert any("python" in part or "bash" in part for part in text), text
+    assert any(":" in part for part in said), said  # The clock.
+    assert any("python" in part or "bash" in part for part in said), said
 
 
 # ----------------------------------------------------------------------
@@ -201,10 +201,10 @@ def test_a_title_in_a_window_out_of_view_is_not_read(session):
     pymux, state, frames = session
     other = out_of_view(pymux, state)
 
-    before = the_text(state)
+    before = text(state)
     other.panes[0].screen.titles.window = "a name nobody can see"
 
-    assert the_text(state) == before
+    assert text(state) == before
 
 
 def test_a_title_in_the_window_in_view_is_read(session):
@@ -212,10 +212,10 @@ def test_a_title_in_the_window_in_view_is_read(session):
     pymux, state, frames = session
     set_option(pymux, "pane-border-status", "on")
 
-    before = the_text(state)
+    before = text(state)
     in_view(pymux, state).panes[0].screen.titles.window = "a name in view"
 
-    assert the_text(state) != before
+    assert text(state) != before
 
 
 def test_the_window_list_still_carries_the_other_windows(session):
@@ -226,10 +226,10 @@ def test_the_window_list_still_carries_the_other_windows(session):
     pymux, state, frames = session
     other = out_of_view(pymux, state)
 
-    before = the_text(state)
+    before = text(state)
     other.chosen_name = "renamed"
 
-    assert the_text(state) != before
+    assert text(state) != before
 
 
 def test_a_clock_in_a_window_out_of_view_asks_for_nothing(session):

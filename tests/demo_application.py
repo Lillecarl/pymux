@@ -50,12 +50,12 @@ ANSI_NAMES = [
 ]
 
 
-def a_line(*parts):
+def create_line(*parts):
     "One row of the screen from styled pieces."
     return "".join(parts) + RESET
 
 
-def the_colours():
+def colours():
     """
     The sixteen, as blocks on the background they name, two rows of
     eight, each block two cells wide with its name under it.
@@ -67,19 +67,19 @@ def the_colours():
         for code, name in zip(ANSI[half : half + 8], ANSI_NAMES[half : half + 8]):
             blocks += "\x1b[7m\x1b[%dm   \x1b[0m" % (code,)
             names += " %-2s " % (name[:2].capitalize(),)
-        rows.append(a_line("  ", blocks))
-        rows.append(a_line("  ", DIM, names, RESET))
+        rows.append(create_line("  ", blocks))
+        rows.append(create_line("  ", DIM, names, RESET))
     return rows
 
 
-def the_files():
+def files():
     "A listing, as one paints it: the kinds of a file in their colours."
     return [
-        a_line("  ", BOLD, "drwxr-xr-x", RESET, "  ", "\x1b[34m\x1b[1m", "src", RESET),
-        a_line("  ", BOLD, "-rw-r--r--", RESET, "  ", "\x1b[32m", "README.md", RESET),
-        a_line("  ", BOLD, "-rwxr-xr-x", RESET, "  ", "\x1b[93m", "build.sh", RESET),
-        a_line("  ", BOLD, "-rw-r--r--", RESET, "  ", "\x1b[90m", ".gitignore", RESET),
-        a_line(
+        create_line("  ", BOLD, "drwxr-xr-x", RESET, "  ", "\x1b[34m\x1b[1m", "src", RESET),
+        create_line("  ", BOLD, "-rw-r--r--", RESET, "  ", "\x1b[32m", "README.md", RESET),
+        create_line("  ", BOLD, "-rwxr-xr-x", RESET, "  ", "\x1b[93m", "build.sh", RESET),
+        create_line("  ", BOLD, "-rw-r--r--", RESET, "  ", "\x1b[90m", ".gitignore", RESET),
+        create_line(
             "  ",
             BOLD,
             "lrwxrwxrwx",
@@ -96,59 +96,59 @@ def the_files():
     ]
 
 
-def the_diff():
+def diff():
     "A diff: what a pane that carries one shows for it."
     return [
-        a_line("  ", "\x1b[90m", "@@ -12,4 +12,5 @@", RESET),
-        a_line("  ", "\x1b[31m", "-", "the colour of the pane, chosen once", RESET),
-        a_line(
+        create_line("  ", "\x1b[90m", "@@ -12,4 +12,5 @@", RESET),
+        create_line("  ", "\x1b[31m", "-", "the colour of the pane, chosen once", RESET),
+        create_line(
             "  ", "\x1b[32m", "+", "a role named once, and the rules it makes", RESET
         ),
-        a_line(
+        create_line(
             "  ", "\x1b[32m", "+", "a theme from the styles of pygments", RESET
         ),
-        a_line("  ", " ", "  the border keeps its own colour", RESET),
+        create_line("  ", " ", "  the border keeps its own colour", RESET),
     ]
 
 
-def the_progress():
+def progress():
     "A bar of equals, filled as far as it says."
     done, total, width = 17, 24, 30
     filled = int(width * done / total)
     bar = "=" * filled + "-" * (width - filled)
-    return a_line("  ", "\x1b[35m", "[", bar, "]", RESET, " %d of %d" % (done, total))
+    return create_line("  ", "\x1b[35m", "[", bar, "]", RESET, " %d of %d" % (done, total))
 
 
-def the_processes():
+def processes():
     "A table in plain characters, headed in bold."
     return [
-        a_line("  ", BOLD, "PID     TIME    WHAT", RESET),
-        a_line("  ", DIM, "1       0:00    the init of it all", RESET),
-        a_line("  ", DIM, "42      3:14    the theme, reading the screen", RESET),
-        a_line("  ", DIM, "99      0:07    the pane, holding it", RESET),
+        create_line("  ", BOLD, "PID     TIME    WHAT", RESET),
+        create_line("  ", DIM, "1       0:00    the init of it all", RESET),
+        create_line("  ", DIM, "42      3:14    the theme, reading the screen", RESET),
+        create_line("  ", DIM, "99      0:07    the pane, holding it", RESET),
     ]
 
 
-def the_rows():
+def screen_rows():
     "Everything the screen says, in order."
     return (
         [
-            a_line("", REVERSE, BOLD, " THE PANE, HOLDING A PROGRAM ", RESET),
+            create_line("", REVERSE, BOLD, " THE PANE, HOLDING A PROGRAM ", RESET),
             "",
             "  A theme draws around this: the status line,",
             "  the title bars, the borders. The colours in",
             "  the pane are the program's own, and stay.",
             "",
         ]
-        + the_files()
+        + files()
         + [""]
-        + the_diff()
+        + diff()
         + [""]
-        + [the_progress()]
+        + [progress()]
         + [""]
-        + the_colours()
+        + colours()
         + [""]
-        + the_processes()
+        + processes()
     )
 
 
@@ -159,11 +159,11 @@ def main():
     # one thing that keeps the screen from settling, and the pane dies
     # with the program, so nobody inherits the state.
     sys.stdout.write("\x1b[?25l\x1b[2J\x1b[H")
-    for line in the_rows()[: rows - 1]:
+    for line in screen_rows()[: rows - 1]:
         sys.stdout.write(line + "\r\n")
 
     tail = " demo_application.py  ·  one program, every theme "
-    sys.stdout.write("\x1b[%d;1H%s" % (rows, a_line(DIM, " ready ", RESET) + tail))
+    sys.stdout.write("\x1b[%d;1H%s" % (rows, create_line(DIM, " ready ", RESET) + tail))
     sys.stdout.flush()
 
     # Parked, so the photograph finds it where it was left.

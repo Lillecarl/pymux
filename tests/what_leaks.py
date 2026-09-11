@@ -105,7 +105,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 # not the directory above it.
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
-from session import Session, the_routes  # noqa: E402
+from session import Session, routes  # noqa: E402
 from prompt_toolkit.application.current import set_app  # noqa: E402
 from prompt_toolkit.data_structures import Size  # noqa: E402
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers  # noqa: E402
@@ -178,7 +178,7 @@ NOT_A_LEAK = frozenset(["Char", "_Char"])
 WORST = 25
 
 
-def the_recordings() -> list[tuple[str, str]]:
+def recordings() -> list[tuple[str, str]]:
     """
     Every recording, by name, as text.
 
@@ -316,7 +316,7 @@ async def settle(panes, seconds: float = 10.0) -> bool:
     return True
 
 
-async def a_round(session: Session, recordings) -> bool:
+async def create_round(session: Session, recordings) -> bool:
     """
     One round: open, feed, draw, resize, scroll, then tear it all down.
 
@@ -466,9 +466,9 @@ async def run(rounds: int, recordings) -> list[str]:
     alive = []
 
     for _round in range(rounds):
-        for name, a_route in the_routes(ROUTE, "PYMUX_LEAKS_ROUTE"):
-            with a_route() as session:
-                if not await a_round(session, recordings):
+        for name, route in routes(ROUTE, "PYMUX_LEAKS_ROUTE"):
+            with route() as session:
+                if not await create_round(session, recordings):
                     alive.append(
                         "a pane never reported itself terminated, so this "
                         "round measured nothing"
@@ -481,7 +481,7 @@ async def run(rounds: int, recordings) -> list[str]:
 
 
 async def main() -> int:
-    recordings = the_recordings()
+    recordings = recordings()
     total = sum(len(data) for _name, data in recordings)
     each = min(total, BYTES)
 

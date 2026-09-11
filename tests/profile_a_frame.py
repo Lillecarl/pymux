@@ -132,7 +132,7 @@ class _Connection(Connection):
     graphics = _Graphics()
 
 
-def a_server(panes: int):
+def create_server(panes: int):
     """
     A server with one client and that many panes, and the client's
     application.
@@ -165,7 +165,7 @@ def a_server(panes: int):
     return pymux, state, pipe
 
 
-def a_frame(state):
+def create_frame(state):
     """
     One whole frame, the way the event loop draws one.
 
@@ -234,13 +234,13 @@ def stop_the_panes(pymux) -> None:
 
 def idle(pymux, state, frames: int):
     "Frames with nothing changed. Nothing here needs to be paid."
-    draw = a_frame(state)
+    draw = create_frame(state)
     return lambda: [draw() for _ in range(frames)]
 
 
 def output(pymux, state, frames: int):
     "A line into one pane before each frame, which is what a program does."
-    draw = a_frame(state)
+    draw = create_frame(state)
     window = pymux.arrangement.get_active_window()
     pane = window.panes[0]
 
@@ -256,7 +256,7 @@ def output(pymux, state, frames: int):
 
 def keys(pymux, state, frames: int):
     "The focus moving left and right, with a frame after each move."
-    draw = a_frame(state)
+    draw = create_frame(state)
 
     def work() -> None:
         for number in range(frames):
@@ -277,7 +277,7 @@ def sparse(pymux, state, frames: int):
 
     The positions cycle deterministically, so a run is the same run.
     """
-    draw = a_frame(state)
+    draw = create_frame(state)
     window = pymux.arrangement.get_active_window()
     pane = window.panes[0]
     columns = COLUMNS
@@ -316,7 +316,7 @@ def rain(pymux, state, frames: int):
     synchronous on purpose: a flame graph can only follow `draw()` when
     the draw is not hidden behind an await.
     """
-    draw = a_frame(state)
+    draw = create_frame(state)
     window = pymux.arrangement.get_active_window()
     pane = window.panes[0]
     rows = ROWS
@@ -484,7 +484,7 @@ def main() -> int:
         asyncio.run(_animated(ANIMATED, ANIMATED_SECONDS, out))
 
     for name, phase in phases:
-        pymux, state, pipe = a_server(panes)
+        pymux, state, pipe = create_server(panes)
         try:
             with set_app(state.app):
                 work = phase(pymux, state, frames)
@@ -492,7 +492,7 @@ def main() -> int:
                 # One frame outside the profile. The first frame of a
                 # client draws every cell and builds every container,
                 # and that is startup and not a frame.
-                a_frame(state)()
+                create_frame(state)()
 
                 profiler = Profiler(interval=INTERVAL)
                 profiler.start()

@@ -120,8 +120,8 @@ ORDER = ("key", "parse", "render")
 #: What the program in the pane answers with, and what a person typed.
 #: One cell either way, which is the steady state a keystroke is: a
 #: frame where one thing changed.
-THE_ANSWER = "~"
-THE_KEY = "a"
+ANSWER = "~"
+KEY = "a"
 
 
 @contextmanager
@@ -183,7 +183,7 @@ def create_client():
         loop.close()
 
 
-def the_stages(pymux, state):
+def stages(pymux, state):
     """
     The three pieces of a keystroke, each as a callable.
 
@@ -196,11 +196,11 @@ def the_stages(pymux, state):
     processor = state.app.key_processor
 
     def key():
-        processor.feed(KeyPress(THE_KEY, THE_KEY))
+        processor.feed(KeyPress(KEY, KEY))
         processor.process_keys()
 
     def parse():
-        stream.feed(THE_ANSWER)
+        stream.feed(ANSWER)
 
     def render():
         state.app.renderer.render(state.app, state.app.layout)
@@ -371,7 +371,7 @@ def main() -> int:
     tolerance = float(os.environ.get("PYMUX_KEYSTROKE_TOLERANCE") or DEFAULT_TOLERANCE)
 
     with create_client() as (pymux, state):
-        stages = the_stages(pymux, state)
+        stages = stages(pymux, state)
         if include:
             stages = {n: w for n, w in stages.items() if re.search(include, n)}
         if not stages:

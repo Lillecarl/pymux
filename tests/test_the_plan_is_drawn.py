@@ -73,7 +73,7 @@ def create_pane(letter: str, width: int, height: int = HEIGHT):
     )
 
 
-def a_row(widths, height=HEIGHT, gap=0):
+def create_row(widths, height=HEIGHT, gap=0):
     """
     A plan of panes side by side, and their containers.
 
@@ -125,39 +125,39 @@ def drawn(plan, containers, visible, offset=Point(x=0, y=0), rows=HEIGHT, row=0)
 
 
 def test_every_pane_is_drawn_where_the_plan_puts_it():
-    plan, containers = a_row([4, 4])
+    plan, containers = create_row([4, 4])
 
     assert drawn(plan, containers, visible=8) == "aaaabbbb"
 
 
 def test_a_gap_in_the_plan_is_left_alone():
     "It is where a border goes, and a border is not a pane."
-    plan, containers = a_row([4, 4], gap=1)
+    plan, containers = create_row([4, 4], gap=1)
 
     assert drawn(plan, containers, visible=9) == "aaaa bbbb"
 
 
 def test_a_plan_wider_than_the_view_shows_what_fits():
-    plan, containers = a_row([4, 4, 4])
+    plan, containers = create_row([4, 4, 4])
 
     assert drawn(plan, containers, visible=8) == "aaaabbbb"
 
 
 def test_the_offset_says_which_part_is_on_screen():
-    plan, containers = a_row([4, 4, 4])
+    plan, containers = create_row([4, 4, 4])
 
     assert drawn(plan, containers, visible=8, offset=Point(x=4, y=0)) == "bbbbcccc"
 
 
 def test_an_offset_between_two_panes_shows_both():
     "Nothing says a view may only stop on an edge."
-    plan, containers = a_row([4, 4, 4])
+    plan, containers = create_row([4, 4, 4])
 
     assert drawn(plan, containers, visible=8, offset=Point(x=2, y=0)) == "aabbbbcc"
 
 
 def test_a_plan_narrower_than_the_view_leaves_the_rest_alone():
-    plan, containers = a_row([4])
+    plan, containers = create_row([4])
 
     assert drawn(plan, containers, visible=8) == "aaaa    "
 
@@ -168,7 +168,7 @@ def test_a_pane_behind_the_origin_is_clipped_and_not_lost():
     is written at a negative position, and the renderer reads only the
     rectangle it shows, so the cells outside cost nothing.
     """
-    plan, containers = a_row([4, 4])
+    plan, containers = create_row([4, 4])
 
     assert drawn(plan, containers, visible=4, offset=Point(x=6, y=0)) == "bb  "
 
@@ -227,7 +227,7 @@ def test_the_layout_fills_the_gap_it_left():
     not be aware of borders ... the layout is responsible for drawing
     the borders either way."
     """
-    plan, containers = a_row([4, 4], gap=1)
+    plan, containers = create_row([4, 4], gap=1)
     line = Line(Rect(x=4, y=0, width=1, height=HEIGHT), "|")
 
     assert drawn_with_chrome(plan, containers, [line], visible=9) == "aaaa|bbbb"
@@ -235,14 +235,14 @@ def test_the_layout_fills_the_gap_it_left():
 
 def test_a_pane_is_drawn_over_a_line():
     "The panes go on last, so a line under one is not seen."
-    plan, containers = a_row([4, 4])
+    plan, containers = create_row([4, 4])
     line = Line(Rect(x=0, y=0, width=8, height=HEIGHT), "|")
 
     assert drawn_with_chrome(plan, containers, [line], visible=8) == "aaaabbbb"
 
 
 def test_a_line_outside_the_view_is_not_drawn_on_it():
-    plan, containers = a_row([4], gap=1)
+    plan, containers = create_row([4], gap=1)
     line = Line(Rect(x=4, y=0, width=1, height=HEIGHT), "|")
 
     assert drawn_with_chrome(plan, containers, [line], visible=4) == "aaaa"
@@ -250,7 +250,7 @@ def test_a_line_outside_the_view_is_not_drawn_on_it():
 
 def test_a_layout_with_no_chrome_draws_none():
     "A layout need not have lines. `_Fixed` has no `chrome` at all."
-    plan, containers = a_row([4, 4], gap=1)
+    plan, containers = create_row([4, 4], gap=1)
 
     assert drawn(plan, containers, visible=9) == "aaaa bbbb"
 
@@ -282,7 +282,7 @@ def test_the_container_holds_the_plan_it_drew():
     so it has to be able to ask what the frame is. That is the two
     answers problem going away.
     """
-    plan, containers = a_row([4, 4])
+    plan, containers = create_row([4, 4])
     container = PlanContainer(_Fixed(plan), containers)
 
     assert container.plan is None
@@ -304,7 +304,7 @@ def test_the_container_holds_the_plan_it_drew():
 
 
 def test_the_container_names_the_pane_that_has_the_keyboard():
-    plan, containers = a_row([4, 4])
+    plan, containers = create_row([4, 4])
     container = PlanContainer(_Fixed(plan), containers)
     wanted = list(containers)[1]
 
@@ -320,7 +320,7 @@ def test_the_container_names_the_pane_that_has_the_keyboard():
 
 def test_a_pane_with_no_container_is_not_drawn():
     "And does not stop the frame: a bar is drawn on every one."
-    plan, containers = a_row([4, 4])
+    plan, containers = create_row([4, 4])
     containers.pop(list(containers)[0])
 
     assert drawn(plan, containers, visible=8) == "    bbbb"
@@ -348,7 +348,7 @@ def _drawn_at(plan, containers, offset, visible=8):
 
 def test_a_pane_is_told_where_it_ended_up():
     "A click has to reach the pane that was drawn under it."
-    plan, containers = a_row([4, 4, 4])
+    plan, containers = create_row([4, 4, 4])
     panes = list(containers)
 
     where = _drawn_at(plan, containers, Point(x=2, y=0))
@@ -368,7 +368,7 @@ def test_a_pane_with_no_part_of_it_in_the_view_is_not_drawn():
     A pane that is *partly* in the view is written whole and clipped,
     which is what the plane rests on, and the test above holds that.
     """
-    plan, containers = a_row([4, 4, 4])
+    plan, containers = create_row([4, 4, 4])
     panes = list(containers)
 
     where = _drawn_at(plan, containers, Point(x=4, y=0))
@@ -383,7 +383,7 @@ def test_the_container_asks_for_no_size_of_its_own():
     wants is what every other layout does, and what this exists to
     avoid.
     """
-    plan, containers = a_row([4, 4, 4])
+    plan, containers = create_row([4, 4, 4])
     container = PlanContainer(_Fixed(plan), containers)
 
     assert container.preferred_width(80).preferred <= 80
@@ -391,7 +391,7 @@ def test_the_container_asks_for_no_size_of_its_own():
 
 
 def test_a_row_is_as_wide_as_the_screen_whatever_the_plan_is():
-    plan, containers = a_row([4, 4, 4])
+    plan, containers = create_row([4, 4, 4])
 
     for visible in (1, 3, 7, 12, 40):
         assert len(drawn(plan, containers, visible=visible)) == visible

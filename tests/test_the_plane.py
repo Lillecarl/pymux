@@ -56,7 +56,7 @@ class _Pane:
 # Building one by hand, for the tests that name a shape.
 
 
-def a_plan(**rects: Rect) -> Plan:
+def create_plan(**rects: Rect) -> Plan:
     "A plan of one pane per rectangle, each named by its keyword."
     return Plan({Slot(_Pane(name)): rect for name, rect in rects.items()})
 
@@ -109,7 +109,7 @@ def _split(draw, box: Rect, room: int) -> list[Rect]:
 
 
 @st.composite
-def a_box(draw) -> Rect:
+def any_box(draw) -> Rect:
     "Somewhere on the plane, which is unbounded and may be negative."
     return Rect(
         x=draw(st.integers(min_value=-30, max_value=30)),
@@ -120,13 +120,13 @@ def a_box(draw) -> Rect:
 
 
 @st.composite
-def a_tiling(draw) -> list[Rect]:
+def any_tiling(draw) -> list[Rect]:
     "Rectangles that fill a box exactly, the way a divided layout does."
-    return _split(draw, draw(a_box()), room=3)
+    return _split(draw, draw(any_box()), room=3)
 
 
 @st.composite
-def a_scatter(draw) -> list[Rect]:
+def any_scatter(draw) -> list[Rect]:
     """
     Rectangles that overlap nothing and fill nothing.
 
@@ -136,7 +136,7 @@ def a_scatter(draw) -> list[Rect]:
     dropping rectangles and shrinking each one where it stands keeps
     the one rule the plane has.
     """
-    rects = draw(a_tiling())
+    rects = draw(any_tiling())
     kept = []
 
     for rect in rects:
@@ -155,7 +155,7 @@ def a_scatter(draw) -> list[Rect]:
 
 
 @st.composite
-def a_drawn_plan(draw, rects) -> Plan:
+def any_drawn_plan(draw, rects) -> Plan:
     "A plan of those rectangles, some of the slots tabbed."
     slots = []
     number = 0
@@ -173,8 +173,8 @@ def a_drawn_plan(draw, rects) -> Plan:
     return Plan(slots)
 
 
-TILINGS = a_drawn_plan(a_tiling())
-SCATTERS = a_drawn_plan(a_scatter())
+TILINGS = any_drawn_plan(any_tiling())
+SCATTERS = any_drawn_plan(any_scatter())
 PLANS = st.one_of(TILINGS, SCATTERS)
 
 
@@ -182,7 +182,7 @@ PLANS = st.one_of(TILINGS, SCATTERS)
 # The promises, in one place, for every slice after this one.
 
 
-def a_walk(plan: Plan, slot: Slot, side: Side) -> list[Slot]:
+def walk(plan: Plan, slot: Slot, side: Side) -> list[Slot]:
     """
     Every slot a person reaches by pressing one direction again and
     again. It raises if the walk comes back to somewhere it has been,
@@ -266,7 +266,7 @@ def every_promise_holds(plan: Plan) -> None:
                 "%r is not across from %r" % (other, slot)
             )
 
-            a_walk(plan, slot, side)
+            walk(plan, slot, side)
 
     assert _the_same_panes(plan.order, plan.shown), "the numbering lost a pane"
     assert _the_same_panes(plan.reading_order(), plan.shown), "reading lost a pane"
@@ -342,7 +342,7 @@ def test_at_finds_whatever_holds_a_cell(plan):
 
 
 def test_a_cell_outside_everything_holds_nothing():
-    plan = a_plan(A=Rect(0, 0, 4, 4))
+    plan = create_plan(A=Rect(0, 0, 4, 4))
 
     assert plan.at(Point(x=-1, y=0)) is None
     assert plan.at(Point(x=4, y=0)) is None
@@ -365,7 +365,7 @@ def test_a_pane_is_found_by_its_slot_and_a_hidden_one_too():
 
 
 def test_a_pane_that_is_not_on_the_plan_is_a_fault():
-    plan = a_plan(A=Rect(0, 0, 4, 4))
+    plan = create_plan(A=Rect(0, 0, 4, 4))
 
     try:
         plan.slot_of(_Pane("elsewhere"))
@@ -390,7 +390,7 @@ def test_a_pane_in_two_slots_is_a_fault():
 
 
 def two_columns() -> Plan:
-    return a_plan(A=Rect(0, 0, 10, 6), B=Rect(10, 0, 10, 6))
+    return create_plan(A=Rect(0, 0, 10, 6), B=Rect(10, 0, 10, 6))
 
 
 def test_the_slot_beside_this_one_is_the_one_that_touches_it():
@@ -409,7 +409,7 @@ def test_nothing_is_beyond_the_edge():
 
 def test_the_nearest_one_wins():
     "Two slots across from me, and the near one answers."
-    plan = a_plan(
+    plan = create_plan(
         A=Rect(0, 0, 4, 4),
         far=Rect(20, 0, 4, 4),
         near=Rect(8, 0, 4, 4),
@@ -420,7 +420,7 @@ def test_the_nearest_one_wins():
 
 def test_the_widest_one_wins_a_tie():
     "Both touch my edge, so the one that shares more of it answers."
-    plan = a_plan(
+    plan = create_plan(
         A=Rect(0, 0, 4, 6),
         thin=Rect(4, 0, 4, 2),
         wide=Rect(4, 2, 4, 4),
@@ -431,7 +431,7 @@ def test_the_widest_one_wins_a_tie():
 
 def test_the_first_one_on_the_plane_wins_an_even_tie():
     "Same gap and the same share of my edge, so insertion order says."
-    plan = a_plan(
+    plan = create_plan(
         A=Rect(0, 0, 4, 4),
         first=Rect(4, 0, 4, 2),
         second=Rect(4, 2, 4, 2),
@@ -445,7 +445,7 @@ def test_a_neighbour_has_to_be_across_from_me():
     Strict, the way tmux is. The slot below and to the right is not
     "to the right", because none of its rows are mine.
     """
-    plan = a_plan(A=Rect(0, 0, 4, 4), corner=Rect(4, 4, 4, 4))
+    plan = create_plan(A=Rect(0, 0, 4, 4), corner=Rect(4, 4, 4, 4))
 
     assert plan.neighbour(named(plan, "A"), Side.RIGHT) is None
     assert plan.neighbour(named(plan, "A"), Side.BELOW) is None
@@ -453,7 +453,7 @@ def test_a_neighbour_has_to_be_across_from_me():
 
 def test_touching_at_a_corner_only_is_not_across_from_me():
     "The bands share a number and no cell, which is not an overlap."
-    plan = a_plan(A=Rect(0, 0, 4, 4), corner=Rect(4, -4, 4, 4))
+    plan = create_plan(A=Rect(0, 0, 4, 4), corner=Rect(4, -4, 4, 4))
 
     assert plan.neighbour(named(plan, "A"), Side.RIGHT) is None
 
@@ -467,7 +467,7 @@ def test_a_diagonal_pair_are_not_neighbours():
     strictness working: a person pressing right does not want the
     focus to jump down a row.
     """
-    plan = a_plan(A=Rect(0, 0, 4, 4), B=Rect(10, 10, 4, 4))
+    plan = create_plan(A=Rect(0, 0, 4, 4), B=Rect(10, 10, 4, 4))
 
     for side in Side:
         assert plan.neighbour(named(plan, "A"), side) is None
@@ -490,7 +490,7 @@ def test_the_neighbour_of_my_neighbour_is_not_always_me():
     the left of B. This is not a fault to fix: it is what a layout
     with panes of different sizes is.
     """
-    plan = a_plan(A=Rect(0, 0, 6, 2), D=Rect(0, 2, 6, 4), B=Rect(6, 0, 14, 6))
+    plan = create_plan(A=Rect(0, 0, 6, 2), D=Rect(0, 2, 6, 4), B=Rect(6, 0, 14, 6))
 
     assert plan.neighbour(named(plan, "A"), Side.RIGHT) is named(plan, "B")
     assert plan.neighbour(named(plan, "D"), Side.RIGHT) is named(plan, "B")
@@ -499,7 +499,7 @@ def test_the_neighbour_of_my_neighbour_is_not_always_me():
 
 def test_the_plane_reaches_below_the_origin():
     "`x` and `y` may be negative, because the plane is unbounded."
-    plan = a_plan(A=Rect(-20, -8, 4, 4), B=Rect(-16, -8, 4, 4))
+    plan = create_plan(A=Rect(-20, -8, 4, 4), B=Rect(-16, -8, 4, 4))
 
     assert plan.neighbour(named(plan, "A"), Side.RIGHT) is named(plan, "B")
     assert plan.plane == Rect(-20, -8, 8, 4)
@@ -529,7 +529,7 @@ def test_a_ray_goes_where_no_key_does():
     What Carl asked the angle for. `B` is not a neighbour of `A` in
     any direction, and a ray at forty five degrees still finds it.
     """
-    plan = a_plan(A=Rect(0, 0, 4, 4), B=Rect(10, 10, 4, 4))
+    plan = create_plan(A=Rect(0, 0, 4, 4), B=Rect(10, 10, 4, 4))
 
     assert plan.neighbour(named(plan, "A"), Side.BELOW) is None
     assert plan.trace(Point(x=3, y=3), math.pi / 4) is named(plan, "B")
@@ -566,13 +566,13 @@ def test_a_ray_never_beats_the_neighbour(plan):
 
 
 def test_a_row_reads_from_the_left():
-    plan = a_plan(A=Rect(0, 0, 4, 6), B=Rect(4, 0, 4, 6), C=Rect(8, 0, 4, 6))
+    plan = create_plan(A=Rect(0, 0, 4, 6), B=Rect(4, 0, 4, 6), C=Rect(8, 0, 4, 6))
 
     assert names(plan.reading_order()) == ["A", "B", "C"]
 
 
 def test_a_stack_reads_from_the_top():
-    plan = a_plan(A=Rect(0, 0, 12, 2), B=Rect(0, 2, 12, 2), C=Rect(0, 4, 12, 2))
+    plan = create_plan(A=Rect(0, 0, 12, 2), B=Rect(0, 2, 12, 2), C=Rect(0, 4, 12, 2))
 
     assert names(plan.reading_order()) == ["A", "B", "C"]
 
@@ -584,7 +584,7 @@ def test_a_column_is_read_out_before_the_next_column():
     `VSplit([HSplit([A, B]), VSplit([C, D])])` draws this, and the
     numbering it gives is the one to keep. Lillecarl/pymux#210.
     """
-    plan = a_plan(
+    plan = create_plan(
         A=Rect(0, 0, 40, 12),
         B=Rect(0, 12, 40, 12),
         C=Rect(40, 0, 20, 24),
@@ -596,7 +596,7 @@ def test_a_column_is_read_out_before_the_next_column():
 
 def test_reading_order_is_not_the_order_the_slots_went_on():
     "Or it would say nothing that insertion order does not."
-    plan = a_plan(B=Rect(4, 0, 4, 6), A=Rect(0, 0, 4, 6))
+    plan = create_plan(B=Rect(4, 0, 4, 6), A=Rect(0, 0, 4, 6))
 
     assert names(plan.panes) == ["B", "A"]
     assert names(plan.reading_order()) == ["A", "B"]
@@ -641,7 +641,7 @@ def test_reading_order_follows_the_splits_and_not_the_rows():
     `Y` and comes after it, which is exactly what the tree does today:
     `HSplit([VSplit([A, Y]), S, VSplit([X, B])])`.
     """
-    plan = a_plan(
+    plan = create_plan(
         A=Rect(0, 0, 10, 5),
         Y=Rect(10, 0, 10, 5),
         S=Rect(0, 5, 20, 5),
@@ -658,7 +658,7 @@ def test_a_shape_no_split_makes_reads_from_the_top_left():
     recover and the answer is the plain one. Only a bare plane can
     hold this shape.
     """
-    plan = a_plan(
+    plan = create_plan(
         A=Rect(0, 0, 2, 1),
         B=Rect(2, 0, 1, 2),
         C=Rect(1, 2, 2, 1),

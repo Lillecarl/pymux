@@ -35,7 +35,7 @@ SIZE = Size(rows=24, columns=80)
 
 
 @pytest.fixture
-def a_server(tmp_path, monkeypatch):
+def create_server(tmp_path, monkeypatch):
     """
     A server with one client and one pane, in a state directory of its
     own.
@@ -68,26 +68,26 @@ def a_server(tmp_path, monkeypatch):
             pymux.stop()
 
 
-def test_a_dump_goes_beside_the_log(a_server, tmp_path):
+def test_a_dump_goes_beside_the_log(create_server, tmp_path):
     "A dump is read with the log around it, so it lives in the same place."
-    pymux, _state = a_server
+    pymux, _state = create_server
     path = introspect.write_dump(pymux)
 
     assert path.parent == tmp_path
     assert path.is_file()
 
 
-def test_a_dump_says_which_server_it_is(a_server):
+def test_a_dump_says_which_server_it_is(create_server):
     "A person reading a dump has several servers, and has to tell them apart."
-    pymux, _state = a_server
+    pymux, _state = create_server
     said = introspect.what_it_is_doing(pymux)
 
     assert "pymux server %d" % (os.getpid(),) in said
     assert "1 clients, 1 windows, 1 panes" in said
 
 
-def test_a_dump_holds_every_thread(a_server):
-    pymux, _state = a_server
+def test_a_dump_holds_every_thread(create_server):
+    pymux, _state = create_server
     said = introspect.what_it_is_doing(pymux)
 
     assert "--- threads (" in said
@@ -95,14 +95,14 @@ def test_a_dump_holds_every_thread(a_server):
     assert "test_a_dump_holds_every_thread" in said
 
 
-def test_a_dump_says_what_a_task_waits_for(a_server):
+def test_a_dump_says_what_a_task_waits_for(create_server):
     """
     The half a thread dump cannot show.
 
     One thread runs the loop, so a thread dump of a server says "the
     loop is polling" and no more. The work of a server is in its tasks.
     """
-    pymux, _state = a_server
+    pymux, _state = create_server
 
     async def check():
         async def waits_forever():
@@ -125,17 +125,17 @@ def test_a_dump_says_what_a_task_waits_for(a_server):
     assert "await asyncio.Event().wait()" in said
 
 
-def test_a_dump_of_a_server_that_never_ran_says_so(a_server):
+def test_a_dump_of_create_server_that_never_ran_says_so(create_server):
     "No loop is a state a dump reports, not one it raises on."
-    pymux, _state = a_server
+    pymux, _state = create_server
     said = introspect.what_it_is_doing(pymux)
 
     assert "--- asyncio tasks" in said
     assert "task " not in said
 
 
-def test_the_command_writes_a_dump_and_says_where(a_server, tmp_path):
-    pymux, state = a_server
+def test_the_command_writes_a_dump_and_says_where(create_server, tmp_path):
+    pymux, state = create_server
     pymux.command_output = []
 
     with set_app(state.app):
@@ -147,7 +147,7 @@ def test_the_command_writes_a_dump_and_says_where(a_server, tmp_path):
     assert (tmp_path / written[0].rsplit("/", 1)[-1]).is_file()
 
 
-def test_a_server_takes_the_signal_that_answers_a_wedged_loop(a_server, tmp_path):
+def test_create_server_takes_the_signal_that_answers_a_wedged_loop(create_server, tmp_path):
     """
     `SIGUSR1`, through `faulthandler`.
 
@@ -155,7 +155,7 @@ def test_a_server_takes_the_signal_that_answers_a_wedged_loop(a_server, tmp_path
     bytecodes, so a loop stuck inside one C call never reaches it, and
     that is the case this signal is for.
     """
-    pymux, _state = a_server
+    pymux, _state = create_server
     stacks = tmp_path / ("stacks-%d.log" % (os.getpid(),))
 
     try:
@@ -167,10 +167,10 @@ def test_a_server_takes_the_signal_that_answers_a_wedged_loop(a_server, tmp_path
         faulthandler.unregister(signal.SIGUSR1)
 
     assert "Current thread" in written
-    assert "test_a_server_takes_the_signal_that_answers_a_wedged_loop" in written
+    assert "test_create_server_takes_the_signal_that_answers_a_wedged_loop" in written
 
 
-def test_the_counters_name_what_asked_for_each_frame(a_server):
+def test_the_counters_name_what_asked_for_each_frame(create_server):
     """
     The finding a count alone cannot carry.
 
@@ -178,7 +178,7 @@ def test_the_counters_name_what_asked_for_each_frame(a_server):
     second, and every one because an application asked" says what is
     doing it, which is the whole diagnosis.
     """
-    pymux, state = a_server
+    pymux, state = create_server
 
     with set_app(state.app):
         pymux.invalidate(Woke.CLIENT_RESIZED)
@@ -209,7 +209,7 @@ def test_a_frame_that_went_out_is_counted():
     assert counters.frame_bytes == len("hello there")
 
 
-def test_a_server_with_no_counters_still_writes(a_server):
+def test_create_server_with_no_counters_still_writes(create_server):
     "The counting is not what a frame is for."
     sent = []
     stdout = _SocketStdout(sent.append, None)
@@ -220,7 +220,7 @@ def test_a_server_with_no_counters_still_writes(a_server):
     assert sent == [{"cmd": "out", "data": "hello"}]
 
 
-def test_the_profile_returns_at_once_and_writes_later(a_server, tmp_path):
+def test_the_profile_returns_at_once_and_writes_later(create_server, tmp_path):
     """
     A profile of a server is taken while the server serves.
 
@@ -228,7 +228,7 @@ def test_the_profile_returns_at_once_and_writes_later(a_server, tmp_path):
     with the file it will land in. Stopping the server to look at it
     would measure a different program.
     """
-    pymux, _state = a_server
+    pymux, _state = create_server
 
     async def check():
         pymux.loop = asyncio.get_running_loop()
@@ -248,21 +248,21 @@ def test_the_profile_returns_at_once_and_writes_later(a_server, tmp_path):
     assert path.with_suffix(".html").is_file()
 
 
-def test_nothing_may_attach_to_a_server_nobody_asked_about(a_server):
+def test_nothing_may_attach_to_create_server_nobody_asked_about(create_server):
     """
     `PR_SET_PTRACER_ANY` lets anything this user runs read the server's
     memory, and a server holds every pane's scrollback. So it is off.
     """
-    pymux, _state = a_server
+    pymux, _state = create_server
 
     assert pymux.allow_remote_debugging is False
     assert "a debugger may attach: no" in introspect.what_it_is_doing(pymux)
 
 
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="prctl is Linux")
-def test_the_option_tells_the_kernel(a_server):
+def test_the_option_tells_the_kernel(create_server):
     "It is a setting the kernel has to be told about, so it is a property."
-    pymux, state = a_server
+    pymux, state = create_server
 
     with set_app(state.app):
         handle_command(pymux, "set-option allow-remote-debugging on")
@@ -273,7 +273,7 @@ def test_the_option_tells_the_kernel(a_server):
         assert pymux.allow_remote_debugging is False
 
 
-def test_every_route_that_starts_a_server_takes_the_signal():
+def test_every_route_that_starts_create_server_takes_the_signal():
     """
     Three routes start a server, and a person sending a signal does not
     know which one this is.

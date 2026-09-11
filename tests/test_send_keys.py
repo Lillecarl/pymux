@@ -120,7 +120,7 @@ def test_the_keys_reach_the_program(pymux):
 #: pane what the terminal sent, and the screen re-spells it for the
 #: modes the pane turned on. So the two roads to a pane have to end in
 #: the same bytes, and for 52 keys they did not. Lillecarl/pymux#119.
-THE_KEYS = [
+KEYS = [
     ("Up", csi(escape.CUU)),
     ("Down", csi(escape.CUD)),
     ("Left", csi(escape.CUB)),
@@ -173,7 +173,7 @@ THE_KEYS = [
 ]
 
 
-@pytest.mark.parametrize("name, expected", THE_KEYS)
+@pytest.mark.parametrize("name, expected", KEYS)
 def test_a_key_sends_what_a_keyboard_sends(pymux, name, expected):
     create_pane(pymux)
     written, errors = send(pymux, name)
@@ -188,7 +188,7 @@ def test_a_key_sends_what_a_keyboard_sends(pymux, name, expected):
 #: no way to find out. Lillecarl/pymux#168 wrote the first trade down
 #: as intended; Carl asked for the opposite on Lillecarl/pymux#237, and
 #: he is right. If you meant ctrl+a, write ctrl+a.
-THE_KEYS_A_LEGACY_PANE_CANNOT_READ = [
+KEYS_A_LEGACY_PANE_CANNOT_READ = [
     ("C-S-a", "shift"),
     ("c-s-z", "shift"),
     ("Super-a", "super"),
@@ -205,7 +205,7 @@ THE_KEYS_A_LEGACY_PANE_CANNOT_READ = [
 ]
 
 
-@pytest.mark.parametrize("name, lost", THE_KEYS_A_LEGACY_PANE_CANNOT_READ)
+@pytest.mark.parametrize("name, lost", KEYS_A_LEGACY_PANE_CANNOT_READ)
 def test_a_key_the_pane_cannot_read_is_refused(pymux, name, lost):
     create_pane(pymux)
 
@@ -273,7 +273,7 @@ def test_an_arrow_is_the_application_form_for_a_pane_that_asked(pymux):
 #:
 #: This is the key Lillecarl/pymux#220 exists for: a keyboard with no
 #: Home key cannot answer a program that asks for ctrl+Home.
-THE_KEYS_A_KEYBOARD_LEAVES_OUT = [
+KEYS_A_KEYBOARD_LEAVES_OUT = [
     ("C-Home", "\x1b[1;5H"),
     ("ctrl+home", "\x1b[1;5H"),
     ("C-End", "\x1b[1;5F"),
@@ -290,7 +290,7 @@ THE_KEYS_A_KEYBOARD_LEAVES_OUT = [
 ]
 
 
-@pytest.mark.parametrize("name, expected", THE_KEYS_A_KEYBOARD_LEAVES_OUT)
+@pytest.mark.parametrize("name, expected", KEYS_A_KEYBOARD_LEAVES_OUT)
 def test_a_modified_key_the_older_table_never_named(pymux, name, expected):
     create_pane(pymux)
     written, errors = send(pymux, name)

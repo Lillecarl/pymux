@@ -31,28 +31,28 @@ def pymux():
     return mux
 
 
-def the_window(pymux):
+def window(pymux):
     return pymux.arrangement.windows[0]
 
 
 def test_a_window_starts_at_thirty(pymux):
     assert DEFAULT_FRAME_RATE == 30
-    assert the_window(pymux).frame_rate == 30
+    assert window(pymux).frame_rate == 30
 
 
 def test_the_option_writes_the_active_window(pymux):
     ALL_WINDOW_OPTIONS["frame-rate"].set_value(pymux, "10")
-    assert the_window(pymux).frame_rate == 10
+    assert window(pymux).frame_rate == 10
 
 
 def test_the_command_writes_it(pymux):
     pymux.handle_command("set-window-option frame-rate 12")
-    assert the_window(pymux).frame_rate == 12
+    assert window(pymux).frame_rate == 12
 
 
 def test_zero_means_as_fast_as_it_can(pymux):
     ALL_WINDOW_OPTIONS["frame-rate"].set_value(pymux, "0")
-    assert the_window(pymux).frame_rate == 0
+    assert window(pymux).frame_rate == 0
 
 
 def test_a_number_that_is_not_one_is_refused(pymux):
@@ -70,10 +70,10 @@ def test_the_global_form_says_what_a_new_window_starts_with(pymux):
     `-g` on a window option is the default for the next window, and
     changes none that is open. Lillecarl/pymux#199.
     """
-    was = the_window(pymux).frame_rate
+    was = window(pymux).frame_rate
     pymux.handle_command("set-window-option -g frame-rate 15")
 
-    assert the_window(pymux).frame_rate == was, "it changed a window that was open"
+    assert window(pymux).frame_rate == was, "it changed a window that was open"
 
     pymux.create_window(PANE_COMMAND)
     assert pymux.arrangement.windows[-1].frame_rate == 15

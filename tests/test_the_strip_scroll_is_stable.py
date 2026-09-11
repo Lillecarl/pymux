@@ -91,7 +91,7 @@ def columns_of(pymux, how_many):
     return window, opened
 
 
-def the_strip(state):
+def strip(state):
     "The container that draws the strip of the layout built now."
     found = []
 
@@ -106,9 +106,9 @@ def the_strip(state):
     return found[0]
 
 
-def the_view(state) -> int:
+def view(state) -> int:
     "How far along the row the view sits."
-    return the_strip(state).view.offset.x
+    return strip(state).view.offset.x
 
 
 def where(pymux, pane):
@@ -131,11 +131,11 @@ def test_the_whole_walk_left_and_right_and_back():
         window, panes = columns_of(pymux, 3)
         draw()
 
-        walk = [the_view(state)]
+        walk = [view(state)]
         for direction in "LLRRLL":
             move(pymux, state, direction)
             draw()
-            walk.append(the_view(state))
+            walk.append(view(state))
 
         assert walk == [40, 40, 0, 0, 40, 40, 0], walk
         # And the focus really did travel, or the test says nothing.
@@ -156,7 +156,7 @@ def test_the_focus_inside_a_stack_still_finds_its_column():
     with create_client(STRIP) as (pymux, state, draw):
         _window, panes = columns_of(pymux, 3)
         draw()
-        on_the_third = the_view(state)
+        on_the_third = view(state)
 
         # Split the third column downwards, so it holds two panes.
         pymux.handle_command("split-window -v")
@@ -164,14 +164,14 @@ def test_the_focus_inside_a_stack_still_finds_its_column():
         draw()
 
         # Still the same column, so the same view.
-        assert the_view(state) == on_the_third, the_view(state)
+        assert view(state) == on_the_third, view(state)
 
         # And moving out of the stack and back does not move it either.
         move(pymux, state, "L")
         draw()
         move(pymux, state, "R")
         draw()
-        assert the_view(state) == on_the_third, the_view(state)
+        assert view(state) == on_the_third, view(state)
 
 
 def test_a_column_wider_than_the_view_still_starts_on_screen():
@@ -260,14 +260,14 @@ def test_opening_a_pane_leaves_the_row_where_a_person_scrolled_it():
         # way, and moving to it moves nothing.
         move(pymux, state, "L")
         draw()
-        scrolled = the_view(state)
+        scrolled = view(state)
         assert scrolled == 40, scrolled
 
         pymux.handle_command("split-window -v")
         state.sync_focus()
         draw()
 
-        assert the_view(state) == scrolled, (scrolled, the_view(state))
+        assert view(state) == scrolled, (scrolled, view(state))
 
 
 def test_moving_back_to_a_column_that_is_on_screen_does_not_move_the_view():
@@ -279,12 +279,12 @@ def test_moving_back_to_a_column_that_is_on_screen_does_not_move_the_view():
     with create_client(STRIP) as (pymux, state, draw):
         _window, _panes = columns_of(pymux, 3)
         draw()
-        on_the_third = the_view(state)
+        on_the_third = view(state)
 
         move(pymux, state, "L")
         draw()
 
-        assert the_view(state) == on_the_third, (on_the_third, the_view(state))
+        assert view(state) == on_the_third, (on_the_third, view(state))
 
 
 def test_walking_right_and_back_returns_the_same_view():
@@ -309,9 +309,9 @@ def test_walking_right_and_back_returns_the_same_view():
 
         step("L")
         step("L")
-        at_the_start = the_view(state)
+        at_the_start = view(state)
 
         for direction in "RRLL":
             step(direction)
 
-        assert the_view(state) == at_the_start, (at_the_start, the_view(state))
+        assert view(state) == at_the_start, (at_the_start, view(state))

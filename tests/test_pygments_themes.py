@@ -22,7 +22,7 @@ from pymux.options import ALL_OPTIONS, SetOptionError
 from pymux.style_pygments import names, pygments_theme
 
 
-def the_attrs(theme, class_name):
+def attrs(theme, class_name):
     """
     What the theme draws on one class of pymux's chrome.
 
@@ -35,8 +35,8 @@ def the_attrs(theme, class_name):
 def test_the_boxes_take_the_colours_of_the_scheme():
     theme = pygments_theme("dracula")
 
-    assert the_attrs(theme, "commandpalette").bgcolor == "282a36"
-    assert the_attrs(theme, "completion-menu").color == "f8f8f2"
+    assert attrs(theme, "commandpalette").bgcolor == "282a36"
+    assert attrs(theme, "completion-menu").color == "f8f8f2"
 
 
 def test_the_text_on_a_bar_reads():
@@ -46,12 +46,12 @@ def test_the_text_on_a_bar_reads():
     #007020 on a light scheme, where white reads.
     """
     dark = pygments_theme("dracula")
-    assert the_attrs(dark, "statusbar").bgcolor == "ff79c6"
-    assert the_attrs(dark, "statusbar").color == "000000"
+    assert attrs(dark, "statusbar").bgcolor == "ff79c6"
+    assert attrs(dark, "statusbar").color == "000000"
 
     light = pygments_theme("friendly")
-    assert the_attrs(light, "statusbar").bgcolor == "007020"
-    assert the_attrs(light, "statusbar").color == "ffffff"
+    assert attrs(light, "statusbar").bgcolor == "007020"
+    assert attrs(light, "statusbar").color == "ffffff"
 
 
 def test_a_pane_that_ended_is_never_the_plain_text():
@@ -63,8 +63,8 @@ def test_a_pane_that_ended_is_never_the_plain_text():
     """
     theme = pygments_theme("dracula")
 
-    assert the_attrs(theme, "terminated").bgcolor == "8b080b"
-    assert the_attrs(theme, "terminated").bgcolor != "f8f8f2"
+    assert attrs(theme, "terminated").bgcolor == "8b080b"
+    assert attrs(theme, "terminated").bgcolor != "f8f8f2"
 
 
 def test_an_error_hidden_in_a_background_is_found():
@@ -76,7 +76,7 @@ def test_an_error_hidden_in_a_background_is_found():
     """
     theme = pygments_theme("solarized-light")
 
-    assert the_attrs(theme, "terminated").bgcolor == "dc322f"
+    assert attrs(theme, "terminated").bgcolor == "dc322f"
 
 
 def test_a_name_nobody_offers_is_refused():
@@ -106,10 +106,10 @@ def test_the_pastel_names_the_colours_of_the_scheme():
     """
     theme = pygments_theme("catppuccin-mocha")
 
-    assert the_attrs(theme, "commandpalette").bgcolor == "181825"
-    assert the_attrs(theme, "statusbar").bgcolor == "cba6f7"
-    assert the_attrs(theme, "completion-menu").color == "cdd6f4"
-    assert the_attrs(theme, "terminated").bgcolor == "f38ba8"
+    assert attrs(theme, "commandpalette").bgcolor == "181825"
+    assert attrs(theme, "statusbar").bgcolor == "cba6f7"
+    assert attrs(theme, "completion-menu").color == "cdd6f4"
+    assert attrs(theme, "terminated").bgcolor == "f38ba8"
 
 
 def test_the_option_offers_the_names_and_refuses_the_others():

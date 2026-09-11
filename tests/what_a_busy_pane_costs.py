@@ -29,7 +29,7 @@ per cent. Nothing here is a budget to be tuned.
 
 Knobs:
 
-    PYMUX_BUSY_PROGRAMS   which of `THE_PROGRAMS` to run, by name
+    PYMUX_BUSY_PROGRAMS   which of `PROGRAMS` to run, by name
     PYMUX_BUSY_SECONDS    how long to measure each one
     PYMUX_BUSY_CEILING    the most of one core a background pane may take
 """
@@ -53,7 +53,7 @@ from prompt_toolkit.data_structures import Size  # noqa: E402
 
 #: The programs that animate, by the name a knob takes. Each one writes
 #: a screenful at its own rate and never stops.
-THE_PROGRAMS = {
+PROGRAMS = {
     "cmatrix": ["cmatrix", "-u", "2"],
     "tty-clock": ["tty-clock", "-s", "-c"],
     "nyancat": ["nyancat"],
@@ -65,7 +65,7 @@ THE_PROGRAMS = {
 #: or the loop goes idle and the fault cannot show. A shell writing a
 #: line every ninety milliseconds is what an agent in a pane looks like
 #: from here.
-THE_WATCHED_PROGRAM = (
+WATCHED_PROGRAM = (
     '%s -c "import sys, time\n'
     "while True:\n"
     "    sys.stdout.write('working\\r\\n')\n"
@@ -89,17 +89,17 @@ CEILING = float(os.environ.get("PYMUX_BUSY_CEILING") or 0.5)
 WHICH_CAPS = [int(one) for one in (os.environ.get("PYMUX_BUSY_CAPS") or "0 30").split()]
 
 
-def the_programs() -> list:
+def programs() -> list:
     "The programs this run covers, by name."
     chosen = (os.environ.get("PYMUX_BUSY_PROGRAMS") or "").split()
     if not chosen:
-        chosen = sorted(THE_PROGRAMS)
+        chosen = sorted(PROGRAMS)
 
     for name in chosen:
-        if name not in THE_PROGRAMS:
+        if name not in PROGRAMS:
             raise SystemExit(
                 "PYMUX_BUSY_PROGRAMS names %s, not %r"
-                % (", ".join(sorted(THE_PROGRAMS)), name)
+                % (", ".join(sorted(PROGRAMS)), name)
             )
     return chosen
 
@@ -116,14 +116,14 @@ async def what_it_costs(name: str) -> tuple:
     Returns the fraction of one core it took, and how many frames the
     client drew meanwhile.
     """
-    command = " ".join(THE_PROGRAMS[name])
+    command = " ".join(PROGRAMS[name])
 
     with over_a_connection() as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
         with set_app(state.app):
-            pymux.create_window(THE_WATCHED_PROGRAM)
+            pymux.create_window(WATCHED_PROGRAM)
         await asyncio.sleep(0.5)
         watched = looks_at(pymux, state)
 
@@ -156,7 +156,7 @@ async def what_it_costs_watched(name: str, rate: int) -> tuple:
     case, where the window is not drawn at all and the cap has nothing
     to refuse.
     """
-    command = " ".join(THE_PROGRAMS[name])
+    command = " ".join(PROGRAMS[name])
 
     with over_a_connection() as session:
         pymux = session.pymux
@@ -175,15 +175,15 @@ async def what_it_costs_watched(name: str, rate: int) -> tuple:
         return cost, (pymux.counters.frames - frames) / HOW_LONG
 
 
-async def the_cap() -> None:
+async def cap() -> None:
     "What the cap buys for a pane somebody is looking at."
     print()
     print("--- what a pane somebody looks at costs, by frame-rate ---")
     print()
     print("%-12s %8s %14s %12s" % ("program", "cap", "of one core", "frames/s"))
 
-    for name in the_programs():
-        if shutil.which(THE_PROGRAMS[name][0]) is None:
+    for name in programs():
+        if shutil.which(PROGRAMS[name][0]) is None:
             continue
         for rate in WHICH_CAPS:
             cost, fps = await what_it_costs_watched(name, rate)
@@ -196,8 +196,8 @@ async def main() -> None:
     print("%-12s %14s %8s" % ("program", "of one core", "frames"))
 
     over = []
-    for name in the_programs():
-        if shutil.which(THE_PROGRAMS[name][0]) is None:
+    for name in programs():
+        if shutil.which(PROGRAMS[name][0]) is None:
             print("%-12s %14s %8s" % (name, "not here", "-"))
             continue
 
@@ -217,7 +217,7 @@ async def main() -> None:
 
     print("Every one of them stayed under %.0f%% of a core." % (100 * CEILING,))
 
-    await the_cap()
+    await cap()
 
 
 asyncio.run(main())

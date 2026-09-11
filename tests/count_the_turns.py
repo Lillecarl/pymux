@@ -94,7 +94,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
 from session import over_a_connection  # noqa: E402
-from measure_latency import MARKERS, THE_CHILD  # noqa: E402
+from measure_latency import MARKERS, CHILD  # noqa: E402
 from prompt_toolkit.application.current import set_app  # noqa: E402
 from prompt_toolkit.data_structures import Size  # noqa: E402
 
@@ -143,7 +143,7 @@ PATIENCE = 10.0
 #:
 #: A run that says another number is not wrong. Read the traces, and
 #: write the new one here with what moved it.
-THE_BEST = 7
+BEST = 7
 
 #: The client's terminal.
 SIZE = Size(rows=24, columns=80)
@@ -250,7 +250,7 @@ class TheFrameComingBack:
         self.arrived.set_result(self.loop.turns)
 
 
-async def a_keystroke(loop, session, state, coming_back, marker) -> tuple:
+async def create_keystroke(loop, session, state, coming_back, marker) -> tuple:
     """
     One keystroke, and the turns between the key and the frame.
 
@@ -285,7 +285,7 @@ async def measure(loop, samples: int) -> tuple:
     with tempfile.TemporaryDirectory() as name:
         tmp = Path(name)
         child = tmp / "echo_child.py"
-        child.write_text(THE_CHILD)
+        child.write_text(CHILD)
         log = tmp / "echo.log"
 
         pymux = Pymux(
@@ -314,11 +314,11 @@ async def measure(loop, samples: int) -> tuple:
             # whole layout, and the program in the pane has to have set
             # its own pty up before a byte means anything.
             for warm in range(2):
-                await a_keystroke(loop, session, state, coming_back, MARKERS[warm])
+                await create_keystroke(loop, session, state, coming_back, MARKERS[warm])
 
             for number in range(samples):
                 marker = MARKERS[number % len(MARKERS)]
-                turns, ran = await a_keystroke(
+                turns, ran = await create_keystroke(
                     loop, session, state, coming_back, marker
                 )
                 counted.append(turns)
@@ -359,11 +359,11 @@ def report(counted: list, traced: list) -> int:
                 print("  turn %-3d %s" % (turn - first, what))
 
     best = min(counted)
-    if best != THE_BEST:
+    if best != BEST:
         print(
             "\nThe shortest keystroke took %d turns, and %d is what the code"
             "\ndecides. `tests/count_the_turns.py` says how to read the traces"
-            "\nabove and where to write a new number." % (best, THE_BEST)
+            "\nabove and where to write a new number." % (best, BEST)
         )
         return 1
 
@@ -371,7 +371,7 @@ def report(counted: list, traced: list) -> int:
         "\nThe shortest keystroke took %d turns. Nothing judges the rest of"
         "\nthe distribution: a loaded machine misses a poll and pays for a"
         "\nsecond redraw, which is a property of the machine."
-        "\nLillecarl/pymux#232." % (THE_BEST,)
+        "\nLillecarl/pymux#232." % (BEST,)
     )
     return 0
 

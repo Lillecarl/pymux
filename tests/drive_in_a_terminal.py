@@ -50,7 +50,7 @@ import time
 CHUNK = 65536
 
 
-def the_size_of(fd):
+def size_of(fd):
     """
     The rows and columns of this terminal.
 
@@ -133,7 +133,7 @@ def relay(argv, steps, hold):
     programs this drives are the ones a picture is taken of, and a
     picture is taken while they are still up.
     """
-    rows, columns = the_size_of(sys.stdout.fileno())
+    rows, columns = size_of(sys.stdout.fileno())
 
     pid, master = pty.fork()
     if pid == 0:

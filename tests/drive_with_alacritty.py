@@ -298,7 +298,7 @@ def left_out(name: str) -> bool:
     return any(re.search(pattern, name) for pattern, _ in NOT_OURS)
 
 
-def the_wire(tmp: Path, name: str, directory: Path) -> bytes:
+def wire(tmp: Path, name: str, directory: Path) -> bytes:
     """
     Put one recording on the screen of a pane, and read our wire back.
 
@@ -338,7 +338,7 @@ def the_wire(tmp: Path, name: str, directory: Path) -> bytes:
 def run_one(tmp: Path, judge: str, name: str, directory: Path):
     "Run one reference test. Returns whether it agreed, and what it said."
     try:
-        wire = the_wire(tmp, name, directory)
+        wire = wire(tmp, name, directory)
     except Exception:
         return False, "the pane could not run it:\n" + traceback.format_exc()
 

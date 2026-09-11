@@ -34,7 +34,7 @@ HOLD = 5.0
 PATIENCE = 20.0
 
 
-def a_terminal(rows=24, columns=80):
+def create_terminal(rows=24, columns=80):
     "A pty, sized, for the relay to run in."
     master, slave = pty.openpty()
     ioctl(slave, termios.TIOCSWINSZ, pack("HHHH", rows, columns, 0, 0))
@@ -48,7 +48,7 @@ def run(keys, argv, rows=24, columns=80, hold=HOLD, wanted=b""):
     It stops as soon as `wanted` has arrived, so a test that passes
     does not wait out the hold.
     """
-    master, slave = a_terminal(rows, columns)
+    master, slave = create_terminal(rows, columns)
     process = subprocess.Popen(
         [sys.executable, RELAY, str(keys), str(hold), "--"] + argv,
         stdin=slave,
@@ -82,7 +82,7 @@ def run(keys, argv, rows=24, columns=80, hold=HOLD, wanted=b""):
     return seen, error
 
 
-def a_keys_file(tmp_path, text):
+def create_keys_file(tmp_path, text):
     path = tmp_path / "keys"
     path.write_text(text)
     return path
@@ -94,7 +94,7 @@ def a_keys_file(tmp_path, text):
 
 def test_the_keys_reach_the_program(tmp_path):
     "Which is the whole reason this exists."
-    keys = a_keys_file(tmp_path, '0.2 b"hello\\n"\n')
+    keys = create_keys_file(tmp_path, '0.2 b"hello\\n"\n')
 
     seen, _ = run(
         keys,
@@ -106,7 +106,7 @@ def test_the_keys_reach_the_program(tmp_path):
 
 
 def test_the_steps_happen_in_order(tmp_path):
-    keys = a_keys_file(tmp_path, '0.1 b"one\\n"\n0.1 b"two\\n"\n')
+    keys = create_keys_file(tmp_path, '0.1 b"one\\n"\n0.1 b"two\\n"\n')
 
     seen, _ = run(
         keys,
@@ -126,7 +126,7 @@ def test_the_steps_happen_in_order(tmp_path):
 
 
 def test_what_the_program_writes_reaches_the_terminal(tmp_path):
-    keys = a_keys_file(tmp_path, "")
+    keys = create_keys_file(tmp_path, "")
 
     seen, _ = run(
         keys,
@@ -143,7 +143,7 @@ def test_the_program_is_given_the_size_of_the_terminal(tmp_path):
     size is a picture of the right program at the wrong shape, which
     reads as a drawing fault.
     """
-    keys = a_keys_file(tmp_path, "")
+    keys = create_keys_file(tmp_path, "")
 
     seen, _ = run(
         keys,
@@ -175,7 +175,7 @@ def test_a_keys_file_that_does_not_parse_is_a_fault(tmp_path, text):
     nothing would photograph the screen before them, which reads as a
     pass.
     """
-    keys = a_keys_file(tmp_path, text)
+    keys = create_keys_file(tmp_path, text)
 
     done = subprocess.run(
         [sys.executable, RELAY, str(keys), "1", "--", "true"],
@@ -187,7 +187,7 @@ def test_a_keys_file_that_does_not_parse_is_a_fault(tmp_path, text):
 
 
 def test_a_comment_and_a_blank_line_are_nothing(tmp_path):
-    keys = a_keys_file(tmp_path, "# a comment\n\n0.1 b'x'  # and one here\n")
+    keys = create_keys_file(tmp_path, "# a comment\n\n0.1 b'x'  # and one here\n")
 
     from drive_in_a_terminal import read_the_keys
 
@@ -199,7 +199,7 @@ def test_a_comment_and_a_blank_line_are_nothing(tmp_path):
 
 
 def test_it_asks_for_a_program_to_run(tmp_path):
-    keys = a_keys_file(tmp_path, "")
+    keys = create_keys_file(tmp_path, "")
 
     done = subprocess.run([sys.executable, RELAY, str(keys), "1"], capture_output=True)
 
@@ -212,7 +212,7 @@ def test_the_hold_is_a_bound(tmp_path):
     case: a picture is taken while it is on the screen. The relay ends
     anyway, so a run that goes wrong leaves nothing behind for longer.
     """
-    keys = a_keys_file(tmp_path, "")
+    keys = create_keys_file(tmp_path, "")
 
     started = time.monotonic()
     done = subprocess.run(

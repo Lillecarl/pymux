@@ -39,7 +39,7 @@ def in_a_loop(test):
 
 
 @asynccontextmanager
-async def a_standalone_session():
+async def create_standalone_session():
     """
     A `Pymux` set up the way `run_standalone` sets one up.
 
@@ -71,8 +71,8 @@ async def a_standalone_session():
 
 
 @in_a_loop
-async def test_a_detach_ends_a_standalone_session():
-    async with a_standalone_session() as (pymux, state):
+async def test_a_detach_ends_create_standalone_session():
+    async with create_standalone_session() as (pymux, state):
         assert not pymux.done_f.done()
 
         with set_app(state.app):
@@ -103,7 +103,7 @@ async def test_a_detach_asks_every_pane_to_stop():
     """
     killed = []
 
-    async with a_standalone_session() as (pymux, state):
+    async with create_standalone_session() as (pymux, state):
         panes = list(pymux.panes_by_id.values())
         assert panes
         for pane in panes:

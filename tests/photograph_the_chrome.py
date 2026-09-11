@@ -89,7 +89,7 @@ def keys(*steps):
     return "".join("%s %r\n" % (delay, one) for delay, one in steps)
 
 
-def a_command(text):
+def create_command(text):
     """
     The keys that run one pymux command from the command line.
 
@@ -131,7 +131,7 @@ FIXTURES = {
     # a keyboard leaves out under it. Lillecarl/pymux#220.
     "compose-a-key": (
         CHROME,
-        keys(*a_command("compose-key"), (0.8, b"ctrl+")),
+        keys(*create_command("compose-key"), (0.8, b"ctrl+")),
     ),
     # Both splits at once: a pane on the left, and two stacked on the
     # right. This is the default layout, and it is the one picture that
@@ -155,7 +155,7 @@ FIXTURES = {
     # Lillecarl/pymux#215.
     "zoomed": (
         CHROME,
-        keys((FIRST_KEY, PREFIX), (0.4, b"%"), *a_command("resize-pane -Z")),
+        keys((FIRST_KEY, PREFIX), (0.4, b"%"), *create_command("resize-pane -Z")),
     ),
     # A strip whose second column is two thirds of the window, with the
     # focus on the first. The pair does not fit, so the second one runs
@@ -170,8 +170,8 @@ FIXTURES = {
         keys(
             (FIRST_KEY, PREFIX),
             (0.4, b"%"),
-            *a_command("switch-column-width"),
-            *a_command("select-pane -L"),
+            *create_command("switch-column-width"),
+            *create_command("select-pane -L"),
         ),
     ),
     # A strip of three columns, which runs past the edge of the screen.

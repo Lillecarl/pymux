@@ -122,7 +122,7 @@ def marked(screen, row: int) -> str:
     )
 
 
-def a_wide_column(pymux, state):
+def create_wide_column(pymux, state):
     """
     Two columns, the second one two thirds of the window, with the
     focus back on the first.
@@ -150,7 +150,7 @@ def test_nothing_is_marked_when_every_column_fits():
 
 def test_the_column_that_runs_off_the_edge_is_marked():
     with create_client(STRIP) as (pymux, state, draw):
-        a_wide_column(pymux, state)
+        create_wide_column(pymux, state)
         screen = draw()
 
         panes = panes_of(state)
@@ -179,7 +179,7 @@ def test_the_tint_sits_before_what_the_pane_wrote():
     it left alone takes the tint.
     """
     with create_client(STRIP) as (pymux, state, draw):
-        a_wide_column(pymux, state)
+        create_wide_column(pymux, state)
         screen = draw()
 
         cut = panes_of(state).plan.rect_of(

@@ -17,7 +17,7 @@ from prompt_toolkit.application.current import set_app
 from session import create_session, in_a_loop
 
 
-def the_controls(app):
+def controls(app):
     "What `_CombinedRegistry` would key its cache by."
     return frozenset(app.layout.find_all_controls())
 
@@ -26,8 +26,8 @@ def the_controls(app):
 async def test_walking_the_layout_twice_finds_the_same_controls():
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            first = the_controls(state.app)
-            second = the_controls(state.app)
+            first = controls(state.app)
+            second = controls(state.app)
 
     assert first == second
 

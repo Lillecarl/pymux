@@ -64,7 +64,7 @@ def in_a_loop(test):
 
 
 @asynccontextmanager
-async def a_server(windows):
+async def create_server(windows):
     """
     A server with this many windows, and a way to attach a client.
 
@@ -110,7 +110,7 @@ async def a_server(windows):
 @in_a_loop
 async def test_a_new_client_lands_where_the_session_is():
     "It landed on window one, once, and on the last active one after."
-    async with a_server(3) as (pymux, _):
+    async with create_server(3) as (pymux, _):
         arrangement = pymux.arrangement
         arrangement.set_active_window(arrangement.windows[2])
 
@@ -122,7 +122,7 @@ async def test_a_new_client_lands_where_the_session_is():
 @in_a_loop
 async def test_the_first_answer_is_the_one_it_keeps():
     "The bug itself: the cache and the return took different windows."
-    async with a_server(3) as (pymux, _):
+    async with create_server(3) as (pymux, _):
         arrangement = pymux.arrangement
         arrangement.set_active_window(arrangement.windows[2])
         arriving = _NotLookedYet()
@@ -135,7 +135,7 @@ async def test_the_first_answer_is_the_one_it_keeps():
 @in_a_loop
 async def test_with_nowhere_to_land_it_takes_the_first_window():
     "Nothing has been made active, so there is no last active window."
-    async with a_server(3) as (pymux, _):
+    async with create_server(3) as (pymux, _):
         arrangement = pymux.arrangement
         arrangement._last_active_window = None
 
@@ -155,7 +155,7 @@ async def test_a_window_that_is_gone_is_not_offered():
     Both answers are read. The window that is gone was what the cache
     took, so it came back on the second question and not on the first.
     """
-    async with a_server(3) as (pymux, _):
+    async with create_server(3) as (pymux, _):
         arrangement = pymux.arrangement
         gone = arrangement.windows[2]
         arrangement.set_active_window(gone)
@@ -169,7 +169,7 @@ async def test_a_window_that_is_gone_is_not_offered():
 @in_a_loop
 async def test_a_client_that_has_looked_keeps_its_own_window():
     "Two clients on two windows. Neither answer moves the other."
-    async with a_server(3) as (pymux, attach):
+    async with create_server(3) as (pymux, attach):
         arrangement = pymux.arrangement
         first = attach()
         with set_app(first):

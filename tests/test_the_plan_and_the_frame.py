@@ -43,12 +43,12 @@ def create_row_of_panes(pymux, count=3):
     return panes
 
 
-def the_frame(pymux):
+def frame(pymux):
     "Where the last frame drew each pane."
     return pymux.get_client_state().layout_manager.pane_write_positions
 
 
-def the_offsets(pymux, plan):
+def offsets(pymux, plan):
     """
     How far the frame is from the plan, for each pane.
 
@@ -58,7 +58,7 @@ def the_offsets(pymux, plan):
     """
     offsets = set()
 
-    for pane, drawn in the_frame(pymux).items():
+    for pane, drawn in frame(pymux).items():
         rect = plan.rect_of(pane)
         assert (drawn.width, drawn.height) == (rect.width, rect.height), (
             "%r: the frame drew %rx%r and the plan says %rx%r"
@@ -69,17 +69,12 @@ def the_offsets(pymux, plan):
     return offsets
 
 
-def the_plan(pymux):
-    window = pymux.arrangement.get_active_window()
-    return plan_of(pymux, window)
-
-
 def test_the_plan_puts_the_columns_where_the_frame_does():
     with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
         create_row_of_panes(pymux)
         draw()
 
-        assert len(the_offsets(pymux, the_plan(pymux))) == 1
+        assert len(offsets(pymux, plan_of(pymux, pymux.arrangement.get_active_window()))) == 1
 
 
 def test_the_plan_divides_a_stack_the_way_the_frame_does():
@@ -94,7 +89,7 @@ def test_the_plan_divides_a_stack_the_way_the_frame_does():
         pymux.handle_command("split-window -v")
         draw()
 
-        assert len(the_offsets(pymux, the_plan(pymux))) == 1
+        assert len(offsets(pymux, plan_of(pymux, pymux.arrangement.get_active_window()))) == 1
 
 
 def test_the_plan_follows_a_resize():
@@ -110,12 +105,12 @@ def test_the_plan_follows_a_resize():
         pymux.handle_command("split-window -v")
         draw()
 
-        was = the_plan(pymux).rect_of(panes[-1]).height
+        was = plan_of(pymux, pymux.arrangement.get_active_window()).rect_of(panes[-1]).height
         pymux.handle_command("resize-pane -U 3")
         draw()
 
-        assert the_plan(pymux).rect_of(panes[-1]).height == was - 3
-        assert len(the_offsets(pymux, the_plan(pymux))) == 1
+        assert plan_of(pymux, pymux.arrangement.get_active_window()).rect_of(panes[-1]).height == was - 3
+        assert len(offsets(pymux, plan_of(pymux, pymux.arrangement.get_active_window()))) == 1
 
 
 def test_a_divided_window_is_drawn_where_its_plan_says_too():
@@ -125,7 +120,7 @@ def test_a_divided_window_is_drawn_where_its_plan_says_too():
         pymux.handle_command("split-window -v")
         draw()
 
-        assert len(the_offsets(pymux, the_plan(pymux))) == 1
+        assert len(offsets(pymux, plan_of(pymux, pymux.arrangement.get_active_window()))) == 1
 
 
 def test_the_plan_holds_a_column_the_frame_never_drew():
@@ -151,12 +146,12 @@ def test_the_plan_holds_a_column_the_frame_never_drew():
         state.sync_focus()
         draw()
 
-        plan = the_plan(pymux)
+        plan = plan_of(pymux, pymux.arrangement.get_active_window())
 
-        assert panes[0] not in the_frame(pymux)
+        assert panes[0] not in frame(pymux)
         # And the plan puts it left of the column that is drawn.
         assert plan.rect_of(panes[0]).right <= plan.rect_of(panes[1]).x
-        assert len(the_offsets(pymux, plan)) == 1
+        assert len(offsets(pymux, plan)) == 1
 
 
 def test_the_plan_uses_the_size_the_window_was_given():

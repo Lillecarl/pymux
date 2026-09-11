@@ -118,7 +118,7 @@ def test_a_machine_is_never_somewhere_to_listen():
 # The round trip.
 
 
-def a_key(where: Path, name: str):
+def create_key(where: Path, name: str):
     "A key pair on disk, the way ssh wants one."
     import asyncssh
 
@@ -130,7 +130,7 @@ def a_key(where: Path, name: str):
     return private, where / ("%s.pub" % name)
 
 
-async def an_ssh_server(where: Path, socket_path: str):
+async def create_ssh_server(where: Path, socket_path: str):
     """
     A server that answers one client key and forwards to a unix socket.
 
@@ -140,8 +140,8 @@ async def an_ssh_server(where: Path, socket_path: str):
     """
     import asyncssh
 
-    host_key, _ = a_key(where, "host")
-    client_key, client_pub = a_key(where, "client")
+    host_key, _ = create_key(where, "host")
+    client_key, client_pub = create_key(where, "client")
 
     class OneSocket(asyncssh.SSHServer):
         def connection_made(self, conn) -> None:
@@ -185,7 +185,7 @@ async def test_a_command_reaches_a_server_over_ssh(tmp_path=None):
     pymux.create_window(PANE_COMMAND)
     await asyncio.sleep(0.5)
 
-    server, port, client_key = await an_ssh_server(where, socket_path)
+    server, port, client_key = await create_ssh_server(where, socket_path)
 
     client = SshClient(
         "ssh://127.0.0.1:%d%s" % (port, socket_path),
@@ -236,7 +236,7 @@ async def test_an_address_with_no_path_finds_the_socket_itself():
     pymux.create_window(PANE_COMMAND)
     await asyncio.sleep(0.5)
 
-    server, port, client_key = await an_ssh_server(where, socket_path)
+    server, port, client_key = await create_ssh_server(where, socket_path)
 
     client = SshClient(
         "ssh://127.0.0.1:%d" % (port,),

@@ -50,7 +50,7 @@ NOTHING = "%s -c pass" % (sys.executable,)
 #: index of the focused pane on pure red and its number on orange,
 #: which are the two loudest things on a screen whose whole point is
 #: that it is quiet. Lillecarl/pymux#161.
-THE_LOUD_ONES = frozenset(
+LOUD_ONES = frozenset(
     {
         "terminal.focused border",
         "terminal.focused titlebar",
@@ -162,7 +162,7 @@ async def test_every_theme_reaches_a_client():
 #: body of an overlay pane is empty: it draws like a pane, on the
 #: terminal's own background, and a colour there put a slab of chrome
 #: behind the program's output.
-THE_RULES = {
+RULES = {
     "border": "#888888",
     "terminal.focused border": "ansigreen bold",
     "terminal titlebar": "bg:#888888 #ffffff",
@@ -213,7 +213,7 @@ THE_RULES = {
 }
 
 #: The fourteen rules grey replaces, which are the roles it differs in.
-THE_GREY_ROLES = {
+GREY_ROLES = {
     "focus": "#5f5f87",
     "focus-strong": "#8787af",
     "focus-border": "#8787af",
@@ -237,7 +237,7 @@ THE_GREY_ROLES = {
 def test_the_roles_produce_the_rules_the_default_drew():
     from pymux.style import ROLES, derive
 
-    assert derive(ROLES) == THE_RULES
+    assert derive(ROLES) == RULES
 
 
 def test_the_roles_produce_the_rules_grey_drew():
@@ -248,10 +248,10 @@ def test_the_roles_produce_the_rules_grey_drew():
     """
     from pymux.style import ROLES, derive
 
-    the_old_rules_grey_replaced = {
+    rules_with_grey_replaced = {
         key: value
         for key, value in {
-            **THE_RULES,
+            **RULES,
             **{
                 "terminal.focused border": "#8787af bold",
                 "terminal.focused titlebar": "bg:#5f5f87 #ffffff",
@@ -271,7 +271,7 @@ def test_the_roles_produce_the_rules_grey_drew():
         }.items()
     }
 
-    assert derive({**ROLES, **THE_GREY_ROLES}) == the_old_rules_grey_replaced
+    assert derive({**ROLES, **GREY_ROLES}) == rules_with_grey_replaced
 
 
 def test_the_body_of_an_overlay_pane_draws_like_a_pane():
@@ -282,7 +282,7 @@ def test_the_body_of_an_overlay_pane_draws_like_a_pane():
     slab of chrome behind the program's output and made the overlay a
     different colour from the panes it floats over.
     """
-    assert THE_RULES["overlay"] == ""
+    assert RULES["overlay"] == ""
 
 
 # ----------------------------------------------------------------------
@@ -330,7 +330,7 @@ def test_the_grey_theme_replaces_the_loud_rules_and_no_others():
     grey = dict(THEMES["grey"].style_rules)
 
     assert set(default) == set(grey)
-    assert {name for name in default if default[name] != grey[name]} == THE_LOUD_ONES
+    assert {name for name in default if default[name] != grey[name]} == LOUD_ONES
 
 
 def test_no_rule_of_the_grey_theme_is_loud():
@@ -340,7 +340,7 @@ def test_no_rule_of_the_grey_theme_is_loud():
     """
     grey = dict(THEMES["grey"].style_rules)
 
-    for name in THE_LOUD_ONES:
+    for name in LOUD_ONES:
         assert "green" not in grey[name]
         for loud in ("#ff0000", "#aa8800", "#44ff44"):
             assert loud not in grey[name]

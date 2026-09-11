@@ -127,7 +127,7 @@ MARKERS = "~!@#$^&"
 #: and a stamp taken afterwards starts it later than that: on a bare
 #: pty the driver can read the byte before the program has written its
 #: own note about it, and the measurement came out at minus nothing.
-THE_CHILD = r"""
+CHILD = r"""
 import os, sys, time, tty
 
 log = open(sys.argv[1], "w", buffering=1)
@@ -247,7 +247,7 @@ def measure(attached, log, samples):
     return found
 
 
-def a_distribution(name, milliseconds):
+def create_distribution(name, milliseconds):
     ordered = sorted(milliseconds)
 
     def at(fraction):
@@ -268,11 +268,11 @@ def report(measured):
     for path in ("input", "output", "round trip"):
         for where in ("bare", "pymux"):
             if where in measured:
-                print(a_distribution("%s %s" % (where, path), measured[where][path]))
+                print(create_distribution("%s %s" % (where, path), measured[where][path]))
         print()
 
 
-def the_gap(measured):
+def gap(measured):
     "What pymux adds to the middle of each path, at the median."
     if "bare" not in measured or "pymux" not in measured:
         return
@@ -294,7 +294,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as name:
         tmp = Path(name)
         child = tmp / "echo_child.py"
-        child.write_text(THE_CHILD)
+        child.write_text(CHILD)
 
         print(
             "%d keystrokes a path, %.0f ms apart, over the %s route."
@@ -328,7 +328,7 @@ def main() -> int:
             terminal.close()
 
     report(measured)
-    the_gap(measured)
+    gap(measured)
 
     print(
         "\nNothing judges these. A wall clock belongs to the machine that"

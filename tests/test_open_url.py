@@ -42,7 +42,7 @@ def opens(packets):
 
 
 @contextlib.contextmanager
-def an_environment(**values):
+def create_environment(**values):
     """
     The environment with what is given set, and what is None gone.
 
@@ -149,7 +149,7 @@ async def test_a_command_from_a_pane_opens_in_the_browser_of_the_client():
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
-        got = await session.a_command("open-url %s" % URL)
+        got = await session.command("open-url %s" % URL)
 
         await once(
             lambda: opens(packets),
@@ -178,7 +178,7 @@ async def test_the_fake_cli_of_a_command_is_not_a_client_anybody_used():
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
-        temp = session.a_command("open-url %s" % URL)
+        temp = session.command("open-url %s" % URL)
 
         assert temp.temporary is True
         assert temp.last_used == 0
@@ -439,7 +439,7 @@ async def test_the_shim_rides_the_path_of_a_new_pane():
         pymux.open_url_shim = True
         pymux._ensure_the_open_url_shim()
 
-        with an_environment(PATH="/usr/bin", BROWSER=None):
+        with create_environment(PATH="/usr/bin", BROWSER=None):
             pymux._shim_the_environment_of_a_pane()
 
             assert os.environ["PATH"].startswith(pymux._open_url_shim_dir + os.pathsep)
@@ -484,7 +484,7 @@ async def test_the_shim_leaves_a_pane_alone_when_it_is_off():
     with in_this_process() as session:
         pymux = session.pymux
 
-        with an_environment(PATH="/usr/bin", BROWSER=None):
+        with create_environment(PATH="/usr/bin", BROWSER=None):
             pymux._shim_the_environment_of_a_pane()
 
             assert os.environ["PATH"] == "/usr/bin"

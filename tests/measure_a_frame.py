@@ -217,7 +217,7 @@ def create_window(count: int, strip: bool = False):
     return window, panes
 
 
-def a_container(pymux, window, panes):
+def create_container(pymux, window, panes):
     "The container that draws this window, with an empty pane in each."
     return PlanContainer(
         layout_of(pymux, window), {pane: Window() for pane in panes}
@@ -225,7 +225,7 @@ def a_container(pymux, window, panes):
 
 
 @contextmanager
-def an_application(container):
+def create_application(container):
     """
     A current application, because a frame asks which pane has the
     keyboard and that is a fact about an application.
@@ -236,7 +236,7 @@ def an_application(container):
             yield app
 
 
-def a_frame(container, room: Size):
+def create_frame(container, room: Size):
     """
     One whole frame of the panes of a window, onto a fresh screen.
 
@@ -260,7 +260,7 @@ def a_frame(container, room: Size):
     return work
 
 
-def the_neighbours(pymux, window, panes):
+def neighbours(pymux, window, panes):
     "What every title bar of this window asks, once each."
 
     def work():
@@ -331,19 +331,19 @@ def measurements(include: str):
             layout = layout_of(pymux, window)
             plan = layout.measure(room)
 
-            container = a_container(pymux, window, panes)
-            with an_application(container):
-                a_frame(container, room)()
+            container = create_container(pymux, window, panes)
+            with create_application(container):
+                create_frame(container, room)()
 
             take("%s (measure)" % shape, lambda la=layout, r=room: la.measure(r))
             take("%s (chrome)" % shape, lambda la=layout, p=plan: la.chrome(p))
-            take("%s (frame)" % shape, a_frame(container, room))
+            take("%s (frame)" % shape, create_frame(container, room))
             take(
                 "%s (neighbours)" % shape,
-                the_neighbours(pymux, window, panes),
+                neighbours(pymux, window, panes),
                 _ClientState(container),
             )
-            take("%s (neighbours cold)" % shape, the_neighbours(pymux, window, panes))
+            take("%s (neighbours cold)" % shape, neighbours(pymux, window, panes))
 
     # A zoomed window lays out one pane, whatever it holds. This is the
     # only measurement of a wrapper, and it is here to say that the
@@ -353,13 +353,13 @@ def measurements(include: str):
     room = room_for_the_panes(pymux, window)
     take(
         "zoomed %d panes (frame)" % max(COUNTS),
-        a_frame(a_container(pymux, window, panes), room),
+        create_frame(create_container(pymux, window, panes), room),
     )
 
     return found, pymux
 
 
-def plans_of_a_frame(pymux, include: str):
+def plans_of_create_frame(pymux, include: str):
     """
     How many plans one frame of each shape measures.
 
@@ -377,15 +377,15 @@ def plans_of_a_frame(pymux, include: str):
                 continue
 
             window, panes = create_window(count, strip)
-            container = a_container(pymux, window, panes)
+            container = create_container(pymux, window, panes)
             room = room_for_the_panes(pymux, window)
             pymux.state = _ClientState(container)
 
             try:
-                with an_application(container):
+                with create_application(container):
                     with counted_plans() as counts:
-                        a_frame(container, room)()
-                        the_neighbours(pymux, window, panes)()
+                        create_frame(container, room)()
+                        neighbours(pymux, window, panes)()
             finally:
                 pymux.state = None
 
@@ -427,7 +427,7 @@ def main() -> int:
     tolerance = float(os.environ.get("PYMUX_FRAME_TOLERANCE", "") or DEFAULT_TOLERANCE)
 
     found, pymux = measurements(include)
-    plans = plans_of_a_frame(pymux, include)
+    plans = plans_of_create_frame(pymux, include)
 
     if not found and not plans:
         print("Nothing matched %r, so this run measured nothing." % include)
@@ -458,7 +458,7 @@ def main() -> int:
     for name, work, state in found:
         pymux.state = state
         try:
-            with an_application(a_container(pymux, *create_window(1))):
+            with create_application(create_container(pymux, *create_window(1))):
                 judge(name, count_instructions(work))
         finally:
             pymux.state = None

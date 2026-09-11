@@ -26,7 +26,7 @@ from pymux.entry_points.run_pymux import _how_much_to_log
 
 
 @pytest.fixture(autouse=True)
-def a_clean_logger():
+def create_clean_logger():
     "Give each test the logger as a fresh process would have it."
     handlers = list(log.logger.handlers)
     level = log.logger.level

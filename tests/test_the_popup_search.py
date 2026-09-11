@@ -22,7 +22,7 @@ from test_command_mode import press
 MANY = "bind-key"
 
 
-def a_popup(pymux, state, vi=False):
+def create_popup(pymux, state, vi=False):
     """
     The popup up and focused, the way `list-keys` leaves it.
 
@@ -66,7 +66,7 @@ async def test_the_key_the_popup_promises_opens_the_search():
     "unless".
     """
     async with create_session() as (pymux, state):
-        a_popup(pymux, state)
+        create_popup(pymux, state)
 
         press(state, "/")
 
@@ -76,7 +76,7 @@ async def test_the_key_the_popup_promises_opens_the_search():
 @in_a_loop
 async def test_the_search_opens_with_vi_mode_keys_too():
     async with create_session() as (pymux, state):
-        a_popup(pymux, state, vi=True)
+        create_popup(pymux, state, vi=True)
 
         press(state, "/")
 
@@ -119,7 +119,7 @@ def matches_in(popup):
 async def test_accepting_a_search_lands_on_the_first_match():
     "So that the tests below can say which match the cursor is on."
     async with create_session() as (pymux, state):
-        popup = a_popup(pymux, state)
+        popup = create_popup(pymux, state)
 
         type_a_search(state, MANY)
 
@@ -134,7 +134,7 @@ async def test_a_second_match_is_one_key_away():
     may not cost a retyped query.
     """
     async with create_session() as (pymux, state):
-        popup = a_popup(pymux, state)
+        popup = create_popup(pymux, state)
         type_a_search(state, MANY)
 
         press(state, "n")
@@ -145,7 +145,7 @@ async def test_a_second_match_is_one_key_away():
 @in_a_loop
 async def test_the_match_before_is_one_key_away_as_well():
     async with create_session() as (pymux, state):
-        popup = a_popup(pymux, state)
+        popup = create_popup(pymux, state)
         type_a_search(state, MANY)
         press(state, "n")
         press(state, "n")
@@ -167,7 +167,7 @@ async def test_a_count_moves_that_many_matches():
     fault of the popup.
     """
     async with create_session() as (pymux, state):
-        popup = a_popup(pymux, state)
+        popup = create_popup(pymux, state)
         type_a_search(state, MANY)
 
         press(state, Keys.Escape, "3")
@@ -180,7 +180,7 @@ async def test_a_count_moves_that_many_matches():
 async def test_repeating_a_search_needs_no_search_field():
     "The search field is closed while a person walks the matches."
     async with create_session() as (pymux, state):
-        a_popup(pymux, state)
+        create_popup(pymux, state)
         type_a_search(state, MANY)
 
         press(state, "n")

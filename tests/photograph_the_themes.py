@@ -47,7 +47,7 @@ ONLY_TERMINALS = os.environ.get("PYMUX_THEMES_TERMINALS", "")
 DEMO = Path(__file__).parent / "demo_application.py"
 
 
-def the_demo_keys():
+def demo_keys():
     """
     Split the window in two, and run the demo in the pane that took
     the keyboard.
@@ -69,12 +69,12 @@ FIXTURES = {}
 for _name in sorted(THEMES):
     FIXTURES["theme-%s" % _name] = (
         CHROME + "set-option theme %s\n" % _name,
-        the_demo_keys(),
+        demo_keys(),
     )
 for _name in names():
     FIXTURES["theme-pygments-%s" % _name] = (
         CHROME + "set-option theme pygments:%s\n" % _name,
-        the_demo_keys(),
+        demo_keys(),
     )
 
 if __name__ == "__main__":

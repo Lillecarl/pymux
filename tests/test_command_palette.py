@@ -26,12 +26,12 @@ def in_command_mode(state):
         state.app.layout.focus(state.command_buffer)
 
 
-def the_floats(state):
+def floats(state):
     "Every float of this client's layout, in the order they are drawn."
     return state.layout_manager.layout.floats
 
 
-def a_float_is_drawn(state, wanted: Float) -> bool:
+def float_is_drawn(state, wanted: Float) -> bool:
     "Whether the layout would draw this float now."
     content = wanted.content
     with set_app(state.app):
@@ -40,7 +40,7 @@ def a_float_is_drawn(state, wanted: Float) -> bool:
         return True
 
 
-def the_float_of(state, name: str) -> Float:
+def float_of(state, name: str) -> Float:
     """
     The float that draws the box `name` builds.
 
@@ -49,7 +49,7 @@ def the_float_of(state, name: str) -> Float:
     them apart. Each is a `DynamicContainer` over the method that
     builds it, and that method's name can.
     """
-    for one in the_floats(state):
+    for one in floats(state):
         inner = getattr(one.content, "content", None)
         builder = getattr(inner, "get_container", None)
         if builder is not None and builder.__name__ == name:
@@ -57,14 +57,14 @@ def the_float_of(state, name: str) -> Float:
     raise AssertionError("the layout draws no %s" % (name,))
 
 
-def the_palette_float(state) -> Float:
+def palette_float(state) -> Float:
     "The float that holds the box in the middle."
-    return the_float_of(state, "_command_palette")
+    return float_of(state, "_command_palette")
 
 
-def the_cursor_menu_float(state) -> Float:
+def cursor_menu_float(state) -> Float:
     "The completion menu that hangs off the cursor."
-    for one in the_floats(state):
+    for one in floats(state):
         if one.xcursor:
             return one
     raise AssertionError("the layout holds no menu under the cursor")
@@ -78,7 +78,7 @@ async def test_the_palette_is_off_to_begin_with():
 
         in_command_mode(state)
 
-        assert not a_float_is_drawn(state, the_palette_float(state))
+        assert not float_is_drawn(state, palette_float(state))
 
 
 @in_a_loop
@@ -88,7 +88,7 @@ async def test_the_option_draws_the_palette():
 
         in_command_mode(state)
 
-        assert a_float_is_drawn(state, the_palette_float(state))
+        assert float_is_drawn(state, palette_float(state))
 
 
 @in_a_loop
@@ -97,7 +97,7 @@ async def test_the_palette_is_drawn_only_in_command_mode():
     async with create_session() as (pymux, state):
         ALL_OPTIONS["command-palette"].set_value(pymux, "on")
 
-        assert not a_float_is_drawn(state, the_palette_float(state))
+        assert not float_is_drawn(state, palette_float(state))
 
 
 @in_a_loop
@@ -110,7 +110,7 @@ async def test_the_menu_under_the_cursor_steps_aside_for_the_palette():
         ALL_OPTIONS["command-palette"].set_value(pymux, "on")
         in_command_mode(state)
 
-        assert not a_float_is_drawn(state, the_cursor_menu_float(state))
+        assert not float_is_drawn(state, cursor_menu_float(state))
 
 
 @in_a_loop
@@ -118,7 +118,7 @@ async def test_the_menu_under_the_cursor_stays_for_the_bar():
     async with create_session() as (pymux, state):
         in_command_mode(state)
 
-        assert a_float_is_drawn(state, the_cursor_menu_float(state))
+        assert float_is_drawn(state, cursor_menu_float(state))
 
 
 @in_a_loop

@@ -124,12 +124,12 @@ class Session(NamedTuple):
     #: pipe input that the client's application reads.
     typed: Callable
 
-    #: `a_command(text)`: a command over a connection of its own, the
+    #: `create_command(text)`: a command over a connection of its own, the
     #: way a pane's CLI sends one. The server runs it under the fake
     #: CLI it makes for such a command, and what that connection
     #: received comes back: the packets of the answer, and nothing a
     #: browser was meant to read.
-    a_command: Callable
+    command: Callable
 
     #: `watch(name, obj)` -> obj, remembered by a weak reference.
     watch: Callable
@@ -223,7 +223,7 @@ def in_this_process(pymux=None):
         def typed(state, text):
             state.app.input.send_text(text)
 
-        def a_command(text):
+        def create_command(text):
             """
             A command under the fake CLI of a socket, the way the
             server runs one that arrived from a pane. The client state
@@ -247,7 +247,7 @@ def in_this_process(pymux=None):
             return state
 
         try:
-            yield Session(pymux, attach, detach, typed, a_command, watch, watched)
+            yield Session(pymux, attach, detach, typed, create_command, watch, watched)
         finally:
             pymux.stop()
 
@@ -415,7 +415,7 @@ def over_a_connection(pymux=None, read_a_packet=None):
         client_end, _draining = ends[id(state)]
         client_end.write_nowait(json.dumps({"cmd": "in", "data": text}))
 
-    async def a_command(text, pane_id=None):
+    async def create_command(text, pane_id=None):
         """
         A command over a connection of its own, the way a pane's CLI
         sends one. The packets that connection's client end received
@@ -449,7 +449,7 @@ def over_a_connection(pymux=None, read_a_packet=None):
         return got
 
     try:
-        yield Session(pymux, attach, detach, typed, a_command, watch, watched)
+        yield Session(pymux, attach, detach, typed, create_command, watch, watched)
     finally:
         for client_end, draining in ends.values():
             client_end.close()
@@ -469,7 +469,7 @@ ROUTES = {
 }
 
 
-def the_routes(chosen: str, knob: str) -> list:
+def routes(chosen: str, knob: str) -> list:
     "The routes a run covers, by name. Empty means all of them."
     if not chosen:
         return list(ROUTES.items())

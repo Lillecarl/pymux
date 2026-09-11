@@ -28,7 +28,7 @@ from pymux.commands.commands import call_command_handler
 from pymux.key_spelling import PREFIX, KeyCompleter
 
 
-def the_float_of(state, name: str) -> Float:
+def float_of(state, name: str) -> Float:
     "The float that draws the box `name` builds."
     for one in state.layout_manager.layout.floats:
         inner = getattr(one.content, "content", None)
@@ -54,7 +54,7 @@ def is_drawn(state, wanted) -> bool:
         return True
 
 
-def the_bottom_prompt(state) -> ConditionalContainer:
+def bottom_prompt(state) -> ConditionalContainer:
     "The one row version of the prompt, along the bottom."
     manager = state.layout_manager
     window = manager._prompt_window()
@@ -105,13 +105,13 @@ async def test_it_asks_in_a_box():
     async with create_session() as (pymux, state):
         compose(pymux, state)
 
-        assert is_drawn(state, the_float_of(state, "_key_box"))
+        assert is_drawn(state, float_of(state, "_key_box"))
 
 
 @in_a_loop
 async def test_nothing_is_drawn_until_it_is_asked_for():
     async with create_session() as (pymux, state):
-        assert not is_drawn(state, the_float_of(state, "_key_box"))
+        assert not is_drawn(state, float_of(state, "_key_box"))
 
 
 @in_a_loop
@@ -127,8 +127,8 @@ async def test_an_ordinary_prompt_still_uses_the_bottom_row():
                 "command-prompt", pymux, ["-p", "Name", "rename-window %%"]
             )
 
-        assert not is_drawn(state, the_float_of(state, "_key_box"))
-        assert is_drawn(state, the_bottom_prompt(state))
+        assert not is_drawn(state, float_of(state, "_key_box"))
+        assert is_drawn(state, bottom_prompt(state))
 
 
 @in_a_loop
@@ -137,7 +137,7 @@ async def test_the_box_replaces_the_bottom_row_and_does_not_join_it():
     async with create_session() as (pymux, state):
         compose(pymux, state)
 
-        assert not is_drawn(state, the_bottom_prompt(state))
+        assert not is_drawn(state, bottom_prompt(state))
 
 
 @in_a_loop
@@ -216,7 +216,7 @@ async def test_it_closes_when_the_key_has_gone():
         answer(pymux, state, "ctrl+home")
 
         assert state.prompt_completer is None
-        assert not is_drawn(state, the_float_of(state, "_key_box"))
+        assert not is_drawn(state, float_of(state, "_key_box"))
 
 
 @in_a_loop

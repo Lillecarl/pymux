@@ -468,7 +468,7 @@ def test_alt_escape_ends_nothing():
 # The keys pymux has no name for.
 
 
-def a_dropped_key(data: str) -> Dropped:
+def create_dropped_key(data: str) -> Dropped:
     "Parse one sequence that pymux cannot name, and give the reason."
     result = parse_kitty_key(data)
     assert isinstance(result, Dropped), result
@@ -658,12 +658,12 @@ def test_shift_and_tab_is_the_back_tab():
 
 
 def test_the_reason_says_what_kind_of_key_it_was():
-    assert a_dropped_key("\x1b[57358u").reason == DropReason.KEY_THAT_WRITES_NOTHING
-    assert a_dropped_key("\x1b[57399;5u").reason == DropReason.KEYPAD_WITH_A_MODIFIER
-    assert a_dropped_key("\x1b[233;5u").reason == DropReason.CTRL_AND_A_CHARACTER
-    assert a_dropped_key("\x1b[99;5~").reason == DropReason.TILDE_KEY_WITH_NO_NAME
+    assert create_dropped_key("\x1b[57358u").reason == DropReason.KEY_THAT_WRITES_NOTHING
+    assert create_dropped_key("\x1b[57399;5u").reason == DropReason.KEYPAD_WITH_A_MODIFIER
+    assert create_dropped_key("\x1b[233;5u").reason == DropReason.CTRL_AND_A_CHARACTER
+    assert create_dropped_key("\x1b[99;5~").reason == DropReason.TILDE_KEY_WITH_NO_NAME
     assert (
-        a_dropped_key("\x1b[27;5u").reason
+        create_dropped_key("\x1b[27;5u").reason
         == DropReason.MODIFIER_THIS_KEY_HAS_NO_NAME_FOR
     )
 
