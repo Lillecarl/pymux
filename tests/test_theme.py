@@ -166,7 +166,125 @@ async def test_every_theme_reaches_a_client():
 
 
 # ----------------------------------------------------------------------
-# The option itself.
+# The roles the themes are written through.
+
+
+#: What the rules were before they were written as roles. The rules a
+#: scheme draws are what a person sees; this is the pin that says the
+#: roles produce exactly them, so the refactor changed no drawing. The
+#: body of an overlay pane is empty: it draws like a pane, on the
+#: terminal's own background, and a colour there put a slab of chrome
+#: behind the program's output.
+THE_RULES = {
+    "border": "#888888",
+    "terminal.focused border": "ansigreen bold",
+    "terminal titlebar": "bg:#888888 #ffffff",
+    "terminal.focused titlebar": "bg:#448844 #ffffff",
+    "terminal.focused titlebar name": "bg:#88aa44 #ffffff",
+    "terminal.focused titlebar paneindex": "bg:#ff0000",
+    "titlebar neighbour": "#dddddd",
+    "commandline": "bg:#4e4e4e #ffffff",
+    "commandline.command": "bold",
+    "commandline.prompt": "bold",
+    "statusbar": "noreverse bg:ansigreen #000000",
+    "statusbar window": "#ffffff",
+    "statusbar window.current": "bg:#44ff44 #000000",
+    "auto-suggestion": "bg:#4e5e4e #88aa88",
+    "message": "bg:#bbee88 #222222",
+    "background": "#888888",
+    "cut": "bg:#303030",
+    "clock": "bg:#88aa00",
+    "panenumber": "bg:#888888",
+    "panenumber focused": "bg:#aa8800",
+    "terminated": "bg:#aa0000 #ffffff",
+    "confirmationtoolbar": "bg:#880000 #ffffff",
+    "confirmationtoolbar question": "",
+    "confirmationtoolbar yesno": "bg:#440000",
+    "copy-mode-cursor-position": "bg:ansiyellow ansiblack",
+    "search-toolbar.prompt": "bg:#88ff44 #444444",
+    "search-toolbar.text": "bg:#88ff44 #000000",
+    "search-match": "#000000 bg:#88aa88",
+    "search-match.current": "#000000 bg:#aaffaa underline",
+    "completion-menu": "bg:#1c1c1c #d0d0d0",
+    "completion-menu.completion": "bg:#1c1c1c #d0d0d0",
+    "completion-menu.completion.current": "bg:#5f5f87 #ffffff",
+    "completion-menu.meta.completion": "bg:#262626 #a8a8a8",
+    "completion-menu.meta.completion.current": "bg:#5f5f87 #ffffff",
+    "scrollbar.background": "bg:#262626",
+    "scrollbar.button": "bg:#5f5f87",
+    "commandpalette": "bg:#1c1c1c",
+    "commandpalette.titlebar": "bg:#5f5f87 #ffffff",
+    "commandpalette.title": "bold bg:#5f5f87 #ffffff",
+    "overlay": "",
+    "overlay.titlebar": "bg:#5f5f87 #ffffff",
+    "overlay.title": "bold",
+    "dialog": "noinherit",
+    "dialog.body": "noinherit",
+    "dialog frame": "noinherit",
+    "dialog.body text-area": "noinherit",
+    "dialog.body text-area last-line": "noinherit",
+}
+
+#: The fourteen rules grey replaces, which are the roles it differs in.
+THE_GREY_ROLES = {
+    "focus": "#5f5f87",
+    "focus-strong": "#8787af",
+    "focus-border": "#8787af",
+    "alarm": "#8787af",
+    "signal": "#5f5f87",
+    "signal-bright": "#8787af",
+    "signal-text": "#ffffff",
+    "suggestion": "#4e4e5e",
+    "suggestion-text": "#8888aa",
+    "notice": "#8787af",
+    "notice-text": "#ffffff",
+    "warn": "#5f5f87",
+    "warn-bright": "#5f5f87",
+    "search": "#8787af",
+    "search-prompt-text": "#ffffff",
+    "search-match": "#8888aa",
+    "search-match-current": "#5f5f87",
+    "search-match-current-text": "#ffffff",
+}
+
+def test_the_roles_produce_the_rules_the_default_drew():
+    from pymux.style import ROLES, derive
+
+    assert derive(ROLES) == THE_RULES
+
+
+def test_the_roles_produce_the_rules_grey_drew():
+    """
+    Grey was written as the default with the loud rules replaced. The
+    roles it replaces are those seventeen; the rules it produces are
+    the same seventeen keys.
+    """
+    from pymux.style import ROLES, derive
+
+    the_old_rules_grey_replaced = {
+        key: value
+        for key, value in {
+            **THE_RULES,
+            **{
+                "terminal.focused border": "#8787af bold",
+                "terminal.focused titlebar": "bg:#5f5f87 #ffffff",
+                "terminal.focused titlebar name": "bg:#8787af #ffffff",
+                "terminal.focused titlebar paneindex": "bg:#8787af",
+                "statusbar": "noreverse bg:#5f5f87 #ffffff",
+                "statusbar window.current": "bg:#8787af #ffffff",
+                "auto-suggestion": "bg:#4e4e5e #8888aa",
+                "message": "bg:#8787af #ffffff",
+                "clock": "bg:#5f5f87",
+                "panenumber focused": "bg:#5f5f87",
+                "search-toolbar.prompt": "bg:#8787af #ffffff",
+                "search-toolbar.text": "bg:#8787af #000000",
+                "search-match": "#000000 bg:#8888aa",
+                "search-match.current": "#ffffff bg:#5f5f87 underline",
+            },
+        }.items()
+    }
+
+    assert derive({**ROLES, **THE_GREY_ROLES}) == the_old_rules_grey_replaced
 
 
 def test_the_body_of_an_overlay_pane_draws_like_a_pane():
@@ -175,12 +293,13 @@ def test_the_body_of_an_overlay_pane_draws_like_a_pane():
     left at the default background shows what is behind pymux, in an
     overlay pane as in any other. The rule named #1c1c1c, which drew a
     slab of chrome behind the program's output and made the overlay a
-    different colour from the panes it floats over. The grey theme
-    spreads these rules, so one check covers both.
+    different colour from the panes it floats over.
     """
-    from pymux.style import DEFAULT_RULES
+    assert THE_RULES["overlay"] == ""
 
-    assert DEFAULT_RULES["overlay"] == ""
+
+# ----------------------------------------------------------------------
+# The option itself.
 
 
 def test_a_name_nobody_registered_is_refused():
