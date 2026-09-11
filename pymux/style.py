@@ -120,8 +120,12 @@ DEFAULT_RULES = {
     # `bold` alone left the title on the background of the box and
     # cut a dark hole in the middle of the title bar.
     "commandpalette.title": "bold bg:#5f5f87 #ffffff",
-    # The overlay pane, which floats over the layout.
-    "overlay": "bg:#1c1c1c",
+    # The overlay pane, which floats over the layout. Its body draws
+    # like any pane: a cell the program left at the default background
+    # shows the terminal's own background, and a rule that named a
+    # colour here put a slab of chrome behind the program's output.
+    # The title bar above it is chrome, and keeps its colours.
+    "overlay": "",
     "overlay.titlebar": "bg:#5f5f87 #ffffff",
     "overlay.title": "bold",
     # Pop-up dialog. Ignore built-in style.

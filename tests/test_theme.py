@@ -169,6 +169,20 @@ async def test_every_theme_reaches_a_client():
 # The option itself.
 
 
+def test_the_body_of_an_overlay_pane_draws_like_a_pane():
+    """
+    A pane's background is the terminal's own one: a cell the program
+    left at the default background shows what is behind pymux, in an
+    overlay pane as in any other. The rule named #1c1c1c, which drew a
+    slab of chrome behind the program's output and made the overlay a
+    different colour from the panes it floats over. The grey theme
+    spreads these rules, so one check covers both.
+    """
+    from pymux.style import DEFAULT_RULES
+
+    assert DEFAULT_RULES["overlay"] == ""
+
+
 def test_a_name_nobody_registered_is_refused():
     pymux = Pymux()
 

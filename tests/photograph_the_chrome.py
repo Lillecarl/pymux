@@ -203,6 +203,20 @@ FIXTURES = {
         CHROME,
         keys((FIRST_KEY, PREFIX), (0.4, b"t")),
     ),
+    # An overlay pane, floating in the middle of the screen over two
+    # panes. Its body runs a program, so its default-background cells
+    # have to show the terminal's own background, the way a normal
+    # pane does: a rule that named a colour behind it drew a slab of
+    # chrome over the layout instead. Lillecarl/pymux#223.
+    "overlay": (
+        CHROME,
+        keys(
+            (FIRST_KEY, PREFIX),
+            (0.4, b"%"),
+            (0.6, PREFIX),
+            (0.4, b"g"),
+        ),
+    ),
     # Two lines of a configuration file that fail. Every error is joined
     # into one message and each names the file and the line, so the pair
     # runs past the width of the screen.
