@@ -27,6 +27,7 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
+from a_session import Connection
 from pymux.main import Pymux
 from pymux.options import ALL_OPTIONS
 
@@ -35,14 +36,6 @@ ROWS, COLUMNS = 24, 80
 #: A status line with nothing in it that time moves, so that a test of
 #: the window list does not race the minute of the real clock.
 NO_CLOCK = "[#S]"
-
-
-class _Connection:
-    "What `Pymux` asks a connection for, and nothing else."
-
-    kitty_source_flags = 0
-    pointer_shape = None
-    graphics = None
 
 
 @pytest.fixture
@@ -67,7 +60,7 @@ def session():
             output=output,
             input=pipe,
             color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=_Connection(),
+            connection=Connection(),
         )
 
         frames = []

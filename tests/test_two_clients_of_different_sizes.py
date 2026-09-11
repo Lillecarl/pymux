@@ -34,6 +34,7 @@ from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
+from a_session import Connection
 from pymux.enums import WindowSize
 from pymux.main import Pymux
 from pymux.plan_container import PlanContainer
@@ -42,20 +43,6 @@ from pymux.plan_container import PlanContainer
 #: that a pane of the big plane cannot fit in the small client.
 BIG = Size(rows=24, columns=100)
 SMALL = Size(rows=12, columns=40)
-
-
-class _Connection:
-    "Two clients need two of these: the server keys on the connection."
-
-    kitty_source_flags = 0
-    pointer_shape = None
-    graphics = None
-
-    def set_pointer_shape(self, shape):
-        pass
-
-    def _send_packet(self, packet):
-        pass
 
 
 class _Client:
@@ -129,7 +116,7 @@ def two_clients(commands=()):
                 output=output,
                 input=pipe,
                 color_depth=ColorDepth.DEPTH_8_BIT,
-                connection=_Connection(),
+                connection=Connection(),
             )
             client = _Client(pymux, state, size)
             opened.append(client)

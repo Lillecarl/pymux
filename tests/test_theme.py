@@ -32,6 +32,7 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
+from a_session import Connection
 from pymux.main import Pymux
 from pymux.options import ALL_OPTIONS, SetOptionError
 from pymux.style import DEFAULT_THEME, THEMES
@@ -69,20 +70,6 @@ THE_LOUD_ONES = frozenset(
 )
 
 
-class _Connection:
-    "What `Pymux` asks a connection for, and nothing else."
-
-    kitty_source_flags = 0
-    pointer_shape = None
-    graphics = None
-
-    def set_pointer_shape(self, shape):
-        pass
-
-    def _send_packet(self, packet):
-        pass
-
-
 def in_a_loop(test):
     "pymux carries no anyio, so pytest here runs no coroutine test."
 
@@ -105,7 +92,7 @@ async def a_client():
             output=output,
             input=pipe,
             color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=_Connection(),
+            connection=Connection(),
         )
         try:
             with set_app(state.app):

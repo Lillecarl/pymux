@@ -24,6 +24,7 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
+from a_session import Connection
 from pymux import introspect, log
 from pymux.commands.commands import handle_command
 from pymux.enums import Woke
@@ -31,14 +32,6 @@ from pymux.main import Pymux
 from pymux.server import _SocketStdout
 
 SIZE = Size(rows=24, columns=80)
-
-
-class _Connection:
-    "What `Pymux` asks a connection for, and nothing else."
-
-    kitty_source_flags = 0
-    pointer_shape = None
-    graphics = None
 
 
 @pytest.fixture
@@ -62,7 +55,7 @@ def a_server(tmp_path, monkeypatch):
             output=output,
             input=pipe,
             color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=_Connection(),
+            connection=Connection(),
         )
         try:
             yield pymux, state

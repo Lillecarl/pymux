@@ -34,6 +34,7 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
+from a_session import Connection
 from pymux.main import Pymux
 
 ROWS, COLUMNS = 24, 80
@@ -50,20 +51,6 @@ class _NotLookedYet:
     application, and `get_active_window_for` uses the key and nothing
     else, so this is enough to be one.
     """
-
-
-class _Connection:
-    "What `Pymux` asks a connection for, and nothing else."
-
-    kitty_source_flags = 0
-    pointer_shape = None
-    graphics = None
-
-    def set_pointer_shape(self, shape):
-        pass
-
-    def _send_packet(self, packet):
-        pass
 
 
 def in_a_loop(test):
@@ -99,7 +86,7 @@ async def a_server(windows):
             output=output,
             input=pipe.__enter__(),
             color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=_Connection(),
+            connection=Connection(),
         ).app
 
     try:

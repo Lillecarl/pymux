@@ -83,6 +83,7 @@ from prompt_toolkit.key_binding.key_processor import KeyPress  # noqa: E402
 from prompt_toolkit.output import ColorDepth  # noqa: E402
 from prompt_toolkit.output.vt100 import Vt100_Output  # noqa: E402
 
+from a_session import Connection  # noqa: E402
 from instructions import count_instructions  # noqa: E402
 
 from pymux.main import Pymux  # noqa: E402
@@ -123,20 +124,6 @@ THE_ANSWER = "~"
 THE_KEY = "a"
 
 
-class _Connection:
-    "What `Pymux` asks a connection for, and nothing else."
-
-    kitty_source_flags = 0
-    pointer_shape = None
-    graphics = None
-
-    def set_pointer_shape(self, shape):
-        pass
-
-    def _send_packet(self, packet):
-        pass
-
-
 @contextmanager
 def a_client():
     """
@@ -166,7 +153,7 @@ def a_client():
                 output=output,
                 input=pipe,
                 color_depth=ColorDepth.DEPTH_8_BIT,
-                connection=_Connection(),
+                connection=Connection(),
             )
 
             state.app.loop = loop

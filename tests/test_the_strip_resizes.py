@@ -22,6 +22,7 @@ from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
+from a_session import Connection
 from pymux.main import Pymux
 
 ROWS = 12
@@ -31,18 +32,6 @@ WIDE = 80
 QUIET = "%s -c 'import time; time.sleep(600)'" % (sys.executable,)
 
 STRIP = ["set-option pane-border-status on", "set-window-option strip on"]
-
-
-class _Connection:
-    kitty_source_flags = 0
-    pointer_shape = None
-    graphics = None
-
-    def set_pointer_shape(self, shape):
-        pass
-
-    def _send_packet(self, packet):
-        pass
 
 
 class _Screen:
@@ -67,7 +56,7 @@ def a_client(commands=(), rows=ROWS, columns=NARROW):
             output=output,
             input=pipe,
             color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=_Connection(),
+            connection=Connection(),
         )
         try:
             with set_app(state.app):

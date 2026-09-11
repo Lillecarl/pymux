@@ -77,7 +77,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
-from a_session import over_a_connection  # noqa: E402
+from a_session import Connection, over_a_connection  # noqa: E402
 from prompt_toolkit.application.current import set_app  # noqa: E402
 from prompt_toolkit.data_structures import Size  # noqa: E402
 from prompt_toolkit.input import create_pipe_input  # noqa: E402
@@ -121,18 +121,15 @@ class _Graphics:
     supported = False
 
 
-class _Connection:
-    "What `Pymux` asks a connection for, and nothing else."
+class _Connection(Connection):
+    """
+    What `Pymux` asks a connection for, with graphics offered and
+    declined. The frame after each render offers the panes to the
+    graphics protocol, and a terminal that does not speak it says so,
+    which is what a frame in a terminal without kitty graphics costs.
+    """
 
-    kitty_source_flags = 0
-    pointer_shape = None
     graphics = _Graphics()
-
-    def set_pointer_shape(self, shape):
-        pass
-
-    def _send_packet(self, packet):
-        pass
 
 
 def a_server(panes: int):

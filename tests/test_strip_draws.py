@@ -33,6 +33,7 @@ from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
+from a_session import Connection
 from pymux.main import Pymux
 
 ROWS, COLUMNS = 12, 40
@@ -40,20 +41,6 @@ ROWS, COLUMNS = 12, 40
 #: A pane that stays up and draws nothing of its own, so every cell on
 #: the screen is one pymux drew.
 QUIET = "%s -c 'import time; time.sleep(600)'" % (sys.executable,)
-
-
-class _Connection:
-    "What `Pymux` asks a connection for, and nothing else."
-
-    kitty_source_flags = 0
-    pointer_shape = None
-    graphics = None
-
-    def set_pointer_shape(self, shape):
-        pass
-
-    def _send_packet(self, packet):
-        pass
 
 
 @contextmanager
@@ -73,7 +60,7 @@ def a_client(commands=(), rows=ROWS, columns=COLUMNS):
             output=output,
             input=pipe,
             color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=_Connection(),
+            connection=Connection(),
         )
         try:
             with set_app(state.app):
@@ -114,11 +101,9 @@ def a_client(commands=(), rows=ROWS, columns=COLUMNS):
 
                 yield pymux, draw
         finally:
-            for window in list(pymux.arrangement.windows):
-                for pane in list(window.panes):
-                    process = getattr(pane, "process", None)
-                    if process is not None and not process.is_terminated:
-                        process.kill()
+            # `stop` kills every pane process, and this one runs a
+            # program that would outlive the test otherwise.
+            pymux.stop()
 
 
 def drawn(commands=(), rows=ROWS, columns=COLUMNS):

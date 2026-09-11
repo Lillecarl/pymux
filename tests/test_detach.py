@@ -22,6 +22,7 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
+from a_session import Connection
 from pymux.main import Pymux
 
 ROWS, COLUMNS = 24, 80
@@ -132,19 +133,11 @@ async def test_a_client_over_a_connection_still_detaches():
     """
     detached = []
 
-    class _Connection:
-        kitty_source_flags = 0
-        pointer_shape = None
-        graphics = None
+    class _Connection(Connection):
+        "The one that records the detach, which is what the test reads."
 
         def detach_and_close(self):
             detached.append(True)
-
-        def set_pointer_shape(self, shape):
-            pass
-
-        def _send_packet(self, packet):
-            pass
 
     pymux = Pymux()
     pymux.create_window("%s -c pass" % (sys.executable,))
