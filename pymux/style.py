@@ -260,3 +260,19 @@ THEMES: dict[str, BaseStyle] = {
 
 #: The one a session starts on.
 DEFAULT_THEME = "default"
+
+
+def the_theme(name: str) -> BaseStyle:
+    """
+    The scheme of one theme name, from whatever source it names.
+
+    `pygments:<name>` names one of the styles pygments carries, and
+    anything a package installs beside them; anything else names one
+    of `THEMES`. A name no source offers raises `KeyError`.
+    """
+    source, _, rest = name.partition(":")
+    if source == "pygments":
+        from pymux.style_pygments import a_pygments_theme
+
+        return a_pygments_theme(rest)
+    return THEMES[name]

@@ -323,9 +323,13 @@ def test_a_name_that_is_refused_leaves_the_theme_alone():
 
 def test_the_names_are_offered_for_completion():
     "Which is what `get_all_values` is for."
+    from pymux.style_pygments import the_names
+
     pymux = Pymux()
 
-    assert ALL_OPTIONS["theme"].get_all_values(pymux) == sorted(THEMES)
+    assert ALL_OPTIONS["theme"].get_all_values(pymux) == sorted(THEMES) + [
+        "pygments:%s" % (name,) for name in the_names()
+    ]
 
 
 def test_the_grey_theme_replaces_the_loud_rules_and_no_others():

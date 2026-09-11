@@ -28,6 +28,9 @@
   # person attaches from the pymux they installed, not from one they
   # built with extras. Lillecarl/pymux#90.
   asyncssh,
+  # `set-option theme pygments:<name>` takes one of the styles pygments
+  # carries. Lillecarl/pymux#194.
+  pygments,
   installShellFiles,
   callPackage,
   mesa,
@@ -52,6 +55,7 @@ let
       argcomplete
       pyinstrument
       asyncssh
+      pygments
     ];
 
     # The completion scripts of bash, zsh and fish, written from

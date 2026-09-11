@@ -251,6 +251,15 @@ for _name in THEMES:
         keys((FIRST_KEY, PREFIX), (0.4, b"%")),
     )
 
+#: One theme from pygments, so the derivation of a whole scheme from
+#: the handful of colours a style carries is judged as a picture, like
+#: the hand themes. A pygments theme reaches the server by name:
+#: `set-option theme pygments:<name>`. Lillecarl/pymux#194.
+FIXTURES["theme-pygments-dracula"] = (
+    CHROME + "set-option theme pygments:dracula\n",
+    keys((FIRST_KEY, PREFIX), (0.4, b"%")),
+)
+
 
 def every_fixture():
     return sorted(FIXTURES)

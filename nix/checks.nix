@@ -22,6 +22,8 @@
   wcwidth,
   pyinstrument,
   asyncssh,
+  # `set-option theme pygments:<name>`, in `test_pygments_themes.py`.
+  pygments,
   # TEMPORARY for the Lillecarl/pymux#258 scratch measurement. Remove
   # with `tests/measure_wire_sizes.py` and the `wire` check below.
   msgpack,
@@ -94,6 +96,8 @@ let
     # server that stands in for sshd in `tests/test_the_ssh_client.py`.
     # Lillecarl/pymux#90.
     asyncssh
+    # The themes of `set-option theme pygments:<name>`.
+    pygments
     # TEMPORARY for the scratch wire measurement. See above.
     msgpack
   ]);

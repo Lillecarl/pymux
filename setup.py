@@ -35,6 +35,10 @@ setup(
         # a `direct-streamlocal@openssh.com` channel to its unix socket.
         # Lillecarl/pymux#90.
         "asyncssh>=2.14.0",
+        # `set-option theme pygments:<name>` takes one of the forty-nine
+        # styles pygments carries, and anything a package installs
+        # beside them. Lillecarl/pymux#194.
+        "pygments>=2.15.0",
     ],
     entry_points={
         "console_scripts": [

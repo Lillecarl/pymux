@@ -315,13 +315,30 @@ class ThemeOption(Option):
     The clients follow at once. Each application reads `pymux.style`
     on every render, so nothing has to be rebuilt; they only have to
     be asked for a frame.
+
+    A name is either one of `THEMES`, or `pygments:<name>` for one of
+    the styles pygments carries - forty-nine of them, and anything a
+    package installs beside them. Lillecarl/pymux#194.
     """
 
     def get_all_values(self, pymux):
-        return sorted(THEMES)
+        from pymux.style_pygments import the_names
+
+        return sorted(THEMES) + [
+            "pygments:%s" % (name,) for name in the_names()
+        ]
 
     def set_value(self, pymux, value):
-        if value not in THEMES:
+        source, _, rest = value.partition(":")
+        if source == "pygments":
+            from pymux.style_pygments import the_names
+
+            if rest not in the_names():
+                raise SetOptionError(
+                    "Expecting the name of a pygments style, like: %s."
+                    % (", ".join(the_names()[:6]),)
+                )
+        elif value not in THEMES:
             raise SetOptionError("Expecting one of: %s." % ", ".join(sorted(THEMES)))
         pymux.theme = value
         pymux.invalidate(Woke.A_THEME_WAS_CHOSEN)
