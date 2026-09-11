@@ -654,7 +654,7 @@ class _SocketStdout:
         # those become one frame.
         written = "".join(self._buffer)
         if self.counters is not None:
-            self.counters.a_frame_went_out(len(written))
+            self.counters.frame_went_out(len(written))
 
         self.send_packet({"cmd": "out", "data": written})
         self._buffer = []

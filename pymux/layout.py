@@ -790,7 +790,7 @@ class LayoutManager:
             parts.append(self._get_status_right_tokens())
             parts += [text for _, text, *_ in self._get_status_tokens()]
 
-        for pane in self._the_panes_in_view():
+        for pane in self._panes_in_view():
             if pane.clock_mode:
                 parts.append(datetime.datetime.now().strftime(CLOCK_FORMAT))
             elif pymux.show_pane_status:
@@ -798,7 +798,7 @@ class LayoutManager:
 
         return tuple(parts)
 
-    def _the_panes_in_view(self) -> List:
+    def _panes_in_view(self) -> List:
         "The panes of the window this client looks at, or none."
         try:
             return list(self.pymux.arrangement.get_active_window().panes)

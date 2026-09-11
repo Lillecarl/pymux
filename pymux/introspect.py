@@ -96,7 +96,7 @@ class Counters:
     def invalidated(self, reason: str) -> None:
         self.invalidates[reason] += 1
 
-    def a_frame_went_out(self, characters: int) -> None:
+    def frame_went_out(self, characters: int) -> None:
         self.frames += 1
         self.frame_bytes += characters
 
