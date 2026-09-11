@@ -548,6 +548,10 @@ class ServerConnection:
             output=output,
             connection=self,
             color_depth=color_depth,
+            # The fake CLI of a command that arrived over a socket is
+            # not a client a person uses: it must not win "used last",
+            # and what a command shows must go to a real one.
+            temporary=not start,
         )
         self.client_state = client_state
 

@@ -29,6 +29,8 @@ import weakref
 from contextlib import contextmanager
 from typing import Any, Callable, Dict, NamedTuple
 
+from prompt_toolkit.application.current import set_app
+from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
@@ -50,6 +52,11 @@ class _Connection:
 
     def _send_packet(self, packet):
         pass
+
+
+#: The size a fake CLI reports. Nothing draws in it; a window that
+#: sizes itself by the latest client must never read it.
+A_SIZE = Size(rows=24, columns=80)
 
 
 class _Sink(io.TextIOBase):
@@ -97,6 +104,13 @@ class Session(NamedTuple):
     #: writes; the in-process route has no packets, so it feeds the
     #: pipe input that the client's application reads.
     typed: Callable
+
+    #: `a_command(text)`: a command over a connection of its own, the
+    #: way a pane's CLI sends one. The server runs it under the fake
+    #: CLI it makes for such a command, and what that connection
+    #: received comes back: the packets of the answer, and nothing a
+    #: browser was meant to read.
+    a_command: Callable
 
     #: `watch(name, obj)` -> obj, remembered by a weak reference.
     watch: Callable
@@ -167,8 +181,31 @@ def in_this_process(pymux=None):
         def typed(state, text):
             state.app.input.send_text(text)
 
+        def a_command(text):
+            """
+            A command under the fake CLI of a socket, the way the
+            server runs one that arrived from a pane. The client state
+            it made comes back, so a test can ask what the command did
+            to it before it is taken away.
+            """
+            output = Vt100_Output(stdout=_Sink(), get_size=lambda: A_SIZE)
+            state = pymux.add_client(
+                output=output,
+                input=pipe,
+                color_depth=ColorDepth.DEPTH_8_BIT,
+                connection=_Connection(),
+                temporary=True,
+            )
+            watch("command client", state)
+            try:
+                with set_app(state.app):
+                    pymux.handle_command(text)
+            finally:
+                pymux.remove_client(state.connection)
+            return state
+
         try:
-            yield Session(pymux, attach, detach, typed, watch, watched)
+            yield Session(pymux, attach, detach, typed, a_command, watch, watched)
         finally:
             pymux.stop()
 
@@ -213,6 +250,11 @@ def over_a_connection(pymux=None, read_a_packet=None):
     #: The client half of each attached client, by the id of its state:
     #: the end of the connection it reads, and the task that drains it.
     ends: dict = {}
+
+    #: The same, for the connections of commands: each one closes
+    #: itself when its command answers, and its drain waits on a queue
+    #: that will never fill again.
+    command_ends: list = []
 
     async def drain(end) -> None:
         while True:
@@ -312,13 +354,50 @@ def over_a_connection(pymux=None, read_a_packet=None):
         client_end, _draining = ends[id(state)]
         client_end.write_nowait(json.dumps({"cmd": "in", "data": text}))
 
+    async def a_command(text, pane_id=None):
+        """
+        A command over a connection of its own, the way a pane's CLI
+        sends one. The packets that connection's client end received
+        come back, so a test can say that nothing meant for a browser
+        went there.
+        """
+        server_end, client_end = connect_in_memory()
+
+        # A context of its own, for the reason `attach` gives.
+        context = contextvars.copy_context()
+        connection = context.run(lambda: ServerConnection(pymux, server_end))
+        pymux.connections.append(connection)
+        watch("command connection", connection)
+
+        got: list = []
+
+        async def drain_command() -> None:
+            while True:
+                try:
+                    packet = await client_end.read()
+                except Exception:
+                    return
+                got.append(packet)
+
+        draining = asyncio.create_task(drain_command())
+        command_ends.append((client_end, draining))
+
+        client_end.write_nowait(
+            json.dumps({"cmd": "run-command", "data": text, "pane_id": pane_id})
+        )
+        return got
+
     try:
-        yield Session(pymux, attach, detach, typed, watch, watched)
+        yield Session(pymux, attach, detach, typed, a_command, watch, watched)
     finally:
         for client_end, draining in ends.values():
             client_end.close()
             draining.cancel()
+        for client_end, draining in command_ends:
+            client_end.close()
+            draining.cancel()
         ends.clear()
+        command_ends.clear()
         pymux.stop()
 
 

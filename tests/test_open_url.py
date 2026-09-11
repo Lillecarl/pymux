@@ -135,6 +135,62 @@ async def test_broadcast_reaches_every_client():
         assert opens(packets) == [{"cmd": "open", "data": URL}] * 2
 
 
+@in_a_loop
+async def test_a_command_from_a_pane_opens_in_the_browser_of_the_client():
+    """
+    `pymux open-url` typed in a pane reaches the server over a socket,
+    and the server runs it under a fake CLI: a client state for the
+    connection of the command, which closes the moment the command
+    answers. It used to carry the newest "used last" stamp, so the
+    open packet went to that connection and no browser opened.
+    Lillecarl/pymux#261, found on a machine.
+    """
+    packets = []
+    with over_a_connection(read_a_packet=packets.append) as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", A_SIZE)
+
+        got = await session.a_command("open-url %s" % URL)
+
+        await once(
+            lambda: opens(packets),
+            5.0,
+            "the command from a pane never opened anything",
+        )
+        assert opens(packets) == [{"cmd": "open", "data": URL}]
+
+        # What the connection of the command received back: the answer
+        # of the command, and nothing a browser was meant to read.
+        await once(
+            lambda: any(json.loads(packet).get("cmd") == "exit" for packet in got),
+            5.0,
+            "the command never answered",
+        )
+        assert opens(got) == []
+
+
+@in_a_loop
+async def test_the_fake_cli_of_a_command_is_not_a_client_anybody_used():
+    """
+    The client state of a command that arrived over a socket is never
+    stamped, never a target, and gone when the command is done.
+    """
+    with in_this_process() as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", A_SIZE)
+
+        temp = session.a_command("open-url %s" % URL)
+
+        assert temp.temporary is True
+        assert temp.last_used == 0
+        assert temp not in pymux._client_states.values()
+
+        # The message of the command went to the client a person is
+        # at, not to the connection of the command.
+        assert URL in (state.message or "")
+        assert URL not in (temp.message or "")
+
+
 # ----------------------------------------------------------------------
 # Whether it asks first.
 

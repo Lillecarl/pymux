@@ -194,6 +194,14 @@ class ClientState:
         #: `Pymux.a_client_was_used`. `window-size latest` reads it.
         self.last_used = 0
 
+        #: True for the fake CLI that runs a command that arrived over
+        #: a socket: it draws nothing, nobody uses it, and it is gone
+        #: the moment the command answers. It must not win "the client
+        #: a person used last", or a URL that `open-url` opens goes to
+        #: a connection that closes before it can ask a browser to do
+        #: anything.
+        self.temporary = False
+
         # What the last frame of this client drew of the strings that
         # time moves. The auto refresh compares against it, and asks
         # for a frame only when they differ. Lillecarl/pymux#154.
@@ -962,7 +970,8 @@ class Pymux:
         return [
             client_state
             for client_state in self._client_states.values()
-            if active_window_for_app(client_state.app) == window
+            if not client_state.temporary
+            and active_window_for_app(client_state.app) == window
         ]
 
     def _create_pane(
@@ -1343,9 +1352,16 @@ class Pymux:
 
         `open-url-target last` is the client a person used last, by the
         same stamp that `window-size latest` reads. Nothing attached
-        means nobody, and the person who asked hears so.
+        means nobody, and the person who asked hears so. The fake CLI
+        of a command that arrived over a socket is never one of them:
+        it is the connection that ran the command, and it closes while
+        the answer is still being sent.
         """
-        clients = list(self._client_states.values())
+        clients = [
+            client
+            for client in self._client_states.values()
+            if not client.temporary
+        ]
         if self.open_url_target != "broadcast" and clients:
             return [max(clients, key=lambda client: client.last_used)]
         return clients
@@ -2001,7 +2017,9 @@ class Pymux:
         # can answer.
         client_state.app.run(set_exception_handler=False)
 
-    def add_client(self, output, input, color_depth, connection) -> ClientState:
+    def add_client(
+        self, output, input, color_depth, connection, temporary: bool = False
+    ) -> ClientState:
         client_state = ClientState(
             self,
             connection=connection,
@@ -2009,13 +2027,17 @@ class Pymux:
             output=output,
             color_depth=color_depth,
         )
+        client_state.temporary = temporary
 
         self._client_states[connection] = client_state
 
         # Attaching counts as using it, so `window-size latest` has an
         # answer before anybody has pressed a key. tmux stamps a client
-        # on attach for the same reason.
-        self.a_client_was_used(client_state)
+        # on attach for the same reason. The fake CLI of a command does
+        # not: nobody is using that terminal, and it is gone before the
+        # answer comes back.
+        if not temporary:
+            self.a_client_was_used(client_state)
 
         # The configuration file was read while this client was being
         # built, so nothing could be told about a line that failed.
