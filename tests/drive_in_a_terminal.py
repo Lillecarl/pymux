@@ -237,7 +237,7 @@ def wait_for_the_first_frame(master, seen, out, copied, started):
     return time.monotonic(), copied
 
 
-def the_frame_and_the_fence(master, seen, out, copied, writer, mark, token, deadline):
+def frame_and_fence(master, seen, out, copied, writer, mark, token, deadline):
     """
     The frame for the last key, then the fence, then the quiet after
     it. Gives back whether the fence came, and where the copying
@@ -298,7 +298,7 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
     picture is taken while they are still up.
 
     With the fifo and the fence file given, the keys are fenced:
-    `the_frame_and_the_fence` says how, and the file is touched when
+    `frame_and_fence` says how, and the file is touched when
     the fence has come back.
     """
     rows, columns = size_of(sys.stdout.fileno())
@@ -366,7 +366,7 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
                 until = when + waiting[0][0] - now
             elif fence_pending:
                 fence_pending = False
-                came, copied = the_frame_and_the_fence(
+                came, copied = frame_and_fence(
                     master, seen, out, copied, writer, mark, token, started + hold
                 )
                 if came:
