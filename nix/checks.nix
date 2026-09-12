@@ -369,6 +369,53 @@ let
       inputs = [ pythonWithTests ] ++ inputs;
       setup = prepare + setup;
     } command;
+
+  # The theme gallery in pieces: one derivation per terminal and per
+  # batch of themes. The pairs come out of the matrix below, the site
+  # gathers the runs, and a rerun rebuilds only the combos that
+  # failed. Lillecarl/pymux#284.
+  makeThemePictures =
+    {
+      name,
+      themesList,
+      terminalsList,
+    }:
+    runInSandbox
+      {
+        name = "pymux-theme-pictures-${name}";
+        inputs = seatInputs;
+        env = {
+          PYMUX_THEMES_LIST = themesList;
+          PYMUX_THEMES_TERMINALS_LIST = terminalsList;
+        };
+      }
+      (
+        seatSetup
+        + ''
+          export PYMUX_THEMES_OUT="$out"
+          export PYMUX_BASE16_SCHEMES="${base16-schemes-json}/base16-schemes.json"
+          python tests/photograph_the_themes.py
+        ''
+      );
+
+  # The pairs that the gallery in pieces builds. Importing the
+  # fixture list at eval time needs a build, because the list lives
+  # in the python modules and nix does not read python; the answer is
+  # one derivation that prints JSON, and `fromJSON` on the file of
+  # it. The derivation reruns only when the modules that name the
+  # fixtures and the terminals change.
+  themePictureMatrix =
+    runInSandbox
+      {
+        name = "pymux-theme-picture-matrix";
+        env = {
+          PYMUX_BASE16_SCHEMES = "${base16-schemes-json}/base16-schemes.json";
+        };
+      }
+      ''
+        export PYMUX_MATRIX_OUT="$out"
+        python tests/the_theme_batches.py
+      '';
 in
 {
   # The unit tests of pymux.
@@ -785,6 +832,23 @@ in
           python tests/photograph_the_themes.py
         ''
       );
+  themePictureMatrix = themePictureMatrix;
+
+  themePictureCombos =
+    let
+      jobs = builtins.fromJSON (
+        builtins.readFile "${themePictureMatrix.run}/matrix.json"
+      );
+      combo = job: {
+        name = "${job.terminal}-${toString job.batch}";
+        value = makeThemePictures {
+          name = "${job.terminal}-${toString job.batch}";
+          themesList = builtins.concatStringsSep "," job.themes;
+          terminalsList = job.terminal;
+        };
+      };
+    in
+    builtins.listToAttrs (map combo jobs);
 
   # The conformance suite, run in a pane. It is not a pass or fail of its
   # own: most of it fails, and each failure names a real difference from

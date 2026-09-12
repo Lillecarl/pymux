@@ -393,13 +393,26 @@ def picture_of(terminal, seat, name, work, out, fixtures=None):
     return room / "pymux.png"
 
 
-def main(fixtures=None, only=None, only_terminals=None, out=None, terminals=None):
+def main(
+    fixtures=None,
+    only=None,
+    only_terminals=None,
+    out=None,
+    terminals=None,
+    only_list=None,
+    only_terminals_list=None,
+):
     """
     Photograph every fixture, in every terminal.
 
     The arguments are the knobs of the run, and default to this
     module's own: `photograph_the_themes.py` passes its own fixtures
     and its own knob names, and the same machinery takes the pictures.
+
+    `only_list` and `only_terminals_list` are exact names, and beat
+    the substrings: a derivation that builds one terminal and a batch
+    of themes needs to name them exactly, where a person typing a
+    knob narrows with a piece of a name.
     """
     if fixtures is None:
         fixtures = FIXTURES
@@ -416,13 +429,25 @@ def main(fixtures=None, only=None, only_terminals=None, out=None, terminals=None
     work.mkdir(parents=True, exist_ok=True)
     out.mkdir(parents=True, exist_ok=True)
 
-    names = [name for name in sorted(fixtures) if only in name]
-    if not names:
-        raise SystemExit("no fixture holds %r" % only)
+    if only_list is not None:
+        wanted = set(only_list)
+        names = [name for name in sorted(fixtures) if name in wanted]
+        if not names:
+            raise SystemExit("no fixture is one of %r" % sorted(wanted))
+    else:
+        names = [name for name in sorted(fixtures) if only in name]
+        if not names:
+            raise SystemExit("no fixture holds %r" % only)
 
-    terminals = [t for t in terminals if only_terminals in t.name]
-    if not terminals:
-        raise SystemExit("no terminal holds %r" % ONLY_TERMINALS)
+    if only_terminals_list is not None:
+        wanted = set(only_terminals_list)
+        terminals = [t for t in terminals if t.name in wanted]
+        if not terminals:
+            raise SystemExit("no terminal is one of %r" % sorted(wanted))
+    else:
+        terminals = [t for t in terminals if only_terminals in t.name]
+        if not terminals:
+            raise SystemExit("no terminal holds %r" % ONLY_TERMINALS)
 
     missing = [t.name for t in terminals if not t.is_available()]
     if missing:

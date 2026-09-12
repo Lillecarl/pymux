@@ -33,7 +33,7 @@ sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pymux.style import THEMES  # noqa: E402
 from pymux.style_pygments import names  # noqa: E402
-from photograph_the_chrome import demo_keys, main  # noqa: E402
+from photograph_the_chrome import CHROME, demo_keys, main  # noqa: E402
 from take_a_picture import LIGHT_TERMINALS, TERMINALS  # noqa: E402
 
 #: Where the pictures go. The check points this at `$out`.
@@ -98,6 +98,20 @@ FIXTURES["painted-screen"] = (
     demo_keys(),
 )
 
+def the_exact_list(env):
+    """
+    An exact list of names from the environment, or None.
+
+    The gallery builds in pieces, one derivation per terminal and per
+    batch of themes, and a piece names what it holds exactly: a
+    substring would run a theme in every combo that holds a piece of
+    its name. Lillecarl/pymux#284.
+    """
+    value = os.environ.get(env, "")
+    names = [one for one in value.split(",") if one]
+    return names or None
+
+
 if __name__ == "__main__":
     raise SystemExit(
         main(
@@ -109,5 +123,7 @@ if __name__ == "__main__":
             # the black it was written on may be unreadable on white,
             # and the light schemes of pygments want the other end.
             terminals=TERMINALS + LIGHT_TERMINALS,
+            only_list=the_exact_list("PYMUX_THEMES_LIST"),
+            only_terminals_list=the_exact_list("PYMUX_THEMES_TERMINALS_LIST"),
         )
     )
