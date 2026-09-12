@@ -12,11 +12,13 @@ respawns the active pane of the window it names.
 
 import asyncio
 
+import argparse
 import pytest
 from prompt_toolkit.application.current import set_app
 
 from session import create_session, in_a_loop
-from pymux.commands.commands import CommandException, respawn_pane
+from pymux.commands import CommandException
+from pymux.commands.respawn_pane import respawn_pane
 
 
 @in_a_loop
@@ -28,7 +30,7 @@ async def test_a_pane_whose_program_runs_refuses_without_k():
             # in the sandbox's PATH.
             pymux.handle_command("new-window 'sleep 30'")
             with pytest.raises(CommandException):
-                respawn_pane(pymux, {"-k": False, "-t": False, "<target-pane>": None, "<command>": None})
+                respawn_pane(pymux, argparse.Namespace(k=False, target_pane=None, command=None))
 
 
 @in_a_loop
@@ -74,7 +76,7 @@ async def test_a_pane_whose_program_ended_is_gone_and_says_so():
             with pytest.raises(CommandException):
                 respawn_pane(
                     pymux,
-                    {"-k": False, "-t": False, "<target-pane>": None, "<command>": "sleep 30"},
+                    argparse.Namespace(k=False, target_pane=None, command="sleep 30"),
                 )
 
 

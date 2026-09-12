@@ -3,8 +3,8 @@ One description of a command, three readers of it.
 
 The tree of argparse parsers is what parses a command, what the shell
 completes through, and what the command bar of a client completes
-from. These tests ask each reader the questions a person asks it.
-Lillecarl/pymux#48.
+from -- in process, through argcomplete. These tests ask each reader
+the questions a person asks it. Lillecarl/pymux#307.
 """
 
 import os
@@ -15,15 +15,8 @@ import sys
 import pytest
 from prompt_toolkit.document import Document
 
-from pymux.commands.commands import (
-    COMMANDS_TO_DESCRIPTIONS,
-    COMMANDS_TO_HANDLERS,
-    COMMANDS_TO_PARSERS,
-    _variables_of,
-    call_command_handler,
-    get_option_flags_for_command,
-)
-from pymux.commands.completer import get_completions_for_parts
+from pymux.commands import call_command_handler, the_parser
+from pymux.commands.completer import create_command_completer
 from pymux.main import Pymux
 
 
@@ -31,43 +24,40 @@ from pymux.main import Pymux
 # The tree: what a command takes.
 
 
+def _parser_of(command):
+    _parser, subparsers = the_parser()
+    return subparsers.choices[command]
+
+
 def test_every_alias_points_at_a_registered_command():
-    "The check at the foot of commands.py, said out loud."
+    "The check at the foot of aliases.py, said out loud."
     from pymux.commands.aliases import ALIASES
 
+    _parser, subparsers = the_parser()
     assert ALIASES
     for alias, command in ALIASES.items():
-        assert command in COMMANDS_TO_HANDLERS, alias
+        assert command in subparsers.choices, alias
 
 
-def test_a_value_option_is_read_under_both_spellings():
+def test_a_value_option_is_read_as_its_dest():
     """
-    A handler that asks whether `-t` was given and a handler that
-    reads the value ask the same dictionary. That is the shape docopt
-    gave, and the shim keeps it, so none of the handlers changed.
+    A handler asks for the value by the dest its declaration names:
+    `-t` of kill-pane lands in `target_pane`.
     """
-    parser = COMMANDS_TO_PARSERS["kill-pane"]
-    namespace = parser.parse_args(["-t", "%1"])
-    variables = _variables_of(parser, namespace)
-    assert variables["-t"] == "%1"
-    assert variables["<target-pane>"] == "%1"
-
-    namespace = parser.parse_args([])
-    variables = _variables_of(parser, namespace)
-    assert variables["-t"] is None
-    assert variables["<target-pane>"] is None
+    parser = _parser_of("kill-pane")
+    assert parser.parse_args(["-t", "%1"]).target_pane == "%1"
+    assert parser.parse_args([]).target_pane is None
 
 
 def test_a_flag_is_read_as_true_or_false():
-    parser = COMMANDS_TO_PARSERS["break-pane"]
-    assert _variables_of(parser, parser.parse_args(["-d"]))["-d"] is True
-    assert _variables_of(parser, parser.parse_args([]))["-d"] is False
+    parser = _parser_of("break-pane")
+    assert parser.parse_args(["-d"]).d is True
+    assert parser.parse_args([]).d is False
 
 
 def test_a_positional_is_read_as_its_name():
-    parser = COMMANDS_TO_PARSERS["rename-window"]
-    variables = _variables_of(parser, parser.parse_args(["editor"]))
-    assert variables["<name>"] == "editor"
+    parser = _parser_of("rename-window")
+    assert parser.parse_args(["editor"]).name == "editor"
 
 
 def test_an_option_of_a_bound_command_is_not_an_option_of_bind_key():
@@ -135,116 +125,128 @@ def test_no_option_at_all_is_the_answer_select_pane_gives():
 # The command bar: what it offers.
 
 
-def _offered(parts, last_part, pymux):
-    def plain(meta):
-        return "".join(text for _style, text, *_ in meta) if meta else ""
+def _offered(line, pymux):
+    """
+    What the command bar offers for a line typed up to its end, as
+    (word, help) pairs. A completion is the whole word the typed one
+    becomes.
+    """
+    completer = create_command_completer(pymux)
+    out = []
+    for c in completer.get_completions(Document(line, len(line)), None):
+        meta = c.display_meta
+        plain = "".join(text for _style, text, *_ in meta) if meta else ""
+        out.append((c.text, plain))
+    return out
 
-    return [
-        (c.text, plain(c.display_meta))
-        for c in get_completions_for_parts(parts, last_part, None, pymux)
-    ]
+
+def _flags_of(command):
+    "Every option string the command's parser takes."
+    return {
+        option
+        for action in _parser_of(command)._actions
+        for option in action.option_strings
+    }
 
 
 def test_every_command_offers_its_flags():
     """
-    The old completer answered for four of the fifty commands out of
-    a second description of them. The tree answers for all of them.
+    The tree answers for all of the commands, and the flags come from
+    the same declaration that parses them.
     """
     pymux = Pymux()
     for command in ("select-pane", "new-window", "capture-pane", "resize-window"):
-        text = [
-            offered[0] for offered in _offered([command], "-", pymux)
-        ]
-        for flag in get_option_flags_for_command(command):
-            assert flag in text, (command, flag, text)
+        offered = {word for word, _said in _offered(command + " -", pymux)}
+        for flag in _flags_of(command):
+            assert flag in offered, (command, flag, offered)
 
 
 def test_a_flag_carries_its_help_beside_it():
     pymux = Pymux()
-    offered = dict(_offered(["new-window"], "-", pymux))
+    offered = dict(_offered("new-window -", pymux))
     assert "Leave the new window unfocused." in offered["-d"]
     assert "Where the program starts." in offered["-c"]
 
 
 def test_a_partially_typed_flag_offers_what_matches():
     pymux = Pymux()
-    text = [offered[0] for offered in _offered(["capture-pane"], "-J", pymux)]
+    text = [word for word, _said in _offered("capture-pane -J", pymux)]
     assert text == ["-J"]
 
 
 def test_an_alias_offers_the_full_name():
     pymux = Pymux()
-    text = [offered[0] for offered in _offered([], "selectp", pymux)]
+    text = [word for word, _said in _offered("selectp", pymux)]
     assert text == ["select-pane"]
 
 
 def test_set_option_offers_the_option_names_then_their_values():
     pymux = Pymux()
-    names = [offered[0] for offered in _offered(["set-option"], "s", pymux)]
+    names = [word for word, _said in _offered("set-option s", pymux)]
     assert "status" in names
 
     pymux.options["status"].set_value(pymux, "off")
-    values = [offered[0] for offered in _offered(["set-option", "status"], "", pymux)]
+    values = [word for word, _said in _offered("set-option status ", pymux)]
     assert "on" in values
     assert "off" in values
 
 
 def test_select_layout_offers_the_layout_names():
     pymux = Pymux()
-    names = [offered[0] for offered in _offered(["select-layout"], "e", pymux)]
+    names = [word for word, _said in _offered("select-layout e", pymux)]
     assert "even-horizontal" in names
 
 
 def test_bind_key_offers_a_key_then_the_command_then_its_arguments():
     pymux = Pymux()
 
-    keys = [offered[0] for offered in _offered(["bind-key"], "ho", pymux)]
+    keys = [word for word, _said in _offered("bind-key ho", pymux)]
     assert "home" in keys
 
-    commands = [offered[0] for offered in _offered(["bind-key", "x"], "set-o", pymux)]
+    commands = [word for word, _said in _offered("bind-key x set-o", pymux)]
     assert "set-option" in commands
 
-    args = [
-        offered[0]
-        for offered in _offered(["bind-key", "x", "set-option"], "-g", pymux)
-    ]
+    args = [word for word, _said in _offered("bind-key x set-option -g", pymux)]
     assert args == ["-g"]
 
 
 def test_a_bare_tab_after_a_command_lists_its_flags():
     """
-    The only way to learn what a command takes used to be to know one
-    of its flags and type the dash first. An empty word is the
-    question, and the flags are the answer. Lillecarl/pymux#148.
+    An empty word is the question, and the flags are one part of the
+    answer. Lillecarl/pymux#148.
     """
     pymux = Pymux()
-    offered = [offered[0] for offered in _offered(["split-window"], "", pymux)]
+    offered = [word for word, _said in _offered("split-window ", pymux)]
     assert "-v" in offered
     assert "-h" in offered
     assert "-c" in offered
 
 
-def test_a_bare_tab_after_set_option_lists_option_names_instead():
-    "The positional that has an answer of its own keeps it."
+def test_a_bare_tab_after_set_option_lists_option_names_too():
+    """
+    The positional that has an answer of its own offers it. argcomplete
+    offers the flags of the command beside it, the way it does for
+    every program it completes.
+    """
     pymux = Pymux()
-    offered = [offered[0] for offered in _offered(["set-option"], "", pymux)]
+    offered = [word for word, _said in _offered("set-option ", pymux)]
     assert "status" in offered
-    assert "-g" not in offered
+    assert "-g" in offered
 
 
 def test_a_bare_tab_after_select_pane_lists_its_flags():
     pymux = Pymux()
-    offered = [offered[0] for offered in _offered(["select-pane"], "", pymux)]
+    offered = [word for word, _said in _offered("select-pane ", pymux)]
     assert "-L" in offered
     assert "-t" in offered
 
 
 def test_send_keys_offers_key_names_until_l_says_text():
     pymux = Pymux()
-    keys = [offered[0] for offered in _offered(["send-keys"], "C", pymux)]
+    keys = [word for word, _said in _offered("send-keys C", pymux)]
     assert keys
 
-    literal = _offered(["send-keys", "-l"], "C", pymux)
+    literal = _offered("send-keys -l C", pymux)
     assert literal == []
 
 
@@ -254,22 +256,25 @@ def test_send_keys_offers_key_names_until_l_says_text():
 
 def test_every_command_says_what_it_does():
     "The palette and the completion of the shell read it."
-    assert set(COMMANDS_TO_DESCRIPTIONS) == set(COMMANDS_TO_HANDLERS)
-    empty = sorted(
-        name for name, said in COMMANDS_TO_DESCRIPTIONS.items() if not said.strip()
-    )
+    _parser, subparsers = the_parser()
+    # One pseudo action per parser: its metavar names the command and
+    # any aliases with it, and its help is what both offer.
+    said = {action.metavar: (action.help or "") for action in subparsers._choices_actions}
+    parsers = {id(parser) for parser in subparsers.choices.values()}
+    assert len(said) == len(parsers)
+    empty = sorted(name for name, text in said.items() if not text.strip())
     assert empty == []
     unfinished = sorted(
         name
-        for name, said in COMMANDS_TO_DESCRIPTIONS.items()
-        if not said.rstrip().endswith((".", ":", ")", "`"))
+        for name, text in said.items()
+        if not text.rstrip().endswith((".", ":", ")", "`"))
     )
     assert unfinished == []
 
 
 def test_the_palette_says_what_a_command_does():
     pymux = Pymux()
-    offered = dict(_offered([], "split-w", pymux))
+    offered = dict(_offered("split-w", pymux))
     assert "Split this window into two panes, side by side or stacked." in (
         offered["split-window"]
     )
@@ -277,7 +282,7 @@ def test_the_palette_says_what_a_command_does():
 
 def test_an_alias_says_what_the_command_it_names_does():
     pymux = Pymux()
-    offered = dict(_offered([], "selectp", pymux))
+    offered = dict(_offered("selectp", pymux))
     assert "Focus a pane beside this one, or rotate the panes of the window." in (
         offered["select-pane"]
     )

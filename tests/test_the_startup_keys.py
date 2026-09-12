@@ -14,9 +14,15 @@ import shlex
 
 import pytest
 
-from pymux.commands.commands import COMMANDS_TO_HANDLERS
+from pymux.commands import the_parser
 from pymux.key_mappings import pymux_key_to_prompt_toolkit_key_sequence
 from pymux.rc import STARTUP_COMMANDS
+
+
+def command_names():
+    "Every name the tree registers, aliases included."
+    _parser, subparsers = the_parser()
+    return set(subparsers.choices)
 
 
 def bindings():
@@ -47,7 +53,7 @@ def test_every_key_of_the_default_table_has_a_name(key, command):
 
 @pytest.mark.parametrize("key,command", bindings())
 def test_every_default_binding_reaches_a_command(key, command):
-    assert command in COMMANDS_TO_HANDLERS
+    assert command in command_names()
 
 
 def test_no_key_is_bound_twice():

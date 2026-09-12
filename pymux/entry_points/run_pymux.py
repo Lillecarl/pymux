@@ -315,7 +315,7 @@ def _completion_parser() -> argparse.ArgumentParser:
     under it, with the options each takes, and argcomplete answers
     through it. It parses nothing on its own.
     """
-    from pymux.commands.commands import add_commands_to
+    from pymux.commands import add_commands_to
 
     # Help and version are options of the real parse, so a
     # completion offers them; nothing is excluded. The commands
@@ -350,9 +350,9 @@ def _answer_a_completion() -> None:
     """
     import argcomplete
 
-    from pymux.commands.commands import _shlex_that_keeps_a_hash
+    from pymux.commands.completer import stop_shlex_comments
 
-    _shlex_that_keeps_a_hash()
+    stop_shlex_comments()
     argcomplete.autocomplete(_completion_parser())
 
 

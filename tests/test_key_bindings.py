@@ -9,7 +9,7 @@ Lillecarl/pymux#235.
 
 import pytest
 
-from pymux.commands.commands import handle_command
+from pymux.commands import handle_command
 from pymux.main import Pymux
 
 #: Three names for one key, and one that reads as nothing.

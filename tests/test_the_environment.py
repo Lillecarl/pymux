@@ -12,11 +12,14 @@ lines, `-s` escapes them for `eval`.
 
 import os
 
+import argparse
 import pytest
 from prompt_toolkit.application.current import set_app
 
 from session import create_session, in_a_loop
-from pymux.commands.commands import CommandException, set_environment, show_environment
+from pymux.commands import CommandException
+from pymux.commands.set_environment import set_environment
+from pymux.commands.show_environment import show_environment
 
 
 @in_a_loop
@@ -92,10 +95,10 @@ async def test_s_escapes_the_values_for_the_shell():
 async def test_a_name_no_scope_holds_is_an_error():
     async with create_session() as (pymux, state):
         with pytest.raises(CommandException):
-            show_environment(pymux, {"-g": False, "-s": False, "<name>": "NOPE"})
+            show_environment(pymux, argparse.Namespace(g=False, s=False, name="NOPE"))
 
         with pytest.raises(CommandException):
-            show_environment(pymux, {"-g": True, "-s": False, "<name>": "NOPE"})
+            show_environment(pymux, argparse.Namespace(g=True, s=False, name="NOPE"))
 
 
 @in_a_loop
@@ -104,6 +107,6 @@ async def test_a_name_with_an_equals_sign_is_refused():
         with pytest.raises(CommandException):
             set_environment(
                 pymux,
-                {"-g": False, "-u": False, "<name>": "FOO=bar", "<value>": None},
+                argparse.Namespace(g=False, u=False, name="FOO=bar", value=None),
             )
         assert "FOO=bar" not in pymux.session_environment

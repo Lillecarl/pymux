@@ -103,7 +103,7 @@ def test_the_table_still_completes_the_written_out_alt_keys():
 
 def bound(command):
     "Run one command the way a configuration file does, and complain."
-    from pymux.commands.commands import handle_command
+    from pymux.commands import handle_command
     from pymux.main import Pymux
 
     pymux = Pymux()

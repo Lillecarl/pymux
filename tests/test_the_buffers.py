@@ -8,18 +8,17 @@ is the buffer, and `paste-buffer` pastes it. A name nothing holds is
 an error on every read and write of it.
 """
 
+import argparse
 import os
 
 import pytest
 from prompt_toolkit.application.current import set_app
 
 from session import create_session, in_a_loop
-from pymux.commands.commands import (
-    CommandException,
-    delete_buffer,
-    save_buffer,
-    show_buffer,
-)
+from pymux.commands import CommandException
+from pymux.commands.delete_buffer import delete_buffer
+from pymux.commands.save_buffer import save_buffer
+from pymux.commands.show_buffer import show_buffer
 
 
 @in_a_loop
@@ -69,13 +68,13 @@ async def test_delete_buffer_removes_the_name():
 async def test_a_buffer_nobody_holds_is_an_error():
     async with create_session() as (pymux, state):
         with pytest.raises(CommandException):
-            delete_buffer(pymux, {"-b": "nope"})
+            delete_buffer(pymux, argparse.Namespace(buffer_name="nope"))
 
         with pytest.raises(CommandException):
-            show_buffer(pymux, {"-b": "nope"})
+            show_buffer(pymux, argparse.Namespace(buffer_name="nope"))
 
         with pytest.raises(CommandException):
-            save_buffer(pymux, {"-b": "nope", "<filename>": "/tmp/opencode/none"})
+            save_buffer(pymux, argparse.Namespace(b="nope", filename="/tmp/opencode/none"))
 
 
 @in_a_loop
@@ -112,13 +111,13 @@ async def test_load_buffer_without_a_name_fills_the_session_buffer(tmp_path):
 async def test_a_buffer_nobody_holds_is_an_error():
     async with create_session() as (pymux, state):
         with set_app(state.app), pytest.raises(CommandException):
-            delete_buffer(pymux, {"-b": "nope"})
+            delete_buffer(pymux, argparse.Namespace(buffer_name="nope"))
 
         with set_app(state.app), pytest.raises(CommandException):
-            show_buffer(pymux, {"-b": "nope"})
+            show_buffer(pymux, argparse.Namespace(buffer_name="nope"))
 
         with set_app(state.app), pytest.raises(CommandException):
-            save_buffer(pymux, {"-b": "nope", "<filename>": "/tmp/opencode/none"})
+            save_buffer(pymux, argparse.Namespace(buffer_name="nope", filename="/tmp/opencode/none"))
 
 @in_a_loop
 async def test_the_buffer_chooser_opens_and_lists_the_buffers():

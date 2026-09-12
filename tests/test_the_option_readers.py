@@ -9,11 +9,14 @@ per option sorted, the two commands keep their kinds apart
 option reads what every new window starts with.
 """
 
+import argparse
 import pytest
 from prompt_toolkit.application.current import set_app
 
 from session import create_session, in_a_loop
-from pymux.commands.commands import CommandException, show_options, show_window_options
+from pymux.commands import CommandException
+from pymux.commands.show_options import show_options
+from pymux.commands.show_window_options import show_window_options
 from pymux.options import ALL_OPTIONS
 
 
@@ -75,17 +78,17 @@ async def test_a_default_nobody_set_reads_as_not_set():
 async def test_the_wrong_kind_of_option_is_unknown():
     async with create_session() as (pymux, state):
         with pytest.raises(CommandException):
-            show_options(pymux, {"-g": False, "<option>": "strip"})
+            show_options(pymux, argparse.Namespace(g=False, option="strip"))
 
         with pytest.raises(CommandException):
-            show_window_options(pymux, {"-g": False, "<option>": "status"})
+            show_window_options(pymux, argparse.Namespace(g=False, option="status"))
 
 
 @in_a_loop
 async def test_an_unknown_option_is_unknown():
     async with create_session() as (pymux, state):
         with pytest.raises(CommandException):
-            show_options(pymux, {"-g": False, "<option>": "not-an-option"})
+            show_options(pymux, argparse.Namespace(g=False, option="not-an-option"))
 
 
 @in_a_loop

@@ -14,7 +14,7 @@ from prompt_toolkit.key_binding.bindings.auto_suggest import (
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent as E
 from prompt_toolkit.keys import Keys
 
-from .commands.commands import call_command_handler
+from .commands import call_command_handler
 from .commands.utils import wrap_argument
 from .enums import COMMAND, PROMPT
 from .filters import HasPrefix, WaitsForConfirmation

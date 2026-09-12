@@ -15,7 +15,7 @@ pymux takes `-g` now, so that line works and is no longer the example
 of one that fails. `test_window_defaults.py` says what it does.
 """
 
-from pymux.commands.commands import call_command_handler
+from pymux.commands import call_command_handler
 from pymux.main import Pymux
 
 
@@ -142,7 +142,7 @@ def test_the_place_is_cleared_after_the_file(tmp_path):
 
 def test_a_missing_file_is_still_an_error_of_its_own(tmp_path):
     "`source-file` raised for that before, and still does."
-    from pymux.commands.commands import CommandException
+    from pymux.commands import CommandException
 
     pymux = Pymux()
     try:

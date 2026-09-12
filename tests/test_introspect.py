@@ -26,7 +26,7 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 
 from session import Connection
 from pymux import introspect, log
-from pymux.commands.commands import handle_command
+from pymux.commands import handle_command
 from pymux.enums import Woke
 from pymux.main import Pymux
 from pymux.server import _SocketStdout

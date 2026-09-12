@@ -14,7 +14,7 @@ import sys
 
 import pytest
 
-from pymux.commands.commands import call_command_handler
+from pymux.commands import call_command_handler
 from pymux.main import Pymux
 
 COLUMNS = 20

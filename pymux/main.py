@@ -40,7 +40,7 @@ from pyte.osc import Osc
 
 from .arrangement import Arrangement, Pane, Window
 from .colors import DefaultColors, theme_color_base
-from .commands.commands import call_command_handler, handle_command
+from .commands import call_command_handler, handle_command
 from .commands.completer import create_command_completer
 from .enums import CHOOSE, COMMAND, PROMPT, WindowSize, Woke
 from .graphics import PaneView

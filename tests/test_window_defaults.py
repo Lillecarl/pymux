@@ -15,7 +15,7 @@ Lillecarl/pymux#199.
 import pytest
 
 from pymux.arrangement import Arrangement, Pane, VSplit
-from pymux.commands.commands import handle_command
+from pymux.commands import handle_command
 from pymux.main import Pymux
 from pymux.options import ALL_OPTIONS, SetOptionError
 
