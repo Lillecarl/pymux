@@ -89,6 +89,7 @@ class Woke(StrEnum):
     OVERLAY_OPENED = "an overlay opened"
     OVERLAY_CLOSED = "an overlay closed"
     CLICK_CHOSE_A_WINDOW = "a click chose a window"
+    CLICK_CHOSE_A_BUFFER = "a chooser chose a buffer"
     CLICK_LEFT_THE_CLOCK = "a click left the clock"
     THEME_WAS_CHOSEN = "a theme was chosen"
     COLUMN_CHANGED_WIDTH = "a column of the strip took another width"

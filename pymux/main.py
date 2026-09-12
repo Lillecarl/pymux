@@ -195,8 +195,12 @@ class ClientState:
         # at, into the rows it lists; the command is the template a
         # `choose-window` command may carry, and the filter is what
         # its search types into. Typing narrows the list and puts
-        # the point back on the first row. Lillecarl/pymux#295.
+        # the point back on the first row. The filter and the index
+        # are the chooser's, whichever kind shows -- a buffer chooser
+        # runs the same keys over its own rows.
+        # Lillecarl/pymux#295. Lillecarl/pymux#304.
         self.choose_window = False
+        self.choose_buffer = False
         self.choose_window_index = 0
         self.choose_window_command = ""
         self.choose_window_filter = Buffer(

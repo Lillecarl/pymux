@@ -215,18 +215,25 @@ class PymuxKeyBindings:
         # keys back. Lillecarl/pymux#295.
         @Condition
         def chooser_displayed() -> bool:
-            return self.pymux.get_client_state().choose_window
+            state = self.pymux.get_client_state()
+            return state.choose_window or state.choose_buffer
 
         @Condition
         def chooser_search_focused() -> bool:
             state = self.pymux.get_client_state()
-            return state.choose_window and has_focus(state.choose_window_filter)()
+            return (state.choose_window or state.choose_buffer) and has_focus(
+                state.choose_window_filter
+            )()
 
         @kb.add("/", filter=chooser_displayed & ~chooser_search_focused)
         def _chooser_search(event: E) -> None:
             "Search the names; what is typed narrows the list."
             state = self.pymux.get_client_state()
-            get_app().layout.focus(state.layout_manager._choose_window_search)
+            manager = state.layout_manager
+            if state.choose_buffer:
+                get_app().layout.focus(manager._choose_buffer_search)
+            else:
+                get_app().layout.focus(manager._choose_window_search)
 
         @kb.add("up", filter=chooser_displayed)
         @kb.add("k", filter=chooser_displayed)
@@ -250,8 +257,12 @@ class PymuxKeyBindings:
 
         @kb.add("enter", filter=chooser_displayed & ~chooser_search_focused)
         def _chooser_choose(event: E) -> None:
-            "Switch to the window the chooser points at."
-            self.pymux.get_client_state().layout_manager.choose_the_pointed_window()
+            "Take the row the chooser points at."
+            state = self.pymux.get_client_state()
+            if state.choose_buffer:
+                state.layout_manager.choose_the_pointed_buffer()
+            else:
+                state.layout_manager.choose_the_pointed_window()
 
         @kb.add("q", filter=chooser_displayed & ~chooser_search_focused, eager=True)
         @kb.add(
@@ -259,15 +270,21 @@ class PymuxKeyBindings:
         )
         @kb.add("c-c", filter=chooser_displayed & ~chooser_search_focused, eager=True)
         def _quit_chooser(event: E) -> None:
-            "Leave the chooser without switching."
-            self.pymux.get_client_state().choose_window = False
+            "Leave the chooser without taking anything."
+            state = self.pymux.get_client_state()
+            state.choose_window = False
+            state.choose_buffer = False
 
         @kb.add("escape", filter=chooser_search_focused, eager=True)
         def _quit_chooser_search(event: E) -> None:
             "Leave the search, keeping the chooser."
             state = self.pymux.get_client_state()
             state.choose_window_filter.reset()
-            get_app().layout.focus(state.layout_manager._choose_window_rows)
+            manager = state.layout_manager
+            if state.choose_buffer:
+                get_app().layout.focus(manager._choose_buffer_rows)
+            else:
+                get_app().layout.focus(manager._choose_window_rows)
 
         @kb.add(Keys.KeyRelease, eager=True)
         def _forward_a_key_release(event: E) -> None:

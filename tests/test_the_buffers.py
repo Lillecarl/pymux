@@ -119,3 +119,57 @@ async def test_a_buffer_nobody_holds_is_an_error():
 
         with set_app(state.app), pytest.raises(CommandException):
             save_buffer(pymux, {"-b": "nope", "<filename>": "/tmp/opencode/none"})
+
+@in_a_loop
+async def test_the_buffer_chooser_opens_and_lists_the_buffers():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("set-buffer -b a hello")
+            pymux.handle_command("set-buffer -b b hey")
+            pymux.handle_command("choose-buffer")
+
+        assert state.choose_buffer
+        rows = state.layout_manager._choose_buffer_tokens()
+        assert len(rows) == 2
+        assert "a" in rows[0][1] and "5" in rows[0][1]
+
+
+@in_a_loop
+async def test_enter_from_the_buffer_chooser_fills_the_session_buffer():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("set-buffer -b mine hello")
+            pymux.handle_command("choose-buffer")
+
+        state.layout_manager.choose_the_pointed_buffer()
+
+        assert not state.choose_buffer
+        assert pymux.clipboard.get_data().text == "hello"
+
+
+@in_a_loop
+async def test_the_search_narrows_the_buffer_rows():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("set-buffer -b mine hello")
+            pymux.handle_command("set-buffer -b yours hey")
+            pymux.handle_command("choose-buffer")
+
+            state.choose_window_filter.insert_text("mi")
+
+        rows = state.layout_manager._choose_buffer_tokens()
+        assert len(rows) == 1
+        assert "mine" in rows[0][1]
+        assert state.choose_window_index == 0
+
+
+@in_a_loop
+async def test_the_choosers_are_one_at_a_time():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("choose-buffer")
+            pymux.handle_command("choose-window")
+
+        assert state.choose_window
+        assert not state.choose_buffer
+

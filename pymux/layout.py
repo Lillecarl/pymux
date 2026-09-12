@@ -9,6 +9,7 @@ from functools import partial
 from typing import TYPE_CHECKING, Callable, Dict, List, Tuple
 
 from prompt_toolkit.application import Application, get_app
+from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.data_structures import Point, Size
 from prompt_toolkit.filters import (
     Condition,
@@ -594,6 +595,9 @@ class LayoutManager:
         self._choose_window: Container | None = None
         self._choose_window_rows: Window | None = None
         self._choose_window_search: Container | None = None
+        self._choose_buffer: Container | None = None
+        self._choose_buffer_rows: Window | None = None
+        self._choose_buffer_search: Container | None = None
 
         # And the same two for the prompt: the line a person answers a
         # question on, and the box that holds it when the question
@@ -743,6 +747,7 @@ class LayoutManager:
         active = self.pymux.arrangement.get_active_window()
         self.client_state.display_popup = False
         self.client_state.choose_window = True
+        self.client_state.choose_buffer = False
         self.client_state.choose_window_command = template
         self.client_state.choose_window_filter.reset()
         self.client_state.choose_window_index = (
@@ -751,19 +756,60 @@ class LayoutManager:
         self._choose_window_box()
         get_app().layout.focus(self._choose_window_rows)
 
-    def chooser_matches(self) -> List[arrangement.Window]:
+    def display_buffer_chooser(self) -> None:
         """
-        The windows the chooser lists. The search narrows them: a
-        window stays when what was typed is in its name or in its
-        index, without case. Lillecarl/pymux#295.
+        Show the named buffers, to choose from.
+
+        Enter makes the chosen buffer the session's one buffer, which
+        is what `paste-buffer` pastes -- the thing tmux's
+        choose-buffer marks current. Lillecarl/pymux#304.
+        """
+        self.client_state.display_popup = False
+        self.client_state.choose_buffer = True
+        self.client_state.choose_window = False
+        self.client_state.choose_window_command = ""
+        self.client_state.choose_window_filter.reset()
+        self.client_state.choose_window_index = 0
+        self._choose_buffer_box()
+        get_app().layout.focus(self._choose_buffer_rows)
+
+    def chooser_matches(self) -> list:
+        """
+        The rows the chooser lists. The search narrows them: a row
+        stays when what was typed is in its name or in its index,
+        without case. Lillecarl/pymux#295.
         """
         text = self.client_state.choose_window_filter.text.lower()
+        if self.client_state.choose_buffer:
+            buffers = self.pymux.named_buffers
+            if not text:
+                return sorted(buffers)
+            return [
+                name
+                for name in sorted(buffers)
+                if text in name.lower() or text in str(len(buffers[name]))
+            ]
         windows = self.pymux.arrangement.windows
         if not text:
             return list(windows)
         return [
             w for w in windows if text in w.name.lower() or text in str(w.index)
         ]
+
+    def choose_the_pointed_buffer(self) -> None:
+        """
+        Make the buffer the chooser points at the session's one
+        buffer, which is what `paste-buffer` pastes. The chooser
+        closes. Lillecarl/pymux#304.
+        """
+        matches = self.chooser_matches()
+        self.client_state.choose_buffer = False
+        if not matches:
+            return
+        index = min(self.client_state.choose_window_index, len(matches) - 1)
+        text = self.pymux.named_buffers[matches[index]]
+        self.pymux.clipboard.set_data(ClipboardData(text))
+        self.pymux.invalidate(Woke.CLICK_CHOSE_A_BUFFER)
 
     def choose_the_pointed_window(self) -> None:
         """
@@ -1181,6 +1227,108 @@ class LayoutManager:
         self._choose_window_search = search
         return self._choose_window
 
+    def _choose_buffer_box(self) -> Container:
+        """
+        The named buffers, in a box.
+
+        Built once, for the reason `_command_line_window` gives.
+        Lillecarl/pymux#304.
+        """
+        if self._choose_buffer is not None:
+            return self._choose_buffer
+
+        rows = Window(
+            content=FormattedTextControl(
+                self._choose_buffer_tokens,
+                focusable=True,
+                show_cursor=False,
+                get_cursor_position=lambda: Point(
+                    0, self.client_state.choose_window_index
+                ),
+            ),
+            height=lambda: D(min=1, max=self._palette_rows() - 1),
+            style="class:commandpalette",
+        )
+        search = VSplit(
+            [
+                Window(
+                    width=2,
+                    height=1,
+                    content=FormattedTextControl(
+                        lambda: [("class:chooser.hint", "/ ")]
+                    ),
+                    style="class:commandpalette",
+                ),
+                Window(
+                    content=BufferControl(
+                        buffer=self.client_state.choose_window_filter
+                    ),
+                    height=1,
+                    style="class:commandpalette",
+                ),
+            ]
+        )
+        self._choose_buffer = HSplit(
+            [
+                Window(
+                    height=1,
+                    align=WindowAlign.CENTER,
+                    content=FormattedTextControl(
+                        lambda: [("class:commandpalette.title", " Choose a buffer ")]
+                    ),
+                    style="class:commandpalette.titlebar",
+                ),
+                rows,
+                search,
+            ],
+        )
+        self._choose_buffer_rows = rows
+        self._choose_buffer_search = search
+        return self._choose_buffer
+
+    def _choose_buffer_tokens(self) -> StyleAndTextTuples:
+        """
+        The named buffers, one row each: the name, and how much it
+        holds. The row the chooser points at carries the gutter arrow
+        and stands out, and a row answers a click the way a window's
+        row does. Lillecarl/pymux#304.
+        """
+        matches = self.chooser_matches()
+        if not matches:
+            return [("class:chooser.hint", " No buffer matches. ")]
+
+        chosen = min(self.client_state.choose_window_index, len(matches) - 1)
+        tokens: StyleAndTextTuples = []
+        for i, name in enumerate(matches):
+            style = "class:chooser.selected" if i == chosen else "class:commandpalette"
+            tokens.append(
+                (
+                    style,
+                    "%s%-24s %i\n"
+                    % (
+                        "> " if i == chosen else "  ",
+                        name,
+                        len(self.pymux.named_buffers[name]),
+                    ),
+                    self._create_buffer_click_handler(i),
+                )
+            )
+        return tokens
+
+    def _create_buffer_click_handler(
+        self, row: int
+    ) -> Callable[[MouseEvent], "NotImplementedOrNone"]:
+        "Return a mouse handler that chooses the buffer on this row."
+
+        def handler(mouse_event: MouseEvent) -> "NotImplementedOrNone":
+            if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
+                self.client_state.choose_window_index = row
+                self.choose_the_pointed_buffer()
+                return None
+            return NotImplemented
+
+        return handler
+
     def _choose_window_tokens(self) -> StyleAndTextTuples:
         """
         The windows of the session, one row each.
@@ -1483,6 +1631,21 @@ class LayoutManager:
                     content=ConditionalContainer(
                         content=DynamicContainer(self._choose_window_box),
                         filter=Condition(lambda: self.client_state.choose_window),
+                    ),
+                    left=BOX_SIDE,
+                    right=BOX_SIDE,
+                    top=BOX_TOP,
+                    bottom=5,
+                    z_index=Z_INDEX.POPUP,
+                ),
+                # The named buffers, to choose from. The same kind of
+                # box as the chooser of windows above, and one at a
+                # time with it: opening one closes the other.
+                # Lillecarl/pymux#304.
+                Float(
+                    content=ConditionalContainer(
+                        content=DynamicContainer(self._choose_buffer_box),
+                        filter=Condition(lambda: self.client_state.choose_buffer),
                     ),
                     left=BOX_SIDE,
                     right=BOX_SIDE,

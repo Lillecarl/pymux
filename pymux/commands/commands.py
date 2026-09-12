@@ -1606,6 +1606,23 @@ def choose_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     )
 
 
+def choose_buffer(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Show the named buffers, to choose from.
+
+    Enter makes the chosen buffer the session's one buffer, which is
+    what `paste-buffer` pastes. The chooser runs the keys of the
+    window chooser: `/` searches, j and k with the arrows move, q and
+    Escape leave. Lillecarl/pymux#304.
+
+    The command line has no view to open a chooser on, so an asker
+    that reads stdout gets nothing. Lillecarl/pymux#272.
+    """
+    if pymux.command_output is not None:
+        return
+    pymux.get_client_state().layout_manager.display_buffer_chooser()
+
+
 def display_message(pymux: "Pymux", variables: _VariablesDict) -> None:
     '''
     Show a message on the status line.
@@ -2415,6 +2432,11 @@ def _declare_choose_window(subparsers: Any) -> None:
         nargs="?",
         help="Run this command on the chosen window instead of switching to it. `%%` stands for the target of the window.",
     )
+
+
+@declarer
+def _declare_choose_buffer(subparsers: Any) -> None:
+    _command(subparsers, choose_buffer)
 
 
 @declarer
