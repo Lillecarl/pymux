@@ -7,6 +7,7 @@ otherwise.
 """
 
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 from prompt_toolkit.output import ColorDepth
@@ -18,12 +19,15 @@ from pymux.colors import (
     DefaultColors,
     depth_from_environment,
     reports_truecolor,
+    theme_color_base,
 )
 from pymux.client.terminal import DETECTION_QUERIES
+from pymux.main import Pymux
 from pymux.server import ServerConnection
 from pyte import escape
 from pyte.colors import DEFAULT_COLORS, PALETTE, Color
 from pyte.osc import COLOR_BASE
+from pyte.screen import Screen
 from pyte.sequences import Csi, apc, csi, dcs, osc
 from test_server_tasks import FakePipe, FakePymux
 
@@ -291,6 +295,53 @@ def test_a_color_base_with_nothing_learned_is_the_conventional_one():
     assert base.palette == list(PALETTE)
     assert base.defaults == DEFAULT_COLORS
     assert base == COLOR_BASE
+
+
+# ----------------------------------------------------------------------
+# The theme, as what a pane answers with.
+#
+# With `paint-screen` on, the theme colours the whole screen, and the
+# palette a program asks for is part of that screen.
+
+
+def test_the_theme_gives_a_whole_palette():
+    base = theme_color_base("grey")
+
+    assert len(base.palette) == 256
+    assert base.palette[16:] == list(PALETTE[16:])
+    assert base.defaults["foreground"] == Color(0xD0, 0xD0, 0xD0)
+    assert base.defaults["background"] == Color(0x00, 0x00, 0x00)
+
+
+def test_a_pygments_theme_names_the_pane_s_red():
+    base = theme_color_base("pygments:dracula")
+
+    assert base.palette[1] == Color(0x8B, 0x08, 0x0B)
+    assert base.defaults["background"] == Color(0x28, 0x2A, 0x36)
+
+
+def test_a_theme_that_owns_the_screen_gives_the_pane_its_palette():
+    pymux = Pymux()
+    pymux.paint_screen = True
+    pymux.theme = "pygments:dracula"
+    pane = SimpleNamespace(screen=Screen(24, 80, write_process_input=lambda data: None))
+
+    pymux.tell_pane_about_the_colours(pane)
+
+    assert pane.screen.color_base.palette[1] == Color(0x8B, 0x08, 0x0B)
+
+
+def test_a_pane_keeps_the_convention_while_the_terminal_owns_the_colours():
+    pymux = Pymux()
+    assert pymux.paint_screen is False
+    screen = Screen(24, 80, write_process_input=lambda data: None)
+    pane = SimpleNamespace(screen=screen)
+
+    pymux.tell_pane_about_the_colours(pane)
+
+    # Nobody attached, and the theme does not own the screen: the pane
+    # stays on what `pyte` reports, as before any of this.
+    assert pane.screen.color_base == COLOR_BASE
 
 
 # ----------------------------------------------------------------------

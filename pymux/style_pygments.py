@@ -32,9 +32,9 @@ from functools import lru_cache
 from prompt_toolkit.styles import BaseStyle
 from prompt_toolkit.styles.named_colors import NAMED_COLORS
 
-from pymux.style import create_theme, derive
+from pymux.style import ANSI_ROLES, create_theme, derive
 
-__all__ = ["pygments_theme", "names"]
+__all__ = ["pygments_roles", "pygments_theme", "names"]
 
 
 def names() -> list[str]:
@@ -67,6 +67,29 @@ def pygments_theme(name: str) -> BaseStyle:
 
 
 pygments_theme = lru_cache(maxsize=None)(pygments_theme)
+
+
+def pygments_roles(name: str) -> dict[str, str]:
+    """
+    The roles of one pygments style, the same ones `derive` consumes.
+
+    `set-option theme pygments:<name>` derives its scheme from these,
+    and the pane's colour base reads the same roles. A name nobody
+    offers raises `KeyError`. Cached, for the same reason the scheme
+    is.
+    """
+    from pygments.styles import get_style_by_name
+    from pygments.util import ClassNotFound
+
+    try:
+        style_cls = get_style_by_name(name)
+    except ClassNotFound as missing_name:
+        raise KeyError(name) from missing_name
+
+    return _roles(style_cls)
+
+
+pygments_roles = lru_cache(maxsize=None)(pygments_roles)
 
 
 def _roles(style_cls) -> dict[str, str]:
@@ -121,7 +144,57 @@ def _roles(style_cls) -> dict[str, str]:
     def on(a):
         return _readable(a)
 
+    def base(*tokens, conventional_key):
+        """
+        One colour of the pane's palette, from the first token that
+        says one.
+
+        What the style left out is the conventional colour, which is
+        what every terminal paints and what the theme's own roles
+        start from. Lillecarl/pymux#283.
+        """
+        for token in tokens:
+            found = color(token)
+            if found is not None:
+                return found
+        return ANSI_ROLES[conventional_key]
+
+    # The palette the pane answers a program with. The brights are the
+    # bases a step towards the text, which is how the schemes that
+    # number brights at all draw them.
+    dim = {
+        "color-0": _blend(surface, "#000000", 0.35),
+        "color-1": error,
+        "color-2": base(Token.String, conventional_key="color-2"),
+        "color-3": base(
+            Token.Literal.String.Escape, Token.Number, conventional_key="color-3"
+        ),
+        "color-4": base(Token.Name.Builtin, Token.Name.Tag, conventional_key="color-4"),
+        "color-5": base(
+            Token.Keyword.Type,
+            Token.Keyword.Constant,
+            Token.Keyword,
+            conventional_key="color-5",
+        ),
+        "color-6": base(
+            Token.Name.Decorator,
+            Token.Name.Class,
+            Token.Comment.Preproc,
+            conventional_key="color-6",
+        ),
+        "color-7": text,
+        "color-8": muted,
+    }
+
     return {
+        **dim,
+        "color-9": _blend(dim["color-1"], text, 0.3),
+        "color-10": _blend(dim["color-2"], text, 0.3),
+        "color-11": _blend(dim["color-3"], text, 0.3),
+        "color-12": _blend(dim["color-4"], text, 0.3),
+        "color-13": _blend(dim["color-5"], text, 0.3),
+        "color-14": _blend(dim["color-6"], text, 0.3),
+        "color-15": _readable(surface),
         "surface": surface,
         "surface-raised": _blend(surface, text, 0.07),
         # The scheme's own background is the pane's: with

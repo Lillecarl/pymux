@@ -52,6 +52,7 @@ __all__ = [
     "TRUECOLOR_PROBE",
     "ColorDetection",
     "DefaultColors",
+    "theme_color_base",
 ]
 
 # The three components of the probe colour. They are small and
@@ -272,6 +273,36 @@ class DefaultColors:
         if self.background is not None:
             defaults["background"] = self.background
         return ColorBase(palette, defaults)
+
+
+def theme_color_base(name: str) -> ColorBase:
+    """
+    What a pane starts with when the theme owns the screen.
+
+    `paint-screen` says the theme colours the whole screen, and the
+    palette a program asks for is part of that screen: the sixteen
+    the theme names, over the cube that convention numbers, and the
+    theme's text and pane as the two defaults. A colour a theme does
+    not name leaves the conventional one standing.
+
+    A name nobody offers raises `KeyError`, as `theme` does.
+    Lillecarl/pymux#283.
+    """
+    from pymux.style import roles_of
+
+    roles = roles_of(name)
+    ansi = [parse_color(roles["color-%i" % index]) for index in range(16)]
+    palette = [learned or PALETTE[index] for index, learned in enumerate(ansi)] + list(
+        PALETTE[16:]
+    )
+    defaults = dict(DEFAULT_COLORS)
+    foreground = parse_color(roles["text"])
+    background = parse_color(roles["pane"])
+    if foreground is not None:
+        defaults["foreground"] = foreground
+    if background is not None:
+        defaults["background"] = background
+    return ColorBase(palette, defaults)
 
 
 def depth_from_environment(term: str, colorterm: str) -> ColorDepth:

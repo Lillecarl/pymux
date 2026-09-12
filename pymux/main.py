@@ -38,7 +38,7 @@ from pyte.keys import KeyboardFlag
 from pyte.osc import Osc
 
 from .arrangement import Arrangement, Pane, Window
-from .colors import DefaultColors
+from .colors import DefaultColors, theme_color_base
 from .commands.commands import call_command_handler, handle_command
 from .commands.completer import create_command_completer
 from .enums import COMMAND, PROMPT, WindowSize, Woke
@@ -1663,15 +1663,24 @@ class Pymux:
 
     def tell_pane_about_the_colours(self, pane) -> None:
         """
-        Tell one pane what the terminal of the latest client draws
-        with. Never raises: a pane that starts without a client, or
-        whose embedder knows no `set_color_base`, answers from the
-        table `pyte` reports, as before. Lillecarl/pymux#283.
+        Tell one pane what the colours around it are: the theme's,
+        when the theme owns the whole screen, and the terminal of the
+        latest client otherwise. Never raises: a pane that starts
+        without either, or whose embedder knows no `set_color_base`,
+        answers from the table `pyte` reports, as before.
+        Lillecarl/pymux#283.
         """
-        base = self.color_base_of_the_latest_client()
-        if base is None:
-            return
         try:
+            if self.paint_screen:
+                # The theme colours the whole screen, and the palette
+                # a program asks for is part of that screen. The same
+                # scheme for every client, which is why this is
+                # decided here and not per client.
+                base = theme_color_base(self.theme)
+            else:
+                base = self.color_base_of_the_latest_client()
+            if base is None:
+                return
             pane.screen.set_color_base(base)
         except Exception:
             return

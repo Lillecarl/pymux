@@ -486,7 +486,10 @@ ALL_OPTIONS = {
     # terminal's either way. A client that asks the terminal its
     # background (OSC 11, Lillecarl/pymux#223) is the softer cousin of
     # the same idea; with this on, the asking is unnecessary rather
-    # than wrong. Lillecarl/pymux#273.
+    # than wrong. The panes answer a program's colour queries with
+    # the theme's sixteen as well, so a theme is one colour scheme
+    # from the chrome to the palette. Lillecarl/pymux#273,
+    # Lillecarl/pymux#283.
     "paint-screen": OnOffOption("paint_screen"),
     # Show 13:37 on the 14th of March, of the year it really is,
     # everywhere pymux displays a clock: the status line's format

@@ -217,8 +217,39 @@ ROLES = {
     "accent": "#5f5f87",
 }
 
+#: The sixteen the pane answers a program with, by the number "OSC 4"
+#: asks in. These are the conventional colours of a 256 colour
+#: terminal -- the same ones `pyte.colors` reports -- and they are
+#: roles so that a theme can own them: with `paint-screen` on, the
+#: theme colours the whole screen, and a program that asks what red
+#: is hears the theme's red, not the terminal's. Lillecarl/pymux#283.
+ANSI_ROLES = {
+    "color-0": "#000000",
+    "color-1": "#cd0000",
+    "color-2": "#00cd00",
+    "color-3": "#cdcd00",
+    "color-4": "#0000ee",
+    "color-5": "#cd00cd",
+    "color-6": "#00cdcd",
+    "color-7": "#e5e5e5",
+    "color-8": "#7f7f7f",
+    "color-9": "#ff0000",
+    "color-10": "#00ff00",
+    "color-11": "#ffff00",
+    "color-12": "#5c5cff",
+    "color-13": "#ff00ff",
+    "color-14": "#00ffff",
+    "color-15": "#ffffff",
+}
+
+#: The roles of a theme, with the palette underneath. `derive` reads
+#: the chrome roles and ignores these; the pane's colour base is what
+#: reads them.
+ROLES = {**ANSI_ROLES, **ROLES}
+
 #: The green scheme pymux has always drawn.
-DEFAULT = create_theme(derive(ROLES))
+DEFAULT_ROLES = dict(ROLES)
+DEFAULT = create_theme(derive(DEFAULT_ROLES))
 
 #: The same scheme with the loud colours taken out, in the blue grey
 #: the command palette and the completion menu already use.
@@ -239,36 +270,42 @@ DEFAULT = create_theme(derive(ROLES))
 #: pane that has ended is still on red, a confirmation is still on
 #: dark red, and the position in copy mode is still yellow. A theme
 #: chooses its chrome, not its warnings.
-GREY = create_theme(
-    derive(
-        {
-            **ROLES,
-            "focus": "#5f5f87",
-            "focus-strong": "#8787af",
-            "focus-border": "#8787af",
-            "alarm": "#8787af",
-            "signal": "#5f5f87",
-            "signal-bright": "#8787af",
-            "signal-text": "#ffffff",
-            "suggestion": "#4e4e5e",
-            "suggestion-text": "#8888aa",
-            "notice": "#8787af",
-            "notice-text": "#ffffff",
-            "warn": "#5f5f87",
-            "warn-bright": "#5f5f87",
-            "search": "#8787af",
-            "search-prompt-text": "#ffffff",
-            "search-match": "#8888aa",
-            "search-match-current": "#5f5f87",
-            "search-match-current-text": "#ffffff",
-        }
-    )
-)
+GREY_ROLES = {
+    **ROLES,
+    "focus": "#5f5f87",
+    "focus-strong": "#8787af",
+    "focus-border": "#8787af",
+    "alarm": "#8787af",
+    "signal": "#5f5f87",
+    "signal-bright": "#8787af",
+    "signal-text": "#ffffff",
+    "suggestion": "#4e4e5e",
+    "suggestion-text": "#8888aa",
+    "notice": "#8787af",
+    "notice-text": "#ffffff",
+    "warn": "#5f5f87",
+    "warn-bright": "#5f5f87",
+    "search": "#8787af",
+    "search-prompt-text": "#ffffff",
+    "search-match": "#8888aa",
+    "search-match-current": "#5f5f87",
+    "search-match-current-text": "#ffffff",
+}
+
+GREY = create_theme(derive(GREY_ROLES))
 
 #: Every theme, by the name `set-option theme` takes.
 THEMES: dict[str, BaseStyle] = {
     "default": DEFAULT,
     "grey": GREY,
+}
+
+#: The roles of each, by the same name. The scheme is derived from
+#: these, and the pane's colour base is read straight off them, so a
+#: theme that names a colour once has named it everywhere.
+THEME_ROLES: dict[str, dict[str, str]] = {
+    "default": DEFAULT_ROLES,
+    "grey": GREY_ROLES,
 }
 
 #: The one a session starts on.
@@ -289,3 +326,19 @@ def theme(name: str) -> BaseStyle:
 
         return pygments_theme(rest)
     return THEMES[name]
+
+
+def roles_of(name: str) -> dict[str, str]:
+    """
+    The roles of one theme name, from whatever source it names.
+
+    The same names `theme` takes, and the same `KeyError` for one it
+    does not. The roles are what a theme is written as, and the
+    scheme is only one of the things derived from them.
+    """
+    source, _, rest = name.partition(":")
+    if source == "pygments":
+        from pymux.style_pygments import pygments_roles
+
+        return pygments_roles(rest)
+    return THEME_ROLES[name]
