@@ -33,7 +33,7 @@ sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pymux.style import THEMES  # noqa: E402
 from pymux.style_pygments import names  # noqa: E402
-from photograph_the_chrome import CHROME, PREFIX, keys, main  # noqa: E402
+from photograph_the_chrome import demo_keys, main  # noqa: E402
 from take_a_picture import LIGHT_TERMINALS, TERMINALS  # noqa: E402
 
 #: Where the pictures go. The check points this at `$out`.
@@ -42,26 +42,6 @@ PICTURES = Path(os.environ.get("PYMUX_THEMES_OUT", "theme-pictures"))
 #: Which fixtures and which terminals to run.
 ONLY = os.environ.get("PYMUX_THEMES", "")
 ONLY_TERMINALS = os.environ.get("PYMUX_THEMES_TERMINALS", "")
-
-#: The program in the pane, beside this file.
-DEMO = Path(__file__).parent / "demo_application.py"
-
-
-def demo_keys():
-    """
-    Split the window in two, and run the demo in the pane that took
-    the keyboard.
-
-    The command is typed, so the pane shows a shell that received it
-    and then the program that answered, which is what a pane looks
-    like in use rather than at rest.
-    """
-    return keys(
-        (0.0, PREFIX),
-        (0.4, b"%"),
-        (0.8, ("python %s\n" % (shlex.quote(str(DEMO)),)).encode("ascii")),
-    )
-
 
 #: One fixture per theme, hand or pygments. The name is the one
 #: `set-option theme` takes, after `theme-`.

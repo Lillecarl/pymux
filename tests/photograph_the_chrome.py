@@ -66,6 +66,12 @@ ONLY_TERMINALS = os.environ.get("PYMUX_CHROME_TERMINALS", "")
 #: The relay, beside this file.
 RELAY = Path(__file__).parent / "drive_in_a_terminal.py"
 
+#: The demo, beside this file: the program a fixture types at a
+#: pane, the way the theme pictures put it there. A pane that has run
+#: it holds rows a person can read, which is what the copy-mode
+#: fixture needs.
+DEMO = Path(__file__).parent / "demo_application.py"
+
 #: What every fixture turns on. The status line and a pane's title bar
 #: are the two pieces of chrome a person looks at all day, and both are
 #: what `full-screen on` takes away.
@@ -100,6 +106,25 @@ def create_command(text):
         (0.4, b":"),
         (0.6, text.encode("ascii") + b"\r"),
     ]
+
+
+def demo_keys():
+    """
+    Split the window in two, and run the demo in the pane that took
+    the keyboard.
+
+    The command is typed, so the pane shows a shell that received it
+    and then the program that answered, which is what a pane looks
+    like in use rather than at rest. **The split is also what keeps
+    the fence alive**: the first pane stays the forwarder, and the
+    fence needs it -- a pane whose program is suspended carries
+    nothing back, and copy mode suspends the one it opens on.
+    """
+    return keys(
+        (0.0, PREFIX),
+        (0.4, b"%"),
+        (0.8, ("python %s\n" % (shlex.quote(str(DEMO)),)).encode("ascii")),
+    )
 
 
 #: What each fixture is: the configuration pymux reads, and the keys
@@ -212,6 +237,11 @@ FIXTURES = {
         CHROME + "set-option which-key on\n",
         keys((0.0, PREFIX), (0.8, b"")),
     ),
+    # The demo in a pane, and copy mode over it. The two hold the
+    # same rows a person can read, and the difference between the two
+    # pictures is what copy mode does.
+    "pane-text": (CHROME, demo_keys()),
+    "copy-mode": (CHROME, demo_keys() + keys((1.2, PREFIX), (0.6, b"["))),
     # An overlay pane, floating in the middle of the screen over two
     # panes. Its body runs a program, so its default-background cells
     # have to show the terminal's own background, the way a normal
@@ -318,7 +348,6 @@ def picture_of(terminal, seat, name, work, out, fixtures=None):
     if fixtures is None:
         fixtures = FIXTURES
     config, keys = fixtures[name]
-
     config_path = work / ("%s.conf" % name)
     config_path.write_text(config)
 
