@@ -77,6 +77,33 @@ for _name in names():
         demo_keys(),
     )
 
+#: A few of the base16 collection, by the same name. The whole
+#: collection is 337 schemes; these four are the ones the gallery
+#: reads, until the gallery itself is built per scheme and per
+#: terminal as its own derivations. Lillecarl/pymux#282,
+#: Lillecarl/pymux#284.
+for _name in (
+    "catppuccin-mocha",
+    "gruvbox-material-dark-medium",
+    "solarized-light",
+    "default-dark",
+):
+    FIXTURES["theme-base16-%s" % _name] = (
+        CHROME + "set-option theme base16:%s\n" % _name,
+        demo_keys(),
+    )
+
+#: The palette half of the same story: with the screen painted, the
+#: pane answers a program's queries with the scheme's sixteen, and
+#: the demo's swatches are the scheme's. The one above is the
+#: off half, where the pane follows the terminal. Lillecarl/pymux#283.
+FIXTURES["theme-base16-painted-mocha"] = (
+    CHROME
+    + "set-option theme base16:catppuccin-mocha\n"
+    + "set-option paint-screen on\n",
+    demo_keys(),
+)
+
 #: The takeover's own picture. `paint-screen` draws the scheme's
 #: background behind every cell the program left at a default one, so
 #: the terminal's own colours are never seen: mocha fills the light

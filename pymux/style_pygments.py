@@ -32,7 +32,14 @@ from functools import lru_cache
 from prompt_toolkit.styles import BaseStyle
 from prompt_toolkit.styles.named_colors import NAMED_COLORS
 
-from pymux.style import ANSI_ROLES, create_theme, derive
+from pymux.style import (
+    ANSI_ROLES,
+    _blend,
+    _other_of,
+    _readable,
+    create_theme,
+    derive,
+)
 
 __all__ = ["pygments_roles", "pygments_theme", "names"]
 
@@ -247,49 +254,3 @@ def _hex(word: str) -> str:
     if len(word) == 3:
         word = "".join(twice for twice in (word[i] * 2 for i in range(3)))
     return "#%s" % (word.lower(),)
-
-
-def _to_rgb(a: str) -> tuple[int, int, int]:
-    return tuple(int(a[i : i + 2], 16) for i in (1, 3, 5))
-
-
-def _from_rgb(rgb) -> str:
-    return "#%02x%02x%02x" % rgb
-
-
-def _blend(a: str, b: str, towards_b: float) -> str:
-    "The colour `towards_b` of the way from `a` to `b`."
-    return _from_rgb(
-        tuple(
-            round(r + (s - r) * towards_b)
-            for r, s in zip(_to_rgb(a), _to_rgb(b))
-        )
-    )
-
-
-def _lightness(a: str) -> float:
-    r, g, b = _to_rgb(a)
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b
-
-
-def _readable(a: str) -> str:
-    """
-    The text that reads on `a`: black or white, by contrast.
-
-    The contrast of WCAG, not the lightness alone: a pale green is
-    light enough to mistake for white by one measure and is still
-    nearly four times closer to black than to white.
-    """
-    def contrast(other):
-        base = _lightness(other) / 255.0
-        base = base / 12.92 if base <= 0.04045 else ((base + 0.055) / 1.055) ** 2.4
-        over = _lightness(a) / 255.0
-        over = over / 12.92 if over <= 0.04045 else ((over + 0.055) / 1.055) ** 2.4
-        return (max(base, over) + 0.05) / (min(base, over) + 0.05)
-
-    return "#000000" if contrast("#000000") >= contrast("#ffffff") else "#ffffff"
-
-
-def _other_of(a: str) -> str:
-    "The text that does not read on `a`."
-    return "#ffffff" if _readable(a) == "#000000" else "#000000"

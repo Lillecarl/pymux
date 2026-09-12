@@ -1247,6 +1247,13 @@ def set_option(pymux: "Pymux", variables: _VariablesDict, window: bool = False) 
                 option.set_default(pymux, value)
             else:
                 option.set_value(pymux, value)
+                # The colour base of every pane is derived from two of
+                # the options: which theme owns the screen, and
+                # whether it does. A pane that exists heard the old
+                # answer, and hears the new one now.
+                # Lillecarl/pymux#283.
+                if name in ("theme", "paint-screen"):
+                    pymux.sync_color_bases()
         except SetOptionError as e:
             raise CommandException(e.message)
     else:

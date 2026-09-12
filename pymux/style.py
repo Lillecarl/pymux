@@ -325,7 +325,133 @@ def theme(name: str) -> BaseStyle:
         from pymux.style_pygments import pygments_theme
 
         return pygments_theme(rest)
+    if source == "base16":
+        from pymux.style_base16 import base16_theme
+
+        return base16_theme(rest)
     return THEMES[name]
+
+
+def _blend(a: str, b: str, towards_b: float) -> str:
+    "The colour `towards_b` of the way from `a` to `b`."
+    return _from_rgb(
+        tuple(
+            round(r + (s - r) * towards_b)
+            for r, s in zip(_to_rgb(a), _to_rgb(b))
+        )
+    )
+
+
+def _to_rgb(a: str) -> tuple[int, int, int]:
+    return tuple(int(a[i : i + 2], 16) for i in (1, 3, 5))
+
+
+def _from_rgb(rgb) -> str:
+    return "#%02x%02x%02x" % rgb
+
+
+def _lightness(a: str) -> float:
+    r, g, b = _to_rgb(a)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _readable(a: str) -> str:
+    """
+    The text that reads on `a`: black or white, by contrast.
+
+    The contrast of WCAG, not the lightness alone: a pale green is
+    light enough to mistake for white by one measure and is still
+    nearly four times closer to black than to white.
+    """
+    def contrast(other):
+        base = _lightness(other) / 255.0
+        base = base / 12.92 if base <= 0.04045 else ((base + 0.055) / 1.055) ** 2.4
+        over = _lightness(a) / 255.0
+        over = over / 12.92 if over <= 0.04045 else ((over + 0.055) / 1.055) ** 2.4
+        return (max(base, over) + 0.05) / (min(base, over) + 0.05)
+
+    return "#000000" if contrast("#000000") >= contrast("#ffffff") else "#ffffff"
+
+
+def _other_of(a: str) -> str:
+    "The text that does not read on `a`."
+    return "#ffffff" if _readable(a) == "#000000" else "#000000"
+
+
+def roles_of_palette(sixteen: list[str]) -> dict[str, str]:
+    """
+    The roles of a theme, from the sixteen colours a palette holds.
+
+    `sixteen` is in the order a terminal numbers them, and the mapping
+    is the base16 spec's: base00 is the background, base03 the muted
+    tone, base05 the text, base07 the bright one, base08 the red and
+    so on to the eight accents. The chrome derives from those anchors,
+    the way every blend in every source derives from two colours; the
+    palette itself goes through verbatim, so what a pane answers a
+    program with is exactly what the scheme said. Lillecarl/pymux#282,
+    Lillecarl/pymux#283.
+
+    A scheme that put nothing sensible in a slot gets a theme that
+    looks wrong there, which is honest: nothing here invents a colour
+    the scheme did not name.
+    """
+    black, red, green, yellow, blue, _, _, white = sixteen[:8]
+    muted = sixteen[8]
+    bright_red = sixteen[9]
+    bright_green = sixteen[10]
+    bright_yellow = sixteen[11]
+    bright_blue = sixteen[12]
+    bright_magenta = sixteen[13]
+    bright_cyan = sixteen[14]
+    bright_white = sixteen[15]
+
+    return {
+        # The screen the chrome draws on, and the text on it.
+        "pane": black,
+        "surface": black,
+        "surface-raised": _blend(black, white, 0.07),
+        "text": white,
+        "text-bright": bright_white,
+        "text-dark": _other_of(black),
+        "text-muted": muted,
+        "soft": _blend(white, black, 0.15),
+        "border": _blend(white, black, 0.45),
+        # A focused pane's bar. The green of the default theme is the
+        # signal too, and the base16 spec's green is base0B.
+        "focus": green,
+        "focus-strong": _blend(green, white, 0.25),
+        "focus-border": green,
+        "alarm": red,
+        # The status bar, on the scheme's green.
+        "signal": green,
+        "signal-bright": _blend(green, white, 0.25),
+        "signal-text": _readable(green),
+        "command": _blend(black, white, 0.2),
+        "suggestion": _blend(black, white, 0.07),
+        "suggestion-text": _blend(white, black, 0.25),
+        "notice": bright_green,
+        "notice-text": _readable(bright_green),
+        "cut": _blend(black, white, 0.08),
+        "warn": yellow,
+        "warn-bright": bright_yellow,
+        # A pane that has ended, and the confirmation that asks.
+        "danger": red,
+        "danger-strong": _blend(red, "#000000", 0.25),
+        "danger-deep": _blend(red, "#000000", 0.6),
+        # The search toolbar, and the matches on the base16 spec's
+        # selection background.
+        "search": bright_green,
+        "search-prompt-text": _readable(bright_green),
+        "search-match": muted,
+        "search-match-current": blue,
+        "search-match-current-text": _readable(blue),
+        # The hue of the pop-ups: the scheme's blue.
+        "accent": blue,
+        # What a pane answers a program with: the sixteen verbatim,
+        # in the order the terminal numbers them, which is what
+        # arrived.
+        **{"color-%i" % index: colour for index, colour in enumerate(sixteen)},
+    }
 
 
 def roles_of(name: str) -> dict[str, str]:
@@ -341,4 +467,8 @@ def roles_of(name: str) -> dict[str, str]:
         from pymux.style_pygments import pygments_roles
 
         return pygments_roles(rest)
+    if source == "base16":
+        from pymux.style_base16 import base16_roles
+
+        return base16_roles(rest)
     return THEME_ROLES[name]

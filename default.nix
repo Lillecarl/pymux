@@ -19,6 +19,7 @@
   python,
   buildPythonApplication,
   pythonOlder,
+  runCommand,
   prompt-toolkit,
   ptterm,
   # The shared rig, whose seats the picture scripts borrow.
@@ -46,6 +47,24 @@
   xclip,
 }:
 let
+  # The schemes of the base16 spec, converted to one JSON object while
+  # the package is built: `set-option theme base16:<name>` reads it,
+  # and a theme that needed a YAML parser to be read would be a theme
+  # that could not be read anywhere. Pinned, because a scheme that
+  # changes under a reader is a theme that lies. Lillecarl/pymux#282.
+  base16-schemes-json = runCommand "pymux-base16-schemes.json"
+    {
+      base16 = builtins.fetchTarball {
+        url = "https://github.com/tinted-theming/schemes/archive/fdca32a0d14ec80ad83a78a9ccb85592ca6cb9e1.tar.gz";
+        sha256 = "sha256-LMHxSQJIv6QJJkO9W7sAkJujlwusFf9/Ct0SYJ6GyHQ=";
+      };
+      nativeBuildInputs = [ (python.withPackages (p: [ p.pyyaml ])) ];
+    }
+    ''
+    python3 ${./nix/convert-base16.py} "$base16/base16" "$(pwd)/base16-schemes.json"
+    install -Dm644 base16-schemes.json "$out"/base16-schemes.json
+  '';
+
   package = buildPythonApplication {
     pname = "pymux";
     version = "0.15";
@@ -80,6 +99,8 @@ let
         --bash rendered/bash \
         --zsh rendered/zsh \
         --fish rendered/fish
+      install -Dm644 ${base16-schemes-json}/base16-schemes.json \
+        "$out/${python.sitePackages}/pymux/base16-schemes.json"
     '';
 
     # The suites run as `checks.unit`, `checks.pty` and the rest, against the source.
@@ -133,6 +154,9 @@ let
       xclip
       ;
     waylandProtocols = pyterm-pytest.waylandProtocols;
+    # The base16 collection the package carries, for the gallery that
+    # photographs a base16 theme and the unit tests that read one.
+    inherit base16-schemes-json;
   };
 in
 package

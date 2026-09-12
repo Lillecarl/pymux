@@ -18,6 +18,9 @@
   prompt-toolkit,
   # The shared rig. The picture scripts borrow its seats.
   pyterm-pytest,
+  # The base16 collection, converted: the themes gallery photographs
+  # a base16 theme, and the pane answers with its palette.
+  base16-schemes-json,
   pywayland,
   # The reader of the clipboard fence: wl-paste on the compositor the
   # seat started, xclip on the X server it started.
@@ -778,6 +781,7 @@ in
           export PYMUX_THEMES="$themesSelection"
           export PYMUX_THEMES_TERMINALS="$themesTerminals"
           export PYMUX_THEMES_OUT="$out"
+          export PYMUX_BASE16_SCHEMES="${base16-schemes-json}/base16-schemes.json"
           python tests/photograph_the_themes.py
         ''
       );

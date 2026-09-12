@@ -261,14 +261,16 @@ def main():
     # with the program, so nobody inherits the state.
     sys.stdout.write("\x1b[?25l\x1b[2J\x1b[H")
 
-    # The echo of the pane's tty is off for good. What the pane writes
-    # back is input to this program, and a tty in the ordinary mode
-    # echoes its input onto the screen: the replies would land beside
-    # the picture as text, which is what the first capture showed.
-    # Every program that reads replies runs with the echo off, and
-    # this one does the same.
+    # The pane's tty is in the ordinary mode, and two of its habits
+    # hold a program's replies back: it echoes its input onto the
+    # screen -- the first capture showed the replies beside the
+    # picture as text -- and it holds bytes back until a whole line
+    # has arrived, and an answer never carries a newline. The echo
+    # goes, the waiting for a line goes, and the replies arrive when
+    # the pane sends them. Every program that reads replies runs
+    # here, and this one does the same.
     attributes = termios.tcgetattr(sys.stdin)
-    attributes[3] &= ~termios.ECHO
+    attributes[3] &= ~(termios.ECHO | termios.ICANON)
     termios.tcsetattr(sys.stdin, termios.TCSANOW, attributes)
 
     sys.stdout.write(ASKS)

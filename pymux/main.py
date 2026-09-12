@@ -1683,7 +1683,10 @@ class Pymux:
                 return
             pane.screen.set_color_base(base)
         except Exception:
-            return
+            # The pane keeps the base it had, and the log says what
+            # was swallowed: a pane that answers from the wrong table
+            # is a fault nobody sees otherwise.
+            logger.exception("Telling a pane about the colours failed.")
 
     def sync_color_bases(self) -> None:
         """

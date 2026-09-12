@@ -318,14 +318,19 @@ class ThemeOption(Option):
 
     A name is either one of `THEMES`, or `pygments:<name>` for one of
     the styles pygments carries - forty-nine of them, and anything a
-    package installs beside them. Lillecarl/pymux#194.
+    package installs beside them. Lillecarl/pymux#194. Or
+    `base16:<name>` for one of the schemes of the base16 spec,
+    Lillecarl/pymux#282.
     """
 
     def get_all_values(self, pymux):
         from pymux.style_pygments import names
+        from pymux.style_base16 import names as base16_names
 
         return sorted(THEMES) + [
             "pygments:%s" % (name,) for name in names()
+        ] + [
+            "base16:%s" % (name,) for name in base16_names()
         ]
 
     def set_value(self, pymux, value):
@@ -336,6 +341,14 @@ class ThemeOption(Option):
             if rest not in names():
                 raise SetOptionError(
                     "Expecting the name of a pygments style, like: %s."
+                    % (", ".join(names()[:6]),)
+                )
+        elif source == "base16":
+            from pymux.style_base16 import names
+
+            if rest not in names():
+                raise SetOptionError(
+                    "Expecting the name of a base16 scheme, like: %s."
                     % (", ".join(names()[:6]),)
                 )
         elif value not in THEMES:
