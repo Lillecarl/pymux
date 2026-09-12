@@ -174,6 +174,36 @@ def test_a_partially_typed_flag_offers_what_matches():
     assert text == ["-J"]
 
 
+def test_a_word_matches_anywhere_in_a_command():
+    """
+    The command bar is where the tmux spellings live, and
+    remembering them exactly is the failure mode: `option` reaches
+    `set-option` without the set. Lillecarl/pymux#269.
+    """
+    pymux = Pymux()
+    text = [word for word, _said in _offered("option", pymux)]
+    assert "set-option" in text
+    assert "set-window-option" in text
+
+
+def test_a_flag_offers_itself_without_the_dash():
+    """
+    The ask of Lillecarl/pymux#148 went one further: a flag lists
+    without the dash at all. A flag says nothing about itself, and
+    its help says plenty, so the help is what a dashless word
+    matches. Lillecarl/pymux#269.
+    """
+    pymux = Pymux()
+    offered = dict(_offered("new-window unfocus", pymux))
+    assert "-d" in offered
+
+
+def test_a_value_matches_loosely():
+    pymux = Pymux()
+    values = [word for word, _said in _offered("set-option status on", pymux)]
+    assert "on" in values
+
+
 def test_an_alias_offers_the_full_name():
     pymux = Pymux()
     text = [word for word, _said in _offered("selectp", pymux)]

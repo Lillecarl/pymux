@@ -16,6 +16,7 @@ finder serves every client, and it re-enters itself for the command
 a `bind-key` binding runs.
 """
 
+import argparse
 from functools import partial
 
 import argcomplete
@@ -178,13 +179,86 @@ class CommandCompleter(Completer):
             yield Completion(m, start_position=-len(prefix), display_meta=meta.get(m, ""))
 
 
-def _case_insensitive(completion, prefix):
+def matches_loosely(word, candidate) -> bool:
     """
-    The bar completes keys and commands without case (a capital `C`
-    offers `ctrl`, the way the key completer always has), so the
-    filter that keeps a completion reads both words without case.
+    The word is in the candidate, without case, anywhere in it.
+
+    The command bar is where the tmux spellings live, and
+    remembering them exactly is the failure mode: `option` reaches
+    `set-option` without the set, `vert` reaches `even-vertical`
+    without the even. Lillecarl/pymux#269.
     """
-    return completion.lower().startswith(prefix.lower())
+    return word.lower() in candidate.lower()
+
+
+class FuzzyFinder(argcomplete.CompletionFinder):
+    """
+    A finder that keeps what the word matches loosely, not only what
+    it starts.
+
+    argcomplete filters three of its four candidates by a prefix --
+    the subcommands, the flags and the words a completer answered;
+    the validator is the fourth. The first three are "exposed for
+    overriding", and this is the override: the same walks, with
+    `matches_loosely` where they said `startswith`.
+
+    A flag also matches what its help says, when the word does not
+    start with a dash: the ask of Lillecarl/pymux#148 was that a
+    flag lists without the dash at all, and "-d" says nothing about
+    itself, while "Leave the new window unfocused" says plenty.
+    """
+
+    def _matches(self, word, candidate) -> bool:
+        return matches_loosely(word, candidate)
+
+    def _flag_matches(self, action, word, option_string) -> bool:
+        if self._matches(word, option_string):
+            return True
+        if word and not word.startswith("-") and action.help:
+            return self._matches(word, action.help)
+        return False
+
+    def _get_subparser_completions(self, parser, cword_prefix):
+        aliases_by_parser: dict = {}
+        for key in parser.choices.keys():
+            p = parser.choices[key]
+            aliases_by_parser.setdefault(p, []).append(key)
+
+        for action in parser._get_subactions():
+            for alias in aliases_by_parser[parser.choices[action.dest]]:
+                if self._matches(cword_prefix, alias):
+                    self._display_completions[alias] = self._get_action_help(action)
+
+        return [
+            subcmd
+            for subcmd in parser.choices.keys()
+            if self._matches(cword_prefix, subcmd)
+        ]
+
+    def _get_option_completions(self, parser, cword_prefix):
+        for action in parser._actions:
+            if action.option_strings:
+                for option_string in action.option_strings:
+                    if self._matches(cword_prefix, option_string):
+                        self._display_completions[option_string] = self._get_action_help(action)
+
+        option_completions = []
+        for action in parser._actions:
+            if not self.print_suppressed:
+                completer = getattr(action, "completer", None)
+                if isinstance(completer, SuppressCompleter) and completer.suppress():
+                    continue
+                if action.help == argparse.SUPPRESS:
+                    continue
+            if not self._action_allowed(action, parser):
+                continue
+            if not isinstance(action, argparse._SubParsersAction):
+                option_completions += [
+                    option_string
+                    for option_string in action.option_strings
+                    if self._flag_matches(action, cword_prefix, option_string)
+                ]
+        return option_completions
 
 
 _finder = None
@@ -198,11 +272,14 @@ def create_command_completer(pymux):
     global _finder
     if _finder is None:
         parser, subparsers = the_parser()
-        _finder = argcomplete.CompletionFinder(
+        _finder = FuzzyFinder(
             parser,
             append_space=False,
             default_completer=SuppressCompleter(),
-            validator=_case_insensitive,
+            # argcomplete hands the validator (completion, prefix); the
+            # matcher reads (word, candidate), and the word is the
+            # prefix the person typed.
+            validator=lambda completion, prefix: matches_loosely(prefix, completion),
         )
         for name, command_parser in subparsers.choices.items():
             for action in command_parser._actions:
