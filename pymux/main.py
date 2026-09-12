@@ -680,6 +680,14 @@ class Pymux:
 
         self.arrangement = Arrangement()
 
+        # What `set-environment` fills, the two scopes tmux has. A
+        # value of None is an unset: the name leaves the environment
+        # of a new pane, so a session unset falls through to the
+        # global value rather than to nothing.
+        # Lillecarl/pymux#270.
+        self.global_environment: dict[str, str | None] = {}
+        self.session_environment: dict[str, str | None] = {}
+
         # The overlay pane: a pane that floats in the middle of the
         # screen over the layout, like the popup of tmux. It belongs to
         # the session, so every client sees the same one, and it takes
@@ -1097,6 +1105,18 @@ class Pymux:
             if self.socket_name:
                 os.environ["PYMUX"] = "%s,%i" % (self.socket_name, pane.pane_id)
 
+            # The environment a `set-environment` filled. The global
+            # scope lands first and the session's over it; a name
+            # either unset takes itself out of the child's
+            # environment, which is the one thing the child would
+            # otherwise inherit from the server. Lillecarl/pymux#270.
+            merged = self.pane_environment()
+            for name, value in merged.items():
+                os.environ[name] = value
+            for name in {**self.global_environment, **self.session_environment}:
+                if name not in merged and name in os.environ:
+                    del os.environ[name]
+
             # The shim, when it is on, reaches the opener of this
             # session before anything else on the PATH of the pane,
             # and names it for what reads $BROWSER.
@@ -1463,6 +1483,32 @@ class Pymux:
             f.write("#!/bin/sh\nexec pymux open-url -- \"$@\"\n")
         os.chmod(script, 0o755)
         os.symlink("pymux-open-url", os.path.join(self._open_url_shim_dir, "xdg-open"))
+
+    def pane_environment(self) -> dict[str, str]:
+        """
+        The environment a new pane runs under, merged: the server's
+        own, with what `set-environment -g` set and then what a plain
+        `set-environment` set over it. An unset takes the name out of
+        its scope only: a session unset of a name the global set
+        falls through to the global value, and a name no scope says
+        anything about leaves entirely. Lillecarl/pymux#270.
+        """
+        merged = dict(os.environ)
+        for name, value in self.global_environment.items():
+            if value is None:
+                merged.pop(name, None)
+            else:
+                merged[name] = value
+        for name, value in self.session_environment.items():
+            if value is None:
+                # A session unset does not reach past the global
+                # scope: what the global set stays, and a name the
+                # global says nothing about leaves.
+                if name not in self.global_environment:
+                    merged.pop(name, None)
+            else:
+                merged[name] = value
+        return merged
 
     def _shim_the_environment_of_a_pane(self) -> None:
         """

@@ -1333,6 +1333,82 @@ def set_window_option(pymux: "Pymux", variables: _VariablesDict) -> None:
     set_option(pymux, variables, window=True)
 
 
+def set_environment(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Put a variable in the environment a new pane runs under.
+
+    -g fills the global scope, which is the fallback a session unset
+    of a name falls through to. A name with no value, or with `-u`,
+    is an unset: the name leaves the environment of a new pane, and
+    with `-g` it leaves the global scope itself. A program that
+    already runs never sees any of this -- the environment is read
+    once, at exec, so only panes spawned after the set carry it.
+    Lillecarl/pymux#270.
+    """
+    name, value = variables["<name>"], variables["<value>"]
+    if not name or "=" in name:
+        raise CommandException("Invalid variable name: %r" % (name,))
+
+    scope = pymux.global_environment if variables["-g"] else pymux.session_environment
+    if variables["-u"] or value is None:
+        scope[name] = None
+    else:
+        scope[name] = value
+
+
+def show_environment(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Read the environment a new pane runs under.
+
+    Without a name, one `NAME=value` line per variable, the form
+    `eval $(pymux show-environment -s)` wants; `-s` escapes the
+    values for the shell. A name that no scope set and the server
+    does not hold reads as an error. With `-g`, only what the global
+    scope holds: an unset prints as `-NAME`, and nothing that the
+    server holds on its own shows. Lillecarl/pymux#270.
+    """
+    name = variables["<name>"]
+    escaped = variables["-s"]
+
+    if variables["-g"]:
+        scope = dict(pymux.global_environment)
+        if name:
+            value = scope.get(name)
+            if value is None and name not in scope:
+                raise CommandException("Can't find variable: %s" % (name,))
+            answer(
+                pymux,
+                "-%s" % (name,)
+                if value is None
+                else "%s=%s" % (name, shlex.quote(value) if escaped else value),
+            )
+            return
+        lines = [
+            "-%s" % (key,)
+            if value is None
+            else "%s=%s" % (key, shlex.quote(value) if escaped else value)
+            for key, value in sorted(scope.items())
+        ]
+        answer(pymux, "\n".join(lines))
+        return
+
+    merged = pymux.pane_environment()
+    if name:
+        if name not in merged:
+            raise CommandException("Can't find variable: %s" % (name,))
+        answer(
+            pymux,
+            "%s=%s" % (name, shlex.quote(merged[name]) if escaped else merged[name]),
+        )
+        return
+
+    lines = [
+        "%s=%s" % (key, shlex.quote(value) if escaped else value)
+        for key, value in sorted(merged.items())
+    ]
+    answer(pymux, "\n".join(lines))
+
+
 def display_panes(pymux: "Pymux", variables: _VariablesDict) -> None:
     "Display the pane numbers."
     pymux.display_pane_numbers = True
@@ -2108,6 +2184,23 @@ def _declare_set_window_option(subparsers: Any) -> None:
     parser.add_argument("-g", action="store_true", help="What every new window starts with.")
     parser.add_argument("option", metavar="<option>")
     parser.add_argument("value", metavar="<value>", nargs="?")
+
+
+@declarer
+def _declare_set_environment(subparsers: Any) -> None:
+    parser = _command(subparsers, set_environment)
+    parser.add_argument("-g", action="store_true", help="Fill the global scope, which new sessions start from.")
+    parser.add_argument("-u", action="store_true", help="Remove the variable from the scope.")
+    parser.add_argument("name", metavar="<name>")
+    parser.add_argument("value", metavar="<value>", nargs="?")
+
+
+@declarer
+def _declare_show_environment(subparsers: Any) -> None:
+    parser = _command(subparsers, show_environment)
+    parser.add_argument("-g", action="store_true", help="Read the global scope rather than what a new pane runs under.")
+    parser.add_argument("-s", action="store_true", help="Escape the values for the shell.")
+    parser.add_argument("name", metavar="<name>", nargs="?")
 
 
 @declarer
