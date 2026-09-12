@@ -1292,6 +1292,27 @@ def clear_history(pymux: "Pymux", variables: _VariablesDict) -> None:
         pane.screen.clear_history()
 
 
+def show_listing(pymux: "Pymux", title: str, text: str) -> None:
+    """
+    A listing, to the person who asked for it.
+
+    A person in a pane asked for a view and gets the popup. The
+    command line has no view to show a listing in, and used to lose
+    it there: the popup went to the client that ran the command, and
+    there is no client to ask for when the command came over the
+    command line -- `get_client_state` has no app to answer with,
+    which is one reason the listing was silence and not a fault. That
+    asker reads stdout, so the listing is printed there, which is
+    what `command_output` says: the same question
+    `print_command_line` asks. tmux prints a listing to stdout,
+    always. Lillecarl/pymux#288.
+    """
+    if pymux.command_output is not None:
+        pymux.print_command_line(text)
+    else:
+        pymux.get_client_state().layout_manager.display_popup(title, text)
+
+
 def list_keys(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Display all configured key bindings.
@@ -1312,9 +1333,7 @@ def list_keys(pymux: "Pymux", variables: _VariablesDict) -> None:
             )
         )
 
-    # Display help in pane.
-    result_str = "\n".join(sorted(result))
-    pymux.get_client_state().layout_manager.display_popup("list-keys", result_str)
+    show_listing(pymux, "list-keys", "\n".join(sorted(result)))
 
 
 def list_panes(pymux: "Pymux", variables: _VariablesDict) -> None:
@@ -1366,9 +1385,10 @@ def list_panes(pymux: "Pymux", variables: _VariablesDict) -> None:
                 )
             )
 
-        # Display help in pane.
-        result_str = "\n".join(sorted(result))
-        pymux.get_client_state().layout_manager.display_popup("list-keys", result_str)
+        # The list-keys title rode along when this branch was
+        # written, and the overview of panes said list-keys.
+        # Lillecarl/pymux#288.
+        show_listing(pymux, "list-panes", "\n".join(sorted(result)))
 
 
 def list_windows(pymux: "Pymux", variables: _VariablesDict) -> None:
@@ -1399,10 +1419,7 @@ def list_windows(pymux: "Pymux", variables: _VariablesDict) -> None:
                     w.active_pane.process.sy,
                 )
             )
-        result_str = "\n".join(result)
-        pymux.get_client_state().layout_manager.display_popup(
-            "list-windows", result_str
-        )
+        show_listing(pymux, "list-windows", "\n".join(result))
 
 
 def list_sessions(pymux: "Pymux", variables: _VariablesDict) -> None:
@@ -1420,10 +1437,8 @@ def list_sessions(pymux: "Pymux", variables: _VariablesDict) -> None:
         )
         pymux.print_command_line(line)
     else:
-        # Display as pop-up in the user interface.
-        result_str = format_pymux_string(pymux, "#{session_name}")
-        pymux.get_client_state().layout_manager.display_popup(
-            "list-sessions", result_str
+        show_listing(
+            pymux, "list-sessions", format_pymux_string(pymux, "#{session_name}")
         )
 
 
@@ -1498,9 +1513,7 @@ def counters(pymux: "Pymux", variables: _VariablesDict) -> None:
     The half a stack cannot give: a stack says where the server is in
     one instant, and this says what it has been doing for an hour.
     """
-    said = introspect.counters(pymux)
-    pymux.print_command_line(said)
-    pymux.get_client_state().layout_manager.display_popup("counters", said)
+    show_listing(pymux, "counters", introspect.counters(pymux))
 
 
 def profile(pymux: "Pymux", variables: _VariablesDict) -> None:
@@ -1646,7 +1659,7 @@ def capture_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
     if variables["-p"]:
         pymux.print_command_line(text)
     else:
-        pymux.get_client_state().layout_manager.display_popup("capture-pane", text)
+        show_listing(pymux, "capture-pane", text)
 
 
 def show_buffer(pymux: "Pymux", variables: _VariablesDict) -> None:
