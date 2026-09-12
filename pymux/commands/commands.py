@@ -35,7 +35,7 @@ from pymux.layout import (
     change_pane_size,
 )
 from pymux.log import logger
-from pymux.options import SetOptionError
+from pymux.options import ALL_OPTIONS, ALL_WINDOW_OPTIONS, SetOptionError
 
 if TYPE_CHECKING:
     from pymux.arrangement import Pane, Window
@@ -1309,8 +1309,12 @@ def option_as_written(
     window that is active, or, with `-g`, the default every new
     window starts with -- which is recorded only when somebody set
     it, so one that was never set reads as not set. `-g` says nothing
-    for a session option, on the read as on the write.
+    for a session option, on the read as on the write. An option that
+    holds its state somewhere else than one attribute -- the prefix
+    key lives in the binding manager -- reads as not set too.
     """
+    if option.attribute_name is None:
+        return "not set"
     if window and variables.get("-g"):
         value = pymux.arrangement.window_defaults.get(option.attribute_name)
     else:
@@ -1331,6 +1335,55 @@ def set_window_option(pymux: "Pymux", variables: _VariablesDict) -> None:
         this one.
     """
     set_option(pymux, variables, window=True)
+
+
+def show_options(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Read a session option, or list the ones there are.
+
+    A name says what that one holds, as a person writes it: the same
+    wording `set-option` without a value answers with. Without a
+    name, one `name value` line per option, sorted. `-g` says
+    nothing here, on the read as on the write -- there is one
+    session per server. Lillecarl/pymux#298.
+    """
+    name = variables["<option>"]
+    if name:
+        option = ALL_OPTIONS.get(name)
+        if option is None:
+            raise CommandException("Unknown option: %s" % (name,))
+        answer(pymux, option_as_written(pymux, option, variables, window=False))
+        return
+
+    lines = [
+        "%s %s" % (key, option_as_written(pymux, option, variables, window=False))
+        for key, option in sorted(ALL_OPTIONS.items())
+    ]
+    answer(pymux, "\n".join(lines))
+
+
+def show_window_options(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Read a window option, or list the ones there are.
+
+    A name says what the active window holds; `-g` reads what every
+    new window starts with, where a default nobody set reads as not
+    set and shows as such. Without a name, one `name value` line per
+    option, sorted. Lillecarl/pymux#298.
+    """
+    name = variables["<option>"]
+    if name:
+        option = ALL_WINDOW_OPTIONS.get(name)
+        if option is None:
+            raise CommandException("Unknown option: %s" % (name,))
+        answer(pymux, option_as_written(pymux, option, variables, window=True))
+        return
+
+    lines = [
+        "%s %s" % (key, option_as_written(pymux, option, variables, window=True))
+        for key, option in sorted(ALL_WINDOW_OPTIONS.items())
+    ]
+    answer(pymux, "\n".join(lines))
 
 
 def set_environment(pymux: "Pymux", variables: _VariablesDict) -> None:
@@ -2193,6 +2246,20 @@ def _declare_set_environment(subparsers: Any) -> None:
     parser.add_argument("-u", action="store_true", help="Remove the variable from the scope.")
     parser.add_argument("name", metavar="<name>")
     parser.add_argument("value", metavar="<value>", nargs="?")
+
+
+@declarer
+def _declare_show_options(subparsers: Any) -> None:
+    parser = _command(subparsers, show_options)
+    parser.add_argument("-g", action="store_true", help="Accepted for tmux and changes nothing: there is one session per server.")
+    parser.add_argument("option", metavar="<option>", nargs="?")
+
+
+@declarer
+def _declare_show_window_options(subparsers: Any) -> None:
+    parser = _command(subparsers, show_window_options)
+    parser.add_argument("-g", action="store_true", help="Read what every new window starts with.")
+    parser.add_argument("option", metavar="<option>", nargs="?")
 
 
 @declarer

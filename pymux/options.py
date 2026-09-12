@@ -28,6 +28,18 @@ class Option(ABC):
     Base class for all options.
     """
 
+    #: A window option belongs to a window, and `-g` reads what
+    #: every new window starts with; the rest belong to the session.
+    #: `show-options` and `show-window-options` split the table on
+    #: this. Lillecarl/pymux#298.
+    window_option: bool = False
+
+    #: Where the value lives, on the object the option belongs to.
+    #: An option that holds its state somewhere else -- the prefix
+    #: key lives in the binding manager -- says None, and reads as
+    #: not set. Lillecarl/pymux#298.
+    attribute_name: str | None = None
+
     @abstractmethod
     def get_all_values(self):
         """
@@ -193,6 +205,8 @@ class KeyPrefixOption(Option):
 
 
 class BaseIndexOption(Option):
+    "The index the first new window takes."
+
     "Base index for window numbering."
 
     def get_all_values(self, pymux):
@@ -270,6 +284,8 @@ class WindowSizeOption(Option):
     A window option, because two windows of one session can be watched
     by different clients. Decision 11 of `docs/layout-engine-plan.md`.
     """
+
+    window_option = True
 
     def get_all_values(self, pymux):
         return [str(one) for one in WindowSize]
@@ -356,6 +372,8 @@ class ThemeOption(Option):
         pymux.theme = value
         pymux.invalidate(Woke.THEME_WAS_CHOSEN)
 
+    attribute_name = "theme"
+
 
 class LogLevelOption(Option):
     """
@@ -366,6 +384,8 @@ class LogLevelOption(Option):
     already wrong, and a restart takes the thing they wanted to look at
     with it. Lillecarl/pymux#252.
     """
+
+    attribute_name = "log_level"
 
     def get_all_values(self, pymux):
         return sorted(log.LEVELS)
