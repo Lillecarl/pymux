@@ -143,7 +143,7 @@ let
 
   # Which of the end to end checks run, comma separated and without the
   # `check_` in front, for instance
-  # `PYMUX_PTY_CHECKS=a_pane_that_changes_nothing nix build --file . checks.pymux-pty`.
+  # `PYMUX_PTY_CHECKS=pane_that_changes_nothing nix build --file . checks.pymux-pty`.
   # A whole run starts seventeen servers, and hunting a check that is
   # red by luck means running that one check many times.
   ptyChecks = builtins.getEnv "PYMUX_PTY_CHECKS";

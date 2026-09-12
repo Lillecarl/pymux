@@ -116,7 +116,7 @@ class ServerConnection:
             # way the protocol does. It is asked when a key arrives and
             # not now, because the detection has not answered yet.
             # Lillecarl/pymux#182.
-            speaks_the_protocol=self.keyboard_is_supported,
+            speaks_protocol=self.keyboard_is_supported,
         )
 
         # The shape of the pointer that this client was told about. A
@@ -676,7 +676,7 @@ class _ClientInput:
         self,
         send_packet: Callable,
         kitty_reply_callback=None,
-        speaks_the_protocol=None,
+        speaks_protocol=None,
     ) -> None:
         self.send_packet = send_packet
         # Keep a reference to the context manager for the whole lifetime of
@@ -692,7 +692,7 @@ class _ClientInput:
         self._input.vt100_parser = KittyVt100Parser(
             lambda key_press: self._input._buffer.append(key_press),
             reply_callback=kitty_reply_callback,
-            speaks_the_protocol=speaks_the_protocol,
+            speaks_protocol=speaks_protocol,
         )
 
     def close(self) -> None:

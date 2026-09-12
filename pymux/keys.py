@@ -838,7 +838,7 @@ class KittyVt100Parser(Vt100Parser):
         self,
         feed_key_callback,
         reply_callback=None,
-        speaks_the_protocol=None,
+        speaks_protocol=None,
     ) -> None:
         self.reply_callback = reply_callback
         # Whether the terminal counts the modifiers the way the
@@ -846,7 +846,7 @@ class KittyVt100Parser(Vt100Parser):
         # start, because the detection answers after this is built.
         # None means nobody knows, which reads as no.
         # Lillecarl/pymux#182.
-        self.speaks_the_protocol = speaks_the_protocol
+        self.speaks_protocol = speaks_protocol
         # Whether the key being handled arrived as several: alt and a
         # key is one such. See `_call_handler`.
         self._one_key_of_several = False
@@ -869,7 +869,7 @@ class KittyVt100Parser(Vt100Parser):
             self._already_said.add(sequence)
         logger.debug("No name here for the key %r: %s.", sequence, dropped.reason)
 
-    def _counts_the_modifiers_of_the_protocol(self) -> bool:
+    def _counts_protocol_modifiers(self) -> bool:
         """
         Whether this terminal numbers the modifiers the protocol's way.
 
@@ -880,10 +880,10 @@ class KittyVt100Parser(Vt100Parser):
         Never raises. It runs on every key, and a keyboard may not stop
         for a question about itself.
         """
-        if self.speaks_the_protocol is None:
+        if self.speaks_protocol is None:
             return False
         try:
-            return bool(self.speaks_the_protocol())
+            return bool(self.speaks_protocol())
         except Exception:
             logger.exception("Asking what the terminal reports failed.")
             return False
@@ -898,7 +898,7 @@ class KittyVt100Parser(Vt100Parser):
         #
         # The detection already knows which terminal this is, so the
         # question is asked rather than guessed. Lillecarl/pymux#182.
-        if self._counts_the_modifiers_of_the_protocol():
+        if self._counts_protocol_modifiers():
             modifier = _CARRIES_A_HIGH_MODIFIER_RE.match(prefix)
             if modifier is not None and int(modifier.group(1)) > _CTRL_ALT_SHIFT:
                 named = parse_kitty_key(prefix)

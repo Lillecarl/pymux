@@ -54,7 +54,7 @@ __all__ = [
 DEPTH = 10
 
 
-def _the_kind_of(obj) -> str:
+def _kind_of(obj) -> str:
     "What this object is, in as few words as read."
     if isinstance(obj, types.ModuleType):
         return "module %s" % (obj.__name__,)
@@ -76,7 +76,7 @@ def _the_kind_of(obj) -> str:
     return type(obj).__qualname__
 
 
-def _the_key_in(holder, obj) -> str:
+def _key_in(holder, obj) -> str:
     "Under which key a dictionary keeps this object, in brackets."
     for key, value in list(holder.items()):
         if value is obj:
@@ -126,7 +126,7 @@ def _referrers_of(obj, seen: set) -> list:
     return [holder for holder in holders if id(holder) not in seen]
 
 
-def _the_frames_here() -> set:
+def _frames_here() -> set:
     """
     Every frame that is running now, by id.
 
@@ -161,7 +161,7 @@ def _one_step(here, seen: set):
         if owner is None:
             continue
         seen.add(id(holder))
-        return owner, "%s%s" % (_the_kind_of(owner), _the_key_in(holder, here))
+        return owner, "%s%s" % (_kind_of(owner), _key_in(holder, here))
 
     # A closure cell: name the function that closes over it.
     for holder in holders:
@@ -171,7 +171,7 @@ def _one_step(here, seen: set):
         if not closing:
             continue
         seen.add(id(holder))
-        return closing[0], "%s (closes over it)" % (_the_kind_of(closing[0]),)
+        return closing[0], "%s (closes over it)" % (_kind_of(closing[0]),)
 
     # A bound method: name what it is bound to, unless that is where
     # the walk came from. A screen is held by a hundred bound methods
@@ -182,7 +182,7 @@ def _one_step(here, seen: set):
     for holder in holders:
         if isinstance(holder, types.MethodType) and id(holder.__self__) not in seen:
             seen.add(id(holder))
-            return holder.__self__, "%s (bound to it)" % (_the_kind_of(holder),)
+            return holder.__self__, "%s (bound to it)" % (_kind_of(holder),)
 
     # Anything else: a plain container, an instance, a module. Prefer
     # something that is not a container, because a container is a step
@@ -190,9 +190,9 @@ def _one_step(here, seen: set):
     holders.sort(key=lambda holder: isinstance(holder, (dict, list, tuple, set)))
     holder = holders[0]
 
-    label = _the_kind_of(holder)
+    label = _kind_of(holder)
     if isinstance(holder, dict):
-        label += _the_key_in(holder, here)
+        label += _key_in(holder, here)
 
     return holder, label
 
@@ -206,7 +206,7 @@ def what_holds(obj, ignore=()) -> list[str]:
     is holding them with.
     """
     chain = []
-    seen = {id(obj)} | {id(one) for one in ignore} | _the_frames_here()
+    seen = {id(obj)} | {id(one) for one in ignore} | _frames_here()
     here = obj
 
     for _step in range(DEPTH):

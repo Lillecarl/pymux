@@ -273,7 +273,7 @@ def run(tmp: Path, directory: Path) -> str:
     try:
         # Answer the detection of the client the way a capable terminal
         # does. A client that is still waiting draws nothing.
-        terminal.wait_for_the_queries()
+        terminal.wait_for_queries()
         terminal.write(b"\x1b[?31u")  # Keyboard flags.
         terminal.write(b"\x1b_Gi=31;OK\x1b\\")  # Kitty graphics.
         terminal.write(b"\x1b[6;20;10t")  # Cell size.

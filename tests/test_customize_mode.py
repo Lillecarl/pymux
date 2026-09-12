@@ -45,7 +45,7 @@ async def test_taking_a_row_asks_for_a_value():
             pymux.handle_command("customize-mode")
 
             state.choose_window_index = 0
-            state.layout_manager.choose_the_pointed_option()
+            state.layout_manager.choose_pointed_option()
 
         assert not state.choose_options
         assert state.prompt_command.startswith("set-option ")

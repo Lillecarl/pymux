@@ -261,11 +261,11 @@ class PymuxKeyBindings:
             "Take the row the chooser points at."
             state = self.pymux.get_client_state()
             if state.choose_options:
-                state.layout_manager.choose_the_pointed_option()
+                state.layout_manager.choose_pointed_option()
             elif state.choose_buffer:
-                state.layout_manager.choose_the_pointed_buffer()
+                state.layout_manager.choose_pointed_buffer()
             else:
-                state.layout_manager.choose_the_pointed_window()
+                state.layout_manager.choose_pointed_window()
 
         @kb.add("q", filter=chooser_displayed & ~chooser_search_focused, eager=True)
         @kb.add(

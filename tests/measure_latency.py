@@ -194,7 +194,7 @@ def when_it_landed(attached, offset):
     return landed
 
 
-def what_the_child_wrote(log):
+def what_child_wrote(log):
     "Each marker the program answered, with when it read and wrote."
     written = {}
     for line in Path(log).read_text().splitlines():
@@ -228,7 +228,7 @@ def measure(attached, log, samples):
     # The child's own file is read at the end, so that writing it is
     # not in the path. It holds one line per answer, in order, so the
     # nth use of a marker pairs with the nth answer carrying it.
-    answered = what_the_child_wrote(log)
+    answered = what_child_wrote(log)
     seen: dict = {}
 
     found = {"input": [], "output": [], "round trip": []}
@@ -318,7 +318,7 @@ def main() -> int:
             command="%s %s %s" % (sys.executable, child, ours_log),
         )
         try:
-            terminal.wait_for_the_queries()
+            terminal.wait_for_queries()
             # The first frame draws the whole screen, and the program
             # has to have set its pty up before a keystroke means
             # anything. Neither belongs in the number.

@@ -14,14 +14,14 @@ import shlex
 
 import pytest
 
-from pymux.commands import the_parser
+from pymux.commands import parser_tree
 from pymux.key_mappings import pymux_key_to_prompt_toolkit_key_sequence
 from pymux.rc import STARTUP_COMMANDS
 
 
 def command_names():
     "Every name the tree registers, aliases included."
-    _parser, subparsers = the_parser()
+    _parser, subparsers = parser_tree()
     return set(subparsers.choices)
 
 

@@ -286,7 +286,7 @@ def test_the_box_does_not_offer_the_prefix():
     """
     offered = [
         completion.text
-        for completion in KeyCompleter(offer_the_prefix=False).get_completions(
+        for completion in KeyCompleter(offer_prefix=False).get_completions(
             Document(""), None
         )
     ]

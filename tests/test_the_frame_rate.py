@@ -131,6 +131,6 @@ async def test_a_client_follows_the_window_it_looks_at():
 
         with set_app(state.app):
             mux.arrangement.set_active_window(first)
-            mux.sync_the_frame_rate()
+            mux.sync_frame_rate()
 
         assert state.app.min_redraw_interval == pytest.approx(0.1)

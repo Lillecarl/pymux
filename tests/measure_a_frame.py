@@ -95,7 +95,7 @@ from pymux.divided import Divided  # noqa: E402
 from pymux.layout import (  # noqa: E402
     layout_of,
     pane_beside,
-    room_for_the_panes,
+    room_for_panes,
 )
 from pymux.plan_container import PlanContainer  # noqa: E402
 from pymux.plane import Side  # noqa: E402
@@ -139,23 +139,23 @@ class _Manager:
 
     def __init__(self, container) -> None:
         self._container = container
-        self._plan_of_the_frame = None
+        self._frame_plan = None
 
     def pane_container(self):
         return self._container
 
     def plan_of_this_frame(self, window, size):
-        if self._plan_of_the_frame is None:
+        if self._frame_plan is None:
             return None
 
-        drawn_for, drawn_at, plan = self._plan_of_the_frame
+        drawn_for, drawn_at, plan = self._frame_plan
         if drawn_for is not window or drawn_at != size:
             return None
 
         return plan
 
-    def remember_the_plan(self, window, size, plan) -> None:
-        self._plan_of_the_frame = (window, size, plan)
+    def remember_plan(self, window, size, plan) -> None:
+        self._frame_plan = (window, size, plan)
 
 
 class _ClientState:
@@ -185,7 +185,7 @@ class _Pymux:
     def __init__(self) -> None:
         self.state = None
 
-    def size_of_the_plane(self, window=None) -> Size:
+    def plane_size(self, window=None) -> Size:
         return Size(rows=ROWS, columns=COLUMNS)
 
     def get_client_state(self):
@@ -328,7 +328,7 @@ def measurements(include: str):
         for what, strip in (("divided", False), ("strip", True)):
             shape = "%s %d panes" % (what, count)
             window, panes = create_window(count, strip)
-            room = room_for_the_panes(pymux, window)
+            room = room_for_panes(pymux, window)
             layout = layout_of(pymux, window)
             plan = layout.measure(room)
 
@@ -351,7 +351,7 @@ def measurements(include: str):
     # wrapper costs nothing.
     window, panes = create_window(max(COUNTS))
     window.zoom = True
-    room = room_for_the_panes(pymux, window)
+    room = room_for_panes(pymux, window)
     take(
         "zoomed %d panes (frame)" % max(COUNTS),
         create_frame(create_container(pymux, window, panes), room),
@@ -379,7 +379,7 @@ def plans_of_create_frame(pymux, include: str):
 
             window, panes = create_window(count, strip)
             container = create_container(pymux, window, panes)
-            room = room_for_the_panes(pymux, window)
+            room = room_for_panes(pymux, window)
             pymux.state = _ClientState(container)
 
             try:

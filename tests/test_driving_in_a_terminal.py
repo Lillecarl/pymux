@@ -190,9 +190,9 @@ def test_a_keys_file_that_does_not_parse_is_a_fault(tmp_path, text):
 def test_a_comment_and_a_blank_line_are_nothing(tmp_path):
     keys = create_keys_file(tmp_path, "# a comment\n\n0.1 b'x'  # and one here\n")
 
-    from drive_in_a_terminal import read_the_keys
+    from drive_in_a_terminal import read_keys
 
-    assert read_the_keys(str(keys)) == [(0.1, b"x")]
+    assert read_keys(str(keys)) == [(0.1, b"x")]
 
 
 # ----------------------------------------------------------------------

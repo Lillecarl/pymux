@@ -223,7 +223,7 @@ def self_time_report(name: str, profiler: Profiler) -> None:
     print()
 
 
-def stop_the_panes(pymux) -> None:
+def stop_panes(pymux) -> None:
     "Kill every process, so nothing outlives the profile."
     for window in list(pymux.arrangement.windows):
         for pane in list(window.panes):
@@ -522,7 +522,7 @@ def main() -> int:
 
             (out / ("%s.html" % name)).write_text(profiler.output_html())
         finally:
-            stop_the_panes(pymux)
+            stop_panes(pymux)
             pipe.__exit__(None, None, None)
 
     return 0

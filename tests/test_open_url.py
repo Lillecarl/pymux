@@ -418,7 +418,7 @@ async def test_the_shim_names_the_opener_of_the_session():
     with in_this_process() as session:
         pymux = session.pymux
         pymux.open_url_shim = True
-        pymux._ensure_the_open_url_shim()
+        pymux._ensure_open_url_shim()
 
         directory = pymux._open_url_shim_dir
         script = os.path.join(directory, "pymux-open-url")
@@ -428,7 +428,7 @@ async def test_the_shim_names_the_opener_of_the_session():
             assert f.read() == '#!/bin/sh\nexec pymux open-url -- "$@"\n'
 
         # A pane that starts again asks for nothing new.
-        pymux._ensure_the_open_url_shim()
+        pymux._ensure_open_url_shim()
         assert pymux._open_url_shim_dir == directory
 
 
@@ -437,10 +437,10 @@ async def test_the_shim_rides_the_path_of_a_new_pane():
     with in_this_process() as session:
         pymux = session.pymux
         pymux.open_url_shim = True
-        pymux._ensure_the_open_url_shim()
+        pymux._ensure_open_url_shim()
 
         with create_environment(PATH="/usr/bin", BROWSER=None):
-            pymux._shim_the_environment_of_a_pane()
+            pymux._shim_pane_environment()
 
             assert os.environ["PATH"].startswith(pymux._open_url_shim_dir + os.pathsep)
             assert os.environ["BROWSER"] == os.path.join(
@@ -485,7 +485,7 @@ async def test_the_shim_leaves_a_pane_alone_when_it_is_off():
         pymux = session.pymux
 
         with create_environment(PATH="/usr/bin", BROWSER=None):
-            pymux._shim_the_environment_of_a_pane()
+            pymux._shim_pane_environment()
 
             assert os.environ["PATH"] == "/usr/bin"
             assert "BROWSER" not in os.environ

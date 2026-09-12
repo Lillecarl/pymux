@@ -615,7 +615,7 @@ def first_difference(bare, through):
     )
 
 
-def read_the_recorded():
+def read_recorded():
     """
     The differences that stand, as {(terminal, identity): verdict}.
 
@@ -634,7 +634,7 @@ def read_the_recorded():
     return standing
 
 
-def write_the_recorded(path, found):
+def write_recorded(path, found):
     "The list of differences a run saw, ready to be recorded."
     header = "\n".join(
         [
@@ -679,7 +679,7 @@ def main():
     if missing:
         raise SystemExit("these terminals are not here: %s" % ", ".join(missing))
 
-    standing = read_the_recorded()
+    standing = read_recorded()
     seen = {}
 
     seats = {}
@@ -705,7 +705,7 @@ def main():
         for seat in seats.values():
             seat.stop()
 
-    write_the_recorded(out / "vttest-picture-differences.txt", seen)
+    write_recorded(out / "vttest-picture-differences.txt", seen)
 
     # Judge the run against the list, in both directions: a difference
     # that grew is a regression, and one that went is a fix nobody wrote

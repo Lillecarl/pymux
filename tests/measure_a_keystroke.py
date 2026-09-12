@@ -238,7 +238,7 @@ def settle(state, stages):
                 stages[name]()
 
 
-def where_the_instructions_are(work, most=WHERE):
+def where_instructions_are(work, most=WHERE):
     """
     Which functions the instructions of one stage went to.
 
@@ -377,7 +377,7 @@ def main() -> int:
         if WHERE:
             with set_app(state.app):
                 for name, work in picked.items():
-                    where[name] = where_the_instructions_are(work)
+                    where[name] = where_instructions_are(work)
 
     print("\n--- what one keystroke costs ---")
     print("%-12s %14s %12s" % ("", "instructions", "in-process"))

@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.key_binding.vi_state import InputMode
 from pymux.commands import add_command
-from pymux.commands.common import ask_the_person
+from pymux.commands.common import ask_person
 
 
 def command_prompt(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -19,7 +19,7 @@ def command_prompt(pymux: "Pymux", args: argparse.Namespace) -> None:
 
     if args.command:
         # When a 'command' has been given.
-        ask_the_person(
+        ask_person(
             pymux,
             args.message or "(%s)" % args.command.split()[0],
             args.command,

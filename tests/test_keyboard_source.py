@@ -104,7 +104,7 @@ def test_every_pane_hears_the_mask():
 def test_a_pane_that_starts_later_hears_it_as_well():
     pymux, _ = make_pymux(0b00110)
     pane = FakePane(1)
-    pymux.tell_pane_about_the_keyboard(pane)
+    pymux.tell_pane_about_keyboard(pane)
     assert pane.screen.keyboard_source_flags == 0b00110
 
 
@@ -130,7 +130,7 @@ def test_a_pane_without_a_process_is_no_error():
             raise AttributeError("no process yet")
 
     pymux, _ = make_pymux(0b11111)
-    pymux.tell_pane_about_the_keyboard(PaneWithoutProcess())  # Does not raise.
+    pymux.tell_pane_about_keyboard(PaneWithoutProcess())  # Does not raise.
 
 
 def test_a_screen_that_knows_nothing_about_the_host_is_no_error():
@@ -146,7 +146,7 @@ def test_a_screen_that_knows_nothing_about_the_host_is_no_error():
             self.screen = OldScreen()
 
     pymux, _ = make_pymux(0b11111)
-    pymux.tell_pane_about_the_keyboard(OldPane())  # Does not raise.
+    pymux.tell_pane_about_keyboard(OldPane())  # Does not raise.
 
 
 # ----------------------------------------------------------------------

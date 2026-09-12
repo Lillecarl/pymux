@@ -46,13 +46,13 @@ def drawn_which_key_float(state) -> Float | None:
     return drawn[0] if drawn else None
 
 
-def put_the_cursor(state, x: int, y: int) -> None:
+def put_cursor(state, x: int, y: int) -> None:
     """
     Place the cursor where the last frame would have recorded it.
 
     The screen holds one cursor position per window, so the position
     goes on the real `Screen` for the window the layout has focused --
-    the same key `_cursor_on_the_view` reads the position under.
+    the same key `_cursor_on_view` reads the position under.
     """
     with set_app(state.app):
         window = state.app.layout.current_window
@@ -130,7 +130,7 @@ async def test_the_box_prefers_the_top_right_and_steps_aside():
             (0, 23, True),  # lower left
             (79, 23, True),  # lower right
         ]:
-            put_the_cursor(state, x, y)
+            put_cursor(state, x, y)
 
             drawn = drawn_which_key_float(state)
 

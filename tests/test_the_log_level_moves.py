@@ -16,7 +16,7 @@ from pymux.options import ALL_OPTIONS, SetOptionError
 
 
 @pytest.fixture(autouse=True)
-def put_the_level_back():
+def put_level_back():
     "A test that changes the level of the shared logger has to undo it."
     was = log.logger.level
     yield

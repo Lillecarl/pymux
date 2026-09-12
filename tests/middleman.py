@@ -174,11 +174,11 @@ class Pane:
 
         self.size_file = size
 
-        self.terminal.wait_for_the_queries()
+        self.terminal.wait_for_queries()
         self.terminal.drain(0.5)
-        self.wait_for_the_size()
+        self.wait_for_size()
 
-    def wait_for_the_size(self) -> None:
+    def wait_for_size(self) -> None:
         """
         Wait until the program in the pane says it is the size asked for.
 
@@ -239,7 +239,7 @@ class Pane:
         pane consumed bytes, and nothing was written here: the size
         travels the other way, from the terminal of the client down to
         the program in the pane. So the size the program reports is the
-        fence, and `wait_for_the_size` waits for it.
+        fence, and `wait_for_size` waits for it.
 
         A judge on the other end has to be resized as well, and by the
         caller: this returns the frame, and what a judge does with a
@@ -250,7 +250,7 @@ class Pane:
 
         mark = self.terminal.mark()
         self.terminal.resize(rows, columns)
-        self.wait_for_the_size()
+        self.wait_for_size()
         self.settle()
         return FENCE.sub(b"", self.terminal.since(mark))
 

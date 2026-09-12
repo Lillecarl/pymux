@@ -299,7 +299,7 @@ def report(failed: Counter, include: str) -> int:
     return 0
 
 
-def check_the_exclusions(names, include: str) -> int:
+def check_exclusions(names, include: str) -> int:
     "Say whether `NOT_OURS` still describes the suite."
     if include != ".*":
         return 0
@@ -374,7 +374,7 @@ def main() -> int:
         print("vterm: no file ran at all")
         return 1
 
-    status = check_the_exclusions(names, include)
+    status = check_exclusions(names, include)
 
     for name in sorted(set(broken)):
         print(

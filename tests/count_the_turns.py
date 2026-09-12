@@ -178,7 +178,7 @@ class CountingLoop(asyncio.SelectorEventLoop):
         super()._run_once()
 
 
-def _naming_the_callbacks() -> None:
+def _naming_callbacks() -> None:
     """
     Make every `Handle` say what it ran, into the loop that ran it.
 
@@ -377,7 +377,7 @@ def report(counted: list, traced: list) -> int:
 
 
 def main() -> int:
-    _naming_the_callbacks()
+    _naming_callbacks()
 
     async def run():
         return await measure(asyncio.get_running_loop(), SAMPLES)

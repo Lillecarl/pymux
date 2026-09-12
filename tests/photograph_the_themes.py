@@ -98,7 +98,7 @@ FIXTURES["painted-screen"] = (
     demo_keys(),
 )
 
-def the_exact_list(env):
+def exact_list(env):
     """
     An exact list of names from the environment, or None.
 
@@ -123,7 +123,7 @@ if __name__ == "__main__":
             # the black it was written on may be unreadable on white,
             # and the light schemes of pygments want the other end.
             terminals=TERMINALS + LIGHT_TERMINALS,
-            only_list=the_exact_list("PYMUX_THEMES_LIST"),
-            only_terminals_list=the_exact_list("PYMUX_THEMES_TERMINALS_LIST"),
+            only_list=exact_list("PYMUX_THEMES_LIST"),
+            only_terminals_list=exact_list("PYMUX_THEMES_TERMINALS_LIST"),
         )
     )

@@ -259,7 +259,7 @@ def _trace(message: str) -> None:
         sys.stderr.flush()
 
 
-def _keep_the_wire(name: str, wire: bytes) -> None:
+def _keep_wire(name: str, wire: bytes) -> None:
     """
     Keep the bytes that pymux emitted, when the run is asked to.
 
@@ -343,7 +343,7 @@ def run_one(tmp: Path, judge: str, name: str, directory: Path):
         return False, "the pane could not run it:\n" + traceback.format_exc()
 
     _trace("%s: %d bytes of wire to the judge" % (name, len(ours)))
-    _keep_the_wire(name, ours)
+    _keep_wire(name, ours)
     try:
         done = subprocess.run(
             [judge, str(directory)],
@@ -410,7 +410,7 @@ def report(differed, include: str) -> int:
     return 0
 
 
-def check_the_exclusions(names, include: str) -> int:
+def check_exclusions(names, include: str) -> int:
     "Say whether `NOT_OURS` still describes the suite."
     if include != ".*":
         return 0
@@ -487,7 +487,7 @@ def main() -> int:
     if not ran:
         raise Failed("no reference test ran, and %r chose them" % include)
 
-    return report(differed, include) | check_the_exclusions(names, include)
+    return report(differed, include) | check_exclusions(names, include)
 
 
 if __name__ == "__main__":

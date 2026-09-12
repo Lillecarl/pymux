@@ -95,11 +95,11 @@ def size_of(fd):
     return rows or 24, columns or 80
 
 
-def set_the_size(fd, rows, columns):
+def set_size(fd, rows, columns):
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
 
 
-def stop_the_echo(fd):
+def stop_echo(fd):
     """
     Take the echo off this pty.
 
@@ -126,7 +126,7 @@ def stop_the_echo(fd):
         pass
 
 
-def read_the_keys(path):
+def read_keys(path):
     """
     The steps of a keys file, as (seconds to wait, bytes) pairs.
 
@@ -153,7 +153,7 @@ def read_the_keys(path):
     return steps
 
 
-def take_the_fifo(fifo, started):
+def take_fifo(fifo, started):
     """
     Open the fifo for writing, which lets the forwarder in the pane
     past its own open.
@@ -212,7 +212,7 @@ def settle(master, seen, out, copied):
     return copied
 
 
-def wait_for_the_first_frame(master, seen, out, copied, started):
+def wait_for_first_frame(master, seen, out, copied, started):
     """
     Copy the program's first frame and its quiet, and say when it was.
 
@@ -307,13 +307,13 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
     if pid == 0:
         # The child. Its stdin, stdout and stderr are the pty already.
         try:
-            set_the_size(sys.stdout.fileno(), rows, columns)
+            set_size(sys.stdout.fileno(), rows, columns)
             os.execvp(argv[0], argv)
         except BaseException:
             os._exit(126)
 
-    set_the_size(master, rows, columns)
-    stop_the_echo(master)
+    set_size(master, rows, columns)
+    stop_echo(master)
 
     started = time.monotonic()
     when = started
@@ -333,8 +333,8 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
             os.mkfifo(fifo)
         except FileExistsError:
             pass
-        writer = take_the_fifo(fifo, started)
-        when, copied = wait_for_the_first_frame(master, seen, out, copied, started)
+        writer = take_fifo(fifo, started)
+        when, copied = wait_for_first_frame(master, seen, out, copied, started)
     else:
         writer = None
 
@@ -424,7 +424,7 @@ def main(argv):
     if len(mine) not in (2, 4) or not theirs:
         raise SystemExit(__doc__.strip().splitlines()[2].strip())
 
-    steps = read_the_keys(mine[0])
+    steps = read_keys(mine[0])
     hold = float(mine[1])
     fifo = mine[2] if len(mine) == 4 else None
     fence_seen = Path(mine[3]) if len(mine) == 4 else None

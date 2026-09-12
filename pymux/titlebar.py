@@ -44,7 +44,7 @@ from prompt_toolkit.formatted_text.utils import fragment_list_width
 from prompt_toolkit.layout.controls import UIContent, UIControl
 from prompt_toolkit.utils import get_cwidth
 
-__all__ = ["PaneTitleBar", "lay_out_the_bar"]
+__all__ = ["PaneTitleBar", "lay_out_bar"]
 
 #: What one edge may take of the bar: one part in this many. A quarter
 #: each leaves half the bar for the title, which is what has to be
@@ -81,7 +81,7 @@ class PaneTitleBar(UIControl):
         self.get_right = get_right
 
     def create_content(self, width: int, height: int) -> UIContent:
-        line = lay_out_the_bar(
+        line = lay_out_bar(
             self.get_number(),
             self.get_left(),
             self.get_middle(),
@@ -91,7 +91,7 @@ class PaneTitleBar(UIControl):
         return UIContent(get_line=lambda i: line, line_count=1, show_cursor=False)
 
 
-def lay_out_the_bar(
+def lay_out_bar(
     number: StyleAndTextTuples,
     left: StyleAndTextTuples,
     middle: StyleAndTextTuples,

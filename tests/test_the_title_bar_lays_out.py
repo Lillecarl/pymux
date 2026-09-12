@@ -1,7 +1,7 @@
 """
 Three parts on one row: the arithmetic of it.
 
-`lay_out_the_bar` is handed the real width, which is the whole reason
+`lay_out_bar` is handed the real width, which is the whole reason
 the bar is a control and not three windows. These tests read the row it
 returns as one string, because that is what a person sees.
 
@@ -13,7 +13,7 @@ Lillecarl/pymux#207.
 import pytest
 from prompt_toolkit.formatted_text.utils import fragment_list_to_text
 
-from pymux.titlebar import ELLIPSIS, lay_out_the_bar
+from pymux.titlebar import ELLIPSIS, lay_out_bar
 
 WIDTH = 40
 
@@ -26,7 +26,7 @@ def bar(number="", left="", middle="", right="", width=WIDTH):
     tests read as the arithmetic they are about.
     """
     return fragment_list_to_text(
-        lay_out_the_bar(
+        lay_out_bar(
             *([("", part)] if part else [] for part in (number, left, middle, right)),
             width,
         )

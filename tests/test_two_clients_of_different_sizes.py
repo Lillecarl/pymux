@@ -145,7 +145,7 @@ def window(pymux):
 
 def plane(pymux):
     "How big the plane of the one window is."
-    return pymux.size_of_the_plane(window(pymux))
+    return pymux.plane_size(window(pymux))
 
 
 # ----------------------------------------------------------------------

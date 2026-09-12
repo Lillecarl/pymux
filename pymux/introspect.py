@@ -277,7 +277,7 @@ def start_watching(pymux: "Pymux", seconds: float = HOW_LONG_TO_WATCH) -> Path:
                     [
                         _server(pymux),
                         "",
-                        _over_the_window(counters, before, seconds),
+                        _over_window(counters, before, seconds),
                         "",
                         profiler.output_text(unicode=True, color=False, show_all=False),
                         "",
@@ -297,7 +297,7 @@ def start_watching(pymux: "Pymux", seconds: float = HOW_LONG_TO_WATCH) -> Path:
     return written
 
 
-def _over_the_window(counters: "Counters", before, seconds: float) -> str:
+def _over_window(counters: "Counters", before, seconds: float) -> str:
     "What the server did while the profiler watched, and nothing before."
     frames, frame_bytes, invalidates = before
     moved = Counter(counters.invalidates)

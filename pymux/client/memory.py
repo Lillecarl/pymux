@@ -101,7 +101,7 @@ class MemoryClient(TerminalClient):
             # Held, so that nothing collects it while it waits. A task
             # nobody holds dies in silence and takes its exception with
             # it.
-            watcher = loop.create_task(self._watch_the_size())
+            watcher = loop.create_task(self._watch_size())
 
             try:
                 while True:
@@ -124,7 +124,7 @@ class MemoryClient(TerminalClient):
                 # when the loop ends through an exception.
                 self._set_kitty_flags(0)
 
-    async def _watch_the_size(self) -> None:
+    async def _watch_size(self) -> None:
         """
         Tell the server whenever the terminal has a new size.
 

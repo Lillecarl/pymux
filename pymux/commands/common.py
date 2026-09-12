@@ -105,7 +105,7 @@ def find_pane(pymux: "Pymux", target: str | None) -> Optional["Pane"]:
     return None
 
 
-def ask_the_person(
+def ask_person(
     pymux: "Pymux",
     message: str,
     command: str,

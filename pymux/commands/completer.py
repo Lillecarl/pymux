@@ -26,7 +26,7 @@ from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.document import Document
 
 from pymux.arrangement import LayoutTypes
-from pymux.commands import the_parser
+from pymux.commands import parser_tree
 from pymux.commands.aliases import ALIASES
 from pymux.key_spelling import KeyCompleter
 
@@ -75,7 +75,7 @@ def _keys(pymux, prefix, **_):
     `-n`, and `send-keys` sends to a pane, where `send-prefix` is the
     command that sends the prefix on. Neither takes it as part of a key.
     """
-    completer = KeyCompleter(offer_the_prefix=False)
+    completer = KeyCompleter(offer_prefix=False)
     return [c.text for c in completer.get_completions(Document(prefix), None)]
 
 
@@ -161,7 +161,7 @@ class CommandCompleter(Completer):
             if not names:
                 # No full name matches: the aliases, spelling the name
                 # they run, and what that does.
-                _parser, subparsers = the_parser()
+                _parser, subparsers = parser_tree()
                 for alias in ALIASES:
                     if alias.startswith(prefix):
                         full = ALIASES[alias]
@@ -271,7 +271,7 @@ def create_command_completer(pymux):
     """
     global _finder
     if _finder is None:
-        parser, subparsers = the_parser()
+        parser, subparsers = parser_tree()
         _finder = FuzzyFinder(
             parser,
             append_space=False,

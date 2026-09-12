@@ -19,7 +19,7 @@ from pymux.keys import (
 )
 
 
-def fed(data: str, speaks_the_protocol: bool = True):
+def fed(data: str, speaks_protocol: bool = True):
     """
     Feed data, return everything the parser gave the callback.
 
@@ -31,7 +31,7 @@ def fed(data: str, speaks_the_protocol: bool = True):
     pressed = []
     parser = KittyVt100Parser(
         lambda key_press: pressed.append(key_press),
-        speaks_the_protocol=lambda: speaks_the_protocol,
+        speaks_protocol=lambda: speaks_protocol,
     )
     parser.feed_and_flush(data)
     return pressed
@@ -585,7 +585,7 @@ def test_a_terminal_that_does_not_speak_the_protocol_is_read_the_old_way():
     """
     old = [
         (key.key, key.data)
-        for key in fed("\x1b[1;9A", speaks_the_protocol=False)
+        for key in fed("\x1b[1;9A", speaks_protocol=False)
         if key is not _Flush
     ]
     assert old == [(Keys.Escape, "\x1b[1;9A"), (Keys.Up, "")]

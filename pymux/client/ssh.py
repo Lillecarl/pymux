@@ -316,7 +316,7 @@ class SshClient(TerminalClient):
                 pass  # No signals here. The size stays as it was.
 
             # Held, so that nothing collects it while it waits.
-            watcher = loop.create_task(self._watch_the_size())
+            watcher = loop.create_task(self._watch_size())
 
             try:
                 async for packet in self._packets(reader):
@@ -363,7 +363,7 @@ class SshClient(TerminalClient):
                 one, held = held.split(b"\0", 1)
                 yield json.loads(one.decode("utf-8"))
 
-    async def _watch_the_size(self) -> None:
+    async def _watch_size(self) -> None:
         """
         Tell the server whenever the terminal has a new size.
 

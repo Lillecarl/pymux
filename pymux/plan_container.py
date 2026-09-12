@@ -156,7 +156,7 @@ class PlanContainer(Container):
         )
         view = self.view.rect
 
-        self._draw_the_chrome(screen, write_position, parent_style, view)
+        self._draw_chrome(screen, write_position, parent_style, view)
 
         for slot, rect in self.plan.rects.items():
             if self.tell_its_size is not None:
@@ -205,7 +205,7 @@ class PlanContainer(Container):
                 z_index,
             )
 
-    def _draw_the_chrome(
+    def _draw_chrome(
         self,
         screen: Screen,
         write_position: WritePosition,

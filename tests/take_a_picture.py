@@ -305,7 +305,7 @@ def recorded_fixtures():
 RECORDED_FIXTURES = recorded_fixtures()
 
 
-def check_the_size_of(recording):
+def check_size_of(recording):
     """
     A recording is only worth replaying at the size it was made at.
 
@@ -343,7 +343,7 @@ def fixture_bytes(name):
     "The bytes of one fixture, with the cursor put out of the way."
     recording = RECORDED_FIXTURES.get(name)
     if recording is not None:
-        check_the_size_of(recording)
+        check_size_of(recording)
         # The hide goes on both ends. Before, because a recording takes
         # a while to reach its own, and the two runs do not reach it at
         # the same moment. After, because a program often gives the
@@ -566,7 +566,7 @@ LIGHT_TERMINALS = [
 # The two runs.
 
 
-def write_the_program(path, fixture_path, payload):
+def write_program(path, fixture_path, payload):
     """
     The program that both runs execute, as a shell script.
 
@@ -678,7 +678,7 @@ def compare_one(terminal, seat, name, work, out):
     payload = base64.b64encode(token.encode()).decode()
 
     program_path = work / ("%s.sh" % name)
-    write_the_program(program_path, fixture_path, payload)
+    write_program(program_path, fixture_path, payload)
 
     config_path = work / "full-screen.conf"
     config_path.write_text("set full-screen on\n")
@@ -793,7 +793,7 @@ def blink_of(terminal, seat, name, work, out):
     return tuple(answers)
 
 
-def read_the_recorded():
+def read_recorded():
     "The differences that stand, as {(terminal, fixture): pixels}."
     if not RECORDED.exists():
         return {}
@@ -807,7 +807,7 @@ def read_the_recorded():
     return standing
 
 
-def write_the_recorded(path, found):
+def write_recorded(path, found):
     "The list of differences that a run saw, ready to be recorded."
     lines = [
         "# Every difference between a picture with pymux and one without.",
@@ -839,7 +839,7 @@ def main():
         raise SystemExit("these terminals are not here: %s" % ", ".join(missing))
     terminals = list(TERMINALS)
 
-    standing = read_the_recorded()
+    standing = read_recorded()
     seen = {}
     blinks = {}
 
@@ -897,7 +897,7 @@ def main():
     # Keep the list that this run saw, beside the pictures, whatever the
     # verdict is. The run of this check does not fail because a picture
     # differed, so what it leaves is there to read either way.
-    write_the_recorded(out / "picture-differences.txt", seen)
+    write_recorded(out / "picture-differences.txt", seen)
 
     # Judge the run against the list. A difference either way matters:
     # one that grew is a regression, and one that went is a fix that

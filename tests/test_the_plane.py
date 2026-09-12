@@ -201,7 +201,7 @@ def walk(plan: Plan, slot: Slot, side: Side) -> list[Slot]:
         seen.append(slot)
 
 
-def _the_same_panes(one, other) -> bool:
+def _same_panes(one, other) -> bool:
     "True when the two hold the same panes, in any order."
     return sorted(id(pane) for pane in one) == sorted(id(pane) for pane in other)
 
@@ -268,8 +268,8 @@ def every_promise_holds(plan: Plan) -> None:
 
             walk(plan, slot, side)
 
-    assert _the_same_panes(plan.order, plan.shown), "the numbering lost a pane"
-    assert _the_same_panes(plan.reading_order(), plan.shown), "reading lost a pane"
+    assert _same_panes(plan.order, plan.shown), "the numbering lost a pane"
+    assert _same_panes(plan.reading_order(), plan.shown), "reading lost a pane"
 
 
 @given(PLANS)

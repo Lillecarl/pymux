@@ -6,7 +6,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import add_command
-from pymux.commands.common import ask_the_person
+from pymux.commands.common import ask_person
 from pymux.key_spelling import KeyCompleter
 
 
@@ -24,14 +24,14 @@ def compose_key(pymux: "Pymux", args: argparse.Namespace) -> None:
     and so does a sequence: "escape a" is two presses.
     Lillecarl/pymux#220.
     """
-    ask_the_person(
+    ask_person(
         pymux,
         args.message or "Send key",
         "send-keys %%",
         args.default or "",
         # Not the prefix. It is a step of the grammar, and it is the
         # one key pymux keeps for itself; `send-prefix` sends it on.
-        KeyCompleter(offer_the_prefix=False),
+        KeyCompleter(offer_prefix=False),
     )
 
 

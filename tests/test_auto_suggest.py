@@ -92,14 +92,14 @@ async def test_nothing_here_can_take_the_right_arrow_of_a_pane():
             # A suggestion on the command line, and the pane focused.
             state.command_buffer.text = "new-"
             state.command_buffer.suggestion = Suggestion("window")
-            assert not _the_binding_would_fire(state)
+            assert not _binding_would_fire(state)
 
         suggesting(state, "new-", "window")
         with set_app(state.app):
-            assert _the_binding_would_fire(state)
+            assert _binding_would_fire(state)
 
 
-def _the_binding_would_fire(state) -> bool:
+def _binding_would_fire(state) -> bool:
     "Whether the right arrow reaches the suggestion binding now."
     for binding in state.app.key_bindings.get_bindings_for_keys((Keys.Right,)):
         if binding.handler.__module__.endswith("auto_suggest"):

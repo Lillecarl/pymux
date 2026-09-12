@@ -274,7 +274,7 @@ class ExtendedKeysOption(Option):
                 % ", ".join('"%s"' % one for one in ExtendedKeys)
             )
         setattr(pymux, self.attribute_name, chosen)
-        pymux.sync_the_keyboard()
+        pymux.sync_keyboard()
 
 
 class WindowSizeOption(Option):
@@ -315,7 +315,7 @@ class WindowSizeOption(Option):
             # person who says it and nothing else means "stop following
             # the clients", not "pick a size for me", and tmux does the
             # same. `resize-window` is how a size is named.
-            window.manual_size = pymux.size_of_the_plane(window)
+            window.manual_size = pymux.plane_size(window)
 
         window.window_size = chosen
 

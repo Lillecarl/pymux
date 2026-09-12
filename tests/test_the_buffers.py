@@ -140,7 +140,7 @@ async def test_enter_from_the_buffer_chooser_fills_the_session_buffer():
             pymux.handle_command("set-buffer -b mine hello")
             pymux.handle_command("choose-buffer")
 
-        state.layout_manager.choose_the_pointed_buffer()
+        state.layout_manager.choose_pointed_buffer()
 
         assert not state.choose_buffer
         assert pymux.clipboard.get_data().text == "hello"

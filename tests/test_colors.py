@@ -326,7 +326,7 @@ def test_a_theme_that_owns_the_screen_gives_the_pane_its_palette():
     pymux.theme = "pygments:dracula"
     pane = SimpleNamespace(screen=Screen(24, 80, write_process_input=lambda data: None))
 
-    pymux.tell_pane_about_the_colours(pane)
+    pymux.tell_pane_about_colours(pane)
 
     assert pane.screen.color_base.palette[1] == Color(0x8B, 0x08, 0x0B)
 
@@ -337,7 +337,7 @@ def test_a_pane_keeps_the_convention_while_the_terminal_owns_the_colours():
     screen = Screen(24, 80, write_process_input=lambda data: None)
     pane = SimpleNamespace(screen=screen)
 
-    pymux.tell_pane_about_the_colours(pane)
+    pymux.tell_pane_about_colours(pane)
 
     # Nobody attached, and the theme does not own the screen: the pane
     # stays on what `pyte` reports, as before any of this.

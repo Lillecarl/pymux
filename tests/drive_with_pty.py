@@ -313,7 +313,7 @@ def run_cli(sock_path, args):
     )
 
 
-def read_the_screen(seen, rows=24, columns=80):
+def read_screen(seen, rows=24, columns=80):
     """
     The screen that a terminal draws from what the client wrote.
 
@@ -528,7 +528,7 @@ class Attached:
         )
         self.client.send_signal(signal.SIGWINCH)
 
-    def wait_for_the_queries(self):
+    def wait_for_queries(self):
         """
         Wait until the client asked everything, up to the fence.
 
@@ -580,7 +580,7 @@ class Attached:
         lines = self.server_log.read_text(errors="replace").splitlines()
         return lines[mark:][-limit:]
 
-    def report_the_window(self, mark, log_mark, start):
+    def report_window(self, mark, log_mark, start):
         """
         Say what arrived in a window, and what the server was doing.
 
@@ -769,7 +769,7 @@ class Terminal(Attached):
 # ----------------------------------------------------------------------
 
 
-def check_the_osc_sequences(terminal, tail):
+def check_osc_sequences(terminal, tail):
     """
     The three OSC sequences of the pane reach the terminal, and the
     clipboard query does not.
@@ -785,7 +785,7 @@ def check_the_osc_sequences(terminal, tail):
     return found.group(1)
 
 
-def check_the_hyperlink(terminal):
+def check_hyperlink(terminal):
     """
     The link that the pane drew reaches the terminal of the user.
 
@@ -803,7 +803,7 @@ def check_the_hyperlink(terminal):
     print("hyperlink: ok")
 
 
-def check_the_underline(terminal):
+def check_underline(terminal):
     """
     The shape of the line and its colour reach the terminal of the user.
 
@@ -821,7 +821,7 @@ def check_kitty_terminal(tmp):
     terminal = Terminal(tmp, "kitty")
     try:
         # 1. The client asks its terminal what it can do.
-        mark = terminal.wait_for_the_queries()
+        mark = terminal.wait_for_queries()
         assert CELL_SIZE_QUERY.encode() in terminal.seen
         assert TRUECOLOR_PROBE.encode() in terminal.seen
 
@@ -850,8 +850,8 @@ def check_kitty_terminal(tmp):
         #    A hyperlink belongs to a cell, so the pane keeps it and the
         #    renderer opens it again on the terminal of the user.
         terminal.wait_for(b"plain")
-        check_the_hyperlink(terminal)
-        check_the_underline(terminal)
+        check_hyperlink(terminal)
+        check_underline(terminal)
 
         assert b"a=T" not in terminal.seen, "graphics command leaked as text"
         assert IMAGE_PAYLOAD.encode() not in terminal.seen, (
@@ -919,7 +919,7 @@ def check_kitty_terminal(tmp):
         #    it starts, so the wait is from the mark that this check
         #    reads them out of, and not from the step above.
         terminal.wait_for(OSC_POINTER.encode(), since=mark)
-        identifier = check_the_osc_sequences(terminal, terminal.since(mark))
+        identifier = check_osc_sequences(terminal, terminal.since(mark))
 
         # 8. The user clicks the notification. The answer goes to the
         #    pane that asked, under the name that the pane chose.
@@ -953,7 +953,7 @@ def check_sixel_terminal(tmp):
     "An xterm-like terminal: sixel, no kitty protocols, 256 colours."
     terminal = Terminal(tmp, "sixel")
     try:
-        mark = terminal.wait_for_the_queries()
+        mark = terminal.wait_for_queries()
 
         # Answer only the cell size and the device attributes. The "4"
         # says sixel; nothing answers the kitty or the colour query.
@@ -999,7 +999,7 @@ def check_colorterm_terminal(tmp):
     "A terminal that answers no probe but sets COLORTERM."
     terminal = Terminal(tmp, "sixel", colorterm="truecolor")
     try:
-        terminal.wait_for_the_queries()
+        terminal.wait_for_queries()
         terminal.write(b"\x1b[?62;1;6c")  # Nothing else is answered.
         terminal.wait_for(b"READY")
         # The environment is the fallback when the probe stays quiet.
@@ -1016,7 +1016,7 @@ def check_plain_terminal(tmp):
     "A terminal that answers only the device attributes."
     terminal = Terminal(tmp, "sixel")
     try:
-        mark = terminal.wait_for_the_queries()
+        mark = terminal.wait_for_queries()
         terminal.write(b"\x1b[?1;2c")  # A VT100: no sixel, nothing else.
 
         terminal.wait_for(b"READY")
@@ -1025,7 +1025,7 @@ def check_plain_terminal(tmp):
         tail = terminal.since(mark)
         # Passing an OSC sequence on asks nothing of the terminal, so a
         # terminal that answers no query still receives them.
-        check_the_osc_sequences(terminal, tail)
+        check_osc_sequences(terminal, tail)
         assert b"\x1b_G" not in tail, "images without support"
         assert b"\x1bP" not in tail, "sixel without support"
         assert b"\x1b[=" not in tail, "keyboard flags without support"
@@ -1065,7 +1065,7 @@ def check_a_closing_split(tmp):
     """
     terminal = Terminal(tmp, "kitty")
     try:
-        terminal.wait_for_the_queries()
+        terminal.wait_for_queries()
         terminal.write(b"\x1b[?1u")
         terminal.write(b"\x1b_Gi=31;OK\x1b\\")
         terminal.write(b"\x1b[6;20;10t")
@@ -1098,7 +1098,7 @@ def check_a_closing_split(tmp):
     print("closing split: ok")
 
 
-def check_the_pointer_shape(tmp):
+def check_pointer_shape(tmp):
     """
     The shape of the pointer follows the pane that the client looks at.
 
@@ -1108,7 +1108,7 @@ def check_the_pointer_shape(tmp):
     """
     terminal = Terminal(tmp, "kitty")
     try:
-        terminal.wait_for_the_queries()
+        terminal.wait_for_queries()
         terminal.write(b"\x1b[?1u")
         terminal.write(b"\x1b_Gi=31;OK\x1b\\")
         terminal.write(b"\x1b[6;20;10t")
@@ -1150,7 +1150,7 @@ def check_the_pointer_shape(tmp):
     print("pointer shape: ok")
 
 
-def check_the_cursor_shape(tmp):
+def check_cursor_shape(tmp):
     """
     The cursor of the client is the cursor of the pane it looks at.
 
@@ -1169,7 +1169,7 @@ def check_the_cursor_shape(tmp):
     """
     terminal = Terminal(tmp, "kitty")
     try:
-        terminal.wait_for_the_queries()
+        terminal.wait_for_queries()
         terminal.write(b"\x1b[?1u")
         terminal.write(b"\x1b_Gi=31;OK\x1b\\")
         terminal.write(b"\x1b[6;20;10t")
@@ -1229,7 +1229,7 @@ def check_an_overlay_pane(tmp):
     """
     terminal = Terminal(tmp, "kitty")
     try:
-        terminal.wait_for_the_queries()
+        terminal.wait_for_queries()
         terminal.write(b"\x1b[?1u")
         terminal.write(b"\x1b_Gi=31;OK\x1b\\")
         terminal.write(b"\x1b[6;20;10t")
@@ -1306,7 +1306,7 @@ def check_two_terminals_of_different_abilities(tmp):
     terminal = Terminal(tmp, "kitty")
     second = None
     try:
-        terminal.wait_for_the_queries()
+        terminal.wait_for_queries()
         # This terminal serves every flag of the keyboard protocol, so
         # a release it sends is a real one.
         terminal.write(b"\x1b[?31u")
@@ -1330,7 +1330,7 @@ def check_two_terminals_of_different_abilities(tmp):
         second = SecondClient(tmp, terminal.sock_path, "plain")
         # After the queries: the graphics query carries "\x1b_G" itself,
         # so a check that it never arrives has to start past it.
-        after_queries = second.wait_for_the_queries()
+        after_queries = second.wait_for_queries()
         second.write(b"\x1b[?62;1;6c")
         second.drain(2.0)
         drawn = second.since(after_queries)
@@ -1428,7 +1428,7 @@ def check_a_full_screen_pane(tmp):
         config=config,
     )
     try:
-        terminal.wait_for_the_queries()
+        terminal.wait_for_queries()
         terminal.write(b"\x1b[?62;1;6c")
         terminal.wait_for(b"SIZE<")
         # The pane draws again when the client gives it its real size.
@@ -1444,7 +1444,7 @@ def check_a_full_screen_pane(tmp):
         assert size.stdout.strip() == b"%dx%d" % (columns, rows), size.stdout
 
         # 2. Every cell of the screen holds what the pane holds.
-        screen = read_the_screen(terminal.seen, rows, columns)
+        screen = read_screen(terminal.seen, rows, columns)
         assert len(screen) == rows
 
         marker = "SIZE<%dx%d>" % (columns, rows)
@@ -1549,7 +1549,7 @@ def check_a_strip_follows_a_resize(tmp):
         The middle row of the screen, which belongs to the panes: the
         title bars are above it and the status line below.
         """
-        screen = read_the_screen(terminal.since(mark), high, wide)
+        screen = read_screen(terminal.since(mark), high, wide)
         middle = screen[high // 2]
 
         for x, char in enumerate(middle):
@@ -1559,7 +1559,7 @@ def check_a_strip_follows_a_resize(tmp):
         raise Failed("no border on row %d of %r" % (high // 2, middle))
 
     try:
-        terminal.wait_for_the_queries()
+        terminal.wait_for_queries()
         terminal.write(b"\x1b[?62;1;6c")
         terminal.drain(2.0)
 
@@ -1624,7 +1624,7 @@ def check_a_quoted_argument(tmp):
         command="python3 %s %s" % (child_path, shlex.quote(wanted)),
     )
     try:
-        terminal.wait_for_the_queries()
+        terminal.wait_for_queries()
         terminal.write(b"\x1b[?62;1;6c")
         terminal.wait_for(b"ARGV<")
         terminal.drain(1.0)
@@ -1633,7 +1633,7 @@ def check_a_quoted_argument(tmp):
         # not the byte stream: a renderer writes a cell where it likes.
         # The row is not known either: a pane keeps a title row above it
         # and the session a status line below.
-        screen = read_the_screen(terminal.seen)
+        screen = read_screen(terminal.seen)
         found = None
         for row in screen:
             start = row.find("ARGV<")
@@ -1671,7 +1671,7 @@ def check_a_non_breaking_space(tmp):
 
     terminal = Terminal(tmp, "nbsp", command="python3 %s" % child_path)
     try:
-        terminal.wait_for_the_queries()
+        terminal.wait_for_queries()
         terminal.write(b"\x1b[?62;1;6c")
         terminal.wait_for("A\u00a0B".encode("utf-8"))
 
@@ -1697,7 +1697,7 @@ def check_a_non_breaking_space(tmp):
         terminal.close()
 
 
-def check_the_cursor_of_a_drawing_pane(tmp):
+def check_cursor_of_drawing_pane(tmp):
     """
     A pane that keeps drawing does not stop the cursor blinking.
 
@@ -1734,7 +1734,7 @@ def check_the_cursor_of_a_drawing_pane(tmp):
 
     terminal = Terminal(tmp, "animate", command="sh %s" % program)
     try:
-        terminal.wait_for_the_queries()
+        terminal.wait_for_queries()
         # A terminal that holds a frame back says so.
         terminal.write(b"\x1b[?2026;2$y")
         terminal.write(b"\x1b[?62;1;6c")
@@ -1760,7 +1760,7 @@ def check_the_cursor_of_a_drawing_pane(tmp):
         terminal.close()
 
 
-def check_a_pane_that_changes_nothing(tmp):
+def check_pane_that_changes_nothing(tmp):
     """
     A frame that changes nothing writes nothing.
 
@@ -1796,7 +1796,7 @@ def check_a_pane_that_changes_nothing(tmp):
 
     terminal = Terminal(tmp, "still", command="sh %s" % program, config=config)
     try:
-        terminal.wait_for_the_queries()
+        terminal.wait_for_queries()
         terminal.write(b"\x1b[?62;1;6c")
         terminal.wait_for(b"STILL")
         # The "x" of the first turn is a change, and the ones after it
@@ -1831,7 +1831,7 @@ def check_a_pane_that_changes_nothing(tmp):
             # went out and what the server was doing at that moment.
             # `Woke` names every reason but one, and the one it cannot
             # name is a pane writing. Lillecarl/pymux#180.
-            terminal.report_the_window(mark, log_mark, started)
+            terminal.report_window(mark, log_mark, started)
             raise Failed("the client wrote %r for a screen that did not change" % since)
 
         print("a pane that changes nothing: ok")
@@ -1842,7 +1842,7 @@ def check_a_pane_that_changes_nothing(tmp):
         terminal.close()
 
 
-def check_the_command_palette(tmp):
+def check_command_palette(tmp):
     """
     `set command-palette on` draws the ":" line in the middle.
 
@@ -1863,7 +1863,7 @@ def check_the_command_palette(tmp):
 
     terminal = Terminal(tmp, "palette", command="sh %s" % program, config=config)
     try:
-        terminal.wait_for_the_queries()
+        terminal.wait_for_queries()
         terminal.write(b"\x1b[?62;1;6c")
         terminal.wait_for(b"HOLDING")
 
@@ -1874,15 +1874,15 @@ def check_the_command_palette(tmp):
         terminal.write(b"new")
         terminal.drain(2.0)
 
-        screen = read_the_screen(terminal.seen)
-        rows_with_the_prompt = [
+        screen = read_screen(terminal.seen)
+        rows_with_prompt = [
             number for number, row in enumerate(screen) if ":new" in row
         ]
-        assert rows_with_the_prompt, "the command line drew nothing\n%s" % "\n".join(
+        assert rows_with_prompt, "the command line drew nothing\n%s" % "\n".join(
             screen
         )
 
-        first = rows_with_the_prompt[0]
+        first = rows_with_prompt[0]
         assert 5 <= first <= 18, (
             "the command line landed on row %d, and the box is rows 5 to 18"
             "\n%s" % (first, "\n".join(screen))
@@ -1908,7 +1908,7 @@ def check_the_command_palette(tmp):
         terminal.close()
 
 
-def check_a_detach_ends_the_client(tmp):
+def check_detach_ends_client(tmp):
     """
     `ctrl+b d` gives the terminal back and ends the client process.
 
@@ -1933,7 +1933,7 @@ def check_a_detach_ends_the_client(tmp):
 
     terminal = Terminal(tmp, "detach", command="sh %s" % program)
     try:
-        terminal.wait_for_the_queries()
+        terminal.wait_for_queries()
         terminal.write(b"\x1b[?62;1;6c")
         terminal.wait_for(b"HOLDING")
 
@@ -1983,7 +1983,7 @@ def check_libpymux(tmp):
 
     terminal = Terminal(tmp, "kitty")
     try:
-        terminal.wait_for_the_queries()
+        terminal.wait_for_queries()
         terminal.write(b"\x1b[?1u")
         terminal.write(b"\x1b_Gi=31;OK\x1b\\")
         terminal.write(b"\x1b[6;20;10t")
@@ -2074,18 +2074,18 @@ CHECKS = (
     check_colorterm_terminal,
     check_plain_terminal,
     check_a_closing_split,
-    check_the_pointer_shape,
-    check_the_cursor_shape,
+    check_pointer_shape,
+    check_cursor_shape,
     check_an_overlay_pane,
     check_two_terminals_of_different_abilities,
     check_a_full_screen_pane,
     check_a_strip_follows_a_resize,
     check_a_quoted_argument,
     check_a_non_breaking_space,
-    check_the_cursor_of_a_drawing_pane,
-    check_a_pane_that_changes_nothing,
-    check_the_command_palette,
-    check_a_detach_ends_the_client,
+    check_cursor_of_drawing_pane,
+    check_pane_that_changes_nothing,
+    check_command_palette,
+    check_detach_ends_client,
     check_libpymux,
 )
 
@@ -2095,7 +2095,7 @@ def chosen_checks():
     The checks this run does. `PYMUX_PTY_CHECKS` names them, comma
     separated and without the `check_` in front:
 
-        PYMUX_PTY_CHECKS=a_pane_that_changes_nothing,the_command_palette
+        PYMUX_PTY_CHECKS=pane_that_changes_nothing,command_palette
 
     A whole run takes minutes and starts seventeen servers. One of
     these checks is red about one run in thirteen, and hunting that

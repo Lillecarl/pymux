@@ -53,7 +53,7 @@ def resize_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     Lillecarl/pymux#225.
     """
     window = pymux.arrangement.get_active_window()
-    now = pymux.size_of_the_plane(window)
+    now = pymux.plane_size(window)
 
     def number(given, instead):
         if given is None:

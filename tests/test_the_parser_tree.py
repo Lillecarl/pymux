@@ -15,7 +15,7 @@ import sys
 import pytest
 from prompt_toolkit.document import Document
 
-from pymux.commands import call_command_handler, the_parser
+from pymux.commands import call_command_handler, parser_tree
 from pymux.commands.completer import create_command_completer
 from pymux.main import Pymux
 
@@ -25,7 +25,7 @@ from pymux.main import Pymux
 
 
 def _parser_of(command):
-    _parser, subparsers = the_parser()
+    _parser, subparsers = parser_tree()
     return subparsers.choices[command]
 
 
@@ -33,7 +33,7 @@ def test_every_alias_points_at_a_registered_command():
     "The check at the foot of aliases.py, said out loud."
     from pymux.commands.aliases import ALIASES
 
-    _parser, subparsers = the_parser()
+    _parser, subparsers = parser_tree()
     assert ALIASES
     for alias, command in ALIASES.items():
         assert command in subparsers.choices, alias
@@ -286,7 +286,7 @@ def test_send_keys_offers_key_names_until_l_says_text():
 
 def test_every_command_says_what_it_does():
     "The palette and the completion of the shell read it."
-    _parser, subparsers = the_parser()
+    _parser, subparsers = parser_tree()
     # One pseudo action per parser: its metavar names the command and
     # any aliases with it, and its help is what both offer.
     said = {action.metavar: (action.help or "") for action in subparsers._choices_actions}

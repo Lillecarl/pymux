@@ -27,7 +27,7 @@ __all__ = [
     "add_commands_to",
     "call_command_handler",
     "handle_command",
-    "the_parser",
+    "parser_tree",
 ]
 
 #: One module per command, in the order the commands were written.
@@ -88,21 +88,21 @@ def add_commands_to(subparsers):
         import_module("." + name, __name__).register(subparsers)
 
 
-_the_parser = None
+_parser_tree = None
 
 
-def the_parser():
+def parser_tree():
     """
     The parser of the whole command line: every command under one
     subparsers action. Built once, on first use.
     """
-    global _the_parser
-    if _the_parser is None:
+    global _parser_tree
+    if _parser_tree is None:
         parser = CommandParser(prog="pymux", add_help=False, allow_abbrev=False)
         subparsers = parser.add_subparsers(metavar="COMMAND", parser_class=CommandParser)
         add_commands_to(subparsers)
-        _the_parser = (parser, subparsers)
-    return _the_parser
+        _parser_tree = (parser, subparsers)
+    return _parser_tree
 
 
 def handle_command(pymux: "Pymux", input_string: str) -> None:
@@ -145,7 +145,7 @@ def call_command_handler(command: str, pymux: "Pymux", arguments: List[str]) -> 
     # Resolve aliases.
     command = ALIASES.get(command, command)
 
-    _parser, subparsers = the_parser()
+    _parser, subparsers = parser_tree()
     parser = subparsers.choices.get(command)
     if parser is None:
         pymux.show_message("Invalid command: %s" % (command,))

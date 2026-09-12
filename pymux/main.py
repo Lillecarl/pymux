@@ -209,7 +209,7 @@ class ClientState:
         self.choose_window_filter = Buffer(
             name=CHOOSE,
             multiline=False,
-            accept_handler=self._accept_the_chooser,
+            accept_handler=self._accept_chooser,
             on_text_changed=lambda buffer: setattr(self, "choose_window_index", 0),
         )
 
@@ -367,15 +367,15 @@ class ClientState:
         self.pymux.leave_command_mode(append_to_history=True)
         self.pymux.handle_command(prompt_command.replace("%%", text))
 
-    def _accept_the_chooser(self, buffer):
+    def _accept_chooser(self, buffer):
         "When the search of a chooser is accepted: it takes the row."
         manager = self.layout_manager
         if self.choose_options:
-            manager.choose_the_pointed_option()
+            manager.choose_pointed_option()
         elif self.choose_buffer:
-            manager.choose_the_pointed_buffer()
+            manager.choose_pointed_buffer()
         else:
-            manager.choose_the_pointed_window()
+            manager.choose_pointed_window()
 
     def _create_app(self):
         """
@@ -988,7 +988,7 @@ class Pymux:
         else:
             return "Pymux"
 
-    def size_of_the_plane(self, window=None):
+    def plane_size(self, window=None):
         """
         How big the plane of that window is, in cells.
 
@@ -1008,7 +1008,7 @@ class Pymux:
 
         The status line comes off the bottom of a client's terminal,
         because it is not part of any window.
-        `layout.room_for_the_panes` takes the rows the chrome
+        `layout.room_for_panes` takes the rows the chrome
         around the panes wants off what is left. **A manual size is
         already the window's own**, so nothing comes off it.
 
@@ -1191,7 +1191,7 @@ class Pymux:
             # The shim, when it is on, reaches the opener of this
             # session before anything else on the PATH of the pane,
             # and names it for what reads $BROWSER.
-            self._shim_the_environment_of_a_pane()
+            self._shim_pane_environment()
 
         if command:
             # `shlex.split` and not `str.split`: a command reaches this as
@@ -1210,7 +1210,7 @@ class Pymux:
         # fork: a directory made in the child is made once per pane,
         # and two panes starting together would race for it.
         if self.open_url_shim:
-            self._ensure_the_open_url_shim()
+            self._ensure_open_url_shim()
 
         # Create new pane and terminal.
         terminal = Terminal(
@@ -1247,8 +1247,8 @@ class Pymux:
         self.panes_by_id[pane.pane_id] = pane
 
         # A pane that starts now missed the last walk of the panes.
-        self.tell_pane_about_the_keyboard(pane)
-        self.tell_pane_about_the_colours(pane)
+        self.tell_pane_about_keyboard(pane)
+        self.tell_pane_about_colours(pane)
 
         logger.info("Created process %r.", command_list)
 
@@ -1344,13 +1344,13 @@ class Pymux:
         # The plan is worked out again on the next frame, which is what
         # this asks for. Lillecarl/pymux#217.
         for client_state in self._client_states.values():
-            client_state.layout_manager.forget_the_plan()
+            client_state.layout_manager.forget_plan()
 
         # **Before the invalidates, and here rather than on the path a
         # pane's write takes.** A window switch and a `set-option`
         # both come through here, and they are the only two things
         # that change the answer. A pane that writes does not.
-        self.sync_the_frame_rate()
+        self.sync_frame_rate()
 
         for app in self.apps:
             app.invalidate()
@@ -1363,7 +1363,7 @@ class Pymux:
         # "set-option synthesize-key-events" takes effect here.
         self.sync_keyboard_source_flags()
 
-    def sync_the_frame_rate(self) -> None:
+    def sync_frame_rate(self) -> None:
         """
         Cap each client at the frame rate of the window it looks at.
 
@@ -1532,7 +1532,7 @@ class Pymux:
             client_state.connection._send_packet({"cmd": "open", "data": url})
             client_state.message = "Opened %s in the browser of this machine." % (url,)
 
-    def _ensure_the_open_url_shim(self) -> None:
+    def _ensure_open_url_shim(self) -> None:
         """
         Make the directory that puts the opener of this session on the
         PATH of a pane.
@@ -1582,7 +1582,7 @@ class Pymux:
                 merged[name] = value
         return merged
 
-    def _shim_the_environment_of_a_pane(self) -> None:
+    def _shim_pane_environment(self) -> None:
         """
         Put the shim on the PATH of a pane, and name the opener in
         $BROWSER. Runs in the fork, before the program of the pane.
@@ -1769,9 +1769,9 @@ class Pymux:
             return
         self._keyboard_state_sent = state
         for pane in list(self.panes_by_id.values()):
-            self.tell_pane_about_the_keyboard(pane)
+            self.tell_pane_about_keyboard(pane)
 
-    def sync_the_keyboard(self) -> None:
+    def sync_keyboard(self) -> None:
         """
         Tell the panes and the clients everything about the keyboard.
 
@@ -1782,7 +1782,7 @@ class Pymux:
         self.sync_keyboard_source_flags()
         self.sync_kitty_flags()
 
-    def tell_pane_about_the_keyboard(self, pane) -> None:
+    def tell_pane_about_keyboard(self, pane) -> None:
         """
         Tell one pane what the keyboards of the clients can report.
 
@@ -1802,7 +1802,7 @@ class Pymux:
             # host. It then claims what a pane asks for, as before.
             pass
 
-    def tell_pane_about_the_colours(self, pane) -> None:
+    def tell_pane_about_colours(self, pane) -> None:
         """
         Tell one pane what the colours around it are: the theme's,
         when the theme owns the whole screen, and the terminal of the
@@ -1819,7 +1819,7 @@ class Pymux:
                 # decided here and not per client.
                 base = theme_color_base(self.theme)
             else:
-                base = self.color_base_of_the_latest_client()
+                base = self.latest_client_color_base()
             if base is None:
                 return
             pane.screen.set_color_base(base)
@@ -1844,9 +1844,9 @@ class Pymux:
         every pane on the table `pyte` reports. Lillecarl/pymux#283.
         """
         for pane in list(self.panes_by_id.values()):
-            self.tell_pane_about_the_colours(pane)
+            self.tell_pane_about_colours(pane)
 
-    def color_base_of_the_latest_client(self):
+    def latest_client_color_base(self):
         """
         The colour base of the client a person used last, or `None`
         when nobody is attached. The fake CLI of a socket command is

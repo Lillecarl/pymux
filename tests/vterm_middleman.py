@@ -135,7 +135,7 @@ class MiddleMan:
             self.pane.trace_the_pane()
         return wire
 
-    def feed_the_judge(self, data: bytes) -> None:
+    def feed_judge(self, data: bytes) -> None:
         """
         Give libvterm what came off the wire, a piece at a time.
 
@@ -164,7 +164,7 @@ class MiddleMan:
                 self.started = True
                 # Whatever pymux drew on the way up goes to the judge
                 # as well, so that the two screens start as one.
-                self.feed_the_judge(self.pane.seen)
+                self.feed_judge(self.pane.seen)
             return True
 
         if line == "WANTPARSER" or line.split(" ")[0] in (
@@ -190,11 +190,11 @@ class MiddleMan:
             # for the reset then goes to the judge, so the two agree
             # again before the next test case.
             self.judge.command("RESET")
-            self.feed_the_judge(self.write(b"\x1bc"))
+            self.feed_judge(self.write(b"\x1bc"))
             return True
 
         if line.startswith("PUSH "):
-            self.feed_the_judge(self.write(bytes.fromhex(line[5:].strip())))
+            self.feed_judge(self.write(bytes.fromhex(line[5:].strip())))
             return True
 
         if line.startswith("RESIZE "):
@@ -208,7 +208,7 @@ class MiddleMan:
             # `Pane.resize` waits for the program to say it arrived.
             rows, columns = (int(one) for one in line[7:].split(","))
             self.judge.command(line)
-            self.feed_the_judge(self.pane.resize(rows, columns))
+            self.feed_judge(self.pane.resize(rows, columns))
             return True
 
         return False

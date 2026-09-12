@@ -160,7 +160,7 @@ def test_the_plan_uses_the_size_the_window_was_given():
         create_row_of_panes(pymux, count=1)
         draw()
 
-        assert pymux.size_of_the_plane() == Size(rows=ROWS - 1, columns=COLUMNS)
+        assert pymux.plane_size() == Size(rows=ROWS - 1, columns=COLUMNS)
 
 
 # ----------------------------------------------------------------------
