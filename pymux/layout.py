@@ -592,6 +592,8 @@ class LayoutManager:
         # fresh each frame is one the layout never focused.
         # Lillecarl/pymux#295.
         self._choose_window: Container | None = None
+        self._choose_window_rows: Window | None = None
+        self._choose_window_search: Container | None = None
 
         # And the same two for the prompt: the line a person answers a
         # question on, and the box that holds it when the question
@@ -727,22 +729,60 @@ class LayoutManager:
         self.client_state.display_popup = True
         get_app().layout.focus(self._popup_textarea)
 
-    def display_chooser(self) -> None:
+    def display_chooser(self, template: str = "") -> None:
         """
         Show the windows of the session, to choose from.
 
         It opens with the chooser on the window this client looks
-        at, the way tmux's tree opens on the current one.
+        at, the way tmux's tree opens on the current one. A template
+        is the tmux `%%`: the command to run on the window the
+        chooser points at, instead of switching to it.
         Lillecarl/pymux#295.
         """
         windows = self.pymux.arrangement.windows
         active = self.pymux.arrangement.get_active_window()
         self.client_state.display_popup = False
         self.client_state.choose_window = True
+        self.client_state.choose_window_command = template
+        self.client_state.choose_window_filter.reset()
         self.client_state.choose_window_index = (
             windows.index(active) if active in windows else 0
         )
-        get_app().layout.focus(self._choose_window_box())
+        self._choose_window_box()
+        get_app().layout.focus(self._choose_window_rows)
+
+    def chooser_matches(self) -> List[arrangement.Window]:
+        """
+        The windows the chooser lists. The search narrows them: a
+        window stays when what was typed is in its name or in its
+        index, without case. Lillecarl/pymux#295.
+        """
+        text = self.client_state.choose_window_filter.text.lower()
+        windows = self.pymux.arrangement.windows
+        if not text:
+            return list(windows)
+        return [
+            w for w in windows if text in w.name.lower() or text in str(w.index)
+        ]
+
+    def choose_the_pointed_window(self) -> None:
+        """
+        Switch to the window the chooser points at, or run the
+        template of the `choose-window` command on it. The chooser
+        closes either way. Lillecarl/pymux#295.
+        """
+        matches = self.chooser_matches()
+        self.client_state.choose_window = False
+        if not matches:
+            return
+        index = min(self.client_state.choose_window_index, len(matches) - 1)
+        window = matches[index]
+        template = self.client_state.choose_window_command
+        if template:
+            self.pymux.handle_command(template.replace("%%", ":%i" % window.index))
+        else:
+            self.pymux.arrangement.set_active_window(window)
+            self.pymux.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
 
     def _create_select_window_handler(
         self, window: arrangement.Window
@@ -1092,6 +1132,37 @@ class LayoutManager:
         if self._choose_window is not None:
             return self._choose_window
 
+        rows = Window(
+            content=FormattedTextControl(
+                self._choose_window_tokens,
+                focusable=True,
+                show_cursor=False,
+                get_cursor_position=lambda: Point(
+                    0, self.client_state.choose_window_index
+                ),
+            ),
+            height=lambda: D(min=1, max=self._palette_rows() - 1),
+            style="class:commandpalette",
+        )
+        search = VSplit(
+            [
+                Window(
+                    width=2,
+                    height=1,
+                    content=FormattedTextControl(
+                        lambda: [("class:chooser.hint", "/ ")]
+                    ),
+                    style="class:commandpalette",
+                ),
+                Window(
+                    content=BufferControl(
+                        buffer=self.client_state.choose_window_filter
+                    ),
+                    height=1,
+                    style="class:commandpalette",
+                ),
+            ]
+        )
         self._choose_window = HSplit(
             [
                 Window(
@@ -1102,20 +1173,12 @@ class LayoutManager:
                     ),
                     style="class:commandpalette.titlebar",
                 ),
-                Window(
-                    content=FormattedTextControl(
-                        self._choose_window_tokens,
-                        focusable=True,
-                        show_cursor=False,
-                        get_cursor_position=lambda: Point(
-                            0, self.client_state.choose_window_index
-                        ),
-                    ),
-                    height=lambda: D(min=1, max=self._palette_rows() - 1),
-                    style="class:commandpalette",
-                ),
+                rows,
+                search,
             ],
         )
+        self._choose_window_rows = rows
+        self._choose_window_search = search
         return self._choose_window
 
     def _choose_window_tokens(self) -> StyleAndTextTuples:
@@ -1124,13 +1187,24 @@ class LayoutManager:
 
         The row the chooser points at carries the gutter arrow and
         stands out, and the window this client already looks at says
-        so, the way `list-windows` does. Lillecarl/pymux#295.
+        so, the way `list-windows` does. A window that holds more
+        panes than one says how many. A row answers a click the way
+        a column of the strip does. Lillecarl/pymux#295.
         """
+        matches = self.chooser_matches()
+        if not matches:
+            return [("class:chooser.hint", " No window matches. ")]
+
         active = self.pymux.arrangement.get_active_window()
-        chosen = self.client_state.choose_window_index
+        chosen = min(self.client_state.choose_window_index, len(matches) - 1)
         tokens: StyleAndTextTuples = []
-        for i, window in enumerate(self.pymux.arrangement.windows):
+        for i, window in enumerate(matches):
             style = "class:chooser.selected" if i == chosen else "class:commandpalette"
+            suffix = ""
+            if len(window.panes) > 1:
+                suffix = " (%i panes)" % len(window.panes)
+            if window == active:
+                suffix += " (active)"
             tokens.append(
                 (
                     style,
@@ -1139,11 +1213,26 @@ class LayoutManager:
                         "> " if i == chosen else "  ",
                         window.index,
                         window.name,
-                        " (active)" if window == active else "",
+                        suffix,
                     ),
+                    self._create_chooser_click_handler(i),
                 )
             )
         return tokens
+
+    def _create_chooser_click_handler(
+        self, row: int
+    ) -> Callable[[MouseEvent], "NotImplementedOrNone"]:
+        "Return a mouse handler that chooses the window on this row."
+
+        def handler(mouse_event: MouseEvent) -> "NotImplementedOrNone":
+            if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
+                self.client_state.choose_window_index = row
+                self.choose_the_pointed_window()
+                return None
+            return NotImplemented
+
+        return handler
 
     def _cursor_on_the_view(self) -> Point:
         """

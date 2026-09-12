@@ -3,6 +3,7 @@ from enum import StrEnum
 __all__ = [
     "COMMAND",
     "PROMPT",
+    "CHOOSE",
     "WindowSize",
     "Woke",
 ]
@@ -13,6 +14,9 @@ COMMAND = "COMMAND"
 
 #: Name of the input for a "command-prompt" command.
 PROMPT = "PROMPT"
+
+#: Name of the buffer that narrows the window chooser's list.
+CHOOSE = "CHOOSE"
 
 
 class WindowSize(StrEnum):

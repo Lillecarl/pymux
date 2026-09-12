@@ -142,6 +142,9 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         # bar's colours, so the selection reads the way a title does.
         # Lillecarl/pymux#295.
         "chooser.selected": "bg:%s %s" % (r["accent"], r["text-bright"]),
+        # The search row of the chooser, and its empty answer.
+        # Lillecarl/pymux#295.
+        "chooser.hint": "%s" % (r["text"],),
         # The overlay pane, which floats over the layout. Its body draws
         # like any pane: a cell the program left at the default background
         # shows the terminal's own background, and a rule that named a

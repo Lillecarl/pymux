@@ -41,7 +41,7 @@ from .arrangement import Arrangement, Pane, Window
 from .colors import DefaultColors, theme_color_base
 from .commands.commands import call_command_handler, handle_command
 from .commands.completer import create_command_completer
-from .enums import COMMAND, PROMPT, WindowSize, Woke
+from .enums import CHOOSE, COMMAND, PROMPT, WindowSize, Woke
 from .graphics import PaneView
 from . import introspect
 from .key_bindings import PymuxKeyBindings
@@ -192,10 +192,19 @@ class ClientState:
         self.display_popup = False
 
         # Window chooser. The index is the row the chooser points
-        # at, into the windows of the session in index order.
-        # Lillecarl/pymux#295.
+        # at, into the rows it lists; the command is the template a
+        # `choose-window` command may carry, and the filter is what
+        # its search types into. Typing narrows the list and puts
+        # the point back on the first row. Lillecarl/pymux#295.
         self.choose_window = False
         self.choose_window_index = 0
+        self.choose_window_command = ""
+        self.choose_window_filter = Buffer(
+            name=CHOOSE,
+            multiline=False,
+            accept_handler=self._accept_the_chooser,
+            on_text_changed=lambda buffer: setattr(self, "choose_window_index", 0),
+        )
 
         #: When a person last used this client, as a turn of
         #: `Pymux.client_was_used`. `window-size latest` reads it.
@@ -341,6 +350,10 @@ class ClientState:
         # Leave command mode and handle command.
         self.pymux.leave_command_mode(append_to_history=True)
         self.pymux.handle_command(prompt_command.replace("%%", text))
+
+    def _accept_the_chooser(self, buffer):
+        "When the search of the window chooser is accepted."
+        self.layout_manager.choose_the_pointed_window()
 
     def _create_app(self):
         """

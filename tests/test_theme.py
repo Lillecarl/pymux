@@ -205,6 +205,7 @@ RULES = {
     "commandpalette.title": "bold bg:#5f5f87 #ffffff",
     "which-key.key": "bold #ffffff",
     "chooser.selected": "bg:#5f5f87 #ffffff",
+    "chooser.hint": "#d0d0d0",
     "overlay": "",
     "overlay.titlebar": "bg:#5f5f87 #ffffff",
     "overlay.title": "bold",

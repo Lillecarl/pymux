@@ -16,7 +16,7 @@ from prompt_toolkit.keys import Keys
 
 from .commands.commands import call_command_handler
 from .commands.utils import wrap_argument
-from .enums import COMMAND, PROMPT, Woke
+from .enums import COMMAND, PROMPT
 from .filters import HasPrefix, WaitsForConfirmation
 from .key_spelling import key_however_it_is_written
 
@@ -209,14 +209,28 @@ class PymuxKeyBindings:
         # which is what keeps the pane from taking these keys; the
         # same reason the pop-up's `q` above answers. tmux's tree
         # answers the mode keys, and so does this: j and k with the
-        # arrows, Enter to switch, q and Escape to leave.
-        # Lillecarl/pymux#295.
+        # arrows, Enter to switch, q and Escape to leave. The search
+        # of `/` takes the focus; while it has it, everything types
+        # into it, the list narrows as it does, and Escape brings the
+        # keys back. Lillecarl/pymux#295.
         @Condition
         def chooser_displayed() -> bool:
             return self.pymux.get_client_state().choose_window
 
+        @Condition
+        def chooser_search_focused() -> bool:
+            state = self.pymux.get_client_state()
+            return state.choose_window and has_focus(state.choose_window_filter)()
+
+        @kb.add("/", filter=chooser_displayed & ~chooser_search_focused)
+        def _chooser_search(event: E) -> None:
+            "Search the names; what is typed narrows the list."
+            state = self.pymux.get_client_state()
+            get_app().layout.focus(state.layout_manager._choose_window_search)
+
         @kb.add("up", filter=chooser_displayed)
         @kb.add("k", filter=chooser_displayed)
+        @kb.add("c-p", filter=chooser_displayed)
         def _chooser_up(event: E) -> None:
             "The row above, staying at the first."
             state = self.pymux.get_client_state()
@@ -224,30 +238,36 @@ class PymuxKeyBindings:
 
         @kb.add("down", filter=chooser_displayed)
         @kb.add("j", filter=chooser_displayed)
+        @kb.add("c-n", filter=chooser_displayed)
         def _chooser_down(event: E) -> None:
             "The row below, staying at the last."
             state = self.pymux.get_client_state()
+            matches = state.layout_manager.chooser_matches()
             state.choose_window_index = min(
-                len(self.pymux.arrangement.windows) - 1,
+                len(matches) - 1,
                 state.choose_window_index + 1,
             )
 
-        @kb.add("enter", filter=chooser_displayed)
+        @kb.add("enter", filter=chooser_displayed & ~chooser_search_focused)
         def _chooser_choose(event: E) -> None:
             "Switch to the window the chooser points at."
-            state = self.pymux.get_client_state()
-            windows = self.pymux.arrangement.windows
-            state.choose_window = False
-            if windows:
-                window = windows[min(state.choose_window_index, len(windows) - 1)]
-                self.pymux.arrangement.set_active_window(window)
-                self.pymux.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
+            self.pymux.get_client_state().layout_manager.choose_the_pointed_window()
 
-        @kb.add("q", filter=chooser_displayed, eager=True)
-        @kb.add("escape", filter=chooser_displayed, eager=True)
+        @kb.add("q", filter=chooser_displayed & ~chooser_search_focused, eager=True)
+        @kb.add(
+            "escape", filter=chooser_displayed & ~chooser_search_focused, eager=True
+        )
+        @kb.add("c-c", filter=chooser_displayed & ~chooser_search_focused, eager=True)
         def _quit_chooser(event: E) -> None:
             "Leave the chooser without switching."
             self.pymux.get_client_state().choose_window = False
+
+        @kb.add("escape", filter=chooser_search_focused, eager=True)
+        def _quit_chooser_search(event: E) -> None:
+            "Leave the search, keeping the chooser."
+            state = self.pymux.get_client_state()
+            state.choose_window_filter.reset()
+            get_app().layout.focus(state.layout_manager._choose_window_rows)
 
         @kb.add(Keys.KeyRelease, eager=True)
         def _forward_a_key_release(event: E) -> None:
