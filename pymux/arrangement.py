@@ -908,6 +908,11 @@ class Arrangement:
     def __init__(self) -> None:
         self.windows: List[Window] = []
 
+        # The windows that link-window can put back. An unlinked
+        # window keeps its panes running; it is only out of the order
+        # nobody sees. Lillecarl/pymux#297.
+        self._unlinked_windows: List[Window] = []
+
         # The number of the first window. tmux starts at zero, but a
         # keyboard starts at one: the "1" key is easier to reach than
         # the "0" key, and it sits where the first window belongs.
@@ -1134,6 +1139,49 @@ class Arrangement:
 
         # Sort windows by index.
         self.windows = sorted(self.windows, key=lambda w: w.index)
+
+    def move_pane_to_window(self, pane: Pane, window: Window, vsplit: bool = False) -> None:
+        """
+        Take a pane out of the window that holds it, and add it to
+        another one, beside or above the pane that is focused there.
+        A window the pane leaves empty is gone, the way a pane whose
+        program ends leaves it. Lillecarl/pymux#297.
+        """
+        self.remove_pane(pane)
+        window.add_pane(pane, vsplit=vsplit)
+
+    def unlink_window(self, window: Window) -> None:
+        """
+        Take a window out of the order, with its panes still running.
+        link_window puts it back. Lillecarl/pymux#297.
+        """
+        # Focus away first, while the window is still in the order to
+        # be counted from.
+        for app, active_w in self._active_window_for_cli.items():
+            if window == active_w and self.windows:
+                with set_app(app):
+                    self.focus_next_window()
+
+        self.windows.remove(window)
+        self._unlinked_windows.append(window)
+
+    def link_window(self, window: Window, index: int | None = None) -> None:
+        """
+        Put a window in the order at an index: one that unlink_window
+        took out, or one that is in the order already, which is a
+        move. Lillecarl/pymux#297.
+        """
+        if window in self._unlinked_windows:
+            self._unlinked_windows.remove(window)
+            if index is None:
+                index = max((w.index for w in self.windows), default=self.base_index - 1) + 1
+            window.index = index
+            self.windows.append(window)
+
+        if index is not None:
+            self.move_window(window, index)
+
+        self.set_active_window(window)
 
     def get_active_pane(self) -> Pane | None:
         """
