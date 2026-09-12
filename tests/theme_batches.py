@@ -16,8 +16,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from photograph_the_themes import FIXTURES  # noqa: E402
-from take_a_picture import LIGHT_TERMINALS, TERMINALS  # noqa: E402
+from photograph_themes import FIXTURES  # noqa: E402
+from take_picture import LIGHT_TERMINALS, TERMINALS  # noqa: E402
 
 BATCH = int(os.environ.get("PYMUX_THEME_BATCH", "12"))
 

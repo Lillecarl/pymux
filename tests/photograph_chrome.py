@@ -54,7 +54,7 @@ sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pyterm_pytest.seats import SEATS  # noqa: E402
 
 from middleman import FORWARDER  # noqa: E402
-from take_a_picture import HOLD, TERMINALS, every_log  # noqa: E402
+from take_picture import HOLD, TERMINALS, every_log  # noqa: E402
 
 #: Where the pictures go. The check points this at `$out`.
 PICTURES = Path(os.environ.get("PYMUX_CHROME_OUT", "chrome-pictures"))

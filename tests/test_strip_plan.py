@@ -16,7 +16,7 @@ prompt_toolkit actually draws.
 from hypothesis import given
 from hypothesis import strategies as st
 from prompt_toolkit.data_structures import Point, Size
-from test_the_plane import every_promise_holds, everything_is_reachable
+from test_plane import every_promise_holds, everything_is_reachable
 
 from pymux.arrangement import Pane, Window
 from pymux.plane import Side, View

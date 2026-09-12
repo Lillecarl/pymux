@@ -14,7 +14,7 @@ row below us gives its leftmost pane.
 
 from pymux.arrangement import HSplit, VSplit
 from pymux.plane import Side
-from test_the_pane_beside_this_one import create_pane, create_window, beside
+from test_pane_beside_this_one import create_pane, create_window, beside
 
 
 def above(window, pane):

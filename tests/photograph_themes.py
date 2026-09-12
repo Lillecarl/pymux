@@ -33,8 +33,8 @@ sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pymux.style import THEMES  # noqa: E402
 from pymux.style_pygments import names  # noqa: E402
-from photograph_the_chrome import CHROME, demo_keys, main  # noqa: E402
-from take_a_picture import LIGHT_TERMINALS, TERMINALS  # noqa: E402
+from photograph_chrome import CHROME, demo_keys, main  # noqa: E402
+from take_picture import LIGHT_TERMINALS, TERMINALS  # noqa: E402
 
 #: Where the pictures go. The check points this at `$out`.
 PICTURES = Path(os.environ.get("PYMUX_THEMES_OUT", "theme-pictures"))

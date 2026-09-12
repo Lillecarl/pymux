@@ -15,7 +15,7 @@ three bars, and nothing in the move says so.
 """
 
 from test_strip_draws import CHROME, create_client
-from test_the_title_bar_names_the_neighbours import (
+from test_title_bar_names_neighbours import (
     COLUMNS,
     create_row_of_named_panes,
     bars_of,

@@ -102,7 +102,7 @@ from pyterm_pytest.seats import (
 )
 
 from recorded import read_verdicts, write_list
-from take_a_picture import TERMINALS, every_log, pymux_command
+from take_picture import TERMINALS, every_log, pymux_command
 
 #: Where the pictures go. The check points this at `$out`.
 PICTURES = Path(os.environ.get("PYMUX_VTTEST_OUT", "vttest-pictures"))

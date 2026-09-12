@@ -118,7 +118,7 @@ let
     # imports it.
     pyinstrument
     # Both ends of the ssh route: the client pymux ships, and the
-    # server that stands in for sshd in `tests/test_the_ssh_client.py`.
+    # server that stands in for sshd in `tests/test_ssh_client.py`.
     # Lillecarl/pymux#90.
     asyncssh
     # The themes of `set-option theme pygments:<name>`.
@@ -275,7 +275,7 @@ let
   chromeTerminals = builtins.getEnv "PYMUX_CHROME_TERMINALS";
 
   # The same for the pictures of every theme, which
-  # `tests/photograph_the_themes.py` takes: one demo application in a
+  # `tests/photograph_themes.py` takes: one demo application in a
   # pane, under every theme the option takes.
   themesSelection = builtins.getEnv "PYMUX_THEMES";
   themesTerminals = builtins.getEnv "PYMUX_THEMES_TERMINALS";
@@ -394,7 +394,7 @@ let
         + ''
           export PYMUX_THEMES_OUT="$out"
           export PYMUX_BASE16_SCHEMES="${base16-schemes-json}/base16-schemes.json"
-          python tests/photograph_the_themes.py
+          python tests/photograph_themes.py
         ''
       );
 
@@ -414,7 +414,7 @@ let
       }
       ''
         export PYMUX_MATRIX_OUT="$out"
-        python tests/the_theme_batches.py
+        python tests/theme_batches.py
       '';
 in
 {
@@ -456,7 +456,7 @@ in
         '';
       }
       ''
-        python tests/measure_a_frame.py
+        python tests/measure_frame.py
       '';
 
   # What pymux still holds after a pane, a window or a client has gone.
@@ -516,7 +516,7 @@ in
   # of a core either way, which would have called the bug fixed. What
   # reproduces it is a program that writes a screenful at a steady
   # rate, and something animating in the window that *is* watched.
-  # `tests/what_a_busy_pane_costs.py` says why both halves matter.
+  # `tests/what_busy_pane_costs.py` says why both halves matter.
   #
   # It needs a pty: the programs run on one, and cmatrix reads
   # terminfo.
@@ -550,12 +550,12 @@ in
         '';
       }
       ''
-        python tests/what_a_busy_pane_costs.py
+        python tests/what_busy_pane_costs.py
       '';
 
   # Where the time of a frame goes. Not a gate, and it judges nothing:
   # a sampling profiler reports wall clock, and this sandbox runs
-  # beside other jobs. `tests/profile_a_frame.py` says what it runs and
+  # beside other jobs. `tests/profile_frame.py` says what it runs and
   # how to read it. It needs a pty, because it runs real panes.
   profile =
     runInSandbox
@@ -588,14 +588,14 @@ in
         '';
       }
       ''
-        python tests/profile_a_frame.py
+        python tests/profile_frame.py
       '';
 
   # The same keystroke counted rather than timed, which is what makes
   # it a gate: bytecode is exact and the same on every machine, so a
   # path that grew fails a build. It covers the two ends that nothing
   # else counts -- the key going out to the pty, and the renderer's
-  # diff coming back. `tests/measure_a_keystroke.py` says why nothing
+  # diff coming back. `tests/measure_keystroke.py` says why nothing
   # here runs the event loop.
   #
   # `PYTHONHASHSEED` is pinned for the reason the other counters pin
@@ -614,7 +614,7 @@ in
         '';
       }
       ''
-        python tests/measure_a_keystroke.py
+        python tests/measure_keystroke.py
       '';
 
   # How many turns of the event loop one keystroke costs.
@@ -623,7 +623,7 @@ in
   # numbers see the waiting and belong to the machine that read them. A
   # turn of the loop is the number in between: it goes up when pymux
   # hands control back, and the code decides it rather than the machine.
-  # `tests/count_the_turns.py` says where the two cuts are.
+  # `tests/count_turns.py` says where the two cuts are.
   #
   # It holds the shortest keystroke of the run and judges nothing else.
   # The program in the pane is another process, so under load its answer
@@ -641,7 +641,7 @@ in
         '';
       }
       ''
-        python tests/count_the_turns.py
+        python tests/count_turns.py
       '';
 
   # What pymux costs a keystroke, in milliseconds, against the same
@@ -737,7 +737,7 @@ in
         + ''
           export PYMUX_PICTURES="$pictureSelection"
           export PYMUX_PICTURES_OUT="$out"
-          python tests/take_a_picture.py
+          python tests/take_picture.py
         ''
       );
 
@@ -779,8 +779,8 @@ in
   # has ever photographed the status line, a pane title bar or the
   # command palette, and nothing could: a headless compositor owns no
   # input device, so nothing could press a key to open any of it.
-  # `tests/drive_in_a_terminal.py` is the way round, and
-  # `tests/photograph_the_chrome.py` is the harness around it.
+  # `tests/drive_in_terminal.py` is the way round, and
+  # `tests/photograph_chrome.py` is the harness around it.
   # Lillecarl/pymux#161.
   #
   # It is not a gate, and it judges nothing. A picture of chrome has no
@@ -801,7 +801,7 @@ in
           export PYMUX_CHROME="$chromeSelection"
           export PYMUX_CHROME_TERMINALS="$chromeTerminals"
           export PYMUX_CHROME_OUT="$out"
-          python tests/photograph_the_chrome.py
+          python tests/photograph_chrome.py
         ''
       );
 
@@ -829,7 +829,7 @@ in
           export PYMUX_THEMES_TERMINALS="$themesTerminals"
           export PYMUX_THEMES_OUT="$out"
           export PYMUX_BASE16_SCHEMES="${base16-schemes-json}/base16-schemes.json"
-          python tests/photograph_the_themes.py
+          python tests/photograph_themes.py
         ''
       );
   themePictureMatrix = themePictureMatrix;

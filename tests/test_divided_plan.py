@@ -14,7 +14,7 @@ elsewhere in this suite hold what is drawn against what a person sees.
 from hypothesis import given
 from hypothesis import strategies as st
 from prompt_toolkit.data_structures import Point, Size
-from test_the_plane import every_promise_holds, everything_is_reachable
+from test_plane import every_promise_holds, everything_is_reachable
 
 from pymux.arrangement import Pane, Window
 from pymux.divided import Divided
