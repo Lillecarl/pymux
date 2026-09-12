@@ -87,3 +87,38 @@ async def test_get_paneid_names_the_pane():
         pymux.command_output = []
         pymux.handle_command("get -t %%%i paneid" % pane.pane_id)
         assert pymux.command_output == [str(pane.pane_id)]
+
+
+@in_a_loop
+async def test_set_option_without_a_value_answers_what_it_holds():
+    async with create_session() as (pymux, state):
+        pymux.command_output = []
+
+        pymux.handle_command("set-option status")
+        assert pymux.command_output == ["status on"]
+
+        pymux.handle_command("set-option status off")
+        pymux.command_output = []
+        pymux.handle_command("set-option status")
+        assert pymux.command_output == ["status off"]
+
+
+@in_a_loop
+async def test_set_window_option_g_answers_the_default():
+    async with create_session() as (pymux, state):
+        pymux.command_output = []
+
+        pymux.handle_command("set-window-option -g strip on")
+        pymux.handle_command("set-window-option -g strip")
+
+        assert pymux.command_output == ["strip on"]
+
+
+@in_a_loop
+async def test_an_option_that_was_never_set_says_so():
+    async with create_session() as (pymux, state):
+        pymux.command_output = []
+
+        pymux.handle_command("set-window-option -g strip")
+
+        assert pymux.command_output == ["strip not set"]

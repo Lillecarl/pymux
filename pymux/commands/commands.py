@@ -1223,6 +1223,11 @@ def set_option(pymux: "Pymux", variables: _VariablesDict, window: bool = False) 
         session and every session option is already global. `set -g`
         is the most common line in a tmux configuration, and `pymux -V`
         says pymux speaks tmux 3.4, so it has to be a line pymux takes.
+
+    With no value, tmux prints what the option holds, and pymux does
+    the same. Without it the command line was write-only: a person
+    could change `mouse` and had no way to see what it was.
+    Lillecarl/pymux#292.
     """
     name = variables["<option>"]
     value = variables["<value>"]
@@ -1232,32 +1237,60 @@ def set_option(pymux: "Pymux", variables: _VariablesDict, window: bool = False) 
     else:
         option = pymux.options.get(name)
 
-    if option:
-        try:
-            # `-g` says what every new window starts with, and changes
-            # no window that is open, which is what it means in tmux.
-            # It is the only way a configuration file can set a window
-            # option, because that file is read before there is a
-            # window. Lillecarl/pymux#199.
-            #
-            # It means nothing for a session option: pymux has one
-            # session, so every session option is already global. That
-            # is why the flag is read here and not by the option.
-            if window and variables.get("-g"):
-                option.set_default(pymux, value)
-            else:
-                option.set_value(pymux, value)
-                # The colour base of every pane is derived from two of
-                # the options: which theme owns the screen, and
-                # whether it does. A pane that exists heard the old
-                # answer, and hears the new one now.
-                # Lillecarl/pymux#283.
-                if name in ("theme", "paint-screen"):
-                    pymux.sync_color_bases()
-        except SetOptionError as e:
-            raise CommandException(e.message)
-    else:
+    if option is None:
         raise CommandException("Invalid option: %s" % (name,))
+
+    if value is None:
+        answer(pymux, "%s %s" % (name, option_as_written(pymux, option, variables)))
+        return
+
+    try:
+        # `-g` says what every new window starts with, and changes
+        # no window that is open, which is what it means in tmux.
+        # It is the only way a configuration file can set a window
+        # option, because that file is read before there is a
+        # window. Lillecarl/pymux#199.
+        #
+        # It means nothing for a session option: pymux has one
+        # session, so every session option is already global. That
+        # is why the flag is read here and not by the option.
+        if window and variables.get("-g"):
+            option.set_default(pymux, value)
+        else:
+            option.set_value(pymux, value)
+            # The colour base of every pane is derived from two of
+            # the options: which theme owns the screen, and
+            # whether it does. A pane that exists heard the old
+            # answer, and hears the new one now.
+            # Lillecarl/pymux#283.
+            if name in ("theme", "paint-screen"):
+                pymux.sync_color_bases()
+    except SetOptionError as e:
+        raise CommandException(e.message)
+
+
+def option_as_written(pymux: "Pymux", option, variables: _VariablesDict) -> str:
+    """
+    What an option holds, as a person wrote it.
+
+    The on/off options hold booleans and a person writes on and off;
+    the rest hold what they were given. A window option reads the
+    window that is active, or, with `-g`, the default every new
+    window starts with -- which is recorded only when somebody set
+    it, so one that was never set reads as not set.
+    """
+    if variables.get("-g"):
+        value = pymux.arrangement.window_defaults.get(option.attribute_name)
+    else:
+        holder = (
+            pymux.arrangement.get_active_window() if option.window_option else pymux
+        )
+        value = getattr(holder, option.attribute_name, None)
+    if value is None:
+        return "not set"
+    if isinstance(value, bool):
+        return "on" if value else "off"
+    return str(value)
 
 
 def set_window_option(pymux: "Pymux", variables: _VariablesDict) -> None:
@@ -2002,7 +2035,7 @@ def _declare_set_option(subparsers: Any) -> None:
     parser = _command(subparsers, set_option)
     parser.add_argument("-g", action="store_true", help="For a window option: what every new window starts with.")
     parser.add_argument("option", metavar="<option>")
-    parser.add_argument("value", metavar="<value>")
+    parser.add_argument("value", metavar="<value>", nargs="?")
 
 
 @declarer
@@ -2010,7 +2043,7 @@ def _declare_set_window_option(subparsers: Any) -> None:
     parser = _command(subparsers, set_window_option)
     parser.add_argument("-g", action="store_true", help="What every new window starts with.")
     parser.add_argument("option", metavar="<option>")
-    parser.add_argument("value", metavar="<value>")
+    parser.add_argument("value", metavar="<value>", nargs="?")
 
 
 @declarer
