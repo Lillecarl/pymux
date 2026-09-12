@@ -35,6 +35,8 @@ from pymux.layout import (
     focus_up,
     change_pane_size,
 )
+from prompt_toolkit.history import InMemoryHistory
+
 from pymux.log import logger
 from pymux.options import ALL_OPTIONS, ALL_WINDOW_OPTIONS, SetOptionError
 
@@ -213,6 +215,31 @@ def add_commands_to(subparsers: Any) -> None:
     """
     for declare in DECLARERS:
         declare(subparsers)
+
+
+def show_prompt_history(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    One line per thing the command line and the prompts took.
+
+    Oldest first, the way the history walks with up. The history is
+    the server's one `InMemoryHistory`, and both buffers of every
+    client share it. Lillecarl/pymux#305.
+    """
+    answer(pymux, "\n".join(pymux.prompt_history.get_strings()))
+
+
+def clear_prompt_history(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Forget everything the command line and the prompts took.
+
+    The history is replaced rather than emptied: a fresh one goes to
+    the server and to the buffers of every client it holds, which is
+    all the readers there are. Lillecarl/pymux#305.
+    """
+    pymux.prompt_history = InMemoryHistory()
+    for client_state in pymux._client_states.values():
+        client_state.command_buffer.history = pymux.prompt_history
+        client_state.prompt_buffer.history = pymux.prompt_history
 
 
 def list_commands(pymux: "Pymux", variables: _VariablesDict) -> None:
@@ -2395,6 +2422,16 @@ def _declare_list_commands(subparsers: Any) -> None:
 @declarer
 def _declare_refresh_client(subparsers: Any) -> None:
     _command(subparsers, refresh_client)
+
+
+@declarer
+def _declare_show_prompt_history(subparsers: Any) -> None:
+    _command(subparsers, show_prompt_history)
+
+
+@declarer
+def _declare_clear_prompt_history(subparsers: Any) -> None:
+    _command(subparsers, clear_prompt_history)
 
 
 def refresh_client(pymux: "Pymux", variables: _VariablesDict) -> None:

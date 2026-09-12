@@ -14,6 +14,7 @@ from typing import Callable, Tuple
 
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app, set_app
+from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.clipboard import ClipboardData, InMemoryClipboard
@@ -232,6 +233,7 @@ class ClientState:
             name=COMMAND,
             accept_handler=self._handle_command,
             auto_suggest=AutoSuggestFromHistory(),
+            history=pymux.prompt_history,
             multiline=False,
             complete_while_typing=False,
             completer=create_command_completer(pymux),
@@ -240,6 +242,7 @@ class ClientState:
         self.prompt_buffer = Buffer(
             name=PROMPT,
             accept_handler=self._handle_prompt_command,
+            history=pymux.prompt_history,
             multiline=False,
             auto_suggest=AutoSuggestFromHistory(),
             # A person composing a key wants to see the keys while they
@@ -691,6 +694,12 @@ class Pymux:
         # Lillecarl/pymux#270.
         self.global_environment: dict[str, str | None] = {}
         self.session_environment: dict[str, str | None] = {}
+
+        # What the command line and the prompts of every client took.
+        # The buffers append through `leave_command_mode`, the grey
+        # suggestion reads it, and up and down walk it.
+        # Lillecarl/pymux#305.
+        self.prompt_history = InMemoryHistory()
 
         # The named buffers a `set-buffer` fills. The one buffer a
         # pane pastes from stays `clipboard`; a name here is tmux's
