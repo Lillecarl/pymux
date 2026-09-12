@@ -1,20 +1,20 @@
 """
 `which-key`: while the prefix waits, the keys it leads to draw in a
-box, placed on the view diagonally opposite the cursor.
+box on the view.
 
-Lillecarl/pymux#29 records the two rules this judges: the popup opens
-as soon as the prefix lands, and it is placed on the view, not the
-pane, as far from the cursor as the view allows. The fast typist pays
-nothing: the box takes no focus, so the key after the prefix reaches
-the bindings as it always did.
+The rules this judges, Lillecarl/pymux#29: the popup opens as soon as
+the prefix lands; it draws in the top right, the corner that holds the
+least of what a person has on the screen, and steps aside to the
+corner diagonally opposite only when the cursor is in its own way; and
+the fast typist pays nothing, because the box takes no focus and the
+key after the prefix reaches the bindings as it always did.
 """
 
-from types import SimpleNamespace
-
 from prompt_toolkit.application.current import set_app
-from prompt_toolkit.data_structures import Point
+from prompt_toolkit.data_structures import Point, Size
 from prompt_toolkit.layout.containers import ConditionalContainer, Float
 from prompt_toolkit.layout.layout import walk
+from prompt_toolkit.layout.screen import Screen
 
 from session import create_session, in_a_loop
 from pymux.options import ALL_OPTIONS
@@ -50,13 +50,15 @@ def put_the_cursor(state, x: int, y: int) -> None:
     """
     Place the cursor where the last frame would have recorded it.
 
-    `renderer._last_screen` is what `_cursor_on_the_view` reads; a
-    stand-in with a cursor position is what the placement needs, and
-    a `SimpleNamespace` gives it without drawing a frame.
+    The screen holds one cursor position per window, so the position
+    goes on the real `Screen` for the window the layout has focused --
+    the same key `_cursor_on_the_view` reads the position under.
     """
-    state.app.renderer._last_screen = SimpleNamespace(
-        cursor_position=Point(x=x, y=y)
-    )
+    with set_app(state.app):
+        window = state.app.layout.current_window
+    screen = Screen(Size(rows=24, columns=80))
+    screen.set_cursor_position(window, Point(x=x, y=y))
+    state.app.renderer._last_screen = screen
 
 
 @in_a_loop
@@ -112,29 +114,29 @@ async def test_the_prefix_alone_asks_for_a_frame():
 
 
 @in_a_loop
-async def test_the_box_draws_opposite_the_cursor():
+async def test_the_box_prefers_the_top_right_and_steps_aside():
     """
-    The rule the issue records: as far from the cursor as possible.
-    A cursor in the upper left puts the box at the bottom right, and
-    each corner round the clock answers the same way.
+    The top right holds the least of what a person has on the screen,
+    so the box draws there by default. Only a cursor that is in its
+    own way sends it to the corner diagonally opposite.
     """
     async with create_session() as (pymux, state):
         ALL_OPTIONS["which-key"].set_value(pymux, "on")
         state.has_prefix = True
 
-        for x, y, anchored_right, anchored_bottom in [
-            (0, 0, True, True),  # upper left
-            (79, 0, False, True),  # upper right
-            (0, 23, True, False),  # lower left
-            (79, 23, False, False),  # lower right
+        for x, y, at_the_top_right in [
+            (0, 0, True),  # upper left
+            (79, 0, False),  # upper right: in the way
+            (0, 23, True),  # lower left
+            (79, 23, True),  # lower right
         ]:
             put_the_cursor(state, x, y)
 
             drawn = drawn_which_key_float(state)
 
-            assert drawn is not None, "no corner drew for (%i, %i)" % (x, y)
-            assert (drawn.right is not None) == anchored_right
-            assert (drawn.bottom is not None) == anchored_bottom
+            assert drawn is not None, "no place drew for (%i, %i)" % (x, y)
+            assert (drawn.right is not None) == at_the_top_right
+            assert (drawn.bottom is not None) != at_the_top_right
 
 
 @in_a_loop

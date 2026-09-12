@@ -1064,31 +1064,32 @@ class LayoutManager:
         Where the cursor of the focused pane sits on this client's
         view, in the coordinates a float is placed in.
 
-        prompt_toolkit records the cursor of the focused window on the
-        screen it drew, which is already the view's coordinate system.
-        Before the first frame there is no screen and the answer is
-        the top-left corner, which is also the place that makes the
-        popup draw farthest away. Lillecarl/pymux#29.
+        prompt_toolkit records one cursor position per window on the
+        screen it drew -- `cursor_positions`, keyed by the window --
+        already in the view's coordinates. While the prefix waits the
+        pane is the window the layout has focused, so it is that
+        window's position the popup steps away from. A screen that
+        has drawn no cursor for the window, and the frame before the
+        first one, answer the top-left corner.
+        Lillecarl/pymux#29.
         """
-        renderer = getattr(self.client_state.app, "renderer", None)
-        screen = getattr(renderer, "_last_screen", None)
-        position = getattr(screen, "cursor_position", None)
-        if position is None:
+        app = self.client_state.app
+        screen = getattr(getattr(app, "renderer", None), "_last_screen", None)
+        window = getattr(getattr(app, "layout", None), "current_window", None)
+        if screen is None or window is None:
             return Point(0, 0)
-        return Point(position.x, position.y)
+        return screen.get_cursor_position(window)
 
-    def _the_cursor_is_in(self, upper: bool, left: bool) -> bool:
+    def _the_cursor_is_in_the_top_right(self) -> bool:
         """
-        Whether the cursor sits in the quadrant of this client's view
-        that `upper` and `left` name. The half the status bar takes is
-        part of the lower half; it is where a cursor below the middle
-        sits either way. Lillecarl/pymux#29.
+        Whether the cursor sits in the quadrant the box would rather
+        draw in. The half the status bar takes is part of the lower
+        half; it is where a cursor below the middle sits either way.
+        Lillecarl/pymux#29.
         """
         point = self._cursor_on_the_view()
         room = self.room_this_client_has
-        upper_half = point.y * 2 < room.rows
-        left_half = point.x * 2 < room.columns
-        return (upper_half == upper) and (left_half == left)
+        return point.y * 2 < room.rows and point.x * 2 >= room.columns
 
     def _palette_rows(self) -> int:
         """
@@ -1299,51 +1300,37 @@ class LayoutManager:
                     ),
                 ),
                 # The keys a prefix leads to, while `which-key` is on
-                # and the prefix waits. One float per corner, because a
-                # float's sides are fixed at build time: the box draws
-                # in the corner diagonally opposite the cursor, which
-                # is the rule Lillecarl/pymux#29 records. It takes no
-                # focus, so the key after the prefix reaches the
-                # bindings as it always did and the popup is gone by
-                # the time the frame for that key draws.
+                # and the prefix waits. The box prefers the top right,
+                # which holds the least of what a person has on the
+                # screen -- a prompt fills a terminal from the bottom,
+                # so the top right is empty more often than any other
+                # corner -- and steps aside to the corner diagonally
+                # opposite only when the cursor is in its own way. One
+                # float per place, because a float's sides are fixed at
+                # build time. It takes no focus, so the key after the
+                # prefix reaches the bindings as it always did and the
+                # popup is gone by the time the frame for that key
+                # draws. Lillecarl/pymux#29.
                 Float(
                     content=ConditionalContainer(
                         content=DynamicContainer(self._which_key_box),
                         filter=which_key_shows
-                        & Condition(lambda: self._the_cursor_is_in(True, True)),
+                        & Condition(
+                            lambda: not self._the_cursor_is_in_the_top_right()
+                        ),
+                    ),
+                    top=0,
+                    right=1,
+                    z_index=Z_INDEX.POPUP,
+                ),
+                Float(
+                    content=ConditionalContainer(
+                        content=DynamicContainer(self._which_key_box),
+                        filter=which_key_shows
+                        & Condition(lambda: self._the_cursor_is_in_the_top_right()),
                     ),
                     # The status line keeps its row.
                     bottom=2,
-                    right=1,
-                    z_index=Z_INDEX.POPUP,
-                ),
-                Float(
-                    content=ConditionalContainer(
-                        content=DynamicContainer(self._which_key_box),
-                        filter=which_key_shows
-                        & Condition(lambda: self._the_cursor_is_in(True, False)),
-                    ),
-                    bottom=2,
-                    left=1,
-                    z_index=Z_INDEX.POPUP,
-                ),
-                Float(
-                    content=ConditionalContainer(
-                        content=DynamicContainer(self._which_key_box),
-                        filter=which_key_shows
-                        & Condition(lambda: self._the_cursor_is_in(False, True)),
-                    ),
-                    top=0,
-                    right=1,
-                    z_index=Z_INDEX.POPUP,
-                ),
-                Float(
-                    content=ConditionalContainer(
-                        content=DynamicContainer(self._which_key_box),
-                        filter=which_key_shows
-                        & Condition(lambda: self._the_cursor_is_in(False, False)),
-                    ),
-                    top=0,
                     left=1,
                     z_index=Z_INDEX.POPUP,
                 ),
