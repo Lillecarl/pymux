@@ -1,4 +1,5 @@
 import asyncio
+from collections import deque
 import base64
 import contextvars
 import datetime
@@ -650,6 +651,10 @@ class Pymux:
         # The lines of the configuration file that failed, until a
         # client is there to be told about them.
         self.startup_errors: list[str] = []
+
+        # What show_message and add_command_error said, oldest last.
+        # show-messages reads it back.
+        self.message_log: deque[str] = deque(maxlen=100)
 
         # The file and the line that `source-file` is reading now, so
         # that a failure can say which line it was.
@@ -1961,6 +1966,7 @@ class Pymux:
 
         :param message: String.
         """
+        self.message_log.append(message)
         try:
             self.get_client_state().message = message
         except ValueError:
@@ -1991,6 +1997,7 @@ class Pymux:
         if self.sourcing is not None:
             message = "%s: %s" % (self.sourcing, message)
 
+        self.message_log.append(message)
         if self.command_error is not None:
             self.command_error.append(message)
         elif not self._startup_done or self.sourcing is not None:

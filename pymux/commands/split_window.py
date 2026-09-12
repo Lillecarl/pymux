@@ -37,8 +37,8 @@ def split_window(pymux: "Pymux", args: argparse.Namespace) -> None:
         )
 
 
-def register(subparsers):
-    parser = add_command(subparsers, split_window)
+def add_arguments(parser):
+    "What a command that opens a pane in a window takes."
     group = parser.add_mutually_exclusive_group()
     group.add_argument("-v", dest="v", action="store_true", help="Split top over bottom.")
     group.add_argument("-h", dest="h", action="store_true", help="Split side by side.")
@@ -48,3 +48,7 @@ def register(subparsers):
     parser.add_argument("-P", dest="P", action="store_true", help="Print information about the new pane.")
     parser.add_argument("-F", dest="format", metavar="<format>", help="The format to print with -P.")
     parser.add_argument("executable", nargs="?", metavar="<executable>")
+
+
+def register(subparsers):
+    add_arguments(add_command(subparsers, split_window))
