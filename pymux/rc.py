@@ -56,6 +56,7 @@ bind-key 8 select-window -t :8
 bind-key 9 select-window -t :9
 bind-key n next-window
 bind-key p previous-window
+bind-key w choose-window
 bind-key o select-pane -t :.+
 bind-key { swap-pane -U
 bind-key } swap-pane -D

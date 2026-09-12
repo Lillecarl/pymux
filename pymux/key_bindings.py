@@ -16,7 +16,7 @@ from prompt_toolkit.keys import Keys
 
 from .commands.commands import call_command_handler
 from .commands.utils import wrap_argument
-from .enums import COMMAND, PROMPT
+from .enums import COMMAND, PROMPT, Woke
 from .filters import HasPrefix, WaitsForConfirmation
 from .key_spelling import key_however_it_is_written
 
@@ -204,6 +204,50 @@ class PymuxKeyBindings:
         def _quit_popup(event: E) -> None:
             "Quit pop-up dialog."
             self.pymux.get_client_state().display_popup = False
+
+        # The chooser of windows. It has the focus while it shows,
+        # which is what keeps the pane from taking these keys; the
+        # same reason the pop-up's `q` above answers. tmux's tree
+        # answers the mode keys, and so does this: j and k with the
+        # arrows, Enter to switch, q and Escape to leave.
+        # Lillecarl/pymux#295.
+        @Condition
+        def chooser_displayed() -> bool:
+            return self.pymux.get_client_state().choose_window
+
+        @kb.add("up", filter=chooser_displayed)
+        @kb.add("k", filter=chooser_displayed)
+        def _chooser_up(event: E) -> None:
+            "The row above, staying at the first."
+            state = self.pymux.get_client_state()
+            state.choose_window_index = max(0, state.choose_window_index - 1)
+
+        @kb.add("down", filter=chooser_displayed)
+        @kb.add("j", filter=chooser_displayed)
+        def _chooser_down(event: E) -> None:
+            "The row below, staying at the last."
+            state = self.pymux.get_client_state()
+            state.choose_window_index = min(
+                len(self.pymux.arrangement.windows) - 1,
+                state.choose_window_index + 1,
+            )
+
+        @kb.add("enter", filter=chooser_displayed)
+        def _chooser_choose(event: E) -> None:
+            "Switch to the window the chooser points at."
+            state = self.pymux.get_client_state()
+            windows = self.pymux.arrangement.windows
+            state.choose_window = False
+            if windows:
+                window = windows[min(state.choose_window_index, len(windows) - 1)]
+                self.pymux.arrangement.set_active_window(window)
+                self.pymux.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
+
+        @kb.add("q", filter=chooser_displayed, eager=True)
+        @kb.add("escape", filter=chooser_displayed, eager=True)
+        def _quit_chooser(event: E) -> None:
+            "Leave the chooser without switching."
+            self.pymux.get_client_state().choose_window = False
 
         @kb.add(Keys.KeyRelease, eager=True)
         def _forward_a_key_release(event: E) -> None:

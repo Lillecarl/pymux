@@ -138,6 +138,10 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         # the meanings behind it, on the same surface the box has.
         # Lillecarl/pymux#29.
         "which-key.key": "bold %s" % (r["text-bright"],),
+        # The row the window chooser points at. It borrows the title
+        # bar's colours, so the selection reads the way a title does.
+        # Lillecarl/pymux#295.
+        "chooser.selected": "bg:%s %s" % (r["accent"], r["text-bright"]),
         # The overlay pane, which floats over the layout. Its body draws
         # like any pane: a cell the program left at the default background
         # shows the terminal's own background, and a rule that named a

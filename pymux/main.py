@@ -191,6 +191,12 @@ class ClientState:
         # Popup.
         self.display_popup = False
 
+        # Window chooser. The index is the row the chooser points
+        # at, into the windows of the session in index order.
+        # Lillecarl/pymux#295.
+        self.choose_window = False
+        self.choose_window_index = 0
+
         #: When a person last used this client, as a turn of
         #: `Pymux.client_was_used`. `window-size latest` reads it.
         self.last_used = 0

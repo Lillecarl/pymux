@@ -1312,6 +1312,22 @@ def display_panes(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.display_pane_numbers = True
 
 
+def choose_window(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Show the windows of the session, to choose from.
+
+    tmux spells the view choose-tree, and prefix w opens it there. A
+    pymux server holds one session, so the tree has one root: the
+    chooser lists the windows and Enter switches to one. The command
+    line has no view to open a chooser on, so an asker that reads
+    stdout gets nothing -- the same shape as the pop-ups.
+    Lillecarl/pymux#272. Lillecarl/pymux#295.
+    """
+    if pymux.command_output is not None:
+        return
+    pymux.get_client_state().layout_manager.display_chooser()
+
+
 def display_message(pymux: "Pymux", variables: _VariablesDict) -> None:
     '''
     Show a message on the status line.
@@ -2053,6 +2069,11 @@ def _declare_set_window_option(subparsers: Any) -> None:
 @declarer
 def _declare_display_panes(subparsers: Any) -> None:
     _command(subparsers, display_panes)
+
+
+@declarer
+def _declare_choose_window(subparsers: Any) -> None:
+    _command(subparsers, choose_window)
 
 
 @declarer

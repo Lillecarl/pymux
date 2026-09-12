@@ -587,6 +587,12 @@ class LayoutManager:
         # the same rule keeps the box one object. Lillecarl/pymux#29.
         self._which_key: Container | None = None
 
+        # The windows of the session, to choose from. Built once,
+        # like the boxes above, for the same reason: a window built
+        # fresh each frame is one the layout never focused.
+        # Lillecarl/pymux#295.
+        self._choose_window: Container | None = None
+
         # And the same two for the prompt: the line a person answers a
         # question on, and the box that holds it when the question
         # knows its answers. Lillecarl/pymux#220.
@@ -720,6 +726,23 @@ class LayoutManager:
         self._popup_textarea.text = content
         self.client_state.display_popup = True
         get_app().layout.focus(self._popup_textarea)
+
+    def display_chooser(self) -> None:
+        """
+        Show the windows of the session, to choose from.
+
+        It opens with the chooser on the window this client looks
+        at, the way tmux's tree opens on the current one.
+        Lillecarl/pymux#295.
+        """
+        windows = self.pymux.arrangement.windows
+        active = self.pymux.arrangement.get_active_window()
+        self.client_state.display_popup = False
+        self.client_state.choose_window = True
+        self.client_state.choose_window_index = (
+            windows.index(active) if active in windows else 0
+        )
+        get_app().layout.focus(self._choose_window_box())
 
     def _create_select_window_handler(
         self, window: arrangement.Window
@@ -1059,6 +1082,69 @@ class LayoutManager:
             tokens.append(("class:commandpalette", meaning + "\n"))
         return tokens
 
+    def _choose_window_box(self) -> Container:
+        """
+        The windows of the session, in a box.
+
+        Built once, for the reason `_command_line_window` gives.
+        Lillecarl/pymux#295.
+        """
+        if self._choose_window is not None:
+            return self._choose_window
+
+        self._choose_window = HSplit(
+            [
+                Window(
+                    height=1,
+                    align=WindowAlign.CENTER,
+                    content=FormattedTextControl(
+                        lambda: [("class:commandpalette.title", " Choose a window ")]
+                    ),
+                    style="class:commandpalette.titlebar",
+                ),
+                Window(
+                    content=FormattedTextControl(
+                        self._choose_window_tokens,
+                        focusable=True,
+                        show_cursor=False,
+                        get_cursor_position=lambda: Point(
+                            0, self.client_state.choose_window_index
+                        ),
+                    ),
+                    height=lambda: D(min=1, max=self._palette_rows() - 1),
+                    style="class:commandpalette",
+                ),
+            ],
+        )
+        return self._choose_window
+
+    def _choose_window_tokens(self) -> StyleAndTextTuples:
+        """
+        The windows of the session, one row each.
+
+        The row the chooser points at carries the gutter arrow and
+        stands out, and the window this client already looks at says
+        so, the way `list-windows` does. Lillecarl/pymux#295.
+        """
+        active = self.pymux.arrangement.get_active_window()
+        chosen = self.client_state.choose_window_index
+        tokens: StyleAndTextTuples = []
+        for i, window in enumerate(self.pymux.arrangement.windows):
+            style = "class:chooser.selected" if i == chosen else "class:commandpalette"
+            tokens.append(
+                (
+                    style,
+                    "%s%2i %s%s\n"
+                    % (
+                        "> " if i == chosen else "  ",
+                        window.index,
+                        window.name,
+                        " (active)" if window == active else "",
+                    ),
+                )
+            )
+        return tokens
+
     def _cursor_on_the_view(self) -> Point:
         """
         Where the cursor of the focused pane sits on this client's
@@ -1298,6 +1384,22 @@ class LayoutManager:
                         content=CompletionsMenu(max_height=12),
                         filter=~in_a_box,
                     ),
+                ),
+                # The windows of the session, to choose from. The
+                # same inset as the keys pop-up, because it is the
+                # same kind of box, and the same z order. It takes
+                # focus, which is what keeps the keys of the pane out
+                # of the way while it shows. Lillecarl/pymux#295.
+                Float(
+                    content=ConditionalContainer(
+                        content=DynamicContainer(self._choose_window_box),
+                        filter=Condition(lambda: self.client_state.choose_window),
+                    ),
+                    left=BOX_SIDE,
+                    right=BOX_SIDE,
+                    top=BOX_TOP,
+                    bottom=5,
+                    z_index=Z_INDEX.POPUP,
                 ),
                 # The keys a prefix leads to, while `which-key` is on
                 # and the prefix waits. The box prefers the top right,
