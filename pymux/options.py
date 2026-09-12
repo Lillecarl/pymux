@@ -490,6 +490,9 @@ ALL_OPTIONS = {
     "default-terminal": StringOption(
         "default_terminal", ["xterm", "xterm-256color", "screen"]
     ),
+    # What lock-server, lock-session and lock-client run to hold the
+    # keyboard. tmux's default is vlock.
+    "lock-command": StringOption("lock_command", ["vlock"]),
     "status-right": StringOption("status_right"),
     "status-left": StringOption("status_left"),
     "status-right-length": PositiveIntOption("status_right_length", [20]),

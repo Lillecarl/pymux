@@ -596,6 +596,10 @@ class Pymux:
         # let a person say something else. It is `default-terminal` in
         # tmux, and it keeps that job.
         self.default_terminal = terminal_name()
+
+        # What the lock commands run over the screen; the keyboard
+        # comes back when it is done. tmux ships vlock for it.
+        self.lock_command = "vlock"
         self.status_left = "[#S] "
         self.status_left_length = 20
         self.status_right = " %H:%M %d-%b-%y "
