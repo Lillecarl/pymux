@@ -2285,6 +2285,24 @@ def _declare_list_commands(subparsers: Any) -> None:
 
 
 @declarer
+def _declare_refresh_client(subparsers: Any) -> None:
+    _command(subparsers, refresh_client)
+
+
+def refresh_client(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Ask this client for a frame.
+
+    A client draws when something changed; this says something did,
+    for the client that ran the command. The other clients keep the
+    frames they have. Lillecarl/pymux#301.
+    """
+    if pymux.command_output is not None:
+        return  # The command line drew nothing and has nothing to draw.
+    pymux.get_client_state().app.invalidate()
+
+
+@declarer
 def _declare_show_environment(subparsers: Any) -> None:
     parser = _command(subparsers, show_environment)
     parser.add_argument("-g", action="store_true", help="Read the global scope rather than what a new pane runs under.")

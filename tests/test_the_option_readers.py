@@ -102,3 +102,16 @@ async def test_list_commands_lists_every_command_with_its_description():
         # Each row carries the first line of the handler's docstring.
         row = [one for one in rows if one.split()[0] == "swap-window"][0]
         assert "Swap" in row
+
+
+@in_a_loop
+async def test_refresh_client_asks_its_own_app_for_a_frame():
+    async with create_session() as (pymux, state):
+        asked = []
+        real = state.app.invalidate
+        state.app.invalidate = lambda: (asked.append(True), real())[1]
+
+        with set_app(state.app):
+            pymux.handle_command("refresh-client")
+
+        assert asked
