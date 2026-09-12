@@ -82,6 +82,7 @@ class Woke(StrEnum):
     CLIENT_DETACHED = "a client detached"
     CLIENT_RESIZED = "a client reported its size"
     PANE_ENDED = "a pane ended"
+    PANE_WAS_RESPAWNED = "a pane was respawned"
     PANE_RESIZED = "a program in a pane asked for a size"
     WINDOW_OPENED = "a window opened"
     PANE_WAS_SPLIT_OFF = "a pane was split off"

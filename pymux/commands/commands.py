@@ -1667,6 +1667,66 @@ def display_message(pymux: "Pymux", variables: _VariablesDict) -> None:
     client_state.message = message
 
 
+def respawn_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Kill the program of a pane and run a new one in its place.
+
+    -k: kill even when the program still runs. Without it a pane
+    whose program is alive refuses -- the same rule tmux's has. -t
+    targets; without it the active pane. The pane keeps its place
+    and its size; its id and its screen are new, because they belong
+    to the program. A pane whose program ended is already out of the
+    tree -- pymux does not keep dead panes on screen -- and there is
+    nothing to respawn. Lillecarl/pymux#306.
+    """
+    if variables["-t"]:
+        pane = _find_pane(pymux, variables["<target-pane>"])
+        if pane is None:
+            raise CommandException(
+                "Can't find pane: %s" % (variables["<target-pane>"],)
+            )
+    else:
+        pane = pymux.arrangement.get_active_pane()
+
+    if pymux._window_holding(pane) is None:
+        raise CommandException(
+            "Can't respawn a pane whose window is gone: a pane that ends leaves the tree, unless remain-on-exit holds it."
+        )
+
+    if not pane.process.is_terminated and not variables["-k"]:
+        raise CommandException("Pane is busy: -k kills a program that runs.")
+
+    pane.process.kill()
+    new_pane = pymux._create_pane(command=variables["<command>"] or None)
+    pymux.arrangement.replace_pane(pane, new_pane)
+    pymux.invalidate(Woke.PANE_WAS_RESPAWNED)
+
+
+def respawn_window(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Kill the program a window's active pane runs, and start a new one in its place.
+
+    tmux's respawn-window restarts the command of the window; a
+    window of pymux has no command of its own, only the panes in it,
+    so this respawns the active pane of the window the target names,
+    or of the active one. The same `-k` rule as respawn-pane has.
+    Lillecarl/pymux#306.
+    """
+    if variables["-t"]:
+        window = _find_window(pymux, variables["<target-window>"])
+        if window is None:
+            raise CommandException(
+                "Can't find window: %s" % (variables["<target-window>"],)
+            )
+    else:
+        window = pymux.arrangement.get_active_window()
+
+    variables = dict(variables)
+    variables["-t"] = False
+    variables["<target-pane>"] = None
+    respawn_pane(pymux, variables)
+
+
 def clear_history(pymux: "Pymux", variables: _VariablesDict) -> None:
     "Clear the scrollback of the pane."
     pane = pymux.arrangement.get_active_pane()
@@ -2432,6 +2492,22 @@ def _declare_show_prompt_history(subparsers: Any) -> None:
 @declarer
 def _declare_clear_prompt_history(subparsers: Any) -> None:
     _command(subparsers, clear_prompt_history)
+
+
+@declarer
+def _declare_respawn_pane(subparsers: Any) -> None:
+    parser = _command(subparsers, respawn_pane)
+    parser.add_argument("-k", action="store_true", help="Kill a program that still runs.")
+    parser.add_argument("-t", metavar="<target-pane>", help="The pane to respawn.")
+    parser.add_argument("command", nargs="?", metavar="<command>", help="The program to run, instead of the default shell.")
+
+
+@declarer
+def _declare_respawn_window(subparsers: Any) -> None:
+    parser = _command(subparsers, respawn_window)
+    parser.add_argument("-k", action="store_true", help="Kill a program that still runs.")
+    parser.add_argument("-t", metavar="<target-window>", help="The window whose active pane respawns.")
+    parser.add_argument("command", nargs="?", metavar="<command>", help="The program to run, instead of the default shell.")
 
 
 def refresh_client(pymux: "Pymux", variables: _VariablesDict) -> None:

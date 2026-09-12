@@ -1105,6 +1105,27 @@ class Arrangement:
         # Sort windows by index.
         self.windows = sorted(self.windows, key=lambda w: w.index)
 
+    def replace_pane(self, old: Pane, new: Pane) -> None:
+        """
+        Put a new pane where an old one sat, in the tree and in the
+        focus. The place and the weights stay; the id and the screen
+        belong to the program, so they go with it.
+        Lillecarl/pymux#306.
+        """
+        for window in self.windows:
+            for split in window.splits:
+                if old in split:
+                    split[split.index(old)] = new
+                    break
+
+            for held, width in list(window.column_widths.items()):
+                if held is old:
+                    window.column_widths[new] = width
+                    del window.column_widths[held]
+
+            if window._active_pane is old:
+                window._active_pane = new
+
     def swap_window(self, first: Window, second: Window) -> None:
         """
         Trade the indexes of two windows. Lillecarl/pymux#296.
