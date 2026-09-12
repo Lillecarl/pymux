@@ -93,10 +93,9 @@ CTRL_A_KITTY_RELEASE = b"\x1b[97;5:3u"
 # sends it. Only a pane that asked for the event types of a key may
 # see one.
 KEY_RELEASE = b"\x1b[97;1:3u"
-# What the pane reads. The form is the one that kitty writes: a field
-# that holds its default stays empty, so the modifiers of a release
-# with none are an empty field and not the value one.
-KEY_RELEASE_READ = b"\x1b[97;:3u"
+# What the pane reads. An event type needs modifier 1 when no
+# modifier is active.
+KEY_RELEASE_READ = b"\x1b[97;1:3u"
 
 # The pane asks "CSI ? u" when it reads a "Q", and echoes the answer.
 # The answer holds the flags that the pane really gets, so it depends
@@ -894,6 +893,14 @@ def check_kitty_terminal(tmp):
         #    pane that asked for the event types may read it.
         terminal.write(KEY_RELEASE)
         terminal.wait_for_input(KEY_RELEASE_READ)
+
+        # A press and its release must give the pane one text key.
+        terminal.drain(0.5)
+        read_mark = len(keys_read(terminal.seen))
+        terminal.write(b"a" + KEY_RELEASE)
+        terminal.wait_for_input(b"a" + KEY_RELEASE_READ)
+        terminal.drain(0.5)
+        assert keys_read(terminal.seen)[read_mark:] == b"a" + KEY_RELEASE_READ
 
         #    And the pane hears the truth about its keyboard: this
         #    terminal serves every flag, so the pane keeps both of the
