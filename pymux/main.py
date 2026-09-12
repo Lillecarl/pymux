@@ -203,6 +203,7 @@ class ClientState:
         # Lillecarl/pymux#295. Lillecarl/pymux#304.
         self.choose_window = False
         self.choose_buffer = False
+        self.choose_options = False
         self.choose_window_index = 0
         self.choose_window_command = ""
         self.choose_window_filter = Buffer(
@@ -211,6 +212,13 @@ class ClientState:
             accept_handler=self._accept_the_chooser,
             on_text_changed=lambda buffer: setattr(self, "choose_window_index", 0),
         )
+
+        # The menu that `display-menu` opened: a line per entry, as
+        # (key, name, command), and what its title bar says. The key
+        # of an entry is what runs it, and Escape leaves the menu.
+        # Lillecarl/pymux#297.
+        self.menu_entries: list[tuple[str, str, str]] = []
+        self.menu_title = ""
 
         #: When a person last used this client, as a turn of
         #: `Pymux.client_was_used`. `window-size latest` reads it.
@@ -360,8 +368,14 @@ class ClientState:
         self.pymux.handle_command(prompt_command.replace("%%", text))
 
     def _accept_the_chooser(self, buffer):
-        "When the search of the window chooser is accepted."
-        self.layout_manager.choose_the_pointed_window()
+        "When the search of a chooser is accepted: it takes the row."
+        manager = self.layout_manager
+        if self.choose_options:
+            manager.choose_the_pointed_option()
+        elif self.choose_buffer:
+            manager.choose_the_pointed_buffer()
+        else:
+            manager.choose_the_pointed_window()
 
     def _create_app(self):
         """

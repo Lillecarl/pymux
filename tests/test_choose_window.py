@@ -81,7 +81,7 @@ async def test_the_chooser_draws_in_a_float():
             for one in state.layout_manager.layout.floats
             if getattr(getattr(one.content, "content", None), "get_container", None)
             is not None
-            and one.content.content.get_container.__name__ == "_choose_window_box"
+            and one.content.content.get_container.__name__ == "_chooser_box"
         ]
         assert boxes, "the layout draws no chooser at all"
 

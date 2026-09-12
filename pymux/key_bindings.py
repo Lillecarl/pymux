@@ -216,7 +216,11 @@ class PymuxKeyBindings:
         @Condition
         def chooser_displayed() -> bool:
             state = self.pymux.get_client_state()
-            return state.choose_window or state.choose_buffer
+            return (
+                state.choose_window
+                or state.choose_buffer
+                or state.choose_options
+            )
 
         @Condition
         def chooser_search_focused() -> bool:
@@ -228,12 +232,9 @@ class PymuxKeyBindings:
         @kb.add("/", filter=chooser_displayed & ~chooser_search_focused)
         def _chooser_search(event: E) -> None:
             "Search the names; what is typed narrows the list."
-            state = self.pymux.get_client_state()
-            manager = state.layout_manager
-            if state.choose_buffer:
-                get_app().layout.focus(manager._choose_buffer_search)
-            else:
-                get_app().layout.focus(manager._choose_window_search)
+            get_app().layout.focus(
+                self.pymux.get_client_state().layout_manager._chooser_search
+            )
 
         @kb.add("up", filter=chooser_displayed)
         @kb.add("k", filter=chooser_displayed)
@@ -259,7 +260,9 @@ class PymuxKeyBindings:
         def _chooser_choose(event: E) -> None:
             "Take the row the chooser points at."
             state = self.pymux.get_client_state()
-            if state.choose_buffer:
+            if state.choose_options:
+                state.layout_manager.choose_the_pointed_option()
+            elif state.choose_buffer:
                 state.layout_manager.choose_the_pointed_buffer()
             else:
                 state.layout_manager.choose_the_pointed_window()
@@ -274,17 +277,43 @@ class PymuxKeyBindings:
             state = self.pymux.get_client_state()
             state.choose_window = False
             state.choose_buffer = False
+            state.choose_options = False
 
         @kb.add("escape", filter=chooser_search_focused, eager=True)
         def _quit_chooser_search(event: E) -> None:
             "Leave the search, keeping the chooser."
-            state = self.pymux.get_client_state()
-            state.choose_window_filter.reset()
-            manager = state.layout_manager
-            if state.choose_buffer:
-                get_app().layout.focus(manager._choose_buffer_rows)
-            else:
-                get_app().layout.focus(manager._choose_window_rows)
+            self.pymux.get_client_state().choose_window_filter.reset()
+            get_app().layout.focus(
+                self.pymux.get_client_state().layout_manager._chooser_rows
+            )
+
+        # The menu that `display-menu` opened. It is modal: the keys
+        # of its entries are the keys it takes, Escape and ctrl+c
+        # leave it, and everything else stays in it. The named keys of
+        # an entry -- Enter, Space, Tab -- come in as their own keys,
+        # and a letter or a digit comes in as the character it is.
+        # Lillecarl/pymux#297.
+        @Condition
+        def menu_displayed() -> bool:
+            return bool(self.pymux.get_client_state().menu_entries)
+
+        @kb.add("enter", filter=menu_displayed, eager=True)
+        def _menu_enter(event: E) -> None:
+            "The entry whose key is Enter, when there is one."
+            self.pymux.get_client_state().layout_manager.menu_key_pressed(event.key)
+
+        @kb.add("escape", filter=menu_displayed, eager=True)
+        @kb.add("c-c", filter=menu_displayed, eager=True)
+        def _quit_menu(event: E) -> None:
+            "Leave the menu without taking anything."
+            self.pymux.get_client_state().close_menu()
+
+        @kb.add(Keys.Any, filter=menu_displayed, eager=True)
+        def _menu_key(event: E) -> None:
+            "The entry whose key this is, or nothing: the menu stays."
+            self.pymux.get_client_state().layout_manager.menu_key_pressed(
+                event.key, event.data
+            )
 
         @kb.add(Keys.KeyRelease, eager=True)
         def _forward_a_key_release(event: E) -> None:

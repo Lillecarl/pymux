@@ -11,8 +11,9 @@ from pymux.commands.lock import lock
 
 def lock_client(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
-    Lock the calling client: cover its screen with the program
-    `lock-command` names, and take the keyboard until it is done.
+    Lock the calling client, and take the keyboard until it is done.
+
+    The lock covers the screen with the program `lock-command` names.
 
     The overlay belongs to the session, so the other clients see it
     too -- which is what lock-session says; there is no per-client

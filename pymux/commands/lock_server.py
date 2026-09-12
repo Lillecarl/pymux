@@ -11,8 +11,9 @@ from pymux.commands.lock import lock
 
 def lock_server(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
-    Lock the server: cover the screen with the program
-    `lock-command` names, and take the keyboard until it is done.
+    Lock the server, and take the keyboard until it is done.
+
+    The lock covers the screen with the program `lock-command` names.
 
     The screen a server has is the session's overlay, and every
     client watches the one session, so this is the same screen

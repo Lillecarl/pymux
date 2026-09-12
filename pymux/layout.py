@@ -3,6 +3,7 @@
 The layout engine. This builds the prompt_toolkit layout.
 """
 
+import argparse
 import datetime
 import weakref
 from functools import partial
@@ -67,6 +68,26 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 __all__ = ["LayoutManager"]
+
+
+def option_value_of(pymux, name: str) -> str:
+    """
+    What one option holds, spelled the way set-option with no value
+    reads it back. A window option reads the window that is active.
+
+    Imported here, and not at the top: options.py reads this module
+    for Justify, so this module may not read options.py while it
+    loads.
+    """
+    from pymux.commands.common import option_as_written
+    from pymux.options import ALL_WINDOW_OPTIONS
+
+    window_kind = name in ALL_WINDOW_OPTIONS
+    table = pymux.window_options if window_kind else pymux.options
+    option = table.get(name)
+    if option is None:
+        return ""
+    return option_as_written(pymux, option, argparse.Namespace(g=False), window=window_kind)
 
 
 #: How far a box floats from the top of the screen and from each
@@ -592,12 +613,11 @@ class LayoutManager:
         # like the boxes above, for the same reason: a window built
         # fresh each frame is one the layout never focused.
         # Lillecarl/pymux#295.
-        self._choose_window: Container | None = None
-        self._choose_window_rows: Window | None = None
-        self._choose_window_search: Container | None = None
-        self._choose_buffer: Container | None = None
-        self._choose_buffer_rows: Window | None = None
-        self._choose_buffer_search: Container | None = None
+        self._chooser: Container | None = None
+        self._chooser_rows: Window | None = None
+        self._chooser_search: Container | None = None
+        self._menu: Container | None = None
+        self._menu_rows: Window | None = None
 
         # And the same two for the prompt: the line a person answers a
         # question on, and the box that holds it when the question
@@ -748,13 +768,15 @@ class LayoutManager:
         self.client_state.display_popup = False
         self.client_state.choose_window = True
         self.client_state.choose_buffer = False
+        self.client_state.choose_options = False
+        self.client_state.menu_entries = []
         self.client_state.choose_window_command = template
         self.client_state.choose_window_filter.reset()
         self.client_state.choose_window_index = (
             windows.index(active) if active in windows else 0
         )
-        self._choose_window_box()
-        get_app().layout.focus(self._choose_window_rows)
+        self._chooser_box()
+        get_app().layout.focus(self._chooser_rows)
 
     def display_buffer_chooser(self) -> None:
         """
@@ -767,11 +789,137 @@ class LayoutManager:
         self.client_state.display_popup = False
         self.client_state.choose_buffer = True
         self.client_state.choose_window = False
+        self.client_state.choose_options = False
+        self.client_state.menu_entries = []
         self.client_state.choose_window_command = ""
         self.client_state.choose_window_filter.reset()
         self.client_state.choose_window_index = 0
-        self._choose_buffer_box()
-        get_app().layout.focus(self._choose_buffer_rows)
+        self._chooser_box()
+        get_app().layout.focus(self._chooser_rows)
+
+    def display_options_chooser(self) -> None:
+        """
+        The options of the session, to choose from: what
+        `customize-mode` is here. Enter asks for a value on the
+        prompt, with the option named and what it holds as the
+        default, which is the editing half of what tmux's
+        customize-mode does. Lillecarl/pymux#297.
+        """
+        self.client_state.display_popup = False
+        self.client_state.choose_options = True
+        self.client_state.choose_window = False
+        self.client_state.choose_buffer = False
+        self.client_state.menu_entries = []
+        self.client_state.choose_window_command = ""
+        self.client_state.choose_window_filter.reset()
+        self.client_state.choose_window_index = 0
+        self._chooser_box()
+        get_app().layout.focus(self._chooser_rows)
+
+    def display_menu(self, entries: list, title: str = "") -> None:
+        """
+        The menu of `display-menu`: a line per entry, with the key
+        that runs it beside the name. The box draws where the other
+        boxes draw; tmux takes a position, and -x and -y are accepted
+        for it and change nothing. Lillecarl/pymux#297.
+        """
+        self.client_state.display_popup = False
+        self.client_state.choose_window = False
+        self.client_state.choose_buffer = False
+        self.client_state.menu_entries = entries
+        self.client_state.menu_title = title
+        self._menu_box()
+        get_app().layout.focus(self._menu_rows)
+
+    def close_menu(self) -> None:
+        "The menu goes, without running anything."
+        self.client_state.menu_entries = []
+
+    def menu_key_pressed(self, key, data=None) -> None:
+        """
+        A key while the menu shows: the entry whose key it is runs,
+        and a key that is nobody's stays in the menu, which is modal.
+        The spelling of a named key is tmux's -- Enter, Space, Tab.
+        """
+        if isinstance(key, str) and key in ("<enter>", "<space>", "<tab>"):
+            spelling = {"<enter>": "Enter", "<space>": "Space", "<tab>": "Tab"}[key]
+        elif data:
+            spelling = data
+        else:
+            spelling = key if isinstance(key, str) else str(key)
+
+        for entry in self.client_state.menu_entries:
+            if entry[0].lower() == spelling.lower():
+                self._run_menu_entry(entry)
+                return
+
+    def _run_menu_entry(self, entry) -> None:
+        _key, _name, command = entry
+        self.close_menu()
+        self.pymux.handle_command(command)
+
+    def _create_menu_click_handler(self, entry) -> Callable[[MouseEvent], "NotImplementedOrNone"]:
+        "Return a mouse handler that runs the entry when clicking."
+
+        def handler(mouse_event: MouseEvent) -> "NotImplementedOrNone":
+            if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
+                self._run_menu_entry(entry)
+                return None
+            else:
+                return NotImplemented  # Event not handled here.
+
+        return handler
+
+    def _menu_tokens(self) -> StyleAndTextTuples:
+        """
+        The entries of the menu, one row each: the key that runs it,
+        and its name. A row answers a click the way a chooser's row
+        does. Lillecarl/pymux#297.
+        """
+        result: StyleAndTextTuples = []
+        for key, name, _command in self.client_state.menu_entries:
+            handler = self._create_menu_click_handler((key, name, _command))
+            result.append(("class:chooser.hint", " %s " % (key or " "), handler))
+            result.append(("", "%s\n" % name, handler))
+        return result
+
+    def _menu_box(self) -> Container:
+        """
+        The menu, in a box. Built once, for the reason
+        `_command_line_window` gives; the title is asked each frame,
+        because the command that opened the menu names it.
+        Lillecarl/pymux#297.
+        """
+        if self._menu is not None:
+            return self._menu
+
+        self._menu_rows = Window(
+            content=FormattedTextControl(
+                self._menu_tokens,
+                focusable=True,
+                show_cursor=False,
+            ),
+            style="class:commandpalette",
+        )
+        self._menu = HSplit(
+            [
+                Window(
+                    height=1,
+                    align=WindowAlign.CENTER,
+                    content=FormattedTextControl(
+                        lambda: [
+                            (
+                                "class:commandpalette.title",
+                                " %s " % (self.client_state.menu_title or "Menu"),
+                            )
+                        ]
+                    ),
+                    style="class:commandpalette.titlebar",
+                ),
+                self._menu_rows,
+            ],
+        )
+        return self._menu
 
     def chooser_matches(self) -> list:
         """
@@ -780,6 +928,18 @@ class LayoutManager:
         without case. Lillecarl/pymux#295.
         """
         text = self.client_state.choose_window_filter.text.lower()
+        if self.client_state.choose_options:
+            from pymux.options import ALL_OPTIONS, ALL_WINDOW_OPTIONS
+
+            names = sorted(set(ALL_OPTIONS) | set(ALL_WINDOW_OPTIONS))
+            if not text:
+                return names
+            return [
+                name
+                for name in names
+                if text in name.lower()
+                or text in option_value_of(self.pymux, name).lower()
+            ]
         if self.client_state.choose_buffer:
             buffers = self.pymux.named_buffers
             if not text:
@@ -804,6 +964,7 @@ class LayoutManager:
         """
         matches = self.chooser_matches()
         self.client_state.choose_buffer = False
+        self.client_state.choose_options = False
         if not matches:
             return
         index = min(self.client_state.choose_window_index, len(matches) - 1)
@@ -819,6 +980,7 @@ class LayoutManager:
         """
         matches = self.chooser_matches()
         self.client_state.choose_window = False
+        self.client_state.choose_options = False
         if not matches:
             return
         index = min(self.client_state.choose_window_index, len(matches) - 1)
@@ -829,6 +991,26 @@ class LayoutManager:
         else:
             self.pymux.arrangement.set_active_window(window)
             self.pymux.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
+
+    def choose_the_pointed_option(self) -> None:
+        """
+        Ask what the option the chooser points at should hold, on the
+        prompt, with the command named and what it holds as the
+        default answer. The chooser closes.
+        Lillecarl/pymux#297.
+        """
+        matches = self.chooser_matches()
+        self.client_state.choose_options = False
+        self.client_state.choose_window = False
+        self.client_state.choose_buffer = False
+        if not matches:
+            return
+        index = min(self.client_state.choose_window_index, len(matches) - 1)
+        name = matches[index]
+        self.pymux.handle_command(
+            "command-prompt -p 'set-option %s' -I '%s' 'set-option %s %%'"
+            % (name, option_value_of(self.pymux, name), name)
+        )
 
     def _create_select_window_handler(
         self, window: arrangement.Window
@@ -1168,19 +1350,23 @@ class LayoutManager:
             tokens.append(("class:commandpalette", meaning + "\n"))
         return tokens
 
-    def _choose_window_box(self) -> Container:
+    def _chooser_box(self) -> Container:
         """
-        The windows of the session, in a box.
+        What a chooser lists, in a box: the windows, the named
+        buffers or the options, by the kind that is showing. One box
+        for the three of them, because they are one thing: the
+        title, the rows and the search are shared, and only what the
+        rows say and what taking a row does differ.
+        Lillecarl/pymux#295. Lillecarl/pymux#304. Lillecarl/pymux#297.
 
         Built once, for the reason `_command_line_window` gives.
-        Lillecarl/pymux#295.
         """
-        if self._choose_window is not None:
-            return self._choose_window
+        if self._chooser is not None:
+            return self._chooser
 
         rows = Window(
             content=FormattedTextControl(
-                self._choose_window_tokens,
+                self._chooser_tokens,
                 focusable=True,
                 show_cursor=False,
                 get_cursor_position=lambda: Point(
@@ -1209,13 +1395,15 @@ class LayoutManager:
                 ),
             ]
         )
-        self._choose_window = HSplit(
+        self._chooser = HSplit(
             [
                 Window(
                     height=1,
                     align=WindowAlign.CENTER,
                     content=FormattedTextControl(
-                        lambda: [("class:commandpalette.title", " Choose a window ")]
+                        lambda: [
+                            ("class:commandpalette.title", " %s " % self._chooser_title())
+                        ]
                     ),
                     style="class:commandpalette.titlebar",
                 ),
@@ -1223,68 +1411,53 @@ class LayoutManager:
                 search,
             ],
         )
-        self._choose_window_rows = rows
-        self._choose_window_search = search
-        return self._choose_window
+        self._chooser_rows = rows
+        self._chooser_search = search
+        return self._chooser
 
-    def _choose_buffer_box(self) -> Container:
+    def _chooser_title(self) -> str:
+        "What the box of the chooser says it is."
+        if self.client_state.choose_options:
+            return "Customize"
+        if self.client_state.choose_buffer:
+            return "Choose a buffer"
+        return "Choose a window"
+
+    def _chooser_tokens(self) -> StyleAndTextTuples:
+        "The rows of the chooser, by the kind that shows."
+        if self.client_state.choose_options:
+            return self._choose_options_tokens()
+        if self.client_state.choose_buffer:
+            return self._choose_buffer_tokens()
+        return self._choose_window_tokens()
+
+    def _choose_options_tokens(self) -> StyleAndTextTuples:
         """
-        The named buffers, in a box.
-
-        Built once, for the reason `_command_line_window` gives.
-        Lillecarl/pymux#304.
+        The options of the session, one row each: the name, and what
+        it holds. A window option says which window it reads.
+        Lillecarl/pymux#297.
         """
-        if self._choose_buffer is not None:
-            return self._choose_buffer
+        from pymux.options import ALL_WINDOW_OPTIONS
 
-        rows = Window(
-            content=FormattedTextControl(
-                self._choose_buffer_tokens,
-                focusable=True,
-                show_cursor=False,
-                get_cursor_position=lambda: Point(
-                    0, self.client_state.choose_window_index
-                ),
-            ),
-            height=lambda: D(min=1, max=self._palette_rows() - 1),
-            style="class:commandpalette",
-        )
-        search = VSplit(
-            [
-                Window(
-                    width=2,
-                    height=1,
-                    content=FormattedTextControl(
-                        lambda: [("class:chooser.hint", "/ ")]
-                    ),
-                    style="class:commandpalette",
-                ),
-                Window(
-                    content=BufferControl(
-                        buffer=self.client_state.choose_window_filter
-                    ),
-                    height=1,
-                    style="class:commandpalette",
-                ),
-            ]
-        )
-        self._choose_buffer = HSplit(
-            [
-                Window(
-                    height=1,
-                    align=WindowAlign.CENTER,
-                    content=FormattedTextControl(
-                        lambda: [("class:commandpalette.title", " Choose a buffer ")]
-                    ),
-                    style="class:commandpalette.titlebar",
-                ),
-                rows,
-                search,
-            ],
-        )
-        self._choose_buffer_rows = rows
-        self._choose_buffer_search = search
-        return self._choose_buffer
+        matches = self.chooser_matches()
+        if not matches:
+            return [("class:chooser.hint", " No option matches. ")]
+
+        chosen = min(self.client_state.choose_window_index, len(matches) - 1)
+        tokens: StyleAndTextTuples = []
+        for i, name in enumerate(matches):
+            style = "class:chooser.selected" if i == chosen else "class:commandpalette"
+            value = option_value_of(self.pymux, name)
+            kind = " (window)" if name in ALL_WINDOW_OPTIONS else ""
+            tokens.append(
+                (
+                    style,
+                    "%s%s = %s%s\n"
+                    % ("> " if i == chosen else "  ", name, value, kind),
+                    self._create_chooser_click_handler(i),
+                )
+            )
+        return tokens
 
     def _choose_buffer_tokens(self) -> StyleAndTextTuples:
         """
@@ -1371,12 +1544,21 @@ class LayoutManager:
     def _create_chooser_click_handler(
         self, row: int
     ) -> Callable[[MouseEvent], "NotImplementedOrNone"]:
-        "Return a mouse handler that chooses the window on this row."
+        """
+        Return a mouse handler that takes the row: the window it
+        names, the buffer it names, or the option it names, by the
+        kind that shows.
+        """
 
         def handler(mouse_event: MouseEvent) -> "NotImplementedOrNone":
             if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
                 self.client_state.choose_window_index = row
-                self.choose_the_pointed_window()
+                if self.client_state.choose_options:
+                    self.choose_the_pointed_option()
+                elif self.client_state.choose_buffer:
+                    self.choose_the_pointed_buffer()
+                else:
+                    self.choose_the_pointed_window()
                 return None
             return NotImplemented
 
@@ -1629,8 +1811,12 @@ class LayoutManager:
                 # of the way while it shows. Lillecarl/pymux#295.
                 Float(
                     content=ConditionalContainer(
-                        content=DynamicContainer(self._choose_window_box),
-                        filter=Condition(lambda: self.client_state.choose_window),
+                        content=DynamicContainer(self._chooser_box),
+                        filter=Condition(
+                            lambda: self.client_state.choose_window
+                            or self.client_state.choose_buffer
+                            or self.client_state.choose_options
+                        ),
                     ),
                     left=BOX_SIDE,
                     right=BOX_SIDE,
@@ -1638,19 +1824,19 @@ class LayoutManager:
                     bottom=5,
                     z_index=Z_INDEX.POPUP,
                 ),
-                # The named buffers, to choose from. The same kind of
-                # box as the chooser of windows above, and one at a
-                # time with it: opening one closes the other.
-                # Lillecarl/pymux#304.
+
+                # The menu that `display-menu` opened. The same
+                # kind of box as the two choosers above, one at a
+                # time with them, and no bottom of its own: it takes
+                # the height of what is in it. Lillecarl/pymux#297.
                 Float(
                     content=ConditionalContainer(
-                        content=DynamicContainer(self._choose_buffer_box),
-                        filter=Condition(lambda: self.client_state.choose_buffer),
+                        content=DynamicContainer(self._menu_box),
+                        filter=Condition(lambda: bool(self.client_state.menu_entries)),
                     ),
                     left=BOX_SIDE,
                     right=BOX_SIDE,
                     top=BOX_TOP,
-                    bottom=5,
                     z_index=Z_INDEX.POPUP,
                 ),
                 # The keys a prefix leads to, while `which-key` is on
