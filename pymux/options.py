@@ -458,6 +458,10 @@ ALL_OPTIONS = {
     # instead of a bar along the bottom. Off, because a person used to
     # the bar should not have it move without asking.
     "command-palette": OnOffOption("command_palette"),
+    # Draw the keys a prefix leads to in a popup while the prefix
+    # waits. Off, because a person who knows the keys does not want a
+    # popup in the way. Lillecarl/pymux#29.
+    "which-key": OnOffOption("which_key"),
     # Which colour scheme the clients draw with. `pymux/style.py`
     # holds them. Lillecarl/pymux#194.
     "theme": ThemeOption(),

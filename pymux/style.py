@@ -134,6 +134,10 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         # `bold` alone left the title on the background of the box and
         # cut a dark hole in the middle of the title bar.
         "commandpalette.title": "bold bg:%s %s" % (r["accent"], r["text-bright"]),
+        # The keys a prefix leads to. The key column stands out from
+        # the meanings behind it, on the same surface the box has.
+        # Lillecarl/pymux#29.
+        "which-key.key": "bold %s" % (r["text-bright"],),
         # The overlay pane, which floats over the layout. Its body draws
         # like any pane: a cell the program left at the default background
         # shows the terminal's own background, and a rule that named a

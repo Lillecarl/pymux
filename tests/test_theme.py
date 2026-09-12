@@ -203,6 +203,7 @@ RULES = {
     "commandpalette": "bg:#1c1c1c",
     "commandpalette.titlebar": "bg:#5f5f87 #ffffff",
     "commandpalette.title": "bold bg:#5f5f87 #ffffff",
+    "which-key.key": "bold #ffffff",
     "overlay": "",
     "overlay.titlebar": "bg:#5f5f87 #ffffff",
     "overlay.title": "bold",

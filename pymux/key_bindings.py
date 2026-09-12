@@ -15,6 +15,7 @@ from prompt_toolkit.key_binding.key_processor import KeyPressEvent as E
 from prompt_toolkit.keys import Keys
 
 from .commands.commands import call_command_handler
+from .commands.utils import wrap_argument
 from .enums import COMMAND, PROMPT
 from .filters import HasPrefix, WaitsForConfirmation
 from .key_spelling import key_however_it_is_written
@@ -98,7 +99,14 @@ class PymuxKeyBindings:
         )
         def enter_prefix_handler(event: E) -> None:
             "Enter prefix mode."
-            pymux.get_client_state().has_prefix = True
+            client_state = pymux.get_client_state()
+            client_state.has_prefix = True
+            # The popup that lists what the prefix leads to draws only
+            # when something asks for a frame, and the prefix alone
+            # changes nothing else. `which-key` is the one thing that
+            # wants one here. Lillecarl/pymux#29.
+            if pymux.which_key:
+                client_state.app.invalidate()
 
         self._prefix_binding = enter_prefix_handler
 
@@ -294,6 +302,27 @@ class PymuxKeyBindings:
         self.custom_bindings[needs_prefix, keys_sequence] = CustomBinding(
             key_handler, command, arguments, key_name
         )
+
+    def keys_a_prefix_leads_to(self) -> "list[tuple[str, str]]":
+        """
+        The keys that follow the prefix, each with what it does.
+
+        One row per binding the prefix reaches: the key as the person
+        wrote it, and the command it runs with its arguments, spelled
+        the way `list-keys` spells a binding. `which-key` reads this
+        to draw its popup, and the view of the bindings that
+        Lillecarl/pymux#30 asks for reads the same. Sorted by key, so
+        the same table draws twice the same.
+        """
+        rows = []
+        for (needs_prefix, _keys), binding in self.custom_bindings.items():
+            if not needs_prefix:
+                continue
+            meaning = binding.command
+            if binding.arguments:
+                meaning += " " + " ".join(map(wrap_argument, binding.arguments))
+            rows.append((binding.written, meaning))
+        return sorted(rows)
 
     def binding_on(
         self, key_name: str, needs_prefix: bool = False

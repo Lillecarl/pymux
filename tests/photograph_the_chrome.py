@@ -201,6 +201,17 @@ FIXTURES = {
         CHROME,
         keys((0.0, PREFIX), (0.4, b"t")),
     ),
+    # The keys a prefix leads to, while the prefix waits. The popup
+    # draws on the view, diagonally opposite the cursor: the pane runs
+    # a script that printed nothing, so the cursor sits at the top
+    # left and the box belongs at the bottom right. The empty step
+    # after the prefix is a wait, so the frame the prefix asked for is
+    # on the screen before the fence comes back.
+    # Lillecarl/pymux#29.
+    "which-key": (
+        CHROME + "set-option which-key on\n",
+        keys((0.0, PREFIX), (0.8, b"")),
+    ),
     # An overlay pane, floating in the middle of the screen over two
     # panes. Its body runs a program, so its default-background cells
     # have to show the terminal's own background, the way a normal

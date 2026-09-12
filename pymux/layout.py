@@ -9,7 +9,7 @@ from functools import partial
 from typing import TYPE_CHECKING, Callable, Dict, List, Tuple
 
 from prompt_toolkit.application import Application, get_app
-from prompt_toolkit.data_structures import Size
+from prompt_toolkit.data_structures import Point, Size
 from prompt_toolkit.filters import (
     Condition,
     has_completions,
@@ -581,6 +581,12 @@ class LayoutManager:
         self._command_window: Window | None = None
         self._palette: Container | None = None
 
+        # The keys a prefix leads to, when `which-key` is on. Built
+        # once, like the two above: a window built fresh each frame is
+        # one the layout never focused. Nothing here takes focus, but
+        # the same rule keeps the box one object. Lillecarl/pymux#29.
+        self._which_key: Container | None = None
+
         # And the same two for the prompt: the line a person answers a
         # question on, and the box that holds it when the question
         # knows its answers. Lillecarl/pymux#220.
@@ -1004,6 +1010,86 @@ class LayoutManager:
         )
         return self._key_prompt
 
+    def _which_key_box(self) -> Container:
+        """
+        The keys the prefix leads to, in a box.
+
+        Built once, for the reason `_command_line_window` gives.
+        Lillecarl/pymux#29.
+        """
+        if self._which_key is not None:
+            return self._which_key
+
+        self._which_key = HSplit(
+            [
+                Window(
+                    height=1,
+                    align=WindowAlign.CENTER,
+                    content=FormattedTextControl(
+                        lambda: [("class:commandpalette.title", " Prefix ")]
+                    ),
+                    style="class:commandpalette.titlebar",
+                ),
+                Window(
+                    content=FormattedTextControl(self._which_key_tokens),
+                    height=lambda: D(min=1, max=self._palette_rows() - 1),
+                    style="class:commandpalette",
+                ),
+            ],
+        )
+        return self._which_key
+
+    def _which_key_tokens(self) -> StyleAndTextTuples:
+        """
+        The keys the prefix leads to, one row each.
+
+        Two columns, the key and the command it runs, the key column
+        one width for the whole list so the meanings line up under
+        each other. A prefix that leads nowhere says so rather than
+        drawing an empty box. Lillecarl/pymux#29.
+        """
+        rows = self.pymux.key_bindings_manager.keys_a_prefix_leads_to()
+        if not rows:
+            return [("class:commandpalette", " No keys follow the prefix. ")]
+
+        width = max(len(key) for key, _meaning in rows) + 2
+        tokens: StyleAndTextTuples = []
+        for key, meaning in rows:
+            tokens.append(("class:which-key.key", key.ljust(width)))
+            tokens.append(("class:commandpalette", meaning + "\n"))
+        return tokens
+
+    def _cursor_on_the_view(self) -> Point:
+        """
+        Where the cursor of the focused pane sits on this client's
+        view, in the coordinates a float is placed in.
+
+        prompt_toolkit records the cursor of the focused window on the
+        screen it drew, which is already the view's coordinate system.
+        Before the first frame there is no screen and the answer is
+        the top-left corner, which is also the place that makes the
+        popup draw farthest away. Lillecarl/pymux#29.
+        """
+        renderer = getattr(self.client_state.app, "renderer", None)
+        screen = getattr(renderer, "_last_screen", None)
+        position = getattr(screen, "cursor_position", None)
+        if position is None:
+            return Point(0, 0)
+        return Point(position.x, position.y)
+
+    def _the_cursor_is_in(self, upper: bool, left: bool) -> bool:
+        """
+        Whether the cursor sits in the quadrant of this client's view
+        that `upper` and `left` name. The half the status bar takes is
+        part of the lower half; it is where a cursor below the middle
+        sits either way. Lillecarl/pymux#29.
+        """
+        point = self._cursor_on_the_view()
+        room = self.room_this_client_has
+        upper_half = point.y * 2 < room.rows
+        left_half = point.x * 2 < room.columns
+        return (upper_half == upper) and (left_half == left)
+
     def _palette_rows(self) -> int:
         """
         How many rows of completions fit under the box.
@@ -1053,6 +1139,9 @@ class LayoutManager:
         )
         in_a_box = (has_focus(self.client_state.command_buffer) & palette) | (
             has_focus(self.client_state.prompt_buffer) & asks_for_a_key
+        )
+        which_key_shows = Condition(lambda: self.pymux.which_key) & Condition(
+            lambda: self.client_state.has_prefix
         )
 
         return FloatContainer(
@@ -1208,6 +1297,55 @@ class LayoutManager:
                         content=CompletionsMenu(max_height=12),
                         filter=~in_a_box,
                     ),
+                ),
+                # The keys a prefix leads to, while `which-key` is on
+                # and the prefix waits. One float per corner, because a
+                # float's sides are fixed at build time: the box draws
+                # in the corner diagonally opposite the cursor, which
+                # is the rule Lillecarl/pymux#29 records. It takes no
+                # focus, so the key after the prefix reaches the
+                # bindings as it always did and the popup is gone by
+                # the time the frame for that key draws.
+                Float(
+                    content=ConditionalContainer(
+                        content=DynamicContainer(self._which_key_box),
+                        filter=which_key_shows
+                        & Condition(lambda: self._the_cursor_is_in(True, True)),
+                    ),
+                    # The status line keeps its row.
+                    bottom=2,
+                    right=1,
+                    z_index=Z_INDEX.POPUP,
+                ),
+                Float(
+                    content=ConditionalContainer(
+                        content=DynamicContainer(self._which_key_box),
+                        filter=which_key_shows
+                        & Condition(lambda: self._the_cursor_is_in(True, False)),
+                    ),
+                    bottom=2,
+                    left=1,
+                    z_index=Z_INDEX.POPUP,
+                ),
+                Float(
+                    content=ConditionalContainer(
+                        content=DynamicContainer(self._which_key_box),
+                        filter=which_key_shows
+                        & Condition(lambda: self._the_cursor_is_in(False, True)),
+                    ),
+                    top=0,
+                    right=1,
+                    z_index=Z_INDEX.POPUP,
+                ),
+                Float(
+                    content=ConditionalContainer(
+                        content=DynamicContainer(self._which_key_box),
+                        filter=which_key_shows
+                        & Condition(lambda: self._the_cursor_is_in(False, False)),
+                    ),
+                    top=0,
+                    left=1,
+                    z_index=Z_INDEX.POPUP,
                 ),
                 # The overlay pane, in the middle of the screen. A
                 # `Float` with no side given is centred.

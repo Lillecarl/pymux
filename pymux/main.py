@@ -506,6 +506,10 @@ class Pymux:
         # under the cursor can reach. tmux has no such thing.
         # Lillecarl/pymux#158.
         self.command_palette = False
+        # Draw what the prefix leads to when it is pressed. A person
+        # who knows the keys turns it off; a person who does not yet
+        # reads the list instead of a manual. Lillecarl/pymux#29.
+        self.which_key = False
         self.enable_bell = True
         self.enable_clipboard = True
         self.open_url_target = "last"
