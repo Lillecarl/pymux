@@ -24,7 +24,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from pymux.style import create_theme, derive, roles_of_palette
+from pymux.style import _blend, _other_of, _readable, create_theme, derive
 
 __all__ = ["base16_roles", "base16_theme", "names"]
 
@@ -68,27 +68,87 @@ def names() -> list[str]:
     return sorted(_schemes())
 
 
-#: The letters in the order a terminal numbers its palette: the
-#: mapping the spec's own terminal template writes, which asks for a
-#: scheme's backgrounds and text in the first eight slots and its
-#: eight accents in the rest.
-_TERMINAL_ORDER = (
-    "base00", "base08", "base0B", "base0A",
-    "base0D", "base0E", "base0C", "base05",
-    "base03", "base08", "base0B", "base0A",
-    "base0D", "base0E", "base0C", "base07",
-)
-
-
 def base16_roles(name: str) -> dict[str, str]:
     """
-    The roles of one base16 scheme.
+    The roles of one base16 scheme, from the letters it names.
+
+    The spec names what each letter is for, and the chrome reads them
+    directly -- base01 is the lighter background the bars draw on,
+    base02 the selection the matches sit on, base04 the darker text
+    the border takes -- rather than blending those steps back out of
+    two colours, which is what a terminal palette can do and a scheme
+    is richer than. The blend remains for the roles finer than any
+    letter: the cut column, the suggestion, the bright of a signal.
+    The palette a pane answers a program with is the sixteen in the
+    order the spec's own terminal template numbers them.
+    Lillecarl/pymux#285.
 
     A name the collection does not hold raises `KeyError`, which is
     what the option turns into an error a person can read.
     """
-    palette = _schemes()[name]
-    return roles_of_palette([palette[letter] for letter in _TERMINAL_ORDER])
+    p = _schemes()[name]
+
+    def blend(a, b, towards_b):
+        # A letter finds its colour here; a literal hex is itself.
+        return _blend(p.get(a, a), p.get(b, b), towards_b)
+
+    return {
+        # The screen the chrome draws on, and the text on it.
+        "pane": p["base00"],
+        "surface": p["base00"],
+        "surface-raised": p["base01"],
+        "text": p["base05"],
+        "text-bright": p["base07"],
+        "text-dark": _other_of(p["base00"]),
+        "text-muted": p["base03"],
+        "soft": p["base06"],
+        "border": p["base04"],
+        # A focused pane's bar. The green of the default theme is the
+        # signal too, and the spec's green is base0B.
+        "focus": p["base0B"],
+        "focus-strong": blend("base0B", "base05", 0.25),
+        "focus-border": p["base0B"],
+        "alarm": p["base08"],
+        # The status bar, on the scheme's green.
+        "signal": p["base0B"],
+        "signal-bright": blend("base0B", "base05", 0.25),
+        "signal-text": _readable(p["base0B"]),
+        "command": p["base01"],
+        "suggestion": p["base01"],
+        "suggestion-text": p["base04"],
+        "notice": blend("base0B", "base05", 0.35),
+        "notice-text": _readable(blend("base0B", "base05", 0.35)),
+        # Finer than any letter: a column that only just separates.
+        "cut": blend("base00", "base05", 0.08),
+        "warn": p["base0A"],
+        "warn-bright": p["base09"],
+        # A pane that has ended, and the confirmation that asks.
+        "danger": p["base08"],
+        "danger-strong": blend("base08", "#000000", 0.25),
+        "danger-deep": blend("base08", "#000000", 0.6),
+        # The search toolbar, and the matches on the selection
+        # background, one step up for the match a person is on.
+        "search": p["base0B"],
+        "search-prompt-text": _readable(p["base0B"]),
+        "search-match": p["base02"],
+        "search-match-current": p["base03"],
+        "search-match-current-text": _readable(p["base03"]),
+        # The hue of the pop-ups: the scheme's blue.
+        "accent": p["base0D"],
+        # What a pane answers a program with: the sixteen, in the
+        # order the spec's own terminal template numbers them.
+        **{
+            "color-%i" % index: p[letter]
+            for index, letter in enumerate(
+                (
+                    "base00", "base08", "base0B", "base0A",
+                    "base0D", "base0E", "base0C", "base05",
+                    "base03", "base08", "base0B", "base0A",
+                    "base0D", "base0E", "base0C", "base07",
+                )
+            )
+        },
+    }
 
 
 def base16_theme(name: str):

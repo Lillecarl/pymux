@@ -71,6 +71,21 @@ def test_the_roles_come_from_the_spec(schemes):
     assert roles["accent"] == "#89b4fa"  # base0D, the blue.
 
 
+def test_the_letters_the_terminal_has_no_slot_for(schemes):
+    """
+    base01, base02, base04 and base06 are the steps between the
+    background and the text, and the chrome reads them as they are
+    instead of blending them back out of two colours.
+    """
+    roles = style_base16.base16_roles("test-dark")
+
+    assert roles["surface-raised"] == "#181825"  # base01.
+    assert roles["command"] == "#181825"  # base01, the bar typed on.
+    assert roles["search-match"] == "#313244"  # base02, the selection.
+    assert roles["border"] == "#585b70"  # base04, the darker text.
+    assert roles["soft"] == "#f5e0dc"  # base06, the light text.
+
+
 def test_the_palette_is_the_scheme_verbatim(schemes):
     "In the order the spec's own template numbers a terminal's."
     roles = style_base16.base16_roles("test-dark")
