@@ -688,6 +688,11 @@ class Pymux:
         self.global_environment: dict[str, str | None] = {}
         self.session_environment: dict[str, str | None] = {}
 
+        # The named buffers a `set-buffer` fills. The one buffer a
+        # pane pastes from stays `clipboard`; a name here is tmux's
+        # `-b`. Lillecarl/pymux#303.
+        self.named_buffers: dict[str, str] = {}
+
         # The overlay pane: a pane that floats in the middle of the
         # screen over the layout, like the popup of tmux. It belongs to
         # the session, so every client sees the same one, and it takes

@@ -11,6 +11,7 @@ from typing import (
     Optional,
 )
 from prompt_toolkit.application.current import get_app
+from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.document import Document
 from prompt_toolkit.key_binding.vi_state import InputMode
@@ -1235,6 +1236,104 @@ def paste_buffer(pymux: "Pymux", variables: _VariablesDict) -> None:
     pane.process.write_input(pane.screen.wrap_paste(pymux.clipboard.get_data().text))
 
 
+def set_buffer(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Put text in a buffer.
+
+    `-b` names one of the named buffers; without it the text lands in
+    the session's one buffer, which `paste-buffer` pastes.
+    Lillecarl/pymux#303.
+    """
+    text = variables["<value>"] or ""
+    if variables["-b"]:
+        pymux.named_buffers[variables["-b"]] = text
+    else:
+        pymux.clipboard.set_data(ClipboardData(text))
+
+
+def show_buffer(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Display the content of a buffer.
+
+    `-b` names one of the named buffers; without it the session's one
+    buffer shows. Lillecarl/pymux#303.
+    """
+    name = variables["-b"]
+    if name:
+        if name not in pymux.named_buffers:
+            raise CommandException("Can't find buffer: %s" % (name,))
+        text = pymux.named_buffers[name]
+    else:
+        text = get_app().clipboard.get_data().text
+    pymux.get_client_state().layout_manager.display_popup("show-buffer", text)
+
+
+def list_buffers(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    One line per named buffer: the name, and how much it holds.
+    Lillecarl/pymux#303.
+    """
+    lines = [
+        "%s %i" % (name, len(text))
+        for name, text in sorted(pymux.named_buffers.items())
+    ]
+    answer(pymux, "\n".join(lines))
+
+
+def delete_buffer(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Remove a named buffer. Lillecarl/pymux#303.
+    """
+    name = variables["-b"]
+    if name not in pymux.named_buffers:
+        raise CommandException("Can't find buffer: %s" % (name,))
+    del pymux.named_buffers[name]
+
+
+def load_buffer(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Read a file into a buffer.
+
+    `-b` names the buffer; without it the session's one buffer fills.
+    Lillecarl/pymux#303.
+    """
+    filename = os.path.expanduser(variables["<filename>"])
+    try:
+        with open(filename, "r") as f:
+            text = f.read()
+    except OSError as e:
+        raise CommandException("IOError: %s" % (e,))
+
+    name = variables["-b"]
+    if name:
+        pymux.named_buffers[name] = text
+    else:
+        pymux.clipboard.set_data(ClipboardData(text))
+
+
+def save_buffer(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Write a buffer to a file.
+
+    `-b` names the buffer; without it the session's one buffer is
+    written. Lillecarl/pymux#303.
+    """
+    name = variables["-b"]
+    if name:
+        if name not in pymux.named_buffers:
+            raise CommandException("Can't find buffer: %s" % (name,))
+        text = pymux.named_buffers[name]
+    else:
+        text = pymux.clipboard.get_data().text
+
+    filename = os.path.expanduser(variables["<filename>"])
+    try:
+        with open(filename, "w") as f:
+            f.write(text)
+    except OSError as e:
+        raise CommandException("IOError: %s" % (e,))
+
+
 def source_file(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Read a configuration file.
@@ -1919,14 +2018,6 @@ def capture_pane(pymux: "Pymux", variables: _VariablesDict) -> None:
         show_listing(pymux, "capture-pane", text)
 
 
-def show_buffer(pymux: "Pymux", variables: _VariablesDict) -> None:
-    """
-    Display the clipboard content.
-    """
-    text = get_app().clipboard.get_data().text
-    pymux.get_client_state().layout_manager.display_popup("show-buffer", text)
-
-
 def _print_object_format(
     pymux: "Pymux",
     format_str: str | None,
@@ -2470,7 +2561,40 @@ def _declare_capture_pane(subparsers: Any) -> None:
 
 @declarer
 def _declare_show_buffer(subparsers: Any) -> None:
-    _command(subparsers, show_buffer)
+    parser = _command(subparsers, show_buffer)
+    parser.add_argument("-b", metavar="<buffer-name>", help="The named buffer to show.")
+
+
+@declarer
+def _declare_set_buffer(subparsers: Any) -> None:
+    parser = _command(subparsers, set_buffer)
+    parser.add_argument("-b", metavar="<buffer-name>", help="The named buffer to fill.")
+    parser.add_argument("value", metavar="<value>", nargs="?")
+
+
+@declarer
+def _declare_list_buffers(subparsers: Any) -> None:
+    _command(subparsers, list_buffers)
+
+
+@declarer
+def _declare_delete_buffer(subparsers: Any) -> None:
+    parser = _command(subparsers, delete_buffer)
+    parser.add_argument("-b", metavar="<buffer-name>", required=True, help="The named buffer to remove.")
+
+
+@declarer
+def _declare_load_buffer(subparsers: Any) -> None:
+    parser = _command(subparsers, load_buffer)
+    parser.add_argument("-b", metavar="<buffer-name>", help="The named buffer to fill.")
+    parser.add_argument("filename", metavar="<filename>")
+
+
+@declarer
+def _declare_save_buffer(subparsers: Any) -> None:
+    parser = _command(subparsers, save_buffer)
+    parser.add_argument("-b", metavar="<buffer-name>", help="The named buffer to write.")
+    parser.add_argument("filename", metavar="<filename>")
 
 
 #
