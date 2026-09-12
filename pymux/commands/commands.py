@@ -1241,7 +1241,10 @@ def set_option(pymux: "Pymux", variables: _VariablesDict, window: bool = False) 
         raise CommandException("Invalid option: %s" % (name,))
 
     if value is None:
-        answer(pymux, "%s %s" % (name, option_as_written(pymux, option, variables)))
+        answer(
+            pymux,
+            "%s %s" % (name, option_as_written(pymux, option, variables, window)),
+        )
         return
 
     try:
@@ -1269,7 +1272,9 @@ def set_option(pymux: "Pymux", variables: _VariablesDict, window: bool = False) 
         raise CommandException(e.message)
 
 
-def option_as_written(pymux: "Pymux", option, variables: _VariablesDict) -> str:
+def option_as_written(
+    pymux: "Pymux", option, variables: _VariablesDict, window: bool
+) -> str:
     """
     What an option holds, as a person wrote it.
 
@@ -1277,14 +1282,13 @@ def option_as_written(pymux: "Pymux", option, variables: _VariablesDict) -> str:
     the rest hold what they were given. A window option reads the
     window that is active, or, with `-g`, the default every new
     window starts with -- which is recorded only when somebody set
-    it, so one that was never set reads as not set.
+    it, so one that was never set reads as not set. `-g` says nothing
+    for a session option, on the read as on the write.
     """
-    if variables.get("-g"):
+    if window and variables.get("-g"):
         value = pymux.arrangement.window_defaults.get(option.attribute_name)
     else:
-        holder = (
-            pymux.arrangement.get_active_window() if option.window_option else pymux
-        )
+        holder = pymux.arrangement.get_active_window() if window else pymux
         value = getattr(holder, option.attribute_name, None)
     if value is None:
         return "not set"

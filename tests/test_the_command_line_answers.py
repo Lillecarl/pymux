@@ -122,3 +122,17 @@ async def test_an_option_that_was_never_set_says_so():
         pymux.handle_command("set-window-option -g strip")
 
         assert pymux.command_output == ["strip not set"]
+
+
+@in_a_loop
+async def test_set_option_ignores_g_on_the_read():
+    """
+    A session option is already global, so `-g` says nothing for it,
+    on the read as on the write.
+    """
+    async with create_session() as (pymux, state):
+        pymux.command_output = []
+
+        pymux.handle_command("set-option -g status")
+
+        assert pymux.command_output == ["status on"]
