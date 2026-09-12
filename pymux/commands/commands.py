@@ -1276,8 +1276,18 @@ def display_panes(pymux: "Pymux", variables: _VariablesDict) -> None:
 
 
 def display_message(pymux: "Pymux", variables: _VariablesDict) -> None:
-    "Show a message on the status line."
+    '''
+    Show a message on the status line.
+
+    With `-p`, print the message, formatted, instead: the way a script
+    asks the session a question and reads the answer. tmux spells it
+    the same. Lillecarl/pymux#289.
+    '''
     message = variables["<message>"]
+    if variables["-p"]:
+        answer(pymux, format_pymux_string(pymux, message))
+        return
+
     client_state = pymux.get_client_state()
     client_state.message = message
 
@@ -1290,6 +1300,21 @@ def clear_history(pymux: "Pymux", variables: _VariablesDict) -> None:
         raise CommandException("Not available in copy mode")
     else:
         pane.screen.clear_history()
+
+
+def answer(pymux: "Pymux", text: str) -> None:
+    """
+    Answer a question on the channel the asker reads.
+
+    A command that arrives over the command line gets stdout, which
+    is what `command_output` says. A person typing at the prompt of a
+    pane gets the message line, because there is no stdout to write
+    to. Lillecarl/pymux#289.
+    """
+    if pymux.command_output is not None:
+        pymux.print_command_line(text)
+    else:
+        pymux.get_client_state().message = text
 
 
 def show_listing(pymux: "Pymux", title: str, text: str) -> None:
@@ -1996,7 +2021,44 @@ def _declare_display_panes(subparsers: Any) -> None:
 @declarer
 def _declare_display_message(subparsers: Any) -> None:
     parser = _command(subparsers, display_message)
+    parser.add_argument("-p", action="store_true", help="Print the message instead of showing it.")
     parser.add_argument("message", metavar="<message>")
+
+
+def get(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Read an id, by the thing it names.
+
+    `get paneid` says the id of the pane a target names, or of the
+    active one. The id is the handle every targeted command accepts
+    as `%<id>`, and unlike the window and pane indexes it does not
+    move when panes open and close. Lillecarl/pymux#291.
+    """
+    what = variables["<what>"]
+    if what != "paneid":
+        raise CommandException("Unknown thing to get: %s" % (what,))
+
+    if variables["-t"]:
+        pane = _find_pane(pymux, variables["<target-pane>"])
+        if pane is None:
+            raise CommandException(
+                "Can't find pane: %s" % (variables["<target-pane>"],)
+            )
+    else:
+        pane = pymux.arrangement.get_active_pane()
+
+    answer(pymux, str(pane.pane_id))
+
+
+@declarer
+def _declare_get(subparsers: Any) -> None:
+    parser = _command(subparsers, get)
+    parser.add_argument(
+        "-t",
+        metavar="<target-pane>",
+        help="The pane to read, rather than the active one.",
+    )
+    parser.add_argument("what", metavar="<what>")
 
 
 @declarer

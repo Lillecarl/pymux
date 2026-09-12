@@ -53,3 +53,37 @@ async def test_a_listing_shows_in_a_pane_and_prints_on_the_command_line():
         pymux.handle_command("list-windows")
         assert pymux.command_output
         assert len(shown) == 1, "the command line drew a popup"
+
+
+@in_a_loop
+async def test_display_message_p_prints_the_answer():
+    async with create_session() as (pymux, state):
+        pymux.command_output = []
+
+        pymux.handle_command("display-message -p hello")
+
+        assert pymux.command_output == ["hello"]
+
+
+@in_a_loop
+async def test_display_message_without_p_shows_the_message():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("display-message hello")
+
+        assert state.message == "hello"
+        assert pymux.command_output is None
+
+
+@in_a_loop
+async def test_get_paneid_names_the_pane():
+    async with create_session() as (pymux, state):
+        pane = pymux.arrangement.get_active_pane()
+
+        pymux.command_output = []
+        pymux.handle_command("get paneid")
+        assert pymux.command_output == [str(pane.pane_id)]
+
+        pymux.command_output = []
+        pymux.handle_command("get -t %%%i paneid" % pane.pane_id)
+        assert pymux.command_output == [str(pane.pane_id)]
