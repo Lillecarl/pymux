@@ -86,3 +86,19 @@ async def test_an_unknown_option_is_unknown():
     async with create_session() as (pymux, state):
         with pytest.raises(CommandException):
             show_options(pymux, {"-g": False, "<option>": "not-an-option"})
+
+
+@in_a_loop
+async def test_list_commands_lists_every_command_with_its_description():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("list-commands")
+
+        rows = state.message.splitlines()
+        names = [row.split()[0] for row in rows]
+        assert names == sorted(names)
+        assert "list-commands" in names
+        assert "swap-window" in names
+        # Each row carries the first line of the handler's docstring.
+        row = [one for one in rows if one.split()[0] == "swap-window"][0]
+        assert "Swap" in row

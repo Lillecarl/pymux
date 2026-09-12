@@ -214,6 +214,23 @@ def add_commands_to(subparsers: Any) -> None:
         declare(subparsers)
 
 
+def list_commands(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    One line per command: the name, and what it does.
+    """
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="command")
+    add_commands_to(subparsers)
+
+    # argparse records the help of each command on a pseudo action of
+    # the subparsers action, not on the parser it built.
+    lines = [
+        "%-24s %s" % (action.metavar, action.help or "")
+        for action in sorted(subparsers._choices_actions, key=lambda a: a.metavar)
+    ]
+    answer(pymux, "\n".join(lines))
+
+
 def _variables_of(parser: argparse.ArgumentParser, namespace: argparse.Namespace) -> _VariablesDict:
     """
     What the handlers read, in the shape docopt used to give.
@@ -2260,6 +2277,11 @@ def _declare_show_window_options(subparsers: Any) -> None:
     parser = _command(subparsers, show_window_options)
     parser.add_argument("-g", action="store_true", help="Read what every new window starts with.")
     parser.add_argument("option", metavar="<option>", nargs="?")
+
+
+@declarer
+def _declare_list_commands(subparsers: Any) -> None:
+    _command(subparsers, list_commands)
 
 
 @declarer
