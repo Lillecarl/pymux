@@ -484,6 +484,31 @@ class ClientState:
         self.app.layout.focus(pane.terminal)
 
 
+#: The hook a wake runs, when it has tmux's name for one. A command
+#: that ran wakes as `Woke.COMMAND_RAN`, and every command has an
+#: `after-` hook in tmux, so its name is read back off the reason.
+_HOOKS_BY_WAKE = {
+    Woke.PANE_WAS_SPLIT_OFF: "after-split-window",
+    Woke.WINDOW_OPENED: "after-new-window",
+    Woke.PANE_BROKE_OUT: "after-break-pane",
+    Woke.PANE_WAS_RESPAWNED: "after-respawn-pane",
+    Woke.PANE_ENDED: "pane-died",
+    Woke.CLIENT_ATTACHED: "client-attached",
+    Woke.CLIENT_DETACHED: "client-detached",
+}
+
+_COMMAND_RAN_BEFORE, _, _COMMAND_RAN_AFTER = Woke.COMMAND_RAN.partition("%s")
+
+
+def _hook_of(reason: str) -> str | None:
+    "The hook name of one wake, or None for a wake that is not an event."
+    if reason.startswith(_COMMAND_RAN_BEFORE) and reason.endswith(_COMMAND_RAN_AFTER):
+        name = reason[len(_COMMAND_RAN_BEFORE):len(reason) - len(_COMMAND_RAN_AFTER)]
+        return "after-%s" % name
+
+    return _HOOKS_BY_WAKE.get(reason)
+
+
 class Pymux:
     """
     The main Pymux application class.
@@ -655,6 +680,11 @@ class Pymux:
         # What show_message and add_command_error said, oldest last.
         # show-messages reads it back.
         self.message_log: deque[str] = deque(maxlen=100)
+
+        # The hooks of the session: a name for an event, and the
+        # commands it runs. `set-hook` fills it, `invalidate` reads it.
+        self.hooks: dict[str, list[str]] = {}
+        self._hooks_running: set[str] = set()
 
         # The file and the line that `source-file` is reading now, so
         # that a failure can say which line it was.
@@ -1284,6 +1314,7 @@ class Pymux:
         here, and holds every reason but the one that carries a name.
         """
         self.counters.invalidated(reason)
+        self.fire_hook(_hook_of(reason))
         # DEBUG: a server draws eleven frames a second when a pane
         # animates, and a line each is what made one log 86 MB in four
         # days. `pymux counters` holds the same reasons with nothing
@@ -1958,6 +1989,25 @@ class Pymux:
         Handle command from the command line.
         """
         handle_command(self, command)
+
+    def fire_hook(self, name: str | None) -> None:
+        """
+        Run the commands of one hook, if somebody set it and it is not
+        running already: a hook that runs a command fires the hooks of
+        that command, and only the guard keeps that from walking in a
+        circle. Lillecarl/pymux#297.
+        """
+        if name is None or name in self._hooks_running:
+            return
+        commands = self.hooks.get(name)
+        if not commands:
+            return
+        self._hooks_running.add(name)
+        try:
+            for command in commands:
+                self.handle_command(command)
+        finally:
+            self._hooks_running.discard(name)
 
     def show_message(self, message):
         """

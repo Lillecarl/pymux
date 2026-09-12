@@ -11,8 +11,7 @@ from pymux.commands.common import find_pane, find_window
 
 def move_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
-    Move a pane into another window, beside or above the pane that is
-    focused there.
+    Move a pane into another window, beside or above the pane focused there.
 
     -s names the pane; the active one is the default. -t names the
     window the pane goes to; the active one is the default, and a
