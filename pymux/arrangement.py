@@ -1105,6 +1105,15 @@ class Arrangement:
         # Sort windows by index.
         self.windows = sorted(self.windows, key=lambda w: w.index)
 
+    def swap_window(self, first: Window, second: Window) -> None:
+        """
+        Trade the indexes of two windows. Lillecarl/pymux#296.
+        """
+        first.index, second.index = second.index, first.index
+
+        # Sort windows by index.
+        self.windows = sorted(self.windows, key=lambda w: w.index)
+
     def get_active_pane(self) -> Pane | None:
         """
         The current :class:`.Pane` from the current window.

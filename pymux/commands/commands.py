@@ -442,6 +442,32 @@ def select_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     pymux.arrangement.set_active_window(w)
 
 
+def swap_window(pymux: "Pymux", variables: _VariablesDict) -> None:
+    """
+    Swap the active window with the window a target names.
+
+    The windows trade indexes, and without `-d` the window swapped
+    into the active one's place takes the focus, the way tmux's does.
+    A relative target, `+1` or `-1`, counts from the active window:
+    the tmux spell is `swap-window -t -1`. Lillecarl/pymux#296.
+    """
+    dst = variables["<dst-window>"]
+    active = pymux.arrangement.get_active_window()
+
+    if dst.startswith(("+", "-")):
+        dst_window = pymux.arrangement.get_window_by_index(active.index + int(dst))
+    else:
+        dst_window = _find_window(pymux, dst)
+
+    if dst_window is None or dst_window is active:
+        return
+
+    pymux.arrangement.swap_window(active, dst_window)
+
+    if not variables["-d"]:
+        pymux.arrangement.set_active_window(dst_window)
+
+
 def move_window(pymux: "Pymux", variables: _VariablesDict) -> None:
     """
     Move this window to another index.
@@ -1808,6 +1834,17 @@ def _declare_select_window(subparsers: Any) -> None:
 def _declare_move_window(subparsers: Any) -> None:
     parser = _command(subparsers, move_window)
     parser.add_argument("-t", metavar="<dst-window>", required=True, help="The index to move to.")
+
+
+@declarer
+def _declare_swap_window(subparsers: Any) -> None:
+    parser = _command(subparsers, swap_window)
+    parser.add_argument(
+        "-d",
+        action="store_true",
+        help="Keep the active window active. The windows trade places either way.",
+    )
+    parser.add_argument("-t", metavar="<dst-window>", required=True, help="The index to swap with. `+1` and `-1` count from the active window.")
 
 
 @declarer
