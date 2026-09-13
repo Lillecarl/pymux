@@ -502,6 +502,10 @@ ALL_OPTIONS = {
     "default-shell": StringOption("default_shell", [get_default_shell()]),
     "status-justify": JustifyOption("status_justify"),
     "status-interval": PositiveIntOption("status_interval", [1, 2, 4, 8, 16, 30, 60]),
+    # The names a client brings with it, space separated, each one a
+    # pattern. `Pymux.take_environment_from` says what happens to them.
+    # Lillecarl/pymux#271.
+    "update-environment": StringOption("update_environment"),
     # Make up the halves of a key event that the keyboard of a client
     # cannot send, so that a pane gets the keyboard protocol whole from
     # any terminal.

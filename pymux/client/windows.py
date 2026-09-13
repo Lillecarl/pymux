@@ -60,6 +60,9 @@ class WindowsClient(Client):
                     "term": os.environ.get("TERM", ""),
                     # Lillecarl/pymux#287, as `client/terminal.py` says.
                     "hostname": socket.gethostname(),
+                    # Lillecarl/pymux#271, and the same file says why
+                    # the client sends all of it.
+                    "environment": dict(os.environ),
                     "data": "",
                 }
             )

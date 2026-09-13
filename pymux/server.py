@@ -134,6 +134,12 @@ class ServerConnection:
         #: person sits at. Lillecarl/pymux#287.
         self.hostname = ""
 
+        #: The environment of the machine this client runs on, as the
+        #: client reported it when it attached. The session keeps the
+        #: names "update-environment" lists, and nothing keeps the rest.
+        #: Lillecarl/pymux#271.
+        self.environment: Dict[str, str] = {}
+
         #: The two colours the outer terminal draws with by itself.
         #: The same handshake asks for them, and either one stays
         #: `None` when the terminal does not say. **Only a client can
@@ -520,12 +526,21 @@ class ServerConnection:
             self.colors.term = term
             self.colors.colorterm = packet.get("colorterm", "")
             self.hostname = packet.get("hostname", "")
+            self.environment = packet.get("environment") or {}
 
             if detach_other_clients:
                 for c in self.pymux.connections:
                     c.detach_and_close()
 
             self._create_app(color_depth=self.colors.depth, term=term)
+
+            # The session this client landed on takes the names that
+            # follow a client: a display, an agent, a session bus.
+            # `attach_client_to` does it for every later move between
+            # sessions; this is the first attach, which does not go
+            # through it. Lillecarl/pymux#271.
+            if self.client_state is not None:
+                self.pymux.take_environment_from(self.client_state)
 
         # A URL that the client of this connection could not open. The
         # request went out as a status line here, so the answer goes

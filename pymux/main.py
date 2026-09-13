@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 import base64
 import contextvars
 import datetime
+import fnmatch
 import os
 import shlex
 import signal
@@ -130,6 +131,16 @@ class PaneCursor(CursorShapeConfig):
 #: key repeats, and one line per repeat is a log nobody reads. A
 #: keyboard has fewer keys than this.
 MAX_KEYS_TO_REMEMBER = 512
+
+#: What a client refreshes in the session it attaches to, by default.
+#: tmux's own list, which is every name that points at something on
+#: the machine a person is sitting at: a display, an agent, a session
+#: bus. ("update-environment", `options-table.c`.) Lillecarl/pymux#271.
+DEFAULT_UPDATE_ENVIRONMENT = (
+    "DISPLAY KRB5CCNAME MSYSTEM SSH_ASKPASS SSH_AUTH_SOCK SSH_AGENT_PID "
+    "SSH_CONNECTION WAYLAND_DISPLAY WINDOWID XAUTHORITY XDG_CURRENT_DESKTOP "
+    "XDG_SESSION_DESKTOP XDG_SESSION_TYPE"
+)
 
 
 def _say_key_did_not_fit():
@@ -850,6 +861,11 @@ class Pymux:
         # than to nothing. Lillecarl/pymux#270.
         self.global_environment: dict[str, str | None] = {}
 
+        #: The names a client refreshes when it attaches, space
+        #: separated, each one a pattern. ("update-environment".)
+        #: `take_environment_from` says what it is for.
+        self.update_environment = DEFAULT_UPDATE_ENVIRONMENT
+
         # What the command line and the prompts of every client took.
         # The buffers append through `leave_command_mode`, the grey
         # suggestion reads it, and up and down walk it.
@@ -930,6 +946,42 @@ class Pymux:
         if session in self.sessions:
             self.remove_session(session)
 
+    def take_environment_from(self, client_state) -> None:
+        """
+        Refresh the named variables of a session from the client that
+        just attached to it. ("update-environment".)
+
+        **The machine a person attaches from is the machine their panes
+        should talk to.** `DISPLAY`, `SSH_AUTH_SOCK` and `WAYLAND_DISPLAY`
+        name things that live on that machine, and a server outlives the
+        client that started it: over ssh (Lillecarl/pymux#90) an old
+        `DISPLAY` from the server's own start is worse than none, because
+        a pane then opens a window nobody is looking at.
+
+        A name the client does not carry is taken out of the session
+        rather than left behind, which is what tmux does
+        (`environ_update` in its `environ.c`) and for the same reason:
+        the point is that these follow the client.
+
+        `set-environment` writes the same dictionary and is not touched
+        here, except for the names this option lists -- those belong to
+        whoever attached. Lillecarl/pymux#271, Lillecarl/pymux#270.
+        """
+        reported = getattr(client_state.connection, "environment", None) or {}
+        environment = client_state.session.environment
+
+        for pattern in self.update_environment.split():
+            # A pattern, because tmux matches one: `XDG_*` is how a
+            # person takes a family of them without naming each.
+            found = False
+            for name, value in reported.items():
+                if fnmatch.fnmatchcase(name, pattern):
+                    environment[name] = value
+                    found = True
+
+            if not found:
+                environment.pop(pattern, None)
+
     def attach_client_to(self, client_state, session: Session) -> None:
         "Put one client on a session, and draw what it shows."
         if client_state.session is session:
@@ -937,6 +989,9 @@ class Pymux:
 
         client_state.previous_session = client_state.session
         client_state.session = session
+        # The session this client now watches takes what the client
+        # reported when it attached. Lillecarl/pymux#271.
+        self.take_environment_from(client_state)
         self.client_was_used(client_state)
         client_state.sync_focus()
         self.invalidate(Woke.SESSION_CHANGED)

@@ -134,6 +134,14 @@ class TerminalClient(Client):
                 # say it: over ssh the server answers `gethostname`
                 # with another machine's name. Lillecarl/pymux#287.
                 "hostname": socket.gethostname(),
+                # The whole environment of this client, of which the
+                # server keeps the names "update-environment" lists and
+                # drops the rest. The client cannot do the filtering: it
+                # is the server that holds the option, and asking for it
+                # first would be a round trip at every attach. tmux
+                # sends the whole environment too, one message per
+                # variable. Lillecarl/pymux#271.
+                "environment": dict(os.environ),
                 "data": "",
             }
         )

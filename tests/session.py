@@ -61,8 +61,11 @@ class Connection:
     pointer_shape = None
     graphics = None
 
-    def __init__(self, hostname: str = "") -> None:
+    def __init__(self, hostname: str = "", environment: dict | None = None) -> None:
         self.hostname = hostname
+        #: What a client reports of the machine it runs on.
+        #: Lillecarl/pymux#271.
+        self.environment = environment or {}
 
     def set_pointer_shape(self, shape):
         pass
@@ -119,8 +122,9 @@ class Session(NamedTuple):
     #: The server.
     pymux: Any
 
-    #: `await attach(name, size, hostname=...)` -> the client state and
-    #: its size. The hostname is what the client says its machine is.
+    #: `await attach(name, size, hostname=..., environment=...)` -> the
+    #: client state and its size. The hostname and the environment are
+    #: what the client says about the machine it runs on.
     attach: Callable
 
     #: `await detach(state)`: what a person walking away does.
@@ -204,14 +208,18 @@ async def in_this_process(pymux=None):
         # `pymux.server._ClientInput`.
         pipe.vt100_parser = KittyVt100Parser(pipe._buffer.append)
 
-        async def attach(name, size, hostname=OTHER_MACHINE):
+        async def attach(name, size, hostname=OTHER_MACHINE, environment=None):
             output = Vt100_Output(stdout=_Sink(), get_size=lambda: size)
             state = pymux.add_client(
                 output=output,
                 input=pipe,
                 color_depth=ColorDepth.DEPTH_8_BIT,
-                connection=Connection(hostname),
+                connection=Connection(hostname, environment),
             )
+            # The socket route takes these from the `start-gui` packet.
+            # This route has no packet, so the attach is here.
+            # Lillecarl/pymux#271.
+            pymux.take_environment_from(state)
             watch("%s client" % name, state)
             watch("%s application" % name, state.app)
             watch("%s layout manager" % name, state.layout_manager)
@@ -333,7 +341,7 @@ async def over_connection(pymux=None, read_packet=None):
             if read_packet is not None:
                 read_packet(packet)
 
-    async def attach(name, size, hostname=OTHER_MACHINE):
+    async def attach(name, size, hostname=OTHER_MACHINE, environment=None):
         server_end, client_end = connect_in_memory()
 
         # A context of its own, which is what both real routes do:
@@ -365,6 +373,7 @@ async def over_connection(pymux=None, read_packet=None):
                     "term": "xterm-256color",
                     "colorterm": "",
                     "hostname": hostname,
+                    "environment": environment or {},
                     "data": "",
                 }
             )
