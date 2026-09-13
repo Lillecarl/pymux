@@ -479,7 +479,7 @@ def foot_argv(command, background="000000", foreground="ffffff"):
     ]
 
 
-def kitty_argv(command, background="#000000", foreground="#ffffff"):
+def kitty_argv(command, background="#000000", foreground="#ffffff", blink=True):
     """
     kitty, which is the terminal the faults get reported from.
 
@@ -490,6 +490,14 @@ def kitty_argv(command, background="#000000", foreground="#ffffff"):
     `cursor_stop_blinking_after=0` is the one that is not about pixels.
     kitty stops blinking the cursor after fifteen seconds with no key
     pressed, and nobody presses a key here.
+
+    **`blink=False` is for a run that keeps one picture instead of
+    subtracting two.** A settle waits for two pictures in a row to be
+    the same, and a cursor that blinks for ever makes sure they never
+    are: a chrome fixture that leaves a cursor on the screen cannot
+    settle in kitty at all. The comparison run wants the blink,
+    because one of its fixtures measures it, so the default stays.
+    Lillecarl/pymux#338.
     """
     return [
         "kitty",
@@ -510,7 +518,7 @@ def kitty_argv(command, background="#000000", foreground="#ffffff"):
         "-o",
         "shell_integration=no",
         "-o",
-        "cursor_blink_interval=0.5",
+        "cursor_blink_interval=%s" % ("0.5" if blink else "0",),
         "-o",
         "cursor_stop_blinking_after=0",
         "sh",

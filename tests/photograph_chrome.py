@@ -43,6 +43,7 @@ import os
 import shlex
 import sys
 import time
+from functools import partial
 from pathlib import Path
 
 # `tests/`, for the harness beside this file, and the directory above
@@ -54,7 +55,36 @@ sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pyterm_pytest.seats import SEATS  # noqa: E402
 
 from middleman import FORWARDER  # noqa: E402
-from take_picture import HOLD, TERMINALS, every_log  # noqa: E402
+from take_picture import (  # noqa: E402
+    HOLD,
+    TERMINALS,
+    Terminal,
+    every_log,
+    kitty_argv,
+)
+
+#: The same three terminals, with kitty's cursor asked to hold still.
+#:
+#: This run keeps one picture of each fixture; it subtracts nothing,
+#: so it has no use for a blinking cursor, and a settle waits for two
+#: pictures in a row to be the same. kitty is configured to blink for
+#: ever, because `take_picture.py` has a fixture that measures the
+#: blink -- so `chooser-search`, the first chrome fixture that leaves a
+#: cursor on the screen, never settled there and took no picture at
+#: all. Lillecarl/pymux#338.
+CHROME_TERMINALS = [
+    Terminal(
+        one.name,
+        one.program,
+        partial(kitty_argv, blink=False),
+        seat=one.seat,
+        window_class=one.window_class,
+        environment=one.environment,
+    )
+    if one.name == "kitty"
+    else one
+    for one in TERMINALS
+]
 
 #: Where the pictures go. The check points this at `$out`.
 PICTURES = Path(os.environ.get("PYMUX_CHROME_OUT", "chrome-pictures"))
@@ -461,7 +491,7 @@ def main(
     if out is None:
         out = PICTURES
     if terminals is None:
-        terminals = TERMINALS
+        terminals = CHROME_TERMINALS
 
     work = Path(os.environ.get("TMPDIR", "/tmp")) / "pymux-chrome"
     work.mkdir(parents=True, exist_ok=True)
