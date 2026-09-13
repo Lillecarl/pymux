@@ -19,19 +19,22 @@ def if_shell(pymux: "Pymux", args: argparse.Namespace):
     the shell command runs, and when it exits zero the first command
     runs, else the second, when there is one. -F asks the question of
     a format instead of a shell: no program runs, and a non-empty
-    answer is yes.
+    answer is yes. -J asks the same of a jinja2 template.
 
     **A question for a shell is a question this answers later.** The
     client that asked waits for it and the server does not, which is
     what `run-shell` beside this says. -F asks a format, which is
     answered here and now. Lillecarl/pymux#297, #311.
     """
-    if args.F:
+    if args.F or args.J:
         # No program runs, so there is nothing to wait for and -b
         # changes nothing. tmux answers this one on the spot as well.
-        # `-F` is the tmux format, as everywhere. Lillecarl/pymux#333.
+        # `-F` asks a tmux format and `-J` the same question written as
+        # a template. Lillecarl/pymux#333.
         answer = format_pymux_string(
-            pymux, args.shell_command, language=Language.TMUX
+            pymux,
+            args.shell_command,
+            language=Language.JINJA if args.J else Language.TMUX,
         )
         return _then_run(pymux, args, bool(answer))
 
@@ -70,6 +73,7 @@ def _then_run(pymux: "Pymux", args: argparse.Namespace, yes: bool):
 def register(subparsers):
     parser = add_command(subparsers, if_shell)
     parser.add_argument("-F", dest="F", action="store_true", help="Ask a format, not a shell: no program runs, and a non-empty answer is yes.")
+    parser.add_argument("-J", dest="J", action="store_true", help="Ask a jinja2 template, not a shell. Like -F, in the other language.")
     parser.add_argument("-b", dest="b", action="store_true", help="Run in the background: the command that asked does not wait for the shell. -F answers at once either way.")
     parser.add_argument("shell_command", metavar="<shell-command>", help="The question, through the shell, or the format with -F.")
     parser.add_argument("then_command", metavar="<then-command>", nargs="?")

@@ -6,8 +6,13 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandException, add_command
-from pymux.commands.common import session_part, show_listing
-from pymux.format import Language, format_pymux_string
+from pymux.commands.common import (
+    add_format_arguments,
+    chosen_format,
+    session_part,
+    show_listing,
+)
+from pymux.format import format_pymux_string
 
 
 def _sessions(pymux: "Pymux", args: argparse.Namespace) -> list:
@@ -38,20 +43,19 @@ def list_windows(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
     sessions = _sessions(pymux, args)
 
-    if args.format:
-        format_str = args.format or "#{window_id}"
+    chosen = chosen_format(args, "#{window_id}")
+
+    if chosen.asked:
         for session in sessions:
             for w in session.arrangement.windows:
                 pymux.print_command_line(
                     format_pymux_string(
                         pymux,
-                        format_str,
+                        chosen.string,
                         window=w,
                         pane=w.active_pane,
                         session=session,
-                        # `-F` is read by a script: tmux format only.
-                        # Lillecarl/pymux#333.
-                        language=Language.TMUX,
+                        language=chosen.language,
                     )
                 )
     else:
@@ -82,4 +86,4 @@ def register(subparsers):
     parser = add_command(subparsers, list_windows)
     parser.add_argument("-a", dest="a", action="store_true", help="Every window of every session.")
     parser.add_argument("-t", dest="target_window", metavar="<target-window>", help="The session whose windows to list.")
-    parser.add_argument("-F", dest="format", metavar="<format>", help="Print this format for every window.")
+    add_format_arguments(parser, "Print this format for every window.")

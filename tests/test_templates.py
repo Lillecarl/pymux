@@ -186,6 +186,53 @@ def test_a_template_is_compiled_once(pymux):
     assert first is second
 
 
+def test_a_listing_asks_for_the_language_by_its_flag():
+    """
+    `-F` and `-J` name the language; neither is sniffed, because a
+    listing is what a script reads. Lillecarl/pymux#333.
+    """
+    import argparse
+
+    from pymux.commands.common import chosen_format
+
+    tmux = chosen_format(argparse.Namespace(format="#{pane_id}", template=None), "d")
+    assert tmux == ("#{pane_id}", Language.TMUX, True)
+
+    jinja = chosen_format(argparse.Namespace(format=None, template="{{ x }}"), "d")
+    assert jinja == ("{{ x }}", Language.JINJA, True)
+
+    nothing = chosen_format(argparse.Namespace(format=None, template=None), "d")
+    assert nothing == ("d", Language.TMUX, False)
+
+
+def test_a_template_in_a_format_flag_is_two_braces(pymux):
+    "`-F '{{ session_name }}'` prints braces, because -F says tmux."
+    from pymux.commands import handle_command
+
+    pymux.command_output = []
+    try:
+        handle_command(pymux, "list-sessions -F '{{ session_name }}'")
+        said = list(pymux.command_output)
+    finally:
+        pymux.command_output = None
+
+    assert said == ["{{ session_name }}"]
+
+
+def test_a_listing_draws_a_template_when_it_is_asked_to(pymux):
+    "`-J` is the same listing in the other language."
+    from pymux.commands import handle_command
+
+    pymux.command_output = []
+    try:
+        handle_command(pymux, "list-sessions -J '{{ session_name | upper }}'")
+        said = list(pymux.command_output)
+    finally:
+        pymux.command_output = None
+
+    assert said == [pymux.session_name.upper()]
+
+
 def test_a_context_of_its_own_still_draws(pymux):
     "`format_in_context` is the seam a renderer with its own facts uses."
     from pymux.format import format_in_context

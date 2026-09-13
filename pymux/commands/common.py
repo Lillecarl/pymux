@@ -1,7 +1,7 @@
 """Helpers shared by the command modules."""
 
 import argparse
-from typing import Optional
+from typing import NamedTuple, Optional
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -256,9 +256,50 @@ def show_listing(pymux: "Pymux", title: str, text: str) -> None:
         pymux.get_client_state().layout_manager.display_popup(title, text)
 
 
+class ChosenFormat(NamedTuple):
+    "What a command prints, and the language it is written in."
+
+    string: str
+    language: Language
+
+    #: Whether the caller asked for a format at all. A listing draws a
+    #: line for each object when they did, and its own overview when
+    #: they did not.
+    asked: bool
+
+
+def add_format_arguments(parser, help_text: str) -> None:
+    """
+    Add `-F` and `-J` to a command that prints a format.
+
+    Neither is sniffed. `-F` is tmux format, which is what libtmux and
+    libpymux read; `-J` is a jinja2 template, for a person who wants a
+    condition or a filter in what they print. Lillecarl/pymux#333.
+    """
+    parser.add_argument("-F", dest="format", metavar="<format>", help=help_text)
+    parser.add_argument(
+        "-J",
+        dest="template",
+        metavar="<template>",
+        help="%s Written as a jinja2 template." % (help_text,),
+    )
+
+
+def chosen_format(args: argparse.Namespace, default: str) -> ChosenFormat:
+    "The format this command prints, by which flag asked for it."
+    template = getattr(args, "template", None)
+    if template:
+        return ChosenFormat(template, Language.JINJA, True)
+    return ChosenFormat(args.format or default, Language.TMUX, bool(args.format))
+
+
+#: What `-P` prints when nothing named a format. (tmux's own.)
+NEW_OBJECT_FORMAT = "#{session_name}:#{window_index}.#{pane_index}"
+
+
 def print_object_format(
     pymux: "Pymux",
-    format_str: str | None,
+    args: argparse.Namespace,
     window: "Window",
     pane: "Pane",
     session: "Session | None" = None,
@@ -267,18 +308,14 @@ def print_object_format(
     Print the information of a newly created object. (Like `tmux
     new-window -P`.)
     """
-    if format_str is None:
-        format_str = "#{session_name}:#{window_index}.#{pane_index}"
+    chosen = chosen_format(args, NEW_OBJECT_FORMAT)
     pymux.print_command_line(
         format_pymux_string(
             pymux,
-            format_str,
+            chosen.string,
             window=window,
             pane=pane,
             session=session,
-            # `-F` is what a script reads, so it says tmux format and
-            # nothing else: a `{{` in it is two braces and not a
-            # template. Lillecarl/pymux#333.
-            language=Language.TMUX,
+            language=chosen.language,
         )
     )

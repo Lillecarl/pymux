@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException
 from pymux.commands import add_command
-from pymux.commands.common import print_object_format
+from pymux.commands.common import add_format_arguments, print_object_format
 from pymux.enums import Woke
 
 
@@ -49,7 +49,7 @@ def new_session(pymux: "Pymux", args: argparse.Namespace) -> None:
         window = session.arrangement.get_active_window()
         print_object_format(
             pymux,
-            args.format,
+            args,
             window=window,
             pane=window.active_pane,
             session=session,
@@ -63,5 +63,5 @@ def register(subparsers):
     parser.add_argument("-c", dest="start_directory", metavar="<start-directory>", help="The working directory of the first pane.")
     parser.add_argument("-d", dest="d", action="store_true", help="Do not attach.")
     parser.add_argument("-P", dest="P", action="store_true", help="Print information about the session.")
-    parser.add_argument("-F", dest="format", metavar="<format>", help="The format to print with -P.")
+    add_format_arguments(parser, "The format to print with -P.")
     parser.add_argument("command", metavar="<shell-command>", nargs="?", help="What the first pane runs.")

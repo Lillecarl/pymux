@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import add_command
 from pymux.commands.common import find_window
-from pymux.commands.common import print_object_format
+from pymux.commands.common import add_format_arguments, print_object_format
 
 
 def split_window(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -32,9 +32,7 @@ def split_window(pymux: "Pymux", args: argparse.Namespace) -> None:
         window = pymux.arrangement.get_active_window()
         if target_window is not None:
             window = target_window
-        print_object_format(
-            pymux, args.format, window=window, pane=window.active_pane
-        )
+        print_object_format(pymux, args, window=window, pane=window.active_pane)
 
 
 def add_arguments(parser):
@@ -46,7 +44,7 @@ def add_arguments(parser):
     parser.add_argument("-c", dest="start_directory", metavar="<start-directory>", help="Where the program starts.")
     parser.add_argument("-d", dest="d", action="store_true", help="Leave the new pane unfocused.")
     parser.add_argument("-P", dest="P", action="store_true", help="Print information about the new pane.")
-    parser.add_argument("-F", dest="format", metavar="<format>", help="The format to print with -P.")
+    add_format_arguments(parser, "The format to print with -P.")
     parser.add_argument("executable", nargs="?", metavar="<executable>")
 
 

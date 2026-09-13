@@ -6,7 +6,11 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandException, add_command
-from pymux.commands.common import print_object_format, session_part
+from pymux.commands.common import (
+    add_format_arguments,
+    print_object_format,
+    session_part,
+)
 
 
 def index(target):
@@ -133,7 +137,7 @@ def new_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     if args.P:
         print_object_format(
             pymux,
-            args.format,
+            args,
             window=new_window,
             pane=new_window.active_pane,
             session=session,
@@ -149,5 +153,5 @@ def register(subparsers):
     parser.add_argument("-c", dest="start_directory", metavar="<start-directory>", help="Where the program starts.")
     parser.add_argument("-d", dest="d", action="store_true", help="Leave the new window unfocused.")
     parser.add_argument("-P", dest="P", action="store_true", help="Print information about the new window.")
-    parser.add_argument("-F", dest="format", metavar="<format>", help="The format to print with -P.")
+    add_format_arguments(parser, "The format to print with -P.")
     parser.add_argument("executable", nargs="?", metavar="<executable>")
