@@ -54,13 +54,15 @@ async def test_listing_shows_in_pane_and_prints_on_command_line():
 
 async def test_capture_pane_p_answers_one_entry_per_call():
     """
-    A multi-line answer is one entry, not one entry per character.
+    A multi-line answer is one entry, not one per line.
 
-    `capture-pane -p` at the raw command line printed `l`, `i`, `l`,
-    `l`, `e` ... one character per line. The server joins
-    `command_output` with a newline, so an answer that arrives as a
-    string instead of inside a list is joined character by character.
-    Lillecarl/pymux#321.
+    The server joins `command_output` with a newline, so a command that
+    answers once has to append once. This says that much and no more:
+    the pane here has no program in it, so the text is empty.
+
+    What `capture-pane -p` really printed one character per line is in
+    `tests/drive_with_pty.py`, and it was never this: a detached pane
+    parsed at zero columns. Lillecarl/pymux#321.
     """
     async with create_session() as (pymux, state):
         pymux.command_output = []

@@ -2068,7 +2068,59 @@ def check_libpymux(tmp):
 #: Every check, in the order a whole run does them. Each one starts a
 #: server of its own, so the order is the order somebody wrote them in
 #: and not a chain.
+def check_detached_pane_has_a_width(tmp):
+    """
+    A pane nobody looks at still parses at a real width.
+
+    A screen starts at nought by nought and the first render sizes it.
+    A detached session never renders, so `create_pane` gives the pane a
+    default size -- and it used to give it to the pty alone. The screen
+    stayed at zero columns, so every character a program wrote wrapped
+    onto a row of its own.
+
+    It showed as `capture-pane -p` printing one character per line.
+    `-J` read correctly throughout, because it joins wrapped rows back
+    together, which is what hid this. Lillecarl/pymux#321.
+
+    No terminal here: a client is the one thing this must run without.
+    """
+    sock_path = tmp / "detached.sock"
+    line = "A" * 40
+    program = "%s -c \"print('%s'); import time; time.sleep(30)\"" % (
+        sys.executable,
+        line,
+    )
+    try:
+        made = run_cli(sock_path, ["new-session", "-d", program])
+        assert made.returncode == 0, made.stderr
+
+        captured = None
+        for _ in range(40):
+            time.sleep(0.25)
+            answer = run_cli(sock_path, ["capture-pane", "-p"])
+            assert answer.returncode == 0, answer.stderr
+            captured = answer.stdout.decode("utf-8", "replace")
+            if line in captured:
+                break
+        else:
+            raise AssertionError(
+                "the pane never held the line it printed.\n"
+                "Every row holding one character is this bug:\n%r" % (captured,)
+            )
+
+        one_character_rows = [
+            row for row in captured.splitlines() if len(row.strip()) == 1
+        ]
+        assert len(one_character_rows) < 5, (
+            "the pane wrapped at one column: %r" % (one_character_rows[:10],)
+        )
+    finally:
+        run_cli(sock_path, ["kill-server"])
+    print("detached pane has a width: ok")
+
+
 CHECKS = (
+    check_detached_pane_has_a_width,
     check_kitty_terminal,
     check_sixel_terminal,
     check_colorterm_terminal,

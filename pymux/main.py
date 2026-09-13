@@ -1234,13 +1234,21 @@ class Pymux:
         # sessions also run and produce output. (Like tmux does.)
         terminal_control = terminal.terminal_control
         if not terminal_control._running:
-            process = terminal_control.process
             # Give the terminal a default size until a client attaches.
-            process.set_size(80, 24)
-            process.start()
+            #
+            # **The control and not the process.** `Process.set_size` tells
+            # the pty and nothing else; `TerminalControl.set_size` tells the
+            # pty and the screen. A screen starts at nought by nought and is
+            # sized by the first render, which a detached pane never gets, so
+            # sizing only the pty left the screen at zero columns: every
+            # character a program wrote wrapped onto a row of its own.
+            #
+            # It showed as `capture-pane -p` printing one character per line,
+            # while `-J` read correctly because it joins wrapped rows back
+            # together. Lillecarl/pymux#321.
+            terminal_control.set_size(80, 24)
+            terminal_control.process.start()
             terminal_control._running = True
-            # Now that the pty exists, apply the size to it as well.
-            process.set_size(80, 24)
 
         # Keep track of panes. This is a WeakKeyDictionary, we only add, but
         # don't remove.
