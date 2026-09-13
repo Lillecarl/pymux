@@ -8,7 +8,7 @@ shorter, so a program only gets its way when the person allows it with
 "set-option allow-program-resize on".
 """
 
-from pymux.arrangement import Arrangement, Pane
+from pymux.arrangement import Pane
 from pymux.layout import plan_of
 from pymux.main import Pymux
 
@@ -37,7 +37,6 @@ def _pymux(allow=False):
     """
     pymux = Pymux()
     pymux.allow_program_resize = allow
-    pymux.arrangement = Arrangement()
 
     first = Pane(terminal=_FakeTerminal(sy=24))
     second = Pane(terminal=_FakeTerminal(sy=24))

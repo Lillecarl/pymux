@@ -58,6 +58,7 @@ from .pipes import bind_and_listen_on_socket, connect_in_memory
 from .prompt_toolkit_compat import apply_prompt_toolkit_compat_fixes
 from .rc import STARTUP_COMMANDS
 from .server import ServerConnection
+from .session import Session
 from .style import DEFAULT_THEME, THEMES, theme
 from .utils import get_default_shell
 
@@ -152,12 +153,20 @@ class ClientState:
     State information that is independent for each client.
     """
 
-    def __init__(self, pymux: "Pymux", input, output, color_depth, connection) -> None:
+    def __init__(
+        self, pymux: "Pymux", input, output, color_depth, connection, session: "Session"
+    ) -> None:
         self.pymux = pymux
         self.input = input
         self.output = output
         self.color_depth = color_depth
         self.connection = connection
+
+        #: The session this client looks at. `attach-session` and
+        #: `switch-client` move it to another one. Every render path
+        #: reads the windows through this, and never through
+        #: `get_app()`. Lillecarl/pymux#323.
+        self.session = session
 
         #: True when the prefix key (Ctrl-B) has been pressed.
         self.has_prefix = False
@@ -651,7 +660,6 @@ class Pymux:
         self.status_right_length = 20
         self.window_status_current_format = "#I:#W#F"
         self.window_status_format = "#I:#W#F"
-        self.session_name = "0"
         self.status_justify = Justify.LEFT
         self.default_shell = get_default_shell()
         self.swap_dark_and_light = False
@@ -756,9 +764,6 @@ class Pymux:
         #: property below is what tells the kernel.
         self._allow_remote_debugging = False
 
-        if session_name is not None:
-            self.session_name = session_name
-
         # Keep track of all the panes, by ID. (For quick lookup.)
         self.panes_by_id = weakref.WeakValueDictionary()
 
@@ -769,15 +774,19 @@ class Pymux:
         # Key bindings manager.
         self.key_bindings_manager = PymuxKeyBindings(self)
 
-        self.arrangement = Arrangement()
+        #: Every session of this server, oldest first, and the number
+        #: the next one takes. tmux numbers a session for the life of
+        #: the server, so a killed `$1` never comes back as `$1`.
+        self.sessions: list[Session] = []
+        self._session_counter = 0
+        self.create_session(name=session_name)
 
-        # What `set-environment` fills, the two scopes tmux has. A
-        # value of None is an unset: the name leaves the environment
-        # of a new pane, so a session unset falls through to the
-        # global value rather than to nothing.
-        # Lillecarl/pymux#270.
+        # What `set-environment -g` fills. The other scope is the
+        # session's own, on `Session.environment`. A value of None is
+        # an unset: the name leaves the environment of a new pane, so
+        # a session unset falls through to the global value rather
+        # than to nothing. Lillecarl/pymux#270.
         self.global_environment: dict[str, str | None] = {}
-        self.session_environment: dict[str, str | None] = {}
 
         # What the command line and the prompts of every client took.
         # The buffers append through `leave_command_mode`, the grey
@@ -804,6 +813,87 @@ class Pymux:
         # is kept, because that is what a person set and can read back;
         # the scheme is derived from it. Lillecarl/pymux#194.
         self.theme = DEFAULT_THEME
+
+    def create_session(self, name: str | None = None) -> Session:
+        """
+        Add a session to this server.
+
+        A session with no name takes its number, which is how tmux names
+        one that `new-session -s` did not.
+        """
+        session_id = self._session_counter
+        self._session_counter += 1
+
+        session = Session(
+            session_id=session_id,
+            name=name if name is not None else str(session_id),
+        )
+        self.sessions.append(session)
+        return session
+
+    @property
+    def current_session(self) -> Session:
+        """
+        The session of the client that asks.
+
+        `get_app()` names that client, which is right for a key binding
+        and for a command, and wrong during a render: the renderer of
+        one client can run while another client is the current one. A
+        caller that holds the client reads `client_state.session`
+        instead. `Arrangement.get_active_window_for` says the same about
+        the window, one level down. Lillecarl/pymux#323.
+
+        Nothing asks -- a start-up command, a timer -- falls back to the
+        session a person looked at last.
+        """
+        try:
+            return self.get_client_state().session
+        except ValueError:
+            return self.last_used_session
+
+    @property
+    def last_used_session(self) -> Session:
+        "The session a person looked at last, of the ones that are left."
+        return max(self.sessions, key=lambda session: session.last_used)
+
+    def get_session(self, name: str) -> Session | None:
+        """
+        The session a target names, or None.
+
+        A target is the name, tmux's exact-match `=name`, or the id
+        `$<number>`.
+        """
+        if name.startswith("="):
+            name = name[1:]
+
+        if name.startswith("$") and name[1:].isdigit():
+            session_id = int(name[1:])
+            for session in self.sessions:
+                if session.session_id == session_id:
+                    return session
+            return None
+
+        for session in self.sessions:
+            if session.name == name:
+                return session
+        return None
+
+    @property
+    def arrangement(self) -> Arrangement:
+        "The windows of the session of the client that asks."
+        return self.current_session.arrangement
+
+    @property
+    def session_name(self) -> str:
+        return self.current_session.name
+
+    @session_name.setter
+    def session_name(self, name: str) -> None:
+        self.current_session.name = name
+
+    @property
+    def session_environment(self) -> dict[str, str | None]:
+        return self.current_session.environment
 
     @property
     def style(self) -> BaseStyle:
@@ -1121,6 +1211,7 @@ class Pymux:
         """
         self._uses += 1
         client_state.last_used = self._uses
+        client_state.session.last_used = self._uses
 
     def clients_watching(self, window=None) -> "list[ClientState]":
         """
@@ -2338,14 +2429,29 @@ class Pymux:
         client_state.app.run(set_exception_handler=False)
 
     def add_client(
-        self, output, input, color_depth, connection, temporary: bool = False
+        self,
+        output,
+        input,
+        color_depth,
+        connection,
+        temporary: bool = False,
+        session: Session | None = None,
     ) -> ClientState:
+        # A client that names no session lands on the one a person
+        # looked at last, which is what `attach-session` with no `-t`
+        # means in tmux. The fake client of a socket command lands there
+        # too: the words arrived with no pane and no session on them, so
+        # there is nothing better to answer with. Lillecarl/pymux#323.
+        if session is None:
+            session = self.last_used_session
+
         client_state = ClientState(
             self,
             connection=connection,
             input=input,
             output=output,
             color_depth=color_depth,
+            session=session,
         )
         client_state.temporary = temporary
 
