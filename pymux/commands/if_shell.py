@@ -27,7 +27,15 @@ def if_shell(pymux: "Pymux", args: argparse.Namespace) -> None:
     if args.F:
         yes = bool(format_pymux_string(pymux, args.shell_command))
     else:
-        yes = subprocess.run(args.shell_command, shell=True).returncode == 0
+        # Captured and dropped. Only the status is read, and the output
+        # would otherwise go to whatever the server's stdout is: /dev/null
+        # under a daemon, and the person's own terminal in the integrated
+        # and standalone routes, where it draws over the frame. tmux sends
+        # it to /dev/null for the same reason. Lillecarl/pymux#312.
+        yes = (
+            subprocess.run(args.shell_command, shell=True, capture_output=True).returncode
+            == 0
+        )
 
     command = args.then_command if yes else args.else_command
 

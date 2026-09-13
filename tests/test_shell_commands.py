@@ -66,3 +66,21 @@ async def test_if_shell_takes_format_for_question():
             pymux.handle_command("if-shell -F 'i-am-a-format' 'display format-said-yes' 'display no'")
 
         assert state.message == "format-said-yes"
+
+
+@in_loop
+async def test_if_shell_keeps_the_question_output_off_the_terminal(capfd):
+    """
+    Only the status is read. The output used to go to the server's own
+    stdout, which is the person's terminal in the integrated and standalone
+    routes, and drew over the frame. Lillecarl/pymux#312.
+    """
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("if-shell 'echo scribble; echo noise >&2' 'display yes'")
+
+        assert state.message == "yes"
+
+    written, errored = capfd.readouterr()
+    assert "scribble" not in written
+    assert "noise" not in errored
