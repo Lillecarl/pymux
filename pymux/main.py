@@ -977,6 +977,41 @@ class Pymux:
 
         raise ValueError("Client state for app %r not found" % (app,))
 
+    def the_client_to_tell(self):
+        """
+        The client a dialog belongs to, or `None` when nobody is there.
+
+        A command that arrives over a socket runs under a temporary CLI
+        that draws nothing and is taken away as soon as the command is
+        answered. A dialog put on that one is a dialog nobody sees: a
+        `display-message` typed in a pane said nothing at all, and a
+        `confirm-before` asked a question no one could answer, so its
+        command never ran. Lillecarl/pymux#272.
+
+        So a real client answers for itself, and the fake one hands over
+        to the client a person used last -- the rule
+        `clients_to_open_on` already follows, for the same reason.
+
+        A listing does not come through here: `show_listing` and
+        `answer` write to stdout when a command arrived over the command
+        line, which is where the person who typed it is looking.
+        Lillecarl/pymux#288, #289.
+        """
+        try:
+            asking = self.get_client_state()
+        except ValueError:
+            asking = None
+
+        if asking is not None and not asking.temporary:
+            return asking
+
+        watching = [
+            client for client in self._client_states.values() if not client.temporary
+        ]
+        if not watching:
+            return None
+        return max(watching, key=lambda client: client.last_used)
+
     def get_connection(self):
         "Return the active Connection instance."
         app = get_app()
@@ -2073,10 +2108,13 @@ class Pymux:
         :param message: String.
         """
         self.message_log.append(message)
-        try:
-            self.get_client_state().message = message
-        except ValueError:
-            pass  # No client. (E.g. a temporary CLI for a run-command.)
+
+        # Not `get_client_state`. A command from a pane runs under a fake
+        # CLI that draws nothing, and a message left there is a message
+        # nobody sees. Lillecarl/pymux#272.
+        client_state = self.the_client_to_tell()
+        if client_state is not None:
+            client_state.message = message
 
     def print_command_line(self, text: str) -> None:
         """

@@ -23,7 +23,14 @@ def display_message(pymux: "Pymux", args: argparse.Namespace) -> None:
         answer(pymux, format_pymux_string(pymux, message))
         return
 
-    client_state = pymux.get_client_state()
+    # The client a person is looking at. A command typed in a pane runs
+    # under a fake CLI that draws nothing, so this used to say the
+    # message to nobody at all. Lillecarl/pymux#272.
+    client_state = pymux.the_client_to_tell()
+    if client_state is None:
+        pymux.add_command_error("pymux: nobody is attached to show a message to.")
+        return
+
     client_state.message = message
 
 
