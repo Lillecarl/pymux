@@ -7,4 +7,4 @@
 #     cp result/keystroke-budgets.txt pymux/tests/keystroke-budgets.txt
 key 14604
 parse 267
-render 238033
+render 226617
