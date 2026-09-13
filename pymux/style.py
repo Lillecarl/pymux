@@ -62,6 +62,11 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         "commandline": "bg:%s %s" % (r["command"], r["text-bright"]),
         "commandline.command": "bold",
         "commandline.prompt": "bold",
+        # Which vi mode the command line is in, when `status-keys vi`
+        # says there is more than one. It reads as a block rather than
+        # as more of the line, because it is not what a person typed.
+        # Lillecarl/pymux#255.
+        "commandline.mode": "bold bg:%s %s" % (r["accent"], r["text-bright"]),
         # The fill of the layout behind the panes, which shows where
         # nothing else draws.
         "background": r["border"],

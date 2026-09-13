@@ -10,6 +10,8 @@ from functools import partial
 from typing import TYPE_CHECKING, Callable, Dict, List, Tuple
 
 from prompt_toolkit.application import Application, get_app
+from prompt_toolkit.enums import EditingMode
+from prompt_toolkit.key_binding.vi_state import InputMode
 from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.data_structures import Point, Size
 from prompt_toolkit.filters import (
@@ -1332,13 +1334,51 @@ class LayoutManager:
         else:
             return WindowAlign.LEFT
 
+    def _vi_mode_tokens(self) -> StyleAndTextTuples:
+        """
+        Which vi mode the line a person types on is in.
+
+        Nothing with emacs status keys: there is one mode there, and a
+        tag that never changes says nothing.
+
+        **With vi status keys the mode decides what a key does**, and
+        Escape most of all: the first one leaves insert mode and the
+        second closes the line. A person has to be able to see which
+        press they are about to make. Lillecarl/pymux#255.
+
+        The tag is one width whatever it says, so the line a person is
+        typing on never moves under them.
+        """
+        if self.pymux.status_keys_vi_mode is False:
+            return []
+
+        app = get_app()
+        if app.editing_mode is not EditingMode.VI:
+            return []
+
+        mode = app.vi_state.input_mode
+        if mode in (InputMode.REPLACE, InputMode.REPLACE_SINGLE):
+            name = "REPLACE"
+        elif mode is InputMode.NAVIGATION:
+            name = "NORMAL"
+        else:
+            name = "INSERT"
+
+        return [("class:commandline.mode", " %-7s " % (name,))]
+
+    def _before_command_tokens(self) -> StyleAndTextTuples:
+        'What stands before what a person types after ":".'
+        return self._vi_mode_tokens() + [("class:commandline-prompt", ":")]
+
     def _before_prompt_command_tokens(self) -> StyleAndTextTuples:
         if self.client_state.prompt_completer is not None:
             # The box says what it is asking for, on the row above the
             # line. Saying it twice is one row wasted and one thing to
             # read. Lillecarl/pymux#220.
             return []
-        return [("class:commandline.prompt", "%s " % (self.client_state.prompt_text,))]
+        return self._vi_mode_tokens() + [
+            ("class:commandline.prompt", "%s " % (self.client_state.prompt_text,))
+        ]
 
     def _overlay_container(self) -> Container:
         """
@@ -1402,7 +1442,7 @@ class LayoutManager:
                 preview_search=True,
                 input_processors=[
                     AppendAutoSuggestion(),
-                    BeforeInput(":", style="class:commandline-prompt"),
+                    BeforeInput(self._before_command_tokens),
                     ShowArg(),
                     HighlightSelectionProcessor(),
                 ],

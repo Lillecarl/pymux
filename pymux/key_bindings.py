@@ -6,7 +6,13 @@ import logging
 from typing import TYPE_CHECKING, Callable, Dict, Tuple
 
 from prompt_toolkit.application.current import get_app
-from prompt_toolkit.filters import Condition, Filter, emacs_mode, has_focus
+from prompt_toolkit.filters import (
+    Condition,
+    Filter,
+    emacs_mode,
+    has_focus,
+    vi_navigation_mode,
+)
 from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
 from prompt_toolkit.key_binding.bindings.auto_suggest import (
     load_auto_suggest_bindings,
@@ -142,6 +148,10 @@ class PymuxKeyBindings:
             pymux.get_client_state().has_prefix = False
 
         @kb.add("escape", filter=prompt_or_command_focus & ~has_prefix & emacs_mode)
+        @kb.add(
+            "escape",
+            filter=prompt_or_command_focus & ~has_prefix & vi_navigation_mode,
+        )
         @kb.add("c-c", filter=prompt_or_command_focus & ~has_prefix)
         @kb.add("c-g", filter=prompt_or_command_focus & ~has_prefix)
         #        @kb.add('backspace', filter=has_focus(COMMAND) & ~has_prefix &
@@ -150,11 +160,17 @@ class PymuxKeyBindings:
             """
             Leave command mode.
 
-            **Escape only outside vi mode.** `status-keys vi` gives
-            Escape to vi, where it leaves insert mode and the command
-            line stays open. tmux draws the same line: Escape cancels
-            with emacs status keys and goes to normal mode with vi
-            ones. Lillecarl/pymux#157.
+            **With vi status keys it takes two Escapes.** The first one
+            is vi's: it leaves insert mode and the line stays open,
+            which is what tmux does and what Lillecarl/pymux#157
+            decided. The second one closes, because a person in normal
+            mode who presses Escape is asking to leave.
+
+            That hole is what Lillecarl/pymux#255 was: Escape belonged
+            to vi and nothing took the second press, so with vi status
+            keys no number of Escapes closed the box at all. The mode
+            the line is in is drawn on it, so a person can see which
+            press they are about to make.
 
             A bare Escape is safe to bind. prompt_toolkit reports one
             only after its own timeout has ruled out a longer escape

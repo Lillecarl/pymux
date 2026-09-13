@@ -157,6 +157,7 @@ RULES = {
     "commandline": "bg:#4e4e4e #ffffff",
     "commandline.command": "bold",
     "commandline.prompt": "bold",
+    "commandline.mode": "bold bg:#5f5f87 #ffffff",
     "statusbar": "noreverse bg:ansigreen #000000",
     "statusbar window": "#ffffff",
     "statusbar window.current": "bg:#44ff44 #000000",
