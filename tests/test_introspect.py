@@ -136,12 +136,21 @@ def test_dump_of_create_server_that_never_ran_says_so(create_server):
 
 def test_command_writes_dump_and_says_where(create_server, tmp_path):
     pymux, state = create_server
+
+    # Put it back, the way `_run_command` does. This is a plain `def
+    # test`, so it runs in the context of the whole process rather
+    # than in a task of its own: a list left here is a list every
+    # later test writes its answers into, instead of to its client.
+    # Lillecarl/pymux#87.
     pymux.command_output = []
+    try:
+        with set_app(state.app):
+            handle_command(pymux, "dump-stacks")
 
-    with set_app(state.app):
-        handle_command(pymux, "dump-stacks")
+        written = pymux.command_output
+    finally:
+        pymux.command_output = None
 
-    written = pymux.command_output
     assert len(written) == 1
     assert written[0].startswith(str(tmp_path))
     assert (tmp_path / written[0].rsplit("/", 1)[-1]).is_file()

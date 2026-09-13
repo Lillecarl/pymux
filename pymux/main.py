@@ -593,6 +593,23 @@ def _hook_of(reason: str) -> str | None:
     return _HOOKS_BY_WAKE.get(reason)
 
 
+#: Where the command that this task is running writes its answer, and
+#: `None` for a command that was typed at a client.
+#:
+#: **Context variables, not attributes of the server.** A handler may
+#: await, so two commands of two clients can be in flight at once, and
+#: one list on the server would hand each of them the other's output.
+#: A task copies the context that started it, so the two lists a
+#: `run-command` packet makes belong to that packet alone.
+#: Lillecarl/pymux#87.
+_command_output: contextvars.ContextVar[list | None] = contextvars.ContextVar(
+    "pymux-command-output", default=None
+)
+_command_error: contextvars.ContextVar[list | None] = contextvars.ContextVar(
+    "pymux-command-error", default=None
+)
+
+
 class Pymux:
     """
     The main Pymux application class.
@@ -756,13 +773,9 @@ class Pymux:
         #: what a server started by `daemonize` does.
         self.done = anyio.Event()
 
-        # Command output, for commands that were entered from the command
-        # line. (E.g. `pymux list-panes -F ...`.) When a run-command packet is
-        # handled, this is a list where commands can append their output.
-        # The server sends it back to the client before the connection is
-        # closed. It's `None` for commands entered interactively.
-        self.command_output: list | None = None
-        self.command_error: list | None = None
+        # `command_output` and `command_error` are properties over the
+        # two context variables below. They read `None` here, which is
+        # what a command entered interactively answers with.
 
         # The lines of the configuration file that failed, until a
         # client is there to be told about them.
@@ -2402,6 +2415,31 @@ class Pymux:
         client_state = self.the_client_to_tell()
         if client_state is not None:
             client_state.message = message
+
+    @property
+    def command_output(self) -> list | None:
+        """
+        Where the command this task runs writes what it says.
+
+        A list while a `run-command` packet is answered, and `None`
+        for a command a person typed at a client. The commands read it
+        both ways round: a listing goes here when there is a list, and
+        to the screen of the client when there is not.
+        """
+        return _command_output.get()
+
+    @command_output.setter
+    def command_output(self, lines: list | None) -> None:
+        _command_output.set(lines)
+
+    @property
+    def command_error(self) -> list | None:
+        "The same, for what a command says went wrong."
+        return _command_error.get()
+
+    @command_error.setter
+    def command_error(self, lines: list | None) -> None:
+        _command_error.set(lines)
 
     def print_command_line(self, text: str) -> None:
         """
