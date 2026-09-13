@@ -1196,7 +1196,7 @@ class LayoutManager:
         The container is built again when the pane changes, and kept
         while it stays, so that the terminal keeps its state.
         """
-        pane = self.pymux.overlay_pane
+        pane = self.client_state.session.overlay_pane
 
         if pane is None:
             return self._nothing_to_draw
@@ -1205,7 +1205,7 @@ class LayoutManager:
             return self._overlay_for_pane[1]
 
         def get_title() -> StyleAndTextTuples:
-            return [("class:overlay.title", " %s " % self.pymux.overlay_title)]
+            return [("class:overlay.title", " %s " % self.client_state.session.overlay_title)]
 
         container = HSplit(
             [
@@ -2065,14 +2065,14 @@ class LayoutManager:
                 Float(
                     content=ConditionalContainer(
                         content=DynamicContainer(self._overlay_container),
-                        filter=Condition(lambda: self.pymux.overlay_pane is not None),
+                        filter=Condition(lambda: self.client_state.session.overlay_pane is not None),
                     ),
                     width=lambda: overlay_size(
-                        self.pymux.overlay_width,
+                        self.client_state.session.overlay_width,
                         self.room_this_client_has.columns,
                     ),
                     height=lambda: overlay_size(
-                        self.pymux.overlay_height,
+                        self.client_state.session.overlay_height,
                         self.room_this_client_has.rows,
                     ),
                     z_index=Z_INDEX.OVERLAY,

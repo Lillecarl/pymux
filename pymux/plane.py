@@ -34,7 +34,7 @@ on one object.
 **Nothing here can stop a popup.** "No two slots overlap" is a rule
 about the tiling, not about the screen. A popup draws in the layer
 above the panes and always has: the chrome floats sit at `Z_INDEX` 5
-to 9, and `display-popup -E` opens `Pymux.overlay_pane`, which is not
+to 9, and `display-popup -E` opens `Session.overlay_pane`, which is not
 in the window tree at all. A floating *window* -- a pane a person
 parks somewhere and leaves there -- is the other thing, and it belongs
 to every layout rather than to one. `Plan` grows a second, ordered

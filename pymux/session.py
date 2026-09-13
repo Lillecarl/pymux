@@ -36,6 +36,16 @@ class Session:
         #: Lillecarl/pymux#270.
         self.environment: Dict[str, str | None] = {}
 
+        #: The overlay pane: a pane that floats in the middle of the
+        #: screen over the layout, like the popup of tmux. It belongs
+        #: to the session, so every client of this session sees the
+        #: same one, and it takes the keyboard while it is open.
+        #: Lillecarl/pymux#324.
+        self.overlay_pane = None
+        self.overlay_title = ""
+        self.overlay_width: str | None = None
+        self.overlay_height: str | None = None
+
         self.created = time.time()
 
         #: The turn of `Pymux.client_was_used` when a person last looked

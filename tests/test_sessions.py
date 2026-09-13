@@ -353,3 +353,54 @@ async def test_a_session_that_empties_goes():
 
         # And the server is still there, because one session is.
         assert not pymux.done_f.done()
+
+
+async def test_an_overlay_stays_in_its_own_session():
+    """
+    `display-popup` and the three lock commands open an overlay. It
+    belonged to the server, so a popup opened in one session covered
+    the screen of every client of the process. Lillecarl/pymux#324.
+    """
+    with in_this_process(_server()) as session:
+        pymux = session.pymux
+        here, _ = await session.attach("here", SIZE)
+        there, _ = await session.attach("there", SIZE)
+
+        _command(pymux, here, "new-session -d -s work '%s'" % (WAITING,))
+        _command(pymux, there, "switch-client -t work")
+
+        _command(pymux, here, "display-popup '%s'" % (WAITING,))
+
+        assert here.session.overlay_pane is not None
+        assert there.session.overlay_pane is None
+
+        # And only the client on that session is focused into it.
+        popup = here.session.overlay_pane
+        assert pymux._has_focus(here, popup) is True
+        assert pymux._has_focus(there, popup) is False
+
+        _command(pymux, here, "close-popup")
+        assert here.session.overlay_pane is None
+
+
+async def test_lock_server_covers_every_session():
+    """
+    An overlay is one session's, so "the server" means one on each.
+    lock-session and lock-client cover the asking client's session
+    alone. Lillecarl/pymux#324.
+    """
+    with in_this_process(_server()) as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", SIZE)
+        pymux.lock_command = WAITING
+
+        _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
+
+        _command(pymux, state, "lock-session")
+        assert pymux.sessions[0].overlay_pane is not None
+        assert pymux.sessions[1].overlay_pane is None
+
+        _command(pymux, state, "close-popup")
+
+        _command(pymux, state, "lock-server")
+        assert all(s.overlay_pane is not None for s in pymux.sessions)

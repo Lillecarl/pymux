@@ -20,7 +20,7 @@ async def test_locking_runs_lock_command_over_whole_screen():
 
             overlay = pymux.overlay_pane
             assert overlay is not None
-            assert pymux.overlay_title == "sleep 5"
+            assert pymux.current_session.overlay_title == "sleep 5"
 
             pymux.close_overlay()
             assert pymux.overlay_pane is None

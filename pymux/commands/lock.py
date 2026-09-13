@@ -17,8 +17,8 @@ def lock(pymux: "Pymux", args: argparse.Namespace) -> None:
 
     tmux has three of these: lock-client for the client that asked,
     lock-session for the clients of one session, lock-server for
-    everything. A pymux overlay belongs to the server, so every client
-    sees the same one, and the three arrive at the same screen.
+    everything. A pymux overlay belongs to one session, so the three
+    arrive at the same screen: the one the asking client is on.
     Lillecarl/pymux#324.
     """
     pymux.display_overlay(command=pymux.lock_command, width="100%", height="100%")

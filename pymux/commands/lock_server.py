@@ -6,19 +6,25 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import add_command
-from pymux.commands.lock import lock
 
 
 def lock_server(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
-    Lock the server, and take the keyboard until it is done.
+    Lock the server: every session of it, and every client on them.
 
     The lock covers the screen with the program `lock-command` names.
 
-    The screen a server has is one overlay for every client, so this
-    is the same screen lock-session covers. Lillecarl/pymux#324.
+    An overlay belongs to one session, so this opens one on each --
+    which is what "the server" means with more than one session, and
+    what separates this from lock-session. Lillecarl/pymux#324.
     """
-    lock(pymux, args)
+    for session in list(pymux.sessions):
+        pymux.display_overlay(
+            command=pymux.lock_command,
+            width="100%",
+            height="100%",
+            session=session,
+        )
 
 
 def register(subparsers):

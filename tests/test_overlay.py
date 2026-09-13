@@ -52,7 +52,7 @@ def test_opening_overlay_starts_pane():
     pane = pymux.display_overlay(command="%s -c pass" % _python(), title="a title")
     try:
         assert pymux.overlay_pane is pane
-        assert pymux.overlay_title == "a title"
+        assert pymux.current_session.overlay_title == "a title"
         # The overlay takes the keyboard.
         assert pymux.get_focused_pane() is pane
     finally:
@@ -64,7 +64,7 @@ def test_title_falls_back_to_command():
     command = "%s -c pass" % _python()
     pymux.display_overlay(command=command)
     try:
-        assert pymux.overlay_title == command
+        assert pymux.current_session.overlay_title == command
     finally:
         pymux.close_overlay()
 
@@ -91,20 +91,31 @@ def test_closing_when_there_is_none_is_fine():
     Pymux().close_overlay()  # Does not raise.
 
 
-def test_every_client_looks_at_overlay():
-    "The overlay belongs to the session, so it has the focus for all."
+def test_every_client_of_the_session_looks_at_overlay():
+    """
+    The overlay belongs to the session, so it has the focus for every
+    client on that session -- and for no client on another.
+    Lillecarl/pymux#324.
+    """
 
     class FakeClientState:
         app = None
+
+        def __init__(self, session):
+            self.session = session
 
     class FakePane:
         pass
 
     pymux = Pymux()
+    here = pymux.current_session
+    elsewhere = pymux.create_session(name="elsewhere")
+
     pane = pymux.display_overlay(command="%s -c pass" % _python())
     try:
-        assert pymux._has_focus(FakeClientState(), pane) is True
-        assert pymux._has_focus(FakeClientState(), FakePane()) is False
+        assert pymux._has_focus(FakeClientState(here), pane) is True
+        assert pymux._has_focus(FakeClientState(here), FakePane()) is False
+        assert pymux._has_focus(FakeClientState(elsewhere), pane) is False
     finally:
         pymux.close_overlay()
 

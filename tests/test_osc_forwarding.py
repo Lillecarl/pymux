@@ -118,8 +118,15 @@ class FakeConnection:
         self.forward_osc("\x1b]22;%s\x1b\\" % shape)
 
 
+class FakeSession:
+    "A session with no overlay, which is what `focused_pane_of` reads."
+    overlay_pane = None
+    arrangement = None
+
+
 class FakeClientState:
     app = None
+    session = FakeSession()
 
 
 class FakeScreen:

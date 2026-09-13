@@ -24,7 +24,18 @@ class FakeConnection:
 
 
 class FakeClientState:
-    pass
+    """
+    The client of one connection, on the session of the server.
+
+    `app` is what `get_client_state` matches on, and `None` never
+    matches a running application: this client answers for the
+    connection and never for the one that asks.
+    """
+
+    app = None
+
+    def __init__(self, session):
+        self.session = session
 
 
 class FakeScreen:
@@ -44,7 +55,10 @@ def make_pymux(*masks):
     "A pymux with one attached client for each mask."
     pymux = Pymux()
     connections = [FakeConnection(mask) for mask in masks]
-    pymux._client_states = {connection: FakeClientState() for connection in connections}
+    pymux._client_states = {
+        connection: FakeClientState(pymux.current_session)
+        for connection in connections
+    }
     return pymux, connections
 
 

@@ -100,10 +100,10 @@ class PaneCursor(CursorShapeConfig):
         self.pymux = pymux
 
     def get_cursor_shape(self, application) -> CursorShape:
-        pane = self.pymux.overlay_pane
+        session = self.pymux.session_of(application)
+        pane = session.overlay_pane
         if pane is None:
-            arrangement = self.pymux.session_of(application).arrangement
-            pane = arrangement.get_active_pane_for(application)
+            pane = session.arrangement.get_active_pane_for(application)
         if pane is None:
             return CursorShape._NEVER_CHANGE
 
@@ -541,8 +541,8 @@ class ClientState:
             return  # Focus command
 
         # An overlay pane takes the keyboard while it is open.
-        if self.pymux.overlay_pane is not None:
-            self.app.layout.focus(self.pymux.overlay_pane.terminal)
+        if self.session.overlay_pane is not None:
+            self.app.layout.focus(self.session.overlay_pane.terminal)
             return
 
         # No windows left, return. We will quit soon.
@@ -816,15 +816,6 @@ class Pymux:
         # `-b`. Lillecarl/pymux#303.
         self.named_buffers: dict[str, str] = {}
 
-        # The overlay pane: a pane that floats in the middle of the
-        # screen over the layout, like the popup of tmux. It belongs to
-        # the session, so every client sees the same one, and it takes
-        # the keyboard while it is open.
-        self.overlay_pane = None
-        self.overlay_title = ""
-        self.overlay_width = None
-        self.overlay_height = None
-
         # Which colour scheme every client draws with.
         # `set-option theme <name>` picks another one. The name is what
         # is kept, because that is what a person set and can read back;
@@ -975,6 +966,11 @@ class Pymux:
     @property
     def session_environment(self) -> dict[str, str | None]:
         return self.current_session.environment
+
+    @property
+    def overlay_pane(self):
+        "The overlay of the session of the client that asks."
+        return self.current_session.overlay_pane
 
     @property
     def style(self) -> BaseStyle:
@@ -1511,6 +1507,7 @@ class Pymux:
         width: str | None = None,
         height: str | None = None,
         title: str | None = None,
+        session: Session | None = None,
     ):
         """
         Open an overlay pane in the middle of the screen.
@@ -1519,46 +1516,54 @@ class Pymux:
         that finishes. It takes the keyboard while it is open.
 
         The overlay belongs to the session, like a window does, so
-        every client sees the same one and a second call replaces the
-        first. That also means a command from the command line reaches
-        it: the temporary client that runs such a command is gone
-        before the next render.
+        every client of that session sees the same one and a second
+        call replaces the first. That also means a command from the
+        command line reaches it: the temporary client that runs such a
+        command is gone before the next render, and it is on the
+        session of the pane the command was typed in.
+        Lillecarl/pymux#324.
         """
-        self.close_overlay()
+        if session is None:
+            session = self.current_session
+        self.close_overlay(session)
 
         pane: "arrangement.Pane" | None = None
 
         def done() -> None:
             "The program of the overlay finished, so the overlay goes."
-            if self.overlay_pane is pane:
-                self.overlay_pane = None
+            if session.overlay_pane is pane:
+                session.overlay_pane = None
                 self._sync_focus_everywhere()
 
         try:
-            window = self.arrangement.get_active_window()
+            window = session.arrangement.get_active_window()
         except Exception:
             window = None
 
         pane = self._create_pane(window=window, command=command, on_done=done)
 
-        self.overlay_pane = pane
-        self.overlay_title = title or command or "overlay"
-        self.overlay_width = width
-        self.overlay_height = height
+        session.overlay_pane = pane
+        session.overlay_title = title or command or "overlay"
+        session.overlay_width = width
+        session.overlay_height = height
         self._sync_focus_everywhere()
         self.invalidate(Woke.OVERLAY_OPENED)
 
         return pane
 
-    def close_overlay(self) -> None:
+    def close_overlay(self, session: Session | None = None) -> None:
         """
-        Close the overlay pane, and kill what runs in it.
+        Close the overlay pane of one session, and kill what runs in
+        it. Without a session, the one this client is on.
         """
-        pane = self.overlay_pane
+        if session is None:
+            session = self.current_session
+
+        pane = session.overlay_pane
         if pane is None:
             return
 
-        self.overlay_pane = None
+        session.overlay_pane = None
 
         process = pane.process
         if not process.is_terminated:
@@ -1956,12 +1961,12 @@ class Pymux:
         Never raises: this runs on the invalidate path, also for
         headless servers without a running prompt_toolkit application.
         """
-        if self.overlay_pane is not None:
-            return self.overlay_pane
+        if client_state.session.overlay_pane is not None:
+            return client_state.session.overlay_pane
 
         try:
             with set_app(client_state.app):
-                window = self.arrangement.get_active_window()
+                window = client_state.session.arrangement.get_active_window()
         except Exception:
             # `get_active_window` needs a running application.
             return None
