@@ -15,9 +15,8 @@ def lock_server(pymux: "Pymux", args: argparse.Namespace) -> None:
 
     The lock covers the screen with the program `lock-command` names.
 
-    The screen a server has is the session's overlay, and every
-    client watches the one session, so this is the same screen
-    lock-session covers. Lillecarl/pymux#297.
+    The screen a server has is one overlay for every client, so this
+    is the same screen lock-session covers. Lillecarl/pymux#324.
     """
     lock(pymux, args)
 

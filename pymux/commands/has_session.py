@@ -10,17 +10,14 @@ from pymux.commands import add_command
 
 
 def pane_matches_session_name(pymux: "Pymux", target: str) -> bool:
-    "Whether the given target matches the session. (For has-session.)"
+    "Whether a target names a session of this server. (For has-session.)"
     # No target asks whether the server has a session at all, which is
-    # what `has-session` with no `-t` means in tmux. A server always has
-    # one, so the answer is yes.
+    # what `has-session` with no `-t` means in tmux. A server with no
+    # session left stops, so the answer is yes.
     if not target:
         return True
 
-    # Accept an exact match ('=name' syntax as used by tmux/libtmux) or a
-    # plain name. Only one session exists on a server.
-    name = target[1:] if target.startswith("=") else target
-    return name == pymux.session_name
+    return pymux.get_session(target) is not None
 
 
 def has_session(pymux: "Pymux", args: argparse.Namespace) -> None:

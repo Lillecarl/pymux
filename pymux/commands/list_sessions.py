@@ -9,28 +9,45 @@ from pymux.commands import add_command
 from pymux.commands.common import show_listing
 from pymux.format import format_pymux_string
 
+#: What a line says when nobody asked for a format. tmux writes the
+#: name, the window count and whether anybody is on it.
+DEFAULT_FORMAT = "#{session_name}: #{session_windows} windows"
+
 
 def list_sessions(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
-    List the session of this server.
+    List the sessions of this server, one to a line.
 
-    With `-F`, the formatted session information is printed to the
-    output of the pymux command line. (Like tmux.)
+    With `-F`, each line is that format. (Like tmux.)
     """
+    format_str = args.format or DEFAULT_FORMAT
+
+    lines = []
+    for session in pymux.sessions:
+        windows = session.arrangement.windows
+        window = windows[0] if windows else None
+        lines.append(
+            format_pymux_string(
+                pymux,
+                format_str,
+                window=window,
+                pane=window.active_pane if window is not None else None,
+                session=session,
+            )
+        )
+
     if args.format:
-        format_str = args.format
-        window = pymux.arrangement.get_active_window()
-        line = format_pymux_string(
-            pymux, format_str, window=window, pane=window.active_pane
-        )
-        pymux.print_command_line(line)
+        # One line to a session, the way tmux answers. A reader that
+        # enumerates the sessions splits the answer on newlines, so a
+        # single string with newlines in it would read as one session
+        # with a strange name.
+        for line in lines:
+            pymux.print_command_line(line)
     else:
-        show_listing(
-            pymux, "list-sessions", format_pymux_string(pymux, "#{session_name}")
-        )
+        show_listing(pymux, "list-sessions", "\n".join(lines))
 
 
 def register(subparsers):
     parser = add_command(subparsers, list_sessions, aliases=("ls",))
-    parser.add_argument("-a", dest="a", action="store_true", help="Accepted for tmux. Pymux has one session per server.")
-    parser.add_argument("-F", dest="format", metavar="<format>", help="Print this format for the session.")
+    parser.add_argument("-a", dest="a", action="store_true", help="Accepted for tmux. Every session of this server is listed anyway.")
+    parser.add_argument("-F", dest="format", metavar="<format>", help="Print this format for each session.")

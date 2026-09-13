@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from pymux.arrangement import Pane
     from pymux.main import Pymux
     from pymux.arrangement import Window
+    from pymux.session import Session
 
 
 from prompt_toolkit.application.current import get_app
@@ -226,6 +227,7 @@ def print_object_format(
     format_str: str | None,
     window: "Window",
     pane: "Pane",
+    session: "Session | None" = None,
 ) -> None:
     """
     Print the information of a newly created object. (Like `tmux
@@ -234,5 +236,7 @@ def print_object_format(
     if format_str is None:
         format_str = "#{session_name}:#{window_index}.#{pane_index}"
     pymux.print_command_line(
-        format_pymux_string(pymux, format_str, window=window, pane=pane)
+        format_pymux_string(
+            pymux, format_str, window=window, pane=pane, session=session
+        )
     )

@@ -169,6 +169,9 @@ class ClientState:
         #: `get_app()`. Lillecarl/pymux#323.
         self.session = session
 
+        #: Where this client was before, for `switch-client -l`.
+        self.previous_session: "Session | None" = None
+
         #: True when the prefix key (Ctrl-B) has been pressed.
         self.has_prefix = False
 
@@ -836,6 +839,54 @@ class Pymux:
         self.sessions.append(session)
         return session
 
+    def remove_session(self, session: Session) -> None:
+        """
+        Take a session off the server, and move its clients away.
+
+        The last session to go stops the server. A server with nothing
+        left to show is what a person means by closing the last pane,
+        and it is where `kill-session` ends in tmux as well.
+        """
+        if session in self.sessions:
+            self.sessions.remove(session)
+
+        if not self.sessions:
+            self.stop()
+            return
+
+        somewhere = self.last_used_session
+        for client_state in self._client_states.values():
+            if client_state.session is session:
+                client_state.session = somewhere
+                client_state.sync_focus()
+
+        self.invalidate(Woke.SESSION_CLOSED)
+
+    def kill_session(self, session: Session) -> None:
+        """
+        Kill every pane of a session, and take the session off.
+
+        The last pane already takes the session, so the call below is
+        for a session that had no pane to start with.
+        """
+        for window in list(session.arrangement.windows):
+            for pane in list(window.panes):
+                self.kill_pane(pane)
+
+        if session in self.sessions:
+            self.remove_session(session)
+
+    def attach_client_to(self, client_state, session: Session) -> None:
+        "Put one client on a session, and draw what it shows."
+        if client_state.session is session:
+            return
+
+        client_state.previous_session = client_state.session
+        client_state.session = session
+        self.client_was_used(client_state)
+        client_state.sync_focus()
+        self.invalidate(Woke.SESSION_CHANGED)
+
     @property
     def current_session(self) -> Session:
         """
@@ -1271,12 +1322,17 @@ class Pymux:
                 on_done()
 
             if not self.remain_on_exit:
-                # Remove pane from layout.
-                self.arrangement.remove_pane(pane)
+                # The session the pane was in, and not the session of
+                # whoever happens to be the current client when a
+                # program ends.
+                session = self.session_holding(pane)
+                if session is not None:
+                    session.arrangement.remove_pane(pane)
 
-                # No panes left? -> Quit.
-                if not self.arrangement.has_panes:
-                    self.stop()
+                    # A session with no panes left is over. The last
+                    # one to go stops the server.
+                    if not session.arrangement.has_panes:
+                        self.remove_session(session)
 
                 # Make sure the right pane is focused for each client.
                 for client_state in self._client_states.values():
@@ -1637,9 +1693,24 @@ class Pymux:
 
     def _window_holding(self, pane):
         "The window that holds this pane, or None when it is gone."
-        for window in self.arrangement.windows:
-            if pane in window.panes:
-                return window
+        for session in self.sessions:
+            for window in session.arrangement.windows:
+                if pane in window.panes:
+                    return window
+        return None
+
+    def session_holding(self, pane) -> Session | None:
+        """
+        The session whose windows hold this pane, or None when it is
+        gone.
+
+        A pane belongs to one session, and the client whose turn it is
+        when the program in it ends says nothing about which.
+        """
+        for session in self.sessions:
+            for window in session.arrangement.windows:
+                if pane in window.panes:
+                    return session
         return None
 
     def displayed_now(self) -> datetime.datetime:
@@ -2117,17 +2188,28 @@ class Pymux:
         start_directory: str | None = None,
         name=None,
         index: int | None = None,
+        session: Session | None = None,
     ):
         """
         Create a new :class:`pymux.arrangement.Window` in the arrangement.
 
         `index` says where it goes. Without one it takes the lowest
         free index. Lillecarl/pymux#191.
+
+        `session` says where the window goes. Without one it is the
+        session of the client that asks. A window made for another
+        session is not focused: its pane is in no layout the asking
+        client draws.
         """
+        asked_for = self.current_session
+        if session is None:
+            session = asked_for
+
         pane = self._create_pane(None, command, start_directory=start_directory)
 
-        self.arrangement.create_window(pane, name=name, index=index)
-        pane.focus()
+        session.arrangement.create_window(pane, name=name, index=index)
+        if session is asked_for:
+            pane.focus()
         self.invalidate(Woke.WINDOW_OPENED)
 
     def add_process(
@@ -2152,13 +2234,23 @@ class Pymux:
     def kill_pane(self, pane: Pane) -> None:
         """
         Kill the given pane, and remove it from the arrangement.
+
+        The last pane of a session takes the session with it, the way
+        `kill-pane` on the last pane ends a session in tmux.
         """
         # Send kill signal.
         if not pane.process.is_terminated:
             pane.process.kill()
 
-        # Remove from layout.
-        self.arrangement.remove_pane(pane)
+        # Remove from layout. The session the pane is in, and not the
+        # session of whoever asked: `kill-pane -t` reaches across.
+        session = self.session_holding(pane)
+        if session is None:
+            return
+
+        session.arrangement.remove_pane(pane)
+        if not session.arrangement.has_panes:
+            self.remove_session(session)
 
     def leave_command_mode(self, append_to_history=False):
         """

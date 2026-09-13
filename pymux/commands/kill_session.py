@@ -6,16 +6,20 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import add_command
+from pymux.commands.sessions import find_session
 
 
 def kill_session(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
-    Kill this session, and the server that runs it.
+    Kill a session, and every pane in it.
 
-    This is the way the last `tmux kill-session` ends its server.
+    The clients on it move to the session a person looked at last. The
+    last session to go stops the server, which is the way the last
+    `tmux kill-session` ends its own.
     """
-    pymux.stop()
+    pymux.kill_session(find_session(pymux, args.target_session))
 
 
 def register(subparsers):
-    add_command(subparsers, kill_session)
+    parser = add_command(subparsers, kill_session)
+    parser.add_argument("-t", dest="target_session", metavar="<target-session>", help="The session to kill.")

@@ -80,6 +80,9 @@ class Woke(StrEnum):
 
     CLIENT_ATTACHED = "a client attached"
     CLIENT_DETACHED = "a client detached"
+    SESSION_OPENED = "a session opened"
+    SESSION_CLOSED = "a session closed"
+    SESSION_CHANGED = "a client moved to another session"
     CLIENT_RESIZED = "a client reported its size"
     PANE_ENDED = "a pane ended"
     PANE_WAS_RESPAWNED = "a pane was respawned"

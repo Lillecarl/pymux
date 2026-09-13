@@ -10,10 +10,10 @@ from pymux.commands import add_command
 
 def kill_server(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
-    Kill the server, and the session that runs in it.
+    Kill the server, and every session in it.
 
-    Pymux has one session per server, so this is the same as
-    `kill-session`.
+    `kill-session` takes one session; this takes them all, and the
+    clients go with it.
     """
     pymux.stop()
 

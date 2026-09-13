@@ -6,19 +6,43 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandException, add_command
+from pymux.commands.sessions import move_this_client, this_client
 
 
 def switch_client(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
-    Move this client to another session.
+    Move this client to another session of this server.
 
-    tmux's switch-client walks a client between the sessions of a
-    server. Every client of pymux watches the one session the server
-    holds, so there is nowhere to walk to, and the command says so
-    rather than doing nothing in silence. Lillecarl/pymux#297.
+    `-t` names one. `-n` and `-p` step along the sessions in the order
+    they were made, and `-l` goes back to the one this client was on
+    before.
     """
-    raise CommandException("Nowhere to switch: every client of this server watches its one session.")
+    target = args.target_session
+
+    if args.n or args.p or args.l:
+        client_state = this_client(pymux)
+        if client_state is None:
+            raise CommandException(
+                "no client to move: this command did not come from an attached client."
+            )
+
+        if args.l:
+            previous = client_state.previous_session
+            if previous is None or previous not in pymux.sessions:
+                raise CommandException("no last session")
+            target = "$%s" % (previous.session_id,)
+        else:
+            sessions = pymux.sessions
+            here = sessions.index(client_state.session)
+            step = 1 if args.n else -1
+            target = "$%s" % (sessions[(here + step) % len(sessions)].session_id,)
+
+    move_this_client(pymux, target)
 
 
 def register(subparsers):
-    add_command(subparsers, switch_client)
+    parser = add_command(subparsers, switch_client)
+    parser.add_argument("-t", dest="target_session", metavar="<target-session>", help="The session to switch to.")
+    parser.add_argument("-n", dest="n", action="store_true", help="The next session.")
+    parser.add_argument("-p", dest="p", action="store_true", help="The previous session.")
+    parser.add_argument("-l", dest="l", action="store_true", help="The session this client was on before.")

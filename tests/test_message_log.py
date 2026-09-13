@@ -38,11 +38,11 @@ async def test_error_is_in_log_too():
         assert any("Invalid option" in line for line in pymux.message_log)
 
 
-async def test_attach_and_switch_have_nowhere_to_go():
+async def test_attach_and_switch_say_which_session_is_missing():
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("attach-session")
-            assert "attached" in state.message
+            pymux.handle_command("attach-session -t nowhere")
+            assert "can't find session: nowhere" in state.message
 
-            pymux.handle_command("switch-client")
-            assert "switch" in state.message
+            pymux.handle_command("switch-client -t nowhere")
+            assert "can't find session: nowhere" in state.message

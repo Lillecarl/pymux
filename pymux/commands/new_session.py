@@ -8,31 +8,60 @@ if TYPE_CHECKING:
 from pymux.commands import CommandException
 from pymux.commands import add_command
 from pymux.commands.common import print_object_format
+from pymux.enums import Woke
 
 
 def new_session(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
-    Create a new session.
+    Create a session on this server.
 
-    Pymux has one session per server. The session is created when the server
-    starts, so this command can only fail with a duplicate session error,
-    like tmux does when the session already exists.
+    The client that asks moves to the new session, the way tmux
+    attaches one. `-d` leaves the client where it is.
+
+    A command that arrived over the socket runs under a client that
+    draws nothing, so there is nothing to attach: the session is made
+    and the command answers, which is `-d` in all but name.
     """
-    session_name = args.session_name
+    name = args.session_name
 
-    if session_name and session_name != pymux.session_name:
-        raise CommandException("duplicate session: %s" % (session_name,))
+    if name is not None and pymux.get_session(name) is not None:
+        raise CommandException("duplicate session: %s" % (name,))
+
+    session = pymux.create_session(name=name)
+    pymux.create_window(
+        command=args.command,
+        start_directory=args.start_directory,
+        name=args.window_name,
+        session=session,
+    )
+    pymux.invalidate(Woke.SESSION_OPENED)
+
+    if not args.d:
+        try:
+            client_state = pymux.get_client_state()
+        except ValueError:
+            client_state = None
+
+        if client_state is not None and not client_state.temporary:
+            pymux.attach_client_to(client_state, session)
 
     if args.P:
-        window = pymux.arrangement.get_active_window()
+        window = session.arrangement.get_active_window()
         print_object_format(
-            pymux, args.format, window=window, pane=window.active_pane
+            pymux,
+            args.format,
+            window=window,
+            pane=window.active_pane,
+            session=session,
         )
 
 
 def register(subparsers):
     parser = add_command(subparsers, new_session)
     parser.add_argument("-s", dest="session_name", metavar="<session-name>", help="The name of the session.")
+    parser.add_argument("-n", dest="window_name", metavar="<window-name>", help="The name of the first window.")
+    parser.add_argument("-c", dest="start_directory", metavar="<start-directory>", help="The working directory of the first pane.")
     parser.add_argument("-d", dest="d", action="store_true", help="Do not attach.")
     parser.add_argument("-P", dest="P", action="store_true", help="Print information about the session.")
     parser.add_argument("-F", dest="format", metavar="<format>", help="The format to print with -P.")
+    parser.add_argument("command", metavar="<shell-command>", nargs="?", help="What the first pane runs.")
