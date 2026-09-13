@@ -143,6 +143,11 @@ let
       ./pymux
       ./libpymux
       ./tests
+      # pytest reads its settings from the root it finds, and a root with
+      # no config file is a root with no settings. `anyio_mode` is in here,
+      # so without this a coroutine test fails in the sandbox while passing
+      # in a checkout. Lillecarl/pymux#87.
+      ./pyproject.toml
     ];
   };
 

@@ -46,6 +46,14 @@ catppuccin = ["catppuccin>=2.0.0"]
 # builds the test environment from this list.
 test = [
     "pytest",
+    # anyio carries the pytest plugin that runs a coroutine test. Every
+    # other repository here already has it; pymux was the one without,
+    # so `tests/session.py` hand-rolled `@in_loop` to run one at all.
+    # This is the half of Lillecarl/pymux#87 that costs nothing: a new
+    # async test needs no decorator now. Moving pymux's own async code
+    # off asyncio, and the 31 files that carry `@in_loop`, is the rest
+    # of #87 and comes after #86.
+    "anyio",
     "hypothesis",
     "wcwidth",
     # The shared rig: the seats, the drivers, the budgets.
@@ -81,6 +89,19 @@ build-backend = "hatchling.build"
 # here are the ones to ship. `tests` is not one of them.
 [tool.hatch.build.targets.wheel]
 packages = ["pymux", "libpymux"]
+
+[tool.pytest.ini_options]
+# Run a coroutine test, with no mark on it.
+#
+# Without this, pytest fails an "async def test" with "async def
+# functions are not natively supported". `tests/session.py` answered that
+# with `@in_loop`, which runs the coroutine in a loop of its own; a new
+# async test needs neither now. Lillecarl/pymux#87.
+#
+# `testSources` in `default.nix` carries this file to the suite. A setting
+# the check cannot read is a setting that holds by hand and not where it
+# counts.
+anyio_mode = "auto"
 
 [tool.black]
 target-version = ['py311']

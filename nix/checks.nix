@@ -308,6 +308,10 @@ let
   # directories and the processes all live and die inside the build sandbox.
   prepare = ''
     cp -r ${testSources}/pymux ${testSources}/libpymux ${testSources}/tests .
+    # pytest reads its settings from the root it runs in. `anyio_mode` is
+    # in this file, and without it a coroutine test fails here while
+    # passing in a checkout. Lillecarl/pymux#87.
+    cp ${testSources}/pyproject.toml .
     chmod -R +w .
     export HOME="$TMPDIR"
     export LANG=C.UTF-8
