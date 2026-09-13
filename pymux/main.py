@@ -728,6 +728,12 @@ class Pymux:
 
         #: List of clients.
         self._runs_standalone = False
+
+        #: True when this server draws on the one terminal it runs in.
+        #: `pymux integrated` is that: a socket may still be bound, for
+        #: commands, and a client that arrives over it cannot attach.
+        #: Lillecarl/pymux#159.
+        self._serves_one_terminal = False
         self.connections = []
 
         #: Kitty keyboard protocol flags last sent to the clients. (The
@@ -2582,8 +2588,17 @@ class Pymux:
         def connection_cb(pipe_connection):
             # We have to create a new `context`, because this will be the scope for
             # a new prompt_toolkit.Application to become active.
+            #
+            # **A client that arrives here may not always attach.** An
+            # integrated server draws on the terminal it runs in, and
+            # this socket is for commands. The question is asked at the
+            # moment a client arrives, because the route is chosen after
+            # the bind. Lillecarl/pymux#159.
+            may_attach = not self._serves_one_terminal
             context = contextvars.copy_context()
-            connection = context.run(lambda: ServerConnection(self, pipe_connection))
+            connection = context.run(
+                lambda: ServerConnection(self, pipe_connection, may_attach=may_attach)
+            )
 
             self.connections.append(connection)
 
@@ -2666,6 +2681,13 @@ class Pymux:
         the user interface reads it. It is there so that
         `pymux -S <socket> <command>` and libpymux reach this server.
 
+        **A client cannot attach over that socket.** This server draws
+        on the terminal it runs in, and a second terminal would hold
+        half a session that the first one ends: `ctrl+b d` here takes
+        the process with it. So `start-gui` on that socket is answered
+        with `server.CANNOT_ATTACH` and the connection closes, and
+        commands are what the socket serves. Lillecarl/pymux#159.
+
         The call returns when the server closes the connection: the
         last pane exited, somebody ran `kill-server`, or the client
         detached. The process ends with it, because both halves are in
@@ -2675,6 +2697,7 @@ class Pymux:
         # through `termios`, which a server on Windows does not have.
         from .client.memory import MemoryClient
 
+        self._serves_one_terminal = True
         self.server_starts()
 
         async def run() -> None:

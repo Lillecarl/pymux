@@ -1302,7 +1302,16 @@ def check_two_terminals_of_different_abilities(tmp):
     back: a pane keeps the flags it pushed, and a client that cannot
     send a release has one made for it. A pane is never told that a
     capability went away because somebody else attached.
+
+    **Not on the integrated route.** That server draws on the one
+    terminal it runs in and refuses an attach over its socket, so two
+    terminals of one session cannot exist there.
+    `check_second_terminal` is what says so. Lillecarl/pymux#159.
     """
+    if ROUTE == "integrated":
+        print("two terminals of different abilities: one terminal on this route")
+        return
+
     terminal = Terminal(tmp, "kitty")
     second = None
     try:
@@ -1393,6 +1402,62 @@ def check_two_terminals_of_different_abilities(tmp):
             second.close()
         terminal.close()
     print("two terminals: ok")
+
+
+def check_second_terminal(tmp):
+    """
+    What a second terminal gets, and it is not the same on both routes.
+
+    A server with a socket of its own serves every terminal that
+    attaches to it. An integrated server draws on the one terminal it
+    runs in: the socket it binds is for commands, and an attach over it
+    is refused with the reason on the terminal that asked.
+
+    **This is what the refusal is for.** Two terminals of an integrated
+    session share a process that only one of them holds, so `ctrl+b d`
+    in that one ends the session for both. Lillecarl/pymux#159.
+    """
+    terminal = Terminal(tmp, "kitty")
+    second = None
+    try:
+        terminal.wait_for_queries()
+        terminal.write(b"\x1b[?1u")
+        terminal.write(b"\x1b_Gi=31;OK\x1b\\")
+        terminal.write(b"\x1b[6;20;10t")
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"READY")
+
+        second = SecondClient(tmp, terminal.sock_path, "second")
+
+        if ROUTE == "integrated":
+            second.wait_for(b"that terminal is taken")
+            try:
+                code = second.client.wait(timeout=20)
+            except subprocess.TimeoutExpired:
+                raise AssertionError("the refused client is still running")
+            assert code == 0, "the refused client left with %r" % (code,)
+
+            # And the server kept serving: the first terminal still has
+            # its pane, and a command still reaches the socket.
+            listed = run_cli(terminal.sock_path, ["list-panes", "-a", "-F", "#{pane_id}"])
+            assert listed.returncode == 0, listed.stderr
+            assert len(listed.stdout.split()) == 1, listed.stdout
+        else:
+            second.wait_for_queries()
+            second.write(b"\x1b[?62;1;6c")
+            second.wait_for(b"READY")
+            assert second.client.poll() is None, "the second client left"
+
+    except BaseException:
+        terminal.report()
+        if second is not None:
+            second.report()
+        raise
+    finally:
+        if second is not None:
+            second.close()
+        terminal.close()
+    print("a second terminal: ok")
 
 
 def check_full_screen_pane(tmp):
@@ -2189,6 +2254,7 @@ CHECKS = (
     check_cursor_shape,
     check_overlay_pane,
     check_two_terminals_of_different_abilities,
+    check_second_terminal,
     check_full_screen_pane,
     check_strip_follows_resize,
     check_quoted_argument,

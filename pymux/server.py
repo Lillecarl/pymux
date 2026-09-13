@@ -51,16 +51,38 @@ _OSC_REPLY_RE = re.compile(
 #: and again is a connection nothing can use. Lillecarl/pymux#329.
 FAILURES_THAT_END_A_CONNECTION = 5
 
+#: What a client is told when it may not attach here.
+#:
+#: `pymux integrated` holds the server and its one terminal in one
+#: process. The socket it binds is for commands, and a client that
+#: attached over it would own half a session that the other half can
+#: end: `ctrl+b d` in the first terminal takes the process, and the
+#: second terminal loses the session whatever the first person meant.
+#: Lillecarl/pymux#159.
+CANNOT_ATTACH = (
+    "This pymux runs in one terminal, and that terminal is taken.\r\n"
+    "The socket is for commands: pymux -S <socket> <command>.\r\n"
+)
+
 
 class ServerConnection:
     """
     For each client that connects, we have one instance of this class.
     """
 
-    def __init__(self, pymux: "Pymux", pipe_connection) -> None:
+    def __init__(
+        self, pymux: "Pymux", pipe_connection, may_attach: bool = True
+    ) -> None:
         self.pymux = pymux
 
         self.pipe_connection = pipe_connection
+
+        #: Whether a client on this connection may ask for the user
+        #: interface. False for a connection that arrived over the
+        #: socket of an integrated server: that server draws on the one
+        #: terminal it runs in, and commands are all it serves to
+        #: anybody else. Lillecarl/pymux#159.
+        self.may_attach = may_attach
 
         self.size = Size(rows=20, columns=80)
         self._closed = False
@@ -483,6 +505,10 @@ class ServerConnection:
 
         # Start GUI. (Create CommandLineInterface front-end for pymux.)
         elif packet["cmd"] == "start-gui":
+            if not self.may_attach:
+                self._spawn(self._refuse_the_attach())
+                return
+
             detach_other_clients = bool(packet["detach-others"])
             forced = packet["color-depth"]
             term = packet["term"]
@@ -526,6 +552,21 @@ class ServerConnection:
                 self.detach_and_close()
 
         self._spawn(send())
+
+    async def _refuse_the_attach(self) -> None:
+        """
+        Tell this client that it cannot have the user interface, and
+        close the connection. Lillecarl/pymux#159.
+
+        **The write is awaited, and `_send_packet` does not wait.** That
+        one spawns the write into the scope of this connection, and
+        closing cancels that scope: the reason the client came would
+        reach it only if the cancel lost the race.
+        """
+        await self._write_packet({"cmd": "out", "data": CANNOT_ATTACH})
+
+        logger.info("A client asked to attach to a server that serves one terminal.")
+        self.detach_and_close()
 
     async def _run_command(self, packet: Dict[str, Any]) -> None:
         """

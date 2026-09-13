@@ -16,9 +16,10 @@ Modes:
                      through queues, not through a socket, so the client
                      reaches the server this command started and nothing
                      else. With -S, the server also listens on that socket
-                     for commands. One process holds both halves, so Ctrl-Z
-                     suspends the server too, and detaching ends the whole
-                     thing.
+                     for commands; a client cannot attach over it, because
+                     this server draws on the terminal it runs in. One
+                     process holds both halves, so Ctrl-Z suspends the
+                     server too, and detaching ends the whole thing.
     start-server   : Run a server daemon that can be attached later on.
     attach         : Attach to a running session.
     list-sessions  : List all running sessions. ('ls' works as well.)
@@ -446,7 +447,9 @@ def run() -> None:
 
         # Only when a socket was asked for. The user interface never
         # reads it; it is there so that `pymux -S <socket> <command>`
-        # and libpymux reach this server.
+        # and libpymux reach this server. A client that asks to attach
+        # over it is refused: this server draws on the terminal it runs
+        # in. Lillecarl/pymux#159.
         if socket_name:
             mux.listen_on_socket(socket_name)
 
