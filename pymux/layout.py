@@ -1241,6 +1241,7 @@ class LayoutManager:
                         format_str,
                         window=w,
                         session=self.client_state.session,
+                        client=self.client_state,
                     ),
                     self._create_select_window_handler(w),
                 )
@@ -1253,6 +1254,7 @@ class LayoutManager:
             self.pymux,
             self.pymux.status_left,
             session=self.client_state.session,
+            client=self.client_state,
         )
 
     def _get_status_right_tokens(self) -> str:
@@ -1260,6 +1262,7 @@ class LayoutManager:
             self.pymux,
             self.pymux.status_right,
             session=self.client_state.session,
+            client=self.client_state,
         )
 
     def what_time_moves(self) -> Tuple[str, ...]:
@@ -1311,6 +1314,7 @@ class LayoutManager:
                         PANE_TITLE_FORMAT,
                         pane=pane,
                         session=self.client_state.session,
+                        client=self.client_state,
                     )
                 )
 
@@ -2245,7 +2249,9 @@ class ConfirmationToolbar(FormattedTextControl):
                 ("class:question", " "),
                 (
                     "class:question",
-                    format_pymux_string(pymux, client_state.confirm_text or ""),
+                    format_pymux_string(
+                        pymux, client_state.confirm_text or "", client=client_state
+                    ),
                 ),
                 ("class:question", " "),
                 ("class:yesno", "  y/n"),

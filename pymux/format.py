@@ -1,19 +1,47 @@
 """
 Pymux string formatting.
+
+A format string names facts: about the server, and about what the
+caller is asking about. `FormatContext` is that question -- the server,
+the session, the window, the pane, and the client this is drawn for --
+and every variable reads one.
+
+**One object, not four arguments.** A variable that reads a context can
+read a fact nobody thought of when it was written: the client arrived
+that way, and `#{client_hostname}` is the first variable that needed
+something no session, window or pane knows. A renderer can take a
+context too, which is what Lillecarl/pymux#333 is for.
+Lillecarl/pymux#330.
 """
 
-import datetime
 import os
 import re
 import socket
-from typing import TYPE_CHECKING, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Callable, Dict, NamedTuple, Optional
 
 if TYPE_CHECKING:
     from pymux.arrangement import Pane, Window
-    from pymux.main import Pymux
+    from pymux.main import ClientState, Pymux
     from pymux.session import Session
 
-__all__ = ["format_pymux_string"]
+__all__ = ["FormatContext", "format_pymux_string"]
+
+
+class FormatContext(NamedTuple):
+    """
+    What a format variable may read.
+
+    `client` is the only one that can be missing. A command formats
+    without one -- `display-message` typed in a pane has no terminal of
+    its own -- and tmux answers a `client_` variable with nothing in
+    the same case (`ft->c == NULL` in its `format.c`).
+    """
+
+    pymux: "Pymux"
+    session: "Session"
+    window: "Window"
+    pane: "Pane"
+    client: Optional["ClientState"] = None
 
 
 def _hostname() -> str:
@@ -38,26 +66,25 @@ def format_pymux_string(
     window: Optional["Window"] = None,
     pane: Optional["Pane"] = None,
     session: Optional["Session"] = None,
+    client: Optional["ClientState"] = None,
 ) -> str:
     """
-    Apply pymux sting formatting. (Similar to tmux.)
+    Apply pymux string formatting. (Similar to tmux.)
     E.g.  #P is replaced by the index of the active pane.
 
     We try to stay compatible with tmux, if possible. Both the classic
     `#S`-style symbols and the tmux `#{variable}` syntax are supported.
 
-    One thing that we won't support (for now) is colors, because our styling
-    works different. (With a Style class.) On the other hand, in the future, we
-    could allow things like `#[token=Token.Title.PID]`. This gives a clean
-    separation of semantics and colors, making it easy to write different color
-    schemes.
+    What is left out of the caller is read from the server: the session
+    of whoever asks, its active window, that window's active pane.
+
+    **A caller that draws for one client passes that client.** Its
+    session is what the frame shows, which is right for a status line
+    and wrong for a command; and a `client_` variable has nothing else
+    to read. Lillecarl/pymux#323, Lillecarl/pymux#330.
     """
-    # A caller that draws for one client passes that client's session.
-    # Without it the answer is the session of whoever asks, which is
-    # right for a command and wrong for a status line drawn for
-    # somebody else. Lillecarl/pymux#323.
     if session is None:
-        session = pymux.current_session
+        session = client.session if client is not None else pymux.current_session
 
     arrangement = session.arrangement
 
@@ -67,71 +94,25 @@ def format_pymux_string(
     if pane is None:
         pane = window.active_pane
 
-    def id_of_pane() -> str:
-        return "%s" % (pane.pane_id,)
+    return format_in_context(
+        FormatContext(pymux, session, window, pane, client), string
+    )
 
-    def index_of_pane() -> str:
-        try:
-            return "%s" % (window.get_pane_index(pane),)
-        except ValueError:
-            return "/"
 
-    def index_of_window() -> str:
-        return "%s" % (window.index,)
-
-    def name_of_window() -> str:
-        return window.name or "(noname)"
-
-    def window_flags() -> str:
-        z = "Z" if window.zoom else ""
-
-        if window == arrangement.get_active_window():
-            return "*" + z
-        elif window == arrangement.get_previous_active_window():
-            return "-" + z
-        else:
-            return z + " "
-
-    def name_of_session() -> str:
-        return session.name
-
-    def title_of_pane() -> str:
-        return pane.screen.titles.window
-
-    def hostname() -> str:
-        return _hostname()
-
-    def hostname_short() -> str:
-        return _hostname_short()
-
-    def literal() -> str:
-        return "#"
-
-    format_table = {
-        "#D": id_of_pane,
-        "#F": window_flags,
-        "#H": hostname,
-        "#I": index_of_window,
-        "#P": index_of_pane,
-        "#S": name_of_session,
-        "#T": title_of_pane,
-        "#W": name_of_window,
-        "#h": hostname_short,
-        "##": literal,
-    }
-
+def format_in_context(context: FormatContext, string: str) -> str:
+    "Apply the formatting to a question that is already complete."
     # Date/time formatting. The clock that test-mode pins runs here
     # as well, so a formatted status line holds still too.
     if "%" in string:
         try:
-            string = pymux.displayed_now().strftime(string)
+            string = context.pymux.displayed_now().strftime(string)
         except ValueError:  # strftime format ends with raw %
             string = "<ValueError>"
 
     # Apply '#' formatting.
-    for symbol, f in format_table.items():
+    for symbol, handler in symbol_variables.items():
         if symbol in string:
-            string = string.replace(symbol, f())
+            string = string.replace(symbol, handler(context))
 
     # Apply `#{variable}` formatting. (tmux syntax.)
     if "#{" in string:
@@ -142,7 +123,7 @@ def format_pymux_string(
             if handler is None:
                 return ""
             try:
-                return str(handler(pymux, window, pane, session))
+                return str(handler(context))
             except Exception:
                 return ""
 
@@ -151,81 +132,165 @@ def format_pymux_string(
     return string
 
 
-def _pane_pid(pymux, window, pane, session) -> str:
+# ---------------------------------------------------------------------
+# The `#X` symbols.
+#
+# Three of them do not answer what the `#{name}` of the same fact
+# answers, and the difference is on purpose. Each one is a status line
+# that must not jump or go blank, and each is noted where it is.
+# ---------------------------------------------------------------------
+
+
+def _symbol_pane_index(context: FormatContext) -> str:
+    try:
+        return "%s" % (context.window.get_pane_index(context.pane),)
+    except ValueError:
+        # A pane that is not in this window. "/" holds the column that
+        # a number held; `#{pane_index}` answers nothing instead.
+        return "/"
+
+
+def _symbol_window_name(context: FormatContext) -> str:
+    # A window with no name keeps its place in the status line.
+    return context.window.name or "(noname)"
+
+
+def _symbol_window_flags(context: FormatContext) -> str:
+    arrangement = context.session.arrangement
+    window = context.window
+    z = "Z" if window.zoom else ""
+
+    if window == arrangement.get_active_window():
+        return "*" + z
+    elif window == arrangement.get_previous_active_window():
+        return "-" + z
+    else:
+        # One column wide either way, so the windows beside this one do
+        # not move when it becomes the current one. `#{window_flags}`
+        # answers the flags alone.
+        return z + " "
+
+
+def _symbol_pane_id(context: FormatContext) -> str:
+    return "%s" % (context.pane.pane_id,)
+
+
+def _symbol_window_index(context: FormatContext) -> str:
+    return "%s" % (context.window.index,)
+
+
+def _symbol_session_name(context: FormatContext) -> str:
+    return context.session.name
+
+
+def _symbol_pane_title(context: FormatContext) -> str:
+    return context.pane.screen.titles.window
+
+
+#: The `#X` symbols, in the order they are applied. `##` is last, so
+#: that the symbols above it are read first.
+symbol_variables: Dict[str, Callable[[FormatContext], str]] = {
+    "#D": _symbol_pane_id,
+    "#F": _symbol_window_flags,
+    "#H": lambda context: _hostname(),
+    "#I": _symbol_window_index,
+    "#P": _symbol_pane_index,
+    "#S": _symbol_session_name,
+    "#T": _symbol_pane_title,
+    "#W": _symbol_window_name,
+    "#h": lambda context: _hostname_short(),
+    "##": lambda context: "#",
+}
+
+
+# ---------------------------------------------------------------------
+# The `#{name}` variables.
+# ---------------------------------------------------------------------
+
+
+def _pane_pid(context: FormatContext) -> str:
     "PID of the process running in the pane."
     # A backend that has no number to give says so with `None`: a
     # program at the other end of an ssh connection runs somewhere
     # else, and one that has not started has no id yet.
-    pid = pane.process.backend.pid
+    pid = context.pane.process.backend.pid
     return str(pid) if pid else ""
 
 
-def _pane_current_command(pymux, window, pane, session) -> str:
+def _pane_current_command(context: FormatContext) -> str:
     "Name of the command running in the pane."
-    name = pane.process.get_name()
+    name = context.pane.process.get_name()
     if name:
         return os.path.basename(name)
     return ""
 
 
-def _pane_current_path(pymux, window, pane, session) -> str:
+def _pane_current_path(context: FormatContext) -> str:
     "Working directory of the process in the pane."
     try:
-        return pane.process.get_cwd()
+        return context.pane.process.get_cwd()
     except Exception:
         return ""
 
 
-def _history_size(pymux, window, pane, session) -> str:
+def _history_size(context: FormatContext) -> str:
     "Number of lines in the history."
-    process = pane.process
-    return str(min(pymux.history_limit, pane.screen.line_offset + process.sy))
+    pane = context.pane
+    return str(
+        min(context.pymux.history_limit, pane.screen.line_offset + pane.process.sy)
+    )
 
 
-def _pane_active(pymux, window, pane, session) -> str:
-    return "1" if window.active_pane == pane else "0"
+def _pane_active(context: FormatContext) -> str:
+    return "1" if context.window.active_pane == context.pane else "0"
 
 
-def _pane_index(pymux, window, pane, session) -> str:
+def _pane_index(context: FormatContext) -> str:
     try:
-        return str(window.get_pane_index(pane))
+        return str(context.window.get_pane_index(context.pane))
     except ValueError:
         return ""
 
 
-def _window_active(pymux, window, pane, session) -> str:
-    return "1" if window == session.arrangement.get_active_window() else "0"
+def _window_active(context: FormatContext) -> str:
+    return (
+        "1"
+        if context.window == context.session.arrangement.get_active_window()
+        else "0"
+    )
 
 
-def _window_flags(pymux, window, pane, session) -> str:
+def _window_flags(context: FormatContext) -> str:
+    arrangement = context.session.arrangement
+    window = context.window
     z = "Z" if window.zoom else ""
 
-    if window == session.arrangement.get_active_window():
+    if window == arrangement.get_active_window():
         return "*" + z
-    elif window == session.arrangement.get_previous_active_window():
+    elif window == arrangement.get_previous_active_window():
         return "-" + z
     else:
         return z
 
 
-def _window_panes(pymux, window, pane, session) -> str:
-    return str(len(window.panes))
+def _window_panes(context: FormatContext) -> str:
+    return str(len(context.window.panes))
 
 
-def _window_name(pymux, window, pane, session) -> str:
-    return window.name or ""
+def _window_name(context: FormatContext) -> str:
+    return context.window.name or ""
 
 
-def _window_index(pymux, window, pane, session) -> str:
-    return str(window.index)
+def _window_index(context: FormatContext) -> str:
+    return str(context.window.index)
 
 
-def _window_id(pymux, window, pane, session) -> str:
-    return "@%s" % (window.window_id,)
+def _window_id(context: FormatContext) -> str:
+    return "@%s" % (context.window.window_id,)
 
 
-def _pane_id(pymux, window, pane, session) -> str:
-    return "%s%s" % (tmux_pane_id_prefix(), pane.pane_id)
+def _pane_id(context: FormatContext) -> str:
+    return "%s%s" % (tmux_pane_id_prefix(), context.pane.pane_id)
 
 
 def tmux_pane_id_prefix() -> str:
@@ -233,68 +298,81 @@ def tmux_pane_id_prefix() -> str:
     return "%"
 
 
-def _session_id(pymux, window, pane, session) -> str:
+def _session_id(context: FormatContext) -> str:
     "Session ID, the way tmux spells one: `$<number>`."
-    return "$%s" % (session.session_id,)
+    return "$%s" % (context.session.session_id,)
 
 
-def _session_attached(pymux, window, pane, session) -> str:
+def _session_attached(context: FormatContext) -> str:
     "Number of clients attached to this session."
     return str(
         len(
             [
                 client
-                for client in pymux._client_states.values()
-                if not client.temporary and client.session is session
+                for client in context.pymux._client_states.values()
+                if not client.temporary and client.session is context.session
             ]
         )
     )
 
 
-def _session_windows(pymux, window, pane, session) -> str:
-    return str(len(session.arrangement.windows))
+def _session_windows(context: FormatContext) -> str:
+    return str(len(context.session.arrangement.windows))
 
 
-def _socket_path(pymux, window, pane, session) -> str:
-    return pymux.socket_name or ""
+def _socket_path(context: FormatContext) -> str:
+    return context.pymux.socket_name or ""
 
 
-def _pid(pymux, window, pane, session) -> str:
+def _pid(context: FormatContext) -> str:
     return str(os.getpid())
 
 
-def _version(pymux, window, pane, session) -> str:
+def _version(context: FormatContext) -> str:
     from pymux import __version__
 
     return __version__
 
 
-def _created(pymux, window, pane, session) -> str:
-    return str(int(pymux.created))
+def _created(context: FormatContext) -> str:
+    return str(int(context.pymux.created))
+
+
+def _client_hostname(context: FormatContext) -> str:
+    """
+    The machine the client this is drawn for runs on.
+
+    **tmux has no such variable**, because every tmux client is on the
+    server's machine. pymux reaches a server over ssh, so `#{host}` is
+    the server's answer and this is the other one. The client reports
+    it when it attaches. Lillecarl/pymux#287, Lillecarl/pymux#330.
+    """
+    client = context.client
+    if client is None:
+        return ""
+    return getattr(client.connection, "hostname", "") or ""
 
 
 #: Mapping of tmux `#{variable}` names. Variables that pymux doesn't know
 #: resolve to an empty string. (libtmux requires all fields of its format
 #: template to be present, but it ignores the empty ones.)
-tmux_variables: Dict[
-    str, Callable[["Pymux", "Window", "Pane", "Session"], str]
-] = {
+tmux_variables: Dict[str, Callable[[FormatContext], str]] = {
     # Pane.
     "pane_id": _pane_id,
     "pane_index": _pane_index,
     "pane_active": _pane_active,
-    "pane_width": lambda p, w, pane, s: str(pane.process.sx),
-    "pane_height": lambda p, w, pane, s: str(pane.process.sy),
-    "pane_title": lambda p, w, pane, s: pane.screen.titles.window,
+    "pane_width": lambda c: str(c.pane.process.sx),
+    "pane_height": lambda c: str(c.pane.process.sy),
+    "pane_title": lambda c: c.pane.screen.titles.window,
     "pane_pid": _pane_pid,
     "pane_current_command": _pane_current_command,
     "pane_current_path": _pane_current_path,
     "pane_start_path": _pane_current_path,
-    "pane_dead": lambda p, w, pane, s: "1" if pane.process.is_terminated else "0",
-    "pane_in_mode": lambda p, w, pane, s: "1" if pane.is_copying else "0",
-    "pane_synchronized": lambda p, w, pane, s: "1" if w.synchronize_panes else "0",
+    "pane_dead": lambda c: "1" if c.pane.process.is_terminated else "0",
+    "pane_in_mode": lambda c: "1" if c.pane.is_copying else "0",
+    "pane_synchronized": lambda c: "1" if c.window.synchronize_panes else "0",
     "history_size": _history_size,
-    "history_limit": lambda p, w, pane, s: str(p.history_limit),
+    "history_limit": lambda c: str(c.pymux.history_limit),
     # Window.
     "window_id": _window_id,
     "window_index": _window_index,
@@ -302,22 +380,24 @@ tmux_variables: Dict[
     "window_active": _window_active,
     "window_flags": _window_flags,
     "window_panes": _window_panes,
-    "window_width": lambda p, w, pane, s: str(pane.process.sx),
-    "window_height": lambda p, w, pane, s: str(pane.process.sy),
+    "window_width": lambda c: str(c.pane.process.sx),
+    "window_height": lambda c: str(c.pane.process.sy),
     # Session.
     "session_id": _session_id,
-    "session_name": lambda p, w, pane, s: s.name,
+    "session_name": lambda c: c.session.name,
     "session_attached": _session_attached,
     "session_windows": _session_windows,
-    "session_path": lambda p, w, pane, s: p.original_cwd,
-    "session_created": lambda p, w, pane, s: str(int(s.created)),
+    "session_path": lambda c: c.pymux.original_cwd,
+    "session_created": lambda c: str(int(c.session.created)),
+    # Client.
+    "client_hostname": _client_hostname,
     # Server.
     "socket_path": _socket_path,
     "pid": _pid,
     "version": _version,
     "start_time": _created,
-    "host": lambda p, w, pane, s: _hostname(),
-    "hostname": lambda p, w, pane, s: _hostname(),
-    "host_short": lambda p, w, pane, s: _hostname_short(),
-    "history_bytes": lambda p, w, pane, s: "0",
+    "host": lambda c: _hostname(),
+    "hostname": lambda c: _hostname(),
+    "host_short": lambda c: _hostname_short(),
+    "history_bytes": lambda c: "0",
 }

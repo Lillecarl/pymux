@@ -12,7 +12,12 @@ import sys
 
 import pytest
 
-from pymux.format import format_pymux_string, tmux_variables
+from pymux.format import (
+    FormatContext,
+    format_pymux_string,
+    symbol_variables,
+    tmux_variables,
+)
 from pymux.main import Pymux
 
 
@@ -31,12 +36,22 @@ def pymux():
                     process.kill()
 
 
+def _context(pymux, client=None) -> FormatContext:
+    session = pymux.current_session
+    window = session.arrangement.get_active_window()
+    return FormatContext(pymux, session, window, window.active_pane, client)
+
+
 @pytest.mark.parametrize("name", sorted(tmux_variables))
 def test_no_variable_raises(pymux, name):
     "Call the handler itself, not the formatter that swallows for it."
-    session = pymux.current_session
-    window = session.arrangement.get_active_window()
-    tmux_variables[name](pymux, window, window.active_pane, session)
+    tmux_variables[name](_context(pymux))
+
+
+@pytest.mark.parametrize("symbol", sorted(symbol_variables))
+def test_no_symbol_raises(pymux, symbol):
+    "The `#X` spellings read the same context, and are asked the same."
+    symbol_variables[symbol](_context(pymux))
 
 
 def test_variable_that_nobody_knows_is_empty(pymux):
@@ -68,6 +83,31 @@ def test_a_hostname_with_no_domain_is_itself(pymux, monkeypatch):
 
     assert format_pymux_string(pymux, "#h") == "dynhetz"
     assert format_pymux_string(pymux, "#H") == "dynhetz"
+
+
+def test_the_client_is_what_a_client_variable_reads(pymux):
+    """
+    `#{client_hostname}` is the machine the client runs on, which only
+    a client can say: `#{host}` here is the server's own, and over ssh
+    those are two machines. Lillecarl/pymux#287, Lillecarl/pymux#330.
+    """
+
+    class Connection:
+        hostname = "buildbox-3"
+
+    class Client:
+        connection = Connection()
+        session = pymux.current_session
+
+    assert (
+        format_pymux_string(pymux, "#{client_hostname}", client=Client())
+        == "buildbox-3"
+    )
+
+
+def test_a_client_variable_with_no_client_is_empty(pymux):
+    "A command formats without one, and tmux answers nothing there too."
+    assert format_pymux_string(pymux, "#{client_hostname}") == ""
 
 
 def test_id_reads_as_target(pymux):
