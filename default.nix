@@ -17,11 +17,10 @@
 # `pyterm/nix/python-set.nix`. Everything pymux imports comes from that set
 # too, by name, out of `pyproject.toml`.
 #
-# pyterm-pytest still arrives as an argument, and it is the copy nixpkgs built
-# rather than the one in the set. The checks borrow tools from its passthru,
-# and a lifted package keeps its files and not its passthru. ptterm used to
-# arrive the same way, and does not any more: it is a builders package now,
-# so the set holds the copy that carries the tools.
+# ptterm and pyterm-pytest arrive as arguments and come from the set, like
+# everything else pymux imports. Both are here for their passthru and not for
+# their modules: the conformance suites ptterm builds, and the wayland
+# bindings pyterm-pytest generates. A tool is not a suite.
 #
 # mesa arrives as an argument as well, and only the checks use it: kitty
 # draws with OpenGL and a build sandbox has no graphics card.
