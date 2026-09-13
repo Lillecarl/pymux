@@ -763,8 +763,8 @@ class LayoutManager:
         chooser points at, instead of switching to it.
         Lillecarl/pymux#295.
         """
-        windows = self.pymux.arrangement.windows
-        active = self.pymux.arrangement.get_active_window()
+        windows = self.client_state.session.arrangement.windows
+        active = self.client_state.session.arrangement.get_active_window()
         self.client_state.display_popup = False
         self.client_state.choose_window = True
         self.client_state.choose_buffer = False
@@ -949,7 +949,7 @@ class LayoutManager:
                 for name in sorted(buffers)
                 if text in name.lower() or text in str(len(buffers[name]))
             ]
-        windows = self.pymux.arrangement.windows
+        windows = self.client_state.session.arrangement.windows
         if not text:
             return list(windows)
         return [
@@ -989,7 +989,7 @@ class LayoutManager:
         if template:
             self.pymux.handle_command(template.replace("%%", ":%i" % window.index))
         else:
-            self.pymux.arrangement.set_active_window(window)
+            self.client_state.session.arrangement.set_active_window(window)
             self.pymux.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
 
     def choose_pointed_option(self) -> None:
@@ -1019,7 +1019,7 @@ class LayoutManager:
 
         def handler(mouse_event: MouseEvent) -> "NotImplementedOrNone":
             if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
-                self.pymux.arrangement.set_active_window(window)
+                self.client_state.session.arrangement.set_active_window(window)
                 self.pymux.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
                 return None
             else:
@@ -1032,11 +1032,11 @@ class LayoutManager:
         result: StyleAndTextTuples = []
 
         # Display panes.
-        for i, w in enumerate(self.pymux.arrangement.windows):
+        for i, w in enumerate(self.client_state.session.arrangement.windows):
             if i > 0:
                 result.append(("", " "))
 
-            if w == self.pymux.arrangement.get_active_window():
+            if w == self.client_state.session.arrangement.get_active_window():
                 style = "class:window.current"
                 format_str = self.pymux.window_status_current_format
 
@@ -1047,7 +1047,12 @@ class LayoutManager:
             result.append(
                 (
                     style,
-                    format_pymux_string(self.pymux, format_str, window=w),
+                    format_pymux_string(
+                        self.pymux,
+                        format_str,
+                        window=w,
+                        session=self.client_state.session,
+                    ),
                     self._create_select_window_handler(w),
                 )
             )
@@ -1055,10 +1060,18 @@ class LayoutManager:
         return result
 
     def _get_status_left_tokens(self) -> str:
-        return format_pymux_string(self.pymux, self.pymux.status_left)
+        return format_pymux_string(
+            self.pymux,
+            self.pymux.status_left,
+            session=self.client_state.session,
+        )
 
     def _get_status_right_tokens(self) -> str:
-        return format_pymux_string(self.pymux, self.pymux.status_right)
+        return format_pymux_string(
+            self.pymux,
+            self.pymux.status_right,
+            session=self.client_state.session,
+        )
 
     def what_time_moves(self) -> Tuple[str, ...]:
         """
@@ -1103,14 +1116,21 @@ class LayoutManager:
             if pane.clock_mode:
                 parts.append(pymux.displayed_now().strftime(CLOCK_FORMAT))
             elif pymux.show_pane_status:
-                parts.append(format_pymux_string(pymux, PANE_TITLE_FORMAT, pane=pane))
+                parts.append(
+                    format_pymux_string(
+                        pymux,
+                        PANE_TITLE_FORMAT,
+                        pane=pane,
+                        session=self.client_state.session,
+                    )
+                )
 
         return tuple(parts)
 
     def _panes_in_view(self) -> List:
         "The panes of the window this client looks at, or none."
         try:
-            return list(self.pymux.arrangement.get_active_window().panes)
+            return list(self.client_state.session.arrangement.get_active_window().panes)
         except IndexError:
             # `get_active_window_for` ends at `windows[0]`, and there
             # may be no window at all: the refresh ticks before the
@@ -1516,7 +1536,7 @@ class LayoutManager:
         if not matches:
             return [("class:chooser.hint", " No window matches. ")]
 
-        active = self.pymux.arrangement.get_active_window()
+        active = self.client_state.session.arrangement.get_active_window()
         chosen = min(self.client_state.choose_window_index, len(matches) - 1)
         tokens: StyleAndTextTuples = []
         for i, window in enumerate(matches):

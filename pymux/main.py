@@ -102,7 +102,8 @@ class PaneCursor(CursorShapeConfig):
     def get_cursor_shape(self, application) -> CursorShape:
         pane = self.pymux.overlay_pane
         if pane is None:
-            pane = self.pymux.arrangement.get_active_pane_for(application)
+            arrangement = self.pymux.session_of(application).arrangement
+            pane = arrangement.get_active_pane_for(application)
         if pane is None:
             return CursorShape._NEVER_CHANGE
 
@@ -531,10 +532,14 @@ class ClientState:
             return
 
         # No windows left, return. We will quit soon.
-        if not self.pymux.arrangement.windows:
+        if not self.session.arrangement.windows:
             return
 
-        pane = self.pymux.arrangement.get_active_pane()
+        # This client's pane, and not `get_app()`'s: focus is synced for
+        # every client at once, so the one that asks is rarely this one.
+        pane = self.session.arrangement.get_active_pane_for(self.app)
+        if pane is None:
+            return
         self.app.layout.focus(pane.terminal)
 
 
@@ -855,6 +860,13 @@ class Pymux:
     def last_used_session(self) -> Session:
         "The session a person looked at last, of the ones that are left."
         return max(self.sessions, key=lambda session: session.last_used)
+
+    def session_of(self, app) -> Session:
+        "The session of the client that this application draws for."
+        for client_state in self._client_states.values():
+            if client_state.app == app:
+                return client_state.session
+        return self.last_used_session
 
     def get_session(self, name: str) -> Session | None:
         """

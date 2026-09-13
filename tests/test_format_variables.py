@@ -5,7 +5,7 @@ The format variables that a driver reads.
 variable that raises looks exactly like one that has nothing to say,
 and a broken variable can sit there for as long as nobody looks.
 `pane_synchronized` did: it took two arguments where every other takes
-three.
+four.
 """
 
 import sys
@@ -34,8 +34,9 @@ def pymux():
 @pytest.mark.parametrize("name", sorted(tmux_variables))
 def test_no_variable_raises(pymux, name):
     "Call the handler itself, not the formatter that swallows for it."
-    window = pymux.arrangement.get_active_window()
-    tmux_variables[name](pymux, window, window.active_pane)
+    session = pymux.current_session
+    window = session.arrangement.get_active_window()
+    tmux_variables[name](pymux, window, window.active_pane, session)
 
 
 def test_variable_that_nobody_knows_is_empty(pymux):
