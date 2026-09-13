@@ -139,7 +139,27 @@ class ServerConnection:
         """
         task = create_task(coro)
         self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
+        task.add_done_callback(self._finished)
+
+    def _finished(self, task: "asyncio.Task") -> None:
+        """
+        Let go of a task, and say what it raised.
+
+        Nothing awaits a spawned task, so its exception is retrieved by
+        nobody. asyncio says so when the task is collected, which is
+        some time later and names no cause -- and the work a connection
+        spawns is the work that reads a client and answers it, so the
+        symptom is a client that stops responding for a reason nothing
+        prints. Lillecarl/pymux#87.
+        """
+        self._tasks.discard(task)
+
+        if task.cancelled():
+            return
+
+        error = task.exception()
+        if error is not None:
+            logger.error("A task of this connection failed.", exc_info=error)
 
     def _write_output_raw(self, data: str) -> None:
         "Write to the outer terminal, without escaping. (For graphics.)"

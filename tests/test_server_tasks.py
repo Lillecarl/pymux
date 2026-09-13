@@ -12,6 +12,7 @@ then repaints the terminal of every client without end.
 
 import asyncio
 import inspect
+import logging
 
 from pymux.server import ServerConnection
 
@@ -99,3 +100,29 @@ def test_application_does_not_take_over_exception_handler():
     """
     source = inspect.getsource(ServerConnection._create_app)
     assert "set_exception_handler=False" in source
+
+
+async def test_a_failed_task_says_what_it_raised(caplog):
+    """
+    Nothing awaits a spawned task, so its exception is retrieved by
+    nobody. asyncio says so when the task is collected, which is some
+    time later and names no cause -- and the work a connection spawns is
+    the work that reads a client and answers it, so the symptom was a
+    client that stopped responding for a reason nothing printed.
+    Lillecarl/pymux#87.
+    """
+    connection = make_connection()
+    # The connection is already reading, and that task stays pending.
+    before = len(connection._tasks)
+
+    async def fails():
+        raise RuntimeError("the reading task fell over")
+
+    with caplog.at_level(logging.ERROR):
+        connection._spawn(fails())
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+
+    assert "the reading task fell over" in caplog.text, caplog.text
+    assert len(connection._tasks) == before, "the failed task is still held"
+    connection._close_connection()
