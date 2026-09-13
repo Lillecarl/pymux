@@ -11,7 +11,7 @@ from pymux.commands import CommandException
 from pymux.commands import add_command
 from pymux.commands.common import find_window
 from pymux.commands.common import show_listing
-from pymux.format import format_pymux_string
+from pymux.format import Language, format_pymux_string
 
 
 def list_panes(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -50,7 +50,14 @@ def list_panes(pymux: "Pymux", args: argparse.Namespace) -> None:
             for p in w.panes:
                 pymux.print_command_line(
                     format_pymux_string(
-                        pymux, format_str, window=w, pane=p, session=session
+                        pymux,
+                        format_str,
+                        window=w,
+                        pane=p,
+                        session=session,
+                        # `-F` is read by a script: tmux format only.
+                        # Lillecarl/pymux#333.
+                        language=Language.TMUX,
                     )
                 )
     else:

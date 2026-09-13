@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 import anyio
 
 from pymux.commands import add_command, handle_command
-from pymux.format import format_pymux_string
+from pymux.format import Language, format_pymux_string
 
 
 def if_shell(pymux: "Pymux", args: argparse.Namespace):
@@ -29,7 +29,11 @@ def if_shell(pymux: "Pymux", args: argparse.Namespace):
     if args.F:
         # No program runs, so there is nothing to wait for and -b
         # changes nothing. tmux answers this one on the spot as well.
-        return _then_run(pymux, args, bool(format_pymux_string(pymux, args.shell_command)))
+        # `-F` is the tmux format, as everywhere. Lillecarl/pymux#333.
+        answer = format_pymux_string(
+            pymux, args.shell_command, language=Language.TMUX
+        )
+        return _then_run(pymux, args, bool(answer))
 
     if args.b:
         pymux.spawn_command(_ask_the_shell(pymux, args))

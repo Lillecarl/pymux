@@ -15,7 +15,7 @@ from prompt_toolkit.application.current import get_app
 from prompt_toolkit.document import Document
 from prompt_toolkit.key_binding.vi_state import InputMode
 from pymux.commands import CommandException
-from pymux.format import format_pymux_string
+from pymux.format import Language, format_pymux_string
 from pymux.key_spelling import why_pane_cannot_read
 from pyte.keys import Unhearable
 
@@ -271,6 +271,14 @@ def print_object_format(
         format_str = "#{session_name}:#{window_index}.#{pane_index}"
     pymux.print_command_line(
         format_pymux_string(
-            pymux, format_str, window=window, pane=pane, session=session
+            pymux,
+            format_str,
+            window=window,
+            pane=pane,
+            session=session,
+            # `-F` is what a script reads, so it says tmux format and
+            # nothing else: a `{{` in it is two braces and not a
+            # template. Lillecarl/pymux#333.
+            language=Language.TMUX,
         )
     )

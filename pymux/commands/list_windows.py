@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException, add_command
 from pymux.commands.common import session_part, show_listing
-from pymux.format import format_pymux_string
+from pymux.format import Language, format_pymux_string
 
 
 def _sessions(pymux: "Pymux", args: argparse.Namespace) -> list:
@@ -49,6 +49,9 @@ def list_windows(pymux: "Pymux", args: argparse.Namespace) -> None:
                         window=w,
                         pane=w.active_pane,
                         session=session,
+                        # `-F` is read by a script: tmux format only.
+                        # Lillecarl/pymux#333.
+                        language=Language.TMUX,
                     )
                 )
     else:

@@ -17,6 +17,7 @@ Lillecarl/pymux#330.
 import os
 import re
 import socket
+from enum import Enum
 from typing import TYPE_CHECKING, Callable, Dict, NamedTuple, Optional
 
 if TYPE_CHECKING:
@@ -24,7 +25,40 @@ if TYPE_CHECKING:
     from pymux.main import ClientState, Pymux
     from pymux.session import Session
 
-__all__ = ["FormatContext", "format_pymux_string"]
+__all__ = ["FormatContext", "Language", "format_pymux_string"]
+
+
+class Language(Enum):
+    """
+    Which language a string is written in.
+
+    **`SNIFF` is for what a person writes** -- the status line, a
+    window status format, a pane title, `display-message`. A string
+    holding `{{` or `{%` is a template and anything else is a tmux
+    format, so a `.tmux.conf` carried over keeps working and a person
+    who wants more does not have to find an option first.
+
+    **`TMUX` is for what a machine reads.** `-F` is a protocol: libtmux
+    parses what it answers, libpymux builds its templates out of
+    `#{...}`, and `pymux -V` says "tmux 3.4". A listing renders a
+    template only when it is asked to, which is what `JINJA` is for.
+    Lillecarl/pymux#333.
+    """
+
+    SNIFF = "sniff"
+    TMUX = "tmux"
+    JINJA = "jinja"
+
+
+#: What tells a template from a tmux format. jinja2 opens an
+#: expression with one and a statement with the other, and neither
+#: means anything in a tmux format.
+TEMPLATE_MARKS = ("{{", "{%")
+
+
+def holds_a_template(string: str) -> bool:
+    "Whether this string is written in the template language."
+    return any(mark in string for mark in TEMPLATE_MARKS)
 
 
 class FormatContext(NamedTuple):
@@ -67,6 +101,7 @@ def format_pymux_string(
     pane: Optional["Pane"] = None,
     session: Optional["Session"] = None,
     client: Optional["ClientState"] = None,
+    language: Language = Language.SNIFF,
 ) -> str:
     """
     Apply pymux string formatting. (Similar to tmux.)
@@ -95,12 +130,25 @@ def format_pymux_string(
         pane = window.active_pane
 
     return format_in_context(
-        FormatContext(pymux, session, window, pane, client), string
+        FormatContext(pymux, session, window, pane, client), string, language
     )
 
 
-def format_in_context(context: FormatContext, string: str) -> str:
+def format_in_context(
+    context: FormatContext,
+    string: str,
+    language: Language = Language.SNIFF,
+) -> str:
     "Apply the formatting to a question that is already complete."
+    if language is Language.JINJA or (
+        language is Language.SNIFF and holds_a_template(string)
+    ):
+        # Here, and not at the top of the file: a `pymux list-sessions`
+        # that formats no template must not pay for importing jinja2.
+        from . import jinja
+
+        return jinja.render(context, string)
+
     # Date/time formatting. The clock that test-mode pins runs here
     # as well, so a formatted status line holds still too.
     if "%" in string:

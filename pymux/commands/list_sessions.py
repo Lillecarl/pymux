@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import add_command
 from pymux.commands.common import show_listing
-from pymux.format import format_pymux_string
+from pymux.format import Language, format_pymux_string
 
 #: What a line says when nobody asked for a format. tmux writes the
 #: name, the window count and whether anybody is on it.
@@ -33,6 +33,9 @@ def list_sessions(pymux: "Pymux", args: argparse.Namespace) -> None:
                 window=window,
                 pane=window.active_pane if window is not None else None,
                 session=session,
+                # A listing is read by a script, so `-F` is tmux format
+                # and nothing else. Lillecarl/pymux#333.
+                language=Language.TMUX,
             )
         )
 
