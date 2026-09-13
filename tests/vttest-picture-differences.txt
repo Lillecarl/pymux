@@ -23,7 +23,7 @@
 # own, and it cannot do some of the things a terminal does to itself.
 #
 # A count is a number of pixels, so it belongs to the font, the size and
-# the geometry that `take_a_picture.py` asks each terminal for. Change
+# the geometry that `take_picture.py` asks each terminal for. Change
 # any of them and every count has to be recorded again.
 #
 # Item 4 of vttest's main menu is recorded, and item 9. Item 2 is

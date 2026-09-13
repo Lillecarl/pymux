@@ -1,6 +1,6 @@
 # Recordings
 
-What a real program drew, once, on a real machine. `take_a_picture.py`
+What a real program drew, once, on a real machine. `take_picture.py`
 replays each one twice — bare and in a pymux pane — and subtracts one
 picture from the other.
 

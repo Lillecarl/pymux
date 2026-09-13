@@ -697,7 +697,7 @@ def compare_one(terminal, seat, name, work, out):
             # before them, both sides alike, agreeing on nothing. Both
             # seats read one now; the guard stays for a seat that
             # cannot yet.
-            not_before=token if seat.reads_the_fence else 0.0,
+            not_before=token if seat.reads_fence else 0.0,
         )
         seat.picture_of(
             terminal,
@@ -714,7 +714,7 @@ def compare_one(terminal, seat, name, work, out):
             work,
             through,
             room / "pymux.log",
-            not_before=token if seat.reads_the_fence else 0.0,
+            not_before=token if seat.reads_fence else 0.0,
         )
     except RuntimeError as reason:
         raise RuntimeError("%s\n%s" % (reason, every_log(room, seat))) from None

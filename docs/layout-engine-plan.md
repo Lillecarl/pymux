@@ -402,7 +402,7 @@ Two smaller rules that follow:
 
 1. **`Rect`, `Slot`, `Plan`, the services, and the property tests.** Pure code,
    no wiring, testable alone. **Landed**: `pymux/plane.py` and
-   `tests/test_the_plane.py`, with `every_promise_holds(plan)` for the
+   `tests/test_plane.py`, with `every_promise_holds(plan)` for the
    slices after it to hold their own `measure` to.
 2. **`Strip` emits a plan, and the title bars plus `select-pane -L|-R`
    read it.** The probe. **Landed**: `Strip.measure` in
