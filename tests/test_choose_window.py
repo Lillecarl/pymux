@@ -378,6 +378,26 @@ def type_bytes(state, data: str) -> None:
         state.app.key_processor.process_keys()
 
 
+#: The bytes a terminal sends for the keys that have names. Escape is
+#: the one that matters: it is the first byte of every escape
+#: sequence, which is why `type_bytes` flushes.
+_DATA = {
+    Keys.Escape: "\x1b",
+    Keys.Enter: "\r",
+}
+
+
+def press(state, *names) -> None:
+    "The named keys, down the same road as `type_bytes`."
+    with set_app(state.app):
+        for name in names:
+            key = _KEYS.get(name, name)
+            state.app.key_processor.feed(KeyPress(key, _DATA.get(key, name)))
+        state.app.key_processor.process_keys()
+        state.app.key_processor.feed(_Flush)
+        state.app.key_processor.process_keys()
+
+
 async def test_the_keyboard_stays_with_the_chooser_after_a_key():
     """
     `ClientState.sync_focus` runs after every key press, and it used to
@@ -441,6 +461,81 @@ async def test_the_search_line_shows_what_was_typed():
         type_bytes(state, "need")
 
         assert "need" in _drawn(state)[1]
+
+
+async def test_walking_the_entries_from_a_key_press():
+    "What `fire` asserts, down the road a keyboard takes."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("new-window")
+            pymux.handle_command("choose-window")
+
+        first, second = pymux.arrangement.windows[-2:]
+        assert here(pymux, state) is second
+
+        type_bytes(state, "h")
+        assert here(pymux, state) is first
+
+        type_bytes(state, "l")
+        assert here(pymux, state) is second
+
+
+async def test_enter_from_a_key_press_keeps_the_window():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("new-window")
+            pymux.handle_command("choose-window")
+
+        first = pymux.arrangement.windows[-2]
+        type_bytes(state, "h")
+        press(state, "enter")
+
+        assert not state.choose_window
+        assert here(pymux, state) is first
+
+
+async def test_escape_from_a_key_press_goes_back():
+    """
+    Escape is bound twice, both eager, on filters that must not
+    overlap: one leaves the chooser and one leaves only the search.
+    An eager binding reached through a stale filter is the shape that
+    misroutes, so both are pressed here and not fired.
+    """
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("new-window")
+            pymux.handle_command("choose-window")
+
+        started_on = here(pymux, state)
+        type_bytes(state, "h")
+        assert here(pymux, state) is not started_on
+
+        press(state, "escape")
+
+        assert not state.choose_window
+        assert here(pymux, state) is started_on
+
+
+async def test_escape_in_the_search_from_a_key_press_keeps_the_chooser():
+    "The other of the two eager Escapes."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("new-window")
+            pymux.handle_command("rename-window needle")
+            pymux.handle_command("choose-window")
+
+        type_bytes(state, "/")
+        type_bytes(state, "need")
+        assert state.choose_window_filter.text == "need"
+
+        press(state, "escape")
+
+        assert state.choose_window, "the search took the chooser with it"
+        assert state.choose_window_filter.text == ""
+        with set_app(state.app):
+            assert state.app.layout.has_focus(
+                state.layout_manager.chooser_rows_control()
+            ), "the keys did not come back to the bar"
 
 
 # ----------------------------------------------------------------------
