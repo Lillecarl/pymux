@@ -99,3 +99,20 @@ def test_list_keys_shows_name_person_wrote(pymux):
 
     (binding,) = bindings(pymux).values()
     assert binding.written == "ctrl+a"
+
+
+@pytest.mark.parametrize("spelling", ("bind-key", "bind"))
+def test_a_semicolon_is_the_key_being_bound_under_either_spelling(pymux, spelling):
+    """
+    `bind \\; last-pane` binds the semicolon; it does not run `bind` and then
+    `last-pane`.
+
+    The test that keeps the splitter off a bind read the word as typed, so it
+    held for the long name and not for the alias a tmux configuration
+    actually writes. Lillecarl/pymux#313.
+    """
+    problems = run(pymux, "%s -n ';' new-window" % (spelling,))
+
+    assert problems == []
+    (binding,) = bindings(pymux).values()
+    assert binding.command == "new-window"

@@ -125,7 +125,15 @@ def handle_command(pymux: "Pymux", input_string: str) -> None:
             # Split into separate commands on bare ';' tokens.
             # (Exception: for bind-key/unbind-key, a ';' can be the name of
             # the key that is bound. Like tmux, we don't split there.)
-            no_semicolon_split = parts[0] in ("bind-key", "unbind-key")
+            #
+            # The alias is resolved here and not left to
+            # `call_command_handler`, because `bind` is what a tmux
+            # configuration writes and `bind \; last-pane` used to split on
+            # the key it was binding: the bind ran with no arguments and
+            # last-pane moved the focus, with no message saying why.
+            # Lillecarl/pymux#313.
+            first = ALIASES.get(parts[0], parts[0])
+            no_semicolon_split = first in ("bind-key", "unbind-key")
             commands: List[List[str]] = [[]]
             for part in parts:
                 if part == ";" and not no_semicolon_split:
