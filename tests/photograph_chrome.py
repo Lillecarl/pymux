@@ -305,6 +305,15 @@ FIXTURES = {
             (0.8, b"bui"),
         ),
     ),
+    # A question waiting for an answer. `prefix x` is
+    # `confirm-before -p "kill-pane #P?" kill-pane`, so the prompt is
+    # also the one piece of chrome that expands a format string into
+    # itself. Two panes, so the pane it names is not the only one and
+    # the number in the question means something.
+    "confirm": (
+        CHROME,
+        keys((0.0, PREFIX), (0.4, b"%"), (0.8, PREFIX), (0.6, b"x")),
+    ),
     # The demo in a pane, and copy mode over it. The two hold the
     # same rows a person can read, and the difference between the two
     # pictures is what copy mode does.
