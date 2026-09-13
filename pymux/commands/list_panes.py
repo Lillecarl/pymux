@@ -30,6 +30,12 @@ def list_panes(pymux: "Pymux", args: argparse.Namespace) -> None:
             )
         windows: List["Window"] = [window]
     elif args.a:
+        # Every window of every session. tmux reads `-a` as the whole
+        # server too. Lillecarl/pymux#323.
+        windows = [
+            w for session in pymux.sessions for w in session.arrangement.windows
+        ]
+    elif args.s:
         windows = list(pymux.arrangement.windows)
     else:
         windows = [pymux.arrangement.get_active_window()]
@@ -39,12 +45,14 @@ def list_panes(pymux: "Pymux", args: argparse.Namespace) -> None:
     if args.format:
         # Print one line for every pane.
         format_str = args.format or "#{pane_id}"
-        lines = [
-            format_pymux_string(pymux, format_str, window=w, pane=p)
-            for w in windows
-            for p in w.panes
-        ]
-        pymux.print_command_line("\n".join(lines))
+        for w in windows:
+            session = pymux.session_of_window(w)
+            for p in w.panes:
+                pymux.print_command_line(
+                    format_pymux_string(
+                        pymux, format_str, window=w, pane=p, session=session
+                    )
+                )
     else:
         result = []
 
@@ -71,6 +79,7 @@ def list_panes(pymux: "Pymux", args: argparse.Namespace) -> None:
 
 def register(subparsers):
     parser = add_command(subparsers, list_panes)
-    parser.add_argument("-a", dest="a", action="store_true", help="The panes of every window, not of the active one.")
+    parser.add_argument("-a", dest="a", action="store_true", help="The panes of every window of every session.")
+    parser.add_argument("-s", dest="s", action="store_true", help="The panes of every window of this session.")
     parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane whose window to list.")
     parser.add_argument("-F", dest="format", metavar="<format>", help="Print this format for every pane.")

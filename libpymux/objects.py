@@ -2,9 +2,9 @@
 A pymux server, and what it holds, as objects.
 
 The shape follows libtmux: a server holds sessions, a session holds
-windows, a window holds panes. pymux runs one session for each server,
-so `Server.session` is the one that matters and `Server.sessions`
-always holds a single entry.
+windows, a window holds panes. A pymux server holds as many sessions as
+a person makes (Lillecarl/pymux#323), so `Server.sessions` is the list
+and `Server.session` is the first of them.
 
 Every object reads its fields from the server through a format string,
 the way libtmux reads them from `tmux -F`. An object holds what it read
@@ -348,11 +348,11 @@ class Window(_Object):
 
 class Session(_Object):
     """
-    The session of a server.
+    One session of a server.
 
-    A pymux server runs exactly one. It is here so that the shape
-    matches libtmux, and so that code written against libtmux reads the
-    same way.
+    Everything it reads names itself with `-t`, so two sessions of one
+    server answer for themselves and not for whichever one a client is
+    on.
     """
 
     _fields = _SESSION_FIELDS
@@ -362,7 +362,7 @@ class Session(_Object):
 
     @property
     def id(self) -> str:
-        'The session id. Always "$0", because a server runs one session.'
+        'The session id, as tmux spells one: "$0".'
         return self._values.get("session_id", "$0")
 
     @property
@@ -381,7 +381,12 @@ class Session(_Object):
 
     @property
     def windows(self) -> List[Window]:
-        return self.server.windows
+        return [
+            Window(self.server, values)
+            for values in self.server._query(
+                ["list-windows", "-t", self.id], _WINDOW_FIELDS
+            )
+        ]
 
     @property
     def active_window(self) -> Optional[Window]:
@@ -392,7 +397,7 @@ class Session(_Object):
 
     @property
     def panes(self) -> List[Pane]:
-        return self.server.panes
+        return [pane for window in self.windows for pane in window.panes]
 
     def new_window(
         self,
@@ -401,8 +406,8 @@ class Session(_Object):
         start_directory: Optional[str] = None,
         select: bool = True,
     ) -> Optional[Window]:
-        "Make a window and return it."
-        arguments = ["new-window"]
+        "Make a window in this session and return it."
+        arguments = ["new-window", "-t", "%s:" % (self.name,)]
         if name is not None:
             arguments += ["-n", name]
         if start_directory is not None:
@@ -416,15 +421,18 @@ class Session(_Object):
         return Window(self.server, rows[0]) if rows else None
 
     def rename(self, name: str) -> None:
-        self.server.cmd(["rename-session", name])
+        self.server.cmd(["rename-session", "-t", self.id, name])
 
     def kill(self) -> None:
-        "End the session, which ends the server."
-        self.server.cmd(["kill-session"])
+        "End this session. The last one to go ends the server."
+        self.server.cmd(["kill-session", "-t", self.id])
 
     def refresh(self) -> "Session":
-        self._values = self.server.session._values
-        return self
+        for session in self.server.sessions:
+            if session.id == self.id:
+                self._values = session._values
+                return self
+        raise LookupError("the session %s is gone" % (self.id,))
 
 
 class Server:
@@ -505,7 +513,7 @@ class Server:
 
     @property
     def sessions(self) -> List[Session]:
-        "Every session. A pymux server runs one, so this holds one."
+        "Every session of this server, oldest first."
         return [
             Session(self, values)
             for values in self._query(["list-sessions"], _SESSION_FIELDS)
@@ -513,15 +521,31 @@ class Server:
 
     @property
     def session(self) -> Session:
-        "The session of this server."
+        "The oldest session of this server."
         found = self.sessions
         if not found:
             raise LookupError("the server has no session")
         return found[0]
 
+    def session_named(self, name: str) -> Optional[Session]:
+        "The session with this name, or None."
+        for session in self.sessions:
+            if session.name == name:
+                return session
+        return None
+
+    def new_session(self, name: str, attach: bool = False) -> Optional[Session]:
+        "Make a session and return it."
+        arguments = ["new-session", "-s", name]
+        if not attach:
+            arguments.append("-d")
+        arguments += ["-P", "-F", _format_string(_SESSION_FIELDS)]
+        rows = _rows(self.cmd(arguments), _SESSION_FIELDS)
+        return Session(self, rows[0]) if rows else None
+
     @property
     def windows(self) -> List[Window]:
-        "Every window of the session, in the order the server keeps them."
+        "Every window of the session a client last looked at."
         return [
             Window(self, values)
             for values in self._query(["list-windows"], _WINDOW_FIELDS)

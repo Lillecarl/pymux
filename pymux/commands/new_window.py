@@ -5,8 +5,8 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command
-from pymux.commands.common import print_object_format
+from pymux.commands import CommandException, add_command
+from pymux.commands.common import print_object_format, session_part
 
 
 def index(target):
@@ -23,7 +23,26 @@ def index(target):
         return None
 
 
-def where_new_window_goes(pymux: "Pymux", args: argparse.Namespace):
+def which_session(pymux: "Pymux", args: argparse.Namespace):
+    """
+    The session a new window goes in, and the target with its session
+    part taken off.
+
+    `new-window -t work:` opens a window in `work`. Without a session
+    part it is the session of the client that asks.
+    Lillecarl/pymux#323.
+    """
+    target = args.target_window
+    if target is None:
+        return pymux.current_session, None
+
+    session, rest = session_part(pymux, target)
+    if session is None:
+        raise CommandException("can't find session: %s" % (target,))
+    return session, rest
+
+
+def where_new_window_goes(pymux: "Pymux", args: argparse.Namespace, session, target):
     """
     The index a new window takes, from the options it was given.
 
@@ -46,13 +65,13 @@ def where_new_window_goes(pymux: "Pymux", args: argparse.Namespace):
     and a person who mistypes a window number while opening one does
     not want the window not to open.
     """
-    number = index(args.target_window)
+    number = index(target)
 
     where = None
     if number is not None:
-        where = pymux.arrangement.get_window_by_index(number)
+        where = session.arrangement.get_window_by_index(number)
     if where is None:
-        where = pymux.arrangement.get_active_window()
+        where = session.arrangement.get_active_window()
 
     if args.b:
         return where.index
@@ -80,30 +99,36 @@ def new_window(pymux: "Pymux", args: argparse.Namespace) -> None:
 
     `-a` and `-b` are tmux's, and name the side. `-t` names the window
     to sit next to, and the active one is the default. tmux reads a
-    bare `-t` as the index to create at instead, and so does this.
+    bare `-t` as the index to create at instead, and so does this. A
+    session part in the target -- `-t work:` -- opens the window in
+    that session. Lillecarl/pymux#323.
     """
     executable = args.executable
     start_directory = args.start_directory
     name = args.name
     dont_select = args.d
 
-    window = pymux.arrangement.get_active_window()
+    session, target = which_session(pymux, args)
+    arrangement = session.arrangement
+
+    window = arrangement.get_active_window()
     pymux.create_window(
         executable,
         start_directory=start_directory,
         name=name,
-        index=where_new_window_goes(pymux, args),
+        index=where_new_window_goes(pymux, args, session, target),
+        session=session,
     )
 
     # **The one that is active, and not the last of the list.** A new
     # window went at the end while it always took the highest index,
     # and it can go anywhere now. `create_window` focuses it, which is
     # the only thing that says which one it is.
-    new_window = pymux.arrangement.get_active_window()
+    new_window = arrangement.get_active_window()
 
     if dont_select:
         # Don't make the new window active.
-        pymux.arrangement.set_active_window(window)
+        arrangement.set_active_window(window)
 
     if args.P:
         print_object_format(
@@ -111,6 +136,7 @@ def new_window(pymux: "Pymux", args: argparse.Namespace) -> None:
             args.format,
             window=new_window,
             pane=new_window.active_pane,
+            session=session,
         )
 
 

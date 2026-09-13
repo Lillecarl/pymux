@@ -287,7 +287,9 @@ def test_new_window_carries_its_name(fake):
     assert window.id == "@4"
     assert window.index == 2
     assert window.name == "build"
-    assert server.asked[1].startswith("new-window -n build -P -F ")
+    # The session names itself, so the window lands in it and not in
+    # whichever session a client is on. Lillecarl/pymux#323.
+    assert server.asked[1].startswith("new-window -t work: -n build -P -F ")
 
 
 def test_session_of_server(fake):
