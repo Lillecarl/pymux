@@ -564,6 +564,17 @@ class ClientState:
         if self.command_mode:
             return  # Focus command
 
+        # A chooser owns the keyboard while it shows. It moves its own
+        # focus -- the rows hold it, and `/` gives it to the search
+        # line -- and this hook runs after every key press, so without
+        # this branch the focus goes straight back to the pane and the
+        # search line can never be typed into. Every other key of the
+        # chooser works, because its bindings ask what shows and not
+        # what has the focus, which is why only the search broke.
+        # Lillecarl/pymux#161, Lillecarl/pymux#337.
+        if self.choose_window or self.choose_buffer or self.choose_options:
+            return
+
         # An overlay pane takes the keyboard while it is open.
         if self.session.overlay_pane is not None:
             self.app.layout.focus(self.session.overlay_pane.terminal)

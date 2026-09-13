@@ -22,6 +22,7 @@ The rules this judges, Lillecarl/pymux#295 and Lillecarl/pymux#327:
 
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.formatted_text import fragment_list_to_text
+from prompt_toolkit.key_binding.key_processor import _Flush, KeyPress
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Screen as PtScreen, WritePosition
@@ -342,6 +343,104 @@ async def test_escape_in_the_search_keeps_the_chooser():
 
         assert state.choose_window, "the search took the chooser with it"
         assert state.choose_window_filter.text == ""
+
+
+# ----------------------------------------------------------------------
+# The search, reached the way a person reaches it.
+#
+# Every test above drives `choose_window_filter` by hand, which proves
+# the narrowing and proves nothing about the road a key takes to it.
+# A picture of the chooser with "bui" typed at it showed an unnarrowed
+# list and an empty search line, and no cell test could see that.
+# Lillecarl/pymux#161.
+
+
+def type_bytes(state, data: str) -> None:
+    """
+    Press each of these keys, through the key processor.
+
+    **Not through `app.input`.** This session runs, so the
+    application's own reader is on that pipe and takes what is written
+    there: a `send_text` here reaches the app sometimes and is drained
+    from under the test the rest of the time.
+
+    **The flush is part of typing.** A letter can be the first key of
+    a longer binding -- vi text objects and digraphs are full of them
+    -- and the processor holds one back until a timeout says no more
+    is coming. A person always waits that long, so a test that never
+    flushes measures the moment before the key, not the key.
+    """
+    with set_app(state.app):
+        for one in data:
+            state.app.key_processor.feed(KeyPress(one, one))
+        state.app.key_processor.process_keys()
+        state.app.key_processor.feed(_Flush)
+        state.app.key_processor.process_keys()
+
+
+async def test_the_keyboard_stays_with_the_chooser_after_a_key():
+    """
+    `ClientState.sync_focus` runs after every key press, and it used to
+    hand the keyboard back to the active pane whatever was showing. So
+    the search line took the focus and lost it in the same key press.
+    Lillecarl/pymux#337.
+    """
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("choose-window")
+
+        type_bytes(state, "/")
+
+        with set_app(state.app):
+            pane = pymux.arrangement.get_active_pane()
+            assert not state.app.layout.has_focus(pane.terminal), (
+                "the pane took the keyboard back from the chooser"
+            )
+
+
+async def test_slash_moves_the_focus_to_the_search():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("choose-window")
+
+        type_bytes(state, "/")
+
+        with set_app(state.app):
+            assert state.app.layout.has_focus(
+                state.layout_manager.chooser_search_control()
+            ), "the slash did not reach the search"
+
+
+async def test_typed_keys_reach_the_search_and_narrow_the_list():
+    "The whole road: prefix w, slash, letters, a narrowed bar."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("new-window")
+            pymux.handle_command("rename-window needle")
+            pymux.handle_command("new-window")
+            pymux.handle_command("choose-window")
+
+        type_bytes(state, "/")
+        type_bytes(state, "needle")
+
+        assert state.choose_window_filter.text == "needle"
+
+        needle = next(w for w in pymux.arrangement.windows if w.name == "needle")
+        assert entries(state) == ["%s:needle" % (needle.index,)]
+        assert here(pymux, state).name == "needle"
+
+
+async def test_the_search_line_shows_what_was_typed():
+    "What the picture looked for and did not find."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("rename-window needle")
+            pymux.handle_command("choose-window")
+
+        type_bytes(state, "/")
+        type_bytes(state, "need")
+
+        assert "need" in _drawn(state)[1]
 
 
 # ----------------------------------------------------------------------
