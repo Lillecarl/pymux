@@ -4,44 +4,33 @@
 # carry the X server, the two terminal emulators, the compositor and the
 # screenshot tools that only a test needs.
 #
-# `testSources` comes from `default.nix`. The package itself is not an input:
-# a pymux suite runs against the source in `testSources`, where pyte and
-# ptterm run their suites against the installed package.
+# `testSources` comes from `default.nix`. A pymux suite runs against the
+# source there, where pyte and ptterm run theirs against the installed
+# package.
 #
 # The entry of terminfo that a pane is told about needs no input either. It
-# rides inside `pyte`, which is in `pythonWithTests` already.
+# rides inside `pyte`, which is in `testEnv` already.
 #
 # `nix/suite.nix` says why a check is two derivations.
 {
-  python,
+  # The python every suite runs on: a virtualenv of pymux, everything pymux
+  # depends on, and its `test` extra. `default.nix` builds it from
+  # `pyproject.toml`, so what a suite may import is what the package
+  # declares, and there is no second dependency list here to fall out of
+  # step with the first. Lillecarl/pymux#319.
+  testEnv,
+  # ptterm as nixpkgs built it, and not the copy inside `testEnv`. The
+  # suites borrow tools from its passthru, and a package lifted into the
+  # builders set keeps its files and not its passthru.
   ptterm,
-  prompt-toolkit,
-  # The shared rig. The picture scripts borrow its seats.
-  pyterm-pytest,
   # The base16 collection, converted: the themes gallery photographs
   # a base16 theme, and the pane answers with its palette.
   base16-schemes-json,
-  pywayland,
   # The reader of the clipboard fence: wl-paste on the compositor the
   # seat started, xclip on the X server it started.
   wl-clipboard,
   xclip,
   waylandProtocols,
-  argcomplete,
-  pytest,
-  hypothesis,
-  wcwidth,
-  pyinstrument,
-  asyncssh,
-  # `set-option theme pygments:<name>`, in `test_pygments_themes.py`.
-  pygments,
-  # The four flavours of the pastel, which pygments finds by entry
-  # point once the package is there: `catppuccin-mocha` and friends.
-  # Lillecarl/pymux#195.
-  catppuccin,
-  # TEMPORARY for the Lillecarl/pymux#258 scratch measurement. Remove
-  # with `tests/measure_wire_sizes.py` and the `wire` check below.
-  msgpack,
   callPackage,
   xorg-server,
   xterm,
@@ -100,34 +89,6 @@ let
   # owns the pty vttest runs on. It belongs to ptterm, which is what it
   # models, and here it is the program that gets photographed.
   inherit (ptterm) vttestWalker;
-
-  pythonWithTests = python.withPackages (ps: [
-    ptterm
-    prompt-toolkit
-    pyterm-pytest
-    # The wayland seat's keyboard holder runs under the python of the
-    # suite that starts it.
-    pywayland
-    argcomplete
-    hypothesis
-    pytest
-    wcwidth
-    # The profiler. It is in every suite's python rather than in one,
-    # because it is instrumentation: a person reaching for it wants it
-    # where they already are, and it costs nothing until something
-    # imports it.
-    pyinstrument
-    # Both ends of the ssh route: the client pymux ships, and the
-    # server that stands in for sshd in `tests/test_ssh_client.py`.
-    # Lillecarl/pymux#90.
-    asyncssh
-    # The themes of `set-option theme pygments:<name>`.
-    pygments
-    # The pastel among them, by entry point. Lillecarl/pymux#195.
-    catppuccin
-    # TEMPORARY for the scratch wire measurement. See above.
-    msgpack
-  ]);
 
   # Knobs that reach the evaluation through the environment. They work
   # because a build from a file evaluates impurely; a flake would see none of
@@ -353,9 +314,9 @@ let
     export PYTHONDONTWRITEBYTECODE=1
   '';
 
-  # `inputs` adds to what a run may call, and `pythonWithTests` is in every
-  # one of them. `env` names the variables that a run reads, and a change to
-  # one of them rebuilds the check, which is what makes the knobs above work.
+  # `inputs` adds to what a run may call, and `testEnv` is in every one of
+  # them. `env` names the variables that a run reads, and a change to one of
+  # them rebuilds the check, which is what makes the knobs above work.
   runInSandbox =
     {
       name,
@@ -366,7 +327,7 @@ let
     command:
     suite {
       inherit name env;
-      inputs = [ pythonWithTests ] ++ inputs;
+      inputs = [ testEnv ] ++ inputs;
       setup = prepare + setup;
     } command;
 

@@ -6,39 +6,35 @@
 # Nothing else belongs in this repository: the dev shell and the collection
 # that assembles this with its siblings live in pyterm.
 #
-# prompt-toolkit and ptterm arrive as arguments, so nixpkgs supplies them
-# when this repository is built on its own, and pyterm supplies the sibling
-# checkouts when it builds the collection.
+# **This is a pyproject.nix builders package, not a nixpkgs one.** What pymux
+# needs is declared once, in `pyproject.toml`, and the renderer reads it: no
+# `propagatedBuildInputs` here, and no second copy of the list in
+# `nix/checks.nix`. An environment is a virtualenv rather than a PYTHONPATH,
+# so there is nothing for an older copy to shadow and no module/application
+# distinction to fall off. Lillecarl/pymux#319.
+#
+# `mkProject` and the three hooks come from the set the collection builds in
+# `pyterm/nix/python-set.nix`. Everything pymux imports comes from that set
+# too, by name, out of `pyproject.toml`.
+#
+# ptterm and pyterm-pytest still arrive as arguments, and they are the copies
+# nixpkgs built rather than the ones in the set. The checks borrow tools from
+# their passthru, and a lifted package keeps its files and not its passthru.
 #
 # mesa arrives as an argument as well, and only the checks use it: kitty
-# draws with OpenGL and a build sandbox has no graphics card. It cannot come
-# from the scope here, because this is the python package set and `mesa`
-# there is a python binding that nixpkgs has marked broken.
+# draws with OpenGL and a build sandbox has no graphics card.
 {
   lib,
   python,
-  buildPythonApplication,
-  pythonOlder,
+  stdenv,
+  pyprojectHook,
+  resolveBuildSystem,
+  mkVirtualEnv,
+  mkProject,
   runCommand,
-  prompt-toolkit,
   ptterm,
   # The shared rig, whose seats the picture scripts borrow.
   pyterm-pytest,
-  argcomplete,
-  pyinstrument,
-  # `-S ssh://host/path` reaches a server on another machine. It is
-  # here and not only in the checks for the reason pyinstrument is: a
-  # person attaches from the pymux they installed, not from one they
-  # built with extras. Lillecarl/pymux#90.
-  asyncssh,
-  # `set-option theme pygments:<name>` takes one of the styles pygments
-  # carries. Lillecarl/pymux#194.
-  pygments,
-  # The four flavours of the pastel, found by pygments through its
-  # entry points. Optional in the packaging; this package carries it,
-  # because a person who installs pymux wants its themes to work.
-  # Lillecarl/pymux#195.
-  catppuccin,
   installShellFiles,
   callPackage,
   mesa,
@@ -65,61 +61,75 @@ let
     install -Dm644 base16-schemes.json "$out"/base16-schemes.json
   '';
 
-  package = buildPythonApplication {
-    pname = "pymux";
-    version = "0.15";
-    format = "setuptools";
-
-    src = lib.cleanSource ./.;
-
-    disabled = pythonOlder "3.11";
-
-    # pyinstrument is here and not only in the checks, because `pymux
-    # profile` asks a running server where its time goes and a person
-    # only wants that on the server they already have.
-    # Lillecarl/pymux#249.
-    propagatedBuildInputs = [
-      prompt-toolkit
-      ptterm
-      argcomplete
-      pyinstrument
-      asyncssh
-      pygments
-      catppuccin
+  # What the wheel is built from, and nothing else.
+  #
+  # `lib.cleanSource ./.` used to be the source, and it carried eleven
+  # megabytes: `docs`, `examples`, `images`, `tests`, and -- worse --
+  # `.hypothesis`, `.pytest_cache` and `.ruff_cache`, which a local test run
+  # rewrites. So running the suite by hand changed the source hash of the
+  # package and rebuilt everything below it. An allowlist cannot do that.
+  # Lillecarl/pymux#320.
+  projectRoot = lib.fileset.toSource {
+    root = ./.;
+    fileset = lib.fileset.unions [
+      (lib.fileset.fileFilter (file: file.hasExt "py") ./pymux)
+      (lib.fileset.fileFilter (file: file.hasExt "py") ./libpymux)
+      # The three the metadata names: the renderer reads the first at
+      # evaluation time, and setuptools reads all three in the build.
+      ./pyproject.toml
+      ./README.rst
+      ./LICENSE
     ];
-
-    # The completion scripts of bash, zsh and fish, written from
-    # argcomplete and put where a shell loads them. The script that
-    # answers a Tab is generic: it makes the shell ask `pymux`, and
-    # pymux answers from its parser tree. Lillecarl/pymux#48.
-    nativeBuildInputs = [ installShellFiles ];
-    postInstall = ''
-      ${python.interpreter} ${./nix/render-completions.py} pymux "$PWD/rendered"
-      installShellCompletion --cmd pymux \
-        --bash rendered/bash \
-        --zsh rendered/zsh \
-        --fish rendered/fish
-      install -Dm644 ${base16-schemes-json}/base16-schemes.json \
-        "$out/${python.sitePackages}/pymux/base16-schemes.json"
-    '';
-
-    # The suites run as `checks.unit`, `checks.pty` and the rest, against the source.
-    doCheck = false;
-    pythonImportsCheck = [
-      "pymux"
-      "libpymux"
-    ];
-
-    passthru = { inherit checks; };
-
-    meta = {
-      description = "Pure Python terminal multiplexer (tmux alternative)";
-      homepage = "https://github.com/prompt-toolkit/pymux";
-      license = lib.licenses.bsd3;
-      mainProgram = "pymux";
-      platforms = lib.platforms.unix;
-    };
   };
+
+  package =
+    (mkProject {
+      inherit projectRoot python;
+      extra = rendered: {
+        # The completion scripts of bash, zsh and fish, written from
+        # argcomplete and put where a shell loads them. The script that
+        # answers a Tab is generic: it makes the shell ask `pymux`, and
+        # pymux answers from its parser tree. Lillecarl/pymux#48.
+        #
+        # The renderer's own `nativeBuildInputs` carry the hooks, so this
+        # appends rather than replaces.
+        nativeBuildInputs = rendered.nativeBuildInputs ++ [ installShellFiles ];
+
+        # `render-completions.py` imports pymux, which imports
+        # prompt_toolkit and ptterm. A builders package propagates nothing,
+        # so the build environment has none of them: the script runs on a
+        # virtualenv of what pymux declares, with the package just installed
+        # in front of it. The specification is `rendered.passthru`, so this
+        # is still one dependency list and not two.
+        postInstall =
+          let
+            deps = mkVirtualEnv "pymux-completions-env" rendered.passthru.dependencies;
+          in
+          ''
+            PYTHONPATH="$out/${python.sitePackages}" \
+              ${deps}/bin/python ${./nix/render-completions.py} pymux "$PWD/rendered"
+            installShellCompletion --cmd pymux \
+              --bash rendered/bash \
+              --zsh rendered/zsh \
+              --fish rendered/fish
+            install -Dm644 ${base16-schemes-json}/base16-schemes.json \
+              "$out/${python.sitePackages}/pymux/base16-schemes.json"
+          '';
+
+        passthru = rendered.passthru // { inherit checks; };
+
+        meta = rendered.meta // {
+          description = "Pure Python terminal multiplexer (tmux alternative)";
+          homepage = "https://github.com/prompt-toolkit/pymux";
+          license = lib.licenses.bsd3;
+          mainProgram = "pymux";
+          platforms = lib.platforms.unix;
+        };
+      };
+    })
+      {
+        inherit stdenv pyprojectHook resolveBuildSystem;
+      };
 
   # Only the module and the tests, not the whole repository. A copy of
   # everything makes the test runs rebuild on every unrelated edit.
@@ -135,20 +145,32 @@ let
     ];
   };
 
-  # ptterm and prompt-toolkit go in by hand. They arrive here as arguments,
-  # so the scope that `callPackage` fills from holds the ones of nixpkgs and
-  # not the sibling checkouts that pyterm assembled.
+  # What every suite runs on. `test` is the extra that `pyproject.toml`
+  # declares for exactly this, so the suites' dependencies are written beside
+  # the package's own and a reader sees one list.
   #
-  # mesa arrives as an argument for the same reason, and pyterm passes the
-  # one that draws. In this package set `mesa` is a python binding that
-  # nixpkgs has marked broken, so it cannot be taken from the scope.
+  # pymux itself is in it. Under nixpkgs it could not be -- `withPackages`
+  # drops an application, and with it everything the application propagates
+  # -- which is why the old environment repeated pymux's dependency list by
+  # hand. Lillecarl/pymux#319.
+  testEnv = mkVirtualEnv "pymux-test-env" {
+    pymux = [
+      "test"
+      "catppuccin"
+    ];
+  };
+
+  # ptterm goes in by hand: the scope here holds the copy lifted into the
+  # builders set, which keeps ptterm's files and not the passthru the suites
+  # borrow their tools from.
+  #
+  # mesa arrives as an argument for the same kind of reason, and pyterm
+  # passes the one that draws.
   checks = callPackage ./nix/checks.nix {
     inherit
+      testEnv
       testSources
       ptterm
-      prompt-toolkit
-      pyterm-pytest
-      argcomplete
       mesa
       wl-clipboard
       xclip

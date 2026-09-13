@@ -1,3 +1,87 @@
+# What pymux is and what it needs. `setup.py` used to say this, and a build
+# read it by running it. Nix reads this file instead, at evaluation time, so
+# the dependency list here is the one the package is built from and there is no
+# second copy in a `.nix` file to fall out of step. Lillecarl/pymux#319.
+[project]
+name = "pymux"
+version = "0.15"
+description = "Pure Python terminal multiplexer."
+readme = "README.rst"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+# asyncio context variables and the modern event loop.
+requires-python = ">=3.11"
+authors = [
+    { name = "Jonathan Slenders" },
+]
+dependencies = [
+    "prompt_toolkit>=3.0.0,<3.1.0",
+    "ptterm",
+    # The shell completes the command line through argcomplete: the
+    # generated scripts of `share/bash-completion` and friends make the
+    # shell ask `pymux`, and it answers from the parsers of the commands.
+    # Lillecarl/pymux#48.
+    "argcomplete>=3.0.0",
+    # `pymux profile` asks a running server where its time went. A person
+    # wants that on the server they already have, not on one they built
+    # with extras.
+    "pyinstrument>=4.0.0",
+    # `-S ssh://host/path` reaches a server on another machine, over a
+    # `direct-streamlocal@openssh.com` channel to its unix socket.
+    # Lillecarl/pymux#90.
+    "asyncssh>=2.14.0",
+    # `set-option theme pygments:<name>` takes one of the forty-nine styles
+    # pygments carries, and anything a package installs beside them.
+    # Lillecarl/pymux#194.
+    "pygments>=2.15.0",
+]
+
+[project.optional-dependencies]
+# The four flavours of the pastel, found by pygments through the entry
+# points the package carries. Optional: pymux runs without it, and the
+# environment that installs pymux asks for it. Lillecarl/pymux#195.
+catppuccin = ["catppuccin>=2.0.0"]
+# What the suites need on top of what pymux needs. It is an extra and not a
+# `[dependency-groups]` entry because only an extra reaches a resolver: Nix
+# builds the test environment from this list.
+test = [
+    "pytest",
+    "hypothesis",
+    "wcwidth",
+    # The shared rig: the seats, the drivers, the budgets.
+    "pyterm-pytest",
+    # The wayland seat's keyboard holder runs under the python of the
+    # suite that starts it.
+    "pywayland",
+    # TEMPORARY for the Lillecarl/pymux#258 scratch measurement. Remove
+    # with `tests/measure_wire_sizes.py` and the `wire` check.
+    "msgpack",
+]
+# What a person needs and no check does. `tests/drive_with_libtmux.py`
+# runs pymux behind a `tmux` shim and drives it with the client library of
+# tmux, so it judges how tmux-compatible the command line is. Not the wire:
+# libtmux runs the `tmux` executable, and pymux's own socket protocol is
+# never involved. Nothing in the sandbox runs it, so `test` would put this
+# in the closure of every pymux check for nothing.
+#
+# The driver does not pass today. Lillecarl/pymux#321.
+dev = ["libtmux"]
+
+[project.urls]
+Homepage = "https://github.com/prompt-toolkit/pymux"
+
+[project.scripts]
+pymux = "pymux.entry_points.run_pymux:run"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Two top-level packages, and a backend cannot guess which of the directories
+# here are the ones to ship. `tests` is not one of them.
+[tool.hatch.build.targets.wheel]
+packages = ["pymux", "libpymux"]
+
 [tool.black]
 target-version = ['py311']
 
