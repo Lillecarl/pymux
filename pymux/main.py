@@ -511,7 +511,18 @@ class ClientState:
     def sync_focus(self, *_):
         """
         Focus the focused window from the pymux arrangement.
+
+        **Under this client's own application.** Focus is synced for
+        every client at once, so the current one is rarely this one,
+        and the layout this walks is built per application:
+        `DynamicBody` keys its body on `get_app()`. Without this a
+        client would be focused into the body of the client that asked.
+        Lillecarl/pymux#323.
         """
+        with set_app(self.app):
+            self._sync_focus()
+
+    def _sync_focus(self):
         # Pop-up displayed?
         if self.display_popup:
             self.app.layout.focus(self.layout_manager.popup_dialog)
@@ -538,8 +549,6 @@ class ClientState:
         if not self.session.arrangement.windows:
             return
 
-        # This client's pane, and not `get_app()`'s: focus is synced for
-        # every client at once, so the one that asks is rarely this one.
         pane = self.session.arrangement.get_active_pane_for(self.app)
         if pane is None:
             return
@@ -2550,9 +2559,9 @@ class Pymux:
     ) -> ClientState:
         # A client that names no session lands on the one a person
         # looked at last, which is what `attach-session` with no `-t`
-        # means in tmux. The fake client of a socket command lands there
-        # too: the words arrived with no pane and no session on them, so
-        # there is nothing better to answer with. Lillecarl/pymux#323.
+        # means in tmux. The fake client of a socket command names the
+        # session of the pane the command was typed in, which the
+        # run-command packet carries. Lillecarl/pymux#323.
         if session is None:
             session = self.last_used_session
 

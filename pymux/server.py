@@ -496,10 +496,22 @@ class ServerConnection:
             # will be removed right after the command handler ran, so it
             # doesn't hurt too much and makes the code easier.)
             pane_id = packet.get("pane_id")
-            self._create_app(start=False)
-            if pane_id is not None:
+            pane = (
+                self.pymux.panes_by_id.get(int(pane_id))
+                if pane_id is not None
+                else None
+            )
+
+            # The session of the pane the command was typed in. Without
+            # it the fake client lands on the session a person looked at
+            # last, so `pymux new-window` typed in a pane of one session
+            # would open the window in another. Lillecarl/pymux#323.
+            session = self.pymux.session_holding(pane) if pane is not None else None
+
+            self._create_app(start=False, session=session)
+            if pane is not None and session is not None:
                 with set_app(self.client_state.app):
-                    self.pymux.arrangement.set_active_window_from_pane_id(int(pane_id))
+                    session.arrangement.set_active_window_from_pane_id(pane.pane_id)
 
         pymux = self.pymux
         pymux.command_output = []
@@ -551,6 +563,7 @@ class ServerConnection:
         color_depth: ColorDepth = ColorDepth.DEPTH_8_BIT,
         term: str = "xterm",
         start: bool = True,
+        session=None,
     ) -> None:
         """
         Create CommandLineInterface for this client.
@@ -559,6 +572,8 @@ class ServerConnection:
         :param start: Start the application. (`False` for the temporary CLI
             that handles `run-command` packets. That one is removed right
             after the command handler ran.)
+        :param session: The session this client is on. Without one it is
+            the session a person looked at last.
         """
         output = Vt100_Output(
             cast(TextIO, _SocketStdout(self._send_packet, self.pymux.counters)),
@@ -575,6 +590,7 @@ class ServerConnection:
             # not a client a person uses: it must not win "used last",
             # and what a command shows must go to a real one.
             temporary=not start,
+            session=session,
         )
         self.client_state = client_state
 
