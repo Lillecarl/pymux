@@ -47,7 +47,19 @@ def daemonize(stdin="/dev/null", stdout="/dev/null", stderr="/dev/null"):
     try:
         pid = os.fork()
         if pid > 0:
-            sys.exit(0)  # Exit second parent.
+            # `os._exit` and not `sys.exit`. This process exists only to
+            # orphan the one below it, and it holds a copy of everything
+            # the caller had. `sys.exit` raises SystemExit, which runs a
+            # full interpreter shutdown on that copy: the event loop the
+            # caller built is finalised here, and its descriptors belong
+            # to a process that is still using them.
+            #
+            # Python 3.14 prints what that raises, and stderr still
+            # belongs to the caller at this point -- the redirection is
+            # below. So `new-session` answered with a traceback on
+            # stderr, and any tool that reads stderr called it a failed
+            # command. libtmux does. Lillecarl/pymux#321.
+            os._exit(0)
     except OSError as e:
         sys.stderr.write("fork #2 failed: (%d) %s\n" % (e.errno, e.strerror))
         sys.exit(1)
