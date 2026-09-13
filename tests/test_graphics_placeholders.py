@@ -31,7 +31,6 @@ def make_client():
 def make_screen(lines=24, columns=80):
     screen = Screen(lines, columns, write_process_input=lambda data: None)
     stream = Stream(screen)
-    stream.attach(screen)
     return screen, stream
 
 
@@ -93,7 +92,7 @@ def keys_of(put):
 # ----------------------------------------------------------------------
 
 
-def test_a_screen_of_placeholders_draws_the_image():
+def test_screen_of_placeholders_draws_image():
     client, written = make_client()
     screen, stream = make_screen()
     transmit_virtual(stream)  # 40x40 pixels: a box of 4 by 2 cells.
@@ -111,7 +110,7 @@ def test_a_screen_of_placeholders_draws_the_image():
     assert (keys["x"], keys["y"], keys["w"], keys["h"]) == ("0", "0", "40", "40")
 
 
-def test_the_image_is_transmitted_once_for_every_run():
+def test_image_is_transmitted_once_for_every_run():
     client, written = make_client()
     screen, stream = make_screen()
     transmit_virtual(stream)
@@ -123,7 +122,7 @@ def test_the_image_is_transmitted_once_for_every_run():
     assert len(puts(written)) == 2  # The text broke the run in two.
 
 
-def test_one_line_of_the_image_crops_that_line():
+def test_one_line_of_image_crops_that_line():
     client, written = make_client()
     screen, stream = make_screen()
     transmit_virtual(stream)
@@ -135,7 +134,7 @@ def test_one_line_of_the_image_crops_that_line():
     assert (keys["x"], keys["y"], keys["w"], keys["h"]) == ("0", "20", "40", "20")
 
 
-def test_a_part_of_a_line_crops_sideways():
+def test_part_of_line_crops_sideways():
     client, written = make_client()
     screen, stream = make_screen()
     transmit_virtual(stream)
@@ -147,7 +146,7 @@ def test_a_part_of_a_line_crops_sideways():
     assert (keys["x"], keys["y"], keys["w"], keys["h"]) == ("0", "0", "20", "20")
 
 
-def test_the_scroll_of_the_pane_moves_the_image():
+def test_scroll_of_pane_moves_image():
     client, written = make_client()
     screen, stream = make_screen()
     transmit_virtual(stream)
@@ -159,7 +158,7 @@ def test_the_scroll_of_the_pane_moves_the_image():
     assert (row, column) == (2, 1)  # One row scrolled away.
 
 
-def test_a_run_scrolled_out_of_the_pane_is_dropped():
+def test_run_scrolled_out_of_pane_is_dropped():
     client, written = make_client()
     screen, stream = make_screen()
     transmit_virtual(stream)
@@ -170,7 +169,7 @@ def test_a_run_scrolled_out_of_the_pane_is_dropped():
     assert puts(written) == []
 
 
-def test_a_run_past_the_right_edge_is_cut():
+def test_run_past_right_edge_is_cut():
     client, written = make_client()
     screen, stream = make_screen(columns=6)
     transmit_virtual(stream)
@@ -184,7 +183,7 @@ def test_a_run_past_the_right_edge_is_cut():
     assert (keys["x"], keys["w"]) == ("0", "20")
 
 
-def test_a_pane_without_placeholders_draws_nothing():
+def test_pane_without_placeholders_draws_nothing():
     client, written = make_client()
     screen, stream = make_screen()
     stream.feed("plain text")
@@ -194,7 +193,7 @@ def test_a_pane_without_placeholders_draws_nothing():
     assert puts(written) == []
 
 
-def test_a_placeholder_of_an_unknown_image_draws_nothing():
+def test_placeholder_of_unknown_image_draws_nothing():
     client, written = make_client()
     screen, stream = make_screen()
     transmit_virtual(stream, image_id=5)
@@ -205,7 +204,7 @@ def test_a_placeholder_of_an_unknown_image_draws_nothing():
     assert puts(written) == []
 
 
-def test_the_placeholders_do_not_reach_the_terminal_as_text():
+def test_placeholders_do_not_reach_terminal_as_text():
     "The character stands for a picture, and must not be drawn."
     from ptterm.terminal import _visible_char
 
@@ -217,7 +216,7 @@ def test_the_placeholders_do_not_reach_the_terminal_as_text():
     assert _visible_char(line[0].char) == " "
 
 
-def test_a_view_without_a_screen_still_renders_the_plain_placements():
+def test_view_without_screen_still_renders_plain_placements():
     "An embedder that gives no screen loses nothing else."
     from pyte.images import GraphicsPlacement
 
