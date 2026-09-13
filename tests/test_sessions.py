@@ -196,6 +196,76 @@ async def test_the_session_environment_belongs_to_the_session():
         assert pymux.sessions[0].environment == {"HERE": "first"}
 
 
+async def test_a_target_reaches_a_window_of_another_session():
+    "`-t session:window`, and the client goes where the window is."
+    with in_this_process(_server()) as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", SIZE)
+
+        _command(pymux, state, "new-session -d -s work '%s'" % (NOTHING,))
+        _command(pymux, state, "select-window -t work:1")
+
+        assert state.session.name == "work"
+
+
+async def test_a_target_that_names_no_session_finds_nothing():
+    """
+    And does not quietly answer with a window of the session the
+    client is on, which is what stripping the session part did.
+    """
+    with in_this_process(_server()) as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", SIZE)
+
+        _command(pymux, state, "select-window -t nowhere:1")
+
+        assert "Can't find window: nowhere:1" in state.message
+
+
+async def test_a_pane_id_reaches_across_the_sessions():
+    "A pane id names one pane of the server, so it takes no session."
+    with in_this_process(_server()) as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", SIZE)
+
+        _command(pymux, state, "new-session -d -s work '%s'" % (NOTHING,))
+        work = pymux.sessions[1]
+        pane = work.arrangement.windows[0].panes[0]
+
+        _command(pymux, state, "kill-pane -t %%%s" % (pane.pane_id,))
+
+        assert [s.name for s in pymux.sessions] == ["0"]
+
+
+async def test_the_chooser_lists_every_session():
+    with in_this_process(_server()) as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", SIZE)
+
+        _command(pymux, state, "new-session -d -s work '%s'" % (NOTHING,))
+        with set_app(state.app):
+            state.layout_manager.display_chooser()
+            rows = state.layout_manager._choose_window_tokens()
+
+        text = "".join(row[1] for row in rows)
+        assert "0:1" in text
+        assert "work:1" in text
+
+
+async def test_choosing_a_window_of_another_session_moves_the_client():
+    with in_this_process(_server()) as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", SIZE)
+
+        _command(pymux, state, "new-session -d -s work '%s'" % (NOTHING,))
+        with set_app(state.app):
+            state.layout_manager.display_chooser()
+            state.choose_window_index = 1
+            state.layout_manager.choose_pointed_window()
+
+        assert state.session.name == "work"
+
+
 async def test_a_session_that_empties_goes():
     """
     A pane that ends takes its window, and the last window takes the

@@ -20,6 +20,26 @@ from pymux.key_spelling import why_pane_cannot_read
 from pyte.keys import Unhearable
 
 
+def session_part(pymux: "Pymux", target: str) -> "tuple[Session | None, str]":
+    """
+    Split a `session:rest` target into the session and the rest.
+
+    No colon, or nothing before it, means the session of the client
+    that asks. A name before the colon that no session has gives
+    `None`, which every caller answers as "not found": a target that
+    names a session that is not there must not quietly answer with a
+    window of another one. Lillecarl/pymux#323.
+    """
+    if ":" not in target:
+        return pymux.current_session, target
+
+    name, _, rest = target.rpartition(":")
+    if not name:
+        return pymux.current_session, rest
+
+    return pymux.get_session(name), rest
+
+
 def find_window(pymux: "Pymux", target: str | None) -> Optional["Window"]:
     """
     Find a window for a tmux-style target.
@@ -27,32 +47,42 @@ def find_window(pymux: "Pymux", target: str | None) -> Optional["Window"]:
     Supported targets: `@<window-id>`, `%<pane-id>` (the window that owns
     this pane), `<window-index>`, `:<window-index>`, and the window part of
     `session:window.pane`.
+
+    A window id and a pane id name one thing on the whole server, so
+    they are looked up across every session and never take a session
+    part.
     """
     if target is None or target == "":
         return pymux.arrangement.get_active_window()
 
-    # Strip the session part. (Pymux has one session per server.)
-    if ":" in target:
-        target = target.rsplit(":", 1)[1]
-
     # A pane ID target: `%<id>`. (Find the window that owns this pane.)
     if target.startswith("%"):
         pane = find_pane(pymux, target)
-        if pane is not None:
-            for w in pymux.arrangement.windows:
-                if pane in w.panes:
-                    return w
-        return None
+        return pymux._window_holding(pane) if pane is not None else None
 
     if target.startswith("@"):
         window_id = target[1:]
         if window_id.isdigit():
-            for w in pymux.arrangement.windows:
-                if w.window_id == int(window_id):
-                    return w
+            for session in pymux.sessions:
+                for w in session.arrangement.windows:
+                    if w.window_id == int(window_id):
+                        return w
+        return None
+
+    session, target = session_part(pymux, target)
+    if session is None:
+        return None
+
+    return window_in(session, target)
+
+
+def window_in(session: "Session", target: str) -> Optional["Window"]:
+    "The window a target names inside one session."
+    if target == "":
+        return session.arrangement.get_active_window()
 
     if target.isdigit():
-        return pymux.arrangement.get_window_by_index(int(target))
+        return session.arrangement.get_window_by_index(int(target))
 
     return None
 
@@ -68,22 +98,19 @@ def find_pane(pymux: "Pymux", target: str | None) -> Optional["Pane"]:
     if target is None or target == "":
         return pymux.arrangement.get_active_pane()
 
-    # A pane ID target: `%<id>`. (Look it up in all windows.)
+    # A pane ID target: `%<id>`. The server knows every pane by id, so
+    # this reaches across the sessions.
     if target.startswith("%"):
         pane_id = target[1:]
         if pane_id.isdigit():
-            pane_id_int = int(pane_id)
-            for w in pymux.arrangement.windows:
-                for p in w.panes:
-                    if p.pane_id == pane_id_int:
-                        return p
+            return pymux.panes_by_id.get(int(pane_id))
         return None
 
-    window = pymux.arrangement.get_active_window()
+    session, target = session_part(pymux, target)
+    if session is None:
+        return None
 
-    # Strip the session part.
-    if ":" in target:
-        _, _, target = target.rpartition(":")
+    window = session.arrangement.get_active_window()
 
     # Split off the pane part.
     pane_part: str | None = None
@@ -91,7 +118,14 @@ def find_pane(pymux: "Pymux", target: str | None) -> Optional["Pane"]:
         target, _, pane_part = target.partition(".")
 
     if target:
-        window = find_window(pymux, target)
+        # Inside the session the target named, and not the one the
+        # client is on: `work:2.1` is the second pane of window 2 of
+        # `work`.
+        window = (
+            find_window(pymux, target)
+            if target.startswith("@")
+            else window_in(session, target)
+        )
         if window is None:
             return None
 

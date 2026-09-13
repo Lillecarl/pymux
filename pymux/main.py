@@ -1699,6 +1699,13 @@ class Pymux:
                     return window
         return None
 
+    def session_of_window(self, window) -> Session | None:
+        "The session whose arrangement holds this window."
+        for session in self.sessions:
+            if window in session.arrangement.windows:
+                return session
+        return None
+
     def session_holding(self, pane) -> Session | None:
         """
         The session whose windows hold this pane, or None when it is

@@ -8,12 +8,16 @@ if TYPE_CHECKING:
 from pymux.commands import CommandException
 from pymux.commands import add_command
 from pymux.commands.common import find_window
+from pymux.commands.sessions import this_client
 
 
 def select_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
     Focus a window by index, by id, or by the pane that holds it.
     E.g:  select-window -t :3  or  select-window -t @1001
+
+    A window of another session takes the client with it, which is
+    what tmux does for a target that names one. Lillecarl/pymux#323.
     """
     window_id = args.target_window
 
@@ -21,7 +25,15 @@ def select_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     if w is None:
         raise CommandException("Can't find window: %s" % (window_id,))
 
-    pymux.arrangement.set_active_window(w)
+    session = pymux.session_of_window(w)
+    if session is None:
+        raise CommandException("Can't find window: %s" % (window_id,))
+
+    client_state = this_client(pymux)
+    if client_state is not None:
+        pymux.attach_client_to(client_state, session)
+
+    session.arrangement.set_active_window(w)
 
 
 def register(subparsers):

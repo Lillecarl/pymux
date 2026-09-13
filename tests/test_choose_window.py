@@ -235,7 +235,7 @@ async def test_template_runs_on_chosen_window():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("new-window")
-            pymux.handle_command("choose-window \"select-window -t ':%%'\"")
+            pymux.handle_command("choose-window \"select-window -t '%%'\"")
 
         # The chooser opens on the window the client looks at: the
         # last one made. Choosing the first row runs the template

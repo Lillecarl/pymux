@@ -12,13 +12,15 @@ def choose_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
     Show the windows of the session, to choose from.
 
-    tmux spells the view choose-tree, and prefix w opens it there. A
-    pymux server holds one session, so the tree has one root: the
-    chooser lists the windows, `/` searches the names, and Enter
-    switches to one. With a command as its argument, the chooser
-    runs that command on the chosen window instead of switching to
-    it, with `%%` in the command standing for the target of the
+    tmux spells the view choose-tree, and prefix w opens it there. The
+    chooser lists the windows of every session of the server as one
+    flat list, `/` searches the names, and Enter switches to one --
+    moving this client to that window's session when it is not the one
+    it is on. With a command as its argument, the chooser runs that
+    command on the chosen window instead of switching to it, with `%%`
+    in the command standing for the `session:index` target of the
     window, the way the command-prompt does. Lillecarl/pymux#295.
+    Lillecarl/pymux#323.
 
     The command line has no view to open a chooser on, so an asker
     that reads stdout gets nothing -- the same shape as the pop-ups.

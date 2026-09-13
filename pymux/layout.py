@@ -753,9 +753,23 @@ class LayoutManager:
         self.client_state.display_popup = True
         get_app().layout.focus(self._popup_textarea)
 
+    def every_window(self) -> List["arrangement.Window"]:
+        """
+        The windows of every session of this server, in session order.
+
+        The chooser lists them all, so a person picks a window without
+        first having to name the session it is in. tmux's choose-tree
+        does the same thing with a tree. Lillecarl/pymux#323.
+        """
+        return [
+            window
+            for session in self.pymux.sessions
+            for window in session.arrangement.windows
+        ]
+
     def display_chooser(self, template: str = "") -> None:
         """
-        Show the windows of the session, to choose from.
+        Show the windows of every session, to choose from.
 
         It opens with the chooser on the window this client looks
         at, the way tmux's tree opens on the current one. A template
@@ -763,7 +777,7 @@ class LayoutManager:
         chooser points at, instead of switching to it.
         Lillecarl/pymux#295.
         """
-        windows = self.client_state.session.arrangement.windows
+        windows = self.every_window()
         active = self.client_state.session.arrangement.get_active_window()
         self.client_state.display_popup = False
         self.client_state.choose_window = True
@@ -949,12 +963,21 @@ class LayoutManager:
                 for name in sorted(buffers)
                 if text in name.lower() or text in str(len(buffers[name]))
             ]
-        windows = self.client_state.session.arrangement.windows
+        windows = self.every_window()
         if not text:
-            return list(windows)
+            return windows
         return [
-            w for w in windows if text in w.name.lower() or text in str(w.index)
+            w
+            for w in windows
+            if text in w.name.lower()
+            or text in str(w.index)
+            or text in self._session_name_of(w).lower()
         ]
+
+    def _session_name_of(self, window) -> str:
+        "The name of the session that holds a window, or nothing."
+        session = self.pymux.session_of_window(window)
+        return session.name if session is not None else ""
 
     def choose_pointed_buffer(self) -> None:
         """
@@ -985,11 +1008,19 @@ class LayoutManager:
             return
         index = min(self.client_state.choose_window_index, len(matches) - 1)
         window = matches[index]
+        session = self.pymux.session_of_window(window)
+        if session is None:
+            return
+
         template = self.client_state.choose_window_command
         if template:
-            self.pymux.handle_command(template.replace("%%", ":%i" % window.index))
+            self.pymux.handle_command(
+                template.replace("%%", "%s:%i" % (session.name, window.index))
+            )
         else:
-            self.client_state.session.arrangement.set_active_window(window)
+            # A window of another session takes the client with it.
+            self.pymux.attach_client_to(self.client_state, session)
+            session.arrangement.set_active_window(window)
             self.pymux.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
 
     def choose_pointed_option(self) -> None:
@@ -1524,13 +1555,18 @@ class LayoutManager:
 
     def _choose_window_tokens(self) -> StyleAndTextTuples:
         """
-        The windows of the session, one row each.
+        The windows of every session, one row each.
 
         The row the chooser points at carries the gutter arrow and
         stands out, and the window this client already looks at says
         so, the way `list-windows` does. A window that holds more
         panes than one says how many. A row answers a click the way
         a column of the strip does. Lillecarl/pymux#295.
+
+        A server with a second session names the session on each row,
+        because two windows can then carry the same number and the
+        same name. A server with one names nothing: the word would be
+        the same on every row. Lillecarl/pymux#323.
         """
         matches = self.chooser_matches()
         if not matches:
@@ -1538,6 +1574,7 @@ class LayoutManager:
 
         active = self.client_state.session.arrangement.get_active_window()
         chosen = min(self.client_state.choose_window_index, len(matches) - 1)
+        many_sessions = len(self.pymux.sessions) > 1
         tokens: StyleAndTextTuples = []
         for i, window in enumerate(matches):
             style = "class:chooser.selected" if i == chosen else "class:commandpalette"
@@ -1546,13 +1583,17 @@ class LayoutManager:
                 suffix = " (%i panes)" % len(window.panes)
             if window == active:
                 suffix += " (active)"
+            if many_sessions:
+                where = "%s:%i" % (self._session_name_of(window), window.index)
+            else:
+                where = "%2i" % (window.index,)
             tokens.append(
                 (
                     style,
-                    "%s%2i %s%s\n"
+                    "%s%s %s%s\n"
                     % (
                         "> " if i == chosen else "  ",
-                        window.index,
+                        where,
                         window.name,
                         suffix,
                     ),
