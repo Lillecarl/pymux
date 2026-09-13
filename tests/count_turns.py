@@ -93,7 +93,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 # not the directory above it.
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
-from session import over_a_connection  # noqa: E402
+from session import over_connection  # noqa: E402
 from measure_latency import MARKERS, CHILD  # noqa: E402
 from prompt_toolkit.application.current import set_app  # noqa: E402
 from prompt_toolkit.data_structures import Size  # noqa: E402
@@ -217,7 +217,7 @@ class TheFrameComingBack:
     """
     The reader of the client's packets, and where the path ends.
 
-    `over_a_connection` calls this with each packet the server sends.
+    `over_connection` calls this with each packet the server sends.
     **The turn is read here** and not where the waiting coroutine
     resumes: a resumption is a turn of its own, and counting it would
     add one to every sample.
@@ -298,7 +298,7 @@ async def measure(loop, samples: int) -> tuple:
 
         coming_back = TheFrameComingBack(loop)
 
-        with over_a_connection(pymux=pymux, read_a_packet=coming_back) as session:
+        with over_connection(pymux=pymux, read_packet=coming_back) as session:
             state, _size = await session.attach("one", SIZE)
 
             with set_app(state.app):
@@ -362,7 +362,7 @@ def report(counted: list, traced: list) -> int:
     if best != BEST:
         print(
             "\nThe shortest keystroke took %d turns, and %d is what the code"
-            "\ndecides. `tests/count_the_turns.py` says how to read the traces"
+            "\ndecides. `tests/count_turns.py` says how to read the traces"
             "\nabove and where to write a new number." % (best, BEST)
         )
         return 1

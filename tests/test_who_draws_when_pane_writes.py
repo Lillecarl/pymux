@@ -9,7 +9,7 @@ handler to the controls of the layout it walks, and a client's layout
 holds only the window that client looks at. So a window nobody looks at
 costs nothing.
 
-The second half is `Pymux.client_asked_for_a_frame`. One client's
+The second half is `Pymux.client_asked_for_frame`. One client's
 invalidate used to ask every client for a frame, so a busy pane in one
 window drew frames for a client looking at another one. It now asks the
 others only for the text that names every window, which is the one
@@ -27,7 +27,7 @@ if somebody takes the wake away rather than narrowing it.
 import asyncio
 import sys
 
-from session import in_a_loop, over_a_connection
+from session import in_loop, over_connection
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 
@@ -73,9 +73,9 @@ async def create_window_of_its_own(pymux, state):
     await asyncio.sleep(LONG_ENOUGH)
 
 
-@in_a_loop
-async def test_a_pane_in_a_window_nobody_looks_at_draws_nothing():
-    with over_a_connection() as session:
+@in_loop
+async def test_pane_in_window_nobody_looks_at_draws_nothing():
+    with over_connection() as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
         await create_window_of_its_own(pymux, state)
@@ -100,9 +100,9 @@ async def test_a_pane_in_a_window_nobody_looks_at_draws_nothing():
         assert state.app.render_counter > drawn
 
 
-@in_a_loop
-async def test_a_pane_does_not_wake_a_client_looking_elsewhere():
-    with over_a_connection() as session:
+@in_loop
+async def test_pane_does_not_wake_client_looking_elsewhere():
+    with over_connection() as session:
         pymux = session.pymux
         a, _ = await session.attach("a", SIZE)
         await create_window_of_its_own(pymux, a)
@@ -121,8 +121,8 @@ async def test_a_pane_does_not_wake_a_client_looking_elsewhere():
         assert b.app.render_counter == drawn_by_b
 
 
-@in_a_loop
-async def test_a_title_a_pane_writes_reaches_the_other_client():
+@in_loop
+async def test_title_pane_writes_reaches_other_client():
     """
     The wake still happens. It was narrowed and not removed.
 
@@ -137,7 +137,7 @@ async def test_a_title_a_pane_writes_reaches_the_other_client():
     it cannot see, and one whose text did not is left alone. The test
     above is the other half. Lillecarl/pymux#251.
     """
-    with over_a_connection() as session:
+    with over_connection() as session:
         pymux = session.pymux
         a, _ = await session.attach("a", SIZE)
         await create_window_of_its_own(pymux, a)

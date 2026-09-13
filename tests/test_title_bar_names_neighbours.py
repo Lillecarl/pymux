@@ -1,7 +1,7 @@
 """
 Where the three parts of a title bar land, in cells.
 
-`test_the_title_bar_lays_out.py` judges the arithmetic on its own.
+`test_title_bar_lays_out.py` judges the arithmetic on its own.
 This renders pymux's real layout and reads the row the bars are drawn
 on, because that is the only place two things exist: which pane each
 bar belongs to, and which pane is beside it.
@@ -18,7 +18,7 @@ NAMES = ["alpha", "beta", "gamma"]
 
 #: Wide enough that three panes side by side each have a bar with room
 #: for a neighbour on either side. A quarter of a narrow bar holds
-#: nothing, which `test_the_title_bar_lays_out.py` asks about instead.
+#: nothing, which `test_title_bar_lays_out.py` asks about instead.
 COLUMNS = 120
 
 
@@ -70,7 +70,7 @@ def middle_of(bar, name):
 # The three parts.
 
 
-def test_a_pane_names_the_pane_on_each_side():
+def test_pane_names_pane_on_each_side():
     with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
         panes = create_row_of_named_panes(pymux)
         bar = bars_of(pymux, draw, panes)[1]
@@ -85,7 +85,7 @@ def test_a_pane_names_the_pane_on_each_side():
         assert "beta" in bar, repr(bar)
 
 
-def test_the_pane_at_the_left_end_names_nothing_on_its_left():
+def test_pane_at_left_end_names_nothing_on_its_left():
     with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
         panes = create_row_of_named_panes(pymux)
         bar = bars_of(pymux, draw, panes)[0]
@@ -95,7 +95,7 @@ def test_the_pane_at_the_left_end_names_nothing_on_its_left():
         assert bar.rstrip().endswith("beta " + RIGHT_MARK), repr(bar)
 
 
-def test_the_pane_at_the_right_end_names_nothing_on_its_right():
+def test_pane_at_right_end_names_nothing_on_its_right():
     with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
         panes = create_row_of_named_panes(pymux)
         bar = bars_of(pymux, draw, panes)[2]
@@ -105,7 +105,7 @@ def test_the_pane_at_the_right_end_names_nothing_on_its_right():
         assert bar.rstrip().endswith("gamma"), repr(bar)
 
 
-def test_a_lone_pane_names_neither_side():
+def test_lone_pane_names_neither_side():
     with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
         panes = create_row_of_named_panes(pymux, ["alone"])
         bar = bars_of(pymux, draw, panes)[0]
@@ -117,7 +117,7 @@ def test_a_lone_pane_names_neither_side():
 # The middle stays in the middle.
 
 
-def test_the_pane_s_own_name_is_in_the_middle_of_its_bar():
+def test_pane_s_own_name_is_in_middle_of_its_bar():
     """
     Centred over the pane, and not over what the neighbours left of
     it: a name growing on one side may not slide the title sideways.
@@ -130,7 +130,7 @@ def test_the_pane_s_own_name_is_in_the_middle_of_its_bar():
             assert middle_of(bar, name) <= 1, (name, repr(bar))
 
 
-def test_a_strip_names_a_column_that_is_off_the_screen():
+def test_strip_names_column_that_is_off_screen():
     """
     The reason the bar carries the names at all. A strip runs past the
     edge of the screen, and a name is how a person knows what is out

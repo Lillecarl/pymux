@@ -347,12 +347,12 @@ def _side_by_side(wanted, found):
     return "\n".join(lines)
 
 
-def on_a_pty(argv, stderr_path, env=None, rows=24, columns=80):
+def on_pty(argv, stderr_path, env=None, rows=24, columns=80):
     """
     Run any program on a pty of its own. Returns the master side, the
     process and the stderr file.
 
-    `run_on_a_pty` is this with pymux's own argv and environment.
+    `run_on_pty` is this with pymux's own argv and environment.
     Anything that wants to put the *same* program on a bare pty, with
     no pymux between it and the master, comes here instead: that is
     what a measurement compares against. Lillecarl/pymux#140.
@@ -373,7 +373,7 @@ def on_a_pty(argv, stderr_path, env=None, rows=24, columns=80):
     return master_fd, process, stderr
 
 
-def run_on_a_pty(args, stderr_path, colorterm="", rows=24, columns=80):
+def run_on_pty(args, stderr_path, colorterm="", rows=24, columns=80):
     """
     Run a pymux command on a pty of its own. Returns the master side,
     the process and the stderr file.
@@ -382,7 +382,7 @@ def run_on_a_pty(args, stderr_path, colorterm="", rows=24, columns=80):
     row for its title and the session takes one for the status line, so
     a pane is two rows shorter than this.
     """
-    return on_a_pty(
+    return on_pty(
         [sys.executable, "-m", "pymux"] + [str(a) for a in args],
         stderr_path,
         env={
@@ -402,7 +402,7 @@ def attach_client(sock_path, stderr_path, colorterm="", rows=24, columns=80):
     Attach a client to a server that is already running, over its
     socket.
     """
-    return run_on_a_pty(
+    return run_on_pty(
         ["-S", sock_path, "attach"], stderr_path, colorterm, rows, columns
     )
 
@@ -515,7 +515,7 @@ class Attached:
 
         The signal is sent here and not by the kernel. The kernel sends
         SIGWINCH to the foreground process group of the pty, and this
-        pty has no session: `run_on_a_pty` gives the client the slave
+        pty has no session: `run_on_pty` gives the client the slave
         as its three streams and never makes it a controlling terminal,
         because nothing else in these checks needs one. So there is no
         foreground group to signal, and this does what the kernel would
@@ -712,7 +712,7 @@ class Terminal(Attached):
             # mode word. Nothing names the session, so it keeps the
             # default name.
             self.session_name = "0"
-            self.master_fd, self.client, self.stderr = run_on_a_pty(
+            self.master_fd, self.client, self.stderr = run_on_pty(
                 [
                     "-S",
                     self.sock_path,
@@ -1049,7 +1049,7 @@ def check_plain_terminal(tmp):
     print("plain terminal: ok")
 
 
-def check_a_closing_split(tmp):
+def check_closing_split(tmp):
     """
     A split that closes must not upset the client.
 
@@ -1220,7 +1220,7 @@ def check_cursor_shape(tmp):
     print("cursor shape: ok")
 
 
-def check_an_overlay_pane(tmp):
+def check_overlay_pane(tmp):
     """
     An overlay pane floats over the layout and takes the keyboard.
 
@@ -1395,7 +1395,7 @@ def check_two_terminals_of_different_abilities(tmp):
     print("two terminals: ok")
 
 
-def check_a_full_screen_pane(tmp):
+def check_full_screen_pane(tmp):
     """
     One pane covers every cell of the terminal, and nothing else does.
 
@@ -1475,7 +1475,7 @@ def check_a_full_screen_pane(tmp):
 BORDERS = "│┃"
 
 
-def check_a_strip_follows_a_resize(tmp):
+def check_strip_follows_resize(tmp):
     """
     A strip is laid out again when the terminal changes size.
 
@@ -1485,7 +1485,7 @@ def check_a_strip_follows_a_resize(tmp):
     Lillecarl/pymux#208.
 
     **The unit harness cannot see this.**
-    `tests/test_the_strip_resizes.py` holds a size a test can change,
+    `tests/test_strip_resizes.py` holds a size a test can change,
     changes it, and drives `write_to_screen` again. It passes at every
     size, which rules out the arithmetic and leaves the path this
     check drives: the client hears SIGWINCH, tells the server, the
@@ -1599,7 +1599,7 @@ def check_a_strip_follows_a_resize(tmp):
         terminal.close()
 
 
-def check_a_quoted_argument(tmp):
+def check_quoted_argument(tmp):
     """
     An argument with a space in it reaches the pane in one piece.
 
@@ -1654,7 +1654,7 @@ def check_a_quoted_argument(tmp):
         terminal.close()
 
 
-def check_a_non_breaking_space(tmp):
+def check_non_breaking_space(tmp):
     """
     A non-breaking space reaches the terminal of the user as one.
 
@@ -2073,15 +2073,15 @@ CHECKS = (
     check_sixel_terminal,
     check_colorterm_terminal,
     check_plain_terminal,
-    check_a_closing_split,
+    check_closing_split,
     check_pointer_shape,
     check_cursor_shape,
-    check_an_overlay_pane,
+    check_overlay_pane,
     check_two_terminals_of_different_abilities,
-    check_a_full_screen_pane,
-    check_a_strip_follows_a_resize,
-    check_a_quoted_argument,
-    check_a_non_breaking_space,
+    check_full_screen_pane,
+    check_strip_follows_resize,
+    check_quoted_argument,
+    check_non_breaking_space,
     check_cursor_of_drawing_pane,
     check_pane_that_changes_nothing,
     check_command_palette,

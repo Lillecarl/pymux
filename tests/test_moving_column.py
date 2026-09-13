@@ -74,21 +74,21 @@ def order_of(window):
 # The order of the row.
 
 
-def test_a_column_moves_to_the_left():
+def test_column_moves_to_left():
     window, panes = create_strip(3)
 
     assert window.move_column(panes[2], -1) is True
     assert order_of(window) == [[panes[0]], [panes[2]], [panes[1]]]
 
 
-def test_a_column_moves_to_the_right():
+def test_column_moves_to_right():
     window, panes = create_strip(3)
 
     assert window.move_column(panes[0], +1) is True
     assert order_of(window) == [[panes[1]], [panes[0]], [panes[2]]]
 
 
-def test_a_column_at_the_end_of_the_row_stays_there():
+def test_column_at_end_of_row_stays_there():
     """
     And says that it did not move, rather than raising. A key held
     down at the edge of the row does nothing, the way it does nothing
@@ -101,7 +101,7 @@ def test_a_column_at_the_end_of_the_row_stays_there():
     assert order_of(window) == [[pane] for pane in panes]
 
 
-def test_a_pane_in_a_stack_moves_the_whole_column():
+def test_pane_in_stack_moves_whole_column():
     """
     The column is what moves, panes and all. Taking one pane out of a
     stack is a different move, and `break-pane` is the command for
@@ -118,7 +118,7 @@ def test_a_pane_in_a_stack_moves_the_whole_column():
     assert order_of(window) == [[panes[1], stacked], [panes[0]]]
 
 
-def test_a_column_keeps_its_width_when_it_moves():
+def test_column_keeps_its_width_when_it_moves():
     """
     `column_widths` is keyed by the column object, so nothing has to
     carry the width across.
@@ -132,7 +132,7 @@ def test_a_column_keeps_its_width_when_it_moves():
     assert window.column_width(panes[1]) == was
 
 
-def test_the_layout_is_rebuilt_after_a_move():
+def test_layout_is_rebuilt_after_move():
     """
     `invalidation_hash` names every pane in the order they sit in, so
     a swap of two columns that hold the same shapes still changes it.
@@ -151,7 +151,7 @@ def test_the_layout_is_rebuilt_after_a_move():
 # What a person sees.
 
 
-def test_moving_a_column_renames_the_title_bars():
+def test_moving_column_renames_title_bars():
     """
     The bar of a pane names the panes on either side, so a move
     renames them. Nothing in the move does that: the names are read
@@ -179,7 +179,7 @@ def test_moving_a_column_renames_the_title_bars():
         assert "beta" in right, (left, right)
 
 
-def test_moving_a_column_outside_a_strip_is_refused():
+def test_moving_column_outside_strip_is_refused():
     """
     Every other layout divides the window, so there is no row to move
     a column along. `switch-column-width` refuses the same way.

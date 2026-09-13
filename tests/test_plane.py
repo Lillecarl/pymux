@@ -14,16 +14,16 @@ plausible one that nobody checked is how a suite starts lying:
 
 - *"If B is to the right of A, then A is to the left of B."* False for
   any layout with panes of different sizes.
-  `test_the_neighbour_of_my_neighbour_is_not_always_me` is the
+  `test_neighbour_of_my_neighbour_is_not_always_me` is the
   counterexample.
 - *"Every slot is reachable from every other."* True of a tiling and
   false of the bare plane, where two rectangles set diagonally are
   neighbours of nothing.
-  `test_a_diagonal_pair_are_not_neighbours` is that one.
+  `test_diagonal_pair_are_not_neighbours` is that one.
 
 A third was expected and is missing on purpose. "A slot to the left of
 another comes earlier in reading order" is false, and
-`test_reading_order_follows_the_splits_and_not_the_rows` shows the
+`test_reading_order_follows_splits_and_not_rows` shows the
 shape that breaks it.
 """
 
@@ -273,7 +273,7 @@ def every_promise_holds(plan: Plan) -> None:
 
 
 @given(PLANS)
-def test_a_plan_keeps_every_promise(plan):
+def test_plan_keeps_every_promise(plan):
     every_promise_holds(plan)
 
 
@@ -282,7 +282,7 @@ def test_a_plan_keeps_every_promise(plan):
 
 
 @given(TILINGS)
-def test_a_tiling_leaves_no_hole(plan):
+def test_tiling_leaves_no_hole(plan):
     "Which is what makes it a tiling, and the bare plane not one."
     box = plan.plane
     covered = sum(rect.width * rect.height for rect in plan.rects.values())
@@ -322,7 +322,7 @@ def everything_is_reachable(plan: Plan) -> bool:
 
 
 @given(TILINGS)
-def test_every_slot_of_a_tiling_is_reachable(plan):
+def test_every_slot_of_tiling_is_reachable(plan):
     "A person can reach every pane with the four direction keys."
     assert everything_is_reachable(plan)
 
@@ -332,7 +332,7 @@ def test_every_slot_of_a_tiling_is_reachable(plan):
 
 
 @given(PLANS)
-def test_at_finds_whatever_holds_a_cell(plan):
+def test_at_finds_whatever_holds_cell(plan):
     "And says nothing for a hole, which is a real answer on a plane."
     for point in plan.plane.cells():
         holding = [slot for slot in plan.slots if plan.rects[slot].holds(point)]
@@ -341,7 +341,7 @@ def test_at_finds_whatever_holds_a_cell(plan):
         assert holding == ([] if found is None else [found])
 
 
-def test_a_cell_outside_everything_holds_nothing():
+def test_cell_outside_everything_holds_nothing():
     plan = create_plan(A=Rect(0, 0, 4, 4))
 
     assert plan.at(Point(x=-1, y=0)) is None
@@ -349,7 +349,7 @@ def test_a_cell_outside_everything_holds_nothing():
     assert plan.at(Point(x=3, y=3)) is named(plan, "A")
 
 
-def test_a_pane_is_found_by_its_slot_and_a_hidden_one_too():
+def test_pane_is_found_by_its_slot_and_hidden_one_too():
     """
     A pane has no rectangle of its own: its slot has one, and every
     pane of a slot gets it, shown or not. A pty needs a size, so a
@@ -364,7 +364,7 @@ def test_a_pane_is_found_by_its_slot_and_a_hidden_one_too():
     assert plan.rect_of(behind) == plan.rect_of(front) == Rect(2, 3, 10, 5)
 
 
-def test_a_pane_that_is_not_on_the_plan_is_a_fault():
+def test_pane_that_is_not_on_plan_is_fault():
     plan = create_plan(A=Rect(0, 0, 4, 4))
 
     try:
@@ -374,7 +374,7 @@ def test_a_pane_that_is_not_on_the_plan_is_a_fault():
     raise AssertionError("a pane that is nowhere answered anyway")
 
 
-def test_a_pane_in_two_slots_is_a_fault():
+def test_pane_in_two_slots_is_fault():
     "Because the numbering is a list of panes, and it would hold it twice."
     pane = _Pane("shared")
 
@@ -393,21 +393,21 @@ def two_columns() -> Plan:
     return create_plan(A=Rect(0, 0, 10, 6), B=Rect(10, 0, 10, 6))
 
 
-def test_the_slot_beside_this_one_is_the_one_that_touches_it():
+def test_slot_beside_this_one_is_one_that_touches_it():
     plan = two_columns()
 
     assert plan.neighbour(named(plan, "A"), Side.RIGHT) is named(plan, "B")
     assert plan.neighbour(named(plan, "B"), Side.LEFT) is named(plan, "A")
 
 
-def test_nothing_is_beyond_the_edge():
+def test_nothing_is_beyond_edge():
     plan = two_columns()
 
     assert plan.neighbour(named(plan, "A"), Side.LEFT) is None
     assert plan.neighbour(named(plan, "A"), Side.ABOVE) is None
 
 
-def test_the_nearest_one_wins():
+def test_nearest_one_wins():
     "Two slots across from me, and the near one answers."
     plan = create_plan(
         A=Rect(0, 0, 4, 4),
@@ -418,7 +418,7 @@ def test_the_nearest_one_wins():
     assert plan.neighbour(named(plan, "A"), Side.RIGHT) is named(plan, "near")
 
 
-def test_the_widest_one_wins_a_tie():
+def test_widest_one_wins_tie():
     "Both touch my edge, so the one that shares more of it answers."
     plan = create_plan(
         A=Rect(0, 0, 4, 6),
@@ -429,7 +429,7 @@ def test_the_widest_one_wins_a_tie():
     assert plan.neighbour(named(plan, "A"), Side.RIGHT) is named(plan, "wide")
 
 
-def test_the_first_one_on_the_plane_wins_an_even_tie():
+def test_first_one_on_plane_wins_even_tie():
     "Same gap and the same share of my edge, so insertion order says."
     plan = create_plan(
         A=Rect(0, 0, 4, 4),
@@ -440,7 +440,7 @@ def test_the_first_one_on_the_plane_wins_an_even_tie():
     assert plan.neighbour(named(plan, "A"), Side.RIGHT) is named(plan, "first")
 
 
-def test_a_neighbour_has_to_be_across_from_me():
+def test_neighbour_has_to_be_across_from_me():
     """
     Strict, the way tmux is. The slot below and to the right is not
     "to the right", because none of its rows are mine.
@@ -451,14 +451,14 @@ def test_a_neighbour_has_to_be_across_from_me():
     assert plan.neighbour(named(plan, "A"), Side.BELOW) is None
 
 
-def test_touching_at_a_corner_only_is_not_across_from_me():
+def test_touching_at_corner_only_is_not_across_from_me():
     "The bands share a number and no cell, which is not an overlap."
     plan = create_plan(A=Rect(0, 0, 4, 4), corner=Rect(4, -4, 4, 4))
 
     assert plan.neighbour(named(plan, "A"), Side.RIGHT) is None
 
 
-def test_a_diagonal_pair_are_not_neighbours():
+def test_diagonal_pair_are_not_neighbours():
     """
     The counterexample to a promise this suite must not make.
 
@@ -474,7 +474,7 @@ def test_a_diagonal_pair_are_not_neighbours():
         assert plan.neighbour(named(plan, "B"), side) is None
 
 
-def test_the_neighbour_of_my_neighbour_is_not_always_me():
+def test_neighbour_of_my_neighbour_is_not_always_me():
     """
     The other counterexample, and the reason a symmetry promise is not
     in `every_promise_holds`.
@@ -497,7 +497,7 @@ def test_the_neighbour_of_my_neighbour_is_not_always_me():
     assert plan.neighbour(named(plan, "B"), Side.LEFT) is named(plan, "D")
 
 
-def test_the_plane_reaches_below_the_origin():
+def test_plane_reaches_below_origin():
     "`x` and `y` may be negative, because the plane is unbounded."
     plan = create_plan(A=Rect(-20, -8, 4, 4), B=Rect(-16, -8, 4, 4))
 
@@ -509,14 +509,14 @@ def test_the_plane_reaches_below_the_origin():
 # Tracing: the general answer, at any angle.
 
 
-def test_a_ray_finds_what_it_runs_into():
+def test_ray_finds_what_it_runs_into():
     plan = two_columns()
 
     assert plan.trace(Point(x=0, y=3), Side.RIGHT.angle) is named(plan, "B")
     assert plan.trace(Point(x=19, y=3), Side.LEFT.angle) is named(plan, "A")
 
 
-def test_a_ray_leaves_the_slot_it_starts_in():
+def test_ray_leaves_slot_it_starts_in():
     "Otherwise every answer is the slot that was asking."
     plan = two_columns()
 
@@ -524,7 +524,7 @@ def test_a_ray_leaves_the_slot_it_starts_in():
     assert plan.trace(Point(x=0, y=3), Side.LEFT.angle) is None
 
 
-def test_a_ray_goes_where_no_key_does():
+def test_ray_goes_where_no_key_does():
     """
     What Carl asked the angle for. `B` is not a neighbour of `A` in
     any direction, and a ray at forty five degrees still finds it.
@@ -536,7 +536,7 @@ def test_a_ray_goes_where_no_key_does():
 
 
 @given(PLANS)
-def test_a_ray_never_beats_the_neighbour(plan):
+def test_ray_never_beats_neighbour(plan):
     """
     A ray cast along a row runs into something that could have
     answered `neighbour`, so `neighbour` never picks anything further
@@ -565,22 +565,22 @@ def test_a_ray_never_beats_the_neighbour(plan):
 # Reading order, which is the numbering a person sees.
 
 
-def test_a_row_reads_from_the_left():
+def test_row_reads_from_left():
     plan = create_plan(A=Rect(0, 0, 4, 6), B=Rect(4, 0, 4, 6), C=Rect(8, 0, 4, 6))
 
     assert names(plan.reading_order()) == ["A", "B", "C"]
 
 
-def test_a_stack_reads_from_the_top():
+def test_stack_reads_from_top():
     plan = create_plan(A=Rect(0, 0, 12, 2), B=Rect(0, 2, 12, 2), C=Rect(0, 4, 12, 2))
 
     assert names(plan.reading_order()) == ["A", "B", "C"]
 
 
-def test_a_column_is_read_out_before_the_next_column():
+def test_column_is_read_out_before_next_column():
     """
-    The shape of `test_a_deep_tree_reads_left_to_right_and_top_to_bottom`
-    in `test_the_order_of_the_panes.py`, as rectangles.
+    The shape of `test_deep_tree_reads_left_to_right_and_top_to_bottom`
+    in `test_order_of_panes.py`, as rectangles.
     `VSplit([HSplit([A, B]), VSplit([C, D])])` draws this, and the
     numbering it gives is the one to keep. Lillecarl/pymux#210.
     """
@@ -594,7 +594,7 @@ def test_a_column_is_read_out_before_the_next_column():
     assert names(plan.reading_order()) == ["A", "B", "C", "D"]
 
 
-def test_reading_order_is_not_the_order_the_slots_went_on():
+def test_reading_order_is_not_order_slots_went_on():
     "Or it would say nothing that insertion order does not."
     plan = create_plan(B=Rect(4, 0, 4, 6), A=Rect(0, 0, 4, 6))
 
@@ -602,7 +602,7 @@ def test_reading_order_is_not_the_order_the_slots_went_on():
     assert names(plan.reading_order()) == ["A", "B"]
 
 
-def test_a_tabbed_slot_reads_out_the_pane_a_person_sees():
+def test_tabbed_slot_reads_out_pane_person_sees():
     """
     A stack is one thing on the screen, so it is one thing in the
     numbering. Carl: "in a stack the visible pane is the only thing to
@@ -624,7 +624,7 @@ def test_a_tabbed_slot_reads_out_the_pane_a_person_sees():
     assert plan.rect_of(behind) == Rect(4, 0, 4, 6)
 
 
-def test_reading_order_follows_the_splits_and_not_the_rows():
+def test_reading_order_follows_splits_and_not_rows():
     """
     Why "a slot to the left of another comes first" is not a promise.
 
@@ -652,7 +652,7 @@ def test_reading_order_follows_the_splits_and_not_the_rows():
     assert names(plan.reading_order()) == ["A", "Y", "S", "X", "B"]
 
 
-def test_a_shape_no_split_makes_reads_from_the_top_left():
+def test_shape_no_split_makes_reads_from_top_left():
     """
     A pinwheel: no straight line divides it, so there is no tree to
     recover and the answer is the plain one. Only a bare plane can
@@ -670,7 +670,7 @@ def test_a_shape_no_split_makes_reads_from_the_top_left():
 
 
 @given(PLANS)
-def test_reading_a_plan_twice_reads_it_the_same_way(plan):
+def test_reading_plan_twice_reads_it_same_way(plan):
     "A number that moves while nothing moves is a number nobody trusts."
     assert plan.reading_order() == plan.reading_order()
 
@@ -679,13 +679,13 @@ def test_reading_a_plan_twice_reads_it_the_same_way(plan):
 # The slot: the invisible thing that owns the panes.
 
 
-def test_a_slot_shows_the_first_pane_it_was_given():
+def test_slot_shows_first_pane_it_was_given():
     first, second = _Pane("first"), _Pane("second")
 
     assert Slot(first, second).shown is first
 
 
-def test_a_slot_owns_at_least_one_pane():
+def test_slot_owns_at_least_one_pane():
     try:
         Slot()
     except ValueError:
@@ -693,7 +693,7 @@ def test_a_slot_owns_at_least_one_pane():
     raise AssertionError("a slot with no pane")
 
 
-def test_showing_a_pane_brings_it_to_the_front():
+def test_showing_pane_brings_it_to_front():
     first, second = _Pane("first"), _Pane("second")
     slot = Slot(first, second)
 
@@ -702,7 +702,7 @@ def test_showing_a_pane_brings_it_to_the_front():
     assert slot.shown is second
 
 
-def test_a_pane_added_to_a_slot_stacks_behind_the_one_shown():
+def test_pane_added_to_slot_stacks_behind_one_shown():
     "Opening a tab and going to it are two things."
     first, second = _Pane("first"), _Pane("second")
     slot = Slot(first)
@@ -713,7 +713,7 @@ def test_a_pane_added_to_a_slot_stacks_behind_the_one_shown():
     assert slot.shown is first
 
 
-def test_a_pane_added_behind_the_one_shown_leaves_it_shown():
+def test_pane_added_behind_one_shown_leaves_it_shown():
     """
     The path that can break the promise above: `after` puts a pane
     earlier in the stack, so the place of the one being shown moves
@@ -729,7 +729,7 @@ def test_a_pane_added_behind_the_one_shown_leaves_it_shown():
     assert slot.shown is second
 
 
-def test_closing_the_pane_a_person_is_on_shows_the_one_behind_it():
+def test_closing_pane_person_is_on_shows_one_behind_it():
     first, second = _Pane("first"), _Pane("second")
     slot = Slot(first, second)
     slot.show(second)
@@ -739,7 +739,7 @@ def test_closing_the_pane_a_person_is_on_shows_the_one_behind_it():
     assert slot.shown is first
 
 
-def test_closing_a_pane_in_front_leaves_the_one_shown_alone():
+def test_closing_pane_in_front_leaves_one_shown_alone():
     first, second, third = _Pane("first"), _Pane("second"), _Pane("third")
     slot = Slot(first, second, third)
     slot.show(third)
@@ -749,7 +749,7 @@ def test_closing_a_pane_in_front_leaves_the_one_shown_alone():
     assert slot.shown is third
 
 
-def test_the_last_pane_of_a_slot_leaves_with_the_slot():
+def test_last_pane_of_slot_leaves_with_slot():
     """
     A slot with no pane has a rectangle and nothing to draw in it,
     which no promise here allows. So it refuses, and whatever holds
@@ -768,7 +768,7 @@ def test_the_last_pane_of_a_slot_leaves_with_the_slot():
 # The examples this suite draws.
 
 
-def test_the_plans_drawn_here_are_worth_drawing():
+def test_plans_drawn_here_are_worth_drawing():
     """
     A strategy that only ever made one rectangle would leave every
     promise above true and empty, and nothing would say so. So this
@@ -781,14 +781,14 @@ def test_the_plans_drawn_here_are_worth_drawing():
     )
     assert crowded
 
-    def has_a_hole(plan) -> bool:
+    def has_hole(plan) -> bool:
         covered = sum(rect.width * rect.height for rect in plan.rects.values())
         return len(plan.slots) >= 2 and covered < plan.plane.width * plan.plane.height
 
-    assert find(SCATTERS, has_a_hole)
+    assert find(SCATTERS, has_hole)
 
 
-def test_a_property_test_of_this_suite_inherits_the_profile():
+def test_property_test_of_this_suite_inherits_profile():
     """
     The one that breaks in silence.
 
@@ -800,7 +800,7 @@ def test_a_property_test_of_this_suite_inherits_the_profile():
     different test every run. `pyte` has the same guard, for the same
     reason. Lillecarl/pymux#180.
     """
-    drawn = test_a_plan_keeps_every_promise._hypothesis_internal_use_settings
+    drawn = test_plan_keeps_every_promise._hypothesis_internal_use_settings
 
     assert drawn.derandomize is settings.default.derandomize
 
@@ -809,7 +809,7 @@ def test_a_property_test_of_this_suite_inherits_the_profile():
 # The small arithmetic, which everything above leans on.
 
 
-def test_a_rectangle_ends_one_past_its_last_cell():
+def test_rectangle_ends_one_past_its_last_cell():
     rect = Rect(2, 3, 4, 5)
 
     assert (rect.right, rect.bottom) == (6, 8)
@@ -827,11 +827,11 @@ def test_bands_that_only_touch_do_not_overlap():
     assert overlap_of((0, 4), (2, 8)) == 2
 
 
-def test_the_box_of_nothing_is_empty():
+def test_box_of_nothing_is_empty():
     assert bounding_box([]) == Rect(0, 0, 0, 0)
 
 
-def test_every_direction_has_an_opposite_and_a_step():
+def test_every_direction_has_opposite_and_step():
     for side in Side:
         assert side.opposite.opposite is side
         assert side.step == Point(*side.value)

@@ -74,7 +74,7 @@ def outer_id(written):
     return int(match.group(1))
 
 
-def test_a_placement_is_transmitted_and_put():
+def test_placement_is_transmitted_and_put():
     client, written = make_client()
     client.render([view(make_state(placement()), x=10, y=5)])
 
@@ -88,7 +88,7 @@ def test_a_placement_is_transmitted_and_put():
     ]
 
 
-def test_the_transmitted_data_is_the_image():
+def test_transmitted_data_is_image():
     client, written = make_client()
     client.render([view(make_state(placement()))])
 
@@ -106,7 +106,7 @@ def test_png_is_sent_as_is():
     ]
 
 
-def test_an_unchanged_frame_sends_nothing():
+def test_unchanged_frame_sends_nothing():
     client, written = make_client()
     state = make_state(placement())
     client.render([view(state)])
@@ -116,7 +116,7 @@ def test_an_unchanged_frame_sends_nothing():
     assert written == []
 
 
-def test_a_moved_placement_is_replaced_without_a_delete():
+def test_moved_placement_is_replaced_without_delete():
     client, written = make_client()
     state = make_state(placement())
     client.render([view(state)])
@@ -132,7 +132,7 @@ def test_a_moved_placement_is_replaced_without_a_delete():
     ]
 
 
-def test_a_removed_placement_is_deleted():
+def test_removed_placement_is_deleted():
     client, written = make_client()
     state = make_state(placement())
     client.render([view(state)])
@@ -144,7 +144,7 @@ def test_a_removed_placement_is_deleted():
     assert deletes(written) == ["\x1b_Ga=d,d=i,i=%i,p=1,q=2\x1b\\" % image_id]
 
 
-def test_a_forgotten_image_is_freed():
+def test_forgotten_image_is_freed():
     client, written = make_client()
     state = make_state(placement())
     client.render([view(state)])
@@ -157,7 +157,7 @@ def test_a_forgotten_image_is_freed():
     assert "\x1b_Ga=d,d=I,i=%i,q=2\x1b\\" % image_id in "".join(written)
 
 
-def test_a_scrolled_out_image_is_kept():
+def test_scrolled_out_image_is_kept():
     "Scrolling an image out of view must not re-transmit its pixels."
     client, written = make_client()
     state = make_state(placement())
@@ -173,7 +173,7 @@ def test_a_scrolled_out_image_is_kept():
     assert len(puts(written)) == 1
 
 
-def test_a_placement_above_the_pane_is_cropped():
+def test_placement_above_pane_is_cropped():
     client, written = make_client()
     # Rows 0 and 1 of the buffer, but the pane shows from row 1.
     client.render([view(make_state(placement(rows=2, columns=2)), vscroll=1)])
@@ -185,7 +185,7 @@ def test_a_placement_above_the_pane_is_cropped():
     ]
 
 
-def test_a_placement_over_the_right_edge_is_cropped():
+def test_placement_over_right_edge_is_cropped():
     client, written = make_client()
     client.render([view(make_state(placement(x=2, columns=4, rows=2)), width=4)])
 
@@ -197,19 +197,19 @@ def test_a_placement_over_the_right_edge_is_cropped():
     ]
 
 
-def test_a_placement_outside_the_pane_is_skipped():
+def test_placement_outside_pane_is_skipped():
     client, written = make_client()
     client.render([view(make_state(placement(y=50)), height=24)])
     assert puts(written) == []
 
 
-def test_a_virtual_placement_is_skipped():
+def test_virtual_placement_is_skipped():
     client, written = make_client()
     client.render([view(make_state(placement(virtual=True)))])
     assert puts(written) == []
 
 
-def test_the_z_index_is_passed_on():
+def test_z_index_is_passed_on():
     client, written = make_client()
     client.render([view(make_state(placement(z=-1)))])
     assert "z=-1" in "".join(written)
@@ -227,7 +227,7 @@ def test_two_placements_of_one_image_get_their_own_slot():
     ]
 
 
-def test_two_panes_with_the_same_image_id_do_not_collide():
+def test_two_panes_with_same_image_id_do_not_collide():
     client, written = make_client()
     first = make_state(placement())
     second = make_state(placement())
@@ -243,7 +243,7 @@ def test_two_panes_with_the_same_image_id_do_not_collide():
     assert ids[0] != ids[1]
 
 
-def test_replacing_the_image_of_a_pane_id_re_transmits():
+def test_replacing_image_of_pane_id_re_transmits():
     client, written = make_client()
     state = make_state(placement())
     client.render([view(state)])
@@ -273,7 +273,7 @@ def test_no_views_removes_everything():
     assert "\x1b_Ga=d,d=I,i=%i,q=2\x1b\\" % image_id in joined
 
 
-def test_reset_removes_the_images():
+def test_reset_removes_images():
     client, written = make_client()
     client.render([view(make_state(placement()))])
     image_id = outer_id(written)
@@ -288,7 +288,7 @@ def test_reset_removes_the_images():
     assert len(transmissions(written)) == 1
 
 
-def test_an_unsupported_terminal_gets_nothing():
+def test_unsupported_terminal_gets_nothing():
     written = []
     client = ClientGraphics(written.append, lambda: None)
     assert not client.supported
@@ -296,7 +296,7 @@ def test_an_unsupported_terminal_gets_nothing():
     assert written == []
 
 
-def test_the_batch_saves_and_restores_the_cursor():
+def test_batch_saves_and_restores_cursor():
     client, written = make_client()
     client.render([view(make_state(placement()))])
 
@@ -307,7 +307,7 @@ def test_the_batch_saves_and_restores_the_cursor():
     assert batch.endswith("\x1b8")
 
 
-def test_the_query_reply_enables_the_output():
+def test_query_reply_enables_output():
     written = []
     client = ClientGraphics(written.append, lambda: None)
     assert not client.kitty_supported
@@ -321,7 +321,7 @@ def test_the_query_reply_enables_the_output():
     assert client.kitty_supported
 
 
-def test_the_query_reply_is_recognised_with_extra_keys():
+def test_query_reply_is_recognised_with_extra_keys():
     written = []
     client = ClientGraphics(written.append, lambda: None)
     client.handle_reply(apc("GI=2,i=31,p=1;OK"))

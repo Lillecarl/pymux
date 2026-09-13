@@ -50,9 +50,9 @@ if TYPE_CHECKING:
 __all__ = [
     "Counters",
     "write_dump",
-    "answer_a_signal",
+    "answer_signal",
     "stacks_file",
-    "where_a_dump_goes",
+    "where_dump_goes",
 ]
 
 #: The file `faulthandler` writes to, held open for the life of the
@@ -101,17 +101,17 @@ class Counters:
         self.frame_bytes += characters
 
 
-def where_a_dump_goes() -> Path:
+def where_dump_goes() -> Path:
     "The directory a dump is written to: the one the log is in."
     return (logfile() or Path.home() / ".local/state/pymux/server.log").parent
 
 
 def stacks_file() -> Path:
     "Where a `SIGUSR1` writes."
-    return where_a_dump_goes() / ("stacks-%d.log" % (os.getpid(),))
+    return where_dump_goes() / ("stacks-%d.log" % (os.getpid(),))
 
 
-def answer_a_signal() -> Path | None:
+def answer_signal() -> Path | None:
     """
     Make `SIGUSR1` dump every thread's stack, and say where it goes.
 
@@ -152,7 +152,7 @@ _PR_SET_PTRACER = 0x59616D61
 _PR_SET_PTRACER_ANY = -1
 
 
-def let_a_debugger_attach(allowed: bool) -> bool:
+def let_debugger_attach(allowed: bool) -> bool:
     """
     Say whether another process of this user may attach to this server,
     and answer with what the kernel took.
@@ -213,7 +213,7 @@ def write_dump(pymux: "Pymux") -> Path:
     Everything it knows, in one file, because a person reading it is
     looking for something they cannot name yet.
     """
-    path = where_a_dump_goes() / ("dump-%d-%s.txt" % (os.getpid(), _now()))
+    path = where_dump_goes() / ("dump-%d-%s.txt" % (os.getpid(), _now()))
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(what_it_is_doing(pymux))
     logger.info("Wrote a dump of this server to %s", path)
@@ -227,7 +227,7 @@ def write_dump(pymux: "Pymux") -> Path:
 HOW_LONG_TO_WATCH = 5.0
 
 #: How often the profiler takes the stack, in seconds. The same
-#: interval `tests/profile_a_frame.py` uses.
+#: interval `tests/profile_frame.py` uses.
 HOW_OFTEN_TO_LOOK = 0.001
 
 
@@ -258,7 +258,7 @@ def start_watching(pymux: "Pymux", seconds: float = HOW_LONG_TO_WATCH) -> Path:
     # anything should not pay to import this.
     from pyinstrument import Profiler
 
-    where = where_a_dump_goes()
+    where = where_dump_goes()
     where.mkdir(parents=True, exist_ok=True)
     stem = "profile-%d-%s" % (os.getpid(), _now())
     written = where / ("%s.txt" % (stem,))
@@ -464,7 +464,7 @@ def _tasks(pymux: "Pymux") -> str:
     lines = ["--- asyncio tasks (%d) ---" % (len(tasks),)]
     for task in tasks:
         lines.append("")
-        lines.append("task %s: %s" % (task.get_name(), _what_a_task_is_doing(task)))
+        lines.append("task %s: %s" % (task.get_name(), _what_task_is_doing(task)))
         for frame in task.get_stack(limit=20):
             lines.extend(
                 "  " + line
@@ -474,7 +474,7 @@ def _tasks(pymux: "Pymux") -> str:
     return "\n".join(lines)
 
 
-def _what_a_task_is_doing(task) -> str:
+def _what_task_is_doing(task) -> str:
     if task.cancelled():
         return "cancelled"
     if task.done():

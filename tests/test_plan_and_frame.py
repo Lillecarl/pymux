@@ -69,7 +69,7 @@ def offsets(pymux, plan):
     return offsets
 
 
-def test_the_plan_puts_the_columns_where_the_frame_does():
+def test_plan_puts_columns_where_frame_does():
     with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
         create_row_of_panes(pymux)
         draw()
@@ -77,7 +77,7 @@ def test_the_plan_puts_the_columns_where_the_frame_does():
         assert len(offsets(pymux, plan_of(pymux, pymux.arrangement.get_active_window()))) == 1
 
 
-def test_the_plan_divides_a_stack_the_way_the_frame_does():
+def test_plan_divides_stack_way_frame_does():
     """
     The part that is arithmetic rather than order. A stack shares its
     column out by weight, and the cells that do not divide evenly have
@@ -92,7 +92,7 @@ def test_the_plan_divides_a_stack_the_way_the_frame_does():
         assert len(offsets(pymux, plan_of(pymux, pymux.arrangement.get_active_window()))) == 1
 
 
-def test_the_plan_follows_a_resize():
+def test_plan_follows_resize():
     """
     A person drags a border, and the frame follows.
 
@@ -113,7 +113,7 @@ def test_the_plan_follows_a_resize():
         assert len(offsets(pymux, plan_of(pymux, pymux.arrangement.get_active_window()))) == 1
 
 
-def test_a_divided_window_is_drawn_where_its_plan_says_too():
+def test_divided_window_is_drawn_where_its_plan_says_too():
     "The layout pymux uses unless a person asks for something else."
     with create_client(CHROME, rows=ROWS, columns=COLUMNS) as (pymux, draw):
         create_row_of_panes(pymux, count=2)
@@ -123,7 +123,7 @@ def test_a_divided_window_is_drawn_where_its_plan_says_too():
         assert len(offsets(pymux, plan_of(pymux, pymux.arrangement.get_active_window()))) == 1
 
 
-def test_the_plan_holds_a_column_the_frame_never_drew():
+def test_plan_holds_column_frame_never_drew():
     """
     The case the frame alone cannot answer, and the reason for all of
     this. A strip scrolls, so a column can be off the screen -- and the
@@ -154,7 +154,7 @@ def test_the_plan_holds_a_column_the_frame_never_drew():
         assert len(offsets(pymux, plan)) == 1
 
 
-def test_the_plan_uses_the_size_the_window_was_given():
+def test_plan_uses_size_window_was_given():
     "So that a client of another size cannot be what it measured."
     with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
         create_row_of_panes(pymux, count=1)
@@ -167,7 +167,7 @@ def test_the_plan_uses_the_size_the_window_was_given():
 # What the frame cannot answer.
 
 
-def test_a_key_moves_the_focus_before_anything_is_drawn():
+def test_key_moves_focus_before_anything_is_drawn():
     """
     **The frame is not there yet, and the plan is.**
 

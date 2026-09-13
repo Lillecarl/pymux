@@ -14,7 +14,7 @@ Lillecarl/pymux#233.
 
 from prompt_toolkit.application.current import set_app
 
-from session import create_session, in_a_loop
+from session import create_session, in_loop
 
 
 def controls(app):
@@ -22,8 +22,8 @@ def controls(app):
     return frozenset(app.layout.find_all_controls())
 
 
-@in_a_loop
-async def test_walking_the_layout_twice_finds_the_same_controls():
+@in_loop
+async def test_walking_layout_twice_finds_same_controls():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             first = controls(state.app)
@@ -32,8 +32,8 @@ async def test_walking_the_layout_twice_finds_the_same_controls():
     assert first == second
 
 
-@in_a_loop
-async def test_the_empty_overlay_is_one_window_and_not_a_new_one():
+@in_loop
+async def test_empty_overlay_is_one_window_and_not_new_one():
     """
     The container that held a fresh `Window()`, which makes a
     `DummyControl` of its own every time it is asked.

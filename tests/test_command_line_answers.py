@@ -9,11 +9,11 @@ client, which went nowhere. Lillecarl/pymux#288, #289, #292.
 
 from prompt_toolkit.application.current import set_app
 
-from session import create_session, in_a_loop
+from session import create_session, in_loop
 
 
-@in_a_loop
-async def test_list_windows_answers_the_command_line():
+@in_loop
+async def test_list_windows_answers_command_line():
     async with create_session() as (pymux, state):
         pymux.command_output = []
 
@@ -22,8 +22,8 @@ async def test_list_windows_answers_the_command_line():
         assert pymux.command_output, "the command line heard nothing"
 
 
-@in_a_loop
-async def test_list_panes_answers_the_command_line():
+@in_loop
+async def test_list_panes_answers_command_line():
     async with create_session() as (pymux, state):
         pymux.command_output = []
 
@@ -32,8 +32,8 @@ async def test_list_panes_answers_the_command_line():
         assert pymux.command_output, "the command line heard nothing"
 
 
-@in_a_loop
-async def test_a_listing_shows_in_a_pane_and_prints_on_the_command_line():
+@in_loop
+async def test_listing_shows_in_pane_and_prints_on_command_line():
     """
     The two ways one listing reaches a person: a popup for a person in
     a pane, stdout for the command line.
@@ -55,8 +55,8 @@ async def test_a_listing_shows_in_a_pane_and_prints_on_the_command_line():
         assert len(shown) == 1, "the command line drew a popup"
 
 
-@in_a_loop
-async def test_display_message_p_prints_the_answer():
+@in_loop
+async def test_display_message_p_prints_answer():
     async with create_session() as (pymux, state):
         pymux.command_output = []
 
@@ -65,8 +65,8 @@ async def test_display_message_p_prints_the_answer():
         assert pymux.command_output == ["hello"]
 
 
-@in_a_loop
-async def test_display_message_without_p_shows_the_message():
+@in_loop
+async def test_display_message_without_p_shows_message():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("display-message hello")
@@ -75,8 +75,8 @@ async def test_display_message_without_p_shows_the_message():
         assert pymux.command_output is None
 
 
-@in_a_loop
-async def test_get_paneid_names_the_pane():
+@in_loop
+async def test_get_paneid_names_pane():
     async with create_session() as (pymux, state):
         pane = pymux.arrangement.get_active_pane()
 
@@ -89,8 +89,8 @@ async def test_get_paneid_names_the_pane():
         assert pymux.command_output == [str(pane.pane_id)]
 
 
-@in_a_loop
-async def test_set_option_without_a_value_answers_what_it_holds():
+@in_loop
+async def test_set_option_without_value_answers_what_it_holds():
     async with create_session() as (pymux, state):
         pymux.command_output = []
 
@@ -103,8 +103,8 @@ async def test_set_option_without_a_value_answers_what_it_holds():
         assert pymux.command_output == ["status off"]
 
 
-@in_a_loop
-async def test_set_window_option_g_answers_the_default():
+@in_loop
+async def test_set_window_option_g_answers_default():
     async with create_session() as (pymux, state):
         pymux.command_output = []
 
@@ -114,8 +114,8 @@ async def test_set_window_option_g_answers_the_default():
         assert pymux.command_output == ["strip on"]
 
 
-@in_a_loop
-async def test_an_option_that_was_never_set_says_so():
+@in_loop
+async def test_option_that_was_never_set_says_so():
     async with create_session() as (pymux, state):
         pymux.command_output = []
 
@@ -124,8 +124,8 @@ async def test_an_option_that_was_never_set_says_so():
         assert pymux.command_output == ["strip not set"]
 
 
-@in_a_loop
-async def test_set_option_ignores_g_on_the_read():
+@in_loop
+async def test_set_option_ignores_g_on_read():
     """
     A session option is already global, so `-g` says nothing for it,
     on the read as on the write.

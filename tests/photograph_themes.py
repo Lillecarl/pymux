@@ -1,7 +1,7 @@
 """
 A picture of every theme, with the demo application in the pane.
 
-`photograph_the_chrome.py` photographs the chrome of the hand themes.
+`photograph_chrome.py` photographs the chrome of the hand themes.
 This walks every theme `set-option theme` takes - the two hand ones,
 and every style pygments offers, catppuccin's four flavours among
 them - and runs `demo_application.py` in a split pane under each, so

@@ -31,21 +31,21 @@ def create_window(root):
     return window
 
 
-def test_a_row_is_numbered_from_the_left():
+def test_row_is_numbered_from_left():
     panes = [create_pane() for _ in range(3)]
     window = create_window(VSplit(panes))
 
     assert window.panes == panes
 
 
-def test_a_stack_is_numbered_from_the_top():
+def test_stack_is_numbered_from_top():
     panes = [create_pane() for _ in range(3)]
     window = create_window(HSplit(panes))
 
     assert window.panes == panes
 
 
-def test_a_nested_split_is_numbered_where_it_sits():
+def test_nested_split_is_numbered_where_it_sits():
     """
     The one that was wrong. `first` is inside a split and `second` is
     not, and `first` is to the left, so it is numbered first.
@@ -58,7 +58,7 @@ def test_a_nested_split_is_numbered_where_it_sits():
     assert window.get_pane_index(second) == 1
 
 
-def test_a_strip_numbers_its_columns_from_the_left():
+def test_strip_numbers_its_columns_from_left():
     """
     What the picture showed. The first column of a strip is a stack of
     one, because turning the mode on wraps whatever the window was.
@@ -76,7 +76,7 @@ def test_a_strip_numbers_its_columns_from_the_left():
     assert [window.get_pane_index(pane) for pane in opened] == [0, 1, 2]
 
 
-def test_a_deep_tree_reads_left_to_right_and_top_to_bottom():
+def test_deep_tree_reads_left_to_right_and_top_to_bottom():
     a, b, c, d = (create_pane() for _ in range(4))
     window = create_window(VSplit([HSplit([a, b]), VSplit([c, d])]))
 

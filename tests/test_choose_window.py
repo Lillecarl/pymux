@@ -16,7 +16,7 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.mouse_events import MouseEventType
 
-from session import create_session, in_a_loop
+from session import create_session, in_loop
 
 #: prompt_toolkit keeps the keys it can name as `Keys` members and
 #: the printable ones as themselves.
@@ -56,8 +56,8 @@ def fire(state, key: str) -> None:
         answers[-1].handler(None)
 
 
-@in_a_loop
-async def test_the_command_opens_the_chooser_on_the_current_window():
+@in_loop
+async def test_command_opens_chooser_on_current_window():
     "The chooser opens on the window this client looks at."
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -72,8 +72,8 @@ async def test_the_command_opens_the_chooser_on_the_current_window():
         assert rows[-1][0] == "class:chooser.selected"
 
 
-@in_a_loop
-async def test_the_chooser_draws_in_a_float():
+@in_loop
+async def test_chooser_draws_in_float():
     "A box on the view, the inset of the keys pop-up."
     async with create_session() as (pymux, state):
         boxes = [
@@ -91,8 +91,8 @@ async def test_the_chooser_draws_in_a_float():
         assert boxes[0].content.filter()
 
 
-@in_a_loop
-async def test_the_keys_move_and_clamp():
+@in_loop
+async def test_keys_move_and_clamp():
     "j and k with the arrows; the ends hold."
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -114,7 +114,7 @@ async def test_the_keys_move_and_clamp():
         assert state.choose_window_index == 0, "the first row did not hold"
 
 
-@in_a_loop
+@in_loop
 async def test_enter_switches_and_closes():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -132,7 +132,7 @@ async def test_enter_switches_and_closes():
         )
 
 
-@in_a_loop
+@in_loop
 async def test_q_and_escape_close_without_switching():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -158,17 +158,17 @@ async def test_q_and_escape_close_without_switching():
             )
 
 
-@in_a_loop
-async def test_the_prefix_w_binding_opens_it():
+@in_loop
+async def test_prefix_w_binding_opens_it():
     "The tmux key: prefix w opens the chooser, as it opens the tree."
     async with create_session() as (pymux, state):
         assert ("w", "choose-window") in (
-            pymux.key_bindings_manager.keys_a_prefix_leads_to()
+            pymux.key_bindings_manager.prefix_keys()
         )
 
 
-@in_a_loop
-async def test_the_search_narrows_the_rows_to_what_was_typed():
+@in_loop
+async def test_search_narrows_rows_to_what_was_typed():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("new-window")
@@ -187,8 +187,8 @@ async def test_the_search_narrows_the_rows_to_what_was_typed():
         assert state.choose_window_index == 0
 
 
-@in_a_loop
-async def test_enter_from_the_search_takes_the_first_match():
+@in_loop
+async def test_enter_from_search_takes_first_match():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("new-window")
@@ -208,8 +208,8 @@ async def test_enter_from_the_search_takes_the_first_match():
             )
 
 
-@in_a_loop
-async def test_a_search_that_matches_nothing_says_so():
+@in_loop
+async def test_search_that_matches_nothing_says_so():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("choose-window")
@@ -221,8 +221,8 @@ async def test_a_search_that_matches_nothing_says_so():
         assert "No window matches." in rows[0][1]
 
 
-@in_a_loop
-async def test_escape_leaves_the_search_and_keeps_the_chooser():
+@in_loop
+async def test_escape_leaves_search_and_keeps_chooser():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("new-window")
@@ -241,8 +241,8 @@ async def test_escape_leaves_the_search_and_keeps_the_chooser():
         assert state.choose_window_index == 1
 
 
-@in_a_loop
-async def test_the_template_runs_on_the_chosen_window():
+@in_loop
+async def test_template_runs_on_chosen_window():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("new-window")
@@ -263,8 +263,8 @@ async def test_the_template_runs_on_the_chosen_window():
             )
 
 
-@in_a_loop
-async def test_a_click_on_a_row_chooses_its_window():
+@in_loop
+async def test_click_on_row_chooses_its_window():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("new-window")
@@ -287,8 +287,8 @@ async def test_a_click_on_a_row_chooses_its_window():
             )
 
 
-@in_a_loop
-async def test_a_window_of_more_than_one_pane_says_how_many():
+@in_loop
+async def test_window_of_more_than_one_pane_says_how_many():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("split-window")

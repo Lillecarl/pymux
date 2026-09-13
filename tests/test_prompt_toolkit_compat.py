@@ -26,18 +26,18 @@ CASES = [
 
 
 @pytest.mark.parametrize("items,weights", CASES)
-def test_the_sequence_is_the_same(items, weights):
+def test_sequence_is_same(items, weights):
     expected = list(itertools.islice(original(items, weights), 200))
     got = list(itertools.islice(faster(items, weights), 200))
     assert got == expected
 
 
-def test_a_weight_of_zero_everywhere_raises():
+def test_weight_of_zero_everywhere_raises():
     with pytest.raises(ValueError):
         next(faster(["a", "b"], [0, 0]))
 
 
-def test_the_documented_proportion_holds():
+def test_documented_proportion_holds():
     # The example of the docstring of prompt_toolkit: the first 70 items
     # are 10 times A, 20 times B and 40 times C.
     got = list(itertools.islice(faster(["A", "B", "C"], [5, 10, 20]), 70))

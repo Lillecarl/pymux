@@ -37,16 +37,16 @@ def pane_of(mux):
     return mux.arrangement.get_active_window().active_pane
 
 
-def test_a_pane_keeps_what_the_option_says(pymux):
+def test_pane_keeps_what_option_says(pymux):
     ALL_OPTIONS["history-limit"].set_value(pymux, "10000")
     assert pane_of(pymux).screen.get_history_limit() == 10000
 
 
-def test_the_default_is_the_one_tmux_keeps(pymux):
+def test_default_is_one_tmux_keeps(pymux):
     assert pane_of(pymux).screen.get_history_limit() == 2000
 
 
-def test_the_option_reaches_a_pane_that_is_already_running(pymux):
+def test_option_reaches_pane_that_is_already_running(pymux):
     pane = pane_of(pymux)
     assert pane.screen.get_history_limit() == 2000
     ALL_OPTIONS["history-limit"].set_value(pymux, "5000")

@@ -6,7 +6,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import add_command
-from pymux.commands.common import send_a_key
+from pymux.commands.common import send_key
 from pymux.key_spelling import event_however_it_is_written
 
 
@@ -22,7 +22,7 @@ def send_prefix(pymux: "Pymux", args: argparse.Namespace) -> None:
     # road as `send-keys`, and says the same thing when a pane cannot
     # hear it. Lillecarl/pymux#237.
     for key in pymux.key_bindings_manager.prefix:
-        send_a_key(pane, event_however_it_is_written(key), key)
+        send_key(pane, event_however_it_is_written(key), key)
 
 
 def register(subparsers):

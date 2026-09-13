@@ -656,7 +656,7 @@ class Window:
                 return item
             item = parent
 
-    def has_a_stack(self) -> bool:
+    def has_stack(self) -> bool:
         """
         Whether any pane of this window has one above or below it.
 
@@ -1043,14 +1043,14 @@ class Arrangement:
         """
         by_index = {w.index: w for w in self.windows}
 
-        in_the_way = []
+        displaced = []
         while index in by_index:
-            in_the_way.append(by_index[index])
+            displaced.append(by_index[index])
             index += 1
 
         # From the top down, so no window lands on one that has not
         # moved yet.
-        for window in reversed(in_the_way):
+        for window in reversed(displaced):
             window.index += 1
 
     def create_window(

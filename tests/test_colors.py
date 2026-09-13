@@ -39,7 +39,7 @@ def detection(term="", colorterm="", forced=None):
     return result
 
 
-def test_the_probe_sets_a_colour_and_asks_for_it_back():
+def test_probe_sets_colour_and_asks_for_it_back():
     assert TRUECOLOR_PROBE.startswith("\x1b[38;2;1;2;3m")
     assert "\x1bP$qm\x1b\\" in TRUECOLOR_PROBE
     assert TRUECOLOR_PROBE.endswith("\x1b[0m")  # The attributes go back.
@@ -69,7 +69,7 @@ def test_the_probe_sets_a_colour_and_asks_for_it_back():
         "\x1bP1$r38;2;1;2;3m\x9c",
     ],
 )
-def test_a_reply_that_keeps_the_colour_means_truecolor(reply):
+def test_reply_that_keeps_colour_means_truecolor(reply):
     assert reports_truecolor(reply)
 
 
@@ -94,7 +94,7 @@ def test_other_replies_do_not_mean_truecolor(reply):
     assert not reports_truecolor(reply)
 
 
-def test_the_probe_reply_raises_the_depth():
+def test_probe_reply_raises_depth():
     detect = detection(term="xterm-256color")
     assert detect.depth == ColorDepth.DEPTH_8_BIT
 
@@ -103,7 +103,7 @@ def test_the_probe_reply_raises_the_depth():
     assert detect.depth == ColorDepth.DEPTH_24_BIT
 
 
-def test_an_unrelated_reply_changes_nothing():
+def test_unrelated_reply_changes_nothing():
     detect = detection(term="xterm-256color")
     detect.handle_reply(csi(Csi.XTWINOPS, 6, 20, 10))
     detect.handle_reply(apc("Gi=31;OK"))
@@ -138,12 +138,12 @@ def test_an_unrelated_reply_changes_nothing():
         ("foot", "", ColorDepth.DEPTH_8_BIT),
     ],
 )
-def test_the_environment_decides_without_a_probe(term, colorterm, expected):
+def test_environment_decides_without_probe(term, colorterm, expected):
     assert depth_from_environment(term, colorterm) == expected
     assert detection(term=term, colorterm=colorterm).depth == expected
 
 
-def test_the_term_name_is_read_case_insensitively():
+def test_term_name_is_read_case_insensitively():
     assert depth_from_environment("XTERM-256COLOR", "") == ColorDepth.DEPTH_8_BIT
 
 
@@ -151,12 +151,12 @@ def test_the_term_name_is_read_case_insensitively():
 # The command line wins.
 
 
-def test_a_forced_depth_beats_the_environment():
+def test_forced_depth_beats_environment():
     detect = detection(term="linux", forced=ColorDepth.DEPTH_24_BIT)
     assert detect.depth == ColorDepth.DEPTH_24_BIT
 
 
-def test_a_forced_depth_beats_the_probe():
+def test_forced_depth_beats_probe():
     detect = detection(term="xterm-256color", forced=ColorDepth.DEPTH_4_BIT)
     detect.handle_reply(dcs("1$r38;2;1;2;3m"))
     assert detect.truecolor  # The probe still came back.
@@ -173,20 +173,20 @@ def test_a_forced_depth_beats_the_probe():
 # Lillecarl/pymux#223.
 
 
-def test_the_queries_ask_for_the_two_defaults_and_the_sixteen_ansi():
+def test_queries_ask_for_two_defaults_and_sixteen_ansi():
     "The cube beyond sixteen is convention, so it is not asked about."
     assert COLOR_QUERIES == osc("10", "?") + osc("11", "?") + "".join(
         osc("4", "%i;?" % index) for index in range(16)
     )
 
 
-def test_a_fresh_terminal_has_said_nothing():
+def test_fresh_terminal_has_said_nothing():
     colors = DefaultColors()
     assert colors.foreground is None
     assert colors.background is None
 
 
-def test_a_background_reply_is_read():
+def test_background_reply_is_read():
     colors = DefaultColors()
 
     assert colors.handle_osc_reply("11", "rgb:1e1e/1e1e/2e2e")
@@ -195,7 +195,7 @@ def test_a_background_reply_is_read():
     assert colors.foreground is None
 
 
-def test_a_foreground_reply_is_read():
+def test_foreground_reply_is_read():
     colors = DefaultColors()
 
     assert colors.handle_osc_reply("10", "#ffffff")
@@ -203,7 +203,7 @@ def test_a_foreground_reply_is_read():
     assert colors.foreground == Color(0xFF, 0xFF, 0xFF)
 
 
-def test_the_second_reply_of_a_colour_replaces_the_first():
+def test_second_reply_of_colour_replaces_first():
     "A terminal whose theme changed says so the same way it answered."
     colors = DefaultColors()
     colors.handle_osc_reply("11", "rgb:0000/0000/0000")
@@ -227,7 +227,7 @@ def test_the_second_reply_of_a_colour_replaces_the_first():
         ("11", ""),
     ],
 )
-def test_a_reply_this_cannot_read_changes_nothing(code, payload):
+def test_reply_this_cannot_read_changes_nothing(code, payload):
     colors = DefaultColors()
 
     assert not colors.handle_osc_reply(code, payload)
@@ -244,7 +244,7 @@ def test_a_reply_this_cannot_read_changes_nothing(code, payload):
 # looking at. Lillecarl/pymux#283.
 
 
-def test_an_ansi_reply_is_read():
+def test_ansi_reply_is_read():
     colors = DefaultColors()
 
     assert colors.handle_osc_reply("4", "1;rgb:ffff/0000/0000")
@@ -252,7 +252,7 @@ def test_an_ansi_reply_is_read():
     assert colors.ansi[1] == Color(0xFF, 0x00, 0x00)
 
 
-def test_an_ansi_reply_beyond_the_sixteen_changes_nothing():
+def test_ansi_reply_beyond_sixteen_changes_nothing():
     # The ask named the first sixteen only. A cube entry is convention
     # in every terminal, and a reply for it is one nobody asked for.
     colors = DefaultColors()
@@ -261,7 +261,7 @@ def test_an_ansi_reply_beyond_the_sixteen_changes_nothing():
     assert not colors.handle_osc_reply("4", "aubergine;rgb:ffff/0000/0000")
 
 
-def test_a_color_base_carries_the_learned_sixteen_over_the_cube():
+def test_color_base_carries_learned_sixteen_over_cube():
     colors = DefaultColors()
     red = Color(0xFF, 0x00, 0x00)
     blue = Color(0x00, 0x00, 0xFF)
@@ -277,7 +277,7 @@ def test_a_color_base_carries_the_learned_sixteen_over_the_cube():
     assert base.palette[16:] == list(PALETTE[16:])
 
 
-def test_a_color_base_carries_the_learned_defaults():
+def test_color_base_carries_learned_defaults():
     colors = DefaultColors()
     colors.handle_osc_reply("10", "rgb:ffff/0000/0000")
     colors.handle_osc_reply("11", "rgb:0000/0000/ffff")
@@ -289,7 +289,7 @@ def test_a_color_base_carries_the_learned_defaults():
     assert base.defaults["cursor"] == DEFAULT_COLORS["cursor"]
 
 
-def test_a_color_base_with_nothing_learned_is_the_conventional_one():
+def test_color_base_with_nothing_learned_is_conventional_one():
     base = DefaultColors().color_base()
 
     assert base.palette == list(PALETTE)
@@ -304,7 +304,7 @@ def test_a_color_base_with_nothing_learned_is_the_conventional_one():
 # palette a program asks for is part of that screen.
 
 
-def test_the_theme_gives_a_whole_palette():
+def test_theme_gives_whole_palette():
     base = theme_color_base("grey")
 
     assert len(base.palette) == 256
@@ -313,14 +313,14 @@ def test_the_theme_gives_a_whole_palette():
     assert base.defaults["background"] == Color(0x00, 0x00, 0x00)
 
 
-def test_a_pygments_theme_names_the_pane_s_red():
+def test_pygments_theme_names_pane_s_red():
     base = theme_color_base("pygments:dracula")
 
     assert base.palette[1] == Color(0x8B, 0x08, 0x0B)
     assert base.defaults["background"] == Color(0x28, 0x2A, 0x36)
 
 
-def test_a_theme_that_owns_the_screen_gives_the_pane_its_palette():
+def test_theme_that_owns_screen_gives_pane_its_palette():
     pymux = Pymux()
     pymux.paint_screen = True
     pymux.theme = "pygments:dracula"
@@ -331,7 +331,7 @@ def test_a_theme_that_owns_the_screen_gives_the_pane_its_palette():
     assert pane.screen.color_base.palette[1] == Color(0x8B, 0x08, 0x0B)
 
 
-def test_a_pane_keeps_the_convention_while_the_terminal_owns_the_colours():
+def test_pane_keeps_convention_while_terminal_owns_colours():
     pymux = Pymux()
     assert pymux.paint_screen is False
     screen = Screen(24, 80, write_process_input=lambda data: None)
@@ -348,7 +348,7 @@ def test_a_pane_keeps_the_convention_while_the_terminal_owns_the_colours():
 # And the reply reaches the client it belongs to.
 
 
-def test_the_detection_asks_the_outer_terminal_for_its_colours():
+def test_detection_asks_outer_terminal_for_its_colours():
     "Before the device attributes, which is the fence of the detection."
     queries = DETECTION_QUERIES.decode("ascii")
 
@@ -356,7 +356,7 @@ def test_the_detection_asks_the_outer_terminal_for_its_colours():
     assert queries.index(COLOR_QUERIES) < queries.index("\x1b[c")
 
 
-def test_a_reply_lands_on_the_connection_that_carried_it():
+def test_reply_lands_on_connection_that_carried_it():
     """
     Each client asks its own terminal and keeps its own answer, so two
     people on one session can be on a light terminal and a dark one.
@@ -378,7 +378,7 @@ def test_a_reply_lands_on_the_connection_that_carried_it():
     asyncio.run(check())
 
 
-def test_a_colour_arriving_after_the_detection_is_still_read():
+def test_colour_arriving_after_detection_is_still_read():
     "A terminal whose theme changes while a person is attached says so."
 
     async def check():
@@ -396,7 +396,7 @@ def test_a_colour_arriving_after_the_detection_is_still_read():
 # ----------------------------------------------------------------------
 # And what the panes answer with follows.
 
-def test_a_learned_colour_tells_the_panes_again():
+def test_learned_colour_tells_panes_again():
     "The panes answer their programs with what this terminal paints."
 
     async def check():
@@ -412,7 +412,7 @@ def test_a_learned_colour_tells_the_panes_again():
     asyncio.run(check())
 
 
-def test_a_reply_that_learns_nothing_tells_the_panes_nothing():
+def test_reply_that_learns_nothing_tells_panes_nothing():
     "A reply this cannot read does not send the panes walking."
 
     async def check():

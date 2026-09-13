@@ -47,7 +47,7 @@ from .enums import CHOOSE, COMMAND, PROMPT, WindowSize, Woke
 from .graphics import PaneView
 from . import introspect
 from .key_bindings import PymuxKeyBindings
-from .key_spelling import why_a_pane_cannot_read
+from .key_spelling import why_pane_cannot_read
 from .layout import Justify, LayoutManager, change_pane_size
 from . import log
 from .log import logger
@@ -127,7 +127,7 @@ class PaneCursor(CursorShapeConfig):
 MAX_KEYS_TO_REMEMBER = 512
 
 
-def _say_a_key_did_not_fit():
+def _say_key_did_not_fit():
     """
     A reporter for one pane, for a key it reads as something else.
 
@@ -142,7 +142,7 @@ def _say_a_key_did_not_fit():
             return
         if len(already_said) < MAX_KEYS_TO_REMEMBER:
             already_said.add(event)
-        logger.info("%s", why_a_pane_cannot_read(event, lost, encoded))
+        logger.info("%s", why_pane_cannot_read(event, lost, encoded))
 
     return say
 
@@ -270,7 +270,7 @@ class ClientState:
         # Whatever the frame before this one left behind goes now: the
         # plan it measured is an answer about the window as it was.
         def before_render(_):
-            self.layout_manager.before_a_frame()
+            self.layout_manager.before_frame()
 
         self.app.before_render += before_render
 
@@ -418,7 +418,7 @@ class ClientState:
                 SwapLightAndDarkStyleTransformation(),
                 Condition(lambda: self.pymux.swap_dark_and_light),
             ),
-            on_invalidate=pymux.client_asked_for_a_frame,
+            on_invalidate=pymux.client_asked_for_frame,
         )
 
         # Synchronize the Vi state with the CLI object.
@@ -809,7 +809,7 @@ class Pymux:
         the clock. Lillecarl/pymux#117.
 
         `but_not` is the application that already asked for a frame, so
-        that `client_asked_for_a_frame` can ask about the others and
+        that `client_asked_for_frame` can ask about the others and
         leave that one alone.
         """
         for client_state in self._client_states.values():
@@ -832,7 +832,7 @@ class Pymux:
                 )
                 client_state.app.invalidate()
 
-    def client_asked_for_a_frame(self, app) -> None:
+    def client_asked_for_frame(self, app) -> None:
         """
         What one client's own invalidate means for the other clients.
 
@@ -878,10 +878,10 @@ class Pymux:
     def allow_remote_debugging(self, allowed: bool) -> None:
         """
         A setting the kernel has to be told about, so it is a property
-        and not an attribute. `introspect.let_a_debugger_attach` says
+        and not an attribute. `introspect.let_debugger_attach` says
         what it costs and why it is off.
         """
-        self._allow_remote_debugging = introspect.let_a_debugger_attach(allowed)
+        self._allow_remote_debugging = introspect.let_debugger_attach(allowed)
 
     @property
     def log_level(self) -> str:
@@ -909,7 +909,7 @@ class Pymux:
         signal taken.
         """
         self._start_auto_refresh()
-        introspect.answer_a_signal()
+        introspect.answer_signal()
 
     def _start_auto_refresh(self) -> None:
         """
@@ -1225,7 +1225,7 @@ class Pymux:
             # could scroll and never reached the screen that holds the
             # rows. A pane kept two thousand whatever the option said.
             get_history_limit=lambda: self.history_limit,
-            unreadable_key_func=_say_a_key_did_not_fit(),
+            unreadable_key_func=_say_key_did_not_fit(),
         )
         pane = Pane(terminal)
 
@@ -1867,7 +1867,7 @@ class Pymux:
             # in-process one -- has no colours to hand over.
             return None
 
-    def keyboard_flags_for_a_client(self) -> int:
+    def keyboard_flags_for_client(self) -> int:
         """
         What the terminal of a client is asked to report.
 
@@ -1902,7 +1902,7 @@ class Pymux:
         they can enable the protocol on their outer terminals. (Only
         sends when the value changed.)
         """
-        flags = self.keyboard_flags_for_a_client()
+        flags = self.keyboard_flags_for_client()
         if flags == self._kitty_flags_sent:
             return
         self._kitty_flags_sent = flags

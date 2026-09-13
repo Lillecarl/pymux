@@ -44,12 +44,12 @@ def width_now(window):
     return window.column_width(window._column_of(window.active_pane))
 
 
-def test_the_presets_are_the_ones_niri_ships_and_a_full_one():
+def test_presets_are_ones_niri_ships_and_full_one():
     assert PRESET_COLUMN_WIDTHS == (1 / 3, 1 / 2, 2 / 3, 1.0)
     assert DEFAULT_COLUMN_WIDTH == 1 / 2
 
 
-def test_a_column_can_be_the_whole_window_without_leaving_the_strip():
+def test_column_can_be_whole_window_without_leaving_strip():
     """
     Carl asked how a person makes a column full width in a strip, and
     the answer was that they could not: the cycle stopped at two
@@ -66,7 +66,7 @@ def test_a_column_can_be_the_whole_window_without_leaving_the_strip():
     assert len(window.root) == 2
 
 
-def test_the_next_width_after_the_default_is_two_thirds():
+def test_next_width_after_default_is_two_thirds():
     "The default is the middle preset, so forward is the wide one."
     window = create_strip(2)
 
@@ -75,7 +75,7 @@ def test_the_next_width_after_the_default_is_two_thirds():
     assert width_now(window) == 2 / 3
 
 
-def test_the_previous_width_from_the_default_is_a_third():
+def test_previous_width_from_default_is_third():
     window = create_strip(2)
 
     window.switch_column_width(window.active_pane, back=True)
@@ -83,7 +83,7 @@ def test_the_previous_width_from_the_default_is_a_third():
     assert width_now(window) == 1 / 3
 
 
-def test_the_widths_come_round_again():
+def test_widths_come_round_again():
     window = create_strip(2)
     seen = []
 
@@ -104,7 +104,7 @@ def test_going_back_undoes_going_forward():
 
 
 @pytest.mark.parametrize("back", [False, True])
-def test_a_width_that_is_not_a_preset_steps_onto_the_list(back):
+def test_width_that_is_not_preset_steps_onto_list(back):
     """
     A column set to something of its own, which a fixed width would
     give. It joins the cycle rather than being stuck outside it.
@@ -117,7 +117,7 @@ def test_a_width_that_is_not_a_preset_steps_onto_the_list(back):
     assert width_now(window) in PRESET_COLUMN_WIDTHS
 
 
-def test_only_the_column_a_person_is_on_changes():
+def test_only_column_person_is_on_changes():
     window = create_strip(3)
     others = [
         window.column_width(column)
@@ -134,7 +134,7 @@ def test_only_the_column_a_person_is_on_changes():
     ] == others
 
 
-def test_a_pane_in_a_stack_changes_the_whole_column():
+def test_pane_in_stack_changes_whole_column():
     "A stack is one column, and a column has one width."
     window = create_strip(2)
     window.add_pane(create_pane(), vsplit=False)

@@ -1,7 +1,7 @@
 """
 Where the time of a frame goes, as a profile and not as a budget.
 
-`tests/measure_a_frame.py` counts what a frame costs and holds it to a
+`tests/measure_frame.py` counts what a frame costs and holds it to a
 number. That says *whether* something got dearer, and it cannot say
 *where*: it counts bytecode, and bytecode is not time. This is the
 other half. It runs a real server with real panes and samples the stack
@@ -77,7 +77,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
-from session import Connection, over_a_connection  # noqa: E402
+from session import Connection, over_connection  # noqa: E402
 from prompt_toolkit.application.current import set_app  # noqa: E402
 from prompt_toolkit.data_structures import Size  # noqa: E402
 from prompt_toolkit.input import create_pipe_input  # noqa: E402
@@ -346,7 +346,7 @@ PHASES = (
 )
 
 #: The `animated` phase runs a real program in the pane, the way
-#: `tests/what_a_busy_pane_costs.py` does, and profiles the live loop.
+#: `tests/what_busy_pane_costs.py` does, and profiles the live loop.
 #: It counts renders separately from frames sent, because a render that
 #: emits no packet is cost the frame counter never sees.
 ANIMATED = os.environ.get("PYMUX_PROFILE_ANIMATED", "")
@@ -375,11 +375,11 @@ async def _animated(command: str, seconds: float, out: Path) -> None:
 
     counts = {"renders": 0, "render_s": 0.0, "feed_s": 0.0, "fed": 0, "wire": 0}
 
-    def read_a_packet(packet) -> None:
+    def read_packet(packet) -> None:
         raw = packet if isinstance(packet, (bytes, bytearray)) else str(packet).encode()
         counts["wire"] += len(raw)
 
-    with over_a_connection(read_a_packet=read_a_packet) as session:
+    with over_connection(read_packet=read_packet) as session:
         pymux = session.pymux
         state, _size = await session.attach("only", Size(rows=ROWS, columns=COLUMNS))
 

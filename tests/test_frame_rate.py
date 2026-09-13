@@ -19,7 +19,7 @@ from prompt_toolkit.application.current import set_app
 from pymux.arrangement import DEFAULT_FRAME_RATE
 from pymux.main import Pymux
 from pymux.options import ALL_WINDOW_OPTIONS, SetOptionError
-from session import create_session, in_a_loop
+from session import create_session, in_loop
 
 PANE_COMMAND = "%s -c pass" % (sys.executable,)
 
@@ -35,17 +35,17 @@ def window(pymux):
     return pymux.arrangement.windows[0]
 
 
-def test_a_window_starts_at_thirty(pymux):
+def test_window_starts_at_thirty(pymux):
     assert DEFAULT_FRAME_RATE == 30
     assert window(pymux).frame_rate == 30
 
 
-def test_the_option_writes_the_active_window(pymux):
+def test_option_writes_active_window(pymux):
     ALL_WINDOW_OPTIONS["frame-rate"].set_value(pymux, "10")
     assert window(pymux).frame_rate == 10
 
 
-def test_the_command_writes_it(pymux):
+def test_command_writes_it(pymux):
     pymux.handle_command("set-window-option frame-rate 12")
     assert window(pymux).frame_rate == 12
 
@@ -55,17 +55,17 @@ def test_zero_means_as_fast_as_it_can(pymux):
     assert window(pymux).frame_rate == 0
 
 
-def test_a_number_that_is_not_one_is_refused(pymux):
+def test_number_that_is_not_one_is_refused(pymux):
     with pytest.raises(SetOptionError):
         ALL_WINDOW_OPTIONS["frame-rate"].set_value(pymux, "smooth")
 
 
-def test_a_negative_rate_is_refused(pymux):
+def test_negative_rate_is_refused(pymux):
     with pytest.raises(SetOptionError):
         ALL_WINDOW_OPTIONS["frame-rate"].set_value(pymux, "-1")
 
 
-def test_the_global_form_says_what_a_new_window_starts_with(pymux):
+def test_global_form_says_what_new_window_starts_with(pymux):
     """
     `-g` on a window option is the default for the next window, and
     changes none that is open. Lillecarl/pymux#199.
@@ -79,7 +79,7 @@ def test_the_global_form_says_what_a_new_window_starts_with(pymux):
     assert pymux.arrangement.windows[-1].frame_rate == 15
 
 
-def test_the_option_offers_the_rates_worth_naming(pymux):
+def test_option_offers_rates_worth_naming(pymux):
     assert "30" in ALL_WINDOW_OPTIONS["frame-rate"].get_all_values(pymux)
 
 
@@ -93,8 +93,8 @@ def test_the_option_offers_the_rates_worth_naming(pymux):
 # hangs with nothing to say. `what_leaks.py` names the same trap.
 
 
-@in_a_loop
-async def test_the_cap_reaches_the_application():
+@in_loop
+async def test_cap_reaches_application():
     """
     `min_redraw_interval` is prompt_toolkit's own knob, and it holds a
     redraw that arrives too soon rather than dropping it. So a cap
@@ -107,8 +107,8 @@ async def test_the_cap_reaches_the_application():
         assert state.app.min_redraw_interval == pytest.approx(0.1)
 
 
-@in_a_loop
-async def test_no_cap_leaves_the_application_uncapped():
+@in_loop
+async def test_no_cap_leaves_application_uncapped():
     async with create_session() as (mux, state):
         with set_app(state.app):
             mux.handle_command("set-window-option frame-rate 0")
@@ -116,8 +116,8 @@ async def test_no_cap_leaves_the_application_uncapped():
         assert state.app.min_redraw_interval is None
 
 
-@in_a_loop
-async def test_a_client_follows_the_window_it_looks_at():
+@in_loop
+async def test_client_follows_window_it_looks_at():
     "The whole reason it is a window option and not a session one."
     async with create_session() as (mux, state):
         with set_app(state.app):

@@ -496,7 +496,7 @@ def _modified_form_of(key: Keys, ctrl: bool, shift: bool) -> Keys | None:
     return None
 
 
-def _code_and_final_of_a_name() -> dict:
+def _code_and_final_of_name() -> dict:
     """
     The number and form of every key that has a name: `_base_of` read
     the other way.
@@ -514,7 +514,7 @@ def _code_and_final_of_a_name() -> dict:
     return named
 
 
-CODE_AND_FORM_OF = _code_and_final_of_a_name()
+CODE_AND_FORM_OF = _code_and_final_of_name()
 
 
 def _modifiers_written_into(name: str) -> Tuple[int, str]:

@@ -45,14 +45,14 @@ def test_one_key_holds_one_binding_however_it_is_written(pymux, first, second):
 
 @pytest.mark.parametrize("bound", CTRL_A)
 @pytest.mark.parametrize("unbound", CTRL_A)
-def test_a_key_unbinds_under_any_of_its_names(pymux, bound, unbound):
+def test_key_unbinds_under_any_of_its_names(pymux, bound, unbound):
     run(pymux, "bind-key -n %s new-window" % (bound,))
     run(pymux, "unbind-key -n %s" % (unbound,))
 
     assert bindings(pymux) == {}
 
 
-def test_the_prefix_tells_two_bindings_of_one_key_apart(pymux):
+def test_prefix_tells_two_bindings_of_one_key_apart(pymux):
     "The same key with and beside the prefix are two bindings."
     run(pymux, "bind-key -n c-a new-window")
     run(pymux, "bind-key c-a kill-pane")
@@ -60,12 +60,12 @@ def test_the_prefix_tells_two_bindings_of_one_key_apart(pymux):
     assert len(bindings(pymux)) == 2
 
 
-def test_unbinding_a_key_nobody_bound_says_nothing(pymux):
+def test_unbinding_key_nobody_bound_says_nothing(pymux):
     "It is not an error in tmux either."
     assert run(pymux, "unbind-key -n c-a") == []
 
 
-def test_unbinding_a_name_that_reads_as_no_key_is_an_error(pymux):
+def test_unbinding_name_that_reads_as_no_key_is_error(pymux):
     """
     It used to be silence, because the name went straight into a
     dictionary that did not hold it. `bind-key` has always said so.
@@ -76,7 +76,7 @@ def test_unbinding_a_name_that_reads_as_no_key_is_an_error(pymux):
     assert "M-Nope" in complaints[0]
 
 
-def test_a_caller_asks_for_a_binding_by_any_name_of_its_key(pymux):
+def test_caller_asks_for_binding_by_any_name_of_its_key(pymux):
     """
     `binding_on` is the one way in, so nothing outside has to know
     the shape of the dictionary key. `nix/home-manager-judge.py` did,
@@ -89,7 +89,7 @@ def test_a_caller_asks_for_a_binding_by_any_name_of_its_key(pymux):
     assert manager.binding_on("c-a", needs_prefix=True) is None
 
 
-def test_list_keys_shows_the_name_the_person_wrote(pymux):
+def test_list_keys_shows_name_person_wrote(pymux):
     """
     The binding is held under the key and not under the name, so the
     name has to be kept beside it. Otherwise the line a person reads

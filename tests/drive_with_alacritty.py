@@ -329,7 +329,7 @@ def wire(tmp: Path, name: str, directory: Path) -> bytes:
         )
         pane.write(recording, timeout=FENCE_TIMEOUT)
         if os.environ.get("PYMUX_ALACRITTY_TRACE"):
-            pane.trace_the_pane()
+            pane.trace_pane()
         return pane.seen
     finally:
         pane.close()

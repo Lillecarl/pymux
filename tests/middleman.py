@@ -254,7 +254,7 @@ class Pane:
         self.settle()
         return FENCE.sub(b"", self.terminal.since(mark))
 
-    def trace_the_pane(self) -> None:
+    def trace_pane(self) -> None:
         """
         Write the screen of the pane itself into the trace.
 

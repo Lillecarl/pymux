@@ -42,23 +42,23 @@ def schemes(tmp_path, monkeypatch):
     style_base16._schemes.cache_clear()
 
 
-def test_the_names_are_the_schemes(schemes):
+def test_names_are_schemes(schemes):
     assert style_base16.names() == ["test-dark", "test-light"]
 
 
-def test_a_name_nobody_holds_raises_keyerror(schemes):
+def test_name_nobody_holds_raises_keyerror(schemes):
     with pytest.raises(KeyError):
         style_base16.base16_roles("no-such-scheme")
 
 
-def test_a_collection_nobody_carries_holds_no_names(monkeypatch):
+def test_collection_nobody_carries_holds_no_names(monkeypatch):
     monkeypatch.delenv("PYMUX_BASE16_SCHEMES", raising=False)
     style_base16._schemes.cache_clear()
 
     assert style_base16.names() == []
 
 
-def test_the_roles_come_from_the_spec(schemes):
+def test_roles_come_from_spec(schemes):
     roles = style_base16.base16_roles("test-dark")
 
     assert roles["pane"] == "#1e1e2e"  # base00, the background.
@@ -71,7 +71,7 @@ def test_the_roles_come_from_the_spec(schemes):
     assert roles["accent"] == "#89b4fa"  # base0D, the blue.
 
 
-def test_the_letters_the_terminal_has_no_slot_for(schemes):
+def test_letters_terminal_has_no_slot_for(schemes):
     """
     base01, base02, base04 and base06 are the steps between the
     background and the text, and the chrome reads them as they are
@@ -86,7 +86,7 @@ def test_the_letters_the_terminal_has_no_slot_for(schemes):
     assert roles["soft"] == "#f5e0dc"  # base06, the light text.
 
 
-def test_the_palette_is_the_scheme_verbatim(schemes):
+def test_palette_is_scheme_verbatim(schemes):
     "In the order the spec's own template numbers a terminal's."
     roles = style_base16.base16_roles("test-dark")
 
@@ -98,7 +98,7 @@ def test_the_palette_is_the_scheme_verbatim(schemes):
     assert roles["color-15"] == "#b4befe"  # base07, the bright one.
 
 
-def test_roles_of_palette_reads_the_terminal_s_order():
+def test_roles_of_palette_reads_terminal_s_order():
     "The sixteen arrive in the order a terminal numbers them."
     sixteen = [
         "#000000", "#ff0000", "#00ff00", "#ffff00",

@@ -23,7 +23,7 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.document import Document
 from prompt_toolkit.layout.containers import ConditionalContainer, Float
 
-from session import create_session, in_a_loop
+from session import create_session, in_loop
 from pymux.commands import call_command_handler
 from pymux.key_spelling import PREFIX, KeyCompleter
 
@@ -96,8 +96,8 @@ def answer(pymux, state, text: str):
 # The box.
 
 
-@in_a_loop
-async def test_it_asks_in_a_box():
+@in_loop
+async def test_it_asks_in_box():
     """
     The completions are what need the room. A menu hanging off a bottom
     row stops at twelve, and in the box it takes the height of the box.
@@ -108,14 +108,14 @@ async def test_it_asks_in_a_box():
         assert is_drawn(state, float_of(state, "_key_box"))
 
 
-@in_a_loop
+@in_loop
 async def test_nothing_is_drawn_until_it_is_asked_for():
     async with create_session() as (pymux, state):
         assert not is_drawn(state, float_of(state, "_key_box"))
 
 
-@in_a_loop
-async def test_an_ordinary_prompt_still_uses_the_bottom_row():
+@in_loop
+async def test_ordinary_prompt_still_uses_bottom_row():
     """
     A question with no answers to offer has nothing to put in a box, so
     `command-prompt` is where it was. Only a question that knows what
@@ -131,8 +131,8 @@ async def test_an_ordinary_prompt_still_uses_the_bottom_row():
         assert is_drawn(state, bottom_prompt(state))
 
 
-@in_a_loop
-async def test_the_box_replaces_the_bottom_row_and_does_not_join_it():
+@in_loop
+async def test_box_replaces_bottom_row_and_does_not_join_it():
     "One question, asked once."
     async with create_session() as (pymux, state):
         compose(pymux, state)
@@ -140,8 +140,8 @@ async def test_the_box_replaces_the_bottom_row_and_does_not_join_it():
         assert not is_drawn(state, bottom_prompt(state))
 
 
-@in_a_loop
-async def test_the_menu_under_the_cursor_steps_aside_for_the_box():
+@in_loop
+async def test_menu_under_cursor_steps_aside_for_box():
     "The box holds a menu of its own. Two at once would be one too many."
     async with create_session() as (pymux, state):
         compose(pymux, state)
@@ -152,8 +152,8 @@ async def test_the_menu_under_the_cursor_steps_aside_for_the_box():
         assert not is_drawn(state, cursor_menu)
 
 
-@in_a_loop
-async def test_the_prompt_window_is_built_once():
+@in_loop
+async def test_prompt_window_is_built_once():
     """
     The layout focuses a control. A fresh one on every render is one it
     never focused, and then the cursor is drawn nowhere and a person
@@ -166,8 +166,8 @@ async def test_the_prompt_window_is_built_once():
         assert manager._key_box() is manager._key_box()
 
 
-@in_a_loop
-async def test_the_box_says_what_it_is_asking_for_once():
+@in_loop
+async def test_box_says_what_it_is_asking_for_once():
     """
     The title row says "Send key", so the line under it says nothing.
     Saying it twice is a row wasted and a thing to read.
@@ -199,16 +199,16 @@ async def test_the_box_says_what_it_is_asking_for_once():
         ("escape a", "\x1ba"),
     ],
 )
-@in_a_loop
-async def test_the_key_reaches_the_pane(written, expected):
+@in_loop
+async def test_key_reaches_pane(written, expected):
     async with create_session() as (pymux, state):
         compose(pymux, state)
 
         assert answer(pymux, state, written) == (expected, [])
 
 
-@in_a_loop
-async def test_it_closes_when_the_key_has_gone():
+@in_loop
+async def test_it_closes_when_key_has_gone():
     "The pane gets the focus back, and the box is not still open."
     async with create_session() as (pymux, state):
         compose(pymux, state)
@@ -219,8 +219,8 @@ async def test_it_closes_when_the_key_has_gone():
         assert not is_drawn(state, float_of(state, "_key_box"))
 
 
-@in_a_loop
-async def test_leaving_it_puts_the_completer_back():
+@in_loop
+async def test_leaving_it_puts_completer_back():
     """
     The completer says the prompt draws in a box, so one left behind
     would put the next question in one.
@@ -234,8 +234,8 @@ async def test_leaving_it_puts_the_completer_back():
         assert state.prompt_completer is None
 
 
-@in_a_loop
-async def test_a_name_no_key_has_goes_as_text():
+@in_loop
+async def test_name_no_key_has_goes_as_text():
     "`send-keys` sends what it cannot read as the text it is."
     async with create_session() as (pymux, state):
         compose(pymux, state)
@@ -243,15 +243,15 @@ async def test_a_name_no_key_has_goes_as_text():
         assert answer(pymux, state, "notakey") == ("notakey", [])
 
 
-@in_a_loop
-async def test_the_message_can_be_changed():
+@in_loop
+async def test_message_can_be_changed():
     async with create_session() as (pymux, state):
         compose(pymux, state, "-p", "Which key")
 
         assert state.prompt_text == "Which key"
 
 
-@in_a_loop
+@in_loop
 async def test_it_can_start_with_something_written():
     async with create_session() as (pymux, state):
         compose(pymux, state, "-I", "ctrl+")
@@ -263,8 +263,8 @@ async def test_it_can_start_with_something_written():
 # What it offers.
 
 
-@in_a_loop
-async def test_it_offers_the_keys_a_keyboard_leaves_out():
+@in_loop
+async def test_it_offers_keys_keyboard_leaves_out():
     async with create_session() as (pymux, state):
         compose(pymux, state)
 
@@ -278,7 +278,7 @@ async def test_it_offers_the_keys_a_keyboard_leaves_out():
         assert offered == ["home"]
 
 
-def test_the_box_does_not_offer_the_prefix():
+def test_box_does_not_offer_prefix():
     """
     The prefix is a step of the grammar, so a box composing a binding
     wants it. This box sends a key to a pane, and the prefix is the one

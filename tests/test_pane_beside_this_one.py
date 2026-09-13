@@ -65,14 +65,14 @@ def create_row(how_many):
 # A row of panes.
 
 
-def test_the_middle_of_a_row_has_a_pane_on_each_side():
+def test_middle_of_row_has_pane_on_each_side():
     window, panes = create_row(3)
 
     assert beside(window, panes[1], Side.LEFT) is panes[0]
     assert beside(window, panes[1], Side.RIGHT) is panes[2]
 
 
-def test_the_ends_of_a_row_have_one_side_each():
+def test_ends_of_row_have_one_side_each():
     window, panes = create_row(3)
 
     assert beside(window, panes[0], Side.LEFT) is None
@@ -82,14 +82,14 @@ def test_the_ends_of_a_row_have_one_side_each():
     assert beside(window, panes[2], Side.RIGHT) is None
 
 
-def test_a_lone_pane_has_neither():
+def test_lone_pane_has_neither():
     window, panes = create_row(1)
 
     assert beside(window, panes[0], Side.LEFT) is None
     assert beside(window, panes[0], Side.RIGHT) is None
 
 
-def test_a_pane_that_is_the_whole_window_has_neither():
+def test_pane_that_is_whole_window_has_neither():
     "A window with no split at all, which is what a new one is."
     window = Window()
     window.add_pane(create_pane())
@@ -102,7 +102,7 @@ def test_a_pane_that_is_the_whole_window_has_neither():
 # A column that is a stack of panes, which is what a niri column is.
 
 
-def test_a_pane_in_a_stack_takes_the_stack_s_neighbours():
+def test_pane_in_stack_takes_stack_s_neighbours():
     """
     The panes of a stack sit above one another, so none of them is to
     the left of another. The pane beside the stack runs the whole
@@ -116,7 +116,7 @@ def test_a_pane_in_a_stack_takes_the_stack_s_neighbours():
         assert beside(window, pane, Side.RIGHT) is right
 
 
-def test_a_stack_beside_us_is_named_by_the_pane_sharing_most_of_our_edge():
+def test_stack_beside_us_is_named_by_pane_sharing_most_of_our_edge():
     """
     A whole stack is to our left, and a bar names one pane. The one it
     names is the one our own edge runs along for longest.
@@ -134,7 +134,7 @@ def test_a_stack_beside_us_is_named_by_the_pane_sharing_most_of_our_edge():
     assert beside(window, alone, Side.LEFT) is top
 
 
-def test_the_pane_beside_us_follows_the_edge_we_share():
+def test_pane_beside_us_follows_edge_we_share():
     "The other half of the same rule, said with a stack that is uneven."
     top, bottom, alone = create_pane(), create_pane(), create_pane()
     window = create_window(VSplit([HSplit([top, bottom]), alone]))
@@ -148,7 +148,7 @@ def test_the_pane_beside_us_follows_the_edge_we_share():
 # A neighbour that is itself a row.
 
 
-def test_a_row_beside_us_gives_the_pane_that_touches_us():
+def test_row_beside_us_gives_pane_that_touches_us():
     """
     The pane to name is the one against our own edge: the rightmost of
     a column on our left, and the leftmost of a column on our right.
@@ -167,7 +167,7 @@ def test_a_row_beside_us_gives_the_pane_that_touches_us():
 # The way a person reaches these shapes.
 
 
-def test_splitting_a_strip_gives_each_column_its_neighbours():
+def test_splitting_strip_gives_each_column_its_neighbours():
     "What `split-window -h` builds, three times over."
     window = Window()
     opened = [create_pane()]

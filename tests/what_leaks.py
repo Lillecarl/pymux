@@ -218,7 +218,7 @@ ROUTE = os.environ.get("PYMUX_LEAKS_ROUTE", "")
 def draw(pymux, state, size) -> None:
     "One frame of one client, the way its renderer draws one."
     with set_app(state.app):
-        state.layout_manager.before_a_frame()
+        state.layout_manager.before_frame()
         screen = Screen()
         state.app.layout.container.write_to_screen(
             screen,

@@ -12,11 +12,11 @@ import asyncio
 import pytest
 from prompt_toolkit.application.current import set_app
 
-from session import create_session, in_a_loop
+from session import create_session, in_loop
 
 
-@in_a_loop
-async def test_run_shell_shows_what_the_command_said():
+@in_loop
+async def test_run_shell_shows_what_command_said():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("run-shell echo hello-from-the-shell")
@@ -30,8 +30,8 @@ async def test_run_shell_shows_what_the_command_said():
             pytest.fail("the output never arrived")
 
 
-@in_a_loop
-async def test_run_shell_from_the_command_line_answers_on_it():
+@in_loop
+async def test_run_shell_from_command_line_answers_on_it():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.command_output = []
@@ -41,8 +41,8 @@ async def test_run_shell_from_the_command_line_answers_on_it():
         pymux.command_output = None
 
 
-@in_a_loop
-async def test_if_shell_runs_the_then_command_on_zero():
+@in_loop
+async def test_if_shell_runs_then_command_on_zero():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("if-shell true 'display yes' 'display no'")
@@ -50,8 +50,8 @@ async def test_if_shell_runs_the_then_command_on_zero():
         assert state.message == "yes"
 
 
-@in_a_loop
-async def test_if_shell_runs_the_else_command_otherwise():
+@in_loop
+async def test_if_shell_runs_else_command_otherwise():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("if-shell false 'display yes' 'display no'")
@@ -59,8 +59,8 @@ async def test_if_shell_runs_the_else_command_otherwise():
         assert state.message == "no"
 
 
-@in_a_loop
-async def test_if_shell_takes_a_format_for_a_question():
+@in_loop
+async def test_if_shell_takes_format_for_question():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("if-shell -F 'i-am-a-format' 'display format-said-yes' 'display no'")

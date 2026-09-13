@@ -30,11 +30,11 @@ from pymux.main import Pymux
         ("60%", 45, 27),
     ],
 )
-def test_the_size_of_an_overlay(given, available, expected):
+def test_size_of_overlay(given, available, expected):
     assert overlay_size(given, available) == expected
 
 
-def test_the_default_is_a_share_of_the_screen():
+def test_default_is_share_of_screen():
     assert DEFAULT_OVERLAY_SIZE.endswith("%")
 
 
@@ -42,12 +42,12 @@ def test_the_default_is_a_share_of_the_screen():
 # Opening and closing it.
 
 
-def test_a_session_starts_without_an_overlay():
+def test_session_starts_without_overlay():
     pymux = Pymux()
     assert pymux.overlay_pane is None
 
 
-def test_opening_an_overlay_starts_a_pane():
+def test_opening_overlay_starts_pane():
     pymux = Pymux()
     pane = pymux.display_overlay(command="%s -c pass" % _python(), title="a title")
     try:
@@ -59,7 +59,7 @@ def test_opening_an_overlay_starts_a_pane():
         pymux.close_overlay()
 
 
-def test_the_title_falls_back_to_the_command():
+def test_title_falls_back_to_command():
     pymux = Pymux()
     command = "%s -c pass" % _python()
     pymux.display_overlay(command=command)
@@ -69,7 +69,7 @@ def test_the_title_falls_back_to_the_command():
         pymux.close_overlay()
 
 
-def test_a_second_overlay_replaces_the_first():
+def test_second_overlay_replaces_first():
     pymux = Pymux()
     first = pymux.display_overlay(command="%s -c pass" % _python())
     second = pymux.display_overlay(command="%s -c pass" % _python())
@@ -80,7 +80,7 @@ def test_a_second_overlay_replaces_the_first():
         pymux.close_overlay()
 
 
-def test_closing_an_overlay_gives_the_keyboard_back():
+def test_closing_overlay_gives_keyboard_back():
     pymux = Pymux()
     pymux.display_overlay(command="%s -c pass" % _python())
     pymux.close_overlay()
@@ -91,7 +91,7 @@ def test_closing_when_there_is_none_is_fine():
     Pymux().close_overlay()  # Does not raise.
 
 
-def test_every_client_looks_at_the_overlay():
+def test_every_client_looks_at_overlay():
     "The overlay belongs to the session, so it has the focus for all."
 
     class FakeClientState:

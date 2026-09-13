@@ -41,30 +41,30 @@ def round_trip(width, height, data):
     return result
 
 
-def test_the_sequence_is_a_dcs_with_transparent_background():
+def test_sequence_is_dcs_with_transparent_background():
     sequence = encode_sixel(2, 6, checkerboard(2, 6))
     # "P2 = 1" keeps the pixels that are not drawn clear.
     assert sequence.startswith('\x1bP0;1;0q"1;1;2;6')
 
 
-def test_the_raster_attributes_carry_the_size():
+def test_raster_attributes_carry_size():
     sequence = encode_sixel(7, 13, checkerboard(7, 13))
     assert '"1;1;7;13' in sequence
 
 
-def test_a_two_colour_image_round_trips_exactly():
+def test_two_colour_image_round_trips_exactly():
     width, height = 4, 8
     original = checkerboard(width, height)
     assert round_trip(width, height, original) == (width, height, original)
 
 
-def test_a_tall_image_round_trips_over_several_bands():
+def test_tall_image_round_trips_over_several_bands():
     width, height = 3, 20
     original = checkerboard(width, height)
     assert round_trip(width, height, original) == (width, height, original)
 
 
-def test_a_single_pixel_round_trips():
+def test_single_pixel_round_trips():
     original = rgba([(1, 2, 3, 255)])
     got_width, got_height, data = round_trip(1, 1, original)
     assert (got_width, got_height) == (1, 1)
@@ -81,21 +81,21 @@ def test_transparent_pixels_are_not_drawn():
     assert tuple(data[8:12]) == (255, 0, 0, 255)
 
 
-def test_a_fully_transparent_image_has_nothing_to_draw():
+def test_fully_transparent_image_has_nothing_to_draw():
     assert encode_sixel(2, 2, rgba([(1, 2, 3, 0)] * 4)) is None
 
 
-def test_a_long_run_uses_the_repeat_introducer():
+def test_long_run_uses_repeat_introducer():
     sequence = encode_sixel(40, 6, rgba([(255, 0, 0, 255)] * 240))
     assert "!40" in sequence
 
 
-def test_a_short_run_is_written_out():
+def test_short_run_is_written_out():
     sequence = encode_sixel(2, 6, rgba([(255, 0, 0, 255)] * 12))
     assert "!" not in sequence
 
 
-def test_every_colour_gets_a_palette_entry():
+def test_every_colour_gets_palette_entry():
     colors = [(0, 0, 0, 255), (255, 0, 0, 255), (0, 255, 0, 255), (0, 0, 255, 255)]
     sequence = encode_sixel(4, 1, rgba(colors))
     definitions = re.findall(r"#(\d+);2;(\d+);(\d+);(\d+)", sequence)
@@ -104,7 +104,7 @@ def test_every_colour_gets_a_palette_entry():
     assert ("100", "0", "0") in [tuple(d[1:]) for d in definitions]
 
 
-def test_many_colours_are_reduced_to_the_palette_size():
+def test_many_colours_are_reduced_to_palette_size():
     # A gradient with far more colours than sixel can hold.
     pixels = [
         (x * 4 % 256, y * 4 % 256, (x + y) * 3 % 256, 255)
@@ -124,7 +124,7 @@ def test_many_colours_are_reduced_to_the_palette_size():
     assert worst <= 64
 
 
-def test_a_small_palette_can_be_asked_for():
+def test_small_palette_can_be_asked_for():
     pixels = [(x * 8 % 256, 0, 0, 255) for x in range(32)]
     sequence = encode_sixel(32, 1, rgba(pixels), max_colors=4)
     assert len(re.findall(r"#(\d+);2;", sequence)) <= 4
@@ -150,7 +150,7 @@ def test_rgba_data_passes_through():
     assert to_rgba(32, 2, 2, data) == data
 
 
-def test_rgb_data_gets_an_alpha_channel():
+def test_rgb_data_gets_alpha_channel():
     data = bytes([1, 2, 3, 4, 5, 6])
     assert to_rgba(24, 2, 1, data) == bytes([1, 2, 3, 255, 4, 5, 6, 255])
 
@@ -160,7 +160,7 @@ def test_short_data_has_no_pixels():
     assert to_rgba(32, 2, 2, b"\x01\x02") is None
 
 
-def test_an_unknown_format_has_no_pixels():
+def test_unknown_format_has_no_pixels():
     assert to_rgba(7, 1, 1, b"\x00" * 4) is None
 
 
@@ -201,12 +201,12 @@ def _png(width, height, pixels):
 # Scaling.
 
 
-def test_the_same_size_is_not_copied():
+def test_same_size_is_not_copied():
     data = checkerboard(2, 2)
     assert scale_rgba(data, 2, 2, 2, 2) is data
 
 
-def test_growing_repeats_the_pixels():
+def test_growing_repeats_pixels():
     data = rgba([(1, 0, 0, 255), (2, 0, 0, 255)])
     grown = scale_rgba(data, 2, 1, 4, 1)
     assert [grown[i * 4] for i in range(4)] == [1, 1, 2, 2]
@@ -226,7 +226,7 @@ def test_scaling_works_in_both_directions():
     assert tuple(grown[0:4]) == (255, 0, 0, 255)
 
 
-def test_a_scaled_image_still_encodes():
+def test_scaled_image_still_encodes():
     data = checkerboard(4, 4)
     grown = scale_rgba(data, 4, 4, 8, 12)
     width, height, _pixels = round_trip(8, 12, grown)

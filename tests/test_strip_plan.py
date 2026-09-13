@@ -7,10 +7,9 @@ wider than the screen, so the screen cannot answer "which pane is
 beside this one". Lillecarl/pymux#217.
 
 This file judges the plan on its own, in cells. Two others hold it to
-something outside itself: `test_the_plane.py` holds every plan to the
-promises every layout makes, and
-`test_the_plan_matches_the_frame.py` holds this plan against the frame
-prompt_toolkit actually draws.
+something outside itself: `test_plane.py` holds every plan to the
+promises every layout makes, and `test_plan_and_frame.py` holds this
+plan against the frame prompt_toolkit actually draws.
 """
 
 from hypothesis import given
@@ -72,7 +71,7 @@ def where(plan, pane):
 # The row.
 
 
-def test_a_column_starts_where_the_one_before_it_ends():
+def test_column_starts_where_one_before_it_ends():
     "And the border the column owns is the cell between them."
     window, panes = create_strip((1, 1, 1))
     plan = create_plan(window)
@@ -84,7 +83,7 @@ def test_a_column_starts_where_the_one_before_it_ends():
     assert third.x == second.right + BORDER_WIDTH
 
 
-def test_a_column_takes_its_share_of_the_window_less_its_border():
+def test_column_takes_its_share_of_window_less_its_border():
     """
     Half a window by default, which is niri's default and the reason
     two columns fit exactly and a third runs past the edge.
@@ -95,7 +94,7 @@ def test_a_column_takes_its_share_of_the_window_less_its_border():
     assert where(create_plan(window), panes[0]).width == 40 - BORDER_WIDTH
 
 
-def test_a_strip_of_three_runs_past_the_window():
+def test_strip_of_three_runs_past_window():
     "Which is the whole point of the mode. The plane is unbounded."
     window, _ = create_strip((1, 1, 1))
     plan = create_plan(window)
@@ -103,7 +102,7 @@ def test_a_strip_of_three_runs_past_the_window():
     assert plan.plane.width > SIZE.columns
 
 
-def test_every_pane_of_a_column_is_as_wide_as_the_column():
+def test_every_pane_of_column_is_as_wide_as_column():
     window, panes = create_strip((3,))
     plan = create_plan(window)
 
@@ -111,7 +110,7 @@ def test_every_pane_of_a_column_is_as_wide_as_the_column():
     assert len(widths) == 1
 
 
-def test_a_stack_divides_the_column_from_the_top_down():
+def test_stack_divides_column_from_top_down():
     window, panes = create_strip((3,))
     plan = create_plan(window)
 
@@ -122,7 +121,7 @@ def test_a_stack_divides_the_column_from_the_top_down():
     assert bottom.y == middle.bottom + Gaps().between_panes
 
 
-def test_the_bar_below_a_pane_costs_the_stack_a_row_each_time():
+def test_bar_below_pane_costs_stack_row_each_time():
     """
     Two rows between stacked panes when that bar is drawn: the lower
     pane hangs its title bar in one and the upper one hangs the bar
@@ -142,7 +141,7 @@ def test_the_bar_below_a_pane_costs_the_stack_a_row_each_time():
     assert where(roomy, panes[1]).bottom == where(tight, panes[1]).bottom
 
 
-def test_a_plan_of_a_strip_keeps_every_promise():
+def test_plan_of_strip_keeps_every_promise():
     window, _ = create_strip((1, 2, 3))
 
     every_promise_holds(create_plan(window))
@@ -152,7 +151,7 @@ def test_a_plan_of_a_strip_keeps_every_promise():
 # What is beside what.
 
 
-def test_the_column_on_the_left_is_the_pane_on_the_left():
+def test_column_on_left_is_pane_on_left():
     window, panes = create_strip((1, 1, 1))
     plan = create_plan(window)
 
@@ -161,14 +160,14 @@ def test_the_column_on_the_left_is_the_pane_on_the_left():
     assert beside.shown is panes[0]
 
 
-def test_nothing_is_beside_the_column_at_the_end_of_the_row():
+def test_nothing_is_beside_column_at_end_of_row():
     window, panes = create_strip((1, 1))
     plan = create_plan(window)
 
     assert plan.neighbour(plan.slot_of(panes[1]), Side.RIGHT) is None
 
 
-def test_a_pane_of_a_stack_has_the_pane_over_it_above_it():
+def test_pane_of_stack_has_pane_over_it_above_it():
     window, panes = create_strip((3,))
     plan = create_plan(window)
 
@@ -178,7 +177,7 @@ def test_a_pane_of_a_stack_has_the_pane_over_it_above_it():
     assert (above.shown, below.shown) == (panes[0], panes[2])
 
 
-def test_a_stack_does_not_reach_into_the_column_beside_it():
+def test_stack_does_not_reach_into_column_beside_it():
     "A column is its own stack: `above` and `below` stay inside it."
     window, panes = create_strip((1, 1))
     plan = create_plan(window)
@@ -188,7 +187,7 @@ def test_a_stack_does_not_reach_into_the_column_beside_it():
         assert plan.neighbour(plan.slot_of(pane), Side.BELOW) is None
 
 
-def test_the_pane_beside_a_stack_is_the_one_sharing_most_of_its_edge():
+def test_pane_beside_stack_is_one_sharing_most_of_its_edge():
     """
     **This is the answer the two older mechanisms disagreed about.**
     The tree named the top pane of the stack beside us, whatever its
@@ -218,7 +217,7 @@ def test_the_pane_beside_a_stack_is_the_one_sharing_most_of_its_edge():
 # The numbering.
 
 
-def test_a_strip_numbers_its_panes_the_way_a_person_reads_them():
+def test_strip_numbers_its_panes_way_person_reads_them():
     "Columns from the left, and a column's panes from the top."
     window, panes = create_strip((2, 2))
     plan = create_plan(window)
@@ -236,7 +235,7 @@ def lines_of(window, size=SIZE, gaps=Gaps()):
     return strip.chrome(strip.measure(size))
 
 
-def test_every_column_has_a_line_down_its_right():
+def test_every_column_has_line_down_its_right():
     "The border it owns, and paid for out of its own share."
     window, _ = create_strip((1, 1))
     down = [line for line in lines_of(window) if line.char == BORDER_VERTICAL]
@@ -245,7 +244,7 @@ def test_every_column_has_a_line_down_its_right():
     assert {line.rect.width for line in down} == {BORDER_WIDTH}
 
 
-def test_a_line_down_a_column_runs_the_whole_height():
+def test_line_down_column_runs_whole_height():
     """
     A column of stacked panes has one line beside it, not one for each
     pane: the panes stop at the gap between them and the line does
@@ -258,7 +257,7 @@ def test_a_line_down_a_column_runs_the_whole_height():
     assert (down[0].rect.y, down[0].rect.height) == (0, SIZE.rows)
 
 
-def test_a_stack_has_a_line_across_every_gap_in_it():
+def test_stack_has_line_across_every_gap_in_it():
     window, panes = create_strip((2,))
     plan = create_plan(window)
     across = [line for line in lines_of(window) if line.char == BORDER_HORIZONTAL]
@@ -268,7 +267,7 @@ def test_a_stack_has_a_line_across_every_gap_in_it():
     assert across[0].rect.height == Gaps().between_panes
 
 
-def test_the_line_across_a_stack_grows_with_the_gap():
+def test_line_across_stack_grows_with_gap():
     "Two rows when a pane draws a bar below it and the next one above."
     window, _ = create_strip((2,))
     across = [
@@ -280,7 +279,7 @@ def test_the_line_across_a_stack_grows_with_the_gap():
     assert across[0].rect.height == 2
 
 
-def test_a_row_of_lone_panes_has_no_line_across_it():
+def test_row_of_lone_panes_has_no_line_across_it():
     window, _ = create_strip((1, 1))
 
     assert not [line for line in lines_of(window) if line.char == BORDER_HORIZONTAL]
@@ -303,7 +302,7 @@ def looking_at(window, focus, offset=0, columns=SIZE.columns, size=SIZE):
     return strip.look_at(plan, view, focus).x
 
 
-def test_a_column_already_on_screen_moves_nothing():
+def test_column_already_on_screen_moves_nothing():
     """
     What makes moving the focus a round trip: walk right and back, and
     the strip is where it started. Lillecarl/pymux#207.
@@ -313,7 +312,7 @@ def test_a_column_already_on_screen_moves_nothing():
     assert looking_at(window, panes[1], offset=40) == 40
 
 
-def test_the_view_follows_the_focus_to_the_right():
+def test_view_follows_focus_to_right():
     window, panes = create_strip((1, 1, 1))
 
     # Three columns of forty cells, and a window eighty wide. The
@@ -321,13 +320,13 @@ def test_the_view_follows_the_focus_to_the_right():
     assert looking_at(window, panes[2], offset=0) == 40
 
 
-def test_the_view_follows_the_focus_back_to_the_left():
+def test_view_follows_focus_back_to_left():
     window, panes = create_strip((1, 1, 1))
 
     assert looking_at(window, panes[0], offset=40) == 0
 
 
-def test_a_column_owns_the_border_the_view_has_to_show():
+def test_column_owns_border_view_has_to_show():
     """
     A column is its panes and the border on its right, so the view
     goes one cell further than the pane needs. Without that the border
@@ -341,19 +340,19 @@ def test_a_column_owns_the_border_the_view_has_to_show():
     assert looking_at(window, panes[1], offset=0, columns=79) == 1
 
 
-def test_the_view_never_passes_the_end_of_the_row():
+def test_view_never_passes_end_of_row():
     window, panes = create_strip((1, 1))
 
     assert looking_at(window, panes[0], offset=99) == 0
 
 
-def test_the_view_never_starts_before_the_row():
+def test_view_never_starts_before_row():
     window, panes = create_strip((1, 1, 1))
 
     assert looking_at(window, panes[0], offset=-5) == 0
 
 
-def test_a_column_wider_than_the_view_shows_its_left_edge():
+def test_column_wider_than_view_shows_its_left_edge():
     """
     It cannot be shown whole, so one end is cut, and the left end is
     the one to keep.
@@ -377,7 +376,7 @@ def test_a_column_wider_than_the_view_shows_its_left_edge():
     assert looking_at(window, panes[1], offset=0, columns=40) == 40
 
 
-def test_a_column_that_fits_is_still_shown_whole():
+def test_column_that_fits_is_still_shown_whole():
     "The rule only changes for a column that cannot be shown whole."
     window, panes = create_strip((1, 1))
 
@@ -390,7 +389,7 @@ def test_a_column_that_fits_is_still_shown_whole():
     assert looking_at(window, panes[1], offset=0, columns=60) == 20
 
 
-def test_nothing_focused_leaves_the_view_where_it_is():
+def test_nothing_focused_leaves_view_where_it_is():
     "A command line or a dialog has the keyboard, and the view holds."
     window, _ = create_strip((1, 1, 1))
 
@@ -409,7 +408,7 @@ ANY_SIZE = st.builds(
 
 
 @given(ANY_SHAPE, ANY_SIZE, st.integers(min_value=1, max_value=2))
-def test_any_strip_makes_a_plan_that_keeps_every_promise(shape, size, between):
+def test_any_strip_makes_plan_that_keeps_every_promise(shape, size, between):
     "The promises of slice 1, cashed by the first layout that makes a plan."
     window, _ = create_strip(shape)
 
@@ -417,7 +416,7 @@ def test_any_strip_makes_a_plan_that_keeps_every_promise(shape, size, between):
 
 
 @given(ANY_SHAPE, ANY_SIZE)
-def test_the_four_keys_reach_every_pane_of_create_strip(shape, size):
+def test_four_keys_reach_every_pane_of_create_strip(shape, size):
     """
     A strip is not a tiling -- the borders between its columns are
     holes -- but it is joined up, so a person can always walk to every

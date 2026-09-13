@@ -56,7 +56,7 @@ def _names():
     return [os.path.basename(path) for path in list_socket_names()]
 
 
-def test_the_newest_server_comes_first(sockets):
+def test_newest_server_comes_first(sockets):
     sockets(["pymux.sock.someone.0", "pymux.sock.someone.1", "pymux.sock.someone.2"])
     assert _names() == [
         "pymux.sock.someone.2",
@@ -65,7 +65,7 @@ def test_the_newest_server_comes_first(sockets):
     ]
 
 
-def test_the_number_does_not_decide(sockets):
+def test_number_does_not_decide(sockets):
     "The oldest server can hold the highest number, after a restart."
     sockets(["pymux.sock.someone.7", "pymux.sock.someone.0"])
     assert _names()[0] == "pymux.sock.someone.0"

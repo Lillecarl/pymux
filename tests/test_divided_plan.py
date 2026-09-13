@@ -6,7 +6,7 @@ so this is the layout the other tests in this suite have been drawing
 all along. It answers with a `Plan` now, the way `Strip` does, and
 `PlanContainer` draws it. Lillecarl/pymux#217.
 
-This file judges the plan on its own, in cells. `test_the_plane.py`
+This file judges the plan on its own, in cells. `test_plane.py`
 holds it to the promises every layout makes, and the cell tests
 elsewhere in this suite hold what is drawn against what a person sees.
 """
@@ -71,7 +71,7 @@ def where(plan, pane):
 # Dividing the view.
 
 
-def test_two_panes_side_by_side_share_the_width():
+def test_two_panes_side_by_side_share_width():
     "And the cell between them is the border, which is nobody's."
     window, panes = create_window([True])
     left, right = (where(create_plan(window), pane) for pane in panes)
@@ -82,7 +82,7 @@ def test_two_panes_side_by_side_share_the_width():
     assert left.height == right.height == SIZE.rows
 
 
-def test_two_panes_stacked_share_the_height():
+def test_two_panes_stacked_share_height():
     window, panes = create_window([False])
     top, bottom = (where(create_plan(window), pane) for pane in panes)
 
@@ -91,7 +91,7 @@ def test_two_panes_stacked_share_the_height():
     assert top.width == bottom.width == SIZE.columns
 
 
-def test_the_tiling_fills_the_view_exactly():
+def test_tiling_fills_view_exactly():
     """
     Which is the whole difference from a strip: every cell of the view
     is a pane or a border, and nothing runs past the edge.
@@ -104,7 +104,7 @@ def test_the_tiling_fills_the_view_exactly():
     assert plan.plane.height == SIZE.rows
 
 
-def test_the_weights_say_who_gets_the_room():
+def test_weights_say_who_gets_room():
     "A weight is a share of the whole, and `resize-pane` writes them."
     window, panes = create_window([True])
     row = window.root[0]
@@ -119,7 +119,7 @@ def test_the_weights_say_who_gets_the_room():
     assert (left.width, right.width) == (59, 20)
 
 
-def test_a_bigger_gap_comes_out_of_the_panes():
+def test_bigger_gap_comes_out_of_panes():
     """
     The view is the same size, so the room for a bar is paid by them.
 
@@ -137,7 +137,7 @@ def test_a_bigger_gap_comes_out_of_the_panes():
     assert roomy.plane.height == tight.plane.height == SIZE.rows
 
 
-def test_the_same_window_measures_the_same_twice():
+def test_same_window_measures_same_twice():
     "Nothing here remembers a frame, so nothing drifts."
     window, panes = create_window([True, False, True])
 
@@ -155,7 +155,7 @@ def lines_of(window, size=SIZE, gaps=Gaps()):
     return layout.chrome(layout.measure(size))
 
 
-def test_a_border_fills_the_gap_between_two_panes():
+def test_border_fills_gap_between_two_panes():
     window, panes = create_window([True])
     plan = create_plan(window)
     (line,) = lines_of(window)
@@ -166,7 +166,7 @@ def test_a_border_fills_the_gap_between_two_panes():
     assert (line.rect.y, line.rect.height) == (0, SIZE.rows)
 
 
-def test_a_border_between_stacked_panes_runs_across_the_pane():
+def test_border_between_stacked_panes_runs_across_pane():
     window, panes = create_window([False])
     plan = create_plan(window)
     (line,) = lines_of(window)
@@ -177,7 +177,7 @@ def test_a_border_between_stacked_panes_runs_across_the_pane():
     assert (line.rect.x, line.rect.width) == (0, SIZE.columns)
 
 
-def test_a_border_stops_where_the_split_that_left_it_stops():
+def test_border_stops_where_split_that_left_it_stops():
     """
     A pane across the top, and two beside each other under it. The
     line between those two belongs to their own split, so it starts
@@ -199,7 +199,7 @@ def test_a_border_stops_where_the_split_that_left_it_stops():
     assert down[0].rect.y > 0
 
 
-def test_a_gap_holds_no_pane():
+def test_gap_holds_no_pane():
     "Every line runs where no rectangle is."
     window, _ = create_window([True, False, True])
     plan = create_plan(window)
@@ -213,7 +213,7 @@ def test_a_gap_holds_no_pane():
 # What it says about the view.
 
 
-def test_a_view_as_big_as_the_plane_never_moves():
+def test_view_as_big_as_plane_never_moves():
     """
     A tiling is measured to fit, so there is nothing to scroll to, and
     a view that has wandered comes back to the origin.
@@ -227,7 +227,7 @@ def test_a_view_as_big_as_the_plane_never_moves():
         assert layout.look_at(plan, view, pane) == Point(x=0, y=0)
 
 
-def test_a_view_smaller_than_the_plane_follows_the_focus():
+def test_view_smaller_than_plane_follows_focus():
     """
     `window-size largest` measures the plane for the biggest client,
     so a smaller one moves its view over it rather than being stuck at
@@ -238,17 +238,17 @@ def test_a_view_smaller_than_the_plane_follows_the_focus():
     layout = Divided(window)
     view = View(Point(x=0, y=0), Size(rows=SIZE.rows, columns=SIZE.columns // 4))
 
-    on_the_right = layout.look_at(plan, view, panes[1])
-    assert on_the_right.x == plan.rect_of(panes[1]).x
+    right = layout.look_at(plan, view, panes[1])
+    assert right.x == plan.rect_of(panes[1]).x
     # And it stays on the plane.
-    assert on_the_right.x <= plan.plane.right - view.size.columns
+    assert right.x <= plan.plane.right - view.size.columns
 
 
 # ----------------------------------------------------------------------
 # Numbering.
 
 
-def test_the_panes_are_numbered_the_way_a_person_reads_them():
+def test_panes_are_numbered_way_person_reads_them():
     """
     The walk takes each split's children in order, so the plan numbers
     the panes exactly as `Window.panes` lists them, which is what
@@ -264,7 +264,7 @@ def test_the_panes_are_numbered_the_way_a_person_reads_them():
 # A window too small for what is in it.
 
 
-def test_every_pane_keeps_a_cell_in_a_window_that_is_too_small():
+def test_every_pane_keeps_cell_in_window_that_is_too_small():
     """
     Six panes stacked in four rows. Each one keeps a row, so the
     tiling runs past the bottom of the view rather than giving a pane
@@ -281,7 +281,7 @@ def test_every_pane_keeps_a_cell_in_a_window_that_is_too_small():
     assert plan.plane.height > 4
 
 
-def test_a_deep_tree_in_a_tiny_window_lays_nothing_on_anything():
+def test_deep_tree_in_tiny_window_lays_nothing_on_anything():
     """
     The case that made `lay_out` answer with the room it took. A split
     that runs past its own rectangle used to start its next sibling
@@ -307,7 +307,7 @@ ANY_SIZE = st.builds(
 
 
 @given(ANY_TREE, ANY_FOCUS, ANY_SIZE, st.integers(min_value=1, max_value=2))
-def test_any_window_makes_a_plan_that_keeps_every_promise(tree, focus, size, between):
+def test_any_window_makes_plan_that_keeps_every_promise(tree, focus, size, between):
     "The promises of slice 1, cashed by the second layout that makes a plan."
     window, _ = create_window(tree, focus)
 
@@ -315,7 +315,7 @@ def test_any_window_makes_a_plan_that_keeps_every_promise(tree, focus, size, bet
 
 
 @given(ANY_TREE, ANY_FOCUS)
-def test_every_pane_of_a_tiling_is_reachable(tree, focus):
+def test_every_pane_of_tiling_is_reachable(tree, focus):
     """
     A person reaches every pane with the four direction keys.
 
@@ -329,7 +329,7 @@ def test_every_pane_of_a_tiling_is_reachable(tree, focus):
 
 
 @given(ANY_TREE, ANY_FOCUS)
-def test_a_tiling_that_fits_covers_the_view_and_no_more(tree, focus):
+def test_tiling_that_fits_covers_view_and_no_more(tree, focus):
     "The property that separates this layout from a strip."
     plan = create_plan(create_window(tree, focus)[0])
 

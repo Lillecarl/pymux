@@ -23,7 +23,7 @@ def index(target):
         return None
 
 
-def where_a_new_window_goes(pymux: "Pymux", args: argparse.Namespace):
+def where_new_window_goes(pymux: "Pymux", args: argparse.Namespace):
     """
     The index a new window takes, from the options it was given.
 
@@ -92,7 +92,7 @@ def new_window(pymux: "Pymux", args: argparse.Namespace) -> None:
         executable,
         start_directory=start_directory,
         name=name,
-        index=where_a_new_window_goes(pymux, args),
+        index=where_new_window_goes(pymux, args),
     )
 
     # **The one that is active, and not the last of the list.** A new

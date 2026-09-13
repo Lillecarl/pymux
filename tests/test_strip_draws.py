@@ -120,14 +120,14 @@ def dump(rows):
 CHROME = ["set-option pane-border-status on"]
 
 
-def test_a_pane_has_a_title_bar():
+def test_pane_has_title_bar():
     "What the strip has to keep. Every other layout draws this."
     rows = drawn(CHROME)
 
     assert rows[0].strip(), dump(rows)
 
 
-def test_a_strip_keeps_the_title_bar():
+def test_strip_keeps_title_bar():
     """
     The one a picture found missing. The title bar is a float one row
     above the pane, and a strip draws onto a screen whose first row is
@@ -138,7 +138,7 @@ def test_a_strip_keeps_the_title_bar():
     assert rows[0].strip(), dump(rows)
 
 
-def test_a_lone_column_takes_half_the_window_and_no_more():
+def test_lone_column_takes_half_window_and_no_more():
     """
     niri's own behaviour, and the reason a strip is not a layout: a
     column has the width it was given, and a strip of one leaves the
@@ -199,7 +199,7 @@ def columns_of(pymux, how_many):
     return window, opened
 
 
-def test_a_strip_records_where_it_drew_the_columns_it_drew():
+def test_strip_records_where_it_drew_columns_it_drew():
     """
     Where each column landed on the screen, which is what a mouse click
     has to reach.
@@ -239,7 +239,7 @@ def test_a_strip_records_where_it_drew_the_columns_it_drew():
         assert xs[-1] + where[-1].width <= COLUMNS, xs
 
 
-def test_moving_right_reaches_the_next_column():
+def test_moving_right_reaches_next_column():
     """
     `select-pane -R` steps one cell past the active pane's right edge
     and looks for the pane drawn there.
@@ -264,7 +264,7 @@ def test_moving_left_comes_back():
         assert window.active_pane is columns[0]
 
 
-def test_moving_right_reaches_a_column_that_is_off_the_screen():
+def test_moving_right_reaches_column_that_is_off_screen():
     """
     Three columns are wider than this screen, so the third one is past
     the right edge. It is drawn all the same, at a position the
@@ -281,7 +281,7 @@ def test_moving_right_reaches_a_column_that_is_off_the_screen():
         assert window.active_pane is columns[2]
 
 
-def test_the_next_pane_still_works_in_a_strip():
+def test_next_pane_still_works_in_strip():
     "`ctrl+b o`, which walks the panes rather than the geometry."
     with create_client(STRIP) as (pymux, draw):
         window, columns = columns_of(pymux, 2)

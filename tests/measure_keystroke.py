@@ -344,7 +344,7 @@ def write_budgets(counts):
     header = "\n".join(
         [
             "# What one keystroke costs pymux, in bytecode instructions.",
-            "# `tests/measure_a_keystroke.py` says what each stage covers",
+            "# `tests/measure_keystroke.py` says what each stage covers",
             "# and why the number is the same on every machine.",
             "#",
         ]
@@ -423,7 +423,7 @@ def main() -> int:
         print("\n--- past the budget ---")
         for line in over:
             print(line)
-        print("\n`tests/measure_a_keystroke.py` says how to record a new budget.")
+        print("\n`tests/measure_keystroke.py` says how to record a new budget.")
         return 1
 
     print("\nEvery stage is within %.1f%% of its budget." % (tolerance,))

@@ -10,11 +10,11 @@ and both buffers of every client share it.
 
 from prompt_toolkit.application.current import set_app
 
-from session import create_session, in_a_loop
+from session import create_session, in_loop
 
 
-@in_a_loop
-async def test_a_command_typed_at_the_prompt_is_remembered():
+@in_loop
+async def test_command_typed_at_prompt_is_remembered():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             state.command_buffer.text = "set-option status off"
@@ -25,8 +25,8 @@ async def test_a_command_typed_at_the_prompt_is_remembered():
         assert state.message.splitlines() == ["set-option status off"]
 
 
-@in_a_loop
-async def test_a_prompt_answer_is_remembered_too():
+@in_loop
+async def test_prompt_answer_is_remembered_too():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             state.prompt_buffer.text = "answer"
@@ -37,8 +37,8 @@ async def test_a_prompt_answer_is_remembered_too():
         assert state.message.splitlines() == ["answer"]
 
 
-@in_a_loop
-async def test_the_history_is_oldest_first_and_shared():
+@in_loop
+async def test_history_is_oldest_first_and_shared():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             state.prompt_buffer.text = "first"
@@ -51,7 +51,7 @@ async def test_the_history_is_oldest_first_and_shared():
         assert state.message.splitlines() == ["first", "second"]
 
 
-@in_a_loop
+@in_loop
 async def test_clear_prompt_history_empties_it():
     async with create_session() as (pymux, state):
         with set_app(state.app):

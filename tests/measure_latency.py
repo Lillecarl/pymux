@@ -83,7 +83,7 @@ from drive_with_pty import (  # noqa: E402
     Attached,
     Failed,
     Terminal,
-    on_a_pty,
+    on_pty,
 )
 
 #: How many keystrokes each path is measured over.
@@ -156,7 +156,7 @@ class Bare(Attached):
 
     def __init__(self, tmp, child, log):
         self.stderr_path = tmp / "bare-stderr.log"
-        self.master_fd, self.process, self.stderr = on_a_pty(
+        self.master_fd, self.process, self.stderr = on_pty(
             [sys.executable, str(child), str(log)],
             self.stderr_path,
             env={"LANG": "C.UTF-8"},

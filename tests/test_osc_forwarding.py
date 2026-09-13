@@ -39,11 +39,11 @@ def sequence(code, param):
         ("22", ""),  # Pop the shape.
     ],
 )
-def test_a_plain_payload_becomes_a_sequence(code, param):
+def test_plain_payload_becomes_sequence(code, param):
     assert build_osc(code, param) == sequence(code, param)
 
 
-def test_a_payload_with_an_escape_byte_is_dropped():
+def test_payload_with_escape_byte_is_dropped():
     "An escape ends the sequence early, and what follows runs as a command."
     assert build_osc("99", "i=1;done" + osc("0", "owned", end=Terminator.BEL)) is None
     assert build_osc("22", "pointer" + csi(escape.ED, 2)) is None
@@ -60,16 +60,16 @@ def test_a_payload_with_an_escape_byte_is_dropped():
         "a\x90b",
     ],
 )
-def test_a_payload_with_a_control_character_is_dropped(param):
+def test_payload_with_control_character_is_dropped(param):
     assert build_osc("99", param) is None
 
 
-def test_a_payload_with_text_of_a_user_survives():
+def test_payload_with_text_of_user_survives():
     "Only the control characters go. Text of any language stays."
     assert build_osc("99", "i=1;Bygget är klart ✅") is not None
 
 
-def test_a_payload_that_is_too_long_is_dropped():
+def test_payload_that_is_too_long_is_dropped():
     "A broken half of a base64 payload writes a broken clipboard."
     data = "a" * (MAX_OSC_LENGTH - 2)
     assert build_osc("52", "c;" + data) is not None
@@ -87,11 +87,11 @@ def test_a_payload_that_is_too_long_is_dropped():
         "",
     ],
 )
-def test_a_clipboard_payload_that_is_not_base64_is_dropped(param):
+def test_clipboard_payload_that_is_not_base64_is_dropped(param):
     assert build_osc("52", param) is None
 
 
-def test_the_same_payload_is_fine_for_a_notification():
+def test_same_payload_is_fine_for_notification():
     "Only OSC 52 reaches the clipboard, so only it is read that strictly."
     assert build_osc("99", "c;not base64!") is not None
 
@@ -159,14 +159,14 @@ def make_pymux(focused=(), pane=None):
     return pymux, connections
 
 
-def test_a_clipboard_write_reaches_every_client():
+def test_clipboard_write_reaches_every_client():
     pymux, connections = make_pymux()
     pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
     for connection in connections:
         assert connection.written == [sequence("52", "c;aGVsbG8=")]
 
 
-def test_a_notification_reaches_every_client():
+def test_notification_reaches_every_client():
     "A pane out of sight is exactly what a notification is for."
     pymux, connections = make_pymux()
     pymux.forward_osc(FakePane(), "99", "i=mine;done")
@@ -176,13 +176,13 @@ def test_a_notification_reaches_every_client():
         assert connection.written == [sequence("99", "i=1;done")]
 
 
-def test_a_notification_without_an_identifier_is_not_touched():
+def test_notification_without_identifier_is_not_touched():
     pymux, connections = make_pymux()
     pymux.forward_osc(FakePane(), "99", "d=0;half a message")
     assert connections[0].written == [sequence("99", "d=0;half a message")]
 
 
-def test_the_answer_finds_the_pane_that_asked():
+def test_answer_finds_pane_that_asked():
     pymux, _connections = make_pymux()
     pymux.forward_osc(FakePane(pane_id=7), "99", "i=mine:a=report;done")
     answer = pymux.notifications.incoming("i=1")
@@ -197,7 +197,7 @@ def test_the_answer_finds_the_pane_that_asked():
 # that it looks at.
 
 
-def test_the_shape_reaches_the_client_that_looks_at_the_pane():
+def test_shape_reaches_client_that_looks_at_pane():
     pane = FakePane(pointer_shape="pointer")
     pymux, connections = make_pymux(focused=[1], pane=pane)
     pymux.forward_osc(pane, "22", "pointer")
@@ -205,7 +205,7 @@ def test_the_shape_reaches_the_client_that_looks_at_the_pane():
     assert connections[1].written == [sequence("22", "pointer")]
 
 
-def test_the_shape_goes_away_when_the_focus_leaves_the_pane():
+def test_shape_goes_away_when_focus_leaves_pane():
     pane = FakePane(pointer_shape="pointer")
     pymux, connections = make_pymux(focused=[0], pane=pane)
     pymux.sync_pointer_shape()
@@ -217,7 +217,7 @@ def test_the_shape_goes_away_when_the_focus_leaves_the_pane():
     assert connections[0].written[-1] == sequence("22", "")
 
 
-def test_the_same_shape_goes_out_once():
+def test_same_shape_goes_out_once():
     pane = FakePane(pointer_shape="pointer")
     pymux, connections = make_pymux(focused=[0], pane=pane)
     pymux.sync_pointer_shape()
@@ -225,7 +225,7 @@ def test_the_same_shape_goes_out_once():
     assert connections[0].written == [sequence("22", "pointer")]
 
 
-def test_a_client_that_never_saw_a_shape_is_not_told_to_reset_it():
+def test_client_that_never_saw_shape_is_not_told_to_reset_it():
     pymux, connections = make_pymux()
     pymux.sync_pointer_shape()
     assert connections[0].written == []
@@ -241,7 +241,7 @@ def test_no_pane_asks_for_no_shape():
     assert pymux.pointer_shape_of(FakePane()) == ""
 
 
-def test_an_unsafe_payload_reaches_nobody():
+def test_unsafe_payload_reaches_nobody():
     pymux, connections = make_pymux()
     pymux.forward_osc(
         FakePane(), "99", ("i=1;done" + osc("0", "owned", end=Terminator.BEL))
@@ -250,7 +250,7 @@ def test_an_unsafe_payload_reaches_nobody():
         assert connection.written == []
 
 
-def test_the_clipboard_option_stops_the_clipboard_only():
+def test_clipboard_option_stops_clipboard_only():
     pymux, connections = make_pymux()
     pymux.enable_clipboard = False
 
@@ -261,11 +261,11 @@ def test_the_clipboard_option_stops_the_clipboard_only():
     assert connections[0].written == [sequence("99", "i=1;done")]
 
 
-def test_the_option_is_on_by_default():
+def test_option_is_on_by_default():
     assert Pymux().enable_clipboard is True
 
 
-def test_a_broken_connection_does_not_stop_the_pane():
+def test_broken_connection_does_not_stop_pane():
     "This runs on the read path of a pane. It may not raise."
 
     class BrokenConnection(FakeConnection):
@@ -277,7 +277,7 @@ def test_a_broken_connection_does_not_stop_the_pane():
     pymux.forward_osc(FakePane(), "99", "i=1;done")  # Does not raise.
 
 
-def test_a_client_without_focus_information_gets_no_pointer_shape():
+def test_client_without_focus_information_gets_no_pointer_shape():
     "`_has_focus` needs a running application, and says False without one."
     pymux = Pymux()
     assert pymux._has_focus(FakeClientState(), FakePane()) is False
@@ -287,19 +287,19 @@ def test_a_client_without_focus_information_gets_no_pointer_shape():
 # The paste buffer of the session.
 
 
-def test_what_a_pane_copies_reaches_the_paste_buffer():
+def test_what_pane_copies_reaches_paste_buffer():
     pymux, _connections = make_pymux()
     pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
     assert pymux.clipboard.get_data().text == "hello"
 
 
-def test_text_of_a_user_survives_the_way_back():
+def test_text_of_user_survives_way_back():
     pymux, _connections = make_pymux()
     pymux.forward_osc(FakePane(), "52", "c;QnlnZ2V0IMOkciBrbGFydA==")
     assert pymux.clipboard.get_data().text == "Bygget är klart"
 
 
-def test_a_selection_that_is_cleared_keeps_the_buffer():
+def test_selection_that_is_cleared_keeps_buffer():
     "An empty payload clears a selection of the user, not the buffer."
     pymux, _connections = make_pymux()
     pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
@@ -307,21 +307,21 @@ def test_a_selection_that_is_cleared_keeps_the_buffer():
     assert pymux.clipboard.get_data().text == "hello"
 
 
-def test_a_payload_that_is_not_base64_reaches_nothing():
+def test_payload_that_is_not_base64_reaches_nothing():
     pymux, connections = make_pymux()
     pymux.forward_osc(FakePane(), "52", "c;not base64!")
     assert pymux.clipboard.get_data().text == ""
     assert connections[0].written == []
 
 
-def test_the_clipboard_option_stops_the_paste_buffer_as_well():
+def test_clipboard_option_stops_paste_buffer_as_well():
     pymux, _connections = make_pymux()
     pymux.enable_clipboard = False
     pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
     assert pymux.clipboard.get_data().text == ""
 
 
-def test_the_buffer_is_one_for_the_whole_session():
+def test_buffer_is_one_for_whole_session():
     "Two clients share it, so a copy in one pastes in the other."
     pymux = Pymux()
     assert pymux.clipboard is not None

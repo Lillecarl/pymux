@@ -28,7 +28,7 @@ import pytest
 from pymux.client.ssh import SshClient, is_ssh_url, ssh_target
 from pymux.main import Pymux
 
-from session import in_a_loop
+from session import in_loop
 
 PANE_COMMAND = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
 
@@ -37,7 +37,7 @@ PANE_COMMAND = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
 # The address.
 
 
-def test_it_reads_a_host_and_a_path():
+def test_it_reads_host_and_path():
     target = ssh_target("ssh://dynhetz/tmp/pymux.sock.carl.0")
 
     assert target.host == "dynhetz"
@@ -46,14 +46,14 @@ def test_it_reads_a_host_and_a_path():
     assert target.port is None
 
 
-def test_it_reads_a_user_and_a_port():
+def test_it_reads_user_and_port():
     target = ssh_target("ssh://carl@dynhetz:2222/tmp/sock")
 
     assert (target.username, target.host, target.port) == ("carl", "dynhetz", 2222)
     assert target.path == "/tmp/sock"
 
 
-def test_a_path_with_more_than_one_part_survives():
+def test_path_with_more_than_one_part_survives():
     target = ssh_target("ssh://host/run/user/1000/pymux/sock")
     assert target.path == "/run/user/1000/pymux/sock"
 
@@ -68,41 +68,41 @@ def test_no_path_is_answered_after_connecting():
     assert ssh_target("ssh://carl@dynhetz/").path is None
 
 
-def test_a_named_path_still_wins():
+def test_named_path_still_wins():
     assert ssh_target("ssh://carl@dynhetz/run/sock").path == "/run/sock"
 
 
-def test_the_fallback_is_the_first_server_of_the_user():
+def test_fallback_is_first_server_of_user():
     "For a machine whose sshd offers no SFTP to list with."
     from pymux.client.ssh import default_socket
 
     assert default_socket("carl") == "/tmp/pymux.sock.carl.0"
 
 
-def test_an_address_with_no_machine_is_refused():
+def test_address_with_no_machine_is_refused():
     with pytest.raises(ValueError):
         ssh_target("ssh:///tmp/sock")
 
 
-def test_a_path_is_not_an_address():
+def test_path_is_not_address():
     with pytest.raises(ValueError):
         ssh_target("/tmp/pymux.sock.carl.0")
 
 
-def test_what_counts_as_an_address():
+def test_what_counts_as_address():
     assert is_ssh_url("ssh://host/tmp/sock")
     assert not is_ssh_url("/tmp/pymux.sock.carl.0")
     assert not is_ssh_url("")
     assert not is_ssh_url(None)
 
 
-def test_the_client_factory_picks_this_one():
+def test_client_factory_picks_this_one():
     from pymux.client import create_client
 
     assert isinstance(create_client("ssh://host/tmp/sock"), SshClient)
 
 
-def test_a_machine_is_never_somewhere_to_listen():
+def test_machine_is_never_somewhere_to_listen():
     """
     `_wait_for_server` looks for a file, and a machine is not one. It
     used to say "no server running" forever, which stopped
@@ -169,8 +169,8 @@ async def create_ssh_server(where: Path, socket_path: str):
     return server, port, str(client_key)
 
 
-@in_a_loop
-async def test_a_command_reaches_a_server_over_ssh(tmp_path=None):
+@in_loop
+async def test_command_reaches_server_over_ssh(tmp_path=None):
     """
     The whole path: an address, a key exchange, a channel to the unix
     socket, and the packets of a command coming back.
@@ -213,8 +213,8 @@ async def test_a_command_reaches_a_server_over_ssh(tmp_path=None):
     assert "".join(said).strip() == pymux.session_name, said
 
 
-@in_a_loop
-async def test_an_address_with_no_path_finds_the_socket_itself():
+@in_loop
+async def test_address_with_no_path_finds_socket_itself():
     """
     `ssh://host` alone, and nothing runs on the far side to answer it.
 

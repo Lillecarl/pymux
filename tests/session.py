@@ -16,11 +16,11 @@ makes for it are all the real ones, and a detach is what a person
 walking away is -- the client end closes and the server tears its side
 down. Lillecarl/pymux#226.
 
-`what_leaks.py` drives both and asks what survived. `count_the_turns.py`
+`what_leaks.py` drives both and asks what survived. `count_turns.py`
 drives the connection route and counts what the event loop did.
 
 `create_session` is the plain session on top of the in-process route:
-one client, one window, the shape most tests want. `in_a_loop` runs a
+one client, one window, the shape most tests want. `in_loop` runs a
 coroutine test while pymux carries no anyio.
 """
 
@@ -165,7 +165,7 @@ async def once(question, seconds: float, complaint: str):
     raise SystemExit(complaint)
 
 
-def in_a_loop(test):
+def in_loop(test):
     """
     Run this test in an event loop of its own.
 
@@ -276,7 +276,7 @@ async def create_session(pymux=None, window=NOTHING):
 
 
 @contextmanager
-def over_a_connection(pymux=None, read_a_packet=None):
+def over_connection(pymux=None, read_packet=None):
     """
     A session whose clients attach the way a real one does.
 
@@ -303,7 +303,7 @@ def over_a_connection(pymux=None, read_a_packet=None):
 
     **Somebody has to take the packets off the queue.** The queue of a
     memory connection has no limit, so a client that never reads is a
-    growing list of every frame the server ever drew. `read_a_packet`
+    growing list of every frame the server ever drew. `read_packet`
     is called with each one, from the task that takes it; nobody has to
     draw them, and a caller that wants to know when a frame arrived
     reads the moment there. It defaults to dropping them.
@@ -331,8 +331,8 @@ def over_a_connection(pymux=None, read_a_packet=None):
                 packet = await end.read()
             except Exception:
                 return
-            if read_a_packet is not None:
-                read_a_packet(packet)
+            if read_packet is not None:
+                read_packet(packet)
 
     async def attach(name, size):
         server_end, client_end = connect_in_memory()
@@ -473,7 +473,7 @@ def over_a_connection(pymux=None, read_a_packet=None):
 #: The routes a client can arrive over, by the name a knob takes.
 ROUTES = {
     "in-process": in_this_process,
-    "connection": over_a_connection,
+    "connection": over_connection,
 }
 
 

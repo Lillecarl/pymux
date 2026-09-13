@@ -537,7 +537,7 @@ TERMINALS = [
 #: run them beside the dark ones, because a theme that read well on
 #: the black it was written on may be unreadable on white, and the
 #: light schemes of pygments want a light terminal to be read on.
-#: `tests/photograph_the_themes.py` takes both lists.
+#: `tests/photograph_themes.py` takes both lists.
 LIGHT_TERMINALS = [
     Terminal(
         "xterm-light",
@@ -811,7 +811,7 @@ def write_recorded(path, found):
     "The list of differences that a run saw, ready to be recorded."
     lines = [
         "# Every difference between a picture with pymux and one without.",
-        "# `tests/take_a_picture.py` says what this is and how to write it.",
+        "# `tests/take_picture.py` says what this is and how to write it.",
         "",
     ]
     for (terminal, fixture), pixels in sorted(found.items()):

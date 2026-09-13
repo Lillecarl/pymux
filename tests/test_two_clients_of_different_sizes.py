@@ -152,20 +152,20 @@ def plane(pymux):
 # Which client decides.
 
 
-def test_the_smallest_client_decides_by_default():
+def test_smallest_client_decides_by_default():
     "Which is what pymux always did, and now it is an option."
     with two_clients() as (pymux, _big, _small):
         assert plane(pymux).columns == SMALL.columns
         assert plane(pymux).rows == SMALL.rows - 1  # The status line.
 
 
-def test_the_largest_client_decides_when_it_is_asked_to():
+def test_largest_client_decides_when_it_is_asked_to():
     with two_clients(["set-window-option window-size largest"]) as (pymux, _b, _s):
         assert plane(pymux).columns == BIG.columns
         assert plane(pymux).rows == BIG.rows - 1
 
 
-def test_the_latest_client_to_be_used_decides():
+def test_latest_client_to_be_used_decides():
     """
     What a person with a laptop and a desktop on one session wants:
     the terminal they are typing in gets the window.
@@ -183,7 +183,7 @@ def test_the_latest_client_to_be_used_decides():
         assert plane(pymux).columns == SMALL.columns
 
 
-def test_a_key_press_is_what_uses_a_client():
+def test_key_press_is_what_uses_client():
     """
     The wiring, which is what `latest` rests on: a key press on a
     client stamps it. The event is fired rather than a key fed,
@@ -199,7 +199,7 @@ def test_a_key_press_is_what_uses_a_client():
         assert plane(pymux).columns == BIG.columns
 
 
-def test_a_manual_size_follows_no_client():
+def test_manual_size_follows_no_client():
     """
     **The size is the window's own**, so no status row comes off it.
     `-x 100 -y 40` is a hundred cells by forty, and neither client
@@ -212,7 +212,7 @@ def test_a_manual_size_follows_no_client():
         assert plane(pymux) == Size(rows=40, columns=120)
 
 
-def test_an_axis_that_is_not_given_keeps_what_it_had():
+def test_axis_that_is_not_given_keeps_what_it_had():
     with two_clients() as (pymux, big, _small):
         big.run("resize-window -x 120")
 
@@ -220,7 +220,7 @@ def test_an_axis_that_is_not_given_keeps_what_it_had():
         assert plane(pymux).rows == SMALL.rows - 1
 
 
-def test_manual_with_no_size_freezes_the_window_as_it_is():
+def test_manual_with_no_size_freezes_window_as_it_is():
     """
     A person who says `manual` and nothing else means "stop following
     the clients", not "pick a size for me". tmux does the same.
@@ -235,7 +235,7 @@ def test_manual_with_no_size_freezes_the_window_as_it_is():
         assert plane(pymux) == was
 
 
-def test_a_nudge_counts_from_the_size_the_window_has_now():
+def test_nudge_counts_from_size_window_has_now():
     """
     Which is the whole point of a nudge, and why it is the one a
     person binds to a key: an absolute size means knowing the size
@@ -249,7 +249,7 @@ def test_a_nudge_counts_from_the_size_the_window_has_now():
         assert plane(pymux) == Size(rows=was.rows + 4, columns=was.columns + 10)
 
 
-def test_the_other_two_nudges_go_the_other_way():
+def test_other_two_nudges_go_other_way():
     with two_clients() as (pymux, big, _small):
         was = plane(pymux)
         big.run("resize-window -L 3 -U 2")
@@ -257,14 +257,14 @@ def test_the_other_two_nudges_go_the_other_way():
         assert plane(pymux) == Size(rows=was.rows - 2, columns=was.columns - 3)
 
 
-def test_an_absolute_size_and_a_nudge_are_read_in_that_order():
+def test_absolute_size_and_nudge_are_read_in_that_order():
     with two_clients() as (pymux, big, _small):
         big.run("resize-window -x 80 -R 10")
 
         assert plane(pymux).columns == 90
 
 
-def test_a_nudge_stops_at_one_cell_and_does_not_complain():
+def test_nudge_stops_at_one_cell_and_does_not_complain():
     """
     A key held down at the edge does nothing, the way it does nothing
     in `move-column`. An absolute size below one is a different thing:
@@ -277,7 +277,7 @@ def test_a_nudge_stops_at_one_cell_and_does_not_complain():
         assert plane(pymux) == Size(rows=1, columns=1)
 
 
-def test_a_window_bigger_than_every_client_is_still_reachable():
+def test_window_bigger_than_every_client_is_still_reachable():
     """
     Which is what makes a manual size safe here and awkward in tmux.
     Both clients scroll their own view over a window neither can show.
@@ -296,7 +296,7 @@ def test_a_window_bigger_than_every_client_is_still_reachable():
             assert client.view.shows(client.panes.plan.rect_of(right))
 
 
-def test_a_size_that_is_not_a_number_is_refused():
+def test_size_that_is_not_number_is_refused():
     with two_clients() as (pymux, big, _small):
         was = plane(pymux)
         big.run("resize-window -x wide")
@@ -305,7 +305,7 @@ def test_a_size_that_is_not_a_number_is_refused():
         assert plane(pymux) == was
 
 
-def test_a_window_of_no_cells_is_refused():
+def test_window_of_no_cells_is_refused():
     with two_clients() as (pymux, big, _small):
         big.run("resize-window -x 0")
 
@@ -313,7 +313,7 @@ def test_a_window_of_no_cells_is_refused():
         assert window(pymux).window_size is WindowSize.SMALLEST
 
 
-def test_a_word_that_is_not_a_policy_is_refused():
+def test_word_that_is_not_policy_is_refused():
     with two_clients() as (pymux, big, _small):
         with set_app(big.state.app):
             pymux.handle_command("set-window-option window-size enormous")
@@ -322,7 +322,7 @@ def test_a_word_that_is_not_a_policy_is_refused():
         assert plane(pymux).columns == SMALL.columns
 
 
-def test_the_policy_belongs_to_one_window():
+def test_policy_belongs_to_one_window():
     """
     Two windows of a session can be watched by different clients, so
     the policy is a window option and a new window starts on the
@@ -336,7 +336,7 @@ def test_the_policy_belongs_to_one_window():
         assert second.window_size is WindowSize.SMALLEST
 
 
-def test_a_default_says_what_every_new_window_starts_with():
+def test_default_says_what_every_new_window_starts_with():
     "Which is what `-g` is for, and it changes no window that is open."
     with two_clients() as (pymux, big, _small):
         big.run("set-window-option -g window-size largest")
@@ -353,7 +353,7 @@ def test_a_default_says_what_every_new_window_starts_with():
 # What each client then sees.
 
 
-def test_the_plan_is_the_same_for_both_clients():
+def test_plan_is_same_for_both_clients():
     """
     **The plan is shared, never per client.** A pane has one pty, so
     the rectangle it is drawn in is one rectangle, and only the part of
@@ -371,7 +371,7 @@ def test_the_plan_is_the_same_for_both_clients():
             assert big.panes.plan.rect_of(pane) == small.panes.plan.rect_of(pane)
 
 
-def test_a_client_smaller_than_the_plane_sees_part_of_it():
+def test_client_smaller_than_plane_sees_part_of_it():
     with two_clients(["set-window-option window-size largest"]) as (pymux, big, small):
         big.draw()
         small.draw()
@@ -381,7 +381,7 @@ def test_a_client_smaller_than_the_plane_sees_part_of_it():
         assert small.view.size.columns < plane(pymux).columns
 
 
-def test_the_small_client_scrolls_to_the_pane_it_is_on():
+def test_small_client_scrolls_to_pane_it_is_on():
     """
     The reason `largest` is worth having. tmux leaves a client too
     small to see the whole window at its top left; here the view moves,
@@ -403,7 +403,7 @@ def test_the_small_client_scrolls_to_the_pane_it_is_on():
         assert not small.view.shows(small.panes.plan.rect_of(left))
 
 
-def test_the_big_client_does_not_move_when_the_small_one_scrolls():
+def test_big_client_does_not_move_when_small_one_scrolls():
     "A view belongs to one client. Nothing a person does moves another's."
     with two_clients(["set-window-option window-size largest"]) as (pymux, big, small):
         big.run("split-window -h")
@@ -420,7 +420,7 @@ def test_the_big_client_does_not_move_when_the_small_one_scrolls():
             assert big.view.shows(big.panes.plan.rect_of(pane))
 
 
-def test_a_pane_is_sized_for_the_plane_and_not_for_a_client():
+def test_pane_is_sized_for_plane_and_not_for_client():
     """
     One pty, one size. The program in a pane writes for the plane, and
     the small client shows as much of that as it has room for.
@@ -438,7 +438,7 @@ def test_a_pane_is_sized_for_the_plane_and_not_for_a_client():
 # And the default policy is unchanged.
 
 
-def test_under_smallest_every_client_sees_the_whole_plane():
+def test_under_smallest_every_client_sees_whole_plane():
     with two_clients() as (pymux, big, small):
         big.run("split-window -h")
         big.draw()

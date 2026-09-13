@@ -65,7 +65,7 @@ class Woke(StrEnum):
     the client, at the moment it did. Lillecarl/pymux#180.
 
     `APPLICATION` is the one reason pymux cannot name, and it is the
-    default for that reason. It is what `client_asked_for_a_frame`
+    default for that reason. It is what `client_asked_for_frame`
     counts: one client's application invalidated itself, which is what
     a pane that writes does. So a run of frames with no named reason
     before them is a pane writing.

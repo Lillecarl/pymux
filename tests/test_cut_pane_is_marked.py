@@ -148,7 +148,7 @@ def test_nothing_is_marked_when_every_column_fits():
         assert marked(screen, ROWS // 2).strip() == ""
 
 
-def test_the_column_that_runs_off_the_edge_is_marked():
+def test_column_that_runs_off_edge_is_marked():
     with create_client(STRIP) as (pymux, state, draw):
         create_wide_column(pymux, state)
         screen = draw()
@@ -169,7 +169,7 @@ def test_the_column_that_runs_off_the_edge_is_marked():
         assert panes.plan.rect_of(left).right <= cut.x
 
 
-def test_the_tint_sits_before_what_the_pane_wrote():
+def test_tint_sits_before_what_pane_wrote():
     """
     Which is what makes a program's own colours survive it.
 

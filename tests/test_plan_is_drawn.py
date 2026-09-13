@@ -124,45 +124,45 @@ def drawn(plan, containers, visible, offset=Point(x=0, y=0), rows=HEIGHT, row=0)
 # Where the panes land.
 
 
-def test_every_pane_is_drawn_where_the_plan_puts_it():
+def test_every_pane_is_drawn_where_plan_puts_it():
     plan, containers = create_row([4, 4])
 
     assert drawn(plan, containers, visible=8) == "aaaabbbb"
 
 
-def test_a_gap_in_the_plan_is_left_alone():
+def test_gap_in_plan_is_left_alone():
     "It is where a border goes, and a border is not a pane."
     plan, containers = create_row([4, 4], gap=1)
 
     assert drawn(plan, containers, visible=9) == "aaaa bbbb"
 
 
-def test_a_plan_wider_than_the_view_shows_what_fits():
+def test_plan_wider_than_view_shows_what_fits():
     plan, containers = create_row([4, 4, 4])
 
     assert drawn(plan, containers, visible=8) == "aaaabbbb"
 
 
-def test_the_offset_says_which_part_is_on_screen():
+def test_offset_says_which_part_is_on_screen():
     plan, containers = create_row([4, 4, 4])
 
     assert drawn(plan, containers, visible=8, offset=Point(x=4, y=0)) == "bbbbcccc"
 
 
-def test_an_offset_between_two_panes_shows_both():
+def test_offset_between_two_panes_shows_both():
     "Nothing says a view may only stop on an edge."
     plan, containers = create_row([4, 4, 4])
 
     assert drawn(plan, containers, visible=8, offset=Point(x=2, y=0)) == "aabbbbcc"
 
 
-def test_a_plan_narrower_than_the_view_leaves_the_rest_alone():
+def test_plan_narrower_than_view_leaves_rest_alone():
     plan, containers = create_row([4])
 
     assert drawn(plan, containers, visible=8) == "aaaa    "
 
 
-def test_a_pane_behind_the_origin_is_clipped_and_not_lost():
+def test_pane_behind_origin_is_clipped_and_not_lost():
     """
     The trick the whole thing rests on. A pane scrolled off the left
     is written at a negative position, and the renderer reads only the
@@ -173,17 +173,17 @@ def test_a_pane_behind_the_origin_is_clipped_and_not_lost():
     assert drawn(plan, containers, visible=4, offset=Point(x=6, y=0)) == "bb  "
 
 
-def test_the_view_moves_down_as_well_as_sideways():
+def test_view_moves_down_as_well_as_sideways():
     "Which is what this container has that `ScrollableStrip` does not."
     pane, container = create_pane("a", 4, height=4)
     plan = Plan({Slot(pane): Rect(x=0, y=2, width=4, height=4)})
 
-    on_the_plane = drawn(plan, {pane: container}, visible=4, rows=4, row=2)
+    on_plane = drawn(plan, {pane: container}, visible=4, rows=4, row=2)
     moved = drawn(
         plan, {pane: container}, visible=4, rows=4, offset=Point(x=0, y=2), row=0
     )
 
-    assert on_the_plane == "aaaa"
+    assert on_plane == "aaaa"
     assert moved == "aaaa"
 
 
@@ -221,7 +221,7 @@ def drawn_with_chrome(plan, containers, lines, visible, rows=HEIGHT, row=0):
     return "".join(screen.data_buffer[row][x].char for x in range(visible))
 
 
-def test_the_layout_fills_the_gap_it_left():
+def test_layout_fills_gap_it_left():
     """
     A pane knows nothing about borders. Carl: "individual panes should
     not be aware of borders ... the layout is responsible for drawing
@@ -233,7 +233,7 @@ def test_the_layout_fills_the_gap_it_left():
     assert drawn_with_chrome(plan, containers, [line], visible=9) == "aaaa|bbbb"
 
 
-def test_a_pane_is_drawn_over_a_line():
+def test_pane_is_drawn_over_line():
     "The panes go on last, so a line under one is not seen."
     plan, containers = create_row([4, 4])
     line = Line(Rect(x=0, y=0, width=8, height=HEIGHT), "|")
@@ -241,14 +241,14 @@ def test_a_pane_is_drawn_over_a_line():
     assert drawn_with_chrome(plan, containers, [line], visible=8) == "aaaabbbb"
 
 
-def test_a_line_outside_the_view_is_not_drawn_on_it():
+def test_line_outside_view_is_not_drawn_on_it():
     plan, containers = create_row([4], gap=1)
     line = Line(Rect(x=4, y=0, width=1, height=HEIGHT), "|")
 
     assert drawn_with_chrome(plan, containers, [line], visible=4) == "aaaa"
 
 
-def test_a_layout_with_no_chrome_draws_none():
+def test_layout_with_no_chrome_draws_none():
     "A layout need not have lines. `_Fixed` has no `chrome` at all."
     plan, containers = create_row([4, 4], gap=1)
 
@@ -259,7 +259,7 @@ def test_a_layout_with_no_chrome_draws_none():
 # A stack draws the pane a person sees.
 
 
-def test_a_slot_draws_the_pane_it_shows_and_no_other():
+def test_slot_draws_pane_it_shows_and_no_other():
     behind, its_container = create_pane("a", 4)
     front, other = create_pane("b", 4)
     slot = Slot(behind, front)
@@ -276,7 +276,7 @@ def test_a_slot_draws_the_pane_it_shows_and_no_other():
 # What the container tells the rest of the frame.
 
 
-def test_the_container_holds_the_plan_it_drew():
+def test_container_holds_plan_it_drew():
     """
     A title bar is drawn inside one of these panes, during the frame,
     so it has to be able to ask what the frame is. That is the two
@@ -303,7 +303,7 @@ def test_the_container_holds_the_plan_it_drew():
     assert screen.data_buffer[0][0].char == "a"
 
 
-def test_the_container_names_the_pane_that_has_the_keyboard():
+def test_container_names_pane_that_has_keyboard():
     plan, containers = create_row([4, 4])
     container = PlanContainer(_Fixed(plan), containers)
     wanted = list(containers)[1]
@@ -318,7 +318,7 @@ def test_the_container_names_the_pane_that_has_the_keyboard():
             assert container.focused_pane() is wanted
 
 
-def test_a_pane_with_no_container_is_not_drawn():
+def test_pane_with_no_container_is_not_drawn():
     "And does not stop the frame: a bar is drawn on every one."
     plan, containers = create_row([4, 4])
     containers.pop(list(containers)[0])
@@ -346,7 +346,7 @@ def _drawn_at(plan, containers, offset, visible=8):
     return screen.visible_windows_to_write_positions
 
 
-def test_a_pane_is_told_where_it_ended_up():
+def test_pane_is_told_where_it_ended_up():
     "A click has to reach the pane that was drawn under it."
     plan, containers = create_row([4, 4, 4])
     panes = list(containers)
@@ -359,7 +359,7 @@ def test_a_pane_is_told_where_it_ended_up():
     assert where[containers[panes[1]]].xpos == 2
 
 
-def test_a_pane_with_no_part_of_it_in_the_view_is_not_drawn():
+def test_pane_with_no_part_of_it_in_view_is_not_drawn():
     """
     Building the rows of a pane nobody can see costs more than the
     cells it throws away, so it is not written at all.
@@ -377,7 +377,7 @@ def test_a_pane_with_no_part_of_it_in_the_view_is_not_drawn():
     assert where[containers[panes[1]]].xpos == 0
 
 
-def test_the_container_asks_for_no_size_of_its_own():
+def test_container_asks_for_no_size_of_its_own():
     """
     The view scrolls, so any size will do. Asking for the size the plan
     wants is what every other layout does, and what this exists to
@@ -390,7 +390,7 @@ def test_the_container_asks_for_no_size_of_its_own():
     assert container.preferred_height(80, 24).preferred <= 24
 
 
-def test_a_row_is_as_wide_as_the_screen_whatever_the_plan_is():
+def test_row_is_as_wide_as_screen_whatever_plan_is():
     plan, containers = create_row([4, 4, 4])
 
     for visible in (1, 3, 7, 12, 40):

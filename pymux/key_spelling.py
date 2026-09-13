@@ -71,7 +71,7 @@ __all__ = [
     "as_chord",
     "keys_of",
     "events_of",
-    "why_a_pane_cannot_read",
+    "why_pane_cannot_read",
 ]
 
 
@@ -157,7 +157,7 @@ def _aliases() -> Dict[str, str]:
 ALIASES = _aliases()
 
 
-def _is_a_base_name(name: str) -> bool:
+def _is_base_name(name: str) -> bool:
     """
     Whether a toolkit name is a key on its own, with nothing held down.
 
@@ -184,7 +184,7 @@ def _base_named(text: str) -> str:
     alias = ALIASES.get(lowered)
     if alias is not None:
         return alias
-    if lowered in KEY_BY_ITS_NAME and _is_a_base_name(lowered):
+    if lowered in KEY_BY_ITS_NAME and _is_base_name(lowered):
         return lowered
     if len(text) == 1:
         # A character key is itself, and its case is kept: "A" is a
@@ -448,7 +448,7 @@ def key_written_out(event: KeyEvent) -> str:
     return written + TOGETHER + name if written else name
 
 
-def why_a_pane_cannot_read(event: KeyEvent, lost: int, encoded: str) -> str:
+def why_pane_cannot_read(event: KeyEvent, lost: int, encoded: str) -> str:
     "Why a key did not reach a pane whole, in a line a person can act on."
     key = key_written_out(event)
     if not encoded:
@@ -511,7 +511,7 @@ def _names_offered() -> list:
     two ways to write one key and a list twice as long.
     """
     plain = [
-        name for name in KEY_BY_ITS_NAME if _is_a_base_name(name) and len(name) > 1
+        name for name in KEY_BY_ITS_NAME if _is_base_name(name) and len(name) > 1
     ]
     spelled_out = _in_reading_order(KEYS_A_KEYBOARD_SPELLS_OUT)
     rest = _in_reading_order(set(plain) - KEYS_A_KEYBOARD_SPELLS_OUT)

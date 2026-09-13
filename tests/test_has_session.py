@@ -10,17 +10,17 @@ from pymux.commands.has_session import pane_matches_session_name
 from pymux.main import Pymux
 
 
-def test_no_target_asks_whether_there_is_a_session():
+def test_no_target_asks_whether_there_is_session():
     "It compared the name against the empty string, so it always said no."
     assert pane_matches_session_name(Pymux(), "")
 
 
-def test_the_name_of_the_session_matches():
+def test_name_of_session_matches():
     pymux = Pymux()
     assert pane_matches_session_name(pymux, pymux.session_name)
 
 
-def test_the_exact_form_that_libtmux_sends_matches():
+def test_exact_form_that_libtmux_sends_matches():
     pymux = Pymux()
     assert pane_matches_session_name(pymux, "=" + pymux.session_name)
 

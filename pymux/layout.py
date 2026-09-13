@@ -733,7 +733,7 @@ class LayoutManager:
         """
         self._frame_plan = None
 
-    def before_a_frame(self) -> None:
+    def before_frame(self) -> None:
         """
         Get ready to draw.
 
@@ -1339,7 +1339,7 @@ class LayoutManager:
         each other. A prefix that leads nowhere says so rather than
         drawing an empty box. Lillecarl/pymux#29.
         """
-        rows = self.pymux.key_bindings_manager.keys_a_prefix_leads_to()
+        rows = self.pymux.key_bindings_manager.prefix_keys()
         if not rows:
             return [("class:commandpalette", " No keys follow the prefix. ")]
 
@@ -1640,11 +1640,11 @@ class LayoutManager:
         palette = Condition(lambda: self.pymux.command_palette)
         # A prompt that knows its answers draws in a box, because the
         # completions are what need the room. Lillecarl/pymux#220.
-        asks_for_a_key = Condition(
+        asks_for_key = Condition(
             lambda: self.client_state.prompt_completer is not None
         )
-        in_a_box = (has_focus(self.client_state.command_buffer) & palette) | (
-            has_focus(self.client_state.prompt_buffer) & asks_for_a_key
+        in_box = (has_focus(self.client_state.command_buffer) & palette) | (
+            has_focus(self.client_state.prompt_buffer) & asks_for_key
         )
         which_key_shows = Condition(lambda: self.pymux.which_key) & Condition(
             lambda: self.client_state.has_prefix
@@ -1742,7 +1742,7 @@ class LayoutManager:
                             ConditionalContainer(
                                 content=self._prompt_window(),
                                 filter=has_focus(self.client_state.prompt_buffer)
-                                & ~asks_for_a_key,
+                                & ~asks_for_key,
                             ),
                         ]
                     ),
@@ -1787,7 +1787,7 @@ class LayoutManager:
                     content=ConditionalContainer(
                         content=DynamicContainer(self._key_box),
                         filter=has_focus(self.client_state.prompt_buffer)
-                        & asks_for_a_key,
+                        & asks_for_key,
                     ),
                     left=BOX_SIDE,
                     right=BOX_SIDE,
@@ -1801,7 +1801,7 @@ class LayoutManager:
                     ycursor=True,
                     content=ConditionalContainer(
                         content=CompletionsMenu(max_height=12),
-                        filter=~in_a_box,
+                        filter=~in_box,
                     ),
                 ),
                 # The windows of the session, to choose from. The
@@ -2177,7 +2177,7 @@ def _bar_below_is_drawn(pymux: "Pymux", window) -> bool:
     the gap between stacked panes, the row kept under the whole
     layout, and the float that draws the bar.
     """
-    return pymux.show_pane_status and not window.zoom and window.has_a_stack()
+    return pymux.show_pane_status and not window.zoom and window.has_stack()
 
 
 def gaps_of(pymux: "Pymux", window) -> Gaps:
@@ -2230,12 +2230,12 @@ def plan_of(pymux: "Pymux", window) -> Plan:
     question. A window of sixteen panes asks sixty-four of them (four
     sides each), and measuring each time cost seventeen times the whole
     frame: 950k bytecode instructions against 55k, paid on every
-    frame. `tests/measure_a_frame.py` is where that number comes from.
+    frame. `tests/measure_frame.py` is where that number comes from.
 
     **Measured fresh when there is no frame to read**, which is what
     makes a direction key work before anything is drawn. That is the
     property slice 2 of Lillecarl/pymux#217 added, and it is held by
-    `test_a_key_moves_the_focus_before_anything_is_drawn`.
+    `test_key_moves_focus_before_anything_is_drawn`.
     """
     size = room_for_panes(pymux, window)
 

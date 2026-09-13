@@ -398,7 +398,7 @@ def plans_of_create_frame(pymux, include: str):
 HEADER = "\n".join(
     [
         "# What it costs pymux to lay a window out and draw the frame around its",
-        "# panes, in bytecode instructions. `tests/measure_a_frame.py` says why",
+        "# panes, in bytecode instructions. `tests/measure_frame.py` says why",
         "# the unit is not a second, and what each measurement covers.",
         "#",
         '# The "(plans)" lines are not instructions. They count how many plans',

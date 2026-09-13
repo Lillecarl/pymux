@@ -113,7 +113,7 @@ def content_of(share):
     return share - 1
 
 
-def test_two_default_columns_fill_the_window_exactly():
+def test_two_default_columns_fill_window_exactly():
     """
     Half a window each, borders included, so the strip does not
     overflow and nothing is shaved. Lillecarl/pymux#206.
@@ -128,7 +128,7 @@ def test_two_default_columns_fill_the_window_exactly():
         assert sum(drawn) + 2 == NARROW
 
 
-def test_a_wider_terminal_makes_every_column_wider():
+def test_wider_terminal_makes_every_column_wider():
     "The reported bug. A column is a fraction, so it has to follow."
     with create_client(STRIP) as (pymux, terminal, draw):
         _window, panes = columns_of(pymux, 2)
@@ -142,7 +142,7 @@ def test_a_wider_terminal_makes_every_column_wider():
         assert after == [content_of(WIDE // 2)] * 2, (before, after)
 
 
-def test_a_narrower_terminal_makes_every_column_narrower():
+def test_narrower_terminal_makes_every_column_narrower():
     with create_client(STRIP, columns=WIDE) as (pymux, terminal, draw):
         _window, panes = columns_of(pymux, 2)
         draw()
@@ -153,7 +153,7 @@ def test_a_narrower_terminal_makes_every_column_narrower():
         assert widths(pymux, panes) == [content_of(NARROW // 2)] * 2
 
 
-def test_the_panes_are_told_the_new_size():
+def test_panes_are_told_new_size():
     """
     A column that is drawn wider has to tell the program in it, or the
     program keeps writing at the old width.

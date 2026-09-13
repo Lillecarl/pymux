@@ -39,14 +39,14 @@ def create_arrangement(windows=0):
 # The defaults themselves.
 
 
-def test_a_window_starts_with_nothing_asked_for():
+def test_window_starts_with_nothing_asked_for():
     arrangement = create_arrangement(1)
 
     assert arrangement.windows[0].synchronize_panes is False
     assert arrangement.windows[0].strip is False
 
 
-def test_a_default_reaches_the_next_window():
+def test_default_reaches_next_window():
     arrangement = create_arrangement()
     arrangement.window_defaults["synchronize_panes"] = True
 
@@ -55,7 +55,7 @@ def test_a_default_reaches_the_next_window():
     assert arrangement.windows[0].synchronize_panes is True
 
 
-def test_a_default_leaves_the_windows_that_are_open():
+def test_default_leaves_windows_that_are_open():
     "Which is what `-g` means in tmux."
     arrangement = create_arrangement(1)
     was = arrangement.windows[0]
@@ -65,7 +65,7 @@ def test_a_default_leaves_the_windows_that_are_open():
     assert was.synchronize_panes is False
 
 
-def test_a_default_that_reshapes_the_window_sees_the_pane():
+def test_default_that_reshapes_window_sees_pane():
     """
     `strip` makes the root the row of columns, and what is in the
     window becomes the first column. Applied before the pane it would
@@ -101,7 +101,7 @@ def run(pymux, command):
     return pymux.startup_errors[was:]
 
 
-def test_a_window_option_before_a_window_says_to_use_dash_g():
+def test_window_option_before_window_says_to_use_dash_g():
     """
     It used to crash the startup with an `IndexError`. The message has
     to name the way out, because a person who reads "there is no
@@ -115,7 +115,7 @@ def test_a_window_option_before_a_window_says_to_use_dash_g():
     assert "-g" in complaints[0]
 
 
-def test_dash_g_works_before_there_is_a_window():
+def test_dash_g_works_before_there_is_window():
     "The whole point: a configuration file is read before one exists."
     pymux = Pymux()
 
@@ -123,7 +123,7 @@ def test_dash_g_works_before_there_is_a_window():
     assert pymux.arrangement.window_defaults == {"strip": True}
 
 
-def test_a_session_option_has_no_global_form():
+def test_session_option_has_no_global_form():
     "It is already one value for the whole session."
     pymux = Pymux()
 
@@ -131,7 +131,7 @@ def test_a_session_option_has_no_global_form():
         ALL_OPTIONS["status"].set_default(pymux, "off")
 
 
-def test_dash_g_on_a_session_option_just_sets_it():
+def test_dash_g_on_session_option_just_sets_it():
     """
     `set -g` is the most common line in a tmux configuration, and
     `pymux -V` says pymux speaks tmux 3.4, so it has to be a line pymux
@@ -146,7 +146,7 @@ def test_dash_g_on_a_session_option_just_sets_it():
     assert pymux.enable_status is False
 
 
-def test_the_tmux_spelling_of_it_works_too():
+def test_tmux_spelling_of_it_works_too():
     "`set` and `setw` are what a person writes."
     pymux = Pymux()
 
@@ -157,7 +157,7 @@ def test_the_tmux_spelling_of_it_works_too():
     assert pymux.arrangement.window_defaults == {"strip": True}
 
 
-def test_a_value_that_is_not_on_or_off_is_refused_with_dash_g_too():
+def test_value_that_is_not_on_or_off_is_refused_with_dash_g_too():
     pymux = Pymux()
 
     assert run(pymux, "set-window-option -g strip maybe")

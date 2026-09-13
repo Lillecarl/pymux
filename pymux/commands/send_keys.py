@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandException
 from pymux.commands import add_command
 from pymux.commands.common import find_pane
-from pymux.commands.common import send_a_key
+from pymux.commands.common import send_key
 from pymux.key_spelling import event_however_it_is_written
 
 
@@ -61,7 +61,7 @@ def send_keys(pymux: "Pymux", args: argparse.Namespace) -> None:
             pane.process.write_input(key)
             continue
 
-        send_a_key(pane, event, key)
+        send_key(pane, event, key)
 
 
 def register(subparsers):

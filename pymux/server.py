@@ -299,7 +299,7 @@ class ServerConnection:
         self._send_packet(
             {
                 "cmd": "kitty-keyboard",
-                "data": {"flags": self.pymux.keyboard_flags_for_a_client()},
+                "data": {"flags": self.pymux.keyboard_flags_for_client()},
             }
         )
 

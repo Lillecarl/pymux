@@ -68,14 +68,14 @@ def _rows(pymux, window):
     return [plan.rect_of(pane).height for pane in window.panes]
 
 
-def test_a_pane_keeps_its_size_while_the_option_is_off():
+def test_pane_keeps_its_size_while_option_is_off():
     pymux, window, first, _second = _pymux(allow=False)
     before = _weights(window)
     pymux.resize_pane_for_program(first, 40, None)
     assert _weights(window) == before
 
 
-def test_a_taller_pane_takes_the_room_from_its_neighbour():
+def test_taller_pane_takes_room_from_its_neighbour():
     pymux, window, first, _second = _pymux(allow=True)
     before = _rows(pymux, window)
 
@@ -88,7 +88,7 @@ def test_a_taller_pane_takes_the_room_from_its_neighbour():
     assert sum(after) == sum(before)
 
 
-def test_a_shorter_pane_gives_the_room_back():
+def test_shorter_pane_gives_room_back():
     pymux, window, first, _second = _pymux(allow=True)
     before = _rows(pymux, window)
 
@@ -99,7 +99,7 @@ def test_a_shorter_pane_gives_the_room_back():
     assert sum(after) == sum(before)
 
 
-def test_a_side_the_program_left_alone_does_not_move():
+def test_side_program_left_alone_does_not_move():
     "DECSLPP names the lines, and says nothing about the columns."
     pymux, window, first, _second = _pymux(allow=True)
     before = _weights(window)
@@ -107,7 +107,7 @@ def test_a_side_the_program_left_alone_does_not_move():
     assert _weights(window) == before
 
 
-def test_a_pane_that_is_gone_changes_nothing():
+def test_pane_that_is_gone_changes_nothing():
     "A program can ask after its pane has been closed."
     pymux, window, _first, _second = _pymux(allow=True)
     before = _weights(window)
@@ -115,7 +115,7 @@ def test_a_pane_that_is_gone_changes_nothing():
     assert _weights(window) == before
 
 
-def test_a_pane_never_loses_its_last_row():
+def test_pane_never_loses_its_last_row():
     "A pane that asks for everything still leaves its neighbour a line."
     pymux, window, first, _second = _pymux(allow=True)
     pymux.resize_pane_for_program(first, 10000, None)

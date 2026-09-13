@@ -48,7 +48,7 @@ def make_connection():
     return ServerConnection(FakePymux(), FakePipe())
 
 
-def test_the_reading_task_is_held():
+def test_reading_task_is_held():
     async def check():
         connection = make_connection()
         assert connection._tasks, "the reading task is not held anywhere"
@@ -57,7 +57,7 @@ def test_the_reading_task_is_held():
     asyncio.run(check())
 
 
-def test_closing_the_connection_stops_its_work():
+def test_closing_connection_stops_its_work():
     "No task of a closed connection is left pending."
 
     async def check():
@@ -71,7 +71,7 @@ def test_closing_the_connection_stops_its_work():
     asyncio.run(check())
 
 
-def test_a_finished_task_is_let_go():
+def test_finished_task_is_let_go():
     "The set must not grow with every packet that is sent."
 
     async def check():
@@ -91,7 +91,7 @@ def test_a_finished_task_is_let_go():
     asyncio.run(check())
 
 
-def test_the_application_does_not_take_over_the_exception_handler():
+def test_application_does_not_take_over_exception_handler():
     """
     prompt_toolkit turns an exception in the event loop into a prompt.
     Nothing can answer that prompt on a server, so the server keeps the

@@ -32,14 +32,14 @@ def attrs(theme, class_name):
     return theme.get_attrs_for_style_str("class:%s" % (class_name,))
 
 
-def test_the_boxes_take_the_colours_of_the_scheme():
+def test_boxes_take_colours_of_scheme():
     theme = pygments_theme("dracula")
 
     assert attrs(theme, "commandpalette").bgcolor == "282a36"
     assert attrs(theme, "completion-menu").color == "f8f8f2"
 
 
-def test_the_text_on_a_bar_reads():
+def test_text_on_bar_reads():
     """
     The same rule on the two ends of one dial. dracula's keyword is
     #ff79c6, which is far closer to black than to white; friendly's is
@@ -54,7 +54,7 @@ def test_the_text_on_a_bar_reads():
     assert attrs(light, "statusbar").color == "ffffff"
 
 
-def test_a_pane_that_ended_is_never_the_plain_text():
+def test_pane_that_ended_is_never_plain_text():
     """
     dracula leaves `Generic.Error` at the plain foreground: a reader
     who took it literally would draw a pane that ended as if nothing
@@ -67,7 +67,7 @@ def test_a_pane_that_ended_is_never_the_plain_text():
     assert attrs(theme, "terminated").bgcolor != "f8f8f2"
 
 
-def test_an_error_hidden_in_a_background_is_found():
+def test_error_hidden_in_background_is_found():
     """
     solarized-light has no error colour at all in the foreground: the
     error and deleted tokens are its plain text, and the red is in
@@ -79,12 +79,12 @@ def test_an_error_hidden_in_a_background_is_found():
     assert attrs(theme, "terminated").bgcolor == "dc322f"
 
 
-def test_a_name_nobody_offers_is_refused():
+def test_name_nobody_offers_is_refused():
     with pytest.raises(KeyError):
         pygments_theme("nosuchtheme")
 
 
-def test_every_name_the_option_offers_builds_a_theme():
+def test_every_name_option_offers_builds_theme():
     """
     All fifty-three: the styles pygments ships, and the four flavours
     of the pastel beside them. A derivation that crashed on one of
@@ -96,7 +96,7 @@ def test_every_name_the_option_offers_builds_a_theme():
         assert pygments_theme(name) is not None
 
 
-def test_the_pastel_names_the_colours_of_the_scheme():
+def test_pastel_names_colours_of_scheme():
     """
     catppuccin-mocha: surface #181825, mauve for the accent, the
     muted lavender of its comments for the quiet text. Its `Error`
@@ -112,7 +112,7 @@ def test_the_pastel_names_the_colours_of_the_scheme():
     assert attrs(theme, "terminated").bgcolor == "f38ba8"
 
 
-def test_the_option_offers_the_names_and_refuses_the_others():
+def test_option_offers_names_and_refuses_others():
     pymux = Pymux()
 
     values = ALL_OPTIONS["theme"].get_all_values(pymux)
@@ -128,7 +128,7 @@ def test_the_option_offers_the_names_and_refuses_the_others():
         ALL_OPTIONS["theme"].set_value(pymux, "vim:nosuchtheme")
 
 
-def test_a_client_draws_with_the_pygments_theme_it_is_given():
+def test_client_draws_with_pygments_theme_it_is_given():
     """
     `pymux.theme` says what was set; whether a client draws with it is
     the question, and `app.style` is where a client reads it.

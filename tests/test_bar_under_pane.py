@@ -1,7 +1,7 @@
 """
 The bar under a pane, which names what is above it and what is below.
 
-`test_the_title_bar_names_the_neighbours.py` is the same reading for
+`test_title_bar_names_neighbours.py` is the same reading for
 the bar over a pane. This one renders pymux's real layout as well,
 because three things have to agree or the rows drift: the padding
 between stacked panes, the row kept under the whole layout, and the
@@ -54,7 +54,7 @@ def bars_under(pymux, draw, panes):
 # What the bar says.
 
 
-def test_a_pane_in_the_middle_names_the_one_above_and_the_one_below():
+def test_pane_in_middle_names_one_above_and_one_below():
     with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
         panes = create_stack_of_named_panes(pymux)
         bar = bars_under(pymux, draw, panes)[1]
@@ -62,7 +62,7 @@ def test_a_pane_in_the_middle_names_the_one_above_and_the_one_below():
         assert bar.split() == [ABOVE_MARK, "top", BELOW_MARK, "bottom"], repr(bar)
 
 
-def test_the_top_of_a_stack_names_only_what_is_below():
+def test_top_of_stack_names_only_what_is_below():
     with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
         panes = create_stack_of_named_panes(pymux)
         bar = bars_under(pymux, draw, panes)[0]
@@ -71,7 +71,7 @@ def test_the_top_of_a_stack_names_only_what_is_below():
         assert ABOVE_MARK not in bar, repr(bar)
 
 
-def test_the_bottom_of_a_stack_names_only_what_is_above():
+def test_bottom_of_stack_names_only_what_is_above():
     with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
         panes = create_stack_of_named_panes(pymux)
         bar = bars_under(pymux, draw, panes)[2]
@@ -80,7 +80,7 @@ def test_the_bottom_of_a_stack_names_only_what_is_above():
         assert BELOW_MARK not in bar, repr(bar)
 
 
-def test_the_names_sit_in_the_middle_of_the_bar():
+def test_names_sit_in_middle_of_bar():
     "Two marks and one gap, centred as one thing."
     with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
         panes = create_stack_of_named_panes(pymux)
@@ -96,7 +96,7 @@ def test_the_names_sit_in_the_middle_of_the_bar():
 # The row it costs, and when it costs nothing.
 
 
-def test_a_window_with_no_stack_keeps_no_row_under_its_panes():
+def test_window_with_no_stack_keeps_no_row_under_its_panes():
     """
     A single pane and a plain row of panes look exactly as they did.
     There is nothing above or below them to name, so the bar would be
@@ -116,7 +116,7 @@ def test_a_window_with_no_stack_keeps_no_row_under_its_panes():
         assert where.ypos + where.height == ROWS - 1, where
 
 
-def test_a_stack_keeps_two_rows_between_its_panes():
+def test_stack_keeps_two_rows_between_its_panes():
     """
     One for the lower pane's own title bar, and one for the upper
     pane's bar below. They cannot share: the title bar names the pane
@@ -132,7 +132,7 @@ def test_a_stack_keeps_two_rows_between_its_panes():
         assert bottom.ypos == top.ypos + top.height + 2, (top, bottom)
 
 
-def test_a_pane_with_nothing_above_or_below_it_draws_no_bar():
+def test_pane_with_nothing_above_or_below_it_draws_no_bar():
     """
     A window can hold a stack in one column and a lone pane beside it.
     The lone pane has nothing to name, and an empty bar is not nothing:
@@ -160,7 +160,7 @@ def test_a_pane_with_nothing_above_or_below_it_draws_no_bar():
         assert not bar.strip(), repr(bar)
 
 
-def test_the_bottom_pane_of_a_stack_has_a_row_under_it():
+def test_bottom_pane_of_stack_has_row_under_it():
     """
     The row is kept under the whole layout, not only between panes.
 

@@ -46,7 +46,7 @@ arrives already laid out, and the classes that lay one out
 (`Strip`, `Divided`, `Masonry`) come in the slices after this one. So
 nothing in this module validates geometry. A plan holding two
 overlapping slots is a fault of whatever laid it out, and
-`tests/test_the_plane.py` is where that promise is kept.
+`tests/test_plane.py` is where that promise is kept.
 """
 
 from __future__ import annotations

@@ -316,7 +316,7 @@ class PymuxKeyBindings:
             )
 
         @kb.add(Keys.KeyRelease, eager=True)
-        def _forward_a_key_release(event: E) -> None:
+        def _forward_key_release(event: E) -> None:
             """
             A key came back up. Give the sequence to the pane that the
             keyboard of this client reaches.
@@ -413,7 +413,7 @@ class PymuxKeyBindings:
             key_handler, command, arguments, key_name
         )
 
-    def keys_a_prefix_leads_to(self) -> "list[tuple[str, str]]":
+    def prefix_keys(self) -> "list[tuple[str, str]]":
         """
         The keys that follow the prefix, each with what it does.
 

@@ -44,17 +44,17 @@ def create_clean_logger():
 # The file.
 
 
-def test_the_named_file_is_the_one_that_is_used(tmp_path):
+def test_named_file_is_one_that_is_used(tmp_path):
     wanted = tmp_path / "named.log"
     assert log.configure(str(wanted)) == wanted
 
 
-def test_without_a_name_it_goes_under_the_state_directory(tmp_path, monkeypatch):
+def test_without_name_it_goes_under_state_directory(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     assert log.configure() == tmp_path / "pymux" / "server.log"
 
 
-def test_the_state_directory_has_a_default(monkeypatch):
+def test_state_directory_has_default(monkeypatch):
     monkeypatch.delenv("XDG_STATE_HOME", raising=False)
     monkeypatch.setenv("HOME", "/home/somebody")
     assert log.default_logfile() == (
@@ -62,7 +62,7 @@ def test_the_state_directory_has_a_default(monkeypatch):
     )
 
 
-def test_a_directory_that_is_missing_is_made(tmp_path):
+def test_directory_that_is_missing_is_made(tmp_path):
     wanted = tmp_path / "one" / "two" / "server.log"
     assert log.configure(str(wanted)) == wanted
     assert wanted.parent.is_dir()
@@ -72,7 +72,7 @@ def test_a_directory_that_is_missing_is_made(tmp_path):
 # What it writes, and when.
 
 
-def test_a_run_that_logs_nothing_leaves_no_file(tmp_path):
+def test_run_that_logs_nothing_leaves_no_file(tmp_path):
     """
     The file is opened by the first message. So the common case, a
     session that goes well, writes nothing at all.
@@ -82,7 +82,7 @@ def test_a_run_that_logs_nothing_leaves_no_file(tmp_path):
     assert not wanted.exists()
 
 
-def test_a_message_reaches_the_file(tmp_path):
+def test_message_reaches_file(tmp_path):
     wanted = tmp_path / "server.log"
     log.configure(str(wanted))
     log.logger.error("a packet went wrong")
@@ -91,7 +91,7 @@ def test_a_message_reaches_the_file(tmp_path):
     assert "a packet went wrong" in wanted.read_text()
 
 
-def test_a_traceback_reaches_the_file(tmp_path):
+def test_traceback_reaches_file(tmp_path):
     "This is the message that used to land on the terminal."
     wanted = tmp_path / "server.log"
     log.configure(str(wanted))
@@ -110,7 +110,7 @@ def test_a_traceback_reaches_the_file(tmp_path):
 # What it must never write to.
 
 
-def test_nothing_reaches_the_terminal(tmp_path, monkeypatch):
+def test_nothing_reaches_terminal(tmp_path, monkeypatch):
     """
     The whole point. Without a handler python writes a record to
     `sys.stderr`, and in two of the modes that is the terminal the
@@ -123,7 +123,7 @@ def test_nothing_reaches_the_terminal(tmp_path, monkeypatch):
     assert caught.getvalue() == ""
 
 
-def test_nothing_reaches_the_terminal_when_no_file_can_be_opened(tmp_path, monkeypatch):
+def test_nothing_reaches_terminal_when_no_file_can_be_opened(tmp_path, monkeypatch):
     "A log that cannot be written is dropped, and not painted."
     caught = io.StringIO()
     monkeypatch.setattr(sys, "stderr", caught)
@@ -137,7 +137,7 @@ def test_nothing_reaches_the_terminal_when_no_file_can_be_opened(tmp_path, monke
     assert caught.getvalue() == ""
 
 
-def test_a_root_handler_does_not_take_the_messages(tmp_path, monkeypatch):
+def test_root_handler_does_not_take_messages(tmp_path, monkeypatch):
     """
     Something else may call `basicConfig` and point the root logger at
     the terminal. The messages of pymux must not follow it there.
@@ -159,14 +159,14 @@ def test_a_root_handler_does_not_take_the_messages(tmp_path, monkeypatch):
 # How loud it is, and how big it gets.
 
 
-def test_a_server_nobody_asked_to_debug_logs_at_info(tmp_path):
+def test_server_nobody_asked_to_debug_logs_at_info(tmp_path):
     "DEBUG writes a line for every frame, and a server draws eleven a second."
     log.configure(str(tmp_path / "server.log"))
 
     assert log.logger.level == logging.INFO
 
 
-def test_the_file_has_an_end(tmp_path):
+def test_file_has_end(tmp_path):
     log.configure(str(tmp_path / "server.log"))
 
     handler = log.logger.handlers[-1]
@@ -190,24 +190,24 @@ def test_it_starts_again_rather_than_growing(tmp_path, monkeypatch):
         assert (tmp_path / name).stat().st_size < 4000
 
 
-def test_the_log_says_where_it_went(tmp_path):
+def test_log_says_where_it_went(tmp_path):
     "`pymux/introspect.py` writes its dumps beside it, so it has to be found."
     path = log.configure(str(tmp_path / "server.log"))
 
     assert log.logfile() == path
 
 
-def test_a_level_nobody_named_is_info():
+def test_level_nobody_named_is_info():
     assert _how_much_to_log(None) == logging.INFO
     assert _how_much_to_log("") == logging.INFO
 
 
-def test_a_person_debugging_asks_for_it():
+def test_person_debugging_asks_for_it():
     assert _how_much_to_log("debug") == logging.DEBUG
     assert _how_much_to_log("warning") == logging.WARNING
 
 
-def test_a_frame_is_not_logged_at_info():
+def test_frame_is_not_logged_at_info():
     """
     The lines are good ones -- `Woke` exists so that a frame drawn for
     no reason can be traced to what asked for it (Lillecarl/pymux#180).
@@ -223,7 +223,7 @@ def test_a_frame_is_not_logged_at_info():
     assert "logger.info(" not in said
 
 
-def test_a_pane_that_writes_is_still_logged():
+def test_pane_that_writes_is_still_logged():
     """
     The line that says a pane is animating.
 
@@ -236,6 +236,6 @@ def test_a_pane_that_writes_is_still_logged():
 
     from pymux.main import Pymux
 
-    said = inspect.getsource(Pymux.client_asked_for_a_frame)
+    said = inspect.getsource(Pymux.client_asked_for_frame)
     assert "logger.debug(" in said
     assert "logger.info(" not in said

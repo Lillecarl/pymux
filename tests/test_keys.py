@@ -26,7 +26,7 @@ def fed(data: str, speaks_protocol: bool = True):
     The terminal speaks the protocol unless a case says otherwise,
     because that is the terminal these sequences come from. What
     changes with it is only how a modifier above ctrl is counted; see
-    `test_a_terminal_that_does_not_speak_the_protocol_is_read_the_old_way`.
+    `test_terminal_that_does_not_speak_protocol_is_read_old_way`.
     """
     pressed = []
     parser = KittyVt100Parser(
@@ -47,7 +47,7 @@ def parse(data: str):
     return [(kp.key, kp.data) for kp in fed(data) if kp is not _Flush]
 
 
-def test_ctrl_a():
+def test_ctrl():
     assert parse("\x1b[97;5u") == [(Keys.ControlA, "\x1b[97;5u")]
 
 
@@ -101,7 +101,7 @@ def test_alternate_key_codes_are_ignored():
     assert parse("\x1b[97:65;2u") == [("A", "\x1b[97:65;2u")]
 
 
-def test_a_release_keeps_its_sequence_under_a_key_of_its_own():
+def test_release_keeps_its_sequence_under_key_of_its_own():
     """
     A key that came back up is not a key press. It takes the name of a
     release, so the binding of the key does not run a second time, and
@@ -114,7 +114,7 @@ def test_a_release_keeps_its_sequence_under_a_key_of_its_own():
     assert parse("\x1b[1;1:3D") == [(Keys.KeyRelease, "\x1b[1;1:3D")]
 
 
-def test_a_repeat_stays_a_key_press():
+def test_repeat_stays_key_press():
     "That is what the key did, and it drives the same binding."
     assert parse("\x1b[97;1:2u") == [("a", "\x1b[97;1:2u")]
     # Press events (type 1) and repeats (type 2) come through.
@@ -137,7 +137,7 @@ def test_tilde_keys():
     assert parse("\x1b[15;5~") == [(Keys.ControlF5, "\x1b[15;5~")]
 
 
-def test_f3_arrives_as_a_number_and_not_as_a_letter():
+def test_f3_arrives_as_number_and_not_as_letter():
     """
     kitty numbers F3 in the "~" form, because "CSI R" is the cursor
     position report. So a modified F3 from any terminal that speaks the
@@ -287,7 +287,7 @@ def test_apc_reply_is_consumed_without_callback():
     assert parse("\x1b_Gi=31;OK\x1b\\") == []
 
 
-def test_keys_after_an_apc_reply_still_arrive():
+def test_keys_after_apc_reply_still_arrive():
     assert parse("\x1b_Gi=31;OK\x1b\\a\x1b[97;5u") == [
         ("a", "a"),
         (Keys.ControlA, "\x1b[97;5u"),
@@ -337,11 +337,11 @@ def test_cell_size_reply_is_reported():
     assert replies == ["\x1b[6;20;10t"]
 
 
-def test_keys_after_a_dcs_reply_still_arrive():
+def test_keys_after_dcs_reply_still_arrive():
     assert parse("\x1bP1$rm\x1b\\b") == [("b", "b")]
 
 
-def test_an_unterminated_dcs_does_not_swallow_input_forever():
+def test_unterminated_dcs_does_not_swallow_input_forever():
     assert parse("\x1bP" + "y" * 2000 + "\x1b\\b")[-1] == ("b", "b")
 
 
@@ -359,7 +359,7 @@ def test_osc_reply_is_reported():
     assert replies == ["\x1b]11;rgb:0000/0000/0000\x1b\\"]
 
 
-def test_osc_reply_ends_at_a_bell():
+def test_osc_reply_ends_at_bell():
     "Unlike APC and DCS, an OSC also ends at BEL."
     replies = []
     pressed = []
@@ -396,20 +396,20 @@ def test_osc_reply_is_consumed_without_callback():
     assert parse("\x1b]11;rgb:0000/0000/0000\x07") == []
 
 
-def test_keys_after_an_osc_reply_still_arrive():
+def test_keys_after_osc_reply_still_arrive():
     assert parse("\x1b]11;rgb:0000/0000/0000\x07c\x1b[97;5u") == [
         ("c", "c"),
         (Keys.ControlA, "\x1b[97;5u"),
     ]
 
 
-def test_an_unterminated_osc_does_not_swallow_input_forever():
+def test_unterminated_osc_does_not_swallow_input_forever():
     pressed = parse("\x1b]11;rgb:0000")
     assert pressed  # Decomposed, not swallowed.
     assert parse("\x1b]" + "z" * 2000 + "\x07c")[-1] == ("c", "c")
 
 
-def test_a_mode_reply_goes_to_reply_callback():
+def test_mode_reply_goes_to_reply_callback():
     """
     The reply of a DECRQM request is not a key press.
 
@@ -428,7 +428,7 @@ def test_a_mode_reply_goes_to_reply_callback():
     assert replies == ["\x1b[?2026;2$y"]
 
 
-def test_a_spelled_out_escape_ends_the_key_buffer():
+def test_spelled_out_escape_ends_key_buffer():
     """
     A terminal that disambiguates writes the Escape key as "CSI 27 u",
     and that sequence can complete nothing. So the key ends the buffer
@@ -443,12 +443,12 @@ def test_a_spelled_out_escape_ends_the_key_buffer():
     assert fed("\x1b[27u")[-1] is _Flush
 
 
-def test_a_legacy_escape_ends_nothing():
+def test_legacy_escape_ends_nothing():
     "A terminal that did not disambiguate says nothing new."
     assert _Flush not in fed("\x1b")
 
 
-def test_the_escape_of_an_alt_key_ends_nothing():
+def test_escape_of_alt_key_ends_nothing():
     """
     alt and a key arrive as two key presses, and the first is an
     escape. It is not the Escape key, and a flush between the two
@@ -475,7 +475,7 @@ def create_dropped_key(data: str) -> Dropped:
     return result
 
 
-def test_a_key_with_no_name_is_eaten_and_not_taken_apart():
+def test_key_with_no_name_is_eaten_and_not_taken_apart():
     """
     Nothing reaches a pane for a key pymux cannot name.
 
@@ -487,7 +487,7 @@ def test_a_key_with_no_name_is_eaten_and_not_taken_apart():
     assert parse("\x1b[57428u") == []  # play
 
 
-def test_ctrl_escape_does_not_reach_a_pane_as_five_keys():
+def test_ctrl_escape_does_not_reach_pane_as_five_keys():
     """
     ctrl+escape has no prompt_toolkit name. It used to leave
     `_apply_modifiers` as None, which is what the parser reads as "not
@@ -496,7 +496,7 @@ def test_ctrl_escape_does_not_reach_a_pane_as_five_keys():
     assert parse("\x1b[27;5u") == []
 
 
-def test_a_functional_key_is_not_a_character():
+def test_functional_key_is_not_character():
     """
     Every member of `Keys` is a string, so a test on `str` says yes to
     all of them. ctrl+Up then went looking for `Keys.ControlUP`, which
@@ -513,7 +513,7 @@ def test_a_functional_key_is_not_a_character():
     assert _apply_modifiers("u", 0b100) == Keys.ControlU
 
 
-def test_shift_and_a_functional_key_is_that_key():
+def test_shift_and_functional_key_is_that_key():
     """
     The shift of a letter makes it upper case, and a functional key is
     not a letter. It read as one: `Keys.Enter` is the string "enter",
@@ -527,7 +527,7 @@ def test_shift_and_a_functional_key_is_that_key():
 # super, hyper and meta, which no `Keys` member names.
 
 
-def test_super_hyper_and_meta_get_a_name_of_their_own():
+def test_super_hyper_and_meta_get_name_of_their_own():
     """
     Five modifiers over every key is more combinations than anybody
     would write down, so the name is built rather than looked up.
@@ -539,13 +539,13 @@ def test_super_hyper_and_meta_get_a_name_of_their_own():
     assert parse("\x1b[97;33u") == [("meta-a", "\x1b[97;33u")]
 
 
-def test_the_order_of_the_modifiers_in_a_name_is_fixed():
+def test_order_of_modifiers_in_name_is_fixed():
     "One combination has one name, or a binding would miss it."
     assert parse("\x1b[97;13u") == [("c-super-a", "\x1b[97;13u")]
     assert parse("\x1b[97;10u") == [("s-super-a", "\x1b[97;10u")]
 
 
-def test_alt_stays_an_escape_in_front():
+def test_alt_stays_escape_in_front():
     "prompt_toolkit spells alt as two key presses, and pymux keeps that."
     assert parse("\x1b[97;11u") == [
         (Keys.Escape, "\x1b[97;11u"),
@@ -553,14 +553,14 @@ def test_alt_stays_an_escape_in_front():
     ]
 
 
-def test_a_functional_key_is_named_by_its_own_name():
+def test_functional_key_is_named_by_its_own_name():
     assert parse("\x1b[1;9A") == [("super-up", "\x1b[1;9A")]
     assert parse("\x1b[15;9~") == [("super-f5", "\x1b[15;9~")]
     assert parse("\x1b[13;9u") == [("super-enter", "\x1b[13;9u")]
     assert parse("\x1b[27;9u") == [("super-escape", "\x1b[27;9u")]
 
 
-def test_a_high_modifier_is_read_here_and_not_from_the_table():
+def test_high_modifier_is_read_here_and_not_from_table():
     """
     The two tables count the modifiers differently. xterm has four and
     the fourth is meta; the protocol has eight and the fourth is super.
@@ -576,7 +576,7 @@ def test_a_high_modifier_is_read_here_and_not_from_the_table():
     assert parse("\x1b[1;3A") == [(Keys.Escape, "\x1b[1;3A"), (Keys.Up, "")]
 
 
-def test_a_terminal_that_does_not_speak_the_protocol_is_read_the_old_way():
+def test_terminal_that_does_not_speak_protocol_is_read_old_way():
     """
     The detection knows which terminal this is, so the numbering is
     asked rather than guessed. A terminal that answered no, or that
@@ -591,7 +591,7 @@ def test_a_terminal_that_does_not_speak_the_protocol_is_read_the_old_way():
     assert old == [(Keys.Escape, "\x1b[1;9A"), (Keys.Up, "")]
 
 
-def test_a_parser_nobody_told_reads_the_old_way():
+def test_parser_nobody_told_reads_old_way():
     "None means nobody knows, and nobody knows reads as no."
     pressed = []
     parser = KittyVt100Parser(pressed.append)
@@ -599,7 +599,7 @@ def test_a_parser_nobody_told_reads_the_old_way():
     assert [key.key for key in pressed] == [Keys.Escape, Keys.Up]
 
 
-def test_a_lock_is_not_a_key_of_its_own():
+def test_lock_is_not_key_of_its_own():
     """
     Caps lock on a letter is the capital, which is text. kitty keeps
     the locks off text producing keys for that reason.
@@ -607,7 +607,7 @@ def test_a_lock_is_not_a_key_of_its_own():
     assert parse("\x1b[97;65u") == [("a", "\x1b[97;65u")]
 
 
-def test_control_and_shift_on_a_letter_is_its_own_key():
+def test_control_and_shift_on_letter_is_its_own_key():
     """
     Only a terminal that says more than the legacy encoding can tell
     these apart: ctrl+a and ctrl+shift+a are the same control code
@@ -632,7 +632,7 @@ def test_alt_reaches_control_and_shift_as_well():
     ]
 
 
-def test_control_and_shift_on_a_digit_is_left_where_it_was():
+def test_control_and_shift_on_digit_is_left_where_it_was():
     """
     prompt_toolkit has `ControlShift1` upwards and pymux does not
     reach for it. A digit with ctrl already goes to whatever control
@@ -646,7 +646,7 @@ def test_control_and_shift_on_a_digit_is_left_where_it_was():
     assert parse("\x1b[49;6u") == []
 
 
-def test_shift_and_tab_is_the_back_tab():
+def test_shift_and_tab_is_back_tab():
     """
     prompt_toolkit has a name for this key, and it is not Tab. A
     legacy keyboard sends "CSI Z" for it, which reaches the same name
@@ -657,7 +657,7 @@ def test_shift_and_tab_is_the_back_tab():
     assert parse("\x1b[Z") == [(Keys.BackTab, "\x1b[Z")]
 
 
-def test_the_reason_says_what_kind_of_key_it_was():
+def test_reason_says_what_kind_of_key_it_was():
     assert create_dropped_key("\x1b[57358u").reason == DropReason.KEY_THAT_WRITES_NOTHING
     assert create_dropped_key("\x1b[57399;5u").reason == DropReason.KEYPAD_WITH_A_MODIFIER
     assert create_dropped_key("\x1b[233;5u").reason == DropReason.CTRL_AND_A_CHARACTER
@@ -668,14 +668,14 @@ def test_the_reason_says_what_kind_of_key_it_was():
     )
 
 
-def test_the_log_says_the_key_and_the_reason(caplog):
+def test_log_says_key_and_reason(caplog):
     with caplog.at_level(logging.DEBUG, logger="pymux.keys"):
         fed("\x1b[57358u")
     assert "\\x1b[57358u" in caplog.text
     assert DropReason.KEY_THAT_WRITES_NOTHING in caplog.text
 
 
-def test_a_held_key_writes_one_line(caplog):
+def test_held_key_writes_one_line(caplog):
     "A key that is held down repeats, and one line per repeat is noise."
     parser = KittyVt100Parser(lambda key_press: None)
     with caplog.at_level(logging.DEBUG, logger="pymux.keys"):
@@ -684,7 +684,7 @@ def test_a_held_key_writes_one_line(caplog):
     assert len(caplog.records) == 1
 
 
-def test_two_keys_with_no_name_each_write_a_line(caplog):
+def test_two_keys_with_no_name_each_write_line(caplog):
     parser = KittyVt100Parser(lambda key_press: None)
     with caplog.at_level(logging.DEBUG, logger="pymux.keys"):
         parser.feed_and_flush("\x1b[57358u")

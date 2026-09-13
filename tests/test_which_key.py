@@ -16,7 +16,7 @@ from prompt_toolkit.layout.containers import ConditionalContainer, Float
 from prompt_toolkit.layout.layout import walk
 from prompt_toolkit.layout.screen import Screen
 
-from session import create_session, in_a_loop
+from session import create_session, in_loop
 from pymux.options import ALL_OPTIONS
 
 
@@ -61,7 +61,7 @@ def put_cursor(state, x: int, y: int) -> None:
     state.app.renderer._last_screen = screen
 
 
-@in_a_loop
+@in_loop
 async def test_which_key_is_off_to_begin_with():
     "A person who knows the keys does not want a popup in the way."
     async with create_session() as (pymux, state):
@@ -72,8 +72,8 @@ async def test_which_key_is_off_to_begin_with():
         assert drawn_which_key_float(state) is None
 
 
-@in_a_loop
-async def test_the_option_and_the_prefix_draw_the_box():
+@in_loop
+async def test_option_and_prefix_draw_box():
     "The popup is about the prefix, so both have to hold."
     async with create_session() as (pymux, state):
         ALL_OPTIONS["which-key"].set_value(pymux, "on")
@@ -86,8 +86,8 @@ async def test_the_option_and_the_prefix_draw_the_box():
         assert drawn is not None
 
 
-@in_a_loop
-async def test_the_prefix_alone_asks_for_a_frame():
+@in_loop
+async def test_prefix_alone_asks_for_frame():
     """
     The popup draws only when something asks for a frame, and nothing
     else changes when the prefix lands. With the option off, nothing
@@ -113,8 +113,8 @@ async def test_the_prefix_alone_asks_for_a_frame():
         assert not asked
 
 
-@in_a_loop
-async def test_the_box_prefers_the_top_right_and_steps_aside():
+@in_loop
+async def test_box_prefers_top_right_and_steps_aside():
     """
     The top right holds the least of what a person has on the screen,
     so the box draws there by default. Only a cursor that is in its
@@ -124,7 +124,7 @@ async def test_the_box_prefers_the_top_right_and_steps_aside():
         ALL_OPTIONS["which-key"].set_value(pymux, "on")
         state.has_prefix = True
 
-        for x, y, at_the_top_right in [
+        for x, y, top_right in [
             (0, 0, True),  # upper left
             (79, 0, False),  # upper right: in the way
             (0, 23, True),  # lower left
@@ -135,12 +135,12 @@ async def test_the_box_prefers_the_top_right_and_steps_aside():
             drawn = drawn_which_key_float(state)
 
             assert drawn is not None, "no place drew for (%i, %i)" % (x, y)
-            assert (drawn.right is not None) == at_the_top_right
-            assert (drawn.bottom is not None) != at_the_top_right
+            assert (drawn.right is not None) == top_right
+            assert (drawn.bottom is not None) != top_right
 
 
-@in_a_loop
-async def test_the_listing_is_the_prefix_bindings():
+@in_loop
+async def test_listing_is_prefix_bindings():
     """
     The keys the box lists are the bindings the prefix reaches, with
     the command each one runs. A binding that answers without the
@@ -152,7 +152,7 @@ async def test_the_listing_is_the_prefix_bindings():
         manager.add_custom_binding("x", "swap-pane", ["-U"], needs_prefix=True)
         manager.add_custom_binding("e", "show-clipboard", [], needs_prefix=True)
 
-        rows = manager.keys_a_prefix_leads_to()
+        rows = manager.prefix_keys()
 
         assert ("e", "show-clipboard") in rows
         assert ("x", "swap-pane -U") in rows
@@ -164,8 +164,8 @@ async def test_the_listing_is_the_prefix_bindings():
         assert ("c", "new-window") in rows
 
 
-@in_a_loop
-async def test_the_box_takes_no_focus():
+@in_loop
+async def test_box_takes_no_focus():
     """
     The key after the prefix must reach the bindings as it always
     did. A focusable control in the box would eat it, and the popup

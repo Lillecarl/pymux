@@ -1,7 +1,7 @@
 """
 Which pane is over this one, and which is under it.
 
-The same question as `test_the_pane_beside_this_one.py`, turned ninety
+The same question as `test_pane_beside_this_one.py`, turned ninety
 degrees, and the same plan answers it. A stack is what a niri column
 holds, and a person in one cannot see what is out there any more than
 they could sideways. Lillecarl/pymux#211.
@@ -35,21 +35,21 @@ def create_stack(how_many):
 # A stack of panes.
 
 
-def test_the_middle_of_a_stack_has_a_pane_on_each_side():
+def test_middle_of_stack_has_pane_on_each_side():
     window, panes = create_stack(3)
 
     assert above(window, panes[1]) is panes[0]
     assert below(window, panes[1]) is panes[2]
 
 
-def test_the_top_of_a_stack_has_nothing_above_it():
+def test_top_of_stack_has_nothing_above_it():
     window, panes = create_stack(2)
 
     assert above(window, panes[0]) is None
     assert below(window, panes[0]) is panes[1]
 
 
-def test_the_bottom_of_a_stack_has_nothing_below_it():
+def test_bottom_of_stack_has_nothing_below_it():
     window, panes = create_stack(2)
 
     assert below(window, panes[1]) is None
@@ -66,7 +66,7 @@ def test_one_pane_has_nothing_on_either_side():
 # A pane inside a row takes the row's neighbours.
 
 
-def test_a_pane_in_a_row_has_no_pane_of_its_own_above_it():
+def test_pane_in_row_has_no_pane_of_its_own_above_it():
     """
     The pane over the row runs the whole width of it, so it is across
     from every pane in the row.
@@ -79,7 +79,7 @@ def test_a_pane_in_a_row_has_no_pane_of_its_own_above_it():
     assert above(window, right) is over
 
 
-def test_a_row_on_its_own_has_nothing_above_or_below():
+def test_row_on_its_own_has_nothing_above_or_below():
     left, right = create_pane(), create_pane()
     window = create_window(VSplit([left, right]))
 
@@ -91,7 +91,7 @@ def test_a_row_on_its_own_has_nothing_above_or_below():
 # Which pane of a neighbour is named.
 
 
-def test_a_stack_above_gives_the_pane_that_touches_us():
+def test_stack_above_gives_pane_that_touches_us():
     "Its last pane, which is the one at the bottom of it."
     top, bottom = create_pane(), create_pane()
     under = create_pane()
@@ -100,7 +100,7 @@ def test_a_stack_above_gives_the_pane_that_touches_us():
     assert above(window, under) is bottom
 
 
-def test_a_stack_below_gives_the_pane_that_touches_us():
+def test_stack_below_gives_pane_that_touches_us():
     over = create_pane()
     top, bottom = create_pane(), create_pane()
     window = create_window(HSplit([over, HSplit([top, bottom])]))
@@ -108,7 +108,7 @@ def test_a_stack_below_gives_the_pane_that_touches_us():
     assert below(window, over) is top
 
 
-def test_a_row_below_gives_the_pane_that_shares_most_of_our_width():
+def test_row_below_gives_pane_that_shares_most_of_our_width():
     """
     Which for an even row of two is the left one, by the odd cell the
     division gives it. The answer does not move when the focus inside
@@ -125,32 +125,32 @@ def test_a_row_below_gives_the_pane_that_shares_most_of_our_width():
 # Whether the window has a stack at all.
 
 
-def test_one_pane_is_not_a_stack():
+def test_one_pane_is_not_stack():
     window = create_window(HSplit([create_pane()]))
 
-    assert not window.has_a_stack()
+    assert not window.has_stack()
 
 
-def test_a_row_is_not_a_stack():
+def test_row_is_not_stack():
     window = create_window(VSplit([create_pane(), create_pane()]))
 
-    assert not window.has_a_stack()
+    assert not window.has_stack()
 
 
-def test_two_panes_one_above_another_are_a_stack():
+def test_two_panes_one_above_another_are_stack():
     window, _ = create_stack(2)
 
-    assert window.has_a_stack()
+    assert window.has_stack()
 
 
-def test_a_stack_inside_a_column_of_a_strip_counts():
+def test_stack_inside_column_of_strip_counts():
     "Which is the case the bar under a pane was asked for."
     window = create_window(VSplit([HSplit([create_pane()]), HSplit([create_pane(), create_pane()])]))
 
-    assert window.has_a_stack()
+    assert window.has_stack()
 
 
-def test_a_strip_of_one_pane_columns_is_not_a_stack():
+def test_strip_of_one_pane_columns_is_not_stack():
     window = create_window(VSplit([HSplit([create_pane()]), HSplit([create_pane()])]))
 
-    assert not window.has_a_stack()
+    assert not window.has_stack()

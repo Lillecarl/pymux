@@ -8,11 +8,11 @@ template does. Lillecarl/pymux#296.
 
 from prompt_toolkit.application.current import set_app
 
-from session import create_session, in_a_loop
+from session import create_session, in_loop
 
 
-@in_a_loop
-async def test_the_windows_trade_indexes_and_the_destination_takes_the_focus():
+@in_loop
+async def test_windows_trade_indexes_and_destination_takes_focus():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("new-window")  # index 3, and it is active
@@ -28,8 +28,8 @@ async def test_the_windows_trade_indexes_and_the_destination_takes_the_focus():
             assert pymux.arrangement.get_active_window() is first
 
 
-@in_a_loop
-async def test_d_keeps_the_active_window_active():
+@in_loop
+async def test_d_keeps_active_window_active():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("new-window")
@@ -42,8 +42,8 @@ async def test_d_keeps_the_active_window_active():
             assert pymux.arrangement.get_active_window() is third
 
 
-@in_a_loop
-async def test_a_relative_target_counts_from_the_active_window():
+@in_loop
+async def test_relative_target_counts_from_active_window():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("new-window")  # index 3, and it is active
@@ -59,8 +59,8 @@ async def test_a_relative_target_counts_from_the_active_window():
             assert pymux.arrangement.get_active_window() is second
 
 
-@in_a_loop
-async def test_a_swap_with_itself_does_nothing():
+@in_loop
+async def test_swap_with_itself_does_nothing():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("new-window")

@@ -47,7 +47,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 # not the directory above it.
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
-from session import over_a_connection  # noqa: E402
+from session import over_connection  # noqa: E402
 from prompt_toolkit.application.current import set_app  # noqa: E402
 from prompt_toolkit.data_structures import Size  # noqa: E402
 
@@ -118,7 +118,7 @@ async def what_it_costs(name: str) -> tuple:
     """
     command = " ".join(PROGRAMS[name])
 
-    with over_a_connection() as session:
+    with over_connection() as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -158,7 +158,7 @@ async def what_it_costs_watched(name: str, rate: int) -> tuple:
     """
     command = " ".join(PROGRAMS[name])
 
-    with over_a_connection() as session:
+    with over_connection() as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 

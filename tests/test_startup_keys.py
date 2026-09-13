@@ -46,13 +46,13 @@ def bindings():
 
 
 @pytest.mark.parametrize("key,command", bindings())
-def test_every_key_of_the_default_table_has_a_name(key, command):
+def test_every_key_of_default_table_has_name(key, command):
     "A name the table does not know is dropped, and says nothing."
     assert pymux_key_to_prompt_toolkit_key_sequence(key)
 
 
 @pytest.mark.parametrize("key,command", bindings())
-def test_every_default_binding_reaches_a_command(key, command):
+def test_every_default_binding_reaches_command(key, command):
     assert command in command_names()
 
 
@@ -77,11 +77,11 @@ def test_no_key_is_bound_twice():
         ("W", "switch-column-width"),
     ],
 )
-def test_the_strip_has_a_key_for_each_of_its_commands(key, command):
+def test_strip_has_key_for_each_of_its_commands(key, command):
     assert (key, command) in bindings()
 
 
-def test_the_braces_are_still_tmux_s_own():
+def test_braces_are_still_tmux_s_own():
     """
     niri moves a window between columns on the two bracket keys, and
     those are `swap-pane` here. tmux's keys stay tmux's, so the strip

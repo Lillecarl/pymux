@@ -23,11 +23,11 @@ def put_level_back():
     log.logger.setLevel(was)
 
 
-def test_the_option_is_there():
+def test_option_is_there():
     assert "log-level" in ALL_OPTIONS
 
 
-def test_it_offers_the_levels_a_person_may_name():
+def test_it_offers_levels_person_may_name():
     assert ALL_OPTIONS["log-level"].get_all_values(Pymux()) == [
         "debug",
         "error",
@@ -36,7 +36,7 @@ def test_it_offers_the_levels_a_person_may_name():
     ]
 
 
-def test_setting_it_reaches_the_logger():
+def test_setting_it_reaches_logger():
     pymux = Pymux()
     ALL_OPTIONS["log-level"].set_value(pymux, "debug")
     assert log.logger.level == logging.DEBUG
@@ -45,25 +45,25 @@ def test_setting_it_reaches_the_logger():
     assert log.logger.level == logging.WARNING
 
 
-def test_a_name_that_is_not_a_level_is_refused():
+def test_name_that_is_not_level_is_refused():
     with pytest.raises(SetOptionError):
         ALL_OPTIONS["log-level"].set_value(Pymux(), "chatty")
 
 
-def test_the_server_says_which_level_it_is_at():
+def test_server_says_which_level_it_is_at():
     pymux = Pymux()
     pymux.log_level = "error"
     assert pymux.log_level == "error"
 
 
-def test_a_running_server_takes_the_command():
+def test_running_server_takes_command():
     "The whole point: `pymux -S <sock> set-option log-level debug`."
     pymux = Pymux()
     pymux.handle_command("set-option log-level debug")
     assert pymux.log_level == "debug"
 
 
-def test_the_server_says_its_level_when_asked_what_it_is_doing():
+def test_server_says_its_level_when_asked_what_it_is_doing():
     """
     pymux has no `show-options`, so a person who turned debug on and
     forgot has nowhere else to read it back.
@@ -75,13 +75,13 @@ def test_the_server_says_its_level_when_asked_what_it_is_doing():
     assert "at debug" in _server(pymux)
 
 
-def test_a_level_nothing_here_set_reads_back_as_its_number():
+def test_level_nothing_here_set_reads_back_as_its_number():
     "Honest about a level that something else chose."
     log.logger.setLevel(logging.CRITICAL)
     assert log.level() == str(logging.CRITICAL)
 
 
-def test_the_flag_and_the_option_take_the_same_words():
+def test_flag_and_option_take_same_words():
     """
     One list, so a person cannot learn one spelling and be refused the
     other.

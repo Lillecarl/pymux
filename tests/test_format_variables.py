@@ -38,7 +38,7 @@ def test_no_variable_raises(pymux, name):
     tmux_variables[name](pymux, window, window.active_pane)
 
 
-def test_a_variable_that_nobody_knows_is_empty(pymux):
+def test_variable_that_nobody_knows_is_empty(pymux):
     assert format_pymux_string(pymux, "#{not_a_variable}") == ""
 
 
@@ -47,7 +47,7 @@ def test_several_variables_in_one_string(pymux):
     assert answer.split(":")[0] == pymux.session_name
 
 
-def test_an_id_reads_as_a_target(pymux):
+def test_id_reads_as_target(pymux):
     "A caller passes these straight back as `-t`."
     assert format_pymux_string(pymux, "#{pane_id}").startswith("%")
     assert format_pymux_string(pymux, "#{window_id}").startswith("@")

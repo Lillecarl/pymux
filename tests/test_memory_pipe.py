@@ -18,7 +18,7 @@ def run(coro):
     return asyncio.run(coro)
 
 
-def test_a_packet_arrives_as_the_bytes_that_were_written():
+def test_packet_arrives_as_bytes_that_were_written():
     async def go():
         server, client = connect_in_memory()
         await server.write('{"cmd": "out", "data": "héllo"}')
@@ -27,7 +27,7 @@ def test_a_packet_arrives_as_the_bytes_that_were_written():
     assert run(go()) == b'{"cmd": "out", "data": "h\xc3\xa9llo"}'
 
 
-def test_the_packets_arrive_in_the_order_they_were_written():
+def test_packets_arrive_in_order_they_were_written():
     async def go():
         server, client = connect_in_memory()
         for i in range(10):
@@ -47,7 +47,7 @@ def test_both_ends_carry_their_own_way():
     assert run(go()) == (b"to the client", b"to the server")
 
 
-def test_a_read_waits_for_a_write():
+def test_read_waits_for_write():
     async def go():
         server, client = connect_in_memory()
 
@@ -63,7 +63,7 @@ def test_a_read_waits_for_a_write():
     assert run(go()) == b"late"
 
 
-def test_a_closed_end_ends_the_read_of_the_peer():
+def test_closed_end_ends_read_of_peer():
     async def go():
         server, client = connect_in_memory()
         server.close()
@@ -73,7 +73,7 @@ def test_a_closed_end_ends_the_read_of_the_peer():
     run(go())
 
 
-def test_what_was_written_before_the_close_still_arrives():
+def test_what_was_written_before_close_still_arrives():
     async def go():
         server, client = connect_in_memory()
         await server.write("last word")
@@ -86,7 +86,7 @@ def test_what_was_written_before_the_close_still_arrives():
     assert run(go()) == b"last word"
 
 
-def test_a_write_to_a_closed_peer_is_a_broken_pipe():
+def test_write_to_closed_peer_is_broken_pipe():
     async def go():
         server, client = connect_in_memory()
         client.close()
@@ -96,7 +96,7 @@ def test_a_write_to_a_closed_peer_is_a_broken_pipe():
     run(go())
 
 
-def test_a_write_after_this_end_closed_is_a_broken_pipe():
+def test_write_after_this_end_closed_is_broken_pipe():
     async def go():
         server, client = connect_in_memory()
         server.close()
@@ -106,7 +106,7 @@ def test_a_write_after_this_end_closed_is_a_broken_pipe():
     run(go())
 
 
-def test_closing_twice_does_nothing_the_second_time():
+def test_closing_twice_does_nothing_second_time():
     async def go():
         server, client = connect_in_memory()
         server.close()

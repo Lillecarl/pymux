@@ -74,7 +74,7 @@ class Strip:
 
     **The plan is the truth.** `PlanContainer` draws it, so nothing
     works the numbers out a second time and nothing can disagree with
-    it. `tests/test_the_plan_and_the_frame.py` holds what was drawn
+    it. `tests/test_plan_and_frame.py` holds what was drawn
     against what was measured.
     """
 

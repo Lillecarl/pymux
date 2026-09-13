@@ -132,7 +132,7 @@ class MiddleMan:
         "Put bytes on the screen of the pane, and read our own wire back."
         wire = self.pane.write(data)
         if os.environ.get("PYMUX_VTERM_TRACE"):
-            self.pane.trace_the_pane()
+            self.pane.trace_pane()
         return wire
 
     def feed_judge(self, data: bytes) -> None:

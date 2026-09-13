@@ -32,19 +32,19 @@ def source(tmp_path, text):
 # What is kept.
 
 
-def test_a_file_that_is_right_keeps_nothing(tmp_path):
+def test_file_that_is_right_keeps_nothing(tmp_path):
     _pymux, errors = source(tmp_path, "set status off\n")
     assert errors == []
 
 
-def test_the_tmux_spelling_of_a_global_option_runs(tmp_path):
+def test_tmux_spelling_of_global_option_runs(tmp_path):
     "The line that started this. It works now, so it reports nothing."
     pymux, errors = source(tmp_path, "set -g status off\n")
     assert errors == []
     assert pymux.enable_status is False
 
 
-def test_a_line_with_a_word_too_many_is_reported(tmp_path):
+def test_line_with_word_too_many_is_reported(tmp_path):
     """
     docopt rejects it with the usage string. That message says nothing
     about which word was wrong, which is the argument of
@@ -55,13 +55,13 @@ def test_a_line_with_a_word_too_many_is_reported(tmp_path):
     assert "set-option" in errors[0]
 
 
-def test_a_command_that_does_not_exist_is_reported(tmp_path):
+def test_command_that_does_not_exist_is_reported(tmp_path):
     _pymux, errors = source(tmp_path, "not-a-command\n")
     assert len(errors) == 1
     assert "invalid command: not-a-command" in errors[0]
 
 
-def test_a_bad_value_is_reported(tmp_path):
+def test_bad_value_is_reported(tmp_path):
     _pymux, errors = source(tmp_path, "set status maybe\n")
     assert len(errors) == 1
 
@@ -77,13 +77,13 @@ def test_every_failing_line_is_reported(tmp_path):
 # What the message says.
 
 
-def test_the_message_names_the_file_and_the_line(tmp_path):
+def test_message_names_file_and_line(tmp_path):
     "Without it a person reads the complaint and hunts for the line."
     _pymux, errors = source(tmp_path, "set status off\nset status maybe\n")
     assert errors[0].startswith("%s line 2: " % (tmp_path / "pymux.conf"))
 
 
-def test_a_comment_and_a_blank_line_do_not_shift_the_count(tmp_path):
+def test_comment_and_blank_line_do_not_shift_count(tmp_path):
     _pymux, errors = source(tmp_path, "# a comment\n\nset status maybe\n")
     assert "line 3: " in errors[0]
 
@@ -92,7 +92,7 @@ def test_a_comment_and_a_blank_line_do_not_shift_the_count(tmp_path):
 # Who is told.
 
 
-def test_the_first_client_is_told(tmp_path):
+def test_first_client_is_told(tmp_path):
     "And the message is what the errors said."
 
     class AClientState:
@@ -107,7 +107,7 @@ def test_the_first_client_is_told(tmp_path):
     assert state.message == errors_before[0]
 
 
-def test_the_second_client_is_not_told(tmp_path):
+def test_second_client_is_not_told(tmp_path):
     "It did not make the mistake, and it cannot act on the message."
 
     class AClientState:
@@ -121,7 +121,7 @@ def test_the_second_client_is_not_told(tmp_path):
     assert second.message is None
 
 
-def test_a_client_with_nothing_to_report_gets_no_message(tmp_path):
+def test_client_with_nothing_to_report_gets_no_message(tmp_path):
     class AClientState:
         message = "something else"
 
@@ -135,12 +135,12 @@ def test_a_client_with_nothing_to_report_gets_no_message(tmp_path):
 # The reading of one line does not leak into the next.
 
 
-def test_the_place_is_cleared_after_the_file(tmp_path):
+def test_place_is_cleared_after_file(tmp_path):
     pymux, _errors = source(tmp_path, "set status maybe\n")
     assert pymux.sourcing is None
 
 
-def test_a_missing_file_is_still_an_error_of_its_own(tmp_path):
+def test_missing_file_is_still_error_of_its_own(tmp_path):
     "`source-file` raised for that before, and still does."
     from pymux.commands import CommandException
 

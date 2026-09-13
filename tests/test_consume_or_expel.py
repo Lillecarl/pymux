@@ -64,7 +64,7 @@ def _panes(item):
 # A pane that is alone in its column joins the next one.
 
 
-def test_a_lone_pane_joins_the_column_on_its_left():
+def test_lone_pane_joins_column_on_its_left():
     window, opened = create_strip(2)
     first, second = opened
 
@@ -73,7 +73,7 @@ def test_a_lone_pane_joins_the_column_on_its_left():
     assert order_of(window) == [[first, second]]
 
 
-def test_a_lone_pane_joins_the_column_on_its_right():
+def test_lone_pane_joins_column_on_its_right():
     window, opened = create_strip(2)
     first, second = opened
 
@@ -82,7 +82,7 @@ def test_a_lone_pane_joins_the_column_on_its_right():
     assert order_of(window) == [[second, first]]
 
 
-def test_it_joins_at_the_bottom_of_the_column():
+def test_it_joins_at_bottom_of_column():
     "One rule, so a person knows where the pane will land."
     window, opened = create_strip(3)
     first, second, third = opened
@@ -93,7 +93,7 @@ def test_it_joins_at_the_bottom_of_the_column():
     assert order_of(window) == [[first, second, third]]
 
 
-def test_the_strip_is_one_column_shorter_afterwards():
+def test_strip_is_one_column_shorter_afterwards():
     window, opened = create_strip(3)
 
     window.consume_or_expel(opened[2], -1)
@@ -101,7 +101,7 @@ def test_the_strip_is_one_column_shorter_afterwards():
     assert len(window.root) == 2
 
 
-def test_the_pane_keeps_the_focus_when_it_moves():
+def test_pane_keeps_focus_when_it_moves():
     window, opened = create_strip(2)
     window.active_pane = opened[1]
 
@@ -110,7 +110,7 @@ def test_the_pane_keeps_the_focus_when_it_moves():
     assert window.active_pane is opened[1]
 
 
-def test_a_lone_pane_at_the_end_of_the_row_stays():
+def test_lone_pane_at_end_of_row_stays():
     "A key held down at the edge does nothing, and does not raise."
     window, opened = create_strip(2)
 
@@ -118,14 +118,14 @@ def test_a_lone_pane_at_the_end_of_the_row_stays():
     assert order_of(window) == [[opened[0]], [opened[1]]]
 
 
-def test_the_only_pane_of_the_window_stays():
+def test_only_pane_of_window_stays():
     window, opened = create_strip(1)
 
     assert not window.consume_or_expel(opened[0], -1)
     assert not window.consume_or_expel(opened[0], +1)
 
 
-def test_the_column_that_is_joined_keeps_its_width():
+def test_column_that_is_joined_keeps_its_width():
     """
     A column should not change size because a pane joined it. The width
     is keyed by the object that holds the column, and a bare pane
@@ -144,7 +144,7 @@ def test_the_column_that_is_joined_keeps_its_width():
 # A pane that shares its column leaves it.
 
 
-def test_a_shared_pane_leaves_into_a_column_on_its_left():
+def test_shared_pane_leaves_into_column_on_its_left():
     window, opened = create_strip(2)
     first, second = opened
     window.consume_or_expel(second, -1)
@@ -154,7 +154,7 @@ def test_a_shared_pane_leaves_into_a_column_on_its_left():
     assert order_of(window) == [[second], [first]]
 
 
-def test_a_shared_pane_leaves_into_a_column_on_its_right():
+def test_shared_pane_leaves_into_column_on_its_right():
     window, opened = create_strip(2)
     first, second = opened
     window.consume_or_expel(second, -1)
@@ -175,7 +175,7 @@ def test_leaving_undoes_joining():
     assert order_of(window) == before
 
 
-def test_a_pane_may_leave_a_column_at_the_end_of_the_row():
+def test_pane_may_leave_column_at_end_of_row():
     "There is always room for a column of its own, at either end."
     window, opened = create_strip(2)
     first, second = opened
@@ -185,7 +185,7 @@ def test_a_pane_may_leave_a_column_at_the_end_of_the_row():
     assert order_of(window) == [[first], [second]]
 
 
-def test_the_column_it_left_collapses_to_the_pane_that_is_left():
+def test_column_it_left_collapses_to_pane_that_is_left():
     "A stack of one is that one, so the tree does not grow scar tissue."
     window, opened = create_strip(2)
     first, second = opened
@@ -196,7 +196,7 @@ def test_the_column_it_left_collapses_to_the_pane_that_is_left():
     assert isinstance(window.root[0], Pane)
 
 
-def test_a_pane_walks_to_the_end_of_the_row_and_comes_back():
+def test_pane_walks_to_end_of_row_and_comes_back():
     """
     What holding the key does. The middle pane goes left until it can
     go no further, then right the same number of times.
@@ -223,7 +223,7 @@ def test_a_pane_walks_to_the_end_of_the_row_and_comes_back():
 # The shape of the tree.
 
 
-def test_the_columns_stay_the_children_of_the_root():
+def test_columns_stay_children_of_root():
     "A strip is a row of columns, and nothing here may change that."
     window, opened = create_strip(3)
 
@@ -234,7 +234,7 @@ def test_the_columns_stay_the_children_of_the_root():
         assert isinstance(column, (Pane, HSplit))
 
 
-def test_the_panes_are_numbered_from_the_left_afterwards():
+def test_panes_are_numbered_from_left_afterwards():
     "`Window.panes` is what a title bar and `select-pane -t` read."
     window, opened = create_strip(3)
     first, second, third = opened

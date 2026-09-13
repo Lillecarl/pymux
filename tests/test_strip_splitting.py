@@ -63,7 +63,7 @@ def shape(item):
 # A horizontal split opens a column.
 
 
-def test_a_horizontal_split_opens_a_column():
+def test_horizontal_split_opens_column():
     window, _ = create_strip(1)
 
     window.add_pane(create_pane(), vsplit=True)
@@ -71,7 +71,7 @@ def test_a_horizontal_split_opens_a_column():
     assert shape(window.root) == ["V", ["H", "p"], "p"]
 
 
-def test_the_column_opens_beside_the_one_a_person_is_on():
+def test_column_opens_beside_one_person_is_on():
     "Not at the end of the strip: beside the pane they were looking at."
     window, opened = create_strip(3)
     window.active_pane = opened[0]
@@ -83,7 +83,7 @@ def test_the_column_opens_beside_the_one_a_person_is_on():
     assert window.root.index(window.active_pane) == 1
 
 
-def test_the_new_column_takes_the_focus():
+def test_new_column_takes_focus():
     window, _ = create_strip(1)
     fresh = create_pane()
 
@@ -92,7 +92,7 @@ def test_the_new_column_takes_the_focus():
     assert window.active_pane is fresh
 
 
-def test_a_column_keeps_its_width_when_another_opens():
+def test_column_keeps_its_width_when_another_opens():
     """
     The point of the mode. Every other layout would have made this
     column narrower.
@@ -106,7 +106,7 @@ def test_a_column_keeps_its_width_when_another_opens():
     assert window.column_width(first) == 2 / 3
 
 
-def test_the_strip_grows_a_column_at_a_time():
+def test_strip_grows_column_at_time():
     window, _ = create_strip(1)
 
     for _ in range(3):
@@ -119,7 +119,7 @@ def test_the_strip_grows_a_column_at_a_time():
 # A vertical split stacks inside the column.
 
 
-def test_a_vertical_split_stacks_inside_the_column():
+def test_vertical_split_stacks_inside_column():
     window, _ = create_strip(2)
 
     window.add_pane(create_pane(), vsplit=False)
@@ -127,7 +127,7 @@ def test_a_vertical_split_stacks_inside_the_column():
     assert shape(window.root) == ["V", ["H", "p"], ["H", "p", "p"]]
 
 
-def test_a_stack_does_not_add_a_column():
+def test_stack_does_not_add_column():
     window, _ = create_strip(2)
 
     window.add_pane(create_pane(), vsplit=False)
@@ -135,7 +135,7 @@ def test_a_stack_does_not_add_a_column():
     assert len(window.root) == 2
 
 
-def test_a_stacked_pane_keeps_the_width_of_the_column_it_joined():
+def test_stacked_pane_keeps_width_of_column_it_joined():
     """
     A column that became a stack should not change width under a
     person. The width belonged to the pane, and it has to move to the
@@ -150,7 +150,7 @@ def test_a_stacked_pane_keeps_the_width_of_the_column_it_joined():
     assert window.column_width(window._column_of(window.active_pane)) == 1 / 3
 
 
-def test_a_column_nobody_resized_is_still_half():
+def test_column_nobody_resized_is_still_half():
     window, _ = create_strip(2)
 
     window.add_pane(create_pane(), vsplit=False)
@@ -163,7 +163,7 @@ def test_a_column_nobody_resized_is_still_half():
 # Which column a pane is in.
 
 
-def test_a_pane_in_the_root_is_its_own_column():
+def test_pane_in_root_is_its_own_column():
     "A column opened by a horizontal split is a bare pane."
     window, _ = create_strip(2)
     alone = window.active_pane
@@ -172,7 +172,7 @@ def test_a_pane_in_the_root_is_its_own_column():
     assert window._column_of(alone) is alone
 
 
-def test_a_pane_in_a_stack_is_in_the_stack_s_column():
+def test_pane_in_stack_is_in_stack_s_column():
     window, _ = create_strip(2)
     window.add_pane(create_pane(), vsplit=False)
     deep = window.active_pane
@@ -187,7 +187,7 @@ def test_a_pane_in_a_stack_is_in_the_stack_s_column():
 # Outside a strip, nothing changed.
 
 
-def test_a_window_that_is_not_a_strip_splits_the_pane():
+def test_window_that_is_not_strip_splits_pane():
     "The old behaviour, on the same calls."
     window = Window()
     window.add_pane(create_pane())
@@ -197,7 +197,7 @@ def test_a_window_that_is_not_a_strip_splits_the_pane():
     assert shape(window.root) == ["H", ["V", "p", "p"]]
 
 
-def test_a_window_that_is_not_a_strip_stacks_the_old_way():
+def test_window_that_is_not_strip_stacks_old_way():
     window = Window()
     window.add_pane(create_pane())
 

@@ -1,7 +1,7 @@
 """
 Photograph what pymux draws around a pane, in a real terminal.
 
-`take_a_picture.py` subtracts two pictures of the same program, one
+`take_picture.py` subtracts two pictures of the same program, one
 bare and one in a pymux pane. It writes `set full-screen on` before
 every fixture, which is right for what it asks -- anything pymux drew
 around the pane would count as a difference on every fixture -- and it
@@ -10,7 +10,7 @@ line, a pane title bar, the command palette, the overlay pane.
 
 Nothing could, either. A headless compositor owns no input device and
 the terminal's pty belongs to the terminal, so nothing could press a
-key at pymux to open any of it. `drive_in_a_terminal.py` is the way
+key at pymux to open any of it. `drive_in_terminal.py` is the way
 round: it runs as the terminal's child, runs pymux on a pty of its own,
 copies what pymux writes to the terminal's tty, and types the keys.
 Lillecarl/pymux#161.
@@ -64,7 +64,7 @@ ONLY = os.environ.get("PYMUX_CHROME", "")
 ONLY_TERMINALS = os.environ.get("PYMUX_CHROME_TERMINALS", "")
 
 #: The relay, beside this file.
-RELAY = Path(__file__).parent / "drive_in_a_terminal.py"
+RELAY = Path(__file__).parent / "drive_in_terminal.py"
 
 #: The demo, beside this file: the program a fixture types at a
 #: pane, the way the theme pictures put it there. A pane that has run
@@ -88,7 +88,7 @@ def keys(*steps):
 
     The first wait is counted from pymux's first frame, which the
     relay waits for. The rest are counted from the step before them.
-    `drive_in_a_terminal.py` says the format.
+    `drive_in_terminal.py` says the format.
     """
     return "".join("%s %r\n" % (delay, one) for delay, one in steps)
 
@@ -310,11 +310,11 @@ def chrome_command(
     # sandbox that passwd shell is /noshell: every pane died at exec
     # and the keys typed after it went nowhere. The shell the harness
     # itself carries is the one pymux gives a pane.
-    the_shell = os.environ.get("SHELL")
+    shell = os.environ.get("SHELL")
     inside = (
         (
-            "export SHELL=%s\n" % shlex.quote(the_shell)
-            if the_shell is not None
+            "export SHELL=%s\n" % shlex.quote(shell)
+            if shell is not None
             else ""
         )
         + "exec python3 -m pymux -S %s -f %s --log %s"
@@ -406,7 +406,7 @@ def main(
     Photograph every fixture, in every terminal.
 
     The arguments are the knobs of the run, and default to this
-    module's own: `photograph_the_themes.py` passes its own fixtures
+    module's own: `photograph_themes.py` passes its own fixtures
     and its own knob names, and the same machinery takes the pictures.
 
     `only_list` and `only_terminals_list` are exact names, and beat
@@ -455,7 +455,7 @@ def main(
 
     # The same directory the comparison check needs, and for the same
     # reason: two display servers run here at once and neither can make
-    # it. `take_a_picture.py` says why. Lillecarl/pymux#177.
+    # it. `take_picture.py` says why. Lillecarl/pymux#177.
     Path("/tmp/.X11-unix").mkdir(parents=True, exist_ok=True)
 
     seats = {}

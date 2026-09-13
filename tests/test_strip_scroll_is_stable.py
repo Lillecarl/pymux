@@ -116,7 +116,7 @@ def where(pymux, pane):
     return pymux.get_client_state().layout_manager.pane_write_positions[pane]
 
 
-def test_the_whole_walk_left_and_right_and_back():
+def test_whole_walk_left_and_right_and_back():
     """
     Three columns of half an 80 column window: 120 cells of strip seen
     through 80, so the view is either at 0 or at 40 and nowhere else.
@@ -142,7 +142,7 @@ def test_the_whole_walk_left_and_right_and_back():
         assert panes.index(window.active_pane) == 0
 
 
-def test_the_focus_inside_a_stack_still_finds_its_column():
+def test_focus_inside_stack_still_finds_its_column():
     """
     A column can be a stack of panes, which is what a niri column is.
     The focused pane is then one of several, and the thing to scroll to
@@ -156,7 +156,7 @@ def test_the_focus_inside_a_stack_still_finds_its_column():
     with create_client(STRIP) as (pymux, state, draw):
         _window, panes = columns_of(pymux, 3)
         draw()
-        on_the_third = view(state)
+        third = view(state)
 
         # Split the third column downwards, so it holds two panes.
         pymux.handle_command("split-window -v")
@@ -164,17 +164,17 @@ def test_the_focus_inside_a_stack_still_finds_its_column():
         draw()
 
         # Still the same column, so the same view.
-        assert view(state) == on_the_third, view(state)
+        assert view(state) == third, view(state)
 
         # And moving out of the stack and back does not move it either.
         move(pymux, state, "L")
         draw()
         move(pymux, state, "R")
         draw()
-        assert view(state) == on_the_third, view(state)
+        assert view(state) == third, view(state)
 
 
-def test_a_column_wider_than_the_view_still_starts_on_screen():
+def test_column_wider_than_view_still_starts_on_screen():
     """
     It cannot be shown whole, so part of it is off the screen, and the
     part a person is looking at may not be.
@@ -186,8 +186,8 @@ def test_a_column_wider_than_the_view_still_starts_on_screen():
     **The left edge is the one that is kept**, and it is kept whether
     the column fits or not: Lillecarl/pymux#218. So this holds for a
     column wider than the whole view as well, and
-    `test_a_column_wider_than_the_view_shows_its_left_edge`
-    (`test_the_strip_plan.py`) reads the offset that says which end it
+    `test_column_wider_than_view_shows_left_edge`
+    (`test_strip_plan.py`) reads the offset that says which end it
     is.
     """
     with create_client(STRIP, columns=20) as (pymux, state, draw):
@@ -205,7 +205,7 @@ def test_a_column_wider_than_the_view_still_starts_on_screen():
         assert drawn.xpos < 20, drawn
 
 
-def test_the_focused_column_is_wholly_on_screen():
+def test_focused_column_is_wholly_on_screen():
     """
     Its border is its right edge, and the column is not on screen
     until that is.
@@ -239,7 +239,7 @@ def move(pymux, state, direction):
     state.sync_focus()
 
 
-def test_opening_a_pane_leaves_the_row_where_a_person_scrolled_it():
+def test_opening_pane_leaves_row_where_person_scrolled_it():
     """
     The containers are built again whenever the arrangement changes
     shape, and the view used to be one of them, so it went back to the
@@ -270,7 +270,7 @@ def test_opening_a_pane_leaves_the_row_where_a_person_scrolled_it():
         assert view(state) == scrolled, (scrolled, view(state))
 
 
-def test_moving_back_to_a_column_that_is_on_screen_does_not_move_the_view():
+def test_moving_back_to_column_that_is_on_screen_does_not_move_view():
     """
     The reported fault. Three columns are wider than the screen, so
     landing on the third scrolls. The second is then wholly on screen,
@@ -279,15 +279,15 @@ def test_moving_back_to_a_column_that_is_on_screen_does_not_move_the_view():
     with create_client(STRIP) as (pymux, state, draw):
         _window, _panes = columns_of(pymux, 3)
         draw()
-        on_the_third = view(state)
+        third = view(state)
 
         move(pymux, state, "L")
         draw()
 
-        assert view(state) == on_the_third, (on_the_third, view(state))
+        assert view(state) == third, (third, view(state))
 
 
-def test_walking_right_and_back_returns_the_same_view():
+def test_walking_right_and_back_returns_same_view():
     """
     The same property, said as a round trip.
 
@@ -309,9 +309,9 @@ def test_walking_right_and_back_returns_the_same_view():
 
         step("L")
         step("L")
-        at_the_start = view(state)
+        start = view(state)
 
         for direction in "RRLL":
             step(direction)
 
-        assert view(state) == at_the_start, (at_the_start, view(state))
+        assert view(state) == start, (start, view(state))

@@ -32,13 +32,13 @@ def test_comments_and_blank_lines_are_not_verdicts(tmp_path):
     }
 
 
-def test_a_missing_file_is_no_list(tmp_path):
+def test_missing_file_is_no_list(tmp_path):
     "The first run of a check with no recording yet writes one, not fails."
     assert read_verdicts(tmp_path / "nothing.txt") == {}
     assert read_names(tmp_path / "nothing.txt") == set()
 
 
-def test_a_line_that_names_nothing_is_a_fault(tmp_path):
+def test_line_that_names_nothing_is_fault(tmp_path):
     "A list whose line quietly named nothing would judge against nothing."
     path = tmp_path / "lists.txt"
     path.write_text("12\n")

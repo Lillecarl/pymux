@@ -1,7 +1,7 @@
 """
 Photograph every screen vttest draws, with pymux in the chain and without.
 
-`take_a_picture.py` runs a fixture somebody wrote and subtracts two
+`take_picture.py` runs a fixture somebody wrote and subtracts two
 pictures of it. This runs vttest, which is the program that exists to
 draw the awkward screens: double sized rows, national character sets,
 origin mode, the character set of a VT52, the reports of a VT420. A
@@ -125,7 +125,7 @@ INCLUDE = os.environ.get("PYMUX_VTTEST_INCLUDE", "^4 ")
 #: reason: every terminal doubles the run.
 #:
 #: xterm is that one, which is the other way round from
-#: `take_a_picture.py`. Measured on item 4 of vttest's main menu:
+#: `take_picture.py`. Measured on item 4 of vttest's main menu:
 #:
 #: * xterm draws the DEC line attributes, honours DECCOLM by resizing
 #:   its window, and settles, because it does not blink a cursor in a
@@ -522,7 +522,7 @@ def compare_one(terminal, seat, work, out):
     # The pane covers every cell, and `pymux_command` writes the same
     # line the still pictures use, so both harnesses put pymux in the
     # chain the same way.
-    def in_a_pane(walker):
+    def in_pane(walker):
         return pymux_command(
             walker,
             work / ("%s-vttest.sock" % terminal.name),
@@ -540,7 +540,7 @@ def compare_one(terminal, seat, work, out):
             work,
             room,
         )
-        through = one_side(terminal, seat, "pymux", in_a_pane, work, room)
+        through = one_side(terminal, seat, "pymux", in_pane, work, room)
     except RuntimeError as reason:
         raise RuntimeError("%s\n%s" % (reason, every_log(room))) from None
 

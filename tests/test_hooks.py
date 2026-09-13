@@ -10,11 +10,11 @@ Lillecarl/pymux#297.
 
 from prompt_toolkit.application.current import set_app
 
-from session import create_session, in_a_loop
+from session import create_session, in_loop
 
 
-@in_a_loop
-async def test_a_hook_runs_when_the_command_its_named_for_runs():
+@in_loop
+async def test_hook_runs_when_command_its_named_for_runs():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("set-hook after-select-pane 'display pane-was-selected'")
@@ -23,8 +23,8 @@ async def test_a_hook_runs_when_the_command_its_named_for_runs():
         assert state.message == "pane-was-selected"
 
 
-@in_a_loop
-async def test_a_hook_runs_when_a_window_opens():
+@in_loop
+async def test_hook_runs_when_window_opens():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("set-hook after-new-window 'display a-window-opened'")
@@ -33,8 +33,8 @@ async def test_a_hook_runs_when_a_window_opens():
         assert state.message == "a-window-opened"
 
 
-@in_a_loop
-async def test_u_forgets_the_hook():
+@in_loop
+async def test_u_forgets_hook():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("set-hook after-select-pane 'display pane-was-selected'")
@@ -44,8 +44,8 @@ async def test_u_forgets_the_hook():
         assert state.message is None
 
 
-@in_a_loop
-async def test_a_hook_holds_its_commands_in_order():
+@in_loop
+async def test_hook_holds_its_commands_in_order():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("set-hook after-select-pane 'display first'")
@@ -57,7 +57,7 @@ async def test_a_hook_holds_its_commands_in_order():
         assert lines == ["display first", "display second"]
 
 
-@in_a_loop
+@in_loop
 async def test_show_hooks_lists_them():
     async with create_session() as (pymux, state):
         with set_app(state.app):

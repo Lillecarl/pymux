@@ -1,7 +1,7 @@
 """
 The relay that lets a picture of a terminal be a picture of pymux.
 
-`tests/drive_in_a_terminal.py` runs as a terminal's child, runs a
+`tests/drive_in_terminal.py` runs as a terminal's child, runs a
 program on a pty of its own, copies what the program writes to the
 terminal's tty, and writes scripted keys into the pty. That is how a
 check presses a key at pymux: a headless compositor owns no input
@@ -27,7 +27,7 @@ from struct import pack
 
 import pytest
 
-RELAY = os.path.join(os.path.dirname(__file__), "drive_in_a_terminal.py")
+RELAY = os.path.join(os.path.dirname(__file__), "drive_in_terminal.py")
 
 #: Long enough for a program to start and answer on a loaded machine,
 #: short enough that a test that goes wrong does not hold the suite.
@@ -93,7 +93,7 @@ def create_keys_file(tmp_path, text):
 # Keys reach the program.
 
 
-def test_the_keys_reach_the_program(tmp_path):
+def test_keys_reach_program(tmp_path):
     "Which is the whole reason this exists."
     keys = create_keys_file(tmp_path, '0.2 b"hello\\n"\n')
 
@@ -106,7 +106,7 @@ def test_the_keys_reach_the_program(tmp_path):
     assert b"got:hello." in seen
 
 
-def test_the_steps_happen_in_order(tmp_path):
+def test_steps_happen_in_order(tmp_path):
     keys = create_keys_file(tmp_path, '0.1 b"one\\n"\n0.1 b"two\\n"\n')
 
     seen, _ = run(
@@ -126,7 +126,7 @@ def test_the_steps_happen_in_order(tmp_path):
 # The program's own bytes come back.
 
 
-def test_what_the_program_writes_reaches_the_terminal(tmp_path):
+def test_what_program_writes_reaches_terminal(tmp_path):
     keys = create_keys_file(tmp_path, "")
 
     seen, _ = run(
@@ -138,7 +138,7 @@ def test_what_the_program_writes_reaches_the_terminal(tmp_path):
     assert b"drawn." in seen
 
 
-def test_the_program_is_given_the_size_of_the_terminal(tmp_path):
+def test_program_is_given_size_of_terminal(tmp_path):
     """
     A program lays its screen out for the size it is told. The wrong
     size is a picture of the right program at the wrong shape, which
@@ -170,7 +170,7 @@ def test_the_program_is_given_the_size_of_the_terminal(tmp_path):
         "0.1 'a string and not bytes'\n",
     ],
 )
-def test_a_keys_file_that_does_not_parse_is_a_fault(tmp_path, text):
+def test_keys_file_that_does_not_parse_is_fault(tmp_path, text):
     """
     Never something to skip over. A script whose keys quietly did
     nothing would photograph the screen before them, which reads as a
@@ -187,7 +187,7 @@ def test_a_keys_file_that_does_not_parse_is_a_fault(tmp_path, text):
     assert str(keys).encode() in done.stderr
 
 
-def test_a_comment_and_a_blank_line_are_nothing(tmp_path):
+def test_comment_and_blank_line_are_nothing(tmp_path):
     keys = create_keys_file(tmp_path, "# a comment\n\n0.1 b'x'  # and one here\n")
 
     from drive_in_terminal import read_keys
@@ -199,7 +199,7 @@ def test_a_comment_and_a_blank_line_are_nothing(tmp_path):
 # How it ends.
 
 
-def test_it_asks_for_a_program_to_run(tmp_path):
+def test_it_asks_for_program_to_run(tmp_path):
     keys = create_keys_file(tmp_path, "")
 
     done = subprocess.run([sys.executable, RELAY, str(keys), "1"], capture_output=True)
@@ -272,7 +272,7 @@ def run_fenced(tmp_path, keys_text, pane):
     return seen, fence_seen, error
 
 
-def test_the_fence_comes_back_and_is_taken_out(tmp_path):
+def test_fence_comes_back_and_is_taken_out(tmp_path):
     """
     The fence proves the keys were consumed, and the terminal never
     sees it: what the relay copies is the frame, and not the
@@ -292,7 +292,7 @@ def test_the_fence_comes_back_and_is_taken_out(tmp_path):
     assert b"ZmVuY2U" not in seen
 
 
-def test_a_pane_that_never_takes_the_fifo_is_a_fault(tmp_path):
+def test_pane_that_never_takes_fifo_is_fault(tmp_path):
     """
     A pymux that never starts its pane is a run that photographs
     nothing, and this is where it says so instead of blocking.
@@ -323,7 +323,7 @@ def test_a_pane_that_never_takes_the_fifo_is_a_fault(tmp_path):
     assert not fence_seen.exists()
 
 
-def test_the_hold_is_a_bound(tmp_path):
+def test_hold_is_bound(tmp_path):
     """
     A program that is still up when the hold runs out is the normal
     case: a picture is taken while it is on the screen. The relay ends

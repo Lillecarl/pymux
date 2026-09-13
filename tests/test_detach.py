@@ -28,7 +28,7 @@ from pymux.main import Pymux
 ROWS, COLUMNS = 24, 80
 
 
-def in_a_loop(test):
+def in_loop(test):
     "pymux carries no anyio, so pytest here runs no coroutine test."
 
     @functools.wraps(test)
@@ -70,8 +70,8 @@ async def create_standalone_session():
                         process.kill()
 
 
-@in_a_loop
-async def test_a_detach_ends_create_standalone_session():
+@in_loop
+async def test_detach_ends_create_standalone_session():
     async with create_standalone_session() as (pymux, state):
         assert not pymux.done_f.done()
 
@@ -81,8 +81,8 @@ async def test_a_detach_ends_create_standalone_session():
         assert pymux.done_f.done()
 
 
-@in_a_loop
-async def test_a_detach_asks_every_pane_to_stop():
+@in_loop
+async def test_detach_asks_every_pane_to_stop():
     """
     The panes were running for the session, and the session has gone.
 
@@ -107,7 +107,7 @@ async def test_a_detach_asks_every_pane_to_stop():
         panes = list(pymux.panes_by_id.values())
         assert panes
         for pane in panes:
-            pane.process.kill = _a_spy_that_still_kills(pane, pane.process.kill, killed)
+            pane.process.kill = _spy_that_still_kills(pane, pane.process.kill, killed)
 
         with set_app(state.app):
             pymux.handle_command("detach-client")
@@ -115,7 +115,7 @@ async def test_a_detach_asks_every_pane_to_stop():
         assert killed == panes
 
 
-def _a_spy_that_still_kills(pane, kill, killed):
+def _spy_that_still_kills(pane, kill, killed):
     "Write the pane down, then do what the caller asked for."
 
     def spy():
@@ -125,8 +125,8 @@ def _a_spy_that_still_kills(pane, kill, killed):
     return spy
 
 
-@in_a_loop
-async def test_a_client_over_a_connection_still_detaches():
+@in_loop
+async def test_client_over_connection_still_detaches():
     """
     The other routes are untouched: a client with a connection has one
     to close, and closing it is not the same as ending the session.

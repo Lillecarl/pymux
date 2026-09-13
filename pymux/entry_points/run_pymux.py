@@ -341,7 +341,7 @@ def _completion_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _answer_a_completion() -> None:
+def _answer_completion() -> None:
     """
     Answer a shell completion, when this start is one.
 
@@ -358,7 +358,7 @@ def _answer_a_completion() -> None:
 
 def run() -> None:
     if os.environ.get("_ARGCOMPLETE"):
-        _answer_a_completion()
+        _answer_completion()
 
     a, mode, command = parse_arguments()
 

@@ -15,7 +15,7 @@ from prompt_toolkit.document import Document
 from prompt_toolkit.key_binding.vi_state import InputMode
 from pymux.commands import CommandException
 from pymux.format import format_pymux_string
-from pymux.key_spelling import why_a_pane_cannot_read
+from pymux.key_spelling import why_pane_cannot_read
 from pyte.keys import Unhearable
 
 
@@ -133,7 +133,7 @@ def ask_person(
     get_app().vi_state.input_mode = InputMode.INSERT
 
 
-def send_a_key(pane, event, written: str) -> None:
+def send_key(pane, event, written: str) -> None:
     """
     Write one key to a pane, or say that the pane cannot read it.
 
@@ -152,7 +152,7 @@ def why_not(written: str, cannot: Unhearable) -> str:
     "Why a pane could not read a key, naming what a person wrote."
     return "%s: %s" % (
         written,
-        why_a_pane_cannot_read(cannot.event, cannot.lost, cannot.encoded),
+        why_pane_cannot_read(cannot.event, cannot.lost, cannot.encoded),
     )
 
 

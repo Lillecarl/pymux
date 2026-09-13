@@ -29,7 +29,7 @@ def _parser_of(command):
     return subparsers.choices[command]
 
 
-def test_every_alias_points_at_a_registered_command():
+def test_every_alias_points_at_registered_command():
     "The check at the foot of aliases.py, said out loud."
     from pymux.commands.aliases import ALIASES
 
@@ -39,7 +39,7 @@ def test_every_alias_points_at_a_registered_command():
         assert command in subparsers.choices, alias
 
 
-def test_a_value_option_is_read_as_its_dest():
+def test_value_option_is_read_as_its_dest():
     """
     A handler asks for the value by the dest its declaration names:
     `-t` of kill-pane lands in `target_pane`.
@@ -49,18 +49,18 @@ def test_a_value_option_is_read_as_its_dest():
     assert parser.parse_args([]).target_pane is None
 
 
-def test_a_flag_is_read_as_true_or_false():
+def test_flag_is_read_as_true_or_false():
     parser = _parser_of("break-pane")
     assert parser.parse_args(["-d"]).d is True
     assert parser.parse_args([]).d is False
 
 
-def test_a_positional_is_read_as_its_name():
+def test_positional_is_read_as_its_name():
     parser = _parser_of("rename-window")
     assert parser.parse_args(["editor"]).name == "editor"
 
 
-def test_an_option_of_a_bound_command_is_not_an_option_of_bind_key():
+def test_option_of_bound_command_is_not_option_of_bind_key():
     """
     The command that bind-key runs is a remainder, so its options are
     its own. `-g` reaches the bound command, not bind-key.
@@ -72,7 +72,7 @@ def test_an_option_of_a_bound_command_is_not_an_option_of_bind_key():
     assert binding.arguments == ["-g", "status", "off"]
 
 
-def test_a_dropped_double_dash_still_separates():
+def test_dropped_double_dash_still_separates():
     "A `--` the caller wrote is dropped, and what follows is the command."
     pymux = Pymux()
     call_command_handler("bind-key", pymux, ["x", "--", "next-window"])
@@ -85,7 +85,7 @@ def test_a_dropped_double_dash_still_separates():
 # What a bad line says.
 
 
-def test_a_word_too_many_is_named():
+def test_word_too_many_is_named():
     """
     docopt answered a bad line with the usage string and nothing
     about which word was wrong, which is the cost that started
@@ -98,7 +98,7 @@ def test_a_word_too_many_is_named():
     assert "set-option" in error
 
 
-def test_a_bad_option_is_named():
+def test_bad_option_is_named():
     pymux = Pymux()
     call_command_handler("display-message", pymux, ["-Z", "hello"])
     (error,) = pymux.startup_errors
@@ -106,14 +106,14 @@ def test_a_bad_option_is_named():
     assert "display-message" in error
 
 
-def test_a_missing_required_option_is_named():
+def test_missing_required_option_is_named():
     pymux = Pymux()
     call_command_handler("select-window", pymux, [])
     (error,) = pymux.startup_errors
     assert "-t" in error
 
 
-def test_no_option_at_all_is_the_answer_select_pane_gives():
+def test_no_option_at_all_is_answer_select_pane_gives():
     "select-pane takes one of six things, and the tree requires one."
     pymux = Pymux()
     call_command_handler("select-pane", pymux, [])
@@ -161,20 +161,20 @@ def test_every_command_offers_its_flags():
             assert flag in offered, (command, flag, offered)
 
 
-def test_a_flag_carries_its_help_beside_it():
+def test_flag_carries_its_help_beside_it():
     pymux = Pymux()
     offered = dict(_offered("new-window -", pymux))
     assert "Leave the new window unfocused." in offered["-d"]
     assert "Where the program starts." in offered["-c"]
 
 
-def test_a_partially_typed_flag_offers_what_matches():
+def test_partially_typed_flag_offers_what_matches():
     pymux = Pymux()
     text = [word for word, _said in _offered("capture-pane -J", pymux)]
     assert text == ["-J"]
 
 
-def test_a_word_matches_anywhere_in_a_command():
+def test_word_matches_anywhere_in_command():
     """
     The command bar is where the tmux spellings live, and
     remembering them exactly is the failure mode: `option` reaches
@@ -186,7 +186,7 @@ def test_a_word_matches_anywhere_in_a_command():
     assert "set-window-option" in text
 
 
-def test_a_flag_offers_itself_without_the_dash():
+def test_flag_offers_itself_without_dash():
     """
     The ask of Lillecarl/pymux#148 went one further: a flag lists
     without the dash at all. A flag says nothing about itself, and
@@ -198,19 +198,19 @@ def test_a_flag_offers_itself_without_the_dash():
     assert "-d" in offered
 
 
-def test_a_value_matches_loosely():
+def test_value_matches_loosely():
     pymux = Pymux()
     values = [word for word, _said in _offered("set-option status on", pymux)]
     assert "on" in values
 
 
-def test_an_alias_offers_the_full_name():
+def test_alias_offers_full_name():
     pymux = Pymux()
     text = [word for word, _said in _offered("selectp", pymux)]
     assert text == ["select-pane"]
 
 
-def test_set_option_offers_the_option_names_then_their_values():
+def test_set_option_offers_option_names_then_their_values():
     pymux = Pymux()
     names = [word for word, _said in _offered("set-option s", pymux)]
     assert "status" in names
@@ -221,13 +221,13 @@ def test_set_option_offers_the_option_names_then_their_values():
     assert "off" in values
 
 
-def test_select_layout_offers_the_layout_names():
+def test_select_layout_offers_layout_names():
     pymux = Pymux()
     names = [word for word, _said in _offered("select-layout e", pymux)]
     assert "even-horizontal" in names
 
 
-def test_bind_key_offers_a_key_then_the_command_then_its_arguments():
+def test_bind_key_offers_key_then_command_then_its_arguments():
     pymux = Pymux()
 
     keys = [word for word, _said in _offered("bind-key ho", pymux)]
@@ -240,7 +240,7 @@ def test_bind_key_offers_a_key_then_the_command_then_its_arguments():
     assert args == ["-g"]
 
 
-def test_a_bare_tab_after_a_command_lists_its_flags():
+def test_bare_tab_after_command_lists_its_flags():
     """
     An empty word is the question, and the flags are one part of the
     answer. Lillecarl/pymux#148.
@@ -252,7 +252,7 @@ def test_a_bare_tab_after_a_command_lists_its_flags():
     assert "-c" in offered
 
 
-def test_a_bare_tab_after_set_option_lists_option_names_too():
+def test_bare_tab_after_set_option_lists_option_names_too():
     """
     The positional that has an answer of its own offers it. argcomplete
     offers the flags of the command beside it, the way it does for
@@ -264,7 +264,7 @@ def test_a_bare_tab_after_set_option_lists_option_names_too():
     assert "-g" in offered
 
 
-def test_a_bare_tab_after_select_pane_lists_its_flags():
+def test_bare_tab_after_select_pane_lists_its_flags():
     pymux = Pymux()
     offered = [word for word, _said in _offered("select-pane ", pymux)]
     assert "-L" in offered
@@ -302,7 +302,7 @@ def test_every_command_says_what_it_does():
     assert unfinished == []
 
 
-def test_the_palette_says_what_a_command_does():
+def test_palette_says_what_command_does():
     pymux = Pymux()
     offered = dict(_offered("split-w", pymux))
     assert "Split this window into two panes, side by side or stacked." in (
@@ -310,7 +310,7 @@ def test_the_palette_says_what_a_command_does():
     )
 
 
-def test_an_alias_says_what_the_command_it_names_does():
+def test_alias_says_what_command_it_names_does():
     pymux = Pymux()
     offered = dict(_offered("selectp", pymux))
     assert "Focus a pane beside this one, or rotate the panes of the window." in (
@@ -370,12 +370,12 @@ def _shell_completes(line: str) -> set:
         ("pymux ls", {"ls"}),
     ),
 )
-def test_the_shell_answers_from_the_tree(line, wanted):
+def test_shell_answers_from_tree(line, wanted):
     offered = _shell_completes(line)
     assert wanted <= offered, (line, wanted, offered)
 
 
-def test_the_shell_answers_the_entry_point_options():
+def test_shell_answers_entry_point_options():
     offered = _shell_completes("pymux attach -")
     assert "-S" in offered
     assert "--socket" in offered

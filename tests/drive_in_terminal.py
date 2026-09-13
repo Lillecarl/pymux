@@ -1,7 +1,7 @@
 """
 Run a program on a pty of our own inside a terminal, and press keys at it.
 
-    drive_in_a_terminal.py <keys-file> <hold-seconds> [<fifo> <fence-seen>] -- <argv...>
+    drive_in_terminal.py <keys-file> <hold-seconds> [<fifo> <fence-seen>] -- <argv...>
 
 `checks.pymux-pictures` photographs a terminal, and nothing in it can
 press a key. A headless compositor owns no input device
@@ -110,7 +110,7 @@ def stop_echo(fd):
     written across the top row is what that looks like, and it is still
     there when the picture is taken.
 
-    `take_a_picture.py` writes `stty -echo` into every program it runs
+    `take_picture.py` writes `stty -echo` into every program it runs
     for the same reason. The pty belongs to this side, so it belongs
     here and not in each script.
     """

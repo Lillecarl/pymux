@@ -14,7 +14,7 @@ for one. Lillecarl/pymux#214.
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.filters import is_searching
 from prompt_toolkit.keys import Keys
-from session import create_session, in_a_loop
+from session import create_session, in_loop
 from test_command_mode import press
 
 #: Text that is in the popup more than once, so that there is a second
@@ -46,7 +46,7 @@ def searching(state) -> bool:
         return bool(is_searching())
 
 
-def type_a_search(state, text):
+def type_search(state, text):
     "Open the search, type into it, and accept it."
     press(state, "/")
     for letter in text:
@@ -58,8 +58,8 @@ def type_a_search(state, text):
 # Opening the search.
 
 
-@in_a_loop
-async def test_the_key_the_popup_promises_opens_the_search():
+@in_loop
+async def test_key_popup_promises_opens_search():
     """
     The popup's own last row says `/` searches. It has to say that in
     whatever editing mode a person is in, because it does not say
@@ -73,8 +73,8 @@ async def test_the_key_the_popup_promises_opens_the_search():
         assert searching(state)
 
 
-@in_a_loop
-async def test_the_search_opens_with_vi_mode_keys_too():
+@in_loop
+async def test_search_opens_with_vi_mode_keys_too():
     async with create_session() as (pymux, state):
         create_popup(pymux, state, vi=True)
 
@@ -115,19 +115,19 @@ def matches_in(popup):
     return result
 
 
-@in_a_loop
-async def test_accepting_a_search_lands_on_the_first_match():
+@in_loop
+async def test_accepting_search_lands_on_first_match():
     "So that the tests below can say which match the cursor is on."
     async with create_session() as (pymux, state):
         popup = create_popup(pymux, state)
 
-        type_a_search(state, MANY)
+        type_search(state, MANY)
 
         assert popup.buffer.cursor_position == matches_in(popup)[0]
 
 
-@in_a_loop
-async def test_a_second_match_is_one_key_away():
+@in_loop
+async def test_second_match_is_one_key_away():
     """
     The one Carl asked for. A list of keys is exactly the kind of text
     somebody searches once and then walks through, so the second match
@@ -135,18 +135,18 @@ async def test_a_second_match_is_one_key_away():
     """
     async with create_session() as (pymux, state):
         popup = create_popup(pymux, state)
-        type_a_search(state, MANY)
+        type_search(state, MANY)
 
         press(state, "n")
 
         assert popup.buffer.cursor_position == matches_in(popup)[1]
 
 
-@in_a_loop
-async def test_the_match_before_is_one_key_away_as_well():
+@in_loop
+async def test_match_before_is_one_key_away_as_well():
     async with create_session() as (pymux, state):
         popup = create_popup(pymux, state)
-        type_a_search(state, MANY)
+        type_search(state, MANY)
         press(state, "n")
         press(state, "n")
 
@@ -155,8 +155,8 @@ async def test_the_match_before_is_one_key_away_as_well():
         assert popup.buffer.cursor_position == matches_in(popup)[1]
 
 
-@in_a_loop
-async def test_a_count_moves_that_many_matches():
+@in_loop
+async def test_count_moves_that_many_matches():
     """
     Three matches on, in one go.
 
@@ -168,7 +168,7 @@ async def test_a_count_moves_that_many_matches():
     """
     async with create_session() as (pymux, state):
         popup = create_popup(pymux, state)
-        type_a_search(state, MANY)
+        type_search(state, MANY)
 
         press(state, Keys.Escape, "3")
         press(state, "n")
@@ -176,12 +176,12 @@ async def test_a_count_moves_that_many_matches():
         assert popup.buffer.cursor_position == matches_in(popup)[3]
 
 
-@in_a_loop
-async def test_repeating_a_search_needs_no_search_field():
+@in_loop
+async def test_repeating_search_needs_no_search_field():
     "The search field is closed while a person walks the matches."
     async with create_session() as (pymux, state):
         create_popup(pymux, state)
-        type_a_search(state, MANY)
+        type_search(state, MANY)
 
         press(state, "n")
 
@@ -192,8 +192,8 @@ async def test_repeating_a_search_needs_no_search_field():
 # Copy mode, which the issue says has the same gap.
 
 
-@in_a_loop
-async def test_copy_mode_opens_a_search_on_the_same_key():
+@in_loop
+async def test_copy_mode_opens_search_on_same_key():
     async with create_session() as (pymux, state):
         in_copy_mode(pymux, state)
 
@@ -202,7 +202,7 @@ async def test_copy_mode_opens_a_search_on_the_same_key():
         assert searching(state)
 
 
-@in_a_loop
+@in_loop
 async def test_copy_mode_holds_its_scrollback_read_only():
     """
     Which is the whole reason those keys reach it.

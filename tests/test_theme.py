@@ -70,7 +70,7 @@ LOUD_ONES = frozenset(
 )
 
 
-def in_a_loop(test):
+def in_loop(test):
     "pymux carries no anyio, so pytest here runs no coroutine test."
 
     @functools.wraps(test)
@@ -114,15 +114,15 @@ def bar_of(app):
 # What a client draws with.
 
 
-@in_a_loop
-async def test_a_client_draws_with_the_theme_it_starts_on():
+@in_loop
+async def test_client_draws_with_theme_it_starts_on():
     async with create_client() as (pymux, app):
         assert pymux.theme == DEFAULT_THEME
         assert bar_of(app) == "ansigreen"
 
 
-@in_a_loop
-async def test_choosing_a_theme_reaches_a_client_that_is_attached():
+@in_loop
+async def test_choosing_theme_reaches_client_that_is_attached():
     "The application reads the scheme again on every render."
     async with create_client() as (pymux, app):
         pymux.handle_command("set-option theme grey")
@@ -131,8 +131,8 @@ async def test_choosing_a_theme_reaches_a_client_that_is_attached():
         assert bar_of(app) == "5f5f87"
 
 
-@in_a_loop
-async def test_choosing_the_theme_back_puts_the_green_back():
+@in_loop
+async def test_choosing_theme_back_puts_green_back():
     async with create_client() as (pymux, app):
         pymux.handle_command("set-option theme grey")
         pymux.handle_command("set-option theme default")
@@ -140,8 +140,8 @@ async def test_choosing_the_theme_back_puts_the_green_back():
         assert bar_of(app) == "ansigreen"
 
 
-@in_a_loop
-async def test_every_theme_reaches_a_client():
+@in_loop
+async def test_every_theme_reaches_client():
     "Whatever is registered, and not only the two this file names."
     async with create_client() as (pymux, app):
         for name, theme in THEMES.items():
@@ -238,13 +238,13 @@ GREY_ROLES = {
     "search-match-current-text": "#ffffff",
 }
 
-def test_the_roles_produce_the_rules_the_default_drew():
+def test_roles_produce_rules_default_drew():
     from pymux.style import ROLES, derive
 
     assert derive(ROLES) == RULES
 
 
-def test_the_roles_produce_the_rules_grey_drew():
+def test_roles_produce_rules_grey_drew():
     """
     Grey was written as the default with the loud rules replaced. The
     roles it replaces are those seventeen; the rules it produces are
@@ -278,7 +278,7 @@ def test_the_roles_produce_the_rules_grey_drew():
     assert derive({**ROLES, **GREY_ROLES}) == rules_with_grey_replaced
 
 
-def test_the_pane_painting_is_the_option():
+def test_pane_painting_is_option():
     """
     The rule is in every theme; the pane's container wears it only
     while `paint-screen` is on, and the default is off: a program that
@@ -296,7 +296,7 @@ def test_the_pane_painting_is_the_option():
     assert pymux.paint_screen is False
 
 
-def test_the_body_of_an_overlay_pane_draws_like_a_pane():
+def test_body_of_overlay_pane_draws_like_pane():
     """
     A pane's background is the terminal's own one: a cell the program
     left at the default background shows what is behind pymux, in an
@@ -311,7 +311,7 @@ def test_the_body_of_an_overlay_pane_draws_like_a_pane():
 # The option itself.
 
 
-def test_a_name_nobody_registered_is_refused():
+def test_name_nobody_registered_is_refused():
     pymux = Pymux()
 
     with pytest.raises(SetOptionError) as raised:
@@ -321,7 +321,7 @@ def test_a_name_nobody_registered_is_refused():
     assert "grey" in raised.value.message
 
 
-def test_a_name_that_is_refused_leaves_the_theme_alone():
+def test_name_that_is_refused_leaves_theme_alone():
     pymux = Pymux()
 
     with pytest.raises(SetOptionError):
@@ -330,7 +330,7 @@ def test_a_name_that_is_refused_leaves_the_theme_alone():
     assert pymux.theme == DEFAULT_THEME
 
 
-def test_the_names_are_offered_for_completion():
+def test_names_are_offered_for_completion():
     "Which is what `get_all_values` is for."
     from pymux.style_pygments import names
 
@@ -341,7 +341,7 @@ def test_the_names_are_offered_for_completion():
     ]
 
 
-def test_the_grey_theme_replaces_the_loud_rules_and_no_others():
+def test_grey_theme_replaces_loud_rules_and_no_others():
     """
     Every rule the grey theme does not name is the default's, so a
     rule added to the default reaches both. Naming them here is what
@@ -355,7 +355,7 @@ def test_the_grey_theme_replaces_the_loud_rules_and_no_others():
     assert {name for name in default if default[name] != grey[name]} == LOUD_ONES
 
 
-def test_no_rule_of_the_grey_theme_is_loud():
+def test_no_rule_of_grey_theme_is_loud():
     """
     The ones it replaces, read back. No green, and none of the three
     colours a picture caught: pure red, orange, bright green.

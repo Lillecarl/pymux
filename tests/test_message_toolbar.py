@@ -34,14 +34,14 @@ SECOND = "/home/someone/.config/pymux/pymux.conf line 2: second thing wrong"
 NO_CLOCK = ("set-option status-right ''",)
 
 
-def drawn_with_a_message(message, columns=40):
+def drawn_with_message(message, columns=40):
     "Every row of the screen while `message` is up."
     with create_client(commands=NO_CLOCK, columns=columns) as (pymux, draw):
         pymux.get_client_state().message = message
         return draw()
 
 
-def on_the_screen(rows):
+def on_screen(rows):
     """
     Everything the screen holds, with every space taken out.
 
@@ -58,40 +58,40 @@ def squashed(text):
     return "".join(text.split())
 
 
-def test_the_start_of_a_long_message_is_on_the_screen():
+def test_start_of_long_message_is_on_screen():
     "The fault. The front of the message used to be scrolled away."
-    rows = drawn_with_a_message("; ".join([FIRST, SECOND]))
+    rows = drawn_with_message("; ".join([FIRST, SECOND]))
 
-    assert squashed("line 1: first thing wrong") in on_the_screen(rows)
+    assert squashed("line 1: first thing wrong") in on_screen(rows)
 
 
-def test_the_rest_of_it_is_there_too():
+def test_rest_of_it_is_there_too():
     "It wraps, so the second complaint did not take the first's place."
-    rows = drawn_with_a_message("; ".join([FIRST, SECOND]))
+    rows = drawn_with_message("; ".join([FIRST, SECOND]))
 
-    assert squashed("line 2: second thing wrong") in on_the_screen(rows)
+    assert squashed("line 2: second thing wrong") in on_screen(rows)
 
 
-def test_a_short_message_still_takes_one_row():
+def test_short_message_still_takes_one_row():
     """
     A message that fits may not push the panes up. `dont_extend_height`
     holds the toolbar to what it needs.
     """
-    short = drawn_with_a_message("a short message")
-    none = drawn_with_a_message("")
+    short = drawn_with_message("a short message")
+    none = drawn_with_message("")
 
     used = [number for number in sorted(short) if short[number] != none[number]]
     assert len(used) == 1, (used, short, none)
 
 
-def test_a_message_may_not_take_the_whole_screen():
+def test_message_may_not_take_whole_screen():
     """
     It is a pop-up over the panes, so a runaway message is cut rather
     than allowed to become a page. The end is the end a reader reaches
     last.
     """
-    rows = drawn_with_a_message("word " * 400)
-    none = drawn_with_a_message("")
+    rows = drawn_with_message("word " * 400)
+    none = drawn_with_message("")
 
     used = [number for number in sorted(rows) if rows[number] != none[number]]
     assert len(used) <= 5, used

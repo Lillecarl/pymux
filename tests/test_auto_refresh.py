@@ -103,7 +103,7 @@ def in_view(pymux, state):
         return pymux.arrangement.get_active_window()
 
 
-def test_the_first_refresh_draws_what_no_frame_drew(session):
+def test_first_refresh_draws_what_no_frame_drew(session):
     "Nothing has drawn the status line yet, so it has something to say."
     pymux, state, frames = session
 
@@ -112,7 +112,7 @@ def test_the_first_refresh_draws_what_no_frame_drew(session):
     assert len(frames) == 1
 
 
-def test_a_refresh_that_finds_the_same_text_asks_for_no_frame(session):
+def test_refresh_that_finds_same_text_asks_for_no_frame(session):
     "The clock says the same minute for fourteen of every fifteen ticks."
     pymux, state, frames = session
     set_option(pymux, "status-right", NO_CLOCK)
@@ -125,7 +125,7 @@ def test_a_refresh_that_finds_the_same_text_asks_for_no_frame(session):
     assert len(frames) == 1
 
 
-def test_a_refresh_asks_for_a_frame_when_the_text_changed(session):
+def test_refresh_asks_for_frame_when_text_changed(session):
     "`#W` in the window list names a window, so a rename shows."
     pymux, state, frames = session
     set_option(pymux, "status-right", NO_CLOCK)
@@ -138,7 +138,7 @@ def test_a_refresh_asks_for_a_frame_when_the_text_changed(session):
     assert len(frames) == 2
 
 
-def test_a_full_screen_session_asks_for_no_frame_at_all(session):
+def test_full_screen_session_asks_for_no_frame_at_all(session):
     "One pane over every cell. Nothing there moves with time."
     pymux, state, frames = session
     set_option(pymux, "full-screen", "on")
@@ -150,7 +150,7 @@ def test_a_full_screen_session_asks_for_no_frame_at_all(session):
     assert frames == []
 
 
-def test_a_clock_inside_a_pane_asks_for_frames(session):
+def test_clock_inside_pane_asks_for_frames(session):
     """
     `clock-mode` draws a clock over the content of the pane, and
     `ctrl-b t` turns it on. With the status line hidden, that clock is
@@ -173,7 +173,7 @@ def test_a_clock_inside_a_pane_asks_for_frames(session):
     assert text(state) != ()
 
 
-def test_the_text_holds_the_clock_and_the_window_list(session):
+def test_text_holds_clock_and_window_list(session):
     "What the refresh compares, spelled out."
     pymux, state, frames = session
 
@@ -198,7 +198,7 @@ def out_of_view(pymux, state):
     return others[0]
 
 
-def test_a_title_in_a_window_out_of_view_is_not_read(session):
+def test_title_in_window_out_of_view_is_not_read(session):
     """
     The titlebars this client draws are its own window's. Another
     window reaches its screen through `window-status-format`, which
@@ -213,7 +213,7 @@ def test_a_title_in_a_window_out_of_view_is_not_read(session):
     assert text(state) == before
 
 
-def test_a_title_in_the_window_in_view_is_read(session):
+def test_title_in_window_in_view_is_read(session):
     "The control: the same title, in the window this client looks at."
     pymux, state, frames = session
     set_option(pymux, "pane-border-status", "on")
@@ -224,7 +224,7 @@ def test_a_title_in_the_window_in_view_is_read(session):
     assert text(state) != before
 
 
-def test_the_window_list_still_carries_the_other_windows(session):
+def test_window_list_still_carries_other_windows(session):
     """
     Narrowing the panes must not narrow the window list: a window that
     is renamed still changes what every client draws.
@@ -238,7 +238,7 @@ def test_the_window_list_still_carries_the_other_windows(session):
     assert text(state) != before
 
 
-def test_a_clock_in_a_window_out_of_view_asks_for_nothing(session):
+def test_clock_in_window_out_of_view_asks_for_nothing(session):
     "A clock that is not drawn is not a reason to draw."
     pymux, state, frames = session
     set_option(pymux, "full-screen", "on")
@@ -261,7 +261,7 @@ def test_a_clock_in_a_window_out_of_view_asks_for_nothing(session):
 # taken in.
 
 
-def test_the_clock_of_a_pane_shows_the_pinned_time(session):
+def test_clock_of_pane_shows_pinned_time(session):
     pymux, state, frames = session
     set_option(pymux, "full-screen", "on")
     set_option(pymux, "test-mode", "on")
@@ -272,7 +272,7 @@ def test_the_clock_of_a_pane_shows_the_pinned_time(session):
     assert any("13:37" in part for part in said), said
 
 
-def test_the_pinned_clock_asks_for_one_frame_and_then_no_more(session):
+def test_pinned_clock_asks_for_one_frame_and_then_no_more(session):
     pymux, state, frames = session
     set_option(pymux, "full-screen", "on")
     set_option(pymux, "test-mode", "on")
@@ -286,7 +286,7 @@ def test_the_pinned_clock_asks_for_one_frame_and_then_no_more(session):
     assert frames == []
 
 
-def test_the_format_strings_show_the_pinned_date_and_the_pinned_time(session):
+def test_format_strings_show_pinned_date_and_pinned_time(session):
     pymux, state, frames = session
     set_option(pymux, "test-mode", "on")
 
@@ -295,7 +295,7 @@ def test_the_format_strings_show_the_pinned_date_and_the_pinned_time(session):
     assert said == "13:37 on 14/03 in %i" % datetime.date.today().year
 
 
-def test_the_clock_runs_on_while_test_mode_is_off():
+def test_clock_runs_on_while_test_mode_is_off():
     pymux = Pymux()
     assert pymux.test_mode is False
 
@@ -303,7 +303,7 @@ def test_the_clock_runs_on_while_test_mode_is_off():
     assert (now.hour, now.minute) == (datetime.datetime.now().hour, datetime.datetime.now().minute)
 
 
-def test_the_pinned_time_keeps_the_year_it_really_is():
+def test_pinned_time_keeps_year_it_really_is():
     pymux = Pymux()
     set_option(pymux, "test-mode", "on")
 

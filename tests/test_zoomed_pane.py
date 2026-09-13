@@ -34,7 +34,7 @@ def two_panes(pymux, command="split-window -h"):
     return window, first, window.active_pane
 
 
-def test_zoom_wraps_the_layout_and_keeps_it():
+def test_zoom_wraps_layout_and_keeps_it():
     with create_client(CHROME) as (pymux, draw):
         window, _first, _second = two_panes(pymux)
 
@@ -47,7 +47,7 @@ def test_zoom_wraps_the_layout_and_keeps_it():
         assert isinstance(layout.inner, Divided)
 
 
-def test_a_zoomed_strip_is_still_a_strip_underneath():
+def test_zoomed_strip_is_still_strip_underneath():
     """
     The fault Carl asked about. The branch tested `zoom` before
     `strip`, so zooming a column threw the row away for that frame.
@@ -62,7 +62,7 @@ def test_a_zoomed_strip_is_still_a_strip_underneath():
         assert isinstance(layout.inner, Strip)
 
 
-def test_the_zoomed_pane_is_the_whole_window():
+def test_zoomed_pane_is_whole_window():
     with create_client(CHROME) as (pymux, draw):
         window, _first, second = two_panes(pymux)
         window.zoom = True
@@ -76,7 +76,7 @@ def test_the_zoomed_pane_is_the_whole_window():
         assert plan.plane.width == COLUMNS
 
 
-def test_nothing_is_beside_a_zoomed_pane():
+def test_nothing_is_beside_zoomed_pane():
     with create_client(CHROME) as (pymux, draw):
         window, _first, second = two_panes(pymux)
         window.zoom = True
@@ -85,7 +85,7 @@ def test_nothing_is_beside_a_zoomed_pane():
             assert pane_beside(pymux, window, second, side) is None
 
 
-def test_only_the_zoomed_pane_is_drawn():
+def test_only_zoomed_pane_is_drawn():
     "The other pane is behind it, so no cell of it reaches the screen."
     with create_client(CHROME) as (pymux, draw):
         window, first, second = two_panes(pymux)
@@ -100,7 +100,7 @@ def test_only_the_zoomed_pane_is_drawn():
         assert "hidden" not in every_cell, dump(rows)
 
 
-def test_a_zoomed_pane_keeps_its_title_bar():
+def test_zoomed_pane_keeps_its_title_bar():
     """
     The row above a pane is the row its bar hangs in, and a zoomed
     pane is drawn inside the same layout as any other, so it has one.
@@ -118,7 +118,7 @@ def test_a_zoomed_pane_keeps_its_title_bar():
         assert " Z " in rows[0], dump(rows)
 
 
-def test_the_mark_goes_when_the_zoom_does():
+def test_mark_goes_when_zoom_does():
     "The same container draws both ways, so the bar has to follow."
     with create_client(CHROME) as (pymux, draw):
         window, _first, _second = two_panes(pymux)
@@ -131,7 +131,7 @@ def test_the_mark_goes_when_the_zoom_does():
         assert " Z " not in "".join(rows.values()), dump(rows)
 
 
-def test_a_zoomed_stack_pays_for_no_bar_below():
+def test_zoomed_stack_pays_for_no_bar_below():
     """
     The bar under a pane names the panes above and below it, and a
     zoomed pane has neither. So the row is not reserved and the pane
@@ -147,7 +147,7 @@ def test_a_zoomed_stack_pays_for_no_bar_below():
         assert zoomed == stacked + 1
 
 
-def test_the_window_comes_back_the_way_it_was_left():
+def test_window_comes_back_way_it_was_left():
     "Unzooming is dropping the wrapper, and nothing under it moved."
     with create_client(STRIP) as (pymux, draw):
         window, first, second = two_panes(pymux)
@@ -163,7 +163,7 @@ def test_the_window_comes_back_the_way_it_was_left():
         ]
 
 
-def test_a_zoomed_window_of_one_pane_is_that_pane():
+def test_zoomed_window_of_one_pane_is_that_pane():
     "Nothing refuses a zoom of one pane, and nothing needs to."
     with create_client(CHROME) as (pymux, draw):
         window = pymux.arrangement.get_active_window()
@@ -175,7 +175,7 @@ def test_a_zoomed_window_of_one_pane_is_that_pane():
         assert plan.plane == plan.rect_of(window.active_pane)
 
 
-def test_the_layout_measures_what_it_is_given():
+def test_layout_measures_what_it_is_given():
     "A zoomed pane is the view, whatever size the view is."
     with create_client(CHROME) as (pymux, draw):
         window, _first, second = two_panes(pymux)

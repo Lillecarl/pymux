@@ -37,17 +37,17 @@ def create_view(x=0, y=0, columns=20, rows=5) -> View:
 # What it can see.
 
 
-def test_a_view_is_a_rectangle_of_the_plane():
+def test_view_is_rectangle_of_plane():
     assert create_view(x=7, y=3).rect == Rect(x=7, y=3, width=20, height=5)
 
 
-def test_a_view_shows_what_it_overlaps():
+def test_view_shows_what_it_overlaps():
     view = create_view(x=10, y=0)
     assert view.shows(Rect(x=29, y=4, width=1, height=1))
     assert view.shows(Rect(x=5, y=0, width=10, height=1))
 
 
-def test_a_view_shows_nothing_it_only_touches():
+def test_view_shows_nothing_it_only_touches():
     "The right edge is one past the last cell, so touching is not seeing."
     view = create_view(x=10, y=0)
     assert not view.shows(Rect(x=30, y=0, width=4, height=1))
@@ -59,7 +59,7 @@ def test_a_view_shows_nothing_it_only_touches():
 # Where it goes.
 
 
-def test_a_rectangle_already_in_the_view_moves_nothing():
+def test_rectangle_already_in_view_moves_nothing():
     """
     The property the strip was built around. A pane the person can
     already see is not a reason to scroll. Lillecarl/pymux#207.
@@ -70,19 +70,19 @@ def test_a_rectangle_already_in_the_view_moves_nothing():
     )
 
 
-def test_a_rectangle_off_the_right_brings_its_left_edge_in():
+def test_rectangle_off_right_brings_its_left_edge_in():
     view = create_view(x=0)
     assert view.moved_onto(Rect(x=25, y=0, width=8, height=5), PLANE) == Point(
         x=25, y=0
     )
 
 
-def test_a_rectangle_off_the_left_brings_its_left_edge_in():
+def test_rectangle_off_left_brings_its_left_edge_in():
     view = create_view(x=30)
     assert view.moved_onto(Rect(x=4, y=0, width=8, height=5), PLANE) == Point(x=4, y=0)
 
 
-def test_a_rectangle_wider_than_the_view_shows_its_left_edge():
+def test_rectangle_wider_than_view_shows_its_left_edge():
     """
     It cannot be shown whole, so one end is cut, and it is the right
     one. Carl: applications begin writing text at the left, so a
@@ -92,13 +92,13 @@ def test_a_rectangle_wider_than_the_view_shows_its_left_edge():
     assert view.moved_onto(Rect(x=25, y=0, width=30, height=5), PLANE).x == 25
 
 
-def test_the_page_follows_the_same_rule_as_the_row():
+def test_page_follows_same_rule_as_row():
     "Down is not a second policy. A tall pane shows its top."
     view = create_view(y=0)
     assert view.moved_onto(Rect(x=0, y=9, width=4, height=9), PLANE).y == 9
 
 
-def test_nothing_to_follow_leaves_the_view_where_it_is():
+def test_nothing_to_follow_leaves_view_where_it_is():
     "A dialog holds the keyboard, so there is no pane to move onto."
     view = create_view(x=13, y=2)
     assert view.moved_onto(None, PLANE) == Point(x=13, y=2)
@@ -108,13 +108,13 @@ def test_nothing_to_follow_leaves_the_view_where_it_is():
 # Where it refuses to go.
 
 
-def test_the_view_never_passes_the_end_of_the_plane():
+def test_view_never_passes_end_of_plane():
     "A pane that closed can leave the view out past the last cell."
     view = create_view(x=55)
     assert view.moved_onto(None, PLANE) == Point(x=40, y=0)
 
 
-def test_a_plane_smaller_than_the_view_puts_it_at_the_start():
+def test_plane_smaller_than_view_puts_it_at_start():
     """
     There is nowhere to scroll to, so the answer is the plane's own
     origin. This is the ordinary case: a tiling is measured to fit.
@@ -124,7 +124,7 @@ def test_a_plane_smaller_than_the_view_puts_it_at_the_start():
     assert view.moved_onto(None, Rect(x=0, y=0, width=8, height=2)) == Point(x=0, y=0)
 
 
-def test_a_plane_that_starts_behind_the_origin_is_still_the_bound():
+def test_plane_that_starts_behind_origin_is_still_bound():
     """
     The plane is unbounded, so a plan may sit at a negative coordinate.
 
@@ -156,7 +156,7 @@ RECTS = st.builds(
 
 
 @given(VIEWS, RECTS)
-def test_the_view_always_lands_on_the_plane(view, rect):
+def test_view_always_lands_on_plane(view, rect):
     "However far the focus is, the view is a part of the plane."
     view.offset = view.moved_onto(rect, PLANE)
 
@@ -167,7 +167,7 @@ def test_the_view_always_lands_on_the_plane(view, rect):
 
 
 @given(VIEWS, RECTS)
-def test_moving_onto_the_same_rectangle_twice_moves_it_once(view, rect):
+def test_moving_onto_same_rectangle_twice_moves_it_once(view, rect):
     """
     The frames a person does not touch anything are most of them, and
     each of them asks this question again.
@@ -177,7 +177,7 @@ def test_moving_onto_the_same_rectangle_twice_moves_it_once(view, rect):
 
 
 @given(VIEWS, RECTS)
-def test_the_start_of_the_rectangle_is_shown_where_the_plane_allows(view, rect):
+def test_start_of_rectangle_is_shown_where_plane_allows(view, rect):
     """
     The point of moving at all. The top left cell of what a person is
     looking at is on the screen, unless the plane's own edge is in the

@@ -21,17 +21,17 @@ def _arrangement(windows=1, base_index=None):
     return arrangement
 
 
-def test_the_first_window_is_one():
+def test_first_window_is_one():
     arrangement = _arrangement()
     assert [w.index for w in arrangement.windows] == [1]
 
 
-def test_the_windows_after_it_count_up():
+def test_windows_after_it_count_up():
     arrangement = _arrangement(windows=3)
     assert [w.index for w in arrangement.windows] == [1, 2, 3]
 
 
-def test_the_option_brings_the_tmux_default_back():
+def test_option_brings_tmux_default_back():
     arrangement = _arrangement(windows=3, base_index=0)
     assert [w.index for w in arrangement.windows] == [0, 1, 2]
 
@@ -48,7 +48,7 @@ def _open(arrangement, index=None):
     arrangement.create_window(Pane(terminal=_Fake()), set_active=False, index=index)
 
 
-def test_a_window_goes_where_it_is_asked_to():
+def test_window_goes_where_it_is_asked_to():
     arrangement = _arrangement(windows=3)
 
     _open(arrangement, index=9)
@@ -56,7 +56,7 @@ def test_a_window_goes_where_it_is_asked_to():
     assert _indexes(arrangement) == [1, 2, 3, 9]
 
 
-def test_an_index_that_is_taken_moves_the_ones_in_the_way_up():
+def test_index_that_is_taken_moves_ones_in_way_up():
     arrangement = _arrangement(windows=3)
 
     _open(arrangement, index=2)
@@ -64,7 +64,7 @@ def test_an_index_that_is_taken_moves_the_ones_in_the_way_up():
     assert _indexes(arrangement) == [1, 2, 3, 4]
 
 
-def test_only_the_run_that_is_in_the_way_moves():
+def test_only_run_that_is_in_way_moves():
     """
     A gap stops the walk, so a window a person put out of the way
     stays where they put it.
@@ -78,7 +78,7 @@ def test_only_the_run_that_is_in_the_way_moves():
     assert _indexes(arrangement) == [1, 2, 3, 4, 7]
 
 
-def test_a_window_at_the_end_moves_nothing():
+def test_window_at_end_moves_nothing():
     arrangement = _arrangement(windows=3)
 
     _open(arrangement, index=4)
@@ -86,7 +86,7 @@ def test_a_window_at_the_end_moves_nothing():
     assert _indexes(arrangement) == [1, 2, 3, 4]
 
 
-def test_no_index_still_takes_the_lowest_free_one():
+def test_no_index_still_takes_lowest_free_one():
     "Which is what a session being restored asks for."
     arrangement = _arrangement(windows=3)
     arrangement.windows[1].index = 8
@@ -96,7 +96,7 @@ def test_no_index_still_takes_the_lowest_free_one():
     assert sorted(_indexes(arrangement)) == [1, 2, 3, 8]
 
 
-def test_the_windows_stay_in_order_of_index():
+def test_windows_stay_in_order_of_index():
     arrangement = _arrangement(windows=3)
 
     _open(arrangement, index=1)

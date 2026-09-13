@@ -37,20 +37,20 @@ def bar(number="", left="", middle="", right="", width=WIDTH):
 # Where each part lands.
 
 
-def test_the_middle_is_centred_over_the_whole_bar():
+def test_middle_is_centred_over_whole_bar():
     row = bar(middle="title")
 
     assert row == "title".center(WIDTH), repr(row)
 
 
-def test_the_edges_are_at_the_edges():
+def test_edges_are_at_edges():
     row = bar(left="vim", middle="bash", right="less")
 
     assert row.startswith("vim"), repr(row)
     assert row.endswith("less"), repr(row)
 
 
-def test_a_neighbour_does_not_move_the_title():
+def test_neighbour_does_not_move_title():
     """
     The middle is centred over the bar and not over what is left of it,
     so a name growing on one side does not slide the title sideways.
@@ -61,12 +61,12 @@ def test_a_neighbour_does_not_move_the_title():
     assert alone.index("bash") == beside.index("bash"), (alone, beside)
 
 
-def test_the_row_is_the_width_it_was_given():
+def test_row_is_width_it_was_given():
     assert len(bar(left="vim", middle="bash", right="less")) == WIDTH
 
 
 @pytest.mark.parametrize("width", [1, 2, 5, 8, 13, 21, 80, 200])
-def test_the_row_is_that_width_whatever_it_holds(width):
+def test_row_is_that_width_whatever_it_holds(width):
     row = bar(left="a long name", middle="a title", right="another name", width=width)
 
     assert len(row) == width, repr(row)
@@ -80,7 +80,7 @@ def test_no_width_at_all_draws_nothing():
 # What gives way, and in which order.
 
 
-def test_a_long_neighbour_is_cut_to_a_quarter_of_the_bar():
+def test_long_neighbour_is_cut_to_quarter_of_bar():
     row = bar(left="a-very-long-program-name", middle="bash", width=40)
 
     assert row.startswith("a-very-lo" + ELLIPSIS), repr(row)
@@ -88,7 +88,7 @@ def test_a_long_neighbour_is_cut_to_a_quarter_of_the_bar():
     assert len(row) - len(row.lstrip("a-very-long" + ELLIPSIS)) <= 10, repr(row)
 
 
-def test_a_narrow_bar_keeps_its_own_title_and_drops_the_neighbours():
+def test_narrow_bar_keeps_its_own_title_and_drops_neighbours():
     """
     Under a handful of cells an edge holds a letter and an ellipsis,
     which names nothing. The pane's own title is what a person needs.
@@ -100,7 +100,7 @@ def test_a_narrow_bar_keeps_its_own_title_and_drops_the_neighbours():
     assert "bash" in row, repr(row)
 
 
-def test_the_middle_gives_way_to_nothing_but_the_edges():
+def test_middle_gives_way_to_nothing_but_edges():
     "It is cut only when the edges have already taken their share."
     row = bar(left="vim", middle="t" * (WIDTH + 10), right="less")
 
@@ -109,7 +109,7 @@ def test_the_middle_gives_way_to_nothing_but_the_edges():
     assert row.count(ELLIPSIS) == 1, repr(row)
 
 
-def test_a_middle_that_would_reach_an_edge_is_pushed_off_it():
+def test_middle_that_would_reach_edge_is_pushed_off_it():
     """
     Centring is where it starts, and not where it ends: a title as
     wide as the room between the names cannot also sit in the middle
@@ -128,13 +128,13 @@ def test_a_middle_that_would_reach_an_edge_is_pushed_off_it():
 NUMBER = "  1 "
 
 
-def test_the_number_is_at_the_far_left_and_is_never_cut():
+def test_number_is_at_far_left_and_is_never_cut():
     row = bar(number=NUMBER, left="a-name-far-too-long", middle="bash", width=WIDTH)
 
     assert row.startswith(NUMBER), repr(row)
 
 
-def test_the_number_does_not_take_from_a_neighbour_s_share():
+def test_number_does_not_take_from_neighbour_s_share():
     """
     A quarter of what is left of the bar, and not a quarter of the bar.
 
@@ -148,7 +148,7 @@ def test_the_number_does_not_take_from_a_neighbour_s_share():
     assert "gamma" in row, repr(row)
 
 
-def test_the_number_does_not_move_the_title():
+def test_number_does_not_move_title():
     "It is centred over the pane, and the number is over the pane too."
     assert bar(middle="title").index("title") == bar(
         number=NUMBER, middle="title"

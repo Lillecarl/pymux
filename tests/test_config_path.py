@@ -41,27 +41,27 @@ def write(path, text="set-option base-index 1\n"):
 # Which paths, and in which order.
 
 
-def test_the_xdg_path_comes_first(home):
+def test_xdg_path_comes_first(home):
     assert config_paths() == [
         str(home / ".config" / "pymux" / "pymux.conf"),
         str(home / ".pymux.conf"),
     ]
 
 
-def test_xdg_config_home_names_the_first_one(home, tmp_path, monkeypatch):
+def test_xdg_config_home_names_first_one(home, tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "elsewhere"))
 
     assert config_paths()[0] == str(tmp_path / "elsewhere" / "pymux" / "pymux.conf")
 
 
-def test_a_relative_xdg_config_home_is_ignored(home, monkeypatch):
+def test_relative_xdg_config_home_is_ignored(home, monkeypatch):
     "The specification says an implementation ignores one."
     monkeypatch.setenv("XDG_CONFIG_HOME", "config")
 
     assert config_paths()[0] == str(home / ".config" / "pymux" / "pymux.conf")
 
 
-def test_an_empty_xdg_config_home_is_ignored(home, monkeypatch):
+def test_empty_xdg_config_home_is_ignored(home, monkeypatch):
     "Which the specification says as well."
     monkeypatch.setenv("XDG_CONFIG_HOME", "")
 
@@ -76,20 +76,20 @@ def test_no_configuration_at_all_is_no_file(home):
     assert find_config() is None
 
 
-def test_the_dotfile_is_still_read(home):
+def test_dotfile_is_still_read(home):
     "Every configuration that exists today is this one."
     wanted = write(home / ".pymux.conf")
 
     assert find_config() == str(wanted)
 
 
-def test_the_xdg_file_is_read(home):
+def test_xdg_file_is_read(home):
     wanted = write(home / ".config" / "pymux" / "pymux.conf")
 
     assert find_config() == str(wanted)
 
 
-def test_the_xdg_file_wins_over_the_dotfile(home):
+def test_xdg_file_wins_over_dotfile(home):
     "Both are there, so the first of the two answers."
     wanted = write(home / ".config" / "pymux" / "pymux.conf")
     write(home / ".pymux.conf")
@@ -97,7 +97,7 @@ def test_the_xdg_file_wins_over_the_dotfile(home):
     assert find_config() == str(wanted)
 
 
-def test_a_directory_with_the_name_is_not_a_configuration(home):
+def test_directory_with_name_is_not_configuration(home):
     """
     A directory called `pymux.conf` answers `os.path.exists` and then
     fails to open. Choosing it would read as a broken configuration
