@@ -268,10 +268,19 @@ def create_command_completer(pymux):
     """
     The completer of the command bar, with the completers of the
     values attached to the arguments they complete.
+
+    **The finder is made once and the values are bound every time.** The
+    finder owns the tree for the life of the process, which is what the
+    module docstring says and is right. What a value completer reads is
+    the server, and binding that once meant the second server in a
+    process completed against the first: `set-option <TAB>` offered the
+    options of a session nobody was looking at. One process serves one
+    server, so nothing a person does reaches it; a suite that makes a
+    `Pymux` per test does, and the answer it got depended on test order.
     """
     global _finder
+    parser, subparsers = parser_tree()
     if _finder is None:
-        parser, subparsers = parser_tree()
         _finder = FuzzyFinder(
             parser,
             append_space=False,
@@ -281,9 +290,9 @@ def create_command_completer(pymux):
             # prefix the person typed.
             validator=lambda completion, prefix: matches_loosely(prefix, completion),
         )
-        for name, command_parser in subparsers.choices.items():
-            for action in command_parser._actions:
-                fn = _VALUE_COMPLETERS.get((name, action.dest))
-                if fn is not None:
-                    action.completer = partial(fn, pymux)
+    for name, command_parser in subparsers.choices.items():
+        for action in command_parser._actions:
+            fn = _VALUE_COMPLETERS.get((name, action.dest))
+            if fn is not None:
+                action.completer = partial(fn, pymux)
     return CommandCompleter()

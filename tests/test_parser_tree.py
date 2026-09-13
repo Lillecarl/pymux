@@ -380,3 +380,26 @@ def test_shell_answers_entry_point_options():
     assert "-S" in offered
     assert "--socket" in offered
     assert "--truecolor" in offered
+
+
+def test_the_completer_reads_the_server_it_was_made_for():
+    """
+    The finder is made once for the process; what a value completer reads
+    is bound every time.
+
+    The finder owning the tree is the design. Binding the server once was
+    not: the second `Pymux` in a process completed against the first, and a
+    suite that makes one per test got an answer that depended on test order.
+    Lillecarl/pymux#310.
+    """
+    first = Pymux()
+    second = Pymux()
+
+    create_command_completer(first)
+    create_command_completer(second)
+
+    _parser, subparsers = parser_tree()
+    action = next(
+        a for a in subparsers.choices["set-option"]._actions if a.dest == "option"
+    )
+    assert action.completer.args[0] is second
