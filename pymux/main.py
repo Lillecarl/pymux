@@ -785,6 +785,12 @@ class Pymux:
         # show-messages reads it back.
         self.message_log: deque[str] = deque(maxlen=100)
 
+        #: The channels of `wait-for`, by name. A channel exists for
+        #: as long as it remembers something: a signal nobody took, a
+        #: lock somebody holds, or somebody waiting.
+        #: Lillecarl/pymux#302.
+        self.wait_channels: dict = {}
+
         # The hooks of the session: a name for an event, and the
         # commands it runs. `set-hook` fills it, `invalidate` reads it.
         self.hooks: dict[str, list[str]] = {}
