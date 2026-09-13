@@ -39,6 +39,33 @@ async def test_run_shell_from_command_line_answers_on_it():
         pymux.command_output = None
 
 
+async def test_run_shell_says_why_a_shell_that_will_not_start_failed(monkeypatch):
+    """
+    A shell that cannot start says so, on both routes.
+
+    `subprocess.run` raises OSError when there is no shell to run. The
+    pane route ran it in a bare daemon thread, so what it raised went
+    nowhere and the person who typed the command got an empty listing
+    and no reason for it. Lillecarl/pymux#311.
+    """
+    import subprocess as subprocess_module
+
+    def refuse(*arguments, **named):
+        raise OSError(2, "No such file or directory")
+
+    monkeypatch.setattr(subprocess_module, "run", refuse)
+
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.command_output = []
+            pymux.handle_command("run-shell echo never-runs")
+
+        answer = "\n".join(pymux.command_output)
+        pymux.command_output = None
+        assert "No such file or directory" in answer, answer
+        assert "run-shell" in answer, answer
+
+
 async def test_if_shell_runs_then_command_on_zero():
     async with create_session() as (pymux, state):
         with set_app(state.app):
