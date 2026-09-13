@@ -62,30 +62,10 @@ let
     install -Dm644 base16-schemes.json "$out"/base16-schemes.json
   '';
 
-  # What the wheel is built from, and nothing else.
-  #
-  # `lib.cleanSource ./.` used to be the source, and it carried eleven
-  # megabytes: `docs`, `examples`, `images`, `tests`, and -- worse --
-  # `.hypothesis`, `.pytest_cache` and `.ruff_cache`, which a local test run
-  # rewrites. So running the suite by hand changed the source hash of the
-  # package and rebuilt everything below it. An allowlist cannot do that.
-  # Lillecarl/pymux#320.
-  projectRoot = lib.fileset.toSource {
-    root = ./.;
-    fileset = lib.fileset.unions [
-      (lib.fileset.fileFilter (file: file.hasExt "py") ./pymux)
-      (lib.fileset.fileFilter (file: file.hasExt "py") ./libpymux)
-      # The three the metadata names: the renderer reads the first at
-      # evaluation time, and setuptools reads all three in the build.
-      ./pyproject.toml
-      ./README.rst
-      ./LICENSE
-    ];
-  };
-
   package =
     (mkProject {
-      inherit projectRoot python;
+      root = ./.;
+      inherit python;
       extra = rendered: {
         # The completion scripts of bash, zsh and fish, written from
         # argcomplete and put where a shell loads them. The script that
