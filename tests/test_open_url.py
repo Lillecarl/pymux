@@ -440,15 +440,20 @@ async def test_pane_that_starts_with_shim_finds_opener():
         pymux.open_url_shim = True
         state, _ = await session.attach("only", SIZE)
 
-        # The pane of this route starts narrow, and long output wraps
-        # over rows and gets cut before a client's size reaches it. So
-        # the pane prints one short line that is the whole verdict: is
-        # $BROWSER the opener of the shim directory, and is that
-        # directory the first thing on PATH?
+        # The pane prints the whole verdict on one line: is $BROWSER the
+        # opener of the shim directory, and is that directory the first
+        # thing on PATH?
+        #
+        # It used to have to fit in six characters. A pane of this route
+        # started at nought columns, because `create_pane` sized the pty
+        # and not the screen, so anything longer wrapped a character to
+        # a row and the reader below saw it cut. Lillecarl/pymux#267,
+        # fixed with Lillecarl/pymux#321.
         program = (
             "%s -c 'import os, time; p = os.environ[\"PATH\"].split(\":\")[0];"
             " b = os.environ.get(\"BROWSER\");"
-            " print(\"M=\" + str(b == p + \"/pymux-open-url\")); time.sleep(30)'"
+            " print(\"MATCH=\" + str(b == p + \"/pymux-open-url\") +"
+            " \" and the shim directory leads PATH\"); time.sleep(30)'"
         ) % (sys.executable,)
         with set_app(state.app):
             pymux.create_window(program)
@@ -456,11 +461,11 @@ async def test_pane_that_starts_with_shim_finds_opener():
 
         page_text = lambda: pane.screen.page.text(0, 23)
         await once(
-            lambda: "M=" in page_text(),
+            lambda: "MATCH=" in page_text(),
             5.0,
             "the pane never printed its environment",
         )
-        assert "M=True" in page_text()
+        assert "MATCH=True and the shim directory leads PATH" in page_text()
 
 
 async def test_shim_leaves_pane_alone_when_it_is_off():
