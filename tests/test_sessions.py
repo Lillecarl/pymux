@@ -310,11 +310,10 @@ async def test_the_chooser_lists_every_session():
         _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
         with set_app(state.app):
             state.layout_manager.display_chooser()
-            rows = state.layout_manager._choose_window_tokens()
+            labels = state.layout_manager.chooser_entries()
 
-        text = "".join(row[1] for row in rows)
-        assert "0:1" in text
-        assert "work:1" in text
+        assert any(label.startswith("0:1") for label in labels)
+        assert any(label.startswith("work:1") for label in labels)
 
 
 async def test_choosing_a_window_of_another_session_moves_the_client():
@@ -325,7 +324,10 @@ async def test_choosing_a_window_of_another_session_moves_the_client():
         _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
         with set_app(state.app):
             state.layout_manager.display_chooser()
-            state.choose_window_index = 1
+            # Pointing at it is the switch: the chooser has no picture
+            # of a window, it moves the client onto it.
+            state.layout_manager.point_at(1)
+            assert state.session.name == "work"
             state.layout_manager.choose_pointed_window()
 
         assert state.session.name == "work"

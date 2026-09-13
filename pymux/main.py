@@ -225,11 +225,21 @@ class ClientState:
         self.choose_options = False
         self.choose_window_index = 0
         self.choose_window_command = ""
+
+        #: Where Escape puts this client back, as (session, window).
+        #: The window chooser has no preview of its own: it switches
+        #: this client to the window it points at, so a person reads
+        #: the real thing. Leaving it has to undo that.
+        #: Lillecarl/pymux#327.
+        self.chooser_return_to = None
         self.choose_window_filter = Buffer(
             name=CHOOSE,
             multiline=False,
             accept_handler=self._accept_chooser,
-            on_text_changed=lambda buffer: setattr(self, "choose_window_index", 0),
+            # Typing narrows the list, so the point goes back to the
+            # first match -- and the window chooser switches to it,
+            # which is how a search previews. Lillecarl/pymux#327.
+            on_text_changed=lambda buffer: self.layout_manager.point_at(0),
         )
 
         # The menu that `display-menu` opened: a line per entry, as

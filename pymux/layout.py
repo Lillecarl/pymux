@@ -48,7 +48,6 @@ from prompt_toolkit.layout.screen import Char, Screen
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.widgets import Dialog, SearchToolbar, TextArea
 
-from ptterm.preview import preview_lines
 
 import pymux.arrangement as arrangement
 
@@ -621,6 +620,13 @@ class LayoutManager:
         self._chooser: Container | None = None
         self._chooser_rows: Window | None = None
         self._chooser_search: Container | None = None
+
+        #: The window chooser is not the box: it is a bar across the
+        #: top, over the window it is switching to.
+        #: Lillecarl/pymux#327.
+        self._bar: Container | None = None
+        self._bar_rows: Window | None = None
+        self._bar_search: Container | None = None
         self._menu: Container | None = None
         self._menu_rows: Window | None = None
 
@@ -781,21 +787,165 @@ class LayoutManager:
         is the tmux `%%`: the command to run on the window the
         chooser points at, instead of switching to it.
         Lillecarl/pymux#295.
+
+        **There is no picture of a window here.** Moving the point
+        switches this client to the window it lands on, so what a
+        person reads under the bar is that window itself, running, at
+        full size. Escape puts the client back where it started.
+        Lillecarl/pymux#327.
         """
+        state = self.client_state
         windows = self.every_window()
-        active = self.client_state.session.arrangement.get_active_window()
-        self.client_state.display_popup = False
-        self.client_state.choose_window = True
-        self.client_state.choose_buffer = False
-        self.client_state.choose_options = False
-        self.client_state.menu_entries = []
-        self.client_state.choose_window_command = template
-        self.client_state.choose_window_filter.reset()
-        self.client_state.choose_window_index = (
+        active = state.session.arrangement.get_active_window()
+
+        state.chooser_return_to = (state.session, active)
+        state.display_popup = False
+        state.choose_window = True
+        state.choose_buffer = False
+        state.choose_options = False
+        state.menu_entries = []
+        state.choose_window_command = template
+        state.choose_window_filter.reset()
+        state.choose_window_index = (
             windows.index(active) if active in windows else 0
         )
-        self._chooser_box()
-        get_app().layout.focus(self._chooser_rows)
+        self._window_bar()
+        get_app().layout.focus(self._bar_rows)
+
+    def _bar_width(self) -> int:
+        "The columns the bar flows its entries across."
+        return max(1, self.room_this_client_has.columns)
+
+    def chooser_entries(self) -> List[str]:
+        """
+        What the bar says about each window it lists, in its order.
+
+        `index:name`, and `session:index:name` when the server holds
+        more than one session -- with one the word is the same on every
+        entry and says nothing. A star marks the window this client was
+        on when the chooser opened, which is the one Escape goes back
+        to.
+
+        The pane count is not here. It was, on a row of its own in a
+        box; the bar sits over the window itself, so a person counts
+        the panes by looking at them. Lillecarl/pymux#327.
+        """
+        many_sessions = len(self.pymux.sessions) > 1
+        going_back = self.client_state.chooser_return_to
+        started_on = going_back[1] if going_back is not None else None
+
+        entries = []
+        for window in self.chooser_matches():
+            if many_sessions:
+                label = "%s:%s:%s" % (
+                    self._session_name_of(window),
+                    window.index,
+                    window.name,
+                )
+            else:
+                label = "%s:%s" % (window.index, window.name)
+            if window is started_on:
+                label += "*"
+            entries.append(label)
+        return entries
+
+    def chooser_lines(self, width: int) -> List[List[int]]:
+        """
+        The entries packed into lines, as places in the list.
+
+        They flow like words: an entry that does not fit starts the
+        next line. One wider than the whole bar takes a line of its own
+        and the screen cuts it, which is what a long word does too.
+        Lillecarl/pymux#327.
+        """
+        lines: List[List[int]] = [[]]
+        room = width
+
+        for index, label in enumerate(self.chooser_entries()):
+            cost = len(label) + (1 if lines[-1] else 0)
+            if lines[-1] and cost > room:
+                lines.append([])
+                room = width
+                cost = len(label)
+            lines[-1].append(index)
+            room -= cost
+
+        return lines
+
+    def step_line(self, step: int) -> None:
+        """
+        Move a line up or down, keeping the place along the line.
+
+        A line holds as many entries as fitted on it, so the place is
+        what j and k keep: the third entry of this line lands on the
+        third of the next, or on its last when it is shorter.
+        """
+        lines = self.chooser_lines(self._bar_width())
+        here = self.client_state.choose_window_index
+
+        for number, line in enumerate(lines):
+            if here in line:
+                break
+        else:
+            return
+
+        target = number + step
+        if not 0 <= target < len(lines):
+            return
+
+        along = line.index(here)
+        landing = lines[target]
+        self.point_at(landing[min(along, len(landing) - 1)])
+
+    def point_at(self, index: int) -> None:
+        """
+        Put the point on one row, and switch this client to it.
+
+        The switch is the preview. It is the same call `select-window`
+        makes, so everything a window has -- its panes, its size, its
+        title bars -- is what a person sees while they choose.
+        Lillecarl/pymux#327.
+        """
+        state = self.client_state
+        matches = self.chooser_matches()
+        if not matches:
+            state.choose_window_index = 0
+            return
+
+        state.choose_window_index = max(0, min(index, len(matches) - 1))
+
+        if not state.choose_window:
+            return
+
+        self.show_window(matches[state.choose_window_index])
+
+    def show_window(self, window) -> None:
+        "Move this client onto a window, wherever that window is."
+        session = self.pymux.session_of_window(window)
+        if session is None:
+            return
+
+        self.pymux.attach_client_to(self.client_state, session)
+        session.arrangement.set_active_window(window)
+        self.pymux.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
+
+    def leave_chooser(self, restore: bool) -> None:
+        """
+        Close the chooser. `restore` puts the client back where it was
+        when the chooser opened, which is what Escape means.
+        """
+        state = self.client_state
+        going_back = state.chooser_return_to
+
+        state.choose_window = False
+        state.choose_buffer = False
+        state.choose_options = False
+        state.chooser_return_to = None
+
+        if restore and going_back is not None:
+            session, window = going_back
+            if window in session.arrangement.windows:
+                self.show_window(window)
 
     def display_buffer_chooser(self) -> None:
         """
@@ -1002,31 +1152,32 @@ class LayoutManager:
 
     def choose_pointed_window(self) -> None:
         """
-        Switch to the window the chooser points at, or run the
-        template of the `choose-window` command on it. The chooser
-        closes either way. Lillecarl/pymux#295.
+        Take the window the chooser points at.
+
+        This client is on it already -- moving the point is what put it
+        there -- so Enter only stops the chooser from putting it back.
+        A template is the one case that undoes the switch: the command
+        is what the person asked for, and being moved as well is not.
+        Lillecarl/pymux#295. Lillecarl/pymux#327.
         """
         matches = self.chooser_matches()
-        self.client_state.choose_window = False
-        self.client_state.choose_options = False
         if not matches:
+            self.leave_chooser(restore=True)
             return
+
         index = min(self.client_state.choose_window_index, len(matches) - 1)
         window = matches[index]
         session = self.pymux.session_of_window(window)
-        if session is None:
-            return
-
         template = self.client_state.choose_window_command
-        if template:
+
+        if template and session is not None:
+            self.leave_chooser(restore=True)
             self.pymux.handle_command(
                 template.replace("%%", "%s:%i" % (session.name, window.index))
             )
-        else:
-            # A window of another session takes the client with it.
-            self.pymux.attach_client_to(self.client_state, session)
-            session.arrangement.set_active_window(window)
-            self.pymux.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
+            return
+
+        self.leave_chooser(restore=False)
 
     def choose_pointed_option(self) -> None:
         """
@@ -1429,35 +1580,10 @@ class LayoutManager:
                     0, self.client_state.choose_window_index
                 ),
             ),
-            # Exact, so that the search line stays at the foot of the
-            # box: a list that only asks for the rows it has leaves the
-            # rest of the box under the search rather than over it.
-            height=lambda: D.exact(self._chooser_list_rows()),
+            height=lambda: D(min=1, max=self._chooser_room()),
             style="class:commandpalette",
         )
 
-        # What the row the chooser points at is showing. tmux draws the
-        # same thing under its tree, and picking a window by looking at
-        # it is the whole reason the box is this big.
-        # Lillecarl/pymux#325.
-        preview = ConditionalContainer(
-            content=HSplit(
-                [
-                    Window(
-                        height=1,
-                        content=FormattedTextControl(self._chooser_preview_title),
-                        style="class:commandpalette.titlebar",
-                    ),
-                    Window(
-                        content=FormattedTextControl(self._chooser_preview_tokens),
-                        wrap_lines=False,
-                        height=lambda: D.exact(max(1, self._chooser_preview_rows())),
-                        style="class:commandpalette",
-                    ),
-                ]
-            ),
-            filter=Condition(self.shows_a_preview),
-        )
         search = VSplit(
             [
                 Window(
@@ -1490,7 +1616,6 @@ class LayoutManager:
                     style="class:commandpalette.titlebar",
                 ),
                 rows,
-                preview,
                 search,
             ],
         )
@@ -1498,116 +1623,95 @@ class LayoutManager:
         self._chooser_search = search
         return self._chooser
 
+    def _window_bar(self) -> Container:
+        """
+        The window chooser: a bar across the top of the screen.
+
+        Not a box, and nothing of the window is hidden by more of it
+        than it needs: the windows flow across the bar and wrap, and
+        what is under it is the window the bar points at, running.
+        Lillecarl/pymux#327.
+
+        Built once, for the reason `_command_line_window` gives.
+        """
+        if self._bar is not None:
+            return self._bar
+
+        rows = Window(
+            content=FormattedTextControl(
+                self._choose_window_tokens,
+                focusable=True,
+                show_cursor=False,
+            ),
+            height=lambda: D.exact(
+                len(self.chooser_lines(self._bar_width()))
+            ),
+            wrap_lines=False,
+            style="class:commandpalette",
+        )
+
+        search = VSplit(
+            [
+                Window(
+                    width=2,
+                    height=1,
+                    content=FormattedTextControl(
+                        lambda: [("class:chooser.hint", "/ ")]
+                    ),
+                    style="class:commandpalette",
+                ),
+                Window(
+                    content=BufferControl(
+                        buffer=self.client_state.choose_window_filter
+                    ),
+                    height=1,
+                    style="class:commandpalette",
+                ),
+            ]
+        )
+
+        self._bar = HSplit([rows, search])
+        self._bar_rows = rows
+        self._bar_search = search
+        return self._bar
+
+    def chooser_rows_control(self):
+        "Where the keys of the chooser that shows belong."
+        if self.client_state.choose_window:
+            self._window_bar()
+            return self._bar_rows
+        self._chooser_box()
+        return self._chooser_rows
+
+    def chooser_search_control(self):
+        "The search line of the chooser that shows."
+        if self.client_state.choose_window:
+            self._window_bar()
+            return self._bar_search
+        self._chooser_box()
+        return self._chooser_search
+
     def _chooser_room(self) -> int:
-        "The rows the box has for the list and the preview together."
+        "The rows the box has for its list."
         rows = self.room_this_client_has.rows
         return max(1, rows - BOX_TOP - BOX_BOTTOM - PALETTE_HEADER)
-
-    def _chooser_width(self) -> int:
-        "The columns inside the box."
-        return max(1, self.room_this_client_has.columns - 2 * BOX_SIDE)
-
-    def _chooser_height(self) -> int:
-        """
-        How many rows the list takes, leaving the rest to the preview.
-
-        tmux's rule, from `mode_tree_set_height` in `mode-tree.c`: two
-        thirds of the room, or half of it when the list is shorter
-        than that.
-
-        **The floor is not tmux's.** tmux gives its tree the whole
-        pane, so it can say that a tree under ten rows takes
-        everything. This box is inset from every side, and on a
-        terminal of twenty-four rows it has twelve: tmux's floor would
-        mean no preview on any ordinary screen. The rule here is what
-        the two parts need instead -- three rows of list, and a title
-        with two rows under it -- and a box smaller than both is all
-        list.
-        """
-        room = self._chooser_room()
-
-        height = (room // 3) * 2
-        if height > len(self.chooser_matches()):
-            height = room // 2
-
-        height = max(height, min(room, 3))
-        if room - height < 3:
-            height = room
-
-        return max(1, height)
-
-    def _chooser_list_rows(self) -> int:
-        "The rows the list takes: the whole box when nothing previews."
-        if not self.shows_a_preview():
-            return self._chooser_room()
-        return self._chooser_height()
-
-    def _chooser_preview_rows(self) -> int:
-        "The rows the preview has, under its own title."
-        return self._chooser_room() - self._chooser_height() - 1
-
-    def shows_a_preview(self) -> bool:
-        "Whether the box has room to draw what it points at."
-        return self.client_state.choose_window and self._chooser_preview_rows() >= 1
-
-    def _pointed_window(self):
-        "The window the chooser points at, or None."
-        matches = self.chooser_matches()
-        if not (self.client_state.choose_window and matches):
-            return None
-        index = min(self.client_state.choose_window_index, len(matches) - 1)
-        return matches[index]
-
-    def _chooser_preview_title(self) -> StyleAndTextTuples:
-        "What the preview is a preview of."
-        window = self._pointed_window()
-        if window is None:
-            return []
-        return [
-            (
-                "class:commandpalette.title",
-                " %s:%s %s " % (self._session_name_of(window), window.index, window.name),
-            )
-        ]
-
-    def _chooser_preview_tokens(self) -> StyleAndTextTuples:
-        """
-        What the window the chooser points at is showing.
-
-        A drawing of the pane's screen and not the pane's own widget:
-        the widget sizes the program it holds from the room it is given,
-        and a preview must never resize the program it is a picture of.
-        `ptterm/preview.py` says the rest. Lillecarl/pymux#325.
-
-        Every pane of the window, where the layout puts them, which is
-        `window_preview`. Lillecarl/pymux#326.
-        """
-        window = self._pointed_window()
-        if window is None:
-            return []
-
-        return window_preview(
-            self.pymux,
-            window,
-            self._chooser_preview_rows(),
-            self._chooser_width() - 2,
-        )
 
     def _chooser_title(self) -> str:
         "What the box of the chooser says it is."
         if self.client_state.choose_options:
             return "Customize"
-        if self.client_state.choose_buffer:
-            return "Choose a buffer"
-        return "Choose a window"
+        return "Choose a buffer"
 
     def _chooser_tokens(self) -> StyleAndTextTuples:
-        "The rows of the chooser, by the kind that shows."
+        """
+        The rows of the box, by the kind that shows.
+
+        The windows are not here: they flow across a bar of their own.
+        Lillecarl/pymux#327.
+        """
         if self.client_state.choose_options:
             return self._choose_options_tokens()
-        if self.client_state.choose_buffer:
-            return self._choose_buffer_tokens()
-        return self._choose_window_tokens()
+        return self._choose_buffer_tokens()
 
     def _choose_options_tokens(self) -> StyleAndTextTuples:
         """
@@ -1682,51 +1786,39 @@ class LayoutManager:
 
     def _choose_window_tokens(self) -> StyleAndTextTuples:
         """
-        The windows of every session, one row each.
+        The windows of every session, flowing across the bar.
 
-        The row the chooser points at carries the gutter arrow and
-        stands out, and the window this client already looks at says
-        so, the way `list-windows` does. A window that holds more
-        panes than one says how many. A row answers a click the way
-        a column of the strip does. Lillecarl/pymux#295.
+        Like words on a line: they sit side by side and wrap when the
+        line is full. A row each was right in a box; a bar is one to
+        three rows over the window a person is reading, and a row each
+        would cover it. Lillecarl/pymux#327.
 
-        A server with a second session names the session on each row,
-        because two windows can then carry the same number and the
-        same name. A server with one names nothing: the word would be
-        the same on every row. Lillecarl/pymux#323.
+        The entry the bar points at stands out, and a star marks the
+        one Escape goes back to. An entry answers a click, the way a
+        column of the strip does.
         """
-        matches = self.chooser_matches()
-        if not matches:
+        entries = self.chooser_entries()
+        if not entries:
             return [("class:chooser.hint", " No window matches. ")]
 
-        active = self.client_state.session.arrangement.get_active_window()
-        chosen = min(self.client_state.choose_window_index, len(matches) - 1)
-        many_sessions = len(self.pymux.sessions) > 1
+        chosen = min(self.client_state.choose_window_index, len(entries) - 1)
+
         tokens: StyleAndTextTuples = []
-        for i, window in enumerate(matches):
-            style = "class:chooser.selected" if i == chosen else "class:commandpalette"
-            suffix = ""
-            if len(window.panes) > 1:
-                suffix = " (%i panes)" % len(window.panes)
-            if window == active:
-                suffix += " (active)"
-            if many_sessions:
-                where = "%s:%i" % (self._session_name_of(window), window.index)
-            else:
-                where = "%2i" % (window.index,)
-            tokens.append(
-                (
-                    style,
-                    "%s%s %s%s\n"
-                    % (
-                        "> " if i == chosen else "  ",
-                        where,
-                        window.name,
-                        suffix,
-                    ),
-                    self._create_chooser_click_handler(i),
+        for number, line in enumerate(self.chooser_lines(self._bar_width())):
+            if number:
+                tokens.append(("class:commandpalette", "\n"))
+            for place, index in enumerate(line):
+                if place:
+                    tokens.append(("class:commandpalette", " "))
+                tokens.append(
+                    (
+                        "class:chooser.selected"
+                        if index == chosen
+                        else "class:commandpalette",
+                        entries[index],
+                        self._create_chooser_click_handler(index),
+                    )
                 )
-            )
         return tokens
 
     def _create_chooser_click_handler(
@@ -1740,12 +1832,17 @@ class LayoutManager:
 
         def handler(mouse_event: MouseEvent) -> "NotImplementedOrNone":
             if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
-                self.client_state.choose_window_index = row
                 if self.client_state.choose_options:
+                    self.client_state.choose_window_index = row
                     self.choose_pointed_option()
                 elif self.client_state.choose_buffer:
+                    self.client_state.choose_window_index = row
                     self.choose_pointed_buffer()
                 else:
+                    # Through `point_at`, so the click switches to the
+                    # window before taking it -- the same path the keys
+                    # take. Lillecarl/pymux#327.
+                    self.point_at(row)
                     self.choose_pointed_window()
                 return None
             return NotImplemented
@@ -1992,17 +2089,17 @@ class LayoutManager:
                         filter=~in_box,
                     ),
                 ),
-                # The windows of the session, to choose from. The
-                # same inset as the keys pop-up, because it is the
-                # same kind of box, and the same z order. It takes
-                # focus, which is what keeps the keys of the pane out
-                # of the way while it shows. Lillecarl/pymux#295.
+                # The buffers or the options, to choose from. A box,
+                # the same inset as the keys pop-up, because it is the
+                # same kind of thing and neither can be switched to.
+                # It takes focus, which is what keeps the keys of the
+                # pane out of the way while it shows.
+                # Lillecarl/pymux#295. Lillecarl/pymux#304.
                 Float(
                     content=ConditionalContainer(
                         content=DynamicContainer(self._chooser_box),
                         filter=Condition(
-                            lambda: self.client_state.choose_window
-                            or self.client_state.choose_buffer
+                            lambda: self.client_state.choose_buffer
                             or self.client_state.choose_options
                         ),
                     ),
@@ -2010,6 +2107,20 @@ class LayoutManager:
                     right=BOX_SIDE,
                     top=BOX_TOP,
                     bottom=BOX_BOTTOM,
+                    z_index=Z_INDEX.POPUP,
+                ),
+                # The windows, to choose from: a bar across the top,
+                # over the window it has switched to. Not a box, and
+                # no inset: it covers as few rows of that window as
+                # the entries need. Lillecarl/pymux#327.
+                Float(
+                    content=ConditionalContainer(
+                        content=DynamicContainer(self._window_bar),
+                        filter=Condition(lambda: self.client_state.choose_window),
+                    ),
+                    left=0,
+                    right=0,
+                    top=0,
                     z_index=Z_INDEX.POPUP,
                 ),
 
@@ -2314,73 +2425,6 @@ def _tell_pane_its_size(pane: arrangement.Pane, rect) -> None:
     for the screen it thinks it has. Lillecarl/pymux#224.
     """
     pane.terminal.set_size(rect.width, rect.height)
-
-
-#: What a preview draws in the cells between two panes. The gap
-#: belongs to the layout, so the miniature has the same holes the
-#: window has; drawing them in the bar colour is what makes the
-#: shape of the window readable at this size.
-PREVIEW_GAP = "class:commandpalette.titlebar"
-
-
-def window_preview(
-    pymux: "Pymux", window, rows: int, columns: int
-) -> StyleAndTextTuples:
-    """
-    A window drawn small: every pane where the layout puts it.
-
-    The layout answers at the size of the preview, so this is the
-    window's own shape and not a strip of panes side by side.
-    tmux draws the second thing -- `window_tree_draw_window` gives each
-    pane 24 columns of its own, whatever the layout is -- because it
-    has no plan to ask. pymux does: `layout_of` measures one at any
-    size, which is the same call the real frame makes.
-    Lillecarl/pymux#326.
-
-    A pane whose rectangle runs off the edge is cut. `Divided.measure`
-    says why: nothing clamps, because every pane keeps a row, and what
-    a person sees is cut by the view.
-    """
-    if rows <= 0 or columns <= 0:
-        return []
-
-    grid = [[(PREVIEW_GAP, " ")] * columns for _ in range(rows)]
-
-    plan = layout_of(pymux, window).measure(Size(rows=rows, columns=columns))
-
-    for slot, rect in plan.rects.items():
-        pane = slot.shown
-        screen = getattr(pane, "screen", None)
-        if screen is None:
-            continue
-
-        # The whole rectangle first, so that the part of a pane its
-        # program has not written is the pane and not a gap.
-        left, right = max(rect.x, 0), min(rect.right, columns)
-        top, bottom = max(rect.y, 0), min(rect.bottom, rows)
-        for y in range(top, bottom):
-            for x in range(left, right):
-                grid[y][x] = ("", " ")
-
-        lines = preview_lines(screen, rect.height, rect.width)
-        for line_number, line in enumerate(lines):
-            y = rect.y + line_number
-            if not top <= y < bottom:
-                continue
-            row = grid[y]
-            for offset, cell in enumerate(line):
-                x = rect.x + offset
-                if x >= right:
-                    break
-                if x >= left:
-                    row[x] = cell
-
-    fragments: StyleAndTextTuples = []
-    for number, row in enumerate(grid):
-        if number:
-            fragments.append(("", "\n"))
-        fragments += row
-    return fragments
 
 
 def layout_of(pymux: "Pymux", window):

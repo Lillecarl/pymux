@@ -204,14 +204,16 @@ class PymuxKeyBindings:
             "Quit pop-up dialog."
             self.pymux.get_client_state().display_popup = False
 
-        # The chooser of windows. It has the focus while it shows,
-        # which is what keeps the pane from taking these keys; the
-        # same reason the pop-up's `q` above answers. tmux's tree
-        # answers the mode keys, and so does this: j and k with the
-        # arrows, Enter to switch, q and Escape to leave. The search
-        # of `/` takes the focus; while it has it, everything types
-        # into it, the list narrows as it does, and Escape brings the
-        # keys back. Lillecarl/pymux#295.
+        # The choosers. One has the focus while it shows, which is
+        # what keeps the pane from taking these keys; the same reason
+        # the pop-up's `q` above answers.
+        #
+        # h and l walk the entries, j and k the lines the bar wraps
+        # them onto, and the arrows go with them. Enter takes the one
+        # the point is on and Escape goes back. The search of `/`
+        # takes the focus; while it has it, everything types into it,
+        # the list narrows as it does, and Escape brings the keys
+        # back. Lillecarl/pymux#295. Lillecarl/pymux#327.
         @Condition
         def chooser_displayed() -> bool:
             state = self.pymux.get_client_state()
@@ -228,32 +230,52 @@ class PymuxKeyBindings:
                 state.choose_window_filter
             )()
 
+        @Condition
+        def window_bar() -> bool:
+            "The chooser that flows across a bar, and not the box."
+            return self.pymux.get_client_state().choose_window
+
         @kb.add("/", filter=chooser_displayed & ~chooser_search_focused)
         def _chooser_search(event: E) -> None:
             "Search the names; what is typed narrows the list."
             get_app().layout.focus(
-                self.pymux.get_client_state().layout_manager._chooser_search
+                self.pymux.get_client_state().layout_manager.chooser_search_control()
             )
 
-        @kb.add("up", filter=chooser_displayed)
-        @kb.add("k", filter=chooser_displayed)
+        @kb.add("left", filter=chooser_displayed & ~chooser_search_focused)
+        @kb.add("h", filter=chooser_displayed & ~chooser_search_focused)
+        @kb.add("up", filter=chooser_displayed & ~window_bar)
+        @kb.add("k", filter=chooser_displayed & ~window_bar)
         @kb.add("c-p", filter=chooser_displayed)
-        def _chooser_up(event: E) -> None:
-            "The row above, staying at the first."
+        def _chooser_back(event: E) -> None:
+            "The entry before this one, staying at the first."
             state = self.pymux.get_client_state()
-            state.choose_window_index = max(0, state.choose_window_index - 1)
+            state.layout_manager.point_at(state.choose_window_index - 1)
 
-        @kb.add("down", filter=chooser_displayed)
-        @kb.add("j", filter=chooser_displayed)
+        @kb.add("right", filter=chooser_displayed & ~chooser_search_focused)
+        @kb.add("l", filter=chooser_displayed & ~chooser_search_focused)
+        @kb.add("down", filter=chooser_displayed & ~window_bar)
+        @kb.add("j", filter=chooser_displayed & ~window_bar)
         @kb.add("c-n", filter=chooser_displayed)
-        def _chooser_down(event: E) -> None:
-            "The row below, staying at the last."
+        def _chooser_on(event: E) -> None:
+            "The entry after this one, staying at the last."
             state = self.pymux.get_client_state()
-            matches = state.layout_manager.chooser_matches()
-            state.choose_window_index = min(
-                len(matches) - 1,
-                state.choose_window_index + 1,
-            )
+            state.layout_manager.point_at(state.choose_window_index + 1)
+
+        # The bar wraps, so up and down are a line and not an entry.
+        # In the box a line holds one entry and the two agree, which
+        # is why only the bar binds these. Lillecarl/pymux#327.
+        @kb.add("up", filter=window_bar & ~chooser_search_focused)
+        @kb.add("k", filter=window_bar & ~chooser_search_focused)
+        def _bar_up(event: E) -> None:
+            "The line above, keeping the place along it."
+            self.pymux.get_client_state().layout_manager.step_line(-1)
+
+        @kb.add("down", filter=window_bar & ~chooser_search_focused)
+        @kb.add("j", filter=window_bar & ~chooser_search_focused)
+        def _bar_down(event: E) -> None:
+            "The line below, keeping the place along it."
+            self.pymux.get_client_state().layout_manager.step_line(1)
 
         @kb.add("enter", filter=chooser_displayed & ~chooser_search_focused)
         def _chooser_choose(event: E) -> None:
@@ -272,19 +294,22 @@ class PymuxKeyBindings:
         )
         @kb.add("c-c", filter=chooser_displayed & ~chooser_search_focused, eager=True)
         def _quit_chooser(event: E) -> None:
-            "Leave the chooser without taking anything."
+            """
+            Leave the chooser without taking anything.
+
+            The window chooser switched this client while a person
+            moved through it, so leaving puts the client back on the
+            window it started from. Lillecarl/pymux#327.
+            """
             state = self.pymux.get_client_state()
-            state.choose_window = False
-            state.choose_buffer = False
-            state.choose_options = False
+            state.layout_manager.leave_chooser(restore=True)
 
         @kb.add("escape", filter=chooser_search_focused, eager=True)
         def _quit_chooser_search(event: E) -> None:
             "Leave the search, keeping the chooser."
-            self.pymux.get_client_state().choose_window_filter.reset()
-            get_app().layout.focus(
-                self.pymux.get_client_state().layout_manager._chooser_rows
-            )
+            state = self.pymux.get_client_state()
+            state.choose_window_filter.reset()
+            get_app().layout.focus(state.layout_manager.chooser_rows_control())
 
         # The menu that `display-menu` opened. It is modal: the keys
         # of its entries are the keys it takes, Escape and ctrl+c
