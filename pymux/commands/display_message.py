@@ -14,13 +14,16 @@ def display_message(pymux: "Pymux", args: argparse.Namespace) -> None:
     '''
     Show a message on the status line.
 
-    With `-p`, print the message, formatted, instead: the way a script
-    asks the session a question and reads the answer. tmux spells it
-    the same. Lillecarl/pymux#289.
+    The message is a format, the way every other message is: `#{...}`
+    and a `{{ template }}` both answer, and the client it is shown to
+    is the one it is drawn for. Lillecarl/pymux#334.
+
+    With `-p`, print the message instead: the way a script asks the
+    session a question and reads the answer. tmux spells it the same.
+    Lillecarl/pymux#289.
     '''
-    message = args.message
     if args.p:
-        answer(pymux, format_pymux_string(pymux, message))
+        answer(pymux, format_pymux_string(pymux, args.message))
         return
 
     # The client a person is looking at. A command typed in a pane runs
@@ -31,7 +34,14 @@ def display_message(pymux: "Pymux", args: argparse.Namespace) -> None:
         pymux.add_command_error("pymux: nobody is attached to show a message to.")
         return
 
-    client_state.message = message
+    # **Formatted here, and for the client that is told.** The status
+    # line drew whatever was typed, so `display-message '#{session_name}'`
+    # answered with the format string. tmux expands it either way, and
+    # a binding that asks the session something is the whole use of
+    # this command. Lillecarl/pymux#334.
+    client_state.message = format_pymux_string(
+        pymux, args.message, session=client_state.session, client=client_state
+    )
 
 
 def register(subparsers):
