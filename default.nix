@@ -17,9 +17,11 @@
 # `pyterm/nix/python-set.nix`. Everything pymux imports comes from that set
 # too, by name, out of `pyproject.toml`.
 #
-# ptterm and pyterm-pytest still arrive as arguments, and they are the copies
-# nixpkgs built rather than the ones in the set. The checks borrow tools from
-# their passthru, and a lifted package keeps its files and not its passthru.
+# pyterm-pytest still arrives as an argument, and it is the copy nixpkgs built
+# rather than the one in the set. The checks borrow tools from its passthru,
+# and a lifted package keeps its files and not its passthru. ptterm used to
+# arrive the same way, and does not any more: it is a builders package now,
+# so the set holds the copy that carries the tools.
 #
 # mesa arrives as an argument as well, and only the checks use it: kitty
 # draws with OpenGL and a build sandbox has no graphics card.
@@ -160,12 +162,11 @@ let
     ];
   };
 
-  # ptterm goes in by hand: the scope here holds the copy lifted into the
-  # builders set, which keeps ptterm's files and not the passthru the suites
-  # borrow their tools from.
+  # ptterm goes in for its passthru: the conformance suites that pymux runs
+  # in a pane are built once, in ptterm, and a tool is not a suite.
   #
-  # mesa arrives as an argument for the same kind of reason, and pyterm
-  # passes the one that draws.
+  # mesa arrives as an argument because the scope holds a python binding
+  # under that name and not the one that draws. pyterm passes the right one.
   checks = callPackage ./nix/checks.nix {
     inherit
       testEnv
