@@ -16,7 +16,7 @@ from prompt_toolkit.layout.containers import ConditionalContainer, Float
 from prompt_toolkit.layout.layout import walk
 from prompt_toolkit.layout.screen import Screen
 
-from session import create_session, in_loop
+from session import create_session
 from pymux.options import ALL_OPTIONS
 
 
@@ -61,7 +61,6 @@ def put_cursor(state, x: int, y: int) -> None:
     state.app.renderer._last_screen = screen
 
 
-@in_loop
 async def test_which_key_is_off_to_begin_with():
     "A person who knows the keys does not want a popup in the way."
     async with create_session() as (pymux, state):
@@ -72,7 +71,6 @@ async def test_which_key_is_off_to_begin_with():
         assert drawn_which_key_float(state) is None
 
 
-@in_loop
 async def test_option_and_prefix_draw_box():
     "The popup is about the prefix, so both have to hold."
     async with create_session() as (pymux, state):
@@ -86,7 +84,6 @@ async def test_option_and_prefix_draw_box():
         assert drawn is not None
 
 
-@in_loop
 async def test_prefix_alone_asks_for_frame():
     """
     The popup draws only when something asks for a frame, and nothing
@@ -113,7 +110,6 @@ async def test_prefix_alone_asks_for_frame():
         assert not asked
 
 
-@in_loop
 async def test_box_prefers_top_right_and_steps_aside():
     """
     The top right holds the least of what a person has on the screen,
@@ -139,7 +135,6 @@ async def test_box_prefers_top_right_and_steps_aside():
             assert (drawn.bottom is not None) != top_right
 
 
-@in_loop
 async def test_listing_is_prefix_bindings():
     """
     The keys the box lists are the bindings the prefix reaches, with
@@ -164,7 +159,6 @@ async def test_listing_is_prefix_bindings():
         assert ("c", "new-window") in rows
 
 
-@in_loop
 async def test_box_takes_no_focus():
     """
     The key after the prefix must reach the bindings as it always

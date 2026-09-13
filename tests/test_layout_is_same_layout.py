@@ -14,7 +14,7 @@ Lillecarl/pymux#233.
 
 from prompt_toolkit.application.current import set_app
 
-from session import create_session, in_loop
+from session import create_session
 
 
 def controls(app):
@@ -22,7 +22,6 @@ def controls(app):
     return frozenset(app.layout.find_all_controls())
 
 
-@in_loop
 async def test_walking_layout_twice_finds_same_controls():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -32,7 +31,6 @@ async def test_walking_layout_twice_finds_same_controls():
     assert first == second
 
 
-@in_loop
 async def test_empty_overlay_is_one_window_and_not_new_one():
     """
     The container that held a fresh `Window()`, which makes a

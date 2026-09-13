@@ -10,10 +10,9 @@ Lillecarl/pymux#297.
 
 from prompt_toolkit.application.current import set_app
 
-from session import create_session, in_loop
+from session import create_session
 
 
-@in_loop
 async def test_hook_runs_when_command_its_named_for_runs():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -23,7 +22,6 @@ async def test_hook_runs_when_command_its_named_for_runs():
         assert state.message == "pane-was-selected"
 
 
-@in_loop
 async def test_hook_runs_when_window_opens():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -33,7 +31,6 @@ async def test_hook_runs_when_window_opens():
         assert state.message == "a-window-opened"
 
 
-@in_loop
 async def test_u_forgets_hook():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -44,7 +41,6 @@ async def test_u_forgets_hook():
         assert state.message is None
 
 
-@in_loop
 async def test_hook_holds_its_commands_in_order():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -57,7 +53,6 @@ async def test_hook_holds_its_commands_in_order():
         assert lines == ["display first", "display second"]
 
 
-@in_loop
 async def test_show_hooks_lists_them():
     async with create_session() as (pymux, state):
         with set_app(state.app):

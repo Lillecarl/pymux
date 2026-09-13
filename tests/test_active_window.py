@@ -22,8 +22,6 @@ land on.
 Lillecarl/pymux#193.
 """
 
-import asyncio
-import functools
 import io
 import sys
 from contextlib import asynccontextmanager
@@ -51,16 +49,6 @@ class _NotLookedYet:
     application, and `get_active_window_for` uses the key and nothing
     else, so this is enough to be one.
     """
-
-
-def in_loop(test):
-    "pymux carries no anyio, so pytest here runs no coroutine test."
-
-    @functools.wraps(test)
-    def run():
-        asyncio.run(test())
-
-    return run
 
 
 @asynccontextmanager
@@ -107,7 +95,6 @@ async def create_server(windows):
             pipe.__exit__(None, None, None)
 
 
-@in_loop
 async def test_new_client_lands_where_session_is():
     "It landed on window one, once, and on the last active one after."
     async with create_server(3) as (pymux, _):
@@ -119,7 +106,6 @@ async def test_new_client_lands_where_session_is():
         )
 
 
-@in_loop
 async def test_first_answer_is_one_it_keeps():
     "The bug itself: the cache and the return took different windows."
     async with create_server(3) as (pymux, _):
@@ -132,7 +118,6 @@ async def test_first_answer_is_one_it_keeps():
         assert arrangement.get_active_window_for(arriving) is first_answer
 
 
-@in_loop
 async def test_with_nowhere_to_land_it_takes_first_window():
     "Nothing has been made active, so there is no last active window."
     async with create_server(3) as (pymux, _):
@@ -144,7 +129,6 @@ async def test_with_nowhere_to_land_it_takes_first_window():
         )
 
 
-@in_loop
 async def test_window_that_is_gone_is_not_offered():
     """
     A program can end the last pane of a window that no client is on.
@@ -166,7 +150,6 @@ async def test_window_that_is_gone_is_not_offered():
         assert arrangement.get_active_window_for(arriving) is arrangement.windows[0]
 
 
-@in_loop
 async def test_client_that_has_looked_keeps_its_own_window():
     "Two clients on two windows. Neither answer moves the other."
     async with create_server(3) as (pymux, attach):

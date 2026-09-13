@@ -28,7 +28,6 @@ import pytest
 from pymux.client.ssh import SshClient, is_ssh_url, ssh_target
 from pymux.main import Pymux
 
-from session import in_loop
 
 PANE_COMMAND = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
 
@@ -169,7 +168,6 @@ async def create_ssh_server(where: Path, socket_path: str):
     return server, port, str(client_key)
 
 
-@in_loop
 async def test_command_reaches_server_over_ssh(tmp_path=None):
     """
     The whole path: an address, a key exchange, a channel to the unix
@@ -213,7 +211,6 @@ async def test_command_reaches_server_over_ssh(tmp_path=None):
     assert "".join(said).strip() == pymux.session_name, said
 
 
-@in_loop
 async def test_address_with_no_path_finds_socket_itself():
     """
     `ssh://host` alone, and nothing runs on the far side to answer it.

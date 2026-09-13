@@ -16,7 +16,7 @@ would draw, and that is the filter of each one.
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.layout.containers import ConditionalContainer, Float
 
-from session import create_session, in_loop
+from session import create_session
 from pymux.options import ALL_OPTIONS
 
 
@@ -70,7 +70,6 @@ def cursor_menu_float(state) -> Float:
     raise AssertionError("the layout holds no menu under the cursor")
 
 
-@in_loop
 async def test_palette_is_off_to_begin_with():
     "A person used to the bar does not have it move without asking."
     async with create_session() as (pymux, state):
@@ -81,7 +80,6 @@ async def test_palette_is_off_to_begin_with():
         assert not float_is_drawn(state, palette_float(state))
 
 
-@in_loop
 async def test_option_draws_palette():
     async with create_session() as (pymux, state):
         ALL_OPTIONS["command-palette"].set_value(pymux, "on")
@@ -91,7 +89,6 @@ async def test_option_draws_palette():
         assert float_is_drawn(state, palette_float(state))
 
 
-@in_loop
 async def test_palette_is_drawn_only_in_command_mode():
     "The option says where the command line goes, not that it is open."
     async with create_session() as (pymux, state):
@@ -100,7 +97,6 @@ async def test_palette_is_drawn_only_in_command_mode():
         assert not float_is_drawn(state, palette_float(state))
 
 
-@in_loop
 async def test_menu_under_cursor_steps_aside_for_palette():
     """
     The palette holds a menu of its own, and that one takes the height
@@ -113,7 +109,6 @@ async def test_menu_under_cursor_steps_aside_for_palette():
         assert not float_is_drawn(state, cursor_menu_float(state))
 
 
-@in_loop
 async def test_menu_under_cursor_stays_for_bar():
     async with create_session() as (pymux, state):
         in_command_mode(state)
@@ -121,7 +116,6 @@ async def test_menu_under_cursor_stays_for_bar():
         assert float_is_drawn(state, cursor_menu_float(state))
 
 
-@in_loop
 async def test_completions_of_palette_stop_above_status_line():
     """
     The menu that hangs under the cursor is twelve rows at the most.
@@ -141,7 +135,6 @@ async def test_completions_of_palette_stop_above_status_line():
         assert rows == screen_rows - 5 - 2
 
 
-@in_loop
 async def test_command_line_window_is_built_once():
     """
     The layout focuses a control. A fresh one on every render is one it

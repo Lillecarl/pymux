@@ -19,8 +19,6 @@ and fails these.
 Lillecarl/pymux#194, Lillecarl/pymux#195.
 """
 
-import asyncio
-import functools
 import io
 import sys
 from contextlib import asynccontextmanager
@@ -70,16 +68,6 @@ LOUD_ONES = frozenset(
 )
 
 
-def in_loop(test):
-    "pymux carries no anyio, so pytest here runs no coroutine test."
-
-    @functools.wraps(test)
-    def run():
-        asyncio.run(test())
-
-    return run
-
-
 @asynccontextmanager
 async def create_client():
     "A server with one client attached, and the client's application."
@@ -114,14 +102,12 @@ def bar_of(app):
 # What a client draws with.
 
 
-@in_loop
 async def test_client_draws_with_theme_it_starts_on():
     async with create_client() as (pymux, app):
         assert pymux.theme == DEFAULT_THEME
         assert bar_of(app) == "ansigreen"
 
 
-@in_loop
 async def test_choosing_theme_reaches_client_that_is_attached():
     "The application reads the scheme again on every render."
     async with create_client() as (pymux, app):
@@ -131,7 +117,6 @@ async def test_choosing_theme_reaches_client_that_is_attached():
         assert bar_of(app) == "5f5f87"
 
 
-@in_loop
 async def test_choosing_theme_back_puts_green_back():
     async with create_client() as (pymux, app):
         pymux.handle_command("set-option theme grey")
@@ -140,7 +125,6 @@ async def test_choosing_theme_back_puts_green_back():
         assert bar_of(app) == "ansigreen"
 
 
-@in_loop
 async def test_every_theme_reaches_client():
     "Whatever is registered, and not only the two this file names."
     async with create_client() as (pymux, app):

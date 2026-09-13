@@ -14,10 +14,9 @@ import pytest
 from prompt_toolkit.application.current import set_app
 
 from pymux.commands import CommandException
-from session import create_session, in_loop
+from session import create_session
 
 
-@in_loop
 async def test_move_pane_puts_pane_in_other_window():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -34,7 +33,6 @@ async def test_move_pane_puts_pane_in_other_window():
         assert source.panes
 
 
-@in_loop
 async def test_emptied_window_is_gone():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -48,7 +46,6 @@ async def test_emptied_window_is_gone():
         assert len(pymux.arrangement.windows) == count - 1
 
 
-@in_loop
 async def test_join_pane_moves_into_current_window():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -62,7 +59,6 @@ async def test_join_pane_moves_into_current_window():
         assert pymux._window_holding(pane) is destination
 
 
-@in_loop
 async def test_unlink_takes_window_out_and_link_puts_it_back():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -83,7 +79,6 @@ async def test_unlink_takes_window_out_and_link_puts_it_back():
         assert pymux.arrangement.get_active_window() is unlinked
 
 
-@in_loop
 async def test_last_window_refuses_to_unlink():
     async with create_session() as (pymux, state):
         from pymux.commands.unlink_window import unlink_window

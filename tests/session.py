@@ -20,8 +20,8 @@ down. Lillecarl/pymux#226.
 drives the connection route and counts what the event loop did.
 
 `create_session` is the plain session on top of the in-process route:
-one client, one window, the shape most tests want. `in_loop` runs a
-coroutine test while pymux carries no anyio.
+one client, one window, the shape most tests want. A coroutine test
+runs on anyio's pytest plugin, which `anyio_mode` turns on.
 """
 
 import asyncio
@@ -32,7 +32,6 @@ import sys
 import time
 import weakref
 from contextlib import asynccontextmanager, contextmanager
-from functools import wraps
 from typing import Any, Callable, Dict, NamedTuple
 
 from prompt_toolkit.application.current import set_app
@@ -163,23 +162,6 @@ async def once(question, seconds: float, complaint: str):
             return answer
         await asyncio.sleep(0.005)
     raise SystemExit(complaint)
-
-
-def in_loop(test):
-    """
-    Run this test in an event loop of its own.
-
-    pymux does not carry anyio and does not turn on `anyio_mode`, so
-    pytest here answers a coroutine test with "async def functions are
-    not natively supported". Lillecarl/pymux#87 is the move that would
-    make this decorator go away.
-    """
-
-    @wraps(test)
-    def run(*arguments, **named):
-        asyncio.run(test(*arguments, **named))
-
-    return run
 
 
 @contextmanager

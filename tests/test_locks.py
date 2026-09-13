@@ -9,10 +9,9 @@ Lillecarl/pymux#297.
 
 from prompt_toolkit.application.current import set_app
 
-from session import create_session, in_loop
+from session import create_session
 
 
-@in_loop
 async def test_locking_runs_lock_command_over_whole_screen():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -27,7 +26,6 @@ async def test_locking_runs_lock_command_over_whole_screen():
             assert pymux.overlay_pane is None
 
 
-@in_loop
 async def test_all_three_locks_arrive_at_same_screen():
     async with create_session() as (pymux, state):
         with set_app(state.app):

@@ -12,10 +12,9 @@ import asyncio
 import pytest
 from prompt_toolkit.application.current import set_app
 
-from session import create_session, in_loop
+from session import create_session
 
 
-@in_loop
 async def test_run_shell_shows_what_command_said():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -30,7 +29,6 @@ async def test_run_shell_shows_what_command_said():
             pytest.fail("the output never arrived")
 
 
-@in_loop
 async def test_run_shell_from_command_line_answers_on_it():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -41,7 +39,6 @@ async def test_run_shell_from_command_line_answers_on_it():
         pymux.command_output = None
 
 
-@in_loop
 async def test_if_shell_runs_then_command_on_zero():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -50,7 +47,6 @@ async def test_if_shell_runs_then_command_on_zero():
         assert state.message == "yes"
 
 
-@in_loop
 async def test_if_shell_runs_else_command_otherwise():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -59,7 +55,6 @@ async def test_if_shell_runs_else_command_otherwise():
         assert state.message == "no"
 
 
-@in_loop
 async def test_if_shell_takes_format_for_question():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -68,7 +63,6 @@ async def test_if_shell_takes_format_for_question():
         assert state.message == "format-said-yes"
 
 
-@in_loop
 async def test_if_shell_keeps_the_question_output_off_the_terminal(capfd):
     """
     Only the status is read. The output used to go to the server's own

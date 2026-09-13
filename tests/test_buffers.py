@@ -14,14 +14,13 @@ import os
 import pytest
 from prompt_toolkit.application.current import set_app
 
-from session import create_session, in_loop
+from session import create_session
 from pymux.commands import CommandException
 from pymux.commands.delete_buffer import delete_buffer
 from pymux.commands.save_buffer import save_buffer
 from pymux.commands.show_buffer import show_buffer
 
 
-@in_loop
 async def test_set_buffer_without_name_fills_session_buffer():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -30,7 +29,6 @@ async def test_set_buffer_without_name_fills_session_buffer():
         assert pymux.clipboard.get_data().text == "hello"
 
 
-@in_loop
 async def test_named_buffer_round_trips():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -43,7 +41,6 @@ async def test_named_buffer_round_trips():
         assert state.layout_manager.popup_dialog.title == "show-buffer"
 
 
-@in_loop
 async def test_list_says_how_much_each_buffer_holds():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -54,7 +51,6 @@ async def test_list_says_how_much_each_buffer_holds():
         assert state.message.splitlines() == ["a 5", "b 3"]
 
 
-@in_loop
 async def test_delete_buffer_removes_name():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -64,7 +60,6 @@ async def test_delete_buffer_removes_name():
         assert "mine" not in pymux.named_buffers
 
 
-@in_loop
 async def test_buffer_nobody_holds_is_error():
     async with create_session() as (pymux, state):
         with pytest.raises(CommandException):
@@ -77,7 +72,6 @@ async def test_buffer_nobody_holds_is_error():
             save_buffer(pymux, argparse.Namespace(b="nope", filename="/tmp/opencode/none"))
 
 
-@in_loop
 async def test_load_and_save_buffer_move_file(tmp_path):
     async with create_session() as (pymux, state):
         source = tmp_path / "in.txt"
@@ -95,7 +89,6 @@ async def test_load_and_save_buffer_move_file(tmp_path):
         assert target.read_text() == "from a file\n"
 
 
-@in_loop
 async def test_load_buffer_without_name_fills_session_buffer(tmp_path):
     async with create_session() as (pymux, state):
         source = tmp_path / "in.txt"
@@ -107,7 +100,6 @@ async def test_load_buffer_without_name_fills_session_buffer(tmp_path):
         assert pymux.clipboard.get_data().text == "piped"
 
 
-@in_loop
 async def test_buffer_nobody_holds_is_error():
     async with create_session() as (pymux, state):
         with set_app(state.app), pytest.raises(CommandException):
@@ -119,7 +111,6 @@ async def test_buffer_nobody_holds_is_error():
         with set_app(state.app), pytest.raises(CommandException):
             save_buffer(pymux, argparse.Namespace(buffer_name="nope", filename="/tmp/opencode/none"))
 
-@in_loop
 async def test_buffer_chooser_opens_and_lists_buffers():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -133,7 +124,6 @@ async def test_buffer_chooser_opens_and_lists_buffers():
         assert "a" in rows[0][1] and "5" in rows[0][1]
 
 
-@in_loop
 async def test_enter_from_buffer_chooser_fills_session_buffer():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -146,7 +136,6 @@ async def test_enter_from_buffer_chooser_fills_session_buffer():
         assert pymux.clipboard.get_data().text == "hello"
 
 
-@in_loop
 async def test_search_narrows_buffer_rows():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -162,7 +151,6 @@ async def test_search_narrows_buffer_rows():
         assert state.choose_window_index == 0
 
 
-@in_loop
 async def test_choosers_are_one_at_time():
     async with create_session() as (pymux, state):
         with set_app(state.app):

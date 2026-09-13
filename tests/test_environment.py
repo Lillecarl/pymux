@@ -16,13 +16,12 @@ import argparse
 import pytest
 from prompt_toolkit.application.current import set_app
 
-from session import create_session, in_loop
+from session import create_session
 from pymux.commands import CommandException
 from pymux.commands.set_environment import set_environment
 from pymux.commands.show_environment import show_environment
 
 
-@in_loop
 async def test_set_and_show_make_round_trip():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -32,7 +31,6 @@ async def test_set_and_show_make_round_trip():
         assert state.message == "FOO=bar"
 
 
-@in_loop
 async def test_session_scope_sits_over_global():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -43,7 +41,6 @@ async def test_session_scope_sits_over_global():
         assert state.message == "FOO=baz"
 
 
-@in_loop
 async def test_session_unset_falls_through_to_global():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -55,7 +52,6 @@ async def test_session_unset_falls_through_to_global():
         assert state.message == "FOO=bar"
 
 
-@in_loop
 async def test_name_unset_in_both_scopes_leaves_environment():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -67,7 +63,6 @@ async def test_name_unset_in_both_scopes_leaves_environment():
         assert "FOO" not in pymux.pane_environment()
 
 
-@in_loop
 async def test_merged_environment_is_server_over_scopes():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -81,7 +76,6 @@ async def test_merged_environment_is_server_over_scopes():
         assert merged.get("PYMUX_TEST_SCOPE") == "more" or "PYMUX_TEST_SCOPE" not in os.environ
 
 
-@in_loop
 async def test_s_escapes_values_for_shell():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -91,7 +85,6 @@ async def test_s_escapes_values_for_shell():
         assert state.message == "FOO='two words'"
 
 
-@in_loop
 async def test_name_no_scope_holds_is_error():
     async with create_session() as (pymux, state):
         with pytest.raises(CommandException):
@@ -101,7 +94,6 @@ async def test_name_no_scope_holds_is_error():
             show_environment(pymux, argparse.Namespace(g=True, s=False, name="NOPE"))
 
 
-@in_loop
 async def test_name_with_equals_sign_is_refused():
     async with create_session() as (pymux, state):
         with pytest.raises(CommandException):

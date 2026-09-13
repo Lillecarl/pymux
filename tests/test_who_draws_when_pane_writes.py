@@ -27,7 +27,7 @@ if somebody takes the wake away rather than narrowing it.
 import asyncio
 import sys
 
-from session import in_loop, over_connection
+from session import over_connection
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 
@@ -73,7 +73,6 @@ async def create_window_of_its_own(pymux, state):
     await asyncio.sleep(LONG_ENOUGH)
 
 
-@in_loop
 async def test_pane_in_window_nobody_looks_at_draws_nothing():
     with over_connection() as session:
         pymux = session.pymux
@@ -100,7 +99,6 @@ async def test_pane_in_window_nobody_looks_at_draws_nothing():
         assert state.app.render_counter > drawn
 
 
-@in_loop
 async def test_pane_does_not_wake_client_looking_elsewhere():
     with over_connection() as session:
         pymux = session.pymux
@@ -121,7 +119,6 @@ async def test_pane_does_not_wake_client_looking_elsewhere():
         assert b.app.render_counter == drawn_by_b
 
 
-@in_loop
 async def test_title_pane_writes_reaches_other_client():
     """
     The wake still happens. It was narrowed and not removed.

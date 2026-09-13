@@ -7,10 +7,9 @@ log: `new-pane`, `show-messages`, `attach-session` and
 import pytest
 from prompt_toolkit.application.current import set_app
 
-from session import create_session, in_loop
+from session import create_session
 
 
-@in_loop
 async def test_new_pane_splits_window():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -20,7 +19,6 @@ async def test_new_pane_splits_window():
         assert len(window.panes) == 2
 
 
-@in_loop
 async def test_show_messages_reads_what_server_said():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -32,7 +30,6 @@ async def test_show_messages_reads_what_server_said():
         assert lines[-1] == "hello"
 
 
-@in_loop
 async def test_error_is_in_log_too():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -41,7 +38,6 @@ async def test_error_is_in_log_too():
         assert any("Invalid option" in line for line in pymux.message_log)
 
 
-@in_loop
 async def test_attach_and_switch_have_nowhere_to_go():
     async with create_session() as (pymux, state):
         with set_app(state.app):

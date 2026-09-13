@@ -15,7 +15,7 @@ from prompt_toolkit.auto_suggest import Suggestion
 from prompt_toolkit.key_binding.key_processor import KeyPress
 from prompt_toolkit.keys import Keys
 
-from session import create_session, in_loop
+from session import create_session
 
 
 def press(state, key):
@@ -39,7 +39,6 @@ def suggesting(state, typed, rest):
         state.command_buffer.suggestion = Suggestion(rest)
 
 
-@in_loop
 async def test_right_arrow_accepts_suggestion():
     async with create_session() as (pymux, state):
         suggesting(state, "new-", "window")
@@ -49,7 +48,6 @@ async def test_right_arrow_accepts_suggestion():
         assert state.command_buffer.text == "new-window"
 
 
-@in_loop
 async def test_control_e_and_control_f_accept_it_as_well():
     "The same binding names all three, and a person may reach for any."
     for key in (Keys.ControlE, Keys.ControlF):
@@ -61,7 +59,6 @@ async def test_control_e_and_control_f_accept_it_as_well():
             assert state.command_buffer.text == "kill-pane"
 
 
-@in_loop
 async def test_right_arrow_still_moves_with_no_suggestion():
     "The filter wants a suggestion, so without one the key is the key."
     async with create_session() as (pymux, state):
@@ -76,7 +73,6 @@ async def test_right_arrow_still_moves_with_no_suggestion():
         assert state.command_buffer.text == "abc"
 
 
-@in_loop
 async def test_nothing_here_can_take_right_arrow_of_pane():
     """
     The key a person presses inside a pane belongs to the program in

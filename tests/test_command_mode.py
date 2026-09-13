@@ -18,7 +18,7 @@ from prompt_toolkit.enums import EditingMode
 from prompt_toolkit.key_binding.key_processor import _Flush, KeyPress
 from prompt_toolkit.keys import Keys
 
-from session import create_session, in_loop
+from session import create_session
 from pymux.options import ALL_OPTIONS
 from pyte.sequences import Csi, csi
 
@@ -95,7 +95,6 @@ def leaves_command_mode(pymux, state, key, typing=None) -> bool:
     return bool(left)
 
 
-@in_loop
 async def test_escape_leaves_command_mode():
     async with create_session() as (pymux, state):
         in_command_mode(state)
@@ -103,7 +102,6 @@ async def test_escape_leaves_command_mode():
         assert leaves_command_mode(pymux, state, Keys.Escape)
 
 
-@in_loop
 async def test_escape_throws_away_what_was_typed():
     "Leaving is leaving. The line does not wait with the text in it."
     async with create_session() as (pymux, state):
@@ -114,7 +112,6 @@ async def test_escape_throws_away_what_was_typed():
         assert state.command_buffer.text == ""
 
 
-@in_loop
 async def test_control_c_still_leaves_command_mode():
     async with create_session() as (pymux, state):
         in_command_mode(state)
@@ -122,7 +119,6 @@ async def test_control_c_still_leaves_command_mode():
         assert leaves_command_mode(pymux, state, Keys.ControlC)
 
 
-@in_loop
 async def test_control_g_still_leaves_command_mode():
     async with create_session() as (pymux, state):
         in_command_mode(state)
@@ -130,14 +126,12 @@ async def test_control_g_still_leaves_command_mode():
         assert leaves_command_mode(pymux, state, Keys.ControlG)
 
 
-@in_loop
 async def test_escape_does_nothing_outside_command_mode():
     "The pane has the keyboard, so Escape belongs to the program in it."
     async with create_session() as (pymux, state):
         assert not leaves_command_mode(pymux, state, Keys.Escape)
 
 
-@in_loop
 async def test_spelled_out_escape_leaves_on_press():
     """
     The command line took two presses of Escape to close, and the
@@ -156,7 +150,6 @@ async def test_spelled_out_escape_leaves_on_press():
         )
 
 
-@in_loop
 async def test_legacy_escape_still_waits():
     """
     One byte is the Escape key and the start of every escape sequence,
@@ -169,7 +162,6 @@ async def test_legacy_escape_still_waits():
         assert not leaves_command_mode(pymux, state, None, typing="\x1b")
 
 
-@in_loop
 async def test_spelled_out_alt_key_does_not_leave():
     """
     alt and a letter arrive as an escape and then the letter. The
@@ -185,7 +177,6 @@ async def test_spelled_out_alt_key_does_not_leave():
         )
 
 
-@in_loop
 async def test_escape_stays_with_vi_when_status_keys_are_vi():
     """
     `status-keys vi` gives Escape to vi, where it leaves insert mode.

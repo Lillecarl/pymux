@@ -22,7 +22,7 @@ from contextlib import asynccontextmanager
 
 from prompt_toolkit.application.current import set_app
 
-from session import DEFAULT_SIZE, NOTHING, in_loop, in_this_process
+from session import DEFAULT_SIZE, NOTHING, in_this_process
 
 
 @asynccontextmanager
@@ -60,7 +60,6 @@ def run(pymux, command):
     pymux.handle_command("%s %s" % (command, NOTHING))
 
 
-@in_loop
 async def test_new_window_lands_next_to_one_person_is_on():
     "The report: on five of one, two, five, it gave three."
     async with create_session(1, 2, 5) as (pymux, _):
@@ -69,7 +68,6 @@ async def test_new_window_lands_next_to_one_person_is_on():
         assert indexes(pymux) == [1, 2, 5, 6]
 
 
-@in_loop
 async def test_it_makes_room_when_next_index_is_taken():
     async with create_session(1, 2, 3) as (pymux, _):
         pymux.arrangement.set_active_window(pymux.arrangement.windows[0])
@@ -80,7 +78,6 @@ async def test_it_makes_room_when_next_index_is_taken():
         assert pymux.arrangement.get_active_window().index == 2
 
 
-@in_loop
 async def test_session_with_no_gaps_is_what_it_always_was():
     "Which is why nobody saw this for so long."
     async with create_session(1, 2, 3) as (pymux, _):
@@ -89,7 +86,6 @@ async def test_session_with_no_gaps_is_what_it_always_was():
         assert indexes(pymux) == [1, 2, 3, 4]
 
 
-@in_loop
 async def test_only_run_that_is_in_way_moves():
     "A gap stops the walk, so a window put out of the way stays there."
     async with create_session(1, 2, 3, 7) as (pymux, _):
@@ -100,7 +96,6 @@ async def test_only_run_that_is_in_way_moves():
         assert indexes(pymux) == [1, 2, 3, 4, 7]
 
 
-@in_loop
 async def test_before_active_window():
     "It takes that window's index, and that window moves up."
     async with create_session(1, 2, 5) as (pymux, _):
@@ -110,7 +105,6 @@ async def test_before_active_window():
         assert pymux.arrangement.get_active_window().index == 5
 
 
-@in_loop
 async def test_after_window_that_is_not_active_one():
     async with create_session(1, 2, 5) as (pymux, _):
         run(pymux, "new-window -a -t 1")
@@ -119,7 +113,6 @@ async def test_after_window_that_is_not_active_one():
         assert pymux.arrangement.get_active_window().index == 2
 
 
-@in_loop
 async def test_bare_target_names_index_to_open_at():
     "Which is how tmux reads one for this command."
     async with create_session(1, 2, 5) as (pymux, _):
@@ -128,7 +121,6 @@ async def test_bare_target_names_index_to_open_at():
         assert indexes(pymux) == [1, 2, 5, 9]
 
 
-@in_loop
 async def test_target_nobody_can_find_falls_back_to_active_window():
     """
     tmux errors there. A person who mistypes a window number while
@@ -140,7 +132,6 @@ async def test_target_nobody_can_find_falls_back_to_active_window():
         assert indexes(pymux) == [1, 2, 5, 6]
 
 
-@in_loop
 async def test_window_that_is_reported_is_one_that_opened():
     """
     It read the last of the list, which was the new one only while a
@@ -154,7 +145,6 @@ async def test_window_that_is_reported_is_one_that_opened():
         assert pymux.arrangement.get_active_window().index == 2
 
 
-@in_loop
 async def test_dash_d_leaves_window_person_was_on():
     "And the new one still lands where it would have."
     async with create_session(1, 2, 5) as (pymux, _):

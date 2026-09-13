@@ -9,10 +9,9 @@ Lillecarl/pymux#297.
 
 from prompt_toolkit.application.current import set_app
 
-from session import create_session, in_loop
+from session import create_session
 
 
-@in_loop
 async def test_menu_opens_with_its_entries_and_title():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -30,7 +29,6 @@ async def test_menu_opens_with_its_entries_and_title():
             assert "Do this" in "".join(text for _style, text, *_ in rows)
 
 
-@in_loop
 async def test_key_of_entry_runs_it():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -42,7 +40,6 @@ async def test_key_of_entry_runs_it():
         assert not state.menu_entries
 
 
-@in_loop
 async def test_nobody_s_key_stays_in_menu():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -53,7 +50,6 @@ async def test_nobody_s_key_stays_in_menu():
         assert state.menu_entries
 
 
-@in_loop
 async def test_partial_triple_is_refused():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -62,7 +58,6 @@ async def test_partial_triple_is_refused():
         assert "menu entry" in state.message
 
 
-@in_loop
 async def test_clicking_row_runs_it():
     async with create_session() as (pymux, state):
         with set_app(state.app):

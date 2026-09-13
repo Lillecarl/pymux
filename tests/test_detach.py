@@ -11,7 +11,6 @@ Lillecarl/pymux#160.
 """
 
 import asyncio
-import functools
 import io
 import sys
 from contextlib import asynccontextmanager
@@ -26,16 +25,6 @@ from session import Connection
 from pymux.main import Pymux
 
 ROWS, COLUMNS = 24, 80
-
-
-def in_loop(test):
-    "pymux carries no anyio, so pytest here runs no coroutine test."
-
-    @functools.wraps(test)
-    def run():
-        asyncio.run(test())
-
-    return run
 
 
 @asynccontextmanager
@@ -70,7 +59,6 @@ async def create_standalone_session():
                         process.kill()
 
 
-@in_loop
 async def test_detach_ends_create_standalone_session():
     async with create_standalone_session() as (pymux, state):
         assert not pymux.done_f.done()
@@ -81,7 +69,6 @@ async def test_detach_ends_create_standalone_session():
         assert pymux.done_f.done()
 
 
-@in_loop
 async def test_detach_asks_every_pane_to_stop():
     """
     The panes were running for the session, and the session has gone.
@@ -125,7 +112,6 @@ def _spy_that_still_kills(pane, kill, killed):
     return spy
 
 
-@in_loop
 async def test_client_over_connection_still_detaches():
     """
     The other routes are untouched: a client with a connection has one

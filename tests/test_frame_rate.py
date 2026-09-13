@@ -19,7 +19,7 @@ from prompt_toolkit.application.current import set_app
 from pymux.arrangement import DEFAULT_FRAME_RATE
 from pymux.main import Pymux
 from pymux.options import ALL_WINDOW_OPTIONS, SetOptionError
-from session import create_session, in_loop
+from session import create_session
 
 PANE_COMMAND = "%s -c pass" % (sys.executable,)
 
@@ -93,7 +93,6 @@ def test_option_offers_rates_worth_naming(pymux):
 # hangs with nothing to say. `what_leaks.py` names the same trap.
 
 
-@in_loop
 async def test_cap_reaches_application():
     """
     `min_redraw_interval` is prompt_toolkit's own knob, and it holds a
@@ -107,7 +106,6 @@ async def test_cap_reaches_application():
         assert state.app.min_redraw_interval == pytest.approx(0.1)
 
 
-@in_loop
 async def test_no_cap_leaves_application_uncapped():
     async with create_session() as (mux, state):
         with set_app(state.app):
@@ -116,7 +114,6 @@ async def test_no_cap_leaves_application_uncapped():
         assert state.app.min_redraw_interval is None
 
 
-@in_loop
 async def test_client_follows_window_it_looks_at():
     "The whole reason it is a window option and not a session one."
     async with create_session() as (mux, state):

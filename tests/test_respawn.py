@@ -16,12 +16,11 @@ import argparse
 import pytest
 from prompt_toolkit.application.current import set_app
 
-from session import create_session, in_loop
+from session import create_session
 from pymux.commands import CommandException
 from pymux.commands.respawn_pane import respawn_pane
 
 
-@in_loop
 async def test_pane_whose_program_runs_refuses_without_k():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -33,7 +32,6 @@ async def test_pane_whose_program_runs_refuses_without_k():
                 respawn_pane(pymux, argparse.Namespace(k=False, target_pane=None, command=None))
 
 
-@in_loop
 async def test_respawn_keeps_place_and_replaces_pane():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -56,7 +54,6 @@ async def test_respawn_keeps_place_and_replaces_pane():
             assert old_pane.process.is_terminated
 
 
-@in_loop
 async def test_pane_whose_program_ended_is_gone_and_says_so():
     """
     A pane that ends leaves the tree, and the window goes with it --
@@ -80,7 +77,6 @@ async def test_pane_whose_program_ended_is_gone_and_says_so():
                 )
 
 
-@in_loop
 async def test_respawn_window_takes_active_pane_of_its_target():
     async with create_session() as (pymux, state):
         with set_app(state.app):

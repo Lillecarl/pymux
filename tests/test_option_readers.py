@@ -13,14 +13,13 @@ import argparse
 import pytest
 from prompt_toolkit.application.current import set_app
 
-from session import create_session, in_loop
+from session import create_session
 from pymux.commands import CommandException
 from pymux.commands.show_options import show_options
 from pymux.commands.show_window_options import show_window_options
 from pymux.options import ALL_OPTIONS
 
 
-@in_loop
 async def test_session_option_reads_as_it_is_written():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -30,7 +29,6 @@ async def test_session_option_reads_as_it_is_written():
         assert state.message == "off"
 
 
-@in_loop
 async def test_session_list_holds_session_options_only():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -43,7 +41,6 @@ async def test_session_list_holds_session_options_only():
         assert names == {name for name, o in ALL_OPTIONS.items() if not o.window_option}
 
 
-@in_loop
 async def test_window_option_reads_active_window():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -53,7 +50,6 @@ async def test_window_option_reads_active_window():
         assert state.message == "on"
 
 
-@in_loop
 async def test_window_list_holds_window_options_only():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -65,7 +61,6 @@ async def test_window_list_holds_window_options_only():
         assert "status" not in names  # a session option
 
 
-@in_loop
 async def test_default_nobody_set_reads_as_not_set():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -74,7 +69,6 @@ async def test_default_nobody_set_reads_as_not_set():
         assert state.message == "not set"
 
 
-@in_loop
 async def test_wrong_kind_of_option_is_unknown():
     async with create_session() as (pymux, state):
         with pytest.raises(CommandException):
@@ -84,14 +78,12 @@ async def test_wrong_kind_of_option_is_unknown():
             show_window_options(pymux, argparse.Namespace(g=False, option="status"))
 
 
-@in_loop
 async def test_unknown_option_is_unknown():
     async with create_session() as (pymux, state):
         with pytest.raises(CommandException):
             show_options(pymux, argparse.Namespace(g=False, option="not-an-option"))
 
 
-@in_loop
 async def test_list_commands_lists_every_command_with_its_description():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -107,7 +99,6 @@ async def test_list_commands_lists_every_command_with_its_description():
         assert "Swap" in row
 
 
-@in_loop
 async def test_refresh_client_asks_its_own_app_for_frame():
     async with create_session() as (pymux, state):
         asked = []

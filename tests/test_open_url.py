@@ -18,7 +18,7 @@ import webbrowser
 
 import pytest
 
-from session import in_loop, once, over_connection, in_this_process
+from session import once, over_connection, in_this_process
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from pymux.client.terminal import TerminalClient
@@ -47,8 +47,8 @@ def create_environment(**values):
     The environment with what is given set, and what is None gone.
 
     The async tests cannot take the `monkeypatch` fixture: the loop
-    they run in is not pytest's, and `in_loop` passes no arguments
-    through. So they say what the environment holds by hand.
+    they run in is not pytest's. So they say what the environment holds
+    by hand.
     """
     saved = {name: os.environ.get(name) for name in values}
     for name, value in values.items():
@@ -77,7 +77,6 @@ def create_pane(pymux, state):
 # Who receives it.
 
 
-@in_loop
 async def test_command_opens_on_client():
     packets = []
     with over_connection(read_packet=packets.append) as session:
@@ -94,7 +93,6 @@ async def test_command_opens_on_client():
         assert URL in state.message
 
 
-@in_loop
 async def test_last_targets_client_used_last():
     packets = []
     with over_connection(read_packet=packets.append) as session:
@@ -117,7 +115,6 @@ async def test_last_targets_client_used_last():
         assert len(opens(packets)) == 1
 
 
-@in_loop
 async def test_broadcast_reaches_every_client():
     packets = []
     with over_connection(read_packet=packets.append) as session:
@@ -134,7 +131,6 @@ async def test_broadcast_reaches_every_client():
         assert opens(packets) == [{"cmd": "open", "data": URL}] * 2
 
 
-@in_loop
 async def test_command_from_pane_opens_in_browser_of_client():
     """
     `pymux open-url` typed in a pane reaches the server over a socket,
@@ -168,7 +164,6 @@ async def test_command_from_pane_opens_in_browser_of_client():
         assert opens(got) == []
 
 
-@in_loop
 async def test_fake_cli_of_command_is_not_client_anybody_used():
     """
     The client state of a command that arrived over a socket is never
@@ -194,7 +189,6 @@ async def test_fake_cli_of_command_is_not_client_anybody_used():
 # Whether it asks first.
 
 
-@in_loop
 async def test_ask_asks_and_opens_nothing():
     packets = []
     with over_connection(read_packet=packets.append) as session:
@@ -209,7 +203,6 @@ async def test_ask_asks_and_opens_nothing():
         assert state.confirm_command == "open-url -c %s" % URL
 
 
-@in_loop
 async def test_yes_opens():
     packets = []
     with over_connection(read_packet=packets.append) as session:
@@ -225,7 +218,6 @@ async def test_yes_opens():
         assert state.confirm_command is None
 
 
-@in_loop
 async def test_no_opens_nothing():
     packets = []
     with over_connection(read_packet=packets.append) as session:
@@ -240,7 +232,6 @@ async def test_no_opens_nothing():
         assert opens(packets) == []
 
 
-@in_loop
 async def test_off_opens_nothing():
     packets = []
     with over_connection(read_packet=packets.append) as session:
@@ -254,7 +245,6 @@ async def test_off_opens_nothing():
         assert state.confirm_text is None
 
 
-@in_loop
 async def test_ask_asks_on_every_client_of_broadcast():
     with over_connection() as session:
         pymux = session.pymux
@@ -270,7 +260,6 @@ async def test_ask_asks_on_every_client_of_broadcast():
             assert state.confirm_command == "open-url -c %s" % URL
 
 
-@in_loop
 async def test_confirmed_command_opens_without_asking():
     packets = []
     with over_connection(read_packet=packets.append) as session:
@@ -289,7 +278,6 @@ async def test_confirmed_command_opens_without_asking():
 # What a pane asks for.
 
 
-@in_loop
 async def test_openurl_of_pane_opens():
     packets = []
     with over_connection(read_packet=packets.append) as session:
@@ -304,7 +292,6 @@ async def test_openurl_of_pane_opens():
         assert opens(packets) == [{"cmd": "open", "data": URL}]
 
 
-@in_loop
 async def test_another_subcommand_of_1337_opens_nothing():
     packets = []
     with over_connection(read_packet=packets.append) as session:
@@ -413,7 +400,6 @@ def test_machine_without_display_tries_no_browser(monkeypatch):
 # The shim.
 
 
-@in_loop
 async def test_shim_names_opener_of_session():
     with in_this_process() as session:
         pymux = session.pymux
@@ -432,7 +418,6 @@ async def test_shim_names_opener_of_session():
         assert pymux._open_url_shim_dir == directory
 
 
-@in_loop
 async def test_shim_rides_path_of_new_pane():
     with in_this_process() as session:
         pymux = session.pymux
@@ -448,7 +433,6 @@ async def test_shim_rides_path_of_new_pane():
             )
 
 
-@in_loop
 async def test_pane_that_starts_with_shim_finds_opener():
     "The whole hook, from the option through the fork to the program."
     with in_this_process() as session:
@@ -479,7 +463,6 @@ async def test_pane_that_starts_with_shim_finds_opener():
         assert "M=True" in page_text()
 
 
-@in_loop
 async def test_shim_leaves_pane_alone_when_it_is_off():
     with in_this_process() as session:
         pymux = session.pymux
@@ -495,7 +478,6 @@ async def test_shim_leaves_pane_alone_when_it_is_off():
 # What a server says when a client reports back.
 
 
-@in_loop
 async def test_client_that_could_not_open_says_so_in_its_status_line():
     with over_connection() as session:
         pymux = session.pymux
