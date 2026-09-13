@@ -2119,8 +2119,67 @@ def check_detached_pane_has_a_width(tmp):
     print("detached pane has a width: ok")
 
 
+def check_relative_socket_name_survives_the_daemon(tmp):
+    """
+    A socket named relatively still works after the fork.
+
+    The bind happens before `daemonize`, which does `os.chdir("/")`, so
+    a relative name means one thing at bind time and another everywhere
+    after it. Two things went wrong, and both are silent:
+
+    * the server could not take its own socket file away when it
+      stopped, because `os.remove` looked for it under `/`, and
+    * a pane was told `PYMUX=<relative>,%1`, so a program inside it
+      could not find the server it runs in from any other directory.
+      tmux writes `TMUX` absolute for that reason.
+
+    Lillecarl/pymux#322.
+
+    The command runs from `tmp`, so the name is relative to a directory
+    that is not `/` and not the repository.
+    """
+    sock_name = "relative.sock"
+    absolute = tmp / sock_name
+
+    def cli(args):
+        return subprocess.run(
+            [sys.executable, "-m", "pymux", "-S", sock_name] + args,
+            cwd=str(tmp),
+            capture_output=True,
+            timeout=20,
+            check=False,
+            env=dict(os.environ, PYTHONPATH=str(REPO_ROOT)),
+        )
+
+    try:
+        made = cli(["new-session", "-d", "sh"])
+        assert made.returncode == 0, made.stderr
+        assert absolute.exists(), "the server bound somewhere else"
+
+        # What a program inside a pane is told to find the server with.
+        cli(["send-keys", "echo MARK=$PYMUX", "Enter"])
+        time.sleep(1.0)
+        seen = cli(["capture-pane", "-p"]).stdout.decode("utf-8", "replace")
+        told = [row for row in seen.splitlines() if row.startswith("MARK=")]
+        assert told, "the pane never answered: %r" % (seen,)
+        assert told[0].startswith("MARK=%s," % absolute), (
+            "a pane was given a socket path it cannot follow: %r" % (told[0],)
+        )
+
+        stopped = cli(["kill-server"])
+        assert stopped.returncode == 0, stopped.stderr
+        time.sleep(1.0)
+        assert not absolute.exists(), (
+            "the server left its socket file behind at %s" % absolute
+        )
+    finally:
+        cli(["kill-server"])
+    print("relative socket name survives the daemon: ok")
+
+
 CHECKS = (
     check_detached_pane_has_a_width,
+    check_relative_socket_name_survives_the_daemon,
     check_kitty_terminal,
     check_sixel_terminal,
     check_colorterm_terminal,

@@ -62,6 +62,20 @@ def _bind_posix_socket(socket_name: str | None = None):
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
     if socket_name:
+        # Absolute, always. The name this returns is the one the server
+        # keeps, and it outlives the directory it was typed in: the bind
+        # happens before `daemonize`, which does `os.chdir("/")`, so a
+        # relative name means one thing here and another everywhere after.
+        #
+        # Two things went wrong with `pymux -S pymux.sock`. The server
+        # could not take its own socket file away when it stopped --
+        # `os.remove` looked for it under `/` and the `except OSError`
+        # there swallowed the miss, so the file stayed. And a pane was
+        # given `PYMUX=pymux.sock,%1`, so a program inside it could not
+        # find the server it runs in unless it happened to share the
+        # directory pymux was started from. tmux writes `TMUX` absolute
+        # for that reason. Lillecarl/pymux#322.
+        socket_name = os.path.abspath(socket_name)
         s.bind(socket_name)
         return socket_name, s
     else:
