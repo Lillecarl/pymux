@@ -11,6 +11,8 @@ ends while a test is looking. A pane that ends takes its session with
 it, which `test_a_session_that_empties_goes` is about.
 """
 
+import sys
+
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 
@@ -23,6 +25,9 @@ SIZE = Size(rows=24, columns=80)
 #: last window takes the session, so a test about sessions needs panes
 #: that are still there when it looks.
 WAITING = "sleep 30"
+
+#: A program that ends at once, for the one test about a pane ending.
+ENDING = "%s -c pass" % (sys.executable,)
 
 
 def _server():
@@ -293,7 +298,8 @@ async def test_a_pane_id_reaches_across_the_sessions():
 
         _command(pymux, state, "kill-pane -t %%%s" % (pane.pane_id,))
 
-        assert [s.name for s in pymux.sessions] == ["0"]
+        assert work.arrangement.windows == []
+        assert len(pymux.sessions[0].arrangement.windows) == 1
 
 
 async def test_the_chooser_lists_every_session():
@@ -329,16 +335,21 @@ async def test_a_session_that_empties_goes():
     """
     A pane that ends takes its window, and the last window takes the
     session. The server stops only when the last session goes.
+
+    Over a connection, because this is the callback that runs when a
+    process ends: an event loop has to turn for it to happen at all.
     """
-    with in_this_process(_server()) as session:
+    with over_connection(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
-        _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
-        work = pymux.sessions[1]
-        pane = work.arrangement.windows[0].panes[0]
+        _command(pymux, state, "new-session -d -s work '%s'" % (ENDING,))
 
-        pymux.kill_pane(pane)
+        await once(
+            lambda: [s.name for s in pymux.sessions] == ["0"],
+            5.0,
+            "the session did not go when its last pane ended",
+        )
 
-        assert [s.name for s in pymux.sessions] == ["0"]
+        # And the server is still there, because one session is.
         assert not pymux.done_f.done()
