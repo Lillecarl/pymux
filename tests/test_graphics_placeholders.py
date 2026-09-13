@@ -206,14 +206,14 @@ def test_placeholder_of_unknown_image_draws_nothing():
 
 def test_placeholders_do_not_reach_terminal_as_text():
     "The character stands for a picture, and must not be drawn."
-    from ptterm.terminal import _visible_char
+    from ptterm.style import visible_char
 
     screen, stream = make_screen()
     transmit_virtual(stream)
     stream.feed(cells(5, 0, 4))
     line = screen.page.data_buffer[0]
     assert line[0].char.startswith(PLACEHOLDER)
-    assert _visible_char(line[0].char) == " "
+    assert visible_char(line[0].char) == " "
 
 
 def test_view_without_screen_still_renders_plain_placements():

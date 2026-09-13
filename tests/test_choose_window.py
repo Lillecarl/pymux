@@ -13,8 +13,15 @@ target. A row answers a click, the way a column of the strip does.
 """
 
 from prompt_toolkit.application.current import set_app
+from prompt_toolkit.data_structures import Size
+from prompt_toolkit.formatted_text import fragment_list_to_text
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.mouse_events import MouseEventType
+
+from prompt_toolkit.layout.mouse_handlers import MouseHandlers
+from prompt_toolkit.layout.screen import Screen as PtScreen, WritePosition
+
+from pyte.streams import Stream
 
 from session import create_session
 
@@ -284,3 +291,119 @@ async def test_window_of_more_than_one_pane_says_how_many():
         rows = state.layout_manager._choose_window_tokens()
         assert "2 panes" in rows[-1][1]
         assert not any("1 panes" in text for _, text, *_ in rows)
+
+
+async def test_the_chooser_previews_the_window_it_points_at():
+    """
+    The row says the name; the preview says what is in it.
+
+    tmux draws the same thing under its tree, and picking a window by
+    looking at it is the reason the box is this big.
+    Lillecarl/pymux#325.
+    """
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("choose-window")
+
+        window = pymux.arrangement.get_active_window()
+        Stream(window.active_pane.screen).feed("a line of output")
+
+        manager = state.layout_manager
+        assert manager.shows_a_preview()
+        assert "a line of output" in fragment_list_to_text(
+            manager._chooser_preview_tokens()
+        )
+        assert window.name in fragment_list_to_text(manager._chooser_preview_title())
+
+
+async def test_a_box_with_no_room_shows_no_preview(monkeypatch):
+    """
+    A box that cannot hold three rows of list and a title with two
+    rows under it is all list.
+    """
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("choose-window")
+
+        manager = state.layout_manager
+        assert manager._chooser_preview_rows() >= 1
+
+        # Fourteen rows leaves the box two, which is a list and
+        # nothing else.
+        monkeypatch.setattr(
+            type(manager),
+            "room_this_client_has",
+            property(lambda self: Size(rows=14, columns=80)),
+        )
+        assert not manager.shows_a_preview()
+        assert manager._chooser_preview_tokens() == []
+
+
+async def test_only_the_window_chooser_previews():
+    "A buffer chooser and an option chooser have nothing to draw."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("set-buffer -b one hello")
+            pymux.handle_command("choose-buffer")
+
+        assert not state.layout_manager.shows_a_preview()
+
+
+def _drawn(state) -> list:
+    """
+    Every row of this client's screen, as a string.
+
+    At the size the client says it is: the box reads that size to
+    divide itself, so a render at any other one draws a box that does
+    not fit what it drew.
+    """
+    rows, columns = state.app.output.get_size()
+    screen = PtScreen()
+    with set_app(state.app):
+        state.app.layout.container.write_to_screen(
+            screen,
+            MouseHandlers(),
+            WritePosition(xpos=0, ypos=0, width=columns, height=rows),
+            "",
+            False,
+            None,
+        )
+        screen.draw_all_floats()
+    return [
+        "".join(screen.data_buffer[y][x].char for x in range(columns)).rstrip()
+        for y in range(rows)
+    ]
+
+
+async def test_the_box_draws_the_list_over_the_preview():
+    """
+    The shape, read off a drawn screen. A float cannot be judged by
+    the containers alone: the rows say where each part landed.
+    """
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("rename-window needle")
+            pymux.handle_command("choose-window")
+
+        Stream(pymux.arrangement.get_active_window().active_pane.screen).feed(
+            "a line of output"
+        )
+
+        every = _drawn(state)
+
+        # From the title of the box down: the pane behind it draws the
+        # same output, and that row is not the preview.
+        top = next(i for i, text in enumerate(every) if "Choose a window" in text)
+        rows = every[top:]
+
+        def where(text: str) -> int:
+            found = [i for i, line in enumerate(rows) if text in line]
+            assert found, "the box drew no %r:\n%s" % (text, "\n".join(rows))
+            return found[0]
+
+        # A row of the list, then the title of the preview, then what
+        # the window is showing, then the search. The list is above the
+        # preview, the way tmux draws its tree.
+        assert where("needle (active)") < where("0:2 needle")
+        assert where("0:2 needle") < where("a line of output")
+        assert where("a line of output") < where("/")

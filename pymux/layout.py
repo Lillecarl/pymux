@@ -48,6 +48,8 @@ from prompt_toolkit.layout.screen import Char, Screen
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.widgets import Dialog, SearchToolbar, TextArea
 
+from ptterm.preview import preview_text
+
 import pymux.arrangement as arrangement
 
 from .enums import Woke
@@ -96,6 +98,9 @@ def option_value_of(pymux, name: str) -> str:
 #: Lillecarl/pymux#158.
 BOX_TOP = 5
 BOX_SIDE = 3
+
+#: What a box leaves under itself, at the foot of the screen.
+BOX_BOTTOM = 5
 
 #: What the palette holds above its completions: a title and the line
 #: a person types on.
@@ -1424,8 +1429,34 @@ class LayoutManager:
                     0, self.client_state.choose_window_index
                 ),
             ),
-            height=lambda: D(min=1, max=self._palette_rows() - 1),
+            # Exact, so that the search line stays at the foot of the
+            # box: a list that only asks for the rows it has leaves the
+            # rest of the box under the search rather than over it.
+            height=lambda: D.exact(self._chooser_list_rows()),
             style="class:commandpalette",
+        )
+
+        # What the row the chooser points at is showing. tmux draws the
+        # same thing under its tree, and picking a window by looking at
+        # it is the whole reason the box is this big.
+        # Lillecarl/pymux#325.
+        preview = ConditionalContainer(
+            content=HSplit(
+                [
+                    Window(
+                        height=1,
+                        content=FormattedTextControl(self._chooser_preview_title),
+                        style="class:commandpalette.titlebar",
+                    ),
+                    Window(
+                        content=FormattedTextControl(self._chooser_preview_tokens),
+                        wrap_lines=False,
+                        height=lambda: D.exact(max(1, self._chooser_preview_rows())),
+                        style="class:commandpalette",
+                    ),
+                ]
+            ),
+            filter=Condition(self.shows_a_preview),
         )
         search = VSplit(
             [
@@ -1459,12 +1490,106 @@ class LayoutManager:
                     style="class:commandpalette.titlebar",
                 ),
                 rows,
+                preview,
                 search,
             ],
         )
         self._chooser_rows = rows
         self._chooser_search = search
         return self._chooser
+
+    def _chooser_room(self) -> int:
+        "The rows the box has for the list and the preview together."
+        rows = self.room_this_client_has.rows
+        return max(1, rows - BOX_TOP - BOX_BOTTOM - PALETTE_HEADER)
+
+    def _chooser_width(self) -> int:
+        "The columns inside the box."
+        return max(1, self.room_this_client_has.columns - 2 * BOX_SIDE)
+
+    def _chooser_height(self) -> int:
+        """
+        How many rows the list takes, leaving the rest to the preview.
+
+        tmux's rule, from `mode_tree_set_height` in `mode-tree.c`: two
+        thirds of the room, or half of it when the list is shorter
+        than that.
+
+        **The floor is not tmux's.** tmux gives its tree the whole
+        pane, so it can say that a tree under ten rows takes
+        everything. This box is inset from every side, and on a
+        terminal of twenty-four rows it has twelve: tmux's floor would
+        mean no preview on any ordinary screen. The rule here is what
+        the two parts need instead -- three rows of list, and a title
+        with two rows under it -- and a box smaller than both is all
+        list.
+        """
+        room = self._chooser_room()
+
+        height = (room // 3) * 2
+        if height > len(self.chooser_matches()):
+            height = room // 2
+
+        height = max(height, min(room, 3))
+        if room - height < 3:
+            height = room
+
+        return max(1, height)
+
+    def _chooser_list_rows(self) -> int:
+        "The rows the list takes: the whole box when nothing previews."
+        if not self.shows_a_preview():
+            return self._chooser_room()
+        return self._chooser_height()
+
+    def _chooser_preview_rows(self) -> int:
+        "The rows the preview has, under its own title."
+        return self._chooser_room() - self._chooser_height() - 1
+
+    def shows_a_preview(self) -> bool:
+        "Whether the box has room to draw what it points at."
+        return self.client_state.choose_window and self._chooser_preview_rows() >= 1
+
+    def _pointed_window(self):
+        "The window the chooser points at, or None."
+        matches = self.chooser_matches()
+        if not (self.client_state.choose_window and matches):
+            return None
+        index = min(self.client_state.choose_window_index, len(matches) - 1)
+        return matches[index]
+
+    def _chooser_preview_title(self) -> StyleAndTextTuples:
+        "What the preview is a preview of."
+        window = self._pointed_window()
+        if window is None:
+            return []
+        return [
+            (
+                "class:commandpalette.title",
+                " %s:%s %s " % (self._session_name_of(window), window.index, window.name),
+            )
+        ]
+
+    def _chooser_preview_tokens(self) -> StyleAndTextTuples:
+        """
+        What the window the chooser points at is showing.
+
+        A drawing of the pane's screen and not the pane's own widget:
+        the widget sizes the program it holds from the room it is given,
+        and a preview must never resize the program it is a picture of.
+        `ptterm/preview.py` says the rest. Lillecarl/pymux#325.
+        """
+        window = self._pointed_window()
+        if window is None:
+            return []
+
+        pane = window.active_pane
+        if pane is None:
+            return []
+
+        return preview_text(
+            pane.screen, self._chooser_preview_rows(), self._chooser_width() - 2
+        )
 
     def _chooser_title(self) -> str:
         "What the box of the chooser says it is."
@@ -1817,7 +1942,7 @@ class LayoutManager:
                     left=BOX_SIDE,
                     right=BOX_SIDE,
                     top=BOX_TOP,
-                    bottom=5,
+                    bottom=BOX_BOTTOM,
                     z_index=Z_INDEX.POPUP,
                 ),
                 # The ":" command line as a box in the middle, when the
@@ -1882,7 +2007,7 @@ class LayoutManager:
                     left=BOX_SIDE,
                     right=BOX_SIDE,
                     top=BOX_TOP,
-                    bottom=5,
+                    bottom=BOX_BOTTOM,
                     z_index=Z_INDEX.POPUP,
                 ),
 
