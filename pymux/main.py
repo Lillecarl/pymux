@@ -1268,6 +1268,20 @@ class Pymux:
             return None
         return max(watching, key=lambda client: client.last_used)
 
+    @property
+    def clients(self) -> "list[ClientState]":
+        """
+        Every client a person is sitting at.
+
+        A command that arrives over a socket runs under a temporary
+        client that draws nothing and goes as soon as the command is
+        answered. Nobody is at one of those, so it is not a client to
+        count, to list or to tell anything.
+        """
+        return [
+            client for client in self._client_states.values() if not client.temporary
+        ]
+
     def get_connection(self):
         "Return the active Connection instance."
         app = get_app()

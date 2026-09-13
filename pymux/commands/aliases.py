@@ -19,6 +19,7 @@ ALIASES = {
     "last": "last-window",
     "lastp": "last-pane",
     "lextl": "next-layout",
+    "lsc": "list-clients",
     "lsk": "list-keys",
     "lsp": "list-panes",
     "movew": "move-window",

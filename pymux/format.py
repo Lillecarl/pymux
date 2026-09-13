@@ -357,8 +357,8 @@ def _session_attached(context: FormatContext) -> str:
         len(
             [
                 client
-                for client in context.pymux._client_states.values()
-                if not client.temporary and client.session is context.session
+                for client in context.pymux.clients
+                if client.session is context.session
             ]
         )
     )
@@ -386,6 +386,18 @@ def _created(context: FormatContext) -> str:
     return str(int(context.pymux.created))
 
 
+def _connection_of(context: FormatContext):
+    """
+    The connection of the client this is drawn for, when there is one.
+
+    A command formats without a client, and the in-process route has a
+    connection that carries none of this. Both answer nothing, which is
+    what tmux does when its own client is NULL.
+    """
+    client = context.client
+    return getattr(client, "connection", None) if client is not None else None
+
+
 def _client_hostname(context: FormatContext) -> str:
     """
     The machine the client this is drawn for runs on.
@@ -395,10 +407,23 @@ def _client_hostname(context: FormatContext) -> str:
     the server's answer and this is the other one. The client reports
     it when it attaches. Lillecarl/pymux#287, Lillecarl/pymux#330.
     """
-    client = context.client
-    if client is None:
-        return ""
-    return getattr(client.connection, "hostname", "") or ""
+    return getattr(_connection_of(context), "hostname", "") or ""
+
+
+def _client_termname(context: FormatContext) -> str:
+    "What the client says its terminal is. (`TERM`, as it reported it.)"
+    colors = getattr(_connection_of(context), "colors", None)
+    return getattr(colors, "term", "") or ""
+
+
+def _client_width(context: FormatContext) -> str:
+    size = getattr(_connection_of(context), "size", None)
+    return str(size.columns) if size is not None else ""
+
+
+def _client_height(context: FormatContext) -> str:
+    size = getattr(_connection_of(context), "size", None)
+    return str(size.rows) if size is not None else ""
 
 
 #: Mapping of tmux `#{variable}` names. Variables that pymux doesn't know
@@ -439,6 +464,10 @@ tmux_variables: Dict[str, Callable[[FormatContext], str]] = {
     "session_created": lambda c: str(int(c.session.created)),
     # Client.
     "client_hostname": _client_hostname,
+    "client_termname": _client_termname,
+    "client_width": _client_width,
+    "client_height": _client_height,
+    "client_session": lambda c: c.client.session.name if c.client else "",
     # Server.
     "socket_path": _socket_path,
     "pid": _pid,
