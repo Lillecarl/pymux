@@ -20,6 +20,7 @@ from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
 from .colors import ColorDetection, DefaultColors
+from .commands import handle_command
 from .enums import Woke
 from .graphics import ClientGraphics
 from .keys import KittyVt100Parser
@@ -527,7 +528,15 @@ class ServerConnection:
 
         with set_app(self.client_state.app):
             try:
-                pymux.handle_command(packet["data"])
+                # **The client waits and the server does not.** A
+                # command that has to wait answers with a coroutine,
+                # and this route is the one that awaits it: the person
+                # who typed `pymux wait-for done` waits for it, while
+                # every other client of this server keeps running.
+                # Lillecarl/pymux#87.
+                answer = handle_command(pymux, packet["data"])
+                if answer is not None:
+                    await answer
             finally:
                 # Send the output of the command back to the client, and
                 # close the connection.

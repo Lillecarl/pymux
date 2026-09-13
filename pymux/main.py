@@ -1277,7 +1277,9 @@ class Pymux:
 
             # Source the given file.
             if self.source_file:
-                call_command_handler("source-file", self, [self.source_file])
+                self.spawn_command(
+                    call_command_handler("source-file", self, [self.source_file])
+                )
 
             # Make sure that there is one window created.
             self.create_window(command=self.startup_command)
@@ -2377,9 +2379,50 @@ class Pymux:
 
     def handle_command(self, command):
         """
-        Handle command from the command line.
+        Handle a command from a key binding, a hook or a config file.
+
+        **The caller is not waiting.** A key press has to return at
+        once, so a command that answers with work to finish is put in
+        the server's task group and the key is done. The socket route
+        does the other thing: `ServerConnection._run_command` awaits,
+        so `pymux wait-for done` holds the client that typed it.
+        Lillecarl/pymux#87.
         """
-        handle_command(self, command)
+        self.spawn_command(handle_command(self, command))
+
+    def spawn_command(self, answer) -> None:
+        """
+        Finish a command that answered with work, in the background.
+
+        Outside `running()` there is nothing to finish it in, and
+        dropping the work would be a command that quietly did half of
+        what it says. That is a mistake in the caller, so it says so.
+        """
+        if answer is None:
+            return
+
+        if self.tasks is None:
+            answer.close()
+            raise RuntimeError(
+                "A command that waits was run outside `Pymux.running`, so "
+                "nothing would finish it."
+            )
+
+        self.tasks.start_soon(self._finish_command, answer)
+
+    async def _finish_command(self, answer) -> None:
+        """
+        A command nobody waits for still says what went wrong.
+
+        In a task group an exception cancels the siblings, and the
+        siblings of a command are every client of this server.
+        """
+        try:
+            await answer
+        except anyio.get_cancelled_exc_class():
+            raise
+        except Exception:
+            logger.exception("A command that ran in the background failed.")
 
     def fire_hook(self, name: str | None) -> None:
         """

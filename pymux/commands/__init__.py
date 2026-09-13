@@ -105,12 +105,19 @@ def parser_tree():
     return _parser_tree
 
 
-def handle_command(pymux: "Pymux", input_string: str) -> None:
+def handle_command(pymux: "Pymux", input_string: str):
     """
     Handle command.
 
     Like tmux, several commands can be given at once, separated by an
     unquoted semicolon. E.g. `send-keys -t %5 -R ; clear-history -t %5`.
+
+    **The answer is `None`, or the rest of the work.** A handler that
+    only reads the server is a plain function and everything it does
+    is done when it returns. A handler that has to wait -- for a
+    program to exit, for a channel to be woken -- is a coroutine, and
+    then this answers with one that finishes the whole line.
+    Lillecarl/pymux#87.
     """
     input_string = input_string.strip()
     logger.debug("handle command: %s", input_string)
@@ -141,14 +148,43 @@ def handle_command(pymux: "Pymux", input_string: str) -> None:
                 else:
                     commands[-1].append(part)
 
-            for args in commands:
-                if args:
-                    call_command_handler(args[0], pymux, args[1:])
+            return _run_in_order(pymux, commands)
+
+    return None
 
 
-def call_command_handler(command: str, pymux: "Pymux", arguments: List[str]) -> None:
+def _run_in_order(pymux: "Pymux", commands: List[List[str]]):
+    """
+    Run the commands of one line, left to right.
+
+    **The order holds across a wait.** `wait-for done ; kill-pane`
+    means the pane dies after the wait, so the first handler that
+    answers with a coroutine takes the commands after it with it.
+    """
+    for index, args in enumerate(commands):
+        if not args:
+            continue
+
+        answer = call_command_handler(args[0], pymux, args[1:])
+        if answer is not None:
+            return _then_the_rest(pymux, answer, commands[index + 1 :])
+
+    return None
+
+
+async def _then_the_rest(pymux: "Pymux", answer, rest: List[List[str]]) -> None:
+    await answer
+
+    more = _run_in_order(pymux, rest)
+    if more is not None:
+        await more
+
+
+def call_command_handler(command: str, pymux: "Pymux", arguments: List[str]):
     """
     Execute one command, given its words.
+
+    Answers with `None`, or with what the handler left to await.
     """
     # Resolve aliases.
     command = ALIASES.get(command, command)
@@ -158,7 +194,7 @@ def call_command_handler(command: str, pymux: "Pymux", arguments: List[str]) -> 
     if parser is None:
         pymux.show_message("Invalid command: %s" % (command,))
         pymux.add_command_error("pymux: invalid command: %s" % (command,))
-        return
+        return None
 
     try:
         namespace = parser.parse_args(list(arguments))
@@ -167,13 +203,34 @@ def call_command_handler(command: str, pymux: "Pymux", arguments: List[str]) -> 
         message = "%s (%s)" % (e.message, usage)
         pymux.show_message(message)
         pymux.add_command_error("pymux: %s" % (message,))
-        return
+        return None
 
     try:
-        namespace._handler(pymux, namespace)
+        answer = namespace._handler(pymux, namespace)
     except CommandException as e:
-        pymux.show_message(e.message)
-        pymux.add_command_error("pymux: %s" % (e.message,))
+        _failed(pymux, e)
+        return None
+
+    if answer is not None:
+        # A coroutine: the command is not done, so neither the message
+        # it may fail with nor the redraw it earns can happen yet.
+        return _finish(pymux, command, answer)
+
+    pymux.invalidate(Woke.COMMAND_RAN % command)
+    return None
+
+
+async def _finish(pymux: "Pymux", command: str, answer) -> None:
+    "Wait for a handler that answers later, and end it the same way."
+    try:
+        await answer
+    except CommandException as e:
+        _failed(pymux, e)
         return
 
     pymux.invalidate(Woke.COMMAND_RAN % command)
+
+
+def _failed(pymux: "Pymux", error: CommandException) -> None:
+    pymux.show_message(error.message)
+    pymux.add_command_error("pymux: %s" % (error.message,))

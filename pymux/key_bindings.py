@@ -444,7 +444,9 @@ class PymuxKeyBindings:
             client has gone changes nothing that anybody reads.
             """
             client_state = self.pymux.get_client_state()
-            call_command_handler(command, self.pymux, arguments)
+            self.pymux.spawn_command(
+                call_command_handler(command, self.pymux, arguments)
+            )
             client_state.has_prefix = False
 
         self.custom_key_bindings.add(*keys_sequence, filter=filter)(key_handler)

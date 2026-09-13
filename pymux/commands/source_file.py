@@ -11,7 +11,7 @@ from pymux.commands import add_command
 from pymux.commands import handle_command
 
 
-def source_file(pymux: "Pymux", args: argparse.Namespace) -> None:
+def source_file(pymux: "Pymux", args: argparse.Namespace):
     """
     Read a configuration file.
     """
@@ -22,15 +22,47 @@ def source_file(pymux: "Pymux", args: argparse.Namespace) -> None:
     except IOError as e:
         raise CommandException("IOError: %s" % (e,))
 
+    return _read_lines(pymux, filename, list(enumerate(lines, start=1)))
+
+
+def _read_lines(pymux: "Pymux", filename: str, lines: list):
+    """
+    Run the lines of the file, top to bottom.
+
+    A line that waits takes the lines under it with it, so a
+    configuration file means the same thing whether or not one of its
+    commands has to wait. Lillecarl/pymux#87.
+    """
     # A line that fails names the file and the line it is on. Without
     # that a person reads "Invalid option: -g" and has to find which of
     # forty lines said it.
-    for number, line in enumerate(lines, start=1):
+    for index, (number, line) in enumerate(lines):
         pymux.sourcing = "%s line %i" % (filename, number)
         try:
-            handle_command(pymux, line)
+            answer = handle_command(pymux, line)
         finally:
             pymux.sourcing = None
+
+        if answer is not None:
+            return _then_the_rest(
+                pymux, filename, number, answer, lines[index + 1 :]
+            )
+
+    return None
+
+
+async def _then_the_rest(
+    pymux: "Pymux", filename: str, number: int, answer, rest: list
+) -> None:
+    pymux.sourcing = "%s line %i" % (filename, number)
+    try:
+        await answer
+    finally:
+        pymux.sourcing = None
+
+    more = _read_lines(pymux, filename, rest)
+    if more is not None:
+        await more
 
 
 def register(subparsers):

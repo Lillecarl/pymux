@@ -6,11 +6,11 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command
+from pymux.commands import add_command, handle_command
 from pymux.format import format_pymux_string
 
 
-def if_shell(pymux: "Pymux", args: argparse.Namespace) -> None:
+def if_shell(pymux: "Pymux", args: argparse.Namespace):
     """
     Run one command or the other, by what a shell answers.
 
@@ -40,7 +40,12 @@ def if_shell(pymux: "Pymux", args: argparse.Namespace) -> None:
     command = args.then_command if yes else args.else_command
 
     if command:
-        pymux.handle_command(command)
+        # The answer of the command it chose is this command's answer:
+        # `if-shell yes 'wait-for done'` waits, rather than leaving the
+        # wait behind it.
+        return handle_command(pymux, command)
+
+    return None
 
 
 def register(subparsers):
