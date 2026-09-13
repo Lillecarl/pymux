@@ -16,6 +16,22 @@ if TYPE_CHECKING:
 __all__ = ["format_pymux_string"]
 
 
+def _hostname() -> str:
+    "The machine this server runs on. (`#H`, `#{host}`.)"
+    return socket.gethostname()
+
+
+def _hostname_short() -> str:
+    """
+    The same name without its domain. (`#h`, `#{host_short}`.)
+
+    tmux cuts at the first dot, and spells it this way round: `#H` is
+    the whole name and `#h` is the short one. `format_cb_host_short` in
+    tmux's `format.c`. Lillecarl/pymux#331.
+    """
+    return _hostname().split(".")[0]
+
+
 def format_pymux_string(
     pymux: "Pymux",
     string: str,
@@ -83,7 +99,10 @@ def format_pymux_string(
         return pane.screen.titles.window
 
     def hostname() -> str:
-        return socket.gethostname()
+        return _hostname()
+
+    def hostname_short() -> str:
+        return _hostname_short()
 
     def literal() -> str:
         return "#"
@@ -91,12 +110,13 @@ def format_pymux_string(
     format_table = {
         "#D": id_of_pane,
         "#F": window_flags,
+        "#H": hostname,
         "#I": index_of_window,
         "#P": index_of_pane,
         "#S": name_of_session,
         "#T": title_of_pane,
         "#W": name_of_window,
-        "#h": hostname,
+        "#h": hostname_short,
         "##": literal,
     }
 
@@ -296,7 +316,8 @@ tmux_variables: Dict[
     "pid": _pid,
     "version": _version,
     "start_time": _created,
-    "host": lambda p, w, pane, s: socket.gethostname(),
-    "hostname": lambda p, w, pane, s: socket.gethostname(),
+    "host": lambda p, w, pane, s: _hostname(),
+    "hostname": lambda p, w, pane, s: _hostname(),
+    "host_short": lambda p, w, pane, s: _hostname_short(),
     "history_bytes": lambda p, w, pane, s: "0",
 }

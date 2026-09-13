@@ -48,6 +48,28 @@ def test_several_variables_in_one_string(pymux):
     assert answer.split(":")[0] == pymux.session_name
 
 
+def test_the_hostname_is_spelled_the_way_tmux_spells_it(pymux, monkeypatch):
+    """
+    `#H` is the whole name and `#h` is the name without its domain.
+    That is round this way in tmux (`format.c`: "host" is H and
+    "host_short" is h), and pymux had `#h` answering the whole name and
+    no `#H` at all. Lillecarl/pymux#331.
+    """
+    monkeypatch.setattr("socket.gethostname", lambda: "dynhetz.example.net")
+
+    assert format_pymux_string(pymux, "#H") == "dynhetz.example.net"
+    assert format_pymux_string(pymux, "#h") == "dynhetz"
+    assert format_pymux_string(pymux, "#{host}") == "dynhetz.example.net"
+    assert format_pymux_string(pymux, "#{host_short}") == "dynhetz"
+
+
+def test_a_hostname_with_no_domain_is_itself(pymux, monkeypatch):
+    monkeypatch.setattr("socket.gethostname", lambda: "dynhetz")
+
+    assert format_pymux_string(pymux, "#h") == "dynhetz"
+    assert format_pymux_string(pymux, "#H") == "dynhetz"
+
+
 def test_id_reads_as_target(pymux):
     "A caller passes these straight back as `-t`."
     assert format_pymux_string(pymux, "#{pane_id}").startswith("%")
