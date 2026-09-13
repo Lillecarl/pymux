@@ -61,6 +61,9 @@ class Connection:
     pointer_shape = None
     graphics = None
 
+    def __init__(self, hostname: str = "") -> None:
+        self.hostname = hostname
+
     def set_pointer_shape(self, shape):
         pass
 
@@ -71,6 +74,11 @@ class Connection:
 #: The size a fake CLI reports. Nothing draws in it; a window that
 #: sizes itself by the latest client must never read it.
 DEFAULT_SIZE = Size(rows=24, columns=80)
+
+#: The machine an attached client says it runs on. **Not the machine
+#: the test runs on**, so a server that answered `gethostname()` by
+#: itself would fail rather than pass by accident. Lillecarl/pymux#287.
+OTHER_MACHINE = "buildbox-3"
 
 #: A command whose pane ends at once and holds a real screen while it
 #: lives. The window the plain sessions make runs it.
@@ -111,7 +119,8 @@ class Session(NamedTuple):
     #: The server.
     pymux: Any
 
-    #: `await attach(name, size)` -> the client state and its size.
+    #: `await attach(name, size, hostname=...)` -> the client state and
+    #: its size. The hostname is what the client says its machine is.
     attach: Callable
 
     #: `await detach(state)`: what a person walking away does.
@@ -195,13 +204,13 @@ async def in_this_process(pymux=None):
         # `pymux.server._ClientInput`.
         pipe.vt100_parser = KittyVt100Parser(pipe._buffer.append)
 
-        async def attach(name, size):
+        async def attach(name, size, hostname=OTHER_MACHINE):
             output = Vt100_Output(stdout=_Sink(), get_size=lambda: size)
             state = pymux.add_client(
                 output=output,
                 input=pipe,
                 color_depth=ColorDepth.DEPTH_8_BIT,
-                connection=Connection(),
+                connection=Connection(hostname),
             )
             watch("%s client" % name, state)
             watch("%s application" % name, state.app)
@@ -324,7 +333,7 @@ async def over_connection(pymux=None, read_packet=None):
             if read_packet is not None:
                 read_packet(packet)
 
-    async def attach(name, size):
+    async def attach(name, size, hostname=OTHER_MACHINE):
         server_end, client_end = connect_in_memory()
 
         # A context of its own, which is what both real routes do:
@@ -355,6 +364,7 @@ async def over_connection(pymux=None, read_packet=None):
                     "color-depth": ColorDepth.DEPTH_8_BIT,
                     "term": "xterm-256color",
                     "colorterm": "",
+                    "hostname": hostname,
                     "data": "",
                 }
             )

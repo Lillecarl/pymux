@@ -105,6 +105,13 @@ class ServerConnection:
         # attributes reply that closes the detection.
         self.colors = ColorDetection()
 
+        #: The machine the client of this connection runs on, as the
+        #: client reported it. Empty until it attaches. **Only a client
+        #: can say it**: `socket.gethostname()` here answers the
+        #: server's own machine, and over ssh that is not the one the
+        #: person sits at. Lillecarl/pymux#287.
+        self.hostname = ""
+
         #: The two colours the outer terminal draws with by itself.
         #: The same handshake asks for them, and either one stays
         #: `None` when the terminal does not say. **Only a client can
@@ -486,6 +493,7 @@ class ServerConnection:
             self.colors.forced = ColorDepth(forced) if forced else None
             self.colors.term = term
             self.colors.colorterm = packet.get("colorterm", "")
+            self.hostname = packet.get("hostname", "")
 
             if detach_other_clients:
                 for c in self.pymux.connections:

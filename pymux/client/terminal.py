@@ -14,6 +14,7 @@ difference of the transport and nothing else.
 import json
 import os
 import signal
+import socket
 import sys
 import webbrowser
 
@@ -122,6 +123,10 @@ class TerminalClient(Client):
                 "color-depth": color_depth,
                 "term": os.environ.get("TERM", ""),
                 "colorterm": os.environ.get("COLORTERM", ""),
+                # The machine this client runs on. Only the client can
+                # say it: over ssh the server answers `gethostname`
+                # with another machine's name. Lillecarl/pymux#287.
+                "hostname": socket.gethostname(),
                 "data": "",
             }
         )

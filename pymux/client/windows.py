@@ -1,5 +1,6 @@
 import json
 import os
+import socket
 import sys
 from ctypes import byref, windll
 from ctypes.wintypes import DWORD
@@ -54,6 +55,8 @@ class WindowsClient(Client):
                     "detach-others": detach_other_clients,
                     "color-depth": color_depth,
                     "term": os.environ.get("TERM", ""),
+                    # Lillecarl/pymux#287, as `client/terminal.py` says.
+                    "hostname": socket.gethostname(),
                     "data": "",
                 }
             )
