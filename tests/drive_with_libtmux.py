@@ -48,12 +48,16 @@ def main() -> None:
     windows = list(session.windows)
     assert len(windows) == 1, windows
     initial_window = windows[0]
-    assert initial_window.window_index == "0"
+    # pymux numbers a window from one, deliberately: a keyboard starts
+    # at one, so the key that picks a window is the number a person
+    # sees. `Arrangement.base_index` is where it is written. tmux ships
+    # `base-index 0` and a great many people set it to one.
+    assert initial_window.window_index == "1"
 
     # new-window
     window = session.new_window(window_name="editor")
     assert window.window_name == "editor"
-    assert window.window_index == "1"
+    assert window.window_index == "2"
     assert list(session.windows)[1].window_id == window.window_id
 
     # split-window
