@@ -407,3 +407,46 @@ async def test_the_box_draws_the_list_over_the_preview():
         assert where("needle (active)") < where("0:2 needle")
         assert where("0:2 needle") < where("a line of output")
         assert where("a line of output") < where("/")
+
+
+async def test_a_split_window_previews_every_pane():
+    """
+    Where the layout puts them, and not one pane blown up.
+
+    tmux draws a strip of panes side by side whatever the layout is,
+    because it has no plan to ask. pymux measures the real one at the
+    size of the preview. Lillecarl/pymux#326.
+    """
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("split-window")
+            pymux.handle_command("choose-window")
+
+        window = pymux.arrangement.get_active_window()
+        top, bottom = window.panes
+        Stream(top.screen).feed("the top pane")
+        Stream(bottom.screen).feed("the bottom pane")
+
+        rows = _drawn(state)
+        first = next(i for i, text in enumerate(rows) if "the top pane" in text)
+        second = next(i for i, text in enumerate(rows) if "the bottom pane" in text)
+
+        # A horizontal split, so the preview draws one over the other.
+        assert first < second
+
+
+async def test_the_preview_is_the_size_it_was_given():
+    "Every row, so nothing runs past the box it is drawn in."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("split-window")
+            pymux.handle_command("choose-window")
+
+        manager = state.layout_manager
+        want = manager._chooser_preview_rows()
+        wide = manager._chooser_width() - 2
+
+        text = fragment_list_to_text(manager._chooser_preview_tokens())
+        lines = text.split("\n")
+        assert len(lines) == want
+        assert all(len(line) == wide for line in lines)

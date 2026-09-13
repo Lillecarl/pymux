@@ -48,7 +48,7 @@ from prompt_toolkit.layout.screen import Char, Screen
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.widgets import Dialog, SearchToolbar, TextArea
 
-from ptterm.preview import preview_text
+from ptterm.preview import preview_lines
 
 import pymux.arrangement as arrangement
 
@@ -1578,17 +1578,19 @@ class LayoutManager:
         the widget sizes the program it holds from the room it is given,
         and a preview must never resize the program it is a picture of.
         `ptterm/preview.py` says the rest. Lillecarl/pymux#325.
+
+        Every pane of the window, where the layout puts them, which is
+        `window_preview`. Lillecarl/pymux#326.
         """
         window = self._pointed_window()
         if window is None:
             return []
 
-        pane = window.active_pane
-        if pane is None:
-            return []
-
-        return preview_text(
-            pane.screen, self._chooser_preview_rows(), self._chooser_width() - 2
+        return window_preview(
+            self.pymux,
+            window,
+            self._chooser_preview_rows(),
+            self._chooser_width() - 2,
         )
 
     def _chooser_title(self) -> str:
@@ -2312,6 +2314,73 @@ def _tell_pane_its_size(pane: arrangement.Pane, rect) -> None:
     for the screen it thinks it has. Lillecarl/pymux#224.
     """
     pane.terminal.set_size(rect.width, rect.height)
+
+
+#: What a preview draws in the cells between two panes. The gap
+#: belongs to the layout, so the miniature has the same holes the
+#: window has; drawing them in the bar colour is what makes the
+#: shape of the window readable at this size.
+PREVIEW_GAP = "class:commandpalette.titlebar"
+
+
+def window_preview(
+    pymux: "Pymux", window, rows: int, columns: int
+) -> StyleAndTextTuples:
+    """
+    A window drawn small: every pane where the layout puts it.
+
+    The layout answers at the size of the preview, so this is the
+    window's own shape and not a strip of panes side by side.
+    tmux draws the second thing -- `window_tree_draw_window` gives each
+    pane 24 columns of its own, whatever the layout is -- because it
+    has no plan to ask. pymux does: `layout_of` measures one at any
+    size, which is the same call the real frame makes.
+    Lillecarl/pymux#326.
+
+    A pane whose rectangle runs off the edge is cut. `Divided.measure`
+    says why: nothing clamps, because every pane keeps a row, and what
+    a person sees is cut by the view.
+    """
+    if rows <= 0 or columns <= 0:
+        return []
+
+    grid = [[(PREVIEW_GAP, " ")] * columns for _ in range(rows)]
+
+    plan = layout_of(pymux, window).measure(Size(rows=rows, columns=columns))
+
+    for slot, rect in plan.rects.items():
+        pane = slot.shown
+        screen = getattr(pane, "screen", None)
+        if screen is None:
+            continue
+
+        # The whole rectangle first, so that the part of a pane its
+        # program has not written is the pane and not a gap.
+        left, right = max(rect.x, 0), min(rect.right, columns)
+        top, bottom = max(rect.y, 0), min(rect.bottom, rows)
+        for y in range(top, bottom):
+            for x in range(left, right):
+                grid[y][x] = ("", " ")
+
+        lines = preview_lines(screen, rect.height, rect.width)
+        for line_number, line in enumerate(lines):
+            y = rect.y + line_number
+            if not top <= y < bottom:
+                continue
+            row = grid[y]
+            for offset, cell in enumerate(line):
+                x = rect.x + offset
+                if x >= right:
+                    break
+                if x >= left:
+                    row[x] = cell
+
+    fragments: StyleAndTextTuples = []
+    for number, row in enumerate(grid):
+        if number:
+            fragments.append(("", "\n"))
+        fragments += row
+    return fragments
 
 
 def layout_of(pymux: "Pymux", window):
