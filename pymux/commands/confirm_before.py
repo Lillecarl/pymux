@@ -14,8 +14,7 @@ def confirm_before(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
     client_state = pymux.get_client_state()
 
-    client_state.confirm_text = args.message or ""
-    client_state.confirm_command = args.command
+    client_state.ask(args.message or "", args.command)
 
 
 def register(subparsers):

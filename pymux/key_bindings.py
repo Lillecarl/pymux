@@ -170,11 +170,9 @@ class PymuxKeyBindings:
             """
             client_state = pymux.get_client_state()
 
-            command = client_state.confirm_command
-            client_state.confirm_command = None
-            client_state.confirm_text = None
-
-            pymux.handle_command(command)
+            command = client_state.answer()
+            if command:
+                pymux.handle_command(command)
 
         @kb.add("n", filter=waits_for_confirmation)
         @kb.add("N", filter=waits_for_confirmation)
@@ -183,9 +181,10 @@ class PymuxKeyBindings:
             """
             Cancel command.
             """
+            # `n` answers the question on screen and leaves the rest
+            # waiting, the way `y` does. Lillecarl/pymux#266.
             client_state = pymux.get_client_state()
-            client_state.confirm_command = None
-            client_state.confirm_text = None
+            client_state.answer()
 
         # Five bindings for copy mode stood here: leaving it, starting
         # a selection, copying one and swapping its type. Every one of

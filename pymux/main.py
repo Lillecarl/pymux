@@ -11,7 +11,7 @@ import tempfile
 import time
 import traceback
 import weakref
-from typing import Callable, Tuple
+from typing import Callable, List, Tuple
 
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app, set_app
@@ -165,11 +165,17 @@ class ClientState:
         #: Error/info message.
         self.message = None
 
-        # When a "confirm-before" command is running,
-        # Show this text in the command bar. When confirmed, execute
-        # confirm_command.
-        self.confirm_text = None
-        self.confirm_command = None
+        #: The questions waiting for a yes or a no, oldest first, each
+        #: one a (text, command) pair.
+        #:
+        #: **A list and not one pair.** There used to be one, and a
+        #: second question silently replaced the first: a pane waiting
+        #: on `confirm-before kill-pane` had its question taken by an
+        #: `open-url` ask, and a `y` then opened the URL while the kill
+        #: was lost with nothing said about either. Ask mode exists so
+        #: that nothing happens without a yes, and losing a yes is the
+        #: same surprise the other way round. Lillecarl/pymux#266.
+        self.confirmations: List[Tuple[str, str]] = []
 
         # When a "command-prompt" command is running.
         self.prompt_text = None
@@ -346,6 +352,31 @@ class ClientState:
     @property
     def command_mode(self):
         return get_app().layout.has_focus(COMMAND)
+
+    # The question on screen is the oldest one waiting. These two read
+    # it, so a filter and the bar below draw what a `y` will answer.
+    @property
+    def confirm_text(self) -> str | None:
+        return self.confirmations[0][0] if self.confirmations else None
+
+    @property
+    def confirm_command(self) -> str | None:
+        return self.confirmations[0][1] if self.confirmations else None
+
+    def ask(self, text: str, command: str) -> None:
+        "Put a question at the back of the queue."
+        self.confirmations.append((text, command))
+
+    def answer(self) -> str | None:
+        "Take the question on screen away, and give back its command."
+        if not self.confirmations:
+            return None
+        _text, command = self.confirmations.pop(0)
+        return command
+
+    def forget_questions(self) -> None:
+        "Drop every question, answered by nobody."
+        self.confirmations.clear()
 
     def _handle_command(self, buffer):
         "When text is accepted in the command line."
@@ -1532,8 +1563,7 @@ class Pymux:
         if self.open_url_mode == "ask" and not confirmed:
             command = "open-url -c %s" % (shlex.quote(url),)
             for client_state in clients:
-                client_state.confirm_text = "Open %s in the browser? (y/n)" % (url,)
-                client_state.confirm_command = command
+                client_state.ask("Open %s in the browser? (y/n)" % (url,), command)
             return
 
         for client_state in clients:
@@ -2002,7 +2032,7 @@ class Pymux:
         client_state.prompt_buffer.reset(append_to_history=True)
 
         client_state.prompt_command = ""
-        client_state.confirm_command = ""
+        client_state.forget_questions()
         # The completer belongs to the question, and the question is
         # over. It also says whether the prompt draws in a box, so a
         # completer left behind would put the next one in one.

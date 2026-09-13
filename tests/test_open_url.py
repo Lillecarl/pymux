@@ -232,6 +232,73 @@ async def test_no_opens_nothing():
         assert opens(packets) == []
 
 
+async def test_a_second_question_waits_its_turn():
+    """
+    An ask must not take the place of a question already on screen.
+
+    There used to be one `confirm_text`/`confirm_command` pair, so the
+    URL question replaced whatever was waiting: a pane asked to confirm
+    `kill-pane` had its question taken, and the `y` that followed opened
+    the URL while the kill was lost with nothing said about either. Ask
+    mode exists so that nothing happens without a yes, and losing a yes
+    is the same surprise the other way round. Lillecarl/pymux#266.
+    """
+    packets = []
+    with over_connection(read_packet=packets.append) as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", SIZE)
+        pymux.open_url_mode = "ask"
+
+        # `confirm-before` asks the client that ran it, so it needs the
+        # app in context; `open-url` walks the attached clients instead.
+        with set_app(state.app):
+            pymux.handle_command(
+                "confirm-before -p 'Really? (y/n)' 'display-message kept'"
+            )
+        pymux.handle_command("open-url %s" % URL)
+
+        # The first question is still the one on screen.
+        assert state.confirm_text == "Really? (y/n)"
+        assert state.confirm_command == "display-message kept"
+
+        session.typed(state, "y")
+        await once(
+            lambda: state.message == "kept", 5.0, "the first command never ran"
+        )
+
+        # Answering it brings the second one up rather than losing it.
+        assert URL in state.confirm_text
+        assert state.confirm_command == "open-url -c %s" % URL
+        assert opens(packets) == []
+
+        session.typed(state, "y")
+        await once(lambda: opens(packets), 5.0, "the second yes never opened anything")
+        assert opens(packets) == [{"cmd": "open", "data": URL}]
+        assert state.confirm_text is None
+
+
+async def test_no_answers_one_question_and_leaves_the_rest():
+    with over_connection() as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", SIZE)
+
+        with set_app(state.app):
+            pymux.handle_command(
+                "confirm-before -p 'First? (y/n)' 'display-message one'"
+            )
+            pymux.handle_command(
+                "confirm-before -p 'Second? (y/n)' 'display-message two'"
+            )
+
+        session.typed(state, "n")
+        await once(
+            lambda: state.confirm_text == "Second? (y/n)",
+            5.0,
+            "the no did not bring the next question up",
+        )
+        assert state.message != "one", "the no ran the command anyway"
+
+
 async def test_off_opens_nothing():
     packets = []
     with over_connection(read_packet=packets.append) as session:
