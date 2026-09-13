@@ -161,6 +161,17 @@ async def test_if_shell_keeps_the_question_output_off_the_terminal(capfd):
     assert "noise" not in errored
 
 
+async def test_if_shell_with_b_does_not_make_the_caller_wait():
+    "tmux's `-b` here too: `wait = !args_has(args, 'b')`."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            assert handle_command(pymux, "if-shell -b true 'display later'") is None
+
+        with anyio.fail_after(5):
+            while state.message != "later":
+                await anyio.sleep(0.005)
+
+
 @pytest.mark.parametrize("command", ["run-shell true", "if-shell true 'display yes'"])
 async def test_a_shell_command_answers_with_work_to_finish(command):
     "Both of them wait now, and the dispatch is what carries that."

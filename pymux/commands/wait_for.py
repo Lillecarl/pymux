@@ -65,6 +65,10 @@ def wait_for(pymux: "Pymux", args: argparse.Namespace):
     `wait-for done` holds until `wait-for -S done` runs somewhere
     else. -L takes a lock and -U gives it back.
     """
+    if not (args.S or args.U):
+        # Before the channel is made, so a refusal leaves nothing.
+        _refuse_without_a_waiter(pymux, "lock" if args.L else "wait")
+
     channel = pymux.wait_channels.get(args.name)
     if channel is None:
         channel = WaitChannel()
@@ -89,6 +93,24 @@ def _signal(pymux: "Pymux", name: str, channel: WaitChannel) -> None:
     channel.waiters = []
     _forget_if_spent(pymux, name, channel)
     return None
+
+
+def _refuse_without_a_waiter(pymux: "Pymux", what: str) -> None:
+    """
+    A wait belongs to somebody who is waiting for the answer.
+
+    tmux refuses a wait and a lock from a command with no client
+    (`cmd_wait_for_wait`, "not able to wait"), and the reason holds
+    here for a shape of its own: a sync route does not wait, it
+    spawns, so `bind-key X wait-for done` would put a task in the
+    server's group for every press and none of them would ever end.
+
+    `command_output` is what says a client is reading the answer: the
+    socket route sets it and a key binding, a hook and a configuration
+    file do not. Lillecarl/pymux#302.
+    """
+    if pymux.command_output is None:
+        raise CommandException("not able to %s" % (what,))
 
 
 def _wait(pymux: "Pymux", name: str, channel: WaitChannel):

@@ -30,7 +30,16 @@ SIZE = Size(rows=24, columns=80)
 
 
 def _ask(pymux, state, command):
-    "Run a command and answer with what it left to finish, if anything."
+    """
+    Run a command the way the socket route runs one, and answer with
+    what it left to finish.
+
+    The two lists are what that route sets, and they are also what
+    says somebody is waiting for the answer -- which a wait needs. A
+    test is one task, so what this sets stays in it.
+    """
+    pymux.command_output = []
+    pymux.command_error = []
     with set_app(state.app):
         return handle_command(pymux, command)
 
@@ -140,15 +149,51 @@ async def test_unlocking_with_nobody_waiting_opens_the_channel():
 async def test_unlocking_a_channel_nobody_locked_is_an_error():
     "tmux says so rather than doing nothing, and so does this."
     async with create_session() as (pymux, state):
-        pymux.command_error = []
-        try:
-            _ask(pymux, state, "wait-for -U never")
-            said = pymux.command_error
-        finally:
-            pymux.command_error = None
+        _ask(pymux, state, "wait-for -U never")
 
+        said = pymux.command_error
         assert any("not locked" in line for line in said), said
         assert "never" not in pymux.wait_channels
+
+
+# ----------------------------------------------------------------------
+# Who may wait.
+
+
+async def test_a_wait_with_nobody_waiting_for_it_is_refused():
+    """
+    A key binding, a hook and a configuration file do not wait: the
+    dispatch spawns what they answer with. So `bind-key X wait-for
+    done` would leave one task in the server's group for every press,
+    and none of them would ever end.
+
+    tmux refuses the same case for its own reason -- there is no
+    client to hold -- and says "not able to wait".
+    """
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            assert pymux.handle_command("wait-for done") is None
+
+        assert state.message == "not able to wait"
+        assert "done" not in pymux.wait_channels, "it left a channel behind"
+
+
+async def test_a_lock_with_nobody_waiting_for_it_is_refused_too():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("wait-for -L door")
+
+        assert state.message == "not able to lock"
+        assert "door" not in pymux.wait_channels
+
+
+async def test_a_signal_needs_nobody_waiting_for_it():
+    "Signalling answers at once, so any route may do it."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            assert pymux.handle_command("wait-for -S from-a-key") is None
+
+        assert pymux.wait_channels["from-a-key"].woken
 
 
 # ----------------------------------------------------------------------
