@@ -38,6 +38,19 @@ def main() -> None:
     server = Server(tmux_bin=tmux_bin, socket_path=socket_path)
     assert not server.is_alive(), "Server should not be running yet."
 
+    try:
+        drive(server)
+    finally:
+        # An assertion that fails leaves the server running, and it holds a
+        # pty and a socket until somebody notices. Four of them were sitting
+        # on a machine after one afternoon of failed runs, which is what
+        # sent me looking for a bug in `kill-server` that was not there.
+        # Lillecarl/pymux#322.
+        if server.is_alive():
+            server.kill()
+
+
+def drive(server) -> None:
     # new-session: starts the server (daemonized) and creates the session.
     session = server.new_session(session_name="test", attach=False)
     assert session.session_id == "$0", session.session_id
@@ -93,7 +106,8 @@ def main() -> None:
     time.sleep(0.3)
     assert [w.window_id for w in session.windows] == [initial_window.window_id]
 
-    # kill-session: stops the server.
+    # kill-session: stops the server. The `finally` above is for the runs
+    # that never reach this line.
     server.kill()
     time.sleep(0.5)
     assert not server.is_alive()
