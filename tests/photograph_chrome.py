@@ -237,6 +237,44 @@ FIXTURES = {
         CHROME + "set-option which-key on\n",
         keys((0.0, PREFIX), (0.8, b"")),
     ),
+    # The window chooser: a bar across the top, over the window it
+    # points at. It is not a box, and the preview is the switch itself
+    # -- the rows under the bar are the real window, drawn by the
+    # layout that owns it. Lillecarl/pymux#325, Lillecarl/pymux#326,
+    # Lillecarl/pymux#327.
+    #
+    # Three windows, so the bar has a list to wrap, and the one it
+    # opens on is split in two, so the preview is a layout and not an
+    # empty shell. **`-d` leaves the new windows unfocused**, which
+    # keeps the client on window 0: that is where the forwarder pane
+    # runs, and the fence comes back through it.
+    "chooser": (
+        CHROME,
+        keys(
+            (0.0, PREFIX),
+            (0.4, b"%"),
+            *create_command("new-window -d -n logs"),
+            *create_command("new-window -d -n build"),
+            (0.8, PREFIX),
+            (0.6, b"w"),
+        ),
+    ),
+    # The same bar with a search typed into it, which narrows the list
+    # and points at what is left. Pointing switches, so this is also
+    # the picture of a preview of a window the client was not on.
+    "chooser-search": (
+        CHROME,
+        keys(
+            (0.0, PREFIX),
+            (0.4, b"%"),
+            *create_command("new-window -d -n logs"),
+            *create_command("new-window -d -n build"),
+            (0.8, PREFIX),
+            (0.6, b"w"),
+            (0.6, b"/"),
+            (0.8, b"bui"),
+        ),
+    ),
     # The demo in a pane, and copy mode over it. The two hold the
     # same rows a person can read, and the difference between the two
     # pictures is what copy mode does.
