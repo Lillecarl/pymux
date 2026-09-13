@@ -507,20 +507,26 @@ def run() -> None:
 
         detach_other_clients = a.detach_others
 
+        # The code the client leaves with is the server's to name. A
+        # server that will not serve this client says so in an `exit`
+        # packet, and a person who detached leaves with nothing to
+        # report. Lillecarl/pymux#332.
         if socket_name:
-            create_client(socket_name).attach(
+            client = create_client(socket_name)
+            client.attach(
                 detach_other_clients=detach_other_clients, color_depth=color_depth
             )
+            sys.exit(client.exit_code)
         else:
             # Connect to the first server.
             for c in list_clients():
                 c.attach(
                     detach_other_clients=detach_other_clients, color_depth=color_depth
                 )
-                break
-            else:  # Nobreak.
-                print("No pymux instance found.")
-                sys.exit(1)
+                sys.exit(c.exit_code)
+
+            print("No pymux instance found.")
+            sys.exit(1)
 
     elif command and socket_name:
         # Run command in the given session.
@@ -547,7 +553,9 @@ def run() -> None:
             # daemon. (Otherwise the `waitpid` call won't work.)
             mux.run_server()
         else:
-            create_client(socket_name).attach(color_depth=color_depth)
+            client = create_client(socket_name)
+            client.attach(color_depth=color_depth)
+            sys.exit(client.exit_code)
 
     else:
         if socket_name_from_env:
@@ -722,7 +730,7 @@ def _new_session(socket_name: str, command: str, args: List[str], pane_id=None) 
     if attach:
         client = create_client(socket_name)
         client.attach(color_depth=ColorDepth.DEPTH_8_BIT)
-        return 0
+        return client.exit_code
 
     return 0
 

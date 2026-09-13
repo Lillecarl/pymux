@@ -70,6 +70,42 @@ async def test_a_client_may_not_attach_when_the_server_serves_one_terminal():
         pymux.stop()
 
 
+async def test_a_refused_client_is_told_what_to_leave_with():
+    """
+    A refusal is not a detach. Both end with the server closing the
+    connection, so the code is the only thing that tells a script which
+    of the two happened. Lillecarl/pymux#332.
+    """
+    pymux = _server()
+
+    async with pymux.running():
+        server_end, client_end = connect_in_memory()
+        ServerConnection(pymux, server_end, may_attach=False)
+
+        client_end.write_nowait(json.dumps(START_GUI))
+        said = await _packets(client_end)
+
+        assert [p["code"] for p in said if p["cmd"] == "exit"] == [1], said
+
+        # And the reason comes first, so a person reads it.
+        kinds = [p["cmd"] for p in said]
+        assert kinds.index("out") < kinds.index("exit")
+
+        pymux.stop()
+
+
+def test_a_client_leaves_with_what_the_server_named():
+    "The client half of it: an `exit` packet is what sets the code."
+    from pymux.client.terminal import TerminalClient
+
+    client = TerminalClient()
+    assert client.exit_code == 0
+
+    client._process(json.dumps({"cmd": "exit", "code": 1}).encode("utf-8"))
+
+    assert client.exit_code == 1
+
+
 async def test_the_reason_reaches_the_client_before_the_close():
     """
     **The write is awaited.** `_send_packet` spawns one into the scope

@@ -1435,7 +1435,9 @@ def check_second_terminal(tmp):
                 code = second.client.wait(timeout=20)
             except subprocess.TimeoutExpired:
                 raise AssertionError("the refused client is still running")
-            assert code == 0, "the refused client left with %r" % (code,)
+            # A refusal is not a detach, and a script has only the code
+            # to tell them apart. Lillecarl/pymux#332.
+            assert code == 1, "the refused client left with %r" % (code,)
 
             # And the server kept serving: the first terminal still has
             # its pane, and a command still reaches the socket.

@@ -564,6 +564,10 @@ class ServerConnection:
         reach it only if the cancel lost the race.
         """
         await self._write_packet({"cmd": "out", "data": CANNOT_ATTACH})
+        # And a code to leave with. A client that attached reads this
+        # too now, so a script hears the refusal rather than reading a
+        # zero and calling it attached. Lillecarl/pymux#332.
+        await self._write_packet({"cmd": "exit", "code": 1})
 
         logger.info("A client asked to attach to a server that serves one terminal.")
         self.detach_and_close()

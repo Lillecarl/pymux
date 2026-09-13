@@ -83,6 +83,13 @@ class TerminalClient(Client):
 
         self.__stdin_reader = None
 
+        #: What this client leaves with when it is attached. The server
+        #: names it in an `exit` packet, which it sends before it closes
+        #: a connection it will not serve: a refused attach is not the
+        #: same as a person who detached, and a script has only the
+        #: code to tell them apart. Lillecarl/pymux#332.
+        self.exit_code = 0
+
     @property
     def _stdin_reader(self) -> PosixStdinReader:
         """
@@ -156,6 +163,12 @@ class TerminalClient(Client):
         if packet["cmd"] == "out":
             # Call os.write manually. In Python2.6, sys.stdout.write doesn't use UTF-8.
             os.write(sys.stdout.fileno(), packet["data"].encode("utf-8"))
+
+        elif packet["cmd"] == "exit":
+            # The server is about to close this connection, and says
+            # what this client leaves with. The read loop ends on the
+            # close itself.
+            self.exit_code = packet["code"]
 
         elif packet["cmd"] == "suspend":
             # Suspend client process to background.

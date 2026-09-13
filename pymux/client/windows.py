@@ -34,6 +34,9 @@ class WindowsClient(Client):
 
         self.pipe = PipeClient(pipe_name)
 
+        #: What this client leaves with. Lillecarl/pymux#332.
+        self.exit_code = 0
+
         #: The scope the writes of this client run in. `_attach` opens
         #: it, and `_send_packet` is called from a keyboard callback,
         #: which is not a coroutine. Lillecarl/pymux#87.
@@ -97,6 +100,11 @@ class WindowsClient(Client):
                 os.write(sys.stdout.fileno(), packet["data"].encode("utf-8"))
             finally:
                 windll.kernel32.SetConsoleMode(self._hconsole, original_mode)
+
+        elif packet["cmd"] == "exit":
+            # What this client leaves with. Lillecarl/pymux#332, as
+            # `client/terminal.py` says.
+            self.exit_code = packet["code"]
 
         elif packet["cmd"] == "suspend":
             # Suspend client process to background.
