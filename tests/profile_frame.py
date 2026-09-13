@@ -379,7 +379,7 @@ async def _animated(command: str, seconds: float, out: Path) -> None:
         raw = packet if isinstance(packet, (bytes, bytearray)) else str(packet).encode()
         counts["wire"] += len(raw)
 
-    with over_connection(read_packet=read_packet) as session:
+    async with over_connection(read_packet=read_packet) as session:
         pymux = session.pymux
         state, _size = await session.attach("only", Size(rows=ROWS, columns=COLUMNS))
 

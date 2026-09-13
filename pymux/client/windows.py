@@ -1,15 +1,17 @@
 import json
 import os
 import sys
-from asyncio import create_task, get_event_loop
 from ctypes import byref, windll
 from ctypes.wintypes import DWORD
+
+import anyio
 
 from prompt_toolkit.input.win32 import Win32Input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.win32 import Win32Output
 from prompt_toolkit.win32_types import STD_OUTPUT_HANDLE
 
+from ..log import logger
 from ..pipes.win32_client import PipeClient
 from .base import Client
 
@@ -31,24 +33,38 @@ class WindowsClient(Client):
 
         self.pipe = PipeClient(pipe_name)
 
+        #: The scope the writes of this client run in. `_attach` opens
+        #: it, and `_send_packet` is called from a keyboard callback,
+        #: which is not a coroutine. Lillecarl/pymux#87.
+        self._tasks: "anyio.abc.TaskGroup" | None = None
+
     def attach(
         self, detach_other_clients: bool = False, color_depth=ColorDepth.DEPTH_8_BIT
     ):
-        self._send_size()
-        self._send_packet(
-            {
-                "cmd": "start-gui",
-                "detach-others": detach_other_clients,
-                "color-depth": color_depth,
-                "term": os.environ.get("TERM", ""),
-                "data": "",
-            }
-        )
+        anyio.run(self._attach, detach_other_clients, color_depth)
 
-        f = create_task(self._start_reader())
-        with self._input.attach(self._input_ready):
-            # Run as long as we have a connection with the server.
-            get_event_loop().run_until_complete(f)  # Run forever.
+    async def _attach(self, detach_other_clients: bool, color_depth) -> None:
+        async with anyio.create_task_group() as tasks:
+            self._tasks = tasks
+
+            self._send_size()
+            self._send_packet(
+                {
+                    "cmd": "start-gui",
+                    "detach-others": detach_other_clients,
+                    "color-depth": color_depth,
+                    "term": os.environ.get("TERM", ""),
+                    "data": "",
+                }
+            )
+
+            try:
+                with self._input.attach(self._input_ready):
+                    # Run as long as we have a connection with the server.
+                    await self._start_reader()
+            finally:
+                self._tasks = None
+                tasks.cancel_scope.cancel()
 
     async def _start_reader(self):
         """
@@ -116,7 +132,21 @@ class WindowsClient(Client):
     def _send_packet(self, data):
         "Send to server."
         data = json.dumps(data)
-        create_task(self.pipe.write_message(data))
+        if self._tasks is None:
+            return  # Not attached, so there is nothing to send to.
+        self._tasks.start_soon(self._write_packet, data)
+
+    async def _write_packet(self, data: str) -> None:
+        """
+        Write one packet, and say what went wrong.
+
+        The return of the write used to be dropped, so a write that
+        failed failed in silence. Lillecarl/pymux#87.
+        """
+        try:
+            await self.pipe.write_message(data)
+        except Exception:
+            logger.exception("Sending a packet to the server failed.")
 
     def _send_size(self):
         "Report terminal size to server."

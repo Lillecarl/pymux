@@ -1,5 +1,6 @@
 """
-What every run of this suite shares: the examples a property test draws.
+What every run of this suite shares: a loop for the panes, and the
+examples a property test draws.
 
 A property test with no seed is a different test every run, and a gate
 that is red by luck teaches everybody to run it again instead of to
@@ -11,7 +12,33 @@ suite has.
 suite around it.
 """
 
+import asyncio
+
+import pytest
 from hypothesis import HealthCheck, settings
+
+
+@pytest.fixture(autouse=True)
+def a_loop_for_this_test():
+    """
+    A current event loop for a test that runs none of its own.
+
+    A pane that is starting holds an `asyncio.Future`, and a bare
+    `Future()` asks this thread for its current loop. A coroutine test
+    has one because anyio runs it; a plain `def test` has none, and a
+    hundred and eighty of them make panes.
+
+    `Pymux.__init__` used to make a loop and set it as the current one.
+    That loop never ran, so anything armed on it happened never -- the
+    server's own clock among them. Lillecarl/pymux#87.
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        yield
+    finally:
+        asyncio.set_event_loop(None)
+        loop.close()
 
 # The gate. `derandomize` seeds each property test from its own source,
 # so a run draws the examples the run before it drew, and a green gate

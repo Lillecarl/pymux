@@ -277,7 +277,7 @@ async def scenario_idle(tmp, recorder) -> list:
     child.write_text(QUIET_CHILD)
     pymux = Pymux(startup_command="%s %s" % (sys.executable, child))
     before = len(recorder.packets)
-    with over_connection(pymux=pymux, read_packet=recorder) as session:
+    async with over_connection(pymux=pymux, read_packet=recorder) as session:
         state, _size = await session.attach("idle", SIZE)
         with set_app(state.app):
             await wait_for(recorder, "READY")
@@ -293,7 +293,7 @@ async def scenario_typing(tmp, recorder) -> list:
     pymux = Pymux(startup_command="%s %s" % (sys.executable, child))
     pymux.status_interval = NO_REFRESH
     before = len(recorder.packets)
-    with over_connection(pymux=pymux, read_packet=recorder) as session:
+    async with over_connection(pymux=pymux, read_packet=recorder) as session:
         state, _size = await session.attach("typing", SIZE)
         with set_app(state.app):
             pymux.handle_command("set-option status-right ''")
@@ -313,7 +313,7 @@ async def scenario_burst(tmp, recorder) -> list:
     pymux = Pymux(startup_command="%s %s" % (sys.executable, child))
     pymux.status_interval = NO_REFRESH
     before = len(recorder.packets)
-    with over_connection(pymux=pymux, read_packet=recorder) as session:
+    async with over_connection(pymux=pymux, read_packet=recorder) as session:
         state, _size = await session.attach("burst", SIZE)
         with set_app(state.app):
             pymux.handle_command("set-option status-right ''")
@@ -330,7 +330,7 @@ async def scenario_churn(tmp, recorder) -> list:
     pymux = Pymux(startup_command="%s %s" % (sys.executable, child))
     pymux.status_interval = NO_REFRESH
     before = len(recorder.packets)
-    with over_connection(pymux=pymux, read_packet=recorder) as session:
+    async with over_connection(pymux=pymux, read_packet=recorder) as session:
         state, _size = await session.attach("churn", SIZE)
         with set_app(state.app):
             pymux.handle_command("set-option status-right ''")

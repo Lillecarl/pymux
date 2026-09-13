@@ -79,7 +79,7 @@ def create_pane(pymux, state):
 
 async def test_command_opens_on_client():
     packets = []
-    with over_connection(read_packet=packets.append) as session:
+    async with over_connection(read_packet=packets.append) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -95,7 +95,7 @@ async def test_command_opens_on_client():
 
 async def test_last_targets_client_used_last():
     packets = []
-    with over_connection(read_packet=packets.append) as session:
+    async with over_connection(read_packet=packets.append) as session:
         pymux = session.pymux
         a, _ = await session.attach("a", SIZE)
         b, _ = await session.attach("b", SIZE)
@@ -117,7 +117,7 @@ async def test_last_targets_client_used_last():
 
 async def test_broadcast_reaches_every_client():
     packets = []
-    with over_connection(read_packet=packets.append) as session:
+    async with over_connection(read_packet=packets.append) as session:
         pymux = session.pymux
         await session.attach("a", SIZE)
         await session.attach("b", SIZE)
@@ -141,7 +141,7 @@ async def test_command_from_pane_opens_in_browser_of_client():
     Lillecarl/pymux#261, found on a machine.
     """
     packets = []
-    with over_connection(read_packet=packets.append) as session:
+    async with over_connection(read_packet=packets.append) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -169,7 +169,7 @@ async def test_fake_cli_of_command_is_not_client_anybody_used():
     The client state of a command that arrived over a socket is never
     stamped, never a target, and gone when the command is done.
     """
-    with in_this_process() as session:
+    async with in_this_process() as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -191,7 +191,7 @@ async def test_fake_cli_of_command_is_not_client_anybody_used():
 
 async def test_ask_asks_and_opens_nothing():
     packets = []
-    with over_connection(read_packet=packets.append) as session:
+    async with over_connection(read_packet=packets.append) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
         pymux.open_url_mode = "ask"
@@ -205,7 +205,7 @@ async def test_ask_asks_and_opens_nothing():
 
 async def test_yes_opens():
     packets = []
-    with over_connection(read_packet=packets.append) as session:
+    async with over_connection(read_packet=packets.append) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
         pymux.open_url_mode = "ask"
@@ -220,7 +220,7 @@ async def test_yes_opens():
 
 async def test_no_opens_nothing():
     packets = []
-    with over_connection(read_packet=packets.append) as session:
+    async with over_connection(read_packet=packets.append) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
         pymux.open_url_mode = "ask"
@@ -244,7 +244,7 @@ async def test_a_second_question_waits_its_turn():
     is the same surprise the other way round. Lillecarl/pymux#266.
     """
     packets = []
-    with over_connection(read_packet=packets.append) as session:
+    async with over_connection(read_packet=packets.append) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
         pymux.open_url_mode = "ask"
@@ -278,7 +278,7 @@ async def test_a_second_question_waits_its_turn():
 
 
 async def test_no_answers_one_question_and_leaves_the_rest():
-    with over_connection() as session:
+    async with over_connection() as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -301,7 +301,7 @@ async def test_no_answers_one_question_and_leaves_the_rest():
 
 async def test_off_opens_nothing():
     packets = []
-    with over_connection(read_packet=packets.append) as session:
+    async with over_connection(read_packet=packets.append) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
         pymux.open_url_mode = "off"
@@ -313,7 +313,7 @@ async def test_off_opens_nothing():
 
 
 async def test_ask_asks_on_every_client_of_broadcast():
-    with over_connection() as session:
+    async with over_connection() as session:
         pymux = session.pymux
         a, _ = await session.attach("a", SIZE)
         b, _ = await session.attach("b", SIZE)
@@ -329,7 +329,7 @@ async def test_ask_asks_on_every_client_of_broadcast():
 
 async def test_confirmed_command_opens_without_asking():
     packets = []
-    with over_connection(read_packet=packets.append) as session:
+    async with over_connection(read_packet=packets.append) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
         pymux.open_url_mode = "ask"
@@ -347,7 +347,7 @@ async def test_confirmed_command_opens_without_asking():
 
 async def test_openurl_of_pane_opens():
     packets = []
-    with over_connection(read_packet=packets.append) as session:
+    async with over_connection(read_packet=packets.append) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
         pane = create_pane(pymux, state)
@@ -361,7 +361,7 @@ async def test_openurl_of_pane_opens():
 
 async def test_another_subcommand_of_1337_opens_nothing():
     packets = []
-    with over_connection(read_packet=packets.append) as session:
+    async with over_connection(read_packet=packets.append) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
         pane = create_pane(pymux, state)
@@ -468,7 +468,7 @@ def test_machine_without_display_tries_no_browser(monkeypatch):
 
 
 async def test_shim_names_opener_of_session():
-    with in_this_process() as session:
+    async with in_this_process() as session:
         pymux = session.pymux
         pymux.open_url_shim = True
         pymux._ensure_open_url_shim()
@@ -486,7 +486,7 @@ async def test_shim_names_opener_of_session():
 
 
 async def test_shim_rides_path_of_new_pane():
-    with in_this_process() as session:
+    async with in_this_process() as session:
         pymux = session.pymux
         pymux.open_url_shim = True
         pymux._ensure_open_url_shim()
@@ -502,7 +502,7 @@ async def test_shim_rides_path_of_new_pane():
 
 async def test_pane_that_starts_with_shim_finds_opener():
     "The whole hook, from the option through the fork to the program."
-    with in_this_process() as session:
+    async with in_this_process() as session:
         pymux = session.pymux
         pymux.open_url_shim = True
         state, _ = await session.attach("only", SIZE)
@@ -536,7 +536,7 @@ async def test_pane_that_starts_with_shim_finds_opener():
 
 
 async def test_shim_leaves_pane_alone_when_it_is_off():
-    with in_this_process() as session:
+    async with in_this_process() as session:
         pymux = session.pymux
 
         with create_environment(PATH="/usr/bin", BROWSER=None):
@@ -551,7 +551,7 @@ async def test_shim_leaves_pane_alone_when_it_is_off():
 
 
 async def test_client_that_could_not_open_says_so_in_its_status_line():
-    with over_connection() as session:
+    async with over_connection() as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
         connection = state.connection

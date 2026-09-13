@@ -16,8 +16,7 @@ the channel carries the packets, and the server answers a client that
 arrived this way. `PYMUX_ROUTE=ssh` in `tests/drive_with_pty.py`, over
 a real sshd, is the check that would say the rest.
 
-The tests are coroutines for the reason `test_command_mode.py` gives:
-pymux carries no anyio and does not turn on `anyio_mode`.
+The tests are coroutines, which anyio's pytest plugin runs.
 """
 
 import asyncio
@@ -180,32 +179,37 @@ async def test_command_reaches_server_over_ssh(tmp_path=None):
 
     pymux = Pymux()
     pymux.listen_on_socket(socket_path)
-    pymux.create_window(PANE_COMMAND)
-    await asyncio.sleep(0.5)
 
-    server, port, client_key = await create_ssh_server(where, socket_path)
+    # The bind is what names the server; the accepting is a task of
+    # `running()`. A server that binds and does not serve takes no
+    # client at all. Lillecarl/pymux#87.
+    async with pymux.running():
+        pymux.create_window(PANE_COMMAND)
+        await asyncio.sleep(0.5)
 
-    client = SshClient(
-        "ssh://127.0.0.1:%d%s" % (port, socket_path),
-        known_hosts=None,
-        client_keys=[client_key],
-        username="anybody",
-    )
+        server, port, client_key = await create_ssh_server(where, socket_path)
 
-    said = []
-    try:
-        # A command whose answer is certainly not empty, so that an
-        # empty one means the channel carried nothing.
-        exit_code = await _what_it_says(
-            client, "list-sessions -F '#{session_name}'", said
+        client = SshClient(
+            "ssh://127.0.0.1:%d%s" % (port, socket_path),
+            known_hosts=None,
+            client_keys=[client_key],
+            username="anybody",
         )
-    finally:
-        server.close()
-        pymux.stop()
-        for window in list(pymux.arrangement.windows):
-            for pane in list(window.panes):
-                if not pane.process.is_terminated:
-                    pane.process.kill()
+
+        said = []
+        try:
+            # A command whose answer is certainly not empty, so that an
+            # empty one means the channel carried nothing.
+            exit_code = await _what_it_says(
+                client, "list-sessions -F '#{session_name}'", said
+            )
+        finally:
+            server.close()
+            pymux.stop()
+            for window in list(pymux.arrangement.windows):
+                for pane in list(window.panes):
+                    if not pane.process.is_terminated:
+                        pane.process.kill()
 
     assert exit_code == 0
     assert "".join(said).strip() == pymux.session_name, said
@@ -230,32 +234,36 @@ async def test_address_with_no_path_finds_socket_itself():
 
     pymux = Pymux()
     pymux.listen_on_socket(socket_path)
-    pymux.create_window(PANE_COMMAND)
-    await asyncio.sleep(0.5)
 
-    server, port, client_key = await create_ssh_server(where, socket_path)
+    # The accepting is a task of `running()`, the same as in the test
+    # above. Lillecarl/pymux#87.
+    async with pymux.running():
+        pymux.create_window(PANE_COMMAND)
+        await asyncio.sleep(0.5)
 
-    client = SshClient(
-        "ssh://127.0.0.1:%d" % (port,),
-        known_hosts=None,
-        client_keys=[client_key],
-        username=getpass.getuser(),
-    )
-    assert client.target.path is None, "the address named no socket"
+        server, port, client_key = await create_ssh_server(where, socket_path)
 
-    said = []
-    try:
-        exit_code = await _what_it_says(
-            client, "list-sessions -F '#{session_name}'", said
+        client = SshClient(
+            "ssh://127.0.0.1:%d" % (port,),
+            known_hosts=None,
+            client_keys=[client_key],
+            username=getpass.getuser(),
         )
-    finally:
-        server.close()
-        pymux.stop()
-        for window in list(pymux.arrangement.windows):
-            for pane in list(window.panes):
-                if not pane.process.is_terminated:
-                    pane.process.kill()
-        Path(socket_path).unlink(missing_ok=True)
+        assert client.target.path is None, "the address named no socket"
+
+        said = []
+        try:
+            exit_code = await _what_it_says(
+                client, "list-sessions -F '#{session_name}'", said
+            )
+        finally:
+            server.close()
+            pymux.stop()
+            for window in list(pymux.arrangement.windows):
+                for pane in list(window.panes):
+                    if not pane.process.is_terminated:
+                        pane.process.kill()
+            Path(socket_path).unlink(missing_ok=True)
 
     assert client.path == socket_path, client.path
     assert exit_code == 0

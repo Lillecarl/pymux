@@ -1,9 +1,10 @@
-import asyncio
 import getpass
 import os
 import socket
 import tempfile
 from typing import Callable
+
+import anyio
 
 from ..log import logger
 from .base import BrokenPipeError, PipeConnection
@@ -11,46 +12,60 @@ from .base import BrokenPipeError, PipeConnection
 __all__ = [
     "bind_and_listen_on_posix_socket",
     "PosixSocketConnection",
+    "PosixSocketListener",
 ]
 
 
-def bind_and_listen_on_posix_socket(
-    socket_name: str,
-    accept_callback: Callable,
-    loop: asyncio.AbstractEventLoop | None = None,
-):
+def bind_and_listen_on_posix_socket(socket_name: str, accept_callback: Callable):
     """
-    :param accept_callback: Called with `PosixSocketConnection` when a new
-        connection is established.
-    :param loop: The asyncio event loop to listen on.
-    """
-    if loop is None:
-        loop = asyncio.get_running_loop()
+    Bind a unix socket, and answer with the listener that serves it.
 
+    **The bind and the accepting are two steps, and they happen in two
+    places.** A server binds before `daemonize` forks, because the name
+    is what the client that started it connects to; it accepts in the
+    task group of `Pymux.running`, which exists only once the loop
+    turns. Lillecarl/pymux#87.
+
+    :param accept_callback: Called with `PosixSocketConnection` when a
+        new connection is established.
+    """
     # Set umask for the socket file.
     old_umask = os.umask(int("0027", 8))
 
-    # Bind socket.
-    socket_name, socket = _bind_posix_socket(socket_name)
+    socket_name, sock = _bind_posix_socket(socket_name)
 
     _ = os.umask(old_umask)
 
-    # Listen on socket.
-    socket.listen(0)
-
-    def _accept_cb():
-        connection, client_address = socket.accept()
-        # Note: We don't have to put this socket in non blocking mode.
-        #       This can cause crashes when sending big packets on OS X.
-
-        posix_connection = PosixSocketConnection(connection, loop=loop)
-
-        accept_callback(posix_connection)
-
-    loop.add_reader(socket.fileno(), _accept_cb)
+    sock.listen(0)
 
     logger.info("Listening on %r." % socket_name)
-    return socket_name
+    return PosixSocketListener(socket_name, sock, accept_callback)
+
+
+class PosixSocketListener:
+    "A bound socket, and the coroutine that takes the clients of it."
+
+    def __init__(self, socket_name: str, sock, accept_callback: Callable) -> None:
+        self.socket_name = socket_name
+        self.socket = sock
+        self._accept_callback = accept_callback
+
+    async def serve(self) -> None:
+        "Take every client that connects, until this task is cancelled."
+        while True:
+            await anyio.wait_readable(self.socket)
+
+            connection, _client_address = self.socket.accept()
+            # Note: We don't have to put this socket in non blocking mode.
+            #       This can cause crashes when sending big packets on OS X.
+
+            self._accept_callback(PosixSocketConnection(connection))
+
+    def close(self) -> None:
+        try:
+            self.socket.close()
+        except OSError:
+            pass
 
 
 def _bind_posix_socket(socket_name: str | None = None):
@@ -106,23 +121,12 @@ class PosixSocketConnection(PipeConnection):
     A single active posix pipe connection on the server side.
     """
 
-    def __init__(self, socket, loop: asyncio.AbstractEventLoop | None = None):
+    def __init__(self, socket) -> None:
         self.socket = socket
-        self._fd = socket.fileno()
         self._recv_buffer = b""
         self._closed = False
-        self._loop = loop
 
-    def _loop_ref(self) -> asyncio.AbstractEventLoop | None:
-        "Return the event loop for this connection, if it's still known."
-        if self._loop is not None:
-            return self._loop
-        try:
-            return asyncio.get_running_loop()
-        except RuntimeError:
-            return None
-
-    async def read(self):
+    async def read(self) -> bytes:
         r"""
         Coroutine that reads the next packet.
         (Packets are \0 separated.)
@@ -132,9 +136,7 @@ class PosixSocketConnection(PipeConnection):
 
         # Read until we have a \0 in our buffer.
         while b"\0" not in self._recv_buffer:
-            self._recv_buffer += await _read_chunk_from_socket(
-                self.socket, self._loop_ref()
-            )
+            self._recv_buffer += await self._read_chunk()
 
         # Split on the first separator.
         pos = self._recv_buffer.index(b"\0")
@@ -144,61 +146,20 @@ class PosixSocketConnection(PipeConnection):
 
         return packet
 
-    def write(self, message):
-        """
-        Coroutine that writes the next packet.
-        """
+    async def _read_chunk(self) -> bytes:
+        "Wait for this socket to say something, and take what it said."
+        if self.socket.fileno() == -1:  # Socket closed.
+            raise BrokenPipeError
+
         try:
-            self.socket.send(message.encode("utf-8") + b"\0")
-        except socket.error:
-            if not self._closed:
-                raise BrokenPipeError
+            await anyio.wait_readable(self.socket)
+        except (anyio.ClosedResourceError, OSError):
+            # `close()` says the socket is going, so that this wakes
+            # rather than waiting on a descriptor that is taken away.
+            raise BrokenPipeError
 
-        loop = self._loop_ref()
-        if loop is None:
-            return None  # No event loop. (Connection is shutting down.)
-
-        f = loop.create_future()
-        f.set_result(None)
-        return f
-
-    def close(self):
-        """
-        Close connection.
-        """
-        if self._closed:
-            return
-        self._closed = True
         try:
-            self.socket.close()
-        finally:
-            # Make sure to remove the reader from the event loop.
-            loop = self._loop_ref()
-            if loop is not None:
-                try:
-                    loop.remove_reader(self._fd)
-                except (ValueError, KeyError, RuntimeError):
-                    pass
-
-
-def _read_chunk_from_socket(socket, loop):
-    """
-    (coroutine)
-    Turn socket reading into coroutine.
-    """
-    fd = socket.fileno()
-    f = loop.create_future()
-
-    if fd == -1:  # Socket closed.
-        f.set_exception(BrokenPipeError())
-        return f
-
-    def read_callback():
-        loop.remove_reader(fd)
-
-        # Read next chunk.
-        try:
-            data = socket.recv(1024)
+            data = self.socket.recv(1024)
         except OSError as e:
             # On OSX, when we try to create a new window by typing "pymux
             # new-window" in a centain pane, very often we get the following
@@ -207,14 +168,39 @@ def _read_chunk_from_socket(socket, loop):
             logger.warning(
                 "Got OSError while reading data from client: %s. Trying again.", e
             )
-            f.set_result(b"")
+            return b""
+
+        if not data:
+            raise BrokenPipeError
+
+        return data
+
+    async def write(self, message: str) -> None:
+        """
+        Write the next packet. (The socket takes it at once.)
+        """
+        try:
+            self.socket.send(message.encode("utf-8") + b"\0")
+        except socket.error:
+            if not self._closed:
+                raise BrokenPipeError
+
+    def close(self) -> None:
+        """
+        Close connection.
+        """
+        if self._closed:
             return
-
-        if data:
-            f.set_result(data)
-        else:
-            f.set_exception(BrokenPipeError())
-
-    loop.add_reader(fd, read_callback)
-
-    return f
+        self._closed = True
+        try:
+            # Wake whatever is parked on this descriptor **before** the
+            # descriptor goes. A reader that learns about the close
+            # afterwards waits on a number the kernel has already given
+            # to somebody else.
+            anyio.notify_closing(self.socket)
+        except Exception:
+            pass  # No loop here: nothing is parked on it either.
+        try:
+            self.socket.close()
+        except OSError:
+            pass

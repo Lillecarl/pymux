@@ -61,12 +61,12 @@ async def create_standalone_session():
 
 async def test_detach_ends_create_standalone_session():
     async with create_standalone_session() as (pymux, state):
-        assert not pymux.done_f.done()
+        assert not pymux.done.is_set()
 
         with set_app(state.app):
             pymux.handle_command("detach-client")
 
-        assert pymux.done_f.done()
+        assert pymux.done.is_set()
 
 
 async def test_detach_asks_every_pane_to_stop():
@@ -142,6 +142,6 @@ async def test_client_over_connection_still_detaches():
                 pymux.handle_command("detach-client")
 
             assert detached == [True]
-            assert not pymux.done_f.done()
+            assert not pymux.done.is_set()
         finally:
             pymux.stop()

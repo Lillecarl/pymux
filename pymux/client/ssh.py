@@ -31,12 +31,13 @@ running one; spawning one is the other half of Lillecarl/pymux#90.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import signal
 import sys
 from typing import NamedTuple
 from urllib.parse import urlparse
+
+import anyio
 
 from prompt_toolkit.input.vt100 import raw_mode
 
@@ -260,7 +261,7 @@ class SshClient(TerminalClient):
     # What a person runs.
 
     def run_command(self, command, pane_id=None) -> int:
-        return asyncio.run(self._run_command(command, pane_id))
+        return anyio.run(self._run_command, command, pane_id)
 
     async def _run_command(self, command, pane_id=None) -> int:
         """
@@ -289,7 +290,7 @@ class SshClient(TerminalClient):
             connection.close()
 
     def attach(self, detach_other_clients: bool = False, color_depth=None) -> None:
-        asyncio.run(self._attach(detach_other_clients, color_depth))
+        anyio.run(self._attach, detach_other_clients, color_depth)
 
     async def _attach(
         self, detach_other_clients: bool = False, color_depth=None
@@ -302,39 +303,45 @@ class SshClient(TerminalClient):
         is read through the loop rather than through `select`, because
         the packets are awaited and one thread cannot do both.
         """
-        loop = asyncio.get_running_loop()
         stdin_fd = sys.stdin.fileno()
 
         connection, reader = await self._connect()
         self._start_gui(detach_other_clients, color_depth)
 
         with raw_mode(stdin_fd):
-            loop.add_reader(stdin_fd, self._process_stdin)
-            try:
-                loop.add_signal_handler(signal.SIGWINCH, self._send_size)
-            except (NotImplementedError, ValueError):
-                pass  # No signals here. The size stays as it was.
+            async with anyio.create_task_group() as tasks:
+                tasks.start_soon(self._read_keyboard, stdin_fd)
+                tasks.start_soon(self._watch_signal)
+                tasks.start_soon(self._watch_size)
 
-            # Held, so that nothing collects it while it waits.
-            watcher = loop.create_task(self._watch_size())
-
-            try:
-                async for packet in self._packets(reader):
-                    self._process(json.dumps(packet).encode("utf-8"))
-                # The server closed the connection. Put the terminal of
-                # the user back as it was.
-                self._reset_terminal()
-            finally:
-                watcher.cancel()
-                loop.remove_reader(stdin_fd)
                 try:
-                    loop.remove_signal_handler(signal.SIGWINCH)
-                except (NotImplementedError, ValueError):
-                    pass
-                # Restore the keyboard mode of the outer terminal, also
-                # when the loop ends through an exception.
-                self._set_kitty_flags(0)
-                connection.close()
+                    async for packet in self._packets(reader):
+                        self._process(json.dumps(packet).encode("utf-8"))
+                    # The server closed the connection. Put the terminal
+                    # of the user back as it was.
+                    self._reset_terminal()
+                finally:
+                    # The three readers above end with this scope.
+                    tasks.cancel_scope.cancel()
+                    # Restore the keyboard mode of the outer terminal,
+                    # also when the loop ends through an exception.
+                    self._set_kitty_flags(0)
+                    connection.close()
+
+    async def _read_keyboard(self, stdin_fd: int) -> None:
+        "Give the server what the person types, until this is cancelled."
+        while True:
+            await anyio.wait_readable(stdin_fd)
+            self._process_stdin()
+
+    async def _watch_signal(self) -> None:
+        "Report the size when the terminal says it changed."
+        try:
+            with anyio.open_signal_receiver(signal.SIGWINCH) as signals:
+                async for _signum in signals:
+                    self._send_size()
+        except (NotImplementedError, ValueError, RuntimeError):
+            pass  # No signals here. The size stays as it was.
 
     # ------------------------------------------------------------------
 
@@ -374,7 +381,7 @@ class SshClient(TerminalClient):
         last = self.size()
 
         while True:
-            await asyncio.sleep(SIZE_INTERVAL)
+            await anyio.sleep(SIZE_INTERVAL)
 
             size = self.size()
             if size != last:

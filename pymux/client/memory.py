@@ -34,10 +34,11 @@ where `attach_winch_signal_handler` is not sufficient" -- and a size
 that is read on a timer costs nothing and covers what a signal misses.
 """
 
-import asyncio
 import json
 import signal
 import sys
+
+import anyio
 
 from prompt_toolkit.input.vt100 import raw_mode
 
@@ -86,43 +87,53 @@ class MemoryClient(TerminalClient):
         exited, somebody ran `kill-server`, or this client detached.
         The process ends with it, because the server is in it.
         """
-        loop = asyncio.get_running_loop()
         stdin_fd = sys.stdin.fileno()
 
         self._start_gui(detach_other_clients, color_depth)
 
         with raw_mode(stdin_fd):
-            loop.add_reader(stdin_fd, self._process_stdin)
-            try:
-                loop.add_signal_handler(signal.SIGWINCH, self._send_size)
-            except (NotImplementedError, ValueError):
-                pass  # No signals here. The size stays as it was.
+            async with anyio.create_task_group() as tasks:
+                tasks.start_soon(self._read_keyboard, stdin_fd)
+                tasks.start_soon(self._watch_signal)
+                tasks.start_soon(self._watch_size)
 
-            # Held, so that nothing collects it while it waits. A task
-            # nobody holds dies in silence and takes its exception with
-            # it.
-            watcher = loop.create_task(self._watch_size())
-
-            try:
-                while True:
-                    try:
-                        packet = await self.connection.read()
-                    except BrokenPipeError:
-                        # The server closed the connection. Put the
-                        # terminal of the user back as it was.
-                        self._reset_terminal()
-                        return
-                    self._process(packet)
-            finally:
-                watcher.cancel()
-                loop.remove_reader(stdin_fd)
                 try:
-                    loop.remove_signal_handler(signal.SIGWINCH)
-                except (NotImplementedError, ValueError):
-                    pass
-                # Restore the keyboard mode of the outer terminal, also
-                # when the loop ends through an exception.
-                self._set_kitty_flags(0)
+                    while True:
+                        try:
+                            packet = await self.connection.read()
+                        except BrokenPipeError:
+                            # The server closed the connection. Put the
+                            # terminal of the user back as it was.
+                            self._reset_terminal()
+                            return
+                        self._process(packet)
+                finally:
+                    # The three readers above end with this scope.
+                    tasks.cancel_scope.cancel()
+                    # Restore the keyboard mode of the outer terminal,
+                    # also when the loop ends through an exception.
+                    self._set_kitty_flags(0)
+
+    async def _read_keyboard(self, stdin_fd: int) -> None:
+        "Give the server what the person types, until this is cancelled."
+        while True:
+            await anyio.wait_readable(stdin_fd)
+            self._process_stdin()
+
+    async def _watch_signal(self) -> None:
+        """
+        Report the size when the terminal says it changed.
+
+        A signal that this platform does not have is one this client
+        does without: `_watch_size` below reads the size on a timer,
+        and that is what actually reports a resize here.
+        """
+        try:
+            with anyio.open_signal_receiver(signal.SIGWINCH) as signals:
+                async for _signum in signals:
+                    self._send_size()
+        except (NotImplementedError, ValueError, RuntimeError):
+            pass  # No signals here. The size stays as it was.
 
     async def _watch_size(self) -> None:
         """
@@ -139,7 +150,7 @@ class MemoryClient(TerminalClient):
         last = self.size()
 
         while True:
-            await asyncio.sleep(SIZE_INTERVAL)
+            await anyio.sleep(SIZE_INTERVAL)
 
             size = self.size()
             if size != last:

@@ -42,7 +42,7 @@ def _command(pymux, state, text):
 
 
 async def test_a_server_starts_with_one_session():
-    with in_this_process(_server()) as session:
+    async with in_this_process(_server()) as session:
         pymux = session.pymux
         assert len(pymux.sessions) == 1
         assert pymux.sessions[0].name == "0"
@@ -50,7 +50,7 @@ async def test_a_server_starts_with_one_session():
 
 
 async def test_new_session_adds_one_and_moves_the_client():
-    with in_this_process(_server()) as session:
+    async with in_this_process(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -63,7 +63,7 @@ async def test_new_session_adds_one_and_moves_the_client():
 
 
 async def test_new_session_with_d_leaves_the_client_where_it_is():
-    with in_this_process(_server()) as session:
+    async with in_this_process(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -74,7 +74,7 @@ async def test_new_session_with_d_leaves_the_client_where_it_is():
 
 
 async def test_a_second_session_cannot_take_a_name_that_is_taken():
-    with in_this_process(_server()) as session:
+    async with in_this_process(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -86,7 +86,7 @@ async def test_a_second_session_cannot_take_a_name_that_is_taken():
 
 
 async def test_each_session_holds_its_own_windows():
-    with in_this_process(_server()) as session:
+    async with in_this_process(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -99,7 +99,7 @@ async def test_each_session_holds_its_own_windows():
 
 
 async def test_a_client_switches_between_sessions():
-    with in_this_process(_server()) as session:
+    async with in_this_process(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -124,7 +124,7 @@ async def test_two_clients_watch_two_sessions_at_once():
     whichever client asked last. That is the render path the whole
     change turns on.
     """
-    with in_this_process(_server()) as session:
+    async with in_this_process(_server()) as session:
         pymux = session.pymux
         here, _ = await session.attach("here", SIZE)
         there, _ = await session.attach("there", SIZE)
@@ -142,7 +142,7 @@ async def test_two_clients_watch_two_sessions_at_once():
 
 
 async def test_list_sessions_names_every_session():
-    with in_this_process(_server()) as session:
+    async with in_this_process(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -155,7 +155,7 @@ async def test_list_sessions_names_every_session():
 
 
 async def test_has_session_answers_for_every_session():
-    with in_this_process(_server()) as session:
+    async with in_this_process(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -170,7 +170,7 @@ async def test_has_session_answers_for_every_session():
 
 
 async def test_rename_session_leaves_the_other_alone():
-    with in_this_process(_server()) as session:
+    async with in_this_process(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -181,7 +181,7 @@ async def test_rename_session_leaves_the_other_alone():
 
 
 async def test_kill_session_takes_its_clients_somewhere_else():
-    with in_this_process(_server()) as session:
+    async with in_this_process(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -203,7 +203,7 @@ async def test_killing_a_session_moves_both_its_clients():
     so a client focused under that one would be looking into another
     client's layout.
     """
-    with in_this_process(_server()) as session:
+    async with in_this_process(_server()) as session:
         pymux = session.pymux
         here, _ = await session.attach("here", SIZE)
         there, _ = await session.attach("there", SIZE)
@@ -229,7 +229,7 @@ async def test_a_command_from_a_pane_runs_in_that_pane_s_session():
     session a person used last, and `pymux new-window` typed in one
     session opens a window in another.
     """
-    with over_connection(_server()) as session:
+    async with over_connection(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -249,7 +249,7 @@ async def test_a_command_from_a_pane_runs_in_that_pane_s_session():
 
 
 async def test_the_session_environment_belongs_to_the_session():
-    with in_this_process(_server()) as session:
+    async with in_this_process(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -262,7 +262,7 @@ async def test_the_session_environment_belongs_to_the_session():
 
 async def test_a_target_reaches_a_window_of_another_session():
     "`-t session:window`, and the client goes where the window is."
-    with in_this_process(_server()) as session:
+    async with in_this_process(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -277,7 +277,7 @@ async def test_a_target_that_names_no_session_finds_nothing():
     And does not quietly answer with a window of the session the
     client is on, which is what stripping the session part did.
     """
-    with in_this_process(_server()) as session:
+    async with in_this_process(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -288,7 +288,7 @@ async def test_a_target_that_names_no_session_finds_nothing():
 
 async def test_a_pane_id_reaches_across_the_sessions():
     "A pane id names one pane of the server, so it takes no session."
-    with in_this_process(_server()) as session:
+    async with in_this_process(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -303,7 +303,7 @@ async def test_a_pane_id_reaches_across_the_sessions():
 
 
 async def test_the_chooser_lists_every_session():
-    with in_this_process(_server()) as session:
+    async with in_this_process(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -317,7 +317,7 @@ async def test_the_chooser_lists_every_session():
 
 
 async def test_choosing_a_window_of_another_session_moves_the_client():
-    with in_this_process(_server()) as session:
+    async with in_this_process(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -341,7 +341,7 @@ async def test_a_session_that_empties_goes():
     Over a connection, because this is the callback that runs when a
     process ends: an event loop has to turn for it to happen at all.
     """
-    with over_connection(_server()) as session:
+    async with over_connection(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -354,7 +354,7 @@ async def test_a_session_that_empties_goes():
         )
 
         # And the server is still there, because one session is.
-        assert not pymux.done_f.done()
+        assert not pymux.done.is_set()
 
 
 async def test_an_overlay_stays_in_its_own_session():
@@ -363,7 +363,7 @@ async def test_an_overlay_stays_in_its_own_session():
     belonged to the server, so a popup opened in one session covered
     the screen of every client of the process. Lillecarl/pymux#324.
     """
-    with in_this_process(_server()) as session:
+    async with in_this_process(_server()) as session:
         pymux = session.pymux
         here, _ = await session.attach("here", SIZE)
         there, _ = await session.attach("there", SIZE)
@@ -391,7 +391,7 @@ async def test_lock_server_covers_every_session():
     lock-session and lock-client cover the asking client's session
     alone. Lillecarl/pymux#324.
     """
-    with in_this_process(_server()) as session:
+    async with in_this_process(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
         pymux.lock_command = WAITING

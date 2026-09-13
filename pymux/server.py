@@ -1,7 +1,5 @@
-import asyncio
 import json
 import re
-from asyncio import create_task
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -9,10 +7,11 @@ from typing import (
     ContextManager,
     Dict,
     List,
-    Set,
     TextIO,
     cast,
 )
+
+import anyio
 
 from prompt_toolkit.application.current import create_app_session, set_app
 from prompt_toolkit.data_structures import Size
@@ -59,10 +58,11 @@ class ServerConnection:
         self.size = Size(rows=20, columns=80)
         self._closed = False
 
-        #: The background work of this connection. asyncio holds only a
-        #: weak reference to a task, so one that nobody else holds can
-        #: be collected while it still runs.
-        self._tasks: Set["asyncio.Task"] = set()
+        #: The scope the background work of this connection runs in.
+        #: `serve()` opens it, so every task of a client ends when that
+        #: client goes, and none of them can outlive the server: the
+        #: group is a child of `Pymux.running`'s. Lillecarl/pymux#87.
+        self._tasks: "anyio.abc.TaskGroup" | None = None
 
         self._recv_buffer = b""
         self.client_state: "ClientState" | None = None
@@ -123,43 +123,73 @@ class ServerConnection:
         # client that never saw one is not told to reset it.
         self._pointer_shape_sent = ""
 
-        self._spawn(self._start_reading())
+        self.pymux.serve_connection(self)
 
     def _spawn(self, coro) -> None:
         """
-        Run a coroutine in the background, and hold on to it.
+        Run a coroutine in the background of this connection.
 
-        A task that nobody holds may be collected while it is still
-        pending. The loop then reports that, and prompt_toolkit answers
-        an exception in the loop by leaving the alternate screen and
-        asking the user to press a key. There is no user at that end,
-        so the answer fails and reports again: a lost task used to turn
-        into an endless storm of repaints on the terminal of every
-        client.
+        It belongs to the connection's scope, so it ends when the
+        client goes and it cannot be collected while it runs. A task
+        that nobody holds used to be collectable mid-flight: the loop
+        then reported that, and prompt_toolkit answers an exception in
+        the loop by leaving the alternate screen and asking the user to
+        press a key. There is no user at that end, so the answer fails
+        and reports again -- a lost task turned into an endless storm
+        of repaints on the terminal of every client.
         """
-        task = create_task(coro)
-        self._tasks.add(task)
-        task.add_done_callback(self._finished)
-
-    def _finished(self, task: "asyncio.Task") -> None:
-        """
-        Let go of a task, and say what it raised.
-
-        Nothing awaits a spawned task, so its exception is retrieved by
-        nobody. asyncio says so when the task is collected, which is
-        some time later and names no cause -- and the work a connection
-        spawns is the work that reads a client and answers it, so the
-        symptom is a client that stops responding for a reason nothing
-        prints. Lillecarl/pymux#87.
-        """
-        self._tasks.discard(task)
-
-        if task.cancelled():
+        if self._tasks is None:
+            logger.warning("A task was spawned on a connection that does not serve.")
+            coro.close()
             return
+        self._tasks.start_soon(self._run_task, coro)
 
-        error = task.exception()
-        if error is not None:
+    async def _run_task(self, coro) -> None:
+        """
+        Run one spawned coroutine, and say what it raised.
+
+        **The failure stays inside the connection.** In a task group an
+        exception cancels the siblings and goes up, and up from here is
+        every other client of this server. The work a connection spawns
+        is the work that answers one client, so the honest blast radius
+        is that client -- and even that is more than the old shape did,
+        which only logged. Lillecarl/pymux#87.
+        """
+        try:
+            await coro
+        except anyio.get_cancelled_exc_class():
+            raise
+        except Exception as error:
             logger.error("A task of this connection failed.", exc_info=error)
+
+    async def serve(self) -> None:
+        """
+        Read this client until the connection ends.
+
+        This is the scope of the connection: the task group it spawns
+        into, and the `AppSession` its application lives in.
+
+        **The session is why this is a coroutine and not a callback.**
+        `set_app` saves and restores one attribute of one session
+        object, so two clients sharing a session save and restore each
+        other's application: the last one to exit puts back a value
+        that is two attachments stale, and the application it names is
+        then held by a module-level `ContextVar` for as long as the
+        server runs, with its layout, its panes and their scrollbacks
+        behind it. Lillecarl/pymux#230.
+
+        A session of its own is what prompt_toolkit does for the same
+        job -- `contrib/ssh/server.py` wraps each client the same way.
+        """
+        with create_app_session():
+            async with anyio.create_task_group() as tasks:
+                self._tasks = tasks
+                try:
+                    await self._read_until_it_ends()
+                finally:
+                    # What the client still had running goes with it.
+                    self._tasks = None
+                    tasks.cancel_scope.cancel()
 
     def _write_output_raw(self, data: str) -> None:
         "Write to the outer terminal, without escaping. (For graphics.)"
@@ -359,28 +389,6 @@ class ServerConnection:
         except Exception:
             logger.exception("Giving a notification answer to a pane failed.")
 
-    async def _start_reading(self) -> None:
-        """
-        Read this client's packets until the connection ends.
-
-        **This is where the client's `AppSession` lives.** `set_app`
-        saves and restores one attribute of one session object, so two
-        clients sharing a session save and restore each other's
-        application: the last one to exit puts back a value that is two
-        attachments stale, and the application it names is then held by
-        a module-level `ContextVar` for as long as the server runs,
-        with its layout, its panes and their scrollbacks behind it.
-        Lillecarl/pymux#230.
-
-        A session of its own is what prompt_toolkit does for the same
-        job -- `contrib/ssh/server.py` wraps each client the same way --
-        and this coroutine is the right place for it: it lives exactly
-        as long as the connection, and every task the connection spawns
-        is started from inside it, so each one inherits the session.
-        """
-        with create_app_session():
-            await self._read_until_it_ends()
-
     async def _read_until_it_ends(self) -> None:
         while True:
             try:
@@ -390,7 +398,7 @@ class ServerConnection:
                 self.detach_and_close()
                 break
 
-            except asyncio.CancelledError:
+            except anyio.get_cancelled_exc_class():
                 raise
 
             except Exception:
@@ -615,7 +623,7 @@ class ServerConnection:
                         # it. Lillecarl/pymux#231.
                         handle_sigwinch=False,
                     )
-                except asyncio.CancelledError:
+                except anyio.get_cancelled_exc_class():
                     raise
                 except Exception:
                     logger.exception("Application crashed.")
@@ -646,12 +654,10 @@ class ServerConnection:
         self.client_state = None
         self._closed = True
 
-        # Stop the background work of this connection, so that no task
-        # of it is left pending when it is collected.
-        current = asyncio.current_task()
-        for task in list(self._tasks):
-            if task is not current:
-                task.cancel()
+        # The background work of this connection ends with the read
+        # loop that `serve` runs: leaving that scope cancels the group.
+        # This is called from inside those tasks, so cancelling here
+        # would cancel the caller before it finished closing.
 
         # Close input pipe and remove connection from eventloop.
         self._pipeinput.close()

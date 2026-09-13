@@ -34,6 +34,11 @@ dependencies = [
     # pygments carries, and anything a package installs beside them.
     # Lillecarl/pymux#194.
     "pygments>=2.15.0",
+    # The async of the server: task groups, a memory object stream, and
+    # `wait_readable` in place of a callback nobody owns. 4.7 is what
+    # `notify_closing` needs, and the posix pipe needs that to wake a
+    # reader parked on a socket that is closing. Lillecarl/pymux#87.
+    "anyio>=4.7.0",
 ]
 
 [project.optional-dependencies]
@@ -46,14 +51,9 @@ catppuccin = ["catppuccin>=2.0.0"]
 # builds the test environment from this list.
 test = [
     "pytest",
-    # anyio carries the pytest plugin that runs a coroutine test. Every
-    # other repository here already has it; pymux was the one without,
-    # so `tests/session.py` hand-rolled `@in_loop` to run one at all.
-    # This is the half of Lillecarl/pymux#87 that costs nothing: a new
-    # async test needs no decorator now. Moving pymux's own async code
-    # off asyncio, and the 31 files that carry `@in_loop`, is the rest
-    # of #87 and comes after #86.
-    "anyio",
+    # anyio is a dependency of pymux itself now, and it carries the
+    # pytest plugin that runs a coroutine test. `anyio_mode` below is
+    # what turns that plugin on.
     "hypothesis",
     "wcwidth",
     # The shared rig: the seats, the drivers, the budgets.

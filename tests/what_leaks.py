@@ -467,7 +467,7 @@ async def run(rounds: int, recordings) -> list[str]:
 
     for _round in range(rounds):
         for name, route in routes(ROUTE, "PYMUX_LEAKS_ROUTE"):
-            with route() as session:
+            async with route() as session:
                 if not await create_round(session, recordings):
                     alive.append(
                         "a pane never reported itself terminated, so this "

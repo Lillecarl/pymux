@@ -164,15 +164,20 @@ async def once(question, seconds: float, complaint: str):
     raise SystemExit(complaint)
 
 
-@contextmanager
-def in_this_process(pymux=None):
+@asynccontextmanager
+async def in_this_process(pymux=None):
     """
     A session whose clients are attached with `Pymux.add_client`.
 
-    No socket, no `ServerConnection`, no tasks: this is the route that
-    a test takes and the one the server takes for nobody. It covers the
+    No socket and no `ServerConnection`: this is the route that a test
+    takes and the one the server takes for nobody. It covers the
     panes, the screens, the windows and the layout, which is where the
     objects and the bytes are.
+
+    It still runs in `Pymux.running`, because that is the scope a
+    server serves in: the task group and the clock. A route that made
+    its own would be a route that is not the server.
+    Lillecarl/pymux#87.
     """
     pymux = pymux if pymux is not None else Pymux()
     # The clock a screen shows is pinned, so no test races the minute
@@ -232,10 +237,13 @@ def in_this_process(pymux=None):
                 pymux.remove_client(state.connection)
             return state
 
-        try:
-            yield Session(pymux, attach, detach, typed, create_command, watch, watched)
-        finally:
-            pymux.stop()
+        async with pymux.running():
+            try:
+                yield Session(
+                    pymux, attach, detach, typed, create_command, watch, watched
+                )
+            finally:
+                pymux.stop()
 
 
 @asynccontextmanager
@@ -250,15 +258,15 @@ async def create_session(pymux=None, window=NOTHING):
     wants to type, run a command or hold two clients uses
     `in_this_process` instead.
     """
-    with in_this_process(pymux) as session:
+    async with in_this_process(pymux) as session:
         if window is not None:
             session.pymux.create_window(window)
         state, _size = await session.attach("the client", DEFAULT_SIZE)
         yield session.pymux, state
 
 
-@contextmanager
-def over_connection(pymux=None, read_packet=None):
+@asynccontextmanager
+async def over_connection(pymux=None, read_packet=None):
     """
     A session whose clients attach the way a real one does.
 
@@ -438,18 +446,19 @@ def over_connection(pymux=None, read_packet=None):
         )
         return got
 
-    try:
-        yield Session(pymux, attach, detach, typed, create_command, watch, watched)
-    finally:
-        for client_end, draining in ends.values():
-            client_end.close()
-            draining.cancel()
-        for client_end, draining in command_ends:
-            client_end.close()
-            draining.cancel()
-        ends.clear()
-        command_ends.clear()
-        pymux.stop()
+    async with pymux.running():
+        try:
+            yield Session(pymux, attach, detach, typed, create_command, watch, watched)
+        finally:
+            for client_end, draining in ends.values():
+                client_end.close()
+                draining.cancel()
+            for client_end, draining in command_ends:
+                client_end.close()
+                draining.cancel()
+            ends.clear()
+            command_ends.clear()
+            pymux.stop()
 
 
 #: The routes a client can arrive over, by the name a knob takes.

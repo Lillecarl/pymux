@@ -36,7 +36,7 @@ async def create_session(*indexes):
     gives its first client a window at startup, and a fixture that
     made one too would have one more than it asked for.
     """
-    with in_this_process() as session:
+    async with in_this_process() as session:
         pymux = session.pymux
         state, _ = await session.attach("the client", DEFAULT_SIZE)
         with set_app(state.app):

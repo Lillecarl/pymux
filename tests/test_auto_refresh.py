@@ -11,9 +11,9 @@ Lillecarl/pymux#154.
 A session with `full-screen on` draws no status line and no pane
 titlebar, so its text is empty and never differs. Lillecarl/pymux#151.
 
-The tests call the refresh. What arms it is one `call_later` that arms
-the next one, and it runs on the loop for the reason in
-Lillecarl/pymux#155.
+The tests call the refresh. What runs it is `Pymux._auto_refresh`, one
+task of the server's own task group, and it is on the loop rather than
+on a thread for the reason in Lillecarl/pymux#155.
 """
 
 import asyncio

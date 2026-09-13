@@ -1,5 +1,6 @@
 import asyncio
 from collections import deque
+from contextlib import asynccontextmanager
 import base64
 import contextvars
 import datetime
@@ -12,6 +13,8 @@ import time
 import traceback
 import weakref
 from typing import Callable, List, Tuple
+
+import anyio
 
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app, set_app
@@ -738,16 +741,20 @@ class Pymux:
         # clients: the flags and the switch above. (None: nothing was
         # told yet.)
         self._keyboard_state_sent = None
-        # Event loop for this server. (Python 3.14 doesn't have a global
-        # "current event loop" anymore. Keep our own reference.)
-        try:
-            self.loop = asyncio.get_running_loop()
-        except RuntimeError:
-            self.loop = asyncio.new_event_loop()
-            # ptterm still uses `asyncio.Future()` without an explicit loop,
-            # which requires a current event loop. Set ours.
-            asyncio.set_event_loop(self.loop)
-        self.done_f = self.loop.create_future()
+        #: The task group every route runs in. `running()` owns it, so
+        #: it is there for exactly as long as this server serves, and
+        #: `None` before and after. Lillecarl/pymux#87.
+        self.tasks: anyio.abc.TaskGroup | None = None
+
+        #: The loop under anyio, for the two readers that need asyncio
+        #: itself: `introspect` dumps the tasks of a running server, and
+        #: it asks a loop for them. `running()` sets it.
+        self.loop: asyncio.AbstractEventLoop | None = None
+
+        #: Set when this server is to stop. `run_server` waits for it.
+        #: An `anyio.Event` may be made before a loop runs, which is
+        #: what a server started by `daemonize` does.
+        self.done = anyio.Event()
 
         # Command output, for commands that were entered from the command
         # line. (E.g. `pymux list-panes -F ...`.) When a run-command packet is
@@ -797,6 +804,9 @@ class Pymux:
         # Socket information.
         self.socket = None
         self.socket_name = None
+        #: The bound socket that waits for clients, once
+        #: `listen_on_socket` made one. `running()` serves it.
+        self.listener = None
 
         # Key bindings manager.
         self.key_bindings_manager = PymuxKeyBindings(self)
@@ -1113,15 +1123,58 @@ class Pymux:
         What every route does before its loop turns.
 
         Three of them start a server -- the socket, `integrated` and
-        `standalone` -- and each one needs the clock ticking and the
-        signal taken.
+        `standalone` -- and each one takes the signal here. The work
+        that needs a loop is in `running()`.
         """
-        self._start_auto_refresh()
         introspect.answer_signal()
 
-    def _start_auto_refresh(self) -> None:
+    @asynccontextmanager
+    async def running(self):
         """
-        Refresh the clients every `status_interval` seconds, on the loop.
+        The scope this server serves in.
+
+        It holds the task group that every background task of the
+        server lives in, so a task cannot outlive the server that
+        started it, and it cannot be collected while it runs.
+        `_spawn` on a connection puts work here.
+
+        The three routes enter it, and so does the test harness. A
+        route that built its own would be a route the harness could
+        not be. Lillecarl/pymux#87.
+        """
+        async with anyio.create_task_group() as tasks:
+            self.tasks = tasks
+            self.loop = asyncio.get_running_loop()
+            tasks.start_soon(self._auto_refresh)
+            if self.listener is not None:
+                tasks.start_soon(self.listener.serve)
+            try:
+                yield
+            finally:
+                # Every task of this server ends with the scope,
+                # including the auto refresh above, which never ends
+                # on its own.
+                tasks.cancel_scope.cancel()
+                self.tasks = None
+
+    def serve_connection(self, connection) -> None:
+        """
+        Put a connection's own read loop in the server's task group.
+
+        A `ServerConnection` is built in a sync callback -- the accept
+        of a socket, or the harness -- and everything it then does is
+        async. This is the one line between the two.
+        """
+        if self.tasks is None:
+            raise RuntimeError(
+                "A connection was made outside `Pymux.running`, so nothing "
+                "would read it."
+            )
+        self.tasks.start_soon(connection.serve)
+
+    async def _auto_refresh(self) -> None:
+        """
+        Refresh the clients every `status_interval` seconds.
 
         On the loop, and not on a thread of its own. The refresh reads
         which window each client looks at, and `set_app` answers that
@@ -1129,17 +1182,18 @@ class Pymux:
         that writes it while a render reads it hands that render
         another client's application. Lillecarl/pymux#155.
 
-        The callback arms the next one, so a `set-option
-        status-interval` reaches the tick after this one. The loop does
-        not have to run yet: the three callers arm this before they
-        start it.
+        The interval is read each turn, so a `set-option
+        status-interval` reaches the tick after this one.
         """
-
-        def tick() -> None:
-            self.refresh_what_time_moves()
-            self.loop.call_later(self.status_interval, tick)
-
-        self.loop.call_later(self.status_interval, tick)
+        while True:
+            await anyio.sleep(self.status_interval)
+            try:
+                self.refresh_what_time_moves()
+            except Exception:
+                # The clock must not take the server with it. In a task
+                # group an exception cancels the siblings, and the
+                # siblings here are every client of the server.
+                logger.exception("The refresh on the clock failed.")
 
     @property
     def apps(self):
@@ -2219,8 +2273,7 @@ class Pymux:
                 # started running. (E.g. temporary CLIs that only handled a
                 # command.)
                 pass
-        if not self.done_f.done():
-            self.done_f.set_result(None)
+        self.done.set()
 
     def create_window(
         self,
@@ -2431,8 +2484,12 @@ class Pymux:
 
     def listen_on_socket(self, socket_name=None):
         """
-        Listen for clients on a Unix socket.
-        Returns the socket name.
+        Bind the socket that clients connect to, and say its name.
+
+        **The clients are taken later.** The bind has to happen before
+        `daemonize` forks, because the name is what the client that
+        started this server connects to, and the accepting needs the
+        loop that the child starts. `running()` runs the listener.
         """
 
         def connection_cb(pipe_connection):
@@ -2443,9 +2500,8 @@ class Pymux:
 
             self.connections.append(connection)
 
-        self.socket_name = bind_and_listen_on_socket(
-            socket_name, connection_cb, loop=self.loop
-        )
+        self.listener = bind_and_listen_on_socket(socket_name, connection_cb)
+        self.socket_name = self.listener.socket_name
 
         # Set session_name according to socket name.
         #        if '.' in self.socket_name:
@@ -2466,9 +2522,21 @@ class Pymux:
 
         self.server_starts()
 
+        async def serve() -> None:
+            try:
+                async with self.running():
+                    await self.done.wait()
+            finally:
+                # `stop()` is what set `done`, so this is usually a
+                # second call that finds nothing. It is here for the
+                # way out that nobody asked for: a pane that still runs
+                # holds a `waitpid` in the executor, and the loop waits
+                # for that thread when it closes.
+                self.stop()
+
         # Run eventloop.
         try:
-            self.loop.run_until_complete(self.done_f)
+            anyio.run(serve)
         except:
             # When something bad happens, always dump the traceback.
             # (Otherwise, when running as a daemon, and stdout/stderr are not
@@ -2485,6 +2553,8 @@ class Pymux:
 
     def _remove_socket(self) -> None:
         "Take away the socket file of this server, if it bound one."
+        if self.listener is not None:
+            self.listener.close()
         if not self.socket_name:
             return
         try:
@@ -2521,34 +2591,40 @@ class Pymux:
         self.server_starts()
 
         async def run() -> None:
-            server_end, client_end = connect_in_memory()
+            try:
+                async with self.running():
+                    server_end, client_end = connect_in_memory()
 
-            # A context of its own, the same as for a client that
-            # arrives over the socket. A `prompt_toolkit.Application`
-            # becomes active in it.
-            context = contextvars.copy_context()
-            connection = context.run(lambda: ServerConnection(self, server_end))
-            self.connections.append(connection)
+                    # A context of its own, the same as for a client
+                    # that arrives over the socket. A
+                    # `prompt_toolkit.Application` becomes active in it.
+                    context = contextvars.copy_context()
+                    connection = context.run(lambda: ServerConnection(self, server_end))
+                    self.connections.append(connection)
 
-            await MemoryClient(client_end).attach(
-                detach_other_clients=detach_other_clients,
-                color_depth=color_depth,
-            )
+                    await MemoryClient(client_end).attach(
+                        detach_other_clients=detach_other_clients,
+                        color_depth=color_depth,
+                    )
+            finally:
+                # The client has gone, and the server is in this
+                # process, so nothing is left for the session to live
+                # on. `ctrl+b d` means quit here, and that is the one
+                # honest reading.
+                #
+                # It is also what lets the process exit at all, and
+                # **it has to happen inside the loop**: a pane that is
+                # still running holds a `waitpid` in the executor of
+                # the loop, and `anyio.run` waits for the executor
+                # threads on its way out. Without this the client put
+                # the terminal back and the person was left looking at
+                # their shell with no prompt. Lillecarl/pymux#109, and
+                # the place it is written is Lillecarl/pymux#87.
+                self.stop()
 
         try:
-            self.loop.run_until_complete(run())
+            anyio.run(run)
         finally:
-            # The client has gone, and the server is in this process,
-            # so nothing is left for the session to live on. `ctrl+b d`
-            # means quit here, and that is the one honest reading.
-            #
-            # It is also what lets the process exit at all. A pane that
-            # is still running holds a `waitpid` in the executor of the
-            # loop, and the interpreter waits for that thread. Without
-            # this the client put the terminal back and the person was
-            # left looking at their shell with no prompt.
-            # Lillecarl/pymux#109.
-            self.stop()
             self._remove_socket()
 
     def run_standalone(self, color_depth):
@@ -2559,17 +2635,30 @@ class Pymux:
         self._runs_standalone = True
         self.server_starts()
 
-        client_state = self.add_client(
-            input=create_input(),
-            output=create_output(stdout=sys.stdout),
-            color_depth=color_depth,
-            connection=None,
-        )
+        async def run() -> None:
+            try:
+                async with self.running():
+                    # Inside the loop: making a client starts the first
+                    # window, and a pane is a process that a loop runs.
+                    client_state = self.add_client(
+                        input=create_input(),
+                        output=create_output(stdout=sys.stdout),
+                        color_depth=color_depth,
+                        connection=None,
+                    )
 
-        # The same as for a client over a socket: an exception in the
-        # event loop is logged, not turned into a prompt that nothing
-        # can answer.
-        client_state.app.run(set_exception_handler=False)
+                    # The same as for a client over a socket: an
+                    # exception in the event loop is logged, not turned
+                    # into a prompt that nothing can answer.
+                    await client_state.app.run_async(set_exception_handler=False)
+            finally:
+                # Inside the loop, for the reason `run_integrated`
+                # gives: a pane that still runs holds a `waitpid` in
+                # the executor, and the loop waits for that thread when
+                # it closes.
+                self.stop()
+
+        anyio.run(run)
 
     def add_client(
         self,

@@ -298,7 +298,7 @@ async def measure(loop, samples: int) -> tuple:
 
         coming_back = TheFrameComingBack(loop)
 
-        with over_connection(pymux=pymux, read_packet=coming_back) as session:
+        async with over_connection(pymux=pymux, read_packet=coming_back) as session:
             state, _size = await session.attach("one", SIZE)
 
             with set_app(state.app):

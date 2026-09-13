@@ -94,6 +94,19 @@ let
   # because a build from a file evaluates impurely; a flake would see none of
   # them.
 
+  # How long one test may take before it is treated as stuck. pytest's
+  # faulthandler then writes every thread's stack and ends the run.
+  #
+  # **A hang used to cost a whole build and say nothing.** The build
+  # timeout kills the sandbox, so the log of the run is never written
+  # and nobody learns which test stopped. Measured while moving the
+  # server to anyio: 28 minutes of a wedged run told nothing, and the
+  # same hang under this told everything in 45 seconds.
+  # Lillecarl/pymux#87.
+  #
+  # The slowest test of this suite takes under ten seconds.
+  hangIsSeconds = 120;
+
   # What pytest runs, for instance
   # `PYMUX_TESTS=tests/test_sixel_encoder.py nix build --file . checks.pymux-unit`.
   selection =
@@ -391,7 +404,8 @@ in
         env = { inherit selection; };
       }
       ''
-        python -m pytest $selection -q -p no:cacheprovider
+        python -m pytest $selection -q -p no:cacheprovider \
+          -o faulthandler_timeout=${toString hangIsSeconds}
       '';
 
   # What it costs to lay a window out and draw the frame around its

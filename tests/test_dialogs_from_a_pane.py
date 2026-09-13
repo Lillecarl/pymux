@@ -25,7 +25,7 @@ SIZE = Size(rows=24, columns=80)
 
 
 async def test_display_message_from_a_pane_reaches_the_person():
-    with over_connection() as session:
+    async with over_connection() as session:
         state, _ = await session.attach("only", SIZE)
 
         await session.command("display-message hello")
@@ -38,7 +38,7 @@ async def test_display_message_from_a_pane_reaches_the_person():
 
 
 async def test_confirm_before_from_a_pane_asks_the_person():
-    with over_connection() as session:
+    async with over_connection() as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -67,7 +67,7 @@ async def test_a_listing_from_a_pane_still_answers_on_stdout():
     other. A listing goes to the person who typed the command, which is
     stdout, and not to a popup on somebody else's screen.
     """
-    with over_connection() as session:
+    async with over_connection() as session:
         await session.attach("only", SIZE)
 
         got = await session.command("list-panes")

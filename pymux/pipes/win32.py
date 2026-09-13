@@ -6,6 +6,8 @@ import asyncio
 from ctypes import byref, create_string_buffer, windll
 from ctypes.wintypes import BOOL, DWORD
 
+import anyio
+
 from ptyhost.backends.win32_pipes import OVERLAPPED
 
 from .base import BrokenPipeError
@@ -188,15 +190,21 @@ async def write_message_bytes_to_pipe(pipe_handle, data):
         windll.kernel32.CloseHandle(overlapped.hEvent)
 
 
-def wait_for_event(event):
+async def wait_for_event(event):
     """
-    Wraps a win32 event into a `Future` and wait for it.
+    Wait for a win32 event.
+
+    **This one asks asyncio itself**, because anyio has no reader for a
+    win32 handle: `add_win32_handle` belongs to the proactor loop, and
+    that loop is what anyio runs on here. The waiting is still a
+    coroutine somebody awaits, so a cancel reaches it.
     """
-    f = asyncio.Future()
+    ready = anyio.Event()
+    loop = asyncio.get_running_loop()
 
-    def ready():
-        asyncio.get_event_loop().remove_win32_handle(event)
-        f.set_result(None)
+    def handle_is_ready() -> None:
+        loop.remove_win32_handle(event)
+        ready.set()
 
-    asyncio.get_event_loop().add_win32_handle(event, ready)
-    return f
+    loop.add_win32_handle(event, handle_is_ready)
+    await ready.wait()

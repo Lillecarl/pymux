@@ -1,7 +1,7 @@
-import asyncio
-from asyncio import create_task, get_event_loop
 from ctypes import byref, windll
 from ctypes.wintypes import DWORD
+
+import anyio
 
 from ptyhost.backends.win32_pipes import OVERLAPPED
 
@@ -55,11 +55,29 @@ def bind_and_listen_on_win32_socket(socket_name, accept_callback):
         for i in range(INSTANCES)
     ]
 
-    for p in pipes:
-        # Start pipe.
-        create_task(p.handle_pipe())
+    return Win32PipeListener(socket_name, pipes)
 
-    return socket_name
+
+class Win32PipeListener:
+    """
+    The named pipes of a server, and the coroutine that serves them.
+
+    The posix listener beside this one says why the two are apart: the
+    pipes are made before the loop runs, and the instances that answer
+    them are tasks of the server's own task group.
+    """
+
+    def __init__(self, socket_name, pipes) -> None:
+        self.socket_name = socket_name
+        self.pipes = pipes
+
+    async def serve(self) -> None:
+        async with anyio.create_task_group() as tasks:
+            for pipe in self.pipes:
+                tasks.start_soon(pipe.handle_pipe)
+
+    def close(self) -> None:
+        pass
 
 
 class Win32PipeConnection(PipeConnection):
@@ -70,26 +88,23 @@ class Win32PipeConnection(PipeConnection):
     def __init__(self, pipe_instance):
         assert isinstance(pipe_instance, PipeInstance)
         self.pipe_instance = pipe_instance
-        try:
-            loop = get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        self.done_f = loop.create_future()
+        #: Set when this connection ends. The instance that serves the
+        #: pipe waits for it and then takes the pipe back.
+        self.done = anyio.Event()
 
     async def read(self):
         """
         (coroutine)
         Read a single message from the pipe. (Return as text.)
         """
-        if self.done_f.done():
+        if self.done.is_set():
             raise BrokenPipeError
 
         try:
             result = await read_message_from_pipe(self.pipe_instance.pipe_handle)
             return result
         except BrokenPipeError:
-            self.done_f.set_result(None)
+            self.done.set()
             raise
 
     async def write(self, message):
@@ -97,13 +112,13 @@ class Win32PipeConnection(PipeConnection):
         (coroutine)
         Write a single message into the pipe.
         """
-        if self.done_f.done():
+        if self.done.is_set():
             raise BrokenPipeError
 
         try:
             await write_message_to_pipe(self.pipe_instance.pipe_handle, message)
         except BrokenPipeError:
-            self.done_f.set_result(None)
+            self.done.set()
             raise
 
     def close(self):
@@ -155,7 +170,7 @@ class PipeInstance:
                 conn = Win32PipeConnection(self)
                 self.pipe_connection_cb(conn)
 
-                await conn.done_f
+                await conn.done.wait()
                 logger.info("Pipe instance done.")
 
             finally:

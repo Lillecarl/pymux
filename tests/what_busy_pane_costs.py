@@ -118,7 +118,7 @@ async def what_it_costs(name: str) -> tuple:
     """
     command = " ".join(PROGRAMS[name])
 
-    with over_connection() as session:
+    async with over_connection() as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
@@ -158,7 +158,7 @@ async def what_it_costs_watched(name: str, rate: int) -> tuple:
     """
     command = " ".join(PROGRAMS[name])
 
-    with over_connection() as session:
+    async with over_connection() as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 

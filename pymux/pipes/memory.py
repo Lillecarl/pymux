@@ -13,8 +13,9 @@ older build; a client that reads a queue reaches the server in its own
 process, and nothing else.
 """
 
-import asyncio
 from typing import Tuple
+
+import anyio
 
 from .base import BrokenPipeError, PipeConnection
 
@@ -23,22 +24,26 @@ __all__ = [
     "connect_in_memory",
 ]
 
-#: What an end puts on the queue of its peer when it closes. A read
-#: that takes this sees the end of the connection.
-_CLOSED = object()
-
 
 class MemoryConnection(PipeConnection):
     """
     One end of an in-memory connection.
 
-    An end reads its own queue and writes the queue of its peer. Both
-    queues are unbounded, so a write never waits and the packets arrive
+    An end reads its own stream and writes the stream of its peer. Both
+    streams are unbounded, so a write never waits and the packets arrive
     in the order they were written.
+
+    **A stream closes and a queue does not**, which is the whole reason
+    this is a memory object stream: the end that goes away closes the
+    stream of its peer, and the peer's next read says so rather than
+    waiting for a packet that a sentinel value has to stand in for.
+    Lillecarl/pymux#87.
     """
 
     def __init__(self) -> None:
-        self._incoming: "asyncio.Queue" = asyncio.Queue()
+        self._send, self._incoming = anyio.create_memory_object_stream(
+            max_buffer_size=float("inf")
+        )
         self._peer: "MemoryConnection" | None = None
         self._closed = False
 
@@ -53,13 +58,11 @@ class MemoryConnection(PipeConnection):
         if self._closed:
             raise BrokenPipeError
 
-        packet = await self._incoming.get()
-
-        if packet is _CLOSED:
+        try:
+            return await self._incoming.receive()
+        except (anyio.EndOfStream, anyio.ClosedResourceError):
             self._closed = True
             raise BrokenPipeError
-
-        return packet
 
     def write_nowait(self, message: str) -> None:
         """
@@ -75,7 +78,10 @@ class MemoryConnection(PipeConnection):
         if self._closed or self._peer is None or self._peer._closed:
             raise BrokenPipeError
 
-        self._peer._incoming.put_nowait(message.encode("utf-8"))
+        try:
+            self._peer._send.send_nowait(message.encode("utf-8"))
+        except (anyio.BrokenResourceError, anyio.ClosedResourceError):
+            raise BrokenPipeError
 
     async def write(self, message: str) -> None:
         """
@@ -86,12 +92,17 @@ class MemoryConnection(PipeConnection):
     def close(self) -> None:
         """
         Close this end. Tell the peer, so that a read of it ends.
+
+        The packets already written stay readable: closing the sending
+        end of a stream leaves what is in it, and the reader sees the
+        end of the stream after the last one.
         """
         if self._closed:
             return
         self._closed = True
+        self._send.close()
         if self._peer is not None:
-            self._peer._incoming.put_nowait(_CLOSED)
+            self._peer._send.close()
 
 
 def connect_in_memory() -> Tuple[MemoryConnection, MemoryConnection]:
