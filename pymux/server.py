@@ -45,6 +45,12 @@ _OSC_REPLY_RE = re.compile(
     r"^(?:\x1b\]|\x9d)(\d+);(.*?)(?:\x1b\\|\x9c|\x07)$", re.DOTALL
 )
 
+#: How many reads in a row may fail before a connection is closed.
+#: A packet that cannot be read is answered and the next one is taken,
+#: which is what makes one bad packet harmless; a read that fails again
+#: and again is a connection nothing can use. Lillecarl/pymux#329.
+FAILURES_THAT_END_A_CONNECTION = 5
+
 
 class ServerConnection:
     """
@@ -391,6 +397,8 @@ class ServerConnection:
             logger.exception("Giving a notification answer to a pane failed.")
 
     async def _read_until_it_ends(self) -> None:
+        failures = 0
+
         while True:
             try:
                 data = await self.pipe_connection.read()
@@ -406,6 +414,24 @@ class ServerConnection:
                 # The read loop must never die silently: log the
                 # exception and keep the connection alive.
                 logger.exception("Exception while processing client packet.")
+
+                failures += 1
+                if failures >= FAILURES_THAT_END_A_CONNECTION:
+                    # **A read that keeps failing is a connection that
+                    # ended in a way the transport did not name.** With
+                    # no count here the loop retries at full speed: one
+                    # whole processor and a traceback in the log on
+                    # every turn, for as long as the server runs.
+                    # Measured at millions of tracebacks in eighteen
+                    # minutes. Lillecarl/pymux#329.
+                    logger.error(
+                        "This client failed %d reads in a row. Closing it.",
+                        failures,
+                    )
+                    self.detach_and_close()
+                    break
+            else:
+                failures = 0
 
     def _process(self, data) -> None:
         """

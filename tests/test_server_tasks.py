@@ -30,7 +30,7 @@ import anyio
 # pymux's own, and not the builtin of the same name. The read loop of a
 # connection ends on this one and logs anything else.
 from pymux.pipes import BrokenPipeError
-from pymux.server import ServerConnection
+from pymux.server import FAILURES_THAT_END_A_CONNECTION, ServerConnection
 
 
 class FakePipe:
@@ -50,6 +50,24 @@ class FakePipe:
     def close(self):
         self.closed = True
         self._gone.set()
+
+
+class FailingPipe(FakePipe):
+    """
+    A pipe whose read fails in a way the transport does not name.
+
+    Not pymux's `BrokenPipeError`, which is the end of a connection,
+    but the kind of fault a descriptor the kernel has taken back gives
+    back. It counts how many times it was asked. Lillecarl/pymux#329.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.reads = 0
+
+    async def read(self):
+        self.reads += 1
+        raise OSError(9, "Bad file descriptor")
 
 
 class FakePymux:
@@ -172,6 +190,54 @@ async def test_a_task_spawned_on_a_closed_connection_says_so(caplog):
             connection._spawn(nothing())
 
         assert "does not serve" in caplog.text, caplog.text
+
+
+async def test_a_read_that_keeps_failing_ends_the_connection():
+    """
+    **The spin, and the whole of Lillecarl/pymux#329.**
+
+    A read that fails and is not the transport saying the connection
+    ended was logged and retried at once. A read that keeps failing
+    was then a loop with no wait in it: one whole processor, and a
+    traceback in the log on every turn, for as long as the server ran.
+    Found by a test whose fake pipe raised the builtin
+    `BrokenPipeError` instead of pymux's -- it burned eighteen minutes
+    of processor time before anybody looked.
+    """
+    pipe = FailingPipe()
+
+    async with anyio.create_task_group() as tasks:
+        pymux = FakePymux(tasks)
+        connection = ServerConnection(pymux, pipe)
+
+        # `_tasks` is `None` before `serve` starts as well, so the
+        # closed pipe is what says the loop gave up.
+        await _until(lambda: pipe.closed)
+
+        assert pipe.reads == FAILURES_THAT_END_A_CONNECTION, (
+            "it read %d times: the count is not what ends it" % (pipe.reads,)
+        )
+        assert pymux.removed == [connection]
+
+
+async def test_one_bad_packet_leaves_the_connection_alone():
+    "A count that closed on the first fault would close on a typo."
+    read = []
+
+    class OneBadRead(FakePipe):
+        async def read(self):
+            read.append(1)
+            if len(read) == 1:
+                raise ValueError("a packet nothing can read")
+            return await super().read()
+
+    async with anyio.create_task_group() as tasks:
+        connection = ServerConnection(FakePymux(tasks), OneBadRead())
+
+        await _until(lambda: len(read) > 1)
+        assert connection._tasks is not None, "one bad packet closed the client"
+
+        connection._close_connection()
 
 
 def test_application_does_not_take_over_exception_handler():
