@@ -275,6 +275,13 @@ def add_format_arguments(parser, help_text: str) -> None:
     Neither is sniffed. `-F` is tmux format, which is what libtmux and
     libpymux read; `-J` is a jinja2 template, for a person who wants a
     condition or a filter in what they print. Lillecarl/pymux#333.
+
+    **`J` means something else on `capture-pane`**, where it is tmux's
+    own flag for joining the pieces a wrapped line was cut into. The
+    two never meet, because `capture-pane` prints no format and so
+    never calls this. A command that is given a format later has to be
+    read for a `-J` of its own first: tmux spells one on
+    `show-messages`, for jobs.
     """
     parser.add_argument("-F", dest="format", metavar="<format>", help=help_text)
     parser.add_argument(
