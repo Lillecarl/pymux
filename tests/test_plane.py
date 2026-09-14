@@ -34,7 +34,7 @@ from hypothesis import find, given, settings
 from hypothesis import strategies as st
 from prompt_toolkit.data_structures import Point
 
-from pymux.plane import Plan, Rect, Side, Slot, bounding_box, overlap_of
+from pymux.plane import GROUND, Plan, Rect, Side, Slot, bounding_box, overlap_of
 
 
 class _Pane:
@@ -56,9 +56,14 @@ class _Pane:
 # Building one by hand, for the tests that name a shape.
 
 
+def on_plane(**rects: Rect) -> dict:
+    "One plane's worth: a slot of one pane per rectangle, named by its keyword."
+    return {Slot(_Pane(name)): rect for name, rect in rects.items()}
+
+
 def create_plan(**rects: Rect) -> Plan:
-    "A plan of one pane per rectangle, each named by its keyword."
-    return Plan({Slot(_Pane(name)): rect for name, rect in rects.items()})
+    "A plan of one pane per rectangle, all of them on the ground plane."
+    return Plan({GROUND: on_plane(**rects)})
 
 
 def named(plan: Plan, name: str) -> Slot:
@@ -170,7 +175,7 @@ def any_drawn_plan(draw, rects) -> Plan:
         slot.showing = draw(st.integers(min_value=0, max_value=len(panes) - 1))
         slots.append((slot, rect))
 
-    return Plan(slots)
+    return Plan({GROUND: slots})
 
 
 TILINGS = any_drawn_plan(any_tiling())
@@ -213,15 +218,19 @@ def every_promise_holds(plan: Plan) -> None:
     Slice 2 onwards import this: a layout hands over a plan and this
     says whether it is one. It holds for the bare plane too, so it
     says nothing about holes and nothing about reaching everything.
+
+    **No two slots overlap on one plane.** Two planes are allowed to
+    cover each other whole: that is what a stack is for, and it is
+    why this asks each layer on its own.
     """
     slots = plan.slots
     rects = plan.rects
 
-    for one, other in itertools.combinations(slots, 2):
-        assert not rects[one].overlaps(rects[other]), "%r and %r share a cell" % (
-            one,
-            other,
-        )
+    for layer in plan.layers.values():
+        for one, other in itertools.combinations(layer.slots, 2):
+            assert not layer.rects[one].overlaps(layer.rects[other]), (
+                "%r and %r share a cell of one plane" % (one, other)
+            )
 
     for slot in slots:
         rect = rects[slot]
@@ -358,7 +367,7 @@ def test_pane_is_found_by_its_slot_and_hidden_one_too():
     behind, front = _Pane("behind"), _Pane("front")
     slot = Slot(behind, front)
     slot.show(front)
-    plan = Plan({slot: Rect(2, 3, 10, 5)})
+    plan = Plan({GROUND: {slot: Rect(2, 3, 10, 5)}})
 
     assert plan.slot_of(behind) is slot
     assert plan.rect_of(behind) == plan.rect_of(front) == Rect(2, 3, 10, 5)
@@ -379,7 +388,7 @@ def test_pane_in_two_slots_is_fault():
     pane = _Pane("shared")
 
     try:
-        Plan({Slot(pane): Rect(0, 0, 2, 2), Slot(pane): Rect(2, 0, 2, 2)})
+        Plan({GROUND: {Slot(pane): Rect(0, 0, 2, 2), Slot(pane): Rect(2, 0, 2, 2)}})
     except ValueError:
         return
     raise AssertionError("one pane went into two slots")
@@ -615,7 +624,7 @@ def test_tabbed_slot_reads_out_pane_person_sees():
     left, behind, front = _Pane("left"), _Pane("behind"), _Pane("front")
     stack = Slot(behind, front)
     stack.show(front)
-    plan = Plan({Slot(left): Rect(0, 0, 4, 6), stack: Rect(4, 0, 4, 6)})
+    plan = Plan({GROUND: {Slot(left): Rect(0, 0, 4, 6), stack: Rect(4, 0, 4, 6)}})
 
     assert names(plan.reading_order()) == ["left", "front"]
     assert names(plan.order) == ["left", "front"]
@@ -762,6 +771,208 @@ def test_last_pane_of_slot_leaves_with_slot():
     except ValueError:
         return
     raise AssertionError("a slot emptied itself")
+
+
+# ----------------------------------------------------------------------
+# The stack of planes. Lillecarl/pymux#228.
+
+
+def test_plane_above_may_cover_one_below():
+    """
+    The rule the stack exists for.
+
+    Two slots of one plane may not share a cell. Two *planes* may
+    cover each other whole, and a plan of them is still a plan.
+    """
+    plan = Plan(
+        {
+            GROUND: on_plane(under=Rect(0, 0, 8, 4)),
+            1: on_plane(over=Rect(2, 1, 4, 2)),
+        }
+    )
+
+    every_promise_holds(plan)
+    assert plan.rects[named(plan, "under")].overlaps(plan.rects[named(plan, "over")])
+
+
+def test_pane_in_two_planes_is_fault():
+    "The same fault as two slots of one plane, and the same answer."
+    pane = _Pane("shared")
+
+    try:
+        Plan(
+            {GROUND: {Slot(pane): Rect(0, 0, 2, 2)}, 1: {Slot(pane): Rect(4, 0, 2, 2)}}
+        )
+    except ValueError:
+        return
+    raise AssertionError("one pane went onto two planes")
+
+
+def test_neighbour_stays_on_the_plane_of_the_slot():
+    """
+    A floating window is not "the one to the right" of a pane.
+
+    The two are not laid out against each other, so the question has
+    no answer to give. Asking it on one plane is what keeps
+    `select-pane -R` meaning what it has always meant.
+    """
+    plan = Plan(
+        {
+            GROUND: on_plane(left=Rect(0, 0, 4, 4)),
+            1: on_plane(floating=Rect(4, 0, 4, 4)),
+        }
+    )
+
+    assert plan.neighbour(named(plan, "left"), Side.RIGHT) is None
+    assert plan.neighbour(named(plan, "floating"), Side.LEFT) is None
+
+
+def test_layer_of_says_which_plane_a_slot_is_on():
+    plan = Plan(
+        {GROUND: on_plane(under=Rect(0, 0, 4, 4)), 3: on_plane(over=Rect(0, 0, 2, 2))}
+    )
+
+    assert plan.layer_of(named(plan, "under")) is plan.layers[GROUND]
+    assert plan.layer_of(named(plan, "over")) is plan.layers[3]
+    assert plan.ground is plan.layers[GROUND]
+
+
+def test_bounds_holds_every_plane():
+    "A floating window past the panes is still where the panes are."
+    plan = Plan(
+        {GROUND: on_plane(pane=Rect(0, 0, 4, 4)), 1: on_plane(over=Rect(6, 6, 2, 2))}
+    )
+
+    assert plan.bounds == Rect(0, 0, 8, 8)
+
+
+def test_rects_run_back_to_front():
+    "Which is the order they paint in, lowest plane first."
+    plan = Plan(
+        {
+            2: on_plane(top=Rect(0, 0, 2, 2)),
+            GROUND: on_plane(bottom=Rect(0, 0, 8, 8)),
+            1: on_plane(middle=Rect(0, 0, 4, 4)),
+        }
+    )
+
+    assert [slot.shown.name for slot in plan.rects] == ["bottom", "middle", "top"]
+    assert [pane.name for pane in plan.reading_order()] == ["bottom", "middle", "top"]
+
+
+def test_at_answers_the_ground_plane():
+    """
+    **The deferred question.** What a mouse should hit where two
+    planes both cover a cell is open, so nothing answers it yet:
+    `at` reads the ground plane, the way it did before there was a
+    stack.
+    """
+    plan = Plan(
+        {GROUND: on_plane(under=Rect(0, 0, 4, 4)), 1: on_plane(over=Rect(0, 0, 4, 4))}
+    )
+
+    assert plan.at(Point(x=1, y=1)) is named(plan, "under")
+
+
+# ----------------------------------------------------------------------
+# What reaches the screen.
+
+
+def test_one_plane_draws_everything():
+    plan = create_plan(a=Rect(0, 0, 4, 4), b=Rect(4, 0, 4, 4))
+
+    assert plan.drawn() == plan.rects
+
+
+def test_covered_slot_is_not_drawn():
+    "The saving the stack is for: nothing of it reaches the screen."
+    plan = Plan(
+        {
+            GROUND: on_plane(under=Rect(2, 2, 4, 2)),
+            1: on_plane(over=Rect(0, 0, 8, 8)),
+        }
+    )
+
+    assert list(plan.drawn()) == [named(plan, "over")]
+
+
+def test_slot_covered_only_in_part_is_drawn():
+    plan = Plan(
+        {
+            GROUND: on_plane(under=Rect(0, 0, 8, 4)),
+            1: on_plane(over=Rect(0, 0, 8, 2)),
+        }
+    )
+
+    assert plan.drawn() == plan.rects
+
+
+def test_two_slots_above_cover_what_neither_covers_alone():
+    """
+    The case `Rect.encloses` cannot answer.
+
+    Two floating windows side by side hide the pane under them, and
+    neither of them encloses it. The cull has to ask about the union.
+    """
+    plan = Plan(
+        {
+            GROUND: on_plane(under=Rect(0, 0, 8, 4)),
+            1: on_plane(left=Rect(0, 0, 4, 4), right=Rect(4, 0, 4, 4)),
+        }
+    )
+
+    under = plan.rects[named(plan, "under")]
+    assert not plan.rects[named(plan, "left")].encloses(under)
+    assert not plan.rects[named(plan, "right")].encloses(under)
+    assert named(plan, "under") not in plan.drawn()
+
+
+def test_slot_is_covered_by_planes_above_it_and_not_beside_it():
+    """
+    A plane covers what is *under* it.
+
+    Two slots of one plane never cover each other -- they may not
+    share a cell -- and a plane below never hides one above.
+    """
+    plan = Plan(
+        {
+            GROUND: on_plane(big=Rect(0, 0, 8, 8)),
+            1: on_plane(small=Rect(2, 2, 2, 2)),
+        }
+    )
+
+    assert list(plan.drawn()) == [named(plan, "big"), named(plan, "small")]
+
+
+def test_drawn_keeps_paint_order():
+    plan = Plan(
+        {
+            GROUND: on_plane(bottom=Rect(0, 0, 8, 8)),
+            1: on_plane(middle=Rect(0, 0, 6, 6)),
+            2: on_plane(top=Rect(0, 0, 4, 4)),
+        }
+    )
+
+    assert [slot.shown.name for slot in plan.drawn()] == ["bottom", "middle", "top"]
+
+
+def test_covered_slot_is_still_on_the_plan():
+    """
+    `drawn` is a cull and not a change. The pane keeps its rectangle,
+    its number and its place beside its neighbours; it is only work
+    nobody would see that goes.
+    """
+    plan = Plan(
+        {
+            GROUND: on_plane(under=Rect(0, 0, 4, 4)),
+            1: on_plane(over=Rect(0, 0, 4, 4)),
+        }
+    )
+    hidden = named(plan, "under")
+
+    assert hidden in plan.rects
+    assert hidden.shown in plan.order
+    assert plan.rect_of(hidden.shown) == Rect(0, 0, 4, 4)
 
 
 # ----------------------------------------------------------------------

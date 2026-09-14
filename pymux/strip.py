@@ -52,7 +52,7 @@ instead. Lillecarl/pymux#207.
 from prompt_toolkit.data_structures import Point, Size
 
 from . import arrangement
-from .plane import Line, Pane, Plan, Rect, Side, Slot, View
+from .plane import GROUND, Line, Pane, Plan, Rect, Side, Slot, View
 from .tiling import BORDER_HORIZONTAL, BORDER_VERTICAL, Gaps, lay_out
 
 __all__ = ["Strip"]
@@ -136,7 +136,7 @@ class Strip:
         # on left to right and a column's panes go on top to bottom.
         # Decision 9: a strip numbers its panes the way a person reads
         # them. Lillecarl/pymux#210.
-        return Plan(rects)
+        return Plan({GROUND: rects})
 
     def chrome(self, plan: Plan) -> list[Line]:
         """

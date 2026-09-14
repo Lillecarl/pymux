@@ -21,7 +21,7 @@ row its title bar hangs in.
 
 from prompt_toolkit.data_structures import Point, Size
 
-from .plane import Line, Pane, Plan, Rect, Slot, View
+from .plane import GROUND, Line, Pane, Plan, Rect, Slot, View
 
 __all__ = ["Zoomed"]
 
@@ -59,9 +59,11 @@ class Zoomed:
         "One slot, the size of the plane."
         return Plan(
             {
-                Slot(self.pane): Rect(
-                    x=0, y=0, width=available.columns, height=available.rows
-                )
+                GROUND: {
+                    Slot(self.pane): Rect(
+                        x=0, y=0, width=available.columns, height=available.rows
+                    )
+                }
             }
         )
 

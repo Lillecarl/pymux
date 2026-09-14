@@ -28,7 +28,7 @@ from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import DummyOutput
 
 from pymux.plan_container import PlanContainer
-from pymux.plane import Line, Plan, Rect, Slot
+from pymux.plane import GROUND, Line, Plan, Rect, Slot
 
 HEIGHT = 2
 
@@ -91,7 +91,7 @@ def create_row(widths, height=HEIGHT, gap=0):
         containers[pane] = container
         x += width + gap
 
-    return Plan(rects), containers
+    return Plan({GROUND: rects}), containers
 
 
 def drawn(plan, containers, visible, offset=Point(x=0, y=0), rows=HEIGHT, row=0):
@@ -176,7 +176,7 @@ def test_pane_behind_origin_is_clipped_and_not_lost():
 def test_view_moves_down_as_well_as_sideways():
     "Which is what this container has that `ScrollableStrip` does not."
     pane, container = create_pane("a", 4, height=4)
-    plan = Plan({Slot(pane): Rect(x=0, y=2, width=4, height=4)})
+    plan = Plan({GROUND: {Slot(pane): Rect(x=0, y=2, width=4, height=4)}})
 
     on_plane = drawn(plan, {pane: container}, visible=4, rows=4, row=2)
     moved = drawn(
@@ -263,7 +263,7 @@ def test_slot_draws_pane_it_shows_and_no_other():
     behind, its_container = create_pane("a", 4)
     front, other = create_pane("b", 4)
     slot = Slot(behind, front)
-    plan = Plan({slot: Rect(x=0, y=0, width=4, height=HEIGHT)})
+    plan = Plan({GROUND: {slot: Rect(x=0, y=0, width=4, height=HEIGHT)}})
     containers = {behind: its_container, front: other}
 
     assert drawn(plan, containers, visible=4) == "aaaa"

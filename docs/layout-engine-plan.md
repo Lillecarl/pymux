@@ -539,6 +539,12 @@ not overlap. Everything is on plane 0 until something asks to be
 raised, which is "all content on a single Z level by default" -- the
 shape Carl asked about when slice 5 landed.
 
+In the code a plane is a `Layer`, plane 0 is `GROUND`, and `Plan` is
+the stack: `Plan({GROUND: rects})` is what every layout builds.
+**These numbers are not prompt_toolkit's `Z_INDEX`.** A plan stacks
+what the window owns; the chrome around it -- the status bar, a
+popup -- floats over the whole layout and keeps `layout.Z_INDEX`.
+
 **The no-overlap rule is what makes this cheap.** It was the honest
 cost of the flexible route: two rectangles that may overlap have no
 well defined "the one to the left", and `select-pane -L`, the title

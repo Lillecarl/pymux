@@ -26,7 +26,7 @@ by which rule.
 from prompt_toolkit.data_structures import Point, Size
 
 from . import arrangement
-from .plane import Line, Pane, Plan, Rect, View
+from .plane import GROUND, Line, Pane, Plan, Rect, View
 from .tiling import Gaps, lay_out
 
 __all__ = ["Divided"]
@@ -105,7 +105,7 @@ class Divided:
         )
 
         self._lines = lines
-        return Plan(rects)
+        return Plan({GROUND: rects})
 
     def chrome(self, plan: Plan) -> list[Line]:
         """

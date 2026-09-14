@@ -13,11 +13,12 @@ bounded: one client's terminal, over part of the plane.
 
 This module is the bottom of that work, and it takes two NamedTuples
 from prompt_toolkit and nothing else: no widget, no pty, no screen. It
-holds four things and almost no behaviour.
+holds five things and almost no behaviour.
 
     Rect     a rectangle of cells on the plane
     Slot     one rectangle's worth of it, and the panes in it
-    Plan     where every slot is, for one frame, and the services
+    Layer    one plane: every slot on it, and the services
+    Plan     the stack of planes, for one frame
     View     where one client looks, and how much it can see
 
 **A pane is any object with an identity.** Nothing here asks a pane
@@ -31,10 +32,11 @@ that owns 1 or more terminals". So "no two slots overlap" needs no
 word about which pane is visible, and moving a stack is one operation
 on one object.
 
-**Nothing here can stop a popup.** A popup draws in the layer above
-the panes and always has: the chrome floats sit at `Z_INDEX` 5 to 9,
-and `display-popup -E` opens `Session.overlay_pane`, which is not in
-the window tree at all.
+**Nothing here can stop a popup.** A popup draws over the panes and
+always has, in prompt_toolkit's own stack: the chrome floats sit at
+`Z_INDEX` 5 to 9, and `display-popup -E` opens `Session.overlay_pane`,
+which is not in the window tree at all. That stack is not this one --
+`Layer` numbers what the window owns.
 
 **"No two slots overlap" is a rule about one plane.** A plan is a
 stack of planes, numbered, and a higher number draws over a lower one.
@@ -49,12 +51,12 @@ A floating *window* -- a pane a person parks somewhere and leaves
 there -- is therefore not a second list beside `rects`. It is a slot
 on a higher plane. Lillecarl/pymux#228.
 
-**What is not here.** No `Plane` class yet, and no layout: a plan
-arrives already laid out, and the classes that lay one out
-(`Strip`, `Divided`, `Masonry`) come in the slices after this one. So
-nothing in this module validates geometry. A plan holding two
-overlapping slots is a fault of whatever laid it out, and
-`tests/test_plane.py` is where that promise is kept.
+**What is not here.** No layout: a plan arrives already laid out, and
+the classes that lay one out (`Strip`, `Divided`, `Masonry`) come in
+the slices after this one. So nothing in this module validates
+geometry. Two slots that overlap **on one layer** are a fault of
+whatever laid it out, and `tests/test_plane.py` is where that promise
+is kept.
 """
 
 from __future__ import annotations
@@ -66,6 +68,8 @@ from typing import Iterable, Iterator, NamedTuple
 from prompt_toolkit.data_structures import Point, Size
 
 __all__ = [
+    "GROUND",
+    "Layer",
     "Line",
     "Rect",
     "Side",
@@ -505,52 +509,35 @@ class Slot:
         return "Slot(%r, showing %r)" % (self.panes, self.shown)
 
 
-class Plan:
+#: The plane a window's own panes are laid out on. Every layout
+#: writes here, and it is the only plane anything builds today.
+GROUND = 0
+
+
+class Layer:
     """
-    Where every slot is, and what that lets a person ask.
+    One plane: where every slot on it is, and what that lets a person
+    ask.
 
-    A plan is a value: whatever laid it out is finished with it, and
-    reading it changes nothing. A layout hands one over on every
-    frame, and everything that draws, moves the focus or names a
-    neighbour reads this and nothing else.
+    **No two slots of a layer overlap.** Carl: "rectangles can't
+    overlap on the same plane". That is what makes the questions below
+    mean anything: "the one to my left" has an answer among
+    rectangles that do not overlap, and none among rectangles that do.
+    Two *planes* may cover each other as much as they like, which is
+    what `Plan` is the stack of.
 
-    `order` is the numbering, and it is **over the panes a person can
-    see**: one for each slot, the one that slot shows. A pane number is
-    what `select-pane -t 1` takes and what a title bar draws, and Carl:
-    "in a stack the visible pane is the only thing to be concerned with
-    (at least for now)". So a hidden pane has no number, and a stack is
-    one thing on the screen and one thing in the numbering.
-
-    The default is insertion order, which is what the bare plane
-    promises; `Strip` and `Divided` pass `reading_order()` instead
-    (Lillecarl/pymux#210).
+    Nothing here checks it. A layer holding two overlapping slots is a
+    fault of whatever laid it out, and `tests/test_plane.py` is where
+    that promise is kept.
     """
 
-    def __init__(
-        self,
-        rects: dict[Slot, Rect] | Iterable[tuple[Slot, Rect]],
-        order: Iterable[Pane] | None = None,
-    ) -> None:
+    def __init__(self, rects: dict[Slot, Rect] | Iterable[tuple[Slot, Rect]]) -> None:
         self.rects: dict[Slot, Rect] = dict(rects)
-
-        #: Which slot each pane is in. Built once, because everything
-        #: that asks where a pane is comes through here.
-        self._slots: dict[int, Slot] = {}
-        for slot in self.rects:
-            for pane in slot.panes:
-                if id(pane) in self._slots:
-                    raise ValueError("%r is in two slots of one plan" % (pane,))
-                self._slots[id(pane)] = slot
 
         #: The bounding box of every rectangle. A plane is unbounded,
         #: so this is where the *panes* are and not where the plane
         #: ends.
         self.bounds: Rect = bounding_box(self.rects.values())
-
-        self.order: list[Pane] = list(order) if order is not None else list(self.shown)
-
-    # ------------------------------------------------------------------
-    # What is on it.
 
     @property
     def slots(self) -> list[Slot]:
@@ -559,12 +546,7 @@ class Plan:
 
     @property
     def panes(self) -> list[Pane]:
-        """
-        Every pane on the plan, the hidden ones as well.
-
-        This is what a plan *holds*. What a person sees is `shown`, and
-        that is what the numbering counts.
-        """
+        "Every pane on this plane, the hidden ones as well."
         return [pane for slot in self.rects for pane in slot.panes]
 
     @property
@@ -582,27 +564,6 @@ class Plan:
             if rect.holds(point):
                 return slot
         return None
-
-    def slot_of(self, pane: Pane) -> Slot:
-        """
-        The slot this pane is in.
-
-        A pane that is not on the plan is a fault in whatever asked,
-        so this raises rather than answering `None`. Everything that
-        wants a pane's rectangle comes through here, because a pane
-        does not have one: its slot does.
-        """
-        try:
-            return self._slots[id(pane)]
-        except KeyError:
-            raise KeyError("%r is not on this plan" % (pane,)) from None
-
-    def rect_of(self, pane: Pane) -> Rect:
-        "Where this pane is drawn, which is where its slot is."
-        return self.rects[self.slot_of(pane)]
-
-    # ------------------------------------------------------------------
-    # What is beside it.
 
     def neighbour(self, slot: Slot, side: Side) -> Slot | None:
         """
@@ -672,9 +633,6 @@ class Plan:
 
         return None if best is None else best[1]
 
-    # ------------------------------------------------------------------
-    # What order it reads in.
-
     def reading_order(self) -> list[Pane]:
         """
         The panes a person sees, in the order they read them.
@@ -698,7 +656,242 @@ class Plan:
         return [slot.shown for slot in _read(list(self.rects.items()))]
 
     def __repr__(self) -> str:
-        return "Plan(%r)" % (self.rects,)
+        return "Layer(%r)" % (self.rects,)
+
+
+class Plan:
+    """
+    Where every slot is, and what that lets a person ask.
+
+    A plan is a value: whatever laid it out is finished with it, and
+    reading it changes nothing. A layout hands one over on every
+    frame, and everything that draws, moves the focus or names a
+    neighbour reads this and nothing else.
+
+    **A plan is a stack of planes.** Carl: "we have multiple separate
+    planes, the higher up the Z plane we are the higher our drawing
+    priority is". The key is the plane's number, a higher one draws
+    over a lower one, and `GROUND` is where every layout writes today.
+    A floating window is therefore a slot on a higher plane and not a
+    second list beside the panes. Lillecarl/pymux#228.
+
+    **These numbers are not prompt_toolkit's `Z_INDEX`.** A plan
+    stacks what the *window* owns. The chrome around it -- the status
+    bar, the message toolbar, a popup -- floats over the whole layout
+    and keeps the toolkit's own numbering, in `layout.Z_INDEX`.
+
+    `order` is the numbering, and it is **over the panes a person can
+    see**: one for each slot, the one that slot shows. A pane number is
+    what `select-pane -t 1` takes and what a title bar draws, and Carl:
+    "in a stack the visible pane is the only thing to be concerned with
+    (at least for now)". So a hidden pane has no number, and a stack is
+    one thing on the screen and one thing in the numbering.
+
+    The default is insertion order, back to front, which is what a
+    bare plane promises. `Strip` and `Divided` both lean on it: each
+    lays its slots out in reading order already (Lillecarl/pymux#210).
+    """
+
+    def __init__(
+        self,
+        layers: dict[int, dict[Slot, Rect] | Iterable[tuple[Slot, Rect]]],
+        order: Iterable[Pane] | None = None,
+    ) -> None:
+        #: One `Layer` for each plane, lowest number first, which is
+        #: the order they paint in.
+        self.layers: dict[int, Layer] = {
+            number: Layer(rects) for number, rects in sorted(layers.items())
+        }
+
+        planes = list(self.layers.values())
+
+        #: Every slot of every plane, back to front -- a slot later in
+        #: here draws over an earlier one -- and the box that holds
+        #: them all. A plane is unbounded, so the box is where the
+        #: *panes* are and not where the plane ends.
+        if len(planes) == 1:
+            # One plane is every plan anything builds today, and a
+            # plan is measured on every frame (Lillecarl/pymux#336).
+            # So the flat view *is* that plane's dictionary and its box
+            # is the plan's box. Neither is ever written to.
+            self.rects: dict[Slot, Rect] = planes[0].rects
+            self.bounds: Rect = planes[0].bounds
+        else:
+            self.rects = {
+                slot: rect for layer in planes for slot, rect in layer.rects.items()
+            }
+            self.bounds = bounding_box(self.rects.values())
+
+        #: Which slot each pane is in, and which plane each slot is
+        #: on. Built once, because everything that asks where a pane
+        #: is comes through here.
+        self._slots: dict[int, Slot] = {}
+        self._planes: dict[Slot, Layer] = {}
+        for layer in planes:
+            for slot in layer.rects:
+                self._planes[slot] = layer
+                for pane in slot.panes:
+                    if id(pane) in self._slots:
+                        raise ValueError("%r is in two slots of one plan" % (pane,))
+                    self._slots[id(pane)] = slot
+
+        self.order: list[Pane] = list(order) if order is not None else list(self.shown)
+
+    @property
+    def ground(self) -> Layer:
+        "The plane the panes are laid out on, empty when nothing is on it."
+        layer = self.layers.get(GROUND)
+        return Layer({}) if layer is None else layer
+
+    # ------------------------------------------------------------------
+    # What is on it.
+
+    @property
+    def slots(self) -> list[Slot]:
+        "Every slot of every plane, back to front."
+        return list(self.rects)
+
+    @property
+    def panes(self) -> list[Pane]:
+        """
+        Every pane on the plan, the hidden ones as well.
+
+        This is what a plan *holds*. What a person sees is `shown`, and
+        that is what the numbering counts.
+        """
+        return [pane for slot in self.rects for pane in slot.panes]
+
+    @property
+    def shown(self) -> list[Pane]:
+        "The one pane of each slot a person can see."
+        return [slot.shown for slot in self.rects]
+
+    def at(self, point: Point) -> Slot | None:
+        """
+        The slot of the ground plane that holds that cell, if one does.
+
+        **The ground plane, and not the topmost slot there.** Nothing
+        asks for the topmost one yet, and what a mouse should hit when
+        two planes both cover a cell is still open: Lillecarl/pymux#228.
+        """
+        return self.ground.at(point)
+
+    def slot_of(self, pane: Pane) -> Slot:
+        """
+        The slot this pane is in.
+
+        A pane that is not on the plan is a fault in whatever asked,
+        so this raises rather than answering `None`. Everything that
+        wants a pane's rectangle comes through here, because a pane
+        does not have one: its slot does.
+        """
+        try:
+            return self._slots[id(pane)]
+        except KeyError:
+            raise KeyError("%r is not on this plan" % (pane,)) from None
+
+    def rect_of(self, pane: Pane) -> Rect:
+        "Where this pane is drawn, which is where its slot is."
+        return self.rects[self.slot_of(pane)]
+
+    def layer_of(self, slot: Slot) -> Layer:
+        "The plane this slot is on."
+        try:
+            return self._planes[slot]
+        except KeyError:
+            raise KeyError("%r is not on this plan" % (slot,)) from None
+
+    # ------------------------------------------------------------------
+    # What is beside it.
+
+    def neighbour(self, slot: Slot, side: Side) -> Slot | None:
+        """
+        The slot a person means by "the one to my left", and so on.
+
+        **On that slot's own plane.** Across two planes the question
+        has no answer: they may overlap, so "beyond this edge" stops
+        being a place. Lillecarl/pymux#228.
+        """
+        return self.layer_of(slot).neighbour(slot, side)
+
+    def trace(self, origin: Point, angle: float) -> Slot | None:
+        """
+        The first slot of the ground plane a ray from that cell runs
+        into. The ground plane, for the reason `at` gives.
+        """
+        return self.ground.trace(origin, angle)
+
+    # ------------------------------------------------------------------
+    # What order it reads in.
+
+    def reading_order(self) -> list[Pane]:
+        """
+        The panes a person sees, in the order they read them.
+
+        Each plane in turn, back to front, because reading order is a
+        question about one plane: a floating window is not in the row
+        it happens to sit over.
+        """
+        return [
+            pane for layer in self.layers.values() for pane in layer.reading_order()
+        ]
+
+    # ------------------------------------------------------------------
+    # What reaches the screen.
+
+    def drawn(self) -> dict[Slot, Rect]:
+        """
+        The slots worth drawing, in paint order.
+
+        A slot the planes above cover whole is left out: nothing of it
+        reaches the screen, so drawing it is work nobody sees. Carl:
+        "ideally we'd walk this backwards as well so we don't bother
+        computing things from lower planes that are entirely
+        invisible".
+
+        **Covered by the planes above together**, and not by any one
+        rectangle of them. Two floating windows side by side hide a
+        pane that neither of them hides alone.
+
+        Nothing draws from this yet: `PlanContainer` still walks
+        `rects`. Lillecarl/pymux#228.
+        """
+        over: list[Rect] = []
+        kept: list[dict[Slot, Rect]] = []
+
+        for layer in reversed(self.layers.values()):
+            kept.append(
+                {
+                    slot: rect
+                    for slot, rect in layer.rects.items()
+                    if not _covered(rect, over)
+                }
+            )
+            over.extend(layer.rects.values())
+
+        return {slot: rect for held in reversed(kept) for slot, rect in held.items()}
+
+    def __repr__(self) -> str:
+        return "Plan(%r)" % (self.layers,)
+
+
+def _covered(rect: Rect, over: Iterable[Rect]) -> bool:
+    """
+    Whether those rectangles hold every cell of this one, together.
+
+    **Together**, which is what `Rect.encloses` cannot say: two
+    rectangles that cover this one between them each answer no on
+    their own.
+
+    A cell at a time. A plan holds a handful of rectangles and nothing
+    draws from this yet, so the cheap correct answer is the right one;
+    a region subtraction is what to write if it ever runs per frame.
+    """
+    over = list(over)
+    if not over:
+        return False
+
+    return all(any(one.holds(cell) for one in over) for cell in rect.cells())
 
 
 def _enters(
