@@ -860,18 +860,56 @@ def test_rects_run_back_to_front():
     assert [pane.name for pane in plan.reading_order()] == ["bottom", "middle", "top"]
 
 
-def test_at_answers_the_ground_plane():
+def test_at_answers_the_topmost_slot():
     """
-    **The deferred question.** What a mouse should hit where two
-    planes both cover a cell is Lillecarl/pymux#356, so nothing
-    answers it yet: `at` reads the ground plane, the way it did
-    before there was a stack.
+    What a person points at is what they can see, which is the slot on
+    the highest plane that covers the cell. A float nobody can click is
+    not a float. Lillecarl/pymux#356.
     """
     plan = Plan(
         {GROUND: on_plane(under=Rect(0, 0, 4, 4)), 1: on_plane(over=Rect(0, 0, 4, 4))}
     )
 
-    assert plan.at(Point(x=1, y=1)) is named(plan, "under")
+    assert plan.at(Point(x=1, y=1)) is named(plan, "over")
+
+
+def test_at_falls_through_a_plane_that_does_not_cover_the_cell():
+    "A higher plane takes the cells it holds and no others."
+    plan = Plan(
+        {GROUND: on_plane(under=Rect(0, 0, 8, 4)), 1: on_plane(over=Rect(0, 0, 4, 4))}
+    )
+
+    assert plan.at(Point(x=1, y=1)) is named(plan, "over")
+    assert plan.at(Point(x=5, y=1)) is named(plan, "under")
+
+
+def test_at_answers_nothing_where_no_plane_holds_the_cell():
+    plan = Plan({GROUND: on_plane(a=Rect(0, 0, 4, 4)), 1: on_plane(b=Rect(0, 0, 2, 2))})
+
+    assert plan.at(Point(x=9, y=9)) is None
+
+
+def test_one_plane_still_answers_the_way_it_did():
+    "Every plan anything builds today has one plane, and it is unchanged."
+    plan = create_plan(a=Rect(0, 0, 4, 4), b=Rect(4, 0, 4, 4))
+
+    assert plan.at(Point(x=1, y=1)) is named(plan, "a")
+    assert plan.at(Point(x=5, y=1)) is named(plan, "b")
+    assert plan.at(Point(x=9, y=9)) is None
+
+
+def test_a_layer_still_answers_within_its_own_plane():
+    """
+    `Layer.at` is the exact reading and does not change: every geometry
+    service needs "which slot of *this* plane", because neighbours only
+    mean something among rectangles that do not overlap.
+    """
+    plan = Plan(
+        {GROUND: on_plane(under=Rect(0, 0, 4, 4)), 1: on_plane(over=Rect(0, 0, 4, 4))}
+    )
+
+    assert plan.layers[GROUND].at(Point(x=1, y=1)) is named(plan, "under")
+    assert plan.layers[1].at(Point(x=1, y=1)) is named(plan, "over")
 
 
 # ----------------------------------------------------------------------

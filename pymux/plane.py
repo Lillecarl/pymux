@@ -768,13 +768,23 @@ class Plan:
 
     def at(self, point: Point) -> Slot | None:
         """
-        The slot of the ground plane that holds that cell, if one does.
+        The topmost slot that holds that cell, if one does.
 
-        **The ground plane, and not the topmost slot there.** Nothing
-        asks for the topmost one yet, and what a mouse should hit when
-        two planes both cover a cell is Lillecarl/pymux#356.
+        **Topmost, because this is what a person points at.** A higher
+        plane draws over a lower one, so the slot a person can see at a
+        cell is the one on the highest plane that covers it. A float
+        nobody can click is not a float. Lillecarl/pymux#356.
+
+        `Layer.at` is the other reading and stays exact: it answers
+        within one plane, which is what every geometry service needs --
+        "the one to my left" has an answer among rectangles that do not
+        overlap and none among rectangles that do.
         """
-        return self.ground.at(point)
+        for layer in reversed(self.layers.values()):
+            slot = layer.at(point)
+            if slot is not None:
+                return slot
+        return None
 
     def slot_of(self, pane: Pane) -> Slot:
         """
