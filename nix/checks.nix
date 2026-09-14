@@ -219,6 +219,10 @@ let
   # A name to ask "who calls this" about. `tests/measure_keystroke.py`
   # says why an instruction count cannot answer it.
   keystrokeCallers = builtins.getEnv "PYMUX_KEYSTROKE_CALLERS";
+  # How many functions each stage names, and whether to count the
+  # containers the per-key walk crosses. Lillecarl/pymux#317.
+  keystrokeWhere = builtins.getEnv "PYMUX_KEYSTROKE_WHERE";
+  keystrokeCensus = builtins.getEnv "PYMUX_KEYSTROKE_CENSUS";
 
   latencySamples = builtins.getEnv "PYMUX_LATENCY_SAMPLES";
   latencyPace = builtins.getEnv "PYMUX_LATENCY_PACE";
@@ -634,6 +638,8 @@ in
             keystrokeTolerance
             keystrokeTimed
             keystrokeCallers
+            keystrokeWhere
+            keystrokeCensus
             ;
         };
         setup = ''
@@ -641,6 +647,8 @@ in
           export PYMUX_KEYSTROKE_TOLERANCE="$keystrokeTolerance"
           export PYMUX_KEYSTROKE_TIMED="$keystrokeTimed"
           export PYMUX_KEYSTROKE_CALLERS="$keystrokeCallers"
+          export PYMUX_KEYSTROKE_WHERE="$keystrokeWhere"
+          export PYMUX_KEYSTROKE_CENSUS="$keystrokeCensus"
           export PYMUX_KEYSTROKE_OUT="$out"
           export PYTHONHASHSEED=0
         '';

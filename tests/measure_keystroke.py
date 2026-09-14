@@ -116,7 +116,17 @@ WHERE = int(os.environ.get("PYMUX_KEYSTROKE_WHERE") or 12)
 #: to get the answer.
 #:
 #:     PYMUX_KEYSTROKE_CALLERS=Flag nix build --file . checks.pymux-keystroke.run
+#:     PYMUX_KEYSTROKE_CENSUS=1 nix build --file . checks.pymux-keystroke.run
 CALLERS = os.environ.get("PYMUX_KEYSTROKE_CALLERS", "")
+
+#: Whether to count the containers the per-key walk crosses.
+#:
+#: `_CombinedRegistry._key_bindings` calls `Layout.find_all_controls`
+#: on every key press, to ask whether the set of controls is still the
+#: one it cached against. That walk is the largest single item in the
+#: key stage, and what it costs is the size of the tree rather than
+#: anything a person did. Lillecarl/pymux#317.
+CENSUS = os.environ.get("PYMUX_KEYSTROKE_CENSUS", "")
 
 #: The client's terminal.
 SIZE = Size(rows=24, columns=80)
@@ -435,6 +445,35 @@ def write_budgets(counts):
     write_list(Path(out) / "keystroke-budgets.txt", header, counts.items())
 
 
+def the_tree_a_key_press_walks(layout):
+    """
+    Every container `find_all_controls` crosses, by class, and how many
+    of them answer with no children.
+
+    The walk is the same one `Layout.find_all_controls` does. It is
+    repeated here rather than called, because the question is what the
+    walk crosses and not what it returns: a container that holds no
+    window costs the walk exactly as much as one that does.
+    Lillecarl/pymux#317.
+    """
+    counted = Counter()
+    childless = Counter()
+    todo = [layout.container]
+    crossed = 0
+
+    while todo:
+        node = todo.pop()
+        crossed += 1
+        counted[type(node).__name__] += 1
+        children = node.get_children()
+        if children:
+            todo.extend(reversed(children))
+        else:
+            childless[type(node).__name__] += 1
+
+    return crossed, counted, childless
+
+
 def main() -> int:
     include = os.environ.get("PYMUX_KEYSTROKE_INCLUDE", "")
     tolerance = float(os.environ.get("PYMUX_KEYSTROKE_TOLERANCE") or DEFAULT_TOLERANCE)
@@ -463,6 +502,11 @@ def main() -> int:
                 for name, work in picked.items():
                     callers[name] = who_calls(work, CALLERS)
 
+        census = None
+        if CENSUS:
+            with set_app(state.app):
+                census = the_tree_a_key_press_walks(state.app.layout)
+
     print("\n--- what one keystroke costs ---")
     print("%-12s %14s %12s" % ("", "instructions", "in-process"))
     for name in ORDER:
@@ -487,6 +531,15 @@ def main() -> int:
                 print("  nothing")
             for place, count in callers[name]:
                 print("  %8d  %s" % (count, place))
+
+    if census is not None:
+        crossed, counted_by_class, childless = census
+        print("\n--- the tree every key press walks ---")
+        print("  %d containers, and %d of them hold nothing" % (crossed, sum(childless.values())))
+        print("")
+        print("  %8s %8s  %s" % ("crossed", "leaves", "class"))
+        for name, count in counted_by_class.most_common():
+            print("  %8d %8d  %s" % (count, childless[name], name))
 
     print(
         "\n**The in-process time is not the latency.** It holds no socket,"
