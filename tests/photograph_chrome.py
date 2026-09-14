@@ -64,7 +64,11 @@ from typing import NamedTuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pyterm_pytest.seats import SEATS  # noqa: E402
+from pyterm_pytest.seats import (  # noqa: E402
+    TheSeatIsGone,
+    open_the_seats,
+    with_no_answer,
+)
 
 from middleman import FORWARDER, run_cli  # noqa: E402
 from take_picture import (  # noqa: E402
@@ -140,6 +144,7 @@ def chosen_by_name(have, wanted, what):
             % (what, ", ".join(missing), ", ".join(have))
         )
     return [one for one in have if one in set(wanted)]
+
 
 #: The relay, beside this file.
 RELAY = Path(__file__).parent / "drive_in_terminal.py"
@@ -762,14 +767,14 @@ def main(
     # it. `take_picture.py` says why. Lillecarl/pymux#177.
     Path("/tmp/.X11-unix").mkdir(parents=True, exist_ok=True)
 
-    seats = {}
     taken = []
     lost = []
     try:
-        for terminal in terminals:
-            if terminal.seat not in seats:
-                seats[terminal.seat] = SEATS[terminal.seat]().start(work)
+        seats = open_the_seats(terminals, work)
+    except TheSeatIsGone as reason:
+        return with_no_answer(str(reason))
 
+    try:
         for terminal in terminals:
             for name in names:
                 started = time.time()
@@ -778,6 +783,14 @@ def main(
                         terminal, seats[terminal.seat], name, work, out, fixtures
                     )
                 except RuntimeError as reason:
+                    # **Ask the seat before blaming the fixture.** A
+                    # display server that went away makes every picture
+                    # after it fail, and there is no answer in that.
+                    # Lillecarl/pymux#216.
+                    try:
+                        seats[terminal.seat].still_there()
+                    except TheSeatIsGone as gone:
+                        return with_no_answer(str(gone))
                     room = out / terminal.name / name
                     lost.append("%s %s" % (terminal.name, name))
                     print(

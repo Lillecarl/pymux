@@ -95,12 +95,14 @@ from pyterm_pytest.seats import (
     BLINK_FRAMES,
     BLINK_GAP,
     BLINK_START,
-    SEATS,
     SETTLE_TIMEOUT,
+    TheSeatIsGone,
     _tail,
     changed_region,
     differences,
     fully_overlaps,
+    open_the_seats,
+    with_no_answer,
 )
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -893,12 +895,12 @@ def main():
 
     # One seat for each kind of display server that a terminal here
     # needs, and none for a kind that nothing needs.
-    seats = {}
     try:
-        for terminal in terminals:
-            if terminal.seat not in seats:
-                seats[terminal.seat] = SEATS[terminal.seat]().start(work)
+        seats = open_the_seats(terminals, work)
+    except TheSeatIsGone as reason:
+        return with_no_answer(str(reason))
 
+    try:
         for terminal in terminals:
             for name in names:
                 found = compare_one(terminal, seats[terminal.seat], name, work, out)
@@ -922,6 +924,17 @@ def main():
                     "%d with pymux" % (terminal.name, name, bare, through),
                     flush=True,
                 )
+    except Exception as reason:
+        # **Ask the seat before believing the fixture.** A display
+        # server that went away makes every picture after it fail, and
+        # the terminal's complaint names the display and not the cause.
+        # A run that cannot draw has no answer to give.
+        # Lillecarl/pymux#216.
+        try:
+            seats[terminal.seat].still_there()
+        except TheSeatIsGone as gone:
+            return with_no_answer(str(gone))
+        raise reason
     finally:
         for seat in seats.values():
             seat.stop()

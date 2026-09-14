@@ -95,10 +95,12 @@ from pathlib import Path
 from pyterm_pytest.seats import (
     BLINK_FRAMES,
     BLINK_GAP,
-    SEATS,
+    TheSeatIsGone,
     _settle,
     _tail,
     differences,
+    open_the_seats,
+    with_no_answer,
 )
 
 from recorded import read_verdicts, write_list
@@ -682,12 +684,12 @@ def main():
     standing = read_recorded()
     seen = {}
 
-    seats = {}
     try:
-        for terminal in terminals:
-            if terminal.seat not in seats:
-                seats[terminal.seat] = SEATS[terminal.seat]().start(work)
+        seats = open_the_seats(terminals, work)
+    except TheSeatIsGone as reason:
+        return with_no_answer(str(reason))
 
+    try:
         for terminal in terminals:
             found = compare_one(terminal, seats[terminal.seat], work, out)
             for identity, verdict in found.items():
@@ -701,6 +703,14 @@ def main():
                 ),
                 flush=True,
             )
+    except Exception as reason:
+        # A seat that went away makes every screen after it fail, and
+        # a run that cannot draw has no answer. Lillecarl/pymux#216.
+        try:
+            seats[terminal.seat].still_there()
+        except TheSeatIsGone as gone:
+            return with_no_answer(str(gone))
+        raise reason
     finally:
         for seat in seats.values():
             seat.stop()
