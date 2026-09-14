@@ -680,6 +680,36 @@ class Plan:
     bar, the message toolbar, a popup -- floats over the whole layout
     and keeps the toolkit's own numbering, in `layout.Z_INDEX`.
 
+    **The numbers are derived, not held, and focus never changes one.**
+    Carl decided this before anything builds a float
+    (Lillecarl/pymux#357). A window keeps its floats in an order, and
+    `measure()` numbers the planes from that order on every frame:
+    `GROUND` for the tiled tree, then 1, 2, 3 for the floats, bottom to
+    top. A float is appended when it opens, moved to the end when it is
+    raised, and dropped when it closes. **Focus does none of those.**
+
+    Two things follow, and both are why a numbered dictionary is enough
+    here where tmux needs a list it can reorder:
+
+    - The numbers never grow. Three floats always give planes 0 to 3,
+      however often anything has been raised, because nothing carries a
+      number from one frame to the next.
+    - No empty plane is ever built, so nothing has to remove one.
+
+    tmux raises a floating pane on focus and never touches a tiled one
+    (`window_redraw_active_switch`, `window.c:790`). We keep the half
+    that matches and leave the other out: `select-pane` moves the
+    focus and nothing else.
+
+    **A pane may ask to be moved; it may not move itself.** Carl:
+    elements "communicate with the layout and **ask** to be moved
+    (which can be denied if we ever have a reason to do so)". Nothing
+    here writes to a plan, so the ask goes to whatever laid the plan
+    out and that decides. `Pymux.resize_pane_to_program_request` is the
+    same shape already: a program asks for a size, and it only gets one
+    when `allow-program-resize` says so, because a pane sits in a
+    layout and taking room takes it from somebody.
+
     `order` is the numbering, and it is **over the panes a person can
     see**: one for each slot, the one that slot shows. A pane number is
     what `select-pane -t 1` takes and what a title bar draws, and Carl:
