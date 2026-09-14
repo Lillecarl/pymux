@@ -13,7 +13,7 @@ Lillecarl/pymux#353.
 import pytest
 
 from photograph_chrome import FIXTURES as CHROME_FIXTURES
-from photograph_chrome import Fixture, count_panes, exact_list
+from photograph_chrome import Fixture, chosen_by_name, count_panes, exact_list
 from photograph_themes import FIXTURES as THEME_FIXTURES
 
 #: What `#{pane_mode}` can answer: tmux's two names, and nothing.
@@ -54,6 +54,25 @@ def test_a_knob_names_fixtures_that_share_no_substring(monkeypatch):
     "Which is the case `PYMUX_CHROME` cannot do. Lillecarl/pymux#365."
     monkeypatch.setenv("PYMUX_CHROME_LIST", "which-key,clock,copy-mode")
     assert exact_list("PYMUX_CHROME_LIST") == ["which-key", "clock", "copy-mode"]
+
+
+def test_an_exact_list_keeps_the_order_of_what_there_is():
+    assert chosen_by_name(["a", "b", "c"], ["c", "a"], "fixture") == ["a", "c"]
+
+
+def test_one_misspelt_name_in_an_exact_list_stops_the_run():
+    """
+    And not "did any of them match". A list of four where one is
+    misspelt would otherwise run the other three, and a batch that
+    quietly shrank is a gap in the gallery nobody sees.
+    Lillecarl/pymux#365.
+    """
+    with pytest.raises(SystemExit) as raised:
+        chosen_by_name(["clock", "which-key"], ["clock", "which_key"], "fixture")
+    assert "which_key" in str(raised.value)
+    # And what there is, because the next thing a person types is the
+    # right spelling.
+    assert "which-key" in str(raised.value)
 
 
 def test_a_fixture_asks_for_one_pane_unless_it_says_otherwise():

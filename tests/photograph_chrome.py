@@ -126,6 +126,21 @@ def exact_list(env):
     names = [one for one in value.split(",") if one]
     return names or None
 
+
+def chosen_by_name(have, wanted, what):
+    """
+    The names of `have` that `wanted` asks for, in `have`'s order.
+
+    Raises unless every asked-for name is one there is.
+    """
+    missing = [one for one in wanted if one not in have]
+    if missing:
+        raise SystemExit(
+            "no %s is named %s. There is: %s"
+            % (what, ", ".join(missing), ", ".join(have))
+        )
+    return [one for one in have if one in set(wanted)]
+
 #: The relay, beside this file.
 RELAY = Path(__file__).parent / "drive_in_terminal.py"
 
@@ -715,20 +730,24 @@ def main(
     out.mkdir(parents=True, exist_ok=True)
 
     if only_list is not None:
-        wanted = set(only_list)
-        names = [name for name in sorted(fixtures) if name in wanted]
-        if not names:
-            raise SystemExit("no fixture is one of %r" % sorted(wanted))
+        # Every name, and not "did any of them match": a list of four
+        # where one is misspelt would otherwise run the other three and
+        # say nothing about the fourth. An exact list is asked for by a
+        # derivation that holds a batch, and a batch that quietly
+        # shrank is a gap in the gallery nobody sees.
+        names = chosen_by_name(sorted(fixtures), only_list, "fixture")
     else:
         names = [name for name in sorted(fixtures) if only in name]
         if not names:
             raise SystemExit("no fixture holds %r" % only)
 
     if only_terminals_list is not None:
-        wanted = set(only_terminals_list)
+        wanted = set(
+            chosen_by_name(
+                [t.name for t in terminals], only_terminals_list, "terminal"
+            )
+        )
         terminals = [t for t in terminals if t.name in wanted]
-        if not terminals:
-            raise SystemExit("no terminal is one of %r" % sorted(wanted))
     else:
         terminals = [t for t in terminals if only_terminals in t.name]
         if not terminals:
