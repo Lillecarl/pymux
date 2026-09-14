@@ -89,13 +89,15 @@ class Connection:
             return ""
         return "%s:%s" % (self.hostname or "?", self.ttyname)
 
-    def detach_and_close(self) -> None:
+    def detach_and_close(self, hang_up: bool = False) -> None:
         """
         What `ServerConnection.detach_and_close` does that a test can
         see: the client leaves the server.
 
         The real one also ends the application and closes two pipes,
-        and neither exists here.
+        and neither exists here. `hang_up` is the `attach -x` packet,
+        which needs a transport to arrive over and so is judged in
+        `test_the_others_are_hung_up.py`. Lillecarl/pymux#347.
         """
         if self._pymux is not None:
             self._pymux.remove_client(self)

@@ -126,6 +126,7 @@ async def test_s_says_so_when_no_session_carries_that_name():
                     all_but_this_one=False,
                     target_session="no-such-session",
                     target_client=None,
+                    hang_up=False,
                 ),
             )
 
@@ -169,6 +170,7 @@ async def test_t_says_so_when_no_client_carries_that_name():
                     all_but_this_one=False,
                     target_session=None,
                     target_client="?:nobody",
+                    hang_up=False,
                 ),
             )
 

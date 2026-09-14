@@ -1,3 +1,5 @@
+import os
+import signal
 from abc import ABC
 
 
@@ -24,6 +26,17 @@ class Client(ABC):
     #: Lillecarl/pymux#340.
     chosen_name: str | None = None
 
+    #: Whether `pymux attach -x` asked for the other clients of the
+    #: session to be hung up as well as detached. It rides on the
+    #: `start-gui` packet, beside the flag for `-d`.
+    #: Lillecarl/pymux#347.
+    hang_up_others: bool = False
+
+    #: Whether the server said to hang up as well as to leave. `attach
+    #: -x` and `detach-client -P` are what say it.
+    #: Lillecarl/pymux#347.
+    hang_up_asked: bool = False
+
     def run_command(self, command, pane_id=None) -> int:
         """
         Ask the server to run this command. Return the exit code.
@@ -34,3 +47,39 @@ class Client(ABC):
         """
         Attach client user interface.
         """
+
+    def hang_up_the_parent(self) -> None:
+        """
+        Send SIGHUP to the process that started this client, when the
+        server asked for it.
+
+        This is what `attach -x` adds to `attach -d`: the terminal that
+        was opened to run pymux closes, rather than going back to a
+        shell prompt nobody asked for. tmux does exactly this, in the
+        client and after the terminal is back
+        (`client.c:415`), and it skips the signal when the parent is
+        init -- a client whose parent already went would otherwise
+        hang up a process that is not the one it means.
+        Lillecarl/pymux#347.
+
+        **After the attachment, never during it.** A signal sent while
+        the alternate screen is up leaves the terminal as pymux had it.
+        """
+        if not self.hang_up_asked:
+            return
+
+        # Windows has no SIGHUP and no process to send one to. The
+        # client leaves, which is the rest of what was asked.
+        if not hasattr(signal, "SIGHUP") or not hasattr(os, "getppid"):
+            return
+
+        parent = os.getppid()
+        if parent <= 1:
+            return
+
+        try:
+            os.kill(parent, signal.SIGHUP)
+        except OSError:
+            # The parent went between the question and the signal.
+            # Nothing to hang up, and nothing to say about it.
+            pass

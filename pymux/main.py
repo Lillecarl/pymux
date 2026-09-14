@@ -2690,7 +2690,7 @@ class Pymux:
         messages, self.startup_errors = self.startup_errors, []
         client_state.message = "; ".join(messages)
 
-    def detach_client(self, app):
+    def detach_client(self, app, hang_up: bool = False):
         """
         Detach the client that belongs to this CLI.
 
@@ -2720,7 +2720,7 @@ class Pymux:
 
         connection = self.connection_of(app)
         if connection:
-            connection.detach_and_close()
+            connection.detach_and_close(hang_up=hang_up)
 
         # Redraw all clients -> Maybe their size has to change.
         self.invalidate(Woke.CLIENT_DETACHED)
@@ -2819,6 +2819,7 @@ class Pymux:
         color_depth,
         detach_other_clients: bool = False,
         chosen_name: str | None = None,
+        hang_up_others: bool = False,
     ):
         """
         Run the server and one client in this process.
@@ -2855,6 +2856,10 @@ class Pymux:
         self._serves_one_terminal = True
         self.server_starts()
 
+        #: The client, kept so that the hangup of `attach -x` can be
+        #: sent after the loop has gone. Lillecarl/pymux#347.
+        attached: list = []
+
         async def run() -> None:
             try:
                 async with self.running():
@@ -2873,6 +2878,8 @@ class Pymux:
                     # that are about this terminal. Lillecarl/pymux#223.
                     client.config_file = self.source_file
                     client.chosen_name = chosen_name
+                    client.hang_up_others = hang_up_others
+                    attached.append(client)
                     await client.attach(
                         detach_other_clients=detach_other_clients,
                         color_depth=color_depth,
@@ -2897,6 +2904,10 @@ class Pymux:
             anyio.run(run)
         finally:
             self._remove_socket()
+            # After the loop, so the terminal is back before the
+            # process that started this one hears about it.
+            for client in attached:
+                client.hang_up_the_parent()
 
     def run_standalone(self, color_depth):
         """

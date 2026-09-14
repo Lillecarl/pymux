@@ -143,6 +143,9 @@ class TerminalClient(Client):
             {
                 "cmd": "start-gui",
                 "detach-others": detach_other_clients,
+                # `-x`: the other clients of the session leave, and the
+                # terminals they were in close. Lillecarl/pymux#347.
+                "hang-up-others": self.hang_up_others,
                 "color-depth": color_depth,
                 "term": os.environ.get("TERM", ""),
                 "colorterm": os.environ.get("COLORTERM", ""),
@@ -244,6 +247,12 @@ class TerminalClient(Client):
             # what this client leaves with. The read loop ends on the
             # close itself.
             self.exit_code = packet["code"]
+            # And whether to hang up the process that started this
+            # client on the way out, which is `attach -x`. The signal
+            # goes after the terminal is back, so it is remembered
+            # here and sent there. Lillecarl/pymux#347.
+            if packet.get("hang-up"):
+                self.hang_up_asked = True
 
         elif packet["cmd"] == "suspend":
             # Suspend client process to background.

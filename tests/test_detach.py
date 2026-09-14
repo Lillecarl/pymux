@@ -122,7 +122,7 @@ async def test_client_over_connection_still_detaches():
     class _Connection(Connection):
         "The one that records the detach, which is what the test reads."
 
-        def detach_and_close(self):
+        def detach_and_close(self, hang_up: bool = False):
             detached.append(True)
 
     pymux = Pymux()

@@ -34,6 +34,8 @@ Options:
                      '$XDG_CONFIG_HOME/pymux/pymux.conf' and
                      '~/.pymux.conf' that is there.
     -d             : Detach all other clients, when attaching.
+    -x             : Detach them, and hang up the process each one was
+                     started by, so the terminal it was in closes.
     -n NAME        : What to call this terminal: 'desk', 'phone'. The
                      commands that take '-t <client>' take it, and it
                      lasts as long as this attachment.
@@ -151,6 +153,18 @@ def _add_options(parser: argparse.ArgumentParser, suppress_defaults: bool) -> No
         action="store_true",
         default=false,
         help="Detach all other clients, when attaching.",
+    )
+    parser.add_argument(
+        "-x",
+        "--hang-up-others",
+        dest="hang_up_others",
+        action="store_true",
+        default=false,
+        help=(
+            "Detach the other clients of that session, and hang up the "
+            "process each one was started by. The terminal each was in "
+            "closes, rather than going back to a shell prompt."
+        ),
     )
     parser.add_argument(
         "-n",
@@ -430,8 +444,9 @@ def run() -> None:
         # the terminal and to the environment.
         mux.run_integrated(
             color_depth=color_depth,
-            detach_other_clients=a.detach_others,
+            detach_other_clients=a.detach_others or a.hang_up_others,
             chosen_name=a.client_name,
+            hang_up_others=a.hang_up_others,
         )
 
     elif mode in ("list-sessions", "ls"):
@@ -478,7 +493,10 @@ def run() -> None:
             _socket_from_env_warning()
             sys.exit(1)
 
-        detach_other_clients = a.detach_others
+        # `-x` is `-d` with a harsher message, which is how tmux reads
+        # it: `if (dflag || xflag)` in `cmd-attach-session.c:123`.
+        # Lillecarl/pymux#347.
+        detach_other_clients = a.detach_others or a.hang_up_others
 
         # The code the client leaves with is the server's to name. A
         # server that will not serve this client says so in an `exit`
@@ -488,19 +506,21 @@ def run() -> None:
             client = create_client(socket_name)
             client.config_file = filename
             client.chosen_name = a.client_name
+            client.hang_up_others = a.hang_up_others
             client.attach(
                 detach_other_clients=detach_other_clients, color_depth=color_depth
             )
-            sys.exit(client.exit_code)
+            _leave(client)
         else:
             # Connect to the first server.
             for c in list_clients():
                 c.config_file = filename
                 c.chosen_name = a.client_name
+                c.hang_up_others = a.hang_up_others
                 c.attach(
                     detach_other_clients=detach_other_clients, color_depth=color_depth
                 )
-                sys.exit(c.exit_code)
+                _leave(c)
 
             print("No pymux instance found.")
             sys.exit(1)
@@ -534,7 +554,7 @@ def run() -> None:
             client.config_file = filename
             client.chosen_name = a.client_name
             client.attach(color_depth=color_depth)
-            sys.exit(client.exit_code)
+            _leave(client)
 
     else:
         if socket_name_from_env:
@@ -543,6 +563,20 @@ def run() -> None:
         else:
             print("Invalid command.")
             sys.exit(1)
+
+
+def _leave(client) -> None:
+    """
+    End this process the way the attachment ended.
+
+    A client that was told to hang up sends the signal here, after the
+    terminal is back and before the process goes: the same order tmux
+    holds (`client.c:410-416`), and for the same reason -- a signal
+    sent while the alternate screen is up leaves the terminal as pymux
+    had it. Lillecarl/pymux#347.
+    """
+    client.hang_up_the_parent()
+    sys.exit(client.exit_code)
 
 
 def _no_server_error(socket_name: str | None) -> None:
@@ -709,6 +743,11 @@ def _new_session(socket_name: str, command: str, args: List[str], pane_id=None) 
     if attach:
         client = create_client(socket_name)
         client.attach(color_depth=ColorDepth.DEPTH_8_BIT)
+        # Nobody else is on a server this command just started, so
+        # nothing hangs this client up at the attach. Something can
+        # later: `detach-client -P` names one client, and this is one.
+        # Lillecarl/pymux#347.
+        client.hang_up_the_parent()
         return client.exit_code
 
     return 0

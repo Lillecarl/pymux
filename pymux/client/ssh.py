@@ -378,6 +378,14 @@ class SshClient(TerminalClient):
                 if lost is None:
                     break  # The server closed the connection.
 
+                if self.hang_up_asked:
+                    # `attach -x` on another terminal told this client
+                    # to leave. The link going while that packet was on
+                    # its way is still the end of this attachment:
+                    # coming back would be coming back uninvited.
+                    # Lillecarl/pymux#347.
+                    break
+
                 try:
                     again = await self._link_again(stdin_fd, waits, lost)
                 except Exception as error:

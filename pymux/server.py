@@ -530,6 +530,9 @@ class ServerConnection:
                 return
 
             detach_other_clients = bool(packet["detach-others"])
+            # `attach -x`: the others leave, and the terminals they were
+            # in close. Lillecarl/pymux#347.
+            hang_up_others = bool(packet.get("hang-up-others"))
             forced = packet["color-depth"]
             term = packet["term"]
 
@@ -546,8 +549,8 @@ class ServerConnection:
 
             self._create_app(color_depth=self.colors.depth, term=term)
 
-            if detach_other_clients:
-                self._detach_the_others()
+            if detach_other_clients or hang_up_others:
+                self._detach_the_others(hang_up=hang_up_others)
 
             # What this client's own configuration file said about it.
             # Applied before the first frame, so nothing draws with a
@@ -572,10 +575,11 @@ class ServerConnection:
                     "Could not open %s in a browser on this machine." % (packet["data"],)
                 )
 
-    def _detach_the_others(self) -> None:
+    def _detach_the_others(self, hang_up: bool = False) -> None:
         """
         What `attach -d` means: take this session from whoever else
-        holds it.
+        holds it. `attach -x` is the same set of clients, told to hang
+        up as well as to leave. Lillecarl/pymux#347.
 
         **The session, and not the server.** tmux's rule is one line --
         `if (c_loop->session != s || c == c_loop) continue;`
@@ -603,7 +607,7 @@ class ServerConnection:
             other = connection.client_state
             if other is None or other.session is not self.client_state.session:
                 continue
-            connection.detach_and_close()
+            connection.detach_and_close(hang_up=hang_up)
 
     def _take_client_options(self, announced) -> None:
         """
@@ -887,9 +891,36 @@ class ServerConnection:
             return ""
         return "%s:%s" % (self.hostname or "?", what)
 
-    def detach_and_close(self) -> None:
-        # Remove from Pymux.
-        self._close_connection()
+    def detach_and_close(self, hang_up: bool = False) -> None:
+        """
+        Take this client off its session and close the connection.
+
+        `hang_up` is `attach -x`: the client leaves and then hangs up
+        the process that started it, so the terminal it was in closes.
+        The client hears that in the `exit` packet, which is the one
+        packet that already means "the server let you go" -- so the
+        SSH client reads it as an ending and not as a link that went,
+        and does not come back. Lillecarl/pymux#332,
+        Lillecarl/pymux#347.
+
+        **The packet has to be written before the close.**
+        `_send_packet` spawns the write into the scope of this
+        connection, and closing cancels that scope, so the two in a row
+        would race and the client would usually hear nothing. This
+        spawns one task that writes and then closes.
+        """
+        # A connection with no scope to run the write in cannot be told
+        # anything, and a hangup that waited for one would never close
+        # it. Leaving is the part that still works.
+        if not hang_up or self._tasks is None:
+            self._close_connection()
+            return
+
+        async def hang_up_and_close() -> None:
+            await self._write_packet({"cmd": "exit", "code": 0, "hang-up": True})
+            self._close_connection()
+
+        self._spawn(hang_up_and_close())
 
 
 class _SocketStdout:

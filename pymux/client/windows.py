@@ -57,6 +57,8 @@ class WindowsClient(Client):
                 {
                     "cmd": "start-gui",
                     "detach-others": detach_other_clients,
+                    # Lillecarl/pymux#347, as `client/terminal.py` says.
+                    "hang-up-others": self.hang_up_others,
                     "color-depth": color_depth,
                     "term": os.environ.get("TERM", ""),
                     # Lillecarl/pymux#287, as `client/terminal.py` says.
@@ -119,6 +121,10 @@ class WindowsClient(Client):
             # What this client leaves with. Lillecarl/pymux#332, as
             # `client/terminal.py` says.
             self.exit_code = packet["code"]
+            # Windows has no SIGHUP, so this is remembered and the
+            # hangup is what does nothing. Lillecarl/pymux#347.
+            if packet.get("hang-up"):
+                self.hang_up_asked = True
 
         elif packet["cmd"] == "suspend":
             # Suspend client process to background.

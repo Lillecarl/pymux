@@ -43,9 +43,20 @@ def this_client(pymux: "Pymux") -> "ClientState | None":
 
 
 def move_this_client(
-    pymux: "Pymux", target: str | None, detach_others: bool = False
+    pymux: "Pymux",
+    target: str | None,
+    detach_others: bool = False,
+    hang_up_others: bool = False,
 ) -> None:
-    "Put the calling client on the session a `-t` names."
+    """
+    Put the calling client on the session a `-t` names.
+
+    `hang_up_others` is `attach-session -x`: the same clients leave,
+    and the terminals they were in close. It says nothing about
+    whether the others go -- tmux reads `-x` as `-d` with a harsher
+    message (`if (dflag || xflag)`, `cmd-attach-session.c:123`), and so
+    does the caller. Lillecarl/pymux#347.
+    """
     session = find_session(pymux, target)
 
     client_state = this_client(pymux)
@@ -54,10 +65,10 @@ def move_this_client(
             "no client to move: this command did not come from an attached client."
         )
 
-    if detach_others:
+    if detach_others or hang_up_others:
         for other in list(pymux._client_states.values()):
             if other is not client_state and not other.temporary:
                 if other.session is session:
-                    pymux.detach_client(other.app)
+                    pymux.detach_client(other.app, hang_up=hang_up_others)
 
     pymux.attach_client_to(client_state, session)

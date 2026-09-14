@@ -240,10 +240,11 @@ class Terminal:
 class Attached:
     "A server with one window, an SSH client on a pty, and the attach."
 
-    def __init__(self, pymux, terminal, attach) -> None:
+    def __init__(self, pymux, terminal, attach, client) -> None:
         self.pymux = pymux
         self.terminal = terminal
         self.attach = attach
+        self.client = client
 
     async def until(self, what, says: str, seconds: float = 20.0) -> None:
         """
@@ -298,7 +299,7 @@ async def attached(monkeypatch, **how):
 
         attach = asyncio.ensure_future(client._attach(**how))
         try:
-            yield Attached(pymux, terminal, attach)
+            yield Attached(pymux, terminal, attach, client)
         finally:
             attach.cancel()
             server.close()
@@ -376,6 +377,25 @@ async def test_a_server_that_closes_the_connection_is_not_retried(monkeypatch):
             connection.detach_and_close()
 
         await asyncio.wait_for(it.attach, 10)
+        assert "lost the server" not in it.terminal.said
+
+
+async def test_a_client_told_to_hang_up_does_not_come_back(monkeypatch):
+    """
+    `attach -x` on another terminal tells this one to leave. A client
+    that can wait for a link to come back must read that as an ending
+    and not as a link that went. Lillecarl/pymux#347.
+    """
+    async with attached(monkeypatch) as it:
+        await it.until(lambda: len(it.pymux.connections) == 1, "the attach")
+        await it.until(lambda: ALTERNATE_SCREEN in it.terminal.said, "the first frame")
+
+        for connection in list(it.pymux.connections):
+            connection.detach_and_close(hang_up=True)
+
+        await asyncio.wait_for(it.attach, 10)
+
+        assert it.client.hang_up_asked, "the client never heard the hangup"
         assert "lost the server" not in it.terminal.said
 
 
