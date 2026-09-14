@@ -134,12 +134,22 @@ class _Connection(Connection):
 
 def create_server(panes: int):
     """
-    A server with one client and that many panes, and the client's
-    application.
+    A server with one client and that many panes, the client's
+    application, and the loop they were built against.
 
     The panes are opened the way a person opens them, alternating the
     two splits, so the tree is the shape a hand builds.
+
+    **A loop has to exist before a pane does.** Opening one reaches
+    `ptyhost.backends.posix.PosixBackend.__init__`, which builds an
+    `asyncio.Future` and therefore asks for the loop of this thread.
+    Nothing runs it: a turn would let the panes write and the frame
+    after it would differ for a reason this file did not choose.
+    `measure_keystroke.py` says the same thing at more length.
     """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
     pymux = Pymux()
     output = Vt100_Output(
         stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS)
@@ -152,6 +162,11 @@ def create_server(panes: int):
         connection=_Connection(),
     )
 
+    # `Application.create_background_task` reads this and only asks
+    # asyncio for a running loop when it is `None`. `run_async` is what
+    # usually sets it, and nothing runs the application here.
+    state.app.loop = loop
+
     with set_app(state.app):
         for command in CHROME:
             pymux.handle_command(command)
@@ -162,7 +177,30 @@ def create_server(panes: int):
                 "split-window %s '%s'" % ("-h" if number % 2 else "-v", QUIET)
             )
 
-    return pymux, state, pipe
+    return pymux, state, pipe, loop
+
+
+def close_server(pymux, pipe, loop) -> None:
+    """
+    Kill the panes, then take the loop down under whatever it armed.
+
+    A flush timer armed against a loop that never turned prints "Task
+    was destroyed but it is pending" when the loop closes, once for
+    each. So they are cancelled and the loop is turned until they have
+    taken it -- **after the profile**, which is why a turn here costs
+    the measurement nothing.
+    """
+    stop_panes(pymux)
+    pipe.__exit__(None, None, None)
+
+    pending = asyncio.all_tasks(loop)
+    for task in pending:
+        task.cancel()
+    if pending:
+        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+
+    asyncio.set_event_loop(None)
+    loop.close()
 
 
 def create_frame(state):
@@ -484,7 +522,7 @@ def main() -> int:
         asyncio.run(_animated(ANIMATED, ANIMATED_SECONDS, out))
 
     for name, phase in phases:
-        pymux, state, pipe = create_server(panes)
+        pymux, state, pipe, loop = create_server(panes)
         try:
             with set_app(state.app):
                 work = phase(pymux, state, frames)
@@ -522,8 +560,7 @@ def main() -> int:
 
             (out / ("%s.html" % name)).write_text(profiler.output_html())
         finally:
-            stop_panes(pymux)
-            pipe.__exit__(None, None, None)
+            close_server(pymux, pipe, loop)
 
     return 0
 

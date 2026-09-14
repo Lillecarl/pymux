@@ -579,6 +579,33 @@ in
         python tests/profile_frame.py
       '';
 
+  # That the profiler still runs, and nothing about what it measured.
+  #
+  # **This is a gate and `profile` is not.** A sampling profiler reads
+  # a wall clock, so it has no answer a build may fail on -- and that
+  # left nothing running it. It rotted: a server built outside an event
+  # loop stopped working when pymux moved to anyio, and the crash sat
+  # there unseen, because the one tool that would have caught it was
+  # the tool that broke. Lillecarl/pymux#360.
+  #
+  # Two panes, one frame, one phase, and no animated program, so it
+  # costs a second and proves the only thing it can prove.
+  profileStarts =
+    runInSandbox
+      {
+        name = "pymux-profile-starts";
+        setup = ''
+          export PYMUX_PROFILE_PANES=2
+          export PYMUX_PROFILE_FRAMES=1
+          export PYMUX_PROFILE_PHASES=idle
+          export PYMUX_PROFILE_ANIMATED=
+          export PYMUX_PROFILE_OUT="$out"
+        '';
+      }
+      ''
+        python tests/profile_frame.py
+      '';
+
   # The same keystroke counted rather than timed, which is what makes
   # it a gate: bytecode is exact and the same on every machine, so a
   # path that grew fails a build. It covers the two ends that nothing
