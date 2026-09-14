@@ -527,15 +527,41 @@ leaves there, so it moves with the view and can be dragged. Carl:
 floating window support "everywhere" makes sense, so it belongs to
 **`Plane` and not to `Masonry`**: every subclass gets it.
 
-`Plan` therefore grows a second list when float mode is built --
-ordered back to front, allowed to overlap, and not part of `rects`.
-Slice 1 does not add the field, because an empty list nobody writes is
-dead weight, and the module says where it goes.
+**A floating window is not a second list.** Carl settled this in
+Lillecarl/pymux#228, and the shape is his:
+
+> We have multiple separate planes, the higher up the Z plane we are
+> the higher our drawing priority is. [...] Rectangles can't overlap
+> on the same plane, the Z axis should be generic.
+
+So a plan is a stack of planes, numbered, each holding slots that do
+not overlap. Everything is on plane 0 until something asks to be
+raised, which is "all content on a single Z level by default" -- the
+shape Carl asked about when slice 5 landed.
+
+**The no-overlap rule is what makes this cheap.** It was the honest
+cost of the flexible route: two rectangles that may overlap have no
+well defined "the one to the left", and `select-pane -L`, the title
+bars and the numbering all lean on that answer. Keeping the rule
+inside a plane keeps every one of them, unchanged. Overlap happens
+between planes, where nothing asks the question.
+
+Two things follow, and both are wanted:
+
+- **Paint back to front, cull front to back.** Carl: "ideally we'd
+  walk this backwards as well so we don't bother computing things from
+  lower planes that are entirely invisible."
+- **`Zoomed` is the first real user.** It builds a plan holding one
+  slot and throws the other panes away, which is why a zoomed window
+  has no borders and no neighbours. A plane lets it raise one pane and
+  leave the rest where they are: the cull skips drawing them, and they
+  keep their sizes, their numbers and their neighbours.
 
 ## Out of scope, on purpose
 
-- Overlapping panes **inside the tiling**. Floats are the section
-  above, and they are a layer, not a relaxed rule.
+- Overlapping panes **on one plane**. The rule is per plane now, and
+  it is not relaxed there: a thing that has to sit over another one
+  goes on a higher plane. The section above says why.
 - niri's numbered horizontal planes. **pymux already has them:**
   `Arrangement.windows` is a numbered set with one visible at a time,
   which is a niri workspace exactly. A subclass can make switching them

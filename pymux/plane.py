@@ -31,15 +31,23 @@ that owns 1 or more terminals". So "no two slots overlap" needs no
 word about which pane is visible, and moving a stack is one operation
 on one object.
 
-**Nothing here can stop a popup.** "No two slots overlap" is a rule
-about the tiling, not about the screen. A popup draws in the layer
-above the panes and always has: the chrome floats sit at `Z_INDEX` 5
-to 9, and `display-popup -E` opens `Session.overlay_pane`, which is not
-in the window tree at all. A floating *window* -- a pane a person
-parks somewhere and leaves there -- is the other thing, and it belongs
-to every layout rather than to one. `Plan` grows a second, ordered
-list for those when float mode is built, and the rule above keeps its
-words because it is about `rects`.
+**Nothing here can stop a popup.** A popup draws in the layer above
+the panes and always has: the chrome floats sit at `Z_INDEX` 5 to 9,
+and `display-popup -E` opens `Session.overlay_pane`, which is not in
+the window tree at all.
+
+**"No two slots overlap" is a rule about one plane.** A plan is a
+stack of planes, numbered, and a higher number draws over a lower one.
+Carl: "we have multiple separate planes, the higher up the Z plane we
+are the higher our drawing priority is", and "rectangles can't overlap
+on the same plane". That second half is what keeps this module's
+services meaning anything: "the one to my left" has an answer inside a
+plane and none between two, so `neighbour`, `trace` and the numbering
+all work on one plane at a time.
+
+A floating *window* -- a pane a person parks somewhere and leaves
+there -- is therefore not a second list beside `rects`. It is a slot
+on a higher plane. Lillecarl/pymux#228.
 
 **What is not here.** No `Plane` class yet, and no layout: a plan
 arrives already laid out, and the classes that lay one out
