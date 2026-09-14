@@ -180,6 +180,10 @@ class TerminalClient(Client):
         """
         output = Vt100_Output.from_pty(sys.stdout)
         self._set_kitty_flags(0)
+        # DECTCEM is not part of what the alternate screen puts back,
+        # so a cursor that pymux hid stays hidden in the shell the
+        # person returns to.
+        output.show_cursor()
         output.quit_alternate_screen()
         output.disable_mouse_support()
         output.disable_bracketed_paste()
