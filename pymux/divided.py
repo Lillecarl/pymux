@@ -150,5 +150,5 @@ class Divided:
         ones over a wider row.
         """
         return view.moved_onto(
-            None if focus is None else plan.rect_of(focus), plan.plane
+            None if focus is None else plan.rect_of(focus), plan.bounds
         )

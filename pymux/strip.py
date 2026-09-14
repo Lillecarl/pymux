@@ -154,7 +154,7 @@ class Strip:
         seen only when the bars are off.
         """
         lines = []
-        box = plan.plane
+        box = plan.bounds
 
         # One line down the right of each column, the whole height of
         # the row. A column is a stack of slots that share an edge, so
@@ -210,7 +210,7 @@ class Strip:
         screen says the column is cut, which is Lillecarl/pymux#222.
         """
         gap = self.gaps.between_columns
-        box = plan.plane
+        box = plan.bounds
         row = Rect(x=box.x, y=box.y, width=box.width + gap, height=box.height)
 
         column = None

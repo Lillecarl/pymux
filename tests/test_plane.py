@@ -230,7 +230,7 @@ def every_promise_holds(plan: Plan) -> None:
         assert slot.panes, "%r owns no pane" % (slot,)
         assert 0 <= slot.showing < len(slot.panes), "%r shows nothing" % (slot,)
 
-    box = plan.plane
+    box = plan.bounds
     for rect in rects.values():
         assert box.x <= rect.x and rect.right <= box.right, "%r is outside %r" % (
             rect,
@@ -284,7 +284,7 @@ def test_plan_keeps_every_promise(plan):
 @given(TILINGS)
 def test_tiling_leaves_no_hole(plan):
     "Which is what makes it a tiling, and the bare plane not one."
-    box = plan.plane
+    box = plan.bounds
     covered = sum(rect.width * rect.height for rect in plan.rects.values())
 
     assert covered == box.width * box.height
@@ -334,7 +334,7 @@ def test_every_slot_of_tiling_is_reachable(plan):
 @given(PLANS)
 def test_at_finds_whatever_holds_cell(plan):
     "And says nothing for a hole, which is a real answer on a plane."
-    for point in plan.plane.cells():
+    for point in plan.bounds.cells():
         holding = [slot for slot in plan.slots if plan.rects[slot].holds(point)]
         found = plan.at(point)
 
@@ -502,7 +502,7 @@ def test_plane_reaches_below_origin():
     plan = create_plan(A=Rect(-20, -8, 4, 4), B=Rect(-16, -8, 4, 4))
 
     assert plan.neighbour(named(plan, "A"), Side.RIGHT) is named(plan, "B")
-    assert plan.plane == Rect(-20, -8, 8, 4)
+    assert plan.bounds == Rect(-20, -8, 8, 4)
 
 
 # ----------------------------------------------------------------------
@@ -783,7 +783,7 @@ def test_plans_drawn_here_are_worth_drawing():
 
     def has_hole(plan) -> bool:
         covered = sum(rect.width * rect.height for rect in plan.rects.values())
-        return len(plan.slots) >= 2 and covered < plan.plane.width * plan.plane.height
+        return len(plan.slots) >= 2 and covered < plan.bounds.width * plan.bounds.height
 
     assert find(SCATTERS, has_hole)
 

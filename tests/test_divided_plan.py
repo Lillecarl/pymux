@@ -99,9 +99,9 @@ def test_tiling_fills_view_exactly():
     window, _ = create_window([True, True, False])
     plan = create_plan(window)
 
-    assert plan.plane == plan.plane._replace(x=0, y=0)
-    assert plan.plane.width == SIZE.columns
-    assert plan.plane.height == SIZE.rows
+    assert plan.bounds == plan.bounds._replace(x=0, y=0)
+    assert plan.bounds.width == SIZE.columns
+    assert plan.bounds.height == SIZE.rows
 
 
 def test_weights_say_who_gets_room():
@@ -134,7 +134,7 @@ def test_bigger_gap_comes_out_of_panes():
 
     assert where(roomy, panes[0]).height == where(tight, panes[0]).height - 1
     assert where(roomy, panes[1]).y == where(tight, panes[1]).y
-    assert roomy.plane.height == tight.plane.height == SIZE.rows
+    assert roomy.bounds.height == tight.bounds.height == SIZE.rows
 
 
 def test_same_window_measures_same_twice():
@@ -241,7 +241,7 @@ def test_view_smaller_than_plane_follows_focus():
     right = layout.look_at(plan, view, panes[1])
     assert right.x == plan.rect_of(panes[1]).x
     # And it stays on the plane.
-    assert right.x <= plan.plane.right - view.size.columns
+    assert right.x <= plan.bounds.right - view.size.columns
 
 
 # ----------------------------------------------------------------------
@@ -278,7 +278,7 @@ def test_every_pane_keeps_cell_in_window_that_is_too_small():
     plan = create_plan(window, Size(rows=4, columns=20))
 
     assert all(where(plan, pane).height >= 1 for pane in panes)
-    assert plan.plane.height > 4
+    assert plan.bounds.height > 4
 
 
 def test_deep_tree_in_tiny_window_lays_nothing_on_anything():
@@ -333,5 +333,5 @@ def test_tiling_that_fits_covers_view_and_no_more(tree, focus):
     "The property that separates this layout from a strip."
     plan = create_plan(create_window(tree, focus)[0])
 
-    assert (plan.plane.x, plan.plane.y) == (0, 0)
-    assert (plan.plane.width, plan.plane.height) == (SIZE.columns, SIZE.rows)
+    assert (plan.bounds.x, plan.bounds.y) == (0, 0)
+    assert (plan.bounds.width, plan.bounds.height) == (SIZE.columns, SIZE.rows)

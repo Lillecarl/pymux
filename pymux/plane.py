@@ -542,10 +542,10 @@ class Plan:
                     raise ValueError("%r is in two slots of one plan" % (pane,))
                 self._slots[id(pane)] = slot
 
-        #: The bounding box of every rectangle. The plane is
-        #: unbounded, so this is where the *panes* are and not where
-        #: the plane ends.
-        self.plane: Rect = bounding_box(self.rects.values())
+        #: The bounding box of every rectangle. A plane is unbounded,
+        #: so this is where the *panes* are and not where the plane
+        #: ends.
+        self.bounds: Rect = bounding_box(self.rects.values())
 
         self.order: list[Pane] = list(order) if order is not None else list(self.shown)
 

@@ -70,10 +70,10 @@ def test_zoomed_pane_is_whole_window():
         plan = plan_of(pymux, window)
 
         assert len(plan.rects) == 1
-        assert plan.rect_of(second) == plan.plane
+        assert plan.rect_of(second) == plan.bounds
         # The window less the row the title bar hangs in.
-        assert plan.plane.height == ROWS - 2
-        assert plan.plane.width == COLUMNS
+        assert plan.bounds.height == ROWS - 2
+        assert plan.bounds.width == COLUMNS
 
 
 def test_nothing_is_beside_zoomed_pane():
@@ -140,9 +140,9 @@ def test_zoomed_stack_pays_for_no_bar_below():
     with create_client(CHROME) as (pymux, draw):
         window, _first, _second = two_panes(pymux, "split-window -v")
 
-        stacked = plan_of(pymux, window).plane.height
+        stacked = plan_of(pymux, window).bounds.height
         window.zoom = True
-        zoomed = plan_of(pymux, window).plane.height
+        zoomed = plan_of(pymux, window).bounds.height
 
         assert zoomed == stacked + 1
 
@@ -172,7 +172,7 @@ def test_zoomed_window_of_one_pane_is_that_pane():
         plan = plan_of(pymux, window)
 
         assert len(plan.rects) == 1
-        assert plan.plane == plan.rect_of(window.active_pane)
+        assert plan.bounds == plan.rect_of(window.active_pane)
 
 
 def test_layout_measures_what_it_is_given():

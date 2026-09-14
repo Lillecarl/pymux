@@ -99,7 +99,7 @@ def test_strip_of_three_runs_past_window():
     window, _ = create_strip((1, 1, 1))
     plan = create_plan(window)
 
-    assert plan.plane.width > SIZE.columns
+    assert plan.bounds.width > SIZE.columns
 
 
 def test_every_pane_of_column_is_as_wide_as_column():
