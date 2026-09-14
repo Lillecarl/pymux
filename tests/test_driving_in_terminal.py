@@ -388,6 +388,21 @@ def test_a_terminal_answer_is_not_the_program_going_quiet():
     assert took >= QUIET
 
 
+def test_a_step_that_presses_nothing_is_a_wait_and_still_fences(tmp_path):
+    """
+    `which-key` ends in an empty step, so that the frame the prefix
+    asked for is on the screen before the fence goes down the fifo.
+    The mark was taken on that step, and the fence then waited for one
+    byte past a frame that had already arrived. `foot which-key` never
+    produced a picture, in five runs across two trees.
+    Lillecarl/pymux#364.
+    """
+    pane = "stty -echo; printf 'up.'; exec python3 %s %s %s"
+    _, fence_seen, error = run_fenced(tmp_path, '0.1 b"k"\n0.3 b""\n', pane)
+
+    assert fence_seen.exists(), error
+
+
 def test_no_key_is_pressed_before_the_boot_fence_comes_back(tmp_path):
     """
     The first bytes a program writes are its questions to the terminal,

@@ -502,9 +502,21 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
                 # How late says whether the schedule held. A step
                 # pressed on time into a program that was busy is the
                 # one that gets lost.
-                note(started, "key %r, %.3fs late" % (keys, now - when))
-                if not waiting:
-                    mark = len(seen)
+                note(
+                    started,
+                    "key %r, %.3fs late" % (keys, now - when)
+                    if keys
+                    else "a wait, %.3fs late" % (now - when,),
+                )
+                # The mark is where the wire was when the keys went in,
+                # and the fence waits for one byte past it. **A step
+                # that presses nothing asks for no frame**: it is a
+                # wait, and the frame for the key before it arrived
+                # during that wait. Taking the mark there left the
+                # fence waiting for a frame nothing was going to draw,
+                # and `which-key` never produced a picture.
+                # Lillecarl/pymux#364.
+                mark = len(seen) if keys else None
 
             if waiting:
                 until = when + waiting[0][0] - now
