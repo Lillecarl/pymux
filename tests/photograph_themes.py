@@ -16,8 +16,9 @@ Six terminals run: the three dark ones, and the same three on a light
 background, because a theme that read on the black it was written on
 may be unreadable on white.
 
-Nothing here is judged. The pictures are for a person, the same way
-the ones of chrome are.
+What these draw is not judged. The pictures are for a person, the same
+way the ones of chrome are. The arrangement behind them is judged, and
+`photograph_chrome.Fixture` says why.
 """
 
 import os
@@ -36,7 +37,9 @@ from pymux.style_pygments import names  # noqa: E402
 from photograph_chrome import (  # noqa: E402
     CHROME,
     DEMO,
+    DEMO_PANES,
     PREFIX,
+    Fixture,
     create_command,
     demo_keys,
     keys,
@@ -62,14 +65,16 @@ ONLY_TERMINALS = os.environ.get("PYMUX_THEMES_TERMINALS", "")
 #: Lillecarl/pymux#223.
 FIXTURES = {}
 for _name in sorted(THEMES):
-    FIXTURES["theme-%s" % _name] = (
+    FIXTURES["theme-%s" % _name] = Fixture(
         CHROME + "set-client-option theme %s\n" % _name,
         demo_keys(),
+        DEMO_PANES,
     )
 for _name in names():
-    FIXTURES["theme-pygments-%s" % _name] = (
+    FIXTURES["theme-pygments-%s" % _name] = Fixture(
         CHROME + "set-client-option theme pygments:%s\n" % _name,
         demo_keys(),
+        DEMO_PANES,
     )
 
 #: A few of the base16 collection, by the same name. The whole
@@ -83,20 +88,22 @@ for _name in (
     "solarized-light",
     "default-dark",
 ):
-    FIXTURES["theme-base16-%s" % _name] = (
+    FIXTURES["theme-base16-%s" % _name] = Fixture(
         CHROME + "set-client-option theme base16:%s\n" % _name,
         demo_keys(),
+        DEMO_PANES,
     )
 
 #: The palette half of the same story: with the screen painted, the
 #: pane answers a program's queries with the scheme's sixteen, and
 #: the demo's swatches are the scheme's. The one above is the
 #: off half, where the pane follows the terminal. Lillecarl/pymux#283.
-FIXTURES["theme-base16-painted-mocha"] = (
+FIXTURES["theme-base16-painted-mocha"] = Fixture(
     CHROME
     + "set-client-option theme base16:catppuccin-mocha\n"
     + "set-option paint-screen on\n",
     demo_keys(),
+    DEMO_PANES,
 )
 
 #: The default, which is the search: no theme is named, and the
@@ -110,7 +117,7 @@ FIXTURES["theme-base16-painted-mocha"] = (
 #: fixed, and `cut-follows-the-terminal` below is the fixture that
 #: shows it: it types nothing and still follows each terminal.
 #: Lillecarl/pymux#346.
-FIXTURES["theme-nearest"] = (
+FIXTURES["theme-nearest"] = Fixture(
     CHROME,
     keys(
         (0.0, PREFIX),
@@ -120,6 +127,7 @@ FIXTURES["theme-nearest"] = (
         # one: "#1d2021" in the form `XParseColor` reads.
         (1.6, b"\x1b]11;rgb:1d1d/2020/2121\x1b\\"),
     ),
+    DEMO_PANES,
 )
 
 #: The takeover's own picture. `paint-screen` draws the scheme's
@@ -129,11 +137,12 @@ FIXTURES["theme-nearest"] = (
 #: terminal keeps its white. The theme's own picture in the loop above
 #: is the off half of the pair, same theme, same keys.
 #: Lillecarl/pymux#273.
-FIXTURES["painted-screen"] = (
+FIXTURES["painted-screen"] = Fixture(
     CHROME
     + "set-client-option theme pygments:catppuccin-mocha\n"
     + "set-option paint-screen on\n",
     demo_keys(),
+    DEMO_PANES,
 )
 
 #: The tint on a column a strip cut off, over the terminal's own
@@ -145,7 +154,7 @@ FIXTURES["painted-screen"] = (
 #: background: the mark lifts a dark screen and darkens a light one,
 #: and one colour could only do one of those. Lillecarl/pymux#222,
 #: Lillecarl/pymux#352.
-FIXTURES["cut-follows-the-terminal"] = (
+FIXTURES["cut-follows-the-terminal"] = Fixture(
     CHROME
     + "set-option paint-screen off\n"
     + "set-window-option -g strip on\n",
@@ -155,6 +164,7 @@ FIXTURES["cut-follows-the-terminal"] = (
         *create_command("switch-column-width"),
         *create_command("select-pane -L"),
     ),
+    (2,),
 )
 
 
