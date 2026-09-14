@@ -544,17 +544,10 @@ class ServerConnection:
             self.ttyname = packet.get("ttyname", "")
             self.pid = packet.get("pid") or 0
 
-            if detach_other_clients:
-                # **Not this one.** A connection is in the list from
-                # the moment the server accepts it, which is before
-                # this packet arrives, so `attach -d` closed the client
-                # that asked for it and the person was back at their
-                # shell. Lillecarl/pymux#344.
-                for c in self.pymux.connections:
-                    if c is not self:
-                        c.detach_and_close()
-
             self._create_app(color_depth=self.colors.depth, term=term)
+
+            if detach_other_clients:
+                self._detach_the_others()
 
             # What this client's own configuration file said about it.
             # Applied before the first frame, so nothing draws with a
@@ -578,6 +571,39 @@ class ServerConnection:
                 self.client_state.message = (
                     "Could not open %s in a browser on this machine." % (packet["data"],)
                 )
+
+    def _detach_the_others(self) -> None:
+        """
+        What `attach -d` means: take this session from whoever else
+        holds it.
+
+        **The session, and not the server.** tmux's rule is one line --
+        `if (c_loop->session != s || c == c_loop) continue;`
+        (`cmd-attach-session.c:127`) -- and pymux had neither half of
+        it. A person attaching to one session threw everybody off every
+        other session too. `detach-client -a` is the gesture for the
+        whole server, in pymux as in tmux. Lillecarl/pymux#345.
+
+        That one rule also answers a question pymux had answered
+        wrongly. `pymux.connections` holds every connection and not
+        every client: a connection that arrived to run a command is in
+        it from the moment the server accepted it, and closing that one
+        killed somebody's `list-sessions` mid-answer. A command has no
+        session, so it is skipped here without a case of its own.
+
+        **This runs after `_create_app`**, because until then this
+        connection has no session to compare the others against.
+        """
+        if self.client_state is None:
+            return
+
+        for connection in list(self.pymux.connections):
+            if connection is self:
+                continue
+            other = connection.client_state
+            if other is None or other.session is not self.client_state.session:
+                continue
+            connection.detach_and_close()
 
     def _take_client_options(self, announced) -> None:
         """
