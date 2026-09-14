@@ -232,6 +232,96 @@ def box_drawing(fixture):
     fixture.append("└" + "─" * 20 + "┘\r\n")
 
 
+#: The size of the image fixture, in pixels. Both numbers are chosen
+#: against `pyte.images.ASSUMED_CELL_WIDTH` and `ASSUMED_CELL_HEIGHT`,
+#: which are 10 and 20: a pane has no idea how big a cell of the client
+#: terminal is, so `GraphicsState.add_sixel` reserves
+#: `ceil(width / 10) x ceil(height / 20)` cells and the client stretches
+#: the image to fill them. 120x120 is exactly 12x6 of those cells, so a
+#: terminal whose cell really is 10x20 draws the same pixels both ways.
+#: The height is also a multiple of six, which is one sixel band.
+IMAGE_WIDTH, IMAGE_HEIGHT = 120, 120
+
+#: Where the edges of the image are. Neither is on a cell boundary of
+#: an assumed cell by accident: the vertical edge at 57 sits inside a
+#: ten pixel column, and the horizontal edge at 63 sits inside a band
+#: *and* inside a twenty pixel row. A crop or a scale that is off by one
+#: moves one of them and the count changes.
+EDGE_X, EDGE_Y = 57, 63
+
+#: The four quadrant colours, as the percentages that sixel carries.
+#: **Only six byte values survive the round trip**: 0, 51, 102, 153,
+#: 204 and 255, which are 0, 20, 40, 60, 80 and 100 percent. pyte
+#: decodes with `round(percent * 255 / 100)` and pymux encodes with
+#: `round(byte * 100 / 255)`, so any other byte comes back rounded and
+#: every pixel of a faithful re-encode would differ. Then the count
+#: would measure the quantisation and nothing else.
+IMAGE_COLOURS = [
+    (100, 0, 0),  # top left
+    (0, 80, 20),  # top right
+    (20, 20, 100),  # bottom left
+    (100, 80, 0),  # bottom right
+]
+
+
+def _band(left_register, right_register, bits):
+    "One sixel band: the left colour to `EDGE_X`, then the right one."
+    return "#%d!%d%s#%d!%d%s" % (
+        left_register,
+        EDGE_X,
+        chr(0x3F + bits),
+        right_register,
+        IMAGE_WIDTH - EDGE_X,
+        chr(0x3F + bits),
+    )
+
+
+def sixel_image(fixture):
+    """
+    A sixel image, which a pane re-encodes for the client terminal.
+
+    **This is the one fixture the client terminal does not draw the way
+    the program wrote it.** A pane cannot draw pixels, so it decodes the
+    sixel into RGBA and `pymux/graphics.py` writes it again in whatever
+    the outer terminal speaks: the kitty graphics protocol where there
+    is one, sixel where there is not, half blocks where there is
+    neither. So the bare picture is the terminal's own sixel decoder and
+    the pymux picture is ours, and in kitty they are two different
+    protocols drawing one image. Lillecarl/pymux#262.
+
+    The bytes are written here and not built with `pymux.sixel`. An
+    encoder fault that survives its own decoder would be invisible if
+    the encoder made both sides.
+    """
+    fixture.append(csi(escape.ED, 2) + csi(escape.CUP))
+
+    # "P1=7" is the 1:1 aspect ratio, and the raster attributes say it
+    # again: pyte ignores Pan and Pad, and a terminal that honours them
+    # would draw the bare side at double height and agree with nothing.
+    body = ["\x1bP7;1;0q", '"1;1;%d;%d' % (IMAGE_WIDTH, IMAGE_HEIGHT)]
+    for register, (red, green, blue) in enumerate(IMAGE_COLOURS, start=1):
+        body.append("#%d;2;%d;%d;%d" % (register, red, green, blue))
+
+    bands = []
+    for band in range(0, IMAGE_HEIGHT, 6):
+        if band + 6 <= EDGE_Y:
+            bands.append(_band(1, 2, 0b111111))
+        elif band >= EDGE_Y:
+            bands.append(_band(3, 4, 0b111111))
+        else:
+            # The band the horizontal edge falls inside. The top colours
+            # light the rows above it, "$" returns to the left of the
+            # same band, and the bottom colours light the rows below.
+            above = (1 << (EDGE_Y - band)) - 1
+            bands.append(_band(1, 2, above) + "$" + _band(3, 4, 0b111111 & ~above))
+
+    # No "-" after the last band: it would move a real terminal's cursor
+    # down one band more than the image is tall.
+    body.append("-".join(bands))
+    body.append("\x1b\\")
+    fixture.append("".join(body))
+
+
 #: Each fixture is a name and the function that writes it. The cursor
 #: is hidden first and shown again at the end, in one place, so that a
 #: still picture does not depend on where a blink was in its cycle.
@@ -241,6 +331,7 @@ FIXTURES = {
     "underlines": underlines,
     "wide-characters": wide_characters,
     "box-drawing": box_drawing,
+    "sixel-image": sixel_image,
 }
 
 

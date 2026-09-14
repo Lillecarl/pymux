@@ -783,7 +783,7 @@ in
 
   # The same picture, of vttest.
   #
-  # `pictures` above photographs four fixtures that a person wrote by
+  # `pictures` above photographs five fixtures that a person wrote by
   # hand. vttest holds five hundred screens, and they are the awkward
   # ones: double sized rows, national character sets, the reports of a
   # VT420. It is interactive, so a walker drives it and says when each

@@ -21,3 +21,64 @@
 # the same thing two ways: the difference belongs to xterm, and not to
 # pymux.
 xterm underlines 206
+
+# The image fixture. A pane cannot draw pixels, so it decodes the sixel
+# its program wrote and pymux writes the image again in whatever the
+# outer terminal speaks. Each of the three terminals answers that
+# differently, and each of the three lines below is one renderer.
+#
+# All three counts are large because a sixel is an image and not a
+# glyph: when a terminal draws nothing bare, every pixel of the image
+# is a difference.
+#
+# **Do not read a number below as a count of pixels.** `compare -metric
+# AE` sums the channel error of the whole picture in this ImageMagick,
+# so it is smaller than the count and it is not proportional to it. The
+# three fixtures below differ in 1080, 13680 and 14400 pixels, and the
+# reasons written under each one are about those pixels. The line
+# `xterm underlines 206` above is the same kind of number.
+# Lillecarl/pymux#368 says how it was measured and what to do.
+
+# foot is the one that draws a sixel on both sides, so this line is the
+# sixel path against a real sixel decoder. The colours are exact
+# everywhere. Nine rows differ and the reason is the cell:
+#
+#   * `pyte.images` reserves `ceil(120/20) = 6` rows for the image,
+#     because a pane serves several clients and has no cell size of its
+#     own, so it assumes ten by twenty.
+#   * foot's cell is ten by *nineteen*, so those six rows are 114
+#     pixels and pymux scales the image into them. The last six rows of
+#     the image go.
+#   * The edge inside the image moves up with the scale: it is at row
+#     63 bare and at row 60 through pymux, which is three more rows.
+#
+# Six plus three rows of 120 pixels is the whole difference. Nothing
+# else on the picture moves.
+foot sixel-image 576
+
+# kitty has no sixel decoder at all. Its log says so in as many words:
+# "[PARSE ERROR] Unknown DCS escape code: 7;1;0q". So the bare picture
+# is empty, and the pymux one carries the image over the kitty graphics
+# protocol, which kitty does speak.
+#
+# **So this line is not the comparison that Lillecarl/pymux#262 is
+# named for.** It says the kitty path draws, not that it draws what the
+# sixel path draws. No terminal in this farm speaks both protocols, so
+# that comparison cannot be made inside one terminal. Measured by hand
+# from this run, foot and kitty have the same cell here, and the two
+# pymux pictures differ on one row of 114: pymux scales by nearest
+# neighbour and kitty interpolates, so the row that holds the edge is a
+# blend in kitty and a hard edge in the sixel. Lillecarl/pymux#262.
+kitty sixel-image 5893
+
+# xterm draws no sixel either, and here it is a setting and not a
+# missing decoder: `decGraphicsID` defaults to 0 and `decTerminalID` to
+# 420, which is not one of the DEC models that had graphics (125, 240,
+# 241, 330, 340, 382). So xterm draws nothing bare and its device
+# attributes claim no sixel, and pymux falls back to half blocks.
+#
+# That makes this the only picture that judges the half block
+# renderer, which is why xterm is left as it is. One cell of text
+# carries two pixels, so the count is the image drawn twelve cells by
+# six with the colours averaged inside each half cell.
+xterm sixel-image 7827
