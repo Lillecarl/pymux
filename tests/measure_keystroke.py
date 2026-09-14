@@ -126,6 +126,9 @@ CALLERS = os.environ.get("PYMUX_KEYSTROKE_CALLERS", "")
 #: one it cached against. That walk is the largest single item in the
 #: key stage, and what it costs is the size of the tree rather than
 #: anything a person did. Lillecarl/pymux#317.
+#:
+#: `tree` prints the shape as well as the counts, which is what says
+#: *where* a container sits rather than how many there are.
 CENSUS = os.environ.get("PYMUX_KEYSTROKE_CENSUS", "")
 
 #: The client's terminal.
@@ -458,20 +461,22 @@ def the_tree_a_key_press_walks(layout):
     """
     counted = Counter()
     childless = Counter()
-    todo = [layout.container]
+    shape = []
+    todo = [(layout.container, 0)]
     crossed = 0
 
     while todo:
-        node = todo.pop()
+        node, depth = todo.pop()
         crossed += 1
         counted[type(node).__name__] += 1
+        shape.append((depth, type(node).__name__))
         children = node.get_children()
         if children:
-            todo.extend(reversed(children))
+            todo.extend((child, depth + 1) for child in reversed(children))
         else:
             childless[type(node).__name__] += 1
 
-    return crossed, counted, childless
+    return crossed, counted, childless, shape
 
 
 def main() -> int:
@@ -533,13 +538,17 @@ def main() -> int:
                 print("  %8d  %s" % (count, place))
 
     if census is not None:
-        crossed, counted_by_class, childless = census
+        crossed, counted_by_class, childless, shape = census
         print("\n--- the tree every key press walks ---")
         print("  %d containers, and %d of them hold nothing" % (crossed, sum(childless.values())))
         print("")
         print("  %8s %8s  %s" % ("crossed", "leaves", "class"))
         for name, count in counted_by_class.most_common():
             print("  %8d %8d  %s" % (count, childless[name], name))
+        if CENSUS == "tree":
+            print("\n--- and what it is the shape of ---")
+            for depth, name in shape:
+                print("  %s%s" % ("  " * depth, name))
 
     print(
         "\n**The in-process time is not the latency.** It holds no socket,"
