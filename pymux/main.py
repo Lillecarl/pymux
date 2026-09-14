@@ -1378,14 +1378,20 @@ class Pymux:
             client for client in self._client_states.values() if not client.temporary
         ]
 
+    def connection_of(self, app):
+        "The connection whose client draws on this application, or None."
+        for connection, client_state in self._client_states.items():
+            if client_state.app is app:
+                return connection
+        return None
+
     def get_connection(self):
         "Return the active Connection instance."
         app = get_app()
-        for connection, client_state in self._client_states.items():
-            if client_state.app == app:
-                return connection
-
-        raise ValueError("Connection for app %r not found" % (app,))
+        connection = self.connection_of(app)
+        if connection is None:
+            raise ValueError("Connection for app %r not found" % (app,))
+        return connection
 
     def startup(self):
         # Handle start-up comands.
@@ -2701,12 +2707,18 @@ class Pymux:
         reads it that way, for the same reason, and one key that says
         one thing on all three routes is worth more than the
         difference between them. Lillecarl/pymux#160.
+
+        **The client of this application, and not the current one.**
+        This took an app and then read `get_app()`, so
+        `attach-session -d` detached the person who typed it, once for
+        each client it meant to take the session from, and left every
+        one of them attached. Lillecarl/pymux#347.
         """
         if self._runs_standalone:
             self.stop()
             return
 
-        connection = self.get_connection()
+        connection = self.connection_of(app)
         if connection:
             connection.detach_and_close()
 

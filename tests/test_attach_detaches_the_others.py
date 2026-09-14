@@ -13,6 +13,7 @@ import sys
 from contextlib import asynccontextmanager
 
 import anyio
+from prompt_toolkit.application.current import set_app
 
 from pymux.main import Pymux
 from pymux.pipes.memory import connect_in_memory
@@ -164,6 +165,61 @@ async def test_it_reaches_this_session_and_no_other():
                 else "attach -d left a client on the session it took"
             )
         assert not taking_over._closed
+
+
+async def _a_session_with_a_window(pymux: Pymux, name: str):
+    "A session a client can sit on. A status line needs a window."
+    session = pymux.create_session(name)
+    pymux.create_window(WAITS, session=session)
+    return session
+
+
+# ----------------------------------------------------------------------
+# The same rule, asked for the other way.
+
+
+async def test_the_command_detaches_the_others(monkeypatch):
+    """
+    `attach-session -d` is the other way to ask for this, and it took
+    the wrong client: `Pymux.detach_client` takes an app and then
+    ignores it, reading `get_app()` instead. So the loop detached the
+    client that ran the command, once for each of the others, and left
+    every one of them attached. Lillecarl/pymux#347.
+    """
+    async with a_server() as pymux:
+        here = await _a_session_with_a_window(pymux, "here")
+        elsewhere = await _a_session_with_a_window(pymux, "elsewhere")
+
+        sitting = await _attach(pymux)
+        asking = await _attach(pymux)
+        pymux.attach_client_to(sitting.client_state, here)
+        pymux.attach_client_to(asking.client_state, elsewhere)
+
+        with set_app(asking.client_state.app):
+            pymux.handle_command("attach-session -t here -d")
+
+        assert sitting._closed, "attach-session -d left the other client attached"
+        assert not asking._closed, "attach-session -d detached the client that asked"
+        assert asking.client_state.session is here
+
+
+async def test_the_command_reaches_this_session_and_no_other():
+    async with a_server() as pymux:
+        here = await _a_session_with_a_window(pymux, "here")
+        elsewhere = await _a_session_with_a_window(pymux, "elsewhere")
+
+        sitting = await _attach(pymux)
+        watching = await _attach(pymux)
+        asking = await _attach(pymux)
+        pymux.attach_client_to(sitting.client_state, here)
+        pymux.attach_client_to(watching.client_state, elsewhere)
+
+        with set_app(asking.client_state.app):
+            pymux.handle_command("attach-session -t here -d")
+
+        assert sitting._closed
+        assert not watching._closed, "attach-session -d closed a client elsewhere"
+        assert not asking._closed
 
 
 async def test_a_command_that_is_running_is_not_a_client():
