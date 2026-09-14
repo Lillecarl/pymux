@@ -24,7 +24,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from pymux.style import _blend, _other_of, _readable, create_theme, derive
+from pymux.style import _blend, _other_of, _readable, create_theme, derive, tinted
 
 __all__ = ["base16_roles", "base16_theme", "names"]
 
@@ -119,7 +119,7 @@ def base16_roles(name: str) -> dict[str, str]:
         "notice": blend("base0B", "base05", 0.35),
         "notice-text": _readable(blend("base0B", "base05", 0.35)),
         # Finer than any letter: a column that only just separates.
-        "cut": blend("base00", "base05", 0.08),
+        "cut": tinted(p["base00"]),
         "warn": p["base0A"],
         "warn-bright": p["base09"],
         # A pane that has ended, and the confirmation that asks.

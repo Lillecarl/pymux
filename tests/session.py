@@ -40,6 +40,7 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
+from pymux.colors import DefaultColors
 from pymux.keys import KittyVt100Parser
 from pymux.main import Pymux
 from pymux.pipes.memory import connect_in_memory
@@ -81,6 +82,10 @@ class Connection:
         #: without one cannot be detached, which is every stub that
         #: nothing detaches. Lillecarl/pymux#335.
         self._pymux = pymux
+        #: What the terminal at the other end said it draws with. A
+        #: stub answers nothing, which is what a terminal that never
+        #: replied is. Lillecarl/pymux#223.
+        self.default_colors = DefaultColors()
 
     @property
     def name(self) -> str:

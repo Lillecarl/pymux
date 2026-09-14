@@ -28,12 +28,21 @@ a parent's class is less precise than a cell's own `bg:`. So the tint
 shows wherever the program left the background alone, which in a shell
 is all of it.
 
+**The colour is the terminal's, not the theme's.** A cell the program
+left alone shows the background of the terminal the client runs in, so
+a tint picked against the theme's background is a guess: it lifts one
+terminal and darkens the next by the same amount. `cut_tint` derives
+it from what the client's terminal answered, and the theme's own rule
+draws only where the theme owns the background. Lillecarl/pymux#352.
+
 This judges the frame a real session draws, because the question is
 what a person sees.
 """
 
 import io
 from contextlib import contextmanager
+
+import pytest
 
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
@@ -44,9 +53,11 @@ from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
 from session import Connection
-from pymux.layout import CUT_IS_TINTED
+from pymux.layout import CUT_IS_TINTED, cut_tint
 from pymux.main import Pymux
 from pymux.plan_container import PlanContainer
+from pymux.style import roles_of, roles_of_palette, tinted
+from pyte.colors import parse_color
 
 ROWS = 12
 COLUMNS = 80
@@ -192,3 +203,107 @@ def test_tint_sits_before_what_pane_wrote():
         # it rather than on top of it.
         assert "class:terminal" in style
         assert style.index("class:terminal") < style.index(CUT_IS_TINTED)
+
+
+# ----------------------------------------------------------------------
+# The colour of it. Lillecarl/pymux#352.
+
+
+#: `conftest.py` paints the screen for every server this suite builds,
+#: and the derived tint is for the case where the theme does *not* own
+#: the background -- which is what pymux starts on.
+PAINT_SCREEN_OFF = "set-option paint-screen off"
+
+
+def _says(state, background: str) -> None:
+    "A client whose terminal answered `OSC 11` with this colour."
+    state.connection.default_colors.background = parse_color(background)
+
+
+def _lightness(colour: str) -> int:
+    return sum(int(colour[at : at + 2], 16) for at in (1, 3, 5))
+
+
+def test_a_dark_terminal_is_lifted():
+    assert _lightness(tinted("#000000")) > _lightness("#000000")
+
+
+def test_a_light_terminal_is_darkened():
+    "The same step, the other way. A fixed colour can only do one of these."
+    assert _lightness(tinted("#ffffff")) < _lightness("#ffffff")
+
+
+@pytest.mark.parametrize(
+    "name", ["default", "grey", "base16:gruvbox-dark-hard", "pygments:monokai"]
+)
+def test_every_source_moves_its_own_background(name):
+    """
+    One number, so a tint is the same mark in every scheme.
+
+    Each source used to pick its own step, and two of the five picked
+    a different one. A source that drifts back to a blend of its own
+    is what this catches. Lillecarl/pymux#352.
+    """
+    roles = roles_of(name)
+
+    assert roles["cut"] == tinted(roles["pane"])
+
+
+def test_a_palette_moves_its_own_background_too():
+    "The fifth source: a theme built from sixteen colours a terminal named."
+    roles = roles_of_palette(["#101018"] + ["#808080"] * 15)
+
+    assert roles["cut"] == tinted(roles["pane"])
+
+
+def test_a_mid_grey_terminal_is_lifted_and_not_holed():
+    """
+    The case that says a fixed colour is wrong, and it needs no light
+    terminal: a screen on `#404040` under the `default` theme, whose
+    `cut` role is darker than that. The theme's colour is a hole in
+    the screen; the derived one is a lift.
+    """
+    assert _lightness(roles_of("default")["cut"]) < _lightness("#404040")
+    assert _lightness(tinted("#404040")) > _lightness("#404040")
+
+
+def test_the_column_wears_the_colour_of_the_terminal():
+    with create_client(STRIP + [PAINT_SCREEN_OFF]) as (pymux, state, draw):
+        _says(state, "#404040")
+        create_wide_column(pymux, state)
+        screen = draw()
+
+        cut = panes_of(state).plan.rect_of(
+            pymux.arrangement.get_active_window().panes[1]
+        )
+        style = screen.data_buffer[ROWS // 2][cut.x].style
+
+        assert "bg:%s" % (tinted("#404040"),) in style
+        # And the theme's own rule is not also there: two rules for one
+        # background is one of them winning by accident.
+        assert CUT_IS_TINTED not in style
+
+
+def test_a_terminal_that_answered_nothing_keeps_the_theme_rule():
+    "Which is every client with no connection, and every dumb terminal."
+    with create_client(STRIP + [PAINT_SCREEN_OFF]) as (pymux, state, draw):
+        create_wide_column(pymux, state)
+
+        assert state.connection.default_colors.background is None
+        assert cut_tint(pymux) == CUT_IS_TINTED
+
+
+def test_the_theme_owns_the_background_when_it_paints_the_screen():
+    """
+    `paint-screen` puts the theme's own colour behind every cell, so
+    the theme's `cut` role is picked against the background it is
+    really drawn over. Lillecarl/pymux#273.
+    """
+    with create_client(STRIP + [PAINT_SCREEN_OFF]) as (pymux, state, draw):
+        _says(state, "#404040")
+        create_wide_column(pymux, state)
+        assert cut_tint(pymux) != CUT_IS_TINTED
+
+        pymux.handle_command("set-option paint-screen on")
+
+        assert cut_tint(pymux) == CUT_IS_TINTED

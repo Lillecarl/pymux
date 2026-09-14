@@ -35,6 +35,77 @@ def create_theme(rules: dict[str, str]) -> Style:
     return Style.from_dict(rules, priority=Priority.MOST_PRECISE)
 
 
+def _blend(a: str, b: str, towards_b: float) -> str:
+    "The colour `towards_b` of the way from `a` to `b`."
+    return _from_rgb(
+        tuple(
+            round(r + (s - r) * towards_b)
+            for r, s in zip(_to_rgb(a), _to_rgb(b))
+        )
+    )
+
+
+def _to_rgb(a: str) -> tuple[int, int, int]:
+    return tuple(int(a[i : i + 2], 16) for i in (1, 3, 5))
+
+
+def _from_rgb(rgb) -> str:
+    return "#%02x%02x%02x" % rgb
+
+
+def _lightness(a: str) -> float:
+    r, g, b = _to_rgb(a)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _readable(a: str) -> str:
+    """
+    The text that reads on `a`: black or white, by contrast.
+
+    The contrast of WCAG, not the lightness alone: a pale green is
+    light enough to mistake for white by one measure and is still
+    nearly four times closer to black than to white.
+    """
+    def contrast(other):
+        base = _lightness(other) / 255.0
+        base = base / 12.92 if base <= 0.04045 else ((base + 0.055) / 1.055) ** 2.4
+        over = _lightness(a) / 255.0
+        over = over / 12.92 if over <= 0.04045 else ((over + 0.055) / 1.055) ** 2.4
+        return (max(base, over) + 0.05) / (min(base, over) + 0.05)
+
+    return "#000000" if contrast("#000000") >= contrast("#ffffff") else "#ffffff"
+
+
+def _other_of(a: str) -> str:
+    "The text that does not read on `a`."
+    return "#ffffff" if _readable(a) == "#000000" else "#000000"
+
+
+#: How far the column a strip cut off moves from the background behind
+#: it. One number, because a tint that is a hint on one scheme and a
+#: slab on the next is not a mark a person learns to read.
+CUT_LIFT = 0.08
+
+
+def tinted(background: str) -> str:
+    """
+    The background of a column that runs off the edge of the view.
+
+    **The direction is the background's, not the theme's.** A fixed
+    colour lifts a dark screen and darkens a light one by the same
+    amount, so it is right on one of them; this moves away from
+    whatever is behind it, which is up on a dark screen and down on a
+    light one. Lillecarl/pymux#222, Lillecarl/pymux#352.
+
+    It moves towards black or white and not towards the scheme's text,
+    which is what the derived sources used to do. A scheme whose text
+    sits close to its background would give a tint nobody can see, and
+    a mark that says "there is more of this pane" has to be visible in
+    every scheme or it says nothing.
+    """
+    return _blend(background, _readable(background), CUT_LIFT)
+
+
 def derive(r: dict[str, str]) -> dict[str, str]:
     """
     The class rules of a scheme, from its roles.
@@ -87,19 +158,6 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         # the class on. Lillecarl/pymux#99.
         "reversed-pane selected": "noreverse",
         "reversed-pane incsearch.current": "noreverse",
-        # The part of a pane that runs off the edge of the view. A strip
-        # is a row that may be wider than the screen, so a column can be
-        # cut, and nothing else on the screen says so. Carl: "the
-        # rightmost visible column [should have] some slightly tinted
-        # background to indicate that it's cut-off."
-        # Lillecarl/pymux#222.
-        #
-        # **One colour, and it should be derived.** A tint over a
-        # background pymux did not choose is a guess: this lifts a dark
-        # terminal and darkens a light one by the same amount, which is
-        # right on one of them. The client knows the real background now
-        # (`OSC 11`, Lillecarl/pymux#223); deriving the tint from it is
-        # the second half of that issue.
         # The pane painted with the theme's own background, which
         # `paint-screen` turns on. The pane's container wears the
         # class, and prompt-toolkit draws it behind every cell the
@@ -108,6 +166,20 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         # output, wanted this time. A program that names its own
         # colours everywhere never sees it. Lillecarl/pymux#273.
         "painted": "bg:%s" % (r["pane"],),
+        # The part of a pane that runs off the edge of the view. A strip
+        # is a row that may be wider than the screen, so a column can be
+        # cut, and nothing else on the screen says so. Carl: "the
+        # rightmost visible column [should have] some slightly tinted
+        # background to indicate that it's cut-off."
+        # Lillecarl/pymux#222.
+        #
+        # **This rule is the fallback, not the usual answer.** The
+        # cells under the tint show the terminal's own background
+        # whenever `paint-screen` is off, which is a background the
+        # theme did not choose, so `cut_tint` derives the colour from
+        # what the client really draws on and names it inline. This
+        # rule draws when the theme does own the background, and when
+        # the terminal answered nothing. Lillecarl/pymux#352.
         "cut": "bg:%s" % (r["cut"],),
         "clock": "bg:%s" % (r["warn-bright"],),
         "panenumber": "bg:%s" % (r["border"],),
@@ -178,6 +250,11 @@ def derive(r: dict[str, str]) -> dict[str, str]:
     }
 
 
+#: The screen the hand-written themes draw a pane on. It is named
+#: because `cut` is derived from it: the tint is the background moved
+#: one step, and naming the background twice would let the two drift.
+PANE = "#000000"
+
 #: What each role draws. A theme names the roles it differs in; the
 #: ones `derive` reads and a theme left out are what it keeps of the
 #: default.
@@ -201,7 +278,7 @@ ROLES = {
     # is on: the scheme's own colour, so the terminal's background is
     # never seen and a theme is the colour of the whole screen.
     # Lillecarl/pymux#273.
-    "pane": "#000000",
+    "pane": PANE,
     # A focused pane's title bar, and its name inside it. `alarm` is
     # the pane index, the loudest thing on the screen.
     "focus": "#448844",
@@ -225,7 +302,7 @@ ROLES = {
     "notice-text": "#222222",
     # The column a strip cuts off, and the clock and pane number, which
     # are yellow here and quiet in a quiet theme.
-    "cut": "#303030",
+    "cut": tinted(PANE),
     "warn": "#aa8800",
     "warn-bright": "#88aa00",
     # A pane that has ended, and the confirmation that asks about it.
@@ -359,52 +436,6 @@ def theme(name: str) -> BaseStyle:
     return THEMES[name]
 
 
-def _blend(a: str, b: str, towards_b: float) -> str:
-    "The colour `towards_b` of the way from `a` to `b`."
-    return _from_rgb(
-        tuple(
-            round(r + (s - r) * towards_b)
-            for r, s in zip(_to_rgb(a), _to_rgb(b))
-        )
-    )
-
-
-def _to_rgb(a: str) -> tuple[int, int, int]:
-    return tuple(int(a[i : i + 2], 16) for i in (1, 3, 5))
-
-
-def _from_rgb(rgb) -> str:
-    return "#%02x%02x%02x" % rgb
-
-
-def _lightness(a: str) -> float:
-    r, g, b = _to_rgb(a)
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b
-
-
-def _readable(a: str) -> str:
-    """
-    The text that reads on `a`: black or white, by contrast.
-
-    The contrast of WCAG, not the lightness alone: a pale green is
-    light enough to mistake for white by one measure and is still
-    nearly four times closer to black than to white.
-    """
-    def contrast(other):
-        base = _lightness(other) / 255.0
-        base = base / 12.92 if base <= 0.04045 else ((base + 0.055) / 1.055) ** 2.4
-        over = _lightness(a) / 255.0
-        over = over / 12.92 if over <= 0.04045 else ((over + 0.055) / 1.055) ** 2.4
-        return (max(base, over) + 0.05) / (min(base, over) + 0.05)
-
-    return "#000000" if contrast("#000000") >= contrast("#ffffff") else "#ffffff"
-
-
-def _other_of(a: str) -> str:
-    "The text that does not read on `a`."
-    return "#ffffff" if _readable(a) == "#000000" else "#000000"
-
-
 def roles_of_palette(sixteen: list[str]) -> dict[str, str]:
     """
     The roles of a theme, from the sixteen colours a palette holds.
@@ -458,7 +489,7 @@ def roles_of_palette(sixteen: list[str]) -> dict[str, str]:
         "suggestion-text": _blend(white, black, 0.25),
         "notice": bright_green,
         "notice-text": _readable(bright_green),
-        "cut": _blend(black, white, 0.08),
+        "cut": tinted(black),
         "warn": yellow,
         "warn-bright": bright_yellow,
         # A pane that has ended, and the confirmation that asks.

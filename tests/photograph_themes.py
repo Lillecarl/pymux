@@ -33,7 +33,15 @@ sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pymux.style import THEMES  # noqa: E402
 from pymux.style_pygments import names  # noqa: E402
-from photograph_chrome import CHROME, DEMO, PREFIX, demo_keys, keys, main  # noqa: E402
+from photograph_chrome import (  # noqa: E402
+    CHROME,
+    DEMO,
+    PREFIX,
+    create_command,
+    demo_keys,
+    keys,
+    main,
+)
 from take_picture import LIGHT_TERMINALS, TERMINALS  # noqa: E402
 
 #: Where the pictures go. The check points this at `$out`.
@@ -94,12 +102,14 @@ FIXTURES["theme-base16-painted-mocha"] = (
 #: The default, which is the search: no theme is named, and the
 #: terminal is asked what it draws with.
 #:
-#: **The reply is typed in.** The relay writes scripted keys into the
-#: client's pty, which is exactly where a terminal's reply arrives, so
-#: this is the one way the farm can photograph an answer -- the
-#: terminals it drives never answer the queries themselves, because
-#: the relay reads their replies and does not pass them on.
-#: Lillecarl/pymux#346, Lillecarl/pymux#350.
+#: **The reply is typed in, to name one scheme whatever the terminal
+#: is.** The relay writes scripted keys into the client's pty, which
+#: is exactly where a terminal's reply arrives, so a fixture can say
+#: what was answered and get the same picture on all six. The real
+#: replies reach pymux as well -- that is what Lillecarl/pymux#350
+#: fixed, and `cut-follows-the-terminal` below is the fixture that
+#: shows it: it types nothing and still follows each terminal.
+#: Lillecarl/pymux#346.
 FIXTURES["theme-nearest"] = (
     CHROME,
     keys(
@@ -125,6 +135,28 @@ FIXTURES["painted-screen"] = (
     + "set-option paint-screen on\n",
     demo_keys(),
 )
+
+#: The tint on a column a strip cut off, over the terminal's own
+#: background.
+#:
+#: **This is the pair that says a fixed colour cannot work.** The same
+#: fixture runs on the dark three and the light three, `paint-screen`
+#: off, so the cells under the tint show each terminal's own
+#: background: the mark lifts a dark screen and darkens a light one,
+#: and one colour could only do one of those. Lillecarl/pymux#222,
+#: Lillecarl/pymux#352.
+FIXTURES["cut-follows-the-terminal"] = (
+    CHROME
+    + "set-option paint-screen off\n"
+    + "set-window-option -g strip on\n",
+    keys(
+        (0.0, PREFIX),
+        (0.4, b"%"),
+        *create_command("switch-column-width"),
+        *create_command("select-pane -L"),
+    ),
+)
+
 
 def exact_list(env):
     """

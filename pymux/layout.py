@@ -61,6 +61,7 @@ from .divided import Divided
 from .plan_container import PlanContainer
 from .plane import Plan, Side, View, bounding_box
 from .strip import Strip
+from .style import tinted
 from .tiling import BORDER_WIDTH, Gaps
 from .zoomed import Zoomed
 from .titlebar import PaneTitleBar
@@ -137,6 +138,9 @@ BELOW_MARK = "▾"
 #: which costs arithmetic on every cell of the column on every frame:
 #: marking them by hand came to 14,620 bytecode instructions a frame,
 #: 43% on top of the frame it marked. Lillecarl/pymux#222.
+#:
+#: `cut_tint` is what a pane really wears. This rule is what it falls
+#: back to.
 CUT_IS_TINTED = "class:cut"
 
 #: What `clock-mode` draws inside a pane, as text. `BigClock` paints the
@@ -2655,6 +2659,40 @@ def pane_is_cut(pymux: "Pymux", pane: arrangement.Pane) -> bool:
     return container.view.cuts(rect)
 
 
+def cut_tint(pymux: "Pymux") -> str:
+    """
+    The tint a cut pane wears, for the client drawing this frame.
+
+    **The tint is painted over a background the theme did not
+    choose.** A cell the program left alone shows the terminal's own
+    background, so a colour picked against the theme's is a guess: it
+    lifts one terminal and darkens the next by the same amount. The
+    client asked its terminal what it draws on (`OSC 11`,
+    Lillecarl/pymux#223), so the tint is derived from the answer.
+    Lillecarl/pymux#352.
+
+    Two cases keep the theme's own rule. `paint-screen` on means the
+    theme *does* own the background, so its `cut` role is already the
+    right colour; and a terminal that answered nothing leaves nothing
+    to derive from.
+    """
+    if pymux.paint_screen:
+        return CUT_IS_TINTED
+
+    try:
+        background = pymux.get_client_state().default_colors.background
+    except (ValueError, AttributeError):
+        # No client is drawing, or its connection never asked its
+        # terminal -- which is what `latest_client_color_base` allows
+        # for as well.
+        return CUT_IS_TINTED
+
+    if background is None:
+        return CUT_IS_TINTED
+
+    return "bg:%s" % (tinted(background.hex),)
+
+
 def _frame_plan(manager, window, size: Size) -> "Plan | None":
     """
     The plan the container of this frame measured, when it is still the
@@ -2827,7 +2865,7 @@ def _create_container_for_process(
         if pane_is_cut(pymux, arrangement_pane):
             # A pane that runs off the edge of the view is tinted, so
             # that a person can see it is cut. Lillecarl/pymux#222.
-            result += " " + CUT_IS_TINTED
+            result += " " + cut_tint(pymux)
 
         return result
 
