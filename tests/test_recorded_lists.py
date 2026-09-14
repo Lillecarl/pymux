@@ -70,11 +70,13 @@ def test_lines_reads_back_what_write_list_wrote(tmp_path):
 
 
 def test_how_to_record_says_how(tmp_path):
-    advice = how_to_record("pymux-frame-instructions", "frame-budgets.txt", "pymux/tests/frame-budgets.txt")
+    advice = how_to_record(
+        "pymux-frame", "frame-budgets.txt", "pymux/tests/frame-budgets.txt"
+    )
 
     assert advice == [
         "# This is what the run saw. To make it what the check expects:",
-        "#     nix build --file . checks.pymux-frame-instructions.run",
+        "#     nix build --file . checks.pymux-frame.run",
         "#     cp result/frame-budgets.txt pymux/tests/frame-budgets.txt",
     ]
 

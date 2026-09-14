@@ -56,14 +56,14 @@ differs from its budget by more than the tolerance fails, in either
 direction: a count that climbed is the fault this check is for, and a
 count that fell is a budget nobody updated.
 
-    nix build --file . checks.pymux-frame-instructions.run
+    nix build --file . checks.pymux-frame.run
     less result/log
     cp result/frame-budgets.txt pymux/tests/frame-budgets.txt
 
 Two knobs reach this file from `pymux/nix/checks.nix`:
 
-    PYMUX_FRAME_INCLUDE=strip nix build --file . checks.pymux-frame-instructions
-    PYMUX_FRAME_TOLERANCE=2 nix build --file . checks.pymux-frame-instructions
+    PYMUX_FRAME_INCLUDE=strip nix build --file . checks.pymux-frame
+    PYMUX_FRAME_TOLERANCE=2 nix build --file . checks.pymux-frame
 """
 
 import os
@@ -405,7 +405,7 @@ HEADER = "\n".join(
         "# one frame measures, and a frame needs one.",
     ]
     + how_to_record(
-        "pymux-frame-instructions",
+        "pymux-frame",
         "frame-budgets.txt",
         "pymux/tests/frame-budgets.txt",
     )

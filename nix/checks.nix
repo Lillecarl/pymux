@@ -167,7 +167,7 @@ let
 
   # Which shapes the frame measurement takes, and how far a count may
   # move from its budget, for instance
-  # `PYMUX_FRAME_INCLUDE=strip nix build --file . checks.pymux-frame-instructions`.
+  # `PYMUX_FRAME_INCLUDE=strip nix build --file . checks.pymux-frame`.
   frameInclude = builtins.getEnv "PYMUX_FRAME_INCLUDE";
   frameTolerance = builtins.getEnv "PYMUX_FRAME_TOLERANCE";
 
