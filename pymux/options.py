@@ -19,6 +19,7 @@ __all__ = [
     "Scope",
     "SetOptionError",
     "OnOffOption",
+    "Clipboard",
     "ExtendedKeys",
     "ALL_OPTIONS",
     "ALL_CLIENT_OPTIONS",
@@ -329,25 +330,64 @@ class ExtendedKeys(StrEnum):
     ALWAYS = "always"
 
 
-class ExtendedKeysOption(Option):
-    "How much of the keyboard a session uses."
+class Clipboard(StrEnum):
+    """
+    Who may write the clipboard of the person at the keyboard.
 
-    def __init__(self, attribute_name, scope=Scope.SESSION):
+    `EXTERNAL` is the careful one, and tmux's default: a copy the
+    person makes in copy mode goes out to their terminal, and a
+    program in a pane cannot reach the clipboard at all.
+
+    `ON` lets a program reach it, which is what a terminal does when
+    nothing stands between the two. It is a real choice: a program on
+    the other side of an ssh connection can then write what a person
+    pastes next.
+    """
+
+    OFF = "off"
+    EXTERNAL = "external"
+    ON = "on"
+
+
+class EnumOption(Option):
+    """
+    One of the values of a `StrEnum`, held as the member itself.
+
+    `ChoiceOption` below takes a list of words and holds the word. Use
+    this one where the code that reads the option asks which value it
+    is, and not what it spells.
+    """
+
+    def __init__(self, choices, attribute_name, scope=Scope.SESSION):
+        self.choices = choices
         self.attribute_name = attribute_name
         self.scope = scope
 
     def get_all_values(self, pymux):
-        return [str(one) for one in ExtendedKeys]
+        return [str(one) for one in self.choices]
 
     def set_value(self, pymux, value, target=None):
         try:
-            chosen = ExtendedKeys(value)
+            chosen = self.choices(value)
         except ValueError:
             raise SetOptionError(
                 "Expecting one of: %s."
-                % ", ".join('"%s"' % one for one in ExtendedKeys)
+                % ", ".join('"%s"' % one for one in self.choices)
             )
         setattr(self.held_by(pymux, target), self.attribute_name, chosen)
+        self.after(pymux)
+
+    def after(self, pymux):
+        "What the server does once the value has changed."
+
+
+class ExtendedKeysOption(EnumOption):
+    "How much of the keyboard a session uses."
+
+    def __init__(self, attribute_name, scope=Scope.SESSION):
+        super().__init__(ExtendedKeys, attribute_name, scope)
+
+    def after(self, pymux):
         # The server tells every client what its terminal should send
         # now, whoever holds the value.
         pymux.sync_keyboard()
@@ -572,7 +612,10 @@ ALL_OPTIONS = {
     # `--log-level` says the same thing before it starts.
     "log-level": LogLevelOption(),
     "bell": OnOffOption("enable_bell"),
-    "set-clipboard": OnOffOption("enable_clipboard"),
+    # Who may write the clipboard of the person at the keyboard.
+    # "external" is tmux's default: a copy the person makes goes out,
+    # and a program in a pane is refused. Lillecarl/pymux#378.
+    "set-clipboard": EnumOption(Clipboard, "clipboard_mode"),
     # Where the browser that "open-url" opens lands on. "last" is the
     # client somebody used last, by the stamp that `window-size
     # latest` reads; "broadcast" is every attached client.

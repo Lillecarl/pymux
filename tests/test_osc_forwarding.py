@@ -12,6 +12,7 @@ import pytest
 from pyte.osc import PointerShapes
 
 from pymux.main import Pymux
+from pymux.options import Clipboard
 from pymux.osc import MAX_OSC_LENGTH, build_osc
 from pyte import escape
 from pyte.sequences import csi
@@ -151,12 +152,17 @@ class FakePane:
         self.screen = FakeScreen(pointer_shape)
 
 
-def make_pymux(focused=(), pane=None):
+def make_pymux(focused=(), pane=None, clipboard=Clipboard.ON):
     """
     A pymux with two client connections. `focused` names the ones that
     look at `pane`.
+
+    The clipboard is open to a pane here, which is not the default:
+    most of these tests are about what a pane's OSC 52 does once it is
+    allowed through, and `set-clipboard` is judged on its own below.
     """
     pymux = Pymux()
+    pymux.clipboard_mode = clipboard
     connections = [FakeConnection(), FakeConnection()]
     states = [FakeClientState(), FakeClientState()]
     pymux._client_states = dict(zip(connections, states))
@@ -168,6 +174,7 @@ def make_pymux(focused=(), pane=None):
 
 def test_clipboard_write_reaches_every_client():
     pymux, connections = make_pymux()
+    pymux.clipboard_mode = Clipboard.ON
     pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
     for connection in connections:
         assert connection.written == [sequence("52", "c;aGVsbG8=")]
@@ -257,9 +264,10 @@ def test_unsafe_payload_reaches_nobody():
         assert connection.written == []
 
 
-def test_clipboard_option_stops_clipboard_only():
+@pytest.mark.parametrize("mode", [Clipboard.OFF, Clipboard.EXTERNAL])
+def test_clipboard_option_stops_clipboard_only(mode):
     pymux, connections = make_pymux()
-    pymux.enable_clipboard = False
+    pymux.clipboard_mode = mode
 
     pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
     assert connections[0].written == []
@@ -268,8 +276,21 @@ def test_clipboard_option_stops_clipboard_only():
     assert connections[0].written == [sequence("99", "i=1;done")]
 
 
-def test_option_is_on_by_default():
-    assert Pymux().enable_clipboard is True
+def test_a_pane_reaches_the_clipboard_when_the_option_says_on():
+    pymux, connections = make_pymux()
+    pymux.clipboard_mode = Clipboard.ON
+    pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
+    assert connections[0].written == [sequence("52", "c;aGVsbG8=")]
+
+
+def test_a_pane_is_refused_the_clipboard_by_default():
+    """
+    tmux ships "external", where a copy the person makes goes out and
+    a program in a pane does not: a program on the far side of an ssh
+    connection would otherwise write what that person pastes next.
+    Lillecarl/pymux#378.
+    """
+    assert Pymux().clipboard_mode is Clipboard.EXTERNAL
 
 
 def test_broken_connection_does_not_stop_pane():
@@ -321,9 +342,10 @@ def test_payload_that_is_not_base64_reaches_nothing():
     assert connections[0].written == []
 
 
-def test_clipboard_option_stops_paste_buffer_as_well():
-    pymux, _connections = make_pymux()
-    pymux.enable_clipboard = False
+@pytest.mark.parametrize("mode", [Clipboard.OFF, Clipboard.EXTERNAL])
+def test_clipboard_option_stops_paste_buffer_as_well(mode):
+    "A pane that may not reach the clipboard may not reach the buffer."
+    pymux, _connections = make_pymux(clipboard=mode)
     pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
     assert pymux.clipboard.get_data().text == ""
 

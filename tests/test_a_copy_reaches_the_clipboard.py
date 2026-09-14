@@ -17,8 +17,13 @@ import base64
 import sys
 
 import pytest
+from prompt_toolkit.application.current import set_app
+from prompt_toolkit.application.dummy import DummyApplication
 
 from pymux.main import Pymux
+from pymux.options import Clipboard
+
+from session import create_session
 
 COLUMNS = 20
 LINES = 5
@@ -98,19 +103,51 @@ def test_a_copy_reaches_the_terminal_of_the_client(pymux):
 
 
 def test_a_copy_reaches_the_paste_buffer_of_the_session(pymux):
-    "Which is what `paste-buffer` reads, and stays where it was."
-    listening(pymux)
+    """
+    Which is what `paste-buffer` reads.
+
+    A copy writes the clipboard of the application, and the clipboard
+    of the application is that buffer: `_create_app` hands it over, so
+    copy mode in one client and `paste-buffer` in another are the same
+    text. The test below says that is really where it comes from.
+    """
+    app = DummyApplication()
+    app.clipboard = pymux.clipboard
     pane, buffer = a_selection(pymux)
 
-    pane.terminal.copy_selection(buffer)
+    with set_app(app):
+        pane.terminal.copy_selection(buffer)
 
     assert pymux.clipboard.get_data().text == SELECTED
 
 
-def test_set_clipboard_off_keeps_the_copy_inside(pymux):
-    "tmux asks the same question of a copy as of a pane: `set-clipboard`."
+async def test_the_clipboard_of_a_client_is_the_buffer_of_the_session():
+    "The wiring the test above stands on."
+    async with create_session() as (mux, state):
+        assert state.app.clipboard is mux.clipboard
+
+
+@pytest.mark.parametrize("mode", [Clipboard.EXTERNAL, Clipboard.ON])
+def test_a_copy_goes_out_on_both_of_the_values_that_allow_it(pymux, mode):
+    """
+    `set-clipboard` answers two questions, and tmux gives them
+    different answers. A copy the person makes goes out on "external"
+    and on "on"; a program in a pane is allowed on "on" alone.
+    Lillecarl/pymux#378.
+    """
     connection = listening(pymux)
-    pymux.enable_clipboard = False
+    pymux.clipboard_mode = mode
+    pane, buffer = a_selection(pymux)
+
+    pane.terminal.copy_selection(buffer)
+
+    assert connection.written == [asked_for(SELECTED)]
+
+
+def test_set_clipboard_off_keeps_the_copy_inside(pymux):
+    "The one value that says no to the person as well."
+    connection = listening(pymux)
+    pymux.clipboard_mode = Clipboard.OFF
     pane, buffer = a_selection(pymux)
 
     pane.terminal.copy_selection(buffer)

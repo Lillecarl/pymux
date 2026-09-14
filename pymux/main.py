@@ -61,6 +61,7 @@ from .options import (
     ALL_CLIENT_OPTIONS,
     ALL_OPTIONS,
     ALL_WINDOW_OPTIONS,
+    Clipboard,
     ExtendedKeys,
     Scope,
 )
@@ -747,7 +748,15 @@ class Pymux:
         # reads the list instead of a manual. Lillecarl/pymux#29.
         self.which_key = False
         self.enable_bell = True
-        self.enable_clipboard = True
+
+        # Who may write the clipboard of the person at the keyboard.
+        # tmux ships "external", where a copy the person makes goes out
+        # and a program in a pane is refused: a program on the far side
+        # of an ssh connection can otherwise write what that person
+        # pastes next. pymux passed a pane's ask on and kept a copy of
+        # the person inside, which is the two answers the wrong way
+        # round. Lillecarl/pymux#378.
+        self.clipboard_mode = Clipboard.EXTERNAL
         self.open_url_target = "last"
         self.open_url_mode = "open"
         self.open_url_shim = False
@@ -1724,6 +1733,11 @@ class Pymux:
             done_callback=done_callback,
             bell_func=bell,
             osc_func=forward_osc,
+            # What copy mode copied. The pane does not build the
+            # sequence for it: the option that says whether it goes
+            # out lives here, and so does the check every payload
+            # passes. Lillecarl/pymux#378.
+            copy_func=self.write_user_clipboard,
             resize_func=resize,
             may_resize=may_resize,
             before_exec_func=before_exec,
@@ -2175,7 +2189,12 @@ class Pymux:
                 return
 
             if code == Osc.CLIPBOARD:
-                if not self.enable_clipboard:
+                # **Only "on" lets a program in a pane near the
+                # clipboard.** tmux asks the same question in
+                # `input_osc_52`, and its default answer is no. A copy
+                # that the person makes asks `write_user_clipboard`
+                # instead, which is the other half of the option.
+                if self.clipboard_mode is not Clipboard.ON:
                     return
                 # What a pane copies goes into the paste buffer of the
                 # session as well, so that "paste-buffer" can put it in
@@ -2201,6 +2220,39 @@ class Pymux:
                 connection.forward_osc(sequence)
         except Exception:
             logger.exception("Forwarding an OSC sequence failed.")
+
+    def write_user_clipboard(self, text: str) -> None:
+        """
+        Put what a person copied on the clipboard of their terminal.
+
+        Copy mode calls this. **It is not `forward_osc`**, although the
+        sequence is the same one: the two have different answers under
+        `set-clipboard`, because a person asking for their own
+        clipboard is not a program in a pane asking for it. tmux keeps
+        them apart the same way -- a copy asks only that the option is
+        not "off". Lillecarl/pymux#378.
+
+        The paste buffer of the session is not written here. Copy mode
+        writes it through the clipboard of the application, which is
+        that buffer, and the selection type goes with it.
+
+        Never raises: this runs under a key press.
+        """
+        if self.clipboard_mode is Clipboard.OFF or not text:
+            return
+        try:
+            payload = base64.b64encode(text.encode("utf-8")).decode("ascii")
+            sequence = build_osc(Osc.CLIPBOARD, "c;" + payload)
+            if sequence is None:
+                # The payload is base64 and the length is the only
+                # thing that can fail it. A person who copies half a
+                # megabyte gets nothing, and has to know why.
+                logger.warning("The copy is too long for the clipboard.")
+                return
+            for connection in self._client_states:
+                connection.forward_osc(sequence)
+        except Exception:
+            logger.exception("Writing the clipboard of the user failed.")
 
     def _mirror_clipboard(self, param: str) -> None:
         """
