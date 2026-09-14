@@ -772,7 +772,7 @@ class Plan:
 
         **The ground plane, and not the topmost slot there.** Nothing
         asks for the topmost one yet, and what a mouse should hit when
-        two planes both cover a cell is still open: Lillecarl/pymux#228.
+        two planes both cover a cell is Lillecarl/pymux#356.
         """
         return self.ground.at(point)
 
@@ -854,7 +854,7 @@ class Plan:
         pane that neither of them hides alone.
 
         Nothing draws from this yet: `PlanContainer` still walks
-        `rects`. Lillecarl/pymux#228.
+        `rects`. Lillecarl/pymux#355.
         """
         over: list[Rect] = []
         kept: list[dict[Slot, Rect]] = []

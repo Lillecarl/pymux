@@ -863,9 +863,9 @@ def test_rects_run_back_to_front():
 def test_at_answers_the_ground_plane():
     """
     **The deferred question.** What a mouse should hit where two
-    planes both cover a cell is open, so nothing answers it yet:
-    `at` reads the ground plane, the way it did before there was a
-    stack.
+    planes both cover a cell is Lillecarl/pymux#356, so nothing
+    answers it yet: `at` reads the ground plane, the way it did
+    before there was a stack.
     """
     plan = Plan(
         {GROUND: on_plane(under=Rect(0, 0, 4, 4)), 1: on_plane(over=Rect(0, 0, 4, 4))}
