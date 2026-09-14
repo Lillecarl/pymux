@@ -398,6 +398,54 @@ def _connection_of(context: FormatContext):
     return getattr(client, "connection", None) if client is not None else None
 
 
+def _pane_mode(context: FormatContext) -> str:
+    """
+    The name of what is drawn over this pane's program, or nothing.
+
+    tmux keeps a stack of modes and answers the topmost one
+    (`format_cb_pane_mode` in its `format.c`), and names them
+    `copy-mode` and `clock-mode` (`window-copy.c`, `window-clock.c`).
+    pymux has those two. **Clock mode is the topmost of the pair**: the
+    clock draws in place of the pane whether or not copy mode is open,
+    which `layout.py` decides.
+    """
+    pane = context.pane
+    if pane.clock_mode:
+        return "clock-mode"
+    if pane.is_copying:
+        return "copy-mode"
+    return ""
+
+
+def _client_prefix(context: FormatContext) -> str:
+    """
+    Whether this client waits for the key after the prefix.
+
+    tmux reads it off the client's key table: "1" when the table is not
+    the client's default one (`format_cb_client_prefix`). pymux holds
+    the same fact in one flag on the client.
+    """
+    client = context.client
+    if client is None:
+        return ""
+    return "1" if client.has_prefix else "0"
+
+
+def _client_key_table(context: FormatContext) -> str:
+    """
+    Which table the client's next key is read from.
+
+    tmux names the default `root` and moves the client to `prefix`
+    until it reads one key (`server_client_get_key_table` and
+    `server-client.c`). pymux has no other tables, so these two are
+    the whole set.
+    """
+    client = context.client
+    if client is None:
+        return ""
+    return "prefix" if client.has_prefix else "root"
+
+
 def _client_hostname(context: FormatContext) -> str:
     """
     The machine the client this is drawn for runs on.
@@ -483,7 +531,11 @@ tmux_variables: Dict[str, Callable[[FormatContext], str]] = {
     "pane_current_path": _pane_current_path,
     "pane_start_path": _pane_current_path,
     "pane_dead": lambda c: "1" if c.pane.process.is_terminated else "0",
-    "pane_in_mode": lambda c: "1" if c.pane.is_copying else "0",
+    # Read off the mode, and not off copy mode alone: tmux counts the
+    # whole stack (`format_cb_pane_in_mode`), so a pane showing the
+    # clock is in a mode too.
+    "pane_in_mode": lambda c: "1" if _pane_mode(c) else "0",
+    "pane_mode": _pane_mode,
     "pane_synchronized": lambda c: "1" if c.window.synchronize_panes else "0",
     "history_size": _history_size,
     "history_limit": lambda c: str(c.pymux.history_limit),
@@ -508,6 +560,8 @@ tmux_variables: Dict[str, Callable[[FormatContext], str]] = {
     "client_tty": _client_tty,
     "client_created": _client_created,
     "client_hostname": _client_hostname,
+    "client_prefix": _client_prefix,
+    "client_key_table": _client_key_table,
     "client_termname": _client_termname,
     "client_width": _client_width,
     "client_height": _client_height,

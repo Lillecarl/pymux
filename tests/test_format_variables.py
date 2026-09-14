@@ -110,6 +110,62 @@ def test_a_client_variable_with_no_client_is_empty(pymux):
     assert format_pymux_string(pymux, "#{client_hostname}") == ""
 
 
+def test_the_mode_over_a_pane_is_named_the_way_tmux_names_it(pymux):
+    """
+    `#{pane_mode}` is the name of what is drawn over the program, and
+    tmux's names are `copy-mode` and `clock-mode`. Lillecarl/pymux#363.
+    """
+    pane = _context(pymux).pane
+
+    assert format_pymux_string(pymux, "#{pane_mode}") == ""
+
+    pane.clock_mode = True
+    assert format_pymux_string(pymux, "#{pane_mode}") == "clock-mode"
+
+
+def test_a_pane_showing_the_clock_is_in_a_mode(pymux):
+    """
+    `#{pane_in_mode}` read copy mode alone, so a pane drawing the clock
+    answered "0" while `#{pane_mode}` named one. tmux counts the whole
+    stack of modes (`format_cb_pane_in_mode`). Lillecarl/pymux#363.
+    """
+    pane = _context(pymux).pane
+
+    assert format_pymux_string(pymux, "#{pane_in_mode}") == "0"
+
+    pane.clock_mode = True
+    assert format_pymux_string(pymux, "#{pane_in_mode}") == "1"
+
+
+def test_the_prefix_a_client_holds_is_a_format(pymux):
+    """
+    `#{client_prefix}` says the client waits for the key after the
+    prefix, and `#{client_key_table}` names the table that key is read
+    from. tmux spells the two tables `root` and `prefix`.
+    Lillecarl/pymux#363.
+    """
+
+    class Client:
+        session = pymux.current_session
+        has_prefix = False
+
+    client = Client()
+
+    assert format_pymux_string(pymux, "#{client_prefix}", client=client) == "0"
+    assert format_pymux_string(pymux, "#{client_key_table}", client=client) == "root"
+
+    client.has_prefix = True
+
+    assert format_pymux_string(pymux, "#{client_prefix}", client=client) == "1"
+    assert format_pymux_string(pymux, "#{client_key_table}", client=client) == "prefix"
+
+
+def test_a_prefix_with_no_client_is_empty(pymux):
+    "Not '0'. tmux answers nothing when it has no client to read."
+    assert format_pymux_string(pymux, "#{client_prefix}") == ""
+    assert format_pymux_string(pymux, "#{client_key_table}") == ""
+
+
 def test_id_reads_as_target(pymux):
     "A caller passes these straight back as `-t`."
     assert format_pymux_string(pymux, "#{pane_id}").startswith("%")
