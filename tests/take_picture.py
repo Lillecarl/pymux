@@ -399,6 +399,23 @@ class Terminal:
     def argv(self, command):
         return self._argv(command)
 
+    def asked(self, **extra):
+        """
+        The same terminal, with more asked of its command line.
+
+        The argv it carries already holds its colours -- a light
+        terminal is the same program with a background -- so this adds
+        to that rather than building a new one.
+        """
+        return Terminal(
+            self.name,
+            self.program,
+            partial(self._argv, **extra),
+            seat=self.seat,
+            window_class=self.window_class,
+            environment=self.environment,
+        )
+
 
 def xterm_argv(command, background="black", foreground="white"):
     """
@@ -440,13 +457,20 @@ def xterm_argv(command, background="black", foreground="white"):
     ]
 
 
-def foot_argv(command, background="000000", foreground="ffffff"):
+def foot_argv(command, background="000000", foreground="ffffff", blink=True):
     """
     foot, a terminal that speaks Wayland and no X at all.
 
     The compositor gives it the whole output, so there is no geometry
     to ask for. Everything that could move a pixel is turned off, the
     same way as for xterm.
+
+    **`blink=False` is for a run that keeps one picture instead of
+    subtracting two.** A settle waits for two pictures in a row to be
+    the same, and a cursor that blinks for ever makes sure they never
+    are. `kitty_argv` says the rest; foot needed the same knob, and
+    without it the chrome farm lost most of its pictures.
+    Lillecarl/pymux#338, Lillecarl/pymux#362.
     """
     return [
         "foot",
@@ -465,7 +489,7 @@ def foot_argv(command, background="000000", foreground="ffffff"):
         # that stops when the holder dies would still differ between
         # the sides, so the cursor of an unfocused window is asked to
         # stay as it is.
-        "--override=cursor.blink=yes",
+        "--override=cursor.blink=%s" % ("yes" if blink else "no",),
         "--override=cursor.unfocused-style=unchanged",
         # The fence a fixture ends in is an OSC 52 write, and foot
         # gates it behind this without the option. The focus itself is

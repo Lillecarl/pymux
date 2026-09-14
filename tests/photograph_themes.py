@@ -42,6 +42,7 @@ from photograph_chrome import (  # noqa: E402
     Fixture,
     create_command,
     demo_keys,
+    holding_still,
     keys,
     main,
 )
@@ -192,7 +193,9 @@ if __name__ == "__main__":
             # The dark three and the light three. A theme that reads on
             # the black it was written on may be unreadable on white,
             # and the light schemes of pygments want the other end.
-            terminals=TERMINALS + LIGHT_TERMINALS,
+            # Every cursor holds still: this run keeps one picture and
+            # subtracts nothing. Lillecarl/pymux#362.
+            terminals=holding_still(TERMINALS + LIGHT_TERMINALS),
             only_list=exact_list("PYMUX_THEMES_LIST"),
             only_terminals_list=exact_list("PYMUX_THEMES_TERMINALS_LIST"),
         )

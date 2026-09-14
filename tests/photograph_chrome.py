@@ -66,33 +66,36 @@ from middleman import FORWARDER, run_cli  # noqa: E402
 from take_picture import (  # noqa: E402
     HOLD,
     TERMINALS,
-    Terminal,
     every_log,
-    kitty_argv,
 )
 
-#: The same three terminals, with kitty's cursor asked to hold still.
+#: The terminals whose cursor blinks for ever, and the argv that asks
+#: each one to hold still.
 #:
 #: This run keeps one picture of each fixture; it subtracts nothing,
 #: so it has no use for a blinking cursor, and a settle waits for two
-#: pictures in a row to be the same. kitty is configured to blink for
+#: pictures in a row to be the same. Both are configured to blink for
 #: ever, because `take_picture.py` has a fixture that measures the
-#: blink -- so `chooser-search`, the first chrome fixture that leaves a
-#: cursor on the screen, never settled there and took no picture at
-#: all. Lillecarl/pymux#338.
-CHROME_TERMINALS = [
-    Terminal(
-        one.name,
-        one.program,
-        partial(kitty_argv, blink=False),
-        seat=one.seat,
-        window_class=one.window_class,
-        environment=one.environment,
-    )
-    if one.name == "kitty"
-    else one
-    for one in TERMINALS
-]
+#: blink.
+#:
+#: kitty was the first to show it: `chooser-search`, the first chrome
+#: fixture to leave a cursor on the screen, never settled there and
+#: took no picture at all (Lillecarl/pymux#338). foot was the same
+#: fault and it cost far more, because every chrome fixture leaves a
+#: cursor somewhere: 16 of 20 pictures lost in one measured run.
+#: Lillecarl/pymux#362.
+STILL = ("kitty", "foot")
+
+
+def holding_still(terminals):
+    "The same terminals, with every cursor asked to hold still."
+    return [
+        one.asked(blink=False) if one.program in STILL else one
+        for one in terminals
+    ]
+
+
+CHROME_TERMINALS = holding_still(TERMINALS)
 
 #: Where the pictures go. The check points this at `$out`.
 PICTURES = Path(os.environ.get("PYMUX_CHROME_OUT", "chrome-pictures"))
