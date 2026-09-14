@@ -42,6 +42,7 @@ from photograph_chrome import (  # noqa: E402
     Fixture,
     create_command,
     demo_keys,
+    exact_list,
     holding_still,
     keys,
     main,
@@ -167,20 +168,6 @@ FIXTURES["cut-follows-the-terminal"] = Fixture(
     ),
     (2,),
 )
-
-
-def exact_list(env):
-    """
-    An exact list of names from the environment, or None.
-
-    The gallery builds in pieces, one derivation per terminal and per
-    batch of themes, and a piece names what it holds exactly: a
-    substring would run a theme in every combo that holds a piece of
-    its name. Lillecarl/pymux#284.
-    """
-    value = os.environ.get(env, "")
-    names = [one for one in value.split(",") if one]
-    return names or None
 
 
 if __name__ == "__main__":

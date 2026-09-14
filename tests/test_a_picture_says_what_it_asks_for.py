@@ -13,7 +13,7 @@ Lillecarl/pymux#353.
 import pytest
 
 from photograph_chrome import FIXTURES as CHROME_FIXTURES
-from photograph_chrome import Fixture, count_panes
+from photograph_chrome import Fixture, count_panes, exact_list
 from photograph_themes import FIXTURES as THEME_FIXTURES
 
 #: What `#{pane_mode}` can answer: tmux's two names, and nothing.
@@ -36,6 +36,24 @@ def test_the_windows_are_sorted_as_numbers():
     """
     listing = "\n".join(str(number) for number in range(11))
     assert count_panes(listing) == (1,) * 11
+
+
+def test_a_knob_that_names_nothing_narrows_nothing(monkeypatch):
+    """
+    None, and not an empty list: a run that narrowed to nothing would
+    take no picture at all and look like a run that found none.
+    """
+    monkeypatch.delenv("PYMUX_CHROME_LIST", raising=False)
+    assert exact_list("PYMUX_CHROME_LIST") is None
+
+    monkeypatch.setenv("PYMUX_CHROME_LIST", "")
+    assert exact_list("PYMUX_CHROME_LIST") is None
+
+
+def test_a_knob_names_fixtures_that_share_no_substring(monkeypatch):
+    "Which is the case `PYMUX_CHROME` cannot do. Lillecarl/pymux#365."
+    monkeypatch.setenv("PYMUX_CHROME_LIST", "which-key,clock,copy-mode")
+    assert exact_list("PYMUX_CHROME_LIST") == ["which-key", "clock", "copy-mode"]
 
 
 def test_a_fixture_asks_for_one_pane_unless_it_says_otherwise():

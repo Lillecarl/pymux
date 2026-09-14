@@ -251,6 +251,12 @@ let
   chromeSelection = builtins.getEnv "PYMUX_CHROME";
   chromeTerminals = builtins.getEnv "PYMUX_CHROME_TERMINALS";
 
+  # The same two, by exact name and comma separated. They beat the
+  # substrings: three fixtures that share no substring are what a probe
+  # of the judge asks for. Lillecarl/pymux#365.
+  chromeList = builtins.getEnv "PYMUX_CHROME_LIST";
+  chromeTerminalsList = builtins.getEnv "PYMUX_CHROME_TERMINALS_LIST";
+
   # The same for the pictures of every theme, which
   # `tests/photograph_themes.py` takes: one demo application in a
   # pane, under every theme the option takes.
@@ -819,13 +825,22 @@ in
       {
         name = "pymux-chrome-pictures";
         inputs = seatInputs;
-        env = { inherit chromeSelection chromeTerminals; };
+        env = {
+          inherit
+            chromeSelection
+            chromeTerminals
+            chromeList
+            chromeTerminalsList
+            ;
+        };
       }
       (
         seatSetup
         + ''
           export PYMUX_CHROME="$chromeSelection"
           export PYMUX_CHROME_TERMINALS="$chromeTerminals"
+          export PYMUX_CHROME_LIST="$chromeList"
+          export PYMUX_CHROME_TERMINALS_LIST="$chromeTerminalsList"
           export PYMUX_CHROME_OUT="$out"
           python tests/photograph_chrome.py
         ''

@@ -44,6 +44,9 @@ arrived. Lillecarl/pymux#353, Lillecarl/pymux#363.
 
 `PYMUX_CHROME` narrows the run to the fixtures whose name holds that
 text, and `PYMUX_CHROME_TERMINALS` to the terminals whose name does.
+`PYMUX_CHROME_LIST` and `PYMUX_CHROME_TERMINALS_LIST` name them
+exactly, comma separated, and beat the substrings: three fixtures that
+share no substring are what a probe of the judge asks for.
 """
 
 import os
@@ -101,9 +104,27 @@ CHROME_TERMINALS = holding_still(TERMINALS)
 #: Where the pictures go. The check points this at `$out`.
 PICTURES = Path(os.environ.get("PYMUX_CHROME_OUT", "chrome-pictures"))
 
-#: Which fixtures and which terminals to run.
+#: Which fixtures and which terminals to run, as a piece of a name.
 ONLY = os.environ.get("PYMUX_CHROME", "")
 ONLY_TERMINALS = os.environ.get("PYMUX_CHROME_TERMINALS", "")
+
+
+def exact_list(env):
+    """
+    An exact list of names from the environment, or None.
+
+    The gallery builds in pieces, one derivation per terminal and per
+    batch of themes, and a piece names what it holds exactly: a
+    substring would run a theme in every combo that holds a piece of
+    its name. Lillecarl/pymux#284.
+
+    A person reaches for it too, and for the other reason: a probe of
+    the judge wants `which-key,clock,copy-mode`, three fixtures that
+    share no substring. Lillecarl/pymux#365.
+    """
+    value = os.environ.get(env, "")
+    names = [one for one in value.split(",") if one]
+    return names or None
 
 #: The relay, beside this file.
 RELAY = Path(__file__).parent / "drive_in_terminal.py"
@@ -780,4 +801,9 @@ def main(
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(
+        main(
+            only_list=exact_list("PYMUX_CHROME_LIST"),
+            only_terminals_list=exact_list("PYMUX_CHROME_TERMINALS_LIST"),
+        )
+    )
