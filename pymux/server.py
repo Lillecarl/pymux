@@ -384,8 +384,15 @@ class ServerConnection:
         # The graphics query reply, the cell size report and the device
         # attributes all say something about the images. The reply of
         # the colour probe says how many colours the terminal takes.
+        knew_the_cell = self.graphics.cell_size_known
         self.graphics.handle_reply(data)
         self.colors.handle_reply(data)
+
+        # The cell size report is the moment a client can first speak
+        # for the panes: it attached before its terminal answered.
+        # Lillecarl/pymux#369.
+        if self.graphics.cell_size_known and not knew_the_cell:
+            self.pymux.sync_cell_size()
 
         if not data.endswith("c"):
             return
@@ -574,7 +581,8 @@ class ServerConnection:
         elif packet["cmd"] == "open-failed":
             if self.client_state is not None:
                 self.client_state.message = (
-                    "Could not open %s in a browser on this machine." % (packet["data"],)
+                    "Could not open %s in a browser on this machine."
+                    % (packet["data"],)
                 )
 
     def _detach_the_others(self, hang_up: bool = False) -> None:

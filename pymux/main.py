@@ -40,6 +40,7 @@ from prompt_toolkit.styles import (
 )
 from ptterm import Terminal
 from pyte.environment import terminal_name
+from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
 from pyte.keys import KeyboardFlag
 from pyte.osc import Osc
 
@@ -669,7 +670,7 @@ _COMMAND_RAN_BEFORE, _, _COMMAND_RAN_AFTER = Woke.COMMAND_RAN.partition("%s")
 def _hook_of(reason: str) -> str | None:
     "The hook name of one wake, or None for a wake that is not an event."
     if reason.startswith(_COMMAND_RAN_BEFORE) and reason.endswith(_COMMAND_RAN_AFTER):
-        name = reason[len(_COMMAND_RAN_BEFORE):len(reason) - len(_COMMAND_RAN_AFTER)]
+        name = reason[len(_COMMAND_RAN_BEFORE) : len(reason) - len(_COMMAND_RAN_AFTER)]
         return "after-%s" % name
 
     return _HOOKS_BY_WAKE.get(reason)
@@ -854,6 +855,9 @@ class Pymux:
         # clients: the flags and the switch above. (None: nothing was
         # told yet.)
         self._keyboard_state_sent = None
+
+        # The cell size the panes were last told. (None: nothing yet.)
+        self._cell_size_sent: Tuple[int, int] | None = None
         #: The task group every route runs in. `running()` owns it, so
         #: it is there for exactly as long as this server serves, and
         #: `None` before and after. Lillecarl/pymux#87.
@@ -1751,6 +1755,7 @@ class Pymux:
         # A pane that starts now missed the last walk of the panes.
         self.tell_pane_about_keyboard(pane)
         self.tell_pane_about_colours(pane)
+        self.tell_pane_about_cell_size(pane)
 
         logger.info("Created process %r.", command_list)
 
@@ -2008,7 +2013,9 @@ class Pymux:
         """
         now = datetime.datetime.now()
         if self.test_mode:
-            now = now.replace(month=3, day=14, hour=13, minute=37, second=0, microsecond=0)
+            now = now.replace(
+                month=3, day=14, hour=13, minute=37, second=0, microsecond=0
+            )
         return now
 
     def clients_to_open_on(self) -> "list[ClientState]":
@@ -2023,9 +2030,7 @@ class Pymux:
         the answer is still being sent.
         """
         clients = [
-            client
-            for client in self._client_states.values()
-            if not client.temporary
+            client for client in self._client_states.values() if not client.temporary
         ]
         if self.open_url_target != "broadcast" and clients:
             return [max(clients, key=lambda client: client.last_used)]
@@ -2084,7 +2089,7 @@ class Pymux:
         self._open_url_shim_dir = tempfile.mkdtemp(prefix="pymux-open-url-")
         script = os.path.join(self._open_url_shim_dir, "pymux-open-url")
         with open(script, "w") as f:
-            f.write("#!/bin/sh\nexec pymux open-url -- \"$@\"\n")
+            f.write('#!/bin/sh\nexec pymux open-url -- "$@"\n')
         os.chmod(script, 0o755)
         os.symlink("pymux-open-url", os.path.join(self._open_url_shim_dir, "xdg-open"))
 
@@ -2303,6 +2308,62 @@ class Pymux:
         for pane in list(self.panes_by_id.values()):
             self.tell_pane_about_keyboard(pane)
 
+    def cell_size(self) -> Tuple[int, int]:
+        """
+        How big one cell is, in pixels, for the panes of this server.
+
+        **The cell of the client that has been here longest and knows
+        one.** A pane serves several clients and they do not share a
+        cell size, so one of them has to speak for the pane. First come
+        is the stable choice: a later client attaching does not move
+        what the panes already hold, and a session usually keeps one
+        client for its whole life. tmux picks a client's cell for the
+        window in the same spirit (`resize.c`).
+
+        A client that never answered "CSI 16 t" is passed over rather
+        than counted at its default, and a connection that runs one
+        command and leaves is not a terminal anybody is looking at.
+        With nobody to ask, the panes keep the size `pyte` assumes.
+        Lillecarl/pymux#369.
+        """
+        for connection, client_state in self._client_states.items():
+            if connection is None or getattr(client_state, "temporary", False):
+                continue
+            graphics = getattr(connection, "graphics", None)
+            if graphics is not None and getattr(graphics, "cell_size_known", False):
+                return (graphics.cell_width, graphics.cell_height)
+        return (ASSUMED_CELL_WIDTH, ASSUMED_CELL_HEIGHT)
+
+    def sync_cell_size(self) -> None:
+        """
+        Tell every pane how big a cell is. (Only walks the panes when
+        the answer changed.)
+
+        A client attaching, a client leaving and a terminal answering
+        the query all reach this. The answer moves rarely: it takes the
+        client that speaks for the panes going away, or the first one
+        ever to answer.
+        """
+        size = self.cell_size()
+        if size == self._cell_size_sent:
+            return
+        self._cell_size_sent = size
+        for pane in list(self.panes_by_id.values()):
+            self.tell_pane_about_cell_size(pane)
+
+    def tell_pane_about_cell_size(self, pane) -> None:
+        """
+        Tell one pane how big a cell is. Never raises: this runs when a
+        client attaches and when a pane starts, and neither may stop
+        for it.
+        """
+        try:
+            pane.screen.set_cell_size(*self.cell_size())
+        except AttributeError:
+            # An older ptterm has a screen that cannot be told. It then
+            # keeps the size `pyte` assumes, as before.
+            pass
+
     def sync_keyboard(self) -> None:
         """
         Tell the panes and the clients everything about the keyboard.
@@ -2390,9 +2451,7 @@ class Pymux:
         reason `clients_to_open_on` names.
         """
         clients = [
-            client
-            for client in self._client_states.values()
-            if not client.temporary
+            client for client in self._client_states.values() if not client.temporary
         ]
         if not clients:
             return None
@@ -3038,6 +3097,11 @@ class Pymux:
         # and raises it again when the terminal can do more.)
         self.sync_keyboard_source_flags()
 
+        # This client speaks for the panes only if no earlier one does,
+        # and only once its terminal has answered the cell size query.
+        # Both are why the reply calls this again.
+        self.sync_cell_size()
+
         return client_state
 
     def remove_client(self, connection):
@@ -3058,3 +3122,5 @@ class Pymux:
             self.connections.remove(connection)
         # One client fewer can mean that the rest speak more.
         self.sync_keyboard_source_flags()
+        # And the client that spoke for the panes may be the one gone.
+        self.sync_cell_size()

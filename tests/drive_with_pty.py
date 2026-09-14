@@ -14,7 +14,8 @@ Three terminals are played:
   re-transmitted and placed, and that the colours are 24 bit.
 * An xterm-like terminal. It draws sixel and takes 256 colours. The
   check is that the sixel image of the pane is re-encoded for the cell
-  size that the terminal reports.
+  size that the terminal reports, and that it keeps its own pixels
+  while it does.
 * A terminal that answers no probe but sets `COLORTERM`. The check is
   that the environment still raises the colour depth.
 * A plain terminal that answers nothing but the device attributes. The
@@ -133,8 +134,9 @@ def keys_read(data: bytes) -> bytes:
 IMAGE_PAYLOAD = "AAECAwQFBgcICQoL"
 KITTY_IMAGE = "\x1b_Ga=T,f=24,s=2,v=2,i=7,c=3,r=2,C=1;" + IMAGE_PAYLOAD + "\x1b\\"
 
-# The sixel image that the pane child draws: 20 by 12 pixels, red. With
-# the cell that a pane assumes that is two columns and one row.
+# The sixel image that the pane child draws: 20 by 12 pixels, red.
+# Against the eight by seventeen cell this terminal reports that is
+# three columns and one row, and the image fits inside them.
 SIXEL_IMAGE = dcs('0;0;0q"1;1;20;12#4;2;100;0;0#4!20~-!20~')
 
 # Cell size that the sixel terminal reports, in pixels.
@@ -977,19 +979,23 @@ def check_sixel_terminal(tmp):
         # as text.
         assert b"!20~" not in terminal.seen, "sixel body leaked as text"
 
-        # The server re-encodes the image for the cell size that this
-        # terminal reported. The pane image is 20x12 pixels, which is
-        # two columns and one row; the terminal draws that as
-        # 2 * 8 by 1 * 17 pixels.
+        # **The image reaches the screen with its own pixels.** The pane
+        # takes its cell size from this client, so it reserves
+        # `ceil(20/8)` by `ceil(12/17)` cells for the 20 by 12 image:
+        # three columns and one row, which is 24 by 17 pixels. The image
+        # fits inside that, so nothing resamples it and the sixel that
+        # goes out is 20 by 12. Lillecarl/pymux#369.
         terminal.wait_for(b"\x1bP0;1;0q")
         found = re.search(rb"\x1b\[(\d+);(\d+)H\x1bP([^\x1b]*)\x1b\\", terminal.seen)
         assert found, "no sixel image on the outer terminal"
         decoded = decode_sixel(found.group(3).decode("latin-1"))
         assert decoded is not None, "the sixel image does not decode"
-        assert (decoded[0], decoded[1]) == (
-            2 * CELL_WIDTH,
-            1 * CELL_HEIGHT,
-        ), "the image was not scaled to the cells: %r" % (decoded[:2],)
+        assert (decoded[0], decoded[1]) == (20, 12), (
+            "the image did not keep its own pixels: %r" % (decoded[:2],)
+        )
+        assert 3 * CELL_WIDTH >= 20 and 1 * CELL_HEIGHT >= 12, (
+            "the cells this test reasons about no longer hold the image"
+        )
 
         # The colours stay at 256: nothing said more.
         assert b"\x1b[0;38;5;" in terminal.seen, "no 256 colour output"
@@ -1452,7 +1458,9 @@ def check_second_terminal(tmp):
 
             # And the server kept serving: the first terminal still has
             # its pane, and a command still reaches the socket.
-            listed = run_cli(terminal.sock_path, ["list-panes", "-a", "-F", "#{pane_id}"])
+            listed = run_cli(
+                terminal.sock_path, ["list-panes", "-a", "-F", "#{pane_id}"]
+            )
             assert listed.returncode == 0, listed.stderr
             assert len(listed.stdout.split()) == 1, listed.stdout
         else:
@@ -1956,9 +1964,7 @@ def check_command_palette(tmp):
         rows_with_prompt = [
             number for number, row in enumerate(screen) if ":new" in row
         ]
-        assert rows_with_prompt, "the command line drew nothing\n%s" % "\n".join(
-            screen
-        )
+        assert rows_with_prompt, "the command line drew nothing\n%s" % "\n".join(screen)
 
         first = rows_with_prompt[0]
         assert 5 <= first <= 18, (
@@ -2189,8 +2195,8 @@ def check_detached_pane_has_a_width(tmp):
         one_character_rows = [
             row for row in captured.splitlines() if len(row.strip()) == 1
         ]
-        assert len(one_character_rows) < 5, (
-            "the pane wrapped at one column: %r" % (one_character_rows[:10],)
+        assert len(one_character_rows) < 5, "the pane wrapped at one column: %r" % (
+            one_character_rows[:10],
         )
     finally:
         run_cli(sock_path, ["kill-server"])

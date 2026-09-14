@@ -36,7 +36,7 @@ import zlib
 from typing import Callable, Dict, Iterable, List, NamedTuple, Tuple
 
 from prompt_toolkit.output import ColorDepth
-from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH, PixelFormat
+from pyte.images import PixelFormat
 from pyte.terminfo import DeviceExtension
 
 from .blocks import average_rgba, blocks_for, rows_for_cells
@@ -192,6 +192,13 @@ class ClientGraphics:
         self.cell_width = DEFAULT_CELL_WIDTH
         self.cell_height = DEFAULT_CELL_HEIGHT
 
+        #: True once the terminal answered "CSI 16 t". The pane takes
+        #: its cell size from a client, and a default is not an answer:
+        #: a terminal that never replied must not hold the pane at ten
+        #: by twenty while a client that did reply waits behind it.
+        #: Lillecarl/pymux#369.
+        self.cell_size_known = False
+
         # Image ids of the outer terminal start at a random offset, so
         # that pymux does not overwrite the images of another program
         # that shares the terminal.
@@ -255,6 +262,7 @@ class ClientGraphics:
             if 0 < width <= MAX_CELL_SIZE and 0 < height <= MAX_CELL_SIZE:
                 self.cell_width = width
                 self.cell_height = height
+                self.cell_size_known = True
             return
 
         match = _DEVICE_ATTRIBUTES_RE.match(data)
@@ -327,6 +335,45 @@ class ClientGraphics:
         self._write_raw(SAVE_CURSOR + "".join(commands) + RESTORE_CURSOR)
         self._flush()
 
+    def draws_at_its_own_size(
+        self, placement, image, source, columns: int, rows: int
+    ) -> bool:
+        """
+        Whether this placement should be drawn at the size of its own
+        pixels, rather than fitted to the cells it covers.
+
+        Three things have to hold.
+
+        **The placement must not be a virtual one.** A virtual
+        placement is drawn through the unicode placeholders in the text
+        of the pane, and there the run of placeholder cells *is* the
+        box: the program put those cells on the screen to be filled,
+        and `_placeholder_source` cuts the piece of the image that each
+        one shows. Drawing that piece at its own size would leave the
+        cells around it empty.
+
+        **The program must not have asked for the box.** "c=3,r=2" with
+        a two pixel image means "draw it over three cells by two", and
+        fitting it there is the answer. Only a box the terminal worked
+        out with `ceil(pixels / cell)` is an artefact.
+
+        **The pixels must fit the cells**, measured in the cell this
+        client's terminal really has. A pane reserves cells against the
+        cell it was told, and the client draws them in its own. When
+        the two are the same cell the box is the image rounded up, so
+        the image fits with less than one cell of slack and both paths
+        draw it untouched -- which is the whole of "never resample".
+        When the cells differ the box can be smaller, and then there is
+        nothing to do but fit the image to it. A client whose cell is
+        larger fits as well and leaves more slack; drawing in the slack
+        would stretch the image to a size nobody asked for.
+        Lillecarl/pymux#369.
+        """
+        if placement.virtual or getattr(placement, "asked_for_the_box", True):
+            return False
+        width, height = _drawn_size(image, source)
+        return columns * self.cell_width >= width and rows * self.cell_height >= height
+
     def _collect(self, views: Iterable[PaneView]) -> Dict[Tuple[int, int], _Placement]:
         "The placements that this frame should show."
         desired: Dict[Tuple[int, int], _Placement] = {}
@@ -371,24 +418,25 @@ class ClientGraphics:
                         rows,
                         pane_placement.z,
                         source,
+                        natural=self.draws_at_its_own_size(
+                            pane_placement, image, source, columns, rows
+                        ),
                     ),
                 )
 
         self._forget_unused_images(live_keys)
         return desired
 
-    @classmethod
-    def _pane_placements(cls, view: PaneView):
+    def _pane_placements(self, view: PaneView):
         """
         Everything of one pane that the client should draw: the plain
         placements, and the images that the unicode placeholders in the
         text of the pane point at.
         """
-        yield from cls._visible_placements(view)
-        yield from cls._placeholder_placements(view)
+        yield from self._visible_placements(view)
+        yield from self._placeholder_placements(view)
 
-    @staticmethod
-    def _placeholder_placements(view: PaneView):
+    def _placeholder_placements(self, view: PaneView):
         """
         Yield the images that the unicode placeholders of one pane
         point at.
@@ -428,6 +476,8 @@ class ClientGraphics:
                 run.image_row,
                 columns,
                 rows,
+                self.cell_width,
+                self.cell_height,
             )
             if source is None:
                 continue  # The empty border around a fitted image.
@@ -666,15 +716,19 @@ class ClientGraphics:
                 slot = slots.get(placement.image_id, 0) + 1
                 slots[placement.image_id] = slot
 
+                own_size = self.draws_at_its_own_size(
+                    placement, image, source, columns, rows
+                )
                 key = (
                     id(image),
                     source,
                     columns * self.cell_width,
                     rows * self.cell_height,
+                    own_size,
                 )
                 live.add(key)
 
-                data = self._sixel_for(key, image, source, columns, rows)
+                data = self._sixel_for(key, image, source, columns, rows, own_size)
                 if data is None:
                     continue
                 desired[(view.pane_id, placement.image_id, slot)] = "\x1b[%i;%iH%s" % (
@@ -752,7 +806,7 @@ class ClientGraphics:
         return lines
 
     def _sixel_for(
-        self, key: tuple, image, source, columns: int, rows: int
+        self, key: tuple, image, source, columns: int, rows: int, own_size: bool = False
     ) -> str | None:
         "The sixel sequence of one placement. (Cached by geometry.)"
         known = self._cell_cache.get(key)
@@ -770,9 +824,15 @@ class ClientGraphics:
                 return None
             width, height = source[2], source[3]
 
-        target_width = max(1, columns * self.cell_width)
-        target_height = max(1, rows * self.cell_height)
-        pixels = scale_rgba(pixels, width, height, target_width, target_height)
+        if own_size:
+            # Its own pixels, straight out. `draws_at_its_own_size`
+            # says when, and `_put_command` says why the cells below
+            # the image are safe.
+            target_width, target_height = width, height
+        else:
+            target_width = max(1, columns * self.cell_width)
+            target_height = max(1, rows * self.cell_height)
+            pixels = scale_rgba(pixels, width, height, target_width, target_height)
 
         encoded = encode_sixel(target_width, target_height, pixels)
         if encoded is None:
@@ -805,6 +865,13 @@ class ClientGraphics:
         self._flush()
 
 
+def _drawn_size(image, source: Tuple[int, int, int, int] | None) -> Tuple[int, int]:
+    "The pixels a placement shows: the image, or the crop out of it."
+    if source is not None:
+        return (source[2], source[3])
+    return (image.width, image.height)
+
+
 def _crop_rgba(
     pixels: bytes, width: int, height: int, source: Tuple[int, int, int, int]
 ) -> bytes | None:
@@ -822,7 +889,9 @@ def _crop_rgba(
     return bytes(out)
 
 
-def _placeholder_source(image, placement, image_column, image_row, columns, rows):
+def _placeholder_source(
+    image, placement, image_column, image_row, columns, rows, cell_width, cell_height
+):
     """
     The rectangle of `image`, in pixels, that a run of placeholder
     cells shows. None when the run falls outside the image.
@@ -831,9 +900,14 @@ def _placeholder_source(image, placement, image_column, image_row, columns, rows
     keeping the proportions and centring what is left over. A cell of
     the box therefore does not map onto a fixed piece of the image, and
     a cell along the border may show none of it.
+
+    **The cell is the client's own.** The box is pixels on the screen
+    of this client, so which part of the image a cell of it shows
+    depends on the shape of that cell. A ten by twenty cell and a ten
+    by nineteen one fit the same image differently.
     """
-    box_width = placement.columns * ASSUMED_CELL_WIDTH
-    box_height = placement.rows * ASSUMED_CELL_HEIGHT
+    box_width = placement.columns * cell_width
+    box_height = placement.rows * cell_height
 
     if image.width * box_height > image.height * box_width:
         # The image fills the box sideways. What is left over is a
@@ -846,10 +920,10 @@ def _placeholder_source(image, placement, image_column, image_row, columns, rows
         y_offset = 0.0
         x_offset = (box_width - image.width * scale) / 2
 
-    left = (image_column * ASSUMED_CELL_WIDTH - x_offset) / scale
-    top = (image_row * ASSUMED_CELL_HEIGHT - y_offset) / scale
-    right = left + columns * ASSUMED_CELL_WIDTH / scale
-    bottom = top + rows * ASSUMED_CELL_HEIGHT / scale
+    left = (image_column * cell_width - x_offset) / scale
+    top = (image_row * cell_height - y_offset) / scale
+    right = left + columns * cell_width / scale
+    bottom = top + rows * cell_height / scale
 
     # Cut away what falls outside the image. A run along the border
     # keeps all of its cells, so the piece that is left stretches over
@@ -878,18 +952,32 @@ def _put_command(
     rows: int,
     z: int,
     source: Tuple[int, int, int, int] | None,
+    natural: bool = False,
 ) -> str:
     """
     The escape sequences that put one image at (`x`, `y`) on the outer
     terminal. The cursor moves there first; `C=1` keeps the image from
     moving it again.
+
+    **`natural` leaves `c` and `r` out, and that is what stops the
+    terminal resampling.** `c` and `r` are a box to fit the image into,
+    so sending them always scales unless the box is the image to the
+    pixel. With neither, kitty draws the image at its own size and
+    works the covered cells out itself -- `ceil(width / cell)`, which
+    is at most the `columns` and `rows` the pane reserved whenever the
+    image fits the box. So nothing below the image is overdrawn.
+    `draws_at_its_own_size` is where that is decided, and it also
+    refuses a box the program asked for. Lillecarl/pymux#369.
     """
     parts = [
         "a=p",
         "i=%i" % outer_id,
         "p=%i" % slot,
-        "c=%i" % columns,
-        "r=%i" % rows,
+    ]
+    if not natural:
+        parts.append("c=%i" % columns)
+        parts.append("r=%i" % rows)
+    parts += [
         "C=1",
         "q=2",
     ]

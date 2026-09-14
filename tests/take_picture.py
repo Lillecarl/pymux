@@ -44,12 +44,13 @@ refuses to give a number at all when the two drawings are not the same
 size. Lillecarl/pymux#262.
 
 **A pane takes an image in over two protocols as well as writing it
-out over two**, so the image fixtures are a matrix: `sixel-image` is a
-sixel going in and `kitty-image` is a kitty transmission going in, and
-each terminal is one of the protocols coming out. `kitty-image` in
-kitty is the only image comparison here whose bare side draws
-something, because it is the only one where the terminal already
-speaks what the program wrote.
+out over two**, so the image fixtures are a matrix: `sixel-image-*` is
+a sixel going in and `kitty-image-*` is a kitty transmission going in,
+and each terminal is one of the protocols coming out. The number is the
+height of the image. A `kitty-image-*` in kitty and a `sixel-image-*`
+in foot are the two whose bare side draws something, because there the
+terminal already speaks what the program wrote; those two are the
+strongest comparisons here.
 
 **Two seats.** xterm speaks X and nothing else, so there is an Xvfb.
 foot speaks Wayland and nothing else, so there is a headless `sway`,
@@ -258,38 +259,36 @@ def box_drawing(fixture):
     fixture.append("└" + "─" * 20 + "┘\r\n")
 
 
-#: The width of every image fixture, in pixels. A pane has no idea how
-#: big a cell of the client terminal is, so `pyte.images` reserves
-#: `ceil(width / 10) x ceil(height / 20)` cells against the cell it
-#: assumes, and the client stretches the image to fill them. 120 is
-#: twelve of those columns and also twelve real ones, because every
-#: terminal here has a ten pixel cell.
+#: The width of every image fixture, in pixels. A pane reserves
+#: `ceil(width / cell) x ceil(height / cell)` cells for an image,
+#: against the cell size its client reported. 120 is twelve columns of
+#: every terminal here, because all three have a ten pixel cell.
 IMAGE_WIDTH = 120
 
-#: The height that needs no resampling anywhere, and the height that
-#: needs it everywhere.
+#: Two image heights, and what the pair is for.
 #:
-#: The pane reserves six rows for either -- `ceil(120/20)` and
-#: `ceil(114/20)` are both 6 -- and six rows of the nineteen pixel cell
-#: these terminals really have is 114 pixels. So:
+#: 114 is six rows of the nineteen pixel cell that kitty and foot have,
+#: exactly. 120 is six rows of xterm's twenty pixel cell, exactly, and
+#: seven rows of nineteen with six pixels left over. So between them the
+#: two cover both shapes a reserved box can have: the image filling it
+#: and the image leaving slack.
 #:
-#: * 120 has to be squeezed into 114, and each path squeezes it its own
-#:   way: pymux with `scale_rgba` for sixel, and the terminal itself for
-#:   kitty, which is handed the image untouched and told the cell box.
-#: * 114 is already 114. Neither path resamples, and both put the
-#:   program's own pixels on the screen.
-#:
-#: 114 is the height that says the two paths agree, and it is the one to
-#: read first. 120 says what a resample costs, which is
-#: Lillecarl/pymux#369: the pane counts cells against a twenty pixel
-#: cell that no terminal here has.
+#: **Neither is resampled anywhere any more.** Until
+#: Lillecarl/pymux#369 a pane counted every image against a cell size it
+#: had invented -- ten by twenty, which only xterm has -- and then the
+#: client stretched the image to fill the cells: pymux with `scale_rgba`
+#: for sixel, and the terminal itself for kitty, which was handed the
+#: image and told the cell box. 120 measured what that cost. Now the
+#: pane counts against the cell its client reported and the client draws
+#: the image at its own size, so both heights come out exact, and the
+#: pair is what says that the slack is left alone as well as the fit.
 #:
 #: Both are a multiple of six, which is one sixel band.
 #:
-#: **The two names are true of a nineteen pixel cell**, which kitty and
-#: foot have here. xterm's is twenty, so xterm resamples both of them
-#: and `EXACT_HEIGHT` is the one it has to stretch furthest.
-EXACT_HEIGHT, RESAMPLED_HEIGHT = 114, 120
+#: The names say which cell each one fills, because neither fills both
+#: and "scaled" and "unscaled" stopped being true of either.
+FILLS_A_NINETEEN_PIXEL_CELL = 114
+FILLS_A_TWENTY_PIXEL_CELL = 120
 
 #: Where the edges of an image are. Neither is on a cell boundary by
 #: accident: the vertical edge at 57 sits inside a ten pixel column, and
@@ -348,14 +347,14 @@ def sixel_image(fixture, height):
     the pymux picture is ours, and in kitty they are two different
     protocols drawing one image. Lillecarl/pymux#262.
 
-    **Neither re-encoding loses a pixel.** The sixel path decodes to
-    RGBA and encodes it again, and the colours here survive that
-    exactly; the kitty path does not even do that much, because it
-    transmits the image untouched. What the two paths do differently is
-    *scale*: `_put_command` sends kitty the cell box and lets kitty fit
-    the image into it, and `_sixel_for` fits the image itself with
-    `scale_rgba`. `EXACT_HEIGHT` and `RESAMPLED_HEIGHT` say which
-    fixture makes them scale and which does not.
+    **Neither re-encoding loses a pixel, and neither resamples one.**
+    The sixel path decodes to RGBA and encodes it again, and the colours
+    here survive that exactly; the kitty path does not even do that
+    much, because it transmits the image untouched. Neither fits the
+    image to the cells it covers: `_put_command` leaves the cell box out
+    and `_sixel_for` skips `scale_rgba`, because the pane counted those
+    cells against the cell this client really has. Lillecarl/pymux#369
+    is where they stopped.
 
     The bytes are written here and not built with `pymux.sixel`. An
     encoder fault that survives its own decoder would be invisible if
@@ -467,12 +466,18 @@ def kitty_image(fixture, height):
 #:
 #: The four of them are a two by two matrix. The protocol going in is
 #: the fixture, the protocol coming out is the terminal, and the height
-#: says whether anything had to be resampled on the way.
+#: says whether the image fills the cells reserved for it or leaves
+#: slack in them.
+#:
+#: **The height is in the name and not a word for it.** Two of these
+#: were `-unscaled` while the other two were resampled; that stopped
+#: being true, and a name that has to be explained is worse than a
+#: number that cannot go stale.
 IMAGE_FIXTURES = {
-    "sixel-image": (sixel_image, RESAMPLED_HEIGHT),
-    "sixel-image-unscaled": (sixel_image, EXACT_HEIGHT),
-    "kitty-image": (kitty_image, RESAMPLED_HEIGHT),
-    "kitty-image-unscaled": (kitty_image, EXACT_HEIGHT),
+    "sixel-image-120": (sixel_image, FILLS_A_TWENTY_PIXEL_CELL),
+    "sixel-image-114": (sixel_image, FILLS_A_NINETEEN_PIXEL_CELL),
+    "kitty-image-120": (kitty_image, FILLS_A_TWENTY_PIXEL_CELL),
+    "kitty-image-114": (kitty_image, FILLS_A_NINETEEN_PIXEL_CELL),
 }
 
 

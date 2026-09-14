@@ -84,8 +84,9 @@ def _drawn_by_kitty(written, cell_width, cell_height):
     to end up with.
 
     The transmission carries the image as the pane wrote it. The
-    placement carries the crop (`x,y,w,h`) and the cell box (`c,r`), so
-    doing both here is doing what the terminal is being told to do.
+    placement carries the crop (`x,y,w,h`) and, when the image does not
+    fit the cells reserved for it, the cell box (`c,r`). Doing both
+    here is doing what the terminal is being told to do.
     """
     joined = "".join(written)
 
@@ -119,12 +120,20 @@ def _drawn_by_kitty(written, cell_width, cell_height):
 
     if "w" in asked:
         assert width is not None, "a cropped PNG is not covered here"
-        pixels = _crop_rgba(pixels, width, height, (asked["x"], asked["y"], asked["w"], asked["h"]))
+        pixels = _crop_rgba(
+            pixels, width, height, (asked["x"], asked["y"], asked["w"], asked["h"])
+        )
         width, height = asked["w"], asked["h"]
 
-    target_width = max(1, asked["c"] * cell_width)
-    target_height = max(1, asked["r"] * cell_height)
-    pixels = scale_rgba(pixels, width, height, target_width, target_height)
+    if "c" in asked:
+        target_width = max(1, asked["c"] * cell_width)
+        target_height = max(1, asked["r"] * cell_height)
+        pixels = scale_rgba(pixels, width, height, target_width, target_height)
+    else:
+        # No box: kitty draws the image at its own size and works the
+        # cells out itself. `_put_command` says when pymux leaves the
+        # box out, and `draws_at_its_own_size` decides it.
+        target_width, target_height = width, height
 
     return (int(row), int(column)), target_width, target_height, pixels
 
@@ -132,10 +141,14 @@ def _drawn_by_kitty(written, cell_width, cell_height):
 def _both(state_args, cell=(1, 1), **view_args):
     "One pane state rendered down each path, reduced to pixels."
     kitty_client, kitty_written = _client(kitty=True, cell=cell)
-    kitty_client.render([view(make_state(*state_args[0], **state_args[1]), **view_args)])
+    kitty_client.render(
+        [view(make_state(*state_args[0], **state_args[1]), **view_args)]
+    )
 
     sixel_client, sixel_written = _client(sixel=True, cell=cell)
-    sixel_client.render([view(make_state(*state_args[0], **state_args[1]), **view_args)])
+    sixel_client.render(
+        [view(make_state(*state_args[0], **state_args[1]), **view_args)]
+    )
 
     return (
         _drawn_by_kitty(kitty_written, *cell),
@@ -151,8 +164,7 @@ def _same_pixels(kitty, sixel):
             a = kitty[index + channel]
             b = sixel[index + channel]
             assert abs(a - b) <= CHANNEL_SLACK, (
-                "pixel %d channel %d: kitty %d, sixel %d"
-                % (index // 4, channel, a, b)
+                "pixel %d channel %d: kitty %d, sixel %d" % (index // 4, channel, a, b)
             )
         assert kitty[index + 3] == sixel[index + 3]
 
@@ -168,9 +180,21 @@ def _same_pixels(kitty, sixel):
         # A placement the pane is too narrow for. The sixel path crops
         # the pixels; the kitty path sends `x,y,w,h` and a smaller `c`.
         # This is the one where a drift is most likely.
-        ("cropped by the pane", [placement(x=2, columns=4, rows=2)], {}, (1, 1), {"width": 4}),
+        (
+            "cropped by the pane",
+            [placement(x=2, columns=4, rows=2)],
+            {},
+            (1, 1),
+            {"width": 4},
+        ),
         # Two rows of cells, so a crop that is off by a row shows.
-        ("cropped from the top", [placement(y=0, columns=2, rows=4)], {}, (1, 1), {"height": 2}),
+        (
+            "cropped from the top",
+            [placement(y=0, columns=2, rows=4)],
+            {},
+            (1, 1),
+            {"height": 2},
+        ),
     ],
 )
 def test_the_two_paths_draw_the_same_picture(name, placements, state, cell, viewed):
