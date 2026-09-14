@@ -61,11 +61,31 @@ class Connection:
     pointer_shape = None
     graphics = None
 
-    def __init__(self, hostname: str = "", environment: dict | None = None) -> None:
+    def __init__(
+        self,
+        hostname: str = "",
+        environment: dict | None = None,
+        pymux=None,
+    ) -> None:
         self.hostname = hostname
         #: What a client reports of the machine it runs on.
         #: Lillecarl/pymux#271.
         self.environment = environment or {}
+        #: The server to leave, for `detach_and_close`. A stub built
+        #: without one cannot be detached, which is every stub that
+        #: nothing detaches. Lillecarl/pymux#335.
+        self._pymux = pymux
+
+    def detach_and_close(self) -> None:
+        """
+        What `ServerConnection.detach_and_close` does that a test can
+        see: the client leaves the server.
+
+        The real one also ends the application and closes two pipes,
+        and neither exists here.
+        """
+        if self._pymux is not None:
+            self._pymux.remove_client(self)
 
     def set_pointer_shape(self, shape):
         pass
@@ -214,7 +234,7 @@ async def in_this_process(pymux=None):
                 output=output,
                 input=pipe,
                 color_depth=ColorDepth.DEPTH_8_BIT,
-                connection=Connection(hostname, environment),
+                connection=Connection(hostname, environment, pymux),
             )
             # The socket route takes these from the `start-gui` packet.
             # This route has no packet, so the attach is here.

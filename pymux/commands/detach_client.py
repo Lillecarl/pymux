@@ -6,17 +6,66 @@ if TYPE_CHECKING:
 
 
 from prompt_toolkit.application.current import get_app
-from pymux.commands import add_command
+from pymux.commands import CommandException, add_command
+
+
+def _detach(pymux: "Pymux", client_state) -> None:
+    """
+    Detach one client that is not necessarily this one.
+
+    `Pymux.detach_client` takes the connection of the application that
+    is current, which is the only client a command could reach before
+    this. Lillecarl/pymux#335.
+    """
+    connection = getattr(client_state, "connection", None)
+    if connection is not None:
+        connection.detach_and_close()
 
 
 def detach_client(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
-    Detach this client from the session.
+    Detach a client from its session. The panes stay with the server.
 
-    The session and its panes stay with the server.
+    `-s` detaches every client watching that session, this one
+    included, which is how a person hands a session over. `-a`
+    detaches every client but this one, which is what somebody wants
+    when they find a session attached twice and they are at the
+    terminal they mean to keep.
+
+    tmux takes `-t <client>` as well, and that waits on a client
+    having a name at all. Lillecarl/pymux#335.
     """
+    if args.target_session is not None:
+        session = pymux.get_session(args.target_session)
+        if session is None:
+            raise CommandException(
+                "can't find session: %s" % (args.target_session,)
+            )
+        for client_state in pymux.clients:
+            if client_state.session is session:
+                _detach(pymux, client_state)
+        return
+
+    if args.all_but_this_one:
+        # **Not `get_client_state`.** A command that arrived from a
+        # pane's CLI runs under a temporary client, and that one is
+        # nobody: keeping it would detach every terminal a person is
+        # actually sitting at. `the_client_to_tell` is the rule pymux
+        # already has for this (Lillecarl/pymux#272) and the faithful
+        # reading of tmux's target client, which for a command from a
+        # pane is the client that owns the pane.
+        here = pymux.the_client_to_tell()
+        # tmux counts a client attached to nothing as already detached
+        # and leaves it alone: `loop->session != NULL`.
+        for client_state in pymux.clients:
+            if client_state is not here and client_state.session is not None:
+                _detach(pymux, client_state)
+        return
+
     pymux.detach_client(get_app())
 
 
 def register(subparsers):
-    add_command(subparsers, detach_client)
+    parser = add_command(subparsers, detach_client)
+    parser.add_argument("-a", dest="all_but_this_one", action="store_true", help="Every client but this one.")
+    parser.add_argument("-s", dest="target_session", metavar="<target-session>", help="Every client watching this session.")
