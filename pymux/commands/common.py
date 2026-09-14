@@ -17,6 +17,7 @@ from prompt_toolkit.key_binding.vi_state import InputMode
 from pymux.commands import CommandException
 from pymux.format import Language, format_pymux_string
 from pymux.key_spelling import why_pane_cannot_read
+from pymux.options import Scope, SetOptionError
 from pyte.keys import Unhearable
 
 
@@ -191,28 +192,60 @@ def why_not(written: str, cannot: Unhearable) -> str:
     )
 
 
+def clients_named(pymux: "Pymux", wanted: str) -> list:
+    """
+    Every client of that name, as `list-clients` prints it first on a
+    line.
+
+    A list and not one: a name is `<machine>:<terminal>` and nothing
+    stops two connections claiming the same one. `detach-client -t`
+    and `set-client-option -t` both read it. Lillecarl/pymux#335.
+
+    A chosen name will be matched here too, so that a script which
+    learned the derived one keeps working when somebody renames their
+    terminal. Lillecarl/pymux#340.
+    """
+    found = [
+        client_state
+        for client_state in pymux.clients
+        if getattr(client_state.connection, "name", "") == wanted
+    ]
+    if not found:
+        raise CommandException("can't find client: %s" % (wanted,))
+    return found
+
+
 def option_as_written(
-    pymux: "Pymux", option, args: argparse.Namespace, window: bool
+    pymux: "Pymux", option, args: argparse.Namespace, target=None
 ) -> str:
     """
     What an option holds, as a person wrote it.
 
     The on/off options hold booleans and a person writes on and off;
-    the rest hold what they were given. A window option reads the
-    window that is active, or, with `-g`, the default every new
-    window starts with -- which is recorded only when somebody set
-    it, so one that was never set reads as not set. `-g` says nothing
-    for a session option, on the read as on the write. An option that
-    holds its state somewhere else than one attribute -- the prefix
-    key lives in the binding manager -- reads as not set too.
+    the rest hold what they were given. The option's own scope says
+    what holds it: the session, the active window, or the client this
+    command means. `-g` on a window option reads the default every new
+    window starts with -- which is recorded only when somebody set it,
+    so one that was never set reads as not set -- and says nothing for
+    the other two scopes, on the read as on the write.
+
+    Nothing holding the value reads as not set: a window option with
+    no window yet, a client option with nobody attached, and an option
+    that keeps its state somewhere else than one attribute, the way
+    the prefix key lives in the binding manager.
     """
     if option.attribute_name is None:
         return "not set"
-    if window and args.g:
+
+    if option.scope is Scope.WINDOW and getattr(args, "g", False):
         value = pymux.arrangement.window_defaults.get(option.attribute_name)
     else:
-        holder = pymux.arrangement.get_active_window() if window else pymux
+        try:
+            holder = option.held_by(pymux, target)
+        except SetOptionError:
+            return "not set"
         value = getattr(holder, option.attribute_name, None)
+
     if value is None:
         return "not set"
     if isinstance(value, bool):

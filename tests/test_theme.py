@@ -5,15 +5,19 @@ Choosing a colour scheme.
 when it was built. There was nowhere to choose another, and nothing
 short of restarting the server would have changed one.
 
-`set-option theme <name>` chooses one now. `pymux/style.py` holds them
-by name, and the application takes the scheme through a `DynamicStyle`,
-so it reads `pymux.style` on every render and a client that is already
-attached follows.
+`set-client-option theme <name>` chooses one now. `pymux/style.py`
+holds them by name, and the application takes the scheme through a
+`DynamicStyle`, so it reads the client's own style on every render and
+a client that is already attached follows.
 
-**The tests ask the client, not the session.** `pymux.theme` says what
+**A theme belongs to one client.** Only a client can know what its
+terminal is, so two people on one session, one on a light screen and
+one on a dark one, choose separately. Lillecarl/pymux#223.
+
+**The tests ask the client, not the option.** `client.theme` says what
 was set and nothing else; whether a client draws with it is the
 question, and `app.style` is where a client reads it. An application
-that was handed the scheme itself passes every test on `pymux.theme`
+that was handed the scheme itself passes every test on the attribute
 and fails these.
 
 Lillecarl/pymux#194, Lillecarl/pymux#195.
@@ -32,7 +36,7 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 
 from session import Connection
 from pymux.main import Pymux
-from pymux.options import ALL_OPTIONS, SetOptionError
+from pymux.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS, SetOptionError
 from pymux.style import DEFAULT_THEME, THEMES
 
 ROWS, COLUMNS = 24, 80
@@ -80,11 +84,11 @@ async def create_client():
             output=output,
             input=pipe,
             color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=Connection(),
+            connection=Connection("here", None, pymux, "/dev/pts/8"),
         )
         try:
             with set_app(state.app):
-                yield pymux, state.app
+                yield pymux, state
         finally:
             for window in list(pymux.arrangement.windows):
                 for pane in list(window.panes):
@@ -98,42 +102,96 @@ def bar_of(app):
     return app.style.get_attrs_for_style_str("class:statusbar").bgcolor
 
 
+def _another_client(pymux, ttyname="/dev/pts/9"):
+    "A second terminal on the same server, with a name `-t` can say."
+    output = Vt100_Output(
+        stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS)
+    )
+    with create_pipe_input() as pipe:
+        return pymux.add_client(
+            output=output,
+            input=pipe,
+            color_depth=ColorDepth.DEPTH_8_BIT,
+            connection=Connection("here", None, pymux, ttyname),
+        )
+
+
+def _said(pymux, command: str) -> str:
+    "What a command answers on the command line."
+    pymux.command_output = []
+    try:
+        pymux.handle_command(command)
+        return "\n".join(pymux.command_output)
+    finally:
+        pymux.command_output = None
+
+
 # ----------------------------------------------------------------------
 # What a client draws with.
 
 
 async def test_client_draws_with_theme_it_starts_on():
-    async with create_client() as (pymux, app):
-        assert pymux.theme == DEFAULT_THEME
-        assert bar_of(app) == "ansigreen"
+    async with create_client() as (pymux, client):
+        assert client.theme == DEFAULT_THEME
+        assert bar_of(client.app) == "ansigreen"
 
 
 async def test_choosing_theme_reaches_client_that_is_attached():
     "The application reads the scheme again on every render."
-    async with create_client() as (pymux, app):
-        pymux.handle_command("set-option theme grey")
+    async with create_client() as (pymux, client):
+        pymux.handle_command("set-client-option theme grey")
 
-        assert pymux.theme == "grey"
-        assert bar_of(app) == "5f5f87"
+        assert client.theme == "grey"
+        assert bar_of(client.app) == "5f5f87"
 
 
 async def test_choosing_theme_back_puts_green_back():
-    async with create_client() as (pymux, app):
-        pymux.handle_command("set-option theme grey")
-        pymux.handle_command("set-option theme default")
+    async with create_client() as (pymux, client):
+        pymux.handle_command("set-client-option theme grey")
+        pymux.handle_command("set-client-option theme default")
 
-        assert bar_of(app) == "ansigreen"
+        assert bar_of(client.app) == "ansigreen"
 
 
 async def test_every_theme_reaches_client():
     "Whatever is registered, and not only the two this file names."
-    async with create_client() as (pymux, app):
+    async with create_client() as (pymux, client):
         for name, theme in THEMES.items():
-            pymux.handle_command("set-option theme %s" % name)
+            pymux.handle_command("set-client-option theme %s" % name)
 
             assert (
-                bar_of(app) == theme.get_attrs_for_style_str("class:statusbar").bgcolor
+                bar_of(client.app)
+                == theme.get_attrs_for_style_str("class:statusbar").bgcolor
             )
+
+
+async def test_the_theme_belongs_to_one_client():
+    """
+    Two people on one session, one on a light screen and one on a dark
+    one. The server held one theme before, so they drew the same
+    colours. Lillecarl/pymux#223.
+    """
+    async with create_client() as (pymux, one):
+        two = _another_client(pymux)
+
+        pymux.handle_command(
+            "set-client-option -t %s theme grey" % (two.connection.name,)
+        )
+
+        assert bar_of(one.app) == "ansigreen"
+        assert bar_of(two.app) == "5f5f87"
+
+
+async def test_a_client_says_what_its_own_theme_is():
+    async with create_client() as (pymux, one):
+        two = _another_client(pymux)
+        here, there = one.connection.name, two.connection.name
+        pymux.handle_command("set-client-option -t %s theme grey" % (there,))
+
+        assert _said(pymux, "show-client-options -t %s theme" % (there,)) == "grey"
+        assert (
+            _said(pymux, "show-client-options -t %s theme" % (here,)) == DEFAULT_THEME
+        )
 
 
 # ----------------------------------------------------------------------
@@ -309,19 +367,32 @@ def test_name_nobody_registered_is_refused():
     pymux = Pymux()
 
     with pytest.raises(SetOptionError) as raised:
-        ALL_OPTIONS["theme"].set_value(pymux, "nosuchtheme")
+        ALL_CLIENT_OPTIONS["theme"].set_value(pymux, "nosuchtheme")
 
     assert "default" in raised.value.message
     assert "grey" in raised.value.message
 
 
-def test_name_that_is_refused_leaves_theme_alone():
+async def test_name_that_is_refused_leaves_the_theme_alone():
+    async with create_client() as (pymux, client):
+        with pytest.raises(SetOptionError):
+            ALL_CLIENT_OPTIONS["theme"].set_value(pymux, "nosuchtheme")
+
+        assert client.theme == DEFAULT_THEME
+
+
+def test_a_name_is_refused_before_a_client_is_asked_for():
+    """
+    The name is read first, so a name nothing offers is refused the
+    same way whether or not anybody is attached. The other order says
+    "there is no client" to a person who has made a typo.
+    """
     pymux = Pymux()
 
-    with pytest.raises(SetOptionError):
-        ALL_OPTIONS["theme"].set_value(pymux, "nosuchtheme")
+    with pytest.raises(SetOptionError) as raised:
+        ALL_CLIENT_OPTIONS["theme"].set_value(pymux, "nosuchtheme")
 
-    assert pymux.theme == DEFAULT_THEME
+    assert "no client" not in raised.value.message
 
 
 def test_names_are_offered_for_completion():
@@ -330,7 +401,7 @@ def test_names_are_offered_for_completion():
 
     pymux = Pymux()
 
-    assert ALL_OPTIONS["theme"].get_all_values(pymux) == sorted(THEMES) + [
+    assert ALL_CLIENT_OPTIONS["theme"].get_all_values(pymux) == sorted(THEMES) + [
         "pygments:%s" % (name,) for name in names()
     ]
 

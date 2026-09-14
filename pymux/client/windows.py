@@ -12,6 +12,7 @@ from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.win32 import Win32Output
 from prompt_toolkit.win32_types import STD_OUTPUT_HANDLE
 
+from ..config import client_options_in, find_config
 from ..log import logger
 from ..pipes.win32_client import PipeClient
 from .base import Client
@@ -67,6 +68,10 @@ class WindowsClient(Client):
                     # always named by its process. Lillecarl/pymux#335.
                     "ttyname": "",
                     "pid": os.getpid(),
+                    # Lillecarl/pymux#223, as `client/terminal.py` says.
+                    "client-options": client_options_in(
+                        self.config_file or find_config()
+                    ),
                     "data": "",
                 }
             )

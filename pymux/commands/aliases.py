@@ -38,6 +38,9 @@ ALIASES = {
     "send": "send-keys",
     "set": "set-option",
     "setw": "set-window-option",
+    # Not a tmux alias: tmux has no client options. It follows the
+    # shape of the two above, which is what a person will reach for.
+    "setc": "set-client-option",
     "source": "source-file",
     "splitw": "split-window",
     "suspendc": "suspend-client",

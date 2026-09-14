@@ -7,6 +7,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import add_command
 from pymux.commands.set_option import set_option
+from pymux.options import Scope
 
 
 def set_window_option(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -16,7 +17,7 @@ def set_window_option(pymux: "Pymux", args: argparse.Namespace) -> None:
     -g: say what every new window starts with, rather than changing
         this one.
     """
-    set_option(pymux, args, window=True)
+    set_option(pymux, args, scope=Scope.WINDOW)
 
 
 def register(subparsers):

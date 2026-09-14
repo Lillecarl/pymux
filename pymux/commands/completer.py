@@ -97,6 +97,15 @@ def _window_option_values(pymux, parsed_args, **_):
     return sorted(option.get_all_values(pymux)) if option else []
 
 
+def _client_option_names(pymux, **_):
+    return sorted(pymux.client_options)
+
+
+def _client_option_values(pymux, parsed_args, **_):
+    option = pymux.client_options.get(parsed_args.option)
+    return sorted(option.get_all_values(pymux)) if option else []
+
+
 def _layout_names(pymux, **_):
     return sorted(t.value for t in LayoutTypes)
 
@@ -127,6 +136,8 @@ _VALUE_COMPLETERS = {
     ("set-option", "value"): _option_values,
     ("set-window-option", "option"): _window_option_names,
     ("set-window-option", "value"): _window_option_values,
+    ("set-client-option", "option"): _client_option_names,
+    ("set-client-option", "value"): _client_option_values,
     ("select-layout", "layout_type"): _layout_names,
     ("compose-key", "default"): _keys,
     ("bind-key", "key"): _keys,

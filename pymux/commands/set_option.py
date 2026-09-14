@@ -9,12 +9,17 @@ from pymux.commands import CommandException
 from pymux.commands import add_command
 from pymux.commands.common import answer
 from pymux.commands.common import option_as_written
-from pymux.options import SetOptionError
+from pymux.options import Scope, SetOptionError
 
 
-def set_option(pymux: "Pymux", args: argparse.Namespace, window: bool = False) -> None:
+def set_option(
+    pymux: "Pymux",
+    args: argparse.Namespace,
+    scope: Scope = Scope.SESSION,
+    target=None,
+) -> None:
     """
-    Set an option, of the session or of a window.
+    Set an option, of the session, of a window or of a client.
 
     -g: for a window option, say what every new window starts with.
         For a session option it changes nothing, because pymux has one
@@ -30,19 +35,13 @@ def set_option(pymux: "Pymux", args: argparse.Namespace, window: bool = False) -
     name = args.option
     value = args.value
 
-    if window:
-        option = pymux.window_options.get(name)
-    else:
-        option = pymux.options.get(name)
+    option = pymux.option_tables[scope].get(name)
 
     if option is None:
         raise CommandException("Invalid option: %s" % (name,))
 
     if value is None:
-        answer(
-            pymux,
-            "%s %s" % (name, option_as_written(pymux, option, args, window)),
-        )
+        answer(pymux, "%s %s" % (name, option_as_written(pymux, option, args, target)))
         return
 
     try:
@@ -55,15 +54,14 @@ def set_option(pymux: "Pymux", args: argparse.Namespace, window: bool = False) -
         # It means nothing for a session option: pymux has one
         # session, so every session option is already global. That
         # is why the flag is read here and not by the option.
-        if window and args.g:
+        if scope is Scope.WINDOW and args.g:
             option.set_default(pymux, value)
         else:
-            option.set_value(pymux, value)
-            # The colour base of every pane is derived from two of
-            # the options: which theme owns the screen, and
-            # whether it does. A pane that exists heard the old
-            # answer, and hears the new one now.
-            # Lillecarl/pymux#283.
+            option.set_value(pymux, value, target)
+            # The colour base of every pane is derived from two
+            # things: which theme owns the screen, and whether it
+            # does. A pane that exists heard the old answer, and
+            # hears the new one now. Lillecarl/pymux#283.
             if name in ("theme", "paint-screen"):
                 pymux.sync_color_bases()
     except SetOptionError as e:

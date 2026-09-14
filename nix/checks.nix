@@ -785,7 +785,7 @@ in
       );
 
   # Every theme, with the demo application in the pane. This walks
-  # everything `set-option theme` takes, the pastel's four flavours
+  # everything `set-client-option theme` takes, the pastel's four flavours
   # among them, and leaves the gallery in `$out`. It judges nothing
   # either. It is also the one place a theme is photographed: every
   # fixture here carries the chrome harness's own setup, so each

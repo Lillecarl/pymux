@@ -23,6 +23,7 @@ from prompt_toolkit.input.vt100 import cooked_mode, raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output, _get_size
 
 from pymux.colors import COLOR_QUERIES, TRUECOLOR_PROBE
+from pymux.config import client_options_in, find_config
 from pymux.graphics import CELL_SIZE_QUERY
 from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
 from pymux.utils import nonblocking
@@ -166,6 +167,15 @@ class TerminalClient(Client):
                 # Lillecarl/pymux#335.
                 "ttyname": _ttyname(),
                 "pid": os.getpid(),
+                # What this client's own configuration file says about
+                # this client. A theme belongs to the terminal a
+                # person is sitting at, and only this side can read
+                # the file that names it: over SSH the server's
+                # configuration is another machine's.
+                # Lillecarl/pymux#223.
+                "client-options": client_options_in(
+                    self.config_file or find_config()
+                ),
                 "data": "",
             }
         )

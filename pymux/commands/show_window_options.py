@@ -26,11 +26,11 @@ def show_window_options(pymux: "Pymux", args: argparse.Namespace) -> None:
         option = ALL_WINDOW_OPTIONS.get(name)
         if option is None:
             raise CommandException("Unknown option: %s" % (name,))
-        answer(pymux, option_as_written(pymux, option, args, window=True))
+        answer(pymux, option_as_written(pymux, option, args))
         return
 
     lines = [
-        "%s %s" % (key, option_as_written(pymux, option, args, window=True))
+        "%s %s" % (key, option_as_written(pymux, option, args))
         for key, option in sorted(ALL_WINDOW_OPTIONS.items())
     ]
     answer(pymux, "\n".join(lines))

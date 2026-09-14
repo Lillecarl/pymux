@@ -2,7 +2,7 @@
 A picture of every theme, with the demo application in the pane.
 
 `photograph_chrome.py` photographs the chrome of the hand themes.
-This walks every theme `set-option theme` takes - the two hand ones,
+This walks every theme `set-client-option theme` takes - the two hand ones,
 and every style pygments offers, catppuccin's four flavours among
 them - and runs `demo_application.py` in a split pane under each, so
 the whole gallery lands in `$out` and a person reads them side by
@@ -44,16 +44,23 @@ ONLY = os.environ.get("PYMUX_THEMES", "")
 ONLY_TERMINALS = os.environ.get("PYMUX_THEMES_TERMINALS", "")
 
 #: One fixture per theme, hand or pygments. The name is the one
-#: `set-option theme` takes, after `theme-`.
+#: `set-client-option theme` takes, after `theme-`.
+#:
+#: **The line goes in the configuration file and the client reads it.**
+#: A theme belongs to a client now, and the server reads this file
+#: before anybody is attached, so a `set-client-option` line here is
+#: the client's to take when it announces itself. That is the path a
+#: person uses, which makes the farm a picture of it.
+#: Lillecarl/pymux#223.
 FIXTURES = {}
 for _name in sorted(THEMES):
     FIXTURES["theme-%s" % _name] = (
-        CHROME + "set-option theme %s\n" % _name,
+        CHROME + "set-client-option theme %s\n" % _name,
         demo_keys(),
     )
 for _name in names():
     FIXTURES["theme-pygments-%s" % _name] = (
-        CHROME + "set-option theme pygments:%s\n" % _name,
+        CHROME + "set-client-option theme pygments:%s\n" % _name,
         demo_keys(),
     )
 
@@ -69,7 +76,7 @@ for _name in (
     "default-dark",
 ):
     FIXTURES["theme-base16-%s" % _name] = (
-        CHROME + "set-option theme base16:%s\n" % _name,
+        CHROME + "set-client-option theme base16:%s\n" % _name,
         demo_keys(),
     )
 
@@ -79,7 +86,7 @@ for _name in (
 #: off half, where the pane follows the terminal. Lillecarl/pymux#283.
 FIXTURES["theme-base16-painted-mocha"] = (
     CHROME
-    + "set-option theme base16:catppuccin-mocha\n"
+    + "set-client-option theme base16:catppuccin-mocha\n"
     + "set-option paint-screen on\n",
     demo_keys(),
 )
@@ -93,7 +100,7 @@ FIXTURES["theme-base16-painted-mocha"] = (
 #: Lillecarl/pymux#273.
 FIXTURES["painted-screen"] = (
     CHROME
-    + "set-option theme pygments:catppuccin-mocha\n"
+    + "set-client-option theme pygments:catppuccin-mocha\n"
     + "set-option paint-screen on\n",
     demo_keys(),
 )

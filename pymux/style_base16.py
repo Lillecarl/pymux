@@ -1,7 +1,7 @@
 """
 The schemes of the base16 spec, as pymux themes.
 
-`set-option theme base16:<name>` chooses one. The schemes live in the
+`set-client-option theme base16:<name>` chooses one. The schemes live in the
 tinted-theming/schemes repository, converted to JSON when the package
 is built, because a theme that needs a YAML parser to be read is a
 theme that cannot be read anywhere.
@@ -63,7 +63,7 @@ def _schemes() -> dict:
 def names() -> list[str]:
     """
     Every scheme the collection holds, by the name
-    `set-option theme base16:<name>` takes.
+    `set-client-option theme base16:<name>` takes.
     """
     return sorted(_schemes())
 

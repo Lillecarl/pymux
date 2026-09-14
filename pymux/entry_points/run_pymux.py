@@ -468,6 +468,7 @@ def run() -> None:
         # report. Lillecarl/pymux#332.
         if socket_name:
             client = create_client(socket_name)
+            client.config_file = filename
             client.attach(
                 detach_other_clients=detach_other_clients, color_depth=color_depth
             )
@@ -475,6 +476,7 @@ def run() -> None:
         else:
             # Connect to the first server.
             for c in list_clients():
+                c.config_file = filename
                 c.attach(
                     detach_other_clients=detach_other_clients, color_depth=color_depth
                 )
@@ -509,6 +511,7 @@ def run() -> None:
             mux.run_server()
         else:
             client = create_client(socket_name)
+            client.config_file = filename
             client.attach(color_depth=color_depth)
             sys.exit(client.exit_code)
 

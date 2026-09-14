@@ -1,7 +1,7 @@
 """
 The colour schemes, and the one a session draws with.
 
-`set-option theme <name>` chooses one. `THEMES` holds them by name, and
+`set-client-option theme <name>` chooses one. `THEMES` holds them by name, and
 `create_theme` is how one is written: every theme needs
 `Priority.MOST_PRECISE`, because these rules overlap on purpose and the
 most precise one has to win.
@@ -321,7 +321,7 @@ GREY_ROLES = {
 
 GREY = create_theme(derive(GREY_ROLES))
 
-#: Every theme, by the name `set-option theme` takes.
+#: Every theme, by the name `set-client-option theme` takes.
 THEMES: dict[str, BaseStyle] = {
     "default": DEFAULT,
     "grey": GREY,

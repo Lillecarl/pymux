@@ -27,11 +27,11 @@ def show_options(pymux: "Pymux", args: argparse.Namespace) -> None:
         option = ALL_OPTIONS.get(name)
         if option is None:
             raise CommandException("Unknown option: %s" % (name,))
-        answer(pymux, option_as_written(pymux, option, args, window=False))
+        answer(pymux, option_as_written(pymux, option, args))
         return
 
     lines = [
-        "%s %s" % (key, option_as_written(pymux, option, args, window=False))
+        "%s %s" % (key, option_as_written(pymux, option, args))
         for key, option in sorted(ALL_OPTIONS.items())
     ]
     answer(pymux, "\n".join(lines))

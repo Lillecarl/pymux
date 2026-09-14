@@ -25,12 +25,14 @@ from pymux.client.terminal import DETECTION_QUERIES
 from pymux.main import Pymux
 from pymux.options import ALL_OPTIONS
 from pymux.server import ServerConnection
+from pymux.style import DEFAULT_THEME
 from pyte import escape
 from pyte.colors import DEFAULT_COLORS, PALETTE, Color
 from pyte.osc import COLOR_BASE
 from pyte.screen import Screen
 from pyte.sequences import Csi, apc, csi, dcs, osc
 from test_server_tasks import FakePipe, FakePymux
+from test_theme import create_client as a_client
 
 
 def detection(term="", colorterm="", forced=None):
@@ -321,15 +323,29 @@ def test_pygments_theme_names_pane_s_red():
     assert base.defaults["background"] == Color(0x28, 0x2A, 0x36)
 
 
-def test_theme_that_owns_screen_gives_pane_its_palette():
+async def test_theme_that_owns_screen_gives_pane_its_palette():
+    """
+    A pane has one palette and its clients may have two themes, so it
+    answers with the theme of the client a person used last.
+    Lillecarl/pymux#223.
+    """
+    async with a_client() as (pymux, client):
+        pymux.paint_screen = True
+        client.theme = "pygments:dracula"
+        pane = SimpleNamespace(
+            screen=Screen(24, 80, write_process_input=lambda data: None)
+        )
+
+        pymux.tell_pane_about_colours(pane)
+
+        assert pane.screen.color_base.palette[1] == Color(0x8B, 0x08, 0x0B)
+
+
+def test_a_pane_falls_back_when_nobody_is_attached():
+    "The theme a new client starts on, because there is no client to ask."
     pymux = Pymux()
-    pymux.paint_screen = True
-    pymux.theme = "pygments:dracula"
-    pane = SimpleNamespace(screen=Screen(24, 80, write_process_input=lambda data: None))
 
-    pymux.tell_pane_about_colours(pane)
-
-    assert pane.screen.color_base.palette[1] == Color(0x8B, 0x08, 0x0B)
+    assert pymux.latest_theme() == DEFAULT_THEME
 
 
 def test_pane_keeps_convention_while_terminal_owns_colours():

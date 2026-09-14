@@ -76,21 +76,20 @@ __all__ = ["LayoutManager"]
 def option_value_of(pymux, name: str) -> str:
     """
     What one option holds, spelled the way set-option with no value
-    reads it back. A window option reads the window that is active.
+    reads it back. A window option reads the window that is active, a
+    client option the client this command means.
 
     Imported here, and not at the top: options.py reads this module
     for Justify, so this module may not read options.py while it
     loads.
     """
     from pymux.commands.common import option_as_written
-    from pymux.options import ALL_WINDOW_OPTIONS
 
-    window_kind = name in ALL_WINDOW_OPTIONS
-    table = pymux.window_options if window_kind else pymux.options
-    option = table.get(name)
-    if option is None:
-        return ""
-    return option_as_written(pymux, option, argparse.Namespace(g=False), window=window_kind)
+    for table in (pymux.options, pymux.window_options, pymux.client_options):
+        option = table.get(name)
+        if option is not None:
+            return option_as_written(pymux, option, argparse.Namespace(g=False))
+    return ""
 
 
 #: How far a box floats from the top of the screen and from each

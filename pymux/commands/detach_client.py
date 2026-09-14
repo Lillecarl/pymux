@@ -7,6 +7,7 @@ if TYPE_CHECKING:
 
 from prompt_toolkit.application.current import get_app
 from pymux.commands import CommandException, add_command
+from pymux.commands.common import clients_named
 
 
 def _detach(pymux: "Pymux", client_state) -> None:
@@ -37,15 +38,7 @@ def detach_client(pymux: "Pymux", args: argparse.Namespace) -> None:
     Lillecarl/pymux#335.
     """
     if args.target_client is not None:
-        wanted = args.target_client
-        found = [
-            client_state
-            for client_state in pymux.clients
-            if getattr(client_state.connection, "name", "") == wanted
-        ]
-        if not found:
-            raise CommandException("can't find client: %s" % (wanted,))
-        for client_state in found:
+        for client_state in clients_named(pymux, args.target_client):
             _detach(pymux, client_state)
         return
 

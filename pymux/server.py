@@ -26,7 +26,7 @@ from .enums import Woke
 from .graphics import ClientGraphics
 from .keys import KittyVt100Parser
 from .log import logger
-from .options import ExtendedKeys
+from .options import ExtendedKeys, SetOptionError
 from .pipes import BrokenPipeError
 
 if TYPE_CHECKING:
@@ -556,6 +556,12 @@ class ServerConnection:
 
             self._create_app(color_depth=self.colors.depth, term=term)
 
+            # What this client's own configuration file said about it.
+            # Applied before the first frame, so nothing draws with a
+            # theme the person did not choose and then change.
+            # Lillecarl/pymux#223.
+            self._take_client_options(packet.get("client-options") or [])
+
             # The session this client landed on takes the names that
             # follow a client: a display, an agent, a session bus.
             # `attach_client_to` does it for every later move between
@@ -572,6 +578,37 @@ class ServerConnection:
                 self.client_state.message = (
                     "Could not open %s in a browser on this machine." % (packet["data"],)
                 )
+
+    def _take_client_options(self, announced) -> None:
+        """
+        Set on this client what its own configuration file named.
+
+        **A bad line never fails the attach.** A person with a typo in
+        their configuration gets their panes and a message saying what
+        was wrong; refusing to attach would leave them with a terminal
+        they cannot use and a file they may not be able to reach.
+        Lillecarl/pymux#223.
+        """
+        if self.client_state is None:
+            return
+
+        for one in announced:
+            try:
+                name, value = one
+                option = self.pymux.client_options[name]
+            except (KeyError, TypeError, ValueError):
+                self.client_state.message = "Invalid client option: %s" % (one,)
+                continue
+
+            try:
+                option.set_value(self.pymux, value, self.client_state)
+            except SetOptionError as e:
+                # The line as they wrote it, then the reason. A person
+                # reading "Expecting one of" needs to see what they
+                # typed to know which line to go and fix.
+                self.client_state.message = "%s %s: %s" % (name, value, e.message)
+
+        self.pymux.sync_color_bases()
 
     def _send_packet(self, data: object) -> None:
         """

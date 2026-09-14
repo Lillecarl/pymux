@@ -15,12 +15,34 @@ from .utils import get_default_shell
 
 __all__ = [
     "Option",
+    "Scope",
     "SetOptionError",
     "OnOffOption",
     "ExtendedKeys",
     "ALL_OPTIONS",
+    "ALL_CLIENT_OPTIONS",
     "ALL_WINDOW_OPTIONS",
 ]
+
+
+class Scope(StrEnum):
+    """
+    What an option belongs to.
+
+    A session option belongs to the server and its one session. A
+    window option belongs to one window, and `-g` says what a new one
+    starts with.
+
+    **A client option belongs to one attached terminal.** Only a client
+    can know what its terminal is -- what colours it draws with, which
+    way round they are -- so an answer kept on the server is one answer
+    for two people who may be sitting at very different screens.
+    Lillecarl/pymux#223.
+    """
+
+    SESSION = "session"
+    WINDOW = "window"
+    CLIENT = "client"
 
 
 class Option(ABC):
@@ -28,17 +50,58 @@ class Option(ABC):
     Base class for all options.
     """
 
-    #: A window option belongs to a window, and `-g` reads what
-    #: every new window starts with; the rest belong to the session.
-    #: `show-options` and `show-window-options` split the table on
-    #: this. Lillecarl/pymux#298.
-    window_option: bool = False
+    #: What this option belongs to. `show-options`,
+    #: `show-window-options` and `show-client-options` split the tables
+    #: on this. Lillecarl/pymux#298, Lillecarl/pymux#223.
+    scope: Scope = Scope.SESSION
 
     #: Where the value lives, on the object the option belongs to.
     #: An option that holds its state somewhere else -- the prefix
     #: key lives in the binding manager -- says None, and reads as
     #: not set. Lillecarl/pymux#298.
     attribute_name: str | None = None
+
+    def held_by(self, pymux, target=None):
+        """
+        The object this option is written on and read from.
+
+        `target` is the one the command chose: `set-client-option -t`
+        names a client, and nothing else names anything yet. Without
+        one, a window option takes the active window and a client
+        option takes `the_client_to_tell()` -- the rule pymux already
+        has for "which client does a command mean", because a command
+        from a pane's CLI runs under a temporary client that is nobody.
+        Lillecarl/pymux#272.
+        """
+        if target is not None:
+            return target
+
+        if self.scope is Scope.WINDOW:
+            # A configuration file is read before the first window is
+            # made, so `set-window-option` in one asked the arrangement
+            # for a window it did not have and got an `IndexError` out
+            # of `windows[0]`. That is not a `SetOptionError`, so it
+            # left `source-file` and took the startup with it: pymux
+            # drew nothing at all. Lillecarl/pymux#199.
+            if not pymux.arrangement.windows:
+                raise SetOptionError(
+                    "There is no window yet. A window option belongs to one "
+                    "window, so a configuration file has none to set. "
+                    'Use "-g" to say what every new window starts with.'
+                )
+            return pymux.arrangement.get_active_window()
+
+        if self.scope is Scope.CLIENT:
+            client = pymux.the_client_to_tell()
+            if client is None:
+                raise SetOptionError(
+                    "There is no client. A client option belongs to one "
+                    "attached terminal, and a client announces its own "
+                    "when it attaches."
+                )
+            return client
+
+        return pymux
 
     @abstractmethod
     def get_all_values(self):
@@ -48,7 +111,7 @@ class Option(ABC):
         """
 
     @abstractmethod
-    def set_value(self, pymux, value):
+    def set_value(self, pymux, value, target=None):
         "Set option. This can raise SetOptionError."
 
     def set_default(self, pymux, value):
@@ -78,9 +141,9 @@ class OnOffOption(Option):
     Boolean on/off option.
     """
 
-    def __init__(self, attribute_name, window_option=False):
+    def __init__(self, attribute_name, scope=Scope.SESSION):
         self.attribute_name = attribute_name
-        self.window_option = window_option
+        self.scope = scope
 
     def get_all_values(self, pymux):
         return ["on", "off"]
@@ -92,31 +155,12 @@ class OnOffOption(Option):
             raise SetOptionError('Expecting "yes" or "no".')
         return value == "on"
 
-    def set_value(self, pymux, value):
-        chosen = self._read(value)
-
-        if self.window_option:
-            # There may be no window. A configuration file is read
-            # before the first one is made, so `set-window-option` in
-            # one asked the arrangement for a window it did not have
-            # and got an `IndexError` out of `windows[0]`. That is not
-            # a `SetOptionError`, so it left `source-file` and took the
-            # startup with it: pymux drew nothing at all.
-            # Lillecarl/pymux#199.
-            if not pymux.arrangement.windows:
-                raise SetOptionError(
-                    "There is no window yet. A window option belongs to one "
-                    "window, so a configuration file has none to set. "
-                    'Use "-g" to say what every new window starts with.'
-                )
-            w = pymux.arrangement.get_active_window()
-            setattr(w, self.attribute_name, chosen)
-        else:
-            setattr(pymux, self.attribute_name, chosen)
+    def set_value(self, pymux, value, target=None):
+        setattr(self.held_by(pymux, target), self.attribute_name, self._read(value))
 
     def set_default(self, pymux, value):
         "What every new window starts with. Changes no window that is open."
-        if not self.window_option:
+        if self.scope is not Scope.WINDOW:
             return super().set_default(pymux, value)
 
         pymux.arrangement.window_defaults[self.attribute_name] = self._read(value)
@@ -134,7 +178,7 @@ class StringOption(Option):
     def get_all_values(self, pymux):
         return sorted(set(self.possible_values + [getattr(pymux, self.attribute_name)]))
 
-    def set_value(self, pymux, value):
+    def set_value(self, pymux, value, target=None):
         setattr(pymux, self.attribute_name, value)
 
 
@@ -143,28 +187,14 @@ class PositiveIntOption(Option):
     Positive integer option, the attribute is set as a Pymux attribute.
     """
 
-    def __init__(self, attribute_name, possible_values=None, window_option=False):
+    def __init__(self, attribute_name, possible_values=None, scope=Scope.SESSION):
         self.attribute_name = attribute_name
         self.possible_values = ["%s" % i for i in (possible_values or [])]
-        self.window_option = window_option
-
-    def _held_by(self, pymux):
-        "The object this option is written on."
-        if not self.window_option:
-            return pymux
-
-        # `OnOffOption.set_value` says why there may be no window.
-        if not pymux.arrangement.windows:
-            raise SetOptionError(
-                "There is no window yet. A window option belongs to one "
-                "window, so a configuration file has none to set. "
-                'Use "-g" to say what every new window starts with.'
-            )
-        return pymux.arrangement.get_active_window()
+        self.scope = scope
 
     def get_all_values(self, pymux):
         try:
-            now = getattr(self._held_by(pymux), self.attribute_name)
+            now = getattr(self.held_by(pymux), self.attribute_name)
         except SetOptionError:
             return sorted(set(self.possible_values))
         return sorted(set(self.possible_values + ["%s" % now]))
@@ -179,12 +209,12 @@ class PositiveIntOption(Option):
             raise SetOptionError("Expecting an integer.")
         return number
 
-    def set_value(self, pymux, value):
-        setattr(self._held_by(pymux), self.attribute_name, self._read(value))
+    def set_value(self, pymux, value, target=None):
+        setattr(self.held_by(pymux, target), self.attribute_name, self._read(value))
 
     def set_default(self, pymux, value):
         "What every new window starts with. Changes no window that is open."
-        if not self.window_option:
+        if self.scope is not Scope.WINDOW:
             return super().set_default(pymux, value)
 
         pymux.arrangement.window_defaults[self.attribute_name] = self._read(value)
@@ -194,7 +224,7 @@ class KeyPrefixOption(Option):
     def get_all_values(self, pymux):
         return PYMUX_TO_PROMPT_TOOLKIT_KEYS.keys()
 
-    def set_value(self, pymux, value):
+    def set_value(self, pymux, value, target=None):
         # Translate prefix to prompt_toolkit
         try:
             keys = key_however_it_is_written(value)
@@ -212,7 +242,7 @@ class BaseIndexOption(Option):
     def get_all_values(self, pymux):
         return ["0", "1"]
 
-    def set_value(self, pymux, value):
+    def set_value(self, pymux, value, target=None):
         try:
             value = int(value)
         except ValueError:
@@ -230,7 +260,7 @@ class KeysOption(Option):
     def get_all_values(self, pymux):
         return ["emacs", "vi"]
 
-    def set_value(self, pymux, value):
+    def set_value(self, pymux, value, target=None):
         if value in ("emacs", "vi"):
             setattr(pymux, self.attribute_name, value == "vi")
         else:
@@ -265,7 +295,7 @@ class ExtendedKeysOption(Option):
     def get_all_values(self, pymux):
         return [str(one) for one in ExtendedKeys]
 
-    def set_value(self, pymux, value):
+    def set_value(self, pymux, value, target=None):
         try:
             chosen = ExtendedKeys(value)
         except ValueError:
@@ -285,7 +315,7 @@ class WindowSizeOption(Option):
     by different clients. Decision 11 of `docs/layout-engine-plan.md`.
     """
 
-    window_option = True
+    scope = Scope.WINDOW
 
     def get_all_values(self, pymux):
         return [str(one) for one in WindowSize]
@@ -298,7 +328,7 @@ class WindowSizeOption(Option):
                 "Expecting one of: %s." % ", ".join('"%s"' % one for one in WindowSize)
             ) from None
 
-    def set_value(self, pymux, value):
+    def set_value(self, pymux, value, target=None):
         chosen = self._read(value)
 
         if not pymux.arrangement.windows:
@@ -326,11 +356,16 @@ class WindowSizeOption(Option):
 
 class ThemeOption(Option):
     """
-    Which colour scheme every client draws with.
+    Which colour scheme one client draws with.
 
-    The clients follow at once. Each application reads `pymux.style`
-    on every render, so nothing has to be rebuilt; they only have to
-    be asked for a frame.
+    **A client option, because only a client knows its terminal.** Two
+    people on one session, one on a light screen and one on a dark
+    one, drew the same colours when the server held this.
+    Lillecarl/pymux#223.
+
+    The client follows at once. Its application reads its own style on
+    every render, so nothing has to be rebuilt; it only has to be
+    asked for a frame.
 
     A name is either one of `THEMES`, or `pygments:<name>` for one of
     the styles pygments carries - forty-nine of them, and anything a
@@ -338,6 +373,8 @@ class ThemeOption(Option):
     `base16:<name>` for one of the schemes of the base16 spec,
     Lillecarl/pymux#282.
     """
+
+    scope = Scope.CLIENT
 
     def get_all_values(self, pymux):
         from pymux.style_pygments import names
@@ -349,7 +386,7 @@ class ThemeOption(Option):
             "base16:%s" % (name,) for name in base16_names()
         ]
 
-    def set_value(self, pymux, value):
+    def set_value(self, pymux, value, target=None):
         source, _, rest = value.partition(":")
         if source == "pygments":
             from pymux.style_pygments import names
@@ -369,7 +406,10 @@ class ThemeOption(Option):
                 )
         elif value not in THEMES:
             raise SetOptionError("Expecting one of: %s." % ", ".join(sorted(THEMES)))
-        pymux.theme = value
+
+        # The name is read before the client, so a name nothing offers
+        # is refused the same way whether or not anybody is attached.
+        self.held_by(pymux, target).theme = value
         pymux.invalidate(Woke.THEME_WAS_CHOSEN)
 
     attribute_name = "theme"
@@ -390,7 +430,7 @@ class LogLevelOption(Option):
     def get_all_values(self, pymux):
         return sorted(log.LEVELS)
 
-    def set_value(self, pymux, value):
+    def set_value(self, pymux, value, target=None):
         if value not in log.LEVELS:
             raise SetOptionError(
                 "Expecting one of: %s." % ", ".join(sorted(log.LEVELS))
@@ -405,7 +445,7 @@ class JustifyOption(Option):
     def get_all_values(self, pymux):
         return Justify._ALL
 
-    def set_value(self, pymux, value):
+    def set_value(self, pymux, value, target=None):
         if value in Justify._ALL:
             setattr(pymux, self.attribute_name, value)
         else:
@@ -429,7 +469,7 @@ class ChoiceOption(Option):
     def get_all_values(self, pymux):
         return sorted(set(self.choices + (getattr(pymux, self.attribute_name),)))
 
-    def set_value(self, pymux, value):
+    def set_value(self, pymux, value, target=None):
         if value not in self.choices:
             raise SetOptionError(
                 "Expecting one of: %s." % ", ".join(sorted(self.choices))
@@ -482,9 +522,6 @@ ALL_OPTIONS = {
     # waits. Off, because a person who knows the keys does not want a
     # popup in the way. Lillecarl/pymux#29.
     "which-key": OnOffOption("which_key"),
-    # Which colour scheme the clients draw with. `pymux/style.py`
-    # holds them. Lillecarl/pymux#194.
-    "theme": ThemeOption(),
     "status-keys": KeysOption("status_keys_vi_mode"),
     "mode-keys": KeysOption("mode_keys_vi_mode"),
     "default-terminal": StringOption(
@@ -519,8 +556,6 @@ ALL_OPTIONS = {
     # pane sits in a layout, and making one taller makes another
     # shorter.
     "allow-program-resize": OnOffOption("allow_program_resize"),
-    # Prompt-toolkit/pymux specific.
-    "swap-light-and-dark-colors": OnOffOption("swap_dark_and_light"),
     # Draw the theme's own background behind every cell of a pane, so
     # the terminal's background is never seen and a theme is the
     # colour of the whole screen. Off by default: a program that
@@ -545,8 +580,26 @@ ALL_OPTIONS = {
 }
 
 
+#: What one attached terminal holds. Only a client can know these:
+#: what colours its terminal draws with, and which way round they are.
+#: A client announces the ones its own configuration file names when
+#: it attaches, and `set-client-option` changes one while it runs.
+#: Lillecarl/pymux#223.
+ALL_CLIENT_OPTIONS = {
+    # Which colour scheme this client draws with. `pymux/style.py`
+    # holds them. Lillecarl/pymux#194.
+    "theme": ThemeOption(),
+    # The theme is the other way round from this terminal: draw it
+    # swapped. A correction to a theme, and therefore as much a fact
+    # of one terminal as the theme is.
+    "swap-light-and-dark-colors": OnOffOption(
+        "swap_dark_and_light", scope=Scope.CLIENT
+    ),
+}
+
+
 ALL_WINDOW_OPTIONS = {
-    "synchronize-panes": OnOffOption("synchronize_panes", window_option=True),
+    "synchronize-panes": OnOffOption("synchronize_panes", scope=Scope.WINDOW),
     # Lay this window's panes out as a strip that may run past the
     # edge of the screen, the way niri's scrollable tiling works,
     # instead of dividing the window between them.
@@ -554,7 +607,7 @@ ALL_WINDOW_OPTIONS = {
     # It is one window's option and it is off, so nothing that does
     # not ask for it changes. `select-layout` turns it off again.
     # Lillecarl/pymux#198.
-    "strip": OnOffOption("strip", window_option=True),
+    "strip": OnOffOption("strip", scope=Scope.WINDOW),
     # Which client's terminal decides how big this window's plane is,
     # when more than one watches it. "smallest" is what pymux always
     # did: every client sees the whole window, and a bigger one draws
@@ -567,6 +620,6 @@ ALL_WINDOW_OPTIONS = {
     # before there was an option. `arrangement.DEFAULT_FRAME_RATE`
     # says why thirty. Lillecarl/pymux#254.
     "frame-rate": PositiveIntOption(
-        "frame_rate", [0, 10, 30, 60, 120], window_option=True
+        "frame_rate", [0, 10, 30, 60, 120], scope=Scope.WINDOW
     ),
 }

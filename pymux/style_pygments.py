@@ -1,7 +1,7 @@
 """
 The themes of pygments, as pymux themes.
 
-`set-option theme pygments:<name>` chooses one. Pygments ships
+`set-client-option theme pygments:<name>` chooses one. Pygments ships
 forty-nine styles - dracula, nord, gruvbox, one-dark - and any
 package that follows the same interface can join them, which is how a
 theme of `catppuccin[pygments]` gets here without pymux carrying it.
@@ -47,7 +47,7 @@ __all__ = ["pygments_roles", "pygments_theme", "names"]
 def names() -> list[str]:
     """
     Every style pygments offers, by the name
-    `set-option theme pygments:<name>` takes.
+    `set-client-option theme pygments:<name>` takes.
     """
     from pygments.styles import get_all_styles
 
@@ -80,7 +80,7 @@ def pygments_roles(name: str) -> dict[str, str]:
     """
     The roles of one pygments style, the same ones `derive` consumes.
 
-    `set-option theme pygments:<name>` derives its scheme from these,
+    `set-client-option theme pygments:<name>` derives its scheme from these,
     and the pane's colour base reads the same roles. A name nobody
     offers raises `KeyError`. Cached, for the same reason the scheme
     is.

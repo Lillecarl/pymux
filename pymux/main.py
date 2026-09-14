@@ -56,7 +56,13 @@ from .layout import Justify, LayoutManager, change_pane_size
 from . import log
 from .log import logger
 from .notifications import NotificationRoutes
-from .options import ALL_OPTIONS, ALL_WINDOW_OPTIONS, ExtendedKeys
+from .options import (
+    ALL_CLIENT_OPTIONS,
+    ALL_OPTIONS,
+    ALL_WINDOW_OPTIONS,
+    ExtendedKeys,
+    Scope,
+)
 from .osc import build_osc, open_url_of
 from .pipes import bind_and_listen_on_socket, connect_in_memory
 from .prompt_toolkit_compat import apply_prompt_toolkit_compat_fixes
@@ -185,6 +191,19 @@ class ClientState:
 
         #: Where this client was before, for `switch-client -l`.
         self.previous_session: "Session | None" = None
+
+        #: The colour scheme this client draws with, and whether it
+        #: draws it the other way round.
+        #:
+        #: **Both belong to the client and not to the server.** Only a
+        #: client knows what its terminal is: two people on one session,
+        #: one on a light screen and one on a dark one, drew the same
+        #: colours while the server held these. A client announces what
+        #: its own configuration file says when it attaches, and
+        #: `set-client-option` changes one while it runs.
+        #: Lillecarl/pymux#223.
+        self.theme = DEFAULT_THEME
+        self.swap_dark_and_light = False
 
         #: True when the prefix key (Ctrl-B) has been pressed.
         self.has_prefix = False
@@ -481,10 +500,13 @@ class ClientState:
             full_screen=True,
             # Read on every render, so a theme chosen while a client is
             # attached reaches it without rebuilding the application.
-            style=DynamicStyle(lambda: self.pymux.style),
+            # This client's own theme, not the server's: two people on
+            # one session may be at very different screens.
+            # Lillecarl/pymux#223.
+            style=DynamicStyle(lambda: self.style),
             style_transformation=ConditionalStyleTransformation(
                 SwapLightAndDarkStyleTransformation(),
-                Condition(lambda: self.pymux.swap_dark_and_light),
+                Condition(lambda: self.swap_dark_and_light),
             ),
             on_invalidate=pymux.client_asked_for_frame,
         )
@@ -545,6 +567,11 @@ class ClientState:
         """
         with set_app(self.app):
             self._sync_focus()
+
+    @property
+    def style(self) -> BaseStyle:
+        "The colour scheme of the theme this client is on."
+        return theme(self.theme)
 
     def _sync_focus(self):
         # Pop-up displayed?
@@ -731,12 +758,20 @@ class Pymux:
         self.window_status_format = "#I:#W#F"
         self.status_justify = Justify.LEFT
         self.default_shell = get_default_shell()
-        self.swap_dark_and_light = False
         self.paint_screen = False
         self.test_mode = False
 
         self.options = ALL_OPTIONS
         self.window_options = ALL_WINDOW_OPTIONS
+        self.client_options = ALL_CLIENT_OPTIONS
+
+        #: Which table a scope reads. `set-option`, `set-window-option`
+        #: and `set-client-option` are one command with three of these.
+        self.option_tables = {
+            Scope.SESSION: self.options,
+            Scope.WINDOW: self.window_options,
+            Scope.CLIENT: self.client_options,
+        }
 
         #: Which pane a desktop notification came from. The terminal of
         #: the user answers a notification by its identifier, and every
@@ -887,12 +922,6 @@ class Pymux:
         # pane pastes from stays `clipboard`; a name here is tmux's
         # `-b`. Lillecarl/pymux#303.
         self.named_buffers: dict[str, str] = {}
-
-        # Which colour scheme every client draws with.
-        # `set-option theme <name>` picks another one. The name is what
-        # is kept, because that is what a person set and can read back;
-        # the scheme is derived from it. Lillecarl/pymux#194.
-        self.theme = DEFAULT_THEME
 
     def create_session(self, name: str | None = None) -> Session:
         """
@@ -1082,11 +1111,6 @@ class Pymux:
     def overlay_pane(self):
         "The overlay of the session of the client that asks."
         return self.current_session.overlay_pane
-
-    @property
-    def style(self) -> BaseStyle:
-        "The colour scheme of the theme this session is on."
-        return theme(self.theme)
 
     @property
     def show_status(self) -> bool:
@@ -2262,10 +2286,15 @@ class Pymux:
         try:
             if self.paint_screen:
                 # The theme colours the whole screen, and the palette
-                # a program asks for is part of that screen. The same
-                # scheme for every client, which is why this is
-                # decided here and not per client.
-                base = theme_color_base(self.theme)
+                # a program asks for is part of that screen.
+                #
+                # **A pane has one palette and its clients may have two
+                # themes.** So this takes the theme of the client a
+                # person used last, which is the rule the line below
+                # already follows for a terminal's own colours, and the
+                # one that decides where a browser opens.
+                # Lillecarl/pymux#223.
+                base = theme_color_base(self.latest_theme())
             else:
                 base = self.latest_client_color_base()
             if base is None:
@@ -2294,11 +2323,11 @@ class Pymux:
         for pane in list(self.panes_by_id.values()):
             self.tell_pane_about_colours(pane)
 
-    def latest_client_color_base(self):
+    def latest_client(self):
         """
-        The colour base of the client a person used last, or `None`
-        when nobody is attached. The fake CLI of a socket command is
-        never it, for the reason `clients_to_open_on` names.
+        The client a person used last, or `None` when nobody is
+        attached. The fake CLI of a socket command is never it, for the
+        reason `clients_to_open_on` names.
         """
         clients = [
             client
@@ -2307,7 +2336,30 @@ class Pymux:
         ]
         if not clients:
             return None
-        latest = max(clients, key=lambda client: client.last_used)
+        return max(clients, key=lambda client: client.last_used)
+
+    def latest_theme(self) -> str:
+        """
+        The theme of the client a person used last.
+
+        What a pane answers a colour query with, when the theme owns
+        the screen. A theme belongs to one client now, and a pane
+        belongs to all of them, so this is the tie break; nothing
+        attached falls back to the theme a new client starts on.
+        Lillecarl/pymux#223.
+        """
+        latest = self.latest_client()
+        return DEFAULT_THEME if latest is None else latest.theme
+
+    def latest_client_color_base(self):
+        """
+        The colour base of the client a person used last, or `None`
+        when nobody is attached, or when that client asked its terminal
+        nothing.
+        """
+        latest = self.latest_client()
+        if latest is None:
+            return None
         try:
             return latest.default_colors.color_base()
         except AttributeError:
@@ -2792,7 +2844,12 @@ class Pymux:
                     connection = context.run(lambda: ServerConnection(self, server_end))
                     self.connections.append(connection)
 
-                    await MemoryClient(client_end).attach(
+                    client = MemoryClient(client_end)
+                    # One process reads the file twice: as the server,
+                    # for everything, and as the client, for the lines
+                    # that are about this terminal. Lillecarl/pymux#223.
+                    client.config_file = self.source_file
+                    await client.attach(
                         detach_other_clients=detach_other_clients,
                         color_depth=color_depth,
                     )

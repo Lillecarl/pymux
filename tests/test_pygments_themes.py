@@ -1,7 +1,7 @@
 """
 The themes of pygments, chosen by name.
 
-`set-option theme pygments:<name>` picks one of the styles pygments
+`set-client-option theme pygments:<name>` picks one of the styles pygments
 carries, and every rule of pymux's chrome follows from the handful of
 colours the style really offers. What it did not say is derived: the
 shades are blends of what it gave, and the text on a colour is the
@@ -17,9 +17,11 @@ Lillecarl/pymux#194.
 
 import pytest
 
-from pymux.main import Pymux
-from pymux.options import ALL_OPTIONS, SetOptionError
+from pymux.options import ALL_CLIENT_OPTIONS, SetOptionError
 from pymux.style_pygments import names, pygments_theme
+
+# A theme belongs to a client, so every test of one needs a client.
+from test_theme import create_client as a_client
 
 
 def attrs(theme, class_name):
@@ -112,30 +114,30 @@ def test_pastel_names_colours_of_scheme():
     assert attrs(theme, "terminated").bgcolor == "f38ba8"
 
 
-def test_option_offers_names_and_refuses_others():
-    pymux = Pymux()
+async def test_option_offers_names_and_refuses_others():
+    async with a_client() as (pymux, client):
+        values = ALL_CLIENT_OPTIONS["theme"].get_all_values(pymux)
+        assert "default" in values and "pygments:dracula" in values
 
-    values = ALL_OPTIONS["theme"].get_all_values(pymux)
-    assert "default" in values and "pygments:dracula" in values
+        ALL_CLIENT_OPTIONS["theme"].set_value(pymux, "pygments:dracula")
+        assert client.theme == "pygments:dracula"
 
-    ALL_OPTIONS["theme"].set_value(pymux, "pygments:dracula")
-    assert pymux.theme == "pygments:dracula"
+        with pytest.raises(SetOptionError):
+            ALL_CLIENT_OPTIONS["theme"].set_value(pymux, "pygments:nosuchtheme")
 
-    with pytest.raises(SetOptionError):
-        ALL_OPTIONS["theme"].set_value(pymux, "pygments:nosuchtheme")
-
-    with pytest.raises(SetOptionError):
-        ALL_OPTIONS["theme"].set_value(pymux, "vim:nosuchtheme")
+        with pytest.raises(SetOptionError):
+            ALL_CLIENT_OPTIONS["theme"].set_value(pymux, "vim:nosuchtheme")
 
 
-def test_client_draws_with_pygments_theme_it_is_given():
+async def test_client_draws_with_pygments_theme_it_is_given():
     """
-    `pymux.theme` says what was set; whether a client draws with it is
-    the question, and `app.style` is where a client reads it.
+    `client.theme` says what was set; whether the client draws with it
+    is the question, and `app.style` is where a client reads it.
     """
-    pymux = Pymux()
+    async with a_client() as (pymux, client):
+        client.theme = "pygments:dracula"
 
-    pymux.theme = "pygments:dracula"
-
-    assert pymux.style is pygments_theme("dracula")
-    assert pymux.style.get_attrs_for_style_str("class:statusbar").bgcolor == "ff79c6"
+        assert client.style is pygments_theme("dracula")
+        assert (
+            client.style.get_attrs_for_style_str("class:statusbar").bgcolor == "ff79c6"
+        )
