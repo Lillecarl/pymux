@@ -26,6 +26,15 @@
 # the geometry that `take_picture.py` asks each terminal for. Change
 # any of them and every count has to be recorded again.
 #
+# **Every count below is older than that.** They were written while
+# `differences` ran `compare -metric AE`, which sums the channel error
+# of the whole picture rather than counting pixels
+# (Lillecarl/pymux#368), so each one is smaller than the number of
+# pixels and not proportional to it. This check is not a gate, so
+# nothing goes red on them; the next
+# `nix build --file . checks.pymux-vttest-pictures.run` records the
+# real counts and this paragraph goes with it.
+#
 # Item 4 of vttest's main menu is recorded, and item 9. Item 2 is
 # measured and not written down, because two runs of it do not yet
 # agree.
