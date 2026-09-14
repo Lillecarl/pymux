@@ -34,7 +34,17 @@ from hypothesis import find, given, settings
 from hypothesis import strategies as st
 from prompt_toolkit.data_structures import Point
 
-from pymux.plane import GROUND, Plan, Rect, Side, Slot, bounding_box, overlap_of
+from pymux.plane import (
+    GROUND,
+    Plan,
+    Rect,
+    Side,
+    Slot,
+    _covered,
+    _without,
+    bounding_box,
+    overlap_of,
+)
 
 
 class _Pane:
@@ -914,6 +924,73 @@ def test_a_layer_still_answers_within_its_own_plane():
 
 # ----------------------------------------------------------------------
 # What reaches the screen.
+
+
+def covered_a_cell_at_a_time(rect: Rect, over) -> bool:
+    """
+    The oracle: the version `_covered` was, asking every cell.
+
+    It is obviously right and too slow to run on a frame, which is why
+    it was replaced by subtracting rectangles. It stays here as the
+    thing the replacement is measured against. Lillecarl/pymux#355.
+    """
+    over = list(over)
+    if not over:
+        return False
+    return all(any(one.holds(cell) for one in over) for cell in rect.cells())
+
+
+SMALL = st.builds(
+    Rect,
+    x=st.integers(min_value=0, max_value=6),
+    y=st.integers(min_value=0, max_value=6),
+    width=st.integers(min_value=1, max_value=6),
+    height=st.integers(min_value=1, max_value=6),
+)
+
+
+@given(SMALL, st.lists(SMALL, max_size=4))
+def test_subtracting_rectangles_answers_what_counting_cells_answers(rect, over):
+    "The replacement and the oracle agree, whatever the shapes are."
+    assert _covered(rect, over) == covered_a_cell_at_a_time(rect, over)
+
+
+@given(SMALL, st.lists(SMALL, max_size=4))
+def test_what_is_left_holds_exactly_the_cells_nothing_covered(rect, over):
+    """
+    Stronger than the answer: the pieces `_without` leaves are the
+    uncovered cells, no more and no less. A piece that overlapped
+    another would double-count, and one that ran outside `rect` would
+    claim a cell nobody asked about.
+    """
+    left = [rect]
+    for one in over:
+        left = [piece for held in left for piece in _without(held, one)]
+
+    kept = set()
+    for piece in left:
+        cells = set(piece.cells())
+        assert cells, "a piece with no cells in it"
+        assert not (cells & kept), "two pieces share a cell"
+        kept |= cells
+
+    wanted = {
+        cell for cell in rect.cells() if not any(one.holds(cell) for one in over)
+    }
+    assert kept == wanted
+
+
+def test_a_cover_that_misses_leaves_the_whole_rectangle():
+    apart = Rect(0, 0, 4, 4)
+    assert _without(apart, Rect(10, 10, 2, 2)) == [apart]
+
+
+def test_a_cover_in_the_middle_leaves_four_pieces():
+    "The case that needs every branch: a hole cut out of the middle."
+    pieces = _without(Rect(0, 0, 6, 6), Rect(2, 2, 2, 2))
+
+    assert len(pieces) == 4
+    assert sum(piece.width * piece.height for piece in pieces) == 36 - 4
 
 
 def test_one_plane_draws_everything():

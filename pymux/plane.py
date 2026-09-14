@@ -915,6 +915,37 @@ class Plan:
         return "Plan(%r)" % (self.layers,)
 
 
+def _without(rect: Rect, cut: Rect) -> list[Rect]:
+    """
+    What is left of `rect` when `cut` is taken out of it.
+
+    Up to four pieces: the band above the cut, the band below it, and
+    the left and right of what the cut's own rows cover. Every piece
+    has cells in it -- each is guarded by the edge that makes it -- so
+    an empty answer means nothing is left.
+    """
+    if not rect.overlaps(cut):
+        return [rect]
+
+    pieces = []
+    if cut.y > rect.y:
+        pieces.append(Rect(rect.x, rect.y, rect.width, cut.y - rect.y))
+    if cut.bottom < rect.bottom:
+        pieces.append(
+            Rect(rect.x, cut.bottom, rect.width, rect.bottom - cut.bottom)
+        )
+
+    # The rows the cut covers, which is where it can leave a side.
+    top = max(rect.y, cut.y)
+    bottom = min(rect.bottom, cut.bottom)
+    if cut.x > rect.x:
+        pieces.append(Rect(rect.x, top, cut.x - rect.x, bottom - top))
+    if cut.right < rect.right:
+        pieces.append(Rect(cut.right, top, rect.right - cut.right, bottom - top))
+
+    return pieces
+
+
 def _covered(rect: Rect, over: Iterable[Rect]) -> bool:
     """
     Whether those rectangles hold every cell of this one, together.
@@ -923,15 +954,23 @@ def _covered(rect: Rect, over: Iterable[Rect]) -> bool:
     rectangles that cover this one between them each answer no on
     their own.
 
-    A cell at a time. A plan holds a handful of rectangles and nothing
-    draws from this yet, so the cheap correct answer is the right one;
-    a region subtraction is what to write if it ever runs per frame.
-    """
-    over = list(over)
-    if not over:
-        return False
+    **Rectangles, not cells.** This asked every cell of `rect` whether
+    something held it, which is honest for a handful of rectangles and
+    wrong on the frame loop: `PlanContainer` calls `Plan.drawn` on
+    every frame, and a full pane is thousands of cells. Subtracting
+    each cover in turn costs the number of rectangles and not the area.
+    Lillecarl/pymux#355.
 
-    return all(any(one.holds(cell) for one in over) for cell in rect.cells())
+    `tests/test_plane.py` holds the cell-at-a-time version as the
+    oracle this is checked against.
+    """
+    left = [rect]
+    for one in over:
+        if not left:
+            return True
+        left = [piece for held in left for piece in _without(held, one)]
+
+    return not left
 
 
 def _enters(
