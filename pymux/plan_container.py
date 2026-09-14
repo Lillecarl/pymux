@@ -158,14 +158,25 @@ class PlanContainer(Container):
 
         self._draw_chrome(screen, write_position, parent_style, view)
 
-        for slot, rect in self.plan.rects.items():
-            if self.tell_its_size is not None:
+        # **Told before culled, and over every slot.** A pane under a
+        # higher plane still has a pty and a size it comes back to, so
+        # the size goes to every pane of every slot whether or not a
+        # cell of it reaches the screen. Lillecarl/pymux#355.
+        if self.tell_its_size is not None:
+            for slot, rect in self.plan.rects.items():
                 # Every pane of the slot, shown or not, because a
                 # hidden pane that already has the size it will be
                 # shown at is revealed without a resize.
                 for pane in slot.panes:
                     self.tell_its_size(pane, rect)
 
+        # **What a higher plane covers whole is not drawn.** Carl:
+        # "ideally we'd walk this backwards as well so we don't bother
+        # computing things from lower planes that are entirely
+        # invisible". `drawn()` is that walk. With one plane it answers
+        # the plan's own rectangles, which is every plan built today.
+        # Lillecarl/pymux#228, Lillecarl/pymux#355.
+        for slot, rect in self.plan.drawn().items():
             if not rect.overlaps(view):
                 # **A pane no part of which is in the view is not
                 # drawn.** Writing it costs far more than the cells it
