@@ -65,7 +65,6 @@ from .options import (
 )
 from .osc import build_osc, open_url_of
 from .pipes import bind_and_listen_on_socket, connect_in_memory
-from .prompt_toolkit_compat import apply_prompt_toolkit_compat_fixes
 from .rc import STARTUP_COMMANDS
 from .server import ServerConnection
 from .session import Session
@@ -76,8 +75,6 @@ from .utils import get_default_shell
 __all__ = [
     "Pymux",
 ]
-
-apply_prompt_toolkit_compat_fixes()
 
 
 #: The shapes of DECSCUSR, as prompt_toolkit names them. The odd numbers
