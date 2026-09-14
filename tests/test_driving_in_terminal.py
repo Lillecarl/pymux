@@ -323,12 +323,30 @@ def test_fence_comes_back_and_is_taken_out(tmp_path):
     )
     seen, fence_seen, error = run_fenced(tmp_path, '0.1 b"hello\\n"\n', pane)
 
-    assert error == b"", error
     assert fence_seen.exists()
     assert b"up." in seen
     assert b"framed." in seen
     assert b"52;" not in seen
     assert b"ZmVuY2U" not in seen
+
+
+def test_the_timeline_says_what_happened_and_when(tmp_path):
+    """
+    A run that photographed the wrong state leaves this file and the
+    program's own log beside it, and the two read together say which
+    key the program never acted on. It was empty before, and a lost
+    key was a guess. Lillecarl/pymux#353.
+    """
+    pane = (
+        "stty -echo; printf 'up.'; (sleep 0.3; printf 'framed.') &"
+        " exec python3 %s %s %s"
+    )
+    _, fence_seen, error = run_fenced(tmp_path, '0.1 b"hello\\n"\n', pane)
+
+    assert fence_seen.exists()
+    assert b"the first frame" in error, error
+    assert b"key b'hello\\n'" in error, error
+    assert b"the fence came" in error, error
 
 
 def test_pane_that_never_takes_fifo_is_fault(tmp_path):

@@ -56,6 +56,15 @@ file's absence after the harness's wait says so.
 The keys are not pressed into a program that has not drawn once. With
 the fifo given, the first step is counted from the first frame, which
 the bytes on the wire prove, and not from the clock.
+
+## The timeline
+
+Every step is written to stderr as it happens: when the first frame
+came, when each key went in and how late it was, and whether the fence
+came back. A run that photographed the wrong state has that file and
+the program's own log beside it, and the two read together say which
+key the program never acted on. Before this the file was empty, and a
+lost key was a guess. Lillecarl/pymux#353.
 """
 
 import ast
@@ -84,6 +93,11 @@ CHUNK = 65536
 #: A program that never draws is a run that photographs nothing, and
 #: the keys are pressed at the end of this rather than never.
 BOOT_TIMEOUT = 10.0
+
+
+def note(started, text):
+    "One line of the timeline, stamped from the start of the run."
+    print("%7.3f  %s" % (time.monotonic() - started, text), file=sys.stderr, flush=True)
 
 
 def size_of(fd):
@@ -408,11 +422,14 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
         except FileExistsError:
             pass
         writer = take_fifo(fifo, started)
+        note(started, "the pane took the fifo")
         when, copied = wait_for_first_frame(
             master, seen, out, copied, started, stdin_fd
         )
+        note(started, "the first frame, %d bytes" % (len(seen),))
     else:
         writer = None
+        note(started, "no fifo, so the keys are counted from the clock")
 
     # The fence, which proves the keys were consumed, and the file
     # that says it happened.
@@ -437,6 +454,10 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
                 delay, keys = waiting.pop(0)
                 when += delay
                 os.write(master, keys)
+                # How late says whether the schedule held. A step
+                # pressed on time into a program that was busy is the
+                # one that gets lost.
+                note(started, "key %r, %.3fs late" % (keys, now - when))
                 if not waiting:
                     mark = len(seen)
 
@@ -455,6 +476,7 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
                     started + hold,
                     stdin_fd,
                 )
+                note(started, "the fence came" if came else "the fence never came")
                 if came:
                     fence_seen.touch()
                 until = max(0.0, started + hold - now)
@@ -478,6 +500,7 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
                     # The pty closed, so the program has gone.
                     if finished is None:
                         finished = wait_for(pid)
+                        note(started, "the program ended, status %s" % (finished,))
                     if not waiting and not fence_pending:
                         return finished
                     break
