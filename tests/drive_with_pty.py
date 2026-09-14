@@ -928,15 +928,26 @@ def check_kitty_terminal(tmp):
 
         # 9. A reply of the outer terminal does not reach the pane. The
         #    pane echoes everything it reads between "<<" and ">>", so
-        #    a leak shows up there.
+        #    a leak shows up there as the hex of what was written.
+        #
+        #    **The reply itself, and not "anything echoed".** These two
+        #    replies tell the server what this terminal draws with, so
+        #    the client's theme is matched again and every client
+        #    repaints -- and a repaint redraws the pane, "<<" blocks of
+        #    earlier steps included. Lillecarl/pymux#346.
         terminal.drain(0.5)
         quiet = terminal.mark()
-        terminal.write(b"\x1b]11;rgb:dead/beef/cafe\x1b\\")
-        terminal.write(b"\x1b]10;rgb:1234/5678/9abc\x07")
+        background = b"\x1b]11;rgb:dead/beef/cafe\x1b\\"
+        foreground = b"\x1b]10;rgb:1234/5678/9abc\x07"
+        terminal.write(background)
+        terminal.write(foreground)
         terminal.drain(1.0)
-        assert b"<<" not in terminal.since(quiet), (
-            "a reply of the terminal reached the pane"
-        )
+        said = terminal.since(quiet)
+        for reply in (background, foreground):
+            assert reply.hex().encode() not in said, (
+                "a reply of the terminal reached the pane"
+            )
+            assert reply not in said, "a reply of the terminal reached the pane"
 
         # 10. The server goes away: the client resets the flags.
         run_cli(terminal.sock_path, ["kill-server"])

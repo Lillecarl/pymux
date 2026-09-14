@@ -397,11 +397,20 @@ let
 in
 {
   # The unit tests of pymux.
+  #
+  # The base16 collection is named here because a test searches it: the
+  # theme a terminal is nearest to is chosen out of every theme pymux
+  # offers, and a run with no collection would judge that search
+  # against fifty-five themes rather than four hundred.
+  # Lillecarl/pymux#346.
   unit =
     runInSandbox
       {
         name = "pymux-unit";
-        env = { inherit selection; };
+        env = {
+          inherit selection;
+          PYMUX_BASE16_SCHEMES = "${base16-schemes-json}/base16-schemes.json";
+        };
       }
       ''
         python -m pytest $selection -q -p no:cacheprovider \

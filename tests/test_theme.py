@@ -36,6 +36,7 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 
 from session import Connection
 from pymux.main import Pymux
+from pymux.nearest import NEAREST
 from pymux.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS, SetOptionError
 from pymux.style import DEFAULT_THEME, THEMES
 
@@ -131,8 +132,14 @@ def _said(pymux, command: str) -> str:
 
 
 async def test_client_draws_with_theme_it_starts_on():
+    """
+    A client starts on the search, and a client whose terminal has
+    said nothing draws the default while it says nothing.
+    Lillecarl/pymux#346.
+    """
     async with create_client() as (pymux, client):
-        assert client.theme == DEFAULT_THEME
+        assert client.theme == NEAREST
+        assert client.theme_in_use == DEFAULT_THEME
         assert bar_of(client.app) == "ansigreen"
 
 
@@ -189,9 +196,9 @@ async def test_a_client_says_what_its_own_theme_is():
         pymux.handle_command("set-client-option -t %s theme grey" % (there,))
 
         assert _said(pymux, "show-client-options -t %s theme" % (there,)) == "grey"
-        assert (
-            _said(pymux, "show-client-options -t %s theme" % (here,)) == DEFAULT_THEME
-        )
+        # The other one never named a theme, and its terminal has said
+        # nothing for the search to match.
+        assert _said(pymux, "show-client-options -t %s theme" % (here,)) == NEAREST
 
 
 # ----------------------------------------------------------------------
@@ -378,7 +385,7 @@ async def test_name_that_is_refused_leaves_the_theme_alone():
         with pytest.raises(SetOptionError):
             ALL_CLIENT_OPTIONS["theme"].set_value(pymux, "nosuchtheme")
 
-        assert client.theme == DEFAULT_THEME
+        assert client.theme == NEAREST
 
 
 def test_a_name_is_refused_before_a_client_is_asked_for():
@@ -396,14 +403,23 @@ def test_a_name_is_refused_before_a_client_is_asked_for():
 
 
 def test_names_are_offered_for_completion():
-    "Which is what `get_all_values` is for."
+    """
+    Which is what `get_all_values` is for. Every source, because a
+    person completes a name out of whichever one they use -- and the
+    nearest search reads the same list to know what it may match.
+    Lillecarl/pymux#346.
+    """
+    from pymux.style_base16 import names as base16_names
     from pymux.style_pygments import names
 
     pymux = Pymux()
 
-    assert ALL_CLIENT_OPTIONS["theme"].get_all_values(pymux) == sorted(THEMES) + [
-        "pygments:%s" % (name,) for name in names()
-    ]
+    assert ALL_CLIENT_OPTIONS["theme"].get_all_values(pymux) == (
+        [NEAREST]
+        + sorted(THEMES)
+        + ["pygments:%s" % (name,) for name in names()]
+        + ["base16:%s" % (name,) for name in base16_names()]
+    )
 
 
 def test_grey_theme_replaces_loud_rules_and_no_others():

@@ -16,6 +16,7 @@ import anyio
 
 from pymux.config import client_options_in
 from pymux.main import Pymux
+from pymux.nearest import NEAREST
 from pymux.pipes.memory import connect_in_memory
 from pymux.server import ServerConnection
 from pymux.style import DEFAULT_THEME
@@ -176,11 +177,16 @@ async def test_the_client_draws_with_what_it_announced():
         )
 
 
-async def test_a_client_that_announces_nothing_starts_on_the_default():
+async def test_a_client_that_announces_nothing_starts_on_the_search():
+    """
+    Which draws the default until its terminal says something.
+    Lillecarl/pymux#346.
+    """
     async with a_server() as pymux:
         client = (await _attached(pymux, [])).client_state
 
-        assert client.theme == DEFAULT_THEME
+        assert client.theme == NEAREST
+        assert client.theme_in_use == DEFAULT_THEME
 
 
 async def test_two_clients_keep_their_own():
@@ -189,7 +195,7 @@ async def test_two_clients_keep_their_own():
         two = await _attached(pymux, [])
 
         assert one.client_state.theme == "grey"
-        assert two.client_state.theme == DEFAULT_THEME
+        assert two.client_state.theme == NEAREST
 
 
 async def test_a_bad_value_never_fails_the_attach():
@@ -206,7 +212,7 @@ async def test_a_bad_value_never_fails_the_attach():
         ).client_state
 
         assert client is not None, "the attach was refused"
-        assert client.theme == DEFAULT_THEME
+        assert client.theme == NEAREST
         assert "nosuchtheme" in (client.message or "")
         # And the line after the bad one still ran.
         assert client.swap_dark_and_light is True

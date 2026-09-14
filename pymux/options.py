@@ -10,6 +10,7 @@ from .key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS
 from .key_spelling import key_however_it_is_written
 from .layout import Justify
 from . import log
+from .nearest import NEAREST
 from .style import THEMES
 from .utils import get_default_shell
 
@@ -102,6 +103,19 @@ class Option(ABC):
             return client
 
         return pymux
+
+    def as_written(self, value, holder) -> str:
+        """
+        What `show-options` prints for a value this option holds.
+
+        The on/off options hold booleans and a person writes on and
+        off; everything else prints as it is. An option whose value
+        does not say the whole story says the rest here -- `theme
+        nearest` names the theme it matched. Lillecarl/pymux#346.
+        """
+        if isinstance(value, bool):
+            return "on" if value else "off"
+        return str(value)
 
     @abstractmethod
     def get_all_values(self):
@@ -380,21 +394,49 @@ class ThemeOption(Option):
     package installs beside them. Lillecarl/pymux#194. Or
     `base16:<name>` for one of the schemes of the base16 spec,
     Lillecarl/pymux#282.
+
+    Or `nearest`, which is the default: pymux asks the terminal what
+    colours it draws with and takes the known theme closest to the
+    answer. Lillecarl/pymux#346.
     """
 
     scope = Scope.CLIENT
 
     def get_all_values(self, pymux):
+        """
+        Every name this option takes, `nearest` first because it is
+        the default: a person types it to go back to the search after
+        trying a theme, and a name that completes is a name they can
+        find. The search itself reads this list and skips `nearest`,
+        because it is not a theme to be matched to.
+        """
         from pymux.style_pygments import names
         from pymux.style_base16 import names as base16_names
 
-        return sorted(THEMES) + [
+        return [NEAREST] + sorted(THEMES) + [
             "pygments:%s" % (name,) for name in names()
         ] + [
             "base16:%s" % (name,) for name in base16_names()
         ]
 
+    def as_written(self, value, holder) -> str:
+        """
+        `nearest` alone says nothing about what is on the screen, so it
+        names the theme it found as well. Lillecarl/pymux#346.
+        """
+        if value != NEAREST:
+            return str(value)
+        matched = getattr(holder, "matched", None)
+        return NEAREST if matched is None else "%s (%s)" % (NEAREST, matched)
+
     def set_value(self, pymux, value, target=None):
+        if value == NEAREST:
+            # Not a theme, and not checked against the sources: it is
+            # the name for letting the terminal decide.
+            self.held_by(pymux, target).theme = NEAREST
+            pymux.invalidate(Woke.THEME_WAS_CHOSEN)
+            return
+
         source, _, rest = value.partition(":")
         if source == "pygments":
             from pymux.style_pygments import names

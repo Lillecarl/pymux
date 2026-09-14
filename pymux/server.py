@@ -26,6 +26,7 @@ from .enums import Woke
 from .graphics import ClientGraphics
 from .keys import KittyVt100Parser
 from .log import logger
+from .nearest import NEAREST, nearest_theme, wanted_from
 from .options import ExtendedKeys, SetOptionError
 from .pipes import BrokenPipeError
 
@@ -348,6 +349,7 @@ class ServerConnection:
                 # the same way. Anything learned is what the panes
                 # answer their programs with, so they are told again.
                 if self.default_colors.handle_osc_reply(osc.group(1), osc.group(2)):
+                    self._match_the_theme()
                     self.pymux.sync_color_bases()
             return
 
@@ -598,6 +600,30 @@ class ServerConnection:
             connection = getattr(other, "connection", None)
             if connection is not None:
                 connection.detach_and_close(hang_up=hang_up)
+
+    def _match_the_theme(self) -> None:
+        """
+        Choose again which known theme this terminal is nearest to.
+
+        **After every reply, not once.** The answers arrive one at a
+        time -- the background, then the foreground, then sixteen
+        palette entries -- so a match made on the first of them is a
+        match made on a third of what the terminal says. Each reply
+        can move it, and the last one settles it.
+
+        A client that named a theme is left alone. A terminal that
+        reports a theme change later comes through here as well, and
+        the match follows it. Lillecarl/pymux#346.
+        """
+        if self.client_state is None or self.client_state.theme != NEAREST:
+            return
+
+        found = nearest_theme(wanted_from(self.default_colors))
+        if found is None or found == self.client_state.matched:
+            return
+
+        self.client_state.matched = found
+        self.pymux.invalidate(Woke.THEME_WAS_CHOSEN)
 
     def _take_client_options(self, announced) -> None:
         """

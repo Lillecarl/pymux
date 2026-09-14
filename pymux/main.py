@@ -69,6 +69,7 @@ from .prompt_toolkit_compat import apply_prompt_toolkit_compat_fixes
 from .rc import STARTUP_COMMANDS
 from .server import ServerConnection
 from .session import Session
+from .nearest import NEAREST
 from .style import DEFAULT_THEME, THEMES, theme
 from .utils import get_default_shell
 
@@ -202,8 +203,22 @@ class ClientState:
         #: its own configuration file says when it attaches, and
         #: `set-client-option` changes one while it runs.
         #: Lillecarl/pymux#223.
-        self.theme = DEFAULT_THEME
+        #: **The default is the search.** A client that names no theme
+        #: draws in the colours of the terminal it is in: pymux asks
+        #: that terminal what it draws with and takes the known theme
+        #: nearest to the answer. A terminal that answers nothing
+        #: leaves `matched` empty, and then this is `DEFAULT_THEME`,
+        #: which is what pymux looked like before.
+        #: Lillecarl/pymux#346.
+        self.theme = NEAREST
         self.swap_dark_and_light = False
+
+        #: What the search found for this terminal, or None while it
+        #: has said nothing. It is not what a person wrote, so it is
+        #: kept beside `theme` rather than in it: a client whose
+        #: terminal reports a new background is matched again, and
+        #: `show-client-options` says both.
+        self.matched: str | None = None
 
         #: What a person calls this terminal, or "" when nobody has.
         #: `ServerConnection.name` is the one pymux derives, and this
@@ -575,9 +590,24 @@ class ClientState:
             self._sync_focus()
 
     @property
+    def theme_in_use(self) -> str:
+        """
+        The theme this client really draws with.
+
+        The one a person named, or -- when that is `nearest` -- the
+        known theme the search found for this terminal. A terminal
+        that has said nothing yet leaves the default standing, so the
+        first frame draws in it and a later frame draws in the match.
+        Lillecarl/pymux#346.
+        """
+        if self.theme != NEAREST:
+            return self.theme
+        return self.matched or DEFAULT_THEME
+
+    @property
     def style(self) -> BaseStyle:
         "The colour scheme of the theme this client is on."
-        return theme(self.theme)
+        return theme(self.theme_in_use)
 
     def _sync_focus(self):
         # Pop-up displayed?
@@ -2382,7 +2412,7 @@ class Pymux:
         Lillecarl/pymux#223.
         """
         latest = self.latest_client()
-        return DEFAULT_THEME if latest is None else latest.theme
+        return DEFAULT_THEME if latest is None else latest.theme_in_use
 
     def latest_client_color_base(self):
         """

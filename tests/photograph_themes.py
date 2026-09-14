@@ -33,7 +33,7 @@ sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pymux.style import THEMES  # noqa: E402
 from pymux.style_pygments import names  # noqa: E402
-from photograph_chrome import CHROME, demo_keys, main  # noqa: E402
+from photograph_chrome import CHROME, DEMO, PREFIX, demo_keys, keys, main  # noqa: E402
 from take_picture import LIGHT_TERMINALS, TERMINALS  # noqa: E402
 
 #: Where the pictures go. The check points this at `$out`.
@@ -89,6 +89,27 @@ FIXTURES["theme-base16-painted-mocha"] = (
     + "set-client-option theme base16:catppuccin-mocha\n"
     + "set-option paint-screen on\n",
     demo_keys(),
+)
+
+#: The default, which is the search: no theme is named, and the
+#: terminal is asked what it draws with.
+#:
+#: **The reply is typed in.** The relay writes scripted keys into the
+#: client's pty, which is exactly where a terminal's reply arrives, so
+#: this is the one way the farm can photograph an answer -- the
+#: terminals it drives never answer the queries themselves, because
+#: the relay reads their replies and does not pass them on.
+#: Lillecarl/pymux#346, Lillecarl/pymux#350.
+FIXTURES["theme-nearest"] = (
+    CHROME,
+    keys(
+        (0.0, PREFIX),
+        (0.4, b"%"),
+        (0.8, ("python %s\n" % (shlex.quote(str(DEMO)),)).encode("ascii")),
+        # The background of gruvbox dark hard, as a terminal reports
+        # one: "#1d2021" in the form `XParseColor` reads.
+        (1.6, b"\x1b]11;rgb:1d1d/2020/2121\x1b\\"),
+    ),
 )
 
 #: The takeover's own picture. `paint-screen` draws the scheme's

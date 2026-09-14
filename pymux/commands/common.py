@@ -230,8 +230,9 @@ def option_as_written(
     """
     What an option holds, as a person wrote it.
 
-    The on/off options hold booleans and a person writes on and off;
-    the rest hold what they were given. The option's own scope says
+    The option says how its own value is spelled, because some of them
+    hold more than a value: `theme nearest` names the theme the search
+    matched. The option's own scope says
     what holds it: the session, the active window, or the client this
     command means. `-g` on a window option reads the default every new
     window starts with -- which is recorded only when somebody set it,
@@ -246,6 +247,7 @@ def option_as_written(
     if option.attribute_name is None:
         return "not set"
 
+    holder = None
     if option.scope is Scope.WINDOW and getattr(args, "g", False):
         value = pymux.arrangement.window_defaults.get(option.attribute_name)
     else:
@@ -257,9 +259,7 @@ def option_as_written(
 
     if value is None:
         return "not set"
-    if isinstance(value, bool):
-        return "on" if value else "off"
-    return str(value)
+    return option.as_written(value, holder)
 
 
 def answer(pymux: "Pymux", text: str) -> None:
