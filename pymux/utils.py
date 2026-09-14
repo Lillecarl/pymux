@@ -11,7 +11,28 @@ __all__ = [
     "daemonize",
     "nonblocking",
     "get_default_shell",
+    "keys_are_vi",
 ]
+
+
+def keys_are_vi(environ=os.environ) -> bool:
+    """
+    Whether copy mode and the status line take vi keys.
+
+    tmux reads the editor of the person and switches both, in
+    `tmux.c`: "Override keys to vi if VISUAL or EDITOR are set". Any
+    editor whose name holds "vi" gives vi keys and everything else
+    gives emacs keys.
+
+    **It is a substring of the name and not the start of it**, so
+    `nvim` gives vi keys. That is the point of writing it that way.
+    """
+    editor = environ.get("VISUAL")
+    if editor is None:
+        editor = environ.get("EDITOR")
+    if editor is None:
+        return False
+    return "vi" in os.path.basename(editor)
 
 
 def daemonize(stdin="/dev/null", stdout="/dev/null", stderr="/dev/null"):

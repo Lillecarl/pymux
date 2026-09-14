@@ -71,7 +71,7 @@ from .server import ServerConnection
 from .session import Session
 from .nearest import NEAREST
 from .style import DEFAULT_THEME, THEMES, theme
-from .utils import get_default_shell
+from .utils import get_default_shell, keys_are_vi
 
 __all__ = [
     "Pymux",
@@ -758,8 +758,17 @@ class Pymux:
         # "paste-buffer" reads it. Every client shares this one.
         self.clipboard = InMemoryClipboard()
         self.remain_on_exit = False
-        self.status_keys_vi_mode = False
-        self.mode_keys_vi_mode = False
+
+        # Which keys the status line and copy mode take. tmux reads the
+        # editor of the person for this, so somebody whose $EDITOR is a
+        # vi finds vi keys in both places and never asks for them. They
+        # were emacs whatever the person used, and the vi keys of copy
+        # mode reach nothing at all in a read-only buffer: a person
+        # pressing `v`, `y` and `$` there read that as copy mode being
+        # unable to copy. Lillecarl/pymux#375.
+        vi_keys = keys_are_vi()
+        self.status_keys_vi_mode = vi_keys
+        self.mode_keys_vi_mode = vi_keys
         # How many lines above the screen a pane keeps. tmux keeps two
         # thousand by default and this keeps the same, so a person who
         # moves over finds the depth they had. People do configure
