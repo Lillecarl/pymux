@@ -9,18 +9,48 @@
 # A count is a number of pixels, so it belongs to the font and the size
 # that `take_picture.py` asks each terminal for. Change either and
 # every count has to be recorded again.
+#
+# It is a number of pixels since Lillecarl/pymux#368. It was a channel
+# error sum before that, which is why the counts below are not the ones
+# this file held: `compare -metric AE` says it counts pixels and does
+# not, and a small difference over few pixels came back as none at all.
 
 # "CSI 4:1 m" asks for a single underline. xterm draws nothing for it.
 # A pane reads the shape and writes a plain "CSI 4 m", which xterm does
-# draw, so "straight" has a line through pymux and none without it.
-# That is the whole difference: the other five shapes have no line in
-# either picture of xterm.
+# draw, so a word asked for with the colon form has a line through
+# pymux and none without it.
+#
+# Two rows of the fixture use that form, and they are the whole count:
+#
+#     row 1  "straight"        79 pixels, a line 80 wide
+#     row 7  "blue straight"  129 pixels, a line 130 wide
+#
+# Ten pixels a character, one short of the width each time. The other
+# four shapes -- double, curly, dotted, dashed -- and the red curly row
+# have no line in either picture of xterm, so they differ nowhere.
 #
 # foot has no difference at all on this fixture. It reads the colon
 # form itself, so both of its pictures carry every shape. Two seats say
 # the same thing two ways: the difference belongs to xterm, and not to
 # pymux.
-xterm underlines 206
+xterm underlines 208
+
+# Eight pixels, and they are all the same eight: the seam between the
+# last two cells of a run of "-" box drawing, on the two rows that hold
+# one. x is 789 and 790, which is the join of column 78 and column 79,
+# and y is 389, 390, 429 and 430.
+#
+# **Both sides draw the same line.** Replaying the recording says so:
+# rows 19 and 21 are a run of "-" across all eighty columns, every cell
+# of them plain and one column wide. The glyph does not quite fill its
+# cell, so a run of them has a darker seam at every cell join, and both
+# pictures have that seam at every join but the last. There xterm joins
+# the two glyphs in the pymux picture and leaves the seam in the bare
+# one, four pixels of grey each on two rows.
+#
+# The cells are the same and the last column is where they differ,
+# which is the column pymux has its own rules for. Lillecarl/pymux#371.
+xterm recorded-claude-code 8
 
 # The image fixture. A pane cannot draw pixels, so it decodes the sixel
 # its program wrote and pymux writes the image again in whatever the
@@ -30,18 +60,11 @@ xterm underlines 206
 # All three counts are large because a sixel is an image and not a
 # glyph: when a terminal draws nothing bare, every pixel of the image
 # is a difference.
-#
-# **Do not read a number below as a count of pixels.** `compare -metric
-# AE` sums the channel error of the whole picture in this ImageMagick,
-# so it is smaller than the count and it is not proportional to it. The
-# three fixtures below differ in 1080, 13680 and 14400 pixels, and the
-# reasons written under each one are about those pixels. The line
-# `xterm underlines 206` above is the same kind of number.
-# Lillecarl/pymux#368 says how it was measured and what to do.
 
 # foot is the one that draws a sixel on both sides, so this line is the
 # sixel path against a real sixel decoder. The colours are exact
-# everywhere. Nine rows differ and the reason is the cell:
+# everywhere. Nine rows of 120 pixels differ, and the reason is the
+# cell:
 #
 #   * `pyte.images` reserves `ceil(120/20) = 6` rows for the image,
 #     because a pane serves several clients and has no cell size of its
@@ -52,24 +75,26 @@ xterm underlines 206
 #   * The edge inside the image moves up with the scale: it is at row
 #     63 bare and at row 60 through pymux, which is three more rows.
 #
-# Six plus three rows of 120 pixels is the whole difference. Nothing
-# else on the picture moves.
-foot sixel-image 576
+# Six plus three rows of 120 pixels is 1080, and that is the whole
+# difference. Nothing else on the picture moves. Lillecarl/pymux#369 is
+# the resampling itself.
+foot sixel-image 1080
 
 # kitty has no sixel decoder at all. Its log says so in as many words:
 # "[PARSE ERROR] Unknown DCS escape code: 7;1;0q". So the bare picture
-# is empty, and the pymux one carries the image over the kitty graphics
-# protocol, which kitty does speak.
+# is empty and the pymux one carries the image over the kitty graphics
+# protocol, which kitty does speak. 120 by 114 is the whole image as
+# kitty draws it.
 #
 # **So this line is not the comparison that Lillecarl/pymux#262 is
 # named for.** It says the kitty path draws, not that it draws what the
 # sixel path draws. No terminal in this farm speaks both protocols, so
 # that comparison cannot be made inside one terminal. Measured by hand
-# from this run, foot and kitty have the same cell here, and the two
-# pymux pictures differ on one row of 114: pymux scales by nearest
-# neighbour and kitty interpolates, so the row that holds the edge is a
-# blend in kitty and a hard edge in the sixel. Lillecarl/pymux#262.
-kitty sixel-image 5893
+# from a run, foot and kitty have the same cell here, and the two pymux
+# pictures differ on one row of 114: pymux scales by nearest neighbour
+# and kitty interpolates, so the row that holds the edge is a blend in
+# kitty and a hard edge in the sixel.
+kitty sixel-image 13680
 
 # xterm draws no sixel either, and here it is a setting and not a
 # missing decoder: `decGraphicsID` defaults to 0 and `decTerminalID` to
@@ -79,6 +104,7 @@ kitty sixel-image 5893
 #
 # That makes this the only picture that judges the half block
 # renderer, which is why xterm is left as it is. One cell of text
-# carries two pixels, so the count is the image drawn twelve cells by
-# six with the colours averaged inside each half cell.
-xterm sixel-image 7827
+# carries two pixels, and xterm's cell is exactly the ten by twenty the
+# pane assumed, so the image covers 120 by 120 and every pixel of it is
+# a difference.
+xterm sixel-image 14400
