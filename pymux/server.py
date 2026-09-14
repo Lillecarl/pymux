@@ -545,8 +545,14 @@ class ServerConnection:
             self.pid = packet.get("pid") or 0
 
             if detach_other_clients:
+                # **Not this one.** A connection is in the list from
+                # the moment the server accepts it, which is before
+                # this packet arrives, so `attach -d` closed the client
+                # that asked for it and the person was back at their
+                # shell. Lillecarl/pymux#344.
                 for c in self.pymux.connections:
-                    c.detach_and_close()
+                    if c is not self:
+                        c.detach_and_close()
 
             self._create_app(color_depth=self.colors.depth, term=term)
 
