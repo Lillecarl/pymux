@@ -205,6 +205,12 @@ class ClientState:
         self.theme = DEFAULT_THEME
         self.swap_dark_and_light = False
 
+        #: What a person calls this terminal, or "" when nobody has.
+        #: `ServerConnection.name` is the one pymux derives, and this
+        #: is drawn over it wherever a client is named or selected.
+        #: Lillecarl/pymux#340.
+        self.name = ""
+
         #: True when the prefix key (Ctrl-B) has been pressed.
         self.has_prefix = False
 
@@ -2796,7 +2802,12 @@ class Pymux:
         except OSError:
             pass
 
-    def run_integrated(self, color_depth, detach_other_clients: bool = False):
+    def run_integrated(
+        self,
+        color_depth,
+        detach_other_clients: bool = False,
+        chosen_name: str | None = None,
+    ):
         """
         Run the server and one client in this process.
 
@@ -2849,6 +2860,7 @@ class Pymux:
                     # for everything, and as the client, for the lines
                     # that are about this terminal. Lillecarl/pymux#223.
                     client.config_file = self.source_file
+                    client.chosen_name = chosen_name
                     await client.attach(
                         detach_other_clients=detach_other_clients,
                         color_depth=color_depth,

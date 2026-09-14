@@ -17,6 +17,13 @@ class Client(ABC):
     #: Lillecarl/pymux#223.
     config_file: str | None = None
 
+    #: What `pymux attach -n` called this terminal, when it named one.
+    #: It is announced as a client option like any other, after the
+    #: ones the configuration file gave, so the flag wins: a file is
+    #: one machine's and a flag is this terminal's.
+    #: Lillecarl/pymux#340.
+    chosen_name: str | None = None
+
     def run_command(self, command, pane_id=None) -> int:
         """
         Ask the server to run this command. Return the exit code.

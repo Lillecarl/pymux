@@ -34,6 +34,9 @@ Options:
                      '$XDG_CONFIG_HOME/pymux/pymux.conf' and
                      '~/.pymux.conf' that is there.
     -d             : Detach all other clients, when attaching.
+    -n NAME        : What to call this terminal: 'desk', 'phone'. The
+                     commands that take '-t <client>' take it, and it
+                     lasts as long as this attachment.
     --log FILE     : Logfile.
     --truecolor    : Render true color (24 bit) instead of 256 colors.
                      (Each client can set this separately.)
@@ -148,6 +151,20 @@ def _add_options(parser: argparse.ArgumentParser, suppress_defaults: bool) -> No
         action="store_true",
         default=false,
         help="Detach all other clients, when attaching.",
+    )
+    parser.add_argument(
+        "-n",
+        "--name",
+        dest="client_name",
+        metavar="NAME",
+        default=default,
+        help=(
+            "What to call this terminal: 'desk', 'phone'. "
+            "'detach-client -t' and 'set-client-option -t' take it, and "
+            "so does the name pymux derives when this is not given. It "
+            "lasts as long as the attachment, so put it in the command "
+            "that attaches rather than expecting the server to remember."
+        ),
     )
     parser.add_argument(
         "--log",
@@ -414,6 +431,7 @@ def run() -> None:
         mux.run_integrated(
             color_depth=color_depth,
             detach_other_clients=a.detach_others,
+            chosen_name=a.client_name,
         )
 
     elif mode in ("list-sessions", "ls"):
@@ -469,6 +487,7 @@ def run() -> None:
         if socket_name:
             client = create_client(socket_name)
             client.config_file = filename
+            client.chosen_name = a.client_name
             client.attach(
                 detach_other_clients=detach_other_clients, color_depth=color_depth
             )
@@ -477,6 +496,7 @@ def run() -> None:
             # Connect to the first server.
             for c in list_clients():
                 c.config_file = filename
+                c.chosen_name = a.client_name
                 c.attach(
                     detach_other_clients=detach_other_clients, color_depth=color_depth
                 )
@@ -512,6 +532,7 @@ def run() -> None:
         else:
             client = create_client(socket_name)
             client.config_file = filename
+            client.chosen_name = a.client_name
             client.attach(color_depth=color_depth)
             sys.exit(client.exit_code)
 

@@ -412,10 +412,29 @@ def _client_hostname(context: FormatContext) -> str:
 
 def _client_name(context: FormatContext) -> str:
     """
-    What `detach-client -t` selects this client by.
+    What a person calls this client, and what `-t` selects it by.
 
-    `ServerConnection.name` says how it is built and why the machine is
-    always part of it. Lillecarl/pymux#335.
+    The chosen name when somebody set one, and the derived one
+    otherwise. **This variable keeps its meaning either way**: it is
+    what `list-clients` prints first on a line and what `-t` takes, so
+    a format string written before names were choosable still says the
+    thing a person can paste into a command. Lillecarl/pymux#340.
+    """
+    client = context.client
+    chosen = getattr(client, "name", "") if client is not None else ""
+    return chosen or _client_tty(context)
+
+
+def _client_tty(context: FormatContext) -> str:
+    """
+    The machine and the terminal this client draws on, which pymux
+    derives and nobody can change.
+
+    **Not tmux's `#{client_tty}`, which is a bare `/dev/pts/7`.** A
+    path alone names a terminal that two machines both have, and a
+    pymux client can be on another machine: `ServerConnection.name`
+    says why the machine is always in front of it.
+    Lillecarl/pymux#335, Lillecarl/pymux#340.
     """
     return getattr(_connection_of(context), "name", "") or ""
 
@@ -486,6 +505,7 @@ tmux_variables: Dict[str, Callable[[FormatContext], str]] = {
     "session_created": lambda c: str(int(c.session.created)),
     # Client.
     "client_name": _client_name,
+    "client_tty": _client_tty,
     "client_created": _client_created,
     "client_hostname": _client_hostname,
     "client_termname": _client_termname,

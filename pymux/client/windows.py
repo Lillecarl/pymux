@@ -69,8 +69,10 @@ class WindowsClient(Client):
                     "ttyname": "",
                     "pid": os.getpid(),
                     # Lillecarl/pymux#223, as `client/terminal.py` says.
-                    "client-options": client_options_in(
-                        self.config_file or find_config()
+                    # The same two sources in the same order.
+                    "client-options": (
+                        client_options_in(self.config_file or find_config())
+                        + ([("name", self.chosen_name)] if self.chosen_name else [])
                     ),
                     "data": "",
                 }

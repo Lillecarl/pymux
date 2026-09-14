@@ -389,7 +389,12 @@ async def over_connection(pymux=None, read_packet=None):
                 read_packet(packet)
 
     async def attach(
-        name, size, hostname=OTHER_MACHINE, environment=None, ttyname=None
+        name,
+        size,
+        hostname=OTHER_MACHINE,
+        environment=None,
+        ttyname=None,
+        client_options=None,
     ):
         server_end, client_end = connect_in_memory()
 
@@ -425,6 +430,10 @@ async def over_connection(pymux=None, read_packet=None):
                     "environment": environment or {},
                     "ttyname": next(ttys) if ttyname is None else ttyname,
                     "pid": 4242,
+                    # What a client's own configuration file and its
+                    # command line said about it. Lillecarl/pymux#223,
+                    # Lillecarl/pymux#340.
+                    "client-options": client_options or [],
                     "data": "",
                 }
             )

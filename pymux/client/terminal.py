@@ -173,9 +173,7 @@ class TerminalClient(Client):
                 # the file that names it: over SSH the server's
                 # configuration is another machine's.
                 # Lillecarl/pymux#223.
-                "client-options": client_options_in(
-                    self.config_file or find_config()
-                ),
+                "client-options": self._client_options(),
                 "data": "",
             }
         )
@@ -198,6 +196,21 @@ class TerminalClient(Client):
                 self._mode_context_managers.pop().__exit__()
             except Exception:
                 pass
+
+    def _client_options(self) -> list:
+        """
+        What this client announces about itself, in the order the
+        server applies it.
+
+        The configuration file first and the command line after, so a
+        flag wins: a file belongs to one machine and a flag to the one
+        terminal it was typed in. Lillecarl/pymux#223,
+        Lillecarl/pymux#340.
+        """
+        announced = client_options_in(self.config_file or find_config())
+        if self.chosen_name:
+            announced.append(("name", self.chosen_name))
+        return announced
 
     def _reset_terminal(self) -> None:
         """

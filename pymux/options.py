@@ -168,18 +168,23 @@ class OnOffOption(Option):
 
 class StringOption(Option):
     """
-    String option, the attribute is set as a Pymux attribute.
+    String option, written on whatever the scope says holds it.
     """
 
-    def __init__(self, attribute_name, possible_values=None):
+    def __init__(self, attribute_name, possible_values=None, scope=Scope.SESSION):
         self.attribute_name = attribute_name
         self.possible_values = possible_values or []
+        self.scope = scope
 
     def get_all_values(self, pymux):
-        return sorted(set(self.possible_values + [getattr(pymux, self.attribute_name)]))
+        try:
+            now = getattr(self.held_by(pymux), self.attribute_name)
+        except SetOptionError:
+            return sorted(set(self.possible_values))
+        return sorted(set(self.possible_values + [now]))
 
     def set_value(self, pymux, value, target=None):
-        setattr(pymux, self.attribute_name, value)
+        setattr(self.held_by(pymux, target), self.attribute_name, value)
 
 
 class PositiveIntOption(Option):
@@ -462,19 +467,24 @@ class ChoiceOption(Option):
     configuration mistake can get.
     """
 
-    def __init__(self, attribute_name, choices):
+    def __init__(self, attribute_name, choices, scope=Scope.SESSION):
         self.attribute_name = attribute_name
         self.choices = tuple(choices)
+        self.scope = scope
 
     def get_all_values(self, pymux):
-        return sorted(set(self.choices + (getattr(pymux, self.attribute_name),)))
+        try:
+            now = getattr(self.held_by(pymux), self.attribute_name)
+        except SetOptionError:
+            return sorted(set(self.choices))
+        return sorted(set(self.choices + (now,)))
 
     def set_value(self, pymux, value, target=None):
         if value not in self.choices:
             raise SetOptionError(
                 "Expecting one of: %s." % ", ".join(sorted(self.choices))
             )
-        setattr(pymux, self.attribute_name, value)
+        setattr(self.held_by(pymux, target), self.attribute_name, value)
 
 
 ALL_OPTIONS = {
@@ -586,6 +596,16 @@ ALL_OPTIONS = {
 #: it attaches, and `set-client-option` changes one while it runs.
 #: Lillecarl/pymux#223.
 ALL_CLIENT_OPTIONS = {
+    # What a person calls this terminal: "desk", "phone", "the big
+    # screen". `detach-client -t` and `set-client-option -t` take it,
+    # and so does the derived name it is drawn over.
+    #
+    # **It lasts as long as the attachment.** `pymux attach -n desk`
+    # is the durable one, and a configuration file names a machine a
+    # person only has one terminal on. A server that remembered a name
+    # per terminal would need a rule for forgetting one whose terminal
+    # closed months ago. Lillecarl/pymux#340.
+    "name": StringOption("name", scope=Scope.CLIENT),
     # Which colour scheme this client draws with. `pymux/style.py`
     # holds them. Lillecarl/pymux#194.
     "theme": ThemeOption(),

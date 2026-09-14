@@ -197,18 +197,27 @@ def clients_named(pymux: "Pymux", wanted: str) -> list:
     Every client of that name, as `list-clients` prints it first on a
     line.
 
-    A list and not one: a name is `<machine>:<terminal>` and nothing
-    stops two connections claiming the same one. `detach-client -t`
-    and `set-client-option -t` both read it. Lillecarl/pymux#335.
+    **Either name selects a client**: the one a person chose, and the
+    one pymux derived from the machine and the terminal. So a script
+    that learned `dynhetz:/dev/pts/7` keeps working after somebody
+    calls that terminal `desk`, and a person who named it can say what
+    they named it. tmux matches several spellings of one client the
+    same way (`cmd-find.c:1322`).
 
-    A chosen name will be matched here too, so that a script which
-    learned the derived one keeps working when somebody renames their
-    terminal. Lillecarl/pymux#340.
+    **A list and not one.** A derived name is not unique either -- two
+    machines can each have a `/dev/pts/3` -- and a chosen one is not
+    checked, so `detach-client -t desk` detaches every terminal called
+    `desk`, which is what the words say. A command that can only act
+    on one takes the first. Lillecarl/pymux#335, Lillecarl/pymux#340.
     """
     found = [
         client_state
         for client_state in pymux.clients
-        if getattr(client_state.connection, "name", "") == wanted
+        if wanted
+        in (
+            getattr(client_state, "name", ""),
+            getattr(client_state.connection, "name", ""),
+        )
     ]
     if not found:
         raise CommandException("can't find client: %s" % (wanted,))
