@@ -330,6 +330,46 @@ def test_fence_comes_back_and_is_taken_out(tmp_path):
     assert b"ZmVuY2U" not in seen
 
 
+def test_a_terminal_answer_is_not_the_program_going_quiet():
+    """
+    `settle` waits for the wire to go quiet, and `wait_for_program`
+    wakes for the program or for the terminal and says only whether
+    the program had something. So an answer from the terminal read as
+    silence and ended the settle at once.
+
+    It ended it at the worst moment. pymux writes its queries, the
+    terminal answers them, and the first frame is called finished after
+    256 bytes of questions -- the timeline of a real run has the fifo,
+    the frame and the prefix all at 0.401s. The keys then go into a
+    pymux that has not drawn. Lillecarl/pymux#353.
+    """
+    import io
+    import socket
+
+    from drive_in_terminal import settle
+    from middleman import QUIET
+
+    ours, theirs = socket.socketpair()
+    answered, terminal = os.pipe()
+    os.write(terminal, b"\x1b]11;rgb:1d1d/2020/2121\x1b\\")
+
+    try:
+        started = time.monotonic()
+        settle(ours.fileno(), bytearray(), io.BytesIO(), 0, answered)
+        took = time.monotonic() - started
+        # And it still reached the program, which is the whole point of
+        # reading the terminal at all. Lillecarl/pymux#350.
+        theirs.settimeout(1.0)
+        assert theirs.recv(64).startswith(b"\x1b]11;")
+    finally:
+        os.close(answered)
+        os.close(terminal)
+        ours.close()
+        theirs.close()
+
+    assert took >= QUIET
+
+
 def test_the_timeline_says_what_happened_and_when(tmp_path):
     """
     A run that photographed the wrong state leaves this file and the

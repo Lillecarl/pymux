@@ -273,18 +273,32 @@ def settle(master, seen, out, copied, stdin_fd=None):
     the program postponed. The fence has already done the waiting, so
     this waits for silence rather than for the clock, and it is short.
     `middleman.py` settles a write the same way.
+
+    **The terminal speaking is not the program going quiet.**
+    `wait_for_program` wakes for either and says only whether the
+    program had something, so an answer arriving from the terminal used
+    to end the settle at once. It ends it at the worst moment: pymux
+    writes its queries, the terminal answers them, and the first frame
+    is called finished after 256 bytes of questions. The keys then go
+    into a pymux that has not drawn and is not reading them yet. So the
+    quiet is measured, and only real silence counts.
+    Lillecarl/pymux#353.
     """
-    deadline = time.monotonic() + FIRST_BYTE
+    quiet_since = time.monotonic()
+    deadline = quiet_since + FIRST_BYTE
     while time.monotonic() < deadline:
         if not wait_for_program(master, stdin_fd, QUIET):
-            return copied
+            if time.monotonic() - quiet_since >= QUIET:
+                return copied
+            continue
         piece = read_from(master, seen)
         if not piece:
             return copied
         out.write(piece)
         out.flush()
         copied += len(piece)
-        deadline = time.monotonic() + FIRST_BYTE
+        quiet_since = time.monotonic()
+        deadline = quiet_since + FIRST_BYTE
     return copied
 
 
