@@ -1234,7 +1234,12 @@ class Arrangement:
         """
         closed = False
 
-        for w in self.windows:
+        # **A copy, because the loop takes windows out of the list.**
+        # Walking the list itself skipped the window after each one it
+        # removed, and that window is the one this sweep is for: an
+        # empty window right behind a closing one stayed in the order
+        # for ever. Lillecarl/pymux#351.
+        for w in list(self.windows):
             w.remove_pane(pane)
 
             # No panes left in this window?
