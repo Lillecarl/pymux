@@ -163,6 +163,11 @@ RULES = {
     "statusbar window.current": "bg:#44ff44 #000000",
     "auto-suggestion": "bg:#4e5e4e #88aa88",
     "message": "bg:#bbee88 #222222",
+    # No role in them: a selection on a reversed pane is turned back
+    # whatever the theme's colours are, because the pane's own reverse
+    # is what it has to be told from. Lillecarl/pymux#99.
+    "reversed-pane selected": "noreverse",
+    "reversed-pane incsearch.current": "noreverse",
     "background": "#888888",
     "painted": "bg:#000000",
     "cut": "bg:#303030",

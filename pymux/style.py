@@ -76,6 +76,17 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         % (r["signal-bright"], r["signal-text"]),
         "auto-suggestion": "bg:%s %s" % (r["suggestion"], r["suggestion-text"]),
         "message": "bg:%s %s" % (r["notice"], r["notice-text"]),
+        # A selection on a pane that a program reversed with DECSCNM.
+        # prompt_toolkit marks a selection by reversing it, and
+        # `reverse` sets rather than toggles, so both the selected
+        # cells and the rest came out reversed and a person copying
+        # could not see what they had. Turning it back is what a
+        # terminal does by itself: foot's `selection-background`
+        # documents its default as "inverse", and an inverse of an
+        # inverted screen is the screen. `Terminal._copy_style` puts
+        # the class on. Lillecarl/pymux#99.
+        "reversed-pane selected": "noreverse",
+        "reversed-pane incsearch.current": "noreverse",
         # The part of a pane that runs off the edge of the view. A strip
         # is a row that may be wider than the screen, so a column can be
         # cut, and nothing else on the screen says so. Carl: "the
