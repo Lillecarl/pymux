@@ -18,10 +18,17 @@ emitted, so a picture of the terminal is a picture of the program. And
 because this side owns the pty, it can write keys into it.
 
 **It is a relay and not a terminal.** It parses nothing and answers
-nothing. Bytes go one way from the program to the tty, and keys go the
-other way on a schedule. A query the program sends reaches the real
-terminal, and the answer reaches the program, because the tty is the
-one the terminal is drawing.
+nothing. Bytes go from the program to the tty, and two things go the
+other way into the pty: the keys, on a schedule, and whatever the
+terminal says.
+
+**The terminal's answers are the second of those, and they used to be
+dropped.** A query the program writes reaches the terminal, and the
+terminal answers on the tty's input -- which is this process's stdin,
+not the program's. Nothing read it, so every answer was lost: the
+colours the terminal draws with, the keyboard flags, the graphics
+protocol, the cell size. A picture then showed a pymux that had asked
+its terminal everything and heard nothing back. Lillecarl/pymux#350.
 
 The keys file is one step a line: how long to wait, then the bytes as a
 Python literal. Everything after a "#" is a comment, and a blank line
@@ -126,6 +133,61 @@ def stop_echo(fd):
         pass
 
 
+def take_input(fd):
+    """
+    Read this terminal's answers as they arrive, and never echo them.
+
+    Two modes are in the way. **The echo** puts everything the terminal
+    says on the screen as text, which is `\x1b[?62;4;22c` written
+    across the top row of the picture. **The line discipline** holds
+    input until a newline, and an answer carries none, so a read would
+    wait for a key nobody is going to press.
+
+    A terminal that this cannot be done to is one whose answers stay
+    unread, which is where this started. Lillecarl/pymux#350.
+    """
+    try:
+        attributes = termios.tcgetattr(fd)
+    except termios.error:
+        return
+
+    attributes[3] &= ~(termios.ECHO | termios.ECHONL | termios.ICANON)
+    attributes[6][termios.VMIN] = 0
+    attributes[6][termios.VTIME] = 0
+    try:
+        termios.tcsetattr(fd, termios.TCSANOW, attributes)
+    except termios.error:
+        pass
+
+
+def carry_the_answer(master, stdin_fd, ready) -> None:
+    "Give the program whatever the terminal said, if it said anything."
+    if stdin_fd is None or stdin_fd not in ready:
+        return
+    try:
+        piece = os.read(stdin_fd, CHUNK)
+    except OSError:
+        return
+    if piece:
+        os.write(master, piece)
+
+
+def wait_for_program(master, stdin_fd, timeout) -> bool:
+    """
+    Wait for the program to write, carrying the terminal's answers the
+    other way while we wait. True when the program has something.
+
+    **Every wait in this file goes through here.** The answers arrive
+    while the program is drawing its first frame, which is the longest
+    wait of the run: a loop that watched only the program would hold
+    them until it happened to look somewhere else.
+    """
+    watching = [master] if stdin_fd is None else [master, stdin_fd]
+    ready = select.select(watching, [], [], timeout)[0]
+    carry_the_answer(master, stdin_fd, ready)
+    return master in ready
+
+
 def read_keys(path):
     """
     The steps of a keys file, as (seconds to wait, bytes) pairs.
@@ -188,7 +250,7 @@ def read_from(master, seen):
     return piece
 
 
-def settle(master, seen, out, copied):
+def settle(master, seen, out, copied, stdin_fd=None):
     """
     Copy until the wire has been quiet for a while, and give back
     where the copying stopped.
@@ -200,7 +262,7 @@ def settle(master, seen, out, copied):
     """
     deadline = time.monotonic() + FIRST_BYTE
     while time.monotonic() < deadline:
-        if not select.select([master], [], [], QUIET)[0]:
+        if not wait_for_program(master, stdin_fd, QUIET):
             return copied
         piece = read_from(master, seen)
         if not piece:
@@ -212,7 +274,7 @@ def settle(master, seen, out, copied):
     return copied
 
 
-def wait_for_first_frame(master, seen, out, copied, started):
+def wait_for_first_frame(master, seen, out, copied, started, stdin_fd=None):
     """
     Copy the program's first frame and its quiet, and say when it was.
 
@@ -225,7 +287,7 @@ def wait_for_first_frame(master, seen, out, copied, started):
     """
     deadline = started + BOOT_TIMEOUT
     while not seen and time.monotonic() < deadline:
-        if not select.select([master], [], [], 0.05)[0]:
+        if not wait_for_program(master, stdin_fd, 0.05):
             continue
         piece = read_from(master, seen)
         if not piece:
@@ -233,11 +295,13 @@ def wait_for_first_frame(master, seen, out, copied, started):
         out.write(piece)
         out.flush()
         copied += len(piece)
-    copied = settle(master, seen, out, copied)
+    copied = settle(master, seen, out, copied, stdin_fd)
     return time.monotonic(), copied
 
 
-def frame_and_fence(master, seen, out, copied, writer, mark, token, deadline):
+def frame_and_fence(
+    master, seen, out, copied, writer, mark, token, deadline, stdin_fd=None
+):
     """
     The frame for the last key, then the fence, then the quiet after
     it. Gives back whether the fence came, and where the copying
@@ -259,7 +323,7 @@ def frame_and_fence(master, seen, out, copied, writer, mark, token, deadline):
     while mark is not None and len(seen) <= mark:
         if time.monotonic() > deadline:
             return False, copied
-        if not select.select([master], [], [], 0.05)[0]:
+        if not wait_for_program(master, stdin_fd, 0.05):
             continue
         piece = read_from(master, seen)
         if not piece:
@@ -268,13 +332,13 @@ def frame_and_fence(master, seen, out, copied, writer, mark, token, deadline):
         out.flush()
         copied += len(piece)
 
-    copied = settle(master, seen, out, copied)
+    copied = settle(master, seen, out, copied, stdin_fd)
 
     os.write(writer, b"\x1b]52;c;%s\x07" % token)
     while token not in seen:
         if time.monotonic() > deadline:
             return False, copied
-        if not select.select([master], [], [], 0.05)[0]:
+        if not wait_for_program(master, stdin_fd, 0.05):
             continue
         if not read_from(master, seen):
             return False, copied
@@ -284,7 +348,7 @@ def frame_and_fence(master, seen, out, copied, writer, mark, token, deadline):
     out.flush()
     copied = len(clean)
 
-    copied = settle(master, seen, out, copied)
+    copied = settle(master, seen, out, copied, stdin_fd)
     return True, copied
 
 
@@ -315,6 +379,16 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
     set_size(master, rows, columns)
     stop_echo(master)
 
+    # This terminal's own input, where its answers arrive. A run with
+    # no terminal -- a test that gives this a pipe -- has none, and
+    # then the program hears nothing back, as before.
+    # Lillecarl/pymux#350.
+    stdin_fd = sys.stdin.fileno()
+    if not os.isatty(stdin_fd):
+        stdin_fd = None
+    else:
+        take_input(stdin_fd)
+
     started = time.monotonic()
     when = started
     waiting = list(steps)
@@ -334,7 +408,9 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
         except FileExistsError:
             pass
         writer = take_fifo(fifo, started)
-        when, copied = wait_for_first_frame(master, seen, out, copied, started)
+        when, copied = wait_for_first_frame(
+            master, seen, out, copied, started, stdin_fd
+        )
     else:
         writer = None
 
@@ -345,6 +421,8 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
 
     selector = selectors.DefaultSelector()
     selector.register(master, selectors.EVENT_READ)
+    if stdin_fd is not None:
+        selector.register(stdin_fd, selectors.EVENT_READ)
 
     try:
         while True:
@@ -367,7 +445,15 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
             elif fence_pending:
                 fence_pending = False
                 came, copied = frame_and_fence(
-                    master, seen, out, copied, writer, mark, token, started + hold
+                    master,
+                    seen,
+                    out,
+                    copied,
+                    writer,
+                    mark,
+                    token,
+                    started + hold,
+                    stdin_fd,
                 )
                 if came:
                     fence_seen.touch()
@@ -381,7 +467,11 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
                 # what it wrote last is on the screen, then stop.
                 until = 0.1
 
-            for _ in selector.select(timeout=until):
+            for key, _events in selector.select(timeout=until):
+                if key.fd != master:
+                    carry_the_answer(master, stdin_fd, [stdin_fd])
+                    continue
+
                 piece = read_from(master, seen)
 
                 if not piece:

@@ -42,12 +42,16 @@ def create_terminal(rows=24, columns=80):
     return master, slave
 
 
-def run(keys, argv, rows=24, columns=80, hold=HOLD, wanted=b""):
+def run(keys, argv, rows=24, columns=80, hold=HOLD, wanted=b"", answer=b""):
     """
     Run the relay in a pty and give back everything it wrote.
 
     It stops as soon as `wanted` has arrived, so a test that passes
     does not wait out the hold.
+
+    `answer` is what this terminal says back, written once the relay
+    has drawn something: it stands for the reply a real terminal sends
+    when the program asks it a question. Lillecarl/pymux#350.
     """
     master, slave = create_terminal(rows, columns)
     process = subprocess.Popen(
@@ -59,9 +63,15 @@ def run(keys, argv, rows=24, columns=80, hold=HOLD, wanted=b""):
     os.close(slave)
 
     seen = b""
+    said = not answer
     deadline = time.monotonic() + PATIENCE
     try:
         while time.monotonic() < deadline:
+            if not said and seen:
+                # The relay has the terminal in hand by now: it has
+                # taken the echo off and is watching this side.
+                os.write(master, answer)
+                said = True
             if wanted and wanted in seen:
                 break
             if not select.select([master], [], [], 0.2)[0]:
@@ -120,6 +130,35 @@ def test_steps_happen_in_order(tmp_path):
     )
 
     assert b"one-two." in seen
+
+
+def test_what_the_terminal_answers_reaches_the_program(tmp_path):
+    """
+    A program asks its terminal what it draws with, and the answer
+    arrives on this process's stdin rather than the program's. Nothing
+    read it before, so pymux in a picture heard nothing back from a
+    terminal that had answered. Lillecarl/pymux#350.
+    """
+    keys = create_keys_file(tmp_path, "")
+
+    seen, error = run(
+        keys,
+        [
+            "sh",
+            "-c",
+            # It draws first, so the answer is written to a relay that
+            # is up and watching rather than to one still starting.
+            # `read -r`, because an answer holds a backslash and `read`
+            # without it reads that as "the line goes on".
+            "stty -echo; printf 'asking.'; read -r x;"
+            " printf 'answered:%s.' \"$x\"; exec sleep 30",
+        ],
+        wanted=b"answered:",
+        answer=b"\x1b]11;rgb:1d1d/2020/2121\x1b\\\n",
+    )
+
+    assert b"answered:" in seen, error
+    assert b"rgb:1d1d/2020/2121" in seen
 
 
 # ----------------------------------------------------------------------
