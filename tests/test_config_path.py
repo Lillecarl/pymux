@@ -19,7 +19,7 @@ Lillecarl/pymux#196.
 
 import pytest
 
-from pymux.entry_points.run_pymux import config_paths, find_config
+from pymux.config import config_paths, find_config
 
 
 @pytest.fixture
