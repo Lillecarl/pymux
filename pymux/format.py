@@ -410,6 +410,28 @@ def _client_hostname(context: FormatContext) -> str:
     return getattr(_connection_of(context), "hostname", "") or ""
 
 
+def _client_name(context: FormatContext) -> str:
+    """
+    What `detach-client -t` selects this client by.
+
+    `ServerConnection.name` says how it is built and why the machine is
+    always part of it. Lillecarl/pymux#335.
+    """
+    return getattr(_connection_of(context), "name", "") or ""
+
+
+def _client_created(context: FormatContext) -> str:
+    """
+    When this client attached, as a whole number of seconds.
+
+    tmux's own `#{client_created}`, and the thing that tells two runs
+    of one terminal apart: a reattach from the same window takes the
+    same name and a later time.
+    """
+    created = getattr(_connection_of(context), "created", None)
+    return str(int(created)) if created else ""
+
+
 def _client_termname(context: FormatContext) -> str:
     "What the client says its terminal is. (`TERM`, as it reported it.)"
     colors = getattr(_connection_of(context), "colors", None)
@@ -463,6 +485,8 @@ tmux_variables: Dict[str, Callable[[FormatContext], str]] = {
     "session_path": lambda c: c.pymux.original_cwd,
     "session_created": lambda c: str(int(c.session.created)),
     # Client.
+    "client_name": _client_name,
+    "client_created": _client_created,
     "client_hostname": _client_hostname,
     "client_termname": _client_termname,
     "client_width": _client_width,

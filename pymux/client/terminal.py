@@ -63,6 +63,21 @@ DETECTION_QUERIES = (
 )
 
 
+def _ttyname() -> str:
+    """
+    The terminal this client draws on, or "" when it has none.
+
+    A client with no terminal is not an error. A pymux command in a
+    script or a cron job has its output on a pipe, and the tests run
+    one with stdout replaced; the server names those by the process
+    instead. Lillecarl/pymux#335.
+    """
+    try:
+        return os.ttyname(sys.stdout.fileno())
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
 class TerminalClient(Client):
     """
     The terminal side of a client. A subclass adds the transport.
@@ -142,6 +157,15 @@ class TerminalClient(Client):
                 # sends the whole environment too, one message per
                 # variable. Lillecarl/pymux#271.
                 "environment": dict(os.environ),
+                # The terminal this client draws on, and the process it
+                # runs as. Both belong to this machine, which is why
+                # the server keeps the hostname in front of them: two
+                # people can each be on their own `/dev/pts/3`. The
+                # process is the fallback for a client with no terminal
+                # at all, the way tmux falls back for a control client.
+                # Lillecarl/pymux#335.
+                "ttyname": _ttyname(),
+                "pid": os.getpid(),
                 "data": "",
             }
         )

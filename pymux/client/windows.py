@@ -63,6 +63,10 @@ class WindowsClient(Client):
                     # Lillecarl/pymux#271, and the same file says why
                     # the client sends all of it.
                     "environment": dict(os.environ),
+                    # Windows has no tty path, so a client here is
+                    # always named by its process. Lillecarl/pymux#335.
+                    "ttyname": "",
+                    "pid": os.getpid(),
                     "data": "",
                 }
             )

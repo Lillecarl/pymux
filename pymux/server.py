@@ -1,5 +1,6 @@
 import json
 import re
+import time
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -139,6 +140,19 @@ class ServerConnection:
         #: names "update-environment" lists, and nothing keeps the rest.
         #: Lillecarl/pymux#271.
         self.environment: Dict[str, str] = {}
+
+        #: The terminal this client draws on, as the client named it,
+        #: and the process it runs as. Both are of the client's own
+        #: machine, so neither means anything here on its own: `name`
+        #: puts the hostname in front. Lillecarl/pymux#335.
+        self.ttyname = ""
+        self.pid = 0
+
+        #: When this connection attached. A client that reattaches from
+        #: the same terminal takes the same name and a later time, so
+        #: this is what tells two runs of one terminal apart, and what
+        #: `#{client_created}` reads.
+        self.created = time.time()
 
         #: The two colours the outer terminal draws with by itself.
         #: The same handshake asks for them, and either one stays
@@ -527,6 +541,8 @@ class ServerConnection:
             self.colors.colorterm = packet.get("colorterm", "")
             self.hostname = packet.get("hostname", "")
             self.environment = packet.get("environment") or {}
+            self.ttyname = packet.get("ttyname", "")
+            self.pid = packet.get("pid") or 0
 
             if detach_other_clients:
                 for c in self.pymux.connections:
@@ -774,6 +790,33 @@ class ServerConnection:
         Ask the client to suspend itself. (Like, when Ctrl-Z is pressed.)
         """
         self._send_packet({"cmd": "suspend"})
+
+    @property
+    def name(self) -> str:
+        """
+        What `detach-client -t` selects this client by.
+
+        tmux names a client by its tty and falls back to its process
+        when it has none (`server-client.c:2989`), and pymux does the
+        same with the machine in front. **The machine is always
+        there**, because a pymux client can be on another one: two
+        people can each be on their own `/dev/pts/3`, and a tty path
+        alone would name them both. Lillecarl/pymux#335.
+
+        A terminal keeps its tty for as long as it is open, so a person
+        who detaches and attaches again from the same window types the
+        same name. That is the property this is chosen for: a name that
+        moves to another client is worse than no name.
+        """
+        if self.ttyname:
+            what = self.ttyname
+        elif self.pid:
+            what = "client-%d" % (self.pid,)
+        else:
+            # Nothing said. A connection that never sent `start-gui`
+            # is the fake CLI of a command, which nobody selects.
+            return ""
+        return "%s:%s" % (self.hostname or "?", what)
 
     def detach_and_close(self) -> None:
         # Remove from Pymux.

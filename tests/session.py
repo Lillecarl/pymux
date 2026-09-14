@@ -66,8 +66,14 @@ class Connection:
         hostname: str = "",
         environment: dict | None = None,
         pymux=None,
+        ttyname: str = "",
     ) -> None:
         self.hostname = hostname
+        #: What `detach-client -t` selects this client by, built the
+        #: way `ServerConnection.name` builds it.
+        #: Lillecarl/pymux#335.
+        self.ttyname = ttyname
+        self.created = time.time()
         #: What a client reports of the machine it runs on.
         #: Lillecarl/pymux#271.
         self.environment = environment or {}
@@ -75,6 +81,13 @@ class Connection:
         #: without one cannot be detached, which is every stub that
         #: nothing detaches. Lillecarl/pymux#335.
         self._pymux = pymux
+
+    @property
+    def name(self) -> str:
+        "The same rule as `ServerConnection.name`."
+        if not self.ttyname:
+            return ""
+        return "%s:%s" % (self.hostname or "?", self.ttyname)
 
     def detach_and_close(self) -> None:
         """
@@ -228,13 +241,24 @@ async def in_this_process(pymux=None):
         # `pymux.server._ClientInput`.
         pipe.vt100_parser = KittyVt100Parser(pipe._buffer.append)
 
-        async def attach(name, size, hostname=OTHER_MACHINE, environment=None):
+        # A terminal apiece, so two attached clients have two names.
+        # A real one never reuses a path a live client holds either.
+        ttys = iter("/dev/pts/%d" % number for number in range(1, 1000))
+
+        async def attach(
+            name, size, hostname=OTHER_MACHINE, environment=None, ttyname=None
+        ):
             output = Vt100_Output(stdout=_Sink(), get_size=lambda: size)
             state = pymux.add_client(
                 output=output,
                 input=pipe,
                 color_depth=ColorDepth.DEPTH_8_BIT,
-                connection=Connection(hostname, environment, pymux),
+                connection=Connection(
+                    hostname,
+                    environment,
+                    pymux,
+                    next(ttys) if ttyname is None else ttyname,
+                ),
             )
             # The socket route takes these from the `start-gui` packet.
             # This route has no packet, so the attach is here.
@@ -352,6 +376,9 @@ async def over_connection(pymux=None, read_packet=None):
     #: that will never fill again.
     command_ends: list = []
 
+    # A terminal apiece, so two attached clients have two names.
+    ttys = iter("/dev/pts/%d" % number for number in range(1, 1000))
+
     async def drain(end) -> None:
         while True:
             try:
@@ -361,7 +388,9 @@ async def over_connection(pymux=None, read_packet=None):
             if read_packet is not None:
                 read_packet(packet)
 
-    async def attach(name, size, hostname=OTHER_MACHINE, environment=None):
+    async def attach(
+        name, size, hostname=OTHER_MACHINE, environment=None, ttyname=None
+    ):
         server_end, client_end = connect_in_memory()
 
         # A context of its own, which is what both real routes do:
@@ -394,6 +423,8 @@ async def over_connection(pymux=None, read_packet=None):
                     "colorterm": "",
                     "hostname": hostname,
                     "environment": environment or {},
+                    "ttyname": next(ttys) if ttyname is None else ttyname,
+                    "pid": 4242,
                     "data": "",
                 }
             )

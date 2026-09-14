@@ -32,9 +32,23 @@ def detach_client(pymux: "Pymux", args: argparse.Namespace) -> None:
     when they find a session attached twice and they are at the
     terminal they mean to keep.
 
-    tmux takes `-t <client>` as well, and that waits on a client
-    having a name at all. Lillecarl/pymux#335.
+    `-t <client>` detaches the one client of that name, which
+    `list-clients` prints first on every line.
+    Lillecarl/pymux#335.
     """
+    if args.target_client is not None:
+        wanted = args.target_client
+        found = [
+            client_state
+            for client_state in pymux.clients
+            if getattr(client_state.connection, "name", "") == wanted
+        ]
+        if not found:
+            raise CommandException("can't find client: %s" % (wanted,))
+        for client_state in found:
+            _detach(pymux, client_state)
+        return
+
     if args.target_session is not None:
         session = pymux.get_session(args.target_session)
         if session is None:
@@ -69,3 +83,4 @@ def register(subparsers):
     parser = add_command(subparsers, detach_client)
     parser.add_argument("-a", dest="all_but_this_one", action="store_true", help="Every client but this one.")
     parser.add_argument("-s", dest="target_session", metavar="<target-session>", help="Every client watching this session.")
+    parser.add_argument("-t", dest="target_client", metavar="<target-client>", help="The client of this name, as list-clients prints it.")

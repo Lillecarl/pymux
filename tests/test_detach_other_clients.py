@@ -123,7 +123,9 @@ async def test_s_says_so_when_no_session_carries_that_name():
             detach_client(
                 pymux,
                 argparse.Namespace(
-                    all_but_this_one=False, target_session="no-such-session"
+                    all_but_this_one=False,
+                    target_session="no-such-session",
+                    target_client=None,
                 ),
             )
 
@@ -140,6 +142,91 @@ async def test_with_no_argument_it_still_detaches_only_the_caller():
         run_at(here, "detach-client")
 
         assert pymux.clients == [there]
+
+
+async def test_t_detaches_the_client_of_that_name():
+    "The command the listing exists for. Lillecarl/pymux#335."
+    async with in_this_process() as session:
+        pymux = session.pymux
+        here, _ = await session.attach("here", SIZE)
+        there, _ = await session.attach("there", SIZE)
+        assert here.connection.name != there.connection.name
+
+        run_at(here, "detach-client -t %s" % (there.connection.name,))
+
+        assert pymux.clients == [here]
+
+
+async def test_t_says_so_when_no_client_carries_that_name():
+    async with in_this_process() as session:
+        pymux = session.pymux
+        here, _ = await session.attach("here", SIZE)
+
+        with set_app(here.app), pytest.raises(CommandException, match="nobody"):
+            detach_client(
+                pymux,
+                argparse.Namespace(
+                    all_but_this_one=False,
+                    target_session=None,
+                    target_client="?:nobody",
+                ),
+            )
+
+        assert pymux.clients == [here]
+
+
+async def test_t_can_detach_the_client_that_asked():
+    "tmux lets a client name itself, and so does this."
+    async with in_this_process() as session:
+        pymux = session.pymux
+        here, _ = await session.attach("here", SIZE)
+        there, _ = await session.attach("there", SIZE)
+
+        run_at(here, "detach-client -t %s" % (here.connection.name,))
+
+        assert pymux.clients == [there]
+
+
+async def test_t_over_the_wire_takes_the_name_the_client_reported():
+    "The socket route, where the name comes out of the `start-gui` packet."
+    async with over_connection() as session:
+        pymux = session.pymux
+        here, _ = await session.attach("here", SIZE, ttyname="/dev/pts/7")
+        there, _ = await session.attach("there", SIZE, ttyname="/dev/pts/8")
+
+        assert there.connection.name == "buildbox-3:/dev/pts/8"
+
+        run_at(here, "detach-client -t buildbox-3:/dev/pts/8")
+
+        assert pymux.clients == [here]
+
+
+async def test_a_client_with_no_terminal_is_named_by_its_process():
+    "tmux's own fallback, for a client that has no tty at all."
+    async with over_connection() as session:
+        state, _ = await session.attach("headless", SIZE, ttyname="")
+
+        # `session.py` reports 4242 as the pid of every client it
+        # attaches.
+        assert state.connection.name == "buildbox-3:client-4242"
+
+
+async def test_the_name_carries_the_machine_so_two_ttys_do_not_collide():
+    """
+    Two people, each on their own `/dev/pts/3`. Carl asked for the
+    hostname always, and this is what it is for.
+    """
+    async with over_connection() as session:
+        one, _ = await session.attach(
+            "one", SIZE, hostname="laptop", ttyname="/dev/pts/3"
+        )
+        two, _ = await session.attach(
+            "two", SIZE, hostname="desktop", ttyname="/dev/pts/3"
+        )
+
+        assert one.connection.name == "laptop:/dev/pts/3"
+        assert two.connection.name == "desktop:/dev/pts/3"
+        assert one.connection.name != two.connection.name
 
 
 async def test_a_reaches_the_other_client_over_the_wire():

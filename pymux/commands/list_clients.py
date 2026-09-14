@@ -9,12 +9,16 @@ from pymux.commands import CommandException, add_command
 from pymux.commands.common import add_format_arguments, chosen_format, show_listing
 from pymux.format import format_pymux_string
 
-#: What a line says when nobody asked for a format. tmux's own shape,
-#: with the machine in place of the tty: a pymux client can be on
-#: another machine, and a tty path of a machine you are not on names
-#: nothing. `LIST_CLIENTS_TEMPLATE` in tmux's `cmd-list-clients.c`.
+#: What a line says when nobody asked for a format.
+#: `LIST_CLIENTS_TEMPLATE` in tmux's `cmd-list-clients.c` is the shape,
+#: which leads with the thing `detach-client -t` takes.
+#:
+#: The machine stays beside it although the name already carries one.
+#: The name is there to be typed and the hostname to be read, and a
+#: reader that wants one of them should not have to cut the other out
+#: of it. Lillecarl/pymux#335.
 DEFAULT_FORMAT = (
-    "#{client_hostname}: #{session_name} "
+    "#{client_name}: #{client_hostname} #{session_name} "
     "[#{client_width}x#{client_height} #{client_termname}]"
 )
 
