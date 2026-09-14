@@ -202,6 +202,15 @@ def test_pane_reads_its_numbers(fake):
     assert not pane.dead
 
 
+def test_a_pane_says_which_mode_is_over_it(fake):
+    "And `in_mode` counts every mode, not copy mode alone."
+    row = pane_row(pane_id="%7", pane_in_mode="1", pane_mode="clock-mode")
+    server = fake([(row + "\n", "", 0)])
+    pane = Server(server.path).panes[0]
+    assert pane.in_mode
+    assert pane.mode == "clock-mode"
+
+
 def test_field_that_server_left_empty_is_not_crash(fake):
     server = fake([(pane_row(pane_id="%1") + "\n", "", 0)])
     pane = Server(server.path).panes[0]

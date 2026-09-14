@@ -58,6 +58,7 @@ _PANE_FIELDS = (
     "pane_current_path",
     "pane_dead",
     "pane_in_mode",
+    "pane_mode",
     "history_size",
     "history_limit",
 )
@@ -178,8 +179,21 @@ class Pane(_Object):
         return _as_bool(self._values.get("pane_dead", ""))
 
     @property
-    def in_copy_mode(self) -> bool:
+    def in_mode(self) -> bool:
+        """
+        True when something is drawn over the pane's program.
+
+        **Not copy mode alone.** `#{pane_in_mode}` counts every mode
+        the server draws, the clock among them, so a name saying copy
+        mode said the wrong thing for one of the two.
+        `mode` is which one. Lillecarl/pymux#363.
+        """
         return _as_bool(self._values.get("pane_in_mode", ""))
+
+    @property
+    def mode(self) -> str:
+        "What is drawn over the program: `copy-mode`, `clock-mode`, or ''."
+        return self._values.get("pane_mode", "")
 
     @property
     def window(self) -> Optional["Window"]:
