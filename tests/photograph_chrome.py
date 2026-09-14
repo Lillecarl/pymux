@@ -33,11 +33,12 @@ recorded image, and recording one before anybody has looked at it
 would record whatever it does today, faults and all. So this is not a
 gate, and reading the pictures is the work.
 
-**It does judge the arrangement.** Each fixture says how many panes it
-ends with, and the server is asked before the picture is kept: a run
-whose split never landed leaves no picture. The fence cannot say this
--- it proves pymux finished the keys, not that a key arrived.
-Lillecarl/pymux#353.
+**It does judge the state.** Each fixture says how many panes it ends
+with, what is drawn over the active pane, and whether the client still
+holds the prefix. The server is asked before the picture is kept, so a
+run whose split never landed leaves no picture. The fence cannot say
+any of this -- it proves pymux finished the keys, not that a key
+arrived. Lillecarl/pymux#353, Lillecarl/pymux#363.
 
     PYMUX_CHROME=palette nix build --file . checks.pymux-chrome-pictures
 
@@ -169,11 +170,23 @@ class Fixture(NamedTuple):
 
     An overlay pane is not counted. It belongs to the session and not
     to a window's arrangement, so `list-panes` never lists it.
+
+    `mode` is what the keys draw over the active pane, and `prefix` is
+    whether they leave the client waiting for the key after the prefix.
+    Both default to the quiet answer, so **every fixture is judged on
+    them**: a run that opened copy mode where none was asked for goes
+    red too. Lillecarl/pymux#363.
+
+    Only the two modes tmux names belong in `mode`. pymux draws more
+    over a pane than tmux does -- the chooser, the command palette, the
+    overlay -- and nothing has named those yet.
     """
 
     config: str
     keys: str = ""
     panes: tuple = (1,)
+    mode: str = ""
+    prefix: bool = False
 
 
 def count_panes(listing):
@@ -189,30 +202,83 @@ def count_panes(listing):
     return tuple(counted[index] for index in sorted(counted, key=int))
 
 
-def panes_now(socket_path):
+def answers_to(socket_path, argv):
     """
-    How many panes each window of this server holds, window 0 first.
+    What the server says, one line per thing it listed.
 
     The server answers over its own socket. An integrated server
     refuses an attach and answers a command, and this is a command.
     Lillecarl/pymux#159.
     """
-    done = run_cli(socket_path, ["list-panes", "-a", "-F", "#{window_index}"])
+    done = run_cli(socket_path, argv)
     if done.returncode != 0:
         raise RuntimeError(
-            "list-panes exited %d: %s"
-            % (done.returncode, done.stderr.decode("utf-8", "replace").strip())
+            "%s exited %d: %s"
+            % (
+                argv[0],
+                done.returncode,
+                done.stderr.decode("utf-8", "replace").strip(),
+            )
         )
-    return count_panes(done.stdout.decode("utf-8", "replace"))
+    return done.stdout.decode("utf-8", "replace").splitlines()
 
 
-def judge_the_arrangement(socket_path, wanted):
-    "Raise unless the server holds the arrangement the keys asked for."
+def panes_now(socket_path):
+    "How many panes each window of this server holds, window 0 first."
+    return count_panes(
+        " ".join(
+            answers_to(socket_path, ["list-panes", "-a", "-F", "#{window_index}"])
+        )
+    )
+
+
+def mode_now(socket_path):
+    """
+    What is drawn over the active pane of the window in view, or "".
+
+    The active pane, and not any pane: a fixture that opens copy mode
+    opens it on the pane that took the keyboard, which is the one the
+    split made and never the forwarder. `list-panes` with no `-a` lists
+    that window alone, so there is exactly one active pane to read.
+    """
+    lines = answers_to(
+        socket_path, ["list-panes", "-F", "#{pane_active}\t#{pane_mode}"]
+    )
+    active = [line.split("\t", 1)[1] for line in lines if line.startswith("1\t")]
+    if len(active) != 1:
+        raise RuntimeError("the window has %d active panes: %r" % (len(active), lines))
+    return active[0]
+
+
+def prefix_now(socket_path):
+    "Whether a client is waiting for the key after the prefix."
+    lines = answers_to(socket_path, ["list-clients", "-F", "#{client_prefix}"])
+    if not lines:
+        raise RuntimeError("the server has no client to ask about the prefix")
+    return "1" in lines
+
+
+def judge_the_fixture(socket_path, fixture):
+    "Raise unless the server holds the state the keys asked for."
     found = panes_now(socket_path)
-    if found != tuple(wanted):
+    if found != tuple(fixture.panes):
         raise RuntimeError(
             "the keys ask for %r panes per window and the server holds %r"
-            % (tuple(wanted), found)
+            % (tuple(fixture.panes), found)
+        )
+
+    mode = mode_now(socket_path)
+    if mode != fixture.mode:
+        raise RuntimeError(
+            "the keys ask for %r over the active pane and the server draws %r"
+            % (fixture.mode, mode)
+        )
+
+    prefix = prefix_now(socket_path)
+    if prefix != fixture.prefix:
+        raise RuntimeError(
+            "the keys ask for the prefix held=%r and the client holds it=%r"
+            % (fixture.prefix, prefix)
         )
 
 
@@ -359,6 +425,7 @@ FIXTURES = {
     "clock": Fixture(
         CHROME,
         keys((0.0, PREFIX), (0.4, b"t")),
+        mode="clock-mode",
     ),
     # The keys a prefix leads to, while the prefix waits. The popup
     # draws on the view, diagonally opposite the cursor: the pane runs
@@ -370,6 +437,7 @@ FIXTURES = {
     "which-key": Fixture(
         CHROME + "set-option which-key on\n",
         keys((0.0, PREFIX), (0.8, b"")),
+        prefix=True,
     ),
     # The window chooser: a bar across the top, over the window it
     # points at. It is not a box, and the preview is the switch itself
@@ -426,7 +494,10 @@ FIXTURES = {
     # pictures is what copy mode does.
     "pane-text": Fixture(CHROME, demo_keys(), (2,)),
     "copy-mode": Fixture(
-        CHROME, demo_keys() + keys((1.2, PREFIX), (0.6, b"[")), (2,)
+        CHROME,
+        demo_keys() + keys((1.2, PREFIX), (0.6, b"[")),
+        (2,),
+        mode="copy-mode",
     ),
     # An overlay pane, floating in the middle of the screen over two
     # panes. Its body runs a program, so its default-background cells
@@ -580,7 +651,7 @@ def picture_of(terminal, seat, name, work, out, fixtures=None):
         not_before=room / "fence",
         # And the fence cannot say a key arrived, so the server is
         # asked what the keys built. Lillecarl/pymux#353.
-        judge=partial(judge_the_arrangement, socket_path, fixture.panes),
+        judge=partial(judge_the_fixture, socket_path, fixture),
     )
 
     return room / "pymux.png"

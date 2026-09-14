@@ -16,6 +16,9 @@ from photograph_chrome import FIXTURES as CHROME_FIXTURES
 from photograph_chrome import Fixture, count_panes
 from photograph_themes import FIXTURES as THEME_FIXTURES
 
+#: What `#{pane_mode}` can answer: tmux's two names, and nothing.
+MODES = ("", "copy-mode", "clock-mode")
+
 
 def test_nothing_running_counts_as_no_windows():
     assert count_panes("") == ()
@@ -39,6 +42,16 @@ def test_a_fixture_asks_for_one_pane_unless_it_says_otherwise():
     assert Fixture("").panes == (1,)
 
 
+def test_a_fixture_asks_for_no_mode_and_no_prefix_unless_it_says_otherwise():
+    """
+    The quiet answer is the default, so a fixture that says nothing is
+    still judged: a run that left copy mode open or the prefix held
+    where none was asked for goes red. Lillecarl/pymux#363.
+    """
+    assert Fixture("").mode == ""
+    assert Fixture("").prefix is False
+
+
 @pytest.mark.parametrize(
     "name", sorted(CHROME_FIXTURES) + sorted(THEME_FIXTURES)
 )
@@ -51,3 +64,8 @@ def test_every_fixture_says_what_its_keys_build(name):
     assert isinstance(fixture, Fixture)
     assert fixture.panes
     assert all(one >= 1 for one in fixture.panes)
+    # A mode is named the way tmux names one, and nothing else is a
+    # mode: pymux draws the chooser and the palette over a pane too,
+    # and part two of Lillecarl/pymux#363 is what to call those.
+    assert fixture.mode in MODES
+    assert isinstance(fixture.prefix, bool)
