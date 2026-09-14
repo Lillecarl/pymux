@@ -43,6 +43,14 @@ background so that where a terminal put it is not a difference, and it
 refuses to give a number at all when the two drawings are not the same
 size. Lillecarl/pymux#262.
 
+**A pane takes an image in over two protocols as well as writing it
+out over two**, so the image fixtures are a matrix: `sixel-image` is a
+sixel going in and `kitty-image` is a kitty transmission going in, and
+each terminal is one of the protocols coming out. `kitty-image` in
+kitty is the only image comparison here whose bare side draws
+something, because it is the only one where the terminal already
+speaks what the program wrote.
+
 **Two seats.** xterm speaks X and nothing else, so there is an Xvfb.
 foot speaks Wayland and nothing else, so there is a headless `sway`,
 which gives its one window the whole output. The Wayland
@@ -101,6 +109,7 @@ from pathlib import Path
 
 from PIL import Image
 from pyte import escape
+from pyte.images import PixelFormat
 from pyte.sequences import csi
 from pyte.modes import PrivateMode
 from pyte.sequences import reset_mode
@@ -249,18 +258,18 @@ def box_drawing(fixture):
     fixture.append("└" + "─" * 20 + "┘\r\n")
 
 
-#: The width of both image fixtures, in pixels. A pane has no idea how
-#: big a cell of the client terminal is, so `GraphicsState.add_sixel`
-#: reserves `ceil(width / 10) x ceil(height / 20)` cells against the
-#: cell `pyte.images` assumes, and the client stretches the image to
-#: fill them. 120 is twelve of those columns and also twelve real ones,
-#: because every terminal here has a ten pixel cell.
+#: The width of every image fixture, in pixels. A pane has no idea how
+#: big a cell of the client terminal is, so `pyte.images` reserves
+#: `ceil(width / 10) x ceil(height / 20)` cells against the cell it
+#: assumes, and the client stretches the image to fill them. 120 is
+#: twelve of those columns and also twelve real ones, because every
+#: terminal here has a ten pixel cell.
 IMAGE_WIDTH = 120
 
-#: The height of each image fixture, and what it is for.
+#: The height that needs no resampling anywhere, and the height that
+#: needs it everywhere.
 #:
-#: **The two differ in one thing: whether the image is resampled.** The
-#: pane reserves six rows for either of them -- `ceil(120/20)` and
+#: The pane reserves six rows for either -- `ceil(120/20)` and
 #: `ceil(114/20)` are both 6 -- and six rows of the nineteen pixel cell
 #: these terminals really have is 114 pixels. So:
 #:
@@ -270,13 +279,17 @@ IMAGE_WIDTH = 120
 #: * 114 is already 114. Neither path resamples, and both put the
 #:   program's own pixels on the screen.
 #:
-#: The second is the one that says the two paths agree, and it is the
-#: fixture to read first. The first says what a resample costs, which is
+#: 114 is the height that says the two paths agree, and it is the one to
+#: read first. 120 says what a resample costs, which is
 #: Lillecarl/pymux#369: the pane counts cells against a twenty pixel
 #: cell that no terminal here has.
 #:
-#: Both heights are a multiple of six, which is one sixel band.
-IMAGE_HEIGHTS = {"sixel-image": 120, "sixel-image-unscaled": 114}
+#: Both are a multiple of six, which is one sixel band.
+#:
+#: **The two names are true of a nineteen pixel cell**, which kitty and
+#: foot have here. xterm's is twenty, so xterm resamples both of them
+#: and `EXACT_HEIGHT` is the one it has to stretch furthest.
+EXACT_HEIGHT, RESAMPLED_HEIGHT = 114, 120
 
 #: Where the edges of an image are. Neither is on a cell boundary by
 #: accident: the vertical edge at 57 sits inside a ten pixel column, and
@@ -292,12 +305,22 @@ EDGE_X, EDGE_Y = 57, 63
 #: `round(byte * 100 / 255)`, so any other byte comes back rounded and
 #: every pixel of a faithful re-encode would differ. Then the count
 #: would measure the quantisation and nothing else.
+#:
+#: The kitty fixture carries bytes rather than percentages, and it uses
+#: these same four colours for the same reason: it is re-encoded as a
+#: sixel for a terminal that has no kitty graphics protocol, and that
+#: encoding is exact only inside this set.
 IMAGE_COLOURS = [
     (100, 0, 0),  # top left
     (0, 80, 20),  # top right
     (20, 20, 100),  # bottom left
     (100, 80, 0),  # bottom right
 ]
+
+
+def as_bytes(percentages):
+    "One sixel colour as the bytes pyte decodes it to."
+    return bytes(round(value * 255 / 100) for value in percentages)
 
 
 def _band(left_register, right_register, bits):
@@ -331,8 +354,8 @@ def sixel_image(fixture, height):
     transmits the image untouched. What the two paths do differently is
     *scale*: `_put_command` sends kitty the cell box and lets kitty fit
     the image into it, and `_sixel_for` fits the image itself with
-    `scale_rgba`. `IMAGE_HEIGHTS` says which fixture makes them scale
-    and which does not.
+    `scale_rgba`. `EXACT_HEIGHT` and `RESAMPLED_HEIGHT` say which
+    fixture makes them scale and which does not.
 
     The bytes are written here and not built with `pymux.sixel`. An
     encoder fault that survives its own decoder would be invisible if
@@ -367,6 +390,92 @@ def sixel_image(fixture, height):
     fixture.append("".join(body))
 
 
+#: How much base64 one kitty transmission carries. The protocol caps a
+#: payload at 4096 characters, so the image goes in chunks: "m=1" on
+#: every message but the last. `GraphicsState._assemble` joins them, and
+#: so does the real kitty that draws the bare side.
+KITTY_CHUNK = 4096
+
+
+def kitty_rgb(height):
+    "The same four quadrants as `sixel_image`, as raw RGB bytes."
+    top = as_bytes(IMAGE_COLOURS[0]) * EDGE_X + as_bytes(IMAGE_COLOURS[1]) * (
+        IMAGE_WIDTH - EDGE_X
+    )
+    bottom = as_bytes(IMAGE_COLOURS[2]) * EDGE_X + as_bytes(IMAGE_COLOURS[3]) * (
+        IMAGE_WIDTH - EDGE_X
+    )
+    return top * EDGE_Y + bottom * (height - EDGE_Y)
+
+
+def kitty_image(fixture, height):
+    """
+    The same image over the kitty graphics protocol, which is the other
+    direction through pymux.
+
+    `sixel_image` measures sixel in and both protocols out. This
+    measures kitty in and both protocols out, and that is the half of
+    the matrix nothing photographed before: every image fixture wrote a
+    sixel, so the sixel decoder was always the first thing in the chain.
+    Lillecarl/pymux#262.
+
+    **It is the only image fixture whose bare side is not empty in
+    kitty.** kitty speaks this protocol itself, so the bare picture is
+    kitty drawing the program's own transmission and the pymux picture
+    is kitty drawing pymux's re-transmission of it. Same terminal, same
+    protocol, same pixels: the one image comparison here with no second
+    decoder anywhere in it.
+
+    **The colours are `IMAGE_COLOURS` and that is what makes the other
+    direction exact too.** foot has no kitty graphics protocol, so pymux
+    encodes the image as a sixel for it, and a sixel carries a channel
+    as a percentage. Only 101 of 256 byte values survive that, which is
+    why the transmitted bytes are taken from the six that do.
+
+    The bytes are written here and not built with `pymux.graphics`, for
+    the reason `sixel_image` gives: an encoder fault that survives its
+    own decoder would be invisible if the encoder made both sides.
+    """
+    fixture.append(csi(escape.ED, 2) + csi(escape.CUP))
+
+    payload = base64.b64encode(kitty_rgb(height)).decode("ascii")
+    chunks = [
+        payload[at : at + KITTY_CHUNK] for at in range(0, len(payload), KITTY_CHUNK)
+    ]
+    for index, chunk in enumerate(chunks):
+        more = 1 if index < len(chunks) - 1 else 0
+        if index == 0:
+            # No "i" and no "I": a fixture here writes no query, and
+            # `GraphicsState.handle` answers nothing that carries
+            # neither. "q=2" asks a real kitty for the same silence.
+            # "C=1" keeps the image from moving the cursor, so the two
+            # sides cannot disagree about where it ended up.
+            control = "a=T,f=%i,s=%i,v=%i,C=1,q=2,m=%i" % (
+                PixelFormat.RGB,
+                IMAGE_WIDTH,
+                height,
+                more,
+            )
+        else:
+            control = "m=%i" % more
+        fixture.append("\x1b_G%s;%s\x1b\\" % (control, chunk))
+
+
+#: Every image fixture: the function that writes it and the height of
+#: the image it writes. These are the only fixtures that may be compared
+#: across two terminals, and `two_protocols_of` says why.
+#:
+#: The four of them are a two by two matrix. The protocol going in is
+#: the fixture, the protocol coming out is the terminal, and the height
+#: says whether anything had to be resampled on the way.
+IMAGE_FIXTURES = {
+    "sixel-image": (sixel_image, RESAMPLED_HEIGHT),
+    "sixel-image-unscaled": (sixel_image, EXACT_HEIGHT),
+    "kitty-image": (kitty_image, RESAMPLED_HEIGHT),
+    "kitty-image-unscaled": (kitty_image, EXACT_HEIGHT),
+}
+
+
 #: Each fixture is a name and the function that writes it. The cursor
 #: is hidden first and shown again at the end, in one place, so that a
 #: still picture does not depend on where a blink was in its cycle.
@@ -379,8 +488,8 @@ FIXTURES = {
 }
 FIXTURES.update(
     {
-        name: partial(sixel_image, height=height)
-        for name, height in IMAGE_HEIGHTS.items()
+        name: partial(writer, height=height)
+        for name, (writer, height) in IMAGE_FIXTURES.items()
     }
 )
 
@@ -896,10 +1005,6 @@ def compare_one(terminal, seat, name, work, out):
 
     return differences(bare, through, room / "difference.png")
 
-
-#: The fixtures that draw an image and no text. Only these may be
-#: compared across two terminals, and `two_protocols_of` says why.
-IMAGE_FIXTURES = frozenset(IMAGE_HEIGHTS)
 
 #: The two terminals that draw one image two ways, and the name the
 #: comparison of them is recorded under.

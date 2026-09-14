@@ -783,10 +783,12 @@ in
 
   # The same picture, of vttest.
   #
-  # `pictures` above photographs five fixtures that a person wrote by
-  # hand. vttest holds five hundred screens, and they are the awkward
-  # ones: double sized rows, national character sets, the reports of a
-  # VT420. It is interactive, so a walker drives it and says when each
+  # `pictures` above photographs a handful of fixtures that a person
+  # wrote by hand. vttest holds five hundred screens, and they are the
+  # awkward ones: double sized rows, national character sets, the
+  # reports of a VT420.
+  #
+  # It is interactive, so a walker drives it and says when each
   # screen is finished; `ptterm/tests/drive_with_vttest.py` is that
   # walker and `tests/photograph_vttest.py` is the harness around it.
   #
