@@ -160,9 +160,14 @@ class Z_INDEX:
     STATUS_BAR = 5
     COMMAND_LINE = 6
     MESSAGE_TOOLBAR = 7
-    WINDOW_TITLE_BAR = 8
-    POPUP = 9
-    OVERLAY = 10
+    #: A question sits where a message sits, so the two can meet: a
+    #: command that said something and then asked. The question wins,
+    #: because it is the one waiting on the person.
+    #: Lillecarl/pymux#339.
+    CONFIRMATION = 8
+    WINDOW_TITLE_BAR = 9
+    POPUP = 10
+    OVERLAY = 11
 
     #: A clock and a pane number are drawn inside the pane they belong
     #: to, over the content of that pane. Nothing else draws in those
@@ -2044,23 +2049,38 @@ class LayoutManager:
                     z_index=Z_INDEX.MESSAGE_TOOLBAR,
                     content=MessageToolbar(self.client_state),
                 ),
+                # A question waiting for an answer sits above the status
+                # line, where a message sits, and not over it. The
+                # status line is where a person reads which window they
+                # are on, and "kill-window #W?" is the moment they want
+                # it: the question names something the window list is
+                # the context for. Lillecarl/pymux#339.
+                # **No `right`.** A float given both sides is as wide as
+                # the screen, and an opaque one paints that row even
+                # when its content is empty: it erased a row of the
+                # pane under it, which `checks.pymux-alacritty` caught
+                # as a changed cell colour. The message toolbar beside
+                # it takes its width from its content, and so does this.
+                Float(
+                    left=0,
+                    bottom=1,
+                    z_index=Z_INDEX.CONFIRMATION,
+                    content=ConditionalContainer(
+                        content=Window(
+                            height=1,
+                            content=ConfirmationToolbar(
+                                self.pymux, self.client_state
+                            ),
+                        ),
+                        filter=waits_for_confirmation,
+                    ),
+                ),
                 Float(
                     left=0,
                     right=0,
                     bottom=0,
                     content=HSplit(
                         [
-                            # Wait for confirmation toolbar.
-                            ConditionalContainer(
-                                content=Window(
-                                    height=1,
-                                    content=ConfirmationToolbar(
-                                        self.pymux, self.client_state
-                                    ),
-                                    z_index=Z_INDEX.COMMAND_LINE,
-                                ),
-                                filter=waits_for_confirmation,
-                            ),
                             # ':' prompt toolbar.
                             ConditionalContainer(
                                 content=self._command_line_window(),
