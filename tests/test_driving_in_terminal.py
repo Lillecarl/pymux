@@ -250,7 +250,25 @@ def test_it_asks_for_program_to_run(tmp_path):
 # The fence.
 
 
-def run_fenced(tmp_path, keys_text, pane):
+#: A pane that holds the fifo from the start and forwards nothing for
+#: a while. It stands for pymux: the server makes the pane at once,
+#: and nothing the pane writes reaches the terminal until the client
+#: has attached and the renderer draws.
+LATE_FORWARDER = r"""
+import os, sys, time
+
+fd = os.open(sys.argv[1], os.O_RDONLY)
+time.sleep(0.6)
+os.write(1, b"drawn.")
+while True:
+    data = os.read(fd, 65536)
+    if not data:
+        break
+    os.write(1, data)
+"""
+
+
+def run_fenced(tmp_path, keys_text, pane, forwarder_text=None):
     """
     Run the relay with the fence args, and give back what it copied,
     the fence file, and the relay's stderr.
@@ -262,7 +280,7 @@ def run_fenced(tmp_path, keys_text, pane):
     from middleman import FORWARDER
 
     forwarder = tmp_path / "forwarder.py"
-    forwarder.write_text(FORWARDER)
+    forwarder.write_text(FORWARDER if forwarder_text is None else forwarder_text)
 
     fifo = tmp_path / "payload.fifo"
     os.mkfifo(fifo)
@@ -368,6 +386,41 @@ def test_a_terminal_answer_is_not_the_program_going_quiet():
         theirs.close()
 
     assert took >= QUIET
+
+
+def test_no_key_is_pressed_before_the_boot_fence_comes_back(tmp_path):
+    """
+    The first bytes a program writes are its questions to the terminal,
+    not its frame. pymux writes 256 bytes of them and then waits for
+    the answers, and a key pressed there reaches a program that is not
+    reading keys yet: one run of `cut-follows-the-terminal` lost its
+    split exactly so. Lillecarl/pymux#353.
+
+    So the boot is fenced too, and the keys are counted from the fence
+    coming back rather than from the first bytes. The round trip is the
+    proof: the program read what the relay put in, drew it, and wrote
+    the frame out.
+    """
+    # "asking." is the questions, and the pane forwards nothing until
+    # after "drawn.". The frame for the last key comes from the
+    # background write: the forwarder reads no keys, and the keys' own
+    # fence waits for the program to answer one.
+    pane = (
+        "stty -echo; printf 'asking.';"
+        " (sleep 1.4; printf 'framed.') & exec python3 %s %s %s"
+    )
+    seen, fence_seen, error = run_fenced(
+        tmp_path, '0.0 b"k"\n', pane, forwarder_text=LATE_FORWARDER
+    )
+
+    assert fence_seen.exists()
+    assert b"asking." in seen and b"drawn." in seen
+
+    # The frame the keys are counted from holds the drawing and not
+    # the questions alone.
+    frame = [one for one in error.decode().splitlines() if "the first frame" in one]
+    assert frame, error
+    assert int(frame[0].split()[-2]) >= len("asking.drawn."), frame[0]
 
 
 def test_the_timeline_says_what_happened_and_when(tmp_path):

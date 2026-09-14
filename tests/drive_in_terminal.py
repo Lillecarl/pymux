@@ -54,8 +54,10 @@ run whose fence never comes is a run that photographs nothing: the
 file's absence after the harness's wait says so.
 
 The keys are not pressed into a program that has not drawn once. With
-the fifo given, the first step is counted from the first frame, which
-the bytes on the wire prove, and not from the clock.
+the fifo given, the boot is fenced the same way, and the first step is
+counted from the fence rather than from the clock: the first bytes a
+program writes are its questions to the terminal, and a key pressed
+then reaches a program that is not reading keys yet.
 
 ## The timeline
 
@@ -93,6 +95,13 @@ CHUNK = 65536
 #: A program that never draws is a run that photographs nothing, and
 #: the keys are pressed at the end of this rather than never.
 BOOT_TIMEOUT = 10.0
+
+#: The two fences, and they have to differ. Both stay in `seen` after
+#: they come back -- only the copy the terminal is given has them
+#: taken out -- so one token would have the keys' fence answered by
+#: the boot's.
+BOOT_TOKEN = base64.b64encode(b"boot")
+KEYS_TOKEN = base64.b64encode(b"keys")
 
 
 def note(started, text):
@@ -302,37 +311,49 @@ def settle(master, seen, out, copied, stdin_fd=None):
     return copied
 
 
-def wait_for_first_frame(master, seen, out, copied, started, stdin_fd=None):
+def wait_for_first_frame(master, seen, out, copied, started, writer, stdin_fd=None):
     """
-    Copy the program's first frame and its quiet, and say when it was.
+    Wait until the program has drawn once, and say when that was.
 
     A key pressed into a pymux that is still starting reaches nothing,
-    so the keys are counted from here and not from the clock. The
-    first bytes the program writes are the frame, and the quiet after
-    them is the whole of it. A program that never draws waits out the
-    boot, and the keys are pressed then: the hold covers the run that
-    photographs nothing.
+    so the keys are counted from here and not from the clock.
+
+    **The first bytes are not the first frame.** pymux writes its
+    terminal queries before it draws anything -- 256 bytes of
+    questions, measured -- and then waits for the answers. Taking those
+    for the frame pressed the prefix into a program that was not
+    reading keys yet, and one run of `cut-follows-the-terminal` lost
+    the split exactly there. Lillecarl/pymux#353.
+
+    So the boot is fenced, the way the keys are fenced at the end. The
+    pane runs the forwarder, so the fence comes back on the wire only
+    once the program has read the pane's output, drawn it, and written
+    the frame to the terminal. That is the proof that the application
+    is up and reading.
+
+    A program that never draws waits out the boot, and the keys are
+    pressed then: the hold covers the run that photographs nothing.
     """
-    deadline = started + BOOT_TIMEOUT
-    while not seen and time.monotonic() < deadline:
-        if not wait_for_program(master, stdin_fd, 0.05):
-            continue
-        piece = read_from(master, seen)
-        if not piece:
-            break
-        out.write(piece)
-        out.flush()
-        copied += len(piece)
-    copied = settle(master, seen, out, copied, stdin_fd)
-    return time.monotonic(), copied
+    came, copied = frame_and_fence(
+        master,
+        seen,
+        out,
+        copied,
+        writer,
+        None,
+        BOOT_TOKEN,
+        started + BOOT_TIMEOUT,
+        stdin_fd,
+    )
+    return came, time.monotonic(), copied
 
 
 def frame_and_fence(
     master, seen, out, copied, writer, mark, token, deadline, stdin_fd=None
 ):
     """
-    The frame for the last key, then the fence, then the quiet after
-    it. Gives back whether the fence came, and where the copying
+    The frame for what came before, then the fence, then the quiet
+    after it. Gives back whether the fence came, and where the copying
     stopped.
 
     `middleman.py` fences a write by putting an OSC 52 behind it:
@@ -342,6 +363,11 @@ def frame_and_fence(
     frame can still follow the fence, because a redraw may be
     postponed, so a quiet window comes after it, and it is short
     because the fence has already done the waiting.
+
+    `mark` is how many bytes had arrived when the payload went in, and
+    the wait for one more is the frame that payload asked for. The
+    boot has none: nothing was sent, and what is waited for is the
+    program's own first drawing.
 
     Nothing is copied while the fence is on its way, and what has
     arrived when it does goes to the terminal with the fence taken
@@ -437,17 +463,22 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
             pass
         writer = take_fifo(fifo, started)
         note(started, "the pane took the fifo")
-        when, copied = wait_for_first_frame(
-            master, seen, out, copied, started, stdin_fd
+        drawn, when, copied = wait_for_first_frame(
+            master, seen, out, copied, started, writer, stdin_fd
         )
-        note(started, "the first frame, %d bytes" % (len(seen),))
+        note(
+            started,
+            "the first frame: the boot fence came back, %d bytes" % (len(seen),)
+            if drawn
+            else "the first frame: no boot fence in %gs, pressing the keys anyway"
+            % (BOOT_TIMEOUT,),
+        )
     else:
         writer = None
         note(started, "no fifo, so the keys are counted from the clock")
 
-    # The fence, which proves the keys were consumed, and the file
-    # that says it happened.
-    token = base64.b64encode(b"fence")
+    # The fence that proves the keys were consumed, and the file that
+    # says it happened.
     fence_pending = fence_seen is not None
 
     selector = selectors.DefaultSelector()
@@ -486,7 +517,7 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
                     copied,
                     writer,
                     mark,
-                    token,
+                    KEYS_TOKEN,
                     started + hold,
                     stdin_fd,
                 )
