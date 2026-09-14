@@ -270,6 +270,30 @@ class BaseIndexOption(Option):
             pymux.arrangement.base_index = value
 
 
+class RenumberOption(Option):
+    """
+    Whether closing a window closes the gap it leaves.
+
+    It lives on the arrangement and not on `Pymux`, the way
+    `base-index` does: both are about the order of the windows, and
+    that order is the arrangement's. Lillecarl/pymux#342.
+    """
+
+    attribute_name = "renumber_windows"
+
+    def get_all_values(self, pymux):
+        return ["on", "off"]
+
+    def held_by(self, pymux, target=None):
+        return pymux.arrangement
+
+    def set_value(self, pymux, value, target=None):
+        value = value.lower()
+        if value not in ("on", "off"):
+            raise SetOptionError('Expecting "on" or "off".')
+        pymux.arrangement.renumber_windows = value == "on"
+
+
 class KeysOption(Option):
     "Emacs or Vi mode."
 
@@ -540,6 +564,10 @@ ALL_OPTIONS = {
     # `pymux/introspect.py` says what answers most questions without it.
     "allow-remote-debugging": OnOffOption("allow_remote_debugging"),
     "base-index": BaseIndexOption(),
+    # Whether closing a window packs the ones above it down, so the
+    # order has no gaps. Off, the way tmux ships it.
+    # Lillecarl/pymux#342.
+    "renumber-windows": RenumberOption(),
     # How much this server writes to its log, changed while it runs.
     # `--log-level` says the same thing before it starts.
     "log-level": LogLevelOption(),

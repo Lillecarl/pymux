@@ -919,6 +919,14 @@ class Arrangement:
         # `set-option base-index 0` brings the tmux default back.
         self.base_index = 1
 
+        # Whether closing a window renumbers the ones that are left,
+        # so the order has no gaps in it. Off, the way tmux ships it:
+        # a person who learned that their build is window 4 keeps
+        # window 4 until they say otherwise. `set-option
+        # renumber-windows on` is the other choice.
+        # Lillecarl/pymux#342.
+        self.renumber_windows = False
+
         # What a new window starts with, by the attribute the option
         # writes. tmux calls these the global window options and
         # `set-window-option -g` is how they are set.
@@ -1026,6 +1034,30 @@ class Arrangement:
         while index in taken:
             index += 1
         return index
+
+    def renumber(self) -> None:
+        """
+        Close the gaps in the window order: the windows keep their
+        order and are relabelled from `base_index` up.
+
+        **Nothing moves and nobody's focus changes.** A client holds a
+        `Window` object and not an index (`_active_window_for_cli`),
+        so a relabel cannot unsettle anybody. What changes is what
+        `select-window -t 3` reaches and what the status line prints.
+
+        tmux does the same walk in index order
+        (`session_renumber_windows`, `session.c:740`).
+
+        **The unlinked windows keep their indices.** One that
+        `unlink-window` parked is out of the order nobody sees, and
+        `link-window` puts it back where it was; packing an order that
+        is not shown would move a window a person never closed.
+        Lillecarl/pymux#297, Lillecarl/pymux#342.
+        """
+        for number, window in enumerate(
+            sorted(self.windows, key=lambda one: one.index), start=self.base_index
+        ):
+            window.index = number
 
     def make_room_at(self, index: int) -> None:
         """
@@ -1200,6 +1232,8 @@ class Arrangement:
         """
         Remove a :class:`.Pane`. (Look in all windows.)
         """
+        closed = False
+
         for w in self.windows:
             w.remove_pane(pane)
 
@@ -1212,6 +1246,13 @@ class Arrangement:
                             self.focus_next_window()
 
                 self.windows.remove(w)
+                closed = True
+
+        # A window closing is what `renumber-windows` is about, and the
+        # only thing: a `move-window` that opens a gap leaves it, in
+        # pymux as in tmux. Lillecarl/pymux#342.
+        if closed and self.renumber_windows:
+            self.renumber()
 
     def focus_previous_window(self) -> None:
         w = self.get_active_window()
