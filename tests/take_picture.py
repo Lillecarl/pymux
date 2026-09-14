@@ -26,13 +26,26 @@ one terminal, because a terminal can be wrong on its own.
 
 The underline fixture is what that is for. xterm draws no underline at
 all for "CSI 4:1 m", and a pane turns the same request into "CSI 4 m",
-which xterm does draw, so 206 pixels differ. foot reads the colon form
+which xterm does draw, so 208 pixels differ. foot reads the colon form
 itself, and there the two pictures are the same. Two seats, one answer:
 the difference belongs to xterm.
 
+**An image is the one exception to that rule, and the rule's own
+reason says why.** An image has no glyphs. Its pixels are the
+program's, and pymux re-encodes them for whichever protocol the client
+terminal speaks: the kitty graphics protocol for kitty, sixel for foot.
+What reaches the screen ought to be the same picture either way, and no
+terminal here speaks both protocols, so the only way to ask is to put
+one terminal's picture beside the other's. `two_protocols_of` is that
+comparison and it holds the whole of the exception: it runs on
+`IMAGE_FIXTURES` and nothing else, it cuts each drawing out of its
+background so that where a terminal put it is not a difference, and it
+refuses to give a number at all when the two drawings are not the same
+size. Lillecarl/pymux#262.
+
 **Two seats.** xterm speaks X and nothing else, so there is an Xvfb.
-foot speaks Wayland and nothing else, so there is a `cage`, a kiosk
-compositor that gives its one window the whole output. The Wayland
+foot speaks Wayland and nothing else, so there is a headless `sway`,
+which gives its one window the whole output. The Wayland
 seat is the better shape for this work: one window, no decoration, no
 window to find, and `grim` takes the output. The X seat has to find
 its window among the ones that ran before it.
@@ -85,6 +98,8 @@ import sys
 import time
 from functools import partial
 from pathlib import Path
+
+from PIL import Image
 from pyte import escape
 from pyte.sequences import csi
 from pyte.modes import PrivateMode
@@ -96,12 +111,14 @@ from pyterm_pytest.seats import (
     BLINK_GAP,
     BLINK_START,
     SETTLE_TIMEOUT,
+    NothingToCompare,
     TheSeatIsGone,
     _tail,
     changed_region,
     differences,
     fully_overlaps,
     open_the_seats,
+    the_same_drawing,
     with_no_answer,
 )
 
@@ -232,21 +249,40 @@ def box_drawing(fixture):
     fixture.append("└" + "─" * 20 + "┘\r\n")
 
 
-#: The size of the image fixture, in pixels. Both numbers are chosen
-#: against `pyte.images.ASSUMED_CELL_WIDTH` and `ASSUMED_CELL_HEIGHT`,
-#: which are 10 and 20: a pane has no idea how big a cell of the client
-#: terminal is, so `GraphicsState.add_sixel` reserves
-#: `ceil(width / 10) x ceil(height / 20)` cells and the client stretches
-#: the image to fill them. 120x120 is exactly 12x6 of those cells, so a
-#: terminal whose cell really is 10x20 draws the same pixels both ways.
-#: The height is also a multiple of six, which is one sixel band.
-IMAGE_WIDTH, IMAGE_HEIGHT = 120, 120
+#: The width of both image fixtures, in pixels. A pane has no idea how
+#: big a cell of the client terminal is, so `GraphicsState.add_sixel`
+#: reserves `ceil(width / 10) x ceil(height / 20)` cells against the
+#: cell `pyte.images` assumes, and the client stretches the image to
+#: fill them. 120 is twelve of those columns and also twelve real ones,
+#: because every terminal here has a ten pixel cell.
+IMAGE_WIDTH = 120
 
-#: Where the edges of the image are. Neither is on a cell boundary of
-#: an assumed cell by accident: the vertical edge at 57 sits inside a
-#: ten pixel column, and the horizontal edge at 63 sits inside a band
-#: *and* inside a twenty pixel row. A crop or a scale that is off by one
-#: moves one of them and the count changes.
+#: The height of each image fixture, and what it is for.
+#:
+#: **The two differ in one thing: whether the image is resampled.** The
+#: pane reserves six rows for either of them -- `ceil(120/20)` and
+#: `ceil(114/20)` are both 6 -- and six rows of the nineteen pixel cell
+#: these terminals really have is 114 pixels. So:
+#:
+#: * 120 has to be squeezed into 114, and each path squeezes it its own
+#:   way: pymux with `scale_rgba` for sixel, and the terminal itself for
+#:   kitty, which is handed the image untouched and told the cell box.
+#: * 114 is already 114. Neither path resamples, and both put the
+#:   program's own pixels on the screen.
+#:
+#: The second is the one that says the two paths agree, and it is the
+#: fixture to read first. The first says what a resample costs, which is
+#: Lillecarl/pymux#369: the pane counts cells against a twenty pixel
+#: cell that no terminal here has.
+#:
+#: Both heights are a multiple of six, which is one sixel band.
+IMAGE_HEIGHTS = {"sixel-image": 120, "sixel-image-unscaled": 114}
+
+#: Where the edges of an image are. Neither is on a cell boundary by
+#: accident: the vertical edge at 57 sits inside a ten pixel column, and
+#: the horizontal edge at 63 sits inside a band, inside a twenty pixel
+#: row and inside a nineteen pixel one. A crop or a scale that is off by
+#: one moves one of them and the count changes.
 EDGE_X, EDGE_Y = 57, 63
 
 #: The four quadrant colours, as the percentages that sixel carries.
@@ -276,7 +312,7 @@ def _band(left_register, right_register, bits):
     )
 
 
-def sixel_image(fixture):
+def sixel_image(fixture, height):
     """
     A sixel image, which a pane re-encodes for the client terminal.
 
@@ -289,6 +325,15 @@ def sixel_image(fixture):
     the pymux picture is ours, and in kitty they are two different
     protocols drawing one image. Lillecarl/pymux#262.
 
+    **Neither re-encoding loses a pixel.** The sixel path decodes to
+    RGBA and encodes it again, and the colours here survive that
+    exactly; the kitty path does not even do that much, because it
+    transmits the image untouched. What the two paths do differently is
+    *scale*: `_put_command` sends kitty the cell box and lets kitty fit
+    the image into it, and `_sixel_for` fits the image itself with
+    `scale_rgba`. `IMAGE_HEIGHTS` says which fixture makes them scale
+    and which does not.
+
     The bytes are written here and not built with `pymux.sixel`. An
     encoder fault that survives its own decoder would be invisible if
     the encoder made both sides.
@@ -298,12 +343,12 @@ def sixel_image(fixture):
     # "P1=7" is the 1:1 aspect ratio, and the raster attributes say it
     # again: pyte ignores Pan and Pad, and a terminal that honours them
     # would draw the bare side at double height and agree with nothing.
-    body = ["\x1bP7;1;0q", '"1;1;%d;%d' % (IMAGE_WIDTH, IMAGE_HEIGHT)]
+    body = ["\x1bP7;1;0q", '"1;1;%d;%d' % (IMAGE_WIDTH, height)]
     for register, (red, green, blue) in enumerate(IMAGE_COLOURS, start=1):
         body.append("#%d;2;%d;%d;%d" % (register, red, green, blue))
 
     bands = []
-    for band in range(0, IMAGE_HEIGHT, 6):
+    for band in range(0, height, 6):
         if band + 6 <= EDGE_Y:
             bands.append(_band(1, 2, 0b111111))
         elif band >= EDGE_Y:
@@ -331,8 +376,13 @@ FIXTURES = {
     "underlines": underlines,
     "wide-characters": wide_characters,
     "box-drawing": box_drawing,
-    "sixel-image": sixel_image,
 }
+FIXTURES.update(
+    {
+        name: partial(sixel_image, height=height)
+        for name, height in IMAGE_HEIGHTS.items()
+    }
+)
 
 
 # ----------------------------------------------------------------------
@@ -847,6 +897,100 @@ def compare_one(terminal, seat, name, work, out):
     return differences(bare, through, room / "difference.png")
 
 
+#: The fixtures that draw an image and no text. Only these may be
+#: compared across two terminals, and `two_protocols_of` says why.
+IMAGE_FIXTURES = frozenset(IMAGE_HEIGHTS)
+
+#: The two terminals that draw one image two ways, and the name the
+#: comparison of them is recorded under.
+#:
+#: kitty is the only one here that speaks the kitty graphics protocol,
+#: and foot the only one that draws a sixel of its own. **No terminal
+#: speaks both**, which is why this comparison crosses two of them:
+#: WezTerm's sixel is "preliminary and incomplete" and it documents no
+#: kitty graphics, Ghostty has the kitty protocol and no sixel, Contour
+#: has sixel and no kitty protocol. Lillecarl/pymux#262.
+THE_TWO_PROTOCOLS = ("kitty", "foot")
+BOTH_PROTOCOLS = "%s-against-%s" % THE_TWO_PROTOCOLS
+
+
+def two_protocols_of(name, out):
+    """
+    One image, drawn by pymux down each of its two graphics paths, and
+    how many pixels of it the two terminals put on the screen
+    differently.
+
+    **This is the one comparison that crosses two terminals**, and the
+    docstring at the top of this file says why the others must not.
+    Each terminal draws its own glyphs from its own font stack, so a
+    difference between two of them says nothing about pymux. An image
+    has no glyphs. The pixels are the program's, pymux re-encodes them
+    for whichever protocol the terminal speaks, and what reaches the
+    screen ought to be the same picture either way. That is what
+    Lillecarl/pymux#262 asks for and what nothing else here can answer:
+    `tests/test_both_graphics_paths_draw_the_same.py` compares what
+    pymux *asks* for, with no terminal in it at all.
+
+    Where each terminal puts the image is not a difference: a
+    compositor gives foot the whole output and kitty centres its cells
+    in it, so the two boxes are at different corners. `the_same_drawing`
+    cuts each drawing out of its background first.
+
+    The size of the image *is* a difference, and it stops the
+    comparison rather than colouring it. Measured 2026-09-14: both
+    terminals have a ten by nineteen cell for DejaVu Sans Mono at size
+    12, so both draw the pane's twelve by six cells as 120 by 114
+    pixels. If a font moves one of them there is nothing to line up,
+    and those are the numbers to compare the complaint against.
+    """
+    room = out / BOTH_PROTOCOLS / name
+    room.mkdir(parents=True, exist_ok=True)
+
+    first, second = THE_TWO_PROTOCOLS
+    drawn = {side: out / side / name / "pymux.png" for side in THE_TWO_PROTOCOLS}
+    difference = room / "difference.png"
+    count, first_box, second_box = the_same_drawing(
+        drawn[first], drawn[second], difference
+    )
+
+    for side, box in ((first, first_box), (second, second_box)):
+        leave_it_where_it_can_be_seen(drawn[side], box, room / ("%s.png" % side))
+    # The difference is already cut to the drawing, and it is the one
+    # that most needs the size: what it marks here is a single row.
+    leave_it_where_it_can_be_seen(difference, None, difference)
+    return count, first_box, second_box
+
+
+#: How much bigger the cut out drawing is written. An image fixture is
+#: a hundred pixels or so inside a screenshot of a whole output, and
+#: nobody can see one at that size.
+BIG_ENOUGH_TO_SEE = 4
+
+
+def leave_it_where_it_can_be_seen(path, box, into):
+    """
+    The drawing alone, enlarged, beside the pictures it came from.
+    `box` is the part to keep, or `None` for the whole picture.
+
+    **A count is not a picture.** Every other fixture of this farm draws
+    over the whole screen, so the screenshots are worth opening on their
+    own. An image fixture is a hundred pixels in the corner of a 1024 by
+    768 output, and two of those that agree look exactly like two that
+    do not. This is what a person opens.
+
+    Nearest neighbour, because a smooth enlargement would invent the
+    very thing this comparison is about: the row where one path
+    interpolates and the other does not.
+    """
+    drawing = Image.open(path).convert("RGB")
+    if box is not None:
+        drawing = drawing.crop(box)
+    drawing.resize(
+        (drawing.width * BIG_ENOUGH_TO_SEE, drawing.height * BIG_ENOUGH_TO_SEE),
+        Image.NEAREST,
+    ).save(into)
+
+
 def blink_of(terminal, seat, name, work, out):
     """
     Run one blink fixture both ways and say how the cursor moved.
@@ -972,7 +1116,7 @@ def main():
     #
     # **Two display servers run here at once**, because a terminal
     # needs X or Wayland and this check has both kinds: Xvfb for
-    # xterm, and cage, which brings Xwayland with it. A build sandbox
+    # xterm, and sway, which brings Xwayland with it. A build sandbox
     # has no such directory and a server cannot make one --
     # "_XSERVTransmkdir: ERROR: euid != 0" -- so each server falls
     # back to the abstract socket alone, neither can see that the
@@ -1030,6 +1174,54 @@ def main():
         for seat in seats.values():
             seat.stop()
 
+    # One image, the two protocols pymux writes it in, and two real
+    # terminals drawing them. `two_protocols_of` says why this one
+    # comparison may cross two terminals when no other may.
+    ran = {terminal.name for terminal in terminals}
+    both_ran = ran.issuperset(THE_TWO_PROTOCOLS)
+    cannot = []
+    for name in names:
+        if name not in IMAGE_FIXTURES:
+            continue
+        if not both_ran:
+            # **Say so rather than pass over it.** A run that kept
+            # quiet here would write a list with no comparison in it,
+            # and the recorded answer would go the next time somebody
+            # copied that list over the recorded one.
+            cannot.append(
+                "%s %s: this needs %s and %s, and only %s ran"
+                % (
+                    BOTH_PROTOCOLS,
+                    name,
+                    THE_TWO_PROTOCOLS[0],
+                    THE_TWO_PROTOCOLS[1],
+                    ", ".join(sorted(ran)),
+                )
+            )
+            continue
+        try:
+            count, first_box, second_box = two_protocols_of(name, out)
+        except NothingToCompare as reason:
+            cannot.append("%s %s: %s" % (BOTH_PROTOCOLS, name, reason))
+            continue
+        seen[(BOTH_PROTOCOLS, name)] = count
+        where = " and ".join(
+            "%s at %d,%d" % (side, box[0], box[1])
+            for side, box in zip(THE_TWO_PROTOCOLS, (first_box, second_box))
+        )
+        print(
+            "%s %s: %d pixels differ. Both draw it %dx%d, %s"
+            % (
+                BOTH_PROTOCOLS,
+                name,
+                count,
+                first_box[2] - first_box[0],
+                first_box[3] - first_box[1],
+                where,
+            ),
+            flush=True,
+        )
+
     # Keep the list that this run saw, beside the pictures, whatever the
     # verdict is. The run of this check does not fail because a picture
     # differed, so what it leaves is there to read either way.
@@ -1038,7 +1230,12 @@ def main():
     # Judge the run against the list. A difference either way matters:
     # one that grew is a regression, and one that went is a fix that
     # nobody wrote down.
-    wrong = []
+    # A comparison that could not be made is a fault of its own. It is
+    # not a picture that differs, it is the instrument saying it has
+    # nothing to measure, and a run that passed over it in silence
+    # would be a check that quietly stopped checking.
+    wrong = list(cannot)
+
     for key, found in sorted(seen.items()):
         expected = standing.get(key, 0)
         if found != expected:

@@ -52,14 +52,38 @@ xterm underlines 208
 # which is the column pymux has its own rules for. Lillecarl/pymux#371.
 xterm recorded-claude-code 8
 
-# The image fixture. A pane cannot draw pixels, so it decodes the sixel
-# its program wrote and pymux writes the image again in whatever the
-# outer terminal speaks. Each of the three terminals answers that
-# differently, and each of the three lines below is one renderer.
+# ----------------------------------------------------------------------
+# The image fixtures.
 #
-# All three counts are large because a sixel is an image and not a
-# glyph: when a terminal draws nothing bare, every pixel of the image
-# is a difference.
+# A pane cannot draw pixels, so it decodes the sixel its program wrote
+# and pymux writes the image again in whatever the outer terminal
+# speaks: the kitty graphics protocol for kitty, sixel for foot, half
+# blocks for an xterm with no graphics. Each of the three is one
+# renderer and each has its own line below.
+#
+# **The strongest two answers here are absent, and that is what they
+# say.** Only a difference is written down, so a fixture that agrees
+# has no line at all:
+#
+#     foot sixel-image-unscaled               0
+#     kitty-against-foot sixel-image-unscaled 0
+#
+# The first is pymux's sixel against foot's own sixel decoder, and the
+# second is the kitty protocol against sixel, drawn by two real
+# terminals. Both are exact, and exact is meant literally: the 41040
+# bytes of RGB that kitty draws over the kitty graphics protocol and
+# the 41040 that foot draws from pymux's sixel are the same bytes.
+# **Neither re-encoding loses a pixel**, and the pictures below that do
+# differ differ for another reason.
+#
+# On the wire the two are nothing alike, and cannot be: one is a sixel
+# DCS and the other an APC transmission with a placement. What is the
+# same is the RGBA under them. The kitty path sends the decoded pixels
+# untouched, and the sixel path encodes them again without loss --
+# which is what the six colours of the fixture are chosen for.
+#
+# A count that is large is a terminal that drew nothing at all bare: a
+# sixel is an image and not a glyph, so then every pixel of it counts.
 
 # foot is the one that draws a sixel on both sides, so this line is the
 # sixel path against a real sixel decoder. The colours are exact
@@ -86,15 +110,56 @@ foot sixel-image 1080
 # protocol, which kitty does speak. 120 by 114 is the whole image as
 # kitty draws it.
 #
-# **So this line is not the comparison that Lillecarl/pymux#262 is
-# named for.** It says the kitty path draws, not that it draws what the
-# sixel path draws. No terminal in this farm speaks both protocols, so
-# that comparison cannot be made inside one terminal. Measured by hand
-# from a run, foot and kitty have the same cell here, and the two pymux
-# pictures differ on one row of 114: pymux scales by nearest neighbour
-# and kitty interpolates, so the row that holds the edge is a blend in
-# kitty and a hard edge in the sixel.
+# This line says the kitty path draws. The line below says what it
+# draws.
 kitty sixel-image 13680
+
+# **One image, both of pymux's graphics protocols, two real terminals
+# drawing them.** This is the comparison Lillecarl/pymux#262 is named
+# for and the only line in this file that crosses two terminals.
+# `take_picture.py` says at length why no other may, and why an image
+# may: an image has no glyphs, so no font stack is in the answer.
+#
+# kitty draws what pymux sends over the kitty graphics protocol; foot
+# draws what pymux encodes as a sixel. Both have a ten by nineteen cell
+# for DejaVu Sans Mono at size 12, so both draw the pane's twelve by
+# six cells as 120 by 114 pixels -- kitty at 2,4 of its output and foot
+# at 0,0, which is not a difference and is cut away before the count.
+#
+# 120 of those 13680 pixels differ, and they are all on **one row**:
+# row 59, the row that holds the horizontal edge of the image.
+#
+#     y=58  sixel (255,0,0)    kitty (255,0,0)
+#     y=59  sixel (255,0,0)    kitty (240,14,102)
+#     y=60  sixel (51,51,255)  kitty (51,51,255)
+#
+# **This is not the conversion.** `sixel-image-unscaled` above is the
+# same image at a height that needs no resampling, and it is exact. The
+# difference here is *who* resamples, and both paths have to:
+#
+#   * the sixel path resamples in pymux, with `scale_rgba`, which picks
+#     the nearest neighbour;
+#   * the kitty path does not resample in pymux at all. `_put_command`
+#     transmits the image untouched and sends the cell box, `c=12,r=6`,
+#     so **kitty** fits the image into it -- and kitty interpolates.
+#
+# So the row where two colours meet is a hard edge in the sixel and a
+# blend in kitty. On the right of the image the same row is (0,204,51)
+# against (102,204,47), green blended into yellow.
+#
+# That is the whole difference. Every other pixel agrees, so the crop,
+# the cell box, the position and the colours come out the same down
+# both paths. Only the filter differs, and only where something had to
+# be resampled at all -- which is Lillecarl/pymux#369.
+#
+# **Look at it rather than at the number.** The run leaves the image
+# cut out of each screenshot and enlarged four times, which is the only
+# size at which a person can see it:
+#
+#     result/kitty-against-foot/sixel-image/kitty.png
+#     result/kitty-against-foot/sixel-image/foot.png
+#     result/kitty-against-foot/sixel-image/difference.png
+kitty-against-foot sixel-image 120
 
 # xterm draws no sixel either, and here it is a setting and not a
 # missing decoder: `decGraphicsID` defaults to 0 and `decTerminalID` to
@@ -108,3 +173,18 @@ kitty sixel-image 13680
 # pane assumed, so the image covers 120 by 120 and every pixel of it is
 # a difference.
 xterm sixel-image 14400
+
+# The same two terminals on the fixture that needs no resampling, and
+# the same two reasons: kitty has no sixel decoder and this xterm has
+# graphics turned off, so both draw nothing bare and every pixel pymux
+# draws is a difference.
+#
+# kitty's is 120 by 114, the image itself. xterm's is 120 by 120,
+# because its cell is twenty pixels tall: the pane reserved six rows for
+# a 114 pixel image and six of xterm's rows are 120 pixels, so the half
+# block renderer stretches it. That is Lillecarl/pymux#369 again, from
+# the other side -- here it is the *unscaled* fixture that xterm has to
+# scale, because "unscaled" is true of a nineteen pixel cell and not of
+# a twenty pixel one.
+kitty sixel-image-unscaled 13680
+xterm sixel-image-unscaled 14400
