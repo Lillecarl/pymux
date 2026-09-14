@@ -162,7 +162,13 @@ def create_client():
             with set_app(state.app):
                 # The clock moves by itself, and a frame drawn either
                 # side of a second is two different diffs.
-                pymux.handle_command("set-option status-right ''")
+                #
+                # **`test-mode` pins it rather than emptying it.** This
+                # used to set `status-right` to nothing, which measured
+                # a status line no person has: the clock is the widest
+                # thing on the right of it and the diff of a frame is
+                # what this counts.
+                pymux.handle_command("set-option test-mode on")
 
             yield pymux, state
     finally:

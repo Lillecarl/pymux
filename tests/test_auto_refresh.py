@@ -296,7 +296,16 @@ def test_format_strings_show_pinned_date_and_pinned_time(session):
 
 
 def test_clock_runs_on_while_test_mode_is_off():
+    """
+    The one test that wants the real clock.
+
+    `conftest.py` gives every server in this suite `test-mode` on, so
+    that a test which reads the time is the same test either side of a
+    second. This is what that default is a default of, so it says so
+    rather than taking it.
+    """
     pymux = Pymux()
+    set_option(pymux, "test-mode", "off")
     assert pymux.test_mode is False
 
     now = pymux.displayed_now()

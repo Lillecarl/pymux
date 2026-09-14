@@ -277,6 +277,10 @@ def test_pane_painting_is_option():
     screen. Lillecarl/pymux#273.
     """
     pymux = Pymux()
+    # `conftest.py` gives every server in this suite `paint-screen` on,
+    # so that a picture shows what a theme does. This is the test of
+    # the option itself, so it says which way it wants it.
+    ALL_OPTIONS["paint-screen"].set_value(pymux, "off")
     assert pymux.paint_screen is False
 
     ALL_OPTIONS["paint-screen"].set_value(pymux, "on")

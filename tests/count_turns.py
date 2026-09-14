@@ -49,9 +49,11 @@ reads one byte and writes one back. One cell in, one cell out, which is
 the steady state a keystroke is. The two checks are then the same path,
 counted here and timed there.
 
-Two things that move by themselves are turned off. `status-right` is
-emptied, so no clock is drawn, and `status-interval` is set to its
-longest, so the auto refresh cannot tick inside a keystroke.
+Two things that move by themselves are held still. `test-mode` pins
+the clock, so the status line draws the same time every frame, and
+`status-interval` is set to its longest, so the auto refresh cannot
+tick inside a keystroke. **The clock is pinned and not removed**: the
+status line counted here is the one a person has.
 
 ## What the distribution says, and why the gate is the smallest of it
 
@@ -303,8 +305,10 @@ async def measure(loop, samples: int) -> tuple:
 
             with set_app(state.app):
                 # The clock moves by itself, and a frame that redraws it
-                # is a frame this did not ask for.
-                pymux.handle_command("set-option status-right ''")
+                # is a frame this did not ask for. `test-mode` pins it
+                # rather than emptying `status-right`, so the status
+                # line counted here is the one a person has.
+                pymux.handle_command("set-option test-mode on")
 
             counted = []
             traced: dict = {}

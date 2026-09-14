@@ -296,7 +296,7 @@ async def scenario_typing(tmp, recorder) -> list:
     async with over_connection(pymux=pymux, read_packet=recorder) as session:
         state, _size = await session.attach("typing", SIZE)
         with set_app(state.app):
-            pymux.handle_command("set-option status-right ''")
+            pymux.handle_command("set-option test-mode on")
             for number in range(30):
                 marker = MARKERS[number % len(MARKERS)]
                 session.typed(state, marker)
@@ -316,7 +316,7 @@ async def scenario_burst(tmp, recorder) -> list:
     async with over_connection(pymux=pymux, read_packet=recorder) as session:
         state, _size = await session.attach("burst", SIZE)
         with set_app(state.app):
-            pymux.handle_command("set-option status-right ''")
+            pymux.handle_command("set-option test-mode on")
             await wait_for(recorder, "DONE")
             await asyncio.sleep(1.0)
             await session.detach(state)
@@ -333,7 +333,7 @@ async def scenario_churn(tmp, recorder) -> list:
     async with over_connection(pymux=pymux, read_packet=recorder) as session:
         state, _size = await session.attach("churn", SIZE)
         with set_app(state.app):
-            pymux.handle_command("set-option status-right ''")
+            pymux.handle_command("set-option test-mode on")
             # "~" passes through to the pane: the typing scenario proves
             # it, where a letter might be a client binding instead.
             session.typed(state, "~")

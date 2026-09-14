@@ -23,6 +23,7 @@ from pymux.colors import (
 )
 from pymux.client.terminal import DETECTION_QUERIES
 from pymux.main import Pymux
+from pymux.options import ALL_OPTIONS
 from pymux.server import ServerConnection
 from pyte import escape
 from pyte.colors import DEFAULT_COLORS, PALETTE, Color
@@ -333,6 +334,9 @@ def test_theme_that_owns_screen_gives_pane_its_palette():
 
 def test_pane_keeps_convention_while_terminal_owns_colours():
     pymux = Pymux()
+    # The case this judges is the one where the theme does *not* own
+    # the screen, which `conftest.py` turns on for the suite.
+    ALL_OPTIONS["paint-screen"].set_value(pymux, "off")
     assert pymux.paint_screen is False
     screen = Screen(24, 80, write_process_input=lambda data: None)
     pane = SimpleNamespace(screen=screen)

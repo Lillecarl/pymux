@@ -105,7 +105,26 @@ DEMO = Path(__file__).parent / "demo_application.py"
 #: What every fixture turns on. The status line and a pane's title bar
 #: are the two pieces of chrome a person looks at all day, and both are
 #: what `full-screen on` takes away.
-CHROME = "set-option status on\nset-option pane-border-status on\n"
+#:
+#: **`test-mode` pins the clock** to 13:37 on the 14th of March.
+#: `Pymux.displayed_now` is where every clock a person reads goes
+#: through, and the status line draws one by default: a picture taken
+#: either side of a second is a different picture, for a reason no
+#: fixture chose. `photograph_themes.py` takes one of these for every
+#: theme, so the race was paid for on every one of them.
+#:
+#: **`paint-screen` gives the theme the whole screen.** A pane's own
+#: cells carry the scheme's background instead of the terminal's, so a
+#: picture shows what a theme does rather than what it does around the
+#: edges. That is the point of photographing a theme at all.
+#: `photograph_themes.py` set it on two fixtures by hand before this,
+#: which is the same thing said once.
+CHROME = (
+    "set-option status on\n"
+    "set-option pane-border-status on\n"
+    "set-option test-mode on\n"
+    "set-option paint-screen on\n"
+)
 
 #: The prefix, and the keys that reach a binding behind it. `rc.py` is
 #: where these are bound: `"` splits a pane in two, top and bottom, and

@@ -13,9 +13,44 @@ suite around it.
 """
 
 import asyncio
+import sys
+from pathlib import Path
 
 import pytest
 from hypothesis import HealthCheck, settings
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from pymux.main import Pymux  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def a_server_in_test_mode(monkeypatch):
+    """
+    Every `Pymux` this suite builds has `test-mode` on.
+
+    **The clock is the reason.** `Pymux.displayed_now` is where every
+    clock a person reads goes through, and `test-mode` pins it to 13:37
+    on the 14th of March. Without it a test that reads the time is a
+    different test either side of a second, and the suite has to
+    choose between not testing the clock and being flaky about it --
+    `measure_keystroke.py` cleared `status-right` rather than face it.
+
+    A test that wants the real clock, or the option off, sets it back:
+    this is a default and not a rule.
+
+    The patch is on `__init__` because the tests build their own
+    servers, a hundred and eighty of them, and a default is worth
+    saying once.
+    """
+    original = Pymux.__init__
+
+    def __init__(self, *args, **kw):
+        original(self, *args, **kw)
+        self.test_mode = True
+        self.paint_screen = True
+
+    monkeypatch.setattr(Pymux, "__init__", __init__)
 
 
 @pytest.fixture(autouse=True)
