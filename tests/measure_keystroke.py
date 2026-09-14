@@ -110,6 +110,14 @@ TIMED = int(os.environ.get("PYMUX_KEYSTROKE_TIMED") or 300)
 #: person reads.
 WHERE = int(os.environ.get("PYMUX_KEYSTROKE_WHERE") or 12)
 
+#: A name to ask "who calls this" about, matched anywhere in the
+#: callee's qualified name. Empty asks nothing, and asking costs a
+#: second run of each stage. `who_calls` says why it is the only way
+#: to get the answer.
+#:
+#:     PYMUX_KEYSTROKE_CALLERS=Flag nix build --file . checks.pymux-keystroke.run
+CALLERS = os.environ.get("PYMUX_KEYSTROKE_CALLERS", "")
+
 #: The client's terminal.
 SIZE = Size(rows=24, columns=80)
 
@@ -281,6 +289,70 @@ def where_instructions_are(work, most=WHERE):
     return [(_where(code), count) for code, count in counted.most_common(most)]
 
 
+def who_calls(work, target: str, most=WHERE):
+    """
+    Which functions called anything whose name holds `target`, and how
+    often.
+
+    **`where_instructions_are` cannot answer this, and neither can a
+    sampler.** The instruction count is keyed by the code object that
+    *runs*, so it says `enum.Flag.__and__` costs 533 and never says who
+    asked. `checks.pymux-profile` samples a wall clock, and a function
+    this small never lands in a sample. Lillecarl/pymux#359.
+
+    It watches `PY_START`, which fires as the matching function begins,
+    and reads the caller off the stack.
+
+    **`CALL` is the wrong event, and the reason is worth keeping.**
+    `CALL` hands over the caller's code object directly, which looks
+    like the answer -- but `a & b` on a `Flag` is a `BINARY_OP` and not
+    a call instruction, so nothing fires and the operator the question
+    is about is invisible. Asked that way, the only callers this found
+    were `enum`'s own.
+
+    **A function that misses is switched off and stays off.**
+    `PY_START` fires for every Python function a keystroke enters, so
+    a miss returns `DISABLE`, which turns that code object off for the
+    rest of the run. The match is on the code object, so a function
+    that misses once misses always: nothing is lost.
+
+    It uses `COVERAGE_ID` rather than `PROFILER_ID`, which
+    `where_instructions_are` takes: `use_tool_id` raises when an id is
+    already held, and two instruments that cannot be nested is a
+    landmine for whoever nests them.
+    """
+    counted: Counter = Counter()
+
+    def one_start(code, offset):
+        if target not in code.co_qualname:
+            return sys.monitoring.DISABLE
+
+        # Frame 0 is this callback and frame 1 is the function that
+        # just started, so the caller is one further back.
+        caller = sys._getframe(1).f_back
+        counted[(caller.f_code if caller else None, code.co_qualname)] += 1
+        return None
+
+    tool = sys.monitoring.COVERAGE_ID
+    started = sys.monitoring.events.PY_START
+    sys.monitoring.use_tool_id(tool, "pymux-keystroke-callers")
+    try:
+        sys.monitoring.register_callback(tool, started, one_start)
+        sys.monitoring.set_events(tool, started)
+        try:
+            work()
+        finally:
+            sys.monitoring.set_events(tool, 0)
+            sys.monitoring.register_callback(tool, started, None)
+    finally:
+        sys.monitoring.free_tool_id(tool)
+
+    return [
+        ("%s -> %s" % ("?" if code is None else _where(code), name), count)
+        for (code, name), count in counted.most_common(most)
+    ]
+
+
 def _where(code) -> str:
     """
     A function, as a reader can use it.
@@ -385,6 +457,12 @@ def main() -> int:
                 for name, work in picked.items():
                     where[name] = where_instructions_are(work)
 
+        callers = {}
+        if CALLERS:
+            with set_app(state.app):
+                for name, work in picked.items():
+                    callers[name] = who_calls(work, CALLERS)
+
     print("\n--- what one keystroke costs ---")
     print("%-12s %14s %12s" % ("", "instructions", "in-process"))
     for name in ORDER:
@@ -400,6 +478,14 @@ def main() -> int:
         if name in where:
             print("\n--- where the instructions of %s are ---" % (name,))
             for place, count in where[name]:
+                print("  %8d  %s" % (count, place))
+
+    for name in ORDER:
+        if name in callers:
+            print("\n--- who calls %r during %s ---" % (CALLERS, name))
+            if not callers[name]:
+                print("  nothing")
+            for place, count in callers[name]:
                 print("  %8d  %s" % (count, place))
 
     print(
