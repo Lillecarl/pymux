@@ -259,17 +259,17 @@ class BaseIndexOption(Option):
 class KeysOption(Option):
     "Emacs or Vi mode."
 
-    def __init__(self, attribute_name):
+    def __init__(self, attribute_name, scope=Scope.SESSION):
         self.attribute_name = attribute_name
+        self.scope = scope
 
     def get_all_values(self, pymux):
         return ["emacs", "vi"]
 
     def set_value(self, pymux, value, target=None):
-        if value in ("emacs", "vi"):
-            setattr(pymux, self.attribute_name, value == "vi")
-        else:
+        if value not in ("emacs", "vi"):
             raise SetOptionError('Expecting "vi" or "emacs".')
+        setattr(self.held_by(pymux, target), self.attribute_name, value == "vi")
 
 
 class ExtendedKeys(StrEnum):
@@ -294,8 +294,9 @@ class ExtendedKeys(StrEnum):
 class ExtendedKeysOption(Option):
     "How much of the keyboard a session uses."
 
-    def __init__(self, attribute_name):
+    def __init__(self, attribute_name, scope=Scope.SESSION):
         self.attribute_name = attribute_name
+        self.scope = scope
 
     def get_all_values(self, pymux):
         return [str(one) for one in ExtendedKeys]
@@ -308,7 +309,9 @@ class ExtendedKeysOption(Option):
                 "Expecting one of: %s."
                 % ", ".join('"%s"' % one for one in ExtendedKeys)
             )
-        setattr(pymux, self.attribute_name, chosen)
+        setattr(self.held_by(pymux, target), self.attribute_name, chosen)
+        # The server tells every client what its terminal should send
+        # now, whoever holds the value.
         pymux.sync_keyboard()
 
 
@@ -444,17 +447,17 @@ class LogLevelOption(Option):
 
 
 class JustifyOption(Option):
-    def __init__(self, attribute_name):
+    def __init__(self, attribute_name, scope=Scope.SESSION):
         self.attribute_name = attribute_name
+        self.scope = scope
 
     def get_all_values(self, pymux):
         return Justify._ALL
 
     def set_value(self, pymux, value, target=None):
-        if value in Justify._ALL:
-            setattr(pymux, self.attribute_name, value)
-        else:
+        if value not in Justify._ALL:
             raise SetOptionError("Invalid justify option.")
+        setattr(self.held_by(pymux, target), self.attribute_name, value)
 
 
 class ChoiceOption(Option):
