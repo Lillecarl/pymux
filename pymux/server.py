@@ -581,19 +581,9 @@ class ServerConnection:
         holds it. `attach -x` is the same set of clients, told to hang
         up as well as to leave. Lillecarl/pymux#347.
 
-        **The session, and not the server.** tmux's rule is one line --
-        `if (c_loop->session != s || c == c_loop) continue;`
-        (`cmd-attach-session.c:127`) -- and pymux had neither half of
-        it. A person attaching to one session threw everybody off every
-        other session too. `detach-client -a` is the gesture for the
-        whole server, in pymux as in tmux. Lillecarl/pymux#345.
-
-        That one rule also answers a question pymux had answered
-        wrongly. `pymux.connections` holds every connection and not
-        every client: a connection that arrived to run a command is in
-        it from the moment the server accepted it, and closing that one
-        killed somebody's `list-sessions` mid-answer. A command has no
-        session, so it is skipped here without a case of its own.
+        **The session, and not the server.** `Pymux.clients_on` holds
+        that rule, for this and for `attach-session -d` alike.
+        Lillecarl/pymux#345, Lillecarl/pymux#349.
 
         **This runs after `_create_app`**, because until then this
         connection has no session to compare the others against.
@@ -601,13 +591,13 @@ class ServerConnection:
         if self.client_state is None:
             return
 
-        for connection in list(self.pymux.connections):
-            if connection is self:
-                continue
-            other = connection.client_state
-            if other is None or other.session is not self.client_state.session:
-                continue
-            connection.detach_and_close(hang_up=hang_up)
+        others = self.pymux.clients_on(
+            self.client_state.session, except_for=self.client_state
+        )
+        for other in others:
+            connection = getattr(other, "connection", None)
+            if connection is not None:
+                connection.detach_and_close(hang_up=hang_up)
 
     def _take_client_options(self, announced) -> None:
         """

@@ -56,6 +56,10 @@ def move_this_client(
     whether the others go -- tmux reads `-x` as `-d` with a harsher
     message (`if (dflag || xflag)`, `cmd-attach-session.c:123`), and so
     does the caller. Lillecarl/pymux#347.
+
+    Which clients those are is `Pymux.clients_on`, which the server
+    reads for the same flag on the `start-gui` packet.
+    Lillecarl/pymux#349.
     """
     session = find_session(pymux, target)
 
@@ -66,9 +70,7 @@ def move_this_client(
         )
 
     if detach_others or hang_up_others:
-        for other in list(pymux._client_states.values()):
-            if other is not client_state and not other.temporary:
-                if other.session is session:
-                    pymux.detach_client(other.app, hang_up=hang_up_others)
+        for other in pymux.clients_on(session, except_for=client_state):
+            pymux.detach_client(other.app, hang_up=hang_up_others)
 
     pymux.attach_client_to(client_state, session)

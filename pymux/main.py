@@ -1378,6 +1378,27 @@ class Pymux:
             client for client in self._client_states.values() if not client.temporary
         ]
 
+    def clients_on(self, session, except_for=None) -> "list[ClientState]":
+        """
+        Every client that holds this session, other than one.
+
+        This is what `attach -d` means by "the other clients", and both
+        ways of asking for it read it here. tmux's rule is one line --
+        `if (c_loop->session != s || c == c_loop) continue;`
+        (`cmd-attach-session.c:129`) -- and pymux had it written twice,
+        once for the flag on the `start-gui` packet and once for the
+        command. Lillecarl/pymux#345, Lillecarl/pymux#349.
+
+        **A command connection is not a client**, and `clients` already
+        says so: the temporary client a command runs under is nobody,
+        and closing it killed somebody's `list-sessions` mid-answer.
+        """
+        return [
+            client_state
+            for client_state in self.clients
+            if client_state.session is session and client_state is not except_for
+        ]
+
     def connection_of(self, app):
         "The connection whose client draws on this application, or None."
         for connection, client_state in self._client_states.items():
