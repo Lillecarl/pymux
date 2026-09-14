@@ -975,10 +975,6 @@ def check_sixel_terminal(tmp):
 
         terminal.wait_for(b"READY")
 
-        # The sixel that the pane child drew must not reach the screen
-        # as text.
-        assert b"!20~" not in terminal.seen, "sixel body leaked as text"
-
         # **The image reaches the screen with its own pixels.** The pane
         # takes its cell size from this client, so it reserves
         # `ceil(20/8)` by `ceil(12/17)` cells for the 20 by 12 image:
@@ -986,6 +982,18 @@ def check_sixel_terminal(tmp):
         # fits inside that, so nothing resamples it and the sixel that
         # goes out is 20 by 12. Lillecarl/pymux#369.
         terminal.wait_for(b"\x1bP0;1;0q")
+
+        # The sixel that the pane child drew must not reach the screen
+        # as text.
+        #
+        # **Only what came before the image counts.** Since #369 the
+        # pane re-encodes an image that fits at its own pixels, so the
+        # body that goes out is the body that came in, byte for byte.
+        # Asking whether the body is anywhere in what the terminal saw
+        # was a race that the answer to #369 decided: the assertion
+        # stood before the image was drawn and passed on timing alone.
+        before_the_image = terminal.seen.split(b"\x1bP0;1;0q")[0]
+        assert b"!20~" not in before_the_image, "sixel body leaked as text"
         found = re.search(rb"\x1b\[(\d+);(\d+)H\x1bP([^\x1b]*)\x1b\\", terminal.seen)
         assert found, "no sixel image on the outer terminal"
         decoded = decode_sixel(found.group(3).decode("latin-1"))
