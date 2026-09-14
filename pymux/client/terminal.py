@@ -173,6 +173,22 @@ class TerminalClient(Client):
         os.write(sys.stdout.fileno(), DETECTION_QUERIES)
         self._send_packet({"cmd": "kitty-detect"})
 
+    def _restore_modes(self) -> None:
+        """
+        Put back every raw or cooked mode the server asked for.
+
+        The server asks for cooked mode while a pane reads a password,
+        and asks for it back afterwards. An attachment that ends in
+        between leaves the terminal as the pane wanted it, which means
+        the keys a person presses next are echoed and held for a line.
+        Lillecarl/pymux#256.
+        """
+        while self._mode_context_managers:
+            try:
+                self._mode_context_managers.pop().__exit__()
+            except Exception:
+                pass
+
     def _reset_terminal(self) -> None:
         """
         Put the terminal of the user back as it was. (The server is
