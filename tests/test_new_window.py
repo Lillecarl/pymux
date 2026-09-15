@@ -121,6 +121,57 @@ async def test_bare_target_names_index_to_open_at():
         assert indexes(pymux) == [1, 2, 5, 9]
 
 
+async def test_the_end_of_the_stack_is_not_the_window_a_person_is_on():
+    """
+    Lillecarl/pymux#381: `new-window -a -t {end}`. The active window
+    is the first here, so the default answer of "after it" would put
+    the new window at 2, and the word has to reach 6.
+    """
+    async with create_session(1, 2, 5) as (pymux, _):
+        pymux.arrangement.set_active_window(pymux.arrangement.windows[0])
+
+        run(pymux, "new-window -a -t {end}")
+
+        assert indexes(pymux) == [1, 2, 5, 6]
+        assert pymux.arrangement.get_active_window().index == 6
+
+
+async def test_the_start_of_the_stack_takes_the_first_index():
+    "It makes room, the way `-b` before any window does."
+    async with create_session(1, 2, 5) as (pymux, _):
+        run(pymux, "new-window -b -t {start}")
+
+        assert indexes(pymux) == [1, 2, 3, 5]
+        assert pymux.arrangement.get_active_window().index == 1
+
+
+async def test_a_word_without_a_side_is_next_to_the_window_it_names():
+    "The same reading a bare target gets: after it."
+    async with create_session(1, 2, 5) as (pymux, _):
+        pymux.arrangement.set_active_window(pymux.arrangement.windows[0])
+
+        run(pymux, "new-window -t {end}")
+
+        assert indexes(pymux) == [1, 2, 5, 6]
+        assert pymux.arrangement.get_active_window().index == 6
+
+
+async def test_on_a_packed_stack_the_word_gives_the_default():
+    "Which is why the old lowest-free rule hid the fact that the answer was gone."
+    async with create_session(1, 2, 3) as (pymux, _):
+        run(pymux, "new-window -a -t {end}")
+
+        assert indexes(pymux) == [1, 2, 3, 4]
+
+
+async def test_a_word_it_does_not_know_falls_back_like_a_name():
+    "`{last}` is tmux's previously active window, and pymux does not track one."
+    async with create_session(1, 2, 5) as (pymux, _):
+        run(pymux, "new-window -a -t {last}")
+
+        assert indexes(pymux) == [1, 2, 5, 6]
+
+
 async def test_target_nobody_can_find_falls_back_to_active_window():
     """
     tmux errors there. A person who mistypes a window number while

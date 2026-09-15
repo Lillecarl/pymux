@@ -15,16 +15,38 @@ from pymux.commands.common import (
 
 def index(target):
     """
-    The window number a target names, or None for one that is a name.
+    The window number a target names, or None for one that is not a
+    number.
 
     tmux takes a window by number, by name, or by one of its own
-    shorthands. Only the number places a window, so the rest read as
-    "no number" and leave the placement to the active window.
+    shorthands. Only a number can be an index to create at, so the
+    rest read as "no number" here, and the placement goes to the
+    window they name -- a word (`word_window`) or the active one.
     """
     try:
         return int(target)
     except (TypeError, ValueError):
         return None
+
+
+def word_window(session, target):
+    """
+    The window one of tmux's target words names, or None for a target
+    that is not one.
+
+    `{start}` and `{end}` are the first and the last window of the
+    stack, which is the order the status line shows and
+    `focus_next_window` walks. They name a window and not a number,
+    so they never take the bare-target rule that creates at an index:
+    `-a -t {end}` is how a person asks for a window at the end of the
+    stack. Lillecarl/pymux#381.
+    """
+    windows = session.arrangement.windows
+    if target == "{start}":
+        return windows[0] if windows else None
+    if target == "{end}":
+        return windows[-1] if windows else None
+    return None
 
 
 def which_session(pymux: "Pymux", args: argparse.Namespace):
@@ -60,6 +82,12 @@ def where_new_window_goes(pymux: "Pymux", args: argparse.Namespace, session, tar
     - Nothing: after the active window, which is the one a person is
       looking at.
 
+    The target may be a number, a name, or one of tmux's words. A
+    word names an end of the stack, so `-a -t {end}` puts a window
+    after the last one whatever window a person is on -- the answer
+    the default gives only while the numbering has no gaps.
+    Lillecarl/pymux#381.
+
     `None` means the lowest free index, and nothing returns it any
     more. It is still what `Arrangement.create_window` does without an
     index, because a session that is restored builds its windows by
@@ -71,8 +99,8 @@ def where_new_window_goes(pymux: "Pymux", args: argparse.Namespace, session, tar
     """
     number = index(target)
 
-    where = None
-    if number is not None:
+    where = word_window(session, target)
+    if where is None and number is not None:
         where = session.arrangement.get_window_by_index(number)
     if where is None:
         where = session.arrangement.get_active_window()
