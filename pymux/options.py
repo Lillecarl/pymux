@@ -275,6 +275,9 @@ class RenumberOption(Option):
     """
     Whether closing a window closes the gap it leaves.
 
+    Setting it on closes the gaps that are open already; setting it
+    off changes nothing, because no setting opens one.
+
     It lives on the arrangement and not on `Pymux`, the way
     `base-index` does: both are about the order of the windows, and
     that order is the arrangement's. Lillecarl/pymux#342.
@@ -293,6 +296,8 @@ class RenumberOption(Option):
         if value not in ("on", "off"):
             raise SetOptionError('Expecting "on" or "off".')
         pymux.arrangement.renumber_windows = value == "on"
+        if value == "on":
+            pymux.arrangement.renumber()
 
 
 class KeysOption(Option):

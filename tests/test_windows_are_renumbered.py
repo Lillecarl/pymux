@@ -4,8 +4,10 @@
 pymux fills the lowest free index when a window is made, and nothing
 ever packed the rest down, so a session numbered 1, 2, 3 that loses
 the second one stayed 1, 3 for good. tmux has a session option for it
-and ships it off; this is the same option, the same default and the
-same trigger. Lillecarl/pymux#342.
+and ships it off; this is the same option and the same default, and
+its trigger is the close. One difference, on purpose: setting the
+option on packs an order that is open already, where tmux leaves the
+gap until the next close. Lillecarl/pymux#342.
 """
 
 import sys
@@ -173,3 +175,76 @@ def test_a_word_it_does_not_know_is_refused():
     pymux.handle_command("set-option renumber-windows sometimes")
 
     assert pymux.arrangement.renumber_windows is False
+
+
+# ----------------------------------------------------------------------
+# Setting the option.
+
+
+def test_setting_it_on_packs_the_gap_that_is_already_there():
+    "The setting itself is a trigger; the next close need not wait for it."
+    pymux = Pymux()
+    try:
+        _three_windows(pymux)
+        _kill(pymux, 2)
+        assert _indices(pymux) == [1, 3]
+
+        pymux.handle_command("set-option renumber-windows on")
+
+        assert _indices(pymux) == [1, 2]
+    finally:
+        _stop(pymux)
+
+
+def test_setting_it_on_again_changes_nothing():
+    "A renumber of an order without gaps is a walk that moves nobody."
+    pymux = Pymux()
+    try:
+        _three_windows(pymux)
+
+        pymux.handle_command("set-option renumber-windows on")
+
+        assert _indices(pymux) == [1, 2, 3]
+    finally:
+        _stop(pymux)
+
+
+def test_setting_it_off_leaves_the_gap_it_finds():
+    pymux = Pymux()
+    try:
+        _three_windows(pymux)
+        _kill(pymux, 2)
+        assert _indices(pymux) == [1, 3]
+
+        pymux.handle_command("set-option renumber-windows off")
+
+        assert _indices(pymux) == [1, 3]
+    finally:
+        _stop(pymux)
+
+
+def test_setting_it_on_leaves_a_parked_window_where_it_was():
+    "The same guarantee the close gives, through the new trigger."
+    pymux = Pymux()
+    try:
+        _three_windows(pymux)
+        parked = pymux.arrangement.get_window_by_index(3)
+        pymux.arrangement.unlink_window(parked)
+        _kill(pymux, 1)
+        assert _indices(pymux) == [2]
+
+        pymux.handle_command("set-option renumber-windows on")
+
+        assert _indices(pymux) == [1]
+        assert parked.index == 3
+    finally:
+        _stop(pymux)
+
+
+def test_setting_it_before_any_window_exists():
+    "A configuration line runs before there is a window to number."
+    pymux = Pymux()
+    pymux.handle_command("set-option renumber-windows on")
+
+    assert pymux.arrangement.renumber_windows is True
+    assert pymux.arrangement.windows == []
