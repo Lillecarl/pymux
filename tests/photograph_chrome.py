@@ -649,11 +649,7 @@ def picture_of(terminal, seat, name, work, out, fixtures=None):
         fixtures = FIXTURES
     fixture = fixtures[name]
     config_path = work / ("%s.conf" % name)
-    # The fence is the forwarder pane writing the clipboard, and a pane
-    # may only do that under "on". pymux ships "external", which lets a
-    # copy the person makes out and refuses a pane.
-    # Lillecarl/pymux#378.
-    config_path.write_text("set set-clipboard on\n" + fixture.config)
+    config_path.write_text(fixture.config)
 
     keys_path = work / ("%s.keys" % name)
     keys_path.write_text(fixture.keys)

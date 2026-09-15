@@ -26,13 +26,23 @@ The bytes reach the pane through a fifo, which a forwarder in the pane
 copies to its own output. Then this has to know when pymux has finished
 drawing what those bytes did.
 
-A fence goes down the fifo behind the payload: an OSC 52, which ptterm
-hands to pymux and pymux writes to the terminal of every client. Seeing
-it on the wire proves the pane consumed the payload.
+A fence goes down the fifo behind the payload: an OSC 99, a desktop
+notification, which ptterm hands to pymux and pymux writes to the
+terminal of every client. Seeing it on the wire proves the pane
+consumed the payload.
 
-**The session says `set-clipboard on` for it.** A pane may write the
-clipboard only under that value; the one pymux ships refuses a pane and
-lets a copy the person makes out. Lillecarl/pymux#378.
+**The fence names no notification.** pymux gives every notification an
+identifier of its own, so that the answer of the terminal finds the
+pane that asked. A payload with no "i=" has nothing to route, so pymux
+passes it on byte for byte, and the token the pane wrote is the token
+to wait for.
+
+**It was an OSC 52, and a clipboard write is not free of options.** A
+pane may write the clipboard only where `set-clipboard` says "on", so
+every harness that used this fence carried that line. The day the value
+pymux ships changed, five checks waited their whole timeout for a fence
+pymux was holding back. A notification passes under no option at all.
+Lillecarl/pymux#380.
 
 It does not prove the frame arrived. prompt_toolkit may postpone a
 redraw, so the frame can follow the fence. A short settle after the
@@ -115,7 +125,16 @@ while True:
 
 #: What pymux writes for the fence, and what to take back out of the
 #: wire before a judge sees it.
-FENCE = re.compile(rb"\x1b\]52;[^\x07\x1b]*(?:\x07|\x1b\\)")
+#:
+#: Both terminators, because both can arrive. pymux ends every sequence
+#: it builds with ST, and a program driven with no pymux at all sends
+#: the fence back the way the pane wrote it.
+FENCE = re.compile(rb"\x1b\]99;[^\x07\x1b]*(?:\x07|\x1b\\)")
+
+
+def fence_sequence(token: bytes) -> bytes:
+    "What a pane writes to say it has consumed everything before it."
+    return b"\x1b]99;;%s\x1b\\" % token
 
 
 class Pane:
@@ -157,11 +176,7 @@ class Pane:
         forwarder.write_text(FORWARDER)
 
         config = self.tmp / ("%s.conf" % self.name)
-        # The fence is a pane writing the clipboard, and a pane may only
-        # do that when `set-clipboard` says "on". It ships as "external",
-        # where a copy the person makes goes out and a program in a pane
-        # is refused. Lillecarl/pymux#378.
-        config.write_text("set full-screen on\nset set-clipboard on\n")
+        config.write_text("set full-screen on\n")
 
         size = self.size_file
 
@@ -230,12 +245,15 @@ class Pane:
         """
         assert self.terminal is not None
         self.fence += 1
-        token = base64.b64encode(b"fence-%d" % self.fence).decode()
+        # Base64 and not the words themselves: the wait is a search of
+        # the wire, and a payload that draws "fence-3" on the screen
+        # would answer the fence of the write that carried it.
+        token = base64.b64encode(b"fence-%d" % self.fence)
 
         mark = self.terminal.mark()
-        os.write(self.writer, data + b"\x1b]52;c;%s\x07" % token.encode())
+        os.write(self.writer, data + fence_sequence(token))
 
-        self.terminal.wait_for(token.encode(), timeout=timeout)
+        self.terminal.wait_for(token, timeout=timeout)
         self.settle()
         return FENCE.sub(b"", self.terminal.since(mark))
 

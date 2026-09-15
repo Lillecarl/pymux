@@ -339,13 +339,16 @@ def test_fence_comes_back_and_is_taken_out(tmp_path):
         "stty -echo; printf 'up.'; (sleep 0.3; printf 'framed.') &"
         " exec python3 %s %s %s"
     )
+    from drive_in_terminal import BOOT_TOKEN, KEYS_TOKEN
+
     seen, fence_seen, error = run_fenced(tmp_path, '0.1 b"hello\\n"\n', pane)
 
     assert fence_seen.exists()
     assert b"up." in seen
     assert b"framed." in seen
-    assert b"52;" not in seen
-    assert b"ZmVuY2U" not in seen
+    assert b"99;" not in seen
+    assert BOOT_TOKEN not in seen
+    assert KEYS_TOKEN not in seen
 
 
 def test_a_terminal_answer_is_not_the_program_going_quiet():

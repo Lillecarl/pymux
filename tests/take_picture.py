@@ -165,10 +165,16 @@ HOLD = APPEAR_TIMEOUT + SETTLE_TIMEOUT + 10
 #: What the pymux side of a picture runs with.
 #:
 #: Full screen, so the pane covers every cell of the window. And
-#: `set-clipboard on`, because the fence a fixture ends in is a pane
-#: writing the clipboard: the value pymux ships refuses that, and the
-#: settle then waits for a fence that pymux is holding back.
-#: Lillecarl/pymux#378.
+#: `set-clipboard on`, which the fence of a picture needs and the fence
+#: of the wire does not.
+#:
+#: **They are two different fences.** `middleman.py` reads its fence off
+#: the wire, so any sequence pymux passes on serves, and it uses a
+#: notification, which no option gates (Lillecarl/pymux#380). A picture
+#: is taken of a terminal and has no wire to read: the fence is read
+#: back out of the clipboard of that terminal, and only an OSC 52 puts
+#: anything there. So a pane has to be allowed to write the clipboard,
+#: which is "on". Lillecarl/pymux#378.
 PICTURE_CONFIG = "set full-screen on\nset set-clipboard on\n"
 
 

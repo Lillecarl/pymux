@@ -46,7 +46,7 @@ bound as well: a run that goes wrong leaves nothing behind for longer.
 With `<fifo>` and `<fence-seen>` given, the keys are fenced the way
 `middleman.py` fences a write. The program runs the forwarder, which
 copies the fifo to its own output, and after the last key the fence --
-an OSC 52 -- goes down the fifo. Seeing it on the wire proves the
+an OSC 99 -- goes down the fifo. Seeing it on the wire proves the
 program has done with everything before it. The fence is taken back
 out of what the terminal is given, and `<fence-seen>` is touched. A
 picture taken after the file is a picture of a finished frame, and a
@@ -86,7 +86,7 @@ from pathlib import Path
 # The fence, its quiet window and its first-byte bound are
 # middleman's, and the relay adopts them: `middleman.py` says what
 # each one is for.
-from middleman import FENCE, FIRST_BYTE, QUIET
+from middleman import FENCE, FIRST_BYTE, QUIET, fence_sequence
 
 #: How much to move at once.
 CHUNK = 65536
@@ -356,7 +356,7 @@ def frame_and_fence(
     after it. Gives back whether the fence came, and where the copying
     stopped.
 
-    `middleman.py` fences a write by putting an OSC 52 behind it:
+    `middleman.py` fences a write by putting an OSC 99 behind it:
     seeing it on the wire proves the pane consumed what came before.
     The keys here are the payload, the fifo is the way in, and the
     fence proves the program has done with every one of them. The
@@ -388,7 +388,7 @@ def frame_and_fence(
 
     copied = settle(master, seen, out, copied, stdin_fd)
 
-    os.write(writer, b"\x1b]52;c;%s\x07" % token)
+    os.write(writer, fence_sequence(token))
     while token not in seen:
         if time.monotonic() > deadline:
             return False, copied
