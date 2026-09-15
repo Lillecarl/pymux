@@ -137,7 +137,12 @@ BASELINE = HERE / "vterm-failures.txt"
 #: How long one test file may take, in seconds. Every PUSH waits for a
 #: fence and then settles, and a file holds hundreds of them, so this is
 #: far above the conformance checks and still only catches a hang.
-FILE_TIMEOUT = 900
+#:
+#: `PYMUX_VTERM_FILE_TIMEOUT` cuts it down, which is what a person
+#: chasing a hang wants: the wait is the whole cost of one attempt, and
+#: the trace of where it stopped only reaches the log once the wait
+#: ends.
+FILE_TIMEOUT = int(os.environ.get("PYMUX_VTERM_FILE_TIMEOUT") or 900)
 
 #: The test files that cannot run with pymux in the middle, and the
 #: reason for each.
@@ -216,8 +221,16 @@ def run_one(directory: Path, name: str):
             text=True,
             timeout=FILE_TIMEOUT,
         )
-    except subprocess.TimeoutExpired:
-        raise Failed("%s did not end in %d seconds" % (name, FILE_TIMEOUT))
+    except subprocess.TimeoutExpired as expired:
+        # What the run had said by then. A hang says nothing about
+        # itself, so the last lines before it are the whole of what
+        # anybody has to go on; `PYMUX_VTERM_TRACE` fills them in.
+        said = (expired.stdout or b"").decode("utf-8", "replace")
+        errors = (expired.stderr or b"").decode("utf-8", "replace")
+        raise Failed(
+            "%s did not end in %d seconds. It had said:\n%s\n%s"
+            % (name, FILE_TIMEOUT, said[-2000:], errors[-2000:])
+        )
     return done.stdout, done.stderr
 
 

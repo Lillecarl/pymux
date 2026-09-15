@@ -138,6 +138,12 @@ let
   # `PYMUX_VTERM_TRACE=1 nix build --file . checks.pymux-vterm.run`.
   vtermTrace = builtins.getEnv "PYMUX_VTERM_TRACE";
 
+  # How long one of libvterm's files may take. A hang says nothing
+  # until the wait ends, so chasing one means cutting the wait down:
+  # `PYMUX_VTERM_FILE_TIMEOUT=60 PYMUX_VTERM_TRACE=1 nix build --file .
+  # checks.pymux-vterm.run`.
+  vtermFileTimeout = builtins.getEnv "PYMUX_VTERM_FILE_TIMEOUT";
+
   # Which of Alacritty's reference tests run, for instance
   # `PYMUX_ALACRITTY_INCLUDE=vttest nix build --file . checks.pymux-alacritty`.
   alacrittyInclude =
@@ -938,13 +944,14 @@ in
           perl
           vtermSuite.harness
         ];
-        env = { inherit vtermInclude vtermTrace; };
+        env = { inherit vtermInclude vtermTrace vtermFileTimeout; };
       }
       ''
         export PYMUX_VTERM=${vtermSuite.tests}/share/libvterm-tests
         export PYMUX_VTERM_HARNESS=${vtermSuite.harness}/bin/libvterm-harness
         export PYMUX_VTERM_INCLUDE="$vtermInclude"
         export PYMUX_VTERM_TRACE="$vtermTrace"
+        export PYMUX_VTERM_FILE_TIMEOUT="$vtermFileTimeout"
         export PYMUX_VTERM_TMP="$TMPDIR"
         export PYMUX_VTERM_OUT="$out"
         python tests/drive_with_vterm.py
