@@ -48,8 +48,21 @@ xterm underlines 208
 # the two glyphs in the pymux picture and leaves the seam in the bare
 # one, four pixels of grey each on two rows.
 #
-# The cells are the same and the last column is where they differ,
-# which is the column pymux has its own rules for. Lillecarl/pymux#371.
+# **The cause is one write against two.** The bare program writes the
+# whole row at once, so xterm places all eighty glyphs of one string
+# against each other. The renderer of prompt_toolkit cannot: in
+# `move_cursor`, a cursor that stands in the last column is a cursor
+# waiting to wrap, and relative motion from there is not reliable, so
+# it writes a carriage return and an absolute move instead. Every full
+# width row therefore reaches the terminal as columns 0 to 78, then
+# column 79 on its own. xterm rounds the glyph of a new string against
+# the cursor cell and the glyph of a continued string against the one
+# before it, and for "-" the two roundings differ by one pixel of grey.
+#
+# It shows here and nowhere else because nowhere else is a run of a
+# glyph whose ink reaches the edge of its cell *and* runs to column 79.
+# A pane cannot give up the guard, so this is what a pane costs: eight
+# pixels. Lillecarl/pymux#371.
 xterm recorded-claude-code 8
 
 # ----------------------------------------------------------------------
