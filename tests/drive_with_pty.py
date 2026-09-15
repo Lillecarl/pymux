@@ -198,11 +198,23 @@ while True:
         # of the client, which is what decides the answer.
         sys.stdout.write("\\x1b[?u")
         sys.stdout.flush()
+    if b"C" in data:
+        # Write the clipboard again, now that the option allows it.
+        # The one at the start was refused, and a pane cannot be told.
+        sys.stdout.write(%r)
+        sys.stdout.flush()
     # A line of its own: a long echo must not wrap, or the check for
     # it reads the wrapping as part of the text.
     sys.stdout.write("\\r\\n<<%%s>>" %% data.hex())
     sys.stdout.flush()
-""" % (KITTY_IMAGE, SIXEL_IMAGE, PANE_OSC, PANE_HYPERLINK, PANE_UNDERLINE)
+""" % (
+    KITTY_IMAGE,
+    SIXEL_IMAGE,
+    PANE_OSC,
+    PANE_HYPERLINK,
+    PANE_UNDERLINE,
+    OSC_CLIPBOARD,
+)
 
 
 #: A program that draws nothing and waits. A pane running it asks for
@@ -773,11 +785,20 @@ class Terminal(Attached):
 
 def check_osc_sequences(terminal, tail):
     """
-    The three OSC sequences of the pane reach the terminal, and the
-    clipboard query does not.
+    The OSC sequences of the pane that reach the terminal, and the two
+    that do not.
+
+    **The clipboard write is one of the two.** `set-clipboard` ships as
+    tmux ships it, "external", where a copy the person makes goes out
+    and a program in a pane is refused: a program on the far side of an
+    ssh connection would otherwise write what that person pastes next.
+    `check_a_pane_reaches_the_clipboard_when_told_to` turns it on.
+    Lillecarl/pymux#378.
     """
-    assert OSC_CLIPBOARD.encode() in tail, "the clipboard write did not arrive"
     assert OSC_POINTER.encode() in tail, "the pointer shape did not arrive"
+    assert OSC_CLIPBOARD.encode() not in tail, (
+        "a pane wrote the clipboard of the user with the shipped option"
+    )
     assert OSC_CLIPBOARD_QUERY.encode() not in tail, (
         "the pane read the clipboard of the user"
     )
@@ -922,6 +943,15 @@ def check_kitty_terminal(tmp):
         #    reads them out of, and not from the step above.
         terminal.wait_for(OSC_POINTER.encode(), since=mark)
         identifier = check_osc_sequences(terminal, terminal.since(mark))
+
+        #    And the clipboard reaches it once the option says a pane
+        #    may. The pane writes it again on "C", because a pane is
+        #    never told that the first one was refused.
+        allowed = terminal.mark()
+        run_cli(terminal.sock_path, ["set-option", "-g", "set-clipboard", "on"])
+        terminal.write(b"C")
+        terminal.wait_for(OSC_CLIPBOARD.encode(), since=allowed)
+        run_cli(terminal.sock_path, ["set-option", "-g", "set-clipboard", "external"])
 
         # 8. The user clicks the notification. The answer goes to the
         #    pane that asked, under the name that the pane chose.

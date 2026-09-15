@@ -162,6 +162,15 @@ ROWS, COLUMNS = 24, 80
 #: wrong is gone in a minute rather than an hour.
 HOLD = APPEAR_TIMEOUT + SETTLE_TIMEOUT + 10
 
+#: What the pymux side of a picture runs with.
+#:
+#: Full screen, so the pane covers every cell of the window. And
+#: `set-clipboard on`, because the fence a fixture ends in is a pane
+#: writing the clipboard: the value pymux ships refuses that, and the
+#: settle then waits for a fence that pymux is holding back.
+#: Lillecarl/pymux#378.
+PICTURE_CONFIG = "set full-screen on\nset set-clipboard on\n"
+
 
 # ----------------------------------------------------------------------
 # The fixtures. Each one is the bytes that a program wrote.
@@ -970,7 +979,7 @@ def compare_one(terminal, seat, name, work, out):
     write_program(program_path, fixture_path, payload)
 
     config_path = work / "full-screen.conf"
-    config_path.write_text("set full-screen on\n")
+    config_path.write_text(PICTURE_CONFIG)
 
     bare = room / "bare.png"
     through = room / "pymux.png"
@@ -1124,7 +1133,7 @@ def blink_of(terminal, seat, name, work, out):
     program_path.write_text(blink_program(name))
 
     config_path = work / "full-screen.conf"
-    config_path.write_text("set full-screen on\n")
+    config_path.write_text(PICTURE_CONFIG)
 
     answers = []
     for side, command in (

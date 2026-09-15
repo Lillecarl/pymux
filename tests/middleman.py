@@ -30,6 +30,10 @@ A fence goes down the fifo behind the payload: an OSC 52, which ptterm
 hands to pymux and pymux writes to the terminal of every client. Seeing
 it on the wire proves the pane consumed the payload.
 
+**The session says `set-clipboard on` for it.** A pane may write the
+clipboard only under that value; the one pymux ships refuses a pane and
+lets a copy the person makes out. Lillecarl/pymux#378.
+
 It does not prove the frame arrived. prompt_toolkit may postpone a
 redraw, so the frame can follow the fence. A short settle after the
 fence covers that, and it is short because the fence has already done
@@ -153,7 +157,11 @@ class Pane:
         forwarder.write_text(FORWARDER)
 
         config = self.tmp / ("%s.conf" % self.name)
-        config.write_text("set full-screen on\n")
+        # The fence is a pane writing the clipboard, and a pane may only
+        # do that when `set-clipboard` says "on". It ships as "external",
+        # where a copy the person makes goes out and a program in a pane
+        # is refused. Lillecarl/pymux#378.
+        config.write_text("set full-screen on\nset set-clipboard on\n")
 
         size = self.size_file
 
