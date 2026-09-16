@@ -31,6 +31,24 @@ async def test_session_option_reads_as_it_is_written():
         assert state.message == "off"
 
 
+async def test_mode_keys_reads_the_word_tmux_reads():
+    """
+    The mode is a bool inside and a word outside. tmux answers `vi`
+    and `emacs`; `on` answers nothing, and the completion offers the
+    words the read-back would not say. Lillecarl/pymux#382.
+    """
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("show-options mode-keys")
+
+            assert state.message == "emacs"
+
+            pymux.handle_command("set-option mode-keys vi")
+            pymux.handle_command("show-options mode-keys")
+
+            assert state.message == "vi"
+
+
 async def test_session_list_holds_session_options_only():
     async with create_session() as (pymux, state):
         with set_app(state.app):

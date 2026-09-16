@@ -310,6 +310,13 @@ class KeysOption(Option):
     def get_all_values(self, pymux):
         return ["emacs", "vi"]
 
+    def as_written(self, value, holder) -> str:
+        """
+        The mode is a bool inside and a word outside: tmux answers
+        `vi` and `emacs`, and `on` answers nothing. #382.
+        """
+        return "vi" if value else "emacs"
+
     def set_value(self, pymux, value, target=None):
         if value not in ("emacs", "vi"):
             raise SetOptionError('Expecting "vi" or "emacs".')
