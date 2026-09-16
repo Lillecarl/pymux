@@ -221,7 +221,7 @@ class TerminalClient(Client):
         gone, or the client is leaving.)
         """
         output = Vt100_Output.from_pty(sys.stdout)
-        self._set_kitty_flags(0)
+        self._pop_kitty_flags()
         # DECTCEM is not part of what the alternate screen puts back,
         # so a cursor that pymux hid stays hidden in the shell the
         # person returns to.
@@ -296,19 +296,39 @@ class TerminalClient(Client):
 
     def _set_kitty_flags(self, flags: int) -> None:
         """
-        Enable the given kitty keyboard protocol flags on the outer
-        terminal. (Ignored when the terminal does not support the
-        protocol. Zero restores the legacy encoding.)
+        Put the outer terminal in the keyboard encoding the focused
+        pane wants. (Ignored when the terminal does not support the
+        protocol.)
+
+        The first enable is a push, the protocol's own way to hold the
+        state that was there: a shell's flags, most of all a nested
+        pymux's. A later pane asks for different flags and gets a set
+        -- our push still holds the restore point, and the value over
+        it is ours to change. The way out pops what we pushed
+        (`_pop_kitty_flags`), and that is how the nested case gives
+        the outer session its encoding back. Lillecarl/pymux#403.
         """
         if not self._kitty_supported and flags != 0:
             return
-        flags = flags or 0
         if flags == self._kitty_flags:
             return
-        if flags == 0 and self._kitty_flags is None:
-            return  # Never enabled anything.
+        if self._kitty_flags is None:
+            if flags == 0:
+                return  # Nothing of ours is on the stack; 0 changes nothing.
+            os.write(sys.stdout.fileno(), ("\x1b[>%du" % flags).encode())
+        else:
+            os.write(sys.stdout.fileno(), ("\x1b[=%d;1u" % flags).encode())
         self._kitty_flags = flags
-        os.write(sys.stdout.fileno(), ("\x1b[=%d;1u" % flags).encode())
+
+    def _pop_kitty_flags(self) -> None:
+        """
+        Take our push off the outer terminal's stack. The state
+        beneath it comes back: the shell's, or a nested pymux's.
+        """
+        if self._kitty_flags is None:
+            return  # Never enabled anything.
+        os.write(sys.stdout.fileno(), b"\x1b[<1u")
+        self._kitty_flags = None
 
     def _open_url(self, url: str) -> bool:
         """

@@ -128,9 +128,9 @@ class PosixClient(TerminalClient):
 
             finally:
                 signal.signal(signal.SIGWINCH, signal.SIG_IGN)
-                # Restore the keyboard mode of the outer terminal, also
-                # when the loop ends through an exception.
-                self._set_kitty_flags(0)
+                # Take our kitty push off the outer terminal, also when
+                # the loop ends through an exception.
+                self._pop_kitty_flags()
 
     def _send_packet(self, data):
         "Send to server."
