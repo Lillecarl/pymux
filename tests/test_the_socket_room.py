@@ -1,0 +1,136 @@
+"""
+The room a server binds its unnamed sockets in.
+
+A socket named in a flat /tmp is a socket any account can squat in
+front of the bind: the next "pymux attach" lands on the squatter. So
+the sockets live in `<base>/pymux-<uid>`, a directory the first server
+creates mode 0700 and every user of it verifies before it uses, the
+way tmux keeps its sockets in `tmux-<uid>`.
+Lillecarl/pymux#405.
+"""
+
+import os
+import stat
+
+import pytest
+
+from pymux.pipes.posix import socket_directory
+
+pytestmark = pytest.mark.skipif(
+    os.name == "nt", reason="the room needs a unix uid and lstat"
+)
+
+
+@pytest.fixture
+def bases(tmp_path, monkeypatch):
+    """
+    A base that obeys the environment, and the environment itself.
+
+    Both override names are taken out, so the room lands under the
+    patched temp directory unless a test puts a name back in.
+    """
+    monkeypatch.delenv("PYMUX_TMPDIR", raising=False)
+    monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
+    monkeypatch.setattr("tempfile.gettempdir", lambda: str(tmp_path))
+    return tmp_path
+
+
+def test_the_room_is_created_private(bases):
+    room = socket_directory()
+
+    assert os.path.basename(room) == "pymux-%d" % os.getuid()
+    assert stat.S_IMODE(os.lstat(room).st_mode) == 0o700
+
+
+def test_an_existing_private_room_is_used(bases):
+    room = os.path.join(str(bases), "pymux-%d" % os.getuid())
+    os.mkdir(room, 0o700)
+
+    assert socket_directory() == room
+
+
+def test_pymux_tmpdir_comes_first(bases, monkeypatch):
+    monkeypatch.setenv("PYMUX_TMPDIR", str(bases / "first"))
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(bases / "second"))
+    (bases / "first").mkdir()
+
+    assert socket_directory() == str(bases / "first" / ("pymux-%d" % os.getuid()))
+
+
+def test_xdg_runtime_dir_comes_before_the_temp_dir(bases, monkeypatch):
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(bases / "runtime"))
+    (bases / "runtime").mkdir()
+
+    assert socket_directory() == str(
+        bases / "runtime" / ("pymux-%d" % os.getuid())
+    )
+
+
+def test_a_relative_base_is_skipped(bases, monkeypatch):
+    monkeypatch.setenv("PYMUX_TMPDIR", "relative/path")
+
+    assert socket_directory() == str(bases / ("pymux-%d" % os.getuid()))
+
+
+def test_a_base_that_cannot_hold_a_room_falls_through(
+    bases, monkeypatch
+):
+    unwritable = bases / "unwritable"
+    unwritable.mkdir()
+    unwritable.chmod(0o555)
+    monkeypatch.setenv("PYMUX_TMPDIR", str(unwritable))
+
+    try:
+        assert socket_directory() == str(bases / ("pymux-%d" % os.getuid()))
+    finally:
+        unwritable.chmod(0o755)
+
+
+def test_a_symlink_in_its_place_is_refused(bases):
+    elsewhere = bases / "elsewhere"
+    elsewhere.mkdir()
+    os.symlink(elsewhere, bases / ("pymux-%d" % os.getuid()))
+
+    with pytest.raises(OSError, match="is not a directory"):
+        socket_directory()
+
+
+def test_a_file_in_its_place_is_refused(bases):
+    (bases / ("pymux-%d" % os.getuid())).write_text("")
+
+    with pytest.raises(OSError, match="is not a directory"):
+        socket_directory()
+
+
+def test_a_readable_room_is_refused(bases):
+    room = bases / ("pymux-%d" % os.getuid())
+    room.mkdir(mode=0o755)
+
+    with pytest.raises(OSError, match="unsafe permissions"):
+        socket_directory()
+
+
+def test_a_room_owned_by_someone_else_is_refused(bases, monkeypatch):
+    real = os.getuid()
+    room = bases / ("pymux-%d" % real)
+    room.mkdir(mode=0o700)
+    # The owner check compares what lstat saw against what getuid says.
+    # Naming a foreign uid makes the two disagree with nothing to chown.
+    monkeypatch.setattr(os, "getuid", lambda: real + 1)
+
+    with pytest.raises(OSError, match="unsafe permissions"):
+        socket_directory()
+
+
+def test_no_usable_base_at_all_is_a_refusal(bases, monkeypatch):
+    dead = bases / "dead"
+    dead.mkdir()
+    dead.chmod(0o555)
+    monkeypatch.setenv("PYMUX_TMPDIR", str(dead))
+    monkeypatch.setattr("tempfile.gettempdir", lambda: str(dead))
+
+    try:
+        with pytest.raises(OSError, match="no base"):
+            socket_directory()
+    finally:
+        dead.chmod(0o755)

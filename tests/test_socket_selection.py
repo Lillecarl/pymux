@@ -30,8 +30,12 @@ def sockets(tmp_path, monkeypatch):
     Make sockets that a client can connect to, oldest first.
 
     A real socket, not a plain file, so that the test says something
-    about the sockets a server leaves behind.
+    about the sockets a server leaves behind. The override names for
+    the socket room are taken out, so the room is the one under the
+    patched temp directory, beside the flat sockets a test binds.
     """
+    monkeypatch.delenv("PYMUX_TMPDIR", raising=False)
+    monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
     monkeypatch.setattr("tempfile.gettempdir", lambda: str(tmp_path))
     monkeypatch.setattr("getpass.getuser", lambda: "someone")
 
@@ -74,3 +78,28 @@ def test_number_does_not_decide(sockets):
 def test_another_user_is_not_listed(sockets):
     sockets(["pymux.sock.someone.0", "pymux.sock.somebody.0"])
     assert _names() == ["pymux.sock.someone.0"]
+
+
+def test_a_socket_in_the_room_is_listed(sockets, tmp_path):
+    # The mode the room itself would have: the client verifies the room
+    # it finds, and a 0755 one is a refusal.
+    room = tmp_path / ("pymux-%d" % os.getuid())
+    room.mkdir(mode=0o700)
+    sockets([str(room / "pymux.sock.someone.0")])
+    assert _names() == ["pymux.sock.someone.0"]
+
+
+def test_the_room_and_the_flat_place_are_one_list(sockets, tmp_path):
+    """
+    One release of the flat layout: a server that bound before the
+    room still answers, and an attach reaches the newest of either.
+    """
+    room = tmp_path / ("pymux-%d" % os.getuid())
+    room.mkdir(mode=0o700)
+    sockets(
+        [
+            "pymux.sock.someone.7",
+            str(room / "pymux.sock.someone.0"),
+        ]
+    )
+    assert _names() == ["pymux.sock.someone.0", "pymux.sock.someone.7"]

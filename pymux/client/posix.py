@@ -10,6 +10,7 @@ from select import select
 
 from prompt_toolkit.input.vt100 import raw_mode
 
+from ..pipes.posix import socket_directory
 from .terminal import TerminalClient
 
 __all__ = [
@@ -156,9 +157,17 @@ def list_socket_names():
     nothing writes to a socket file after the bind. Newest first means
     that "pymux attach" reaches the server a person just started, which
     is what they mean by it.
+
+    The servers live in the room `socket_directory` holds -- the
+    per-UID directory tmux keeps its own sockets in
+    (Lillecarl/pymux#405) -- and one release also in the flat place
+    they bound before it: a server that answered before the room still
+    answers, and an attach should still find it.
     """
-    pattern = "%s/pymux.sock.%s.*" % (tempfile.gettempdir(), getpass.getuser())
-    return sorted(glob.glob(pattern), key=_started_at, reverse=True)
+    user = getpass.getuser()
+    found = glob.glob("%s/pymux.sock.%s.*" % (socket_directory(), user))
+    found += glob.glob("%s/pymux.sock.%s.*" % (tempfile.gettempdir(), user))
+    return sorted(set(found), key=_started_at, reverse=True)
 
 
 def _started_at(path: str) -> float:

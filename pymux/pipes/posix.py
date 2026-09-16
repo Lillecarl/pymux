@@ -1,6 +1,7 @@
 import getpass
 import os
 import socket
+import stat
 import tempfile
 from typing import Callable
 
@@ -11,9 +12,67 @@ from .base import BrokenPipeError, PipeConnection
 
 __all__ = [
     "bind_and_listen_on_posix_socket",
+    "socket_directory",
     "PosixSocketConnection",
     "PosixSocketListener",
 ]
+
+
+def socket_directory() -> str:
+    """
+    The directory that holds this user's unnamed sockets.
+
+    tmux keeps its sockets in `<base>/tmux-<uid>`: a directory it
+    creates mode 0700 and then verifies before it uses -- owned by the
+    user, closed to everyone else, a real directory and not a symlink.
+    A socket named in a flat /tmp is a socket any account can squat in
+    front of the bind, and then an attach lands on the squatter.
+    Lillecarl/pymux#405.
+
+    The bases, in order: `$PYMUX_TMPDIR`, the override tmux spells
+    `$TMUX_TMPDIR`; then `$XDG_RUNTIME_DIR`, the user-private runtime
+    directory Linux already holds, which dies with the session and
+    takes stale sockets with it; then what Python names the temp
+    directory, which on macOS is the user's own `$TMPDIR`.
+
+    A room that fails the check is a refusal, never a repair: a
+    directory somebody else built is exactly the one not to use. A
+    base that cannot hold a room falls through to the next base.
+    """
+    bases = []
+    for name in ("PYMUX_TMPDIR", "XDG_RUNTIME_DIR"):
+        value = os.environ.get(name)
+        # A relative base means another thing after `daemonize` moves
+        # the process to /. Lillecarl/pymux#322.
+        if value and os.path.isabs(value):
+            bases.append(value)
+    bases.append(tempfile.gettempdir())
+
+    for base in bases:
+        directory = os.path.join(base, "pymux-%d" % os.getuid())
+        try:
+            os.mkdir(directory, 0o700)
+        except FileExistsError:
+            pass
+        except OSError:
+            continue
+        _verify_the_socket_room(directory)
+        return directory
+
+    raise OSError("no base can hold a pymux socket directory")
+
+
+def _verify_the_socket_room(directory: str) -> None:
+    """
+    tmux's check, in tmux's order (`tmux.c` `make_label`): a real
+    directory -- `lstat`, so a symlink does not pass -- owned by this
+    user, with no permission for anybody else.
+    """
+    room = os.lstat(directory)
+    if not stat.S_ISDIR(room.st_mode):
+        raise OSError("%s is not a directory" % directory)
+    if room.st_uid != os.getuid() or room.st_mode & 0o007:
+        raise OSError("directory %s has unsafe permissions" % directory)
 
 
 def bind_and_listen_on_posix_socket(socket_name: str, accept_callback: Callable):
@@ -94,11 +153,12 @@ def _bind_posix_socket(socket_name: str | None = None):
         s.bind(socket_name)
         return socket_name, s
     else:
+        room = socket_directory()
         i = 0
         while True:
             try:
                 socket_name = "%s/pymux.sock.%s.%i" % (
-                    tempfile.gettempdir(),
+                    room,
                     getpass.getuser(),
                     i,
                 )

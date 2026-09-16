@@ -19,6 +19,8 @@ import socket
 import tempfile
 from typing import Iterable, List, NamedTuple, Optional, Sequence, Union
 
+from pymux.pipes.posix import socket_directory
+
 __all__ = [
     "CommandError",
     "CommandResult",
@@ -96,9 +98,15 @@ def socket_paths() -> List[str]:
 
     A server started with a socket path of its own is not in here. Name
     that path to reach it.
+
+    The servers live in the per-UID room the server binds in, and one
+    release also in the flat place they bound before it.
+    Lillecarl/pymux#405.
     """
-    pattern = "%s/pymux.sock.%s.*" % (tempfile.gettempdir(), getpass.getuser())
-    return sorted(path for path in glob.glob(pattern) if _is_socket(path))
+    user = getpass.getuser()
+    found = glob.glob("%s/pymux.sock.%s.*" % (socket_directory(), user))
+    found += glob.glob("%s/pymux.sock.%s.*" % (tempfile.gettempdir(), user))
+    return sorted(set(path for path in found if _is_socket(path)))
 
 
 def _is_socket(path: str) -> bool:
