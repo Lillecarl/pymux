@@ -27,10 +27,12 @@ def command_names():
 
 def bindings():
     """
-    Every `bind-key` line, as (key, command name).
+    Every `bind-key` line, as (table, key, command name).
 
     The rest of the line is the command's own arguments, and
-    `test_key_mappings.py` covers the key names themselves.
+    `test_key_mappings.py` covers the key names themselves. A line
+    without `-T` binds into the prefix table, what a bare `bind-key`
+    has always meant.
 
     It splits the way pymux does, with `shlex`, because two of the keys
     are quotation marks and a plain split keeps the quotes around them.
@@ -39,28 +41,49 @@ def bindings():
 
     for line in STARTUP_COMMANDS.splitlines():
         words = shlex.split(line, comments=True)
-        if words[:1] == ["bind-key"]:
-            result.append((words[1], words[2]))
+        if words[:1] != ["bind-key"]:
+            continue
+        words = words[1:]
+        table = "prefix"
+        if words[:1] == ["-T"]:
+            table = words[1]
+            words = words[2:]
+        elif words[:1] == ["-n"]:
+            table = "root"
+            words = words[1:]
+        result.append((table, words[0], words[1]))
 
     return result
 
 
-@pytest.mark.parametrize("key,command", bindings())
-def test_every_key_of_default_table_has_name(key, command):
+@pytest.mark.parametrize("table,key,command", bindings())
+def test_every_key_of_default_table_has_name(table, key, command):
     "A name the table does not know is dropped, and says nothing."
     assert pymux_key_to_prompt_toolkit_key_sequence(key)
 
 
-@pytest.mark.parametrize("key,command", bindings())
-def test_every_default_binding_reaches_command(key, command):
+@pytest.mark.parametrize("table,key,command", bindings())
+def test_every_default_binding_reaches_command(table, key, command):
     assert command in command_names()
 
 
 def test_no_key_is_bound_twice():
     "The second line wins in silence, which is never what was meant."
-    keys = [key for key, _ in bindings()]
+    pairs = [(table, key) for table, key, _ in bindings()]
 
-    assert sorted(keys) == sorted(set(keys))
+    assert sorted(pairs) == sorted(set(pairs))
+
+
+def test_a_mode_binds_its_own_keys_beside_the_prefix_table():
+    """
+    The same key is two bindings when the tables differ: `h` follows
+    the prefix as one thing and answers in pane-management as
+    another. Lillecarl/pymux#395.
+    """
+    tables = {(table, key) for table, key, _ in bindings()}
+
+    assert ("prefix", "h") in tables
+    assert ("pane-management", "h") in tables
 
 
 # ----------------------------------------------------------------------
@@ -78,7 +101,7 @@ def test_no_key_is_bound_twice():
     ],
 )
 def test_strip_has_key_for_each_of_its_commands(key, command):
-    assert (key, command) in bindings()
+    assert ("prefix", key, command) in bindings()
 
 
 def test_braces_are_still_tmux_s_own():
@@ -87,5 +110,5 @@ def test_braces_are_still_tmux_s_own():
     those are `swap-pane` here. tmux's keys stay tmux's, so the strip
     took `<` and `>`. Lillecarl/pymux#212.
     """
-    assert ("{", "swap-pane") in bindings()
-    assert ("}", "swap-pane") in bindings()
+    assert ("prefix", "{", "swap-pane") in bindings()
+    assert ("prefix", "}", "swap-pane") in bindings()

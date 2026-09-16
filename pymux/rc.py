@@ -102,4 +102,36 @@ bind-key M-5 select-layout tiled
 bind-key , command-prompt -I #W "rename-window '%%'"
 #bind-key "'" command-prompt -I #W "rename-pane '%%'"
 bind-key "'" command-prompt -p index "select-window -t ':%%'"
+
+# The pane-management mode. One `M` enters it, and while it lasts the
+# keys of moving a pane around are one press each, no prefix in
+# between: hjkl and the arrows move the focus, ctrl moves the edges.
+# The resize step is the prefix table's own, so the two feel the same.
+# A key the table does not name still reaches the pane, so a person
+# can keep working while they manage; q and Escape leave.
+# Lillecarl/pymux#395.
+bind-key M enter-mode pane-management
+bind-key -T pane-management h select-pane -L
+bind-key -T pane-management l select-pane -R
+bind-key -T pane-management k select-pane -U
+bind-key -T pane-management j select-pane -D
+bind-key -T pane-management Left select-pane -L
+bind-key -T pane-management Right select-pane -R
+bind-key -T pane-management Up select-pane -U
+bind-key -T pane-management Down select-pane -D
+bind-key -T pane-management C-h resize-pane -L 2
+bind-key -T pane-management C-l resize-pane -R 2
+bind-key -T pane-management C-k resize-pane -U 2
+bind-key -T pane-management C-j resize-pane -D 2
+bind-key -T pane-management C-Left resize-pane -L 2
+bind-key -T pane-management C-Right resize-pane -R 2
+bind-key -T pane-management C-Up resize-pane -U 2
+bind-key -T pane-management C-Down resize-pane -D 2
+bind-key -T pane-management z resize-pane -Z
+bind-key -T pane-management s swap-pane -U
+bind-key -T pane-management o select-pane -t :.+
+bind-key -T pane-management x confirm-before -p "kill-pane #P?" kill-pane
+bind-key -T pane-management [ copy-mode
+bind-key -T pane-management q leave-mode
+bind-key -T pane-management Escape leave-mode
 """
