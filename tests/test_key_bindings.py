@@ -83,10 +83,11 @@ def test_caller_asks_for_binding_by_any_name_of_its_key(pymux):
     and the gate caught it.
     """
     run(pymux, "bind-key -n ctrl+a new-window")
+
     manager = pymux.key_bindings_manager
 
-    assert manager.binding_on("C-a").command == "new-window"
-    assert manager.binding_on("c-a", needs_prefix=True) is None
+    assert manager.binding_on("C-a", table="root").command == "new-window"
+    assert manager.binding_on("c-a") is None
 
 
 def test_list_keys_shows_name_person_wrote(pymux):

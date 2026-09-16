@@ -13,9 +13,10 @@ def bind_key(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
     Bind a key sequence to a command.
     -n: Not necessary to use the prefix.
+    -T: The key table to bind into, a mode's by name.
     """
     key = args.key
-    needs_prefix = not args.n
+    table = "root" if args.n else (args.table or "prefix")
 
     # The bound command is the first word of the remainder, and its
     # arguments are the rest. A leading `--` separated the two from
@@ -29,7 +30,7 @@ def bind_key(pymux: "Pymux", args: argparse.Namespace) -> None:
 
     try:
         pymux.key_bindings_manager.add_custom_binding(
-            key, command, bound_arguments, needs_prefix=needs_prefix
+            key, command, bound_arguments, table=table
         )
     except ValueError:
         raise CommandException("Invalid key: %r" % (key,))
@@ -37,7 +38,12 @@ def bind_key(pymux: "Pymux", args: argparse.Namespace) -> None:
 
 def register(subparsers):
     parser = add_command(subparsers, bind_key)
-    parser.add_argument("-n", dest="n", action="store_true", help="Bind without the prefix.")
+    table = parser.add_mutually_exclusive_group()
+    table.add_argument("-n", dest="n", action="store_true", help="Bind without the prefix.")
+    table.add_argument(
+        "-T", dest="table", metavar="<key-table>", help="Bind into this key table: "
+        "a mode's name, which the first `bind-key -T` names."
+    )
     parser.add_argument("key", metavar="<key>", help="The key to bind.")
     # Everything from the bound command on is a remainder, so an
     # option of the bound command is never read as an option of

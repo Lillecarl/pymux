@@ -38,6 +38,7 @@ import re
 from typing import Dict, Sequence, Tuple
 
 from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.keys import Keys
 from pyte.keys import FIRST_FUNCTIONAL_KEY, KeyEvent, Modifier
 
 from .key_mappings import (
@@ -373,6 +374,11 @@ def key_however_it_is_written(text: str) -> Tuple[str, ...]:
     The third reading only ever sees a name the second one refused, so
     it can add keys and cannot change one.
 
+    "Any" reads before all of them, as the key that is every key. No
+    keyboard sends it and `send-keys` must never, but a table binds it:
+    `bind-key -T <mode> Any noop` is what makes a mode strict, and
+    that is the one way to write it. Lillecarl/pymux#394.
+
     **One key, and never a sequence.** `send-keys` sends what it cannot
     read as literal text, the way tmux does, so reading a space here
     would turn `send-keys "a b"` from three characters into two key
@@ -381,6 +387,9 @@ def key_however_it_is_written(text: str) -> Tuple[str, ...]:
 
     Raises `ValueError` when no reading of it names a key.
     """
+    if text.lower() == "any":
+        return (Keys.Any,)
+
     try:
         return chord(text)
     except ValueError:

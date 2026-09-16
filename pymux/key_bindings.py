@@ -23,7 +23,7 @@ from prompt_toolkit.keys import Keys
 from .commands import call_command_handler
 from .commands.utils import wrap_argument
 from .enums import COMMAND, PROMPT
-from .filters import HasPrefix, WaitsForConfirmation
+from .filters import HasPrefix, KeyTableIs, ModeActive, WaitsForConfirmation
 from .key_spelling import key_however_it_is_written
 
 if TYPE_CHECKING:
@@ -33,10 +33,65 @@ logger = logging.getLogger(__name__)
 
 __all__ = ["PymuxKeyBindings"]
 
-#: One binding: the keys it answers to, and whether the prefix comes
-#: first. The keys are prompt_toolkit's, so every spelling of one key
-#: gives the same one.
-_ABinding = Tuple[bool, Tuple[str, ...]]
+#: The two tables a client is always between: the one its keys are
+#: read from while the prefix is up, and the one for the rest of the
+#: time. A mode adds its own named table on top.
+ROOT_TABLE = "root"
+PREFIX_TABLE = "prefix"
+
+#: One binding: the table its key is read from, and the keys
+#: themselves. The keys are prompt_toolkit's, so every spelling of one
+#: key gives the same one.
+_ABinding = Tuple[str, Tuple[str, ...]]
+
+
+class KeyTable:
+    """
+    A named table of keys, and what entering it does.
+
+    **A table is a mode when a person can be in it.** The name is what
+    `enter-mode` takes, what `bind-key -T` binds into, and what
+    `#{client_key_table}` reports while it is on top. `on_enter` and
+    `on_leave` are the mode's own side effects, and nothing more: the
+    keys themselves are the bindings the table holds.
+
+    A key the table holds no binding for falls through to the pane.
+    That is what makes a mode transparent, and strictness is a
+    binding of its own: `bind-key -T <table> Any noop` swallows
+    everything the table does not name. Lillecarl/pymux#394.
+    """
+
+    def __init__(self, name: str, on_enter=None, on_leave=None) -> None:
+        self.name = name
+        #: The mode's own side effects. Each takes the pymux.
+        self.on_enter = on_enter
+        self.on_leave = on_leave
+
+
+def _hold_pane_numbers_up(pymux: "Pymux") -> None:
+    "The numbers are how a person reads a mode that moves the focus."
+    pymux.display_pane_numbers = True
+
+
+def _put_pane_numbers_back(pymux: "Pymux") -> None:
+    pymux.display_pane_numbers = False
+
+
+def _register_builtin_mode_tables(manager: "PymuxKeyBindings") -> None:
+    """
+    The modes pymux ships with, with the side effects their keys
+    cannot say.
+
+    The keys themselves are the `bind-key -T` lines of the initial
+    configuration, so a person who rebinds one rebinds it; the table
+    is here so that entering it means something even then.
+    Lillecarl/pymux#395.
+    """
+    manager.mode_tables["pane-management"] = KeyTable(
+        "pane-management",
+        on_enter=_hold_pane_numbers_up,
+        on_leave=_put_pane_numbers_back,
+    )
 
 
 class PymuxKeyBindings:
@@ -48,6 +103,12 @@ class PymuxKeyBindings:
         self.pymux = pymux
 
         self.custom_key_bindings = KeyBindings()
+
+        #: The modes a person can be in, by the name `enter-mode`
+        #: takes. `bind-key -T` creates a table without hooks here
+        #: when it meets a name this does not hold. Lillecarl/pymux#394.
+        self.mode_tables: Dict[str, KeyTable] = {}
+        _register_builtin_mode_tables(self)
 
         self.key_bindings = merge_key_bindings(
             [
@@ -141,6 +202,7 @@ class PymuxKeyBindings:
         waits_for_confirmation = WaitsForConfirmation(pymux)
         prompt_or_command_focus = has_focus(COMMAND) | has_focus(PROMPT)
         display_pane_numbers = Condition(lambda: pymux.display_pane_numbers)
+        mode_active = ModeActive(pymux)
 
         @kb.add(Keys.Any, filter=has_prefix)
         def _(event: E) -> None:
@@ -383,9 +445,17 @@ class PymuxKeyBindings:
             except Exception:
                 logger.exception("Forwarding a key release failed.")
 
-        @kb.add(Keys.Any, eager=True, filter=display_pane_numbers)
+        @kb.add(Keys.Any, eager=True, filter=display_pane_numbers & ~mode_active)
         def _hide_numbers(event: E) -> None:
-            "When the pane numbers are shown. Any key press should hide them."
+            """
+            When the pane numbers are shown. Any key press should hide
+            them.
+
+            **Not the keys of a mode.** Pane-management holds the
+            numbers up for its whole stay: its keys move the focus and
+            resize, and the numbers are how a person reads what they
+            did. Lillecarl/pymux#395.
+            """
             pymux.display_pane_numbers = False
 
         @Condition
@@ -403,7 +473,7 @@ class PymuxKeyBindings:
         return kb
 
     def add_custom_binding(
-        self, key_name: str, command: str, arguments: list, needs_prefix=False
+        self, key_name: str, command: str, arguments: list, table: str = PREFIX_TABLE
     ) -> None:
         """
         Add custom binding (for the "bind-key" command.)
@@ -411,21 +481,28 @@ class PymuxKeyBindings:
 
         :param key_name: Pymux key name, for instance "C-a", "M-x" or
             "ctrl+home".
+        :param table: The table the key is read from: `root` for a
+            binding that answers without the prefix (`-n`), the name
+            of a mode for `bind-key -T`. The default is the prefix
+            table, what a bare `bind-key` has always meant.
         """
         # Translate the name into a prompt_toolkit key sequence, in
         # either spelling. (Can raise ValueError.)
         keys_sequence = key_however_it_is_written(key_name)
 
         # Unbind the key, under whichever name it was bound.
-        self.remove_custom_binding(key_name, needs_prefix=needs_prefix)
+        self.remove_custom_binding(key_name, table=table)
 
-        # Create handler and add to Registry.
-        filter: Filter
-        if needs_prefix:
-            filter = HasPrefix(self.pymux)
-        else:
-            filter = ~HasPrefix(self.pymux)
+        # A mode a person binds into exists from then on, the way it
+        # does in tmux: the first `bind-key -T` is what names it.
+        if table not in (ROOT_TABLE, PREFIX_TABLE) and table not in self.mode_tables:
+            self.mode_tables[table] = KeyTable(table)
 
+        # The binding answers only when this table is the one the
+        # client's next key is read from. That is the whole of the
+        # masking: while a mode is on top, the root table and the
+        # prefix table hold nothing the mode does not.
+        filter: Filter = KeyTableIs(self.pymux, table)
         filter = filter & ~(
             WaitsForConfirmation(self.pymux) | has_focus(COMMAND) | has_focus(PROMPT)
         )
@@ -449,11 +526,49 @@ class PymuxKeyBindings:
             )
             client_state.has_prefix = False
 
-        self.custom_key_bindings.add(*keys_sequence, filter=filter)(key_handler)
+        # An `Any` binding is eager, or it loses to an eager one below
+        # it: the pane's own keys and `_hide_numbers` are any-key
+        # bindings too, and waiting for a longer sequence that cannot
+        # come hands the key to them. The same lesson
+        # `_load_builtins` records on `_hide_numbers`.
+        self.custom_key_bindings.add(
+            *keys_sequence, filter=filter, eager=(keys_sequence == (Keys.Any,))
+        )(key_handler)
 
-        self.custom_bindings[needs_prefix, keys_sequence] = CustomBinding(
+        self.custom_bindings[table, keys_sequence] = CustomBinding(
             key_handler, command, arguments, key_name
         )
+
+    def enter_mode(self, name: str) -> None:
+        """
+        Put a mode's table on top of this client's stack of them.
+
+        Raises `KeyError` for a name no table holds, and `ValueError`
+        when no client is here to enter it.
+        """
+        table = self.mode_tables[name]  # KeyError for a name nobody bound.
+        client_state = self.pymux.get_client_state()
+        client_state.key_tables.append(name)
+        if table.on_enter:
+            table.on_enter(self.pymux)
+        client_state.app.invalidate()
+
+    def leave_mode(self) -> None:
+        """
+        Take the top mode off this client's stack, and put back what
+        its entering changed.
+
+        Raises `ValueError` when no client is here, and
+        `IndexError` when no mode is on the stack: `leave-mode` typed
+        at the command line with nothing to leave is a mistake worth
+        saying so, and not a silence.
+        """
+        client_state = self.pymux.get_client_state()
+        name = client_state.key_tables.pop()
+        table = self.mode_tables[name]
+        if table.on_leave:
+            table.on_leave(self.pymux)
+        client_state.app.invalidate()
 
     def prefix_keys(self) -> "list[tuple[str, str]]":
         """
@@ -467,8 +582,8 @@ class PymuxKeyBindings:
         the same table draws twice the same.
         """
         rows = []
-        for (needs_prefix, _keys), binding in self.custom_bindings.items():
-            if not needs_prefix:
+        for (table, _keys), binding in self.custom_bindings.items():
+            if table != PREFIX_TABLE:
                 continue
             meaning = binding.command
             if binding.arguments:
@@ -477,7 +592,7 @@ class PymuxKeyBindings:
         return sorted(rows)
 
     def binding_on(
-        self, key_name: str, needs_prefix: bool = False
+        self, key_name: str, table: str = PREFIX_TABLE
     ) -> "CustomBinding | None":
         """
         What a key runs, under any name for that key, or None.
@@ -485,10 +600,10 @@ class PymuxKeyBindings:
         Raises `ValueError` when the name reads as no key at all.
         """
         return self.custom_bindings.get(
-            (needs_prefix, key_however_it_is_written(key_name))
+            (table, key_however_it_is_written(key_name))
         )
 
-    def remove_custom_binding(self, key_name: str, needs_prefix: bool = False) -> None:
+    def remove_custom_binding(self, key_name: str, table: str = PREFIX_TABLE) -> None:
         """
         Remove the binding on a key, under any name for that key.
 
@@ -496,7 +611,7 @@ class PymuxKeyBindings:
 
         :param key_name: Pymux key name, for instance "C-A".
         """
-        k = (needs_prefix, key_however_it_is_written(key_name))
+        k = (table, key_however_it_is_written(key_name))
 
         if k in self.custom_bindings:
             self.custom_key_bindings.remove(self.custom_bindings[k].handler)

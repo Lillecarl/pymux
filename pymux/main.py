@@ -228,6 +228,14 @@ class ClientState:
         #: True when the prefix key (Ctrl-B) has been pressed.
         self.has_prefix = False
 
+        #: The mode tables this client sits in, the innermost last.
+        #: Empty when every key is read from root or prefix. A mode is
+        #: client state, the way the chooser is: two people on one
+        #: session manage panes separately.
+        #: `enter-mode` and `leave-mode` move the top.
+        #: Lillecarl/pymux#394.
+        self.key_tables: List[str] = []
+
         #: Error/info message.
         self.message = None
 
@@ -373,6 +381,23 @@ class ClientState:
                 logger.exception("Drawing the pane images failed.")
 
         self.app.after_render += after_render
+
+    @property
+    def active_key_table(self) -> str:
+        """
+        The table this client's next key is read from.
+
+        The prefix first, because a prefix pressed inside a mode sits
+        on top of it: one key is read from `prefix`, and the mode is
+        still there when that key is done. Then the innermost mode,
+        and `root` when no mode is on the stack.
+        Lillecarl/pymux#394.
+        """
+        if self.has_prefix:
+            return "prefix"
+        if self.key_tables:
+            return self.key_tables[-1]
+        return "root"
 
     @property
     def default_colors(self) -> DefaultColors:

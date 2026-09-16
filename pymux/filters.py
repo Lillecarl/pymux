@@ -5,6 +5,8 @@ __all__ = [
     "WaitsForConfirmation",
     "InCommandMode",
     "WaitsForPrompt",
+    "KeyTableIs",
+    "ModeActive",
 ]
 
 
@@ -20,6 +22,46 @@ class HasPrefix(Filter):
     def __call__(self):
         try:
             return self.pymux.get_client_state().has_prefix
+        except ValueError:
+            return False
+
+
+class KeyTableIs(Filter):
+    """
+    When the key in front of the client is read from this table.
+
+    The client's active table says so: `prefix` while the prefix key
+    is up, a mode's table while that mode is on top of the client's
+    stack, and `root` otherwise. Lillecarl/pymux#394.
+    """
+
+    def __init__(self, pymux, table: str):
+        self.pymux = pymux
+        self.table = table
+        super().__init__()
+
+    def __call__(self):
+        try:
+            return self.pymux.get_client_state().active_key_table == self.table
+        except ValueError:
+            return False
+
+
+class ModeActive(Filter):
+    """
+    When a mode's table sits on top of this client's stack.
+
+    This is what masks the root table and the prefix for as long as
+    the mode lasts. Lillecarl/pymux#394.
+    """
+
+    def __init__(self, pymux):
+        self.pymux = pymux
+        super().__init__()
+
+    def __call__(self):
+        try:
+            return bool(self.pymux.get_client_state().key_tables)
         except ValueError:
             return False
 

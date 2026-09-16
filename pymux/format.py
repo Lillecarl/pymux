@@ -437,13 +437,14 @@ def _client_key_table(context: FormatContext) -> str:
 
     tmux names the default `root` and moves the client to `prefix`
     until it reads one key (`server_client_get_key_table` and
-    `server-client.c`). pymux has no other tables, so these two are
-    the whole set.
+    `server-client.c`). A mode puts its own named table there for as
+    long as it lasts, and a prefix pressed inside a mode sits on top
+    of it for one key. Lillecarl/pymux#394.
     """
     client = context.client
     if client is None:
         return ""
-    return "prefix" if client.has_prefix else "root"
+    return client.active_key_table
 
 
 def _client_hostname(context: FormatContext) -> str:

@@ -13,20 +13,26 @@ from pymux.commands.utils import wrap_argument
 def list_keys(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
     Display all configured key bindings.
+    -T: Only this key table.
     """
     # Create help string.
     result = []
 
-    for k, custom_binding in pymux.key_bindings_manager.custom_bindings.items():
-        needs_prefix, _keys = k
+    for (table, _keys), custom_binding in (
+        pymux.key_bindings_manager.custom_bindings.items()
+    ):
+        if args.table and args.table != table:
+            continue
 
         result.append(
-            "bind-key %3s %-10s %s %s"
+            "bind-key -T %-16s %s %s"
             % (
-                ("-n" if needs_prefix else ""),
+                table,
                 custom_binding.written,
-                custom_binding.command,
-                " ".join(map(wrap_argument, custom_binding.arguments)),
+                " ".join(
+                    [custom_binding.command]
+                    + list(map(wrap_argument, custom_binding.arguments))
+                ),
             )
         )
 
@@ -34,4 +40,7 @@ def list_keys(pymux: "Pymux", args: argparse.Namespace) -> None:
 
 
 def register(subparsers):
-    add_command(subparsers, list_keys)
+    parser = add_command(subparsers, list_keys)
+    parser.add_argument(
+        "-T", dest="table", metavar="<key-table>", help="List only this key table."
+    )

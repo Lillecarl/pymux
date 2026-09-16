@@ -18,7 +18,7 @@ from pymux.format import (
     symbol_variables,
     tmux_variables,
 )
-from pymux.main import Pymux
+from pymux.main import ClientState, Pymux
 
 
 @pytest.fixture
@@ -141,13 +141,16 @@ def test_the_prefix_a_client_holds_is_a_format(pymux):
     """
     `#{client_prefix}` says the client waits for the key after the
     prefix, and `#{client_key_table}` names the table that key is read
-    from. tmux spells the two tables `root` and `prefix`.
-    Lillecarl/pymux#363.
+    from. tmux spells the two tables `root` and `prefix`, and a mode
+    puts its own name there for as long as it lasts.
+    Lillecarl/pymux#363. Lillecarl/pymux#394.
     """
 
     class Client:
         session = pymux.current_session
         has_prefix = False
+        key_tables = []
+        active_key_table = ClientState.active_key_table
 
     client = Client()
 
@@ -158,6 +161,13 @@ def test_the_prefix_a_client_holds_is_a_format(pymux):
 
     assert format_pymux_string(pymux, "#{client_prefix}", client=client) == "1"
     assert format_pymux_string(pymux, "#{client_key_table}", client=client) == "prefix"
+
+    client.has_prefix = False
+    client.key_tables = ["pane-management"]
+
+    assert format_pymux_string(pymux, "#{client_key_table}", client=client) == (
+        "pane-management"
+    )
 
 
 def test_a_prefix_with_no_client_is_empty(pymux):

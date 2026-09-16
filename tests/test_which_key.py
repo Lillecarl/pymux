@@ -143,9 +143,9 @@ async def test_listing_is_prefix_bindings():
     """
     async with create_session() as (pymux, state):
         manager = pymux.key_bindings_manager
-        manager.add_custom_binding("C-z", "send-prefix", [])
-        manager.add_custom_binding("x", "swap-pane", ["-U"], needs_prefix=True)
-        manager.add_custom_binding("e", "show-clipboard", [], needs_prefix=True)
+        manager.add_custom_binding("C-z", "send-prefix", [], table="root")
+        manager.add_custom_binding("x", "swap-pane", ["-U"])
+        manager.add_custom_binding("e", "show-clipboard", [])
 
         rows = manager.prefix_keys()
 
