@@ -1,0 +1,41 @@
+Head-to-head probes of the divergences in
+tests/reference/tmux_compat/divergences.toml, against the pinned tmux
+oracle. One block per entry: the transcript of the probe that proved
+what tmux does, run by hand until #384's harness carries it.
+
+== swap-pane -U and -D directions (tmux 3.7c)
+
+A three-pane session, one command per pane so the swap is readable
+back. Pane indices start at 1 on this machine's tmux.conf.
+
+$ tmux -S probe.sock new-session -d -s probe 'sh -c "echo A; sleep 999"'
+$ tmux -S probe.sock split-window -t probe 'sh -c "echo B; sleep 999"'
+$ tmux -S probe.sock split-window -t probe 'sh -c "echo C; sleep 999"'
+$ tmux -S probe.sock list-panes -t probe -F '#{pane_index} #{pane_start_command}'
+1 "sh -c \"echo A; sleep 999\""
+2 "sh -c \"echo B; sleep 999\""
+3 "sh -c \"echo C; sleep 999\""
+
+-U from the middle pane (index 2):
+
+$ tmux -S probe.sock select-pane -t probe.2
+$ tmux -S probe.sock swap-pane -U -t probe
+$ tmux -S probe.sock list-panes -t probe -F '#{pane_index} #{pane_start_command}'
+1 "sh -c \"echo B; sleep 999\""     <- B came UP: -U is the pane above
+2 "sh -c \"echo A; sleep 999\""
+3 "sh -c \"echo C; sleep 999\""
+
+-D from the same pane, putting it back:
+
+$ tmux -S probe.sock swap-pane -D -t probe
+$ tmux -S probe.sock list-panes -t probe -F '#{pane_index} #{pane_start_command}'
+1 "sh -c \"echo A; sleep 999\""
+2 "sh -c \"echo B; sleep 999\""     <- B went DOWN: -D is the pane below
+3 "sh -c \"echo C; sleep 999\""
+
+The wrap agrees: -U from the topmost pane swaps with the bottom one
+(the previous pane cyclically), which is also in the transcript of
+the first attempt at this probe.
+
+tmux(1) swap-pane: "-U: swap the active pane with the pane above (or
+previous)", "-D: swap the active pane with the pane below (or next)".

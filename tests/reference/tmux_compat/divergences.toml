@@ -1,0 +1,24 @@
+# Every intentional difference from tmux, with the test that pins it
+# and the probe that proved what tmux does. The rule the ledger
+# enforces on itself: a behavior that differs from tmux and holds no
+# entry here is a bug. Lillecarl/pymux#385.
+unlisted_divergences_are_bugs = true
+
+[[divergence]]
+name = "swap-pane -U and -D directions are inverted"
+command = "swap-pane"
+tmux = "-U swaps the active pane with the pane above, -D with the pane below"
+pymux = "-U swaps with the pane below, -D with the pane above"
+test = "test_swap_pane_swaps_the_other_way_from_tmux_product_divergence"
+evidence = "tests/fixtures/tmux37/accepted_product_divergences.txt"
+reason = """
+pymux's own help has said 'Swap with the pane below' for -U since
+before the ledger existed, and the pane-management mode built on it
+(#395) reads the same way. Both directions of the flip are recorded
+under one entry: a person with tmux's muscle memory sends their pane
+the other way either way. Flipping the flags to match tmux is one
+line and a break in the other direction; the ledger holds the choice
+until the differential harness (#384) makes matching tmux the cheap
+default. Lillecarl/pymux#400.
+"""
+references = ["Lillecarl/pymux#400", "Lillecarl/pymux#385"]
