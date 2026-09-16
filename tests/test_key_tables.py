@@ -268,6 +268,22 @@ async def test_escape_leaves_the_default_pane_management_mode():
         assert state.key_tables == []
 
 
+async def test_copy_mode_ends_the_mode():
+    """
+    Copy mode reads the keys its pane binds, under every table the
+    client holds. A mode left on the stack would eat them: its `q`
+    would leave the mode and copy mode's `q` would never run. tmux's
+    rule is one mode at a time.
+    """
+    async with create_session() as (pymux, state):
+        in_mode(pymux, state)
+
+        run_as_client(pymux, state, "copy-mode")
+
+        assert state.key_tables == []
+        assert pymux.arrangement.get_active_pane().is_copying
+
+
 async def test_prefix_m_enters_it():
     "The key the initial configuration binds entry to."
     async with create_session() as (pymux, state):

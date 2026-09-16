@@ -17,6 +17,16 @@ def copy_mode(pymux: "Pymux", args: argparse.Namespace) -> None:
     pane = pymux.arrangement.get_active_pane()
     pane.enter_copy_mode()
 
+    # Copy mode is a mode of its own, and its keys are the pane
+    # widget's, under every table this client holds: a key table left
+    # on the stack eats them. tmux's rule is one mode at a time.
+    try:
+        pymux.key_bindings_manager.leave_all_modes()
+    except ValueError:
+        # No client: a copy mode entered over the socket has nobody in
+        # a mode to take out of one.
+        pass
+
 
 def register(subparsers):
     parser = add_command(subparsers, copy_mode)

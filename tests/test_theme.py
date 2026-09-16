@@ -68,7 +68,7 @@ LOUD_ONES = frozenset(
         "search-match",
         "search-match.current",
         "terminal.focused titlebar paneindex",
-        "panenumber focused",
+        "terminal.focused panenumber",
     }
 )
 
@@ -141,6 +141,24 @@ async def test_client_draws_with_theme_it_starts_on():
         assert client.theme == NEAREST
         assert client.theme_in_use == DEFAULT_THEME
         assert bar_of(client.app) == "ansigreen"
+
+
+async def test_the_active_pane_s_number_reads_louder_than_the_others():
+    """
+    The number a display-panes draws in the active pane is the one a
+    person reads first: it says which pane the next key will hit, in
+    the mode that holds the numbers for its stay and out of it. #161
+    chose the loud colour for it; the rule was keyed with a class
+    nothing ever added, so every number drew the same.
+    Lillecarl/pymux#161. Lillecarl/pymux#395.
+    """
+    async with create_client() as (pymux, client):
+        loud = client.app.style.get_attrs_for_style_str(
+            "class:terminal.focused class:panenumber"
+        )
+        quiet = client.app.style.get_attrs_for_style_str("class:panenumber")
+
+        assert loud.bgcolor != quiet.bgcolor
 
 
 async def test_choosing_theme_reaches_client_that_is_attached():
@@ -240,7 +258,7 @@ RULES = {
     "cut": "bg:#141414",
     "clock": "bg:#88aa00",
     "panenumber": "bg:#888888",
-    "panenumber focused": "bg:#aa8800",
+    "terminal.focused panenumber": "bg:#aa8800",
     "terminated": "bg:#aa0000 #ffffff",
     "confirmationtoolbar": "bg:#880000 #ffffff",
     "confirmationtoolbar question": "",
@@ -323,7 +341,7 @@ def test_roles_produce_rules_grey_drew():
                 "auto-suggestion": "bg:#4e4e5e #8888aa",
                 "message": "bg:#8787af #ffffff",
                 "clock": "bg:#5f5f87",
-                "panenumber focused": "bg:#5f5f87",
+                "terminal.focused panenumber": "bg:#5f5f87",
                 "search-toolbar.prompt": "bg:#8787af #ffffff",
                 "search-toolbar.text": "bg:#8787af #000000",
                 "search-match": "#000000 bg:#8888aa",

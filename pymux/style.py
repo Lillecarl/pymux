@@ -182,8 +182,16 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         # the terminal answered nothing. Lillecarl/pymux#352.
         "cut": "bg:%s" % (r["cut"],),
         "clock": "bg:%s" % (r["warn-bright"],),
+        # The number a display-panes puts in the middle of each pane.
+        # The active pane's is the loud one: the class it resolves
+        # under is the one the focused pane's own chrome wears, so
+        # `terminal.focused` is what says which pane the mode's keys
+        # will hit. #161 chose the loud colour for it; this rule used
+        # to be keyed `panenumber focused`, a class nothing added, so
+        # every number drew the same and the mark said nothing.
+        # Lillecarl/pymux#161. Lillecarl/pymux#395.
         "panenumber": "bg:%s" % (r["border"],),
-        "panenumber focused": "bg:%s" % (r["warn"],),
+        "terminal.focused panenumber": "bg:%s" % (r["warn"],),
         "terminated": "bg:%s %s" % (r["danger"], r["text-bright"]),
         "confirmationtoolbar": "bg:%s %s" % (r["danger-strong"], r["text-bright"]),
         "confirmationtoolbar question": "",

@@ -570,6 +570,20 @@ class PymuxKeyBindings:
             table.on_leave(self.pymux)
         client_state.app.invalidate()
 
+    def leave_all_modes(self) -> None:
+        """
+        Every mode this client sits in, innermost first.
+
+        Copy mode reads the keys its pane widget binds, and those are
+        under every table this client holds: a mode left on the stack
+        eats them. So copy mode's entry ends the modes first, which is
+        tmux's one-mode-at-a-time. #396 gives copy mode a table of its
+        own, and this moves under it.
+        """
+        client_state = self.pymux.get_client_state()
+        while client_state.key_tables:
+            self.leave_mode()
+
     def prefix_keys(self) -> "list[tuple[str, str]]":
         """
         The keys that follow the prefix, each with what it does.
