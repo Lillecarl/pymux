@@ -132,6 +132,10 @@ class PosixClient(TerminalClient):
                 # Take our kitty push off the outer terminal, also when
                 # the loop ends through an exception.
                 self._pop_kitty_flags()
+                # Put back raw mode if the server pushed cooked over
+                # us; an attachment that ends in between must not leave
+                # the person's keys echoing. Lillecarl/pymux#411.
+                self._restore_modes()
                 # And put back what the server's bytes set: the
                 # alternate screen, the mouse, the cursor, the
                 # attributes. A crash used to leave all of those

@@ -162,7 +162,6 @@ def ask_person(
     client_state.prompt_command = command
     client_state.prompt_completer = completer
 
-    client_state.prompt_mode = True
     client_state.prompt_buffer.reset(Document(format_pymux_string(pymux, default)))
 
     get_app().layout.focus(client_state.prompt_buffer)
