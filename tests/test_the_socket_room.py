@@ -86,6 +86,30 @@ def test_a_base_that_cannot_hold_a_room_falls_through(
         unwritable.chmod(0o755)
 
 
+def test_a_squatted_room_falls_through_to_the_next_base(bases, monkeypatch):
+    """
+    A squat in the first base must not stop the server: the next base
+    holds a good room, and the squat wins nothing by existing.
+    """
+    squatted = bases / "squatted"
+    squatted.mkdir()
+    room = squatted / ("pymux-%d" % os.getuid())
+    room.mkdir(mode=0o755)
+    monkeypatch.setenv("PYMUX_TMPDIR", str(squatted))
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(bases / "runtime"))
+    (bases / "runtime").mkdir()
+
+    assert socket_directory() == str(bases / "runtime" / ("pymux-%d" % os.getuid()))
+
+
+def test_every_room_failing_names_the_last_reason(bases):
+    room = bases / ("pymux-%d" % os.getuid())
+    room.mkdir(mode=0o755)
+
+    with pytest.raises(OSError, match="unsafe permissions"):
+        socket_directory()
+
+
 def test_a_symlink_in_its_place_is_refused(bases):
     elsewhere = bases / "elsewhere"
     elsewhere.mkdir()

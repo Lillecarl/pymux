@@ -36,8 +36,10 @@ def socket_directory() -> str:
     directory, which on macOS is the user's own `$TMPDIR`.
 
     A room that fails the check is a refusal, never a repair: a
-    directory somebody else built is exactly the one not to use. A
-    base that cannot hold a room falls through to the next base.
+    directory somebody else built is exactly the one not to use. The
+    refusal falls through to the next base -- a squat must not stop a
+    server that a good base would hold -- and the last base's reason
+    is what comes out when no base holds a good room.
     """
     bases = []
     for name in ("PYMUX_TMPDIR", "XDG_RUNTIME_DIR"):
@@ -48,6 +50,7 @@ def socket_directory() -> str:
             bases.append(value)
     bases.append(tempfile.gettempdir())
 
+    failure = None
     for base in bases:
         directory = os.path.join(base, "pymux-%d" % os.getuid())
         try:
@@ -56,9 +59,21 @@ def socket_directory() -> str:
             pass
         except OSError:
             continue
-        _verify_the_socket_room(directory)
+        try:
+            _verify_the_socket_room(directory)
+        except OSError as gone:
+            # A room somebody else built is exactly the one not to use,
+            # and a squat must not stop a server from starting while a
+            # good base stands behind this one.
+            logger.warning("Not using %s: %s", directory, gone)
+            failure = gone
+            continue
         return directory
 
+    if failure is not None:
+        # Every room failed its check. The last one is the temp
+        # directory, the place the person can look at.
+        raise failure
     raise OSError("no base can hold a pymux socket directory")
 
 
