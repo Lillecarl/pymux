@@ -60,8 +60,12 @@ def daemonize(stdin="/dev/null", stdout="/dev/null", stderr="/dev/null"):
         sys.exit(1)
 
     # Decouple from parent environment.
+    # The recipe sets `umask(0)` here, for a daemon that picks its own
+    # later. This daemon is the server, and every pane forks from it,
+    # so the umask it keeps is the caller's -- the one the person
+    # chose for the shells that follow. Nothing between here and the
+    # return needs a known umask. Lillecarl/pymux#398.
     os.chdir("/")
-    os.umask(0)
     os.setsid()
 
     # Do second fork.
