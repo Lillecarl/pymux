@@ -110,9 +110,10 @@ class PosixClient(TerminalClient):
                             data = b""
 
                         if data == b"":
-                            # End of file. Connection closed.
-                            # Reset terminal
-                            self._reset_terminal()
+                            # End of file. The connection is gone, and
+                            # the way out through the `finally` puts
+                            # the terminal back -- once, whatever ended
+                            # the loop. Lillecarl/pymux#404.
                             return
                         else:
                             data_buffer += data
@@ -131,6 +132,16 @@ class PosixClient(TerminalClient):
                 # Take our kitty push off the outer terminal, also when
                 # the loop ends through an exception.
                 self._pop_kitty_flags()
+                # And put back what the server's bytes set: the
+                # alternate screen, the mouse, the cursor, the
+                # attributes. A crash used to leave all of those
+                # behind. stdout may be the thing that failed, so the
+                # original error outranks anything this raises.
+                # Lillecarl/pymux#404.
+                try:
+                    self._reset_terminal()
+                except Exception:
+                    pass
 
     def _send_packet(self, data):
         "Send to server."
