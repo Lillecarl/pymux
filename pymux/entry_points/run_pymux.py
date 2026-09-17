@@ -57,13 +57,9 @@ import tempfile
 import time
 from typing import Dict, List, Set, Tuple
 
-from prompt_toolkit.output import ColorDepth
-
 from pymux import __version__, log
-from pymux.client import create_client, list_clients, list_socket_names
-from pymux.client.ssh import is_ssh_url
+from pymux.client import create_client, is_ssh_url, list_clients
 from pymux.config import find_config
-from pymux.main import Pymux
 from pymux.utils import daemonize
 
 __all__ = ["run"]
@@ -364,13 +360,10 @@ def run() -> None:
         socket_name, pane_id = socket_name.rsplit(",", 1)
 
     # Color depth. Without a flag the client asks its terminal and
-    # falls back through COLORTERM and TERM. (See `pymux.colors`.)
-    if ansi_colors_only:
-        color_depth = ColorDepth.DEPTH_4_BIT
-    elif true_color:
-        color_depth = ColorDepth.DEPTH_24_BIT
-    else:
-        color_depth = None
+    # falls back through COLORTERM and TERM. (See `pymux.colors`.) It
+    # is answered where a depth is used, so that a detached command
+    # pays neither the question nor the import of the answer.
+    # Lillecarl/pymux#392.
 
     # A machine is somewhere to attach to, never somewhere to listen.
     # `listen_on_socket` would try to bind a path called "ssh:" and
@@ -419,8 +412,12 @@ def run() -> None:
     if mode == "standalone":
         # When a command was given (e.g. 'pymux standalone htop'), run it in
         # the first pane.
-        mux = Pymux(source_file=filename, startup_command=command)
-        mux.run_standalone(color_depth=color_depth or ColorDepth.DEPTH_8_BIT)
+        from prompt_toolkit.output import ColorDepth
+
+        mux = _new_pymux(source_file=filename, startup_command=command)
+        mux.run_standalone(
+            color_depth=_color_depth(ansi_colors_only, true_color) or ColorDepth.DEPTH_8_BIT
+        )
 
     elif mode == "integrated":
         if socket_name_from_env:
@@ -430,7 +427,7 @@ def run() -> None:
         # A server and one client in this process. The client reads a
         # queue that this server writes, so it reaches this server and
         # no other one.
-        mux = Pymux(source_file=filename, startup_command=command)
+        mux = _new_pymux(source_file=filename, startup_command=command)
 
         # Only when a socket was asked for. The user interface never
         # reads it; it is there so that `pymux -S <socket> <command>`
@@ -444,7 +441,7 @@ def run() -> None:
         # flags asked for, and `None` leaves the answer to the probe of
         # the terminal and to the environment.
         mux.run_integrated(
-            color_depth=color_depth,
+            color_depth=_color_depth(ansi_colors_only, true_color),
             detach_other_clients=a.detach_others or a.hang_up_others,
             chosen_name=a.client_name,
             hang_up_others=a.hang_up_others,
@@ -470,6 +467,8 @@ def run() -> None:
         # channel: the finding lives where the binding lives, so a
         # change in where servers bind cannot leave that client
         # looking in the old place. Lillecarl/pymux#90.
+        from pymux.client.posix import list_socket_names
+
         names = list_socket_names()
         if names:
             print(names[0])
@@ -492,7 +491,7 @@ def run() -> None:
 
         # Create 'Pymux'. (Do this after the logging setup, so that crashes
         # in Pymux() can be logged.)
-        mux = Pymux(source_file=filename)
+        mux = _new_pymux(source_file=filename)
 
         # Run server.
         socket_name = mux.listen_on_socket(socket_name)
@@ -521,7 +520,8 @@ def run() -> None:
             client.chosen_name = a.client_name
             client.hang_up_others = a.hang_up_others
             client.attach(
-                detach_other_clients=detach_other_clients, color_depth=color_depth
+                detach_other_clients=detach_other_clients,
+                color_depth=_color_depth(ansi_colors_only, true_color),
             )
             _leave(client)
         else:
@@ -531,7 +531,8 @@ def run() -> None:
                 c.chosen_name = a.client_name
                 c.hang_up_others = a.hang_up_others
                 c.attach(
-                    detach_other_clients=detach_other_clients, color_depth=color_depth
+                    detach_other_clients=detach_other_clients,
+                    color_depth=_color_depth(ansi_colors_only, true_color),
                 )
                 _leave(c)
 
@@ -553,7 +554,7 @@ def run() -> None:
 
     elif not socket_name:
         # Run client/server combination.
-        mux = Pymux(source_file=filename)
+        mux = _new_pymux(source_file=filename)
         socket_name = mux.listen_on_socket(socket_name)
         pid = daemonize()
 
@@ -566,7 +567,7 @@ def run() -> None:
             client = create_client(socket_name)
             client.config_file = filename
             client.chosen_name = a.client_name
-            client.attach(color_depth=color_depth)
+            client.attach(color_depth=_color_depth(ansi_colors_only, true_color))
             _leave(client)
 
     else:
@@ -576,6 +577,39 @@ def run() -> None:
         else:
             print("Invalid command.")
             sys.exit(1)
+
+
+def _new_pymux(source_file, startup_command=None, session_name=None):
+    """
+    Build the thing that runs a server.
+
+    `pymux.main` arrives here and not from the top of the module: a
+    detached command never builds one, and what it imports instead is
+    the whole cost this file was charged. Lillecarl/pymux#392.
+    """
+    from pymux.main import Pymux
+
+    return Pymux(
+        source_file=source_file,
+        startup_command=startup_command,
+        session_name=session_name,
+    )
+
+
+def _color_depth(ansi_colors_only: bool, true_color: bool):
+    """
+    The depth the flags asked for, or `None`: the client then asks its
+    terminal and falls back through COLORTERM and TERM
+    (`pymux.colors`). The import rides along -- the answer is an enum
+    of the toolkit, and a detached command draws nothing.
+    """
+    from prompt_toolkit.output import ColorDepth
+
+    if ansi_colors_only:
+        return ColorDepth.DEPTH_4_BIT
+    if true_color:
+        return ColorDepth.DEPTH_24_BIT
+    return None
 
 
 def _leave(client) -> None:
@@ -729,7 +763,7 @@ def _new_session(socket_name: str, command: str, args: List[str], pane_id=None) 
         except OSError:
             pass
 
-    mux = Pymux(
+    mux = _new_pymux(
         source_file=filename_var(),
         startup_command=startup_command,
         session_name=session_name,
@@ -754,6 +788,8 @@ def _new_session(socket_name: str, command: str, args: List[str], pane_id=None) 
         return client.run_command(query)
 
     if attach:
+        from prompt_toolkit.output import ColorDepth
+
         client = create_client(socket_name)
         client.attach(color_depth=ColorDepth.DEPTH_8_BIT)
         # Nobody else is on a server this command just started, so

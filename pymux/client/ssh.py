@@ -53,18 +53,15 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 
 from pymux.utils import nonblocking
 
+from .defaults import SCHEME, is_ssh_url
 from .reconnect import Backoff, draw, link_may_come_back, notice, why
 from .terminal import TerminalClient
 
 __all__ = [
     "SshClient",
     "SshTarget",
-    "is_ssh_url",
     "ssh_target",
 ]
-
-#: What `-S` starts with when it names a machine rather than a path.
-SCHEME = "ssh://"
 
 #: How often to tell the server the terminal has a new size, in
 #: seconds. `client/memory.py` says why a poll and not only a signal.
@@ -108,11 +105,6 @@ class SshTarget(NamedTuple):
     path: str | None
     username: str | None
     port: int | None
-
-
-def is_ssh_url(name: str | None) -> bool:
-    "Whether this `-S` names a machine."
-    return bool(name) and str(name).startswith(SCHEME)
 
 
 def default_socket(username: str) -> str:
