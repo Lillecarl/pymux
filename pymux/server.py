@@ -267,8 +267,15 @@ class ServerConnection:
         An OSC sequence moves no cursor and paints no cell, so it is
         safe between two frames. `pymux.osc.build_osc` has already
         checked the payload of the pane.
+
+        **The temporary client of a socket command has no terminal.**
+        It holds a client state like a real one, and its focused pane
+        is the pane a person is looking at, so a sync that walks every
+        client would hand it the shape of that pointer and the OSC of
+        that pane -- read back as garbage after the answer of the
+        command. Lillecarl/pymux#420.
         """
-        if self.client_state is None:
+        if self.client_state is None or self.client_state.temporary:
             return
         self._write_output_raw(sequence)
         self._flush_output()
@@ -799,8 +806,13 @@ class ServerConnection:
         :param session: The session this client is on. Without one it is
             the session a person looked at last.
         """
+        stdout: TextIO = (
+            _SocketStdout(self._send_packet, self.pymux.counters)
+            if start
+            else _NoStdout()
+        )
         output = Vt100_Output(
-            cast(TextIO, _SocketStdout(self._send_packet, self.pymux.counters)),
+            cast(TextIO, stdout),
             lambda: self.size,
             term=term,
         )
@@ -973,6 +985,30 @@ class _SocketStdout:
 
         self.send_packet({"cmd": "out", "data": written})
         self._buffer = []
+
+    def isatty(self) -> bool:
+        return True
+
+
+class _NoStdout:
+    """
+    Stdout-like object that keeps nothing: writes go nowhere.
+
+    The temporary CLI of a socket command has no terminal behind it,
+    and nothing it holds is ever drawn. But building the application
+    builds a renderer, and prompt_toolkit's renderer answers its
+    construction with a reset -- `show_cursor`, the cursor shape --
+    written to the output and flushed there. On a connection that
+    carries a command, the person reading the answer got those bytes
+    after it, as garbage that came and went with the timing of the
+    writes around it. Lillecarl/pymux#420.
+    """
+
+    def write(self, data: str) -> int:
+        return len(data)
+
+    def flush(self) -> None:
+        pass
 
     def isatty(self) -> bool:
         return True

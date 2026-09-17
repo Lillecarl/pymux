@@ -2364,9 +2364,15 @@ class Pymux:
         # connection, so nothing ever asked its terminal what it can
         # report. It counts as reporting nothing, which is what it
         # already did.
+        #
+        # **The temporary client of a socket command is not here.** It
+        # never asked a terminal anything, so its report of nothing
+        # would drag the mask of every real client down with it for as
+        # long as the command runs. Lillecarl/pymux#420.
         masks = [
             0 if connection is None else connection.kitty_source_flags
-            for connection in self._client_states
+            for connection, client_state in self._client_states.items()
+            if not client_state.temporary
         ]
         if not masks:
             return 0

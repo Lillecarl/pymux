@@ -34,6 +34,12 @@ class FakeClientState:
 
     app = None
 
+    #: A real client state says whether the temporary CLI of a socket
+    #: command holds it, and the keyboard mask walks that: a client
+    #: that never attached a terminal must not be counted as one that
+    #: reports nothing. Lillecarl/pymux#420.
+    temporary = False
+
     def __init__(self, session):
         self.session = session
 
@@ -97,6 +103,23 @@ def test_client_that_leaves_lets_rest_speak():
     pymux, connections = make_pymux(0b11111, 0)
     assert pymux.keyboard_source_flags() == 0
     pymux.remove_client(connections[1])
+    assert pymux.keyboard_source_flags() == 0b11111
+
+
+def test_temporary_client_does_not_hold_the_mask_back():
+    """
+    The temporary CLI of a socket command never asked a terminal
+    anything, so its report of nothing must not drag the mask of every
+    real client down while the command runs. Lillecarl/pymux#420.
+    """
+    pymux, connections = make_pymux(0b11111)
+    temporary = FakeConnection(0)
+    pymux._client_states[temporary] = FakeClientState(pymux.current_session)
+    pymux._client_states[temporary].temporary = True
+    assert pymux.keyboard_source_flags() == 0b11111
+
+    # And when it leaves, the mask is the same: it never counted.
+    pymux.remove_client(temporary)
     assert pymux.keyboard_source_flags() == 0b11111
 
 
