@@ -30,10 +30,15 @@ def socket_directory() -> str:
     Lillecarl/pymux#405.
 
     The bases, in order: `$PYMUX_TMPDIR`, the override tmux spells
-    `$TMUX_TMPDIR`; then `$XDG_RUNTIME_DIR`, the user-private runtime
-    directory Linux already holds, which dies with the session and
-    takes stale sockets with it; then what Python names the temp
-    directory, which on macOS is the user's own `$TMPDIR`.
+    `$TMUX_TMPDIR`; then the per-user runtime directory the platform
+    prefers, which is platformdirs' answer -- it reads
+    `$XDG_RUNTIME_DIR` itself where that is the convention, and knows
+    `/run/user/<uid>` for a login that never set it, the runtime
+    directories of the BSDs, and the room macOS and Windows prefer
+    (Lillecarl/pymux#421). No app name is asked for, so the room keeps
+    the name `pymux-<uid>` and this move changed no path a running
+    server had bound; then what Python names the temp directory, which
+    on macOS is the user's own `$TMPDIR`.
 
     A room that fails the check is a refusal, never a repair: a
     directory somebody else built is exactly the one not to use. The
@@ -42,12 +47,19 @@ def socket_directory() -> str:
     is what comes out when no base holds a good room.
     """
     bases = []
-    for name in ("PYMUX_TMPDIR", "XDG_RUNTIME_DIR"):
-        value = os.environ.get(name)
-        # A relative base means another thing after `daemonize` moves
-        # the process to /. Lillecarl/pymux#322.
-        if value and os.path.isabs(value):
-            bases.append(value)
+    value = os.environ.get("PYMUX_TMPDIR")
+    # A relative base means another thing after `daemonize` moves
+    # the process to /. Lillecarl/pymux#322.
+    if value and os.path.isabs(value):
+        bases.append(value)
+    # Not at the top of the file: a detached command pays the import
+    # of nothing it does not use. Lillecarl/pymux#392.
+    from platformdirs import PlatformDirs
+
+    # No app name: platformdirs appends one to the base when it is
+    # given, and the room below is the per-user folder of this app
+    # already -- `pymux-<uid>`, the name tmux spells `tmux-<uid>`.
+    bases.append(PlatformDirs().user_runtime_dir)
     bases.append(tempfile.gettempdir())
 
     failure = None

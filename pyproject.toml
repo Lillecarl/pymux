@@ -39,6 +39,12 @@ dependencies = [
     # `notify_closing` needs, and the posix pipe needs that to wake a
     # reader parked on a socket that is closing. Lillecarl/pymux#87.
     "anyio>=4.7.0",
+    # Where a server binds its socket room, after the `$PYMUX_TMPDIR`
+    # override: the per-user runtime directory the platform prefers.
+    # It reads `$XDG_RUNTIME_DIR` where that is the convention, and
+    # knows the answer of macOS, the BSDs and Windows besides, so the
+    # list does not grow by hand. Lillecarl/pymux#421.
+    "platformdirs>=4.0.0",
     # The template language a person writes. A status line holding `{{`
     # or `{%` is rendered by jinja2, and everything else takes the tmux
     # format path; `-F` stays tmux format, because libtmux reads it.

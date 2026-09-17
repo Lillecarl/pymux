@@ -26,13 +26,39 @@ def bases(tmp_path, monkeypatch):
     """
     A base that obeys the environment, and the environment itself.
 
-    Both override names are taken out, so the room lands under the
-    patched temp directory unless a test puts a name back in.
+    Both override names are taken out, the platform's runtime directory
+    is patched to the same place, so the room lands under the patched
+    temp directory unless a test puts a name back in.
     """
     monkeypatch.delenv("PYMUX_TMPDIR", raising=False)
     monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
     monkeypatch.setattr("tempfile.gettempdir", lambda: str(tmp_path))
+    monkeypatch.setattr(
+        "platformdirs.PlatformDirs", lambda: FakePlatformDirs(str(tmp_path))
+    )
     return tmp_path
+
+
+class FakePlatformDirs:
+    """
+    The runtime directory platformdirs answers, minus the platform.
+
+    It reads `$XDG_RUNTIME_DIR` first, and names the platform default
+    when that is unset -- the contract of its mixin, with the platform
+    itself patched out: the machine the suite runs on may have none of
+    the directories the real one names, and a test that depended on
+    them would only pass where it was written.
+    """
+
+    def __init__(self, base):
+        self.base = base
+
+    @property
+    def user_runtime_dir(self):
+        value = os.environ.get("XDG_RUNTIME_DIR", "")
+        if value and os.path.isabs(value):
+            return value
+        return self.base
 
 
 def test_the_room_is_created_private(bases):
@@ -64,6 +90,32 @@ def test_xdg_runtime_dir_comes_before_the_temp_dir(bases, monkeypatch):
     assert socket_directory() == str(
         bases / "runtime" / ("pymux-%d" % os.getuid())
     )
+
+
+def test_the_platform_runtime_dir_comes_before_the_temp_dir(bases, monkeypatch):
+    """
+    With `$XDG_RUNTIME_DIR` unset -- a login that skipped it, cron --
+    the platform's own runtime directory is the second base: on Linux
+    `/run/user/<uid>`, on macOS what Apple prefers, on the BSDs their
+    own. A socket room there is private by the platform's rule, and
+    dies with the session. Lillecarl/pymux#421.
+    """
+    platform = bases / "platform"
+    platform.mkdir()
+    monkeypatch.setattr("platformdirs.PlatformDirs", lambda: FakePlatformDirs(platform))
+
+    assert socket_directory() == str(platform / ("pymux-%d" % os.getuid()))
+
+
+def test_a_squatted_platform_room_falls_through_to_the_temp_dir(
+    bases, monkeypatch
+):
+    platform = bases / "platform"
+    platform.mkdir()
+    (platform / ("pymux-%d" % os.getuid())).mkdir(mode=0o755)
+    monkeypatch.setattr("platformdirs.PlatformDirs", lambda: FakePlatformDirs(platform))
+
+    assert socket_directory() == str(bases / ("pymux-%d" % os.getuid()))
 
 
 def test_a_relative_base_is_skipped(bases, monkeypatch):
@@ -151,6 +203,7 @@ def test_no_usable_base_at_all_is_a_refusal(bases, monkeypatch):
     dead.mkdir()
     dead.chmod(0o555)
     monkeypatch.setenv("PYMUX_TMPDIR", str(dead))
+    monkeypatch.setattr("platformdirs.PlatformDirs", lambda: FakePlatformDirs(dead))
     monkeypatch.setattr("tempfile.gettempdir", lambda: str(dead))
 
     try:
