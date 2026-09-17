@@ -399,7 +399,26 @@ class SshClient(TerminalClient):
         lost = None
 
         async with anyio.create_task_group() as tasks:
-            tasks.start_soon(self._while_the_link_holds, self._read_keyboard, stdin_fd)
+
+            async def read_keyboard() -> None:
+                """
+                Give the server what the person types, until their
+                input side is gone.
+
+                An ended stdin is the end of this attachment: the
+                person's terminal is what they see and type on, and
+                with its input gone there is nothing left to serve.
+                The connection is closed, and the read loop ends the
+                way a closed link does, through the `finally` that
+                restores the terminal. Lillecarl/pymux#419.
+                """
+                while True:
+                    await anyio.wait_readable(stdin_fd)
+                    if not self._process_stdin():
+                        connection.close()
+                        return
+
+            tasks.start_soon(self._while_the_link_holds, read_keyboard)
             tasks.start_soon(self._while_the_link_holds, self._watch_signal)
             tasks.start_soon(self._while_the_link_holds, self._watch_size)
 
@@ -440,12 +459,6 @@ class SshClient(TerminalClient):
             await work(*arguments)
         except BrokenPipeError:
             pass
-
-    async def _read_keyboard(self, stdin_fd: int) -> None:
-        "Give the server what the person types, until this is cancelled."
-        while True:
-            await anyio.wait_readable(stdin_fd)
-            self._process_stdin()
 
     async def _watch_signal(self) -> None:
         "Report the size when the terminal says it changed."

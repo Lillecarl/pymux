@@ -115,10 +115,22 @@ class MemoryClient(TerminalClient):
                     self._set_kitty_flags(0)
 
     async def _read_keyboard(self, stdin_fd: int) -> None:
-        "Give the server what the person types, until this is cancelled."
+        """
+        Give the server what the person types, until their input side
+        is gone.
+
+        An ended stdin is the end of this attachment. Here the server
+        lives in this process and this terminal is the one it serves,
+        so closing the connection ends the read loop the same way its
+        own hangup does, and the attach returns through the
+        `BrokenPipeError` that restores the terminal.
+        Lillecarl/pymux#419.
+        """
         while True:
             await anyio.wait_readable(stdin_fd)
-            self._process_stdin()
+            if not self._process_stdin():
+                self.connection.close()
+                return
 
     async def _watch_signal(self) -> None:
         """

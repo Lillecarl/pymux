@@ -355,9 +355,18 @@ class TerminalClient(Client):
         except Exception:
             return False
 
-    def _process_stdin(self):
+    def _process_stdin(self) -> bool:
         """
         Received data on stdin. Read and send to server.
+
+        Returns False when stdin is over: the person's input side is
+        gone, and there is nothing left this client can be given.
+
+        An empty read is not the thing to judge by -- the reader
+        returns "" also when nothing was ready to read, and when a
+        paste of junk decoded to nothing at all. Its docstring says
+        only the `closed` attribute is the end of the file, and that
+        is what is reported here.
         """
         with nonblocking(sys.stdin.fileno()):
             data = self._stdin_reader.read()
@@ -386,6 +395,8 @@ class TerminalClient(Client):
                     "data": data[i : i + step],
                 }
             )
+
+        return not self._stdin_reader.closed
 
     def size(self):
         "The rows and columns of the terminal this client draws on."

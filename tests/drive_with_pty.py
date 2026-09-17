@@ -2197,6 +2197,74 @@ def check_a_stopped_client_does_not_stop_the_server(tmp):
     print("a stopped client does not stop the server: ok")
 
 
+def check_a_client_whose_stdin_ends_leaves(tmp):
+    """
+    A client whose stdin ends leaves, and the session holds.
+
+    A harness runs attach with a pipe or an ended stdin: `script`, CI,
+    a supervisor that closed the pipe. `select` reports an ended stdin
+    readable forever, the loop then read empty packets from it at the
+    full rate of the machine, and the client sat in the alternate
+    screen burning a core and never left. tmux ends the client when
+    its stdin closes; this one does too now. Lillecarl/pymux#419.
+
+    The subject runs with its stdin at /dev/null, which answers end of
+    file on the first read. Before the fix it never left, so the
+    `wait` below is the judge: it either sees the exit, or kills a
+    client that has been spinning for twenty seconds.
+
+    Not on the integrated route: the client's stdin there is the one
+    pty the server draws on, and a pty has no end of file -- closing
+    the master takes the whole process with it.
+    """
+    if ROUTE == "integrated":
+        print("a client whose stdin ends: one terminal on this route")
+        return
+
+    terminal = Terminal(tmp, "plain")
+    eof_stderr = None
+    try:
+        terminal.wait_for_queries()
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"READY")
+
+        eof_stderr_path = tmp / "eof-client-stderr.log"
+        eof_master, eof_client, eof_stderr = on_pty(
+            [
+                "sh",
+                "-c",
+                "exec %s -m pymux -S %s attach < /dev/null"
+                % (sys.executable, terminal.sock_path),
+            ],
+            eof_stderr_path,
+            env={
+                "TERM": "xterm-256color",
+                "LANG": "C.UTF-8",
+                "COLORTERM": "",
+            },
+        )
+        try:
+            code = eof_client.wait(timeout=20)
+            assert code == 0, code
+        except subprocess.TimeoutExpired:
+            eof_client.kill()
+            raise AssertionError(
+                "the client whose stdin ended did not leave in 20s"
+            )
+
+        # Leaving is a detach and not a quit: the session it was
+        # attached to is still there for the next client.
+        listed = run_cli(terminal.sock_path, ["list-sessions"])
+        assert listed.returncode == 0, listed.stderr
+        assert terminal.session_name.encode() in listed.stdout, listed.stdout
+    finally:
+        if eof_stderr is not None:
+            eof_stderr.close()
+            os.close(eof_master)
+        terminal.close()
+    print("a client whose stdin ends leaves: ok")
+
+
 def check_libpymux(tmp):
     """
     libpymux against a server that is really there.
@@ -2426,6 +2494,7 @@ CHECKS = (
     check_command_palette,
     check_detach_ends_client,
     check_a_stopped_client_does_not_stop_the_server,
+    check_a_client_whose_stdin_ends_leaves,
     check_libpymux,
 )
 

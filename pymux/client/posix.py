@@ -134,8 +134,15 @@ class PosixClient(TerminalClient):
                                 data_buffer = data_buffer[pos + 1 :]
 
                     elif stdin_fd in r:
-                        # Got user input.
-                        self._process_stdin()
+                        # Got user input. An ended stdin is the
+                        # person's input side going away, and the
+                        # client leaves on it, the same way an ended
+                        # socket above ends the loop: `select` reports
+                        # an ended fd ready forever, and left alone the
+                        # loop spun at full CPU on empty reads.
+                        # Lillecarl/pymux#419.
+                        if not self._process_stdin():
+                            return
 
             finally:
                 signal.signal(signal.SIGWINCH, signal.SIG_IGN)
