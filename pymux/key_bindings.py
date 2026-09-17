@@ -418,7 +418,7 @@ class PymuxKeyBindings:
             )
 
         @kb.add(Keys.KeyRelease, eager=True)
-        def _forward_key_release(event: E) -> None:
+        def _forward_key_release(event: E) -> object:
             """
             A key came back up. Give the sequence to the pane that the
             keyboard of this client reaches.
@@ -433,17 +433,24 @@ class PymuxKeyBindings:
             the prefix key, still sends its release on, so a pane can
             see a release with no press. Holding the pressed keys of
             every pane to stop that costs more than it is worth.
+
+            **`NotImplemented` on every way out.** A release changes
+            nothing of pymux's, so prompt_toolkit has no frame to draw
+            from it; the frame that shows its effect comes when the
+            pane answers. Returning anything else asks for a redraw
+            that has nothing in it. Lillecarl/pymux#246.
             """
             pane = pymux.get_focused_pane()
             if pane is None or not event.data:
-                return
+                return NotImplemented
             try:
                 if not get_app().layout.has_focus(pane.terminal):
                     # The keyboard is on the command line or a prompt.
-                    return
+                    return NotImplemented
                 pane.process.write_input(pane.screen.encode_key(event.data))
             except Exception:
                 logger.exception("Forwarding a key release failed.")
+            return NotImplemented
 
         @kb.add(Keys.Any, eager=True, filter=display_pane_numbers & ~mode_active)
         def _hide_numbers(event: E) -> None:
