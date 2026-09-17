@@ -60,7 +60,7 @@ from typing import Dict, List, Set, Tuple
 from prompt_toolkit.output import ColorDepth
 
 from pymux import __version__, log
-from pymux.client import create_client, list_clients
+from pymux.client import create_client, list_clients, list_socket_names
 from pymux.client.ssh import is_ssh_url
 from pymux.config import find_config
 from pymux.main import Pymux
@@ -75,6 +75,7 @@ MODES = (
     "attach",
     "list-sessions",
     "ls",
+    "find",
 )
 
 #: The modes that take the command of the first pane after the mode
@@ -316,9 +317,9 @@ def _completion_parser() -> argparse.ArgumentParser:
     _add_options(parser, suppress_defaults=False)
     modes = parser.add_subparsers(metavar="COMMAND")
     # `list-sessions` and `ls` come from the command tree below, with
-    # the options the command takes; what is left here is the four
-    # starts that run a server or a client.
-    for name in ("standalone", "integrated", "start-server", "attach"):
+    # the options the command takes; what is left here is the starts
+    # that run a server or a client, and `find`, which takes nothing.
+    for name in ("standalone", "integrated", "start-server", "attach", "find"):
         mode_parser = modes.add_parser(
             name,
             help="Run a server, or attach to one. See `pymux --help`.",
@@ -461,6 +462,18 @@ def run() -> None:
         if not clients:
             # Like tmux, exit with a non-zero exit code when there is no
             # server running.
+            sys.exit(1)
+
+    elif mode == "find":
+        # The socket a local `attach` without `-S` would take, newest
+        # first. The client of `ssh://host` runs this over its exec
+        # channel: the finding lives where the binding lives, so a
+        # change in where servers bind cannot leave that client
+        # looking in the old place. Lillecarl/pymux#90.
+        names = list_socket_names()
+        if names:
+            print(names[0])
+        else:
             sys.exit(1)
 
     elif mode == "start-server":

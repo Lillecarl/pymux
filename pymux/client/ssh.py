@@ -16,10 +16,15 @@ middle is openssh's. With the client opening the socket itself the pane
 is drawn here, so everything this machine has stays reachable: its
 clipboard, its files, and the keyboard that is really attached.
 
-**Nothing runs on the other machine.** Not a shell, not a pymux, not
-even to find out which socket to open: `ssh://host` with no path lists
-the sockets over SFTP, which is a subsystem of sshd itself. So the far
-side needs a pymux server and an sshd, and nothing else.
+**One command runs on the other machine, and it only prints.** Which
+socket to open when the address named none is the far side's own
+knowledge: the room a server binds in, and which of them is newest,
+is what `pymux attach` answers on that machine. So the client runs
+`pymux find` there -- a command that prints a path and exits, not a
+client that owns a terminal -- and opens the channel to the path it
+was given. A discovery that lived here would drift from the one
+that binds there, which is how the room changed and this client
+kept looking in `/tmp`. Lillecarl/pymux#405.
 
 **It connects when it attaches, not when it is made.** The connection
 has to live in the loop that reads it, and `create_client` is called
@@ -84,15 +89,11 @@ COUNTDOWN_STEP = 1.0
 LEAVE = ("q", "Q", "\x03")
 
 
-#: Where a server binds when nobody named a socket, and the shape of
-#: the name it takes. `pipes/posix.py` builds it, and
-#: `client/posix.py` globs the same thing to list the servers here.
-#:
-#: `/tmp` and not `tempfile.gettempdir()`, because the directory
-#: belongs to the other machine. It is what `TMPDIR` unset means, which
-#: is what a login shell almost always has.
-SOCKET_DIRECTORY = "/tmp"
-SOCKET_NAMES = "pymux.sock.%s.*"
+#: What runs on the other machine when the address named no path. It
+#: prints the socket a local `pymux attach` would take: the newest
+#: server of that user, found by the same code that binds one. One
+#: command, one line back.
+FIND_COMMAND = "pymux find"
 
 
 class SshTarget(NamedTuple):
@@ -118,12 +119,14 @@ def default_socket(username: str) -> str:
     """
     Where the first server of a user listens.
 
-    The fallback, for a machine whose sshd does not offer SFTP. A
-    server with no name takes the lowest free number, so the first one
-    is always `.0`, and most machines have exactly one.
-    `SshClient._socket` is what asks rather than guesses.
+    The guess that is left when `pymux find` gave nothing: no exec
+    channel, or a pymux over there that predates it and answered
+    with an error. A server with no name takes the lowest free
+    number, so the first one is always `.0`, and most machines have
+    exactly one. `SshClient._socket` is what asks rather than
+    guesses.
     """
-    return "%s/pymux.sock.%s.0" % (SOCKET_DIRECTORY, username)
+    return "/tmp/pymux.sock.%s.0" % (username,)
 
 
 def ssh_target(url: str) -> SshTarget:
@@ -240,62 +243,41 @@ class SshClient(TerminalClient):
         """
         Which socket to open, when the address named none.
 
-        **Nothing runs on the other machine.** The listing goes over
-        SFTP, which is a subsystem of sshd itself and not a program
-        anybody has to install; the channel to the socket is
-        `direct-streamlocal@openssh.com`, which is sshd as well. So a
-        remote machine needs a pymux server and an sshd, and nothing
-        else at all.
+        **One command runs on the other machine, and it only prints.**
+        `pymux find` answers with the socket a local attach would
+        take, found by the same `list_socket_names` that binds and
+        attaches on that machine -- the room of Lillecarl/pymux#405
+        and the flat place before it, newest first. The client
+        guesses no shape at all: a discovery that lived here would
+        drift from the one that binds there, which is how the room
+        changed and this client kept looking in `/tmp`.
 
-        The newest server, which is what `pymux attach` with no `-S`
-        means on this machine: `client/posix.py` sorts the same names
-        by the same time, because nothing writes to a socket file after
-        the bind, so its time is the time the server started.
+        The channel to the socket is `direct-streamlocal@openssh.com`,
+        which is sshd itself. So the far side needs a pymux server, an
+        sshd, and a `pymux` on the PATH this session's login shell
+        gives -- or a path named in the address.
 
         The user is the one that was really authenticated, which is
         better than a guess here: `~/.ssh/config` can name a different
         one, and asyncssh has already applied it.
         """
-        import stat
-
         username = connection.get_extra_info("username")
-        pattern = "%s/%s" % (
-            SOCKET_DIRECTORY,
-            SOCKET_NAMES % (username,),
-        )
 
         try:
-            async with connection.start_sftp_client() as sftp:
-                found = await sftp.glob_sftpname(pattern)
+            result = await connection.run(FIND_COMMAND)
         except Exception:
-            # No SFTP subsystem, or nothing matched. Fall back to where
-            # the first server of a user listens, which is right on a
-            # machine that has one.
+            # No exec channel: some servers refuse sessions entirely.
             return default_socket(username)
 
-        sockets = [
-            one
-            for one in found
-            if one.attrs.permissions and stat.S_ISSOCK(one.attrs.permissions)
-        ]
-        if not sockets:
-            return default_socket(username)
+        found = (result.stdout or "").splitlines()
+        if result.exit_status == 0 and found:
+            return found[0].strip()
 
-        newest = max(sockets, key=lambda one: one.attrs.mtime or 0)
-        name = newest.filename
-        if isinstance(name, bytes):
-            name = name.decode("utf-8", "replace")
-
-        # `glob` answers with the path it was given, which was absolute.
-        return (
-            name
-            if name.startswith("/")
-            else "%s/%s"
-            % (
-                SOCKET_DIRECTORY,
-                name,
-            )
-        )
+        # `find` found nothing, or the pymux over there predates it
+        # and answered with an error. The flat first server is the
+        # guess that is left; naming the path in the address is the
+        # answer that always works.
+        return default_socket(username)
 
     # ------------------------------------------------------------------
     # What a person runs.

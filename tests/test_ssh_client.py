@@ -20,7 +20,9 @@ The tests are coroutines, which anyio's pytest plugin runs.
 """
 
 import asyncio
+import os
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
@@ -70,11 +72,18 @@ def test_named_path_still_wins():
     assert ssh_target("ssh://carl@dynhetz/run/sock").path == "/run/sock"
 
 
-def test_fallback_is_first_server_of_user():
-    "For a machine whose sshd offers no SFTP to list with."
+def test_the_fallback_is_pinned():
+    "The flat first server, for a far side older than `find`."
     from pymux.client.ssh import default_socket
 
     assert default_socket("carl") == "/tmp/pymux.sock.carl.0"
+
+
+def test_the_client_asks_the_far_side_to_find():
+    "The contract the far side answers: `pymux find` prints one path."
+    from pymux.client.ssh import FIND_COMMAND
+
+    assert FIND_COMMAND == "pymux find"
 
 
 def test_address_with_no_machine_is_refused():
@@ -128,18 +137,40 @@ def create_key(where: Path, name: str):
     return private, where / ("%s.pub" % name)
 
 
-async def create_ssh_server(where: Path, socket_path: str):
+async def create_ssh_server(
+    where: Path,
+    socket_path: str,
+    session_env: dict | None = None,
+    allow_exec: bool = True,
+):
     """
     A server that answers one client key and forwards to a unix socket.
 
     `unix_connection_requested` is what makes this stand in for sshd:
     asyncssh opens the socket itself and joins the two ends, which is
     what `direct-streamlocal@openssh.com` asks for.
+
+    `session_env` is the environment a session runs its command in,
+    and `None` inherits this process's, the way an sshd session
+    inherits the machine's. The command really runs, through a shell:
+    what the client reads back is the answer of a real `pymux find`,
+    not a string this test made up.
     """
     import asyncssh
 
     host_key, _ = create_key(where, "host")
     client_key, client_pub = create_key(where, "client")
+
+    async def answer_sessions(process) -> None:
+        ran = await asyncio.create_subprocess_shell(
+            process.command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            env=session_env,
+        )
+        out, _ = await ran.communicate()
+        process.stdout.write(out.decode("utf-8", "replace"))
+        process.exit(0)
 
     class OneSocket(asyncssh.SSHServer):
         def connection_made(self, conn) -> None:
@@ -153,29 +184,33 @@ async def create_ssh_server(where: Path, socket_path: str):
             # so a fault cannot reach anything else on the machine.
             return dest_path == socket_path
 
-    server = await asyncssh.listen(
-        "127.0.0.1",
-        0,
+    options = dict(
         server_factory=OneSocket,
         server_host_keys=[str(host_key)],
         authorized_client_keys=str(client_pub),
-        # The subsystem that lists the sockets when the address named
-        # none. sshd offers it; nothing is installed for it.
-        sftp_factory=True,
     )
+    if allow_exec:
+        # The session that runs `pymux find`. sshd offers it; nothing
+        # is installed for it.
+        options["process_factory"] = answer_sessions
+
+    server = await asyncssh.listen("127.0.0.1", 0, **options)
     port = server.get_addresses()[0][1]
     return server, port, str(client_key)
 
 
-async def test_command_reaches_server_over_ssh(tmp_path=None):
+@asynccontextmanager
+async def live_servers(socket_path: str, **server_options):
     """
-    The whole path: an address, a key exchange, a channel to the unix
-    socket, and the packets of a command coming back.
+    A pymux server bound at `socket_path`, serving, and an asyncssh
+    server that forwards to it.
+
+    The block runs with the pymux server, the asyncssh port and the
+    client key. Everything made here is closed when the block ends.
     """
     import tempfile
 
     where = Path(tempfile.mkdtemp())
-    socket_path = str(where / "pymux.sock")
 
     pymux = Pymux()
     pymux.listen_on_socket(socket_path)
@@ -187,8 +222,31 @@ async def test_command_reaches_server_over_ssh(tmp_path=None):
         pymux.create_window(PANE_COMMAND)
         await asyncio.sleep(0.5)
 
-        server, port, client_key = await create_ssh_server(where, socket_path)
+        server, port, client_key = await create_ssh_server(
+            where, socket_path, **server_options
+        )
+        try:
+            yield pymux, port, client_key
+        finally:
+            server.close()
+            pymux.stop()
+            for window in list(pymux.arrangement.windows):
+                for pane in list(window.panes):
+                    if not pane.process.is_terminated:
+                        pane.process.kill()
 
+
+async def test_command_reaches_server_over_ssh():
+    """
+    The whole path: an address, a key exchange, a channel to the unix
+    socket, and the packets of a command coming back.
+    """
+    import tempfile
+
+    where = Path(tempfile.mkdtemp())
+    socket_path = str(where / "pymux.sock")
+
+    async with live_servers(socket_path) as (pymux, port, client_key):
         client = SshClient(
             "ssh://127.0.0.1:%d%s" % (port, socket_path),
             known_hosts=None,
@@ -197,73 +255,101 @@ async def test_command_reaches_server_over_ssh(tmp_path=None):
         )
 
         said = []
-        try:
-            # A command whose answer is certainly not empty, so that an
-            # empty one means the channel carried nothing.
-            exit_code = await _what_it_says(
-                client, "list-sessions -F '#{session_name}'", said
-            )
-        finally:
-            server.close()
-            pymux.stop()
-            for window in list(pymux.arrangement.windows):
-                for pane in list(window.panes):
-                    if not pane.process.is_terminated:
-                        pane.process.kill()
+        # A command whose answer is certainly not empty, so that an
+        # empty one means the channel carried nothing.
+        exit_code = await _what_it_says(
+            client, "list-sessions -F '#{session_name}'", said
+        )
 
     assert exit_code == 0
     assert "".join(said).strip() == pymux.session_name, said
 
 
-async def test_address_with_no_path_finds_socket_itself():
+async def test_a_server_in_its_room_is_found():
     """
-    `ssh://host` alone, and nothing runs on the far side to answer it.
+    `ssh://host` with no path, and a server that bound in the per-UID
+    room of Lillecarl/pymux#405.
 
-    The socket is deliberately **not** number zero, so a fallback to
-    "the first server of this user" would open nothing. What passes
-    this test is the SFTP listing.
+    `pymux find` really runs, through a shell, on the far side of the
+    fake sshd: its `$XDG_RUNTIME_DIR` is where this test put the
+    room, so the finding and the binding happen on one side. The
+    socket is deliberately not number zero, so the flat guess of a
+    first server would miss. What passes this test is the command,
+    and the channel opened to the path it printed.
     """
     import getpass
     import tempfile
 
     where = Path(tempfile.mkdtemp())
-    # Where a real server binds, because that is what the listing
-    # looks for. Seven, so that the guess would miss.
-    socket_path = "/tmp/pymux.sock.%s.7" % (getpass.getuser(),)
-    Path(socket_path).unlink(missing_ok=True)
+    room = where / ("pymux-%d" % os.getuid())
+    room.mkdir(mode=0o700)
+    socket_path = str(room / ("pymux.sock.%s.7" % (getpass.getuser(),)))
 
-    pymux = Pymux()
-    pymux.listen_on_socket(socket_path)
+    room_env = {
+        "PATH": os.path.dirname(sys.executable) + os.pathsep + os.environ["PATH"],
+        "XDG_RUNTIME_DIR": str(where),
+    }
 
-    # The accepting is a task of `running()`, the same as in the test
-    # above. Lillecarl/pymux#87.
-    async with pymux.running():
-        pymux.create_window(PANE_COMMAND)
-        await asyncio.sleep(0.5)
-
-        server, port, client_key = await create_ssh_server(where, socket_path)
-
+    async with live_servers(socket_path, session_env=room_env) as (
+        pymux,
+        port,
+        client_key,
+    ):
         client = SshClient(
             "ssh://127.0.0.1:%d" % (port,),
             known_hosts=None,
             client_keys=[client_key],
             username=getpass.getuser(),
         )
-        assert client.target.path is None, "the address named no socket"
+        assert client.target.path is None, "the address named no path"
 
         said = []
-        try:
-            exit_code = await _what_it_says(
-                client, "list-sessions -F '#{session_name}'", said
-            )
-        finally:
-            server.close()
-            pymux.stop()
-            for window in list(pymux.arrangement.windows):
-                for pane in list(window.panes):
-                    if not pane.process.is_terminated:
-                        pane.process.kill()
-            Path(socket_path).unlink(missing_ok=True)
+        exit_code = await _what_it_says(
+            client, "list-sessions -F '#{session_name}'", said
+        )
+
+    assert client.path == socket_path, client.path
+    assert exit_code == 0
+    assert "".join(said).strip() == pymux.session_name, said
+
+
+async def test_the_flat_guess_when_find_cannot_run(monkeypatch):
+    """
+    A server whose sessions refuse to run commands, or a pymux over
+    there that predates `find`: the flat first server is the guess
+    that is left.
+
+    The socket is deliberately not where `pymux find` would have
+    looked, so what passes this test is the guess, and nothing else.
+    """
+    import getpass
+    import tempfile
+
+    where = Path(tempfile.mkdtemp())
+    socket_path = str(where / ("pymux.sock.%s.0" % (getpass.getuser(),)))
+
+    monkeypatch.setattr(
+        "pymux.client.ssh.default_socket",
+        lambda username: socket_path,
+    )
+
+    async with live_servers(socket_path, allow_exec=False) as (
+        pymux,
+        port,
+        client_key,
+    ):
+        client = SshClient(
+            "ssh://127.0.0.1:%d" % (port,),
+            known_hosts=None,
+            client_keys=[client_key],
+            username=getpass.getuser(),
+        )
+        assert client.target.path is None, "the address named no path"
+
+        said = []
+        exit_code = await _what_it_says(
+            client, "list-sessions -F '#{session_name}'", said
+        )
 
     assert client.path == socket_path, client.path
     assert exit_code == 0
