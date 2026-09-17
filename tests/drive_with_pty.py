@@ -857,8 +857,11 @@ def check_kitty_terminal(tmp):
         terminal.write(b"\x1b[?62;1;6c")  # Device attributes: no sixel.
 
         # 2. The pane pushed the disambiguate flag and the event types;
-        #    the client enables both on the outer terminal.
-        terminal.wait_for(b"\x1b[=3;1u")
+        #    the client pushes both on the outer terminal. The first
+        #    enable is a push, the protocol's own way to hold the state
+        #    that was there -- a shell's, or a nested pymux's.
+        #    Lillecarl/pymux#403.
+        terminal.wait_for(b"\x1b[>3u")
 
         # 3. The pane child runs and its output is rendered.
         terminal.wait_for(b"READY")
@@ -981,9 +984,11 @@ def check_kitty_terminal(tmp):
             )
             assert reply not in said, "a reply of the terminal reached the pane"
 
-        # 10. The server goes away: the client resets the flags.
+        # 10. The server goes away: the client pops what it pushed, and
+        #     the encoding beneath it comes back -- not zero, what was
+        #     ours to change was only the value over the push.
         run_cli(terminal.sock_path, ["kill-server"])
-        terminal.wait_for(b"\x1b[=0;1u")
+        terminal.wait_for(b"\x1b[<1u")
     except BaseException:
         terminal.report()
         raise
