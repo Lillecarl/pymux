@@ -19,11 +19,10 @@ import sys
 FOREIGN = ("prompt_toolkit", "asyncssh", "anyio")
 
 
-def modules_after_import() -> list[str]:
-    "The modules a fresh interpreter holds after importing the entry."
+def modules_after_import(imports: str) -> list[str]:
+    "The modules a fresh interpreter holds after `imports`."
     statement = (
-        "import json, sys; import pymux.entry_points.run_pymux; "
-        "print(json.dumps(sorted(sys.modules)))"
+        "import json, sys; %s print(json.dumps(sorted(sys.modules)))" % imports
     )
     out = subprocess.run(
         [sys.executable, "-c", statement],
@@ -37,10 +36,21 @@ def modules_after_import() -> list[str]:
 def test_the_entry_imports_no_toolkit():
     "The entry comes in without the stack that draws."
     assert not [
-        m for m in modules_after_import() if m.startswith(FOREIGN)
+        m for m in modules_after_import("import pymux.entry_points.run_pymux;")
+        if m.startswith(FOREIGN)
     ], "the entry imported the TUI stack: a detached command pays it"
 
 
+def test_diagnose_imports_no_toolkit():
+    "`diagnose` rides the entry's mode word, and reports stdlib-only."
+    assert not [
+        m for m in modules_after_import("import pymux.diagnose;")
+        if m.startswith(FOREIGN)
+    ], "diagnose imported the TUI stack: a report pays it"
+
+
 def test_the_entry_still_imports():
-    "The entry is importable at all, so the test above can lie."
-    assert "pymux.entry_points.run_pymux" in modules_after_import()
+    "The entry is importable at all, so the tests above can lie."
+    assert "pymux.entry_points.run_pymux" in modules_after_import(
+        "import pymux.entry_points.run_pymux;"
+    )

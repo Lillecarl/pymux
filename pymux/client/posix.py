@@ -36,14 +36,24 @@ class PosixClient(TerminalClient):
         self.socket.connect(socket_name)
         self.socket.setblocking(1)
 
-    def run_command(self, command, pane_id=None) -> int:
+    def run_command(self, command, pane_id=None, timeout=None) -> int:
         """
         Ask the server to run this command. Print the output that the server
         sends back, and return the exit code of the command.
 
         :param pane_id: Optional identifier of the current pane.
+        :param timeout: How long the answer may take, in seconds, when a
+            number is given. A server always closes the connection after
+            the answer, so the read ends with it; the number is for a
+            peer that never answers at all -- something else listens on
+            the path. `None`, the default, waits the way the attach
+            always has.
         """
         self._send_packet({"cmd": "run-command", "data": command, "pane_id": pane_id})
+        if timeout is not None:
+            # After the send, which asked for blocking again: the read
+            # is the side that needs the patience.
+            self.socket.settimeout(timeout)
 
         # Read the answer of the server. Packets:
         #   "out": output of the command. (stdout)

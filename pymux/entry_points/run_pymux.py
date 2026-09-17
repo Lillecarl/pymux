@@ -72,6 +72,7 @@ MODES = (
     "list-sessions",
     "ls",
     "find",
+    "diagnose",
 )
 
 #: The modes that take the command of the first pane after the mode
@@ -274,6 +275,14 @@ def parse_arguments(
         if rest and rest[0] == "--":
             rest = rest[1:]
 
+        if mode == "diagnose":
+            # Its own flags, before the fallthrough below would read
+            # `--json` as a command for a server.
+            flag_parser = argparse.ArgumentParser(add_help=False)
+            flag_parser.add_argument("--json", action="store_true", default=False)
+            flag_args, rest = flag_parser.parse_known_args(rest)
+            a.diagnose_json = flag_args.json
+
     if mode in MODES_WITH_A_FIRST_PANE:
         # An optional command can be given for the first pane.
         command = " ".join(shlex.quote(x) for x in rest) if rest else None
@@ -315,12 +324,16 @@ def _completion_parser() -> argparse.ArgumentParser:
     # `list-sessions` and `ls` come from the command tree below, with
     # the options the command takes; what is left here is the starts
     # that run a server or a client, and `find`, which takes nothing.
-    for name in ("standalone", "integrated", "start-server", "attach", "find"):
+    for name in ("standalone", "integrated", "start-server", "attach", "find", "diagnose"):
         mode_parser = modes.add_parser(
             name,
             help="Run a server, or attach to one. See `pymux --help`.",
         )
         _add_options(mode_parser, suppress_defaults=True)
+        if name == "diagnose":
+            mode_parser.add_argument(
+                "--json", action="store_true", help="Print the report as JSON."
+            )
     add_commands_to(modes)
     return parser
 
@@ -474,6 +487,15 @@ def run() -> None:
             print(names[0])
         else:
             sys.exit(1)
+
+    elif mode == "diagnose":
+        # One report of what this machine sees, for a paste into a
+        # support conversation. Read-only, and light: the imports of
+        # the report are stdlib only. Lillecarl/pymux#391.
+        from pymux.diagnose import as_json, diagnose, human
+
+        report = diagnose(socket_name=socket_name, config_file=filename)
+        print(as_json(report) if a.diagnose_json else human(report))
 
     elif mode == "start-server":
         if socket_name_from_env:
