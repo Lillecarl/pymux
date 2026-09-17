@@ -307,6 +307,25 @@ sys.stdin.read()
 """
 
 
+#: A program that writes a screenful at a time, forever. The wedge needs
+#: frames faster than a client reads them, and a pane that draws once
+#: proves nothing: the frames have to keep coming after the client
+#: stopped taking them. The count in every row makes each frame differ
+#: from the one before it, so the renderer redraws instead of sending
+#: nothing.
+FLOOD_CHILD = """
+import sys, time
+out = sys.stdout
+n = 0
+while True:
+    for i in range(20):
+        out.write("FLOOD %d row %d %s\\n" % (n, i, "x" * 60))
+    out.flush()
+    n += 1
+    time.sleep(0.02)
+"""
+
+
 class Failed(AssertionError):
     pass
 
@@ -2097,6 +2116,87 @@ def check_detach_ends_client(tmp):
         terminal.close()
 
 
+def check_a_stopped_client_does_not_stop_the_server(tmp):
+    """
+    A client that stopped reading must not stop the server.
+
+    The client is a process, and a process can stop: ctrl+z suspends
+    it, a laptop sleeps. The server keeps drawing for it -- the clock
+    in the status line moves -- and every frame leaves through
+    `PosixSocketConnection.write`. A send to a client that never reads
+    fills the socket's kernel buffer and then blocks, and a send that
+    blocks inside a coroutine blocks the whole loop: list-sessions
+    hangs, a new attach connects and draws nothing, panes stop being
+    parsed. When the stopped client dies the send fails, the loop
+    comes back, and the fault reads as "attach is broken" and then,
+    unaccountably, as "it works again". Lillecarl/pymux#418.
+
+    So: stop the client, let a pane write past the size of the
+    kernel's buffer, and ask the server for something. It must answer,
+    and a client that arrives now must still draw.
+    """
+    if ROUTE == "integrated":
+        # Stopping the client stops the server with it: one process.
+        # The socket route is the one where the two halves can part.
+        print("a stopped client: socket route only")
+        return
+
+    terminal = Terminal(tmp, "kitty")
+    try:
+        terminal.wait_for_queries()
+        terminal.write(b"\x1b[?1u")
+        terminal.write(b"\x1b_Gi=31;OK\x1b\\")
+        terminal.write(b"\x1b[6;20;10t")
+        terminal.write(b"\x1bP1$r38:2::1:2:3m\x1b\\")
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"READY")
+
+        child = tmp / "flood-child.py"
+        child.write_text(FLOOD_CHILD)
+        made = run_cli(
+            terminal.sock_path, ["split-window", "%s %s" % (sys.executable, child)]
+        )
+        assert made.returncode == 0, made.stderr
+        terminal.wait_for(b"FLOOD")
+
+        # The client stops here. What the server sends it now queues in
+        # the kernel, and past ~200 kB there is no room left: the next
+        # send is the one that must not block the loop.
+        terminal.client.send_signal(signal.SIGSTOP)
+        time.sleep(10.0)
+
+        try:
+            answer = run_cli(terminal.sock_path, ["list-sessions"])
+        except subprocess.TimeoutExpired:
+            raise AssertionError(
+                "list-sessions did not answer in 20s: the server is "
+                "wedged on the client that stopped reading"
+            )
+        assert answer.returncode == 0, answer.stderr
+
+        # And a client that arrives now still draws.
+        other = SecondClient(tmp, terminal.sock_path, "second-stopped")
+        try:
+            other.wait_for_queries()
+            other.write(b"\x1b[?1;2c")
+            other.wait_for(b"FLOOD", timeout=15)
+        except BaseException:
+            other.report()
+            raise
+        finally:
+            other.close()
+    except BaseException:
+        terminal.report()
+        raise
+    finally:
+        # A stopped process answers no SIGTERM until it is continued,
+        # and `close` waits five seconds for one. Take it out first.
+        if terminal.client.poll() is None:
+            terminal.client.kill()
+        terminal.close()
+    print("a stopped client does not stop the server: ok")
+
+
 def check_libpymux(tmp):
     """
     libpymux against a server that is really there.
@@ -2325,6 +2425,7 @@ CHECKS = (
     check_pane_that_changes_nothing,
     check_command_palette,
     check_detach_ends_client,
+    check_a_stopped_client_does_not_stop_the_server,
     check_libpymux,
 )
 

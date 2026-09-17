@@ -130,9 +130,13 @@ class PosixSocketListener:
             await anyio.wait_readable(self.socket)
 
             connection, _client_address = self.socket.accept()
-            # Note: We don't have to put this socket in non blocking mode.
-            #       This can cause crashes when sending big packets on OS X.
-
+            # The socket goes to `PosixSocketConnection` non blocking,
+            # and every send waits for room before it retries. A client
+            # that stopped reading must not park the loop inside a
+            # send: the partial-send loop in `_send_all` is also what
+            # keeps a packet whole on OS X, where a non blocking send
+            # of more than the buffer holds used to lose the rest.
+            # Lillecarl/pymux#418.
             self._accept_callback(PosixSocketConnection(connection))
 
     def close(self) -> None:
@@ -191,6 +195,18 @@ def _bind_posix_socket(socket_name: str | None = None):
                     raise
 
 
+#: What may wait to be read by one client before it is left behind.
+#:
+#: The kernel holds about 200 kB on a unix socket before a send has to
+#: wait for room. Past a megabyte the client is not reading slowly, it
+#: is not reading at all -- suspended with ctrl+z, a laptop asleep --
+#: and an animating pane would pile up one parked write after another
+#: for as long as the server runs. tmux leaves such a client behind
+#: too ("client is too slow"): the person who comes back reads an
+#: ended attachment, and the server goes on. Lillecarl/pymux#418.
+TOO_SLOW_BYTES = 1024 * 1024
+
+
 class PosixSocketConnection(PipeConnection):
     """
     A single active posix pipe connection on the server side.
@@ -198,8 +214,16 @@ class PosixSocketConnection(PipeConnection):
 
     def __init__(self, socket) -> None:
         self.socket = socket
+        # Non blocking. A send that finds no room parks this
+        # connection's write and never the loop (`write`).
+        # Lillecarl/pymux#418.
+        self.socket.setblocking(False)
         self._recv_buffer = b""
         self._closed = False
+
+        #: Bytes given to `write` and not yet taken by the kernel.
+        self._outstanding = 0
+        self._write_lock: "anyio.Lock | None" = None
 
     async def read(self) -> bytes:
         r"""
@@ -252,13 +276,53 @@ class PosixSocketConnection(PipeConnection):
 
     async def write(self, message: str) -> None:
         """
-        Write the next packet. (The socket takes it at once.)
+        Write the next packet. (Packets are \\0 separated.)
+
+        **A client that stopped reading stops only itself.** The send
+        waits for room on its own connection and the loop goes on:
+        list-sessions, a later attach and every other client of the
+        server keep working while this one holds a full buffer. Past
+        `TOO_SLOW_BYTES` the client is left behind. Lillecarl/pymux#418.
         """
+        if self._closed:
+            raise BrokenPipeError
+
+        data = message.encode("utf-8") + b"\0"
+
+        # Counted before the lock, so that a write waiting for its
+        # turn is counted while it waits: the lock serialises the
+        # packets (one send, then the next, never interleaved), and
+        # this count is what bounds how much they may hold together.
+        if self._outstanding + len(data) > TOO_SLOW_BYTES:
+            raise BrokenPipeError
+        self._outstanding += len(data)
+
         try:
-            self.socket.send(message.encode("utf-8") + b"\0")
-        except socket.error:
-            if not self._closed:
+            if self._write_lock is None:
+                self._write_lock = anyio.Lock()
+            async with self._write_lock:
+                await self._send_all(data)
+        finally:
+            self._outstanding -= len(data)
+
+    async def _send_all(self, data: bytes) -> None:
+        "Send every byte, waiting for room rather than blocking the loop."
+        view = memoryview(data)
+        while view:
+            try:
+                sent = self.socket.send(view)
+            except BlockingIOError:
+                try:
+                    await anyio.wait_writable(self.socket)
+                except (anyio.ClosedResourceError, OSError):
+                    # `close()` says the socket is going (it calls
+                    # `notify_closing`, which wakes this), or the peer
+                    # is gone. Either way this connection is over.
+                    raise BrokenPipeError
+                continue
+            except OSError:
                 raise BrokenPipeError
+            view = view[sent:]
 
     def close(self) -> None:
         """
