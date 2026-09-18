@@ -307,15 +307,34 @@ class Pane:
         postpone a redraw. Waiting for silence rather than for a fixed
         time costs nothing when there is no frame to wait for, and waits
         as long as it has to when there is.
+
+        **The two waits are different waits.** `FIRST_BYTE` is how long
+        a frame may take to start, and it is paid in full only when no
+        frame comes. `QUIET` is how long a gap inside a frame may be.
+        Selecting on `QUIET` before the first byte spends the shorter
+        of the two on the longer wait, and then the frame is lost:
+        `since(mark)` returns the bytes from before it and the judge
+        reads a screen the pane never finished drawing.
+
+        Measured, on an idle machine, with the `colored_reset`
+        recording of the Alacritty references: `settle: 0.053s, 0 bytes`
+        and a 551 byte wire, where the same test gives 9115 bytes when
+        the frame is waited for. Lillecarl/pymux#425.
         """
         assert self.terminal is not None
-        deadline = time.monotonic() + FIRST_BYTE
-        while time.monotonic() < deadline:
-            readable, _, _ = select.select([self.terminal.master_fd], [], [], QUIET)
+        started = time.monotonic()
+        read = 0
+        patience = FIRST_BYTE
+        while True:
+            readable, _, _ = select.select([self.terminal.master_fd], [], [], patience)
             if not readable:
-                return
-            self.terminal.seen += os.read(self.terminal.master_fd, 65536)
-            deadline = time.monotonic() + FIRST_BYTE
+                break
+            piece = os.read(self.terminal.master_fd, 65536)
+            self.terminal.seen += piece
+            read += len(piece)
+            # The frame has started, so from here a gap is a gap.
+            patience = QUIET
+        self._trace("settle: %.3fs, %d bytes" % (time.monotonic() - started, read))
 
     def close(self) -> None:
         if self.writer >= 0:
