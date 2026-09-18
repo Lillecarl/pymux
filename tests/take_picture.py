@@ -59,6 +59,22 @@ seat is the better shape for this work: one window, no decoration, no
 window to find, and `grim` takes the output. The X seat has to find
 its window among the ones that ran before it.
 
+**Neither server takes the display of the other, and nothing here
+arranges that.** Xvfb chooses a display by binding a socket and
+reporting the number it got. Xwayland walks the displays in turn, and
+its bind of the abstract name fails on the one Xvfb holds: "Failed to
+bind socket @/tmp/.X11-unix/X0: Address already in use" is in the log
+of every run, and it is the second server stepping aside. Making
+`/tmp/.X11-unix` first is no part of it -- measured, a sandbox that
+starts with an empty /tmp ends with the socket in it either way,
+because each server makes the directory itself. Lillecarl/pymux#177.
+
+"xterm: Xt error: Can't open display" came from neither. An X server
+resets when its last client goes, and a picture here is a terminal
+that starts and is killed, so the client count reaches zero between
+every pair of pictures. `pyterm_pytest.seats` asks for `-noreset`.
+Lillecarl/pymux#431.
+
 Not every difference is a fault. A pane reads what a program asked for
 and writes the request again in the form the terminal of the user
 understands, so a pane can draw more than that terminal draws on its
@@ -1236,22 +1252,6 @@ def main():
     standing = read_recorded()
     seen = {}
     blinks = {}
-
-    # Where an X server puts the socket of its display.
-    #
-    # **Two display servers run here at once**, because a terminal
-    # needs X or Wayland and this check has both kinds: Xvfb for
-    # xterm, and sway, which brings Xwayland with it. A build sandbox
-    # has no such directory and a server cannot make one --
-    # "_XSERVTransmkdir: ERROR: euid != 0" -- so each server falls
-    # back to the abstract socket alone, neither can see that the
-    # other took display zero, and xterm connects to whichever
-    # answers: "xterm: Xt error: Can't open display: :0".
-    #
-    # With the directory there, the first server writes X0 into it and
-    # the second one sees it and takes the next number.
-    # Lillecarl/pymux#177.
-    Path("/tmp/.X11-unix").mkdir(parents=True, exist_ok=True)
 
     # One seat for each kind of display server that a terminal here
     # needs, and none for a kind that nothing needs.

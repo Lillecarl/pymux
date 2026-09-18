@@ -762,11 +762,6 @@ def main(
     if missing:
         raise SystemExit("these terminals are not here: %s" % ", ".join(missing))
 
-    # The same directory the comparison check needs, and for the same
-    # reason: two display servers run here at once and neither can make
-    # it. `take_picture.py` says why. Lillecarl/pymux#177.
-    Path("/tmp/.X11-unix").mkdir(parents=True, exist_ok=True)
-
     taken = []
     lost = []
     try:
