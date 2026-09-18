@@ -1284,6 +1284,9 @@ def main():
                     "%d with pymux" % (terminal.name, name, bare, through),
                     flush=True,
                 )
+    except TheSeatIsGone as gone:
+        # The seat said so itself, so there is nothing to ask.
+        return with_no_answer(str(gone))
     except Exception as reason:
         # **Ask the seat before believing the fixture.** A display
         # server that went away makes every picture after it fail, and

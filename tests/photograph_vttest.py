@@ -703,6 +703,9 @@ def main():
                 ),
                 flush=True,
             )
+    except TheSeatIsGone as gone:
+        # The seat said so itself, so there is nothing to ask.
+        return with_no_answer(str(gone))
     except Exception as reason:
         # A seat that went away makes every screen after it fail, and
         # a run that cannot draw has no answer. Lillecarl/pymux#216.

@@ -810,6 +810,9 @@ def main(
                         ),
                         flush=True,
                     )
+    except TheSeatIsGone as gone:
+        # The seat said so itself, so there is nothing to ask.
+        return with_no_answer(str(gone))
     finally:
         for seat in seats.values():
             seat.stop()
