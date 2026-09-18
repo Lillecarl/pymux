@@ -716,6 +716,7 @@ def main():
         raise reason
     finally:
         for seat in seats.values():
+            seat.keep_the_log(out)
             seat.stop()
 
     write_recorded(out / "vttest-picture-differences.txt", seen)

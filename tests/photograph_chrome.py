@@ -810,6 +810,7 @@ def main(
         return with_no_answer(str(gone))
     finally:
         for seat in seats.values():
+            seat.keep_the_log(out)
             seat.stop()
 
     print("")
