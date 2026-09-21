@@ -28,6 +28,15 @@ number that goes up fails a build. Carl:
   Nothing counted the diff or the writing before this, and they are
   the part a keystroke pays that a recording does not.
 
+## Two terminals, because a keystroke costs what the screen costs
+
+Every stage is measured twice: on a terminal of 80x24, and on one of
+342x74, which is a real session on a wide monitor. The render stage
+lays the window out and draws it cell by cell, so a budget at one size
+holds nothing at the other, and the wide one is where a person feels
+it. The bare budget names belong to the small terminal, so every
+number recorded before there were two still means what it meant.
+
 ## Why it is deterministic, which is what makes it a gate
 
 **Nothing runs the event loop.** A loop exists because
@@ -131,13 +140,38 @@ CALLERS = os.environ.get("PYMUX_KEYSTROKE_CALLERS", "")
 #: *where* a container sits rather than how many there are.
 CENSUS = os.environ.get("PYMUX_KEYSTROKE_CENSUS", "")
 
-#: The client's terminal.
-SIZE = Size(rows=24, columns=80)
+#: The terminals every stage is measured on, and the name each one
+#: puts on its budget lines. The unnamed one owns the bare names, so
+#: every budget recorded before there were two of these still means
+#: what it meant.
+#:
+#: **A keystroke costs what the screen costs.** The render stage lays
+#: the window out and draws it cell by cell, so a budget at one size
+#: says nothing about another, and a wide terminal is where a person
+#: feels it. Measured with the sampling profiler, one pane, 100 frames:
+#: a frame of 80x24 takes 6.9 ms and a frame of 342x74 takes 22.2 ms,
+#: and four panes at 342x74 take 19.5 ms -- the same screen divided
+#: differently costs the same, because the cells are what is paid for.
+#: Lillecarl/pymux#434.
+SIZES = {
+    "": Size(rows=24, columns=80),
+    "wide": Size(rows=74, columns=342),
+}
 
 #: The order a keystroke happens in, which is the order everything
 #: here measures in. A press, the program's answer, and the frame that
 #: shows it.
 ORDER = ("key", "parse", "render")
+
+
+def on(stage, size_name):
+    "What one stage on one terminal is called, in the log and the budgets."
+    return "%s (%s)" % (stage, size_name) if size_name else stage
+
+
+def every_measurement():
+    "Every stage on every terminal, grouped by terminal."
+    return [on(stage, name) for name in SIZES for stage in ORDER]
 
 #: What the program in the pane answers with, and what a person typed.
 #: One cell either way, which is the steady state a keystroke is: a
@@ -147,7 +181,7 @@ KEY = "a"
 
 
 @contextmanager
-def create_client():
+def create_client(size):
     """
     One session, one pane, one client, and no loop turning.
 
@@ -170,7 +204,7 @@ def create_client():
     pymux = Pymux()
     try:
         with create_pipe_input() as pipe:
-            output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: SIZE)
+            output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: size)
             state = pymux.add_client(
                 output=output,
                 input=pipe,
@@ -483,53 +517,61 @@ def main() -> int:
     include = os.environ.get("PYMUX_KEYSTROKE_INCLUDE", "")
     tolerance = float(os.environ.get("PYMUX_KEYSTROKE_TOLERANCE") or DEFAULT_TOLERANCE)
 
-    with create_client() as (pymux, state):
-        picked = stages(pymux, state)
-        if include:
-            picked = {n: w for n, w in picked.items() if re.search(include, n)}
-        if not picked:
-            print("Nothing matched %r." % (include,))
-            return 1
+    counts, microseconds, where, callers = {}, {}, {}, {}
+    census = None
 
-        settle(state, picked)
-        counts = counted(state, picked)
-        microseconds = timed(state, picked, TIMED)
+    # One client per terminal. A client's size is fixed when it
+    # attaches, and a resize is a different measurement from a
+    # keystroke, so each size gets a session of its own.
+    for size_name, size in SIZES.items():
+        with create_client(size) as (pymux, state):
+            picked = stages(pymux, state)
+            if include:
+                picked = {n: w for n, w in picked.items() if re.search(include, n)}
+            if not picked:
+                print("Nothing matched %r." % (include,))
+                return 1
 
-        where = {}
-        if WHERE:
-            with set_app(state.app):
-                for name, work in picked.items():
-                    where[name] = where_instructions_are(work)
+            settle(state, picked)
+            for stage, count in counted(state, picked).items():
+                counts[on(stage, size_name)] = count
+            for stage, each in timed(state, picked, TIMED).items():
+                microseconds[on(stage, size_name)] = each
 
-        callers = {}
-        if CALLERS:
-            with set_app(state.app):
-                for name, work in picked.items():
-                    callers[name] = who_calls(work, CALLERS)
+            if WHERE:
+                with set_app(state.app):
+                    for stage, work in picked.items():
+                        where[on(stage, size_name)] = where_instructions_are(work)
 
-        census = None
-        if CENSUS:
-            with set_app(state.app):
-                census = the_tree_a_key_press_walks(state.app.layout)
+            if CALLERS:
+                with set_app(state.app):
+                    for stage, work in picked.items():
+                        callers[on(stage, size_name)] = who_calls(work, CALLERS)
+
+            # The tree is the same shape on every terminal, so it is
+            # asked once.
+            if CENSUS and census is None:
+                with set_app(state.app):
+                    census = the_tree_a_key_press_walks(state.app.layout)
 
     print("\n--- what one keystroke costs ---")
-    print("%-12s %14s %12s" % ("", "instructions", "in-process"))
-    for name in ORDER:
+    print("%-18s %14s %12s" % ("", "instructions", "in-process"))
+    for name in every_measurement():
         if name in counts:
-            print("%-12s %14d %10.1f us" % (name, counts[name], microseconds[name]))
+            print("%-18s %14d %10.1f us" % (name, counts[name], microseconds[name]))
 
     print(
-        "%-12s %14d %10.1f us"
+        "%-18s %14d %10.1f us"
         % ("all of it", sum(counts.values()), sum(microseconds.values()))
     )
 
-    for name in ORDER:
+    for name in every_measurement():
         if name in where:
             print("\n--- where the instructions of %s are ---" % (name,))
             for place, count in where[name]:
                 print("  %8d  %s" % (count, place))
 
-    for name in ORDER:
+    for name in every_measurement():
         if name in callers:
             print("\n--- who calls %r during %s ---" % (CALLERS, name))
             if not callers[name]:
