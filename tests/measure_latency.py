@@ -89,6 +89,21 @@ from drive_with_pty import (  # noqa: E402
 #: How many keystrokes each path is measured over.
 SAMPLES = int(os.environ.get("PYMUX_LATENCY_SAMPLES") or 200)
 
+#: The terminal both paths are measured on.
+#:
+#: **A round trip carries a frame, and a frame costs what the screen
+#: costs.** Measured with `checks.pymux-profile`: a frame of 80x24
+#: takes 6.9 ms and one of 342x74 takes 22.2 ms, so the size here is
+#: most of the answer on the pymux side and none of it on the bare
+#: one. A wide terminal is what a person runs.
+#:
+#:     PYMUX_LATENCY_ROWS=74 PYMUX_LATENCY_COLUMNS=342 \
+#:       nix build --file . checks.pymux-latency.run
+#:
+#: Lillecarl/pymux#434.
+ROWS = int(os.environ.get("PYMUX_LATENCY_ROWS") or 24)
+COLUMNS = int(os.environ.get("PYMUX_LATENCY_COLUMNS") or 80)
+
 #: How long to wait between one keystroke and the next.
 #:
 #: Long enough that a round trip finishes first, so each sample is one
@@ -160,6 +175,8 @@ class Bare(Attached):
             [sys.executable, str(child), str(log)],
             self.stderr_path,
             env={"LANG": "C.UTF-8"},
+            rows=ROWS,
+            columns=COLUMNS,
         )
         self.seen = b""
         self.arrivals = []
@@ -297,8 +314,9 @@ def main() -> int:
         child.write_text(CHILD)
 
         print(
-            "%d keystrokes a path, %.0f ms apart, over the %s route."
-            % (SAMPLES, PACE * 1000.0, ROUTE)
+            "%d keystrokes a path, %.0f ms apart, over the %s route, "
+            "on a terminal of %dx%d."
+            % (SAMPLES, PACE * 1000.0, ROUTE, COLUMNS, ROWS)
         )
 
         measured = {}
@@ -316,6 +334,8 @@ def main() -> int:
             tmp,
             "latency",
             command="%s %s %s" % (sys.executable, child, ours_log),
+            rows=ROWS,
+            columns=COLUMNS,
         )
         try:
             terminal.wait_for_queries()

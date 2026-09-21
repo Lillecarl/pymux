@@ -234,6 +234,13 @@ let
   latencyPace = builtins.getEnv "PYMUX_LATENCY_PACE";
   latencyRoute = builtins.getEnv "PYMUX_ROUTE";
 
+  # The terminal a round trip is measured on. A round trip carries a
+  # frame, and a frame costs what the screen costs.
+  # `PYMUX_LATENCY_ROWS=74 PYMUX_LATENCY_COLUMNS=342 nix build --file . checks.pymux-latency.run`.
+  # Lillecarl/pymux#434.
+  latencyRows = builtins.getEnv "PYMUX_LATENCY_ROWS";
+  latencyColumns = builtins.getEnv "PYMUX_LATENCY_COLUMNS";
+
   # How many keystrokes the turn count takes, how far apart, and how
   # many of them name the callback of every turn.
   # `PYMUX_TURNS_SAMPLES=1000 nix build --file . checks.pymux-turns.run`.
@@ -700,10 +707,20 @@ in
     runInSandbox
       {
         name = "pymux-latency";
-        env = { inherit latencySamples latencyPace latencyRoute; };
+        env = {
+          inherit
+            latencySamples
+            latencyPace
+            latencyRoute
+            latencyRows
+            latencyColumns
+            ;
+        };
         setup = ''
           export PYMUX_LATENCY_SAMPLES="$latencySamples"
           export PYMUX_LATENCY_PACE="$latencyPace"
+          export PYMUX_LATENCY_ROWS="$latencyRows"
+          export PYMUX_LATENCY_COLUMNS="$latencyColumns"
           # Only when it was asked for. `drive_with_pty.py` defaults to
           # the socket route, and an empty value defeats the default
           # rather than choosing it.
