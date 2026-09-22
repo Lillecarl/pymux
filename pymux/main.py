@@ -13,7 +13,7 @@ import tempfile
 import time
 import traceback
 import weakref
-from typing import Callable, List, Tuple
+from typing import Callable, List, NamedTuple, Tuple
 
 import anyio
 
@@ -49,6 +49,7 @@ from .colors import DefaultColors, theme_color_base
 from .commands import CommandException, call_command_handler, handle_command
 from .commands.completer import create_command_completer
 from .enums import CHOOSE, COMMAND, PROMPT, WindowSize, Woke
+from .forwarding import LOOPBACK_NAMES
 from .graphics import PaneView
 from . import introspect
 from .key_bindings import PymuxKeyBindings
@@ -167,6 +168,21 @@ def _say_key_did_not_fit():
         logger.info("%s", why_pane_cannot_read(event, lost, encoded))
 
     return say
+
+
+class Asker(NamedTuple):
+    """
+    The client a forward is asked of, and whether a person asked.
+
+    `in_person` is false when the request arrived over the socket,
+    which is how a program in a pane runs a command. The forward still
+    belongs to an attached client -- that is the machine with the SSH
+    connection -- but nobody chose it, so `forward_needs_asking` says
+    it has to be confirmed. Lillecarl/pymux#440.
+    """
+
+    client_state: "ClientState"
+    in_person: bool
 
 
 class ClientState:
@@ -784,6 +800,14 @@ class Pymux:
         self.clipboard_mode = Clipboard.EXTERNAL
         self.open_url_target = "last"
         self.open_url_mode = "open"
+
+        #: What happens to a request to forward a port. "on" is the
+        #: default because the common case is a person typing
+        #: `forward-port -L` at their own keyboard, and a question
+        #: there is a nuisance and no safer. The two cases that ask
+        #: anyway are in `forward_needs_asking`.
+        #: Lillecarl/pymux#440.
+        self.forward_mode = "on"
         self.open_url_shim = False
         self._open_url_shim_dir = None
 
@@ -2117,9 +2141,9 @@ class Pymux:
             client_state.connection._send_packet({"cmd": "open", "data": url})
             client_state.message = "Opened %s in the browser of this machine." % (url,)
 
-    def forwarding_client(self) -> "ClientState":
+    def forwarding_client(self) -> "Asker":
         """
-        The client that a forward is asked of.
+        The client that a forward is asked of, and who asked.
 
         **The one that asked, when a client asked.** A forward binds a
         port on one machine, and the machine a person means is the one
@@ -2140,7 +2164,7 @@ class Pymux:
             asking = None
 
         if asking is not None and not asking.temporary:
-            return asking
+            return self._can_it_forward(Asker(asking, in_person=True))
 
         attached = [
             client for client in self._client_states.values() if not client.temporary
@@ -2153,7 +2177,47 @@ class Pymux:
             raise CommandException(
                 "Several clients are attached. Run this from the one that should forward."
             )
-        return attached[0]
+        # A temporary client is the fake CLI of a command that arrived
+        # over the socket, which is how a program in a pane runs one.
+        # Nobody typed this.
+        return self._can_it_forward(Asker(attached[0], in_person=False))
+
+    def _can_it_forward(self, asker: "Asker") -> "Asker":
+        """
+        Refuse a client with no SSH connection, before anything else.
+
+        **Before the question**, because asking somebody whether to
+        make a forward that cannot be made wastes the only answer they
+        can give.
+        """
+        if not asker.client_state.connection.can_forward:
+            raise CommandException(
+                "%s did not reach this server over SSH, so it cannot forward a port."
+                % (asker.client_state.connection.name,)
+            )
+        return asker
+
+    def forward_needs_asking(self, forward, in_person: bool) -> bool:
+        """
+        Whether this forward has to be confirmed before it is made.
+
+        **"on" is not "never ask".** Two cases ask whatever the option
+        says, because in neither of them did the person at the keyboard
+        choose this forward:
+
+        - A program in a pane asked. Any command a pane runs reaches
+          the server, so without this any program on the far machine
+          could bind a port here.
+        - It listens somewhere other than loopback, which publishes the
+          far machine's service to the network this one is on. openssh
+          makes the same split, through `GatewayPorts`.
+
+        Lillecarl/pymux#440.
+        """
+        if self.forward_mode == "ask":
+            return True
+
+        return not in_person or forward.listen_host not in LOOPBACK_NAMES
 
     def forward_through(self, client_state: "ClientState", packet: dict) -> None:
         """
@@ -2163,14 +2227,10 @@ class Pymux:
         connection: the client does, and it is the machine the person
         sits at. So this is a request, the way `open-url` is, and the
         answer comes back as the client's whole table.
-        Lillecarl/pymux#436.
-        """
-        if not client_state.connection.can_forward:
-            raise CommandException(
-                "%s did not reach this server over SSH, so it cannot forward a port."
-                % (client_state.connection.name,)
-            )
 
+        `forwarding_client` has already refused a client that cannot
+        forward at all. Lillecarl/pymux#436.
+        """
         client_state.connection._send_packet(packet)
 
     def _ensure_open_url_shim(self) -> None:

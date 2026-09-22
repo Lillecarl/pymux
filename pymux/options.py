@@ -641,6 +641,14 @@ ALL_OPTIONS = {
     # opens a browser here without knowing pymux. A pane that runs
     # already keeps the PATH it was born with; only new panes see it.
     "open-url-shim": OnOffOption("open_url_shim"),
+    # What happens to a request to forward a port. "on" forwards it,
+    # "ask" shows "(y/n)" in the command bar of the client that would
+    # bind it, and "off" refuses. **"on" is not "never ask"**: a
+    # request that binds somewhere other than loopback, and one that a
+    # program in a pane made rather than the person, still ask. The
+    # port belongs to the machine somebody is sitting at.
+    # Lillecarl/pymux#440.
+    "forward-mode": ChoiceOption("forward_mode", ["on", "ask", "off"]),
     "history-limit": PositiveIntOption(
         "history_limit", [200, 500, 1000, 2000, 5000, 10000]
     ),

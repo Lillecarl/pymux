@@ -20,6 +20,7 @@ __all__ = [
     "Direction",
     "Forward",
     "LOOPBACK",
+    "LOOPBACK_NAMES",
     "parse_forward",
     "parse_listen",
 ]
@@ -52,6 +53,14 @@ class Direction(StrEnum):
 #: a laptop's wifi address publishes it to the cafe. openssh defaults the
 #: same way and makes the other choice explicit through `GatewayPorts`.
 LOOPBACK: Final = "localhost"
+
+#: The addresses that reach only the machine itself.
+#:
+#: A forward that binds one of these is private to whoever is at that
+#: keyboard. A forward that binds anything else publishes a service to
+#: the network the machine is on, which is a different decision and is
+#: why `forward_needs_asking` separates them. Lillecarl/pymux#440.
+LOOPBACK_NAMES: Final = frozenset({"localhost", "127.0.0.1", "::1", "ip6-localhost"})
 
 #: The port number that asks the operating system for a free one. The
 #: listener answers with the number it really got.

@@ -14,7 +14,7 @@ only checked "something came back" would pass on it.
 from __future__ import annotations
 
 import json
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 
 import anyio
@@ -32,6 +32,7 @@ from pymux.forwarding import (
     parse_listen,
 )
 
+from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 
 from pymux.client.ssh import SshClient
@@ -565,7 +566,8 @@ async def test_the_request_reaches_the_client_that_asked():
         await session.attach("the client", SIZE)
         session.pymux.clients[0].connection.can_forward = True
 
-        session.pymux.handle_command("forward-port -L 8080:localhost:3000")
+        with as_the_person(session):
+            session.pymux.handle_command("forward-port -L 8080:localhost:3000")
 
         asked = await once(
             lambda: _forward_requests(seen),
@@ -638,6 +640,195 @@ async def test_the_listing_reads_what_the_client_reported():
 
     assert "-L localhost:8080 -> localhost:3000" in said, said
     assert "-R localhost:9222 -> localhost:9222 (Address already in use)" in said, said
+
+
+# ----------------------------------------------------------------------
+# The trust gate. Lillecarl/pymux#440.
+
+
+def _questions(session) -> list:
+    return [text for text, _command in session.pymux.clients[0].confirmations]
+
+
+@contextmanager
+def as_the_person(session):
+    """
+    Run a command the way the command bar does: inside the application
+    of the client that is typing.
+
+    **This is what makes the request in person.** `ClientState._handle_command`
+    runs with that client's application current, so `get_client_state`
+    finds it and `forwarding_client` says a person asked. A test that
+    calls `handle_command` bare looks like a program in a pane instead,
+    which is a different answer from the gate. Lillecarl/pymux#440.
+    """
+    with set_app(session.pymux.clients[0].app):
+        yield
+
+
+async def test_a_person_forwarding_loopback_is_not_asked():
+    """
+    The common case, and the reason the default is `on`: somebody types
+    `forward-port -L` at their own keyboard, for a port on their own
+    machine. A question there is a nuisance and no safer.
+    """
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        await session.attach("the client", SIZE)
+        session.pymux.clients[0].connection.can_forward = True
+
+        with as_the_person(session):
+            session.pymux.handle_command("forward-port -L 8080:localhost:3000")
+
+        await once(
+            lambda: _forward_requests(seen),
+            2.0,
+            "A person asking for a loopback forward was not obeyed.",
+        )
+        assert _questions(session) == []
+
+
+async def test_binding_off_loopback_is_asked_even_when_the_mode_is_on():
+    """
+    `-R 0.0.0.0:2222:localhost:22` publishes the far machine's ssh to
+    whatever network this one is on. openssh makes the same split, and
+    calls it `GatewayPorts`.
+    """
+    async with over_connection() as session:
+        await session.attach("the client", SIZE)
+        session.pymux.clients[0].connection.can_forward = True
+
+        with as_the_person(session):
+            session.pymux.handle_command("forward-port -R 0.0.0.0:2222:localhost:22")
+
+        asked = _questions(session)
+        assert len(asked) == 1, asked
+        # Both ends, because where it listens is the whole question.
+        assert "0.0.0.0:2222" in asked[0] and "localhost:22" in asked[0], asked
+
+
+async def test_a_pane_is_asked_although_a_person_would_not_be():
+    """
+    **The hole this closes.** Any command a pane runs reaches the
+    server, so without this any program on the far machine could bind
+    a port on the machine somebody is sitting at.
+
+    A command over a connection of its own is what a pane's CLI sends.
+    """
+    async with over_connection() as session:
+        await session.attach("the client", SIZE)
+        session.pymux.clients[0].connection.can_forward = True
+
+        await session.command("forward-port -L 8080:localhost:3000")
+
+        asked = await once(
+            lambda: _questions(session),
+            2.0,
+            "A pane's forward was made without anybody being asked.",
+        )
+        assert len(asked) == 1, asked
+        assert "8080" in asked[0]
+
+
+async def test_answering_yes_forwards_it():
+    "The question carries the command that a yes runs, and -c stops it asking again."
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        await session.attach("the client", SIZE)
+        session.pymux.clients[0].connection.can_forward = True
+
+        await session.command("forward-port -L 8080:localhost:3000")
+        await once(
+            lambda: _questions(session),
+            2.0,
+            "A pane's forward was never put as a question.",
+        )
+
+        answer = session.pymux.clients[0].answer()
+        assert answer is not None
+
+        # What a yes does: the same command again, with -c, from the
+        # client that answered.
+        with as_the_person(session):
+            session.pymux.handle_command(answer)
+
+        asked = await once(
+            lambda: _forward_requests(seen),
+            2.0,
+            "A confirmed forward never reached the client.",
+        )
+
+    assert asked[0]["listen_port"] == 8080
+    assert asked[0]["dest_port"] == 3000
+
+
+async def test_a_pane_cannot_confirm_its_own_request():
+    """
+    **The gate would be one word wide without this.** `-c` is the
+    answer to a question, and a question is answered at a keyboard. A
+    pane that sends the flag itself answered nothing.
+    """
+    async with over_connection() as session:
+        await session.attach("the client", SIZE)
+        session.pymux.clients[0].connection.can_forward = True
+
+        await session.command("forward-port -c -L 8080:localhost:3000")
+
+        asked = await once(
+            lambda: _questions(session),
+            2.0,
+            "A pane confirmed its own forward.",
+        )
+        assert len(asked) == 1, asked
+
+
+async def test_the_mode_can_ask_for_everything():
+    async with over_connection() as session:
+        await session.attach("the client", SIZE)
+        session.pymux.clients[0].connection.can_forward = True
+        session.pymux.handle_command("set-option -g forward-mode ask")
+
+        with as_the_person(session):
+            session.pymux.handle_command("forward-port -L 8080:localhost:3000")
+
+        assert len(_questions(session)) == 1
+
+
+async def test_the_mode_can_refuse_everything():
+    """
+    `off` refuses before it asks anybody. A person who turned
+    forwarding off does not want a question about it either.
+    """
+    async with over_connection() as session:
+        await session.attach("the client", SIZE)
+        session.pymux.clients[0].connection.can_forward = True
+        session.pymux.handle_command("set-option -g forward-mode off")
+
+        said = await _errors_of(session, "forward-port -L 8080:localhost:3000")
+
+        assert any("off" in line for line in said), said
+        assert _questions(session) == []
+
+
+async def test_removing_a_forward_is_never_asked():
+    "Taking one away only removes something, so the reason to confirm does not apply."
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        await session.attach("the client", SIZE)
+        session.pymux.clients[0].connection.can_forward = True
+        session.pymux.handle_command("set-option -g forward-mode ask")
+
+        session.pymux.handle_command("unforward-port -L 8080")
+
+        await once(
+            lambda: _forward_requests(seen),
+            2.0,
+            "Removing a forward was not obeyed.",
+        )
+        assert _questions(session) == []
 
 
 async def test_the_listing_says_so_when_there_is_nothing():

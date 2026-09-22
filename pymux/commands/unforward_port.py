@@ -34,9 +34,11 @@ def unforward_port(pymux: "Pymux", args: argparse.Namespace) -> None:
     except BadForward as error:
         raise CommandException(str(error)) from None
 
-    client_state = pymux.forwarding_client()
+    # No question here, whatever `forward-mode` says. Taking a forward
+    # away only ever removes something, so the reason to confirm one
+    # does not apply. Lillecarl/pymux#440.
     pymux.forward_through(
-        client_state,
+        pymux.forwarding_client().client_state,
         {
             "cmd": "forward",
             "remove": True,

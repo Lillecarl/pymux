@@ -1,4 +1,5 @@
 import argparse
+import shlex
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -25,6 +26,10 @@ def forward_port(pymux: "Pymux", args: argparse.Namespace) -> None:
     **The server forwards nothing itself.** It holds no SSH connection;
     the client does. So this asks the client, and the client answers
     with what it is forwarding. Lillecarl/pymux#436.
+
+    `forward-mode` says whether it is confirmed first. A forward that
+    binds off loopback, and one a program in a pane asked for, are
+    confirmed whatever the option says. Lillecarl/pymux#440.
     """
     if args.local and args.remote:
         raise CommandException("Give -L or -R, not both.")
@@ -40,9 +45,30 @@ def forward_port(pymux: "Pymux", args: argparse.Namespace) -> None:
     except BadForward as error:
         raise CommandException(str(error)) from None
 
-    client_state = pymux.forwarding_client()
+    if pymux.forward_mode == "off":
+        raise CommandException("forward-mode is off, so pymux forwards nothing.")
+
+    asker = pymux.forwarding_client()
+
+    # **`-c` counts only from a person.** It is the answer to a
+    # question, and a question is answered at a keyboard. A pane that
+    # sends `-c` itself answered nothing, so the flag means nothing
+    # there -- otherwise the gate is one word to walk around.
+    confirmed = args.confirmed and asker.in_person
+
+    if not confirmed and pymux.forward_needs_asking(forward, asker.in_person):
+        # The question names both ends. "Forward a port?" is not enough
+        # to answer safely: what matters is where it listens and what it
+        # reaches. A yes runs this same command with -c, so it is asked
+        # once. Lillecarl/pymux#440.
+        asker.client_state.ask(
+            "Forward %s? (y/n)" % (forward.spell(),),
+            "forward-port -c %s %s" % (direction.flag, shlex.quote(spec)),
+        )
+        return
+
     pymux.forward_through(
-        client_state,
+        asker.client_state,
         {
             "cmd": "forward",
             "direction": str(forward.direction),
@@ -67,4 +93,10 @@ def register(subparsers):
         dest="remote",
         metavar="[host:]port:host:port",
         help="Listen on the server's machine and reach a service on this one.",
+    )
+    parser.add_argument(
+        "-c",
+        dest="confirmed",
+        action="store_true",
+        help="Forward without asking again.",
     )
