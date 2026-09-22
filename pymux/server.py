@@ -149,6 +149,13 @@ class ServerConnection:
         self.ttyname = ""
         self.pid = 0
 
+        #: Whether this client can forward a port, and what it is
+        #: forwarding. Both come from the client: it holds the SSH
+        #: connection, so the list here is a copy to draw and never the
+        #: truth. Lillecarl/pymux#436.
+        self.can_forward = False
+        self.forwards: List[Dict] = []
+
         #: When this connection attached. A client that reattaches from
         #: the same terminal takes the same name and a later time, so
         #: this is what tells two runs of one terminal apart, and what
@@ -559,6 +566,9 @@ class ServerConnection:
             self.colors.term = term
             self.colors.colorterm = packet.get("colorterm", "")
             self.hostname = packet.get("hostname", "")
+            # Whether `forward-port` can reach this client at all. Only
+            # the SSH client says yes. Lillecarl/pymux#436.
+            self.can_forward = bool(packet.get("forwards"))
             self.environment = packet.get("environment") or {}
             self.ttyname = packet.get("ttyname", "")
             self.pid = packet.get("pid") or 0
@@ -591,6 +601,26 @@ class ServerConnection:
                     "Could not open %s in a browser on this machine."
                     % (packet["data"],)
                 )
+
+        # What this client is forwarding, after it changed or after the
+        # link came back. The server keeps a copy and never the truth:
+        # it holds no SSH connection, so only the client can say whether
+        # a listener is really open. Lillecarl/pymux#436.
+        elif packet["cmd"] == "forwards":
+            reported = packet.get("data") or []
+            said = packet.get("message")
+
+            if said and self.client_state is not None:
+                self.client_state.message = said
+
+            # Every SSH client reports once as it attaches, nearly
+            # always with nothing forwarded. A frame that draws the
+            # same screen again is a fault of its own
+            # (Lillecarl/pymux#117), so the unchanged case asks for
+            # none.
+            if reported != self.forwards or said:
+                self.forwards = reported
+                self.pymux.invalidate(Woke.FORWARDS_CHANGED)
 
     def _detach_the_others(self, hang_up: bool = False) -> None:
         """

@@ -62,6 +62,15 @@ class Connection:
     pointer_shape = None
     graphics = None
 
+    #: What a client on a unix socket reports: it holds no SSH
+    #: connection, so it can forward nothing and has nothing to list.
+    #: A test that wants the other answer sets them.
+    #: Lillecarl/pymux#436.
+    can_forward = False
+    #: A tuple, because a class attribute every stub shares must not be
+    #: something a test can append to.
+    forwards: tuple = ()
+
     def __init__(
         self,
         hostname: str = "",

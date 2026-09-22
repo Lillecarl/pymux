@@ -46,7 +46,7 @@ from pyte.osc import Osc
 
 from .arrangement import Arrangement, Pane, Window
 from .colors import DefaultColors, theme_color_base
-from .commands import call_command_handler, handle_command
+from .commands import CommandException, call_command_handler, handle_command
 from .commands.completer import create_command_completer
 from .enums import CHOOSE, COMMAND, PROMPT, WindowSize, Woke
 from .graphics import PaneView
@@ -2116,6 +2116,62 @@ class Pymux:
         for client_state in clients:
             client_state.connection._send_packet({"cmd": "open", "data": url})
             client_state.message = "Opened %s in the browser of this machine." % (url,)
+
+    def forwarding_client(self) -> "ClientState":
+        """
+        The client that a forward is asked of.
+
+        **The one that asked, when a client asked.** A forward binds a
+        port on one machine, and the machine a person means is the one
+        they typed the command on. That is different from `open-url`,
+        which a program in a pane triggers and which therefore has to
+        choose a client; here there is nothing to choose while the
+        person is right there.
+
+        A command that arrived over the socket has a temporary client
+        of its own, which is no terminal and holds no SSH connection.
+        Then the one attached client is the answer, and two of them is
+        a question this cannot answer for the person.
+        Lillecarl/pymux#436.
+        """
+        try:
+            asking = self.get_client_state()
+        except ValueError:
+            asking = None
+
+        if asking is not None and not asking.temporary:
+            return asking
+
+        attached = [
+            client for client in self._client_states.values() if not client.temporary
+        ]
+        if not attached:
+            raise CommandException(
+                "Nobody is attached, so there is nothing to forward through."
+            )
+        if len(attached) > 1:
+            raise CommandException(
+                "Several clients are attached. Run this from the one that should forward."
+            )
+        return attached[0]
+
+    def forward_through(self, client_state: "ClientState", packet: dict) -> None:
+        """
+        Ask a client to open or close a forward.
+
+        **The server never forwards anything itself.** It holds no SSH
+        connection: the client does, and it is the machine the person
+        sits at. So this is a request, the way `open-url` is, and the
+        answer comes back as the client's whole table.
+        Lillecarl/pymux#436.
+        """
+        if not client_state.connection.can_forward:
+            raise CommandException(
+                "%s did not reach this server over SSH, so it cannot forward a port."
+                % (client_state.connection.name,)
+            )
+
+        client_state.connection._send_packet(packet)
 
     def _ensure_open_url_shim(self) -> None:
         """

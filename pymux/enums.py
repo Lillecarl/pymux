@@ -99,3 +99,4 @@ class Woke(StrEnum):
     COLUMN_CHANGED_WIDTH = "a column of the strip took another width"
     COLUMN_MOVED = "a column of the strip moved along the row"
     PANE_CHANGED_COLUMN = "a pane joined another column of the strip, or left one"
+    FORWARDS_CHANGED = "a client reported the ports it forwards"

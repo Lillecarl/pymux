@@ -1,0 +1,649 @@
+"""
+Forwarded ports over the `ssh://` client. Lillecarl/pymux#436.
+
+The spelling is judged on its own, because it is pure. The table is
+judged against a real asyncssh server and a real echo server: a forward
+passes when bytes written to the listening port come back changed, so
+nothing passes by writing to itself.
+
+**The echo answers in upper case on purpose.** A forward that quietly
+loops back to the caller would return the same bytes, and a test that
+only checked "something came back" would pass on it.
+"""
+
+from __future__ import annotations
+
+import json
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+import anyio
+import pytest
+from anyio.abc import SocketAttribute
+
+from pymux.client.forwards import Forwards
+from pymux.forwarding import (
+    ANY_PORT,
+    BadForward,
+    Direction,
+    Forward,
+    LOOPBACK,
+    parse_forward,
+    parse_listen,
+)
+
+from prompt_toolkit.data_structures import Size
+
+from pymux.client.ssh import SshClient
+
+from session import once, over_connection
+from test_ssh_client import create_ssh_server, live_servers
+
+SIZE = Size(rows=24, columns=80)
+
+# ----------------------------------------------------------------------
+# The spelling.
+
+
+def test_three_parts_listen_on_loopback():
+    """
+    **The default is loopback, never every interface.** openssh
+    defaults the same way: a forward reaches a service that chose to
+    listen on loopback, and putting it on a laptop's wifi address
+    publishes it to whoever else is on that network.
+    """
+    forward = parse_forward(Direction.LOCAL, "8080:localhost:3000")
+
+    assert forward.listen_host == LOOPBACK
+    assert forward.listen_port == 8080
+    assert forward.dest_host == "localhost"
+    assert forward.dest_port == 3000
+
+
+def test_four_parts_name_where_to_listen():
+    forward = parse_forward(Direction.REMOTE, "0.0.0.0:9222:localhost:9222")
+
+    assert forward.listen_host == "0.0.0.0"
+    assert forward.listen_port == 9222
+
+
+def test_an_empty_listen_host_is_still_loopback():
+    "`:8080:localhost:3000` names no address, so it is not every address."
+    assert parse_forward(Direction.LOCAL, ":8080:localhost:3000").listen_host == LOOPBACK
+
+
+def test_zero_asks_for_any_port():
+    assert parse_forward(Direction.LOCAL, "0:localhost:3000").listen_port == ANY_PORT
+
+
+@pytest.mark.parametrize(
+    "spec",
+    [
+        "8080",
+        "8080:localhost",
+        "a:b:c:d:e",
+        "8080:localhost:nonsense",
+        "70000:localhost:3000",
+        "8080::3000",
+    ],
+)
+def test_a_spelling_that_cannot_be_read_says_so(spec):
+    "Every one of these used to be a forward that silently did nothing."
+    with pytest.raises(BadForward):
+        parse_forward(Direction.LOCAL, spec)
+
+
+def test_the_listening_end_alone_names_a_forward():
+    assert parse_listen("8080") == (LOOPBACK, 8080)
+    assert parse_listen("0.0.0.0:8080") == ("0.0.0.0", 8080)
+
+
+def test_a_forward_spells_itself_back():
+    forward = parse_forward(Direction.LOCAL, "8080:localhost:3000")
+    assert forward.spell() == "-L localhost:8080:localhost:3000"
+    assert parse_forward(Direction.REMOTE, "9222:localhost:9222").spell().startswith("-R")
+
+
+# ----------------------------------------------------------------------
+# The table, against a real connection.
+
+
+@asynccontextmanager
+async def echoing():
+    """
+    A TCP server on loopback that answers in upper case.
+
+    The change is what proves the bytes went through it: a forward that
+    looped back to the caller would return them as they were sent.
+    """
+
+    async def handle(stream) -> None:
+        async with stream:
+            try:
+                async for chunk in stream:
+                    await stream.send(chunk.upper())
+            except anyio.EndOfStream:
+                pass
+
+    listener = await anyio.create_tcp_listener(local_host="127.0.0.1")
+    port = listener.extra(SocketAttribute.local_address)[1]
+
+    # **Cancel before closing, never the other way round.** `serve` is
+    # parked in `accept`, and closing the listener under it raises
+    # `ClosedResourceError` out of the task group -- which fails the
+    # test on the way out, after its body passed.
+    try:
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(listener.serve, handle)
+            try:
+                yield port
+            finally:
+                tasks.cancel_scope.cancel()
+    finally:
+        await listener.aclose()
+
+
+@asynccontextmanager
+async def ssh_connection(**server_options):
+    "An asyncssh client joined to the fake sshd of the ssh client tests."
+    import tempfile
+
+    import asyncssh
+
+    where = Path(tempfile.mkdtemp())
+    socket_path = str(where / "pymux.sock")
+    server, port, client_key = await create_ssh_server(
+        where, socket_path, allow_exec=False, **server_options
+    )
+
+    try:
+        async with asyncssh.connect(
+            "127.0.0.1",
+            port=port,
+            known_hosts=None,
+            client_keys=[client_key],
+            username="anybody",
+        ) as connection:
+            yield connection
+    finally:
+        server.close()
+
+
+def _free_port() -> int:
+    """
+    A port nothing is listening on.
+
+    Bound and released, which is the usual small race: nothing else in
+    this check binds loopback ports, and a named port is what the
+    replacing test needs to mean anything.
+    """
+    import socket
+
+    with socket.socket() as held:
+        held.bind(("127.0.0.1", 0))
+        return held.getsockname()[1]
+
+
+async def _spoken_through(port: int, said: bytes = b"hello") -> bytes:
+    "Write to a forwarded port, and read what the echo answered."
+    async with await anyio.connect_tcp("127.0.0.1", port) as stream:
+        await stream.send(said)
+        return await stream.receive()
+
+
+async def test_a_local_forward_carries_bytes():
+    """
+    `-L`: the client listens here and the far sshd opens the
+    destination. The whole path is exercised -- a `direct-tcpip`
+    channel, the server's `connection_requested`, and the echo.
+    """
+    async with echoing() as echo_port, ssh_connection() as connection:
+        forwards = Forwards()
+        opened = await forwards.add(
+            connection,
+            Forward(Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port),
+        )
+
+        assert opened.error == ""
+        assert opened.port != ANY_PORT, "A bound listener has to report its port."
+        assert await _spoken_through(opened.port) == b"HELLO"
+
+        forwards.close()
+
+
+async def test_a_remote_forward_carries_bytes():
+    """
+    `-R`: the far sshd listens and hands each connection back down the
+    link, where this side opens the destination. It is what a program
+    on the workstation needs to reach Chrome's CDP port on the laptop.
+    """
+    async with echoing() as echo_port, ssh_connection() as connection:
+        forwards = Forwards()
+        opened = await forwards.add(
+            connection,
+            Forward(Direction.REMOTE, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port),
+        )
+
+        assert opened.error == ""
+        assert opened.port != ANY_PORT
+        assert await _spoken_through(opened.port) == b"HELLO"
+
+        forwards.close()
+
+
+async def test_a_refused_remote_forward_is_a_reason_and_not_a_fault():
+    """
+    `AllowTcpForwarding no` is what the rig does with
+    `allow_forward=False`.
+
+    **It must not raise.** A forward is opened again on every
+    reconnect, and one the far side refuses would otherwise take the
+    person's panes down with it. The reason lands in the table, where
+    `list-forwards` shows it.
+    """
+    async with echoing() as echo_port, ssh_connection(allow_forward=False) as connection:
+        forwards = Forwards()
+        opened = await forwards.add(
+            connection,
+            Forward(Direction.REMOTE, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port),
+        )
+
+        assert opened.error, "A refusal has to say why."
+        assert forwards.opened()[0].error == opened.error
+
+
+async def test_a_refused_local_forward_opens_and_fails_per_connection():
+    """
+    **A `-L` forward cannot know that the far side will refuse it**, and
+    this records that rather than wishing otherwise.
+
+    The two directions ask different things. `-R` is a `tcpip-forward`
+    global request, which the sshd answers at once, so a refusal is a
+    failure to open. `-L` binds a port on this machine and nothing
+    crosses the link until somebody connects to it -- the `direct-tcpip`
+    channel is opened per connection, and that is the first moment the
+    sshd can say no.
+
+    So the listener is open and the table is clean, and every connection
+    through it dies. `list-forwards` cannot show a reason here; the
+    person finds out by using it. Lillecarl/pymux#436.
+    """
+    async with echoing() as echo_port, ssh_connection(allow_forward=False) as connection:
+        forwards = Forwards()
+        opened = await forwards.add(
+            connection,
+            Forward(Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port),
+        )
+
+        assert opened.error == "", "A local bind does not ask the far side."
+
+        # The refusal arrives as a reset: asyncssh accepted the
+        # connection here, asked for the channel, was told no, and had
+        # nothing left to do but drop what it had accepted.
+        with pytest.raises((anyio.BrokenResourceError, anyio.EndOfStream, OSError)):
+            await _spoken_through(opened.port)
+
+        forwards.close()
+
+
+async def test_the_wanted_set_comes_back_on_a_new_connection():
+    """
+    **The reason this class exists.** `_link_again` builds a new
+    connection and every listener of the old one dies with it. openssh
+    loses its forwards there for good; this opens them again.
+    """
+    async with echoing() as echo_port:
+        forwards = Forwards()
+        wanted = Forward(
+            Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port
+        )
+
+        async with ssh_connection() as first:
+            was = await forwards.add(first, wanted)
+            assert was.error == ""
+
+        # The link is gone, and with it the listener.
+        with pytest.raises(OSError):
+            await _spoken_through(was.port)
+
+        async with ssh_connection() as second:
+            await forwards.reopen(second)
+            again = forwards.opened()[0]
+
+            assert again.error == "", again.error
+            assert await _spoken_through(again.port) == b"HELLO"
+
+            forwards.close()
+
+
+async def test_a_forward_that_is_removed_does_not_come_back():
+    "Removing stops the wanting, so the next reconnect does not undo it."
+    async with echoing() as echo_port:
+        forwards = Forwards()
+        wanted = Forward(
+            Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port
+        )
+
+        async with ssh_connection() as first:
+            await forwards.add(first, wanted)
+            assert len(forwards) == 1
+
+            gone = forwards.remove(
+                (Direction.LOCAL, "127.0.0.1", ANY_PORT)
+            )
+            assert gone == wanted
+            assert len(forwards) == 0
+
+        async with ssh_connection() as second:
+            await forwards.reopen(second)
+            assert forwards.opened() == []
+
+
+async def test_asking_twice_leaves_one_listener():
+    """
+    Two listeners on one port is a race nobody wins, so the second ask
+    replaces the first rather than joining it.
+
+    **A named port is what proves it.** With `add` not closing the one
+    that was there, the second bind is the same address twice and the
+    operating system refuses it -- so the empty error is the whole
+    assertion.
+    """
+    async with echoing() as echo_port, ssh_connection() as connection:
+        wanted = Forward(Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port)
+
+        forwards = Forwards()
+        first = await forwards.add(connection, wanted)
+        assert first.error == "", first.error
+
+        again = await forwards.add(connection, wanted)
+
+        assert again.error == "", again.error
+        assert len(forwards) == 1, "The same listening end replaces, never adds."
+        assert await _spoken_through(again.port) == b"HELLO"
+
+        forwards.close()
+
+
+# ----------------------------------------------------------------------
+# The client's own glue: the packet it is asked with, and the reconnect.
+
+
+async def test_the_client_opens_what_the_server_asked_for():
+    """
+    `_forward_asked` end to end: the packet the server sends, the
+    listener it produces, and the answer that goes back.
+
+    **The answer is the whole table**, so the server's copy is right
+    after a reconnect as well as after a change, and the bound port
+    reaches the person who asked for any free one.
+    """
+    import tempfile
+
+    sent = []
+    where = Path(tempfile.mkdtemp())
+    socket_path = str(where / "pymux.sock")
+
+    async with echoing() as echo_port, ssh_connection() as connection:
+        client = SshClient("ssh://127.0.0.1:1%s" % (socket_path,))
+        client._send_packet = sent.append
+
+        await client._forward_asked(
+            connection,
+            {
+                "cmd": "forward",
+                "direction": "local",
+                "listen_host": "127.0.0.1",
+                "listen_port": ANY_PORT,
+                "dest_host": "127.0.0.1",
+                "dest_port": echo_port,
+            },
+        )
+
+        assert len(sent) == 1
+        assert sent[0]["cmd"] == "forwards"
+        listed = sent[0]["data"]
+        assert len(listed) == 1
+        assert listed[0]["error"] == ""
+
+        port = listed[0]["port"]
+        assert port != ANY_PORT
+        # The person asked for any port, so the message names the one
+        # they got. Without this they have nothing to connect to.
+        assert str(port) in sent[0]["message"], sent[0]["message"]
+        assert await _spoken_through(port) == b"HELLO"
+
+        await client._forward_asked(
+            connection,
+            {
+                "cmd": "forward",
+                "remove": True,
+                "direction": "local",
+                "listen_host": "127.0.0.1",
+                "listen_port": ANY_PORT,
+            },
+        )
+
+        assert sent[1]["data"] == []
+        assert "Stopped forwarding" in sent[1]["message"]
+
+
+async def test_connecting_again_brings_the_forwards_back():
+    """
+    **The promise this feature makes**, through the client's own
+    `_connect` and not through `Forwards.reopen` alone: a link that
+    dropped gives the tunnels back with the panes.
+
+    `_link_again` calls the same `_connect`, so what passes here is
+    what a person gets after their laptop wakes up.
+    """
+    import tempfile
+
+    where = Path(tempfile.mkdtemp())
+    socket_path = str(where / "pymux.sock")
+
+    async with echoing() as echo_port:
+        async with live_servers(socket_path) as (_pymux, port, client_key):
+            client = SshClient(
+                "ssh://127.0.0.1:%d%s" % (port, socket_path),
+                known_hosts=None,
+                client_keys=[client_key],
+                username="anybody",
+            )
+
+            connection, _reader = await client._connect()
+            was = await client.forwards.add(
+                connection,
+                Forward(
+                    Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port
+                ),
+            )
+            assert was.error == ""
+
+            connection.close()
+            with pytest.raises(OSError):
+                await _spoken_through(was.port)
+
+            # What `_link_again` does, and the only line under test.
+            again, _reader = await client._connect()
+            try:
+                back = client.forwards.opened()[0]
+                assert back.error == "", back.error
+                assert await _spoken_through(back.port) == b"HELLO"
+            finally:
+                again.close()
+
+
+# ----------------------------------------------------------------------
+# The commands, and what they ask of a client.
+
+
+async def _errors_of(session, command) -> list:
+    "What a command complained about, as a person would read it."
+    session.pymux.command_error = []
+    try:
+        session.pymux.handle_command(command)
+        return list(session.pymux.command_error)
+    finally:
+        session.pymux.command_error = None
+
+
+def _forward_requests(seen: list) -> list:
+    """
+    The forward requests among the packets a client received.
+
+    The memory pipe carries what the socket carries, which is JSON
+    ending at a zero byte, so this reads it the way a real client
+    does rather than expecting objects.
+    """
+    asked = []
+
+    for packet in seen:
+        if isinstance(packet, (bytes, bytearray)):
+            packet = packet.decode("utf-8")
+        for one in packet.split("\0"):
+            if not one.strip():
+                continue
+            read = json.loads(one)
+            if read.get("cmd") == "forward":
+                asked.append(read)
+
+    return asked
+
+
+async def _listed(session, command) -> list:
+    session.pymux.command_output = []
+    try:
+        session.pymux.handle_command(command)
+        return list(session.pymux.command_output)
+    finally:
+        session.pymux.command_output = None
+
+
+async def test_a_client_on_a_socket_cannot_forward():
+    """
+    **The error a person meets first**, because most clients are local.
+    A unix socket is already on the machine the server runs on, so
+    there is nothing to tunnel and no connection to tunnel through.
+    """
+    async with over_connection() as session:
+        await session.attach("the client", SIZE)
+
+        said = await _errors_of(session, "forward-port -L 8080:localhost:3000")
+
+        assert any("SSH" in line for line in said), said
+
+
+async def test_a_spelling_that_cannot_be_read_says_so():
+    async with over_connection() as session:
+        await session.attach("the client", SIZE)
+        session.pymux.clients[0].connection.can_forward = True
+
+        said = await _errors_of(session, "forward-port -L nonsense")
+
+        assert any("nonsense" in line for line in said), said
+
+
+async def test_giving_neither_direction_says_so():
+    async with over_connection() as session:
+        await session.attach("the client", SIZE)
+
+        said = await _errors_of(session, "forward-port")
+
+        assert any("-L" in line for line in said), said
+
+
+async def test_the_request_reaches_the_client_that_asked():
+    """
+    The packet a forward really is: the server asks, and the machine
+    the person sits at acts. It carries both ends resolved, so the
+    client parses no spelling of its own.
+    """
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        await session.attach("the client", SIZE)
+        session.pymux.clients[0].connection.can_forward = True
+
+        session.pymux.handle_command("forward-port -L 8080:localhost:3000")
+
+        asked = await once(
+            lambda: _forward_requests(seen),
+            2.0,
+            "The client was never asked to forward anything.",
+        )
+
+    assert asked[0] == {
+        "cmd": "forward",
+        "direction": "local",
+        "listen_host": "localhost",
+        "listen_port": 8080,
+        "dest_host": "localhost",
+        "dest_port": 3000,
+    }
+
+
+async def test_removing_asks_by_the_listening_end_alone():
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        await session.attach("the client", SIZE)
+        session.pymux.clients[0].connection.can_forward = True
+
+        session.pymux.handle_command("unforward-port -R 9222")
+
+        asked = await once(
+            lambda: _forward_requests(seen),
+            2.0,
+            "The client was never asked to stop forwarding.",
+        )
+
+    assert asked[0] == {
+        "cmd": "forward",
+        "remove": True,
+        "direction": "remote",
+        "listen_host": "localhost",
+        "listen_port": 9222,
+    }
+
+
+async def test_the_listing_reads_what_the_client_reported():
+    """
+    `list-forwards` draws the server's copy, which a client fills in
+    when it reports. A forward that could not open is listed with the
+    reason, because that is what a person asks when the port is dead.
+    """
+    async with over_connection() as session:
+        await session.attach("the client", SIZE)
+        connection = session.pymux.clients[0].connection
+        connection.can_forward = True
+        connection.forwards = [
+            {
+                "direction": "local",
+                "listen_host": "localhost",
+                "port": 8080,
+                "dest": "localhost:3000",
+                "error": "",
+            },
+            {
+                "direction": "remote",
+                "listen_host": "localhost",
+                "port": 9222,
+                "dest": "localhost:9222",
+                "error": "Address already in use",
+            },
+        ]
+
+        said = "\n".join(await _listed(session, "list-forwards"))
+
+    assert "-L localhost:8080 -> localhost:3000" in said, said
+    assert "-R localhost:9222 -> localhost:9222 (Address already in use)" in said, said
+
+
+async def test_the_listing_says_so_when_there_is_nothing():
+    async with over_connection() as session:
+        await session.attach("the client", SIZE)
+
+        said = "\n".join(await _listed(session, "list-forwards"))
+
+    assert "No client is forwarding" in said, said

@@ -87,6 +87,12 @@ class TerminalClient(Client):
     the transport and the keyboard until one of them ends.
     """
 
+    #: Whether this client can forward a port. Only `SshClient` can:
+    #: forwarding needs an SSH connection, and a client on a unix
+    #: socket is already on the machine the server runs on.
+    #: Lillecarl/pymux#436.
+    can_forward = False
+
     def __init__(self) -> None:
         self._mode_context_managers = []
 
@@ -153,6 +159,12 @@ class TerminalClient(Client):
                 # say it: over ssh the server answers `gethostname`
                 # with another machine's name. Lillecarl/pymux#287.
                 "hostname": socket.gethostname(),
+                # Whether this client can forward a port. Only the one
+                # that reached the server over SSH holds a connection
+                # that carries one, and the server cannot tell from its
+                # end: a unix socket is a unix socket either way.
+                # Lillecarl/pymux#436.
+                "forwards": self.can_forward,
                 # The whole environment of this client, of which the
                 # server keeps the names "update-environment" lists and
                 # drops the rest. The client cannot do the filtering: it

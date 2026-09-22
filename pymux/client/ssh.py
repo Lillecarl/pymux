@@ -51,9 +51,11 @@ import anyio
 from prompt_toolkit.input.vt100 import raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output
 
+from pymux.forwarding import Direction, Forward
 from pymux.utils import nonblocking
 
 from .defaults import SCHEME, is_ssh_url
+from .forwards import Forwards
 from .reconnect import Backoff, draw, link_may_come_back, notice, why
 from .terminal import TerminalClient
 
@@ -163,6 +165,12 @@ class SshClient(TerminalClient):
     one loop.
     """
 
+    #: This client can forward a port, because it holds the SSH
+    #: connection that carries one. The server reads it from the
+    #: `start-gui` packet, so that `forward-port` on a session nobody
+    #: reaches over SSH says so rather than sending into the void.
+    can_forward = True
+
     def __init__(self, socket_name: str, **connect_with) -> None:
         super().__init__()
         self.target = ssh_target(socket_name)
@@ -174,6 +182,11 @@ class SshClient(TerminalClient):
         #: the address's path, or the one the listing found.
         self.path = self.target.path
         self._writer = None
+        #: The ports this client was asked to forward. It outlives a
+        #: connection on purpose: `_connect` opens the wanted set again
+        #: on the new one, so a link that dropped gives the tunnels
+        #: back with the panes. Lillecarl/pymux#436.
+        self.forwards = Forwards()
 
     # ------------------------------------------------------------------
     # The transport.
@@ -229,6 +242,13 @@ class SshClient(TerminalClient):
 
         self.path = path
         self._writer = writer
+
+        # The listeners of the previous connection died with it, so the
+        # wanted set opens again on this one. It raises nothing: a port
+        # that has since been taken is a line in `list-forwards`, not a
+        # reason to keep the person off their panes.
+        await self.forwards.reopen(connection)
+
         return connection, reader
 
     async def _socket(self, connection) -> str:
@@ -428,8 +448,25 @@ class SshClient(TerminalClient):
                 # the same failure, and it has to reach the retries
                 # rather than leave the terminal on the other screen.
                 self._start_gui(detach_other_clients, color_depth)
+                # What the table holds after `_connect` opened it
+                # again. The server's copy is drawn from this, and it
+                # has to arrive after `start-gui`, because until then
+                # the connection has no client to hang it on.
+                self._report_forwards()
 
                 async for packet in self._packets(reader):
+                    if packet["cmd"] == "forward":
+                        # Opening one is a coroutine and `_process` is
+                        # not, so it goes to the scope that owns this
+                        # attachment rather than blocking the reader.
+                        tasks.start_soon(
+                            self._while_the_link_holds,
+                            self._forward_asked,
+                            connection,
+                            packet,
+                        )
+                        continue
+
                     self._process(json.dumps(packet).encode("utf-8"))
             except Exception as error:
                 lost = error
@@ -444,6 +481,81 @@ class SshClient(TerminalClient):
                 connection.close()
 
         return lost
+
+    # ------------------------------------------------------------------
+    # Forwarded ports.
+
+    async def _forward_asked(self, connection, packet) -> None:
+        """
+        Add or remove one forward, because the server asked.
+
+        **The server asks and this side acts**, the way it does for a
+        URL to open: only the machine a person sits at can bind their
+        port, and only this client holds the SSH connection that
+        carries it. Lillecarl/pymux#436, Lillecarl/pymux#261.
+
+        The answer is the whole table and not the one that changed. It
+        is a handful of lines, it makes the server's copy right after
+        a reconnect as well as after a change, and a person reading
+        `list-forwards` wants the set anyway.
+        """
+        if packet.get("remove"):
+            where = (
+                Direction(packet["direction"]),
+                packet["listen_host"],
+                packet["listen_port"],
+            )
+            gone = self.forwards.remove(where)
+
+            if gone is None:
+                said = "Nothing was forwarding %s:%s." % (
+                    packet["listen_host"],
+                    packet["listen_port"],
+                )
+            else:
+                said = "Stopped forwarding %s." % (gone.spell(),)
+
+            self._report_forwards(said)
+            return
+
+        forward = Forward(
+            direction=Direction(packet["direction"]),
+            listen_host=packet["listen_host"],
+            listen_port=packet["listen_port"],
+            dest_host=packet["dest_host"],
+            dest_port=packet["dest_port"],
+        )
+        opened = await self.forwards.add(connection, forward)
+
+        if opened.error:
+            said = "Cannot forward %s: %s" % (forward.spell(), opened.error)
+        elif opened.port != forward.listen_port:
+            # The person asked for any free port, so the number is news.
+            said = "Forwarding %s:%d to %s." % (
+                forward.listen_host,
+                opened.port,
+                forward.dest,
+            )
+        else:
+            said = "Forwarding %s." % (forward.spell(),)
+
+        self._report_forwards(said)
+
+    def _report_forwards(self, message: str = "") -> None:
+        """
+        Tell the server what this client is forwarding.
+
+        The server keeps a copy to draw and never the truth: it has no
+        SSH connection, so it cannot know whether a listener is really
+        open. `list-forwards` reads the copy.
+        """
+        self._send_packet(
+            {
+                "cmd": "forwards",
+                "data": self.forwards.report(),
+                "message": message,
+            }
+        )
 
     async def _while_the_link_holds(self, work, *arguments) -> None:
         """

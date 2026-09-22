@@ -142,6 +142,7 @@ async def create_ssh_server(
     socket_path: str,
     session_env: dict | None = None,
     allow_exec: bool = True,
+    allow_forward: bool = True,
 ):
     """
     A server that answers one client key and forwards to a unix socket.
@@ -149,6 +150,14 @@ async def create_ssh_server(
     `unix_connection_requested` is what makes this stand in for sshd:
     asyncssh opens the socket itself and joins the two ends, which is
     what `direct-streamlocal@openssh.com` asks for.
+
+    `connection_requested` and `server_requested` are the same job for
+    a TCP port: the first is what `-L` needs and the second what `-R`
+    needs. asyncssh's own `SSHServer` refuses both, so a rig without
+    them fails a forwarding test as `ChannelOpenError` and reads like a
+    client bug. `allow_forward=False` is how a test asks for that
+    refusal on purpose -- it is what `AllowTcpForwarding no` does.
+    Lillecarl/pymux#436.
 
     `session_env` is the environment a session runs its command in,
     and `None` inherits this process's, the way an sshd session
@@ -183,6 +192,19 @@ async def create_ssh_server(
             # True lets asyncssh open it. Only the one this test made,
             # so a fault cannot reach anything else on the machine.
             return dest_path == socket_path
+
+        def connection_requested(
+            self, dest_host: str, dest_port: int, orig_host: str, orig_port: int
+        ):
+            # What `-L` asks of sshd: open this destination and join the
+            # two ends. Loopback only, so a fault reaches nothing off
+            # this machine.
+            return allow_forward and dest_host in ("localhost", "127.0.0.1")
+
+        def server_requested(self, listen_host: str, listen_port: int):
+            # What `-R` asks of sshd: listen here, and hand each
+            # connection back down the link.
+            return allow_forward and listen_host in ("localhost", "127.0.0.1")
 
     options = dict(
         server_factory=OneSocket,
