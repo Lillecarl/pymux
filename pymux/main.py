@@ -65,6 +65,9 @@ from .options import (
     ALL_WINDOW_OPTIONS,
     Clipboard,
     ExtendedKeys,
+    ForwardMode,
+    OpenUrlMode,
+    OpenUrlTarget,
     Scope,
 )
 from .osc import build_osc, open_url_of
@@ -799,8 +802,8 @@ class Pymux:
         # the person inside, which is the two answers the wrong way
         # round. Lillecarl/pymux#378.
         self.clipboard_mode = Clipboard.EXTERNAL
-        self.open_url_target = "last"
-        self.open_url_mode = "open"
+        self.open_url_target = OpenUrlTarget.LAST
+        self.open_url_mode = OpenUrlMode.OPEN
 
         #: What happens to a request to forward a port. "on" is the
         #: default because the common case is a person typing
@@ -808,7 +811,7 @@ class Pymux:
         #: there is a nuisance and no safer. The two cases that ask
         #: anyway are in `forward_needs_asking`.
         #: Lillecarl/pymux#440.
-        self.forward_mode = "on"
+        self.forward_mode = ForwardMode.ON
         self.open_url_shim = False
         self._open_url_shim_dir = None
 
@@ -2105,7 +2108,7 @@ class Pymux:
         clients = [
             client for client in self._client_states.values() if not client.temporary
         ]
-        if self.open_url_target != "broadcast" and clients:
+        if self.open_url_target != OpenUrlTarget.BROADCAST and clients:
             return [max(clients, key=lambda client: client.last_used)]
         return clients
 
@@ -2123,7 +2126,7 @@ class Pymux:
         client picks the way its platform opens one: "open" on macOS,
         "xdg-open" or what $BROWSER names on Linux.
         """
-        if self.open_url_mode == "off":
+        if self.open_url_mode == OpenUrlMode.OFF:
             logger.info("Not opening %s: open-url-mode is off.", url)
             return
 
@@ -2132,7 +2135,7 @@ class Pymux:
             self.add_command_error("Nobody is attached to open %s." % (url,))
             return
 
-        if self.open_url_mode == "ask" and not confirmed:
+        if self.open_url_mode == OpenUrlMode.ASK and not confirmed:
             command = "open-url -c %s" % (shlex.quote(url),)
             for client_state in clients:
                 client_state.ask("Open %s in the browser? (y/n)" % (url,), command)
@@ -2215,7 +2218,7 @@ class Pymux:
 
         Lillecarl/pymux#440.
         """
-        if self.forward_mode == "ask":
+        if self.forward_mode == ForwardMode.ASK:
             return True
 
         return not in_person or forward.listen_host not in LOOPBACK_NAMES

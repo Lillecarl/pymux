@@ -382,7 +382,12 @@ def test_open_url_option_takes_its_words_only():
         open_url_mode = "open"
 
     holder = _Holder()
-    assert ALL_OPTIONS["open-url-target"].get_all_values(holder) == ["broadcast", "last"]
+    # The words, not their order: `commands/completer.py` sorts what it
+    # offers, so nothing reads the order.
+    assert sorted(ALL_OPTIONS["open-url-target"].get_all_values(holder)) == [
+        "broadcast",
+        "last",
+    ]
 
     with pytest.raises(SetOptionError):
         ALL_OPTIONS["open-url-target"].set_value(holder, "nonsense")

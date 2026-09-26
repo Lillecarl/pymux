@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException, add_command
 from pymux.forwarding import BadForward, Direction, parse_forward
+from pymux.options import ForwardMode
 from pymux.protocol import Packet
 
 
@@ -46,7 +47,7 @@ def forward_port(pymux: "Pymux", args: argparse.Namespace) -> None:
     except BadForward as error:
         raise CommandException(str(error)) from None
 
-    if pymux.forward_mode == "off":
+    if pymux.forward_mode == ForwardMode.OFF:
         raise CommandException("forward-mode is off, so pymux forwards nothing.")
 
     asker = pymux.forwarding_client()

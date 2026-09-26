@@ -361,6 +361,48 @@ class Clipboard(StrEnum):
     ON = "on"
 
 
+class OpenUrlTarget(StrEnum):
+    """
+    Which client's browser "open-url" opens in.
+
+    `LAST` is the client somebody used last, by the stamp that
+    `window-size latest` reads. `BROADCAST` is every attached client.
+    """
+
+    LAST = "last"
+    BROADCAST = "broadcast"
+
+
+class OpenUrlMode(StrEnum):
+    """
+    What happens to a request to open a URL.
+
+    `ASK` shows "(y/n)" in the command bar of the clients it would
+    land on, and a yes runs `open-url -c`, so the question is asked
+    once.
+    """
+
+    OPEN = "open"
+    ASK = "ask"
+    OFF = "off"
+
+
+class ForwardMode(StrEnum):
+    """
+    What happens to a request to forward a port.
+
+    **`ON` is not "never ask".** A request that binds somewhere other
+    than loopback, and one that a program in a pane made rather than
+    the person, are confirmed whatever this says: `Pymux.forward_needs_asking`
+    holds the two. The port belongs to the machine somebody is sitting
+    at. Lillecarl/pymux#440.
+    """
+
+    ON = "on"
+    ASK = "ask"
+    OFF = "off"
+
+
 class EnumOption(Option):
     """
     One of the values of a `StrEnum`, held as the member itself.
@@ -628,27 +670,18 @@ ALL_OPTIONS = {
     # "external" is tmux's default: a copy the person makes goes out,
     # and a program in a pane is refused. Lillecarl/pymux#378.
     "set-clipboard": EnumOption(Clipboard, "clipboard_mode"),
-    # Where the browser that "open-url" opens lands on. "last" is the
-    # client somebody used last, by the stamp that `window-size
-    # latest` reads; "broadcast" is every attached client.
-    "open-url-target": ChoiceOption("open_url_target", ["last", "broadcast"]),
-    # What happens to an open request. "open" sends it, "ask" shows
-    # "(y/n)" in the command bar of the clients it would land on, and
-    # "off" drops it.
-    "open-url-mode": ChoiceOption("open_url_mode", ["open", "ask", "off"]),
+    # Which client's browser it lands on. `OpenUrlTarget` says.
+    "open-url-target": EnumOption(OpenUrlTarget, "open_url_target"),
+    # What happens to an open request. `OpenUrlMode` says.
+    "open-url-mode": EnumOption(OpenUrlMode, "open_url_mode"),
     # Put the opener of this session on the PATH of a pane, as
     # "xdg-open", and name it in $BROWSER, so that a program in a pane
     # opens a browser here without knowing pymux. A pane that runs
     # already keeps the PATH it was born with; only new panes see it.
     "open-url-shim": OnOffOption("open_url_shim"),
-    # What happens to a request to forward a port. "on" forwards it,
-    # "ask" shows "(y/n)" in the command bar of the client that would
-    # bind it, and "off" refuses. **"on" is not "never ask"**: a
-    # request that binds somewhere other than loopback, and one that a
-    # program in a pane made rather than the person, still ask. The
-    # port belongs to the machine somebody is sitting at.
-    # Lillecarl/pymux#440.
-    "forward-mode": ChoiceOption("forward_mode", ["on", "ask", "off"]),
+    # What happens to a request to forward a port, and the two
+    # cases that ask whatever it says. `ForwardMode` says.
+    "forward-mode": EnumOption(ForwardMode, "forward_mode"),
     "history-limit": PositiveIntOption(
         "history_limit", [200, 500, 1000, 2000, 5000, 10000]
     ),
