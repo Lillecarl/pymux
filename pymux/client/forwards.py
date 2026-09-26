@@ -18,9 +18,10 @@ cannot do this: `~C` and its forwards go with the link.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, NamedTuple
+import time
+from typing import TYPE_CHECKING, Callable, NamedTuple
 
-from pymux.forwarding import Direction, Forward
+from pymux.forwarding import ANY_PORT, Direction, Forward
 
 if TYPE_CHECKING:
     from asyncssh import SSHClientConnection, SSHListener
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
 __all__ = [
     "Forwards",
     "Opened",
+    "Wanted",
 ]
 
 #: What names a forward for removing it, and what two forwards may not
@@ -35,13 +37,35 @@ __all__ = [
 Where = tuple[Direction, str, int]
 
 
+class Wanted(NamedTuple):
+    """
+    One forward as it was asked for.
+
+    **`idle` is what separates the two kinds.** A person's forward has
+    none: it listens exactly where they said, and it stays until they
+    remove it. A forward pymux opened by itself, for a loopback URL,
+    has one -- and with it comes the licence to move, because the URL
+    is rewritten to whatever port was really free, so the number was
+    never the person's to begin with. Lillecarl/pymux#437.
+    """
+
+    forward: Forward
+    idle: float | None = None
+
+    @property
+    def may_move(self) -> bool:
+        "Whether another port will do when the one asked for is taken."
+        return self.idle is not None
+
+
 class Opened(NamedTuple):
     """
     One forward as it stands, for the server to draw.
 
-    `port` is the number really bound, which differs from the number
-    asked for when the person asked for any. `error` is why it is not
-    open, and is empty while it is.
+    `port` is the number really bound. It differs from the number
+    asked for when the person asked for any, and when a URL's own port
+    was taken here. `error` is why it is not open, and is empty while
+    it is.
     """
 
     forward: Forward
@@ -75,35 +99,110 @@ class Forwards:
     """
 
     def __init__(self) -> None:
-        self._wanted: dict[Where, Forward] = {}
+        self._wanted: dict[Where, Wanted] = {}
         self._open: dict[Where, SSHListener] = {}
         self._ports: dict[Where, int] = {}
         self._errors: dict[Where, str] = {}
+        #: When each forward last carried a connection. Only a forward
+        #: with an idle time has one, and only that one is reaped.
+        self._used: dict[Where, float] = {}
 
     def __len__(self) -> int:
         return len(self._wanted)
 
+    def _now(self) -> float:
+        """
+        The clock the idle time is measured on.
+
+        **The world's clock and not the loop's.** A laptop that slept
+        for eight hours really has left a forward unused for eight
+        hours, and `time.monotonic` does not run while it sleeps. A
+        method so that a test can move it without waiting.
+        """
+        return time.time()
+
     # ------------------------------------------------------------------
     # What the person asked for.
 
-    async def add(self, connection: SSHClientConnection, forward: Forward) -> Opened:
+    async def add(
+        self,
+        connection: SSHClientConnection,
+        forward: Forward,
+        idle: float | None = None,
+    ) -> Opened:
         """
         Want this forward, and open it now.
 
         A forward that listens where one already does replaces it, so
         that asking twice is not two listeners racing for one port.
+
+        **A forward pymux made for itself never replaces one.** `idle`
+        is what says it is one: pymux chose the port from a URL, and a
+        person who typed `forward-port` for that same port chose it on
+        purpose. Taking theirs away would be pymux answering a question
+        nobody asked it. Lillecarl/pymux#437.
         """
         where = _where(forward)
+        wanted = Wanted(forward, idle)
+        standing = self._wanted.get(where)
+
+        if wanted.may_move and standing is not None:
+            if standing.forward != forward:
+                return Opened(
+                    forward,
+                    forward.listen_port,
+                    "%s already goes to %s" % (forward.listen, standing.forward.dest),
+                )
+            if where in self._open:
+                # The same URL again. The listener is up, so this is a
+                # use of it and not a new one.
+                self._wanted[where] = wanted
+                self._used[where] = self._now()
+                return self._one(where)
+
         self.remove(where)
-        self._wanted[where] = forward
-        return await self._open_one(connection, forward)
+        self._wanted[where] = wanted
+        return await self._open_one(connection, wanted)
 
     def remove(self, where: Where) -> Forward | None:
         "Stop wanting the forward that listens here, and close it."
         self._close_one(where)
         self._ports.pop(where, None)
         self._errors.pop(where, None)
-        return self._wanted.pop(where, None)
+        self._used.pop(where, None)
+        wanted = self._wanted.pop(where, None)
+        return None if wanted is None else wanted.forward
+
+    def reap(self, now: float | None = None) -> list[Forward]:
+        """
+        Close and forget every forward nothing has used lately.
+
+        Only a forward with an idle time, which is one pymux opened for
+        a URL. A person's forward is never reaped: they asked for it.
+
+        **Idle means no new connection**, and nothing more. asyncssh
+        tells this table when a connection arrives and never when one
+        ends, so a single long-lived connection -- a websocket that a
+        page holds open -- reads as idle while it carries bytes.
+        Closing the listener does not cut it: `SSHListener.close` stops
+        new connections and leaves open ones alone. What breaks is the
+        page's *next* request, and opening the URL again brings the
+        forward back. That is why the default idle time is generous.
+        Lillecarl/pymux#437.
+        """
+        if now is None:
+            now = self._now()
+
+        gone = []
+        for where, wanted in list(self._wanted.items()):
+            if wanted.idle is None:
+                continue
+            if now - self._used.get(where, now) < wanted.idle:
+                continue
+            gone.append(wanted.forward)
+            self.remove(where)
+
+        return gone
 
     def close(self) -> None:
         "Close every listener, and keep wanting them."
@@ -131,14 +230,19 @@ class Forwards:
         only way to find out short of `list-forwards`.
         Lillecarl/pymux#442.
         """
+        # A forward whose idle time ran out while the link was down has
+        # nothing to come back for.
+        self.reap()
+
         was = dict(self._ports)
         self._open.clear()
 
         moved = []
         lost = []
 
-        for forward in list(self._wanted.values()):
-            opened = await self._open_one(connection, forward)
+        for wanted in list(self._wanted.values()):
+            forward = wanted.forward
+            opened = await self._open_one(connection, wanted)
             where = _where(forward)
 
             if opened.error:
@@ -158,27 +262,63 @@ class Forwards:
         )
 
     async def _open_one(
-        self, connection: SSHClientConnection, forward: Forward
+        self, connection: SSHClientConnection, wanted: Wanted
     ) -> Opened:
+        forward = wanted.forward
         where = _where(forward)
 
-        try:
-            listener = await _listen(connection, forward)
-        except Exception as error:
-            self._errors[where] = _why(error)
-            self._ports[where] = forward.listen_port
-            return Opened(forward, forward.listen_port, _why(error))
+        #: **The name of a forward stays the port it was asked for.**
+        #: A second try on any free port is a different bind and the
+        #: same forward: `Where` holds the URL's number, `_ports` holds
+        #: the one really bound, and the URL is rewritten to that. Two
+        #: URL forwards that both fall back therefore keep their own
+        #: entries -- with `ANY_PORT` in the name they would share one
+        #: and the second would close the first. Lillecarl/pymux#441.
+        tries = [forward]
+        if wanted.may_move and forward.listen_port != ANY_PORT:
+            tries.append(forward._replace(listen_port=ANY_PORT))
 
-        self._open[where] = listener
-        self._errors.pop(where, None)
-        # The number really bound, which is news when the person asked
-        # for any free port. Both directions answer it: a local
-        # listener reports what the operating system gave, and a remote
-        # one reports what the far sshd put in its `tcpip-forward`
-        # reply. The fallback is for a listener that reports nothing.
-        port = listener.get_port() or forward.listen_port
-        self._ports[where] = port
-        return Opened(forward, port, "")
+        accepted = self._accept(where) if wanted.may_move else None
+        error = ""
+
+        for attempt in tries:
+            try:
+                listener = await _listen(connection, attempt, accepted)
+            except Exception as raised:
+                error = _why(raised)
+                continue
+
+            self._open[where] = listener
+            self._errors.pop(where, None)
+            # The number really bound, which is news when the person
+            # asked for any free port. Both directions answer it: a
+            # local listener reports what the operating system gave,
+            # and a remote one reports what the far sshd put in its
+            # `tcpip-forward` reply. The fallback is for a listener
+            # that reports nothing.
+            self._ports[where] = listener.get_port() or attempt.listen_port
+            self._used[where] = self._now()
+            return self._one(where)
+
+        self._errors[where] = error
+        self._ports[where] = forward.listen_port
+        return Opened(forward, forward.listen_port, error)
+
+    def _accept(self, where: Where) -> Callable[[str, int], bool]:
+        """
+        What marks a forward as used, for the idle time to measure.
+
+        asyncssh calls this per incoming connection and takes the
+        answer as permission, so it has to say yes. Only a local
+        forward has one: `forward_remote_port` takes no accept handler,
+        and a URL forward is always local.
+        """
+
+        def accepted(_host: str, _port: int) -> bool:
+            self._used[where] = self._now()
+            return True
+
+        return accepted
 
     def _close_one(self, where: Where) -> None:
         listener = self._open.pop(where, None)
@@ -187,16 +327,17 @@ class Forwards:
 
     # ------------------------------------------------------------------
 
+    def _one(self, where: Where) -> Opened:
+        wanted = self._wanted[where]
+        return Opened(
+            wanted.forward,
+            self._ports.get(where, wanted.forward.listen_port),
+            self._errors.get(where, ""),
+        )
+
     def opened(self) -> list[Opened]:
         "Every wanted forward, with the port it got or the reason it has none."
-        return [
-            Opened(
-                forward,
-                self._ports.get(where, forward.listen_port),
-                self._errors.get(where, ""),
-            )
-            for where, forward in self._wanted.items()
-        ]
+        return [self._one(where) for where in self._wanted]
 
     def report(self) -> list[dict]:
         "The whole table, for the copy the server draws."
@@ -208,7 +349,9 @@ def _where(forward: Forward) -> Where:
 
 
 async def _listen(
-    connection: SSHClientConnection, forward: Forward
+    connection: SSHClientConnection,
+    forward: Forward,
+    accepted: Callable[[str, int], bool] | None = None,
 ) -> SSHListener:
     """
     Ask asyncssh for the listener of this forward.
@@ -224,6 +367,7 @@ async def _listen(
             forward.listen_port,
             forward.dest_host,
             forward.dest_port,
+            accepted,
         )
 
     return await connection.forward_remote_port(

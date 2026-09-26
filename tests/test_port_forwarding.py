@@ -496,6 +496,226 @@ async def test_asking_twice_leaves_one_listener():
 
 
 # ----------------------------------------------------------------------
+# A forward pymux opened for a URL. Lillecarl/pymux#437.
+
+
+@contextmanager
+def _clock(forwards: Forwards):
+    "Drive the idle time by hand, rather than by waiting for it."
+    stands_at = [1000.0]
+    forwards._now = lambda: stands_at[0]
+    yield stands_at
+
+
+async def test_a_url_forward_moves_when_its_port_is_taken():
+    """
+    **The URL's port is a wish and not a promise.** Something on this
+    machine already listens on it, and the page still has to open, so
+    the forward takes any free port and the URL is rewritten to it.
+
+    A person's forward never does this: they named that number.
+    """
+    async with echoing() as echo_port, ssh_connection() as connection:
+        asked = _free_port()
+        squatter = await anyio.create_tcp_listener(
+            local_host="127.0.0.1", local_port=asked
+        )
+        try:
+            forwards = Forwards()
+            opened = await forwards.add(
+                connection,
+                Forward(Direction.LOCAL, "127.0.0.1", asked, "127.0.0.1", echo_port),
+                idle=60,
+            )
+
+            assert opened.error == "", opened.error
+            assert opened.port != asked
+            assert await _spoken_through(opened.port) == b"HELLO"
+
+            forwards.close()
+        finally:
+            await squatter.aclose()
+
+
+async def test_two_url_forwards_that_both_moved_keep_their_own_entries():
+    """
+    **The bug that a shared name would give.** A forward is known by
+    where it listens, so two that both fell back to any free port would
+    claim one entry and the second would close the first. The name stays
+    the port the URL asked for, which is different for each.
+    Lillecarl/pymux#441.
+    """
+    async with echoing() as echo_port, ssh_connection() as connection:
+        first, second = _free_port(), _free_port()
+        assert first != second
+
+        squatters = [
+            await anyio.create_tcp_listener(local_host="127.0.0.1", local_port=port)
+            for port in (first, second)
+        ]
+        try:
+            forwards = Forwards()
+            one = await forwards.add(
+                connection,
+                Forward(Direction.LOCAL, "127.0.0.1", first, "127.0.0.1", echo_port),
+                idle=60,
+            )
+            two = await forwards.add(
+                connection,
+                Forward(Direction.LOCAL, "127.0.0.1", second, "127.0.0.1", echo_port),
+                idle=60,
+            )
+
+            assert len(forwards) == 2
+            assert one.port != two.port
+            assert await _spoken_through(one.port) == b"HELLO"
+            assert await _spoken_through(two.port) == b"HELLO"
+
+            forwards.close()
+        finally:
+            for squatter in squatters:
+                await squatter.aclose()
+
+
+async def test_a_url_forward_leaves_a_typed_one_alone():
+    """
+    Somebody typed `forward-port -L 8080:...` for a reason. A pane then
+    printing `http://localhost:8080` must not silently point that port
+    somewhere else.
+    """
+    async with echoing() as echo_port, ssh_connection() as connection:
+        forwards = Forwards()
+        port = _free_port()
+        typed = Forward(Direction.LOCAL, "127.0.0.1", port, "127.0.0.1", echo_port)
+        assert (await forwards.add(connection, typed)).error == ""
+
+        refused = await forwards.add(
+            connection,
+            Forward(Direction.LOCAL, "127.0.0.1", port, "127.0.0.1", echo_port + 1),
+            idle=60,
+        )
+
+        assert refused.error, "A URL forward has to say why it did nothing."
+        assert len(forwards) == 1
+        assert await _spoken_through(port) == b"HELLO", "The typed forward stands."
+
+        forwards.close()
+
+
+async def test_the_same_url_twice_keeps_the_one_listener():
+    "Opening a page again is a use of the forward, not a second one."
+    async with echoing() as echo_port, ssh_connection() as connection:
+        forwards = Forwards()
+        wanted = Forward(
+            Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
+        )
+
+        first = await forwards.add(connection, wanted, idle=60)
+        again = await forwards.add(connection, wanted, idle=60)
+
+        assert first.error == "" and again.error == ""
+        assert again.port == first.port
+        assert len(forwards) == 1
+        assert await _spoken_through(first.port) == b"HELLO"
+
+        forwards.close()
+
+
+async def test_a_url_forward_nobody_used_is_reaped():
+    "The port goes back to the machine when the page is done with it."
+    async with echoing() as echo_port, ssh_connection() as connection:
+        forwards = Forwards()
+
+        with _clock(forwards) as stands_at:
+            opened = await forwards.add(
+                connection,
+                Forward(
+                    Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
+                ),
+                idle=60,
+            )
+            assert opened.error == ""
+
+            stands_at[0] += 61
+            gone = forwards.reap()
+
+        assert len(gone) == 1
+        assert len(forwards) == 0, "A reaped forward is not wanted any more."
+        with pytest.raises(OSError):
+            await _spoken_through(opened.port)
+
+
+async def test_using_a_url_forward_puts_off_the_reaping():
+    """
+    **The accept handler is the whole activity signal.** asyncssh calls
+    it per incoming connection, and without it a page that is being used
+    would lose its port on the clock.
+    """
+    async with echoing() as echo_port, ssh_connection() as connection:
+        forwards = Forwards()
+
+        with _clock(forwards) as stands_at:
+            opened = await forwards.add(
+                connection,
+                Forward(
+                    Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
+                ),
+                idle=60,
+            )
+
+            stands_at[0] += 30
+            assert await _spoken_through(opened.port) == b"HELLO"
+
+            stands_at[0] += 40  # 70 since it opened, 40 since it was used.
+            assert forwards.reap() == []
+            assert len(forwards) == 1
+
+            stands_at[0] += 30
+            assert len(forwards.reap()) == 1
+
+        forwards.close()
+
+
+async def test_a_forward_somebody_typed_is_never_reaped():
+    "They asked for it, so nothing but them takes it away."
+    async with echoing() as echo_port, ssh_connection() as connection:
+        forwards = Forwards()
+
+        with _clock(forwards) as stands_at:
+            await forwards.add(
+                connection,
+                Forward(
+                    Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port
+                ),
+            )
+
+            stands_at[0] += 60 * 60 * 24
+            assert forwards.reap() == []
+            assert len(forwards) == 1
+
+        forwards.close()
+
+
+async def test_a_url_forward_that_went_idle_while_the_link_was_down_stays_gone():
+    "There is nothing to come back for, so the reconnect does not bring it."
+    async with echoing() as echo_port:
+        forwards = Forwards()
+        wanted = Forward(
+            Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
+        )
+
+        with _clock(forwards) as stands_at:
+            async with ssh_connection() as first:
+                assert (await forwards.add(first, wanted, idle=60)).error == ""
+
+            stands_at[0] += 61
+
+            async with ssh_connection() as second:
+                assert await forwards.reopen(second) == ""
+                assert forwards.opened() == []
+
+
+# ----------------------------------------------------------------------
 # The client's own glue: the packet it is asked with, and the reconnect.
 
 
