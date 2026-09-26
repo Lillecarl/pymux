@@ -49,7 +49,7 @@ from .colors import DefaultColors, theme_color_base
 from .commands import CommandException, call_command_handler, handle_command
 from .commands.completer import create_command_completer
 from .enums import CHOOSE, COMMAND, PROMPT, WindowSize, Woke
-from .forwarding import LOOPBACK_NAMES
+from .forwarding import LOOPBACK_NAMES, loopback_port
 from .graphics import PaneView
 from . import introspect
 from .key_bindings import PymuxKeyBindings
@@ -713,6 +713,26 @@ _HOOKS_BY_WAKE = {
 _COMMAND_RAN_BEFORE, _, _COMMAND_RAN_AFTER = Woke.COMMAND_RAN.partition("%s")
 
 
+def _open_question(url: str, forward: dict | None) -> str:
+    """
+    What a person is asked before a URL opens on their machine.
+
+    **The forward is named, because it is part of what a yes allows.**
+    Opening a page is one thing; binding a port on the machine somebody
+    is sitting at is another, and a question that hid the second would
+    be collecting an answer to a smaller question than it asked.
+    Lillecarl/pymux#437.
+    """
+    if forward is None:
+        return "Open %s in the browser? (y/n)" % (url,)
+
+    return "Open %s in the browser, and forward %s:%d here? (y/n)" % (
+        url,
+        forward["host"],
+        forward["port"],
+    )
+
+
 def _hook_of(reason: str) -> str | None:
     "The hook name of one wake, or None for a wake that is not an event."
     if reason.startswith(_COMMAND_RAN_BEFORE) and reason.endswith(_COMMAND_RAN_AFTER):
@@ -812,6 +832,21 @@ class Pymux:
         #: anyway are in `forward_needs_asking`.
         #: Lillecarl/pymux#440.
         self.forward_mode = ForwardMode.ON
+
+        #: Whether a loopback URL brings its port with it. On, because
+        #: without it the URL cannot work: `http://localhost:3000` on
+        #: the browser of the machine at the keyboard means a service
+        #: on *that* machine, and the one a pane printed it about is on
+        #: the other. Lillecarl/pymux#437.
+        self.open_url_forward = True
+
+        #: How long such a forward outlives its last connection, in
+        #: seconds. Generous on purpose: idle means no *new* connection,
+        #: so a page holding one websocket open reads as idle, and what
+        #: a reap breaks is its next request. Ten minutes is longer than
+        #: a person leaves a tab they are still using.
+        self.open_url_forward_idle = 600
+
         self.open_url_shim = False
         self._open_url_shim_dir = None
 
@@ -2125,6 +2160,12 @@ class Pymux:
         the browser of the user runs on the machine of the client. The
         client picks the way its platform opens one: "open" on macOS,
         "xdg-open" or what $BROWSER names on Linux.
+
+        **A loopback URL travels with its port.** The packet then
+        carries what to forward, and the client binds it before it
+        opens anything. `url_forward` decides, and the question below
+        says so, because binding a port here is part of what a yes
+        allows. Lillecarl/pymux#437.
         """
         if self.open_url_mode == OpenUrlMode.OFF:
             logger.info("Not opening %s: open-url-mode is off.", url)
@@ -2135,21 +2176,62 @@ class Pymux:
             self.add_command_error("Nobody is attached to open %s." % (url,))
             return
 
+        forwards = [self.url_forward(url, client_state) for client_state in clients]
+
         # **A `-c` counts only from a person.** It is the answer to a
         # question, and a pane that sends the flag itself answered
         # nothing -- without this, `open-url-mode ask` reads as a gate
         # and is not one. Lillecarl/pymux#443.
         confirmed = confirmed and self.a_person_asked()
 
-        if self.open_url_mode == OpenUrlMode.ASK and not confirmed:
+        asking = self.open_url_mode == OpenUrlMode.ASK or (
+            self.forward_mode == ForwardMode.ASK and any(forwards)
+        )
+
+        if asking and not confirmed:
             command = "open-url -c %s" % (shlex.quote(url),)
-            for client_state in clients:
-                client_state.ask("Open %s in the browser? (y/n)" % (url,), command)
+            for client_state, forward in zip(clients, forwards):
+                client_state.ask(_open_question(url, forward), command)
             return
 
-        for client_state in clients:
-            client_state.connection._send_packet({"cmd": Packet.OPEN, "data": url})
-            client_state.message = "Opened %s in the browser of this machine." % (url,)
+        for client_state, forward in zip(clients, forwards):
+            packet = {"cmd": Packet.OPEN, "data": url}
+            if forward is None:
+                client_state.message = (
+                    "Opened %s in the browser of this machine." % (url,)
+                )
+            else:
+                # The client says what it opened, once it knows: a port
+                # that was taken here moves the URL, and a message from
+                # this side would name the address that did not work.
+                packet["forward"] = forward
+            client_state.connection._send_packet(packet)
+
+    def url_forward(self, url: str, client_state: "ClientState") -> dict | None:
+        """
+        What to forward so that this URL works on that client, or
+        `None`.
+
+        **`None` for nearly every URL**, and for every client that is
+        not on another machine. A forward is only the answer when the
+        address means "the machine the server runs on" and the browser
+        is somewhere else. Lillecarl/pymux#437.
+        """
+        if not client_state.connection.can_forward:
+            return None
+        if not self.open_url_forward:
+            return None
+        if self.forward_mode == ForwardMode.OFF:
+            # Somebody turned port forwarding off. A URL is not a way
+            # around that.
+            return None
+
+        found = loopback_port(url)
+        if found is None:
+            return None
+
+        host, port = found
+        return {"host": host, "port": port, "idle": self.open_url_forward_idle}
 
     def a_person_asked(self) -> bool:
         """

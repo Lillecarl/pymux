@@ -679,6 +679,18 @@ ALL_OPTIONS = {
     # opens a browser here without knowing pymux. A pane that runs
     # already keeps the PATH it was born with; only new panes see it.
     "open-url-shim": OnOffOption("open_url_shim"),
+    # Bring the port with the URL. A "localhost" address opened on the
+    # browser of the machine at the keyboard means a service on that
+    # machine, which is the wrong one, so the client forwards the port
+    # first. Lillecarl/pymux#437.
+    "open-url-forward": OnOffOption("open_url_forward"),
+    # How long such a forward outlives its last connection, in seconds.
+    # Idle means no *new* connection, so a page holding one websocket
+    # open reads as idle; what a reap breaks is its next request, and
+    # opening the URL again brings the forward back.
+    "open-url-forward-idle": PositiveIntOption(
+        "open_url_forward_idle", [60, 300, 600, 3600]
+    ),
     # What happens to a request to forward a port, and the two
     # cases that ask whatever it says. `ForwardMode` says.
     "forward-mode": EnumOption(ForwardMode, "forward_mode"),

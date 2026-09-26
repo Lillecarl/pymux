@@ -1050,6 +1050,186 @@ async def test_the_listing_reads_what_the_client_reported():
 
 
 # ----------------------------------------------------------------------
+# The URL that brings its port with it. Lillecarl/pymux#437.
+
+LOOPBACK_URL = "http://localhost:3000/"
+
+
+def _open_requests(seen: list) -> list:
+    "The open requests among the packets a client received."
+    asked = []
+
+    for packet in seen:
+        if isinstance(packet, (bytes, bytearray)):
+            packet = packet.decode("utf-8")
+        for one in packet.split("\0"):
+            if not one.strip():
+                continue
+            read = json.loads(one)
+            if read.get("cmd") == "open":
+                asked.append(read)
+
+    return asked
+
+
+async def _opened(session, seen, url=LOOPBACK_URL, can_forward=True) -> dict:
+    "Ask the session to open a URL, and read the packet the client got."
+    await session.attach("the client", SIZE)
+    session.pymux.clients[0].connection.can_forward = can_forward
+
+    session.pymux.handle_command("open-url %s" % (url,))
+
+    asked = await once(
+        lambda: _open_requests(seen),
+        2.0,
+        "The client was never asked to open anything.",
+    )
+    return asked[0]
+
+
+async def test_a_loopback_url_carries_its_port():
+    """
+    **The whole feature in one packet.** `http://localhost:3000` on the
+    browser of the machine at the keyboard means a service on that
+    machine. The one the pane meant is on the other, so the port comes
+    with the URL.
+    """
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        packet = await _opened(session, seen)
+
+    assert packet["data"] == LOOPBACK_URL
+    assert packet["forward"] == {"host": "localhost", "port": 3000, "idle": 600}
+
+
+async def test_an_ordinary_url_carries_nothing():
+    "The machine at the keyboard reaches example.com by itself."
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        packet = await _opened(session, seen, url="https://example.com/")
+
+    assert packet == {"cmd": "open", "data": "https://example.com/"}
+
+
+async def test_a_client_that_cannot_forward_is_asked_for_nothing_extra():
+    """
+    A client on a unix socket is already on the machine the server runs
+    on, so `localhost` means the same machine and there is nothing to
+    tunnel.
+    """
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        packet = await _opened(session, seen, can_forward=False)
+
+    assert packet == {"cmd": "open", "data": LOOPBACK_URL}
+
+
+async def test_the_option_can_turn_the_forwarding_off():
+    "The URL still opens. It just will not work, which is what was asked for."
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        session.pymux.handle_command("set-option -g open-url-forward off")
+        packet = await _opened(session, seen)
+
+    assert "forward" not in packet
+
+
+async def test_forwarding_turned_off_is_not_worked_around():
+    "`forward-mode off` means no port is bound here. A URL is not a way past it."
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        session.pymux.handle_command("set-option -g forward-mode off")
+        packet = await _opened(session, seen)
+
+    assert packet == {"cmd": "open", "data": LOOPBACK_URL}
+
+
+async def test_the_idle_time_is_the_option():
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        session.pymux.handle_command("set-option -g open-url-forward-idle 60")
+        packet = await _opened(session, seen)
+
+    assert packet["forward"]["idle"] == 60
+
+
+async def test_the_question_names_the_port_it_would_bind():
+    """
+    **A yes allows two things**, and a question that named only the
+    page would be collecting an answer to the smaller one.
+    """
+    async with over_connection() as session:
+        await session.attach("the client", SIZE)
+        session.pymux.clients[0].connection.can_forward = True
+        session.pymux.handle_command("set-option -g open-url-mode ask")
+
+        session.pymux.handle_command("open-url %s" % (LOOPBACK_URL,))
+
+        asked = _questions(session)
+        assert len(asked) == 1, asked
+        assert LOOPBACK_URL in asked[0] and "localhost:3000" in asked[0], asked
+
+
+async def test_asking_about_forwards_asks_about_a_url_that_brings_one():
+    """
+    `forward-mode ask` is about binding a port here, and this binds one.
+    So the question is asked although `open-url-mode` would not ask.
+    """
+    async with over_connection() as session:
+        await session.attach("the client", SIZE)
+        session.pymux.clients[0].connection.can_forward = True
+        session.pymux.handle_command("set-option -g forward-mode ask")
+
+        session.pymux.handle_command("open-url %s" % (LOOPBACK_URL,))
+
+        assert len(_questions(session)) == 1
+
+
+async def test_asking_about_forwards_leaves_an_ordinary_url_alone():
+    "Nothing is bound for it, so the forwarding mode has no say."
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        session.pymux.handle_command("set-option -g forward-mode ask")
+        packet = await _opened(session, seen, url="https://example.com/")
+
+        assert packet["data"] == "https://example.com/"
+        assert _questions(session) == []
+
+
+async def test_answering_yes_opens_it_with_the_forward():
+    seen = []
+
+    async with over_connection(read_packet=seen.append) as session:
+        await session.attach("the client", SIZE)
+        session.pymux.clients[0].connection.can_forward = True
+        session.pymux.handle_command("set-option -g forward-mode ask")
+
+        session.pymux.handle_command("open-url %s" % (LOOPBACK_URL,))
+        await once(lambda: _questions(session), 2.0, "Nobody was asked.")
+
+        answer = session.pymux.clients[0].answer()
+        assert answer is not None
+
+        with as_the_person(session):
+            session.pymux.handle_command(answer)
+
+        asked = await once(
+            lambda: _open_requests(seen),
+            2.0,
+            "A confirmed open never reached the client.",
+        )
+
+    assert asked[0]["forward"]["port"] == 3000
+
+
+# ----------------------------------------------------------------------
 # The trust gate. Lillecarl/pymux#440.
 
 
