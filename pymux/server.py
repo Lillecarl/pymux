@@ -53,6 +53,18 @@ _OSC_REPLY_RE = re.compile(
 #: and again is a connection nothing can use. Lillecarl/pymux#329.
 FAILURES_THAT_END_A_CONNECTION = 5
 
+#: How often to ask an attached client whether it is still there, in
+#: seconds, and how many unanswered pings end it.
+#:
+#: Thirty seconds of a ghost, and one small packet per fifteen seconds
+#: per attached client. It is a backstop and not the first line: over
+#: SSH the client notices its own machine woke (Lillecarl/pymux#445)
+#: and a server's sshd may reap the session too. This is what covers
+#: the cases neither does -- a client process that was stopped, or a
+#: transport with no liveness of its own. Lillecarl/pymux#446.
+PING_INTERVAL = 15.0
+PING_MISSES = 2
+
 #: What a client is told when it may not attach here.
 #:
 #: `pymux integrated` holds the server and its one terminal in one
@@ -155,6 +167,12 @@ class ServerConnection:
         #: truth. Lillecarl/pymux#436.
         self.can_forward = False
         self.forwards: List[Dict] = []
+
+        #: Whether this client answers a ping, and how many have gone
+        #: unanswered. Only a client that said it answers is ever
+        #: dropped for not answering. Lillecarl/pymux#446.
+        self.answers_ping = False
+        self._unanswered = 0
 
         #: When this connection attached. A client that reattaches from
         #: the same terminal takes the same name and a later time, so
@@ -569,6 +587,7 @@ class ServerConnection:
             # Whether `forward-port` can reach this client at all. Only
             # the SSH client says yes. Lillecarl/pymux#436.
             self.can_forward = bool(packet.get("forwards"))
+            self.answers_ping = bool(packet.get("pings"))
             self.environment = packet.get("environment") or {}
             self.ttyname = packet.get("ttyname", "")
             self.pid = packet.get("pid") or 0
@@ -592,6 +611,9 @@ class ServerConnection:
             if self.client_state is not None:
                 self.pymux.take_environment_from(self.client_state)
 
+            if self.answers_ping:
+                self._spawn(self._watch_the_client())
+
         # A URL that the client of this connection could not open. The
         # request went out as a status line here, so the answer goes
         # there too, and it names the URL to copy.
@@ -606,6 +628,11 @@ class ServerConnection:
         # link came back. The server keeps a copy and never the truth:
         # it holds no SSH connection, so only the client can say whether
         # a listener is really open. Lillecarl/pymux#436.
+        # The client is still there. Any answer clears the count, so a
+        # client that is merely slow keeps its place.
+        elif packet["cmd"] == "pong":
+            self._unanswered = 0
+
         elif packet["cmd"] == "forwards":
             reported = packet.get("data") or []
             said = packet.get("message")
@@ -956,6 +983,45 @@ class ServerConnection:
             # is the fake CLI of a command, which nobody selects.
             return ""
         return "%s:%s" % (self.hostname or "?", what)
+
+    async def _watch_the_client(self) -> None:
+        """
+        Drop a client that stops answering.
+
+        **A closed socket is the only thing that dropped a client
+        before this**, and a socket can stay open long after the
+        person is gone: a laptop that sleeps leaves a dead TCP
+        connection that the far sshd holds until it gives up, and the
+        forwarded unix socket here stays open behind it. Nothing else
+        asks, because a client that is attached and quiet sends
+        nothing -- it reports its size only when the size changes.
+
+        What the ghost costs is not the socket. `window-size smallest`
+        is the default, so a client holding a stale terminal size
+        keeps the window that size for whoever is really looking at
+        it. Lillecarl/pymux#446.
+
+        **Only a client that said it answers is ever dropped.**
+        `start-gui` carries that, the way it carries whether the
+        client can forward a port: a client that does not know the
+        packet would otherwise be reaped for staying quiet, which is
+        the one mistake this must not make.
+
+        A pong clears the count, so a slow link keeps its place and
+        only silence ends it.
+        """
+        while True:
+            await anyio.sleep(PING_INTERVAL)
+
+            if self._unanswered >= PING_MISSES:
+                logger.info(
+                    "Dropping %s: %d pings unanswered.", self.name, self._unanswered
+                )
+                self.detach_and_close()
+                return
+
+            self._unanswered += 1
+            await self._write_packet({"cmd": "ping"})
 
     def detach_and_close(self, hang_up: bool = False) -> None:
         """

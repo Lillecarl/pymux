@@ -93,6 +93,11 @@ class TerminalClient(Client):
     #: Lillecarl/pymux#436.
     can_forward = False
 
+    #: Every real client answers the server's ping. The server drops a
+    #: client that stops answering, and only one that said it answers,
+    #: so this is what makes that safe. Lillecarl/pymux#446.
+    answers_ping = True
+
     def __init__(self) -> None:
         self._mode_context_managers = []
 
@@ -165,6 +170,10 @@ class TerminalClient(Client):
                 # end: a unix socket is a unix socket either way.
                 # Lillecarl/pymux#436.
                 "forwards": self.can_forward,
+                # Whether this client answers a ping. A server drops a
+                # client that stops answering, and never one that did
+                # not say it would. Lillecarl/pymux#446.
+                "pings": self.answers_ping,
                 # The whole environment of this client, of which the
                 # server keeps the names "update-environment" lists and
                 # drops the rest. The client cannot do the filtering: it
@@ -265,6 +274,13 @@ class TerminalClient(Client):
             # here and sent there. Lillecarl/pymux#347.
             if packet.get("hang-up"):
                 self.hang_up_asked = True
+
+        elif packet["cmd"] == "ping":
+            # The server is asking whether anybody is still here. An
+            # answer costs one packet and keeps this client's place;
+            # silence is what tells the server the person is gone.
+            # Lillecarl/pymux#446.
+            self._send_packet({"cmd": "pong"})
 
         elif packet["cmd"] == "suspend":
             # Suspend client process to background.

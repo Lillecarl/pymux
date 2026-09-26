@@ -411,7 +411,15 @@ async def over_connection(pymux=None, read_packet=None):
         environment=None,
         ttyname=None,
         client_options=None,
+        pings=False,
     ):
+        """
+        `pings` says this client answers the server's ping, which is
+        what lets the server drop it for not answering
+        (Lillecarl/pymux#446). It is off by default because nothing
+        here answers one: a test that turns it on is a test about
+        being dropped.
+        """
         server_end, client_end = connect_in_memory()
 
         # A context of its own, which is what both real routes do:
@@ -450,6 +458,7 @@ async def over_connection(pymux=None, read_packet=None):
                     # command line said about it. Lillecarl/pymux#223,
                     # Lillecarl/pymux#340.
                     "client-options": client_options or [],
+                    "pings": pings,
                     "data": "",
                 }
             )

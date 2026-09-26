@@ -66,6 +66,15 @@ class WindowsClient(Client):
                     # Lillecarl/pymux#271, and the same file says why
                     # the client sends all of it.
                     "environment": dict(os.environ),
+                    # **No "pings" here, and adding one is the trap.**
+                    # A client that says it answers and then does not
+                    # is dropped after two unanswered pings, so the
+                    # field and the `pong` branch in `_process` have to
+                    # land together -- and nothing here can run a
+                    # Windows client to prove they did. Saying nothing
+                    # costs this client the check and never its
+                    # session. Lillecarl/pymux#446.
+                    #
                     # Windows has no tty path, so a client here is
                     # always named by its process. Lillecarl/pymux#335.
                     "ttyname": "",
