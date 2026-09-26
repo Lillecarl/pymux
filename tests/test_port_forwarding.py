@@ -30,6 +30,7 @@ from pymux.forwarding import (
     LOOPBACK,
     parse_forward,
     parse_listen,
+    the_far_side_may_narrow,
 )
 
 from prompt_toolkit.application.current import set_app
@@ -92,6 +93,18 @@ def test_a_spelling_that_cannot_be_read_says_so(spec):
     "Every one of these used to be a forward that silently did nothing."
     with pytest.raises(BadForward):
         parse_forward(Direction.LOCAL, spec)
+
+
+def test_only_a_remote_bind_off_loopback_may_be_narrowed():
+    """
+    `GatewayPorts` governs the remote listener and nothing else, so a
+    `-L` and a loopback `-R` are exactly what they say.
+    """
+    assert the_far_side_may_narrow(parse_forward(Direction.REMOTE, "0.0.0.0:22:h:22"))
+    assert not the_far_side_may_narrow(parse_forward(Direction.REMOTE, "22:h:22"))
+    assert not the_far_side_may_narrow(
+        parse_forward(Direction.LOCAL, "0.0.0.0:22:h:22")
+    )
 
 
 def test_the_listening_end_alone_names_a_forward():
@@ -429,6 +442,64 @@ async def test_the_client_opens_what_the_server_asked_for():
         assert "Stopped forwarding" in sent[1]["message"]
 
 
+async def test_the_message_does_not_claim_an_address_it_cannot_know():
+    """
+    A remote bind off loopback opens, and what the client says about it
+    has to stop short of the address.
+
+    **The reply carries a port and no address**, so "Forwarding
+    -R 0.0.0.0:2222" would be an assertion the client cannot support.
+    `checks.pymux-openssh` shows the other half: a real openssh under
+    its default binds loopback here and reports success.
+    Lillecarl/pymux#444.
+    """
+    sent = []
+
+    async with echoing() as echo_port, ssh_connection() as connection:
+        client = SshClient("ssh://127.0.0.1/tmp/nowhere.sock")
+        client._send_packet = sent.append
+
+        await client._forward_asked(
+            connection,
+            {
+                "cmd": "forward",
+                "direction": "remote",
+                "listen_host": "0.0.0.0",
+                "listen_port": ANY_PORT,
+                "dest_host": "127.0.0.1",
+                "dest_port": echo_port,
+            },
+        )
+
+        said = sent[0]["message"]
+        assert sent[0]["data"][0]["error"] == "", said
+        assert "loopback only" in said, said
+        assert "0.0.0.0" in said, said
+
+
+async def test_a_loopback_forward_is_reported_without_a_caveat():
+    "The common case says what happened, with nothing hedged onto it."
+    sent = []
+
+    async with echoing() as echo_port, ssh_connection() as connection:
+        client = SshClient("ssh://127.0.0.1/tmp/nowhere.sock")
+        client._send_packet = sent.append
+
+        await client._forward_asked(
+            connection,
+            {
+                "cmd": "forward",
+                "direction": "local",
+                "listen_host": "127.0.0.1",
+                "listen_port": ANY_PORT,
+                "dest_host": "127.0.0.1",
+                "dest_port": echo_port,
+            },
+        )
+
+        assert "loopback only" not in sent[0]["message"], sent[0]["message"]
+
+
 async def test_connecting_again_brings_the_forwards_back():
     """
     **The promise this feature makes**, through the client's own
@@ -706,6 +777,11 @@ async def test_binding_off_loopback_is_asked_even_when_the_mode_is_on():
         assert len(asked) == 1, asked
         # Both ends, because where it listens is the whole question.
         assert "0.0.0.0:2222" in asked[0] and "localhost:22" in asked[0], asked
+        # And that the answer is not pymux's to give. Asking somebody to
+        # confirm the dangerous bind without saying openssh may quietly
+        # make it a safe one asks about something that may not happen.
+        # Lillecarl/pymux#444.
+        assert "loopback only" in asked[0], asked
 
 
 async def test_a_pane_is_asked_although_a_person_would_not_be():

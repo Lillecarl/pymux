@@ -52,7 +52,7 @@ import anyio
 from prompt_toolkit.input.vt100 import raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output
 
-from pymux.forwarding import Direction, Forward
+from pymux.forwarding import MAY_NARROW, Direction, Forward, the_far_side_may_narrow
 from pymux.protocol import Packet
 from pymux.utils import nonblocking
 
@@ -584,6 +584,18 @@ class SshClient(TerminalClient):
             )
         else:
             said = "Forwarding %s." % (forward.spell(),)
+
+        if not opened.error and the_far_side_may_narrow(forward):
+            # **The listener is open and the address may not be the one
+            # asked for.** Saying "Forwarding -R 0.0.0.0:2222" flat
+            # would be the client asserting something it cannot know:
+            # the reply to `tcpip-forward` carries a port and no
+            # address. Lillecarl/pymux#444.
+            said = "%s Asked for %s, but %s." % (
+                said,
+                forward.listen_host,
+                MAY_NARROW,
+            )
 
         self._report_forwards(said)
 

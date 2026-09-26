@@ -368,16 +368,18 @@ async def test_a_forward_comes_back_on_a_new_openssh_connection(sshd):
         tasks.cancel_scope.cancel()
 
 
-async def test_openssh_refuses_a_remote_forward_off_loopback(sshd):
+async def test_openssh_narrows_a_remote_forward_rather_than_refusing_it(sshd):
     """
-    `GatewayPorts no` is openssh's default, and it is why the gate of
-    Lillecarl/pymux#440 asks before binding off loopback: the person
-    would otherwise confirm something the far side quietly narrows.
+    **It binds loopback and reports success.** A person who asked for
+    `0.0.0.0` gets a listener nothing off the machine can reach, and no
+    error says so. Measured here against `GatewayPorts no`, which is
+    openssh's default.
 
-    **openssh narrows rather than refuses.** It binds loopback and
-    reports success, so a person who asked for `0.0.0.0` gets a
-    listener that nothing off the machine can reach, and no error says
-    so. Measured here, against `GatewayPorts no`.
+    Nothing downstream can find out either: the `tcpip-forward` reply
+    carries a port and no address. That is why `forward-port` says so
+    in the question instead of claiming the address afterwards --
+    `the_far_side_may_narrow` holds the rule.
+    Lillecarl/pymux#440, Lillecarl/pymux#444.
     """
     async with anyio.create_task_group() as tasks:
         echo_port = await _echoing(tasks)

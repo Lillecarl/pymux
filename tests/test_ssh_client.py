@@ -204,7 +204,21 @@ async def create_ssh_server(
         def server_requested(self, listen_host: str, listen_port: int):
             # What `-R` asks of sshd: listen here, and hand each
             # connection back down the link.
-            return allow_forward and listen_host in ("localhost", "127.0.0.1")
+            #
+            # `0.0.0.0` is allowed so a test can reach the case
+            # Lillecarl/pymux#444 is about. asyncssh binds what it is
+            # told and does not narrow the way openssh under
+            # `GatewayPorts no` does, so this models the permissive
+            # server; `checks.pymux-openssh` is where the narrowing
+            # one is. The check runs in a network namespace that holds
+            # only loopback -- measured, `ip addr` in the sandbox shows
+            # `lo` and nothing else -- so every address here is this
+            # machine either way.
+            return allow_forward and listen_host in (
+                "localhost",
+                "127.0.0.1",
+                "0.0.0.0",
+            )
 
     options = dict(
         server_factory=OneSocket,

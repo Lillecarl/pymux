@@ -7,7 +7,13 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandException, add_command
-from pymux.forwarding import BadForward, Direction, parse_forward
+from pymux.forwarding import (
+    MAY_NARROW,
+    BadForward,
+    Direction,
+    parse_forward,
+    the_far_side_may_narrow,
+)
 from pymux.options import ForwardMode
 from pymux.protocol import Packet
 
@@ -63,8 +69,14 @@ def forward_port(pymux: "Pymux", args: argparse.Namespace) -> None:
         # to answer safely: what matters is where it listens and what it
         # reaches. A yes runs this same command with -c, so it is asked
         # once. Lillecarl/pymux#440.
+        #
+        # **And it says where the answer is not ours to give.** The one
+        # bind worth confirming is the one openssh may quietly narrow,
+        # so a question that did not say so would be asking about
+        # something that may not happen. Lillecarl/pymux#444.
+        caveat = " -- %s" % (MAY_NARROW,) if the_far_side_may_narrow(forward) else ""
         asker.client_state.ask(
-            "Forward %s? (y/n)" % (forward.spell(),),
+            "Forward %s%s? (y/n)" % (forward.spell(), caveat),
             "forward-port -c %s %s" % (direction.flag, shlex.quote(spec)),
         )
         return

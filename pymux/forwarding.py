@@ -21,6 +21,8 @@ __all__ = [
     "Forward",
     "LOOPBACK",
     "LOOPBACK_NAMES",
+    "MAY_NARROW",
+    "the_far_side_may_narrow",
     "parse_forward",
     "parse_listen",
 ]
@@ -101,6 +103,34 @@ def _address(host: str, port: int) -> str:
     if port == ANY_PORT:
         return "%s:*" % (host,)
     return "%s:%d" % (host, port)
+
+
+def the_far_side_may_narrow(forward: Forward) -> bool:
+    """
+    Whether the server may bind this somewhere smaller than it was
+    asked to.
+
+    **Only a remote forward, and only off loopback.** `GatewayPorts` is
+    openssh's switch for it and `no` is the default, under which a
+    `-R 0.0.0.0:...` binds loopback, reports success, and says nothing.
+
+    **Nothing can tell afterwards, so this has to be said before.** The
+    `tcpip-forward` reply carries one number and no address -- read in
+    asyncssh 2.24.0, `connection.py`: a `get_uint32()` for the port and
+    then `check_end()`. A listener reports back the address it asked
+    for, because that is the only one it has. Lillecarl/pymux#444.
+    """
+    return (
+        forward.direction is Direction.REMOTE
+        and forward.listen_host not in LOOPBACK_NAMES
+    )
+
+
+#: What to tell a person about a bind the far side may narrow. It is
+#: not a warning about pymux: openssh's default really does this, and
+#: the person is the only one who can find out whether this server is
+#: configured for it.
+MAY_NARROW = "the server may bind it on loopback only"
 
 
 class BadForward(ValueError):
