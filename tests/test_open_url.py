@@ -203,6 +203,29 @@ async def test_ask_asks_and_opens_nothing():
         assert state.confirm_command == "open-url -c %s" % URL
 
 
+async def test_a_pane_cannot_confirm_its_own_open():
+    """
+    **`open-url-mode ask` read as a gate and was not one.**
+
+    `-c` is the answer to a question, and a program in a pane runs
+    pymux commands too -- over the socket, under a temporary client. It
+    could send the flag itself and reach the browser of the person at
+    the keyboard with the option set to ask. Lillecarl/pymux#443.
+    """
+    packets = []
+    async with over_connection(read_packet=packets.append) as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", SIZE)
+        pymux.open_url_mode = "ask"
+
+        await session.command("open-url -c %s" % URL)
+
+        await once(
+            lambda: state.confirm_command, 5.0, "the pane's -c was taken as an answer"
+        )
+        assert opens(packets) == []
+
+
 async def test_yes_opens():
     packets = []
     async with over_connection(read_packet=packets.append) as session:
@@ -334,7 +357,14 @@ async def test_confirmed_command_opens_without_asking():
         state, _ = await session.attach("only", SIZE)
         pymux.open_url_mode = "ask"
 
-        pymux.handle_command("open-url -c %s" % URL)
+        # Inside the client's application, which is where a person's
+        # yes runs it: `ClientState` answers the question from its own
+        # context. A bare `handle_command` has no client and therefore
+        # looks like a pane, whose `-c` answers nothing.
+        # Lillecarl/pymux#443.
+        with set_app(state.app):
+            pymux.handle_command("open-url -c %s" % URL)
+
         await once(lambda: opens(packets), 5.0, "the command never opened anything")
 
         assert opens(packets) == [{"cmd": "open", "data": URL}]

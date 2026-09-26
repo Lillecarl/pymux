@@ -2135,6 +2135,12 @@ class Pymux:
             self.add_command_error("Nobody is attached to open %s." % (url,))
             return
 
+        # **A `-c` counts only from a person.** It is the answer to a
+        # question, and a pane that sends the flag itself answered
+        # nothing -- without this, `open-url-mode ask` reads as a gate
+        # and is not one. Lillecarl/pymux#443.
+        confirmed = confirmed and self.a_person_asked()
+
         if self.open_url_mode == OpenUrlMode.ASK and not confirmed:
             command = "open-url -c %s" % (shlex.quote(url),)
             for client_state in clients:
@@ -2144,6 +2150,25 @@ class Pymux:
         for client_state in clients:
             client_state.connection._send_packet({"cmd": Packet.OPEN, "data": url})
             client_state.message = "Opened %s in the browser of this machine." % (url,)
+
+    def a_person_asked(self) -> bool:
+        """
+        Whether the command running now was typed at a client.
+
+        **This is what makes a confirmation mean anything.** A yes runs
+        the same command again with a flag that says "do not ask" --
+        `open-url -c`, `forward-port -c`. A program in a pane runs
+        commands too, over the socket and under a temporary client, so
+        it can send that flag itself and answer a question nobody
+        asked. The flag counts only when this says so.
+        Lillecarl/pymux#443, Lillecarl/pymux#440.
+        """
+        try:
+            asking = self.get_client_state()
+        except ValueError:
+            return False
+
+        return not asking.temporary
 
     def forwarding_client(self) -> "Asker":
         """
@@ -2162,13 +2187,10 @@ class Pymux:
         a question this cannot answer for the person.
         Lillecarl/pymux#436.
         """
-        try:
-            asking = self.get_client_state()
-        except ValueError:
-            asking = None
-
-        if asking is not None and not asking.temporary:
-            return self._can_it_forward(Asker(asking, in_person=True))
+        if self.a_person_asked():
+            return self._can_it_forward(
+                Asker(self.get_client_state(), in_person=True)
+            )
 
         attached = [
             client for client in self._client_states.values() if not client.temporary
