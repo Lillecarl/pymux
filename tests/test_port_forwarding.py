@@ -330,6 +330,75 @@ async def test_the_wanted_set_comes_back_on_a_new_connection():
             forwards.close()
 
 
+async def test_a_reconnect_that_changed_nothing_says_nothing():
+    "A named port comes back as itself, so there is nothing to tell."
+    async with echoing() as echo_port:
+        forwards = Forwards()
+        wanted = Forward(
+            Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
+        )
+
+        async with ssh_connection() as first:
+            assert (await forwards.add(first, wanted)).error == ""
+
+        async with ssh_connection() as second:
+            assert await forwards.reopen(second) == ""
+            forwards.close()
+
+
+async def test_a_forward_that_came_back_on_another_port_says_so():
+    """
+    **The case that costs a person their session otherwise.** A forward
+    that asked for any free port rarely gets the same one twice, and
+    whatever was pointed at the old number is pointing at nothing.
+    Lillecarl/pymux#442.
+    """
+    async with echoing() as echo_port:
+        forwards = Forwards()
+        wanted = Forward(
+            Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port
+        )
+
+        async with ssh_connection() as first:
+            was = await forwards.add(first, wanted)
+            assert was.error == ""
+
+        async with ssh_connection() as second:
+            said = await forwards.reopen(second)
+            now = forwards.opened()[0].port
+
+            if now == was.port:
+                pytest.skip("the operating system handed back the same port")
+
+            assert str(now) in said, said
+            assert "moved" in said, said
+            forwards.close()
+
+
+async def test_a_forward_that_could_not_come_back_says_why():
+    "A port taken while the link was down is a reason, not a silence."
+    async with echoing() as echo_port:
+        forwards = Forwards()
+        port = _free_port()
+        wanted = Forward(Direction.LOCAL, "127.0.0.1", port, "127.0.0.1", echo_port)
+
+        async with ssh_connection() as first:
+            assert (await forwards.add(first, wanted)).error == ""
+
+        # Somebody else took it while the link was down.
+        squatter = await anyio.create_tcp_listener(
+            local_host="127.0.0.1", local_port=port
+        )
+        try:
+            async with ssh_connection() as second:
+                said = await forwards.reopen(second)
+
+                assert "Could not forward" in said, said
+                assert str(port) in said, said
+        finally:
+            await squatter.aclose()
+
+
 async def test_a_forward_that_is_removed_does_not_come_back():
     "Removing stops the wanting, so the next reconnect does not undo it."
     async with echoing() as echo_port:

@@ -213,6 +213,10 @@ class SshClient(TerminalClient):
         #: the address's path, or the one the listing found.
         self.path = self.target.path
         self._writer = None
+        #: What changed about the forwards when the link came back, for
+        #: `_attached` to say once it has a client to say it to.
+        #: Lillecarl/pymux#442.
+        self._forwards_moved = ""
         #: Why this client ended its own link, when it did. Only the
         #: suspend watch sets it, and only `_attached` reads it.
         #: Lillecarl/pymux#445.
@@ -282,7 +286,11 @@ class SshClient(TerminalClient):
         # wanted set opens again on this one. It raises nothing: a port
         # that has since been taken is a line in `list-forwards`, not a
         # reason to keep the person off their panes.
-        await self.forwards.reopen(connection)
+        #
+        # What moved is kept for `_attached` to report, because the
+        # server has no client to hang a message on until `start-gui`
+        # has been sent. Lillecarl/pymux#442.
+        self._forwards_moved = await self.forwards.reopen(connection)
 
         return connection, reader
 
@@ -491,7 +499,12 @@ class SshClient(TerminalClient):
                 # again. The server's copy is drawn from this, and it
                 # has to arrive after `start-gui`, because until then
                 # the connection has no client to hang it on.
-                self._report_forwards()
+                #
+                # It carries a message only when something moved, so a
+                # first attach and a reconnect that changed nothing are
+                # both silent. Lillecarl/pymux#442.
+                self._report_forwards(self._forwards_moved)
+                self._forwards_moved = ""
 
                 async for packet in self._packets(reader):
                     if packet["cmd"] == Packet.FORWARD:

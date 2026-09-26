@@ -113,7 +113,7 @@ class Forwards:
     # ------------------------------------------------------------------
     # The connection under them.
 
-    async def reopen(self, connection: SSHClientConnection) -> None:
+    async def reopen(self, connection: SSHClientConnection) -> str:
         """
         Open the wanted set on a new connection.
 
@@ -121,11 +121,41 @@ class Forwards:
         that dropped, and a port that has since been taken must not
         stop the person's panes coming back. The reason lands beside
         the forward instead, where `list-forwards` shows it.
+
+        Answers what to tell the person, or "" when every forward came
+        back exactly as it was. **A forward that came back on another
+        port is the case worth a sentence.** One that asked for any
+        free port rarely gets the same one twice, and whatever was
+        pointed at the old number -- a browser tab, a CDP client, a
+        script -- is pointing at nothing. Saying the new number is the
+        only way to find out short of `list-forwards`.
+        Lillecarl/pymux#442.
         """
+        was = dict(self._ports)
         self._open.clear()
 
+        moved = []
+        lost = []
+
         for forward in list(self._wanted.values()):
-            await self._open_one(connection, forward)
+            opened = await self._open_one(connection, forward)
+            where = _where(forward)
+
+            if opened.error:
+                lost.append("%s (%s)" % (forward.spell(), opened.error))
+            elif where in was and was[where] != opened.port:
+                moved.append(
+                    "%s is now on %d" % (forward.spell(), opened.port)
+                )
+
+        return " ".join(
+            part
+            for part in (
+                "Forwarding moved: %s." % ("; ".join(moved),) if moved else "",
+                "Could not forward %s." % ("; ".join(lost),) if lost else "",
+            )
+            if part
+        )
 
     async def _open_one(
         self, connection: SSHClientConnection, forward: Forward
