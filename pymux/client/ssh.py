@@ -52,7 +52,13 @@ import anyio
 from prompt_toolkit.input.vt100 import raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output
 
-from pymux.forwarding import MAY_NARROW, Direction, Forward, the_far_side_may_narrow
+from pymux.forwarding import (
+    MAY_NARROW,
+    Direction,
+    Forward,
+    the_far_side_may_narrow,
+    with_port,
+)
 from pymux.protocol import Packet
 from pymux.utils import nonblocking
 
@@ -105,6 +111,14 @@ SUSPEND_GAP = 4.0
 
 #: How often the disconnected screen draws its countdown, in seconds.
 COUNTDOWN_STEP = 1.0
+
+#: How often to look for a forward nothing is using, in seconds.
+#:
+#: It decides only how late a reap is, never whether one happens: the
+#: idle time itself is measured against the clock. Half a minute is
+#: nothing beside the ten minutes a URL forward is given.
+#: Lillecarl/pymux#437.
+REAP_POLL = 30.0
 
 #: What a person types to stop trying.
 LEAVE = ("q", "Q", "\x03")
@@ -485,6 +499,7 @@ class SshClient(TerminalClient):
             tasks.start_soon(self._while_the_link_holds, read_keyboard)
             tasks.start_soon(self._while_the_link_holds, self._watch_signal)
             tasks.start_soon(self._while_the_link_holds, self._watch_size)
+            tasks.start_soon(self._while_the_link_holds, self._reap_forwards)
             # It writes no packet, so it needs no guard against a link
             # that stopped taking them: ending the link is its whole job.
             tasks.start_soon(self._watch_for_suspend, connection)
@@ -514,6 +529,20 @@ class SshClient(TerminalClient):
                         tasks.start_soon(
                             self._while_the_link_holds,
                             self._forward_asked,
+                            connection,
+                            packet,
+                        )
+                        continue
+
+                    if packet["cmd"] == Packet.OPEN and packet.get("forward"):
+                        # A URL that names loopback, which is this
+                        # machine to the browser and the other machine
+                        # to the pane that printed it. The port has to
+                        # be here before the page is.
+                        # Lillecarl/pymux#437.
+                        tasks.start_soon(
+                            self._while_the_link_holds,
+                            self._open_asked,
                             connection,
                             packet,
                         )
@@ -611,6 +640,60 @@ class SshClient(TerminalClient):
             )
 
         self._report_forwards(said)
+
+    async def _open_asked(self, connection, packet) -> None:
+        """
+        Forward the port a URL names, then open the URL.
+
+        **The port first, and the page after it.** A browser that
+        arrives before the listener does gets a refused connection and
+        an error page, and reloading is then the person's job.
+
+        The URL moves when its own port is taken here. Nothing else can
+        say so: the server named the address that a pane printed, and
+        by the time this knows the real number the packet has already
+        been sent. So the message about it comes from this side.
+        Lillecarl/pymux#437.
+        """
+        url = packet["data"]
+        asked = packet["forward"]
+        host, port = asked["host"], asked["port"]
+
+        opened = await self.forwards.add(
+            connection,
+            Forward(Direction.LOCAL, host, port, host, port),
+            idle=asked["idle"],
+        )
+
+        if opened.error:
+            said = "Opened %s, but not %s:%d: %s" % (
+                url,
+                host,
+                port,
+                opened.error,
+            )
+        else:
+            if opened.port != port:
+                url = with_port(url, opened.port)
+            said = "Opened %s in the browser of this machine." % (url,)
+
+        reached = self._open_url(url)
+        self._report_forwards(said if reached else "")
+
+        if not reached:
+            self._send_packet({"cmd": Packet.OPEN_FAILED, "data": url})
+
+    async def _reap_forwards(self) -> None:
+        "Give back the port of a URL that nobody is using any more."
+        while True:
+            await anyio.sleep(REAP_POLL)
+
+            gone = self.forwards.reap()
+            if gone:
+                self._report_forwards(
+                    "Stopped forwarding %s: nothing used it."
+                    % ("; ".join(one.listen for one in gone),)
+                )
 
     def _report_forwards(self, message: str = "") -> None:
         """

@@ -38,6 +38,7 @@ from pymux.forwarding import (
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 
+from pymux.client import ssh as ssh_module
 from pymux.client.ssh import SshClient
 
 from session import once, over_connection
@@ -834,6 +835,145 @@ async def test_a_loopback_forward_is_reported_without_a_caveat():
         )
 
         assert "loopback only" not in sent[0]["message"], sent[0]["message"]
+
+
+@contextmanager
+def _browser(client) -> list:
+    "What this client's machine was asked to open."
+    opened = []
+    client._open_url = lambda url: (opened.append(url), True)[1]
+    yield opened
+
+
+async def test_the_client_keeps_the_url_when_its_port_was_free():
+    """
+    **The number in the URL is the whole point of trying it first.**
+    A bookmark, a link in a chat, a second tab -- all of them name the
+    port the pane printed, and they keep working only while pymux binds
+    that one. Lillecarl/pymux#437.
+    """
+    sent = []
+    port = _free_port()
+    url = "http://127.0.0.1:%d/app" % (port,)
+
+    async with ssh_connection() as connection:
+        client = SshClient("ssh://127.0.0.1/tmp/nowhere.sock")
+        client._send_packet = sent.append
+
+        with _browser(client) as opened:
+            await client._open_asked(
+                connection,
+                {
+                    "cmd": "open",
+                    "data": url,
+                    "forward": {"host": "127.0.0.1", "port": port, "idle": 600},
+                },
+            )
+
+        assert opened == [url]
+        assert sent[0]["cmd"] == "forwards"
+        assert sent[0]["data"][0]["port"] == port
+        assert sent[0]["data"][0]["error"] == ""
+
+        client.forwards.close()
+
+
+async def test_the_client_moves_the_url_when_its_port_was_taken():
+    """
+    The echo here is both the service on the far side and the thing
+    holding the port on this one, which is the real shape of the
+    collision: one machine, one number, two meanings.
+
+    The browser is sent to the port that was free, and the bytes still
+    reach the service the URL meant.
+    """
+    sent = []
+
+    async with echoing() as echo_port, ssh_connection() as connection:
+        url = "http://127.0.0.1:%d/app?x=1" % (echo_port,)
+        client = SshClient("ssh://127.0.0.1/tmp/nowhere.sock")
+        client._send_packet = sent.append
+
+        with _browser(client) as opened:
+            await client._open_asked(
+                connection,
+                {
+                    "cmd": "open",
+                    "data": url,
+                    "forward": {"host": "127.0.0.1", "port": echo_port, "idle": 600},
+                },
+            )
+
+        assert len(opened) == 1
+        moved = opened[0]
+        assert moved != url, "The port was taken, so the URL had to move."
+        assert moved.endswith("/app?x=1"), moved
+
+        port = sent[0]["data"][0]["port"]
+        assert port != echo_port
+        assert str(port) in moved, moved
+        # And the person's message names the URL that works, not the
+        # one the server sent.
+        assert moved in sent[0]["message"], sent[0]["message"]
+        assert await _spoken_through(port) == b"HELLO"
+
+        client.forwards.close()
+
+
+async def test_the_client_opens_the_page_even_when_it_cannot_forward():
+    """
+    A page that cannot reach its service is still better than no page:
+    the person sees the address, and the reason is in the message.
+    """
+    sent = []
+    # An address this machine does not have, so neither the port asked
+    # for nor any other one can be bound on it. TEST-NET-1 exists for
+    # exactly this: RFC 5737 keeps it off the internet.
+    url = "http://192.0.2.1:3000/"
+
+    async with ssh_connection() as connection:
+        client = SshClient("ssh://127.0.0.1/tmp/nowhere.sock")
+        client._send_packet = sent.append
+
+        with _browser(client) as opened:
+            await client._open_asked(
+                connection,
+                {
+                    "cmd": "open",
+                    "data": url,
+                    "forward": {"host": "192.0.2.1", "port": 3000, "idle": 600},
+                },
+            )
+
+        assert opened == [url], "The page opens whatever the forward did."
+        assert sent[0]["data"][0]["error"], "A forward that failed has to say why."
+        assert "192.0.2.1:3000" in sent[0]["message"], sent[0]["message"]
+
+
+async def test_the_client_gives_an_idle_port_back_and_says_so(monkeypatch):
+    "The reaper is a task of the attachment, and it reports like the rest."
+    monkeypatch.setattr(ssh_module, "REAP_POLL", 0.01)
+    sent = []
+
+    async with echoing() as echo_port, ssh_connection() as connection:
+        client = SshClient("ssh://127.0.0.1/tmp/nowhere.sock")
+        client._send_packet = sent.append
+
+        opened = await client.forwards.add(
+            connection,
+            Forward(Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port),
+            idle=0,
+        )
+        assert opened.error == ""
+
+        with anyio.move_on_after(2.0):
+            await client._reap_forwards()
+
+        assert sent, "The reaper never reported anything."
+        assert "Stopped forwarding" in sent[0]["message"], sent[0]["message"]
+        assert sent[0]["data"] == []
+        with pytest.raises(OSError):
+            await _spoken_through(opened.port)
 
 
 async def test_connecting_again_brings_the_forwards_back():
