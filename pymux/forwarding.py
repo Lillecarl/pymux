@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from typing import Final, NamedTuple
+from urllib.parse import urlparse, urlunparse
 
 __all__ = [
     "ANY_PORT",
@@ -22,9 +23,12 @@ __all__ = [
     "LOOPBACK",
     "LOOPBACK_NAMES",
     "MAY_NARROW",
+    "SCHEME_PORTS",
+    "loopback_port",
     "the_far_side_may_narrow",
     "parse_forward",
     "parse_listen",
+    "with_port",
 ]
 
 
@@ -180,6 +184,86 @@ def parse_listen(spec: str) -> tuple[str, int]:
     """
     host, _, port = spec.rpartition(":")
     return host or LOOPBACK, _port(port, spec)
+
+
+# ----------------------------------------------------------------------
+# A URL that names a port on the machine the server runs on.
+# Lillecarl/pymux#437.
+
+
+#: The port a scheme means when a URL names none.
+#:
+#: Only the schemes a development server answers on. A URL with any
+#: other scheme and no port names nothing to forward, and guessing a
+#: number for it would bind a port for nobody.
+SCHEME_PORTS: Final = {
+    "http": 80,
+    "https": 443,
+    "ws": 80,
+    "wss": 443,
+}
+
+
+def loopback_port(url: str) -> tuple[str, int] | None:
+    """
+    The loopback address and port this URL names, or `None`.
+
+    **`None` is the common answer and the cheap one.** Most URLs a pane
+    prints are ordinary web addresses, which the machine at the keyboard
+    reaches by itself.
+
+    A URL that names loopback is the one case where opening it on the
+    other machine's browser cannot work: the address means "here", and
+    "here" is the wrong machine. The port is what a forward needs to
+    make the address true again.
+    """
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return None
+
+    host = parsed.hostname
+    if host is None or host not in LOOPBACK_NAMES:
+        return None
+
+    try:
+        port = parsed.port
+    except ValueError:
+        return None  # A netloc with rubbish where the port goes.
+
+    if port is None:
+        port = SCHEME_PORTS.get(parsed.scheme)
+    if port is None:
+        return None
+
+    return host, port
+
+
+def with_port(url: str, port: int) -> str:
+    """
+    The same URL, on another port.
+
+    What a forward that could not bind the number the URL asked for
+    needs: the bytes still arrive, at a different door, and the person
+    has to be sent to that one.
+
+    An address with colons in it is IPv6 and goes back in brackets,
+    which is where `urlparse` took it from.
+    """
+    parsed = urlparse(url)
+
+    host = parsed.hostname or ""
+    if ":" in host:
+        host = "[%s]" % (host,)
+
+    netloc = "%s:%d" % (host, port)
+    if parsed.username:
+        who = parsed.username
+        if parsed.password:
+            who = "%s:%s" % (who, parsed.password)
+        netloc = "%s@%s" % (who, netloc)
+
+    return urlunparse(parsed._replace(netloc=netloc))
 
 
 def _port(text: str, spec: str) -> int:

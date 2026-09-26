@@ -28,9 +28,11 @@ from pymux.forwarding import (
     Direction,
     Forward,
     LOOPBACK,
+    loopback_port,
     parse_forward,
     parse_listen,
     the_far_side_may_narrow,
+    with_port,
 )
 
 from prompt_toolkit.application.current import set_app
@@ -105,6 +107,51 @@ def test_only_a_remote_bind_off_loopback_may_be_narrowed():
     assert not the_far_side_may_narrow(
         parse_forward(Direction.LOCAL, "0.0.0.0:22:h:22")
     )
+
+
+# ----------------------------------------------------------------------
+# The URL a pane printed. Lillecarl/pymux#437.
+
+
+@pytest.mark.parametrize(
+    "url, expected",
+    [
+        ("http://localhost:3000/", ("localhost", 3000)),
+        ("http://127.0.0.1:8080", ("127.0.0.1", 8080)),
+        ("https://localhost:8443/app?x=1#y", ("localhost", 8443)),
+        ("http://[::1]:5000/", ("::1", 5000)),
+        ("ws://localhost:9222/devtools", ("localhost", 9222)),
+        # No port, so the scheme says which one.
+        ("http://localhost/", ("localhost", 80)),
+        ("https://localhost/", ("localhost", 443)),
+        # Not this machine's business.
+        ("https://example.com/", None),
+        ("https://example.com:8080/", None),
+        # Nothing to forward: no scheme that implies a port, and none given.
+        ("file:///tmp/page.html", None),
+        ("mailto:someone@localhost", None),
+        ("localhost:3000", None),
+        # A netloc that is not a netloc.
+        ("http://localhost:nonsense/", None),
+    ],
+)
+def test_only_a_loopback_url_names_a_port_to_forward(url, expected):
+    """
+    **The answer is `None` for nearly every URL**, and it has to be: a
+    forward binds a port on the machine somebody is sitting at, and an
+    ordinary web address needs none.
+    """
+    assert loopback_port(url) == expected
+
+
+def test_a_url_moves_to_the_port_that_was_free():
+    "The path, the query and the fragment are the person's, so they stay."
+    assert (
+        with_port("http://localhost:3000/app?x=1#y", 54321)
+        == "http://localhost:54321/app?x=1#y"
+    )
+    assert with_port("http://[::1]:5000/", 54321) == "http://[::1]:54321/"
+    assert with_port("http://carl@localhost/", 8080) == "http://carl@localhost:8080/"
 
 
 def test_the_listening_end_alone_names_a_forward():
