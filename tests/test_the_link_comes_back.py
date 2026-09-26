@@ -22,6 +22,9 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import anyio
+
+from pymux.client import ssh as ssh_client
 from pymux.client.reconnect import Backoff, link_may_come_back, notice, why
 from pymux.client.ssh import SshClient
 from pymux.main import Pymux
@@ -146,6 +149,109 @@ def test_the_notice_says_both_keys():
 def test_a_failure_with_nothing_to_say_is_named_by_its_kind():
     assert why(TimeoutError()) == "TimeoutError"
     assert why(OSError("Network is unreachable")) == "Network is unreachable"
+
+
+# ----------------------------------------------------------------------
+# A machine that was asleep. Lillecarl/pymux#445.
+
+
+class Link:
+    "Something with the one method the suspend watch calls."
+
+    def __init__(self) -> None:
+        self.aborted = False
+
+    def abort(self) -> None:
+        self.aborted = True
+
+
+def moving_clocks(steps):
+    """
+    A `_clocks` that walks through these `(wall, loop)` pairs.
+
+    The last pair repeats, so a watch that keeps looking sees a
+    machine whose clocks agree again -- which is what a machine that
+    woke up looks like.
+    """
+    walked = list(steps)
+
+    def clocks():
+        return walked.pop(0) if len(walked) > 1 else walked[0]
+
+    return clocks
+
+
+async def _watched(client, link, seconds: float = 2.0) -> None:
+    "Run the suspend watch until it ends or the time is up."
+    with anyio.move_on_after(seconds):
+        await client._watch_for_suspend(link)
+
+
+def a_client() -> SshClient:
+    "A client that never connects. Only its clock watch is under test."
+    return SshClient("ssh://127.0.0.1/tmp/nowhere.sock")
+
+
+async def test_a_clock_that_keeps_up_never_ends_the_link(monkeypatch):
+    "The ordinary case: both clocks move together, for ever."
+    monkeypatch.setattr(ssh_client, "SUSPEND_POLL", 0.01)
+
+    client = a_client()
+    client._clocks = moving_clocks(
+        [(100.0, 100.0), (101.0, 101.0), (102.0, 102.0), (103.0, 103.0)]
+    )
+    link = Link()
+
+    await _watched(client, link, seconds=0.2)
+
+    assert not link.aborted
+
+
+async def test_a_poll_that_ran_late_is_not_a_sleep(monkeypatch):
+    """
+    A machine under load runs a poll late, and both clocks show it. A
+    gap has to be the difference between them, never the length of one.
+    """
+    monkeypatch.setattr(ssh_client, "SUSPEND_POLL", 0.01)
+
+    client = a_client()
+    # Thirty seconds late, and the loop agrees it was thirty seconds.
+    client._clocks = moving_clocks([(100.0, 100.0), (130.0, 130.0)])
+    link = Link()
+
+    await _watched(client, link, seconds=0.2)
+
+    assert not link.aborted, "a slow poll is not a suspend"
+
+
+async def test_the_world_moving_without_the_loop_ends_the_link(monkeypatch):
+    """
+    What a closed lid looks like from inside the process: the wall
+    clock jumped an hour and the loop's clock barely moved.
+    """
+    monkeypatch.setattr(ssh_client, "SUSPEND_POLL", 0.01)
+
+    client = a_client()
+    client._clocks = moving_clocks([(100.0, 100.0), (3700.0, 101.0)])
+    link = Link()
+
+    await _watched(client, link, seconds=0.2)
+
+    assert link.aborted, "an hour asleep has to end the link"
+
+
+async def test_a_gap_under_the_threshold_is_left_alone(monkeypatch):
+    "Below the threshold nothing happens, so a stepped clock costs nothing."
+    monkeypatch.setattr(ssh_client, "SUSPEND_POLL", 0.01)
+
+    client = a_client()
+    gap = ssh_client.SUSPEND_GAP - 1.0
+    client._clocks = moving_clocks([(100.0, 100.0), (100.0 + gap + 0.01, 100.01)])
+    link = Link()
+
+    await _watched(client, link, seconds=0.2)
+
+    assert not link.aborted
 
 
 # ----------------------------------------------------------------------
@@ -342,6 +448,47 @@ async def test_a_dropped_link_shows_a_notice_and_comes_back(monkeypatch):
         await it.until(lambda: len(it.pymux.connections) == 1, "the second attach")
 
         # And the server lets it go, the way a detach does.
+        for connection in list(it.pymux.connections):
+            connection.detach_and_close()
+        await asyncio.wait_for(it.attach, 10)
+
+
+async def test_a_machine_that_slept_comes_back_without_waiting(monkeypatch):
+    """
+    The whole of Lillecarl/pymux#445, on the real stack.
+
+    **Nothing drops the link here.** The stand-in sshd is untouched and
+    the server is still serving; the only thing that changes is that
+    this client's wall clock jumped an hour while its loop clock did
+    not, which is what a closed lid leaves behind. So the notice and
+    the reattach can only have come from the suspend watch.
+
+    Without it the same moment costs four keepalive intervals of a
+    frozen screen, because the timers that would notice were asleep
+    too.
+    """
+    async with attached(monkeypatch) as it:
+        await it.until(lambda: len(it.pymux.connections) == 1, "the first attach")
+        await it.until(
+            lambda: ALTERNATE_SCREEN in it.terminal.said, "the first frame"
+        )
+
+        # An hour of sleep, from inside the process. Every later read
+        # keeps the same offset, which is a machine that woke up and
+        # whose clocks agree again.
+        real = it.client._clocks
+        it.client._clocks = lambda: (real()[0] + 3600.0, real()[1])
+
+        await it.until(
+            lambda: not it.pymux.connections, "the server to let the old client go"
+        )
+        await it.until(
+            lambda: "lost the server" in it.terminal.said, "the disconnected screen"
+        )
+
+        it.terminal.type("\r")
+        await it.until(lambda: len(it.pymux.connections) == 1, "the second attach")
+
         for connection in list(it.pymux.connections):
             connection.detach_and_close()
         await asyncio.wait_for(it.attach, 10)

@@ -43,6 +43,7 @@ from __future__ import annotations
 import json
 import signal
 import sys
+import time
 from typing import NamedTuple
 from urllib.parse import urlparse
 
@@ -78,8 +79,28 @@ SIZE_INTERVAL = 0.5
 #: notice never comes and there is nothing to retry. asyncssh sends
 #: `keepalive@openssh.com`, which is what `ssh -o ServerAliveInterval`
 #: sends. Lillecarl/pymux#256.
-KEEPALIVE_INTERVAL = 15
+#:
+#: **The wait is four intervals, not three.** asyncssh counts up and
+#: ends the connection when the count passes the maximum, so the
+#: timers at 5, 10, 15 and 20 seconds make the fourth the one that
+#: gives up. Twenty seconds of a frozen screen is the cost of a link
+#: that went, and the keepalive costs one small packet per five
+#: seconds of silence. openssh's own habit is fifteen, which is
+#: chosen for a login session that may sit idle for hours, not for a
+#: screen somebody is looking at. Lillecarl/pymux#445.
+KEEPALIVE_INTERVAL = 5
 KEEPALIVE_MISSES = 3
+
+#: How often to look for a gap between the clocks, in seconds.
+SUSPEND_POLL = 1.0
+
+#: How far the world may move ahead of the loop before this client
+#: calls the link gone, in seconds.
+#:
+#: The number only has to be above the jitter of a poll that is late
+#: under load, and below the shortest sleep worth noticing. A laptop
+#: lid closes for minutes, never for four seconds.
+SUSPEND_GAP = 4.0
 
 #: How often the disconnected screen draws its countdown, in seconds.
 COUNTDOWN_STEP = 1.0
@@ -93,6 +114,15 @@ LEAVE = ("q", "Q", "\x03")
 #: server of that user, found by the same code that binds one. One
 #: command, one line back.
 FIND_COMMAND = "pymux find"
+
+
+def _how_long(seconds: float) -> str:
+    "A sleep, in the largest unit that keeps it a small number."
+    if seconds < 90:
+        return "%d seconds" % (round(seconds),)
+    if seconds < 90 * 60:
+        return "%d minutes" % (round(seconds / 60),)
+    return "%.1f hours" % (seconds / 3600,)
 
 
 class SshTarget(NamedTuple):
@@ -182,6 +212,10 @@ class SshClient(TerminalClient):
         #: the address's path, or the one the listing found.
         self.path = self.target.path
         self._writer = None
+        #: Why this client ended its own link, when it did. Only the
+        #: suspend watch sets it, and only `_attached` reads it.
+        #: Lillecarl/pymux#445.
+        self._slept_through: Exception | None = None
         #: The ports this client was asked to forward. It outlives a
         #: connection on purpose: `_connect` opens the wanted set again
         #: on the new one, so a link that dropped gives the tunnels
@@ -417,6 +451,7 @@ class SshClient(TerminalClient):
         the packets are awaited and one thread cannot do both.
         """
         lost = None
+        self._slept_through = None
 
         async with anyio.create_task_group() as tasks:
 
@@ -441,6 +476,9 @@ class SshClient(TerminalClient):
             tasks.start_soon(self._while_the_link_holds, read_keyboard)
             tasks.start_soon(self._while_the_link_holds, self._watch_signal)
             tasks.start_soon(self._while_the_link_holds, self._watch_size)
+            # It writes no packet, so it needs no guard against a link
+            # that stopped taking them: ending the link is its whole job.
+            tasks.start_soon(self._watch_for_suspend, connection)
 
             try:
                 # Inside the try, because the link can go between the
@@ -479,6 +517,13 @@ class SshClient(TerminalClient):
                 self._restore_modes()
                 self._writer = None
                 connection.close()
+
+        if lost is None and self._slept_through is not None:
+            # The link ended cleanly because this client ended it. Left
+            # alone that reads as a detach, and the panes on the other
+            # machine would be abandoned by the one thing that was
+            # supposed to go back to them. Lillecarl/pymux#445.
+            lost = self._slept_through
 
         return lost
 
@@ -571,6 +616,73 @@ class SshClient(TerminalClient):
             await work(*arguments)
         except BrokenPipeError:
             pass
+
+    def _clocks(self) -> "tuple[float, float]":
+        """
+        The world's clock and the loop's, read together.
+
+        A method so that a test can move one of them without sleeping
+        a machine.
+        """
+        return time.time(), anyio.current_time()
+
+    async def _watch_for_suspend(self, connection) -> None:
+        """
+        End the link when this machine has been asleep.
+
+        **A sleep is invisible to everything else here.** The loop's
+        clock is `time.monotonic`, which on Linux does not run while
+        the machine is suspended, so every timer that would notice a
+        dead link is suspended with it: asyncssh's keepalive resumes
+        counting from where it stopped and takes its full four
+        intervals *after* the lid opens. The person looks at a frozen
+        screen for that whole time, and the panes they are looking at
+        have been reachable for most of it.
+
+        So this watches the one thing a sleep cannot hide: the world
+        moved and the loop did not. It needs no signal, no bus and no
+        platform code, and it is right whichever way a platform
+        chooses. Where the loop's clock keeps running through a sleep
+        there is no gap to find, and there is nothing to fix either --
+        the keepalive timers ran too, so they have already given up by
+        the time anybody looks.
+
+        **A gap ends the link rather than testing it.** A machine that
+        has been asleep has almost always lost its TCP connections,
+        and the two outcomes are not equal: reconnecting a link that
+        was alive costs about a second and the panes are on the other
+        machine anyway, while waiting on a link that is dead costs the
+        twenty seconds the keepalive needs. A clock that was stepped
+        forwards by something other than a sleep pays the same second.
+
+        **A link this client ended reads as end of file either way**,
+        and end of file is how a server says the person detached. So
+        the reason is written down before the link goes, and
+        `_attached` uses it in place of the ending it would otherwise
+        read. `_packets` measured `ConnectionLost` for an abort, but
+        that was the far side aborting; aborting our own gives a clean
+        end here, and a client that trusted the measurement left
+        instead of coming back.
+
+        A reset is what the reason says, because that is what a sleep
+        did to the socket, and `link_may_come_back` retries an
+        `OSError`. Lillecarl/pymux#445.
+        """
+        was_wall, was_loop = self._clocks()
+
+        while True:
+            await anyio.sleep(SUSPEND_POLL)
+
+            wall, loop = self._clocks()
+            asleep = (wall - was_wall) - (loop - was_loop)
+            was_wall, was_loop = wall, loop
+
+            if asleep >= SUSPEND_GAP:
+                self._slept_through = ConnectionResetError(
+                    "This machine was asleep for %s." % (_how_long(asleep),)
+                )
+                connection.abort()
+                return
 
     async def _watch_signal(self) -> None:
         "Report the size when the terminal says it changed."
