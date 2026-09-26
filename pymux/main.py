@@ -841,10 +841,10 @@ class Pymux:
         self.open_url_forward = True
 
         #: How long such a forward outlives its last connection, in
-        #: seconds. Generous on purpose: idle means no *new* connection,
-        #: so a page holding one websocket open reads as idle, and what
-        #: a reap breaks is its next request. Ten minutes is longer than
-        #: a person leaves a tab they are still using.
+        #: seconds. A forward carrying a connection is never idle,
+        #: whatever the clock says, so this measures a page nobody has
+        #: open rather than a page nobody is clicking on. Ten minutes
+        #: leaves room for a tab somebody comes back to.
         self.open_url_forward_idle = 600
 
         self.open_url_shim = False

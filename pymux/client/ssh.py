@@ -559,6 +559,12 @@ class SshClient(TerminalClient):
                 self._set_kitty_flags(0)
                 self._restore_modes()
                 self._writer = None
+                # The listeners are this table's own, so nothing else
+                # closes them. Left open they would accept a browser
+                # and then carry nothing, which is a worse answer than
+                # a refused connection while the link is down. The
+                # wanted set stays, and `_connect` opens it again.
+                self.forwards.close()
                 connection.close()
 
         if lost is None and self._slept_through is not None:

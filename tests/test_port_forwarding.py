@@ -246,6 +246,13 @@ def _free_port() -> int:
         return held.getsockname()[1]
 
 
+#: What a forward with nothing behind it does to a connection. Which
+#: of the three depends on how far it got: refused outright when the
+#: listener is closed, and accepted-then-dropped when the listener is
+#: up but the link under it is not.
+_NOTHING_CAME_BACK = (anyio.BrokenResourceError, anyio.EndOfStream, OSError)
+
+
 async def _spoken_through(port: int, said: bytes = b"hello") -> bytes:
     "Write to a forwarded port, and read what the echo answered."
     async with await anyio.connect_tcp("127.0.0.1", port) as stream:
@@ -342,7 +349,7 @@ async def test_a_refused_local_forward_opens_and_fails_per_connection():
         # The refusal arrives as a reset: asyncssh accepted the
         # connection here, asked for the channel, was told no, and had
         # nothing left to do but drop what it had accepted.
-        with pytest.raises((anyio.BrokenResourceError, anyio.EndOfStream, OSError)):
+        with pytest.raises(_NOTHING_CAME_BACK):
             await _spoken_through(opened.port)
 
         forwards.close()
@@ -364,8 +371,12 @@ async def test_the_wanted_set_comes_back_on_a_new_connection():
             was = await forwards.add(first, wanted)
             assert was.error == ""
 
-        # The link is gone, and with it the listener.
-        with pytest.raises(OSError):
+        # The link is gone, so nothing comes back through the forward.
+        # `SshClient._attached` closes the listeners as an attachment
+        # ends, which refuses a browser outright; this test closes the
+        # connection under the table, where the socket is still there
+        # and has nowhere to carry to.
+        with pytest.raises(_NOTHING_CAME_BACK):
             await _spoken_through(was.port)
 
         async with ssh_connection() as second:
@@ -432,6 +443,11 @@ async def test_a_forward_that_could_not_come_back_says_why():
 
         async with ssh_connection() as first:
             assert (await forwards.add(first, wanted)).error == ""
+
+        # What `SshClient._attached` does as the attachment ends. The
+        # listeners are this table's own, so the link going does not
+        # free the port by itself.
+        forwards.close()
 
         # Somebody else took it while the link was down.
         squatter = await anyio.create_tcp_listener(
@@ -666,6 +682,16 @@ async def test_using_a_url_forward_puts_off_the_reaping():
 
             stands_at[0] += 30
             assert await _spoken_through(opened.port) == b"HELLO"
+            # The close arrives after the read, and it is activity too.
+            await once(
+                lambda: forwards._live.get(
+                    (Direction.LOCAL, "127.0.0.1", opened.port)
+                )
+                == 0
+                or None,
+                2.0,
+                "The connection never came back to zero.",
+            )
 
             stands_at[0] += 40  # 70 since it opened, 40 since it was used.
             assert forwards.reap() == []
@@ -673,6 +699,154 @@ async def test_using_a_url_forward_puts_off_the_reaping():
 
             stands_at[0] += 30
             assert len(forwards.reap()) == 1
+
+        forwards.close()
+
+
+async def test_a_forward_carrying_a_connection_is_never_idle():
+    """
+    **The case an accept handler alone cannot see.** A page holding a
+    websocket open sends nothing for minutes, and a tab somebody closed
+    sends nothing either. The open connection is the whole difference,
+    so the clock must not run while one is there.
+    """
+    async with echoing() as echo_port, ssh_connection() as connection:
+        forwards = Forwards()
+
+        with _clock(forwards) as stands_at:
+            opened = await forwards.add(
+                connection,
+                Forward(
+                    Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
+                ),
+                idle=60,
+            )
+            assert opened.error == ""
+
+            async with await anyio.connect_tcp("127.0.0.1", opened.port) as held:
+                await held.send(b"hello")
+                assert await held.receive() == b"HELLO"
+
+                stands_at[0] += 60 * 60
+                assert forwards.reap() == [], "A forward in use was reaped."
+                assert len(forwards) == 1
+
+            # The socket is closed, so the clock may run again.
+            await once(
+                lambda: forwards._live.get(
+                    (Direction.LOCAL, "127.0.0.1", opened.port)
+                )
+                == 0
+                or None,
+                2.0,
+                "The end of the connection was never counted.",
+            )
+            stands_at[0] += 61
+            assert len(forwards.reap()) == 1
+
+        assert len(forwards) == 0
+
+
+async def test_the_idle_clock_starts_when_the_last_connection_ends():
+    "A connection that ends is activity, so what follows it is the idle time."
+    async with echoing() as echo_port, ssh_connection() as connection:
+        forwards = Forwards()
+
+        with _clock(forwards) as stands_at:
+            opened = await forwards.add(
+                connection,
+                Forward(
+                    Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
+                ),
+                idle=60,
+            )
+
+            stands_at[0] += 600  # Long past the idle time, and unused.
+
+            async with await anyio.connect_tcp("127.0.0.1", opened.port) as held:
+                await held.send(b"hello")
+                assert await held.receive() == b"HELLO"
+
+            await once(
+                lambda: forwards._live.get(
+                    (Direction.LOCAL, "127.0.0.1", opened.port)
+                )
+                == 0
+                or None,
+                2.0,
+                "The end of a connection was never counted.",
+            )
+
+            # The use just now resets it, although the forward opened
+            # ten minutes ago on this clock.
+            assert forwards.reap() == []
+
+            stands_at[0] += 61
+            assert len(forwards.reap()) == 1
+
+
+async def test_bytes_through_a_forward_are_use_of_it():
+    """
+    The second signal, and the one that matters for a connection that
+    stays open: traffic on it is use, so the idle clock reads from the
+    last byte and not from when the connection began.
+    """
+    async with echoing() as echo_port, ssh_connection() as connection:
+        forwards = Forwards()
+
+        with _clock(forwards) as stands_at:
+            opened = await forwards.add(
+                connection,
+                Forward(
+                    Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
+                ),
+                idle=60,
+            )
+            where = (Direction.LOCAL, "127.0.0.1", opened.port)
+
+            async with await anyio.connect_tcp("127.0.0.1", opened.port) as held:
+                # Long after the connection began, so a stamp at this
+                # time can only have come from the bytes.
+                stands_at[0] += 5000
+                await held.send(b"hello")
+                assert await held.receive() == b"HELLO"
+
+                await once(
+                    lambda: forwards._used.get(where) == stands_at[0] or None,
+                    2.0,
+                    "Bytes through the forward were not counted as use.",
+                )
+
+        forwards.close()
+
+
+async def test_a_refused_channel_does_not_count_its_end_twice():
+    """
+    **asyncssh calls `connection_lost` by hand when the far side
+    refuses, and asyncio calls it again.** Counting both would put the
+    live count below zero, and a negative count reads as "in use" for
+    ever after -- the forward would never be reaped again.
+    """
+    async with echoing() as echo_port, ssh_connection(
+        allow_forward=False
+    ) as connection:
+        forwards = Forwards()
+        opened = await forwards.add(
+            connection,
+            Forward(Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port),
+            idle=60,
+        )
+        where = (Direction.LOCAL, "127.0.0.1", opened.port)
+
+        with pytest.raises(_NOTHING_CAME_BACK):
+            await _spoken_through(opened.port)
+
+        await once(
+            lambda: forwards._live.get(where) == 0 or None,
+            2.0,
+            "The refused connection never came back to zero: %r"
+            % (forwards._live,),
+        )
 
         forwards.close()
 
@@ -1009,7 +1183,7 @@ async def test_connecting_again_brings_the_forwards_back():
             assert was.error == ""
 
             connection.close()
-            with pytest.raises(OSError):
+            with pytest.raises(_NOTHING_CAME_BACK):
                 await _spoken_through(was.port)
 
             # What `_link_again` does, and the only line under test.

@@ -338,9 +338,9 @@ async def test_openssh_takes_the_unix_channel_the_client_lives_on(sshd):
 
 async def test_a_forward_comes_back_on_a_new_openssh_connection(sshd):
     """
-    The reconnect promise, against openssh rather than a stand-in. A
-    listener dies with the connection that made it, and the wanted set
-    opens again on the next one.
+    The reconnect promise, against openssh rather than a stand-in. The
+    wanted set opens again on the next connection, and the port it had
+    is free for it to take.
     """
     async with anyio.create_task_group() as tasks:
         echo_port = await _echoing(tasks)
@@ -353,8 +353,14 @@ async def test_a_forward_comes_back_on_a_new_openssh_connection(sshd):
             was = await forwards.add(first, wanted)
             assert was.error == "", was.error
 
-        with pytest.raises(OSError):
+        # The listeners are the table's own, so the link going does not
+        # close them. `SshClient._attached` does that as an attachment
+        # ends; here the connection is closed under the table, and the
+        # socket is left with nowhere to carry to.
+        with pytest.raises((anyio.BrokenResourceError, anyio.EndOfStream, OSError)):
             await _spoken_through(was.port)
+
+        forwards.close()
 
         async with _connect_to(sshd) as second:
             await forwards.reopen(second)

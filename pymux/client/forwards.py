@@ -19,7 +19,7 @@ cannot do this: `~C` and its forwards go with the link.
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, Callable, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 from pymux.forwarding import ANY_PORT, Direction, Forward
 
@@ -103,9 +103,13 @@ class Forwards:
         self._open: dict[Where, SSHListener] = {}
         self._ports: dict[Where, int] = {}
         self._errors: dict[Where, str] = {}
-        #: When each forward last carried a connection. Only a forward
-        #: with an idle time has one, and only that one is reaped.
+        #: When each forward last did anything: a connection arrived,
+        #: one ended, or bytes went through it.
         self._used: dict[Where, float] = {}
+        #: How many connections each forward is carrying right now. A
+        #: forward carrying one is busy however quiet it is, which is
+        #: what a held-open websocket looks like.
+        self._live: dict[Where, int] = {}
 
     def __len__(self) -> int:
         return len(self._wanted)
@@ -170,8 +174,26 @@ class Forwards:
         self._ports.pop(where, None)
         self._errors.pop(where, None)
         self._used.pop(where, None)
+        self._live.pop(where, None)
         wanted = self._wanted.pop(where, None)
         return None if wanted is None else wanted.forward
+
+    # ------------------------------------------------------------------
+    # What the listeners report back, from asyncssh's own callbacks.
+
+    def _began(self, where: Where) -> None:
+        self._live[where] = self._live.get(where, 0) + 1
+        self._used[where] = self._now()
+
+    def _ended(self, where: Where) -> None:
+        # Never below zero. A listener that was replaced can still see
+        # the end of a connection it opened.
+        self._live[where] = max(0, self._live.get(where, 0) - 1)
+        self._used[where] = self._now()
+
+    def _carried(self, where: Where) -> None:
+        "Bytes went through it, which is use even with nothing opening."
+        self._used[where] = self._now()
 
     def reap(self, now: float | None = None) -> list[Forward]:
         """
@@ -180,14 +202,15 @@ class Forwards:
         Only a forward with an idle time, which is one pymux opened for
         a URL. A person's forward is never reaped: they asked for it.
 
-        **Idle means no new connection**, and nothing more. asyncssh
-        tells this table when a connection arrives and never when one
-        ends, so a single long-lived connection -- a websocket that a
-        page holds open -- reads as idle while it carries bytes.
-        Closing the listener does not cut it: `SSHListener.close` stops
-        new connections and leaves open ones alone. What breaks is the
-        page's *next* request, and opening the URL again brings the
-        forward back. That is why the default idle time is generous.
+        **A forward carrying a connection is never idle, whatever the
+        clock says.** That is the case the count is for: a page holding
+        a websocket open sends nothing for minutes at a time, and the
+        number of open connections is the only thing that separates it
+        from a tab somebody closed. `_Counting` keeps the number, out of
+        asyncssh's own callbacks.
+
+        So the clock starts when the last connection ends, and measures
+        a forward that nothing is using rather than one that is quiet.
         Lillecarl/pymux#437.
         """
         if now is None:
@@ -196,6 +219,8 @@ class Forwards:
         gone = []
         for where, wanted in list(self._wanted.items()):
             if wanted.idle is None:
+                continue
+            if self._live.get(where, 0):
                 continue
             if now - self._used.get(where, now) < wanted.idle:
                 continue
@@ -235,7 +260,13 @@ class Forwards:
         self.reap()
 
         was = dict(self._ports)
-        self._open.clear()
+        # **Close them, never just forget them.** The listeners belong
+        # to this table: `_listen` supplies its own protocol factory,
+        # so asyncssh does not register them against the connection and
+        # does not close them when it goes. A forgotten listener still
+        # holds its port, and the rebind below would fail on the very
+        # port it is trying to restore.
+        self.close()
 
         moved = []
         lost = []
@@ -278,12 +309,11 @@ class Forwards:
         if wanted.may_move and forward.listen_port != ANY_PORT:
             tries.append(forward._replace(listen_port=ANY_PORT))
 
-        accepted = self._accept(where) if wanted.may_move else None
         error = ""
 
         for attempt in tries:
             try:
-                listener = await _listen(connection, attempt, accepted)
+                listener = await self._listen(connection, attempt, where)
             except Exception as raised:
                 error = _why(raised)
                 continue
@@ -298,27 +328,72 @@ class Forwards:
             # that reports nothing.
             self._ports[where] = listener.get_port() or attempt.listen_port
             self._used[where] = self._now()
+            # A new listener carries nothing yet. The old one's
+            # connections are gone with it, and a late callback from
+            # one of them cannot take this below zero.
+            self._live[where] = 0
             return self._one(where)
 
         self._errors[where] = error
         self._ports[where] = forward.listen_port
         return Opened(forward, forward.listen_port, error)
 
-    def _accept(self, where: Where) -> Callable[[str, int], bool]:
+    async def _listen(
+        self, connection: SSHClientConnection, forward: Forward, where: Where
+    ) -> SSHListener:
         """
-        What marks a forward as used, for the idle time to measure.
+        Ask asyncssh for the listener of this forward.
 
-        asyncssh calls this per incoming connection and takes the
-        answer as permission, so it has to say yes. Only a local
-        forward has one: `forward_remote_port` takes no accept handler,
-        and a URL forward is always local.
+        The two arms sit where openssh's two flags sit: a local forward
+        listens on this machine and the far sshd opens the destination,
+        a remote one asks the far sshd to listen and opens the
+        destination from here.
+
+        **The local arm is `forward_local_port` taken apart.** That
+        method offers one hook, `accept_handler`, which fires when a
+        connection arrives and never when one ends -- so a table built
+        on it can only measure silence, not use. Everything below is
+        what `forward_local_port` does, with the protocol factory
+        supplied rather than hardcoded, so that `_Counting` sees all
+        three callbacks. asyncssh still carries every byte, and its
+        flow control and half-close handling are untouched.
+
+        A remote forward gets none of this: `forward_remote_port` takes
+        no factory, the far sshd owns the listener, and a remote
+        forward is never one pymux opened for itself.
         """
+        if forward.direction is Direction.REMOTE:
+            return await connection.forward_remote_port(
+                forward.listen_host,
+                forward.listen_port,
+                forward.dest_host,
+                forward.dest_port,
+            )
 
-        def accepted(_host: str, _port: int) -> bool:
-            self._used[where] = self._now()
-            return True
+        # asyncio, deliberately: asyncssh is an asyncio library and
+        # this is the loop it is already running on.
+        import asyncio
 
-        return accepted
+        from asyncssh.listener import create_tcp_local_listener
+
+        async def tunnel(session_factory, orig_host: str, orig_port: int):
+            return await connection.create_connection(
+                session_factory,
+                forward.dest_host,
+                forward.dest_port,
+                orig_host,
+                orig_port,
+            )
+
+        counting = _counting_forwarder()
+
+        return await create_tcp_local_listener(
+            connection,
+            asyncio.get_running_loop(),
+            lambda: counting(connection, tunnel, self, where),
+            forward.listen_host,
+            forward.listen_port,
+        )
 
     def _close_one(self, where: Where) -> None:
         listener = self._open.pop(where, None)
@@ -348,34 +423,67 @@ def _where(forward: Forward) -> Where:
     return (forward.direction, forward.listen_host, forward.listen_port)
 
 
-async def _listen(
-    connection: SSHClientConnection,
-    forward: Forward,
-    accepted: Callable[[str, int], bool] | None = None,
-) -> SSHListener:
-    """
-    Ask asyncssh for the listener of this forward.
+#: Built once, on the first local forward. See `_counting_forwarder`.
+_counting: type | None = None
 
-    The two calls sit where openssh's two flags sit: `forward_local_port`
-    listens on this machine and the far sshd opens the destination,
-    `forward_remote_port` asks the far sshd to listen and opens the
-    destination from here.
-    """
-    if forward.direction is Direction.LOCAL:
-        return await connection.forward_local_port(
-            forward.listen_host,
-            forward.listen_port,
-            forward.dest_host,
-            forward.dest_port,
-            accepted,
-        )
 
-    return await connection.forward_remote_port(
-        forward.listen_host,
-        forward.listen_port,
-        forward.dest_host,
-        forward.dest_port,
-    )
+def _counting_forwarder() -> type:
+    """
+    asyncssh's own local forwarder, with its three callbacks counted.
+
+    **This reaches one name asyncssh does not export**, and the reason
+    is worth the line. Read in asyncssh 2.24.0: `forward_local_port`
+    builds its protocol factory inside `create_tcp_forward_listener`
+    and offers no way to replace it, so the only public signal a
+    forward gives is `accept_handler` -- a connection arrived. Nothing
+    says one ended. The alternative to subclassing is to carry the
+    bytes ourselves, which means reimplementing asyncssh's flow control
+    and its half-close handling; this keeps both and adds three
+    counters. A version that moves the name breaks here at import,
+    loudly, which is the failure worth having.
+
+    Built on first use, so that importing this module still costs no
+    asyncssh. Lillecarl/pymux#437.
+    """
+    global _counting
+
+    if _counting is not None:
+        return _counting
+
+    from asyncssh.forward import SSHLocalPortForwarder
+
+    class _Counting(SSHLocalPortForwarder):
+        "One forwarded connection, telling the table what it does."
+
+        def __init__(self, connection, coro, table: "Forwards", where: Where):
+            super().__init__(connection, coro)
+            self._table = table
+            self._where = where
+            self._counted = False
+
+        def connection_made(self, transport) -> None:
+            self._counted = True
+            self._table._began(self._where)
+            super().connection_made(transport)
+
+        def connection_lost(self, error) -> None:
+            # **asyncssh calls this twice when the far side refuses the
+            # channel.** `SSHLocalForwarder._forward` calls it by hand
+            # on `ChannelOpenError`, and asyncio calls it again when
+            # the transport really closes. Counting both would put the
+            # live count below zero and reap a forward somebody is
+            # using.
+            if self._counted:
+                self._counted = False
+                self._table._ended(self._where)
+            super().connection_lost(error)
+
+        def data_received(self, data, datatype=None) -> None:
+            self._table._carried(self._where)
+            super().data_received(data, datatype)
+
+    _counting = _Counting
+    return _Counting
 
 
 def _why(error: Exception) -> str:

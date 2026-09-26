@@ -685,9 +685,9 @@ ALL_OPTIONS = {
     # first. Lillecarl/pymux#437.
     "open-url-forward": OnOffOption("open_url_forward"),
     # How long such a forward outlives its last connection, in seconds.
-    # Idle means no *new* connection, so a page holding one websocket
-    # open reads as idle; what a reap breaks is its next request, and
-    # opening the URL again brings the forward back.
+    # A forward carrying a connection is never idle, however quiet it
+    # is, so this measures a page nobody has open. Opening the URL
+    # again brings a reaped forward back.
     "open-url-forward-idle": PositiveIntOption(
         "open_url_forward_idle", [60, 300, 600, 3600]
     ),
