@@ -56,6 +56,14 @@
   # program writes the way that measures it: a screenful at a steady
   # rate, forever. A writer in a `python -c` loop does not reproduce
   # the fault these caught. Lillecarl/pymux#253.
+  # A real sshd, for the one suite that does not want a stand-in. The
+  # `ssh://` client is tested against asyncssh on both sides
+  # everywhere else, which cannot say whether openssh agrees.
+  # Lillecarl/pymux#436.
+  openssh,
+  # What lets sshd accept the sandbox's user: a passwd database in
+  # front of the one whose shell is `/noshell`.
+  nss_wrapper,
   cmatrix,
   tty-clock,
   nyancat,
@@ -731,6 +739,35 @@ in
       }
       ''
         python tests/measure_latency.py
+      '';
+
+  # The `ssh://` client against a real openssh sshd: the unix socket
+  # channel every attach rests on, and the two forward directions.
+  #
+  # A suite of its own rather than part of `unit`, because it starts a
+  # daemon. `PYMUX_SSHD` is an absolute path on purpose -- sshd refuses
+  # to start when it was found on PATH, and the message says so only
+  # once you capture its stderr. Lillecarl/pymux#436.
+  openssh-interop =
+    runInSandbox
+      {
+        name = "pymux-openssh";
+        # openssh itself for `ssh-keygen`, which makes the host key and
+        # the one authorised key the daemon trusts.
+        inputs = [ openssh ];
+        env = {
+          PYMUX_SSHD = "${openssh}/bin/sshd";
+          # sshd refuses a user whose shell is not a real file, and the
+          # sandbox gives every uid `/noshell`. There is no option to
+          # turn that check off, so the suite puts a passwd database in
+          # front of it.
+          PYMUX_NSS_WRAPPER = "${nss_wrapper}/lib/libnss_wrapper.so";
+          PYMUX_LOGIN_SHELL = runtimeShell;
+        };
+      }
+      ''
+        python -m pytest tests/test_openssh_interop.py -q -p no:cacheprovider \
+          -o faulthandler_timeout=${toString hangIsSeconds}
       '';
 
   # TEMPORARY scratch measurement for Lillecarl/pymux#258. Not a
