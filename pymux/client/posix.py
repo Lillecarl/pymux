@@ -9,6 +9,7 @@ import tempfile
 from select import select
 
 from prompt_toolkit.input.vt100 import raw_mode
+from pymux.protocol import Packet
 
 from ..pipes.posix import socket_directory
 from .terminal import TerminalClient
@@ -49,7 +50,7 @@ class PosixClient(TerminalClient):
             the path. `None`, the default, waits the way the attach
             always has.
         """
-        self._send_packet({"cmd": "run-command", "data": command, "pane_id": pane_id})
+        self._send_packet({"cmd": Packet.RUN_COMMAND, "data": command, "pane_id": pane_id})
         if timeout is not None:
             # After the send, which asked for blocking again: the read
             # is the side that needs the patience.
@@ -78,13 +79,13 @@ class PosixClient(TerminalClient):
 
                 packet = json.loads(packet_data.decode("utf-8"))
 
-                if packet["cmd"] == "out":
+                if packet["cmd"] == Packet.OUT:
                     sys.stdout.write(packet["data"])
                     sys.stdout.flush()
-                elif packet["cmd"] == "err":
+                elif packet["cmd"] == Packet.ERR:
                     sys.stderr.write(packet["data"])
                     sys.stderr.flush()
-                elif packet["cmd"] == "exit":
+                elif packet["cmd"] == Packet.EXIT:
                     exit_code = packet["code"]
 
         return exit_code

@@ -57,6 +57,7 @@ from .key_spelling import why_pane_cannot_read
 from .layout import Justify, LayoutManager, change_pane_size
 from . import log
 from .log import logger
+from pymux.protocol import Packet
 from .notifications import NotificationRoutes
 from .options import (
     ALL_CLIENT_OPTIONS,
@@ -2138,7 +2139,7 @@ class Pymux:
             return
 
         for client_state in clients:
-            client_state.connection._send_packet({"cmd": "open", "data": url})
+            client_state.connection._send_packet({"cmd": Packet.OPEN, "data": url})
             client_state.message = "Opened %s in the browser of this machine." % (url,)
 
     def forwarding_client(self) -> "Asker":
@@ -2736,7 +2737,7 @@ class Pymux:
         try:
             for connection in self.connections:
                 connection._send_packet(
-                    {"cmd": "kitty-keyboard", "data": {"flags": flags}}
+                    {"cmd": Packet.KITTY_KEYBOARD, "data": {"flags": flags}}
                 )
         except Exception:
             logger.exception("Sending kitty keyboard flags failed.")

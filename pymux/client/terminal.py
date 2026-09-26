@@ -26,6 +26,7 @@ from pymux.colors import COLOR_QUERIES, TRUECOLOR_PROBE
 from pymux.config import client_options_in, find_config
 from pymux.graphics import CELL_SIZE_QUERY
 from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
+from pymux.protocol import Mode, Packet
 from pymux.utils import nonblocking
 
 from .base import Client
@@ -152,7 +153,7 @@ class TerminalClient(Client):
         self._send_size()
         self._send_packet(
             {
-                "cmd": "start-gui",
+                "cmd": Packet.START_GUI,
                 "detach-others": detach_other_clients,
                 # `-x`: the other clients of the session leave, and the
                 # terminals they were in close. Lillecarl/pymux#347.
@@ -203,7 +204,7 @@ class TerminalClient(Client):
         )
 
         os.write(sys.stdout.fileno(), DETECTION_QUERIES)
-        self._send_packet({"cmd": "kitty-detect"})
+        self._send_packet({"cmd": Packet.KITTY_DETECT})
 
     def _restore_modes(self) -> None:
         """
@@ -259,11 +260,11 @@ class TerminalClient(Client):
         """
         packet = json.loads(data_buffer.decode("utf-8"))
 
-        if packet["cmd"] == "out":
+        if packet["cmd"] == Packet.OUT:
             # Call os.write manually. In Python2.6, sys.stdout.write doesn't use UTF-8.
             os.write(sys.stdout.fileno(), packet["data"].encode("utf-8"))
 
-        elif packet["cmd"] == "exit":
+        elif packet["cmd"] == Packet.EXIT:
             # The server is about to close this connection, and says
             # what this client leaves with. The read loop ends on the
             # close itself.
@@ -275,27 +276,27 @@ class TerminalClient(Client):
             if packet.get("hang-up"):
                 self.hang_up_asked = True
 
-        elif packet["cmd"] == "ping":
+        elif packet["cmd"] == Packet.PING:
             # The server is asking whether anybody is still here. An
             # answer costs one packet and keeps this client's place;
             # silence is what tells the server the person is gone.
             # Lillecarl/pymux#446.
-            self._send_packet({"cmd": "pong"})
+            self._send_packet({"cmd": Packet.PONG})
 
-        elif packet["cmd"] == "suspend":
+        elif packet["cmd"] == Packet.SUSPEND:
             # Suspend client process to background.
             if hasattr(signal, "SIGTSTP"):
                 os.kill(os.getpid(), signal.SIGTSTP)
 
-        elif packet["cmd"] == "open":
+        elif packet["cmd"] == Packet.OPEN:
             # The server asks this machine, not the machine of the
             # server, to open the URL. A machine with no browser says
             # so back, where the request was made visible.
             url = packet["data"]
             if not self._open_url(url):
-                self._send_packet({"cmd": "open-failed", "data": url})
+                self._send_packet({"cmd": Packet.OPEN_FAILED, "data": url})
 
-        elif packet["cmd"] == "kitty-keyboard":
+        elif packet["cmd"] == Packet.KITTY_KEYBOARD:
             # Kitty keyboard protocol instructions for the outer
             # terminal.
             data = packet["data"]
@@ -304,21 +305,21 @@ class TerminalClient(Client):
             if "flags" in data:
                 self._set_kitty_flags(data["flags"])
 
-        elif packet["cmd"] == "mode":
+        elif packet["cmd"] == Packet.MODE:
             # Set terminal to raw/cooked.
             action = packet["data"]
 
-            if action == "raw":
+            if action == Mode.RAW:
                 cm = raw_mode(sys.stdin.fileno())
                 cm.__enter__()
                 self._mode_context_managers.append(cm)
 
-            elif action == "cooked":
+            elif action == Mode.COOKED:
                 cm = cooked_mode(sys.stdin.fileno())
                 cm.__enter__()
                 self._mode_context_managers.append(cm)
 
-            elif action == "restore" and self._mode_context_managers:
+            elif action == Mode.RESTORE and self._mode_context_managers:
                 cm = self._mode_context_managers.pop()
                 cm.__exit__()
 
@@ -419,7 +420,7 @@ class TerminalClient(Client):
         for i in range(0, len(data), step):
             self._send_packet(
                 {
-                    "cmd": "in",
+                    "cmd": Packet.IN,
                     "data": data[i : i + step],
                 }
             )
@@ -433,4 +434,4 @@ class TerminalClient(Client):
     def _send_size(self):
         "Report terminal size to server."
         rows, cols = self.size()
-        self._send_packet({"cmd": "size", "data": [rows, cols]})
+        self._send_packet({"cmd": Packet.SIZE, "data": [rows, cols]})

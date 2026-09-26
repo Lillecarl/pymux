@@ -26,6 +26,7 @@ from .enums import Woke
 from .graphics import ClientGraphics
 from .keys import KittyVt100Parser
 from .log import logger
+from pymux.protocol import Mode, Packet
 from .nearest import NEAREST, nearest_theme, wanted_from
 from .options import ExtendedKeys, SetOptionError
 from .pipes import BrokenPipeError
@@ -435,7 +436,7 @@ class ServerConnection:
         self._apply_color_depth()
         self._send_packet(
             {
-                "cmd": "kitty-keyboard",
+                "cmd": Packet.KITTY_KEYBOARD,
                 "data": {"supported": self.keyboard_is_supported()},
             }
         )
@@ -445,7 +446,7 @@ class ServerConnection:
         # the value settled would otherwise never hear it.)
         self._send_packet(
             {
-                "cmd": "kitty-keyboard",
+                "cmd": Packet.KITTY_KEYBOARD,
                 "data": {"flags": self.pymux.keyboard_flags_for_client()},
             }
         )
@@ -543,29 +544,29 @@ class ServerConnection:
             return
 
         # Handle commands.
-        if packet["cmd"] == "run-command":
+        if packet["cmd"] == Packet.RUN_COMMAND:
             # Handle this in a task. The command handler can produce output
             # that has to be sent back to the client.
             self._spawn(self._run_command(packet))
             return
 
         # Handle stdin.
-        elif packet["cmd"] == "in":
+        elif packet["cmd"] == Packet.IN:
             self._pipeinput.send_text(packet["data"])
 
         # The client queried its terminal for kitty keyboard protocol
         # support. (The replies come back as input on this connection.)
-        elif packet["cmd"] == "kitty-detect":
+        elif packet["cmd"] == Packet.KITTY_DETECT:
             self._kitty_detection_pending = True
 
         # Set size. (The client reports the size.)
-        elif packet["cmd"] == "size":
+        elif packet["cmd"] == Packet.SIZE:
             rows, columns = packet["data"]
             self.size = Size(rows=rows, columns=columns)
             self.pymux.invalidate(Woke.CLIENT_RESIZED)
 
         # Start GUI. (Create CommandLineInterface front-end for pymux.)
-        elif packet["cmd"] == "start-gui":
+        elif packet["cmd"] == Packet.START_GUI:
             if not self.may_attach:
                 self._spawn(self._refuse_the_attach())
                 return
@@ -617,7 +618,7 @@ class ServerConnection:
         # A URL that the client of this connection could not open. The
         # request went out as a status line here, so the answer goes
         # there too, and it names the URL to copy.
-        elif packet["cmd"] == "open-failed":
+        elif packet["cmd"] == Packet.OPEN_FAILED:
             if self.client_state is not None:
                 self.client_state.message = (
                     "Could not open %s in a browser on this machine."
@@ -630,10 +631,10 @@ class ServerConnection:
         # a listener is really open. Lillecarl/pymux#436.
         # The client is still there. Any answer clears the count, so a
         # client that is merely slow keeps its place.
-        elif packet["cmd"] == "pong":
+        elif packet["cmd"] == Packet.PONG:
             self._unanswered = 0
 
-        elif packet["cmd"] == "forwards":
+        elif packet["cmd"] == Packet.FORWARDS:
             reported = packet.get("data") or []
             said = packet.get("message")
 
@@ -755,11 +756,11 @@ class ServerConnection:
         closing cancels that scope: the reason the client came would
         reach it only if the cancel lost the race.
         """
-        await self._write_packet({"cmd": "out", "data": CANNOT_ATTACH})
+        await self._write_packet({"cmd": Packet.OUT, "data": CANNOT_ATTACH})
         # And a code to leave with. A client that attached reads this
         # too now, so a script hears the refusal rather than reading a
         # zero and calling it attached. Lillecarl/pymux#332.
-        await self._write_packet({"cmd": "exit", "code": 1})
+        await self._write_packet({"cmd": Packet.EXIT, "code": 1})
 
         logger.info("A client asked to attach to a server that serves one terminal.")
         self.detach_and_close()
@@ -819,14 +820,14 @@ class ServerConnection:
                 try:
                     if output:
                         await self._write_packet(
-                            {"cmd": "out", "data": "\n".join(output) + "\n"}
+                            {"cmd": Packet.OUT, "data": "\n".join(output) + "\n"}
                         )
                     if errors:
                         await self._write_packet(
-                            {"cmd": "err", "data": "\n".join(errors) + "\n"}
+                            {"cmd": Packet.ERR, "data": "\n".join(errors) + "\n"}
                         )
                     await self._write_packet(
-                        {"cmd": "exit", "code": 1 if errors else 0}
+                        {"cmd": Packet.EXIT, "code": 1 if errors else 0}
                     )
                 except BrokenPipeError:
                     pass
@@ -955,7 +956,7 @@ class ServerConnection:
         """
         Ask the client to suspend itself. (Like, when Ctrl-Z is pressed.)
         """
-        self._send_packet({"cmd": "suspend"})
+        self._send_packet({"cmd": Packet.SUSPEND})
 
     @property
     def name(self) -> str:
@@ -1021,7 +1022,7 @@ class ServerConnection:
                 return
 
             self._unanswered += 1
-            await self._write_packet({"cmd": "ping"})
+            await self._write_packet({"cmd": Packet.PING})
 
     def detach_and_close(self, hang_up: bool = False) -> None:
         """
@@ -1049,7 +1050,7 @@ class ServerConnection:
             return
 
         async def hang_up_and_close() -> None:
-            await self._write_packet({"cmd": "exit", "code": 0, "hang-up": True})
+            await self._write_packet({"cmd": Packet.EXIT, "code": 0, "hang-up": True})
             self._close_connection()
 
         self._spawn(hang_up_and_close())
@@ -1079,7 +1080,7 @@ class _SocketStdout:
         if self.counters is not None:
             self.counters.frame_went_out(len(written))
 
-        self.send_packet({"cmd": "out", "data": written})
+        self.send_packet({"cmd": Packet.OUT, "data": written})
         self._buffer = []
 
     def isatty(self) -> bool:
@@ -1179,20 +1180,20 @@ class _ClientInput:
     # Implement raw/cooked mode by sending this to the attached client.
 
     def raw_mode(self) -> ContextManager[None]:
-        return self._create_context_manager("raw")
+        return self._create_context_manager(Mode.RAW)
 
     def cooked_mode(self) -> ContextManager[None]:
-        return self._create_context_manager("cooked")
+        return self._create_context_manager(Mode.COOKED)
 
-    def _create_context_manager(self, mode: str) -> ContextManager[None]:
+    def _create_context_manager(self, mode: Mode) -> ContextManager[None]:
         "Create a context manager that sends 'mode' commands to the client."
 
         class mode_context_manager:
             def __enter__(*a: object) -> None:
-                self.send_packet({"cmd": "mode", "data": mode})
+                self.send_packet({"cmd": Packet.MODE, "data": mode})
 
             def __exit__(*a: object) -> None:
-                self.send_packet({"cmd": "mode", "data": "restore"})
+                self.send_packet({"cmd": Packet.MODE, "data": Mode.RESTORE})
 
         return mode_context_manager()
 

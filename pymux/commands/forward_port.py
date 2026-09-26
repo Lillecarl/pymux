@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException, add_command
 from pymux.forwarding import BadForward, Direction, parse_forward
+from pymux.protocol import Packet
 
 
 def forward_port(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -70,7 +71,7 @@ def forward_port(pymux: "Pymux", args: argparse.Namespace) -> None:
     pymux.forward_through(
         asker.client_state,
         {
-            "cmd": "forward",
+            "cmd": Packet.FORWARD,
             "direction": str(forward.direction),
             "listen_host": forward.listen_host,
             "listen_port": forward.listen_port,

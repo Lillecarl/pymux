@@ -10,6 +10,7 @@ import anyio
 from prompt_toolkit.input.win32 import Win32Input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.win32 import Win32Output
+from pymux.protocol import Packet
 from prompt_toolkit.win32_types import STD_OUTPUT_HANDLE
 
 from ..config import client_options_in, find_config
@@ -55,7 +56,7 @@ class WindowsClient(Client):
             self._send_size()
             self._send_packet(
                 {
-                    "cmd": "start-gui",
+                    "cmd": Packet.START_GUI,
                     "detach-others": detach_other_clients,
                     # Lillecarl/pymux#347, as `client/terminal.py` says.
                     "hang-up-others": self.hang_up_others,
@@ -111,7 +112,7 @@ class WindowsClient(Client):
         """
         packet = json.loads(data_buffer)
 
-        if packet["cmd"] == "out":
+        if packet["cmd"] == Packet.OUT:
             # Call os.write manually. In Python2.6, sys.stdout.write doesn't use UTF-8.
             original_mode = DWORD(0)
             windll.kernel32.GetConsoleMode(self._hconsole, byref(original_mode))
@@ -126,7 +127,7 @@ class WindowsClient(Client):
             finally:
                 windll.kernel32.SetConsoleMode(self._hconsole, original_mode)
 
-        elif packet["cmd"] == "exit":
+        elif packet["cmd"] == Packet.EXIT:
             # What this client leaves with. Lillecarl/pymux#332, as
             # `client/terminal.py` says.
             self.exit_code = packet["code"]
@@ -135,11 +136,11 @@ class WindowsClient(Client):
             if packet.get("hang-up"):
                 self.hang_up_asked = True
 
-        elif packet["cmd"] == "suspend":
+        elif packet["cmd"] == Packet.SUSPEND:
             # Suspend client process to background.
             pass
 
-        elif packet["cmd"] == "mode":
+        elif packet["cmd"] == Packet.MODE:
             pass
 
             # # Set terminal to raw/cooked.
@@ -164,7 +165,7 @@ class WindowsClient(Client):
         if keys:
             self._send_packet(
                 {
-                    "cmd": "in",
+                    "cmd": Packet.IN,
                     "data": "".join(key_press.data for key_press in keys),
                 }
             )
@@ -193,7 +194,7 @@ class WindowsClient(Client):
         output = Win32Output(sys.stdout)
         rows, cols = output.get_size()
 
-        self._send_packet({"cmd": "size", "data": [rows, cols]})
+        self._send_packet({"cmd": Packet.SIZE, "data": [rows, cols]})
 
 
 def list_clients():

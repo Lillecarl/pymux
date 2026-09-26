@@ -53,6 +53,7 @@ from prompt_toolkit.input.vt100 import raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output
 
 from pymux.forwarding import Direction, Forward
+from pymux.protocol import Packet
 from pymux.utils import nonblocking
 
 from .defaults import SCHEME, is_ssh_url
@@ -345,19 +346,19 @@ class SshClient(TerminalClient):
 
         try:
             self._send_packet(
-                {"cmd": "run-command", "data": command, "pane_id": pane_id}
+                {"cmd": Packet.RUN_COMMAND, "data": command, "pane_id": pane_id}
             )
 
             exit_code = 0
             try:
                 async for packet in self._packets(reader):
-                    if packet["cmd"] == "out":
+                    if packet["cmd"] == Packet.OUT:
                         sys.stdout.write(packet["data"])
                         sys.stdout.flush()
-                    elif packet["cmd"] == "err":
+                    elif packet["cmd"] == Packet.ERR:
                         sys.stderr.write(packet["data"])
                         sys.stderr.flush()
-                    elif packet["cmd"] == "exit":
+                    elif packet["cmd"] == Packet.EXIT:
                         exit_code = packet["code"]
             except Exception as error:
                 # The link went before the answer arrived. Nothing here
@@ -493,7 +494,7 @@ class SshClient(TerminalClient):
                 self._report_forwards()
 
                 async for packet in self._packets(reader):
-                    if packet["cmd"] == "forward":
+                    if packet["cmd"] == Packet.FORWARD:
                         # Opening one is a coroutine and `_process` is
                         # not, so it goes to the scope that owns this
                         # attachment rather than blocking the reader.
@@ -596,7 +597,7 @@ class SshClient(TerminalClient):
         """
         self._send_packet(
             {
-                "cmd": "forwards",
+                "cmd": Packet.FORWARDS,
                 "data": self.forwards.report(),
                 "message": message,
             }
