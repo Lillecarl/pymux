@@ -479,6 +479,14 @@ def _counting_forwarder() -> type:
             super().connection_lost(error)
 
         def data_received(self, data, datatype=None) -> None:
+            # **One direction only: bytes from the browser.** The peer
+            # that carries the other way is built by asyncssh inside
+            # `SSHLocalForwarder._forward` and is a plain
+            # `SSHForwarder`, so a download stamps nothing. It does not
+            # matter, and must not be made to: a connection that is
+            # receiving is a connection that is open, and `_live` holds
+            # the forward on its own. This stamp is what keeps the
+            # clock honest once the last connection has gone.
             self._table._carried(self._where)
             super().data_received(data, datatype)
 

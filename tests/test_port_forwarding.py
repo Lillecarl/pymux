@@ -206,6 +206,41 @@ async def echoing():
 
 
 @asynccontextmanager
+async def pushing():
+    """
+    A TCP server that sends without being asked, and keeps the
+    connection open.
+
+    What a server-sent-event stream or a live-reload channel is: the
+    far side talks, the browser only listens. Nothing the caller writes
+    is ever read, so a forward that only counted what it was *sent*
+    would see this connection as silent.
+    """
+
+    async def handle(stream) -> None:
+        async with stream:
+            try:
+                while True:
+                    await stream.send(b"PUSHED")
+                    await anyio.sleep(0.05)
+            except (anyio.BrokenResourceError, anyio.ClosedResourceError):
+                pass
+
+    listener = await anyio.create_tcp_listener(local_host="127.0.0.1")
+    port = listener.extra(SocketAttribute.local_address)[1]
+
+    try:
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(listener.serve, handle)
+            try:
+                yield port
+            finally:
+                tasks.cancel_scope.cancel()
+    finally:
+        await listener.aclose()
+
+
+@asynccontextmanager
 async def ssh_connection(**server_options):
     "An asyncssh client joined to the fake sshd of the ssh client tests."
     import tempfile
@@ -745,6 +780,49 @@ async def test_a_forward_carrying_a_connection_is_never_idle():
             assert len(forwards.reap()) == 1
 
         assert len(forwards) == 0
+
+
+async def test_a_forward_that_only_receives_is_not_reaped():
+    """
+    **The question the counters exist to answer.** A live-reload
+    channel and a server-sent-event stream both talk one way: the far
+    side sends, the browser listens and writes nothing back.
+
+    `_Counting.data_received` sees only the other direction -- bytes
+    from the browser -- because asyncssh builds the peer that handles
+    the channel side itself, inside `SSHLocalForwarder._forward`, and
+    that one is a plain `SSHForwarder`. So the byte stamp never moves
+    here. The open connection is what holds the forward, and it is
+    enough on its own.
+    """
+    async with pushing() as pushed_port, ssh_connection() as connection:
+        forwards = Forwards()
+
+        with _clock(forwards) as stands_at:
+            opened = await forwards.add(
+                connection,
+                Forward(
+                    Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", pushed_port
+                ),
+                idle=60,
+            )
+            assert opened.error == ""
+
+            async with await anyio.connect_tcp("127.0.0.1", opened.port) as listening:
+                # Nothing is ever sent on this socket, so nothing can
+                # stamp the clock by being written.
+                assert await listening.receive() == b"PUSHED"
+
+                stands_at[0] += 60 * 60
+                assert forwards.reap() == [], (
+                    "A forward that was receiving was reaped as idle."
+                )
+                assert len(forwards) == 1
+
+                # Still receiving, an hour of idle time later.
+                assert await listening.receive() == b"PUSHED"
+
+        forwards.close()
 
 
 async def test_the_idle_clock_starts_when_the_last_connection_ends():
