@@ -551,6 +551,17 @@ async def test_asking_twice_leaves_one_listener():
 # A forward pymux opened for a URL. Lillecarl/pymux#437.
 
 
+def _nothing_connected(forwards: Forwards, port: int):
+    """
+    True once the forward on this port is carrying nothing.
+
+    The end of a connection reaches the table after the read that
+    provoked it, so a test that closes a socket has to wait for the
+    handle to leave the set.
+    """
+    return not forwards._live.get((Direction.LOCAL, "127.0.0.1", port))
+
+
 @contextmanager
 def _clock(forwards: Forwards):
     "Drive the idle time by hand, rather than by waiting for it."
@@ -719,13 +730,9 @@ async def test_using_a_url_forward_puts_off_the_reaping():
             assert await _spoken_through(opened.port) == b"HELLO"
             # The close arrives after the read, and it is activity too.
             await once(
-                lambda: forwards._live.get(
-                    (Direction.LOCAL, "127.0.0.1", opened.port)
-                )
-                == 0
-                or None,
+                lambda: _nothing_connected(forwards, opened.port),
                 2.0,
-                "The connection never came back to zero.",
+                "The connection was never let go of.",
             )
 
             stands_at[0] += 40  # 70 since it opened, 40 since it was used.
@@ -768,13 +775,9 @@ async def test_a_forward_carrying_a_connection_is_never_idle():
 
             # The socket is closed, so the clock may run again.
             await once(
-                lambda: forwards._live.get(
-                    (Direction.LOCAL, "127.0.0.1", opened.port)
-                )
-                == 0
-                or None,
+                lambda: _nothing_connected(forwards, opened.port),
                 2.0,
-                "The end of the connection was never counted.",
+                "The end of the connection never reached the table.",
             )
             stands_at[0] += 61
             assert len(forwards.reap()) == 1
@@ -846,13 +849,9 @@ async def test_the_idle_clock_starts_when_the_last_connection_ends():
                 assert await held.receive() == b"HELLO"
 
             await once(
-                lambda: forwards._live.get(
-                    (Direction.LOCAL, "127.0.0.1", opened.port)
-                )
-                == 0
-                or None,
+                lambda: _nothing_connected(forwards, opened.port),
                 2.0,
-                "The end of a connection was never counted.",
+                "The end of a connection never reached the table.",
             )
 
             # The use just now resets it, although the forward opened
@@ -898,35 +897,46 @@ async def test_bytes_through_a_forward_are_use_of_it():
         forwards.close()
 
 
-async def test_a_refused_channel_does_not_count_its_end_twice():
+async def test_a_refused_channel_reports_its_end_twice_and_is_counted_once():
     """
     **asyncssh calls `connection_lost` by hand when the far side
-    refuses, and asyncio calls it again.** Counting both would put the
-    live count below zero, and a negative count reads as "in use" for
-    ever after -- the forward would never be reaped again.
+    refuses, and asyncio calls it again.** The table holds the
+    connections rather than a number of them, so the second report
+    discards a handle that has already gone and says the same thing.
+
+    A counter would have gone below zero here, and a forward that reads
+    as carrying -1 connections is never reaped again.
     """
     async with echoing() as echo_port, ssh_connection(
         allow_forward=False
     ) as connection:
         forwards = Forwards()
-        opened = await forwards.add(
-            connection,
-            Forward(Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port),
-            idle=60,
-        )
-        where = (Direction.LOCAL, "127.0.0.1", opened.port)
 
-        with pytest.raises(_NOTHING_CAME_BACK):
-            await _spoken_through(opened.port)
+        with _clock(forwards) as stands_at:
+            opened = await forwards.add(
+                connection,
+                Forward(
+                    Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
+                ),
+                idle=60,
+            )
+            where = (Direction.LOCAL, "127.0.0.1", opened.port)
 
-        await once(
-            lambda: forwards._live.get(where) == 0 or None,
-            2.0,
-            "The refused connection never came back to zero: %r"
-            % (forwards._live,),
-        )
+            with pytest.raises(_NOTHING_CAME_BACK):
+                await _spoken_through(opened.port)
 
-        forwards.close()
+            await once(
+                lambda: _nothing_connected(forwards, opened.port),
+                2.0,
+                "The refused connection was never let go of: %r" % (forwards._live,),
+            )
+
+            # And the forward is still reapable, which is exactly what a
+            # count gone negative would have cost.
+            stands_at[0] += 60 * 60
+            assert len(forwards.reap()) == 1
+
+        assert where not in forwards._live
 
 
 async def test_a_forward_somebody_typed_is_never_reaped():

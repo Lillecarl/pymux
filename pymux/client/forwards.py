@@ -19,6 +19,7 @@ cannot do this: `~C` and its forwards go with the link.
 from __future__ import annotations
 
 import time
+import weakref
 from typing import TYPE_CHECKING, NamedTuple
 
 from pymux.forwarding import ANY_PORT, Direction, Forward
@@ -106,10 +107,18 @@ class Forwards:
         #: When each forward last did anything: a connection arrived,
         #: one ended, or bytes went through it.
         self._used: dict[Where, float] = {}
-        #: How many connections each forward is carrying right now. A
-        #: forward carrying one is busy however quiet it is, which is
-        #: what a held-open websocket looks like.
-        self._live: dict[Where, int] = {}
+        #: The connections each forward is carrying right now, held as
+        #: the forwarder object asyncssh made for each one. A forward
+        #: carrying any is busy however quiet it is, which is what a
+        #: held-open websocket looks like.
+        #:
+        #: **A set of handles rather than a count**, because asyncssh
+        #: can report the same connection's end twice and `discard` does
+        #: not care, where a counter has to be told not to. Weak, so
+        #: that a forwarder nothing else holds cannot keep a forward
+        #: looking busy for ever: if it has been collected, its
+        #: connection is gone.
+        self._live: dict[Where, "weakref.WeakSet"] = {}
 
     def __len__(self) -> int:
         return len(self._wanted)
@@ -181,14 +190,17 @@ class Forwards:
     # ------------------------------------------------------------------
     # What the listeners report back, from asyncssh's own callbacks.
 
-    def _began(self, where: Where) -> None:
-        self._live[where] = self._live.get(where, 0) + 1
+    def _began(self, where: Where, carrier: object) -> None:
+        self._live.setdefault(where, weakref.WeakSet()).add(carrier)
         self._used[where] = self._now()
 
-    def _ended(self, where: Where) -> None:
-        # Never below zero. A listener that was replaced can still see
-        # the end of a connection it opened.
-        self._live[where] = max(0, self._live.get(where, 0) - 1)
+    def _ended(self, where: Where, carrier: object) -> None:
+        # `discard`, so that the same connection ending twice is the
+        # same answer, and so that a listener already replaced can
+        # still report one of its own without raising.
+        carrying = self._live.get(where)
+        if carrying is not None:
+            carrying.discard(carrier)
         self._used[where] = self._now()
 
     def _carried(self, where: Where) -> None:
@@ -220,7 +232,7 @@ class Forwards:
         for where, wanted in list(self._wanted.items()):
             if wanted.idle is None:
                 continue
-            if self._live.get(where, 0):
+            if self._live.get(where):
                 continue
             if now - self._used.get(where, now) < wanted.idle:
                 continue
@@ -329,9 +341,9 @@ class Forwards:
             self._ports[where] = listener.get_port() or attempt.listen_port
             self._used[where] = self._now()
             # A new listener carries nothing yet. The old one's
-            # connections are gone with it, and a late callback from
-            # one of them cannot take this below zero.
-            self._live[where] = 0
+            # connections went with it, and a late end from one of them
+            # discards a handle this set never held.
+            self._live[where] = weakref.WeakSet()
             return self._one(where)
 
         self._errors[where] = error
@@ -459,23 +471,19 @@ def _counting_forwarder() -> type:
             super().__init__(connection, coro)
             self._table = table
             self._where = where
-            self._counted = False
 
         def connection_made(self, transport) -> None:
-            self._counted = True
-            self._table._began(self._where)
+            self._table._began(self._where, self)
             super().connection_made(transport)
 
         def connection_lost(self, error) -> None:
-            # **asyncssh calls this twice when the far side refuses the
-            # channel.** `SSHLocalForwarder._forward` calls it by hand
-            # on `ChannelOpenError`, and asyncio calls it again when
-            # the transport really closes. Counting both would put the
-            # live count below zero and reap a forward somebody is
-            # using.
-            if self._counted:
-                self._counted = False
-                self._table._ended(self._where)
+            # **asyncssh reports this twice when the far side refuses
+            # the channel**: `SSHLocalForwarder._forward` calls it by
+            # hand on `ChannelOpenError`, and asyncio calls it again
+            # when the transport really closes. Saying which connection
+            # ended rather than that one did makes the second report
+            # the same answer as the first.
+            self._table._ended(self._where, self)
             super().connection_lost(error)
 
         def data_received(self, data, datatype=None) -> None:
