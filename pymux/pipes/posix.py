@@ -1,6 +1,9 @@
+import errno
+import fcntl
 import getpass
 import os
 import socket
+import stat
 from typing import Callable
 
 import anyio
@@ -30,11 +33,16 @@ def bind_and_listen_on_posix_socket(socket_name: str, accept_callback: Callable)
         new connection is established.
     """
     # Set umask for the socket file.
+    #
+    # **Put back even when the bind fails.** The umask belongs to the
+    # process, so a bind that raised used to leave every file this
+    # process wrote afterwards at 0027. A suite that expects a
+    # directory it makes to be group readable is where that shows.
     old_umask = os.umask(int("0027", 8))
-
-    socket_name, sock = _bind_posix_socket(socket_name)
-
-    _ = os.umask(old_umask)
+    try:
+        socket_name, sock = _bind_posix_socket(socket_name)
+    finally:
+        _ = os.umask(old_umask)
 
     sock.listen(0)
 
@@ -72,6 +80,85 @@ class PosixSocketListener:
             pass
 
 
+def _nobody_answers(socket_name: str) -> bool:
+    """
+    Whether a connect on this name reaches no server at all.
+
+    Only "refused" and "not there" say that the name is free. Anything
+    else -- no permission to reach it, a connect that hangs -- is a
+    question this cannot answer, and a name it cannot answer for is a
+    name to leave alone. tmux reads the same two errors and no others
+    (`client.c`, `client_connect`).
+    """
+    probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        probe.connect(socket_name)
+    except (ConnectionRefusedError, FileNotFoundError):
+        return True
+    except OSError:
+        return False
+    else:
+        return False
+    finally:
+        probe.close()
+
+
+def _bind_or_take_over(sock: socket.socket, socket_name: str) -> None:
+    """
+    Bind the name, taking it from a server that has gone.
+
+    **A killed server leaves its socket file behind**, and a bind on
+    that name answers EADDRINUSE for as long as the file is there --
+    for ever, because nothing takes it away. So `pymux -S <path>
+    new-session` could not start a server on the path its own last
+    server had used. tmux answers this by unlinking a socket that
+    nobody is listening on, and this is that answer.
+
+    **The lock is what makes the unlink safe.** Between the question
+    "does anybody answer" and the bind, another process may start a
+    server on the same name, and unlinking then would take the name
+    away from a server that is alive. So the question is asked again
+    under `<path>.lock`, and the lock is held until this socket is
+    bound. tmux holds the same lock over the same two steps, and its
+    comment says why it re-asks even when the lock was free.
+
+    A name that something answers on stays where it is: the caller
+    sees the EADDRINUSE it would have seen. So does a name that holds
+    anything but a socket -- a file somebody else put there is not
+    ours to delete. Lillecarl/pymux#453.
+    """
+    try:
+        sock.bind(socket_name)
+        return
+    except OSError as busy:
+        if busy.errno != errno.EADDRINUSE:
+            raise
+        in_use = busy
+
+    lock = os.open(socket_name + ".lock", os.O_WRONLY | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+
+        if not _nobody_answers(socket_name):
+            raise in_use
+
+        try:
+            left_behind = os.lstat(socket_name)
+        except FileNotFoundError:
+            # Somebody took it away while this waited for the lock, so
+            # there is nothing to take and the bind below has the name.
+            pass
+        else:
+            if not stat.S_ISSOCK(left_behind.st_mode):
+                raise in_use
+            os.unlink(socket_name)
+            logger.info("Took %r from a server that has gone.", socket_name)
+
+        sock.bind(socket_name)
+    finally:
+        os.close(lock)
+
+
 def _bind_posix_socket(socket_name: str | None = None):
     """
     Find a socket to listen on and return it.
@@ -95,7 +182,7 @@ def _bind_posix_socket(socket_name: str | None = None):
         # directory pymux was started from. tmux writes `TMUX` absolute
         # for that reason. Lillecarl/pymux#322.
         socket_name = os.path.abspath(socket_name)
-        s.bind(socket_name)
+        _bind_or_take_over(s, socket_name)
         return socket_name, s
     else:
         room = socket_directory()
