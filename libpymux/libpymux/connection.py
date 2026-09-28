@@ -10,23 +10,16 @@ call here opens a socket of its own, the same way the command line of
 pymux does.
 """
 
-import getpass
-import glob
 import json
-import os
 import shlex
 import socket
-import tempfile
-from typing import Iterable, List, NamedTuple, Optional, Sequence, Union
-
-from pymux.pipes.posix import socket_directory
+from typing import List, NamedTuple, Optional, Sequence, Union
 
 __all__ = [
     "CommandError",
     "CommandResult",
     "Connection",
     "ServerNotRunning",
-    "socket_paths",
     "quote",
 ]
 
@@ -90,32 +83,6 @@ def _as_command(command: Union[str, Sequence[str]]) -> str:
     if isinstance(command, str):
         return command
     return " ".join(quote(argument) for argument in command)
-
-
-def socket_paths() -> List[str]:
-    """
-    Every pymux socket of this user that the default place holds.
-
-    A server started with a socket path of its own is not in here. Name
-    that path to reach it.
-
-    The servers live in the per-UID room the server binds in, and one
-    release also in the flat place they bound before it.
-    Lillecarl/pymux#405.
-    """
-    user = getpass.getuser()
-    found = glob.glob("%s/pymux.sock.%s.*" % (socket_directory(), user))
-    found += glob.glob("%s/pymux.sock.%s.*" % (tempfile.gettempdir(), user))
-    return sorted(set(path for path in found if _is_socket(path)))
-
-
-def _is_socket(path: str) -> bool:
-    import stat
-
-    try:
-        return stat.S_ISSOCK(os.stat(path).st_mode)
-    except OSError:
-        return False
 
 
 class Connection:

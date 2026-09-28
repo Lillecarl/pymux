@@ -1,0 +1,39 @@
+# What libpymux is and what it needs.
+#
+# **A project of its own, inside the repository of the server it
+# drives.** The two have to agree about the wire and about the names of
+# the format variables, and the tests that say they agree are pymux's:
+# one of them drives a real server. A source of its own could not run
+# that test without depending on the thing above it.
+#
+# **The dependency list is the whole point of the split.** A program
+# that drives a server gets a socket, a JSON message and platformdirs.
+# It does not get prompt_toolkit, ptterm or the parser, which is what
+# installing pymux for the library cost before. pymux takes this
+# package; nothing here takes pymux.
+[project]
+name = "libpymux"
+version = "0.1"
+description = "Drive a pymux server from python."
+readme = "README.md"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+dependencies = [
+    # Where a server binds its socket room, after the `$PYMUX_TMPDIR`
+    # override: the per-user runtime directory the platform prefers.
+    # `sockets.py` is what reads it, and both sides of the wire import
+    # that module -- the server to bind in the room, a caller to look
+    # in it. Lillecarl/pymux#421.
+    "platformdirs>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/prompt-toolkit/pymux"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["libpymux"]

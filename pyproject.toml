@@ -17,6 +17,11 @@ authors = [
 dependencies = [
     "prompt_toolkit>=3.0.0,<3.1.0",
     "ptterm",
+    # The client library, in `libpymux/`, which is a project of its own
+    # inside this repository. pymux takes it for the room a server
+    # binds its socket in: the server and a caller have to agree about
+    # that, so it is written once, in the library both import.
+    "libpymux",
     # The shell completes the command line through argcomplete: the
     # generated scripts of `share/bash-completion` and friends make the
     # shell ask `pymux`, and it answers from the parsers of the commands.
@@ -39,12 +44,6 @@ dependencies = [
     # `notify_closing` needs, and the posix pipe needs that to wake a
     # reader parked on a socket that is closing. Lillecarl/pymux#87.
     "anyio>=4.7.0",
-    # Where a server binds its socket room, after the `$PYMUX_TMPDIR`
-    # override: the per-user runtime directory the platform prefers.
-    # It reads `$XDG_RUNTIME_DIR` where that is the convention, and
-    # knows the answer of macOS, the BSDs and Windows besides, so the
-    # list does not grow by hand. Lillecarl/pymux#421.
-    "platformdirs>=4.0.0",
     # The template language a person writes. A status line holding `{{`
     # or `{%` is rendered by jinja2, and everything else takes the tmux
     # format path; `-F` stays tmux format, because libtmux reads it.
@@ -96,10 +95,12 @@ pymux = "pymux.entry_points.run_pymux:run"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-# Two top-level packages, and a backend cannot guess which of the directories
-# here are the ones to ship. `tests` is not one of them.
+# The backend cannot guess which of the directories here is the one to ship.
+# `tests` is not it, and neither is `libpymux`: that one is a project of its
+# own, with a `pyproject.toml` beside its modules, and it builds a
+# distribution that this one depends on.
 [tool.hatch.build.targets.wheel]
-packages = ["pymux", "libpymux"]
+packages = ["pymux"]
 
 [tool.pytest.ini_options]
 # Run a coroutine test, with no mark on it.

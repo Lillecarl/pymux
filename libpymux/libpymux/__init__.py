@@ -17,15 +17,24 @@ the server itself.
 do is out of reach.
 """
 
+import logging
+
 from .connection import (
     CommandError,
     CommandResult,
     Connection,
     ServerNotRunning,
     quote,
-    socket_paths,
 )
 from .objects import Pane, Server, Session, Window
+from .sockets import socket_paths
+
+# A library writes nothing to the terminal of a program that did not ask
+# for it. Without a handler, `logging` sends a record to `sys.stderr`
+# through its last resort, and this library is imported by pymux itself:
+# a warning on stderr lands on top of the frame a pane is drawing.
+# `pymux/log.py` gives this logger the file handler of the server.
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "CommandError",

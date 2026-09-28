@@ -74,6 +74,15 @@ LEVELS = {
 
 logger = logging.getLogger(__package__)
 
+#: Every logger whose records belong in the log of this process.
+#:
+#: libpymux is a package of its own, so its records reach nothing of
+#: pymux's by themselves, and the library gives its own logger a null
+#: handler so that an embedder gets no stderr. Without this line the
+#: warning that names a socket room somebody else owns would be written
+#: nowhere. Lillecarl/pymux#405.
+LOGGERS = [logger, logging.getLogger("libpymux")]
+
 #: How large the log may get before it starts again, and how many of the
 #: old ones to keep.
 #:
@@ -111,7 +120,8 @@ def level() -> str:
 
 def set_level(name: str) -> None:
     "Log at this level from now on. Raises `KeyError` for an unknown name."
-    logger.setLevel(LEVELS[name])
+    for one in LOGGERS:
+        one.setLevel(LEVELS[name])
 
 
 def default_logfile() -> Path:
@@ -160,15 +170,17 @@ def configure(logfile: str | None = None, level: int = logging.INFO) -> Path | N
         # A read only home, a full disk, a path that is a directory. The
         # messages are lost, and that is better than painting them over
         # the screen of the person using this.
-        logger.addHandler(logging.NullHandler())
+        for one in LOGGERS:
+            one.addHandler(logging.NullHandler())
         return None
 
     global _logfile
 
-    logger.addHandler(handler)
-    logger.setLevel(level)
-    # The root logger reaches `sys.stderr` through `basicConfig`, and
-    # nothing here should. The handler above is the whole path.
-    logger.propagate = False
+    for one in LOGGERS:
+        one.addHandler(handler)
+        one.setLevel(level)
+        # The root logger reaches `sys.stderr` through `basicConfig`, and
+        # nothing here should. The handler above is the whole path.
+        one.propagate = False
     _logfile = path
     return path

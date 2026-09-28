@@ -99,7 +99,7 @@ def _socket_report(socket_name: str | None) -> dict:
     connect answers `list-sessions` too, and its output is what says
     how many sessions it holds.
     """
-    from pymux.pipes.posix import socket_directory
+    from libpymux.sockets import socket_directory
 
     report: dict = {
         "name": socket_name or "",

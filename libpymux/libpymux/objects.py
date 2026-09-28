@@ -14,7 +14,8 @@ fields again, or read the collection again for the objects.
 
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple, Union
 
-from .connection import CommandResult, Connection, ServerNotRunning, socket_paths
+from .connection import CommandResult, Connection, ServerNotRunning
+from .sockets import socket_paths
 
 __all__ = ["Server", "Session", "Window", "Pane"]
 

@@ -8,10 +8,10 @@ import sys
 import tempfile
 from select import select
 
+from libpymux.sockets import socket_directory
 from prompt_toolkit.input.vt100 import raw_mode
 from pymux.protocol import Packet
 
-from ..pipes.posix import socket_directory
 from .terminal import TerminalClient
 
 __all__ = [

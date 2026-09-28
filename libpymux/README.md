@@ -23,6 +23,13 @@ call and parses what it prints. libpymux talks to the server itself: the
 wire of pymux is JSON on a unix socket, so there is no subprocess and no
 shell quoting between the caller and the server.
 
+**It carries nothing of the terminal.** This is a distribution of its
+own, and what it asks for is platformdirs -- the one thing that says
+where a server binds its socket room on each platform. No
+prompt_toolkit, no ptterm, no parser: a program that drives a server
+does not install one. pymux depends on this package, never the other
+way round.
+
 **This is the way to drive pymux.** libtmux can drive it too, through a
 `tmux` shim, and `tests/drive_with_libtmux.py` does that. But libtmux
 only knows what tmux has, and pymux does more: the kitty keyboard

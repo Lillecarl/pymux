@@ -19,7 +19,9 @@ Driving pymux from python
 
 ``libpymux`` drives a running server over its socket, with the object
 model that libtmux uses: a server holds sessions, a session holds
-windows, a window holds panes.
+windows, a window holds panes. It is a distribution of its own, in
+``libpymux/``, and it carries nothing of the terminal: a program that
+drives a server installs a socket, a JSON message and platformdirs.
 
 .. code:: python
 

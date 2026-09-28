@@ -14,7 +14,7 @@ import stat
 
 import pytest
 
-from pymux.pipes.posix import socket_directory
+from libpymux.sockets import socket_directory
 
 pytestmark = pytest.mark.skipif(
     os.name == "nt", reason="the room needs a unix uid and lstat"

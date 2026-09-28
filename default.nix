@@ -121,7 +121,8 @@ let
     root = ./.;
     fileset = lib.fileset.unions [
       ./pymux
-      ./libpymux
+      # Not `./libpymux`: it is a project of its own now, so the suites
+      # import it out of `testEnv` like any other dependency.
       ./tests
       # pytest reads its settings from the root it finds, and a root with
       # no config file is a root with no settings. `anyio_mode` is in here,
