@@ -9,5 +9,5 @@ key 11599
 key (wide) 11599
 parse 271
 parse (wide) 271
-render 119855
-render (wide) 475519
+render 95237
+render (wide) 167245
