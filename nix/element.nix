@@ -54,6 +54,10 @@ let
       files = [
         "pymux-pane.js"
         "pymux-pane.d.ts"
+        # Imported by the element rather than by a consumer, and a file
+        # the package does not carry is a package that does not load.
+        "keys.js"
+        "keys.d.ts"
       ];
     }
   );
@@ -78,6 +82,7 @@ runCommand "pymux-element-${npmVersion}"
     mkdir -p "$out"
     # `page.js` rides along and the manifest does not export it: the
     # demo page is served beside the element, not imported through it.
-    install -m644 dist/pymux-pane.js dist/pymux-pane.d.ts dist/page.js "$out"/
+    install -m644 dist/pymux-pane.js dist/pymux-pane.d.ts \
+      dist/keys.js dist/keys.d.ts dist/page.js "$out"/
     install -m644 ${manifest} "$out"/package.json
   ''

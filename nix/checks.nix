@@ -69,9 +69,11 @@
   nyancat,
   pipes,
   # The compiler, reading the declarations that ship with
-  # `<pymux-pane>` as a consumer's compiler reads them. `default.nix`
-  # takes it as well, to build the element; it is in nothing pymux
-  # installs, because a browser needs no compiler.
+  # `<pymux-pane>` as a consumer's compiler reads them, and the runtime
+  # that runs what the element decides about a keydown. `default.nix`
+  # takes the compiler as well, to build the element. Neither is in
+  # anything pymux installs, because a browser brings its own.
+  nodejs,
   typescript,
   testSources,
 }:
@@ -775,7 +777,8 @@ in
           -o faulthandler_timeout=${toString hangIsSeconds}
       '';
 
-  # `<pymux-pane>`: that the declarations it publishes are usable.
+  # `<pymux-pane>`: that it runs, and that the declarations it publishes
+  # are usable.
   #
   # The element is TypeScript and the package build compiles it, so a
   # file that does not parse and a type that does not hold fail
@@ -796,13 +799,33 @@ in
   # `pymux/web/client/tsconfig.json`. Somebody else's compiler settings on
   # our declarations is the whole of what this measures.
   # Lillecarl/pymux#461.
+  #
+  # **And it runs the part of the element that can be run.** Importing
+  # the element itself needs a browser -- it subclasses `HTMLElement` and
+  # defines a custom element -- so `pymux/web/client/keys.ts` holds the
+  # decision that is a table of cases, and `node --test` reads the
+  # compiled `keys.js` out of `pymux/web/static/`. Two faults reached a
+  # person through that table, the second being Control typing
+  # `C-Control`. Lillecarl/pymux#468.
+  #
+  # A pattern and not a list of files, so a test added here runs without
+  # anything being told about it. It is quoted because node expands it
+  # itself: a bare `tests/` is read as one module to run and fails with
+  # "Cannot find module", which is what node 24 does with a positional
+  # that is not a glob.
   element =
     runInSandbox
       {
         name = "pymux-element";
-        inputs = [ typescript ];
+        inputs = [
+          nodejs
+          typescript
+        ];
       }
       ''
+        echo "running what the element decides about a keydown"
+        node --test "tests/*.test.mjs"
+
         echo "reading the declarations of <pymux-pane> against a use of them"
         tsc --noEmit --strict \
           --target es2022 --lib es2022,dom --module esnext \

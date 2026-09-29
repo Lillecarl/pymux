@@ -62,6 +62,8 @@ let
   served = [
     "pymux-pane.js"
     "pymux-pane.d.ts"
+    "keys.js"
+    "keys.d.ts"
     "page.js"
   ];
 

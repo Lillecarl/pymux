@@ -32,6 +32,10 @@
  *     document.querySelector('pymux-pane').socket = myWebSocket;
  */
 
+// `.js` and not `.ts`: this line survives into the emitted
+// `pymux-pane.js`, where a browser resolves it.
+import { keysFor } from "./keys.js";
+
 // ----------------------------------------------------------------------
 // The protocol, as a consumer reads it.
 
@@ -194,79 +198,6 @@ const INPUT = "input";
 
 /** Text that becomes a bracketed paste when the program asked for one. */
 const PASTE = "paste";
-
-/**
- * What to send for a key that means more than the character it types.
- *
- * **Only the keys that have no text.** Anything that produces a
- * character is left to `beforeinput`, which is what an IME, a dead key,
- * an emoji picker and dictation all arrive through; a `keydown` handler
- * that also sent those would send them twice.
- *
- * The names are pymux's own, because the server spells them: it owns the
- * three keyboard modes and knows which the program asked for.
- */
-const NAMED_KEYS: Record<string, string | undefined> = {
-  Enter: "Enter",
-  Tab: "Tab",
-  Backspace: "BSpace",
-  Delete: "DC",
-  Escape: "Escape",
-  ArrowUp: "Up",
-  ArrowDown: "Down",
-  ArrowLeft: "Left",
-  ArrowRight: "Right",
-  Home: "Home",
-  End: "End",
-  PageUp: "PageUp",
-  PageDown: "PageDown",
-  Insert: "IC",
-  F1: "F1",
-  F2: "F2",
-  F3: "F3",
-  F4: "F4",
-  F5: "F5",
-  F6: "F6",
-  F7: "F7",
-  F8: "F8",
-  F9: "F9",
-  F10: "F10",
-  F11: "F11",
-  F12: "F12",
-};
-
-/** `keyCode` a browser reports for a key an IME has taken. */
-const TAKEN_BY_AN_IME = 229;
-
-/**
- * Keys that are only a modifier, which type nothing on their own.
- *
- * **A keydown of one of these already reports itself held.** Pressing
- * Control gives `key` "Control" with `ctrlKey` true, so a handler that
- * reads "modified, and no text" sends `C-Control` to the program --
- * measured by a person typing in a browser. The same holds for Alt and
- * for Meta.
- *
- * A list and not `getModifierState(event.key)`: a lock key reports the
- * state it is about to leave, so the test answers wrongly for exactly
- * the keys that are hardest to notice.
- */
-const ONLY_A_MODIFIER = new Set([
-  "Control",
-  "Alt",
-  "AltGraph",
-  "Shift",
-  "Meta",
-  "CapsLock",
-  "NumLock",
-  "ScrollLock",
-  "Fn",
-  "FnLock",
-  "Hyper",
-  "Super",
-  "Symbol",
-  "SymbolLock",
-]);
 
 /**
  * The three events this dispatches, typed.
@@ -615,29 +546,12 @@ export class PymuxPane extends HTMLElement {
   // -- what a viewer types -------------------------------------------
 
   #onKeyDown(event: KeyboardEvent): void {
-    // **Nothing while a composition runs.** A dead key and an IME both
-    // deliver their keystrokes here as well, and the committed text
-    // arrives separately; sending both would type it twice.
-    if (event.isComposing || event.keyCode === TAKEN_BY_AN_IME) return;
-
-    // Holding a modifier is not typing. The keydown that starts the hold
-    // arrives here with the modifier already set, so this has to come
-    // before the test below reads it.
-    if (ONLY_A_MODIFIER.has(event.key)) return;
-
-    const named = NAMED_KEYS[event.key];
-    const modified = event.ctrlKey || event.altKey || event.metaKey;
-
-    if (!named && !modified) return; // `beforeinput` carries the text.
-
+    const keys = keysFor(event);
+    // `null` is "leave this keydown alone", which is what lets a plain
+    // character reach `beforeinput` and a composition finish.
+    if (keys === null) return;
     event.preventDefault();
-
-    const parts = [];
-    if (event.ctrlKey) parts.push("C");
-    if (event.altKey) parts.push("M");
-    if (event.shiftKey && named) parts.push("S");
-    parts.push(named || event.key);
-    this.send({ type: INPUT, keys: parts.join("-") });
+    this.send({ type: INPUT, keys });
   }
 
   #onBeforeInput(event: InputEvent): void {

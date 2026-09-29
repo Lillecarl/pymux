@@ -43,6 +43,8 @@ def test_the_element_is_in_the_installed_package():
     """
     assert (web.STATIC / "pymux-pane.js").is_file()
     assert (web.STATIC / "pymux-pane.d.ts").is_file()
+    # Imported by the element, so a browser asks for it by itself.
+    assert (web.STATIC / "keys.js").is_file()
     assert (web.STATIC / "index.html").is_file()
     assert (web.STATIC / "page.js").is_file()
     assert (web.STATIC / "page.css").is_file()
@@ -181,24 +183,6 @@ def test_the_palette_goes_in_a_sheet_of_its_own():
     assert "#paletteSheet" in element
     assert "#adopt(this.#paletteSheet, frame.palette)" in element
     assert "#adopt(this.#themeSheet, frame.css" in element
-
-
-def test_holding_a_modifier_types_nothing():
-    """
-    Pressing Control alone sent `C-Control` to the program.
-
-    A keydown of a modifier arrives with that modifier already set, so a
-    handler that reads "something is held and there is no text" builds a
-    key name out of the modifier's own name. A person found it by
-    pressing Control in a browser.
-
-    Read as text, which is all that can be read here: nothing in this
-    collection runs the element's key handling. Lillecarl/pymux#468.
-    """
-    element = source_of("pymux-pane.js")
-    assert "ONLY_A_MODIFIER" in element
-    for held in ["Control", "Alt", "Meta", "AltGraph", "CapsLock"]:
-        assert '"%s"' % held in element, held
 
 
 def test_the_element_needs_no_unsafe_inline():

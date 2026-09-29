@@ -201,6 +201,9 @@ async def test_the_page_and_the_element_are_served(pymux):
             for path, wanted in [
                 ("/", b"<pymux-pane"),
                 ("/pymux-pane.js", b"customElements.define"),
+                # The element imports this, so a browser asks for it
+                # next and a 404 here means nothing is ever defined.
+                ("/keys.js", b"keysFor"),
                 ("/page.js", b"pymux-pane.js"),
                 ("/page.css", b"pymux-pane"),
             ]:

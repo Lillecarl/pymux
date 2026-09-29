@@ -55,6 +55,11 @@ SERVED = {
     "/page.css": ("page.css", "text/css; charset=utf-8"),
     "/pymux-pane.js": ("pymux-pane.js", "text/javascript; charset=utf-8"),
     "/pymux-pane.d.ts": ("pymux-pane.d.ts", "text/plain; charset=utf-8"),
+    # The element imports this one, so a browser asks for it by itself.
+    # A name missing from this table is a 404, and a 404 here means the
+    # element never loads at all.
+    "/keys.js": ("keys.js", "text/javascript; charset=utf-8"),
+    "/keys.d.ts": ("keys.d.ts", "text/plain; charset=utf-8"),
 }
 
 
