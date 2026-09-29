@@ -173,10 +173,17 @@ ROWS, COLUMNS = 24, 80
 #: terminal closes its window when its program ends, and the picture is
 #: taken after the program ran, so it has to still be there.
 #:
-#: It is a bound and not a parking space. The two waits above are the
-#: longest this can need, and anything left behind by a run that went
-#: wrong is gone in a minute rather than an hour.
-HOLD = APPEAR_TIMEOUT + SETTLE_TIMEOUT + 10
+#: It is a bound and not a parking space. Anything left behind by a run
+#: that went wrong is gone in a minute rather than an hour.
+#:
+#: **Three waits stand between the program starting and the last
+#: picture of it**, and the hold has to cover all of them: the window
+#: appearing, the fence reaching the clipboard, and the screen
+#: settling. It covered two, so a picture whose first two waits both
+#: ran long lost its window before the settle gave up -- and `import`
+#: does not fail on a window that has gone, it waits.
+#: Lillecarl/pymux#462.
+HOLD = 2 * APPEAR_TIMEOUT + SETTLE_TIMEOUT + 10
 
 #: What the pymux side of a picture runs with.
 #:

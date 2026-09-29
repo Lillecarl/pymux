@@ -7,9 +7,15 @@ and takes twenty minutes. These are the ones that need none of that,
 and the first of them is the one a burst got wrong.
 """
 
-from pyterm_pytest.seats import BLINK_FRAMES, BLINK_GAP, BLINK_START
+from pyterm_pytest.seats import (
+    APPEAR_TIMEOUT,
+    BLINK_FRAMES,
+    BLINK_GAP,
+    BLINK_START,
+    SETTLE_TIMEOUT,
+)
 
-from take_picture import BLINK_FIXTURES, blink_program
+from take_picture import BLINK_FIXTURES, HOLD, blink_program
 
 #: The longest one picture took on this machine, measured with three
 #: times as many busy processes as cores: 0.85 seconds. A burst takes
@@ -36,3 +42,14 @@ def test_a_blink_fixture_holds_its_window_past_its_whole_burst():
         assert holds_for(blink_program(name)) >= burst, (
             "%s holds its window for less than its burst takes" % (name,)
         )
+
+
+def test_a_still_fixture_holds_its_window_past_all_three_waits():
+    """
+    A still picture waits three times before it is taken: for the
+    window, for the fence to reach the clipboard, and for the screen to
+    settle. The hold covered two of them, so a picture whose first two
+    waits both ran long lost its window while the settle was still
+    going. Lillecarl/pymux#462.
+    """
+    assert HOLD >= APPEAR_TIMEOUT + APPEAR_TIMEOUT + SETTLE_TIMEOUT
