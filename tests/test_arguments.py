@@ -14,7 +14,7 @@ argument with a space in it in one piece on the way there.
 
 import pytest
 
-from pymux.entry_points.run_pymux import parse_arguments
+from pymux.entry_points.run_pymux import _flag_args, parse_arguments
 
 
 def parse(*argv):
@@ -141,3 +141,72 @@ def test_option_after_separator_belongs_to_program():
     options, _mode, command = parse_arguments(["integrated", "--", "x", "-d"])
     assert options.detach_others is False
     assert command == "x -d"
+
+
+# ----------------------------------------------------------------------
+# The flags of the invocation that starts a server.
+#
+# `new-session` is answered by the client when no server is up yet, so
+# it is read here and never by `new_session.register`'s parser. A flag
+# it did not know went into a set nobody reads, and a `--long` one
+# became a word of the command the first pane runs: the session started
+# and nothing was said, on the one route where nobody is watching
+# stderr. Lillecarl/pymux#458.
+
+
+def flags_of(*args):
+    "What the client reads out of a `new-session` line."
+    return _flag_args(
+        list(args),
+        flags_with_value=("s", "n", "c", "x", "y", "F", "J"),
+        flags_alone=("d", "P"),
+    )
+
+
+def test_a_flag_alone_is_read():
+    assert flags_of("-d") == ({"d"}, {}, [])
+
+
+def test_a_value_is_read_beside_its_flag_or_glued_to_it():
+    assert flags_of("-s", "name") == (set(), {"s": "name"}, [])
+    assert flags_of("-sname") == (set(), {"s": "name"}, [])
+
+
+def test_several_flags_in_one_argument_are_all_read():
+    "getopt reads `-dP` as both. Only the first was taken."
+    assert flags_of("-dP") == ({"d", "P"}, {}, [])
+
+
+def test_a_flag_and_a_value_in_one_argument():
+    assert flags_of("-dsname") == ({"d"}, {"s": "name"}, [])
+
+
+def test_the_command_is_what_is_left():
+    assert flags_of("-d", "-s", "here", "sleep 60") == (
+        {"d"},
+        {"s": "here"},
+        ["sleep 60"],
+    )
+
+
+def test_a_short_flag_nobody_declared_is_refused():
+    with pytest.raises(ValueError) as refused:
+        flags_of("-Z", "sleep 60")
+    assert str(refused.value) == "unrecognized arguments: -Z"
+
+
+def test_a_long_flag_nobody_declared_is_refused():
+    "It used to become the first word of what the pane runs."
+    with pytest.raises(ValueError) as refused:
+        flags_of("--zzz-not-a-flag", "sleep 60")
+    assert str(refused.value) == "unrecognized arguments: --zzz-not-a-flag"
+
+
+def test_a_flag_that_wants_a_value_and_has_none_is_refused():
+    with pytest.raises(ValueError) as refused:
+        flags_of("-d", "-s")
+    assert str(refused.value) == "argument -s: expected one argument"
+
+
+def test_everything_after_a_separator_is_the_command():
+    assert flags_of("-d", "--", "-x", "--y") == ({"d"}, {}, ["-x", "--y"])

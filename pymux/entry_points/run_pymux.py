@@ -852,37 +852,78 @@ def _send_command(socket_name: str, command: str, pane_id=None) -> int:
 
 
 def _flag_args(
-    args: List[str], flags_with_value: Tuple[str, ...]
+    args: List[str],
+    flags_with_value: Tuple[str, ...],
+    flags_alone: Tuple[str, ...],
 ) -> Tuple[Set[str], Dict[str, str], List[str]]:
     """
     Parse a list of short flags, given either glued to their value
     (e.g. `-sname`) or as a separate argument (e.g. `-s name`).
+
+    **A flag this does not know is an error**, and it raises
+    `ValueError` naming the argument. Anything else was collected into
+    a set nobody reads, and a `--long` one fell past the test
+    altogether and became a word of the command the first pane runs.
+    So `new-session --zzz-not-a-flag "sleep 60"` started a session and
+    said nothing at all -- on the one route where nobody is watching
+    stderr, the invocation that starts the server. The same line
+    against a server that is already running reaches argparse in
+    `call_command_handler` and is refused there.
+    Lillecarl/pymux#458.
+
+    **The two tables have to hold what the command's own parser holds**,
+    because a person writes one line and the route it takes is not
+    their choice: it depends on whether a server is up.
+
+    Several flags in one argument are read the way getopt reads them,
+    so `-dP` is both of them. Only the first was taken before, which is
+    the same silent drop one character along.
     """
     flags: Set[str] = set()
     values: Dict[str, str] = {}
     positional: List[str] = []
 
+    def unknown(arg: str) -> ValueError:
+        return ValueError("unrecognized arguments: %s" % (arg,))
+
     i = 0
     while i < len(args):
         arg = args[i]
-        if arg.startswith("-") and len(arg) >= 2 and not arg.startswith("--"):
-            flag = arg[1]
-            rest = arg[2:]
-            if flag in flags_with_value:
-                if rest:
-                    values[flag] = rest
-                    i += 1
-                elif i + 1 < len(args):
-                    values[flag] = args[i + 1]
-                    i += 2
-                else:
-                    i += 1
-            else:
-                flags.add(flag)
-                i += 1
-        else:
+
+        if arg == "--":
+            # getopt's separator: the rest is the command, whatever it
+            # starts with.
+            positional.extend(args[i + 1 :])
+            break
+
+        if arg.startswith("--"):
+            raise unknown(arg)
+
+        if not (arg.startswith("-") and len(arg) >= 2):
             positional.append(arg)
             i += 1
+            continue
+
+        i += 1
+        letters = arg[1:]
+        while letters:
+            flag, letters = letters[0], letters[1:]
+
+            if flag in flags_alone:
+                flags.add(flag)
+                continue
+
+            if flag not in flags_with_value:
+                raise unknown("-" + flag)
+
+            if letters:
+                values[flag] = letters
+            elif i < len(args):
+                values[flag] = args[i]
+                i += 1
+            else:
+                raise ValueError("argument -%s: expected one argument" % (flag,))
+            break
 
     return flags, values, positional
 
@@ -923,9 +964,21 @@ def _new_session(socket_name: str, command: str, args: List[str], pane_id=None) 
     Otherwise, pass the command to the running server. (Which will report
     a duplicate session error, like tmux does.)
     """
-    flags, values, positional = _flag_args(
-        args[1:], flags_with_value=("s", "F", "c", "n", "x", "y", "e")
-    )
+    # **The same flags `new_session.register` declares**, because a
+    # person writes one line and does not choose the route it takes:
+    # whether this invocation starts the server or reaches one decides
+    # which parser reads it, and the two have to answer alike.
+    # Lillecarl/pymux#458.
+    try:
+        flags, values, positional = _flag_args(
+            args[1:],
+            flags_with_value=("s", "n", "c", "x", "y", "F", "J"),
+            flags_alone=("d", "P"),
+        )
+    except ValueError as unreadable:
+        sys.stderr.write("pymux: %s\n" % (unreadable,))
+        return 1
+
     attach = "d" not in flags
     session_name = values.get("s")
     start_directory = values.get("c")
