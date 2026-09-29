@@ -56,6 +56,12 @@ dependencies = [
 # points the package carries. Optional: pymux runs without it, and the
 # environment that installs pymux asks for it. Lillecarl/pymux#195.
 catppuccin = ["catppuccin>=2.0.0"]
+# `pymux web` serves a pane to a browser. Optional because it is an
+# adapter that runs beside a server rather than a part of one: a server
+# never imports this, and a caller with a front end of its own relays
+# `stream-pane` over the socket and needs nothing here.
+# Lillecarl/pymux#461.
+web = ["websockets>=13.0"]
 # What the suites need on top of what pymux needs. It is an extra and not a
 # `[dependency-groups]` entry because only an extra reaches a resolver: Nix
 # builds the test environment from this list.
@@ -101,6 +107,15 @@ build-backend = "hatchling.build"
 # distribution that this one depends on.
 [tool.hatch.build.targets.wheel]
 packages = ["pymux"]
+
+# **The element and the page have to be named, or they do not ship.**
+# Measured: with `packages` alone the wheel held every `.py` of
+# `pymux/web/` and none of `pymux/web/static/`, so `pymux web` served
+# nothing and said nothing about why. A test asserts they are there
+# (`tests/test_the_web_server.py`), because a missing file in a wheel is
+# the kind of fault that only shows to whoever installed it.
+# Lillecarl/pymux#461.
+artifacts = ["pymux/web/static/*"]
 
 [tool.pytest.ini_options]
 # Run a coroutine test, with no mark on it.

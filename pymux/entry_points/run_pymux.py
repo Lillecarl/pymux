@@ -73,6 +73,7 @@ MODES = (
     "ls",
     "find",
     "diagnose",
+    "web",
 )
 
 #: The modes that take the command of the first pane after the mode
@@ -176,6 +177,36 @@ def _add_options(parser: argparse.ArgumentParser, suppress_defaults: bool) -> No
             "so does the name pymux derives when this is not given. It "
             "lasts as long as the attachment, so put it in the command "
             "that attaches rather than expecting the server to remember."
+        ),
+    )
+    parser.add_argument(
+        "--port",
+        dest="web_port",
+        metavar="PORT",
+        default=default,
+        help="`pymux web`: the port to serve on. 8080 by default.",
+    )
+    parser.add_argument(
+        "--bind",
+        dest="web_bind",
+        metavar="ADDRESS",
+        default=default,
+        help=(
+            "`pymux web`: what to listen on. 127.0.0.1 by default, which "
+            "is this machine only. Anything else lets another machine "
+            "reach the terminal, with the token as the only guard and no "
+            "TLS unless something else adds it."
+        ),
+    )
+    parser.add_argument(
+        "--allow-input",
+        dest="web_allow_input",
+        action="store_true",
+        default=false,
+        help=(
+            "`pymux web`: let a viewer type into the pane. Off by "
+            "default: a port that types into a terminal is a different "
+            "thing from one that shows it."
         ),
     )
     parser.add_argument(
@@ -460,6 +491,9 @@ def run() -> None:
             hang_up_others=a.hang_up_others,
         )
 
+    elif mode == "web":
+        sys.exit(_web(socket_name, a))
+
     elif mode in ("list-sessions", "ls"):
         if socket_name:
             # With an explicit socket, ask the server. (The exit code tells
@@ -660,6 +694,72 @@ def _axis_of(values: Dict[str, str], flag: str, standing: int) -> int:
     if wanted < 1:
         raise ValueError("A window is at least one cell.")
     return wanted
+
+
+def _web(socket_name: str | None, a) -> int:
+    """
+    `pymux web`: serve panes of a running server in a browser.
+
+    **It runs beside the server and not inside it.** One stream per viewer
+    over the socket the server already has, so the server process never
+    imports a web library. That is what makes the web parts optional, and
+    it is the same relay path a caller with a front end of its own uses.
+
+    **Loopback and a token, both.** A browser sends no credentials on a
+    websocket upgrade, so on loopback an `Origin` check is the only guard
+    and a page may simply omit the header. So every upgrade carries the
+    token printed here. Lillecarl/pymux#461.
+    """
+    import anyio
+
+    from pymux.web.server import MISSING, a_token, serve, the_server
+
+    try:
+        server = the_server(socket_name)
+    except OSError as none:
+        sys.stderr.write("pymux: %s\n" % (none,))
+        return 1
+
+    token = a_token()
+    host = a.web_bind or "127.0.0.1"
+    port = int(a.web_port or 8080)
+
+    if host not in ("127.0.0.1", "::1", "localhost"):
+        sys.stderr.write(
+            "pymux: serving on %s, which is not only this machine. The token is "
+            "the only thing between a stranger and this terminal, and it travels "
+            "in plain text unless something else adds TLS.\n" % (host,)
+        )
+
+    # **Flushed, every line.** The token is the only way in and this
+    # process then runs until it is stopped, so a buffered stdout holds the
+    # one thing a person needs until the thing they need it for has ended.
+    # Measured: redirected to a file, nothing appeared at all.
+    def say(line: str) -> None:
+        print(line, flush=True)
+
+    say("pymux web on http://%s:%d/?pane=<pane>&t=%s" % (host, port, token))
+    say("  panes: %s" % (" ".join(pane.id for pane in server.panes) or "none",))
+    if not a.web_allow_input:
+        say("  showing only; --allow-input takes keys")
+
+    try:
+        anyio.run(
+            serve,
+            server.socket_path,
+            host,
+            port,
+            token,
+            bool(a.web_allow_input),
+        )
+    except RuntimeError as missing:
+        if str(missing) == MISSING:
+            sys.stderr.write("pymux: %s\n" % (MISSING,))
+            return 1
+        raise
+    except KeyboardInterrupt:
+        pass
+    return 0
 
 
 def _color_depth(ansi_colors_only: bool, true_color: bool):

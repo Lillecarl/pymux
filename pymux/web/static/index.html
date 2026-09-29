@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>pymux</title>
+    <link rel="stylesheet" href="/page.css" />
+  </head>
+  <body>
+    <!--
+      The demo page. It picks a pane from the query string, because this
+      server has no session list yet: `?pane=%1001&t=TOKEN`, which is
+      what `pymux web` prints.
+
+      Everything about a cell comes from the server, so this page styles
+      only the room around it.
+    -->
+    <h1>pymux</h1>
+    <p id="about">Opening…</p>
+    <pymux-pane id="pane"></pymux-pane>
+    <script type="module" src="/page.js"></script>
+  </body>
+</html>

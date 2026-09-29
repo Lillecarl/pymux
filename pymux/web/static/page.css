@@ -1,0 +1,51 @@
+/*
+ * The room around the pane, and nothing about a cell.
+ *
+ * Every colour and every rendition inside `<pymux-pane>` comes from the
+ * server's own stylesheet, which the element adopts into its shadow root.
+ * So this file cannot reach a cell and is not meant to.
+ */
+
+:root {
+  color-scheme: light dark;
+  --room: #fbfbfb;
+  --ink: #1a1a1a;
+  --quiet: #666;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --room: #17181c;
+    --ink: #e8e8e8;
+    --quiet: #999;
+  }
+}
+
+body {
+  margin: 0;
+  padding: 16px;
+  background: var(--room);
+  color: var(--ink);
+  font-family: system-ui, sans-serif;
+}
+
+h1 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+#about {
+  margin: 0 0 12px;
+  color: var(--quiet);
+  font-size: 0.85rem;
+}
+
+pymux-pane {
+  /* The pane draws its own background, and this is the edge around it. */
+  border: 1px solid color-mix(in srgb, var(--ink) 20%, transparent);
+  border-radius: 4px;
+  padding: 8px;
+  overflow: auto;
+  max-width: 100%;
+}
