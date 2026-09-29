@@ -22,9 +22,14 @@ import sys
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 
-from session import once, over_connection
+from session import in_this_process, once, over_connection
 
 SIZE = Size(rows=24, columns=80)
+
+#: One terminal with room, and one without. A person watching from the
+#: small one must not take the columns away from the big one.
+BIG = Size(rows=24, columns=100)
+SMALL = Size(rows=12, columns=40)
 
 #: A pane that stays up. The last window of a session ending takes the
 #: session with it, which detaches the client this file is about.
@@ -131,6 +136,115 @@ async def test_a_read_only_client_may_still_read_the_clients():
             pymux.handle_command("list-clients")
 
         assert state.message != "client is read-only"
+
+
+# ----------------------------------------------------------------------
+# The flag, and the two ways to ask for it.
+
+
+async def test_attach_session_r_marks_the_client_that_ran_it():
+    async with over_connection() as session:
+        pymux = session.pymux
+        pymux.create_window(WAITS)
+        state, _ = await session.attach("watcher", SIZE)
+
+        with set_app(state.app):
+            pymux.handle_command("attach-session -r")
+
+        assert state.read_only is True
+        assert state.ignore_size is True
+
+
+async def test_attaching_again_without_r_leaves_it_read_only():
+    """
+    tmux's `-r` only sets: `cmd-attach-session.c:118` adds both flags
+    and nothing there takes either away. So an `attach-session` with
+    no flag is not a way out of read-only.
+    """
+    async with over_connection() as session:
+        pymux = session.pymux
+        pymux.create_window(WAITS)
+        state, _ = await session.attach("watcher", SIZE)
+
+        with set_app(state.app):
+            pymux.handle_command("attach-session -r")
+            pymux.handle_command("attach-session")
+
+        assert state.read_only is True
+
+
+async def test_a_client_that_attached_with_the_flag_only_watches():
+    """
+    `pymux attach -r`, which is the flag on the `start-gui` packet. It
+    has to be read before the first key arrives, so this is the whole
+    of the route the command cannot cover: a person who attaches this
+    way is never writable, not even for one frame.
+    """
+    async with over_connection() as session:
+        session.pymux.create_window(WAITS)
+        state, _ = await session.attach("watcher", SIZE, read_only=True)
+
+        assert state.read_only is True
+        assert state.ignore_size is True
+
+
+async def test_the_flags_can_be_read_back():
+    "`list-clients -F` is how anything outside pymux sees this."
+    async with over_connection() as session:
+        pymux = session.pymux
+        pymux.create_window(WAITS)
+        state, _ = await session.attach("watcher", SIZE, read_only=True)
+
+        pymux.command_output = []
+        try:
+            with set_app(state.app):
+                pymux.handle_command("list-clients -F '#{client_flags}'")
+            lines = list(pymux.command_output)
+        finally:
+            pymux.command_output = None
+
+        assert lines == ["read-only,ignore-size"]
+
+
+# ----------------------------------------------------------------------
+# The size of the plane.
+
+
+async def test_a_read_only_client_does_not_shrink_the_plane():
+    async with in_this_process() as session:
+        pymux = session.pymux
+        pymux.create_window(WAITS)
+        await session.attach("working", BIG)
+        watching, _ = await session.attach("watching", SMALL)
+        watching.ignore_size = True
+
+        assert pymux.plane_size().columns == BIG.columns
+
+
+async def test_without_the_flag_the_small_client_still_wins():
+    "The control: `window-size smallest` is the default."
+    async with in_this_process() as session:
+        pymux = session.pymux
+        pymux.create_window(WAITS)
+        await session.attach("working", BIG)
+        await session.attach("watching", SMALL)
+
+        assert pymux.plane_size().columns == SMALL.columns
+
+
+async def test_a_read_only_client_on_its_own_still_sizes_the_plane():
+    """
+    Nobody left to leave it to. tmux falls back the same way, and for
+    the same reason: the alternative is a plane no terminal here can
+    show (`resize.c:95-107`).
+    """
+    async with in_this_process() as session:
+        pymux = session.pymux
+        pymux.create_window(WAITS)
+        watching, _ = await session.attach("watching", SMALL)
+        watching.ignore_size = True
+
+        assert pymux.plane_size().columns == SMALL.columns
 
 
 async def test_a_command_from_a_pane_is_nobody_and_is_not_refused():

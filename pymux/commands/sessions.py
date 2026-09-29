@@ -3,7 +3,7 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.main import ClientState, Pymux
     from pymux.session import Session
 
 
@@ -31,9 +31,10 @@ def move_this_client(
     target: str | None,
     detach_others: bool = False,
     hang_up_others: bool = False,
-) -> None:
+) -> "ClientState":
     """
-    Put the calling client on the session a `-t` names.
+    Put the calling client on the session a `-t` names, and answer
+    with it.
 
     `hang_up_others` is `attach-session -x`: the same clients leave,
     and the terminals they were in close. It says nothing about
@@ -58,3 +59,4 @@ def move_this_client(
             pymux.detach_client(other.app, hang_up=hang_up_others)
 
     pymux.attach_client_to(client_state, session)
+    return client_state

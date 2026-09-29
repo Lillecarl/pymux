@@ -412,8 +412,13 @@ async def over_connection(pymux=None, read_packet=None):
         ttyname=None,
         client_options=None,
         pings=False,
+        read_only=False,
     ):
         """
+        `read_only` is `pymux attach -r`: the flag rides on the
+        `start-gui` packet, so this is the only route that can ask for
+        it the way a person does. Lillecarl/pymux#467.
+
         `pings` says this client answers the server's ping, which is
         what lets the server drop it for not answering
         (Lillecarl/pymux#446). It is off by default because nothing
@@ -447,6 +452,7 @@ async def over_connection(pymux=None, read_packet=None):
                 {
                     "cmd": "start-gui",
                     "detach-others": False,
+                    "read-only": read_only,
                     "color-depth": ColorDepth.DEPTH_8_BIT,
                     "term": "xterm-256color",
                     "colorterm": "",

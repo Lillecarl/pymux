@@ -1654,6 +1654,14 @@ class Pymux:
         if not clients:
             return self.size_with_no_client(self.session_showing(window))
 
+        # A client that attached with `-r` is left out, and the filter
+        # is here rather than in `clients_watching`: such a client is
+        # watching, and it gets every frame. **Unless they all are** --
+        # then they decide it between them, because the alternative is
+        # a plane no terminal here can show. tmux does the same, and
+        # for the same reason (`resize.c:95-107`). Lillecarl/pymux#467.
+        clients = [one for one in clients if not one.ignore_size] or clients
+
         if window.window_size is WindowSize.LATEST:
             newest = max(clients, key=lambda client: client.last_used)
             size = newest.app.output.get_size()
@@ -3329,6 +3337,7 @@ class Pymux:
         detach_other_clients: bool = False,
         chosen_name: str | None = None,
         hang_up_others: bool = False,
+        read_only: bool = False,
     ):
         """
         Run the server and one client in this process.
@@ -3388,6 +3397,12 @@ class Pymux:
                     client.config_file = self.source_file
                     client.chosen_name = chosen_name
                     client.hang_up_others = hang_up_others
+                    # `-r` here is a watcher of a session nobody else
+                    # can reach, which is a thin thing to want; it is
+                    # passed on all the same, because the flag means
+                    # the same wherever it is written and `ctrl+b d`
+                    # is still the way out. Lillecarl/pymux#467.
+                    client.read_only = read_only
                     attached.append(client)
                     await client.attach(
                         detach_other_clients=detach_other_clients,

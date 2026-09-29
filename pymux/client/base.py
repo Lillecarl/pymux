@@ -32,6 +32,12 @@ class Client(ABC):
     #: Lillecarl/pymux#347.
     hang_up_others: bool = False
 
+    #: Whether `pymux attach -r` asked to only watch. It rides on the
+    #: same packet: the flag belongs to the client the server is about
+    #: to make, and `attach-session -r` is the other way to ask, for a
+    #: client that is already attached. Lillecarl/pymux#467.
+    read_only: bool = False
+
     #: Whether the server said to hang up as well as to leave. `attach
     #: -x` and `detach-client -P` are what say it.
     #: Lillecarl/pymux#347.

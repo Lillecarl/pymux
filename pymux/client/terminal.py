@@ -158,6 +158,8 @@ class TerminalClient(Client):
                 # `-x`: the other clients of the session leave, and the
                 # terminals they were in close. Lillecarl/pymux#347.
                 "hang-up-others": self.hang_up_others,
+                # `-r`: this client only watches. Lillecarl/pymux#467.
+                "read-only": self.read_only,
                 "color-depth": color_depth,
                 "term": os.environ.get("TERM", ""),
                 "colorterm": os.environ.get("COLORTERM", ""),

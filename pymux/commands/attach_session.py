@@ -23,10 +23,22 @@ def attach_session(pymux: "Pymux", args: argparse.Namespace) -> None:
     the terminal it was in closes rather than going back to a shell
     prompt. tmux spells both, and reads `-x` as `-d` with a harsher
     message. Lillecarl/pymux#347.
+
+    `-r` makes this client one that only watches, and takes it out of
+    the size of the plane at the same time: a person watching from a
+    phone must not shrink the session for the people working in it.
+    **It only sets.** Attaching again without `-r` leaves a read-only
+    client read-only, which is what tmux does
+    (`cmd-attach-session.c:118` sets both flags and clears neither).
+    Lillecarl/pymux#467.
     """
-    move_this_client(
+    client_state = move_this_client(
         pymux, args.target_session, detach_others=args.d, hang_up_others=args.x
     )
+
+    if args.r:
+        client_state.read_only = True
+        client_state.ignore_size = True
 
 
 def register(subparsers):
@@ -34,3 +46,4 @@ def register(subparsers):
     parser.add_argument("-t", dest="target_session", metavar="<target-session>", help="The session to attach to.")
     parser.add_argument("-d", dest="d", action="store_true", help="Detach the other clients of that session.")
     parser.add_argument("-x", dest="x", action="store_true", help="Detach them, and hang up the process each one was started by.")
+    parser.add_argument("-r", dest="r", action="store_true", help="Only watch: type nothing, and do not shrink the session.")

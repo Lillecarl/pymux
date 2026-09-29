@@ -616,6 +616,15 @@ class ServerConnection:
 
             self._create_app(color_depth=self.colors.depth, term=term)
 
+            # `pymux attach -r`. The client state exists from
+            # `_create_app` on, and the flag has to be on it before the
+            # first key arrives. `attach-session -r` is the same two
+            # lines for a client that is already here.
+            # Lillecarl/pymux#467.
+            if packet.get("read-only") and self.client_state is not None:
+                self.client_state.read_only = True
+                self.client_state.ignore_size = True
+
             if detach_other_clients or hang_up_others:
                 self._detach_the_others(hang_up=hang_up_others)
 

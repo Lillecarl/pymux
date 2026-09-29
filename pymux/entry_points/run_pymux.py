@@ -166,6 +166,19 @@ def _add_options(parser: argparse.ArgumentParser, suppress_defaults: bool) -> No
         ),
     )
     parser.add_argument(
+        "-r",
+        "--read-only",
+        dest="read_only",
+        action="store_true",
+        default=false,
+        help=(
+            "Only watch. This client types nothing into a pane and "
+            "runs no command that changes anything, and it is left out "
+            "of the size of the session, so a small terminal watching "
+            "does not shrink it for the people working in it."
+        ),
+    )
+    parser.add_argument(
         "-n",
         "--name",
         dest="client_name",
@@ -489,6 +502,7 @@ def run() -> None:
             detach_other_clients=a.detach_others or a.hang_up_others,
             chosen_name=a.client_name,
             hang_up_others=a.hang_up_others,
+            read_only=a.read_only,
         )
 
     elif mode == "web":
@@ -575,6 +589,7 @@ def run() -> None:
             client.config_file = filename
             client.chosen_name = a.client_name
             client.hang_up_others = a.hang_up_others
+            client.read_only = a.read_only
             client.attach(
                 detach_other_clients=detach_other_clients,
                 color_depth=_color_depth(ansi_colors_only, true_color),
@@ -586,6 +601,7 @@ def run() -> None:
                 c.config_file = filename
                 c.chosen_name = a.client_name
                 c.hang_up_others = a.hang_up_others
+                c.read_only = a.read_only
                 c.attach(
                     detach_other_clients=detach_other_clients,
                     color_depth=_color_depth(ansi_colors_only, true_color),

@@ -516,6 +516,36 @@ def _client_height(context: FormatContext) -> str:
     return str(size.rows) if size is not None else ""
 
 
+def _client_readonly(context: FormatContext) -> str:
+    "Whether this client only watches. tmux spells it the same way."
+    client = context.client
+    return "1" if client is not None and client.read_only else "0"
+
+
+def _client_flags(context: FormatContext) -> str:
+    """
+    What is true of this client, comma separated.
+
+    The shape of tmux's `server_client_get_flags`
+    (`server-client.c:3131`), with the two flags pymux has. It is the
+    only way to read either one back, because `list-clients` has no
+    line of its own for them: pymux's format language has no
+    conditional, so a default format cannot print the brackets tmux
+    puts round these and leave them out for a plain client.
+    Lillecarl/pymux#467.
+    """
+    client = context.client
+    if client is None:
+        return ""
+
+    flags = []
+    if client.read_only:
+        flags.append("read-only")
+    if client.ignore_size:
+        flags.append("ignore-size")
+    return ",".join(flags)
+
+
 #: Mapping of tmux `#{variable}` names. Variables that pymux doesn't know
 #: resolve to an empty string. (libtmux requires all fields of its format
 #: template to be present, but it ignores the empty ones.)
@@ -571,6 +601,8 @@ tmux_variables: Dict[str, Callable[[FormatContext], str]] = {
     "client_termname": _client_termname,
     "client_width": _client_width,
     "client_height": _client_height,
+    "client_readonly": _client_readonly,
+    "client_flags": _client_flags,
     "client_session": lambda c: c.client.session.name if c.client else "",
     # Server.
     "socket_path": _socket_path,

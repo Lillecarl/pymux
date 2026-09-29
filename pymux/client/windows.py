@@ -60,6 +60,8 @@ class WindowsClient(Client):
                     "detach-others": detach_other_clients,
                     # Lillecarl/pymux#347, as `client/terminal.py` says.
                     "hang-up-others": self.hang_up_others,
+                    # Lillecarl/pymux#467, as `client/terminal.py` says.
+                    "read-only": self.read_only,
                     "color-depth": color_depth,
                     "term": os.environ.get("TERM", ""),
                     # Lillecarl/pymux#287, as `client/terminal.py` says.
