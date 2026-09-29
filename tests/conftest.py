@@ -13,11 +13,13 @@ suite around it.
 """
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
 import pytest
 from hypothesis import HealthCheck, settings
+from ptyhost.process import Process
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -74,6 +76,61 @@ def a_loop_for_this_test():
     finally:
         asyncio.set_event_loop(None)
         loop.close()
+
+
+@pytest.fixture(autouse=True)
+def every_pty_this_test_opened(a_loop_for_this_test, monkeypatch):
+    """
+    Close the pty of every pane a test made.
+
+    **`kill` does not close one, on purpose.** A program writes its
+    last words and exits, and the kernel still holds them; the reader
+    picks them up on the turns of the loop after the kill and
+    `Backend.close` runs when that read reaches the end of the file
+    (Lillecarl/pymux#121). A test ends before any of those turns, so
+    the descriptors stayed open -- two per pane, in a suite that makes
+    a hundred and eighty of them.
+
+    It ended holding 1067 of them. `select()` takes no descriptor above
+    1023, so `test_windows_are_renumbered` failed with "filedescriptor
+    out of range" as soon as anything added a pane, and which test paid
+    for it depended on the order they ran in.
+
+    **Here rather than in the thirty-three fixtures that kill a pane.**
+    They each tear down what they know about; this closes what the test
+    really opened, including a pane a fixture forgot. It asks for the
+    loop so that it gives its descriptors back before the loop that
+    reads them goes.
+    """
+    opened = []
+    original = Process.__init__
+
+    def __init__(self, *args, **kw):
+        original(self, *args, **kw)
+        opened.append(self.backend)
+
+    monkeypatch.setattr(Process, "__init__", __init__)
+    try:
+        yield
+    finally:
+        for backend in opened:
+            # Both sides, and the slave first, which is the order the
+            # reap uses: closing it is what makes the end of the file
+            # reachable on the master. Neither is reached here -- the
+            # reap closes the slave from a loop callback and the reader
+            # closes the master when it reads the end -- so a test that
+            # never turns the loop again leaves both.
+            slave = getattr(backend, "slave", None)
+            if slave is not None:
+                backend.slave = None
+                try:
+                    os.close(slave)
+                except OSError:
+                    pass
+            try:
+                backend.close()
+            except OSError:
+                pass
 
 # The gate. `derandomize` seeds each property test from its own source,
 # so a run draws the examples the run before it drew, and a green gate
