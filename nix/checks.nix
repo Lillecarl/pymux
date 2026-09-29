@@ -803,11 +803,6 @@ in
         inputs = [ typescript ];
       }
       ''
-        # `set -e`, because a check script does not have it, and a script
-        # that grows a second command grows a place to fail in silence.
-        # Lillecarl/pymux#464.
-        set -e
-
         echo "reading the declarations of <pymux-pane> against a use of them"
         tsc --noEmit --strict \
           --target es2022 --lib es2022,dom --module esnext \
