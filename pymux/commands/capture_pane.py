@@ -92,6 +92,10 @@ def capture_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
     terminal can draw the pane: the colours, the renditions and the
     hyperlinks that the text drops. `show-html-stylesheet` is the other
     half of it. Lillecarl/pymux#452.
+
+    **The range is the visible pane, and `-S -` is the history.** A
+    caller that asks for a pane means the screenful it draws, not the
+    ten thousand rows behind it. Lillecarl/pymux#457.
     """
     if args.target_pane:
         pane = find_pane(pymux, args.target_pane)
@@ -149,8 +153,17 @@ def capture_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
         start_str = args.start
         end_str = args.end
 
-        if start_str in (None, "", "-"):
+        # **Nothing given is the visible pane, and "-" is the history.**
+        # They were the same answer, so `capture-pane -p` printed the
+        # whole scrollback: a caller that asks for the pane got up to
+        # `history-limit` rows and nothing said so. tmux reads a missing
+        # `-S` as the first visible row (`cmd-capture-pane.c:298-306`,
+        # where no value leaves `top = gd->hsize`) and keeps `-` for the
+        # top of the history. Lillecarl/pymux#457.
+        if start_str == "-":
             first_index = 0
+        elif start_str in (None, ""):
+            first_index = visible_top
         else:
             try:
                 first_index = from_tmux_line_number(int(start_str))

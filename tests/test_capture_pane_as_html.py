@@ -185,9 +185,12 @@ def test_what_a_program_writes_cannot_become_markup(pymux):
 
 def test_the_default_range_is_the_visible_pane(pymux):
     """
-    Where the text capture takes the whole buffer. A caller that draws
-    a pane a few times a second wants the screen, not ten thousand rows
-    of history. Lillecarl/pymux#457 holds the text side of it.
+    A caller that draws a pane a few times a second wants the screen,
+    not ten thousand rows of history.
+
+    The text capture took the whole buffer when this was written, and
+    the two agree now: Lillecarl/pymux#457 gave it the same default,
+    and `-S -` is what still reaches the history on both sides.
     """
     create_pane(pymux, NINE_LINES)
     drawn = read(capture(pymux)).text
@@ -197,8 +200,8 @@ def test_the_default_range_is_the_visible_pane(pymux):
     # a line: `html_of_page` joins the rows, so it is the last newline.
     assert drawn.endswith("line 8\n")
 
-    # The contrast, so that this test says what it is about.
-    assert text(pymux).splitlines()[0] == "line 0"
+    # The two spellings of a capture answer the same rows.
+    assert text(pymux).splitlines() == drawn.splitlines()
 
 
 def test_a_dash_reaches_as_far_back_as_the_buffer_goes(pymux):

@@ -101,6 +101,57 @@ def test_line_that_wrap_carried_onto_screen_is_whole(pymux):
     ]
 
 
+# ----------------------------------------------------------------------
+# What a capture with no range covers.
+#
+# The visible pane, which is what a caller that asks for a pane means.
+# It used to be the whole buffer, so a poller drawing a pane a few
+# times a second read up to `history-limit` rows a frame and nothing
+# said so. `-S -` is the spelling that still reaches the history, and
+# tmux reads the two apart the same way
+# (`cmd-capture-pane.c:294-306`). Lillecarl/pymux#457.
+
+#: More lines than the pane is tall, so some of them scroll off.
+SCROLLED = "".join("line %d\r\n" % number for number in range(9))
+
+
+def test_no_range_is_the_visible_pane(pymux):
+    create_pane(pymux, SCROLLED)
+    assert capture(pymux).splitlines() == ["line 5", "line 6", "line 7", "line 8"]
+
+
+def test_a_start_of_dash_reaches_the_history(pymux):
+    create_pane(pymux, SCROLLED)
+    lines = capture(pymux, "-S", "-").splitlines()
+    assert lines[0] == "line 0"
+    assert lines[-1] == "line 8"
+
+
+def test_no_range_is_the_visible_pane_with_joined_lines(pymux):
+    "`-J` numbers lines and not rows, and the default is the same idea."
+    create_pane(pymux, SCROLLED)
+    assert capture(pymux, "-J").splitlines() == [
+        "line 5",
+        "line 6",
+        "line 7",
+        "line 8",
+    ]
+
+
+def test_a_start_of_dash_reaches_the_history_with_joined_lines(pymux):
+    create_pane(pymux, SCROLLED)
+    assert capture(pymux, "-J", "-S", "-").splitlines()[0] == "line 0"
+
+
+def test_a_wrapped_line_of_the_history_is_not_in_the_default(pymux):
+    """
+    The pane is what a caller asked for, so a row above it stays out
+    however long the line on it was.
+    """
+    create_pane(pymux, LONG + "\r\n" + SCROLLED)
+    assert "a line longer" not in capture(pymux)
+
+
 def test_line_number_that_is_not_number_is_error(pymux):
     create_pane(pymux, "one")
     errors = []
