@@ -1873,6 +1873,14 @@ class Pymux:
         # the first time. Start it right away, so that panes in detached
         # sessions also run and produce output. (Like tmux does.)
         terminal_control = terminal.terminal_control
+
+        # What moves `#{pane_revision}`. It is wired here and not in
+        # `Pane`, because a pane is about the arrangement and knows
+        # nothing about a widget: a dozen tests build one around a stub
+        # that has no terminal control at all. `ptyhost` fires this after
+        # every read from the program, whatever the bytes were.
+        # Lillecarl/pymux#387.
+        terminal_control.on_content_changed += lambda _sender: pane.content_changed()
         if not terminal_control._running:
             # The size of the session this pane is going into, until a
             # client attaches. `new-session -x -y` is what names it, and

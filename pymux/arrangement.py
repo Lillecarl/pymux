@@ -96,6 +96,35 @@ class Pane:
         Pane._pane_counter += 1
         self.pane_id = Pane._pane_counter
 
+        #: How many times anything this pane shows may have changed. It
+        #: only goes up, and `#{pane_revision}` is it.
+        #:
+        #: **`Pymux._create_pane` is what makes it move**, because it is
+        #: what builds the terminal that says so. A pane built around
+        #: anything else -- a dozen tests build one around a stub -- has
+        #: the field and never counts, which is what lets those tests go
+        #: on knowing nothing about a widget.
+        #:
+        #: **Compare it, never order it.** Two revisions that differ say
+        #: something may have changed; a difference of one says nothing
+        #: about how much. The count moves on output that draws nothing
+        #: at all, because `ptyhost` calls `invalidate` after every read
+        #: whatever the bytes were, and that is the safe direction: a
+        #: reader that redraws for nothing loses a frame, and one that
+        #: misses a change shows the wrong screen until the next one.
+        #:
+        #: **It is not `screen.writes`.** That counts writes to rows, so
+        #: it stands still through a DECSCNM, an "OSC 4" and the death of
+        #: the program -- each of which changes what a reader draws. A
+        #: reader inside the server compares those itself, the way
+        #: `ptterm` compares reverse video; a reader that has only this
+        #: number cannot. Lillecarl/pymux#387.
+        self.revision = 0
+
+    def content_changed(self) -> None:
+        "Say that what this pane shows may have changed."
+        self.revision += 1
+
     @property
     def is_copying(self) -> bool:
         """

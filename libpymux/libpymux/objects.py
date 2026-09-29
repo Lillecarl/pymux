@@ -60,6 +60,7 @@ _PANE_FIELDS = (
     "pane_dead",
     "pane_in_mode",
     "pane_mode",
+    "pane_revision",
     "history_size",
     "history_limit",
 )
@@ -197,6 +198,23 @@ class Pane(_Object):
         return self._values.get("pane_mode", "")
 
     @property
+    def revision(self) -> int:
+        """
+        How many times what this pane shows may have changed.
+
+        **Compare it, never order it.** It only goes up, but a step of
+        one says nothing about how much happened, and it moves on output
+        that draws nothing at all -- the server counts every read from
+        the program, whatever the bytes were. So a difference means "ask
+        again", and equality means "nothing to do".
+
+        `-1` from a server too old to answer the field.
+        `wait_for_change` is how to wait for it rather than poll it.
+        Lillecarl/pymux#387.
+        """
+        return _as_int(self._values.get("pane_revision", ""), -1)
+
+    @property
     def window(self) -> Optional["Window"]:
         "The window that holds this pane, read again from the server."
         for window in self.server.windows:
@@ -270,6 +288,38 @@ class Pane(_Object):
         if end is not None:
             arguments += ["-E", str(end)]
         return self.server.cmd(arguments).stdout
+
+    def wait_for_change(
+        self, since: Optional[int] = None, timeout: Optional[float] = None
+    ) -> int:
+        """
+        Hold until this pane shows something else, and answer its
+        revision.
+
+        `since` is the revision last seen. The server answers at once
+        when the pane has already left it, so a caller that draws a
+        frame and then waits misses nothing in between -- which is what
+        makes this safe to use in a loop:
+
+            revision = pane.revision
+            while True:
+                draw(pane.capture_html())
+                revision = pane.wait_for_change(since=revision)
+
+        Without `since` it waits for the next change, whatever the pane
+        holds now.
+
+        The answer is the same revision back when the wait ran out, so a
+        caller compares it with what it sent. `timeout` is how long to
+        wait; the server has its own answer for how long, and it is
+        under a minute. Lillecarl/pymux#387.
+        """
+        arguments = ["wait-pane-change", "-t", self.id]
+        if since is not None:
+            arguments += ["--since", str(since)]
+        if timeout is not None:
+            arguments += ["--timeout", str(timeout)]
+        return _as_int(self.server.cmd(arguments).stdout.strip(), -1)
 
     def clear_history(self) -> None:
         "Throw away the scrollback of this pane."

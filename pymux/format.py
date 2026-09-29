@@ -538,6 +538,11 @@ tmux_variables: Dict[str, Callable[[FormatContext], str]] = {
     "pane_in_mode": lambda c: "1" if _pane_mode(c) else "0",
     "pane_mode": _pane_mode,
     "pane_synchronized": lambda c: "1" if c.window.synchronize_panes else "0",
+    # "Has anything happened in this pane?", as one number to compare.
+    # It only goes up, and a difference says something may have changed
+    # rather than how much. `Pane.revision` says what moves it.
+    # Lillecarl/pymux#387.
+    "pane_revision": lambda c: str(c.pane.revision),
     "history_size": _history_size,
     "history_limit": lambda c: str(c.pymux.history_limit),
     # Window.

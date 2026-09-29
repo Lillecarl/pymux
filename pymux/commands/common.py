@@ -276,6 +276,24 @@ def answer(pymux: "Pymux", text: str) -> None:
         pymux.get_client_state().message = text
 
 
+def refuse_without_a_waiter(pymux: "Pymux", what: str) -> None:
+    """
+    A wait belongs to somebody who is waiting for the answer.
+
+    tmux refuses a wait and a lock from a command with no client
+    (`cmd_wait_for_wait`, "not able to wait"), and the reason holds
+    here for a shape of its own: a sync route does not wait, it
+    spawns, so `bind-key X wait-for done` would put a task in the
+    server's group for every press and none of them would ever end.
+
+    `command_output` is what says a client is reading the answer: the
+    socket route sets it and a key binding, a hook and a configuration
+    file do not. Lillecarl/pymux#302.
+    """
+    if pymux.command_output is None:
+        raise CommandException("not able to %s" % (what,))
+
+
 def show_listing(pymux: "Pymux", title: str, text: str) -> None:
     """
     A listing, to the person who asked for it.
