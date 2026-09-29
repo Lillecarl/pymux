@@ -103,3 +103,115 @@ def test_the_room_and_the_flat_place_are_one_list(sockets, tmp_path):
         ]
     )
     assert _names() == ["pymux.sock.someone.0", "pymux.sock.someone.7"]
+
+
+# ----------------------------------------------------------------------
+# A server that is not there.
+#
+# A killed server leaves its socket file behind, and nothing ever took
+# one away. The file is a socket by every test the filesystem has, so
+# both readers offered it -- and `attach` offers the newest first, so
+# the dead one went in front of a live server that was one entry down.
+# Lillecarl/pymux#454.
+
+
+@pytest.fixture
+def a_dead_socket(tmp_path):
+    "Bind a name and close it. The file stays, and nobody answers it."
+
+    def make(name):
+        path = str(tmp_path / name)
+        listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        listener.bind(path)
+        listener.listen(1)
+        listener.close()
+        time.sleep(0.05)
+        return path
+
+    return make
+
+
+def test_a_socket_nobody_answers_is_not_a_server(sockets, a_dead_socket):
+    a_dead_socket("pymux.sock.someone.0")
+    sockets(["pymux.sock.someone.1"])
+
+    assert _names() == ["pymux.sock.someone.1"]
+
+
+def test_the_dead_one_does_not_go_in_front(sockets, a_dead_socket):
+    "It is the newest, which is the case a person meets."
+    sockets(["pymux.sock.someone.1"])
+    a_dead_socket("pymux.sock.someone.0")
+
+    assert _names() == ["pymux.sock.someone.1"]
+
+
+def test_the_lock_a_bind_takes_is_not_a_server(sockets, tmp_path):
+    "It sits in the room and its name matches the glob."
+    sockets(["pymux.sock.someone.0"])
+    (tmp_path / "pymux.sock.someone.0.lock").write_text("")
+
+    assert _names() == ["pymux.sock.someone.0"]
+
+
+def test_the_library_answers_the_same_list(sockets, a_dead_socket):
+    "`Server.list()` reads this one, and the two must agree."
+    from libpymux.sockets import socket_paths
+
+    a_dead_socket("pymux.sock.someone.0")
+    sockets(["pymux.sock.someone.1"])
+
+    assert [os.path.basename(one) for one in socket_paths()] == [
+        "pymux.sock.someone.1"
+    ]
+
+
+# ----------------------------------------------------------------------
+# Taking a name back.
+
+
+def test_a_new_server_takes_the_dead_name_rather_than_the_next(
+    sockets, a_dead_socket, tmp_path
+):
+    """
+    The numbers only ever went up, so a person read a bigger one in
+    `PYMUX` after every crash, and a hundred of them stopped a server
+    starting at all.
+    """
+    from libpymux.sockets import socket_directory
+    from pymux.pipes.posix import _bind_posix_socket
+
+    room = socket_directory()
+    dead = os.path.join(room, "pymux.sock.someone.0")
+    listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    listener.bind(dead)
+    listener.listen(1)
+    listener.close()
+
+    name, bound = _bind_posix_socket()
+    try:
+        assert os.path.basename(name) == "pymux.sock.someone.0"
+    finally:
+        bound.close()
+        os.unlink(name)
+
+
+def test_a_name_somebody_answers_on_is_left_alone(sockets, tmp_path):
+    "The next index, which is what a second server has always taken."
+    from libpymux.sockets import socket_directory
+    from pymux.pipes.posix import _bind_posix_socket
+
+    room = socket_directory()
+    held = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    held.bind(os.path.join(room, "pymux.sock.someone.0"))
+    held.listen(1)
+
+    try:
+        name, bound = _bind_posix_socket()
+    finally:
+        held.close()
+    try:
+        assert os.path.basename(name) == "pymux.sock.someone.1"
+    finally:
+        bound.close()
+        os.unlink(name)

@@ -12,11 +12,13 @@ import getpass
 import glob
 import logging
 import os
+import socket
 import stat
 import tempfile
 from typing import List
 
 __all__ = [
+    "nobody_answers",
     "socket_directory",
     "socket_paths",
 ]
@@ -118,11 +120,24 @@ def socket_paths() -> List[str]:
     The servers live in the per-UID room the server binds in, and one
     release also in the flat place they bound before it.
     Lillecarl/pymux#405.
+
+    **A socket nobody answers on is not a server.** A server that is
+    killed leaves its file behind, and a dead file is a socket by every
+    test the filesystem has, so this offered it and a caller got an
+    error from a name that had never been served. That costs a connect
+    per candidate, on a path a person runs by typing `attach`.
+    Lillecarl/pymux#454.
     """
     user = getpass.getuser()
     found = glob.glob("%s/pymux.sock.%s.*" % (socket_directory(), user))
     found += glob.glob("%s/pymux.sock.%s.*" % (tempfile.gettempdir(), user))
-    return sorted(set(path for path in found if _is_socket(path)))
+    return sorted(
+        set(
+            path
+            for path in found
+            if _is_socket(path) and not nobody_answers(path)
+        )
+    )
 
 
 def _is_socket(path: str) -> bool:
@@ -130,3 +145,30 @@ def _is_socket(path: str) -> bool:
         return stat.S_ISSOCK(os.stat(path).st_mode)
     except OSError:
         return False
+
+
+def nobody_answers(socket_name: str) -> bool:
+    """
+    Whether a connect on this name reaches no server at all.
+
+    Only "refused" and "not there" say that the name is free. Anything
+    else -- no permission to reach it, a connect that hangs -- is a
+    question this cannot answer, and a name it cannot answer for is a
+    name to leave alone. tmux reads the same two errors and no others
+    (`client.c`, `client_connect`).
+
+    **It lives here and not with the bind**, because both sides need
+    it: the server asks before it takes a name from a server that has
+    gone, and a caller asks before it offers one. Lillecarl/pymux#454.
+    """
+    probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        probe.connect(socket_name)
+    except (ConnectionRefusedError, FileNotFoundError):
+        return True
+    except OSError:
+        return False
+    else:
+        return False
+    finally:
+        probe.close()

@@ -7,7 +7,7 @@ import stat
 from typing import Callable
 
 import anyio
-from libpymux.sockets import socket_directory
+from libpymux.sockets import nobody_answers, socket_directory
 
 from ..log import logger
 from .base import BrokenPipeError, PipeConnection
@@ -80,29 +80,6 @@ class PosixSocketListener:
             pass
 
 
-def _nobody_answers(socket_name: str) -> bool:
-    """
-    Whether a connect on this name reaches no server at all.
-
-    Only "refused" and "not there" say that the name is free. Anything
-    else -- no permission to reach it, a connect that hangs -- is a
-    question this cannot answer, and a name it cannot answer for is a
-    name to leave alone. tmux reads the same two errors and no others
-    (`client.c`, `client_connect`).
-    """
-    probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    try:
-        probe.connect(socket_name)
-    except (ConnectionRefusedError, FileNotFoundError):
-        return True
-    except OSError:
-        return False
-    else:
-        return False
-    finally:
-        probe.close()
-
-
 def _bind_or_take_over(sock: socket.socket, socket_name: str) -> None:
     """
     Bind the name, taking it from a server that has gone.
@@ -139,7 +116,7 @@ def _bind_or_take_over(sock: socket.socket, socket_name: str) -> None:
     try:
         fcntl.flock(lock, fcntl.LOCK_EX)
 
-        if not _nobody_answers(socket_name):
+        if not nobody_answers(socket_name):
             raise in_use
 
         try:
@@ -194,7 +171,16 @@ def _bind_posix_socket(socket_name: str | None = None):
                     getpass.getuser(),
                     i,
                 )
-                s.bind(socket_name)
+                # **A dead name is taken and not stepped over.** A
+                # killed server leaves its file behind and nothing ever
+                # took one away, so the numbers only ever went up: a
+                # person read a bigger one in `PYMUX` every time, and
+                # after a hundred of them no server could start at all.
+                # The explicit path has answered this since
+                # Lillecarl/pymux#453 and the room gets the same answer.
+                # A name something answers on raises EADDRINUSE here,
+                # which is the next index. Lillecarl/pymux#454.
+                _bind_or_take_over(s, socket_name)
                 return socket_name, s
             except (OSError, socket.error):
                 i += 1

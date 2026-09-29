@@ -4,11 +4,12 @@ import json
 import os
 import signal
 import socket
+import stat
 import sys
 import tempfile
 from select import select
 
-from libpymux.sockets import socket_directory
+from libpymux.sockets import nobody_answers, socket_directory
 from prompt_toolkit.input.vt100 import raw_mode
 from pymux.protocol import Packet
 
@@ -215,11 +216,32 @@ def list_socket_names():
     (Lillecarl/pymux#405) -- and one release also in the flat place
     they bound before it: a server that answered before the room still
     answers, and an attach should still find it.
+
+    **A name nobody answers on is not a server, and neither is a file
+    that is not a socket.** A killed server leaves its file behind, and
+    the newest of those is the one this offers first -- so a person
+    attached and got an error while a live server sat one entry down.
+    The lock a bind takes the name under is in the room too, and its
+    name matches this glob. `socket_paths` asks the same two questions;
+    that the two of them glob separately at all is
+    Lillecarl/pymux#451. Lillecarl/pymux#454.
     """
     user = getpass.getuser()
     found = glob.glob("%s/pymux.sock.%s.*" % (socket_directory(), user))
     found += glob.glob("%s/pymux.sock.%s.*" % (tempfile.gettempdir(), user))
-    return sorted(set(found), key=_started_at, reverse=True)
+    alive = [
+        path
+        for path in set(found)
+        if _is_socket(path) and not nobody_answers(path)
+    ]
+    return sorted(alive, key=_started_at, reverse=True)
+
+
+def _is_socket(path: str) -> bool:
+    try:
+        return stat.S_ISSOCK(os.stat(path).st_mode)
+    except OSError:
+        return False
 
 
 def _started_at(path: str) -> float:
