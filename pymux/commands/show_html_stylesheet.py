@@ -7,9 +7,8 @@ if TYPE_CHECKING:
 
 from pyte.html import CSS, theme_css
 
-from pymux.commands import CommandException
 from pymux.commands import add_command
-from pymux.commands.common import find_pane
+from pymux.commands.common import the_pane
 from pymux.commands.common import show_listing
 
 
@@ -34,9 +33,7 @@ def show_html_stylesheet(pymux: "Pymux", args: argparse.Namespace) -> None:
         show_listing(pymux, "show-html-stylesheet", CSS)
         return
 
-    pane = find_pane(pymux, args.target_pane)
-    if pane is None:
-        raise CommandException("Can't find pane: %s" % (args.target_pane,))
+    pane = the_pane(pymux, args.target_pane)
 
     show_listing(
         pymux, "show-html-stylesheet", CSS + "\n" + theme_css(pane.screen.colors)

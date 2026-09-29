@@ -7,6 +7,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException
 from pymux.commands import add_command
+from pymux.commands.common import the_window
 from pymux.enums import Woke
 
 
@@ -25,7 +26,7 @@ def switch_column_width(pymux: "Pymux", args: argparse.Namespace) -> None:
     nothing to keep for muscle memory and nothing to collide with, and
     which key it should be is a choice rather than a default.
     """
-    window = pymux.arrangement.get_active_window()
+    window = the_window(pymux, None)
 
     if not window.strip:
         raise CommandException(

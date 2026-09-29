@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException
 from pymux.commands import add_command
-from pymux.commands.common import add_format_arguments, chosen_format, find_window
+from pymux.commands.common import add_format_arguments, chosen_format, find_window, the_window
 from pymux.commands.common import show_listing
 from pymux.format import format_pymux_string
 
@@ -26,7 +26,7 @@ def list_panes(pymux: "Pymux", args: argparse.Namespace) -> None:
         window = find_window(pymux, args.target_pane.rsplit(".", 1)[0])
         if window is None:
             raise CommandException(
-                "Can't find window: %s" % (args.target_pane,)
+                "can't find window: %s" % (args.target_pane,)
             )
         windows: List["Window"] = [window]
     elif args.a:
@@ -38,7 +38,7 @@ def list_panes(pymux: "Pymux", args: argparse.Namespace) -> None:
     elif args.s:
         windows = list(pymux.arrangement.windows)
     else:
-        windows = [pymux.arrangement.get_active_window()]
+        windows = [the_window(pymux, None)]
 
     active_pane = windows[0].active_pane
 

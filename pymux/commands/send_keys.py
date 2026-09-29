@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException
 from pymux.commands import add_command
-from pymux.commands.common import find_pane
+from pymux.commands.common import the_pane
 from pymux.commands.common import send_key
 from pymux.key_spelling import event_however_it_is_written
 
@@ -22,14 +22,7 @@ def send_keys(pymux: "Pymux", args: argparse.Namespace) -> None:
     to a terminal that is being reset. tmux takes it on its own.
     Lillecarl/pymux#118.
     """
-    if args.target_pane:
-        pane = find_pane(pymux, args.target_pane)
-        if pane is None:
-            raise CommandException(
-                "Can't find pane: %s" % (args.target_pane,)
-            )
-    else:
-        pane = pymux.arrangement.get_active_pane()
+    pane = the_pane(pymux, args.target_pane)
 
     if pane.is_copying:
         raise CommandException("Cannot send keys. Pane is in copy mode.")

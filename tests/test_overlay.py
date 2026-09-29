@@ -108,8 +108,12 @@ def test_every_client_of_the_session_looks_at_overlay():
         pass
 
     pymux = Pymux()
-    here = pymux.current_session
-    elsewhere = pymux.create_session(name="elsewhere")
+    # The overlay lands on the session a command with no client means,
+    # and that is the newest session on the server: nothing has looked
+    # at either of these, so `last_used_session` answers with the one
+    # made last. Lillecarl/pymux#473.
+    elsewhere = pymux.current_session
+    here = pymux.create_session(name="here")
 
     pane = pymux.display_overlay(command="%s -c pass" % _python())
     try:

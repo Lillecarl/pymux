@@ -9,7 +9,7 @@ from pyte.html import SCREEN_CLASS, html_of_page
 
 from pymux.commands import CommandException
 from pymux.commands import add_command
-from pymux.commands.common import find_pane
+from pymux.commands.common import the_pane
 from pymux.commands.common import show_listing
 
 
@@ -97,14 +97,7 @@ def capture_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
     caller that asks for a pane means the screenful it draws, not the
     ten thousand rows behind it. Lillecarl/pymux#457.
     """
-    if args.target_pane:
-        pane = find_pane(pymux, args.target_pane)
-        if pane is None:
-            raise CommandException(
-                "Can't find pane: %s" % (args.target_pane,)
-            )
-    else:
-        pane = pymux.arrangement.get_active_pane()
+    pane = the_pane(pymux, args.target_pane)
 
     process = pane.process
     screen = pane.screen

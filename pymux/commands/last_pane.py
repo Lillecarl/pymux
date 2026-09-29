@@ -6,13 +6,14 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import add_command
+from pymux.commands.common import the_window
 
 
 def last_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
     Focus the pane that was active before this one.
     """
-    w = pymux.arrangement.get_active_window()
+    w = the_window(pymux, None)
     prev_active_pane = w.previous_active_pane
 
     if prev_active_pane:

@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException
 from pymux.commands import add_command
-from pymux.commands.common import find_pane
+from pymux.commands.common import find_pane, the_window
 from pymux.layout import focus_down
 from pymux.layout import focus_left
 from pymux.layout import focus_right
@@ -20,7 +20,7 @@ def select_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
     if args.pane_id:
         pane_id = args.pane_id
-        w = pymux.arrangement.get_active_window()
+        w = the_window(pymux, None)
 
         if pane_id == ":.+":
             w.focus_next()
@@ -29,11 +29,11 @@ def select_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
         else:
             pane = find_pane(pymux, pane_id)
             if pane is None:
-                raise CommandException("Can't find pane: %s" % (pane_id,))
+                raise CommandException("can't find pane: %s" % (pane_id,))
             w.active_pane = pane
 
     elif args.l:
-        pymux.arrangement.get_active_window().rotate(with_pane_after_only=True)
+        the_window(pymux, None).rotate(with_pane_after_only=True)
 
     else:
         if args.L:

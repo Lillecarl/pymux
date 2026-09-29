@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 from pymux.arrangement import LayoutTypes
 from pymux.commands import CommandException
 from pymux.commands import add_command
+from pymux.commands.common import the_window
 
 
 def select_layout(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -21,7 +22,7 @@ def select_layout(pymux: "Pymux", args: argparse.Namespace) -> None:
     except ValueError:
         raise CommandException("Invalid layout type.")
     else:
-        pymux.arrangement.get_active_window().select_layout(layout_type_obj)
+        the_window(pymux, None).select_layout(layout_type_obj)
 
 
 def register(subparsers):

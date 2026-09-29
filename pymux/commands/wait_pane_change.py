@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 import anyio
 
 from pymux.commands import CommandException, add_command
-from pymux.commands.common import find_pane, refuse_without_a_waiter
+from pymux.commands.common import refuse_without_a_waiter, the_pane
 
 #: How long a wait runs when nobody says. Short enough that a caller
 #: behind a proxy with its own idea of an idle connection gets an answer
@@ -102,9 +102,7 @@ def _the_pane(pymux: "Pymux", args: argparse.Namespace):
             raise CommandException("no pane to wait on")
         return pane
 
-    pane = find_pane(pymux, args.target_pane)
-    if pane is None:
-        raise CommandException("Can't find pane: %s" % (args.target_pane,))
+    pane = the_pane(pymux, args.target_pane)
     return pane
 
 

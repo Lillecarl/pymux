@@ -6,6 +6,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import add_command
+from pymux.commands.common import the_window
 
 
 def swap_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -17,7 +18,7 @@ def swap_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
     # and recorded: tests/reference/tmux_compat/divergences.toml.
     # Lillecarl/pymux#400. -D used to pass neither flag, which
     # rotated every pane of the window instead of swapping one.
-    pymux.arrangement.get_active_window().rotate(
+    the_window(pymux, None).rotate(
         with_pane_before_only=args.D, with_pane_after_only=args.U
     )
 

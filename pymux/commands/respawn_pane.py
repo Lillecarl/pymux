@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException
 from pymux.commands import add_command
-from pymux.commands.common import find_pane
+from pymux.commands.common import the_pane
 from pymux.enums import Woke
 
 
@@ -24,14 +24,7 @@ def respawn_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
     tree -- pymux does not keep dead panes on screen -- and there is
     nothing to respawn. Lillecarl/pymux#306.
     """
-    if args.target_pane:
-        pane = find_pane(pymux, args.target_pane)
-        if pane is None:
-            raise CommandException(
-                "Can't find pane: %s" % (args.target_pane,)
-            )
-    else:
-        pane = pymux.arrangement.get_active_pane()
+    pane = the_pane(pymux, args.target_pane)
 
     replace_pane_program(pymux, pane, args)
 

@@ -283,7 +283,7 @@ async def test_a_target_that_names_no_session_finds_nothing():
 
         _command(pymux, state, "select-window -t nowhere:1")
 
-        assert "Can't find window: nowhere:1" in state.message
+        assert "can't find window: nowhere:1" in state.message
 
 
 async def test_a_pane_id_reaches_across_the_sessions():

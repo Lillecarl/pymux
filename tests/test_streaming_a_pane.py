@@ -162,7 +162,7 @@ async def test_a_pane_nobody_can_find_is_refused(pymux):
         said = await frames_of(client_end, 2)
 
         assert said[0]["cmd"] == "err"
-        assert "Can't find pane" in said[0]["data"]
+        assert "can't find pane" in said[0]["data"]
         assert said[1] == {"cmd": "exit", "code": 1}
 
         pymux.stop()

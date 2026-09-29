@@ -6,13 +6,14 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import add_command
+from pymux.commands.common import the_window
 
 
 def rename_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
     Rename the active window.
     """
-    pymux.arrangement.get_active_window().chosen_name = args.name
+    the_window(pymux, None).chosen_name = args.name
 
 
 def register(subparsers):

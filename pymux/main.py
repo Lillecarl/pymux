@@ -1130,6 +1130,17 @@ class Pymux:
             name=name if name is not None else str(session_id),
         )
         self.sessions.append(session)
+
+        # **A session counts as used the moment it is made.** Nothing
+        # has looked at one yet, so every unused session tied at nought
+        # and `max` answered with the first of them: a command with no
+        # target, over the socket, landed on the session `__init__`
+        # made rather than on the one somebody had just created. tmux
+        # stamps a session's activity from its creation time
+        # (`session.c:154`) and ranks by that (`cmd-find.c:146`).
+        # Lillecarl/pymux#473.
+        self._uses += 1
+        session.last_used = self._uses
         return session
 
     def remove_session(self, session: Session) -> None:
@@ -1250,8 +1261,23 @@ class Pymux:
 
     @property
     def last_used_session(self) -> Session:
-        "The session a person looked at last, of the ones that are left."
-        return max(self.sessions, key=lambda session: session.last_used)
+        """
+        The session a person looked at last, of the ones that are left.
+
+        **A session with no window is not an answer.** A command with
+        no target needs a window to act on, and that session has none,
+        so answering with it turns a server full of windows into "no
+        current window". tmux refuses one outright:
+        `cmd_find_session_valid` calls a session whose `curw` is NULL
+        invalid and `cmd_find_best_session` skips it
+        (`cmd-find.c:150-158`).
+
+        One is taken when no session holds a window, because then the
+        answer is a message and there is no better session to give it
+        about. Lillecarl/pymux#473.
+        """
+        holding = [one for one in self.sessions if one.arrangement.windows]
+        return max(holding or self.sessions, key=lambda session: session.last_used)
 
     def session_of(self, app) -> Session:
         "The session of the client that this application draws for."

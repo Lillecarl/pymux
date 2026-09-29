@@ -6,13 +6,12 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import add_command
+from pymux.commands.common import the_window
 
 
 def previous_layout(pymux: "Pymux", args: argparse.Namespace) -> None:
     "Select previous layout."
-    pane = pymux.arrangement.get_active_window()
-    if pane:
-        pane.select_previous_layout()
+    the_window(pymux, None).select_previous_layout()
 
 
 def register(subparsers):

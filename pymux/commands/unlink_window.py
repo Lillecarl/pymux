@@ -6,7 +6,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandException, add_command
-from pymux.commands.common import find_window
+from pymux.commands.common import the_window
 
 
 def unlink_window(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -19,12 +19,7 @@ def unlink_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     last window of the session refuses: there would be nothing left
     to watch. Lillecarl/pymux#297.
     """
-    if args.target_window:
-        window = find_window(pymux, args.target_window)
-        if window is None:
-            raise CommandException("Can't find window: %s" % (args.target_window,))
-    else:
-        window = pymux.arrangement.get_active_window()
+    window = the_window(pymux, args.target_window)
 
     if len(pymux.arrangement.windows) == 1:
         raise CommandException("Can't unlink the last window.")

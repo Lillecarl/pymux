@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandException
 from pymux.commands import add_command
 from pymux.commands.common import answer
-from pymux.commands.common import find_pane
+from pymux.commands.common import the_pane
 
 
 def get(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -24,14 +24,7 @@ def get(pymux: "Pymux", args: argparse.Namespace) -> None:
     if what != "paneid":
         raise CommandException("Unknown thing to get: %s" % (what,))
 
-    if args.target_pane:
-        pane = find_pane(pymux, args.target_pane)
-        if pane is None:
-            raise CommandException(
-                "Can't find pane: %s" % (args.target_pane,)
-            )
-    else:
-        pane = pymux.arrangement.get_active_pane()
+    pane = the_pane(pymux, args.target_pane)
 
     answer(pymux, str(pane.pane_id))
 

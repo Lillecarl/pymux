@@ -6,7 +6,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import add_command
-from pymux.commands.common import find_window
+from pymux.commands.common import find_window, the_window
 from pymux.commands.common import add_format_arguments, print_object_format
 
 
@@ -29,7 +29,7 @@ def split_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     )
 
     if args.P:
-        window = pymux.arrangement.get_active_window()
+        window = the_window(pymux, None)
         if target_window is not None:
             window = target_window
         print_object_format(pymux, args, window=window, pane=window.active_pane)

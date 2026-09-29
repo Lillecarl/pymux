@@ -809,7 +809,7 @@ class ServerConnection:
         pane = find_pane(self.pymux, target) if target else None
         if pane is None:
             await self._write_packet(
-                {"cmd": Packet.ERR, "data": "Can't find pane: %s\n" % (target,)}
+                {"cmd": Packet.ERR, "data": "can't find pane: %s\n" % (target,)}
             )
             await self._write_packet({"cmd": Packet.EXIT, "code": 1})
             self._close_connection()

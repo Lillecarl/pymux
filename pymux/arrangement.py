@@ -990,13 +990,14 @@ class Arrangement:
         w = self.get_active_window()
         return w.invalidation_hash()
 
-    def get_active_window(self) -> Window:
+    def get_active_window(self) -> Window | None:
         """
-        The current active :class:`.Window`.
+        The current active :class:`.Window`, or nothing when this
+        session holds none.
         """
         return self.get_active_window_for(get_app())
 
-    def get_active_window_for(self, app) -> Window:
+    def get_active_window_for(self, app) -> Window | None:
         """
         The active :class:`.Window` of one client.
 
@@ -1010,7 +1011,17 @@ class Arrangement:
         was last on. It cached that window and returned `windows[0]`, so
         the first answer and every answer after it differed as soon as
         anything had made a window active. Lillecarl/pymux#193.
+
+        **A session that holds no window has no answer, and says so.**
+        It answered `windows[0]` of an empty list, which is an
+        `IndexError` out of whatever asked -- and an `IndexError` is
+        not a `CommandException`, so a bare `resize-window -x 200` over
+        the socket reached nobody at all. `get_active_pane_for` already
+        reads this as optional. Lillecarl/pymux#473.
         """
+        if not self.windows:
+            return None
+
         try:
             return self._active_window_for_cli[app]
         except KeyError:

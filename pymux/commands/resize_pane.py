@@ -7,6 +7,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException
 from pymux.commands import add_command
+from pymux.commands.common import the_window
 from pymux.layout import change_pane_size
 
 
@@ -22,7 +23,7 @@ def resize_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
     except ValueError:
         raise CommandException("Expecting an integer.")
 
-    w = pymux.arrangement.get_active_window()
+    w = the_window(pymux, None)
 
     if w and w.active_pane is not None:
         change_pane_size(

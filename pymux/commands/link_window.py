@@ -36,7 +36,7 @@ def link_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
     window = _find_anywhere(pymux, args.s)
     if window is None:
-        raise CommandException("Can't find window: %s" % (args.s,))
+        raise CommandException("can't find window: %s" % (args.s,))
 
     index = int(args.t) if args.t else None
     pymux.arrangement.link_window(window, index)

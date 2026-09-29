@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException
 from pymux.commands import add_command, this_client
-from pymux.commands.common import find_window
+from pymux.commands.common import the_window
 
 
 def select_window(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -20,13 +20,11 @@ def select_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
     window_id = args.target_window
 
-    w = find_window(pymux, window_id)
-    if w is None:
-        raise CommandException("Can't find window: %s" % (window_id,))
+    w = the_window(pymux, window_id)
 
     session = pymux.session_of_window(w)
     if session is None:
-        raise CommandException("Can't find window: %s" % (window_id,))
+        raise CommandException("can't find window: %s" % (window_id,))
 
     client_state = this_client(pymux)
     if client_state is not None:

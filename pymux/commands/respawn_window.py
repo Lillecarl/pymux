@@ -5,9 +5,8 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException
 from pymux.commands import add_command
-from pymux.commands.common import find_window
+from pymux.commands.common import the_window
 from pymux.commands.respawn_pane import replace_pane_program
 
 
@@ -21,14 +20,7 @@ def respawn_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     or of the active one. The same `-k` rule as respawn-pane has.
     Lillecarl/pymux#306.
     """
-    if args.target_window:
-        window = find_window(pymux, args.target_window)
-        if window is None:
-            raise CommandException(
-                "Can't find window: %s" % (args.target_window,)
-            )
-    else:
-        window = pymux.arrangement.get_active_window()
+    window = the_window(pymux, args.target_window)
 
     replace_pane_program(pymux, window.active_pane, args)
 

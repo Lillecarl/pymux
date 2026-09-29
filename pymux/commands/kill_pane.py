@@ -5,23 +5,15 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException
 from pymux.commands import add_command
-from pymux.commands.common import find_pane
+from pymux.commands.common import the_pane
 
 
 def kill_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
     Kill a pane, or the active one.
     """
-    if args.target_pane:
-        pane = find_pane(pymux, args.target_pane)
-        if pane is None:
-            raise CommandException(
-                "Can't find pane: %s" % (args.target_pane,)
-            )
-    else:
-        pane = pymux.arrangement.get_active_pane()
+    pane = the_pane(pymux, args.target_pane)
     pymux.kill_pane(pane)
 
 

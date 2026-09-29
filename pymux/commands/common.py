@@ -77,6 +77,29 @@ def find_window(pymux: "Pymux", target: str | None) -> Optional["Window"]:
     return window_in(session, target)
 
 
+def the_window(pymux: "Pymux", target: str | None) -> "Window":
+    """
+    The window a target names, or a `CommandException` saying why not.
+
+    **A command with no target means the window the caller is looking
+    at, and a caller over the socket looks at nothing.** So the two
+    failures are different questions and want different words: a target
+    that named a window nobody has is "can't find window: work:3", and
+    no target on a server with no window at all is "no current window",
+    which is tmux's own wording for it.
+
+    `can't find window: None` was what came out of every caller that
+    spelled the message itself, because the caller had nothing to name.
+    Lillecarl/pymux#473.
+    """
+    window = find_window(pymux, target)
+    if window is not None:
+        return window
+    if target:
+        raise CommandException("can't find window: %s" % (target,))
+    raise CommandException("no current window")
+
+
 def window_in(session: "Session", target: str) -> Optional["Window"]:
     "The window a target names inside one session."
     if target == "":
@@ -139,6 +162,23 @@ def find_pane(pymux: "Pymux", target: str | None) -> Optional["Pane"]:
             return window.panes[index]
 
     return None
+
+
+def the_pane(pymux: "Pymux", target: str | None) -> "Pane":
+    """
+    The pane a target names, or a `CommandException` saying why not.
+
+    `the_window` above says why the two failures want different words.
+    The same holds one level down: a caller over the socket is looking
+    at no pane either. tmux spells both messages in lower case
+    (`cmd-find.c:1263-1268`). Lillecarl/pymux#473.
+    """
+    pane = find_pane(pymux, target)
+    if pane is not None:
+        return pane
+    if target:
+        raise CommandException("can't find pane: %s" % (target,))
+    raise CommandException("no current pane")
 
 
 def ask_person(

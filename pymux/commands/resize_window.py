@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 from prompt_toolkit.data_structures import Size
 from pymux.commands import CommandException
 from pymux.commands import add_command
-from pymux.commands.common import find_window
+from pymux.commands.common import the_window
 from pymux.enums import WindowSize
 from pymux.layout import size_the_panes_of
 
@@ -67,9 +67,7 @@ def resize_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     saying it, so whether those are worth having at all is
     Lillecarl/pymux#225.
     """
-    window = find_window(pymux, args.target_window)
-    if window is None:
-        raise CommandException("can't find window: %s" % (args.target_window,))
+    window = the_window(pymux, args.target_window)
 
     now = pymux.plane_size(window)
 

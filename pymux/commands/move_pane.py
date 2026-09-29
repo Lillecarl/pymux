@@ -5,8 +5,8 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, add_command
-from pymux.commands.common import find_pane, find_window
+from pymux.commands import add_command
+from pymux.commands.common import the_pane, the_window
 
 
 def move_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -20,19 +20,8 @@ def move_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
     -d leaves the focus where it was. A window the pane leaves empty
     is gone. Lillecarl/pymux#297.
     """
-    if args.s:
-        pane = find_pane(pymux, args.s)
-        if pane is None:
-            raise CommandException("Can't find pane: %s" % (args.s,))
-    else:
-        pane = pymux.arrangement.get_active_pane()
-
-    if args.t:
-        window = find_window(pymux, args.t)
-        if window is None:
-            raise CommandException("Can't find window: %s" % (args.t,))
-    else:
-        window = pymux.arrangement.get_active_window()
+    pane = the_pane(pymux, args.s)
+    window = the_window(pymux, args.t)
 
     if pymux._window_holding(pane) is window:
         return

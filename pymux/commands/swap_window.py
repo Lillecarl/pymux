@@ -6,7 +6,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import add_command
-from pymux.commands.common import find_window
+from pymux.commands.common import find_window, the_window
 
 
 def swap_window(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -19,7 +19,7 @@ def swap_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     the tmux spell is `swap-window -t -1`. Lillecarl/pymux#296.
     """
     dst = args.dst_window
-    active = pymux.arrangement.get_active_window()
+    active = the_window(pymux, None)
 
     if dst.startswith(("+", "-")):
         dst_window = pymux.arrangement.get_window_by_index(active.index + int(dst))

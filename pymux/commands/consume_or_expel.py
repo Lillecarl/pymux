@@ -7,6 +7,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException
 from pymux.commands import add_command
+from pymux.commands.common import the_window
 from pymux.enums import Woke
 
 
@@ -37,7 +38,7 @@ def consume_or_expel(pymux: "Pymux", args: argparse.Namespace) -> None:
     `-D` and pymux keeps tmux's keys. Which keys the three commands of
     the strip take is Lillecarl/pymux#212.
     """
-    window = pymux.arrangement.get_active_window()
+    window = the_window(pymux, None)
 
     if not window.strip:
         raise CommandException(

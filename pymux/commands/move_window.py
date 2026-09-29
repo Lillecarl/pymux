@@ -7,6 +7,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException
 from pymux.commands import add_command
+from pymux.commands.common import the_window
 
 
 def move_window(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -35,7 +36,7 @@ def move_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     if args.after:
         new_index += 1
 
-    window = pymux.arrangement.get_active_window()
+    window = the_window(pymux, None)
     occupant = pymux.arrangement.get_window_by_index(new_index)
 
     if occupant is window:
