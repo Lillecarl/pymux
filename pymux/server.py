@@ -297,9 +297,25 @@ class ServerConnection:
         pointer: pymux cannot serve those, the terminal of the user
         can.)
 
+        **It goes with the next frame, and not the moment it arrives.**
+        `write_raw` puts it in the output's buffer and the renderer's
+        flush is what sends one, so leaving the flush out is what
+        orders this behind the drawing. A flush here made the clipboard
+        change before the screen that showed the copy, and anything
+        that reads the clipboard as a marker for what is drawn saw the
+        two the wrong way round -- which is how `checks.pymux-pictures`
+        photographed a pane that was still catching up.
+
+        tmux orders it the same way and for the same reason: a pane's
+        "OSC 52" goes through `screen_write_setselection`
+        (`input.c:3414-3440`), so it is dispatched as
+        `tty_cmd_setselection` among the drawing commands
+        (`tty.c:2140`). Only its popup case, which has no pane, writes
+        straight to the terminal. Lillecarl/pymux#478.
+
         An OSC sequence moves no cursor and paints no cell, so it is
-        safe between two frames. `pymux.osc.build_osc` has already
-        checked the payload of the pane.
+        safe anywhere between two frames. `pymux.osc.build_osc` has
+        already checked the payload of the pane.
 
         **The temporary client of a socket command has no terminal.**
         It holds a client state like a real one, and its focused pane
@@ -311,7 +327,6 @@ class ServerConnection:
         if self.client_state is None or self.client_state.temporary:
             return
         self._write_output_raw(sequence)
-        self._flush_output()
 
     def set_pointer_shape(self, shape: str) -> None:
         """

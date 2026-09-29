@@ -2675,6 +2675,15 @@ class Pymux:
             # notification is for.
             for connection in self._client_states:
                 connection.forward_osc(sequence)
+
+            # **The escape travels with the next frame, so there has to
+            # be one.** A pane that writes wakes the clients watching
+            # it, and those would draw anyway; a pane in a window
+            # nobody looks at draws no frame at all, and a notification
+            # from one is what the line above is for. Without this, its
+            # escape would sit in a client's buffer until something
+            # else happened to draw. Lillecarl/pymux#478.
+            self.invalidate(Woke.PANE_WROTE_AN_OSC)
         except Exception:
             logger.exception("Forwarding an OSC sequence failed.")
 
