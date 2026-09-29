@@ -156,8 +156,24 @@ def test_a_spelling_is_sent_once_and_numbered():
     numbers = [style for style, _text in frame["rows"]["0"]]
     entry = frame["styles"][str(numbers[0])]
 
-    assert "font-weight:bold" in entry["s"]
+    # A class of the stylesheet the client already has, and not the
+    # declaration again. Lillecarl/pymux#460.
+    assert "pyte-bold" in entry["c"]
+    assert "s" not in entry
     assert numbers[0] != PLAIN_STYLE
+
+
+def test_a_spelling_with_a_value_in_it_still_carries_the_value():
+    "A colour a program named itself answers to no rule of a stylesheet."
+    screen = a_screen()
+    feed(screen, "\x1b[38;2;30;170;90mgreen\x1b[0m")
+    view = PaneView()
+
+    frame = view.frame(screen, 1)
+    numbers = [style for style, _text in frame["rows"]["0"]]
+    entry = frame["styles"][str(numbers[0])]
+
+    assert entry["s"] == "color:#1eaa5a"
 
 
 def test_a_spelling_already_sent_is_only_a_number():

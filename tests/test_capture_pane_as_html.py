@@ -88,8 +88,9 @@ class _Read(HTMLParser):
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
-        #: One entry per piece of text, as (text, style, href).
-        self.pieces: List[Tuple[str, str, str]] = []
+        #: One entry per piece of text, as (text, classes, style, href).
+        self.pieces: List[Tuple[str, str, str, str]] = []
+        self._classes = ""
         self._style = ""
         self._href = ""
         self.element = ""
@@ -101,26 +102,35 @@ class _Read(HTMLParser):
             self.element = tag
             self.screen_class = values.get("class") or ""
         else:
+            self._classes = values.get("class") or ""
             self._style = values.get("style") or ""
             self._href = values.get("href") or ""
 
     def handle_endtag(self, tag):
         if tag != "pre":
+            self._classes = ""
             self._style = ""
             self._href = ""
 
     def handle_data(self, data):
-        self.pieces.append((data, self._style, self._href))
+        self.pieces.append((data, self._classes, self._style, self._href))
 
     @property
     def text(self) -> str:
-        return "".join(piece for piece, _style, _href in self.pieces)
+        return "".join(piece for piece, _c, _s, _h in self.pieces)
 
-    def style_of(self, wanted: str) -> str:
-        "The style of the piece holding `wanted`."
-        for piece, style, _href in self.pieces:
+    def drawn_by(self, wanted: str) -> str:
+        """
+        Everything that draws the piece holding `wanted`.
+
+        The classes and the attribute together, because a reader should
+        not have to know which half a rendition took: most of them are
+        a class of the stylesheet now, and a colour with a value in it
+        is not. Lillecarl/pymux#460.
+        """
+        for piece, classes, style, _href in self.pieces:
             if wanted in piece:
-                return style
+                return classes + " " + style
         raise AssertionError("no piece holds %r: %r" % (wanted, self.pieces))
 
 
@@ -149,17 +159,24 @@ def test_the_characters_are_the_ones_the_text_capture_gives(pymux):
     assert read(capture(pymux)).text.rstrip("\n") == "one\ntwo"
 
 
-def test_a_colour_reaches_the_style(pymux):
+def test_a_colour_reaches_the_drawing(pymux):
     "The whole reason for this command: the text drops it."
     create_pane(pymux, "\x1b[31mred\x1b[0m")
 
-    assert "var(--pyte-1)" in read(capture(pymux)).style_of("red")
+    assert "pyte-fg-1" in read(capture(pymux)).drawn_by("red")
 
 
-def test_a_rendition_reaches_the_style(pymux):
+def test_a_rendition_reaches_the_drawing(pymux):
     create_pane(pymux, "\x1b[1mbold\x1b[0m")
 
-    assert "font-weight:bold" in read(capture(pymux)).style_of("bold")
+    assert "pyte-bold" in read(capture(pymux)).drawn_by("bold")
+
+
+def test_a_colour_a_program_named_carries_its_value(pymux):
+    "No rule of a stylesheet can answer one, so it stays an attribute."
+    create_pane(pymux, "\x1b[38;2;30;170;90mgreen\x1b[0m")
+
+    assert "color:#1eaa5a" in read(capture(pymux)).drawn_by("green")
 
 
 def test_a_hyperlink_becomes_an_anchor(pymux):
@@ -167,7 +184,7 @@ def test_a_hyperlink_becomes_an_anchor(pymux):
     create_pane(pymux, "\x1b]8;;https://example.com/\x1b\\link\x1b]8;;\x1b\\")
     reader = read(capture(pymux))
 
-    assert [href for _piece, _style, href in reader.pieces if href] == [
+    assert [href for _piece, _c, _s, href in reader.pieces if href] == [
         "https://example.com/"
     ]
 

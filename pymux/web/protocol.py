@@ -226,8 +226,9 @@ class PaneView:
         self, appearance, reverse_video: bool, styles: Dict[str, Dict[str, str]]
     ) -> int:
         "The number this way of drawing goes out as, naming it if it is new."
-        key = (style_of(appearance, reverse_video), href_of(appearance.hyperlink))
-        if key == ("", ""):
+        drawn = style_of(appearance, reverse_video)
+        key = (drawn.classes, drawn.style, href_of(appearance.hyperlink))
+        if key == ("", "", ""):
             return PLAIN_STYLE
 
         held = self._styles.get(key)
@@ -238,11 +239,18 @@ class PaneView:
         self._next_style += 1
         self._styles[key] = held
 
+        # **The classes go out as a name and not as their rules.** Most
+        # of a rendition carries no value, and the stylesheet the client
+        # already fetched answers every one of those, so the wire holds
+        # a word rather than the declarations again.
+        # Lillecarl/pymux#460.
         entry: Dict[str, str] = {}
         if key[0]:
-            entry["s"] = key[0]
+            entry["c"] = key[0]
         if key[1]:
-            entry["h"] = key[1]
+            entry["s"] = key[1]
+        if key[2]:
+            entry["h"] = key[2]
         styles[str(held)] = entry
         return held
 

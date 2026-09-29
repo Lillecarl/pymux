@@ -46,6 +46,15 @@ export type Run = [style: number, text: string];
 export interface StyleEntry {
   /** The CSS declarations for a cell drawn this way. */
   s?: string;
+  /**
+   * The classes of the server's stylesheet that draw this cell.
+   *
+   * Most of a rendition carries no value -- bold, the lines, the
+   * underline shapes, the themed colours -- so the server names a rule
+   * it already serves rather than sending the declarations again.
+   * Lillecarl/pymux#460.
+   */
+  c?: string;
   /** The `href` of a link the program opened, already allowlisted. */
   h?: string;
 }
@@ -522,7 +531,12 @@ export class PymuxPane extends HTMLElement {
       } else {
         piece = document.createElement("span");
       }
-      if (entry && entry.s) piece.className = `${STYLE_CLASS}${style}`;
+      // The rule this element built for the declarations, and the rules
+      // the server's own stylesheet already holds.
+      const names: string[] = [];
+      if (entry && entry.s) names.push(`${STYLE_CLASS}${style}`);
+      if (entry && entry.c) names.push(entry.c);
+      if (names.length) piece.className = names.join(" ");
       piece.textContent = text;
       row.append(piece);
     }
