@@ -74,7 +74,7 @@ from .osc import build_osc, open_url_of
 from .pipes import bind_and_listen_on_socket, connect_in_memory
 from .rc import STARTUP_COMMANDS
 from .server import ServerConnection
-from .session import Session
+from .session import DEFAULT_SIZE, Session
 from .nearest import NEAREST
 from .style import DEFAULT_THEME, THEMES, theme
 from .utils import get_default_shell, keys_are_vi
@@ -785,6 +785,7 @@ class Pymux:
         source_file=None,
         startup_command=None,
         session_name: str | None = None,
+        size_with_no_client: Size | None = None,
     ):
         self._client_states = {}  # connection -> client_state
 
@@ -1041,7 +1042,15 @@ class Pymux:
         #: the server, so a killed `$1` never comes back as `$1`.
         self.sessions: list[Session] = []
         self._session_counter = 0
-        self.create_session(name=session_name)
+        first = self.create_session(name=session_name)
+
+        # `new-session -x -y` on the route that starts a server: the
+        # session is made here and its first window comes later, in
+        # `startup`, so this is early enough for the program in that
+        # window to be told the right size from its first byte.
+        # Lillecarl/pymux#459.
+        if size_with_no_client is not None:
+            first.default_size = size_with_no_client
 
         # What `set-environment -g` fills. The other scope is the
         # session's own, on `Session.environment`. A value of None is
@@ -1610,10 +1619,12 @@ class Pymux:
         around the panes wants off what is left. **A manual size is
         already the window's own**, so nothing comes off it.
 
-        **Nobody watching is eighty by twenty**, and no status row
-        comes off it. A window exists before a client attaches to it,
-        and the program in a pane needs a size from the first byte it
-        writes.
+        **Nobody watching is the session's `default_size`**, and no
+        status row comes off it. A window exists before a client
+        attaches to it, and the program in a pane needs a size from the
+        first byte it writes. `new-session -x -y` is what names that
+        size, and eighty by twenty-four is what it is otherwise, which
+        is what tmux answers. Lillecarl/pymux#459.
         """
         if window is None:
             window = self.arrangement.get_active_window()
@@ -1624,7 +1635,7 @@ class Pymux:
         clients = self.clients_watching(window)
 
         if not clients:
-            return Size(rows=20, columns=80)
+            return self.size_with_no_client(self.session_showing(window))
 
         if window.window_size is WindowSize.LATEST:
             newest = max(clients, key=lambda client: client.last_used)
@@ -1641,6 +1652,22 @@ class Pymux:
             rows=size.rows - (1 if self.show_status else 0),
             columns=size.columns,
         )
+
+    def size_with_no_client(self, session: Session | None) -> Size:
+        """
+        How big a window of that session is while nobody is watching it.
+
+        A session that is gone, or one nobody named, answers the same
+        two numbers tmux answers.
+        """
+        return DEFAULT_SIZE if session is None else session.default_size
+
+    def session_showing(self, window) -> Session | None:
+        "The session whose windows hold this one, or None when it is gone."
+        for session in self.sessions:
+            if window in session.arrangement.windows:
+                return session
+        return None
 
     def client_was_used(self, client_state) -> None:
         """
@@ -1684,6 +1711,7 @@ class Pymux:
         command: str | None = None,
         start_directory: str | None = None,
         on_done: Callable[[], None] | None = None,
+        session: Session | None = None,
     ):
         """
         Create a new :class:`pymux.arrangement.Pane` instance. (Don't put it in
@@ -1693,6 +1721,9 @@ class Pymux:
             process of that window as the start path for this pane.
         :param command: If given, run this command instead of `self.default_shell`.
         :param start_directory: If given, use this as the CWD.
+        :param session: Where this pane is going, which says how big it
+            is until a client renders it. The pane is not in a window
+            yet, so it cannot be asked.
         """
 
         def done_callback():
@@ -1843,7 +1874,10 @@ class Pymux:
         # sessions also run and produce output. (Like tmux does.)
         terminal_control = terminal.terminal_control
         if not terminal_control._running:
-            # Give the terminal a default size until a client attaches.
+            # The size of the session this pane is going into, until a
+            # client attaches. `new-session -x -y` is what names it, and
+            # a pane no client ever renders keeps it for ever, which is
+            # what an automated caller works on. Lillecarl/pymux#459.
             #
             # **The control and not the process.** `Process.set_size` tells
             # the pty and nothing else; `TerminalControl.set_size` tells the
@@ -1855,7 +1889,8 @@ class Pymux:
             # It showed as `capture-pane -p` printing one character per line,
             # while `-J` read correctly because it joins wrapped rows back
             # together. Lillecarl/pymux#321.
-            terminal_control.set_size(80, 24)
+            size = self.size_with_no_client(session)
+            terminal_control.set_size(size.columns, size.rows)
             terminal_control.process.start()
             terminal_control._running = True
 
@@ -2892,7 +2927,9 @@ class Pymux:
         if session is None:
             session = asked_for
 
-        pane = self._create_pane(None, command, start_directory=start_directory)
+        pane = self._create_pane(
+            None, command, start_directory=start_directory, session=session
+        )
 
         session.arrangement.create_window(pane, name=name, index=index)
         if session is asked_for:
@@ -2913,7 +2950,12 @@ class Pymux:
         if window is None:
             window = self.arrangement.get_active_window()
 
-        pane = self._create_pane(window, command, start_directory=start_directory)
+        pane = self._create_pane(
+            window,
+            command,
+            start_directory=start_directory,
+            session=self.session_showing(window),
+        )
         window.add_pane(pane, vsplit=vsplit)
         pane.focus()
         self.invalidate(Woke.PANE_WAS_SPLIT_OFF)

@@ -601,21 +601,65 @@ def run() -> None:
             sys.exit(1)
 
 
-def _new_pymux(source_file, startup_command=None, session_name=None):
+def _new_pymux(
+    source_file, startup_command=None, session_name=None, size_with_no_client=None
+):
     """
     Build the thing that runs a server.
 
     `pymux.main` arrives here and not from the top of the module: a
     detached command never builds one, and what it imports instead is
     the whole cost this file was charged. Lillecarl/pymux#392.
+
+    `size_with_no_client` is `(columns, rows)` or None. Two numbers and
+    not a `Size`, because `Size` is the toolkit's and this module may not
+    reach for the toolkit before it knows it is starting a server.
     """
+    from prompt_toolkit.data_structures import Size
+
     from pymux.main import Pymux
 
     return Pymux(
         source_file=source_file,
         startup_command=startup_command,
         session_name=session_name,
+        size_with_no_client=(
+            None
+            if size_with_no_client is None
+            else Size(rows=size_with_no_client[1], columns=size_with_no_client[0])
+        ),
     )
+
+
+def _axis_of(values: Dict[str, str], flag: str, standing: int) -> int:
+    """
+    One axis of `new-session -x -y`, on the route that starts a server.
+
+    The command handler reads the same two flags for a server that is
+    already running (`pymux/commands/new_session.py`). This route cannot
+    use it: there is nothing to send the command to yet, and the size has
+    to be known before the first pane starts.
+
+    Raises `ValueError` with the message to print.
+    """
+    given = values.get(flag)
+    if given is None:
+        return standing
+    if given == "-":
+        import shutil
+
+        # The terminal of whoever typed this, which is what tmux reads
+        # "-" as. With no terminal `get_terminal_size` answers the
+        # standing numbers, which is the answer tmux gives for no client.
+        room = shutil.get_terminal_size(fallback=(80, 24))
+        return room.columns if flag == "x" else room.lines
+    try:
+        wanted = int(given)
+    except ValueError:
+        raise ValueError("Expecting an integer: %s" % (given,))
+    if wanted < 1:
+        raise ValueError("A window is at least one cell.")
+    return wanted
 
 
 def _color_depth(ansi_colors_only: bool, true_color: bool):
@@ -765,6 +809,20 @@ def _new_session(socket_name: str, command: str, args: List[str], pane_id=None) 
 
     startup_command = " ".join(x for x in (window_name, window_command) if x) or None
 
+    # Read before a server is forked, so that a number nobody can read
+    # leaves no server behind. The standing answer is tmux's, and
+    # `pymux.session.DEFAULT_SIZE` is the same two numbers; it is not
+    # imported here because that would import the server.
+    # Lillecarl/pymux#459.
+    try:
+        size_with_no_client = (
+            _axis_of(values, "x", 80),
+            _axis_of(values, "y", 24),
+        )
+    except ValueError as unreadable:
+        sys.stderr.write("pymux: %s\n" % (unreadable,))
+        return 1
+
     # Is there a server running on this socket?
     server_running = _wait_for_server(socket_name, timeout=0.1)
 
@@ -789,6 +847,7 @@ def _new_session(socket_name: str, command: str, args: List[str], pane_id=None) 
         source_file=filename_var(),
         startup_command=startup_command,
         session_name=session_name,
+        size_with_no_client=size_with_no_client,
     )
     socket_name = mux.listen_on_socket(socket_name)
 

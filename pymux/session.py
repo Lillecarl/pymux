@@ -9,9 +9,18 @@ until Lillecarl/pymux#323.
 import time
 from typing import Dict
 
+from prompt_toolkit.data_structures import Size
+
 from .arrangement import Arrangement
 
-__all__ = ["Session"]
+__all__ = ["DEFAULT_SIZE", "Session"]
+
+#: How big a window of this session is while no client is watching it.
+#:
+#: A window exists before a client attaches, and a program in a pane needs
+#: a size from the first byte it writes. tmux answers the same two numbers
+#: and calls them `default-size` (`cmd-new-session.c`, `dsx` and `dsy`).
+DEFAULT_SIZE = Size(rows=24, columns=80)
 
 
 class Session:
@@ -45,6 +54,17 @@ class Session:
         self.overlay_title = ""
         self.overlay_width: str | None = None
         self.overlay_height: str | None = None
+
+        #: How big a window of this session is while nobody is watching
+        #: it. `new-session -x -y` is what names it, and it is the only
+        #: size a session that nothing ever attaches to has.
+        #:
+        #: **Not `window.manual_size`.** A manual size says a person
+        #: means that size to stay, so a client that attaches keeps it
+        #: and scrolls. This one gives way to the client, which is what
+        #: `window-size` is for and what tmux does with the same flags.
+        #: Lillecarl/pymux#459.
+        self.default_size = DEFAULT_SIZE
 
         self.created = time.time()
 
