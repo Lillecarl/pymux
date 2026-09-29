@@ -45,7 +45,12 @@ def sockets(tmp_path, monkeypatch):
         for name in names:
             listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             listener.bind(str(tmp_path / name))
-            listener.listen(1)
+            # **Room for every probe.** Nothing here accepts, and
+            # `nobody_answers` connects once per candidate per call, so
+            # a queue of one parks the second probe until it times out.
+            # A real server accepts at once, which is why its own
+            # `listen(0)` is enough there. Lillecarl/pymux#454.
+            listener.listen(64)
             open_sockets.append(listener)
             time.sleep(gap)
 

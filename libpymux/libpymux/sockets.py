@@ -147,21 +147,39 @@ def _is_socket(path: str) -> bool:
         return False
 
 
+#: How long a probe waits for an answer.
+#:
+#: **A connect that never comes back is what this is for.** The kernel
+#: answers a unix socket itself, so a live server answers at once and a
+#: file nobody listens on is refused at once. What takes time is a
+#: server whose backlog is full -- `listen(0)` is a queue of one -- and
+#: a server with a full backlog is a server. So the wait is short and a
+#: timeout counts as somebody being there, which is the safe way round:
+#: a listing keeps the name, and a bind leaves it alone.
+#:
+#: Measured: with no timeout at all, a listener that accepts nothing
+#: parks the second probe for ever, and the suite's faulthandler cut it
+#: off at two minutes. Lillecarl/pymux#454.
+ANSWER_TIMEOUT = 1.0
+
+
 def nobody_answers(socket_name: str) -> bool:
     """
     Whether a connect on this name reaches no server at all.
 
     Only "refused" and "not there" say that the name is free. Anything
-    else -- no permission to reach it, a connect that hangs -- is a
+    else -- no permission to reach it, a connect that timed out -- is a
     question this cannot answer, and a name it cannot answer for is a
     name to leave alone. tmux reads the same two errors and no others
-    (`client.c`, `client_connect`).
+    (`client.c`, `client_connect`). A timeout arrives as `TimeoutError`,
+    which is an `OSError`, so the catch below already holds it.
 
     **It lives here and not with the bind**, because both sides need
     it: the server asks before it takes a name from a server that has
     gone, and a caller asks before it offers one. Lillecarl/pymux#454.
     """
     probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    probe.settimeout(ANSWER_TIMEOUT)
     try:
         probe.connect(socket_name)
     except (ConnectionRefusedError, FileNotFoundError):
