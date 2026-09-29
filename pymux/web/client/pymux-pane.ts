@@ -239,6 +239,36 @@ const NAMED_KEYS: Record<string, string | undefined> = {
 const TAKEN_BY_AN_IME = 229;
 
 /**
+ * Keys that are only a modifier, which type nothing on their own.
+ *
+ * **A keydown of one of these already reports itself held.** Pressing
+ * Control gives `key` "Control" with `ctrlKey` true, so a handler that
+ * reads "modified, and no text" sends `C-Control` to the program --
+ * measured by a person typing in a browser. The same holds for Alt and
+ * for Meta.
+ *
+ * A list and not `getModifierState(event.key)`: a lock key reports the
+ * state it is about to leave, so the test answers wrongly for exactly
+ * the keys that are hardest to notice.
+ */
+const ONLY_A_MODIFIER = new Set([
+  "Control",
+  "Alt",
+  "AltGraph",
+  "Shift",
+  "Meta",
+  "CapsLock",
+  "NumLock",
+  "ScrollLock",
+  "Fn",
+  "FnLock",
+  "Hyper",
+  "Super",
+  "Symbol",
+  "SymbolLock",
+]);
+
+/**
  * The three events this dispatches, typed.
  *
  * An interface beside the class and not methods in it: overloads in a
@@ -589,6 +619,11 @@ export class PymuxPane extends HTMLElement {
     // deliver their keystrokes here as well, and the committed text
     // arrives separately; sending both would type it twice.
     if (event.isComposing || event.keyCode === TAKEN_BY_AN_IME) return;
+
+    // Holding a modifier is not typing. The keydown that starts the hold
+    // arrives here with the modifier already set, so this has to come
+    // before the test below reads it.
+    if (ONLY_A_MODIFIER.has(event.key)) return;
 
     const named = NAMED_KEYS[event.key];
     const modified = event.ctrlKey || event.altKey || event.metaKey;
