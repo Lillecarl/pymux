@@ -175,8 +175,17 @@ def _say_key_did_not_fit():
 
 
 def _any_of_them_wants_chrome(watchers) -> bool:
-    "Whether any of those clients is not in full screen. None is yes."
-    return not watchers or any(not one.full_screen for one in watchers)
+    """
+    Whether any of those clients is not in full screen.
+
+    **Nobody watching draws nothing**, so a plane with no client on it
+    keeps no row for a titlebar or a status line that nothing will put
+    there. `plane_size` already answers a detached window this way, and
+    `_create_pane` gives the program the whole of it: a plan that
+    reserved a row here was the third answer, one short of the other
+    two. Lillecarl/pymux#459.
+    """
+    return any(not one.full_screen for one in watchers)
 
 
 class Asker(NamedTuple):
@@ -1336,9 +1345,7 @@ class Pymux:
         client with chrome turned it off -- resizes everybody's
         programs because somebody else changed their mind.
 
-        **Nobody watching is the server's own answer.** There is no
-        terminal to ask, and it is what the plane was measured with
-        before `full-screen` belonged to a client.
+        **Nobody watching is no.** There is no terminal to draw it.
         Lillecarl/pymux#471.
         """
         return self.enable_status and _any_of_them_wants_chrome(watchers)

@@ -8,12 +8,17 @@ if TYPE_CHECKING:
 from prompt_toolkit.data_structures import Size
 from pymux.commands import CommandException
 from pymux.commands import add_command
+from pymux.commands.common import find_window
 from pymux.enums import WindowSize
+from pymux.layout import size_the_panes_of
 
 
 def resize_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
-    Say how big this window is, and stop following the clients.
+    Say how big a window is, and stop following the clients.
+
+    -t: which window. Without it, the one the calling client is
+        looking at.
 
     -x: how many columns. -y: how many rows.
 
@@ -47,12 +52,23 @@ def resize_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     `move-column`. An absolute size below one is a person asking for
     something that cannot exist, and that raises.
 
+    **A window no client owns needs `-t`.** With nobody attached there
+    is no active window to take: a command over the socket runs under a
+    client that draws nothing, and the size it named went to whichever
+    window that one happened to point at, or to none. So `-t` is what
+    makes this reach a detached session, which is the shape an
+    automated caller and a web front end both have. tmux spells the
+    same flag. Lillecarl/pymux#459.
+
     tmux also takes `-A` and `-a` for the largest and smallest client.
     The four policies of `window-size` already say that and keep
     saying it, so whether those are worth having at all is
     Lillecarl/pymux#225.
     """
-    window = pymux.arrangement.get_active_window()
+    window = find_window(pymux, args.target_window)
+    if window is None:
+        raise CommandException("can't find window: %s" % (args.target_window,))
+
     now = pymux.plane_size(window)
 
     def number(given, instead):
@@ -77,9 +93,15 @@ def resize_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     window.manual_size = Size(rows=max(1, rows), columns=max(1, columns))
     window.window_size = WindowSize.MANUAL
 
+    # A frame is what tells a pane its size, and a window nobody
+    # watches gets no frame. Without this the plane answered the new
+    # number and every pty kept the old one. Lillecarl/pymux#459.
+    size_the_panes_of(pymux, window)
+
 
 def register(subparsers):
     parser = add_command(subparsers, resize_window)
+    parser.add_argument("-t", dest="target_window", metavar="<target-window>", help="The window to resize. Without it, the one this client is looking at.")
     parser.add_argument("-x", dest="columns", metavar="<columns>", help="How many columns the window is.")
     parser.add_argument("-y", dest="rows", metavar="<rows>", help="How many rows the window is.")
     parser.add_argument("-L", dest="left", metavar="<left>", help="That many columns narrower.")

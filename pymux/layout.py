@@ -2679,6 +2679,28 @@ def plan_of(pymux: "Pymux", window) -> Plan:
     return plan
 
 
+def size_the_panes_of(pymux: "Pymux", window) -> None:
+    """
+    Give every pane of this window the size the plan gives it.
+
+    **A frame does this, and a window nobody watches gets no frame.**
+    `PlanContainer.write_to_screen` tells each pane its rectangle, so
+    an attached client's next frame is what makes a resize reach the
+    programs. With nobody attached there is no next frame: the plane
+    answered a new number and the ptys kept the old one, which is a
+    size the program in the pane never hears about.
+
+    Every pane of every slot, shown or not, for the reason
+    `PlanContainer` gives: a hidden pane that already has the size it
+    will be shown at is revealed without a resize.
+    Lillecarl/pymux#459.
+    """
+    plan = plan_of(pymux, window)
+    for slot, rect in plan.rects.items():
+        for pane in slot.panes:
+            _tell_pane_its_size(pane, rect)
+
+
 def pane_is_cut(pymux: "Pymux", pane: arrangement.Pane) -> bool:
     """
     Whether this pane runs off the edge of the view this client has.

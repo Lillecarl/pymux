@@ -259,3 +259,108 @@ def test_a_dash_with_no_client_watching_is_the_standing_answer(pymux):
     session, _pane = one_pane(pymux)
 
     assert session.default_size == DEFAULT_SIZE
+
+
+# ----------------------------------------------------------------------
+# Resizing a window no client owns.
+#
+# `new-session -x -y` names a size a session carries, and it gives way
+# to a client that attaches. This is the other half: a size a person
+# means to stay, on a window nobody is looking at. It needs a target,
+# because there is no client to take the window from.
+#
+# Lillecarl/pymux#459.
+
+
+def resize_window(pymux, *arguments) -> list:
+    "Run the command, and give back what it complained about."
+    errors: list = []
+    pymux.add_command_error = errors.append
+    pymux.show_message = lambda message: None
+    call_command_handler("resize-window", pymux, list(arguments))
+    return errors
+
+
+def window_of(pymux):
+    return pymux.sessions[-1].arrangement.windows[0]
+
+
+def named(window) -> list:
+    "The `-t` that names that one window on the whole server."
+    return ["-t", "@%d" % (window.window_id,)]
+
+
+def test_a_window_of_a_detached_session_can_be_resized(pymux):
+    new_session(pymux)
+    window = window_of(pymux)
+
+    assert resize_window(pymux, *named(window), "-x", "200", "-y", "50") == []
+    assert pymux.plane_size(window) == Size(rows=50, columns=200)
+
+
+def test_the_new_size_reaches_the_program(pymux):
+    """
+    **The whole point.** A frame is what tells a pane its size, and a
+    window nobody watches gets no frame: the plane answered the new
+    number and the pty kept the old one, so the program wrapped its
+    output at eighty columns whatever anybody asked for.
+    """
+    new_session(pymux)
+    window = window_of(pymux)
+    pane = window.panes[0]
+    assert size_of(pane) == (DEFAULT_SIZE.columns, DEFAULT_SIZE.rows)
+
+    resize_window(pymux, *named(window), "-x", "200", "-y", "50")
+
+    assert size_of(pane) == (200, 50)
+    assert (pane.screen.columns, pane.screen.lines) == (200, 50)
+
+
+def test_every_pane_of_the_window_hears_it(pymux):
+    "Two panes divide the new plane between them, and both are told."
+    new_session(pymux)
+    window = window_of(pymux)
+    pymux.add_process(ENDS_AT_ONCE, window=window)
+
+    resize_window(pymux, *named(window), "-x", "200", "-y", "50")
+
+    widths = {size_of(pane)[0] for pane in window.panes}
+    assert widths == {200}, widths
+
+
+def test_a_target_nothing_holds_says_so(pymux):
+    "A silent no-op is what this command used to be. Lillecarl/pymux#458."
+    new_session(pymux)
+
+    assert resize_window(pymux, "-t", "@9999", "-x", "200") == [
+        "pymux: can't find window: @9999"
+    ]
+
+
+def test_the_plan_of_a_detached_window_keeps_no_row_for_chrome(pymux):
+    """
+    Nothing draws a titlebar over a window nobody is looking at, so the
+    plan does not reserve the row and the program gets every row of the
+    size that was named.
+
+    Three things used to answer this and one of them disagreed:
+    `plane_size` said fifty, `_create_pane` said fifty, and the plan
+    said forty-nine.
+    """
+    new_session(pymux)
+    window = window_of(pymux)
+
+    resize_window(pymux, *named(window), "-x", "200", "-y", "50")
+
+    assert pymux.plane_size(window).rows == 50
+    assert size_of(window.panes[0])[1] == 50
+
+
+def test_a_nudge_counts_from_the_size_that_window_has(pymux):
+    "Not from the active window's, which is the target's whole purpose."
+    new_session(pymux, "-x", "100", "-y", "30")
+    window = window_of(pymux)
+
+    resize_window(pymux, *named(window), "-R", "10", "-D", "5")
+
+    assert pymux.plane_size(window) == Size(rows=35, columns=110)
