@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command
+from pymux.commands import add_command, not_past_this_client, this_client
 from pymux.commands.common import clients_named
 from pymux.commands.set_option import set_option
 from pymux.options import Scope
@@ -37,6 +37,14 @@ def set_client_option(pymux: "Pymux", args: argparse.Namespace) -> None:
     configuration every time it attaches, a reconnect included, so a
     value set here lasts as long as the terminal stays connected.
     Lillecarl/pymux#256, Lillecarl/pymux#340.
+
+    **A client that only watches may set its own.** All three of these
+    options are facts of the terminal a person is sitting at -- what
+    it is called, the colours it draws with, and whether they go the
+    other way round -- so refusing them costs a watcher their screen
+    and protects nobody. tmux has no per-client option to compare
+    with. `-t` is the part that reaches somebody else.
+    Lillecarl/pymux#467.
     """
     if pymux.sourcing and pymux.the_client_to_tell() is None:
         # The server, reading a configuration file with nobody
@@ -47,12 +55,13 @@ def set_client_option(pymux: "Pymux", args: argparse.Namespace) -> None:
     target = None
     if args.target_client is not None:
         target = clients_named(pymux, args.target_client)[0]
+        not_past_this_client(pymux, target is not this_client(pymux))
 
     set_option(pymux, args, scope=Scope.CLIENT, target=target)
 
 
 def register(subparsers):
-    parser = add_command(subparsers, set_client_option)
+    parser = add_command(subparsers, set_client_option, read_only=True)
     parser.add_argument("-t", dest="target_client", metavar="<target-client>", help="The client of this name, as list-clients prints it.")
     parser.add_argument("option", metavar="<option>")
     parser.add_argument("value", metavar="<value>", nargs="?")

@@ -198,6 +198,36 @@ async def test_an_ordinary_client_still_takes_the_session():
         )
 
 
+async def test_a_read_only_client_may_set_its_own_terminal_up():
+    """
+    Every client option is a fact of the terminal the person is
+    sitting at, so refusing these costs a watcher their colours and
+    protects nobody.
+    """
+    async with over_connection() as session:
+        _working, watching = await _two_clients(session)
+
+        with set_app(watching.app):
+            session.pymux.handle_command("set-client-option theme grey")
+
+        assert watching.message != "client is read-only"
+        assert watching.theme == "grey"
+
+
+async def test_a_read_only_client_cannot_set_somebody_else_up():
+    async with over_connection() as session:
+        working, watching = await _two_clients(session)
+        was = working.theme
+
+        with set_app(watching.app):
+            session.pymux.handle_command(
+                "set-client-option -t %s theme grey" % (working.connection.name,)
+            )
+
+        assert watching.message == "client is read-only"
+        assert working.theme == was
+
+
 async def test_a_read_only_client_may_still_read_the_clients():
     async with over_connection() as session:
         pymux = session.pymux
