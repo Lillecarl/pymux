@@ -13,6 +13,7 @@ suite around it.
 """
 
 import asyncio
+import faulthandler
 import os
 import sys
 from pathlib import Path
@@ -24,6 +25,44 @@ from ptyhost.process import Process
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from pymux.main import Pymux  # noqa: E402
+
+#: How long one test may take before it is stuck. The check sets it.
+HANG_SECONDS = float(os.environ.get("PYMUX_HANG_SECONDS") or 0)
+
+#: Where the stacks go: a copy of stderr made before any test's capture.
+#: Written into the capture instead, they were thrown away with it by the
+#: exit -- measured, an empty log. pytest's own plugin keeps the same copy.
+_stacks_go_to = None
+
+
+def pytest_configure(config):
+    global _stacks_go_to
+    try:
+        fileno = sys.stderr.fileno()
+    except (AttributeError, ValueError, OSError):
+        fileno = sys.__stderr__.fileno()
+    _stacks_go_to = os.dup(fileno)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_protocol(item):
+    """
+    Dump every thread's stack and **end the run** when a test hangs.
+
+    Not pytest's `faulthandler_timeout`: it dumps and then waits on, so a
+    deadlocked run never wrote its log or its status. Measured: one run
+    still going after twenty minutes, another after hours.
+    Lillecarl/pymux#482.
+    """
+    if HANG_SECONDS:
+        faulthandler.dump_traceback_later(
+            HANG_SECONDS, exit=True, file=_stacks_go_to
+        )
+    try:
+        yield
+    finally:
+        if HANG_SECONDS:
+            faulthandler.cancel_dump_traceback_later()
 
 
 @pytest.fixture(autouse=True)

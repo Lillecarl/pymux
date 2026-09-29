@@ -109,18 +109,25 @@ let
   # because a build from a file evaluates impurely; a flake would see none of
   # them.
 
-  # How long one test may take before it is treated as stuck. pytest's
-  # faulthandler then writes every thread's stack and ends the run.
+  # How long one test may take before it is treated as stuck.
+  # `tests/conftest.py` then writes every thread's stack and ends the run,
+  # so the log and the status are still written.
   #
   # **A hang used to cost a whole build and say nothing.** The build
   # timeout kills the sandbox, so the log of the run is never written
   # and nobody learns which test stopped. Measured while moving the
   # server to anyio: 28 minutes of a wedged run told nothing, and the
   # same hang under this told everything in 45 seconds.
-  # Lillecarl/pymux#87.
+  # Lillecarl/pymux#87. pytest's own `faulthandler_timeout` dumps and
+  # does not exit, which is why the conftest arms it. Lillecarl/pymux#482.
   #
   # The slowest test of this suite takes under ten seconds.
-  hangIsSeconds = 120;
+  # `PYMUX_HANG_SECONDS` changes it for one run.
+  hangIsSeconds =
+    let
+      value = builtins.getEnv "PYMUX_HANG_SECONDS";
+    in
+    if value == "" then 120 else builtins.fromJSON value;
 
   # What pytest runs, for instance
   # `PYMUX_TESTS=tests/test_sixel_encoder.py nix build --file . checks.pymux-unit`.
@@ -450,12 +457,12 @@ in
         name = "pymux-unit";
         env = {
           inherit selection;
+          PYMUX_HANG_SECONDS = toString hangIsSeconds;
           PYMUX_BASE16_SCHEMES = "${base16-schemes-json}/base16-schemes.json";
         };
       }
       ''
-        python -m pytest $selection -q -p no:cacheprovider \
-          -o faulthandler_timeout=${toString hangIsSeconds}
+        python -m pytest $selection -q -p no:cacheprovider
       '';
 
   # What it costs to lay a window out and draw the frame around its
@@ -763,6 +770,7 @@ in
         # the one authorised key the daemon trusts.
         inputs = [ openssh ];
         env = {
+          PYMUX_HANG_SECONDS = toString hangIsSeconds;
           PYMUX_SSHD = "${openssh}/bin/sshd";
           # sshd refuses a user whose shell is not a real file, and the
           # sandbox gives every uid `/noshell`. There is no option to
@@ -773,8 +781,7 @@ in
         };
       }
       ''
-        python -m pytest tests/test_openssh_interop.py -q -p no:cacheprovider \
-          -o faulthandler_timeout=${toString hangIsSeconds}
+        python -m pytest tests/test_openssh_interop.py -q -p no:cacheprovider
       '';
 
   # `<pymux-pane>`: that it runs, and that the declarations it publishes
