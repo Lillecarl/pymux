@@ -738,10 +738,20 @@ def _web(socket_name: str | None, a) -> int:
     def say(line: str) -> None:
         print(line, flush=True)
 
-    say("pymux web on http://%s:%d/?pane=<pane>&t=%s" % (host, port, token))
-    say("  panes: %s" % (" ".join(pane.id for pane in server.panes) or "none",))
-    if not a.web_allow_input:
-        say("  showing only; --allow-input takes keys")
+    def ready() -> None:
+        """
+        Said once the port is listening, and not before.
+
+        **The URL used to print first.** A bind that then failed --
+        something else on the port -- left a caller with an address and a
+        token for a server that was not there, and the only sign was an
+        EADDRINUSE after them. A caller found it by having pymux web
+        already running.
+        """
+        say("pymux web on http://%s:%d/?pane=<pane>&t=%s" % (host, port, token))
+        say("  panes: %s" % (" ".join(pane.id for pane in server.panes) or "none",))
+        if not a.web_allow_input:
+            say("  showing only; --allow-input takes keys")
 
     try:
         anyio.run(
@@ -751,6 +761,7 @@ def _web(socket_name: str | None, a) -> int:
             port,
             token,
             bool(a.web_allow_input),
+            ready,
         )
     except RuntimeError as missing:
         if str(missing) == MISSING:

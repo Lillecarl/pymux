@@ -144,6 +144,20 @@ def test_the_element_defines_the_tag_the_page_uses():
     assert "<pymux-pane" in source_of("index.html")
 
 
+def test_the_palette_goes_in_a_sheet_of_its_own():
+    """
+    A frame's `palette` may not replace the welcome's stylesheet.
+
+    One sheet for both is what lost the screen's background, its font,
+    `white-space: pre`, the link rule and the blink on the first frame. A
+    browser found it; this says the element keeps them apart.
+    """
+    element = source_of("pymux-pane.js")
+    assert "#paletteSheet" in element
+    assert "#adopt(this.#paletteSheet, frame.palette)" in element
+    assert "#adopt(this.#themeSheet, frame.css" in element
+
+
 def test_the_element_needs_no_unsafe_inline():
     """
     Every rule goes through the CSSOM into a constructed stylesheet, which

@@ -68,6 +68,11 @@
   tty-clock,
   nyancat,
   pipes,
+  # The type checker for the declarations that ship with `<pymux-pane>`.
+  # Neither is in anything pymux installs: the element is hand-written
+  # javascript and a consumer bundles it as it stands.
+  nodejs,
+  typescript,
   testSources,
 }:
 let
@@ -768,6 +773,64 @@ in
       ''
         python -m pytest tests/test_openssh_interop.py -q -p no:cacheprovider \
           -o faulthandler_timeout=${toString hangIsSeconds}
+      '';
+
+  # `<pymux-pane>`: that it parses, and that its declarations describe it.
+  #
+  # **Parsing first, because that is the one that bit.** The element is
+  # hand-written javascript that nothing compiles -- there is no node in
+  # any build of pymux, and a consumer bundles it as it stands -- so
+  # nothing here read the file at all. A backtick inside a CSS comment
+  # inside a template literal closed the literal; the file did not parse,
+  # the element was never defined, and a page waited for ever with nothing
+  # to show for it but a syntax error in a console. A browser found it.
+  # `node --check` finds it in a second.
+  #
+  # Then the declarations. They are written by hand beside the `.js`, so
+  # the two can drift; `tests/uses_the_element.ts` reaches for every member
+  # a consumer reaches for, and `tsc` reads the declarations against it.
+  # Proven to fail: renaming one member there turned this check red.
+  #
+  # **node is in this check and in no closure pymux ships.** That is the
+  # trade: a checker at build time, nothing at run time. `--noEmit`,
+  # because there is nothing to emit -- the element is the source.
+  # Lillecarl/pymux#461.
+  element =
+    runInSandbox
+      {
+        name = "pymux-element";
+        inputs = [
+          nodejs
+          typescript
+        ];
+      }
+      ''
+        # **`set -e`, because a check script does not have it.** Without
+        # it every command but the last one may fail in silence: the loop
+        # below found a real syntax error, `tsc` ran afterwards and
+        # passed, and the check went green over a file that does not
+        # parse. Measured twice in one sitting.
+        set -e
+
+        # Every javascript the package ships, not a list of them: a file
+        # added and forgotten is exactly the one nobody parses. `nullglob`
+        # is off on purpose -- a pattern that matched nothing then reaches
+        # `node` as a name that does not exist, and fails, which is the
+        # answer wanted if these files ever stop being here.
+        for script in pymux/web/static/*.js; do
+          echo "parsing $script"
+          node --check "$script"
+        done
+
+        # **`tsc` runs last, and nothing follows it.** A command after it
+        # becomes the script's exit status, so an `echo` here reported
+        # success over a real type error -- measured, by breaking the
+        # declarations on purpose and watching the check pass.
+        echo "reading the declarations of <pymux-pane> against a use of them"
+        tsc --noEmit --strict \
+          --target es2022 --lib es2022,dom --module esnext \
+          --moduleResolution bundler \
+          tests/uses_the_element.ts
       '';
 
   # TEMPORARY scratch measurement for Lillecarl/pymux#258. Not a

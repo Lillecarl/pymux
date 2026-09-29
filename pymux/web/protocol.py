@@ -98,9 +98,14 @@ class PaneView:
         """
         The message that goes before any frame.
 
-        It carries the stylesheet, because the custom properties the
+        It carries the whole stylesheet, because the custom properties the
         runs name have to be answered by something and a client that
         fetched them separately would need a second route to the server.
+
+        **`css` here is everything; `palette` on a frame is only the
+        sixteen colours and the two defaults.** They are named apart for
+        that reason: a client that treated them as one field put both into
+        one stylesheet and the first frame threw the rules away.
         """
         self._welcomed = True
         return {
@@ -181,7 +186,16 @@ class PaneView:
             answer["whole"] = True
             answer["size"] = {"columns": columns, "rows": lines}
             answer["reverse"] = reverse_video
-            answer["css"] = palette
+            # **`palette` and not `css`, because it is not the
+            # stylesheet.** It was called `css` and the welcome's whole
+            # stylesheet was called `css` too, so the first client put
+            # both into one sheet: the first frame replaced every rule
+            # with the palette block, and the screen lost its background,
+            # `white-space: pre`, its font, its link rule and its blink.
+            # A browser found it, and one field meaning two things was the
+            # fault rather than anything the client did with it. Two
+            # names, two sheets, and neither can eat the other.
+            answer["palette"] = palette
         return answer
 
     # -- the pieces ----------------------------------------------------

@@ -20,9 +20,9 @@ It needs `pymux[web]`. Lillecarl/pymux#461.
 import json
 import secrets
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
-from libpymux import PaneStream, Server
+from libpymux import PaneStream, Server, StreamRefused
 
 from pymux.log import logger
 
@@ -80,6 +80,7 @@ async def serve(
     port: int,
     token: str,
     writable: bool = False,
+    ready: Optional[Callable[[], None]] = None,
 ) -> None:
     """
     Serve panes of that pymux server until this is cancelled.
@@ -87,6 +88,11 @@ async def serve(
     `writable` is what a viewer may do, and it is off by default: a port
     that types into a terminal is a different thing from one that shows
     it, and the safe one is the one nobody has to remember to ask for.
+
+    `ready` is called once the port is listening, and it is why it exists:
+    the command printed its URL and token first and then failed to bind,
+    so a printed URL said nothing about whether anything was there. A
+    caller found that by having something else on the port.
     """
     try:
         from websockets.asyncio.server import serve as websocket_serve
@@ -146,12 +152,23 @@ async def serve(
         try:
             async with PaneStream(socket_path, pane_id, writable=writable) as stream:
                 await _relay(stream, connection)
+        except StreamRefused as refused:
+            # **The reason travels, because a silent close says nothing.**
+            # A pane id the server cannot find -- a percent-encoding a
+            # caller did not undo, a pane that has gone -- closed with
+            # code 1000 and no welcome, which reads as a stream that
+            # simply ended. 1008 is "policy violation", which is what
+            # websockets have instead of a 404 once the upgrade is done.
+            logger.info("A viewer asked for %s: %s", pane_id, refused)
+            await connection.close(1008, str(refused)[:120])
         except Exception as ended:  # noqa: BLE001 - said, then the socket closes
             logger.info("A viewer of %s ended: %s", pane_id, ended)
 
     async with websocket_serve(handle, host, port, process_request=check):
         import anyio
 
+        if ready is not None:
+            ready()
         await anyio.sleep_forever()
 
 

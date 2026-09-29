@@ -45,20 +45,31 @@ const PLAIN = 0;
 const OWN_RULES = `
 :host {
   display: block;
-  position: relative;
   font-family: monospace;
   line-height: 1.2;
   --pymux-cursor-row: -1;
   --pymux-cursor-column: -1;
 }
 :host([hidden]) { display: none; }
+/* The screen is what the cursor is measured against, so it is what
+   carries the positioning. The host used to, and a page that gave the
+   host padding then moved the cursor by that much: 8px of padding put it
+   one row up and one cell left of the cell it marks. Measured in a
+   browser -- the offset was constant at columns 0, 2 and 199, which is
+   what a padding box looks like and not what a font does. */
 .${SCREEN} {
+  position: relative;
   margin: 0;
   outline: none;
 }
 /* The one focusable thing, and it is off screen rather than hidden:
    a composition needs a focused editable element to draw its preedit
-   in, and one that is `display: none` is not focusable. */
+   in, and one that is "display: none" is not focusable.
+
+   No backticks in here: this comment is inside a template literal, and
+   one would close it. The file then does not parse, so the element is
+   never defined and a page waits for ever with no error but a syntax
+   one in a console nobody was reading. */
 .keyboard {
   position: absolute;
   left: -9999px;
@@ -139,6 +150,7 @@ export class PymuxPane extends HTMLElement {
   #cursor;
   #ownSheet;
   #themeSheet;
+  #paletteSheet;
   #styleSheet;
   #styles = new Map();
   #rows = [];
@@ -149,19 +161,40 @@ export class PymuxPane extends HTMLElement {
 
   constructor() {
     super();
-    const root = this.attachShadow({ mode: "open" });
+    // `delegatesFocus`, so that focus arriving at the host -- a click, a
+    // tab, a `focus()` from a page -- lands on the first focusable thing
+    // in here, which is the textarea a composition needs.
+    const root = this.attachShadow({ mode: "open", delegatesFocus: true });
 
     this.#ownSheet = new CSSStyleSheet();
     this.#ownSheet.replaceSync(OWN_RULES);
-    // The server's stylesheet, which arrives in the welcome, and the
-    // rules for the style table, which arrive as the table grows.
+    // Three sheets from the server, and they are three on purpose.
+    //
+    // `themeSheet` is the whole stylesheet, which arrives once in the
+    // welcome. `paletteSheet` is the sixteen colours and the two
+    // defaults, which a `whole` frame sends again when a program changes
+    // one; it comes after so that its properties win, and it is separate
+    // so that it cannot replace the rules. `styleSheet` grows one rule
+    // per way of drawing as the style table does.
     this.#themeSheet = new CSSStyleSheet();
+    this.#paletteSheet = new CSSStyleSheet();
     this.#styleSheet = new CSSStyleSheet();
-    root.adoptedStyleSheets = [this.#ownSheet, this.#themeSheet, this.#styleSheet];
+    root.adoptedStyleSheets = [
+      this.#ownSheet,
+      this.#themeSheet,
+      this.#paletteSheet,
+      this.#styleSheet,
+    ];
 
     this.#screen = document.createElement("pre");
     this.#screen.className = SCREEN;
-    this.#screen.tabIndex = 0;
+    // **No `tabIndex` here.** It used to have one, so a click landed the
+    // keyboard on the `pre` rather than on the textarea below, and every
+    // key was lost: the mousedown handler focused the textarea and the
+    // click's own default focus then took it away again. Measured in a
+    // browser -- `shadowRoot.activeElement` was the `pre`. The textarea
+    // is the only focusable thing now, which is also what makes
+    // `delegatesFocus` land on it.
 
     // A textarea and not the `pre`, because a composition draws its
     // preedit in a focused editable element. It holds nothing: every
@@ -176,9 +209,22 @@ export class PymuxPane extends HTMLElement {
     this.#cursor.className = "cursor";
     this.#cursor.hidden = true;
 
-    root.append(this.#screen, this.#keyboard, this.#cursor);
+    // The cursor goes **inside** the screen, so that it is positioned
+    // against the screen's content box rather than the host's padding
+    // box. A page that gives the host padding then moves the text and
+    // the cursor together.
+    this.#screen.append(this.#cursor);
+    root.append(this.#keyboard, this.#screen);
 
-    this.#screen.addEventListener("mousedown", () => this.#keyboard.focus());
+    this.#screen.addEventListener("mousedown", (event) => {
+      // **`preventDefault`, or the click takes the focus back.** The
+      // default action of a mousedown moves focus to whatever was
+      // clicked, which undid this line before `delegatesFocus` and the
+      // dropped `tabIndex` made the textarea the only candidate. Kept
+      // because a selection drag should not move the keyboard either.
+      event.preventDefault();
+      this.#keyboard.focus();
+    });
     this.#keyboard.addEventListener("keydown", (event) => this.#onKeyDown(event));
     this.#keyboard.addEventListener("beforeinput", (event) => this.#onBeforeInput(event));
     this.#keyboard.addEventListener("compositionend", (event) => {
@@ -235,9 +281,11 @@ export class PymuxPane extends HTMLElement {
   #listen() {
     const socket = this.#socket;
     socket.addEventListener("message", (event) => this.#onMessage(event));
-    socket.addEventListener("open", () =>
-      this.dispatchEvent(new CustomEvent("connected")),
-    );
+    // **No `connected` on `open`.** A socket that is open has told a
+    // page nothing yet: `writable` and the size arrive in the welcome, so
+    // a listener that read them there read `false` and said "showing
+    // only" to somebody who could type. Measured in a browser. The event
+    // fires from the welcome instead, where what it reports is true.
     socket.addEventListener("close", (event) =>
       this.dispatchEvent(
         new CustomEvent("closed", {
@@ -275,8 +323,11 @@ export class PymuxPane extends HTMLElement {
 
     if (frame.type === "welcome") {
       this.#writable = Boolean(frame.writable);
-      this.#themeSheet.replaceSync(frame.css || "");
+      this.#adopt(this.#themeSheet, frame.css || "");
       this.#resize(frame.size);
+      // Now, and not when the socket opened: this is the first moment a
+      // listener can read `writable` and the size and be told the truth.
+      this.dispatchEvent(new CustomEvent("connected"));
       return;
     }
     if (frame.type !== "frame") return;
@@ -284,7 +335,14 @@ export class PymuxPane extends HTMLElement {
     if (frame.whole) {
       // Every row the element holds was drawn under another size,
       // another reverse video or another palette, so none of it counts.
-      if (frame.css) this.#themeSheet.replaceSync(frame.css);
+      //
+      // **`palette` into its own sheet.** It is only the sixteen colours
+      // and the two defaults, not the stylesheet the welcome sent. Both
+      // were called `css` and went into one sheet, so the first frame
+      // replaced every rule with the palette block: the screen lost its
+      // background, its font, `white-space: pre`, the link rule and the
+      // blink. A browser found it.
+      if (frame.palette) this.#adopt(this.#paletteSheet, frame.palette);
       this.#resize(frame.size);
     }
     if (frame.styles) this.#learnStyles(frame.styles);
@@ -292,6 +350,24 @@ export class PymuxPane extends HTMLElement {
       this.#drawRow(Number(number), runs);
     }
     if (frame.cursor) this.#moveCursor(frame.cursor);
+  }
+
+  /**
+   * Adopt a stylesheet, widened so that the host sees the theme too.
+   *
+   * **The host needs the properties, not only the screen.** The server
+   * writes its rules for `.pyte-screen`, so a custom property it defines
+   * lives on the screen and inherits downward -- and the host, which is
+   * above it, cannot see any of them. A page that gives the host padding
+   * then shows its own background in that ring.
+   *
+   * So the rules are adopted twice, the second time with the screen's
+   * selector widened to reach the host. A selector replacement and not a
+   * hand-written copy: the values stay the server's, and `pyte.html`
+   * remains the only place a colour is decided.
+   */
+  #adopt(sheet, css) {
+    sheet.replaceSync(css + "\n" + css.replaceAll(`.${SCREEN}`, ":host"));
   }
 
   #learnStyles(styles) {
@@ -319,6 +395,12 @@ export class PymuxPane extends HTMLElement {
       this.#rows.push(row);
       this.#screen.append(row);
     }
+    // **The cursor lives in the screen, so emptying the screen takes it
+    // away.** It is in there so that a page's padding moves the text and
+    // the cursor together, and this is the price: every resize has to put
+    // it back. A frame that resizes then carries a cursor position with
+    // nothing to position.
+    this.#screen.append(this.#cursor);
   }
 
   #drawRow(number, runs) {

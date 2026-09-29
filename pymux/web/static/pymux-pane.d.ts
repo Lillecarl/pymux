@@ -37,7 +37,12 @@ export interface Welcome {
   revision: number;
   /** Whether this stream takes input. The server enforces it. */
   writable: boolean;
-  /** The stylesheet the runs are written against. */
+  /**
+   * The whole stylesheet the runs are written against.
+   *
+   * A client has no second route to the server, so it travels with the
+   * stream. `Frame.palette` is a different and smaller thing.
+   */
   css: string;
   size: Size;
 }
@@ -55,7 +60,14 @@ export interface Frame {
   whole?: true;
   size?: Size;
   reverse?: boolean;
-  css?: string;
+  /**
+   * The sixteen colours and the two defaults, when a program changed one.
+   *
+   * **Not the stylesheet.** `Welcome.css` is that, and this is only the
+   * custom properties it defines. They are named apart because a client
+   * that put both into one stylesheet lost every rule the welcome sent.
+   */
+  palette?: string;
 }
 
 /** The names of keys, which the server spells. */

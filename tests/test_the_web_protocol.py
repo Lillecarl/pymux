@@ -63,10 +63,14 @@ def test_the_first_frame_says_it_is_the_whole_screen():
     assert frame["size"] == {"columns": COLUMNS, "rows": LINES}
 
 
-def test_a_welcome_carries_the_stylesheet():
+def test_a_welcome_carries_the_whole_stylesheet():
     """
     A client has no second route to the server, and the runs name custom
     properties that something has to answer.
+
+    **Everything, not only the properties.** `white-space: pre` is what
+    makes a column land, so a client that lost it lost the layout. That is
+    what happened when a frame's `palette` and this shared a field name.
     """
     screen = a_screen()
     message = PaneView().welcome(screen, 1, writable=True)
@@ -74,6 +78,8 @@ def test_a_welcome_carries_the_stylesheet():
     assert message["type"] == WELCOME
     assert ".pyte-screen {" in message["css"]
     assert "--pyte-1:" in message["css"]
+    assert "white-space: pre" in message["css"]
+    assert "@keyframes pyte-blink" in message["css"]
     assert message["writable"] is True
 
 
@@ -264,7 +270,16 @@ def test_a_palette_change_redraws_everything_and_resends_the_stylesheet():
     frame = view.frame(screen, 2)
     assert frame is not None
     assert frame["whole"] is True
-    assert "--pyte-1: #ff5555;" in frame["css"]
+    assert "--pyte-1: #ff5555;" in frame["palette"]
+
+    # **`palette`, and never `css`.** The welcome's whole stylesheet is
+    # `css`; this is the sixteen colours and the two defaults. One field
+    # for both put a client's first frame over the rules the welcome sent,
+    # so the screen lost its background, its font, `white-space: pre`, the
+    # link rule and the blink. A browser found it, and the field name is
+    # the fix.
+    assert "css" not in frame
+    assert "white-space" not in frame["palette"]
 
 
 def test_a_resize_redraws_everything():

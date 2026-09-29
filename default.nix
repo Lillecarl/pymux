@@ -144,6 +144,13 @@ let
     pymux = [
       "test"
       "catppuccin"
+      # `pymux web` and the suite that drives it. It is here for a second
+      # reason as well: naming the extra is what makes every check fail
+      # when the extra does not exist, so a `pymux-web` attribute in
+      # pyterm asking for an extra that `pyproject.toml` dropped cannot
+      # reach whoever installs it. A caller building mid-edit hit exactly
+      # that and asked whether our gates would. Lillecarl/pymux#461.
+      "web"
     ];
   };
 
