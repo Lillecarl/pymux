@@ -191,7 +191,10 @@ HOLD = APPEAR_TIMEOUT + SETTLE_TIMEOUT + 10
 #: back out of the clipboard of that terminal, and only an OSC 52 puts
 #: anything there. So a pane has to be allowed to write the clipboard,
 #: which is "on". Lillecarl/pymux#378.
-PICTURE_CONFIG = "set full-screen on\nset set-clipboard on\n"
+#: `set-client-option` for the first, because full screen belongs to
+#: the terminal a person is sitting at and the client reads this file
+#: for itself. Lillecarl/pymux#471.
+PICTURE_CONFIG = "set-client-option full-screen on\nset set-clipboard on\n"
 
 
 # ----------------------------------------------------------------------

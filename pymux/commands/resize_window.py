@@ -36,7 +36,9 @@ def resize_window(pymux: "Pymux", args: argparse.Namespace) -> None:
 
     **The size is the window's own**, so nothing comes off it for the
     status line: `-x 100 -y 40` is a hundred cells by forty. An axis
-    that is not given keeps what it has.
+    that is not given keeps what it has. The titlebar of a pane is not
+    the status line: it draws inside the window, so a pane of a
+    forty-row window is thirty-nine rows while that option is on.
 
     **A nudge counts from the size the window has now**, which is why
     it is the one a person binds to a key: naming an absolute size

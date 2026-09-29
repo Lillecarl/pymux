@@ -2,7 +2,8 @@
 Photograph what pymux draws around a pane, in a real terminal.
 
 `take_picture.py` subtracts two pictures of the same program, one
-bare and one in a pymux pane. It writes `set full-screen on` before
+bare and one in a pymux pane. It writes `set-client-option
+full-screen on` before
 every fixture, which is right for what it asks -- anything pymux drew
 around the pane would count as a difference on every fixture -- and it
 means **no check has ever photographed pymux's own chrome**: the status

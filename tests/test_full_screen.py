@@ -173,17 +173,23 @@ async def test_a_full_screen_client_still_sizes_the_plane():
 # What it is not.
 
 
-async def test_set_option_does_not_reach_it():
+async def test_set_option_says_which_command_takes_it():
     """
-    `set-option` sees the session's options, so a tmux configuration
-    line for this one names the wrong command and says so rather than
-    doing nothing.
+    `set-option` sees the session's options only, so the line a person
+    had in their configuration file before this moved has to say what
+    to write instead. A bare "invalid option" reads as a typo.
     """
     async with in_this_process() as session:
+        pymux = session.pymux
         state, _ = await session.attach("only", BIG)
+
         with set_app(state.app):
-            assert "full-screen" not in session.pymux.option_tables["session"]
-            assert "full-screen" in session.pymux.option_tables["client"]
+            pymux.handle_command("set-option full-screen on")
+
+        assert state.message == (
+            "full-screen is a client option: use set-client-option"
+        )
+        assert shows(pymux, state) == (True, True)
 
 
 def test_nobody_attached_cannot_set_it():

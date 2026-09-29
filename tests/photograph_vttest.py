@@ -519,7 +519,7 @@ def compare_one(terminal, seat, work, out):
     room.mkdir(parents=True, exist_ok=True)
 
     config_path = work / "full-screen.conf"
-    config_path.write_text("set full-screen on\n")
+    config_path.write_text("set-client-option full-screen on\n")
 
     # The pane covers every cell, and `pymux_command` writes the same
     # line the still pictures use, so both harnesses put pymux in the

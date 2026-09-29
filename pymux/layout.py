@@ -2584,9 +2584,8 @@ def _bar_below_is_drawn(pymux: "Pymux", window) -> bool:
 
 def _the_plane_keeps_a_bar_below(pymux: "Pymux", window) -> bool:
     "The same rows, asked of every client watching. Lillecarl/pymux#471."
-    watchers = pymux.clients_watching(window)
     return (
-        pymux.any_watcher_shows_pane_status(watchers)
+        pymux.any_watcher_shows_pane_status(window)
         and not window.zoom
         and window.has_stack()
     )
@@ -2632,7 +2631,7 @@ def room_for_panes(pymux: "Pymux", window) -> Size:
     size = pymux.plane_size(window)
 
     rows = size.rows
-    if pymux.any_watcher_shows_pane_status(pymux.clients_watching(window)):
+    if pymux.any_watcher_shows_pane_status(window):
         rows -= 1
     if _the_plane_keeps_a_bar_below(pymux, window):
         rows -= 1

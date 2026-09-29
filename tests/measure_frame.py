@@ -188,6 +188,18 @@ class _Pymux:
     def plane_size(self, window=None) -> Size:
         return Size(rows=ROWS, columns=COLUMNS)
 
+    def any_watcher_shows_pane_status(self, window=None) -> bool:
+        """
+        The plane's own question, which a plan is measured with.
+
+        `show_pane_status` above is this client's, and they are the
+        same answer here: the measurement has one client and it is not
+        in full screen. A real server takes the same short way out when
+        nobody is, which is what keeps this off the frame path.
+        Lillecarl/pymux#471.
+        """
+        return self.show_pane_status
+
     def get_client_state(self):
         if self.state is None:
             # What a real server says when nothing is attached, and

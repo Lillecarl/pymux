@@ -11,6 +11,30 @@ from pymux.commands.common import answer
 from pymux.commands.common import option_as_written
 from pymux.options import Scope, SetOptionError
 
+#: Which command sets an option of each scope.
+_COMMAND_FOR = {
+    Scope.SESSION: "set-option",
+    Scope.WINDOW: "set-window-option",
+    Scope.CLIENT: "set-client-option",
+}
+
+
+def _not_here(pymux: "Pymux", name: str, scope: Scope) -> str:
+    """
+    What to say about a name this command does not hold.
+
+    **A name that lives in another scope names the command that takes
+    it.** A bare "invalid option" is what a person sees the first time
+    they run a configuration file after an option moves -- `full-screen`
+    became one terminal's (Lillecarl/pymux#471) -- and it reads as a
+    typo rather than as a line to change.
+    """
+    for other, table in pymux.option_tables.items():
+        if other is not scope and name in table:
+            return "%s is a %s option: use %s" % (name, other, _COMMAND_FOR[other])
+
+    return "Invalid option: %s" % (name,)
+
 
 def set_option(
     pymux: "Pymux",
@@ -38,7 +62,7 @@ def set_option(
     option = pymux.option_tables[scope].get(name)
 
     if option is None:
-        raise CommandException("Invalid option: %s" % (name,))
+        raise CommandException(_not_here(pymux, name, scope))
 
     if value is None:
         answer(pymux, "%s %s" % (name, option_as_written(pymux, option, args, target)))

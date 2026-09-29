@@ -312,8 +312,10 @@ def test_the_new_size_reaches_the_program(pymux):
 
     resize_window(pymux, *named(window), "-x", "200", "-y", "50")
 
-    assert size_of(pane) == (200, 50)
-    assert (pane.screen.columns, pane.screen.lines) == (200, 50)
+    # Forty-nine rows, because the titlebar of a pane draws in one of
+    # the fifty the window was given. The test below holds that alone.
+    assert size_of(pane) == (200, 49)
+    assert (pane.screen.columns, pane.screen.lines) == (200, 49)
 
 
 def test_every_pane_of_the_window_hears_it(pymux):
@@ -337,15 +339,16 @@ def test_a_target_nothing_holds_says_so(pymux):
     ]
 
 
-def test_the_plan_of_a_detached_window_keeps_no_row_for_chrome(pymux):
+def test_the_titlebar_row_comes_out_of_the_size_that_was_named(pymux):
     """
-    Nothing draws a titlebar over a window nobody is looking at, so the
-    plan does not reserve the row and the program gets every row of the
-    size that was named.
+    `-y 50` is the window's fifty rows, and the titlebar of a pane
+    draws in one of them, so the program gets forty-nine. That is what
+    the attached case does too, and `resize-window` says the size is
+    the window's own.
 
-    Three things used to answer this and one of them disagreed:
-    `plane_size` said fifty, `_create_pane` said fifty, and the plan
-    said forty-nine.
+    **The row is reserved although nobody draws it.** A window no
+    client watches has no titlebar on any screen, so the plan keeps a
+    row that stays empty. Lillecarl/pymux#474.
     """
     new_session(pymux)
     window = window_of(pymux)
@@ -353,7 +356,7 @@ def test_the_plan_of_a_detached_window_keeps_no_row_for_chrome(pymux):
     resize_window(pymux, *named(window), "-x", "200", "-y", "50")
 
     assert pymux.plane_size(window).rows == 50
-    assert size_of(window.panes[0])[1] == 50
+    assert size_of(window.panes[0]) == (200, 49)
 
 
 def test_a_nudge_counts_from_the_size_that_window_has(pymux):

@@ -176,7 +176,11 @@ class Pane:
         forwarder.write_text(FORWARDER)
 
         config = self.tmp / ("%s.conf" % self.name)
-        config.write_text("set full-screen on\n")
+        # `set-client-option`, because full screen belongs to the
+        # terminal a person is sitting at. The client reads this file
+        # for itself and announces the line when it attaches.
+        # Lillecarl/pymux#471.
+        config.write_text("set-client-option full-screen on\n")
 
         size = self.size_file
 
