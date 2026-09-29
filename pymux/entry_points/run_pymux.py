@@ -528,9 +528,9 @@ def run() -> None:
         # channel: the finding lives where the binding lives, so a
         # change in where servers bind cannot leave that client
         # looking in the old place. Lillecarl/pymux#90.
-        from pymux.client.posix import list_socket_names
+        from libpymux.sockets import servers_newest_first
 
-        names = list_socket_names()
+        names = servers_newest_first()
         if names:
             print(names[0])
         else:

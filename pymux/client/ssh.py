@@ -314,7 +314,7 @@ class SshClient(TerminalClient):
 
         **One command runs on the other machine, and it only prints.**
         `pymux find` answers with the socket a local attach would
-        take, found by the same `list_socket_names` that binds and
+        take, found by the same `servers_newest_first` that binds and
         attaches on that machine -- the room of Lillecarl/pymux#405
         and the flat place before it, newest first. The client
         guesses no shape at all: a discovery that lived here would

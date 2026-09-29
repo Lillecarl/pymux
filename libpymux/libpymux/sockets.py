@@ -19,6 +19,7 @@ from typing import List
 
 __all__ = [
     "nobody_answers",
+    "servers_newest_first",
     "socket_directory",
     "socket_paths",
 ]
@@ -127,17 +128,59 @@ def socket_paths() -> List[str]:
     error from a name that had never been served. That costs a connect
     per candidate, on a path a person runs by typing `attach`.
     Lillecarl/pymux#454.
+
+    `servers_newest_first` is the same sockets in the other order.
+    """
+    return sorted(_every_server())
+
+
+def servers_newest_first() -> List[str]:
+    """
+    The same servers, the one that started last in front.
+
+    A server with no name takes the lowest number that is free, so the
+    oldest server usually holds "pymux.sock.<user>.0", and `glob` gives
+    no order at all. `pymux attach` takes the first name it reads, so a
+    person who started a second server and attached could land on
+    either one, and usually landed on the old one.
+
+    The time of the socket file is the time the server started, because
+    nothing writes to a socket file after the bind.
+
+    **The order is the whole difference between this and
+    `socket_paths`.** They globbed the same two patterns in two places
+    and answered one question twice, and only one of them said whether
+    a name was really a socket. Lillecarl/pymux#451.
+    """
+    return sorted(_every_server(), key=_started_at, reverse=True)
+
+
+def _every_server() -> List[str]:
+    """
+    Every socket of this user that a server is listening on, unordered.
+
+    The servers live in the per-UID room the server binds in, and one
+    release also in the flat place they bound before it
+    (Lillecarl/pymux#405). The lock a bind takes the name under is in
+    the room as well and matches this glob, which is one of the two
+    reasons a name here is asked what it is.
     """
     user = getpass.getuser()
     found = glob.glob("%s/pymux.sock.%s.*" % (socket_directory(), user))
     found += glob.glob("%s/pymux.sock.%s.*" % (tempfile.gettempdir(), user))
-    return sorted(
-        set(
-            path
-            for path in found
-            if _is_socket(path) and not nobody_answers(path)
-        )
-    )
+    return [
+        path
+        for path in set(found)
+        if _is_socket(path) and not nobody_answers(path)
+    ]
+
+
+def _started_at(path: str) -> float:
+    "When the server bound this socket. A socket that went away is oldest."
+    try:
+        return os.stat(path).st_mtime
+    except OSError:
+        return 0.0
 
 
 def _is_socket(path: str) -> bool:

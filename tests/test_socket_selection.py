@@ -17,7 +17,7 @@ import time
 
 import pytest
 
-from pymux.client.posix import list_socket_names
+from libpymux.sockets import servers_newest_first
 
 pytestmark = pytest.mark.skipif(
     os.name == "nt", reason="the posix client needs a unix socket"
@@ -61,8 +61,8 @@ def sockets(tmp_path, monkeypatch):
 
 
 def _names():
-    "The sockets that `list_socket_names` gives back, in its order."
-    return [os.path.basename(path) for path in list_socket_names()]
+    "The sockets that `servers_newest_first` gives back, in its order."
+    return [os.path.basename(path) for path in servers_newest_first()]
 
 
 def test_newest_server_comes_first(sockets):
@@ -169,6 +169,26 @@ def test_the_library_answers_the_same_list(sockets, a_dead_socket):
     assert [os.path.basename(one) for one in socket_paths()] == [
         "pymux.sock.someone.1"
     ]
+
+
+def test_the_two_orders_are_two_orders_of_one_set(sockets):
+    """
+    They globbed the same two patterns in two places and answered one
+    question twice, and only one of them asked whether a name was a
+    socket. The order is the whole difference now.
+    Lillecarl/pymux#451.
+    """
+    from libpymux.sockets import socket_paths
+
+    # The older one holds the lower number, so the two orders differ.
+    sockets(["pymux.sock.someone.0", "pymux.sock.someone.2"])
+
+    assert set(socket_paths()) == set(servers_newest_first())
+    assert [os.path.basename(one) for one in socket_paths()] == [
+        "pymux.sock.someone.0",
+        "pymux.sock.someone.2",
+    ]
+    assert _names() == ["pymux.sock.someone.2", "pymux.sock.someone.0"]
 
 
 # ----------------------------------------------------------------------

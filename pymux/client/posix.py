@@ -1,15 +1,10 @@
-import getpass
-import glob
 import json
-import os
 import signal
 import socket
-import stat
 import sys
-import tempfile
 from select import select
 
-from libpymux.sockets import nobody_answers, socket_directory
+from libpymux.sockets import servers_newest_first
 from prompt_toolkit.input.vt100 import raw_mode
 from pymux.protocol import Packet
 
@@ -196,69 +191,17 @@ class PosixClient(TerminalClient):
             pass
 
 
-def list_socket_names():
-    """
-    The socket of every server that is running, the newest one first.
-
-    A server with no name takes the lowest number that is free, so the
-    oldest server usually holds "pymux.sock.<user>.0". `glob` gives no
-    order at all, and "pymux attach" takes the first name it reads. So
-    a person who started a second server and attached could land on
-    either one, and usually landed on the old one.
-
-    The time of the socket file is the time the server started, because
-    nothing writes to a socket file after the bind. Newest first means
-    that "pymux attach" reaches the server a person just started, which
-    is what they mean by it.
-
-    The servers live in the room `socket_directory` holds -- the
-    per-UID directory tmux keeps its own sockets in
-    (Lillecarl/pymux#405) -- and one release also in the flat place
-    they bound before it: a server that answered before the room still
-    answers, and an attach should still find it.
-
-    **A name nobody answers on is not a server, and neither is a file
-    that is not a socket.** A killed server leaves its file behind, and
-    the newest of those is the one this offers first -- so a person
-    attached and got an error while a live server sat one entry down.
-    The lock a bind takes the name under is in the room too, and its
-    name matches this glob. `socket_paths` asks the same two questions;
-    that the two of them glob separately at all is
-    Lillecarl/pymux#451. Lillecarl/pymux#454.
-    """
-    user = getpass.getuser()
-    found = glob.glob("%s/pymux.sock.%s.*" % (socket_directory(), user))
-    found += glob.glob("%s/pymux.sock.%s.*" % (tempfile.gettempdir(), user))
-    alive = [
-        path
-        for path in set(found)
-        if _is_socket(path) and not nobody_answers(path)
-    ]
-    return sorted(alive, key=_started_at, reverse=True)
-
-
-def _is_socket(path: str) -> bool:
-    try:
-        return stat.S_ISSOCK(os.stat(path).st_mode)
-    except OSError:
-        return False
-
-
-def _started_at(path: str) -> float:
-    "When the server bound this socket. A socket that went away is oldest."
-    try:
-        return os.stat(path).st_mtime
-    except OSError:
-        return 0.0
-
-
 def list_clients():
     """
     A client for every server that is running, the newest one first.
 
-    A server that no longer answers is left out.
+    A server that no longer answers is left out. `servers_newest_first`
+    says why that order and not another, and it is where the room is
+    read: this globbed the same two patterns for itself, and the two
+    answers differed in the order and in whether they asked if a name
+    was a socket at all. Lillecarl/pymux#451.
     """
-    for path in list_socket_names():
+    for path in servers_newest_first():
         try:
             yield PosixClient(path)
         except socket.error:
