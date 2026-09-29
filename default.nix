@@ -44,6 +44,33 @@
   xclip,
 }:
 let
+  # pymux's own version. The element is published as an npm package as
+  # well, and two distributions of one element should not disagree about
+  # which version they are.
+  pyproject = lib.importTOML ./pyproject.toml;
+
+  # `<pymux-pane>` compiled: the files `pymux web` serves, and an npm
+  # package for a front end built with node. `nix/element.nix` says why
+  # both come out of one derivation.
+  element = callPackage ./nix/element.nix {
+    src = ./pymux/web/client;
+    inherit (pyproject.project) version;
+  };
+
+  # What the compiler writes, and `pymux web` then serves. Two trees need
+  # it: the installed package, and the source the suites run against.
+  served = [
+    "pymux-pane.js"
+    "pymux-pane.d.ts"
+    "page.js"
+  ];
+
+  installElement =
+    into:
+    lib.concatMapStrings (name: ''
+      install -Dm644 ${element}/${name} "${into}/${name}"
+    '') served;
+
   # The schemes of the base16 spec, converted to one JSON object while
   # the package is built: `set-option theme base16:<name>` reads it,
   # and a theme that needed a YAML parser to be read would be a theme
@@ -95,9 +122,10 @@ let
               --fish rendered/fish
             install -Dm644 ${base16-schemes-json}/base16-schemes.json \
               "$out/${python.sitePackages}/pymux/base16-schemes.json"
+            ${installElement "$out/${python.sitePackages}/pymux/web/static"}
           '';
 
-        passthru = rendered.passthru // { inherit checks; };
+        passthru = rendered.passthru // { inherit checks element; };
 
         meta = rendered.meta // {
           description = "Pure Python terminal multiplexer (tmux alternative)";
@@ -117,7 +145,7 @@ let
   #
   # It is built here and not under `nix`, because `./.` there is the `nix`
   # directory and this needs the root of the repository.
-  testSources = lib.fileset.toSource {
+  sourceFiles = lib.fileset.toSource {
     root = ./.;
     fileset = lib.fileset.unions [
       ./pymux
@@ -131,6 +159,20 @@ let
       ./pyproject.toml
     ];
   };
+
+  # The same tree with the element compiled into it.
+  #
+  # **A pymux suite reads this tree and not the installed package.**
+  # `nix/checks.nix` copies `pymux` out of here and `python -m pytest`
+  # puts the copy first on `sys.path`, so `pymux.web.server.STATIC` is
+  # the directory below. Without this every test that reads it would read
+  # a directory the compiler never wrote to -- which is the same fault as
+  # the wheel that shipped no static files, one layer along.
+  testSources = runCommand "pymux-test-sources" { } ''
+    cp -r ${sourceFiles} "$out"
+    chmod -R +w "$out"
+    ${installElement "$out/pymux/web/static"}
+  '';
 
   # What every suite runs on. `test` is the extra that `pyproject.toml`
   # declares for exactly this, so the suites' dependencies are written beside

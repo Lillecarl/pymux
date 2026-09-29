@@ -35,8 +35,9 @@ MISSING = (
     "or use `stream-pane` over the socket, which needs nothing."
 )
 
-#: Where the element and the page live. They ship with the package, so
-#: `pyproject.toml` has to carry them as package data.
+#: What is served. Two things fill it: `pyproject.toml` declares the files
+#: a person wrote, and the build compiles `web/client/` into the three the
+#: compiler writes.
 STATIC = Path(__file__).parent / "static"
 
 #: What a token is worth guessing. 32 bytes of urlsafe base64 is 43

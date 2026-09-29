@@ -1,7 +1,7 @@
 /**
  * The demo page's own script.
  *
- * Separate from `pymux-pane.js` because that is the thing somebody
+ * Separate from `pymux-pane.ts` because that is the thing somebody
  * imports and this is the room around it. A page of their own replaces
  * this file and keeps the element.
  *
@@ -11,15 +11,27 @@
  * need not ask for any.
  */
 
+// `.js` and not `.ts`, because this line survives into the emitted
+// `page.js` and a browser resolves it. The compiler reads it as the
+// TypeScript beside this file.
 import "./pymux-pane.js";
+
+/** One element of this page's own markup, which ships beside it. */
+function needed<T>(found: T | null, what: string): T {
+  if (found === null) throw new Error(`the page has no ${what}`);
+  return found;
+}
 
 const asked = new URLSearchParams(location.search);
 const pane = asked.get("pane");
 const token = asked.get("t");
-const about = document.getElementById("about");
-const element = document.getElementById("pane");
+// `querySelector` and not `getElementById`, because the tag map makes
+// this a `PymuxPane` where `getElementById` gives a bare `HTMLElement`:
+// the line below reads `writable` off it.
+const element = needed(document.querySelector("pymux-pane"), "pane");
+const about = needed(document.getElementById("about"), "caption");
 
-function say(text) {
+function say(text: string): void {
   about.textContent = text;
 }
 

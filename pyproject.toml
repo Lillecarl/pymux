@@ -108,13 +108,19 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["pymux"]
 
-# **The element and the page have to be named, or they do not ship.**
+# **The page has to be named, or it does not ship.**
 # Measured: with `packages` alone the wheel held every `.py` of
 # `pymux/web/` and none of `pymux/web/static/`, so `pymux web` served
-# nothing and said nothing about why. A test asserts they are there
-# (`tests/test_the_web_server.py`), because a missing file in a wheel is
-# the kind of fault that only shows to whoever installed it.
-# Lillecarl/pymux#461.
+# nothing and said nothing about why. A test asserts the directory is
+# filled (`tests/test_the_web_server.py`), because a missing file in a
+# wheel is the kind of fault that only shows to whoever installed it.
+#
+# This covers what a person wrote: `index.html` and `page.css`. The
+# element is TypeScript, in `pymux/web/client/`, and a compiler writes
+# `pymux-pane.js`, `pymux-pane.d.ts` and `page.js` into the directory
+# below. hatchling alone therefore builds a wheel with no element in it;
+# `nix/element.nix` is what compiles, and `default.nix` installs the
+# result. Lillecarl/pymux#461.
 artifacts = ["pymux/web/static/*"]
 
 [tool.pytest.ini_options]

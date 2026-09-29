@@ -5,6 +5,11 @@
  * it is the only complete account of what a frame holds. The protocol is
  * Lillecarl/pymux#461, and `pymux/web/protocol.py` is the other half.
  *
+ * **The types here are the published ones.** `tsc` emits
+ * `pymux-pane.js` and `pymux-pane.d.ts` from this file, so what a
+ * consumer's compiler reads is derived from what runs rather than
+ * written beside it. `nix/element.nix` is that build.
+ *
  * **Nothing here knows what bold is.** A frame carries a style table --
  * the declarations for a way of drawing, sent once and referenced by a
  * number after that -- and this turns each entry into one CSS rule. So
@@ -26,6 +31,98 @@
  *
  *     document.querySelector('pymux-pane').socket = myWebSocket;
  */
+
+// ----------------------------------------------------------------------
+// The protocol, as a consumer reads it.
+
+/** One run of a row: the number of a way of drawing, and its characters. */
+export type Run = [style: number, text: string];
+
+/** What a style number means, sent once and referenced by number after. */
+export interface StyleEntry {
+  /** The CSS declarations for a cell drawn this way. */
+  s?: string;
+  /** The `href` of a link the program opened, already allowlisted. */
+  h?: string;
+}
+
+export interface Size {
+  columns: number;
+  rows: number;
+}
+
+/** Where the cursor is, in rows of the screen. `-1` is off the screen. */
+export interface Cursor {
+  row: number;
+  column: number;
+}
+
+/** The first message of a stream. */
+export interface Welcome {
+  type: "welcome";
+  revision: number;
+  /** Whether this stream takes input. The server enforces it. */
+  writable: boolean;
+  /**
+   * The whole stylesheet the runs are written against.
+   *
+   * A client has no second route to the server, so it travels with the
+   * stream. `Frame.palette` is a different and smaller thing.
+   */
+  css: string;
+  size: Size;
+}
+
+/** The rows that changed, and nothing else. */
+export interface Frame {
+  type: "frame";
+  revision: number;
+  /** Keyed by row of the screen. A row that is absent is unchanged. */
+  rows: Record<string, Run[]>;
+  cursor: Cursor;
+  /** Ways of drawing this stream has not sent before. */
+  styles?: Record<string, StyleEntry>;
+  /** Everything changed: throw away every row held. */
+  whole?: true;
+  size?: Size;
+  reverse?: boolean;
+  /**
+   * The sixteen colours and the two defaults, when a program changed one.
+   *
+   * **Not the stylesheet.** `Welcome.css` is that, and this is only the
+   * custom properties it defines. They are named apart because a client
+   * that put both into one stylesheet lost every rule the welcome sent.
+   */
+  palette?: string;
+}
+
+/** The names of keys, which the server spells. */
+export interface InputMessage {
+  type: "input";
+  keys: string;
+}
+
+/** Characters a viewer finished composing, written as typed. */
+export interface TextMessage {
+  type: "text";
+  text: string;
+}
+
+/** Text that becomes a bracketed paste when the program asked for one. */
+export interface PasteMessage {
+  type: "paste";
+  text: string;
+}
+
+export type ViewerMessage = InputMessage | TextMessage | PasteMessage;
+
+export interface ClosedDetail {
+  code: number;
+  reason: string;
+}
+
+// ----------------------------------------------------------------------
+// The element.
 
 /** The class every rule of the server's stylesheet is written under. */
 const SCREEN = "pyte-screen";
@@ -52,8 +149,8 @@ const OWN_RULES = `
 }
 :host([hidden]) { display: none; }
 /* The screen is what the cursor is measured against, so it is what
-   carries the positioning. The host used to, and a page that gave the
-   host padding then moved the cursor by that much: 8px of padding put it
+   carries the positioning. The host cannot: a page that gives the host
+   padding then moves the cursor by that much, and 8px of padding put it
    one row up and one cell left of the cell it marks. Measured in a
    browser -- the offset was constant at columns 0, 2 and 199, which is
    what a padding box looks like and not what a font does. */
@@ -67,9 +164,8 @@ const OWN_RULES = `
    in, and one that is "display: none" is not focusable.
 
    No backticks in here: this comment is inside a template literal, and
-   one would close it. The file then does not parse, so the element is
-   never defined and a page waits for ever with no error but a syntax
-   one in a console nobody was reading. */
+   one would close it. The compiler fails on that now, which is why this
+   is a note about reading the file and not a warning about shipping it. */
 .keyboard {
   position: absolute;
   left: -9999px;
@@ -110,7 +206,7 @@ const PASTE = "paste";
  * The names are pymux's own, because the server spells them: it owns the
  * three keyboard modes and knows which the program asked for.
  */
-const NAMED_KEYS = {
+const NAMED_KEYS: Record<string, string | undefined> = {
   Enter: "Enter",
   Tab: "Tab",
   Backspace: "BSpace",
@@ -142,22 +238,52 @@ const NAMED_KEYS = {
 /** `keyCode` a browser reports for a key an IME has taken. */
 const TAKEN_BY_AN_IME = 229;
 
+/**
+ * The three events this dispatches, typed.
+ *
+ * An interface beside the class and not methods in it: overloads in a
+ * class body need an implementation, and there is nothing to implement
+ * -- `EventTarget` already carries the one that runs. Merging declares
+ * them on the instance type, and `tsc` emits them into the `.d.ts`.
+ */
+export interface PymuxPane {
+  /** The stream ended, with the code and reason the server closed on. */
+  addEventListener(
+    type: "closed",
+    listener: (event: CustomEvent<ClosedDetail>) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  /**
+   * `connected` is the welcome and not the socket: `writable` and the
+   * size are true by then.
+   */
+  addEventListener(
+    type: "connected" | "error",
+    listener: (event: CustomEvent) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+}
+
 export class PymuxPane extends HTMLElement {
   static observedAttributes = ["src"];
 
-  #screen;
-  #keyboard;
-  #cursor;
-  #ownSheet;
-  #themeSheet;
-  #paletteSheet;
-  #styleSheet;
-  #styles = new Map();
-  #rows = [];
-  #socket = null;
+  #screen: HTMLPreElement;
+  #keyboard: HTMLTextAreaElement;
+  #cursor: HTMLDivElement;
+  #ownSheet: CSSStyleSheet;
+  #themeSheet: CSSStyleSheet;
+  #paletteSheet: CSSStyleSheet;
+  #styleSheet: CSSStyleSheet;
+  #styles = new Map<string, StyleEntry>();
+  #rows: HTMLDivElement[] = [];
+  #socket: WebSocket | null = null;
   #ownsSocket = false;
   #writable = false;
-  #columns = 0;
 
   constructor() {
     super();
@@ -188,13 +314,13 @@ export class PymuxPane extends HTMLElement {
 
     this.#screen = document.createElement("pre");
     this.#screen.className = SCREEN;
-    // **No `tabIndex` here.** It used to have one, so a click landed the
-    // keyboard on the `pre` rather than on the textarea below, and every
-    // key was lost: the mousedown handler focused the textarea and the
-    // click's own default focus then took it away again. Measured in a
-    // browser -- `shadowRoot.activeElement` was the `pre`. The textarea
-    // is the only focusable thing now, which is also what makes
-    // `delegatesFocus` land on it.
+    // **No `tabIndex` here.** With one, a click landed the keyboard on
+    // the `pre` rather than on the textarea below and every key was
+    // lost: the mousedown handler focuses the textarea and the click's
+    // own default focus then takes it away again. Measured in a browser
+    // -- `shadowRoot.activeElement` was the `pre`. The textarea is the
+    // only focusable thing, which is also what makes `delegatesFocus`
+    // land on it.
 
     // A textarea and not the `pre`, because a composition draws its
     // preedit in a focused editable element. It holds nothing: every
@@ -219,14 +345,17 @@ export class PymuxPane extends HTMLElement {
     this.#screen.addEventListener("mousedown", (event) => {
       // **`preventDefault`, or the click takes the focus back.** The
       // default action of a mousedown moves focus to whatever was
-      // clicked, which undid this line before `delegatesFocus` and the
-      // dropped `tabIndex` made the textarea the only candidate. Kept
-      // because a selection drag should not move the keyboard either.
+      // clicked, and a selection drag should not move the keyboard
+      // either.
       event.preventDefault();
       this.#keyboard.focus();
     });
-    this.#keyboard.addEventListener("keydown", (event) => this.#onKeyDown(event));
-    this.#keyboard.addEventListener("beforeinput", (event) => this.#onBeforeInput(event));
+    this.#keyboard.addEventListener("keydown", (event) =>
+      this.#onKeyDown(event),
+    );
+    this.#keyboard.addEventListener("beforeinput", (event) =>
+      this.#onBeforeInput(event),
+    );
     this.#keyboard.addEventListener("compositionend", (event) => {
       if (event.data) this.send({ type: TEXT, text: event.data });
       this.#keyboard.value = "";
@@ -235,16 +364,20 @@ export class PymuxPane extends HTMLElement {
 
   // -- the socket ----------------------------------------------------
 
-  attributeChangedCallback(name, _was, now) {
+  attributeChangedCallback(
+    name: string,
+    _was: string | null,
+    now: string | null,
+  ): void {
     if (name === "src" && now) this.#open(now);
   }
 
-  connectedCallback() {
+  connectedCallback(): void {
     const src = this.getAttribute("src");
     if (src && !this.#socket) this.#open(src);
   }
 
-  disconnectedCallback() {
+  disconnectedCallback(): void {
     this.close();
   }
 
@@ -255,31 +388,31 @@ export class PymuxPane extends HTMLElement {
    * which is how a cookie and an `Origin` stay the page's own. The
    * element does not close a socket it was given.
    */
-  set socket(socket) {
+  set socket(socket: WebSocket | null) {
     this.close();
     this.#socket = socket;
     this.#ownsSocket = false;
-    this.#listen();
+    if (socket) this.#listen(socket);
   }
 
-  get socket() {
+  get socket(): WebSocket | null {
     return this.#socket;
   }
 
   /** Whether the server said this stream takes input. */
-  get writable() {
+  get writable(): boolean {
     return this.#writable;
   }
 
-  #open(url) {
+  #open(url: string): void {
     this.close();
-    this.#socket = new WebSocket(url);
+    const socket = new WebSocket(url);
+    this.#socket = socket;
     this.#ownsSocket = true;
-    this.#listen();
+    this.#listen(socket);
   }
 
-  #listen() {
-    const socket = this.#socket;
+  #listen(socket: WebSocket): void {
     socket.addEventListener("message", (event) => this.#onMessage(event));
     // **No `connected` on `open`.** A socket that is open has told a
     // page nothing yet: `writable` and the size arrive in the welcome, so
@@ -288,7 +421,7 @@ export class PymuxPane extends HTMLElement {
     // fires from the welcome instead, where what it reports is true.
     socket.addEventListener("close", (event) =>
       this.dispatchEvent(
-        new CustomEvent("closed", {
+        new CustomEvent<ClosedDetail>("closed", {
           detail: { code: event.code, reason: event.reason },
         }),
       ),
@@ -298,13 +431,14 @@ export class PymuxPane extends HTMLElement {
     );
   }
 
-  close() {
+  /** Close a socket this element opened. */
+  close(): void {
     if (this.#socket && this.#ownsSocket) this.#socket.close();
     this.#socket = null;
   }
 
   /** Send one message as it stands. */
-  send(message) {
+  send(message: ViewerMessage): void {
     if (this.#socket && this.#socket.readyState === WebSocket.OPEN) {
       this.#socket.send(JSON.stringify(message));
     }
@@ -312,10 +446,10 @@ export class PymuxPane extends HTMLElement {
 
   // -- what arrives --------------------------------------------------
 
-  #onMessage(event) {
-    let frame;
+  #onMessage(event: MessageEvent): void {
+    let frame: Welcome | Frame;
     try {
-      frame = JSON.parse(event.data);
+      frame = JSON.parse(String(event.data)) as Welcome | Frame;
     } catch {
       this.dispatchEvent(new CustomEvent("error", { detail: "bad frame" }));
       return;
@@ -366,11 +500,11 @@ export class PymuxPane extends HTMLElement {
    * hand-written copy: the values stay the server's, and `pyte.html`
    * remains the only place a colour is decided.
    */
-  #adopt(sheet, css) {
+  #adopt(sheet: CSSStyleSheet, css: string): void {
     sheet.replaceSync(css + "\n" + css.replaceAll(`.${SCREEN}`, ":host"));
   }
 
-  #learnStyles(styles) {
+  #learnStyles(styles: Record<string, StyleEntry>): void {
     for (const [number, entry] of Object.entries(styles)) {
       if (this.#styles.has(number)) continue;
       this.#styles.set(number, entry);
@@ -385,9 +519,8 @@ export class PymuxPane extends HTMLElement {
     }
   }
 
-  #resize(size) {
+  #resize(size: Size | undefined): void {
     if (!size) return;
-    this.#columns = size.columns;
     this.#screen.textContent = "";
     this.#rows = [];
     for (let index = 0; index < size.rows; index += 1) {
@@ -403,7 +536,7 @@ export class PymuxPane extends HTMLElement {
     this.#screen.append(this.#cursor);
   }
 
-  #drawRow(number, runs) {
+  #drawRow(number: number, runs: Run[]): void {
     const row = this.#rows[number];
     if (!row) return;
     row.textContent = "";
@@ -418,14 +551,15 @@ export class PymuxPane extends HTMLElement {
         row.append(document.createTextNode(text));
         continue;
       }
-      const piece =
-        entry && entry.h
-          ? document.createElement("a")
-          : document.createElement("span");
+      let piece: HTMLAnchorElement | HTMLSpanElement;
       if (entry && entry.h) {
-        piece.href = entry.h;
-        piece.rel = "noreferrer noopener";
-        piece.target = "_blank";
+        const link = document.createElement("a");
+        link.href = entry.h;
+        link.rel = "noreferrer noopener";
+        link.target = "_blank";
+        piece = link;
+      } else {
+        piece = document.createElement("span");
       }
       if (entry && entry.s) piece.className = `${STYLE_CLASS}${style}`;
       piece.textContent = text;
@@ -434,21 +568,23 @@ export class PymuxPane extends HTMLElement {
 
     // A row with nothing in it still takes a line, the way a blank row
     // of a terminal does.
-    if (!row.firstChild) row.append(document.createTextNode(" "));
+    if (!row.firstChild) row.append(document.createTextNode(" "));
   }
 
-  #moveCursor(cursor) {
+  #moveCursor(cursor: Cursor): void {
     const off = cursor.row < 0;
     this.#cursor.hidden = off;
     if (off) return;
-    const style = this.#ownSheet.cssRules[0].style;
+    // The first rule is `:host`, which is where the two custom
+    // properties the cursor is placed by are declared.
+    const { style } = this.#ownSheet.cssRules[0] as CSSStyleRule;
     style.setProperty("--pymux-cursor-row", String(cursor.row));
     style.setProperty("--pymux-cursor-column", String(cursor.column));
   }
 
   // -- what a viewer types -------------------------------------------
 
-  #onKeyDown(event) {
+  #onKeyDown(event: KeyboardEvent): void {
     // **Nothing while a composition runs.** A dead key and an IME both
     // deliver their keystrokes here as well, and the committed text
     // arrives separately; sending both would type it twice.
@@ -469,7 +605,7 @@ export class PymuxPane extends HTMLElement {
     this.send({ type: INPUT, keys: parts.join("-") });
   }
 
-  #onBeforeInput(event) {
+  #onBeforeInput(event: InputEvent): void {
     if (event.inputType === "insertFromPaste") {
       event.preventDefault();
       const text = event.data ?? event.dataTransfer?.getData("text") ?? "";
@@ -485,6 +621,12 @@ export class PymuxPane extends HTMLElement {
       event.preventDefault();
       this.send({ type: INPUT, keys: "Enter" });
     }
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    "pymux-pane": PymuxPane;
   }
 }
 

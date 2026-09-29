@@ -1,12 +1,11 @@
 /**
  * Everything the element declares, used the way a consumer uses it.
  *
- * **This file is the check on the `.d.ts`.** The declarations are written
- * by hand beside a hand-written `.js`, because nothing compiles that
- * package -- there is no node in any build of pymux, which is the point.
- * So the two can drift, and `tsc --noEmit` over this file is what stops
- * them: a signature that no longer matches fails a gate here rather than
- * a consumer's build.
+ * **This reads the declarations that ship.** The import below resolves to
+ * `pymux/web/static/pymux-pane.d.ts`, which the compiler emits from the
+ * TypeScript in `pymux/web/client/`. So it cannot drift from the code; what
+ * it can be is unusable, and that is what this asks. A member that stops
+ * being reachable fails a gate here rather than a consumer's build.
  *
  * It is not a test of behaviour and cannot be: `tsc` reads types and runs
  * nothing. What it says is that every member a consumer reaches for exists

@@ -8,8 +8,9 @@ here, and it is why these tests can reach the serving without a server of
 their own.
 
 **Two things here are about packaging and not about behaviour**, and they
-are the two that failed silently. The element and the page are data files
-in a python package, so they ship only if something says they do; and the
+are the two that failed silently. The front end is data in a python
+package, so it ships only if something puts it there -- a declaration for
+the files a person wrote, and a compiler for the files it emits; and the
 websocket library is an extra, so the failure to have it must say which
 extra rather than raising `ImportError` at somebody.
 Lillecarl/pymux#461.
@@ -29,10 +30,13 @@ def test_the_element_is_in_the_installed_package():
     """
     **Measured, and it did not.** With `packages` alone the wheel held
     every `.py` of `pymux/web/` and nothing of `pymux/web/static/`, so the
-    serving answered nothing and said nothing about why. Two declarations
-    keep it: `artifacts` in `pyproject.toml`, which hatchling reads, and
-    the same list in `mkProject`, which is what builds the source a wheel
-    is made from.
+    serving answered nothing and said nothing about why.
+
+    Two routes fill this directory and both can fail on their own. The
+    files a person wrote arrive because `artifacts` in `pyproject.toml`
+    names them and `mkProject` reads the same list. The three the compiler
+    writes arrive from the element derivation, which installs them into
+    the package and into the tree the suites run against.
 
     `web.STATIC` and not a path built here: the test asks the question the
     program asks.
@@ -42,6 +46,23 @@ def test_the_element_is_in_the_installed_package():
     assert (web.STATIC / "index.html").is_file()
     assert (web.STATIC / "page.js").is_file()
     assert (web.STATIC / "page.css").is_file()
+
+
+def test_the_source_is_not_beside_what_it_compiles_to():
+    """
+    The TypeScript lives in `pymux/web/client/` and never here.
+
+    **A check rests on this.** `checks.pymux-element` compiles a
+    consumer's file against `pymux-pane.d.ts`, and a `pymux-pane.ts` in
+    this directory would win that resolution: the check would read the
+    source twice and say nothing about what was emitted.
+    """
+    beside = [
+        found.name
+        for found in web.STATIC.iterdir()
+        if found.suffix == ".ts" and not found.name.endswith(".d.ts")
+    ]
+    assert beside == [], beside
 
 
 @pytest.mark.parametrize("path", sorted(web.SERVED))
@@ -128,6 +149,10 @@ async def test_serving_without_the_library_raises_what_the_command_prints(
 
 # ----------------------------------------------------------------------
 # The element, read as text.
+#
+# **The compiled file and not the TypeScript**, because that is the one a
+# browser runs and the one a page is served. A property that survived the
+# source and not the emit is a property a viewer does not get.
 #
 # No browser here, so these say only what can be said without one: that
 # the file holds the things a page needs from it. Whether it draws is what

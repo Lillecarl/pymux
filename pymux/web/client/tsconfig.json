@@ -1,0 +1,25 @@
+{
+  "//": [
+    "How the element is compiled. `nix/element.nix` runs tsc over this.",
+    "`declaration` is the whole reason the build exists: the types a",
+    "consumer reads come out of the code rather than being written",
+    "beside it. Comments stay in, because the element is meant to be",
+    "read as well as run.",
+    "A browser is the only runtime, so the target is what a browser of",
+    "2022 has and the module format is what a browser loads."
+  ],
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2022", "dom"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noImplicitOverride": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "declaration": true,
+    "removeComments": false,
+    "outDir": "dist"
+  },
+  "files": ["pymux-pane.ts", "page.ts"]
+}
