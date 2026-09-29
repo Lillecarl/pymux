@@ -174,6 +174,11 @@ def _say_key_did_not_fit():
     return say
 
 
+def _any_of_them_wants_chrome(watchers) -> bool:
+    "Whether any of those clients is not in full screen. None is yes."
+    return not watchers or any(not one.full_screen for one in watchers)
+
+
 class Asker(NamedTuple):
     """
     The client a forward is asked of, and whether a person asked.
@@ -244,6 +249,18 @@ class ClientState:
         #: is drawn over it wherever a client is named or selected.
         #: Lillecarl/pymux#340.
         self.name = ""
+
+        #: One pane over every cell of this terminal, with nothing
+        #: pymux draws for itself. It hides the status line and the
+        #: pane titlebars without changing the options that ask for
+        #: them, so turning it off gives both back.
+        #:
+        #: **A fact of one terminal, like the theme is.** A person
+        #: watching on a phone drops the chrome while the person
+        #: working keeps it. The plane is shared, so it keeps the rows
+        #: the chrome of any watcher needs and this client draws
+        #: background in them. Lillecarl/pymux#471.
+        self.full_screen = False
 
         #: Whether this client only watches. `attach-session -r` sets
         #: it, and nothing clears it: tmux's `-r` only sets as well
@@ -815,11 +832,6 @@ class Pymux:
         self.enable_mouse_support = True
         self.enable_status = True
         self.enable_pane_status = True  # False
-        # Full screen: one pane takes every cell, and pymux draws
-        # nothing of its own. It hides the status line and the pane
-        # titlebar without changing what the person asked for, so
-        # turning it off gives them both back.
-        self.full_screen = False
         # Where the ":" command line is drawn. A box in the middle of
         # the screen has room for a completion beside what it means,
         # for a usage line, and for more than the twelve rows a menu
@@ -1283,13 +1295,57 @@ class Pymux:
 
     @property
     def show_status(self) -> bool:
-        "Whether a client draws the status line."
-        return self.enable_status and not self.full_screen
+        """
+        Whether the client that is asking draws the status line.
+
+        **The client that is asking, because `full-screen` is one
+        terminal's.** Every reader of this draws, and a frame is drawn
+        under the application of the client it is for, so the client
+        asking is the client the answer is about. The two questions
+        about the plane are `any_watcher_shows_status` and its pair,
+        which are not this one. Lillecarl/pymux#471.
+        """
+        return self.enable_status and not self._asking_is_full_screen()
 
     @property
     def show_pane_status(self) -> bool:
-        "Whether a client draws the titlebar of a pane."
-        return self.enable_pane_status and not self.full_screen
+        "Whether the client that is asking draws the titlebar of a pane."
+        return self.enable_pane_status and not self._asking_is_full_screen()
+
+    def _asking_is_full_screen(self) -> bool:
+        """
+        Whether the client this frame is for wants no chrome.
+
+        No client is no, not the server's own answer: a client is what
+        holds the flag now, so with nobody there nobody asked for it.
+        """
+        try:
+            return self.get_client_state().full_screen
+        except ValueError:
+            return False
+
+    def any_watcher_shows_status(self, watchers) -> bool:
+        """
+        Whether any of those clients draws the status line.
+
+        **This is the plane's question, and `show_status` is not.** The
+        plane is one size for every client watching a window, because a
+        pane has one pty, so it keeps the rows the chrome of any watcher
+        needs and a client that dropped its own draws background in
+        them. The other way round -- a plane that grew when the last
+        client with chrome turned it off -- resizes everybody's
+        programs because somebody else changed their mind.
+
+        **Nobody watching is the server's own answer.** There is no
+        terminal to ask, and it is what the plane was measured with
+        before `full-screen` belonged to a client.
+        Lillecarl/pymux#471.
+        """
+        return self.enable_status and _any_of_them_wants_chrome(watchers)
+
+    def any_watcher_shows_pane_status(self, watchers) -> bool:
+        "The same question for the titlebar of a pane."
+        return self.enable_pane_status and _any_of_them_wants_chrome(watchers)
 
     def refresh_what_time_moves(self, but_not=None) -> None:
         """
@@ -1649,11 +1705,12 @@ class Pymux:
         if window.window_size is WindowSize.MANUAL and window.manual_size is not None:
             return window.manual_size
 
-        clients = self.clients_watching(window)
+        watchers = self.clients_watching(window)
 
-        if not clients:
+        if not watchers:
             return self.size_with_no_client(self.session_showing(window))
 
+        clients = watchers
         # A client that attached with `-r` is left out, and the filter
         # is here rather than in `clients_watching`: such a client is
         # watching, and it gets every frame. **Unless they all are** --
@@ -1673,8 +1730,11 @@ class Pymux:
                 columns=pick(one.columns for one in sizes),
             )
 
+        # **Every watcher, and not the ones that size it.** A read-only
+        # client still draws its own status line, so the row it needs
+        # comes off the plane even while its columns do not.
         return Size(
-            rows=size.rows - (1 if self.show_status else 0),
+            rows=size.rows - (1 if self.any_watcher_shows_status(watchers) else 0),
             columns=size.columns,
         )
 

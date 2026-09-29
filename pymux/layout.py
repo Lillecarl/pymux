@@ -2569,11 +2569,27 @@ def _bar_below_is_drawn(pymux: "Pymux", window) -> bool:
     holds: one pane covers everything, and nothing is above or below
     it. So it does not pay the row either.
 
-    **Three places have to give the same answer**, or the rows drift:
-    the gap between stacked panes, the row kept under the whole
-    layout, and the float that draws the bar.
+    **Two places have to give the same answer**, or the rows drift: the
+    row this client keeps under the whole layout, and the float that
+    draws the bar. Both are this client's own drawing.
+
+    The third is the gap between stacked panes, and that one is the
+    plane's: `_the_plane_keeps_a_bar_below`. A full-screen client
+    sharing a stacked window draws nothing in those gaps rather than
+    closing them up, because the gap is geometry and a pane has one
+    pty. Lillecarl/pymux#471.
     """
     return pymux.show_pane_status and not window.zoom and window.has_stack()
+
+
+def _the_plane_keeps_a_bar_below(pymux: "Pymux", window) -> bool:
+    "The same rows, asked of every client watching. Lillecarl/pymux#471."
+    watchers = pymux.clients_watching(window)
+    return (
+        pymux.any_watcher_shows_pane_status(watchers)
+        and not window.zoom
+        and window.has_stack()
+    )
 
 
 def gaps_of(pymux: "Pymux", window) -> Gaps:
@@ -2584,10 +2600,13 @@ def gaps_of(pymux: "Pymux", window) -> Gaps:
     panes when a pane draws a bar below it and the pane under it draws
     one above. `_create_split` leaves the same rows for the same
     reason. Lillecarl/pymux#211.
+
+    **The plane's answer**, because a plan is one plan for every client
+    watching. Lillecarl/pymux#471.
     """
     return Gaps(
         between_columns=BORDER_WIDTH,
-        between_panes=2 if _bar_below_is_drawn(pymux, window) else 1,
+        between_panes=2 if _the_plane_keeps_a_bar_below(pymux, window) else 1,
     )
 
 
@@ -2603,13 +2622,19 @@ def room_for_panes(pymux: "Pymux", window) -> Size:
     **This is the size a plan is measured for**, and it is the plane's
     and not a client's. A client smaller than this sees part of the
     plan through a view of its own.
+
+    So the rows come off for any client watching that draws the
+    chrome, and never for the client asking: a full-screen client draws
+    background where another one's titlebars go, rather than making a
+    plan of its own and resizing everybody's programs.
+    Lillecarl/pymux#471.
     """
     size = pymux.plane_size(window)
 
     rows = size.rows
-    if pymux.show_pane_status:
+    if pymux.any_watcher_shows_pane_status(pymux.clients_watching(window)):
         rows -= 1
-    if _bar_below_is_drawn(pymux, window):
+    if _the_plane_keeps_a_bar_below(pymux, window):
         rows -= 1
 
     return Size(rows=max(1, rows), columns=size.columns)

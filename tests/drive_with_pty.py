@@ -430,13 +430,26 @@ def run_on_pty(args, stderr_path, colorterm="", rows=24, columns=80):
     )
 
 
-def attach_client(sock_path, stderr_path, colorterm="", rows=24, columns=80):
+def attach_client(
+    sock_path, stderr_path, colorterm="", rows=24, columns=80, configuration=()
+):
     """
     Attach a client to a server that is already running, over its
     socket.
+
+    **The client reads the configuration file too**, which is not a
+    nicety: a client option lives on the terminal a person is sitting
+    at, so a `set-client-option` line reaches it only through the
+    client's own reading of the file. The server's reading of the same
+    line is a no-op, on purpose. Lillecarl/pymux#223,
+    Lillecarl/pymux#471.
     """
     return run_on_pty(
-        ["-S", sock_path, "attach"], stderr_path, colorterm, rows, columns
+        ["-S", sock_path, *[str(a) for a in configuration], "attach"],
+        stderr_path,
+        colorterm,
+        rows,
+        columns,
     )
 
 
@@ -778,7 +791,12 @@ class Terminal(Attached):
             assert started.returncode == 0, started.stderr
 
             self.master_fd, self.client, self.stderr = attach_client(
-                self.sock_path, self.stderr_path, colorterm, rows=rows, columns=columns
+                self.sock_path,
+                self.stderr_path,
+                colorterm,
+                rows=rows,
+                columns=columns,
+                configuration=configuration,
             )
         self.seen = b""
         self.arrivals = []
@@ -1562,7 +1580,10 @@ def check_full_screen_pane(tmp):
     rows, columns = 24, 80
 
     config = tmp / "full-screen.conf"
-    config.write_text("set full-screen on\n")
+    # `set-client-option`, because full screen belongs to the terminal
+    # a person is sitting at. The client reads this file for itself and
+    # announces the line when it attaches. Lillecarl/pymux#471.
+    config.write_text("set-client-option full-screen on\n")
 
     child_path = tmp / "corner_child.py"
     child_path.write_text(CORNER_CHILD)
@@ -1930,7 +1951,7 @@ def check_pane_that_changes_nothing(tmp):
     the clock is not on the screen to move.
     """
     config = tmp / "quiet.conf"
-    config.write_text("set full-screen on\n")
+    config.write_text("set-client-option full-screen on\n")
 
     program = tmp / "still.sh"
     # The same character in the same cell, over and over.

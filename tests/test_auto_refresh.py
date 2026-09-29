@@ -31,7 +31,7 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 from session import Connection
 from pymux.format import format_pymux_string
 from pymux.main import Pymux
-from pymux.options import ALL_OPTIONS
+from pymux.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS
 
 ROWS, COLUMNS = 24, 80
 
@@ -82,8 +82,17 @@ def session():
             loop.close()
 
 
-def set_option(pymux, name, value):
-    ALL_OPTIONS[name].set_value(pymux, value)
+def set_option(pymux, name, value, state=None):
+    """
+    A client option belongs to one terminal, so `full-screen` needs
+    the client to set it under. Lillecarl/pymux#471.
+    """
+    table = ALL_CLIENT_OPTIONS if name in ALL_CLIENT_OPTIONS else ALL_OPTIONS
+    if state is None:
+        table[name].set_value(pymux, value)
+        return
+    with set_app(state.app):
+        table[name].set_value(pymux, value)
 
 
 def text(state):
@@ -141,7 +150,7 @@ def test_refresh_asks_for_frame_when_text_changed(session):
 def test_full_screen_session_asks_for_no_frame_at_all(session):
     "One pane over every cell. Nothing there moves with time."
     pymux, state, frames = session
-    set_option(pymux, "full-screen", "on")
+    set_option(pymux, "full-screen", "on", state)
 
     assert text(state) == ()
     pymux.refresh_what_time_moves()
@@ -157,7 +166,7 @@ def test_clock_inside_pane_asks_for_frames(session):
     the only thing on the screen that time moves.
     """
     pymux, state, frames = session
-    set_option(pymux, "full-screen", "on")
+    set_option(pymux, "full-screen", "on", state)
     pymux.refresh_what_time_moves()
     assert frames == []
 
@@ -241,7 +250,7 @@ def test_window_list_still_carries_other_windows(session):
 def test_clock_in_window_out_of_view_asks_for_nothing(session):
     "A clock that is not drawn is not a reason to draw."
     pymux, state, frames = session
-    set_option(pymux, "full-screen", "on")
+    set_option(pymux, "full-screen", "on", state)
     other = out_of_view(pymux, state)
 
     pymux.refresh_what_time_moves()
@@ -263,7 +272,7 @@ def test_clock_in_window_out_of_view_asks_for_nothing(session):
 
 def test_clock_of_pane_shows_pinned_time(session):
     pymux, state, frames = session
-    set_option(pymux, "full-screen", "on")
+    set_option(pymux, "full-screen", "on", state)
     set_option(pymux, "test-mode", "on")
     in_view(pymux, state).panes[0].clock_mode = True
     pymux.refresh_what_time_moves()
@@ -274,7 +283,7 @@ def test_clock_of_pane_shows_pinned_time(session):
 
 def test_pinned_clock_asks_for_one_frame_and_then_no_more(session):
     pymux, state, frames = session
-    set_option(pymux, "full-screen", "on")
+    set_option(pymux, "full-screen", "on", state)
     set_option(pymux, "test-mode", "on")
     in_view(pymux, state).panes[0].clock_mode = True
 

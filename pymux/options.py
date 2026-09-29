@@ -702,9 +702,9 @@ ALL_OPTIONS = {
     "remain-on-exit": OnOffOption("remain_on_exit"),
     "status": OnOffOption("enable_status"),
     "pane-border-status": OnOffOption("enable_pane_status"),
-    # One pane over every cell, with nothing that pymux draws for
-    # itself. It hides the two options above without changing them.
-    "full-screen": OnOffOption("full_screen"),
+    # **`full-screen` is not here.** It hides the two options above,
+    # and it belongs to one terminal, so it is in
+    # `ALL_CLIENT_OPTIONS`. Lillecarl/pymux#471.
     # Draw the ":" command line as a box in the middle of the screen
     # instead of a bar along the bottom. Off, because a person used to
     # the bar should not have it move without asking.
@@ -796,6 +796,16 @@ ALL_CLIENT_OPTIONS = {
     "swap-light-and-dark-colors": OnOffOption(
         "swap_dark_and_light", scope=Scope.CLIENT
     ),
+    # One pane over every cell of this terminal, with nothing that
+    # pymux draws for itself. It hides `status` and
+    # `pane-border-status` without changing them, so turning it off
+    # gives both back.
+    #
+    # **One terminal's, like the theme.** A person watching on a phone
+    # drops the chrome while the person working keeps it. The plane is
+    # shared, so it keeps the rows the chrome of any watcher needs and
+    # this client draws background in them. Lillecarl/pymux#471.
+    "full-screen": OnOffOption("full_screen", scope=Scope.CLIENT),
 }
 
 
