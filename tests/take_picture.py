@@ -552,12 +552,26 @@ FIXTURES.update(
 #: submits, whether a pixel differs or not, so the loop's rewrites
 #: spent the burst's frames on pictures of nothing -- a burst of eight
 #: covered eight tenths of a second and held one blink inside it.
+#:
+#: **It holds for `HOLD`, and the burst is why.** The program slept
+#: five seconds, which was the whole of a burst while a burst was eight
+#: tenths of a second long. A burst is `BLINK_START`, seven gaps and
+#: eight pictures now: four seconds on an idle machine, and over eight
+#: on a machine with three times as many busy processes as cores. So
+#: the window went while its own burst was still running, and `import`
+#: does not fail on a window that has gone -- it waits. Measured,
+#: twelve calls of twelve waited until the harness cut them off, and
+#: the picture that timed out was `bare.7` both times somebody saw it:
+#: the last frame of the burst. Lillecarl/pymux#462.
+#:
+#: The longer sleep costs no time. `Seat.running` kills the terminal as
+#: soon as the burst has its frames.
 BLINK_FIXTURES = {
     "cursor-blink": (
         "printf '\\033[2J\\033[H'\n"
         "printf 'the cursor is after this: '\n"
         "printf '\\033[10;1Hx'\n"
-        "sleep 5\n"
+        "exec sleep %d\n" % HOLD
     ),
 }
 
