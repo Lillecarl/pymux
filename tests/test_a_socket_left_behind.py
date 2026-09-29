@@ -14,6 +14,7 @@ something is listening on, or to anything that is not a socket.
 Lillecarl/pymux#453.
 """
 
+import errno
 import os
 import socket
 import stat
@@ -93,3 +94,47 @@ def test_a_file_that_is_not_a_socket_is_left_alone(tmp_path):
         bind_and_listen_on_posix_socket(str(path), lambda _connection: None)
 
     assert path.read_text() == "not a socket"
+
+
+# ----------------------------------------------------------------------
+# The lock beside the socket.
+#
+# The unlink above is safe because it happens under `<path>.lock`, and
+# that lock file is a name in the same directory: for `pymux -S
+# /tmp/shared.sock` it is a name another account can get to first. The
+# per-UID room is 0700, so only an explicitly named socket in a
+# directory somebody else can write is exposed -- the shape of
+# Lillecarl/pymux#405 again. Lillecarl/pymux#455.
+
+
+def test_a_lock_somebody_pointed_elsewhere_is_not_opened(tmp_path):
+    """
+    `os.open` follows a symlink, so a squatter got an flock on a file
+    of their choosing and could hold a server start for as long as they
+    liked.
+    """
+    path = tmp_path / "pymux.sock"
+    _killed_server(path)
+
+    theirs = tmp_path / "theirs"
+    theirs.write_text("not pymux's")
+    os.symlink(theirs, str(path) + ".lock")
+
+    with pytest.raises(OSError) as refused:
+        bind_and_listen_on_posix_socket(str(path), lambda _connection: None)
+
+    assert refused.value.errno == errno.ELOOP
+    assert theirs.read_text() == "not pymux's"
+
+
+def test_a_lock_file_of_its_own_still_opens(tmp_path):
+    "The guard costs nothing honest: nobody symlinks their own lock."
+    path = tmp_path / "pymux.sock"
+    _killed_server(path)
+    (tmp_path / "pymux.sock.lock").write_text("")
+
+    listener = bind_and_listen_on_posix_socket(str(path), lambda _c: None)
+    try:
+        assert stat.S_ISSOCK(os.stat(path).st_mode)
+    finally:
+        listener.close()

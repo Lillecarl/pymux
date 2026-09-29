@@ -112,7 +112,25 @@ def _bind_or_take_over(sock: socket.socket, socket_name: str) -> None:
             raise
         in_use = busy
 
-    lock = os.open(socket_name + ".lock", os.O_WRONLY | os.O_CREAT, 0o600)
+    # **`O_NOFOLLOW`, because the lock file is a name beside the socket
+    # and a name is something another account can get there first.**
+    # `os.open` follows a symlink, so for `pymux -S /tmp/shared.sock`
+    # somebody else could make `/tmp/shared.sock.lock` point at a file
+    # of their choosing and pymux would flock that -- and hold a server
+    # start for as long as it liked. Nothing is written and there is no
+    # `O_TRUNC`, so no content was ever at risk; the lock was.
+    #
+    # It costs nothing honest: nobody symlinks their own lock file, and
+    # a real one still opens. A symlink answers ELOOP, which the
+    # explicit path reports and the room's loop reads as a name to step
+    # past. The per-UID room is 0700 so only an explicitly named socket
+    # in a directory somebody else can write is exposed at all, which
+    # is the shape of Lillecarl/pymux#405 again. Lillecarl/pymux#455.
+    lock = os.open(
+        socket_name + ".lock",
+        os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW,
+        0o600,
+    )
     try:
         fcntl.flock(lock, fcntl.LOCK_EX)
 
