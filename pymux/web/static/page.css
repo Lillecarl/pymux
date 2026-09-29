@@ -41,6 +41,21 @@ h1 {
   font-size: 0.85rem;
 }
 
+/* A session is sized by the room it gets, so it gets the rest of the
+   window: the element counts the cells in its box and tells the server. */
+body.session {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  box-sizing: border-box;
+}
+
+body.session pymux-pane {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 pymux-pane {
   /* The pane draws its own background, and this is the edge around it. */
   border: 1px solid color-mix(in srgb, var(--ink) 20%, transparent);

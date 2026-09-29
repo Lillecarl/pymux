@@ -766,6 +766,7 @@ def _web(socket_name: str | None, a) -> int:
         """
         say("pymux web on http://%s:%d/?pane=<pane>&t=%s" % (host, port, token))
         say("  panes: %s" % (" ".join(pane.id for pane in server.panes) or "none",))
+        say("  the session, as a client sees it: http://%s:%d/?session&t=%s" % (host, port, token))
         if not a.web_allow_input:
             say("  showing only; --allow-input takes keys")
 

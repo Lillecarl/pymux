@@ -142,6 +142,54 @@ async def test_a_viewer_without_the_token_is_refused(pymux, token):
         pymux.stop()
 
 
+async def test_a_viewer_of_the_session_is_a_client_of_it(pymux):
+    """
+    `/session` is what one client draws: the panes, and the status line a
+    pane stream has none of. The size is the viewer's, because a client's
+    size is its terminal's. Lillecarl/pymux#481.
+    """
+    async with pymux.running():
+        async with anyio.create_task_group() as tasks:
+            web = await _serving(pymux, tasks, writable=False)
+            url = "ws://127.0.0.1:%d/session?t=%s&rows=10&columns=40" % (
+                web.port,
+                web.token,
+            )
+
+            async with connect(url) as socket:
+                welcome = json.loads(await socket.recv())
+                assert welcome["type"] == "welcome"
+                assert welcome["size"] == {"columns": 40, "rows": 10}
+                assert welcome["writable"] is False
+
+                rows: dict = {}
+                with anyio.fail_after(10):
+                    while not rows.get("9", "").strip():
+                        frame = json.loads(await socket.recv())
+                        for number, runs in frame.get("rows", {}).items():
+                            rows[number] = "".join(text for _style, text in runs)
+
+            tasks.cancel_scope.cancel()
+        pymux.stop()
+
+
+async def test_a_viewer_of_the_session_without_the_token_is_refused(pymux):
+    from websockets.exceptions import InvalidStatus
+
+    async with pymux.running():
+        async with anyio.create_task_group() as tasks:
+            web = await _serving(pymux, tasks, writable=False)
+
+            with pytest.raises(InvalidStatus) as refused:
+                async with connect("ws://127.0.0.1:%d/session?t=wrong" % web.port):
+                    pass
+
+            assert refused.value.response.status_code == 403
+
+            tasks.cancel_scope.cancel()
+        pymux.stop()
+
+
 async def test_a_writable_viewer_types_into_the_pane(pymux):
     pane = pymux.arrangement.get_active_window().active_pane
     written = []

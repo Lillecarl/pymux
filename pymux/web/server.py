@@ -46,6 +46,11 @@ STATIC = Path(__file__).parent / "static"
 #: security.
 TOKEN_BYTES = 32
 
+#: The path of the whole session, as one client of it sees it. `/pane/<id>`
+#: is one pane's own screen; this is what a client draws over and around
+#: the panes. Lillecarl/pymux#481.
+SESSION = "/session"
+
 #: What may be served, by name. A list and not a directory walk: a path
 #: this does not name is not served, so no traversal can reach anything.
 SERVED = {
@@ -136,7 +141,7 @@ async def serve(
                 body,
             )
 
-        if not path.startswith("/pane/"):
+        if not (path.startswith("/pane/") or path == SESSION):
             return connection.respond(404, "no such thing here\n")
 
         asked = _one_of(query, "t")
@@ -148,7 +153,11 @@ async def serve(
         return None
 
     async def handle(connection) -> None:
-        path, _, _query = connection.request.path.partition("?")
+        path, _, query = connection.request.path.partition("?")
+        if path == SESSION:
+            await _serve_a_session(socket_path, connection, query, writable)
+            return
+
         pane_id = path[len("/pane/") :]
         if not pane_id:
             await connection.close(1008, "no pane named")
@@ -205,6 +214,49 @@ async def _relay(stream: PaneStream, connection) -> None:
 
         both.start_soon(to_the_viewer)
         both.start_soon(to_the_pane)
+
+
+async def _serve_a_session(socket_path: str, connection, query: str, writable: bool) -> None:
+    """
+    One viewer as one client of the session, with everything a client
+    draws. `rows` and `columns` in the query are the element's first size;
+    a `size` message moves it after. Lillecarl/pymux#481.
+    """
+    import asyncio
+
+    from pymux.web.session import LARGEST, run_session
+
+    def cells(name: str, default: int) -> int:
+        try:
+            value = int(_one_of(query, name) or default)
+        except ValueError:
+            return default
+        return max(1, min(LARGEST, value))
+
+    logger.info("A viewer opened the session.")
+    try:
+        reader, writer = await asyncio.open_unix_connection(socket_path)
+    except OSError as refused:
+        await connection.close(1008, str(refused)[:120])
+        return
+
+    async def to_viewer(frame) -> None:
+        await connection.send(json.dumps(frame))
+
+    try:
+        await run_session(
+            reader,
+            writer,
+            to_viewer,
+            connection,
+            cells("rows", 24),
+            cells("columns", 80),
+            read_only=not writable,
+        )
+    except Exception as ended:  # noqa: BLE001 - said, then the socket closes
+        logger.info("A viewer of the session ended: %s", ended)
+    finally:
+        writer.close()
 
 
 def _one_of(query: str, name: str) -> Optional[str]:

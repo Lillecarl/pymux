@@ -23,7 +23,11 @@ function needed<T>(found: T | null, what: string): T {
 }
 
 const asked = new URLSearchParams(location.search);
-const pane = asked.get("pane");
+// `?session` shows the whole session as one client draws it, with the
+// status line and whatever pymux draws over the panes; `?pane=%1` shows
+// one pane's own screen. Lillecarl/pymux#481.
+const session = asked.has("session");
+const pane = session ? "the session" : asked.get("pane");
 const token = asked.get("t");
 // `querySelector` and not `getElementById`, because the tag map makes
 // this a `PymuxPane` where `getElementById` gives a bare `HTMLElement`:
@@ -36,12 +40,20 @@ function say(text: string): void {
 }
 
 if (!pane || !token) {
-  say("Open the address that `pymux web` printed, with ?pane=%1001 on it.");
+  say(
+    "Open the address that `pymux web` printed, with ?pane=%1001 or ?session on it.",
+  );
 } else {
   const where = new URL(location.href);
   where.protocol = where.protocol === "https:" ? "wss:" : "ws:";
-  where.pathname = `/pane/${pane}`;
+  where.pathname = session ? "/session" : `/pane/${pane}`;
   where.search = `?t=${encodeURIComponent(token)}`;
+  if (session) {
+    // The element says how many cells it holds, and the page gives it
+    // the room: a client's size is its terminal's.
+    element.setAttribute("fit", "");
+    document.body.classList.add("session");
+  }
 
   element.addEventListener("connected", () =>
     say(

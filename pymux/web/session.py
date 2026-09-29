@@ -22,8 +22,11 @@ how one arrives, so a unix socket, a test's pipe and a relay are three
 callers of one thing.
 """
 
+import asyncio
 import json
-from typing import Any, Callable, Dict, Optional
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Optional
+
+import anyio
 
 from pyte.keys import Unhearable
 from pyte.modes import PrivateMode
@@ -31,16 +34,28 @@ from pyte.screen import Screen
 from pyte.streams import Stream
 
 from pymux.key_spelling import event_however_it_is_written
+from pymux.log import logger
 from pymux.protocol import Packet
 from pymux.web.protocol import PaneView, Typed, typed_of
 
-__all__ = ["SessionScreen"]
+__all__ = ["SessionScreen", "run_session"]
 
 #: What this terminal says it is. pyte answers as xterm does, and holds
 #: 24-bit colour, so the client need not guess down to 256.
 TERM = "xterm-256color"
 COLORTERM = "truecolor"
 COLOR_DEPTH = "DEPTH_24_BIT"
+
+#: What a viewer says when its element changed size.
+SIZE = "size"
+
+#: The most rows or columns a viewer may ask for. A screen of a thousand
+#: by a thousand is a million cells, and a number past that is a mistake
+#: or somebody seeing what happens.
+LARGEST = 1000
+
+#: How much of the socket to read at once, as `libpymux` does.
+_CHUNK = 65536
 
 
 class SessionScreen:
@@ -131,6 +146,18 @@ class SessionScreen:
             return "that is not JSON"
         if not isinstance(message, dict):
             return "a message is an object"
+
+        # A pane has a size of its own, and a client does not: only the
+        # viewer knows how many cells its element holds.
+        if message.get("type") == SIZE:
+            rows, columns = message.get("rows"), message.get("columns")
+            if not all(
+                isinstance(one, int) and 0 < one <= LARGEST for one in (rows, columns)
+            ):
+                return "a size message needs rows and columns from 1 to %d" % LARGEST
+            self.resize(rows, columns)
+            return None
+
         try:
             typed = typed_of(message)
         except ValueError as refused:
@@ -170,3 +197,62 @@ class SessionScreen:
                 continue
             spelled.append(self.screen.encode_key_event(event, exactly=True))
         return "".join(spelled)
+
+
+async def run_session(
+    reader: asyncio.StreamReader,
+    writer: asyncio.StreamWriter,
+    to_viewer: Callable[[Dict[str, Any]], Awaitable[None]],
+    from_viewer: AsyncIterator[str],
+    rows: int,
+    columns: int,
+    read_only: bool = False,
+) -> None:
+    """
+    Be one client of the server at the other end of `reader` and `writer`,
+    for one viewer, until either of them stops.
+
+    **A frame goes out per read of the socket, not per packet.** The
+    server writes one frame as several packets, and a viewer sent one
+    frame each would be shown most of them half drawn. A read takes what
+    has arrived, which is usually the whole frame.
+    """
+
+    def send(packet: Dict[str, Any]) -> None:
+        writer.write(json.dumps(packet).encode("utf-8") + b"\0")
+
+    session = SessionScreen(rows, columns, send, read_only=read_only)
+    session.start()
+    await to_viewer(session.welcome())
+
+    async with anyio.create_task_group() as both:
+
+        async def from_the_server() -> None:
+            buffer = b""
+            while True:
+                data = await reader.read(_CHUNK)
+                if not data:
+                    break
+                buffer += data
+                ended = False
+                while b"\0" in buffer:
+                    raw, buffer = buffer.split(b"\0", 1)
+                    if raw and session.take_packet(json.loads(raw.decode("utf-8"))):
+                        ended = True
+                frame = session.frame()
+                if frame is not None:
+                    await to_viewer(frame)
+                if ended:
+                    break
+            both.cancel_scope.cancel()
+
+        async def from_the_viewer() -> None:
+            async for message in from_viewer:
+                refused = session.take(message)
+                if refused is not None:
+                    logger.info("A viewer's message was refused: %s", refused)
+                await writer.drain()
+            both.cancel_scope.cancel()
+
+        both.start_soon(from_the_server)
+        both.start_soon(from_the_viewer)

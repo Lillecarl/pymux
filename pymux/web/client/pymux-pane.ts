@@ -127,7 +127,22 @@ export interface PasteMessage {
   text: string;
 }
 
-export type ViewerMessage = InputMessage | TextMessage | PasteMessage;
+/**
+ * How many cells the element holds. Only `/session` reads it: a pane has
+ * a size of its own, and a client's size is its terminal's.
+ * Lillecarl/pymux#481.
+ */
+export interface SizeMessage {
+  type: "size";
+  rows: number;
+  columns: number;
+}
+
+export type ViewerMessage =
+  | InputMessage
+  | TextMessage
+  | PasteMessage
+  | SizeMessage;
 
 export interface ClosedDetail {
   code: number;
@@ -197,6 +212,11 @@ const OWN_RULES = `
   pointer-events: none;
 }
 .cursor[hidden] { display: none; }
+/* What a cell measures, for "fit". Absolute, so it adds no row. */
+.probe {
+  position: absolute;
+  visibility: hidden;
+}
 `;
 
 /** Text a viewer typed, which the server writes as it stands. */
@@ -241,6 +261,14 @@ export interface PymuxPane {
 
 export class PymuxPane extends HTMLElement {
   static observedAttributes = ["src"];
+
+  /**
+   * With `fit`, the element tells the server how many cells its box
+   * holds, at the welcome and whenever the box changes. That is what a
+   * `/session` stream sizes its client by. A pane stream ignores it.
+   */
+  #observer = new ResizeObserver(() => this.#tellTheSize());
+  #toldSize = "";
 
   #screen: HTMLPreElement;
   #keyboard: HTMLTextAreaElement;
@@ -345,10 +373,51 @@ export class PymuxPane extends HTMLElement {
   connectedCallback(): void {
     const src = this.getAttribute("src");
     if (src && !this.#socket) this.#open(src);
+    this.#observer.observe(this);
   }
 
   disconnectedCallback(): void {
+    this.#observer.disconnect();
     this.close();
+  }
+
+  /**
+   * The cells the box holds, measured with the glyph and the line height
+   * the screen is drawn with, so the count agrees with the cursor's
+   * `1ch` and `1.2em`.
+   */
+  #cellsThatFit(): Size | null {
+    const probe = document.createElement("span");
+    probe.textContent = "0".repeat(10);
+    probe.className = "probe";
+    this.#screen.append(probe);
+    const glyph = probe.getBoundingClientRect();
+    probe.remove();
+
+    const lineHeight = glyph.height;
+    const cellWidth = glyph.width / 10;
+    if (!lineHeight || !cellWidth) return null;
+    // The screen is a block, so its width is the host's content box. The
+    // host's own height holds its padding as well, which a page may set.
+    const host = getComputedStyle(this);
+    const height =
+      this.clientHeight -
+      parseFloat(host.paddingTop) -
+      parseFloat(host.paddingBottom);
+    return {
+      columns: Math.floor(this.#screen.clientWidth / cellWidth),
+      rows: Math.floor(height / lineHeight),
+    };
+  }
+
+  #tellTheSize(): void {
+    if (!this.hasAttribute("fit")) return;
+    const size = this.#cellsThatFit();
+    if (!size || size.rows < 1 || size.columns < 1) return;
+    const said = `${size.rows}x${size.columns}`;
+    if (said === this.#toldSize) return;
+    this.#toldSize = said;
+    this.send({ type: "size", rows: size.rows, columns: size.columns });
   }
 
   /**
@@ -429,6 +498,9 @@ export class PymuxPane extends HTMLElement {
       this.#writable = Boolean(frame.writable);
       this.#adopt(this.#themeSheet, frame.css || "");
       this.#resize(frame.size);
+      // A new stream has been told nothing yet.
+      this.#toldSize = "";
+      this.#tellTheSize();
       // Now, and not when the socket opened: this is the first moment a
       // listener can read `writable` and the size and be told the truth.
       this.dispatchEvent(new CustomEvent("connected"));
