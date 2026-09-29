@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command
+from pymux.commands import add_command, not_past_this_client
 from pymux.commands.sessions import move_this_client
 
 
@@ -31,7 +31,14 @@ def attach_session(pymux: "Pymux", args: argparse.Namespace) -> None:
     client read-only, which is what tmux does
     (`cmd-attach-session.c:118` sets both flags and clears neither).
     Lillecarl/pymux#467.
+
+    **A client that only watches may not run `-d` or `-x`.** tmux
+    lets it: the loop at `cmd-attach-session.c:127` has no read-only
+    guard, so a watcher there takes the session from everybody and
+    `-x` closes the terminal each of them was in.
     """
+    not_past_this_client(pymux, args.d or args.x)
+
     client_state = move_this_client(
         pymux, args.target_session, detach_others=args.d, hang_up_others=args.x
     )

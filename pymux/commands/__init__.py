@@ -27,6 +27,7 @@ __all__ = [
     "add_commands_to",
     "call_command_handler",
     "handle_command",
+    "not_past_this_client",
     "parser_tree",
     "this_client",
 ]
@@ -63,6 +64,30 @@ def this_client(pymux: "Pymux") -> "ClientState | None":
         return None
 
     return None if client_state.temporary else client_state
+
+
+def not_past_this_client(pymux: "Pymux", reaches_another: bool) -> None:
+    """
+    Refuse what a read-only client aimed at somebody else.
+
+    Two of the commands a watcher may run also reach other clients:
+    `detach-client -a` puts every one of them back at a shell prompt,
+    and `attach-session -x` closes the terminal each was sitting in.
+    `read_only=True` is a yes for the whole command, so a handler asks
+    this for the part of it that is not.
+
+    tmux has this guard on `detach-client` and nowhere else
+    (`cmd-detach-client.c:73-78`): its `attach-session -x` runs for a
+    read-only client and hangs up everybody, which is the harder
+    version of the thing the flag exists to stop.
+    Lillecarl/pymux#467.
+    """
+    if not reaches_another:
+        return
+
+    client_state = this_client(pymux)
+    if client_state is not None and client_state.read_only:
+        raise CommandException("client is read-only")
 
 
 class CommandParser(argparse.ArgumentParser):

@@ -6,7 +6,12 @@ if TYPE_CHECKING:
 
 
 from prompt_toolkit.application.current import get_app
-from pymux.commands import CommandException, add_command
+from pymux.commands import (
+    CommandException,
+    add_command,
+    not_past_this_client,
+    this_client,
+)
 from pymux.commands.common import clients_named
 
 
@@ -41,15 +46,27 @@ def detach_client(pymux: "Pymux", args: argparse.Namespace) -> None:
     the terminal it was in closes. It is tmux's own letter for it, and
     the same message tmux's `attach-session -x` sends
     (`cmd-detach-client.c:80`). Lillecarl/pymux#347.
+
+    **A client that only watches may detach itself and nobody else.**
+    Leaving is the one thing such a person has to be able to do, and
+    putting other people back at a shell prompt is not it.
+    Lillecarl/pymux#467.
     """
     hang_up = args.hang_up
 
     if args.target_client is not None:
-        for client_state in clients_named(pymux, args.target_client):
+        here = this_client(pymux)
+        targets = list(clients_named(pymux, args.target_client))
+        not_past_this_client(pymux, any(one is not here for one in targets))
+        for client_state in targets:
             _detach(pymux, client_state, hang_up)
         return
 
     if args.target_session is not None:
+        # Every client on that session, so even a session this one is
+        # alone on is a reach past itself. tmux refuses `-s` for a
+        # read-only client without looking either.
+        not_past_this_client(pymux, True)
         session = pymux.get_session(args.target_session)
         if session is None:
             raise CommandException(
@@ -61,6 +78,7 @@ def detach_client(pymux: "Pymux", args: argparse.Namespace) -> None:
         return
 
     if args.all_but_this_one:
+        not_past_this_client(pymux, True)
         # **Not `get_client_state`.** A command that arrived from a
         # pane's CLI runs under a temporary client, and that one is
         # nobody: keeping it would detach every terminal a person is

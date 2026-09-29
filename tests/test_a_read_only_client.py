@@ -125,6 +125,79 @@ async def test_a_read_only_client_may_still_leave():
         assert state.message != "client is read-only"
 
 
+# ----------------------------------------------------------------------
+# What it may not do to anybody else.
+#
+# `detach-client` and `attach-session` are marked read only, and both
+# take a target beyond the caller. A yes for the command is not a yes
+# for that part of it.
+
+
+async def _two_clients(session):
+    "A person working, and a person watching over their shoulder."
+    session.pymux.create_window(WAITS)
+    working, _ = await session.attach("working", SIZE)
+    watching, _ = await session.attach("watching", SIZE)
+    watching.read_only = True
+    return working, watching
+
+
+async def test_a_read_only_client_cannot_detach_everybody_else():
+    async with over_connection() as session:
+        working, watching = await _two_clients(session)
+
+        with set_app(watching.app):
+            session.pymux.handle_command("detach-client -a")
+
+        assert watching.message == "client is read-only"
+        assert not working.connection._closed
+
+
+async def test_a_read_only_client_cannot_detach_a_named_client():
+    async with over_connection() as session:
+        working, watching = await _two_clients(session)
+
+        with set_app(watching.app):
+            session.pymux.handle_command(
+                "detach-client -t %s" % (working.connection.name,)
+            )
+
+        assert watching.message == "client is read-only"
+        assert not working.connection._closed
+
+
+async def test_a_read_only_client_cannot_take_the_session():
+    """
+    `attach-session -x` hangs up the terminal each other client was
+    sitting in. tmux allows this for a read-only client: the loop at
+    `cmd-attach-session.c:127` has no guard at all.
+    """
+    async with over_connection() as session:
+        working, watching = await _two_clients(session)
+
+        with set_app(watching.app):
+            session.pymux.handle_command("attach-session -x")
+
+        assert watching.message == "client is read-only"
+        assert not working.connection._closed
+
+
+async def test_an_ordinary_client_still_takes_the_session():
+    "The control: the guard reads the flag, not the flags."
+    async with over_connection() as session:
+        working, watching = await _two_clients(session)
+        watching.read_only = False
+
+        with set_app(watching.app):
+            session.pymux.handle_command("detach-client -a")
+
+        await once(
+            lambda: working.connection._closed,
+            5.0,
+            "an ordinary client could not detach the others",
+        )
+
+
 async def test_a_read_only_client_may_still_read_the_clients():
     async with over_connection() as session:
         pymux = session.pymux
