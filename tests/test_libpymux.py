@@ -266,6 +266,27 @@ def test_capture_without_lines_asks_for_screen(fake):
     assert server.asked == ["capture-pane -p -t %5"]
 
 
+def test_the_revision_of_a_pane_is_the_one_it_was_read_at(fake):
+    "The snapshot, like every other field."
+    server = fake([])
+    pane = Pane(Server(server.path), {"pane_id": "%5", "pane_revision": "42"})
+    assert pane.revision == 42
+    assert server.asked == []
+
+
+def test_asking_for_the_revision_now_goes_to_the_server(fake):
+    """
+    The trap this exists for: a caller that keeps its `Pane` would seed a
+    wait with the number from when the object was made, so every wait
+    answers at once and the loop spins.
+    """
+    server = fake([(pane_row(pane_id="%5", pane_revision="99") + "\n", "", 0)])
+    pane = Pane(Server(server.path), {"pane_id": "%5", "pane_revision": "1"})
+
+    assert pane.current_revision() == 99
+    assert server.asked, "it has to ask the server"
+
+
 def test_capture_html_asks_for_the_html_of_a_pane(fake):
     server = fake([("<pre></pre>\n", "", 0)])
     pane = Pane(Server(server.path), {"pane_id": "%5"})

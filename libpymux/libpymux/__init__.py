@@ -28,6 +28,7 @@ from .connection import (
 )
 from .objects import Pane, Server, Session, Window
 from .sockets import socket_paths
+from .streams import PaneStream, StreamRefused
 
 # A library writes nothing to the terminal of a program that did not ask
 # for it. Without a handler, `logging` sends a record to `sys.stderr`
@@ -41,9 +42,11 @@ __all__ = [
     "CommandResult",
     "Connection",
     "Pane",
+    "PaneStream",
     "Server",
     "ServerNotRunning",
     "Session",
+    "StreamRefused",
     "Window",
     "quote",
     "socket_paths",

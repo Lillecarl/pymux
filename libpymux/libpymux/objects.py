@@ -12,10 +12,23 @@ and does not follow the server on its own. Call `refresh()` for the
 fields again, or read the collection again for the objects.
 """
 
-from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 from .connection import CommandResult, Connection, ServerNotRunning
 from .sockets import socket_paths
+
+if TYPE_CHECKING:
+    from .streams import PaneStream
 
 __all__ = ["Server", "Session", "Window", "Pane"]
 
@@ -200,19 +213,40 @@ class Pane(_Object):
     @property
     def revision(self) -> int:
         """
-        How many times what this pane shows may have changed.
+        The revision this pane **was read at**, which is not now.
 
-        **Compare it, never order it.** It only goes up, but a step of
-        one says nothing about how much happened, and it moves on output
-        that draws nothing at all -- the server counts every read from
-        the program, whatever the bytes were. So a difference means "ask
-        again", and equality means "nothing to do".
+        Like every other field here it comes from the snapshot this object
+        was made from, so an object a caller keeps holds the number from
+        when it was made however long ago that was. For a field that
+        describes a pane that is what a caller wants; for this one it is a
+        trap, because the whole use of the number is comparing it with
+        now. `current_revision()` asks the server, and `refresh()` reads
+        every field again.
+
+        **Compare it, never order it.** It only goes up, but a step of one
+        says nothing about how much happened, and it moves on output that
+        draws nothing at all -- the server counts every read from the
+        program, whatever the bytes were.
 
         `-1` from a server too old to answer the field.
-        `wait_for_change` is how to wait for it rather than poll it.
         Lillecarl/pymux#387.
         """
         return _as_int(self._values.get("pane_revision", ""), -1)
+
+    def current_revision(self) -> int:
+        """
+        The revision this pane holds now, asked of the server.
+
+        A method and not a property, because it costs a round trip and
+        nothing about the word `revision` says so. This is what a loop
+        seeds itself with: `revision` alone is the snapshot, and a caller
+        that kept its `Pane` would wait on a number the server left long
+        ago -- every wait then answers at once and the loop spins.
+        """
+        for pane in self.server.panes:
+            if pane.id == self.id:
+                return pane.revision
+        raise LookupError("the pane %s is gone" % (self.id,))
 
     @property
     def window(self) -> Optional["Window"]:
@@ -301,10 +335,17 @@ class Pane(_Object):
         frame and then waits misses nothing in between -- which is what
         makes this safe to use in a loop:
 
-            revision = pane.revision
+            revision = pane.current_revision()
             while True:
                 draw(pane.capture_html())
                 revision = pane.wait_for_change(since=revision)
+
+        **`current_revision()` and not `revision`.** The property is the
+        snapshot this object was made from, so a caller that keeps its
+        `Pane` seeds the loop with a number the server left long ago:
+        every wait then answers at once and the loop spins at full speed
+        with nothing happening. Found by the first caller doing exactly
+        that.
 
         Without `since` it waits for the next change, whatever the pane
         holds now.
@@ -320,6 +361,25 @@ class Pane(_Object):
         if timeout is not None:
             arguments += ["--timeout", str(timeout)]
         return _as_int(self.server.cmd(arguments).stdout.strip(), -1)
+
+    def stream(self, writable: bool = False) -> "PaneStream":
+        """
+        A stream of the rows of this pane that change.
+
+        For a caller that draws the pane rather than reading it once:
+        `capture_html` gives a whole screen each time, and this gives each
+        changed row once. It is async, and used as a context manager:
+
+            async with pane.stream() as stream:
+                async for frame in stream:
+                    draw(frame)
+
+        `writable` asks for a stream that takes input as well.
+        `libpymux.streams` says what a frame holds. Lillecarl/pymux#461.
+        """
+        from .streams import PaneStream
+
+        return PaneStream(self.server.socket_path, self.id, writable=writable)
 
     def clear_history(self) -> None:
         "Throw away the scrollback of this pane."

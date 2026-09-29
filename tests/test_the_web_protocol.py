@@ -16,7 +16,7 @@ import pytest
 from pyte.screen import Screen
 from pyte.streams import Stream
 
-from pymux.web.protocol import FRAME, PLAIN_STYLE, WELCOME, PaneView, keys_of
+from pymux.web.protocol import FRAME, PLAIN_STYLE, WELCOME, PaneView, typed_of
 
 LINES = 5
 COLUMNS = 20
@@ -334,11 +334,32 @@ def test_keys_are_names_and_not_bytes():
     client that spelled an escape sequence would have to know which mode
     the program asked for, and would be wrong the moment it changed.
     """
-    assert keys_of({"type": "input", "keys": "C-c"}) == ("C-c", False)
+    assert typed_of({"type": "input", "keys": "C-c"}) == ("C-c", True, False)
 
 
-def test_a_paste_goes_as_it_stands():
-    assert keys_of({"type": "paste", "text": "C-c"}) == ("C-c", True)
+def test_composed_text_goes_as_it_stands_and_is_not_a_paste():
+    """
+    What a viewer finished composing. Not bracketed: a program that asked
+    to know about pastes would draw the markers around a character
+    somebody typed.
+    """
+    assert typed_of({"type": "text", "text": "C-c"}) == ("C-c", False, False)
+
+
+def test_a_paste_is_marked_as_one():
+    assert typed_of({"type": "paste", "text": "C-c"}) == ("C-c", False, True)
+
+
+def test_the_three_kinds_are_three_because_of_composition():
+    """
+    A design with keys alone breaks on a Latin keyboard, not only on a
+    CJK one: a dead key fires the same composition events a browser uses
+    for an IME, and so do an emoji picker and dictation. The first caller
+    measured that; this says the three kinds stay distinguishable.
+    """
+    named = {typed_of({"type": kind, "text": "e"}).named for kind in ("text", "paste")}
+    assert named == {False}
+    assert typed_of({"type": "input", "keys": "e"}).named is True
 
 
 @pytest.mark.parametrize(
@@ -347,6 +368,8 @@ def test_a_paste_goes_as_it_stands():
         ({"type": "input"}, "keys string"),
         ({"type": "input", "keys": ""}, "keys string"),
         ({"type": "input", "keys": 3}, "keys string"),
+        ({"type": "text"}, "text string"),
+        ({"type": "text", "text": 3}, "text string"),
         ({"type": "paste"}, "text string"),
         ({"type": "resize", "columns": 10}, "not something a client may say"),
         ({}, "not something a client may say"),
@@ -355,4 +378,12 @@ def test_a_paste_goes_as_it_stands():
 def test_what_a_client_may_not_say_is_refused_by_name(message, reason):
     "A typo in a client is an error and not silence."
     with pytest.raises(ValueError, match=reason):
-        keys_of(message)
+        typed_of(message)
+
+
+def test_empty_composed_text_is_allowed():
+    """
+    A composition a viewer cancelled commits nothing, and a client that
+    sent it should not get an error for being honest.
+    """
+    assert typed_of({"type": "text", "text": ""}).text == ""

@@ -26,6 +26,7 @@ from .enums import Woke
 from .graphics import ClientGraphics
 from .keys import KittyVt100Parser
 from .log import logger
+from pymux.commands.common import find_pane
 from pymux.protocol import Mode, Packet
 from .nearest import NEAREST, nearest_theme, wanted_from
 from .options import ExtendedKeys, SetOptionError
@@ -110,6 +111,12 @@ class ServerConnection:
 
         self._recv_buffer = b""
         self.client_state: "ClientState" | None = None
+
+        #: The pane this connection is streaming, when it asked for one.
+        #: A connection streams at most one pane: a caller that watches
+        #: two opens two, so one slow viewer never holds up another.
+        #: Lillecarl/pymux#461.
+        self._stream: "PaneStream | None" = None
 
         # Kitty keyboard protocol support of the outer terminal. The
         # client sends "kitty-detect" right after querying its terminal;
@@ -550,6 +557,20 @@ class ServerConnection:
             self._spawn(self._run_command(packet))
             return
 
+        # "Send me this pane as frames." A stream holds the connection
+        # and writes many packets, so it is not a command that prints.
+        elif packet["cmd"] == Packet.STREAM_PANE:
+            self._spawn(self._stream_pane(packet))
+            return
+
+        # One input message of a stream, which the stream itself reads:
+        # a packet that arrives with no stream running has nowhere to go.
+        elif packet["cmd"] == Packet.STREAM_IN:
+            if self._stream is None:
+                logger.warning("Input for a stream that is not running. Ignoring.")
+            else:
+                self._stream.take(packet.get("data", ""))
+
         # Handle stdin.
         elif packet["cmd"] == Packet.IN:
             self._pipeinput.send_text(packet["data"])
@@ -764,6 +785,42 @@ class ServerConnection:
 
         logger.info("A client asked to attach to a server that serves one terminal.")
         self.detach_and_close()
+
+    async def _stream_pane(self, packet: Dict[str, Any]) -> None:
+        """
+        Send a pane to this client as frames, until it goes away.
+
+        **The frames are the protocol and this envelope is not.** A relay
+        passes `data` on without reading it, so the packet names here stay
+        ours to change. Lillecarl/pymux#461.
+        """
+        from pymux.web.stream import PaneStream
+
+        target = packet.get("pane")
+        pane = find_pane(self.pymux, target) if target else None
+        if pane is None:
+            await self._write_packet(
+                {"cmd": Packet.ERR, "data": "Can't find pane: %s\n" % (target,)}
+            )
+            await self._write_packet({"cmd": Packet.EXIT, "code": 1})
+            self._close_connection()
+            return
+
+        async def send(frame: Dict[str, Any]) -> None:
+            await self._write_packet(
+                {"cmd": Packet.STREAM_OUT, "data": json.dumps(frame)}
+            )
+
+        self._stream = PaneStream(
+            self.pymux, pane, send, writable=bool(packet.get("writable"))
+        )
+        try:
+            await self._stream.run()
+        except BrokenPipeError:
+            pass  # The viewer went away, which is how a stream usually ends.
+        finally:
+            self._stream = None
+            self._close_connection()
 
     async def _run_command(self, packet: Dict[str, Any]) -> None:
         """

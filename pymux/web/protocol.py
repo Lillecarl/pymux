@@ -27,7 +27,7 @@ Nothing here does any I/O, imports no transport and holds no socket.
 Lillecarl/pymux#461.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 from pyte.html import CSS, href_of, runs_of_row, style_of, theme_css
 
@@ -36,7 +36,8 @@ __all__ = [
     "PLAIN_STYLE",
     "WELCOME",
     "PaneView",
-    "keys_of",
+    "Typed",
+    "typed_of",
 ]
 
 #: What a frame of rows is called on the wire.
@@ -249,19 +250,48 @@ class PaneView:
 #: What a client may say. Anything else is refused by name, so a typo in
 #: a client is an error and not silence.
 _INPUT = "input"
+_TEXT = "text"
 _PASTE = "paste"
 
 
-def keys_of(message: Dict[str, Any]) -> Tuple[str, bool]:
-    """
-    What a client's message asks to send, as (text, literal).
+class Typed(NamedTuple):
+    "What one message from a viewer asks to put into the pane."
 
-    `literal` says the text goes as it stands; without it the words are
-    the **names** of keys -- `C-c`, `Escape`, `Enter` -- which is how
-    `send-keys` already reads them. **A client never spells bytes.** The
-    server owns the three keyboard modes and the translation table, so a
-    browser that sent an escape sequence would have to know which mode
-    the program asked for, and would be wrong the moment it changed.
+    text: str
+
+    #: Whether the words are the **names** of keys for the server to
+    #: spell: `C-c`, `Escape`, `Enter`.
+    named: bool
+
+    #: Whether to mark it as a paste, for a program that asked to know.
+    bracketed: bool
+
+
+def typed_of(message: Dict[str, Any]) -> Typed:
+    """
+    What a viewer's message asks to put into the pane.
+
+    Three kinds, and the reason there are three is composition.
+
+    - `input` carries the **names** of keys. **A client never spells
+      bytes**: the server owns the three keyboard modes and the
+      translation table, so a browser that sent an escape sequence would
+      have to know which mode the program asked for and would be wrong
+      the moment it changed.
+    - `text` carries characters a viewer has finished composing, written
+      as typed. A browser draws a composition itself -- the preedit and
+      the candidate window belong in the element, and a real terminal
+      shows nothing until the commit either -- so the intermediate state
+      never reaches the wire.
+    - `paste` carries text that becomes a bracketed paste when the
+      program asked for one. Not the same as `text`: a shell that reads
+      a paste as keys runs the lines in it, and a typed character must
+      not be wrapped in markers a program would draw.
+
+    **`text` is not only for CJK.** The first caller measured this and it
+    is the reason the message exists: a dead key on a European layout
+    fires the same composition events, and so do an emoji picker and
+    dictation. A design with keys alone breaks on a Latin keyboard.
 
     Raises `ValueError` with the reason, so a transport answers rather
     than dropping it.
@@ -271,10 +301,15 @@ def keys_of(message: Dict[str, Any]) -> Tuple[str, bool]:
         keys = message.get("keys")
         if not isinstance(keys, str) or not keys:
             raise ValueError("an input message needs a keys string")
-        return (keys, False)
+        return Typed(keys, named=True, bracketed=False)
+    if kind == _TEXT:
+        text = message.get("text")
+        if not isinstance(text, str):
+            raise ValueError("a text message needs a text string")
+        return Typed(text, named=False, bracketed=False)
     if kind == _PASTE:
         text = message.get("text")
         if not isinstance(text, str):
             raise ValueError("a paste message needs a text string")
-        return (text, True)
+        return Typed(text, named=False, bracketed=True)
     raise ValueError("%r is not something a client may say" % (kind,))

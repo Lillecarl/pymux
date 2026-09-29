@@ -47,6 +47,11 @@ class Packet(StrEnum):
     IN = "in"
     SIZE = "size"
     KITTY_DETECT = "kitty-detect"
+    # "Send me this pane as frames, and take what I send as input." A
+    # stream is not a command that prints: it holds the connection and
+    # writes many packets. Lillecarl/pymux#461.
+    STREAM_PANE = "stream-pane"
+    STREAM_IN = "stream-in"
 
     # The client answers.
     PONG = "pong"
@@ -60,6 +65,10 @@ class Packet(StrEnum):
     SUSPEND = "suspend"
     MODE = "mode"
     KITTY_KEYBOARD = "kitty-keyboard"
+    # One frame of a pane a client is streaming, under `data`. A relay
+    # passes `data` on without reading it: the frames are the protocol
+    # and this envelope is ours to change. Lillecarl/pymux#461.
+    STREAM_OUT = "stream-out"
 
     # The server asks, and the machine the person sits at acts.
     OPEN = "open"
