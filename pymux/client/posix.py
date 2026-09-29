@@ -166,14 +166,33 @@ class PosixClient(TerminalClient):
                     pass
 
     def _send_packet(self, data):
-        "Send to server."
+        """
+        Send to server, and say nothing when the server has gone.
+
+        **A server that refuses an attach writes the reason and closes.**
+        `ServerConnection._refuse_the_attach` awaits both writes first,
+        so the reason is on its way; the client is still in its
+        handshake at that moment, and its next packet meets a socket
+        with no reader. Raising there loses the reason: the person reads
+        "BrokenPipeError: [Errno 32] Broken pipe" where "that terminal
+        is taken" belongs, and on a loaded machine the close wins that
+        race. Lillecarl/pymux#479.
+
+        Nothing is lost by saying nothing here. The read loop is what
+        learns that a connection ended, and it already treats an ended
+        socket as the end of the attachment; what the server sent before
+        it closed is in the buffer on this side, waiting to be read.
+        """
         data = json.dumps(data).encode("utf-8")
 
         # Be sure that our socket is blocking, otherwise, the send() call could
         # raise `BlockingIOError` if the buffer is full.
         self.socket.setblocking(1)
 
-        self.socket.send(data + b"\0")
+        try:
+            self.socket.send(data + b"\0")
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
 
 def list_socket_names():
