@@ -80,7 +80,9 @@ def detach_client(pymux: "Pymux", args: argparse.Namespace) -> None:
 
 
 def register(subparsers):
-    parser = add_command(subparsers, detach_client)
+    # A client that only watches has to be able to leave, or the one
+    # key it needs is the one it cannot press. Lillecarl/pymux#467.
+    parser = add_command(subparsers, detach_client, read_only=True)
     parser.add_argument("-a", dest="all_but_this_one", action="store_true", help="Every client but this one.")
     parser.add_argument("-s", dest="target_session", metavar="<target-session>", help="Every client watching this session.")
     parser.add_argument("-t", dest="target_client", metavar="<target-client>", help="The client of this name, as list-clients prints it.")

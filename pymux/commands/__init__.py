@@ -19,7 +19,7 @@ from pymux.enums import Woke
 from pymux.log import logger
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.main import ClientState, Pymux
 
 __all__ = [
     "CommandException",
@@ -28,6 +28,7 @@ __all__ = [
     "call_command_handler",
     "handle_command",
     "parser_tree",
+    "this_client",
 ]
 
 #: One module per command, in the order the commands were written.
@@ -48,6 +49,22 @@ class BadLine(Exception):
         self.message = message
 
 
+def this_client(pymux: "Pymux") -> "ClientState | None":
+    """
+    The client that ran this command, or None when no person did.
+
+    A command that arrived over the socket runs under a client that
+    draws nothing and goes away with the answer. It stands for nobody,
+    so nothing that is about a person applies to it.
+    """
+    try:
+        client_state = pymux.get_client_state()
+    except ValueError:
+        return None
+
+    return None if client_state.temporary else client_state
+
+
 class CommandParser(argparse.ArgumentParser):
     "An argparse parser that raises instead of exiting."
 
@@ -55,10 +72,17 @@ class CommandParser(argparse.ArgumentParser):
         raise BadLine(message)
 
 
-def add_command(subparsers, handler, *, name=None, aliases=()):
+def add_command(subparsers, handler, *, name=None, aliases=(), read_only=False):
     """
     The parser of one command: named after its handler, described by
     the first line of its docstring.
+
+    `read_only` marks a command a client that only watches may still
+    run. **The default is no**, because the cost of the two mistakes
+    is not the same: a command wrongly refused says so and a person
+    runs it from a client of their own, and a command wrongly allowed
+    types into somebody else's session. tmux marks five and no more.
+    Lillecarl/pymux#467.
     """
     if name is None:
         name = handler.__name__.replace("_", "-")
@@ -71,7 +95,7 @@ def add_command(subparsers, handler, *, name=None, aliases=()):
         # the shell come from this tree, not from a `-h`.
         add_help=False,
     )
-    parser.set_defaults(_handler=handler)
+    parser.set_defaults(_handler=handler, _read_only=read_only)
     return parser
 
 
@@ -208,6 +232,21 @@ def call_command_handler(command: str, pymux: "Pymux", arguments: List[str]):
         message = "%s (%s)" % (e.message, usage)
         pymux.show_message(message)
         pymux.add_command_error("pymux: %s" % (message,))
+        return None
+
+    # **Every route to a command comes through here**: a key binding,
+    # the command bar, a configuration file and the socket. So this is
+    # the one place the read-only answer has to be given, and a second
+    # one would be a second thing to keep in step.
+    #
+    # One command at a time, where tmux refuses a whole `;` line before
+    # any of it runs (`cmd_list_all_have`, `key-bindings.c:769`). A
+    # binding here holds one command, so the difference shows only for
+    # a line somebody types, and a read-only client cannot open the
+    # command bar: `command-prompt` is not a read-only command.
+    client_state = this_client(pymux)
+    if client_state is not None and client_state.read_only and not namespace._read_only:
+        _failed(pymux, CommandException("client is read-only"))
         return None
 
     try:

@@ -6,9 +6,8 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandException
-from pymux.commands import add_command
+from pymux.commands import add_command, this_client
 from pymux.commands.common import find_window
-from pymux.commands.sessions import this_client
 
 
 def select_window(pymux: "Pymux", args: argparse.Namespace) -> None:

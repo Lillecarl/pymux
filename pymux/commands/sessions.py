@@ -3,11 +3,11 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import ClientState, Pymux
+    from pymux.main import Pymux
     from pymux.session import Session
 
 
-from pymux.commands import CommandException
+from pymux.commands import CommandException, this_client
 
 
 def find_session(pymux: "Pymux", target: str | None) -> "Session":
@@ -24,22 +24,6 @@ def find_session(pymux: "Pymux", target: str | None) -> "Session":
     if session is None:
         raise CommandException("can't find session: %s" % (target,))
     return session
-
-
-def this_client(pymux: "Pymux") -> "ClientState | None":
-    """
-    The client that ran this command, or None when no person did.
-
-    A command that arrived over the socket runs under a client that
-    draws nothing and goes away with the answer. Moving that one moves
-    nobody.
-    """
-    try:
-        client_state = pymux.get_client_state()
-    except ValueError:
-        return None
-
-    return None if client_state.temporary else client_state
 
 
 def move_this_client(

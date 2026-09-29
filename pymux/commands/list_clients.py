@@ -66,6 +66,6 @@ def list_clients(pymux: "Pymux", args: argparse.Namespace) -> None:
 
 
 def register(subparsers):
-    parser = add_command(subparsers, list_clients, aliases=("lsc",))
+    parser = add_command(subparsers, list_clients, aliases=("lsc",), read_only=True)
     parser.add_argument("-t", dest="target_session", metavar="<target-session>", help="Only the clients of this session.")
     add_format_arguments(parser, "Print this format for each client.")

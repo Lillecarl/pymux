@@ -245,6 +245,23 @@ class ClientState:
         #: Lillecarl/pymux#340.
         self.name = ""
 
+        #: Whether this client only watches. `attach-session -r` sets
+        #: it, and nothing clears it: tmux's `-r` only sets as well
+        #: (`cmd-attach-session.c:118`).
+        #:
+        #: Two things read it. A pane asks it for every key, every
+        #: paste and every mouse event, through `may_type` on the
+        #: widget. And a command refuses to run for such a client
+        #: unless `add_command` marked it read only.
+        #: Lillecarl/pymux#467.
+        self.read_only = False
+
+        #: Whether this client is left out of the size of the plane.
+        #: `attach-session -r` sets this too: a person who watches a
+        #: session from a small terminal must not shrink it for the
+        #: people working in it. tmux calls it `CLIENT_IGNORESIZE`.
+        self.ignore_size = False
+
         #: True when the prefix key (Ctrl-B) has been pressed.
         self.has_prefix = False
 
@@ -1775,6 +1792,24 @@ class Pymux:
             """
             return self.allow_program_resize
 
+        def may_type() -> bool:
+            """
+            May the person whose key this is drive the pane?
+
+            A pane is shared and a keyboard is not, so this asks about
+            the client the key came from and never about the pane. The
+            answer is no for a client that attached with
+            `attach-session -r`. Lillecarl/pymux#467.
+
+            **No client is yes.** A key with no client behind it comes
+            from a test or from the standalone route, neither of which
+            has anybody to refuse.
+            """
+            try:
+                return not self.get_client_state().read_only
+            except ValueError:
+                return True
+
         # Start directory.
         path: str | None
 
@@ -1859,6 +1894,7 @@ class Pymux:
             copy_func=self.write_user_clipboard,
             resize_func=resize,
             may_resize=may_resize,
+            may_type=may_type,
             before_exec_func=before_exec,
             command=command_list,
             # The `history-limit` option, which said how far copy mode
