@@ -243,6 +243,34 @@ class Pane(_Object):
             arguments += ["-E", str(end)]
         return self.server.cmd(arguments).stdout
 
+    def capture_html(
+        self, start: Optional[int] = None, end: Optional[int] = None
+    ) -> str:
+        """
+        Read the content of this pane back as HTML.
+
+        One `pre` element, holding the colours, the renditions and the
+        hyperlinks that `capture` drops. `Server.html_stylesheet` is the
+        other half of it, and a caller needs that once.
+
+        **The default range is the visible pane**, where `capture` reads
+        the whole buffer. The line numbers are the same ones: 0 is the
+        first visible line and a negative number reaches into the
+        history.
+
+        Three things are not in it. There is no cursor. There are no
+        images. And what pymux draws over the pane -- copy mode, the
+        clock, a popup -- is not on the pane's own screen, so it is not
+        here either; `in_mode` says when that is happening and `mode`
+        says which one. Lillecarl/pymux#452.
+        """
+        arguments = ["capture-pane", "-p", "-H", "-t", self.id]
+        if start is not None:
+            arguments += ["-S", str(start)]
+        if end is not None:
+            arguments += ["-E", str(end)]
+        return self.server.cmd(arguments).stdout
+
     def clear_history(self) -> None:
         "Throw away the scrollback of this pane."
         self.server.cmd(["clear-history", "-t", self.id])
@@ -511,6 +539,25 @@ class Server:
     def is_alive(self) -> bool:
         "True when a server answers on this socket."
         return self.connection.is_alive()
+
+    def html_stylesheet(self, pane: Optional[Pane] = None) -> str:
+        """
+        The stylesheet that `Pane.capture_html` is written against.
+
+        A caller needs it once and the markup of a frame needs it to
+        mean anything: the spans name custom properties, and a page
+        that defines none of them draws nothing.
+
+        With a pane it carries that pane's own colours as well -- the
+        theme the terminal of a person is showing, and whatever the
+        program in the pane set with "OSC 4". Without one it is the
+        conventional palette, which is what one stylesheet for every
+        pane should be. Lillecarl/pymux#452.
+        """
+        arguments = ["show-html-stylesheet"]
+        if pane is not None:
+            arguments += ["-t", pane.id]
+        return self.cmd(arguments).stdout
 
     def _query(
         self, command: Sequence[str], fields: Sequence[str]
