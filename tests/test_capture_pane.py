@@ -57,20 +57,41 @@ def capture(mux, *arguments) -> str:
 LONG = "a line longer than that pane"
 
 
+def rows_of(text: str) -> list:
+    """
+    The rows of a capture.
+
+    `splitlines` cannot count these: a capture whose last row is blank
+    ends in a newline, and `splitlines` drops what follows one. The
+    height is the whole point below, so the rows are split on the
+    separator that joined them.
+    """
+    return text.split("\n")
+
+
 def test_capture_of_rows_holds_cut(pymux):
+    "And the rows below the line are the rest of the pane. #476."
     create_pane(pymux, LONG)
-    assert capture(pymux).splitlines() == ["a line longer than t", "hat pane"]
+    assert rows_of(capture(pymux)) == [
+        "a line longer than t",
+        "hat pane",
+        "",
+        "",
+        "",
+    ]
 
 
 def test_capture_of_lines_joins_cut(pymux):
     create_pane(pymux, LONG)
-    assert capture(pymux, "-J").splitlines() == [LONG]
+    joined = rows_of(capture(pymux, "-J"))
+    assert joined[0] == LONG
+    assert set(joined[1:]) == {""}
 
 
 def test_rows_and_lines_agree_on_line_that_fits(pymux):
     "Nothing wrapped, so joining changes nothing."
     create_pane(pymux, "one\r\ntwo")
-    assert capture(pymux) == capture(pymux, "-J") == "one\ntwo"
+    assert capture(pymux) == capture(pymux, "-J") == "one\ntwo\n\n\n"
 
 
 def test_line_zero_of_rows_is_first_row_of_screen(pymux):
@@ -150,6 +171,65 @@ def test_a_wrapped_line_of_the_history_is_not_in_the_default(pymux):
     """
     create_pane(pymux, LONG + "\r\n" + SCROLLED)
     assert "a line longer" not in capture(pymux)
+
+
+# ----------------------------------------------------------------------
+# How tall an answer is.
+#
+# The pane, always. The rows came from the buffer alone, so a row the
+# program never wrote was not in the answer and a caller could not use
+# the count: it had to learn the height another way and pad, which is
+# the work a capture was meant to save. tmux writes a line for every
+# row of `hsize .. hsize + sy - 1` and trims none of them
+# (`cmd-capture-pane.c:311-325, 349`). Lillecarl/pymux#476.
+
+
+def test_a_capture_is_as_tall_as_the_pane(pymux):
+    "A fresh pane answered one line, where tmux answers twenty-four."
+    create_pane(pymux, "one")
+
+    assert rows_of(capture(pymux)) == ["one", "", "", "", ""]
+
+
+def test_a_pane_nothing_wrote_on_is_still_that_tall(pymux):
+    create_pane(pymux, "")
+
+    assert rows_of(capture(pymux)) == [""] * LINES
+
+
+def test_a_row_below_the_text_is_a_line_of_its_own(pymux):
+    "And the row the cursor stands on is one of them."
+    create_pane(pymux, "one\r\ntwo")
+
+    assert rows_of(capture(pymux)) == ["one", "two", "", "", ""]
+
+
+def test_joined_lines_are_as_tall_as_the_pane_too(pymux):
+    create_pane(pymux, "one")
+
+    assert rows_of(capture(pymux, "-J")) == ["one", "", "", "", ""]
+
+
+def test_a_range_beyond_the_pane_answers_no_more_than_the_pane(pymux):
+    """
+    A row outside both the buffer and the screen is nothing at all, so
+    a big `-E` may not answer with a hundred thousand blank lines.
+    """
+    create_pane(pymux, "one")
+
+    assert len(rows_of(capture(pymux, "-E", "100000"))) == LINES
+
+
+def test_the_two_spellings_answer_the_same_rows(pymux):
+    "The HTML path spanned the screen first; now they share the span."
+    create_pane(pymux, SCROLLED)
+    printed = []
+    pymux.print_command_line = printed.append
+    call_command_handler("capture-pane", pymux, ["-p", "-H"])
+    drawn = printed[0]
+
+    for line in capture(pymux).splitlines():
+        assert line in drawn
 
 
 def test_line_number_that_is_not_number_is_error(pymux):

@@ -33,6 +33,35 @@ def _row_of(
         raise CommandException("Invalid %s line: %s" % (name, given))
 
 
+def _the_rows_of(screen) -> tuple[int, int]:
+    """
+    The first and the last row a capture of this pane may answer with.
+
+    **The range covers the screen even where the buffer does not.** A
+    row of the pane that the program never wrote is a blank line and
+    belongs in the answer, so what a caller gets is always as tall as
+    the pane: a fresh pane running `sleep 60` answered one row, where
+    tmux answers twenty-four. tmux runs its loop over `hsize .. hsize +
+    sy - 1` and writes a line for each of them with no trimming
+    (`cmd-capture-pane.c:311-325, 349`). Lillecarl/pymux#476.
+
+    A row outside both the buffer and the screen is nothing at all, so
+    "-E 100000" may not answer with a hundred thousand blank lines.
+
+    Nothing here reads a row the buffer does not hold. `Page.text` and
+    `html_of_page` both go through `.get`, because `data_buffer` is a
+    defaultdict and a row made below the floor of the history is a row
+    that came back from the dead.
+    """
+    rows = screen.page.data_buffer.keys()
+    top = screen.line_offset
+    bottom = top + screen.lines - 1
+    return (
+        min(min(rows, default=top), top),
+        max(max(rows, default=bottom), bottom),
+    )
+
+
 def _html(screen, args: argparse.Namespace) -> str:
     """
     The rows of a pane as the element `pyte.html` is written for.
@@ -43,25 +72,11 @@ def _html(screen, args: argparse.Namespace) -> str:
     thousand rows of history per frame is not a default anybody wants.
     "-S -" still reaches as far back as the buffer goes.
     Lillecarl/pymux#457 holds the same question for the text.
-
-    Nothing here reads a row the buffer does not hold. `html_of_page`
-    goes through `.get`, because `data_buffer` is a defaultdict and a
-    row made below the floor of the history is a row that came back
-    from the dead.
     """
-    rows = screen.page.data_buffer.keys()
     line_offset = screen.line_offset
     top = line_offset
     bottom = line_offset + screen.lines - 1
-
-    # **The range covers the screen even where the buffer does not.** A
-    # row of the pane that the program never wrote is a blank line and
-    # belongs in the answer, so the element a caller draws is always as
-    # tall as the pane. A row outside both the buffer and the screen is
-    # nothing at all, so "-E 100000" may not answer with a hundred
-    # thousand blank lines.
-    lowest = min(min(rows, default=top), top)
-    highest = max(max(rows, default=bottom), bottom)
+    lowest, highest = _the_rows_of(screen)
 
     first = max(_row_of(args.start, "start", top, lowest, line_offset), lowest)
     last = min(_row_of(args.end, "end", bottom, highest, line_offset), highest)
@@ -102,7 +117,6 @@ def capture_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
     process = pane.process
     screen = pane.screen
     page = screen.page
-    data_buffer = page.data_buffer
 
     if args.H and args.J:
         raise CommandException(
@@ -111,11 +125,14 @@ def capture_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
 
     if args.H:
         text = _html(screen, args)
-    elif not data_buffer:
-        text = ""
     else:
-        first_row = min(data_buffer)
-        last_row = max(data_buffer)
+        # **As tall as the pane, whatever a program wrote.** The rows
+        # came from the buffer alone, so a fresh pane running `sleep
+        # 60` answered one line where tmux answers twenty-four. A
+        # caller drawing a pane could not use the count and had to
+        # learn the height another way and pad. `_the_rows_of` says
+        # what tmux does. Lillecarl/pymux#476.
+        first_row, last_row = _the_rows_of(screen)
 
         if args.J:
             # One entry per line a program wrote, with the rows it was
