@@ -521,6 +521,62 @@ async def test_a_forward_that_is_removed_does_not_come_back():
             assert forwards.opened() == []
 
 
+async def test_a_forward_is_removed_by_the_port_it_was_shown_at():
+    """
+    A forward that asked for any free port is filed under 0 and shown at
+    the number that was free, so the number a person read there has to
+    find it. Lillecarl/pymux#441.
+    """
+    async with echoing() as echo_port, ssh_connection() as connection:
+        forwards = Forwards()
+        wanted = Forward(
+            Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port
+        )
+        opened = await forwards.add(connection, wanted)
+        assert opened.port != ANY_PORT, "A bound listener reports its port."
+
+        gone = forwards.remove((Direction.LOCAL, "127.0.0.1", opened.port))
+
+        assert gone == wanted
+        assert len(forwards) == 0
+
+
+async def test_a_forward_is_removed_by_any_name_for_loopback():
+    """
+    `localhost` and `127.0.0.1` are one machine, so a forward asked for
+    at one is found by the other -- which is what a person who typed no
+    address has in front of them. Lillecarl/pymux#441.
+    """
+    async with echoing() as echo_port, ssh_connection() as connection:
+        forwards = Forwards()
+        wanted = Forward(
+            Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
+        )
+        await forwards.add(connection, wanted)
+
+        gone = forwards.remove((Direction.LOCAL, "localhost", wanted.listen_port))
+
+        assert gone == wanted
+        assert len(forwards) == 0
+
+
+async def test_removing_a_name_nobody_holds_removes_nothing():
+    "A name that reaches no entry answers `None` and leaves the table alone."
+    async with echoing() as echo_port, ssh_connection() as connection:
+        forwards = Forwards()
+        wanted = Forward(
+            Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
+        )
+        await forwards.add(connection, wanted)
+
+        gone = forwards.remove(
+            (Direction.LOCAL, "127.0.0.1", wanted.listen_port + 1)
+        )
+
+        assert gone is None
+        assert len(forwards) == 1
+
+
 async def test_asking_twice_leaves_one_listener():
     """
     Two listeners on one port is a race nobody wins, so the second ask
@@ -1039,6 +1095,53 @@ async def test_the_client_opens_what_the_server_asked_for():
 
         assert sent[1]["data"] == []
         assert "Stopped forwarding" in sent[1]["message"]
+
+
+async def test_the_client_removes_by_the_number_it_reported():
+    """
+    The whole round trip of Lillecarl/pymux#441: ask for any free port,
+    read the number the client reported, and ask to stop by that number
+    and a loopback name the person did not type.
+    """
+    import tempfile
+
+    sent = []
+    where = Path(tempfile.mkdtemp())
+    socket_path = str(where / "pymux.sock")
+
+    async with echoing() as echo_port, ssh_connection() as connection:
+        client = SshClient("ssh://127.0.0.1:1%s" % (socket_path,))
+        client._send_packet = sent.append
+
+        await client._forward_asked(
+            connection,
+            {
+                "cmd": "forward",
+                "direction": "local",
+                "listen_host": "127.0.0.1",
+                "listen_port": ANY_PORT,
+                "dest_host": "127.0.0.1",
+                "dest_port": echo_port,
+            },
+        )
+
+        port = sent[0]["data"][0]["port"]
+        assert port != ANY_PORT
+
+        await client._forward_asked(
+            connection,
+            {
+                "cmd": "forward",
+                "remove": True,
+                "direction": "local",
+                "listen_host": "localhost",
+                "listen_port": port,
+            },
+        )
+
+        assert sent[1]["data"] == []
+        assert "Stopped forwarding" in sent[1]["message"], sent[1]["message"]
+        assert "Nothing" not in sent[1]["message"]
 
 
 async def test_the_message_does_not_claim_an_address_it_cannot_know():

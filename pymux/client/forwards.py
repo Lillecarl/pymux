@@ -22,7 +22,7 @@ import time
 import weakref
 from typing import TYPE_CHECKING, NamedTuple
 
-from pymux.forwarding import ANY_PORT, Direction, Forward
+from pymux.forwarding import ANY_PORT, LOOPBACK_NAMES, Direction, Forward
 
 if TYPE_CHECKING:
     from asyncssh import SSHClientConnection, SSHListener
@@ -173,18 +173,54 @@ class Forwards:
                 self._used[where] = self._now()
                 return self._one(where)
 
-        self.remove(where)
+        self._discard(where)
         self._wanted[where] = wanted
         return await self._open_one(connection, wanted)
 
     def remove(self, where: Where) -> Forward | None:
-        "Stop wanting the forward that listens here, and close it."
-        self._close_one(where)
-        self._ports.pop(where, None)
-        self._errors.pop(where, None)
-        self._used.pop(where, None)
-        self._live.pop(where, None)
-        wanted = self._wanted.pop(where, None)
+        """
+        Stop wanting the forward a person named, and close it.
+
+        **The name is the one the person was shown.** The table is keyed
+        by what was asked for, and `list-forwards` draws what was bound:
+        `forward-port -L 0:...` is filed under port 0 and shown at the
+        number that was free, so the number on screen is the only one a
+        person can type back. An exact key still wins, so a spelling
+        that names the entry itself is never read as a neighbour's.
+        Lillecarl/pymux#441.
+        """
+        key = self._named(where)
+        return None if key is None else self._discard(key)
+
+    def _named(self, where: Where) -> Where | None:
+        """
+        The key a person's name reaches, or `None`.
+
+        The direction and the host have to agree, and the port counts as
+        either the one asked for or the one bound, so both spellings a
+        person has seen find the same entry.
+        """
+        if where in self._wanted:
+            return where
+
+        direction, host, port = where
+        for key in self._wanted:
+            if key[0] is not direction:
+                continue
+            if not _same_host(key[1], host):
+                continue
+            if port == key[2] or port == self._ports.get(key):
+                return key
+        return None
+
+    def _discard(self, key: Where) -> Forward | None:
+        "Take one entry out by its own key, without reading the name."
+        self._close_one(key)
+        self._ports.pop(key, None)
+        self._errors.pop(key, None)
+        self._used.pop(key, None)
+        self._live.pop(key, None)
+        wanted = self._wanted.pop(key, None)
         return None if wanted is None else wanted.forward
 
     # ------------------------------------------------------------------
@@ -237,7 +273,7 @@ class Forwards:
             if now - self._used.get(where, now) < wanted.idle:
                 continue
             gone.append(wanted.forward)
-            self.remove(where)
+            self._discard(where)
 
         return gone
 
@@ -433,6 +469,18 @@ class Forwards:
 
 def _where(forward: Forward) -> Where:
     return (forward.direction, forward.listen_host, forward.listen_port)
+
+
+def _same_host(one: str, other: str) -> bool:
+    """
+    Whether two listening addresses name the same machine.
+
+    **Every loopback name does.** `localhost`, `127.0.0.1` and `::1`
+    are the machine itself, and neither which one a person wrote nor
+    which one a default supplied may decide whether a forward is found.
+    Lillecarl/pymux#441.
+    """
+    return one == other or (one in LOOPBACK_NAMES and other in LOOPBACK_NAMES)
 
 
 #: Built once, on the first local forward. See `_counting_forwarder`.
