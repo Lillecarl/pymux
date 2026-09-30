@@ -26,8 +26,9 @@ from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.document import Document
 
 from pymux.arrangement import LayoutTypes
-from pymux.commands import parser_tree
+from pymux.commands import CommandException, parser_tree
 from pymux.commands.aliases import ALIASES
+from pymux.forwarding import Direction
 from pymux.key_spelling import KeyCompleter
 
 __all__ = ["create_command_completer", "stop_shlex_comments"]
@@ -130,6 +131,29 @@ def _send_keys_names(pymux, prefix, parsed_args, **_):
     return _keys(pymux, prefix)
 
 
+def _forward_listenings(pymux, parsed_args, direction, **_):
+    """
+    The listening ends `unforward-port` can name.
+
+    **The number offered is the number shown.** `list-forwards` draws
+    the port really bound, so a forward that asked for any free port is
+    reachable only by the number a person read there. Offering that same
+    spelling is what makes the offer removable. Lillecarl/pymux#441.
+    """
+    try:
+        connection = pymux.forwarding_client().client_state.connection
+    except (CommandException, ValueError):
+        return {}
+
+    return {
+        "%s:%s" % (one.get("listen_host", ""), one.get("port", "")): one.get(
+            "dest", ""
+        )
+        for one in connection.forwards
+        if one.get("direction") == direction.value
+    }
+
+
 #: What completes a value, by the command and the dest of the argument.
 _VALUE_COMPLETERS = {
     ("set-option", "option"): _session_option_names,
@@ -143,6 +167,12 @@ _VALUE_COMPLETERS = {
     ("bind-key", "key"): _keys,
     ("bind-key", "arguments"): _bound_command,
     ("send-keys", "keys"): _send_keys_names,
+    ("unforward-port", "local"): partial(
+        _forward_listenings, direction=Direction.LOCAL
+    ),
+    ("unforward-port", "remote"): partial(
+        _forward_listenings, direction=Direction.REMOTE
+    ),
 }
 
 

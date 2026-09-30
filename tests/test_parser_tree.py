@@ -403,3 +403,54 @@ def test_the_completer_reads_the_server_it_was_made_for():
         a for a in subparsers.choices["set-option"]._actions if a.dest == "option"
     )
     assert action.completer.args[0] is second
+
+
+# ----------------------------------------------------------------------
+# The command bar and the forwards it can name. Lillecarl/pymux#441.
+
+
+def _offered_words(line, pymux):
+    "The whole words the command bar offers for a line typed to its end."
+    completer = create_command_completer(pymux)
+    return [
+        c.text for c in completer.get_completions(Document(line, len(line)), None)
+    ]
+
+
+async def test_unforward_port_offers_the_listenings_that_were_shown():
+    """
+    The offer reads the copy `list-forwards` draws, so the number it
+    suggests is the number that can be removed. Only forwards of the
+    direction the flag names are offered, and the flag decides that and
+    not the word being typed. Lillecarl/pymux#441.
+    """
+    from prompt_toolkit.data_structures import Size
+
+    from session import over_connection
+
+    async with over_connection() as session:
+        await session.attach("the client", Size(rows=24, columns=80))
+        connection = session.pymux.clients[0].connection
+        connection.can_forward = True
+        connection.forwards = [
+            {
+                "direction": "local",
+                "listen_host": "localhost",
+                "port": 41337,
+                "dest": "localhost:3000",
+                "error": "",
+            },
+            {
+                "direction": "remote",
+                "listen_host": "localhost",
+                "port": 9222,
+                "dest": "localhost:9222",
+                "error": "",
+            },
+        ]
+
+        local = _offered_words("unforward-port -L ", session.pymux)
+        remote = _offered_words("unforward-port -R ", session.pymux)
+
+    assert local == ["localhost:41337"], local
+    assert remote == ["localhost:9222"], remote
