@@ -3145,6 +3145,10 @@ def _create_container_for_process(
                 ),
             ],
         ),
+        # Whether the row below this pane is the bar that names a stack's
+        # neighbours, which is the row the mark's foot is drawn on.
+        # Lillecarl/pymux#401.
+        has_bar_below=lambda: bool(get_bar_below()),
     )
 
 
@@ -3195,19 +3199,37 @@ _border_right_top = "┐"
 class HighlightBordersIfActive:
     """
     Put borders around this control if active.
+
+    **A corner needs a chrome row to sit on.** The row above a pane is
+    its title bar, and the row below is the bar that names a stack's
+    neighbours -- there is none for a pane in no stack, whose lower
+    edge is the window's, where a mark would land on the status line.
+    So the foot of the mark is drawn only where that bar is.
+    Lillecarl/pymux#401.
     """
 
-    def __init__(self, window, pane, style, content):
+    def __init__(self, window, pane, style, content, has_bar_below):
         @Condition
         def is_selected() -> bool:
             return window.active_pane == pane
 
+        @Condition
+        def foot_is_selected() -> bool:
+            return window.active_pane == pane and has_bar_below()
+
         def conditional_float(
-            char, left=None, right=None, top=None, bottom=None, width=None, height=None
+            char,
+            filter=is_selected,
+            left=None,
+            right=None,
+            top=None,
+            bottom=None,
+            width=None,
+            height=None,
         ):
             return Float(
                 content=ConditionalContainer(
-                    Window(char=char, style="class:border"), filter=is_selected
+                    Window(char=char, style="class:border"), filter=filter
                 ),
                 left=left,
                 right=right,
@@ -3229,25 +3251,37 @@ class HighlightBordersIfActive:
                 conditional_float(
                     _focused_border_vertical, right=-1, top=0, bottom=0, width=1
                 ),
-                # conditional_float(
-                #    _focused_border_horizontal, left=0, right=0, top=-1, height=1
-                # ),
-                # conditional_float(
-                #    _focused_border_horizontal, left=0, right=0, bottom=-1, height=1
-                # ),
-                # Corners.
+                # Corners, and no horizontals between them.
+                #
+                # **The rows a horizontal would take belong to the pane's
+                # own chrome.** The title bar is the row above and the bar
+                # below names the neighbours, and each spans the same cells
+                # the horizontal would, so the horizontal would be drawn
+                # under a bar instead of beside it. The corners sit one
+                # cell outside both, so the rectangle closes without
+                # covering either bar. Lillecarl/pymux#401.
                 conditional_float(
                     _focused_border_left_top, left=-1, top=-1, width=1, height=1
                 ),
                 conditional_float(
                     _focused_border_right_top, right=-1, top=-1, width=1, height=1
                 ),
-                # conditional_float(
-                #    _focused_border_left_bottom, left=-1, bottom=-1, width=1, height=1
-                # ),
-                # conditional_float(
-                #    _focused_border_right_bottom, right=-1, bottom=-1, width=1, height=1
-                # ),
+                conditional_float(
+                    _focused_border_left_bottom,
+                    filter=foot_is_selected,
+                    left=-1,
+                    bottom=-1,
+                    width=1,
+                    height=1,
+                ),
+                conditional_float(
+                    _focused_border_right_bottom,
+                    filter=foot_is_selected,
+                    right=-1,
+                    bottom=-1,
+                    width=1,
+                    height=1,
+                ),
             ],
         )
 
