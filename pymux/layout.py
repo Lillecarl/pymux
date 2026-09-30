@@ -93,6 +93,23 @@ def option_value_of(pymux, name: str) -> str:
     return ""
 
 
+def option_command_of(name: str) -> str:
+    """
+    The command that sets one option by name. A session option is
+    `set-option`, a window option `set-window-option`, and a client
+    option `set-client-option`; each scope has its own command, so a
+    chooser that lists all three has to carry a name to the one that
+    takes it. Lillecarl/pymux#472.
+    """
+    from pymux.options import ALL_CLIENT_OPTIONS, ALL_WINDOW_OPTIONS
+
+    if name in ALL_CLIENT_OPTIONS:
+        return "set-client-option"
+    if name in ALL_WINDOW_OPTIONS:
+        return "set-window-option"
+    return "set-option"
+
+
 #: How far a box floats from the top of the screen and from each
 #: side. The keys pop-up chose these, and the command palette takes
 #: the same ones because it is the same kind of box.
@@ -1006,7 +1023,7 @@ class LayoutManager:
 
     def display_options_chooser(self) -> None:
         """
-        The options of the session, to choose from: what
+        The options of every scope, to choose from: what
         `customize-mode` is here. Enter asks for a value on the
         prompt, with the option named and what it holds as the
         default, which is the editing half of what tmux's
@@ -1136,9 +1153,15 @@ class LayoutManager:
         """
         text = self.client_state.choose_window_filter.text.lower()
         if self.client_state.choose_options:
-            from pymux.options import ALL_OPTIONS, ALL_WINDOW_OPTIONS
+            from pymux.options import (
+                ALL_CLIENT_OPTIONS,
+                ALL_OPTIONS,
+                ALL_WINDOW_OPTIONS,
+            )
 
-            names = sorted(set(ALL_OPTIONS) | set(ALL_WINDOW_OPTIONS))
+            names = sorted(
+                set(ALL_OPTIONS) | set(ALL_WINDOW_OPTIONS) | set(ALL_CLIENT_OPTIONS)
+            )
             if not text:
                 return names
             return [
@@ -1221,8 +1244,10 @@ class LayoutManager:
         """
         Ask what the option the chooser points at should hold, on the
         prompt, with the command named and what it holds as the
-        default answer. The chooser closes.
-        Lillecarl/pymux#297.
+        default answer. The command is the option's own scope's --
+        `set-option`, `set-window-option` or `set-client-option` -- so
+        a client option reaches the client this chooser is drawn on.
+        The chooser closes. Lillecarl/pymux#297. Lillecarl/pymux#472.
         """
         matches = self.chooser_matches()
         self.client_state.choose_options = False
@@ -1232,9 +1257,10 @@ class LayoutManager:
             return
         index = min(self.client_state.choose_window_index, len(matches) - 1)
         name = matches[index]
+        command = option_command_of(name)
         self.pymux.handle_command(
-            "command-prompt -p 'set-option %s' -I '%s' 'set-option %s %%'"
-            % (name, option_value_of(self.pymux, name), name)
+            "command-prompt -p '%s %s' -I '%s' '%s %s %%'"
+            % (command, name, option_value_of(self.pymux, name), command, name)
         )
 
     def _create_select_window_handler(
@@ -1795,11 +1821,12 @@ class LayoutManager:
 
     def _choose_options_tokens(self) -> StyleAndTextTuples:
         """
-        The options of the session, one row each: the name, and what
-        it holds. A window option says which window it reads.
-        Lillecarl/pymux#297.
+        The options, one row each: the name, and what it holds. A
+        window or client option says which scope it is, because the
+        three scopes are set by three commands.
+        Lillecarl/pymux#297. Lillecarl/pymux#472.
         """
-        from pymux.options import ALL_WINDOW_OPTIONS
+        from pymux.options import ALL_CLIENT_OPTIONS, ALL_WINDOW_OPTIONS
 
         matches = self.chooser_matches()
         if not matches:
@@ -1810,7 +1837,12 @@ class LayoutManager:
         for i, name in enumerate(matches):
             style = "class:chooser.selected" if i == chosen else "class:commandpalette"
             value = option_value_of(self.pymux, name)
-            kind = " (window)" if name in ALL_WINDOW_OPTIONS else ""
+            if name in ALL_WINDOW_OPTIONS:
+                kind = " (window)"
+            elif name in ALL_CLIENT_OPTIONS:
+                kind = " (client)"
+            else:
+                kind = ""
             tokens.append(
                 (
                     style,

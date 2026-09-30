@@ -10,7 +10,7 @@ from pymux.commands import add_command
 
 def customize_mode(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
-    The options of the session, in a box, to change.
+    The options of every scope, in a box, to change.
 
     A row is an option and what it holds; the search of `/` narrows
     the rows, and taking a row asks on the prompt what the option
