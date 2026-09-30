@@ -181,3 +181,78 @@ def test_id_reads_as_target(pymux):
     assert format_pymux_string(pymux, "#{pane_id}").startswith("%")
     assert format_pymux_string(pymux, "#{window_id}").startswith("@")
     assert format_pymux_string(pymux, "#{session_id}") == "$0"
+
+
+def test_a_conditional_reads_a_value_the_way_tmux_reads_it(pymux):
+    """
+    `#{?cond,then,else}` takes the then for a value that is neither
+    empty nor "0", and the else otherwise. Lillecarl/pymux#469.
+    """
+    assert format_pymux_string(pymux, "#{?pane_active,yes,no}") == "yes"
+    assert format_pymux_string(pymux, "#{?pane_in_mode,yes,no}") == "no"
+    assert format_pymux_string(pymux, "#{?not_a_variable,yes,no}") == "no"
+
+
+def test_a_conditional_with_no_else_answers_nothing(pymux):
+    """
+    tmux's `list-clients` wraps the flags only when a client has some,
+    and the else is what leaves a plain client's line alone.
+    Lillecarl/pymux#469.
+    """
+    assert format_pymux_string(pymux, "#{?not_a_variable,(}") == ""
+    assert format_pymux_string(pymux, "#{?pane_active,(}") == "("
+
+
+def test_a_comparison_is_a_condition(pymux):
+    "`#{==:a,b}` and `#{!=:a,b}` answer 1 or 0. Lillecarl/pymux#469."
+    assert format_pymux_string(pymux, "#{==:a,a}") == "1"
+    assert format_pymux_string(pymux, "#{==:a,b}") == "0"
+    assert format_pymux_string(pymux, "#{!=:a,b}") == "1"
+
+
+def test_a_branch_may_hold_a_comma_and_another_variable(pymux):
+    """
+    The comma inside a comparison belongs to it and not to the
+    conditional around it, and a branch formats a variable of its own.
+    Lillecarl/pymux#469.
+    """
+    template = "#{?#{==:#{pane_active},1},it is #{pane_index},no}"
+
+    assert format_pymux_string(pymux, template) == "it is 0"
+
+
+def test_a_bare_condition_is_a_variable_name_and_not_a_literal(pymux):
+    """
+    tmux looks the condition up as a name, so `#{?1,...}` names a
+    variable called "1" and is false, while `#{?#{==:1,1},...}` is the
+    comparison that is true. Lillecarl/pymux#469.
+    """
+    assert format_pymux_string(pymux, "#{?1,yes,no}") == "no"
+    assert format_pymux_string(pymux, "#{?#{==:1,1},yes,no}") == "yes"
+
+
+def test_a_comparison_reads_literals_and_needs_a_hash_for_a_variable(pymux):
+    """
+    A comparison operand is text unless it is written `#{...}`, so a
+    bare name compares as itself. Lillecarl/pymux#469.
+    """
+    assert format_pymux_string(pymux, "#{==:session_name,#{session_name}}") == "0"
+    assert format_pymux_string(pymux, "#{==:#{session_name},#{session_name}}") == "1"
+
+
+def test_the_flags_of_a_client_are_bracketed_only_when_it_has_some(pymux):
+    """
+    tmux's `LIST_CLIENTS_TEMPLATE` ends with this shape, so a client
+    with flags reads the flags and a plain one reads nothing.
+    Lillecarl/pymux#469.
+    """
+    template = "#{?client_flags,(,}#{client_flags}#{?client_flags,),}"
+
+    assert format_pymux_string(pymux, template) == ""
+
+    class Client:
+        session = pymux.current_session
+        read_only = True
+        ignore_size = False
+
+    assert format_pymux_string(pymux, template, client=Client()) == "(read-only)"

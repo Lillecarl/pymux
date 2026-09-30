@@ -15,10 +15,9 @@ Lillecarl/pymux#330.
 """
 
 import os
-import re
 import socket
 from enum import Enum
-from typing import TYPE_CHECKING, Callable, Dict, NamedTuple, Optional
+from typing import TYPE_CHECKING, Callable, Dict, List, NamedTuple, Optional
 
 if TYPE_CHECKING:
     from pymux.arrangement import Pane, Window
@@ -134,6 +133,148 @@ def format_pymux_string(
     )
 
 
+def _find_closing(string: str, start: int) -> int:
+    """
+    The `}` that closes the `#{` before `start`, or -1 when none does.
+
+    A nested `#{` opens one that must close first, so the depth counts
+    both. The index a caller passes is the character just past the
+    opening `#{`.
+    """
+    depth = 1
+    i = start
+    n = len(string)
+    while i < n:
+        if string[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return i
+        elif string[i] == "#" and i + 1 < n and string[i + 1] == "{":
+            depth += 1
+            i += 1
+        i += 1
+    return -1
+
+
+def _split_arguments(string: str) -> List[str]:
+    "Every argument, split on the commas that are not inside a `#{...}`."
+    parts: List[str] = []
+    depth = 0
+    start = 0
+    i = 0
+    n = len(string)
+    while i < n:
+        char = string[i]
+        if char == "#" and i + 1 < n and string[i + 1] == "{":
+            depth += 1
+            i += 1
+        elif char == "}" and depth:
+            depth -= 1
+        elif char == "," and depth == 0:
+            parts.append(string[start:i])
+            start = i + 1
+        i += 1
+    parts.append(string[start:])
+    return parts
+
+
+def _is_true(value: str) -> bool:
+    """
+    Whether a conditional reads a value as true.
+
+    tmux answers the else for an empty value and for the string "0", and
+    the then for everything else (`format_is_true` in its `format.c`). So
+    a variable that reads "0" takes the else and one that reads anything
+    else takes the then.
+    """
+    return value != "" and value != "0"
+
+
+def _evaluate_condition(context: FormatContext, condition: str) -> str:
+    """
+    What a conditional reads as its condition.
+
+    **A bare name is a variable and anything else is a format.** tmux
+    looks the condition up as a name first (`format_find`), and expands
+    it only when that fails; an expansion that changes nothing means the
+    condition resolved to nothing, which is false (`format.c`). So
+    `#{?client_flags,...}` reads the variable of that name and
+    `#{?#{==:a,b},...}` reads the comparison.
+    """
+    handler = tmux_variables.get(condition)
+    if handler is not None:
+        try:
+            return str(handler(context))
+        except Exception:
+            return ""
+    expanded = _format_variables(context, condition)
+    if expanded == condition:
+        return ""
+    return expanded
+
+
+def _expand_variable(context: FormatContext, content: str) -> str:
+    "One `#{...}`, with the braces already taken off."
+    if content.startswith("?"):
+        args = _split_arguments(content[1:])
+        i = 0
+        while i < len(args):
+            if i + 1 == len(args):
+                # A last argument with no condition after it pairs the
+                # one before, so it is the else.
+                return _format_variables(context, args[i])
+            if _is_true(_evaluate_condition(context, args[i])):
+                return _format_variables(context, args[i + 1])
+            i += 2
+        return ""
+
+    if content.startswith("==:") or content.startswith("!=:"):
+        equal = content.startswith("==:")
+        left, right = (_split_arguments(content[3:]) + ["", ""])[:2]
+        same = _format_variables(context, left) == _format_variables(context, right)
+        return "1" if same == equal else "0"
+
+    handler = tmux_variables.get(content)
+    if handler is None:
+        return ""
+    try:
+        return str(handler(context))
+    except Exception:
+        return ""
+
+
+def _format_variables(context: FormatContext, string: str) -> str:
+    """
+    Expand every `#{...}`, the conditional and the comparisons included.
+
+    **The whole language, and not a name at a time.** `#{?cond,then,else}`
+    holds commas and further `#{...}` in its branches, and `#{==:a,b}`
+    holds a comma between its two sides, so a regular expression that
+    reads one name cannot parse either. This walks the string and takes a
+    branch as far as its own braces reach. Lillecarl/pymux#469.
+    """
+    if "#{" not in string:
+        return string
+
+    out: List[str] = []
+    i = 0
+    n = len(string)
+    while i < n:
+        start = string.find("#{", i)
+        if start == -1:
+            out.append(string[i:])
+            break
+        out.append(string[i:start])
+        end = _find_closing(string, start + 2)
+        if end == -1:
+            # Nothing closes it. tmux prints the rest as it stands.
+            out.append(string[start:])
+            break
+        out.append(_expand_variable(context, string[start + 2 : end]))
+        i = end + 1
+    return "".join(out)
+
+
 def format_in_context(
     context: FormatContext,
     string: str,
@@ -162,22 +303,8 @@ def format_in_context(
         if symbol in string:
             string = string.replace(symbol, handler(context))
 
-    # Apply `#{variable}` formatting. (tmux syntax.)
-    if "#{" in string:
-
-        def format_variable(match: "re.Match[str]") -> str:
-            variable = match.group(1)
-            handler = tmux_variables.get(variable)
-            if handler is None:
-                return ""
-            try:
-                return str(handler(context))
-            except Exception:
-                return ""
-
-        string = re.sub(r"#\{([a-zA-Z0-9_]+)\}", format_variable, string)
-
-    return string
+    # Apply `#{...}` formatting. (tmux syntax.)
+    return _format_variables(context, string)
 
 
 # ---------------------------------------------------------------------
@@ -529,10 +656,9 @@ def _client_flags(context: FormatContext) -> str:
     The shape of tmux's `server_client_get_flags`
     (`server-client.c:3131`), with the two flags pymux has. It is the
     only way to read either one back, because `list-clients` has no
-    line of its own for them: pymux's format language has no
-    conditional, so a default format cannot print the brackets tmux
-    puts round these and leave them out for a plain client.
-    Lillecarl/pymux#467.
+    line of its own for them. The default format wraps it in brackets
+    with `#{?client_flags,...}`, so a plain client reads none.
+    Lillecarl/pymux#467, Lillecarl/pymux#469.
     """
     client = context.client
     if client is None:

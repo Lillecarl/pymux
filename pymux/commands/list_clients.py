@@ -20,6 +20,7 @@ from pymux.format import format_pymux_string
 DEFAULT_FORMAT = (
     "#{client_name}: #{client_hostname} #{session_name} "
     "[#{client_width}x#{client_height} #{client_termname}]"
+    "#{?client_flags, (}#{client_flags}#{?client_flags,)}"
 )
 
 
