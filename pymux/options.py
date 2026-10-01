@@ -3,6 +3,7 @@ All configurable options which can be changed through "set-option" commands.
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 from enum import StrEnum
 
 from .enums import WindowSize, Woke
@@ -105,6 +106,18 @@ class Option(ABC):
 
         return pymux
 
+    def _attribute(self) -> str:
+        """
+        The attribute this option is written on.
+
+        A `None` says the option keeps its value somewhere else, the
+        way the prefix key lives in the binding manager. No option that
+        reaches a `setattr` is one of those.
+        """
+        if self.attribute_name is None:
+            raise SetOptionError("This option holds its value somewhere else.")
+        return self.attribute_name
+
     def as_written(self, value, holder) -> str:
         """
         What `show-options` prints for a value this option holds.
@@ -119,17 +132,16 @@ class Option(ABC):
         return str(value)
 
     @abstractmethod
-    def get_all_values(self):
+    def get_all_values(self, pymux) -> Iterable[str]:
         """
-        Return a list of strings, with all possible values. (For
-        autocompletion.)
+        Return the possible values, as strings. (For autocompletion.)
         """
 
     @abstractmethod
     def set_value(self, pymux, value, target=None):
         "Set option. This can raise SetOptionError."
 
-    def set_default(self, pymux, value):
+    def set_default(self, pymux, value) -> None:
         """
         Say what a new window starts with, without changing one.
 
@@ -171,14 +183,14 @@ class OnOffOption(Option):
         return value == "on"
 
     def set_value(self, pymux, value, target=None):
-        setattr(self.held_by(pymux, target), self.attribute_name, self._read(value))
+        setattr(self.held_by(pymux, target), self._attribute(), self._read(value))
 
     def set_default(self, pymux, value):
         "What every new window starts with. Changes no window that is open."
         if self.scope is not Scope.WINDOW:
             return super().set_default(pymux, value)
 
-        pymux.arrangement.window_defaults[self.attribute_name] = self._read(value)
+        pymux.arrangement.window_defaults[self._attribute()] = self._read(value)
 
 
 class StringOption(Option):
@@ -193,13 +205,13 @@ class StringOption(Option):
 
     def get_all_values(self, pymux):
         try:
-            now = getattr(self.held_by(pymux), self.attribute_name)
+            now = getattr(self.held_by(pymux), self._attribute())
         except SetOptionError:
             return sorted(set(self.possible_values))
         return sorted(set(self.possible_values + [now]))
 
     def set_value(self, pymux, value, target=None):
-        setattr(self.held_by(pymux, target), self.attribute_name, value)
+        setattr(self.held_by(pymux, target), self._attribute(), value)
 
 
 class PositiveIntOption(Option):
@@ -214,7 +226,7 @@ class PositiveIntOption(Option):
 
     def get_all_values(self, pymux):
         try:
-            now = getattr(self.held_by(pymux), self.attribute_name)
+            now = getattr(self.held_by(pymux), self._attribute())
         except SetOptionError:
             return sorted(set(self.possible_values))
         return sorted(set(self.possible_values + ["%s" % now]))
@@ -230,14 +242,14 @@ class PositiveIntOption(Option):
         return number
 
     def set_value(self, pymux, value, target=None):
-        setattr(self.held_by(pymux, target), self.attribute_name, self._read(value))
+        setattr(self.held_by(pymux, target), self._attribute(), self._read(value))
 
     def set_default(self, pymux, value):
         "What every new window starts with. Changes no window that is open."
         if self.scope is not Scope.WINDOW:
             return super().set_default(pymux, value)
 
-        pymux.arrangement.window_defaults[self.attribute_name] = self._read(value)
+        pymux.arrangement.window_defaults[self._attribute()] = self._read(value)
 
 
 class KeyPrefixOption(Option):
@@ -320,7 +332,7 @@ class KeysOption(Option):
     def set_value(self, pymux, value, target=None):
         if value not in ("emacs", "vi"):
             raise SetOptionError('Expecting "vi" or "emacs".')
-        setattr(self.held_by(pymux, target), self.attribute_name, value == "vi")
+        setattr(self.held_by(pymux, target), self._attribute(), value == "vi")
 
 
 class ExtendedKeys(StrEnum):
@@ -428,7 +440,7 @@ class EnumOption(Option):
                 "Expecting one of: %s."
                 % ", ".join('"%s"' % one for one in self.choices)
             )
-        setattr(self.held_by(pymux, target), self.attribute_name, chosen)
+        setattr(self.held_by(pymux, target), self._attribute(), chosen)
         self.after(pymux)
 
     def after(self, pymux):
@@ -617,7 +629,7 @@ class JustifyOption(Option):
     def set_value(self, pymux, value, target=None):
         if value not in Justify._ALL:
             raise SetOptionError("Invalid justify option.")
-        setattr(self.held_by(pymux, target), self.attribute_name, value)
+        setattr(self.held_by(pymux, target), self._attribute(), value)
 
 
 class ChoiceOption(Option):
@@ -637,7 +649,7 @@ class ChoiceOption(Option):
 
     def get_all_values(self, pymux):
         try:
-            now = getattr(self.held_by(pymux), self.attribute_name)
+            now = getattr(self.held_by(pymux), self._attribute())
         except SetOptionError:
             return sorted(set(self.choices))
         return sorted(set(self.choices + (now,)))
@@ -647,7 +659,7 @@ class ChoiceOption(Option):
             raise SetOptionError(
                 "Expecting one of: %s." % ", ".join(sorted(self.choices))
             )
-        setattr(self.held_by(pymux, target), self.attribute_name, value)
+        setattr(self.held_by(pymux, target), self._attribute(), value)
 
 
 ALL_OPTIONS = {
