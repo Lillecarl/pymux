@@ -42,6 +42,8 @@
   # Only the checks use these: the readers of the clipboard fence.
   wl-clipboard,
   xclip,
+  # The static checker that the `types` check runs.
+  pyrefly,
 }:
 let
   # pymux's own version. The element is published as an npm package as
@@ -211,6 +213,7 @@ let
       mesa
       wl-clipboard
       xclip
+      pyrefly
       ;
     waylandProtocols = pyterm-pytest.waylandProtocols;
     # The base16 collection the package carries, for the gallery that

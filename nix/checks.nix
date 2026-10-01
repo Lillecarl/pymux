@@ -76,6 +76,9 @@
   nodejs,
   typescript,
   testSources,
+  # The static checker of the `types` check. It reads the sources and
+  # the interpreter's site-packages and runs nothing itself.
+  pyrefly,
 }:
 let
   inherit (callPackage ./suite.nix { }) suite;
@@ -463,6 +466,28 @@ in
       }
       ''
         python -m pytest $selection -q -p no:cacheprovider
+      '';
+
+  # The types of pymux, held by a static checker rather than by a run.
+  #
+  # `entry_points/run_pymux.py` matches on `Mode` and ends every arm with
+  # `typing.assert_never`, so a member added and not handled is meant to
+  # fail the build. pytest never runs a checker, so that promise was a
+  # run-time raise until now. Lillecarl/pymux#486.
+  #
+  # `pyrefly` reads its site-packages from the interpreter it is pointed
+  # at, so it sees exactly the dependencies a suite runs on and not the
+  # dev shell's older copies.
+  types =
+    runInSandbox
+      {
+        name = "pymux-types";
+        inputs = [ pyrefly ];
+      }
+      ''
+        pyrefly check --preset default \
+          --python-interpreter-path "${testEnv}/bin/python" \
+          pymux
       '';
 
   # What it costs to lay a window out and draw the frame around its
