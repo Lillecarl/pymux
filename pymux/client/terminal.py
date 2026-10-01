@@ -26,7 +26,7 @@ from pymux.colors import COLOR_QUERIES, TRUECOLOR_PROBE
 from pymux.config import client_options_in, find_config
 from pymux.graphics import CELL_SIZE_QUERY
 from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
-from pymux.protocol import Mode, Packet
+from libpymux.protocol import Mode, Packet
 from pymux.utils import nonblocking
 
 from .base import Client

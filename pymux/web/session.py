@@ -36,7 +36,7 @@ from pyte.streams import GroundTimer, Stream
 
 from pymux.key_spelling import event_however_it_is_written
 from pymux.log import logger
-from pymux.protocol import Packet
+from libpymux.protocol import Packet
 from pymux.web.protocol import PaneView, Typed, typed_of
 
 __all__ = ["SessionScreen", "run_session"]

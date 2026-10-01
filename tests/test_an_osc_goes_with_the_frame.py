@@ -22,7 +22,7 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 
 from pymux.main import Pymux
 from pymux.options import Clipboard
-from pymux.protocol import Packet
+from libpymux.protocol import Packet
 from pymux.server import ServerConnection, _SocketStdout
 
 #: A clipboard write, as a pane writes one.

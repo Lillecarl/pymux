@@ -6,7 +6,7 @@ from select import select
 
 from libpymux.sockets import servers_newest_first
 from prompt_toolkit.input.vt100 import raw_mode
-from pymux.protocol import Packet
+from libpymux.protocol import Packet
 
 from .terminal import TerminalClient
 

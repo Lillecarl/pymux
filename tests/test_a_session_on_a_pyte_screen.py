@@ -23,7 +23,7 @@ import pytest
 from pymux.log import logger
 from pymux.main import Pymux
 from pymux.pipes.memory import connect_in_memory
-from pymux.protocol import Packet
+from libpymux.protocol import Packet
 from pymux.server import ServerConnection
 from pymux.web.session import SessionScreen
 

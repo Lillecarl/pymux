@@ -9,8 +9,13 @@ matches nothing, raises nothing, and drops the packet: the feature
 simply does not happen. Three packet kinds were added in one sitting
 for Lillecarl/pymux#436 and #446, each spelled by hand in two files.
 
-So the name lives here once, and both sides import it.
+So the name lives here once, and every side imports it.
 Lillecarl/pymux#447.
+
+**It lives in the client library and not in pymux.** pymux takes
+libpymux, and nothing here takes pymux, so a name in pymux could not
+be reached from here without a cycle -- and this library spells
+packets too (`streams.py`, `connection.py`).
 
 **They are `StrEnum`, so nothing else has to change.** A member is a
 `str` with that value: `json.dumps` writes the plain name, and a
@@ -18,8 +23,7 @@ member compares equal to the plain name that comes back off the wire.
 The other side may be an older pymux spelling strings by hand and the
 two still meet.
 
-This module imports nothing of pymux's. Both halves of the protocol
-depend on it, so anything it reached for would be reachable from both.
+This module imports nothing else.
 """
 
 from __future__ import annotations

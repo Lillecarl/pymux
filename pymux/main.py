@@ -57,7 +57,7 @@ from .key_spelling import why_pane_cannot_read
 from .layout import Justify, LayoutManager, change_pane_size
 from . import log
 from .log import logger
-from pymux.protocol import Packet
+from libpymux.protocol import Packet
 from .notifications import NotificationRoutes
 from .options import (
     ALL_CLIENT_OPTIONS,

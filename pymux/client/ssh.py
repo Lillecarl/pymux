@@ -59,7 +59,7 @@ from pymux.forwarding import (
     the_far_side_may_narrow,
     with_port,
 )
-from pymux.protocol import Packet
+from libpymux.protocol import Packet
 from pymux.utils import nonblocking
 
 from .defaults import SCHEME, is_ssh_url

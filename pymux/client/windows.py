@@ -10,7 +10,7 @@ import anyio
 from prompt_toolkit.input.win32 import Win32Input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.win32 import Win32Output
-from pymux.protocol import Packet
+from libpymux.protocol import Packet
 from prompt_toolkit.win32_types import STD_OUTPUT_HANDLE
 
 from ..config import client_options_in, find_config

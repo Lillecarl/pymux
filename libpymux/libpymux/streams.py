@@ -23,6 +23,8 @@ import asyncio
 import json
 from typing import Any, AsyncIterator, Dict, Optional
 
+from .protocol import Packet
+
 __all__ = ["PaneStream", "StreamRefused"]
 
 #: The byte that ends one JSON message on the wire.
@@ -77,7 +79,7 @@ class PaneStream:
         )
         await self._packet(
             {
-                "cmd": "stream-pane",
+                "cmd": Packet.STREAM_PANE,
                 "pane": self.pane_id,
                 "writable": self.writable,
             }
@@ -114,9 +116,9 @@ class PaneStream:
             if packet is None:
                 return
             kind = packet.get("cmd")
-            if kind == "stream-out":
+            if kind == Packet.STREAM_OUT:
                 yield json.loads(packet["data"])
-            elif kind == "err":
+            elif kind == Packet.ERR:
                 raise StreamRefused(packet.get("data", "").strip())
             # "exit" and anything else: the server is finishing.
 
@@ -163,7 +165,7 @@ class PaneStream:
         This is what a relay uses: a viewer's message goes through
         without being read here.
         """
-        await self._packet({"cmd": "stream-in", "data": json.dumps(message)})
+        await self._packet({"cmd": Packet.STREAM_IN, "data": json.dumps(message)})
 
     async def _packet(self, packet: Dict[str, Any]) -> None:
         assert self._writer is not None, "the stream is not open"

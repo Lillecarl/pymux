@@ -15,6 +15,8 @@ import shlex
 import socket
 from typing import List, NamedTuple, Optional, Sequence, Union
 
+from .protocol import Packet
+
 __all__ = [
     "CommandError",
     "CommandResult",
@@ -129,7 +131,7 @@ class Connection:
         text = _as_command(command)
         sock = self._connect()
         try:
-            self._send(sock, {"cmd": "run-command", "data": text, "pane_id": pane_id})
+            self._send(sock, {"cmd": Packet.RUN_COMMAND, "data": text, "pane_id": pane_id})
             result = self._read(sock)
         finally:
             sock.close()
@@ -179,11 +181,11 @@ class Connection:
                     continue
                 packet = json.loads(raw.decode("utf-8"))
                 kind = packet.get("cmd")
-                if kind == "out":
+                if kind == Packet.OUT:
                     out.append(packet["data"])
-                elif kind == "err":
+                elif kind == Packet.ERR:
                     err.append(packet["data"])
-                elif kind == "exit":
+                elif kind == Packet.EXIT:
                     exit_code = packet["code"]
 
         return CommandResult("".join(out), "".join(err), exit_code)

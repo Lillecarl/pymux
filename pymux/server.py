@@ -27,7 +27,7 @@ from .graphics import ClientGraphics
 from .keys import KittyVt100Parser
 from .log import logger
 from pymux.commands.common import find_pane
-from pymux.protocol import Mode, Packet
+from libpymux.protocol import Mode, Packet
 from .nearest import NEAREST, nearest_theme, wanted_from
 from .options import ExtendedKeys, SetOptionError
 from .pipes import BrokenPipeError

@@ -23,7 +23,7 @@ import socket
 import pytest
 
 from pymux.client.posix import PosixClient
-from pymux.protocol import Packet
+from libpymux.protocol import Packet
 from pymux.server import CANNOT_ATTACH
 
 

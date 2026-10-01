@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException, add_command
 from pymux.forwarding import BadForward, Direction, parse_listen
-from pymux.protocol import Packet
+from libpymux.protocol import Packet
 
 
 def unforward_port(pymux: "Pymux", args: argparse.Namespace) -> None:

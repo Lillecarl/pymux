@@ -15,7 +15,7 @@ from pymux.forwarding import (
     the_far_side_may_narrow,
 )
 from pymux.options import ForwardMode
-from pymux.protocol import Packet
+from libpymux.protocol import Packet
 
 
 def forward_port(pymux: "Pymux", args: argparse.Namespace) -> None:
