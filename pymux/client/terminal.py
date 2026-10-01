@@ -26,7 +26,7 @@ from pymux.colors import COLOR_QUERIES, TRUECOLOR_PROBE
 from pymux.config import client_options_in, find_config
 from pymux.graphics import CELL_SIZE_QUERY
 from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
-from libpymux.protocol import Mode, Packet
+from libpymux.protocol import Field, Mode, Packet
 from pymux.utils import nonblocking
 
 from .base import Client
@@ -153,30 +153,30 @@ class TerminalClient(Client):
         self._send_size()
         self._send_packet(
             {
-                "cmd": Packet.START_GUI,
-                "detach-others": detach_other_clients,
+                Field.CMD: Packet.START_GUI,
+                Field.DETACH_OTHERS: detach_other_clients,
                 # `-x`: the other clients of the session leave, and the
                 # terminals they were in close. Lillecarl/pymux#347.
-                "hang-up-others": self.hang_up_others,
+                Field.HANG_UP_OTHERS: self.hang_up_others,
                 # `-r`: this client only watches. Lillecarl/pymux#467.
-                "read-only": self.read_only,
-                "color-depth": color_depth,
-                "term": os.environ.get("TERM", ""),
-                "colorterm": os.environ.get("COLORTERM", ""),
+                Field.READ_ONLY: self.read_only,
+                Field.COLOR_DEPTH: color_depth,
+                Field.TERM: os.environ.get("TERM", ""),
+                Field.COLORTERM: os.environ.get("COLORTERM", ""),
                 # The machine this client runs on. Only the client can
                 # say it: over ssh the server answers `gethostname`
                 # with another machine's name. Lillecarl/pymux#287.
-                "hostname": socket.gethostname(),
+                Field.HOSTNAME: socket.gethostname(),
                 # Whether this client can forward a port. Only the one
                 # that reached the server over SSH holds a connection
                 # that carries one, and the server cannot tell from its
                 # end: a unix socket is a unix socket either way.
                 # Lillecarl/pymux#436.
-                "forwards": self.can_forward,
+                Field.FORWARDS: self.can_forward,
                 # Whether this client answers a ping. A server drops a
                 # client that stops answering, and never one that did
                 # not say it would. Lillecarl/pymux#446.
-                "pings": self.answers_ping,
+                Field.PINGS: self.answers_ping,
                 # The whole environment of this client, of which the
                 # server keeps the names "update-environment" lists and
                 # drops the rest. The client cannot do the filtering: it
@@ -184,7 +184,7 @@ class TerminalClient(Client):
                 # first would be a round trip at every attach. tmux
                 # sends the whole environment too, one message per
                 # variable. Lillecarl/pymux#271.
-                "environment": dict(os.environ),
+                Field.ENVIRONMENT: dict(os.environ),
                 # The terminal this client draws on, and the process it
                 # runs as. Both belong to this machine, which is why
                 # the server keeps the hostname in front of them: two
@@ -192,21 +192,21 @@ class TerminalClient(Client):
                 # process is the fallback for a client with no terminal
                 # at all, the way tmux falls back for a control client.
                 # Lillecarl/pymux#335.
-                "ttyname": _ttyname(),
-                "pid": os.getpid(),
+                Field.TTYNAME: _ttyname(),
+                Field.PID: os.getpid(),
                 # What this client's own configuration file says about
                 # this client. A theme belongs to the terminal a
                 # person is sitting at, and only this side can read
                 # the file that names it: over SSH the server's
                 # configuration is another machine's.
                 # Lillecarl/pymux#223.
-                "client-options": self._client_options(),
-                "data": "",
+                Field.CLIENT_OPTIONS: self._client_options(),
+                Field.DATA: "",
             }
         )
 
         os.write(sys.stdout.fileno(), DETECTION_QUERIES)
-        self._send_packet({"cmd": Packet.KITTY_DETECT})
+        self._send_packet({Field.CMD: Packet.KITTY_DETECT})
 
     def _restore_modes(self) -> None:
         """
@@ -262,54 +262,54 @@ class TerminalClient(Client):
         """
         packet = json.loads(data_buffer.decode("utf-8"))
 
-        if packet["cmd"] == Packet.OUT:
+        if packet[Field.CMD] == Packet.OUT:
             # Call os.write manually. In Python2.6, sys.stdout.write doesn't use UTF-8.
-            os.write(sys.stdout.fileno(), packet["data"].encode("utf-8"))
+            os.write(sys.stdout.fileno(), packet[Field.DATA].encode("utf-8"))
 
-        elif packet["cmd"] == Packet.EXIT:
+        elif packet[Field.CMD] == Packet.EXIT:
             # The server is about to close this connection, and says
             # what this client leaves with. The read loop ends on the
             # close itself.
-            self.exit_code = packet["code"]
+            self.exit_code = packet[Field.CODE]
             # And whether to hang up the process that started this
             # client on the way out, which is `attach -x`. The signal
             # goes after the terminal is back, so it is remembered
             # here and sent there. Lillecarl/pymux#347.
-            if packet.get("hang-up"):
+            if packet.get(Field.HANG_UP):
                 self.hang_up_asked = True
 
-        elif packet["cmd"] == Packet.PING:
+        elif packet[Field.CMD] == Packet.PING:
             # The server is asking whether anybody is still here. An
             # answer costs one packet and keeps this client's place;
             # silence is what tells the server the person is gone.
             # Lillecarl/pymux#446.
-            self._send_packet({"cmd": Packet.PONG})
+            self._send_packet({Field.CMD: Packet.PONG})
 
-        elif packet["cmd"] == Packet.SUSPEND:
+        elif packet[Field.CMD] == Packet.SUSPEND:
             # Suspend client process to background.
             if hasattr(signal, "SIGTSTP"):
                 os.kill(os.getpid(), signal.SIGTSTP)
 
-        elif packet["cmd"] == Packet.OPEN:
+        elif packet[Field.CMD] == Packet.OPEN:
             # The server asks this machine, not the machine of the
             # server, to open the URL. A machine with no browser says
             # so back, where the request was made visible.
-            url = packet["data"]
+            url = packet[Field.DATA]
             if not self._open_url(url):
-                self._send_packet({"cmd": Packet.OPEN_FAILED, "data": url})
+                self._send_packet({Field.CMD: Packet.OPEN_FAILED, Field.DATA: url})
 
-        elif packet["cmd"] == Packet.KITTY_KEYBOARD:
+        elif packet[Field.CMD] == Packet.KITTY_KEYBOARD:
             # Kitty keyboard protocol instructions for the outer
             # terminal.
-            data = packet["data"]
+            data = packet[Field.DATA]
             if "supported" in data:
                 self._kitty_supported = data["supported"]
             if "flags" in data:
                 self._set_kitty_flags(data["flags"])
 
-        elif packet["cmd"] == Packet.MODE:
+        elif packet[Field.CMD] == Packet.MODE:
             # Set terminal to raw/cooked.
-            action = packet["data"]
+            action = packet[Field.DATA]
 
             if action == Mode.RAW:
                 cm = raw_mode(sys.stdin.fileno())
@@ -422,8 +422,8 @@ class TerminalClient(Client):
         for i in range(0, len(data), step):
             self._send_packet(
                 {
-                    "cmd": Packet.IN,
-                    "data": data[i : i + step],
+                    Field.CMD: Packet.IN,
+                    Field.DATA: data[i : i + step],
                 }
             )
 
@@ -436,4 +436,4 @@ class TerminalClient(Client):
     def _send_size(self):
         "Report terminal size to server."
         rows, cols = self.size()
-        self._send_packet({"cmd": Packet.SIZE, "data": [rows, cols]})
+        self._send_packet({Field.CMD: Packet.SIZE, Field.DATA: [rows, cols]})

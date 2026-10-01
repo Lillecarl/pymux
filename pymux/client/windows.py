@@ -10,7 +10,7 @@ import anyio
 from prompt_toolkit.input.win32 import Win32Input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.win32 import Win32Output
-from libpymux.protocol import Packet
+from libpymux.protocol import Field, Packet
 from prompt_toolkit.win32_types import STD_OUTPUT_HANDLE
 
 from ..config import client_options_in, find_config
@@ -56,19 +56,19 @@ class WindowsClient(Client):
             self._send_size()
             self._send_packet(
                 {
-                    "cmd": Packet.START_GUI,
-                    "detach-others": detach_other_clients,
+                    Field.CMD: Packet.START_GUI,
+                    Field.DETACH_OTHERS: detach_other_clients,
                     # Lillecarl/pymux#347, as `client/terminal.py` says.
-                    "hang-up-others": self.hang_up_others,
+                    Field.HANG_UP_OTHERS: self.hang_up_others,
                     # Lillecarl/pymux#467, as `client/terminal.py` says.
-                    "read-only": self.read_only,
-                    "color-depth": color_depth,
-                    "term": os.environ.get("TERM", ""),
+                    Field.READ_ONLY: self.read_only,
+                    Field.COLOR_DEPTH: color_depth,
+                    Field.TERM: os.environ.get("TERM", ""),
                     # Lillecarl/pymux#287, as `client/terminal.py` says.
-                    "hostname": socket.gethostname(),
+                    Field.HOSTNAME: socket.gethostname(),
                     # Lillecarl/pymux#271, and the same file says why
                     # the client sends all of it.
-                    "environment": dict(os.environ),
+                    Field.ENVIRONMENT: dict(os.environ),
                     # **No "pings" here, and adding one is the trap.**
                     # A client that says it answers and then does not
                     # is dropped after two unanswered pings, so the
@@ -80,15 +80,15 @@ class WindowsClient(Client):
                     #
                     # Windows has no tty path, so a client here is
                     # always named by its process. Lillecarl/pymux#335.
-                    "ttyname": "",
-                    "pid": os.getpid(),
+                    Field.TTYNAME: "",
+                    Field.PID: os.getpid(),
                     # Lillecarl/pymux#223, as `client/terminal.py` says.
                     # The same two sources in the same order.
-                    "client-options": (
+                    Field.CLIENT_OPTIONS: (
                         client_options_in(self.config_file or find_config())
                         + ([("name", self.chosen_name)] if self.chosen_name else [])
                     ),
-                    "data": "",
+                    Field.DATA: "",
                 }
             )
 
@@ -114,7 +114,7 @@ class WindowsClient(Client):
         """
         packet = json.loads(data_buffer)
 
-        if packet["cmd"] == Packet.OUT:
+        if packet[Field.CMD] == Packet.OUT:
             # Call os.write manually. In Python2.6, sys.stdout.write doesn't use UTF-8.
             original_mode = DWORD(0)
             windll.kernel32.GetConsoleMode(self._hconsole, byref(original_mode))
@@ -125,28 +125,28 @@ class WindowsClient(Client):
             )
 
             try:
-                os.write(sys.stdout.fileno(), packet["data"].encode("utf-8"))
+                os.write(sys.stdout.fileno(), packet[Field.DATA].encode("utf-8"))
             finally:
                 windll.kernel32.SetConsoleMode(self._hconsole, original_mode)
 
-        elif packet["cmd"] == Packet.EXIT:
+        elif packet[Field.CMD] == Packet.EXIT:
             # What this client leaves with. Lillecarl/pymux#332, as
             # `client/terminal.py` says.
-            self.exit_code = packet["code"]
+            self.exit_code = packet[Field.CODE]
             # Windows has no SIGHUP, so this is remembered and the
             # hangup is what does nothing. Lillecarl/pymux#347.
-            if packet.get("hang-up"):
+            if packet.get(Field.HANG_UP):
                 self.hang_up_asked = True
 
-        elif packet["cmd"] == Packet.SUSPEND:
+        elif packet[Field.CMD] == Packet.SUSPEND:
             # Suspend client process to background.
             pass
 
-        elif packet["cmd"] == Packet.MODE:
+        elif packet[Field.CMD] == Packet.MODE:
             pass
 
             # # Set terminal to raw/cooked.
-            # action = packet['data']
+            # action = packet[Field.DATA]
 
             # if action == 'raw':
             #     cm = raw_mode(sys.stdin.fileno())
@@ -167,8 +167,8 @@ class WindowsClient(Client):
         if keys:
             self._send_packet(
                 {
-                    "cmd": Packet.IN,
-                    "data": "".join(key_press.data for key_press in keys),
+                    Field.CMD: Packet.IN,
+                    Field.DATA: "".join(key_press.data for key_press in keys),
                 }
             )
 
@@ -196,7 +196,7 @@ class WindowsClient(Client):
         output = Win32Output(sys.stdout)
         rows, cols = output.get_size()
 
-        self._send_packet({"cmd": Packet.SIZE, "data": [rows, cols]})
+        self._send_packet({Field.CMD: Packet.SIZE, Field.DATA: [rows, cols]})
 
 
 def list_clients():

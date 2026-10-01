@@ -31,6 +31,7 @@ from __future__ import annotations
 from enum import StrEnum
 
 __all__ = [
+    "Field",
     "Mode",
     "Packet",
 ]
@@ -78,6 +79,47 @@ class Packet(StrEnum):
     OPEN = "open"
     FORWARD = "forward"
     PING = "ping"
+
+
+class Field(StrEnum):
+    """
+    The keys of a packet, beside `cmd`.
+
+    A packet is a JSON object. `cmd` says what it is and the rest of
+    its keys carry the payload, and both sides read and write them. A
+    key one side spells wrong matches nothing and raises nothing, the
+    same silent drop a command name has, so they live here once.
+    Lillecarl/pymux#447.
+    """
+
+    CMD = "cmd"
+    DATA = "data"
+    CODE = "code"
+    PANE = "pane"
+    PANE_ID = "pane_id"
+    WRITABLE = "writable"
+    DETACH_OTHERS = "detach-others"
+    HANG_UP = "hang-up"
+    HANG_UP_OTHERS = "hang-up-others"
+    READ_ONLY = "read-only"
+    COLOR_DEPTH = "color-depth"
+    TERM = "term"
+    COLORTERM = "colorterm"
+    HOSTNAME = "hostname"
+    FORWARDS = "forwards"
+    PINGS = "pings"
+    ENVIRONMENT = "environment"
+    TTYNAME = "ttyname"
+    PID = "pid"
+    CLIENT_OPTIONS = "client-options"
+    DIRECTION = "direction"
+    LISTEN_HOST = "listen_host"
+    LISTEN_PORT = "listen_port"
+    DEST_HOST = "dest_host"
+    DEST_PORT = "dest_port"
+    REMOVE = "remove"
+    MESSAGE = "message"
+    FORWARD = "forward"
 
 
 class Mode(StrEnum):

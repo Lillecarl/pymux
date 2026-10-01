@@ -57,7 +57,7 @@ from .key_spelling import why_pane_cannot_read
 from .layout import Justify, LayoutManager, change_pane_size
 from . import log
 from .log import logger
-from libpymux.protocol import Packet
+from libpymux.protocol import Field, Packet
 from .notifications import NotificationRoutes
 from .options import (
     ALL_CLIENT_OPTIONS,
@@ -2403,7 +2403,7 @@ class Pymux:
             return
 
         for client_state, forward in zip(clients, forwards):
-            packet = {"cmd": Packet.OPEN, "data": url}
+            packet = {Field.CMD: Packet.OPEN, Field.DATA: url}
             if forward is None:
                 client_state.message = (
                     "Opened %s in the browser of this machine." % (url,)
@@ -2412,7 +2412,7 @@ class Pymux:
                 # The client says what it opened, once it knows: a port
                 # that was taken here moves the URL, and a message from
                 # this side would name the address that did not work.
-                packet["forward"] = forward
+                packet[Field.FORWARD] = forward
             client_state.connection._send_packet(packet)
 
     def url_forward(self, url: str, client_state: "ClientState") -> dict | None:
@@ -3061,7 +3061,7 @@ class Pymux:
         try:
             for connection in self.connections:
                 connection._send_packet(
-                    {"cmd": Packet.KITTY_KEYBOARD, "data": {"flags": flags}}
+                    {Field.CMD: Packet.KITTY_KEYBOARD, Field.DATA: {"flags": flags}}
                 )
         except Exception:
             logger.exception("Sending kitty keyboard flags failed.")

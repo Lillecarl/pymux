@@ -36,7 +36,7 @@ from pyte.streams import GroundTimer, Stream
 
 from pymux.key_spelling import event_however_it_is_written
 from pymux.log import logger
-from libpymux.protocol import Packet
+from libpymux.protocol import Field, Packet
 from pymux.web.protocol import PaneView, Typed, typed_of
 
 __all__ = ["SessionScreen", "run_session"]
@@ -91,12 +91,12 @@ class SessionScreen:
         self._send_size()
         self._send(
             {
-                "cmd": Packet.START_GUI,
-                "detach-others": False,
-                "read-only": self.read_only,
-                "color-depth": COLOR_DEPTH,
-                "term": TERM,
-                "colorterm": COLORTERM,
+                Field.CMD: Packet.START_GUI,
+                Field.DETACH_OTHERS: False,
+                Field.READ_ONLY: self.read_only,
+                Field.COLOR_DEPTH: COLOR_DEPTH,
+                Field.TERM: TERM,
+                Field.COLORTERM: COLORTERM,
             }
         )
 
@@ -108,9 +108,9 @@ class SessionScreen:
         because a server writes a frame as several packets and one frame
         a viewer sees per packet would be most of them half drawn.
         """
-        kind = packet.get("cmd")
+        kind = packet.get(Field.CMD)
         if kind == Packet.OUT:
-            self._ground_timer.feed(packet["data"])
+            self._ground_timer.feed(packet[Field.DATA])
         elif kind in (Packet.EXIT, Packet.ERR):
             return True
         return False
@@ -122,12 +122,12 @@ class SessionScreen:
 
     def _send_size(self) -> None:
         self._send(
-            {"cmd": Packet.SIZE, "data": [self.screen.lines, self.screen.columns]}
+            {Field.CMD: Packet.SIZE, Field.DATA: [self.screen.lines, self.screen.columns]}
         )
 
     def _answer(self, data: str) -> None:
         "What the terminal says back to a query goes in as input."
-        self._send({"cmd": Packet.IN, "data": data})
+        self._send({Field.CMD: Packet.IN, Field.DATA: data})
 
     # -- the viewer side -----------------------------------------------
 
@@ -175,7 +175,7 @@ class SessionScreen:
             return "this client only watches"
 
         try:
-            self._send({"cmd": Packet.IN, "data": self._spelled(typed)})
+            self._send({Field.CMD: Packet.IN, Field.DATA: self._spelled(typed)})
         except Unhearable as refused:
             return str(refused)
         return None

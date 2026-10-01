@@ -59,7 +59,7 @@ from pymux.forwarding import (
     the_far_side_may_narrow,
     with_port,
 )
-from libpymux.protocol import Packet
+from libpymux.protocol import Field, Packet
 from pymux.utils import nonblocking
 
 from .defaults import SCHEME, is_ssh_url
@@ -368,20 +368,20 @@ class SshClient(TerminalClient):
 
         try:
             self._send_packet(
-                {"cmd": Packet.RUN_COMMAND, "data": command, "pane_id": pane_id}
+                {Field.CMD: Packet.RUN_COMMAND, Field.DATA: command, Field.PANE_ID: pane_id}
             )
 
             exit_code = 0
             try:
                 async for packet in self._packets(reader):
-                    if packet["cmd"] == Packet.OUT:
-                        sys.stdout.write(packet["data"])
+                    if packet[Field.CMD] == Packet.OUT:
+                        sys.stdout.write(packet[Field.DATA])
                         sys.stdout.flush()
-                    elif packet["cmd"] == Packet.ERR:
-                        sys.stderr.write(packet["data"])
+                    elif packet[Field.CMD] == Packet.ERR:
+                        sys.stderr.write(packet[Field.DATA])
                         sys.stderr.flush()
-                    elif packet["cmd"] == Packet.EXIT:
-                        exit_code = packet["code"]
+                    elif packet[Field.CMD] == Packet.EXIT:
+                        exit_code = packet[Field.CODE]
             except Exception as error:
                 # The link went before the answer arrived. Nothing here
                 # knows whether the command ran, so the code has to say
@@ -522,7 +522,7 @@ class SshClient(TerminalClient):
                 self._forwards_moved = ""
 
                 async for packet in self._packets(reader):
-                    if packet["cmd"] == Packet.FORWARD:
+                    if packet[Field.CMD] == Packet.FORWARD:
                         # Opening one is a coroutine and `_process` is
                         # not, so it goes to the scope that owns this
                         # attachment rather than blocking the reader.
@@ -534,7 +534,7 @@ class SshClient(TerminalClient):
                         )
                         continue
 
-                    if packet["cmd"] == Packet.OPEN and packet.get("forward"):
+                    if packet[Field.CMD] == Packet.OPEN and packet.get(Field.FORWARD):
                         # A URL that names loopback, which is this
                         # machine to the browser and the other machine
                         # to the pane that printed it. The port has to
@@ -593,18 +593,18 @@ class SshClient(TerminalClient):
         a reconnect as well as after a change, and a person reading
         `list-forwards` wants the set anyway.
         """
-        if packet.get("remove"):
+        if packet.get(Field.REMOVE):
             where = (
-                Direction(packet["direction"]),
-                packet["listen_host"],
-                packet["listen_port"],
+                Direction(packet[Field.DIRECTION]),
+                packet[Field.LISTEN_HOST],
+                packet[Field.LISTEN_PORT],
             )
             gone = self.forwards.remove(where)
 
             if gone is None:
                 said = "Nothing was forwarding %s:%s." % (
-                    packet["listen_host"],
-                    packet["listen_port"],
+                    packet[Field.LISTEN_HOST],
+                    packet[Field.LISTEN_PORT],
                 )
             else:
                 said = "Stopped forwarding %s." % (gone.spell(),)
@@ -613,11 +613,11 @@ class SshClient(TerminalClient):
             return
 
         forward = Forward(
-            direction=Direction(packet["direction"]),
-            listen_host=packet["listen_host"],
-            listen_port=packet["listen_port"],
-            dest_host=packet["dest_host"],
-            dest_port=packet["dest_port"],
+            direction=Direction(packet[Field.DIRECTION]),
+            listen_host=packet[Field.LISTEN_HOST],
+            listen_port=packet[Field.LISTEN_PORT],
+            dest_host=packet[Field.DEST_HOST],
+            dest_port=packet[Field.DEST_PORT],
         )
         opened = await self.forwards.add(connection, forward)
 
@@ -661,8 +661,8 @@ class SshClient(TerminalClient):
         been sent. So the message about it comes from this side.
         Lillecarl/pymux#437.
         """
-        url = packet["data"]
-        asked = packet["forward"]
+        url = packet[Field.DATA]
+        asked = packet[Field.FORWARD]
         host, port = asked["host"], asked["port"]
 
         opened = await self.forwards.add(
@@ -687,7 +687,7 @@ class SshClient(TerminalClient):
         self._report_forwards(said if reached else "")
 
         if not reached:
-            self._send_packet({"cmd": Packet.OPEN_FAILED, "data": url})
+            self._send_packet({Field.CMD: Packet.OPEN_FAILED, Field.DATA: url})
 
     async def _reap_forwards(self) -> None:
         "Give back the port of a URL that nobody is using any more."
@@ -711,9 +711,9 @@ class SshClient(TerminalClient):
         """
         self._send_packet(
             {
-                "cmd": Packet.FORWARDS,
-                "data": self.forwards.report(),
-                "message": message,
+                Field.CMD: Packet.FORWARDS,
+                Field.DATA: self.forwards.report(),
+                Field.MESSAGE: message,
             }
         )
 

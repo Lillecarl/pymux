@@ -15,7 +15,7 @@ from pymux.forwarding import (
     the_far_side_may_narrow,
 )
 from pymux.options import ForwardMode
-from libpymux.protocol import Packet
+from libpymux.protocol import Field, Packet
 
 
 def forward_port(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -84,12 +84,12 @@ def forward_port(pymux: "Pymux", args: argparse.Namespace) -> None:
     pymux.forward_through(
         asker.client_state,
         {
-            "cmd": Packet.FORWARD,
-            "direction": str(forward.direction),
-            "listen_host": forward.listen_host,
-            "listen_port": forward.listen_port,
-            "dest_host": forward.dest_host,
-            "dest_port": forward.dest_port,
+            Field.CMD: Packet.FORWARD,
+            Field.DIRECTION: str(forward.direction),
+            Field.LISTEN_HOST: forward.listen_host,
+            Field.LISTEN_PORT: forward.listen_port,
+            Field.DEST_HOST: forward.dest_host,
+            Field.DEST_PORT: forward.dest_port,
         },
     )
 

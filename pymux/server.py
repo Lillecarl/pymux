@@ -27,7 +27,7 @@ from .graphics import ClientGraphics
 from .keys import KittyVt100Parser
 from .log import logger
 from pymux.commands.common import find_pane
-from libpymux.protocol import Mode, Packet
+from libpymux.protocol import Field, Mode, Packet
 from .nearest import NEAREST, nearest_theme, wanted_from
 from .options import ExtendedKeys, SetOptionError
 from .pipes import BrokenPipeError
@@ -458,8 +458,8 @@ class ServerConnection:
         self._apply_color_depth()
         self._send_packet(
             {
-                "cmd": Packet.KITTY_KEYBOARD,
-                "data": {"supported": self.keyboard_is_supported()},
+                Field.CMD: Packet.KITTY_KEYBOARD,
+                Field.DATA: {"supported": self.keyboard_is_supported()},
             }
         )
         # Enable the flags on this client's terminal as well. (Other
@@ -468,8 +468,8 @@ class ServerConnection:
         # the value settled would otherwise never hear it.)
         self._send_packet(
             {
-                "cmd": Packet.KITTY_KEYBOARD,
-                "data": {"flags": self.pymux.keyboard_flags_for_client()},
+                Field.CMD: Packet.KITTY_KEYBOARD,
+                Field.DATA: {"flags": self.pymux.keyboard_flags_for_client()},
             }
         )
 
@@ -566,7 +566,7 @@ class ServerConnection:
             return
 
         # Handle commands.
-        if packet["cmd"] == Packet.RUN_COMMAND:
+        if packet[Field.CMD] == Packet.RUN_COMMAND:
             # Handle this in a task. The command handler can produce output
             # that has to be sent back to the client.
             self._spawn(self._run_command(packet))
@@ -574,60 +574,60 @@ class ServerConnection:
 
         # "Send me this pane as frames." A stream holds the connection
         # and writes many packets, so it is not a command that prints.
-        elif packet["cmd"] == Packet.STREAM_PANE:
+        elif packet[Field.CMD] == Packet.STREAM_PANE:
             self._spawn(self._stream_pane(packet))
             return
 
         # One input message of a stream, which the stream itself reads:
         # a packet that arrives with no stream running has nowhere to go.
-        elif packet["cmd"] == Packet.STREAM_IN:
+        elif packet[Field.CMD] == Packet.STREAM_IN:
             if self._stream is None:
                 logger.warning("Input for a stream that is not running. Ignoring.")
             else:
-                self._stream.take(packet.get("data", ""))
+                self._stream.take(packet.get(Field.DATA, ""))
 
         # Handle stdin.
-        elif packet["cmd"] == Packet.IN:
-            self._pipeinput.send_text(packet["data"])
+        elif packet[Field.CMD] == Packet.IN:
+            self._pipeinput.send_text(packet[Field.DATA])
 
         # The client queried its terminal for kitty keyboard protocol
         # support. (The replies come back as input on this connection.)
-        elif packet["cmd"] == Packet.KITTY_DETECT:
+        elif packet[Field.CMD] == Packet.KITTY_DETECT:
             self._kitty_detection_pending = True
 
         # Set size. (The client reports the size.)
-        elif packet["cmd"] == Packet.SIZE:
-            rows, columns = packet["data"]
+        elif packet[Field.CMD] == Packet.SIZE:
+            rows, columns = packet[Field.DATA]
             self.size = Size(rows=rows, columns=columns)
             self.pymux.invalidate(Woke.CLIENT_RESIZED)
 
         # Start GUI. (Create CommandLineInterface front-end for pymux.)
-        elif packet["cmd"] == Packet.START_GUI:
+        elif packet[Field.CMD] == Packet.START_GUI:
             if not self.may_attach:
                 self._spawn(self._refuse_the_attach())
                 return
 
-            detach_other_clients = bool(packet["detach-others"])
+            detach_other_clients = bool(packet[Field.DETACH_OTHERS])
             # `attach -x`: the others leave, and the terminals they were
             # in close. Lillecarl/pymux#347.
-            hang_up_others = bool(packet.get("hang-up-others"))
-            forced = packet["color-depth"]
-            term = packet["term"]
+            hang_up_others = bool(packet.get(Field.HANG_UP_OTHERS))
+            forced = packet[Field.COLOR_DEPTH]
+            term = packet[Field.TERM]
 
             # The colour depth of the outer terminal. A flag of the
             # client forces one; otherwise the environment gives the
             # first answer and the probe can raise it later.
             self.colors.forced = ColorDepth(forced) if forced else None
             self.colors.term = term
-            self.colors.colorterm = packet.get("colorterm", "")
-            self.hostname = packet.get("hostname", "")
+            self.colors.colorterm = packet.get(Field.COLORTERM, "")
+            self.hostname = packet.get(Field.HOSTNAME, "")
             # Whether `forward-port` can reach this client at all. Only
             # the SSH client says yes. Lillecarl/pymux#436.
-            self.can_forward = bool(packet.get("forwards"))
-            self.answers_ping = bool(packet.get("pings"))
-            self.environment = packet.get("environment") or {}
-            self.ttyname = packet.get("ttyname", "")
-            self.pid = packet.get("pid") or 0
+            self.can_forward = bool(packet.get(Field.FORWARDS))
+            self.answers_ping = bool(packet.get(Field.PINGS))
+            self.environment = packet.get(Field.ENVIRONMENT) or {}
+            self.ttyname = packet.get(Field.TTYNAME, "")
+            self.pid = packet.get(Field.PID) or 0
 
             self._create_app(color_depth=self.colors.depth, term=term)
 
@@ -636,7 +636,7 @@ class ServerConnection:
             # first key arrives. `attach-session -r` is the same two
             # lines for a client that is already here.
             # Lillecarl/pymux#467.
-            if packet.get("read-only") and self.client_state is not None:
+            if packet.get(Field.READ_ONLY) and self.client_state is not None:
                 self.client_state.read_only = True
                 self.client_state.ignore_size = True
 
@@ -647,7 +647,7 @@ class ServerConnection:
             # Applied before the first frame, so nothing draws with a
             # theme the person did not choose and then change.
             # Lillecarl/pymux#223.
-            self._take_client_options(packet.get("client-options") or [])
+            self._take_client_options(packet.get(Field.CLIENT_OPTIONS) or [])
 
             # The session this client landed on takes the names that
             # follow a client: a display, an agent, a session bus.
@@ -663,11 +663,11 @@ class ServerConnection:
         # A URL that the client of this connection could not open. The
         # request went out as a status line here, so the answer goes
         # there too, and it names the URL to copy.
-        elif packet["cmd"] == Packet.OPEN_FAILED:
+        elif packet[Field.CMD] == Packet.OPEN_FAILED:
             if self.client_state is not None:
                 self.client_state.message = (
                     "Could not open %s in a browser on this machine."
-                    % (packet["data"],)
+                    % (packet[Field.DATA],)
                 )
 
         # What this client is forwarding, after it changed or after the
@@ -676,12 +676,12 @@ class ServerConnection:
         # a listener is really open. Lillecarl/pymux#436.
         # The client is still there. Any answer clears the count, so a
         # client that is merely slow keeps its place.
-        elif packet["cmd"] == Packet.PONG:
+        elif packet[Field.CMD] == Packet.PONG:
             self._unanswered = 0
 
-        elif packet["cmd"] == Packet.FORWARDS:
-            reported = packet.get("data") or []
-            said = packet.get("message")
+        elif packet[Field.CMD] == Packet.FORWARDS:
+            reported = packet.get(Field.DATA) or []
+            said = packet.get(Field.MESSAGE)
 
             if said and self.client_state is not None:
                 self.client_state.message = said
@@ -801,11 +801,11 @@ class ServerConnection:
         closing cancels that scope: the reason the client came would
         reach it only if the cancel lost the race.
         """
-        await self._write_packet({"cmd": Packet.OUT, "data": CANNOT_ATTACH})
+        await self._write_packet({Field.CMD: Packet.OUT, Field.DATA: CANNOT_ATTACH})
         # And a code to leave with. A client that attached reads this
         # too now, so a script hears the refusal rather than reading a
         # zero and calling it attached. Lillecarl/pymux#332.
-        await self._write_packet({"cmd": Packet.EXIT, "code": 1})
+        await self._write_packet({Field.CMD: Packet.EXIT, Field.CODE: 1})
 
         logger.info("A client asked to attach to a server that serves one terminal.")
         self.detach_and_close()
@@ -820,23 +820,23 @@ class ServerConnection:
         """
         from pymux.web.stream import PaneStream
 
-        target = packet.get("pane")
+        target = packet.get(Field.PANE)
         pane = find_pane(self.pymux, target) if target else None
         if pane is None:
             await self._write_packet(
-                {"cmd": Packet.ERR, "data": "can't find pane: %s\n" % (target,)}
+                {Field.CMD: Packet.ERR, Field.DATA: "can't find pane: %s\n" % (target,)}
             )
-            await self._write_packet({"cmd": Packet.EXIT, "code": 1})
+            await self._write_packet({Field.CMD: Packet.EXIT, Field.CODE: 1})
             self._close_connection()
             return
 
         async def send(frame: Dict[str, Any]) -> None:
             await self._write_packet(
-                {"cmd": Packet.STREAM_OUT, "data": json.dumps(frame)}
+                {Field.CMD: Packet.STREAM_OUT, Field.DATA: json.dumps(frame)}
             )
 
         self._stream = PaneStream(
-            self.pymux, pane, send, writable=bool(packet.get("writable"))
+            self.pymux, pane, send, writable=bool(packet.get(Field.WRITABLE))
         )
         try:
             await self._stream.run()
@@ -857,7 +857,7 @@ class ServerConnection:
             # window containing this pane, is the active one. (The CLI instance
             # will be removed right after the command handler ran, so it
             # doesn't hurt too much and makes the code easier.)
-            pane_id = packet.get("pane_id")
+            pane_id = packet.get(Field.PANE_ID)
             pane = (
                 self.pymux.panes_by_id.get(int(pane_id))
                 if pane_id is not None
@@ -887,7 +887,7 @@ class ServerConnection:
                 # who typed `pymux wait-for done` waits for it, while
                 # every other client of this server keeps running.
                 # Lillecarl/pymux#87.
-                answer = handle_command(pymux, packet["data"])
+                answer = handle_command(pymux, packet[Field.DATA])
                 if answer is not None:
                     await answer
             finally:
@@ -901,14 +901,14 @@ class ServerConnection:
                 try:
                     if output:
                         await self._write_packet(
-                            {"cmd": Packet.OUT, "data": "\n".join(output) + "\n"}
+                            {Field.CMD: Packet.OUT, Field.DATA: "\n".join(output) + "\n"}
                         )
                     if errors:
                         await self._write_packet(
-                            {"cmd": Packet.ERR, "data": "\n".join(errors) + "\n"}
+                            {Field.CMD: Packet.ERR, Field.DATA: "\n".join(errors) + "\n"}
                         )
                     await self._write_packet(
-                        {"cmd": Packet.EXIT, "code": 1 if errors else 0}
+                        {Field.CMD: Packet.EXIT, Field.CODE: 1 if errors else 0}
                     )
                 except BrokenPipeError:
                     pass
@@ -1037,7 +1037,7 @@ class ServerConnection:
         """
         Ask the client to suspend itself. (Like, when Ctrl-Z is pressed.)
         """
-        self._send_packet({"cmd": Packet.SUSPEND})
+        self._send_packet({Field.CMD: Packet.SUSPEND})
 
     @property
     def name(self) -> str:
@@ -1103,7 +1103,7 @@ class ServerConnection:
                 return
 
             self._unanswered += 1
-            await self._write_packet({"cmd": Packet.PING})
+            await self._write_packet({Field.CMD: Packet.PING})
 
     def detach_and_close(self, hang_up: bool = False) -> None:
         """
@@ -1131,7 +1131,7 @@ class ServerConnection:
             return
 
         async def hang_up_and_close() -> None:
-            await self._write_packet({"cmd": Packet.EXIT, "code": 0, "hang-up": True})
+            await self._write_packet({Field.CMD: Packet.EXIT, Field.CODE: 0, Field.HANG_UP: True})
             self._close_connection()
 
         self._spawn(hang_up_and_close())
@@ -1161,7 +1161,7 @@ class _SocketStdout:
         if self.counters is not None:
             self.counters.frame_went_out(len(written))
 
-        self.send_packet({"cmd": Packet.OUT, "data": written})
+        self.send_packet({Field.CMD: Packet.OUT, Field.DATA: written})
         self._buffer = []
 
     def isatty(self) -> bool:
@@ -1271,10 +1271,10 @@ class _ClientInput:
 
         class mode_context_manager:
             def __enter__(*a: object) -> None:
-                self.send_packet({"cmd": Packet.MODE, "data": mode})
+                self.send_packet({Field.CMD: Packet.MODE, Field.DATA: mode})
 
             def __exit__(*a: object) -> None:
-                self.send_packet({"cmd": Packet.MODE, "data": Mode.RESTORE})
+                self.send_packet({Field.CMD: Packet.MODE, Field.DATA: Mode.RESTORE})
 
         return mode_context_manager()
 

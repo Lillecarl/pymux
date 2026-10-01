@@ -6,7 +6,7 @@ from select import select
 
 from libpymux.sockets import servers_newest_first
 from prompt_toolkit.input.vt100 import raw_mode
-from libpymux.protocol import Packet
+from libpymux.protocol import Field, Packet
 
 from .terminal import TerminalClient
 
@@ -46,7 +46,7 @@ class PosixClient(TerminalClient):
             the path. `None`, the default, waits the way the attach
             always has.
         """
-        self._send_packet({"cmd": Packet.RUN_COMMAND, "data": command, "pane_id": pane_id})
+        self._send_packet({Field.CMD: Packet.RUN_COMMAND, Field.DATA: command, Field.PANE_ID: pane_id})
         if timeout is not None:
             # After the send, which asked for blocking again: the read
             # is the side that needs the patience.
@@ -75,14 +75,14 @@ class PosixClient(TerminalClient):
 
                 packet = json.loads(packet_data.decode("utf-8"))
 
-                if packet["cmd"] == Packet.OUT:
-                    sys.stdout.write(packet["data"])
+                if packet[Field.CMD] == Packet.OUT:
+                    sys.stdout.write(packet[Field.DATA])
                     sys.stdout.flush()
-                elif packet["cmd"] == Packet.ERR:
-                    sys.stderr.write(packet["data"])
+                elif packet[Field.CMD] == Packet.ERR:
+                    sys.stderr.write(packet[Field.DATA])
                     sys.stderr.flush()
-                elif packet["cmd"] == Packet.EXIT:
-                    exit_code = packet["code"]
+                elif packet[Field.CMD] == Packet.EXIT:
+                    exit_code = packet[Field.CODE]
 
         return exit_code
 
