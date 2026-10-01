@@ -124,6 +124,28 @@ async def test_buffer_chooser_opens_and_lists_buffers():
         assert "a" in rows[0][1] and "5" in rows[0][1]
 
 
+async def test_the_buffer_chooser_rolls_over_at_the_ends():
+    """
+    The point wraps for every chooser, and this one walks the same
+    `point_at`: one past the last buffer is the first, and one before
+    the first is the last.
+    """
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("set-buffer -b a hello")
+            pymux.handle_command("set-buffer -b b hey")
+            pymux.handle_command("choose-buffer")
+
+            last = len(state.layout_manager.chooser_matches()) - 1
+            assert last == 1
+
+            state.layout_manager.point_at(-1)
+            assert state.choose_window_index == last
+
+            state.layout_manager.point_at(last + 1)
+            assert state.choose_window_index == 0
+
+
 async def test_enter_from_buffer_chooser_fills_session_buffer():
     async with create_session() as (pymux, state):
         with set_app(state.app):
