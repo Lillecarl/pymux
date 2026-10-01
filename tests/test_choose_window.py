@@ -10,7 +10,8 @@ The rules this judges, Lillecarl/pymux#295 and Lillecarl/pymux#327:
   that window, so a person reads the real thing at full size. Escape
   puts the client back where it started; Enter leaves it where it is.
 - h and l walk the entries, j and k the lines they wrapped onto, and
-  the arrows go with them. The ends hold.
+  the arrows go with them. Moving past an end rolls over: one past the
+  last is the first, and one before the first is the last.
 - `/` searches: what is typed narrows the entries to the names, the
   indexes or the session that carry it, and the client follows to the
   first match. Enter takes it and Escape brings the keys back.
@@ -183,23 +184,30 @@ async def test_moving_the_point_switches_this_client():
         assert here(pymux, state) is second
 
 
-async def test_the_ends_hold():
+async def test_moving_past_an_end_rolls_over():
+    """
+    The ends do not hold. One entry past the last is the first, and
+    one before the first is the last, so prefix w cycles.
+    """
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("new-window")
             pymux.handle_command("choose-window")
 
         last = len(pymux.arrangement.windows) - 1
-        fire(state, "l")
         assert state.choose_window_index == last
+
+        fire(state, "l")
+        assert state.choose_window_index == 0
 
         fire(state, "right")
-        assert state.choose_window_index == last
+        assert state.choose_window_index == 1
 
         fire(state, "h")
-        fire(state, "h")
-        fire(state, "left")
         assert state.choose_window_index == 0
+
+        fire(state, "left")
+        assert state.choose_window_index == last
 
 
 async def test_j_and_k_move_a_line_and_keep_the_place_along_it():

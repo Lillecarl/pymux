@@ -956,9 +956,11 @@ class LayoutManager:
         """
         Put the point on one row, and switch this client to it.
 
-        The switch is the preview. It is the same call `select-window`
-        makes, so everything a window has -- its panes, its size, its
-        title bars -- is what a person sees while they choose.
+        One row past the last is the first, and one before the first
+        is the last, so walking the entries cycles. The switch is the
+        preview. It is the same call `select-window` makes, so
+        everything a window has -- its panes, its size, its title
+        bars -- is what a person sees while they choose.
         Lillecarl/pymux#327.
         """
         state = self.client_state
@@ -967,7 +969,7 @@ class LayoutManager:
             state.choose_window_index = 0
             return
 
-        state.choose_window_index = max(0, min(index, len(matches) - 1))
+        state.choose_window_index = index % len(matches)
 
         if not state.choose_window:
             return

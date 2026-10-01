@@ -326,7 +326,7 @@ class PymuxKeyBindings:
         @kb.add("k", filter=chooser_displayed & ~window_bar)
         @kb.add("c-p", filter=chooser_displayed)
         def _chooser_back(event: E) -> None:
-            "The entry before this one, staying at the first."
+            "The entry before this one, rolling round to the last."
             state = self.pymux.get_client_state()
             state.layout_manager.point_at(state.choose_window_index - 1)
 
@@ -336,7 +336,7 @@ class PymuxKeyBindings:
         @kb.add("j", filter=chooser_displayed & ~window_bar)
         @kb.add("c-n", filter=chooser_displayed)
         def _chooser_on(event: E) -> None:
-            "The entry after this one, staying at the last."
+            "The entry after this one, rolling round to the first."
             state = self.pymux.get_client_state()
             state.layout_manager.point_at(state.choose_window_index + 1)
 
