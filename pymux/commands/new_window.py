@@ -160,14 +160,20 @@ def new_window(pymux: "Pymux", args: argparse.Namespace) -> None:
 
     if dont_select:
         # Don't make the new window active.
-        arrangement.set_active_window(window)
+        if window is not None:
+            arrangement.set_active_window(window)
 
     if args.P:
+        if new_window is None:
+            raise CommandException("no current window")
+        pane = new_window.active_pane
+        if pane is None:
+            raise CommandException("no current pane")
         print_object_format(
             pymux,
             args,
             window=new_window,
-            pane=new_window.active_pane,
+            pane=pane,
             session=session,
         )
 

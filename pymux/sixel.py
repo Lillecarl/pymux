@@ -155,10 +155,11 @@ def _palette(
         if not bucket:
             continue
         weight = sum(counts[color] for color in bucket)
-        entry = tuple(
+        red, green, blue = (
             sum(color[channel] * counts[color] for color in bucket) // weight
             for channel in range(3)
         )
+        entry = (red, green, blue)
         palette.append(entry)
         for color in bucket:
             mapping[color] = len(palette) - 1

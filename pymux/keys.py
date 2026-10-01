@@ -32,7 +32,7 @@ key presses, and land in whichever pane has the focus.
 
 import logging
 import re
-from typing import Tuple
+from typing import Tuple, cast
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -192,7 +192,7 @@ MODIFIERS_WITH_NO_MEMBER = Modifier.SUPER | Modifier.HYPER | Modifier.META
 #: Written out rather than read off the `Keys` member that names them.
 #: `Keys.Enter` is an alias of `ControlM`, so its value is "c-m", and
 #: "super-c-m" is a name nobody would guess or type.
-_CONTROL_KEY_NAMES = {
+_CONTROL_KEY_NAMES: dict[int, str] = {
     KeyCode.ESCAPE: "escape",
     KeyCode.ENTER: "enter",
     KeyCode.TAB: "tab",
@@ -226,7 +226,7 @@ KEY_BY_ITS_NAME = {
 #: is `ControlH` and reads back as "c-h". Neither is a name a person
 #: would write, and neither reaches the branch of `key_named` that
 #: knows what ctrl on that key means.
-NAME_OF_A_KEY = {
+NAME_OF_A_KEY: dict[str, str] = {
     **{key: str.__str__(key) for key in Keys},
     **{KEY_BY_ITS_NAME[name]: name for name in _CONTROL_KEY_NAMES.values()},
 }
@@ -396,7 +396,12 @@ _MODE_REPLY = object()
 # a release that matches no press without trouble.
 _KEY_RELEASE = object()
 
-_KeyResult = str | Keys | tuple | object
+#: A key that a name reads back as: a character, a `Keys` member, the
+#: two keys of alt, or a `Dropped` for a combination pymux cannot name.
+_Key = str | Keys | Dropped | tuple[str | Keys, ...]
+
+#: Everything the parser may hand on, the reply sentinels included.
+_KeyResult = _Key | object
 
 # Reply of the "CSI ? u" flags query.
 _FLAGS_REPLY_RE = re.compile(r"^\x1b\[\?(\d+)u$")
@@ -426,7 +431,7 @@ def _ctrl_mapping(char: str) -> Keys | None:
     return _CTRL_KEYS.get(char)
 
 
-def _apply_modifiers(key: str | Keys, mods: int) -> _KeyResult:
+def _apply_modifiers(key: str | Keys, mods: int) -> _Key:
     """
     Apply the modifier bits to a plain key. Returns a `Dropped` when
     the combination has no prompt_toolkit representation.
@@ -505,7 +510,7 @@ def _code_and_final_of_name() -> dict:
     than written again. A character is not here; its number is its code
     point.
     """
-    named = {name: (int(code), "u") for code, name in _CONTROL_KEY_NAMES.items()}
+    named = {name: (code, "u") for code, name in _CONTROL_KEY_NAMES.items()}
     for code, key in _TILDE_KEYS.items():
         named[str.__str__(key)] = (code, "~")
     for final, key in _LETTER_KEYS.items():
@@ -569,7 +574,7 @@ def event_named(base: str, mods: int) -> KeyEvent:
     raise ValueError("No key is named %r." % (base,))
 
 
-def _with_alt(key: str | Keys, mods: int) -> _KeyResult:
+def _with_alt(key: str | Keys, mods: int) -> _Key:
     """
     Alt on a key, which prompt_toolkit spells as two key presses.
 
@@ -581,7 +586,7 @@ def _with_alt(key: str | Keys, mods: int) -> _KeyResult:
     return (Keys.Escape, key) if mods & _ALT else key
 
 
-def key_named(base: str, mods: int) -> _KeyResult:
+def key_named(base: str, mods: int) -> _Key:
     """
     The prompt_toolkit key that one key with its modifiers is.
 
@@ -888,7 +893,7 @@ class KittyVt100Parser(Vt100Parser):
             logger.exception("Asking what the terminal reports failed.")
             return False
 
-    def _get_match(self, prefix: str) -> Keys | tuple | object | None:
+    def _get_match(self, prefix: str) -> None | Keys | tuple[Keys, ...]:
         # A modifier above ctrl is read here first, but only from a
         # terminal that counts them the way the protocol does. xterm
         # has four and the fourth is meta; the protocol has eight and
@@ -903,14 +908,14 @@ class KittyVt100Parser(Vt100Parser):
             if modifier is not None and int(modifier.group(1)) > _CTRL_ALT_SHIFT:
                 named = parse_kitty_key(prefix)
                 if named is not None:
-                    return named
+                    return cast("Keys | tuple[Keys, ...]", named)
 
         # prompt_toolkit's own table otherwise: it knows richer
         # variants (like shift+arrow) for the sequences that it covers.
         result = super()._get_match(prefix)
         if result is not None:
             return result
-        return parse_kitty_key(prefix)
+        return cast("None | Keys | tuple[Keys, ...]", parse_kitty_key(prefix))
 
     def _call_handler(self, key: str | Keys | tuple, insert_text: str) -> None:
         if isinstance(key, tuple):

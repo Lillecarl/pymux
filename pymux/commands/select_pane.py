@@ -38,11 +38,11 @@ def select_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
     else:
         if args.L:
             h = focus_left
-        if args.U:
+        elif args.U:
             h = focus_up
-        if args.D:
+        elif args.D:
             h = focus_down
-        if args.R:
+        else:
             h = focus_right
 
         h(pymux)

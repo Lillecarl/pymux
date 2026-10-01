@@ -1,8 +1,9 @@
+import ctypes
 import json
 import os
 import socket
 import sys
-from ctypes import byref, windll
+from ctypes import byref
 from ctypes.wintypes import DWORD
 
 import anyio
@@ -17,6 +18,10 @@ from ..config import client_options_in, find_config
 from ..log import logger
 from ..pipes.win32_client import PipeClient
 from .base import Client
+
+#: The loaded Win32 library. `ctypes` exposes it on Windows only, so it
+#: is reached by name rather than imported.
+windll = getattr(ctypes, "windll")
 
 __all__ = [
     "WindowsClient",

@@ -46,7 +46,7 @@ def _blend(a: str, b: str, towards_b: float) -> str:
 
 
 def _to_rgb(a: str) -> tuple[int, int, int]:
-    return tuple(int(a[i : i + 2], 16) for i in (1, 3, 5))
+    return (int(a[1:3], 16), int(a[3:5], 16), int(a[5:7], 16))
 
 
 def _from_rgb(rgb) -> str:

@@ -123,7 +123,7 @@ MODIFIERS_A_PERSON_WRITES: Dict[str, Modifier] = {
     **{
         modifier.name.lower(): modifier
         for modifier in Modifier
-        if not modifier & _LOCKS
+        if modifier.name is not None and not modifier & _LOCKS
     },
     "control": Modifier.CTRL,
     "option": Modifier.ALT,
@@ -496,7 +496,10 @@ def _in_reading_order(names) -> list:
     "The names sorted the way a person reads them."
 
     def parts(name: str):
-        head, digits = _NUMBER_AT_THE_END.match(name).groups()
+        found = _NUMBER_AT_THE_END.match(name)
+        if found is None:
+            return name, 0
+        head, digits = found.groups()
         return head, int(digits) if digits else 0
 
     return sorted(names, key=parts)

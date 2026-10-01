@@ -31,6 +31,7 @@ So the rest is derived, by three rules:
 """
 
 from functools import lru_cache
+from typing import overload
 
 from prompt_toolkit.styles import BaseStyle
 from prompt_toolkit.styles.named_colors import NAMED_COLORS
@@ -110,6 +111,13 @@ def _roles(style_cls) -> dict[str, str]:
     Everything the style did not say is a blend of what it did.
     """
     from pygments.token import Token
+
+    @overload
+    def color(
+        token, fallback: None = None, accept_bg: bool = False
+    ) -> str | None: ...
+    @overload
+    def color(token, fallback: str, accept_bg: bool = False) -> str: ...
 
     def color(token, fallback=None, accept_bg=False):
         """

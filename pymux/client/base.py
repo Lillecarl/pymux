@@ -1,6 +1,7 @@
 import os
 import signal
 from abc import ABC
+from collections.abc import Awaitable
 
 
 __all__ = [
@@ -49,9 +50,15 @@ class Client(ABC):
         """
         return 0
 
-    def attach(self, detach_other_clients=False, color_depth=None):
+    def attach(
+        self, detach_other_clients=False, color_depth=None
+    ) -> Awaitable[None] | None:
         """
         Attach client user interface.
+
+        A client that shares the server's event loop returns a
+        coroutine to await; a client on its own event loop blocks until
+        the attachment ends and returns nothing.
         """
 
     def hang_up_the_parent(self) -> None:

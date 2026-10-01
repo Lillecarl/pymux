@@ -122,6 +122,7 @@ def _socket_report(socket_name: str | None) -> dict:
     # diagnose that never reaches a server pays nothing for it.
     # Lillecarl/pymux#392.
     from pymux.client import create_client
+    from pymux.client.posix import PosixClient
 
     try:
         client = create_client(socket_name)
@@ -132,10 +133,14 @@ def _socket_report(socket_name: str | None) -> dict:
     report["connectable"] = True
     # A socket that answers the connect and nothing else -- some other
     # daemon on a mistyped path -- must not hold the report hostage:
-    # two seconds, and then it is called mute.
-    answer = _io_capture(
-        lambda: client.run_command("list-sessions", timeout=2.0)
-    )
+    # two seconds, and then it is called mute. Only the unix-socket
+    # client takes a timeout; the others answer or fail on their own.
+    if isinstance(client, PosixClient):
+        answer = _io_capture(
+            lambda: client.run_command("list-sessions", timeout=2.0)
+        )
+    else:
+        answer = _io_capture(lambda: client.run_command("list-sessions"))
     report["sessions"] = answer.strip() or None
     report["error"] = "" if report["sessions"] else "connected, but no answer came"
     return report

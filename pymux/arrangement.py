@@ -499,7 +499,7 @@ class Window:
         return self._active_pane
 
     @active_pane.setter
-    def active_pane(self, value: Pane) -> None:
+    def active_pane(self, value: Pane | None) -> None:
         # Remember previous active pane.
         if self._active_pane:
             self._prev_active_pane = ref(self._active_pane)
@@ -512,11 +512,14 @@ class Window:
         """
         The previous active :class:`.Pane` or `None` if unknown.
         """
-        p = self._prev_active_pane and self._prev_active_pane()
+        if self._prev_active_pane is None:
+            return None
+
+        p = self._prev_active_pane()
 
         # Only return when this pane actually still exists in the current
         # window.
-        if p and p in self.panes:
+        if p is not None and p in self.panes:
             return p
         return None
 
@@ -547,36 +550,38 @@ class Window:
         is what a niri column holds. Lillecarl/pymux#198.
         """
         split_cls = VSplit if vsplit else HSplit
+        active = self.active_pane
 
-        if self.active_pane is None:
+        if active is None:
             self.root.append(pane)
         elif self._strip and vsplit:
-            column = self._column_of(self.active_pane)
+            column = self._column_of(active)
             self.root.insert(self.root.index(column) + 1, pane)
             self.active_pane = pane
             self.zoom = False
             return
         else:
-            parent = self._get_parent(self.active_pane)
+            parent = self._get_parent(active)
+            assert parent is not None
             same_direction = isinstance(parent, split_cls)
 
-            index = parent.index(self.active_pane)
+            index = parent.index(active)
 
             if same_direction:
                 parent.insert(index + 1, pane)
             else:
-                new_split = split_cls([self.active_pane, pane])
+                new_split = split_cls([active, pane])
                 parent[index] = new_split
 
                 # Give the newly created split the same weight as the original
                 # pane that was at this position.
-                parent.weights[new_split] = parent.weights[self.active_pane]
+                parent.weights[new_split] = parent.weights[active]
 
                 # And, in a strip, the width of the column it became.
                 # A pane that is stacked into a column should not make
                 # that column change width under a person.
                 if self._strip and parent is self.root:
-                    self.column_widths[new_split] = self.column_width(self.active_pane)
+                    self.column_widths[new_split] = self.column_width(active)
 
         self.active_pane = pane
         self.zoom = False
@@ -608,17 +613,20 @@ class Window:
         first, and a pane that is only changing column keeps it.
         """
         parent = self._get_parent(item)
+        assert parent is not None
         parent.remove(item)
 
         # An empty split is not a column of nothing: it is gone.
         while len(parent) == 0 and parent is not self.root:
             above = self._get_parent(parent)
+            assert above is not None
             above.remove(parent)
             parent = above
 
         # A split of one is that one.
         while len(parent) == 1 and parent is not self.root:
             above = self._get_parent(parent)
+            assert above is not None
             above.weights[parent[0]] = above.weights[parent]
 
             if parent in self.column_widths:
@@ -972,9 +980,9 @@ class Arrangement:
         self._active_window_for_cli: "WeakKeyDictionary[Application, Window]" = (
             WeakKeyDictionary()
         )
-        self._prev_active_window_for_cli: "WeakKeyDictionary[Application, Window]" = (
-            WeakKeyDictionary()
-        )
+        self._prev_active_window_for_cli: WeakKeyDictionary[
+            Application, Window | None
+        ] = WeakKeyDictionary()
 
         # The active window of the last CLI. Used as default when a new session
         # is attached.
@@ -984,10 +992,10 @@ class Arrangement:
         """
         When this changes, the layout needs to be rebuild.
         """
-        if not self.windows:
+        w = self.get_active_window()
+        if w is None:
             return "<no-windows>"
 
-        w = self.get_active_window()
         return w.invalidation_hash()
 
     def get_active_window(self) -> Window | None:
@@ -1301,6 +1309,7 @@ class Arrangement:
 
     def focus_previous_window(self) -> None:
         w = self.get_active_window()
+        assert w is not None
 
         self.set_active_window(
             self.windows[(self.windows.index(w) - 1) % len(self.windows)]
@@ -1308,6 +1317,7 @@ class Arrangement:
 
     def focus_next_window(self) -> None:
         w = self.get_active_window()
+        assert w is not None
 
         self.set_active_window(
             self.windows[(self.windows.index(w) + 1) % len(self.windows)]
@@ -1321,16 +1331,18 @@ class Arrangement:
         :param set_active: When True, focus the new window.
         """
         w = self.get_active_window()
+        assert w is not None
 
         if len(w.panes) > 1:
             pane = w.active_pane
             if pane is not None:
-                self.get_active_window().remove_pane(pane)
+                w.remove_pane(pane)
                 self.create_window(pane, set_active=set_active)
 
     def rotate_window(self, count: int = 1) -> None:
         "Rotate the panes in the active window."
         w = self.get_active_window()
+        assert w is not None
         w.rotate(count=count)
 
     @property

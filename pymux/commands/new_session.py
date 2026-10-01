@@ -108,11 +108,16 @@ def new_session(pymux: "Pymux", args: argparse.Namespace) -> None:
 
     if args.P:
         window = session.arrangement.get_active_window()
+        if window is None:
+            raise CommandException("no current window")
+        pane = window.active_pane
+        if pane is None:
+            raise CommandException("no current pane")
         print_object_format(
             pymux,
             args,
             window=window,
-            pane=window.active_pane,
+            pane=pane,
             session=session,
         )
 

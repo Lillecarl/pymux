@@ -25,7 +25,7 @@ def bind_key(pymux: "Pymux", args: argparse.Namespace) -> None:
     arguments = list(args.arguments)
     if arguments and arguments[0] == "--":
         arguments = arguments[1:]
-    command = arguments[0] if arguments else None
+    command = arguments[0] if arguments else ""
     bound_arguments = arguments[1:]
 
     try:

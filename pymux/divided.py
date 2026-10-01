@@ -23,6 +23,8 @@ a client smaller than the plane has one that does, and `look_at` says
 by which rule.
 """
 
+from typing import Callable
+
 from prompt_toolkit.data_structures import Point, Size
 
 from . import arrangement
@@ -51,7 +53,9 @@ class Divided:
     function.
     """
 
-    def __init__(self, window: "arrangement.Window", gaps=Gaps()) -> None:
+    def __init__(
+        self, window: "arrangement.Window", gaps: Gaps | Callable[[], Gaps] = Gaps()
+    ) -> None:
         self.window = window
         self._gaps = gaps
 
@@ -71,7 +75,8 @@ class Divided:
         is drawn under a pane and one when it is not, and an option
         turns that on while a layout that is already standing draws.
         """
-        return self._gaps() if callable(self._gaps) else self._gaps
+        gaps = self._gaps
+        return gaps() if callable(gaps) else gaps
 
     def __repr__(self) -> str:
         return "Divided(%r)" % (self.window,)

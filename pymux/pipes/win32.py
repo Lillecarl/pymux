@@ -3,7 +3,8 @@ Common Win32 pipe operations.
 """
 
 import asyncio
-from ctypes import byref, create_string_buffer, windll
+import ctypes
+from ctypes import byref, create_string_buffer
 from ctypes.wintypes import BOOL, DWORD
 
 import anyio
@@ -11,6 +12,10 @@ import anyio
 from ptyhost.backends.win32_pipes import OVERLAPPED
 
 from .base import BrokenPipeError
+
+#: The loaded Win32 library. `ctypes` exposes it on Windows only, so it
+#: is reached by name rather than imported.
+windll = getattr(ctypes, "windll")
 
 __all__ = [
     "read_message_from_pipe",
@@ -201,10 +206,12 @@ async def wait_for_event(event):
     """
     ready = anyio.Event()
     loop = asyncio.get_running_loop()
+    add_win32_handle = getattr(loop, "add_win32_handle")
+    remove_win32_handle = getattr(loop, "remove_win32_handle")
 
     def handle_is_ready() -> None:
-        loop.remove_win32_handle(event)
+        remove_win32_handle(event)
         ready.set()
 
-    loop.add_win32_handle(event, handle_is_ready)
+    add_win32_handle(event, handle_is_ready)
     await ready.wait()

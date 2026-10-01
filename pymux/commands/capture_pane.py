@@ -118,6 +118,9 @@ def capture_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
     screen = pane.screen
     page = screen.page
 
+    if page is None:
+        raise CommandException("capture-pane: the screen has no page")
+
     if args.H and args.J:
         raise CommandException(
             "capture-pane: -J joins rows into one line, which -H cannot draw"

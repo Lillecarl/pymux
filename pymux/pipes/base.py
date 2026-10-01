@@ -14,21 +14,21 @@ class PipeConnection(ABC):
     """
 
     @abstractmethod
-    def read(self):
+    async def read(self) -> bytes | str:
         """
-        (coroutine)
-        Read a single message from the pipe. (Return as text.)
+        Read a single message from the pipe.
 
-        This can can BrokenPipeError.
+        A unix socket and an in-process pipe give bytes; a Win32 pipe
+        hands back the text its reader decoded. This can raise
+        BrokenPipeError.
         """
 
     @abstractmethod
-    def write(self, message):
+    async def write(self, message: str) -> None:
         """
-        (coroutine)
         Write a single message into the pipe.
 
-        This can can BrokenPipeError.
+        This can raise BrokenPipeError.
         """
 
     @abstractmethod

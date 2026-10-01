@@ -78,7 +78,7 @@ class PaneView:
 
         #: The declarations this viewer has been given, and the number
         #: each one went out as.
-        self._styles: Dict[Tuple[str, str], int] = {}
+        self._styles: Dict[Tuple[str, str, str], int] = {}
         self._next_style = PLAIN_STYLE + 1
 
         #: The screen-wide answers a row does not carry. Each one changes

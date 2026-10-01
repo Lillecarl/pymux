@@ -124,9 +124,13 @@ def format_pymux_string(
 
     if window is None:
         window = arrangement.get_active_window()
+    if window is None:
+        raise ValueError("No active window to format for.")
 
     if pane is None:
         pane = window.active_pane
+    if pane is None:
+        raise ValueError("No active pane to format for.")
 
     return format_in_context(
         FormatContext(pymux, session, window, pane, client), string, language

@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command
+from pymux.commands import CommandException, add_command
 from pymux.commands.common import find_window, the_window
 from pymux.commands.common import add_format_arguments, print_object_format
 
@@ -32,7 +32,10 @@ def split_window(pymux: "Pymux", args: argparse.Namespace) -> None:
         window = the_window(pymux, None)
         if target_window is not None:
             window = target_window
-        print_object_format(pymux, args, window=window, pane=window.active_pane)
+        pane = window.active_pane
+        if pane is None:
+            raise CommandException("no current pane")
+        print_object_format(pymux, args, window=window, pane=pane)
 
 
 def add_arguments(parser):

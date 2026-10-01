@@ -532,7 +532,7 @@ def _counting_forwarder() -> type:
             self._table._began(self._where, self)
             super().connection_made(transport)
 
-        def connection_lost(self, error) -> None:
+        def connection_lost(self, exc) -> None:
             # **asyncssh reports this twice when the far side refuses
             # the channel**: `SSHLocalForwarder._forward` calls it by
             # hand on `ChannelOpenError`, and asyncio calls it again
@@ -540,7 +540,7 @@ def _counting_forwarder() -> type:
             # ended rather than that one did makes the second report
             # the same answer as the first.
             self._table._ended(self._where, self)
-            super().connection_lost(error)
+            super().connection_lost(exc)
 
         def data_received(self, data, datatype=None) -> None:
             # **One direction only: bytes from the browser.** The peer

@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command
+from pymux.commands import CommandException, add_command
 
 
 def copy_mode(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -15,6 +15,8 @@ def copy_mode(pymux: "Pymux", args: argparse.Namespace) -> None:
     # TODO: handle '-u' (go in copy mode and page-up directly).
 
     pane = pymux.arrangement.get_active_pane()
+    if pane is None:
+        raise CommandException("no current pane")
     pane.enter_copy_mode()
 
     # Copy mode is a mode of its own, and its keys are the pane

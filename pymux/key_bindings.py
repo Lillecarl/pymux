@@ -402,7 +402,9 @@ class PymuxKeyBindings:
         @kb.add("enter", filter=menu_displayed, eager=True)
         def _menu_enter(event: E) -> None:
             "The entry whose key is Enter, when there is one."
-            self.pymux.get_client_state().layout_manager.menu_key_pressed(event.key)
+            self.pymux.get_client_state().layout_manager.menu_key_pressed(
+                event.key_sequence[-1].key
+            )
 
         @kb.add("escape", filter=menu_displayed, eager=True)
         @kb.add("c-c", filter=menu_displayed, eager=True)
@@ -414,7 +416,7 @@ class PymuxKeyBindings:
         def _menu_key(event: E) -> None:
             "The entry whose key this is, or nothing: the menu stays."
             self.pymux.get_client_state().layout_manager.menu_key_pressed(
-                event.key, event.data
+                event.key_sequence[-1].key, event.data
             )
 
         @kb.add(Keys.KeyRelease, eager=True)
@@ -469,12 +471,14 @@ class PymuxKeyBindings:
         def clock_displayed() -> bool:
             " "
             pane = pymux.arrangement.get_active_pane()
-            return pane.clock_mode
+            return pane is not None and pane.clock_mode
 
         @kb.add(Keys.Any, eager=True, filter=clock_displayed)
         def _hide_clock(event: E) -> None:
             "When the clock is displayed. Any key press should hide it."
             pane = pymux.arrangement.get_active_pane()
+            if pane is None:
+                return
             pane.clock_mode = False
 
         return kb

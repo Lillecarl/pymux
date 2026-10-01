@@ -16,7 +16,9 @@ import anyio
 
 from prompt_toolkit.application.current import create_app_session, set_app
 from prompt_toolkit.data_structures import Size
+from prompt_toolkit.input import PipeInput
 from prompt_toolkit.input.defaults import create_pipe_input
+from prompt_toolkit.input.vt100 import Vt100Input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
@@ -34,6 +36,7 @@ from .pipes import BrokenPipeError
 
 if TYPE_CHECKING:
     from pymux.main import ClientState, Pymux
+    from pymux.web.stream import PaneStream
 
 __all__ = ["ServerConnection"]
 
@@ -871,15 +874,21 @@ class ServerConnection:
             session = self.pymux.session_holding(pane) if pane is not None else None
 
             self._create_app(start=False, session=session)
-            if pane is not None and session is not None:
-                with set_app(self.client_state.app):
+            client_state = self.client_state
+            if client_state is not None and pane is not None and session is not None:
+                with set_app(client_state.app):
                     session.arrangement.set_active_window_from_pane_id(pane.pane_id)
 
         pymux = self.pymux
         pymux.command_output = []
         pymux.command_error = []
 
-        with set_app(self.client_state.app):
+        client_state = self.client_state
+        if client_state is None:
+            self._close_connection()
+            return
+
+        with set_app(client_state.app):
             try:
                 # **The client waits and the server does not.** A
                 # command that has to wait answers with a coroutine,
@@ -945,7 +954,7 @@ class ServerConnection:
         :param session: The session this client is on. Without one it is
             the session a person looked at last.
         """
-        stdout: TextIO = (
+        stdout = (
             _SocketStdout(self._send_packet, self.pymux.counters)
             if start
             else _NoStdout()
@@ -1209,17 +1218,23 @@ class _ClientInput:
         # this object. `create_pipe_input()` returns a generator context
         # manager; when it's garbage collected, the pipe is closed.
         self._input_cm = create_pipe_input()
-        self._input = self._input_cm.__enter__()
+        self._input: PipeInput | None = self._input_cm.__enter__()
 
         # Replace the parser of the pipe input with one that also
         # understands the key encoding of the kitty keyboard protocol,
         # and routes terminal replies (keyboard flags query, device
         # attributes) to the given callback.
-        self._input.vt100_parser = KittyVt100Parser(
-            lambda key_press: self._input._buffer.append(key_press),
+        vt100_input = cast(Vt100Input, self._input)
+        vt100_input.vt100_parser = KittyVt100Parser(
+            lambda key_press: vt100_input._buffer.append(key_press),
             reply_callback=kitty_reply_callback,
             speaks_protocol=speaks_protocol,
         )
+
+    def send_text(self, data: str) -> None:
+        "Feed a text string to the input pipe."
+        if self._input is not None:
+            self._input.send_text(data)
 
     def close(self) -> None:
         "Close the input pipe. (Idempotent.)"

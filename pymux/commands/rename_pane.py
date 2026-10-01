@@ -5,14 +5,17 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command
+from pymux.commands import CommandException, add_command
 
 
 def rename_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
     Rename the active pane.
     """
-    pymux.arrangement.get_active_pane().chosen_name = args.name
+    pane = pymux.arrangement.get_active_pane()
+    if pane is None:
+        raise CommandException("no current pane")
+    pane.chosen_name = args.name
 
 
 def register(subparsers):

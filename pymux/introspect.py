@@ -293,7 +293,10 @@ def start_watching(pymux: "Pymux", seconds: float = HOW_LONG_TO_WATCH) -> Path:
 
         logger.info("Watched this server for %.1fs, and wrote %s", seconds, written)
 
-    pymux.loop.call_later(seconds, stop)
+    loop = pymux.loop
+    if loop is None:
+        raise RuntimeError("This server has no event loop to watch on.")
+    loop.call_later(seconds, stop)
     return written
 
 

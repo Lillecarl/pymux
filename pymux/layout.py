@@ -7,7 +7,7 @@ import argparse
 import datetime
 import weakref
 from functools import partial
-from typing import TYPE_CHECKING, Callable, Dict, List, Tuple
+from typing import TYPE_CHECKING, Callable, Dict, List, Tuple, cast
 
 from prompt_toolkit.application import Application, get_app
 from prompt_toolkit.enums import EditingMode
@@ -22,6 +22,7 @@ from prompt_toolkit.filters import (
 )
 from prompt_toolkit.formatted_text import HTML, FormattedText, StyleAndTextTuples
 from prompt_toolkit.layout.containers import (
+    AnyContainer,
     ConditionalContainer,
     Container,
     DynamicContainer,
@@ -483,6 +484,9 @@ class PaneNumber(Container):  # XXX: make FormattedTextControl
 
     def _get_index(self):
         window = self.pymux.arrangement.get_active_window()
+        if window is None:
+            return 0
+
         try:
             return window.get_pane_index(self.arrangement_pane)
         except ValueError:
@@ -708,7 +712,7 @@ class LayoutManager:
         smaller than the plane shows part of it and its view scrolls,
         which is what `window-size largest` is for.
         """
-        plane = self.pymux.plane_size()
+        plane = cast(Size, self.pymux.plane_size())
         mine = self.room_this_client_has
 
         return Size(
@@ -770,7 +774,7 @@ class LayoutManager:
         """
         self.forget_plan()
 
-    def _popup_box(self) -> Container:
+    def _popup_box(self) -> AnyContainer:
         "The pop-up, or nothing while nobody has asked for one."
         return self.popup_dialog or self._nothing_to_draw
 
@@ -814,6 +818,8 @@ class LayoutManager:
         Display a pop-up dialog.
         """
         self._build_popup()
+        assert self.popup_dialog is not None
+        assert self._popup_textarea is not None
         self.popup_dialog.title = title
         self._popup_textarea.text = content
         self.client_state.display_popup = True
@@ -865,6 +871,7 @@ class LayoutManager:
             windows.index(active) if active in windows else 0
         )
         self._window_bar()
+        assert self._bar_rows is not None
         get_app().layout.focus(self._bar_rows)
 
     def _bar_width(self) -> int:
@@ -1021,6 +1028,7 @@ class LayoutManager:
         self.client_state.choose_window_filter.reset()
         self.client_state.choose_window_index = 0
         self._chooser_box()
+        assert self._chooser_rows is not None
         get_app().layout.focus(self._chooser_rows)
 
     def display_options_chooser(self) -> None:
@@ -1040,6 +1048,7 @@ class LayoutManager:
         self.client_state.choose_window_filter.reset()
         self.client_state.choose_window_index = 0
         self._chooser_box()
+        assert self._chooser_rows is not None
         get_app().layout.focus(self._chooser_rows)
 
     def display_menu(self, entries: list, title: str = "") -> None:
@@ -1055,6 +1064,7 @@ class LayoutManager:
         self.client_state.menu_entries = entries
         self.client_state.menu_title = title
         self._menu_box()
+        assert self._menu_rows is not None
         get_app().layout.focus(self._menu_rows)
 
     def close_menu(self) -> None:
@@ -2504,7 +2514,7 @@ class DynamicBody(Container):
         return [body]
 
 
-def _create_panes(pymux: "Pymux", window, view: View) -> Container:
+def _create_panes(pymux: "Pymux", window, view: View) -> PlanContainer:
     """
     The container that draws every pane of a window.
 
@@ -2662,7 +2672,7 @@ def room_for_panes(pymux: "Pymux", window) -> Size:
     plan of its own and resizing everybody's programs.
     Lillecarl/pymux#471.
     """
-    size = pymux.plane_size(window)
+    size = cast(Size, pymux.plane_size(window))
 
     rows = size.rows
     if pymux.any_watcher_shows_pane_status(window):
@@ -2731,7 +2741,7 @@ def size_the_panes_of(pymux: "Pymux", window) -> None:
     plan = plan_of(pymux, window)
     for slot, rect in plan.rects.items():
         for pane in slot.panes:
-            _tell_pane_its_size(pane, rect)
+            _tell_pane_its_size(cast(arrangement.Pane, pane), rect)
 
 
 def pane_is_cut(pymux: "Pymux", pane: arrangement.Pane) -> bool:
@@ -2914,7 +2924,10 @@ def pane_beside(
         return None
 
     beside = plan.neighbour(slot, side)
-    return None if beside is None else beside.shown
+    if beside is None:
+        return None
+
+    return cast(arrangement.Pane, beside.shown)
 
 
 def _short_name_of(pymux: "Pymux", pane: arrangement.Pane) -> str:
@@ -3010,9 +3023,12 @@ def _create_container_for_process(
         return result
 
     def get_pane_index() -> str:
+        window = pymux.arrangement.get_active_window()
+        if window is None:
+            return "%3s " % "/"
+
         try:
-            w = pymux.arrangement.get_active_window()
-            index = w.get_pane_index(arrangement_pane)
+            index = window.get_pane_index(arrangement_pane)
         except ValueError:
             index = "/"
 
@@ -3090,7 +3106,9 @@ def _create_container_for_process(
     def on_click() -> None:
         "Click handler for the clock. When clicked, select this pane."
         arrangement_pane.clock_mode = False
-        pymux.arrangement.get_active_window().active_pane = arrangement_pane
+        window = pymux.arrangement.get_active_window()
+        if window is not None:
+            window.active_pane = arrangement_pane
         pymux.invalidate(Woke.CLICK_LEFT_THE_CLOCK)
 
     return HighlightBordersIfActive(
@@ -3392,10 +3410,14 @@ def _move_focus(pymux: "Pymux", side: Side) -> None:
     Lillecarl/pymux#217.
     """
     window = pymux.arrangement.get_active_window()
-
-    if window.active_pane is None:
+    if window is None:
         return
 
-    beside = pane_beside(pymux, window, window.active_pane, side)
+    active = window.active_pane
+
+    if active is None:
+        return
+
+    beside = pane_beside(pymux, window, active, side)
     if beside is not None:
         window.active_pane = beside

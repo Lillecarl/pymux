@@ -49,6 +49,8 @@ something was out there and nothing about what; the title bar names it
 instead. Lillecarl/pymux#207.
 """
 
+from typing import Callable
+
 from prompt_toolkit.data_structures import Point, Size
 
 from . import arrangement
@@ -78,7 +80,9 @@ class Strip:
     against what was measured.
     """
 
-    def __init__(self, window: "arrangement.Window", gaps=Gaps()) -> None:
+    def __init__(
+        self, window: "arrangement.Window", gaps: Gaps | Callable[[], Gaps] = Gaps()
+    ) -> None:
         self.window = window
         self._gaps = gaps
 
@@ -92,7 +96,8 @@ class Strip:
         one when it is not, and an option turns that on while a layout
         that was already built is still standing.
         """
-        return self._gaps() if callable(self._gaps) else self._gaps
+        gaps = self._gaps
+        return gaps() if callable(gaps) else gaps
 
     def __repr__(self) -> str:
         return "Strip(%r)" % (self.window,)

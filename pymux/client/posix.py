@@ -31,7 +31,7 @@ class PosixClient(TerminalClient):
         # Connect to socket.
         self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.socket.connect(socket_name)
-        self.socket.setblocking(1)
+        self.socket.setblocking(True)
 
     def run_command(self, command, pane_id=None, timeout=None) -> int:
         """
@@ -183,7 +183,7 @@ class PosixClient(TerminalClient):
 
         # Be sure that our socket is blocking, otherwise, the send() call could
         # raise `BlockingIOError` if the buffer is full.
-        self.socket.setblocking(1)
+        self.socket.setblocking(True)
 
         try:
             self.socket.send(data + b"\0")

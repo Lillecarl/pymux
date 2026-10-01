@@ -1,4 +1,5 @@
-from ctypes import byref, windll
+import ctypes
+from ctypes import byref
 from ctypes.wintypes import DWORD
 
 import anyio
@@ -13,6 +14,10 @@ from .win32 import (
     wait_for_event,
     write_message_to_pipe,
 )
+
+#: The loaded Win32 library. `ctypes` exposes it on Windows only, so it
+#: is reached by name rather than imported.
+windll = getattr(ctypes, "windll")
 
 __all__ = [
     "bind_and_listen_on_win32_socket",
@@ -168,6 +173,7 @@ class PipeInstance:
                 logger.info("Connected in pipe instance")
 
                 conn = Win32PipeConnection(self)
+                assert self.pipe_connection_cb is not None
                 self.pipe_connection_cb(conn)
 
                 await conn.done.wait()

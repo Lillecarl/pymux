@@ -12,6 +12,8 @@ from pymux.commands import add_command
 def clear_history(pymux: "Pymux", args: argparse.Namespace) -> None:
     "Clear the scrollback of the pane."
     pane = pymux.arrangement.get_active_pane()
+    if pane is None:
+        raise CommandException("no current pane")
 
     if pane.is_copying:
         raise CommandException("Not available in copy mode")

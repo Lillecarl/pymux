@@ -150,8 +150,9 @@ def find_pane(pymux: "Pymux", target: str | None) -> Optional["Pane"]:
             if target.startswith("@")
             else window_in(session, target)
         )
-        if window is None:
-            return None
+
+    if window is None:
+        return None
 
     if pane_part is None or pane_part == "":
         return window.active_pane

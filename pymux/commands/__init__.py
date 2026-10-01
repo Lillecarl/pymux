@@ -12,7 +12,7 @@ import argparse
 import inspect
 import shlex
 from importlib import import_module
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, NoReturn
 
 from pymux.commands.aliases import ALIASES
 from pymux.enums import Woke
@@ -93,7 +93,7 @@ def not_past_this_client(pymux: "Pymux", reaches_another: bool) -> None:
 class CommandParser(argparse.ArgumentParser):
     "An argparse parser that raises instead of exiting."
 
-    def error(self, message: str) -> None:
+    def error(self, message: str) -> NoReturn:
         raise BadLine(message)
 
 

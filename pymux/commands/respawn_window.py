@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command
+from pymux.commands import CommandException, add_command
 from pymux.commands.common import the_window
 from pymux.commands.respawn_pane import replace_pane_program
 
@@ -22,7 +22,11 @@ def respawn_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
     window = the_window(pymux, args.target_window)
 
-    replace_pane_program(pymux, window.active_pane, args)
+    pane = window.active_pane
+    if pane is None:
+        raise CommandException("no current pane")
+
+    replace_pane_program(pymux, pane, args)
 
 
 def register(subparsers):

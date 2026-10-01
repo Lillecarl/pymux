@@ -157,8 +157,11 @@ class SessionScreen:
         # viewer knows how many cells its element holds.
         if message.get("type") == SIZE:
             rows, columns = message.get("rows"), message.get("columns")
-            if not all(
-                isinstance(one, int) and 0 < one <= LARGEST for one in (rows, columns)
+            if (
+                not isinstance(rows, int)
+                or not isinstance(columns, int)
+                or not 0 < rows <= LARGEST
+                or not 0 < columns <= LARGEST
             ):
                 return "a size message needs rows and columns from 1 to %d" % LARGEST
             self.resize(rows, columns)

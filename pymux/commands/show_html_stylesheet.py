@@ -1,11 +1,12 @@
 import argparse
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
 from pyte.html import CSS, theme_css
+from pyte.osc import ColorOverrides
 
 from pymux.commands import add_command
 from pymux.commands.common import the_pane
@@ -35,9 +36,11 @@ def show_html_stylesheet(pymux: "Pymux", args: argparse.Namespace) -> None:
 
     pane = the_pane(pymux, args.target_pane)
 
-    show_listing(
-        pymux, "show-html-stylesheet", CSS + "\n" + theme_css(pane.screen.colors)
-    )
+    # The screen belongs to the installed pyte that ptterm was built
+    # against, and `theme_css` to the one this package imports; pyrefly
+    # sees two classes with the same name where there is one class.
+    colors = cast(ColorOverrides, pane.screen.colors)
+    show_listing(pymux, "show-html-stylesheet", CSS + "\n" + theme_css(colors))
 
 
 def register(subparsers):

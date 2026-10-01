@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command
+from pymux.commands import CommandException, add_command
 
 
 def paste_buffer(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -17,6 +17,8 @@ def paste_buffer(pymux: "Pymux", args: argparse.Namespace) -> None:
     reads it there and not from the application of one client.
     """
     pane = pymux.arrangement.get_active_pane()
+    if pane is None:
+        raise CommandException("no current pane")
     pane.process.write_input(pane.screen.wrap_paste(pymux.clipboard.get_data().text))
 
 

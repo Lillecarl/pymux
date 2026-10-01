@@ -544,7 +544,7 @@ class ClientState:
         "Drop every question, answered by nobody."
         self.confirmations.clear()
 
-    def _handle_command(self, buffer):
+    def _handle_command(self, buffer) -> bool:
         "When text is accepted in the command line."
         text = buffer.text
 
@@ -554,17 +554,21 @@ class ClientState:
 
         # Execute command.
         self.pymux.handle_command(text)
+        return False
 
-    def _handle_prompt_command(self, buffer):
+    def _handle_prompt_command(self, buffer) -> bool:
         "When a command-prompt command is accepted."
         text = buffer.text
         prompt_command = self.prompt_command
 
         # Leave command mode and handle command.
         self.pymux.leave_command_mode(append_to_history=True)
+        if prompt_command is None:
+            return False
         self.pymux.handle_command(prompt_command.replace("%%", text))
+        return False
 
-    def _accept_chooser(self, buffer):
+    def _accept_chooser(self, buffer) -> bool:
         "When the search of a chooser is accepted: it takes the row."
         manager = self.layout_manager
         if self.choose_options:
@@ -573,6 +577,7 @@ class ClientState:
             manager.choose_pointed_buffer()
         else:
             manager.choose_pointed_window()
+        return False
 
     def _create_app(self):
         """
@@ -701,7 +706,9 @@ class ClientState:
     def _sync_focus(self):
         # Pop-up displayed?
         if self.display_popup:
-            self.app.layout.focus(self.layout_manager.popup_dialog)
+            dialog = self.layout_manager.popup_dialog
+            if dialog is not None:
+                self.app.layout.focus(dialog)
             return
 
         # Confirm.
@@ -745,7 +752,7 @@ class ClientState:
 #: The hook a wake runs, when it has tmux's name for one. A command
 #: that ran wakes as `Woke.COMMAND_RAN`, and every command has an
 #: `after-` hook in tmux, so its name is read back off the reason.
-_HOOKS_BY_WAKE = {
+_HOOKS_BY_WAKE: dict[str, str] = {
     Woke.PANE_WAS_SPLIT_OFF: "after-split-window",
     Woke.WINDOW_OPENED: "after-new-window",
     Woke.PANE_BROKE_OUT: "after-break-pane",
@@ -1728,7 +1735,7 @@ class Pymux:
         else:
             return "Pymux"
 
-    def plane_size(self, window=None):
+    def plane_size(self, window: Window | None = None) -> Size:
         """
         How big the plane of that window is, in cells.
 
@@ -1761,6 +1768,8 @@ class Pymux:
         """
         if window is None:
             window = self.arrangement.get_active_window()
+        if window is None:
+            return self.size_with_no_client(None)
 
         if window.window_size is WindowSize.MANUAL and window.manual_size is not None:
             return window.manual_size
@@ -2106,7 +2115,7 @@ class Pymux:
             session = self.current_session
         self.close_overlay(session)
 
-        pane: "arrangement.Pane" | None = None
+        pane: Pane | None = None
 
         def done() -> None:
             "The program of the overlay finished, so the overlay goes."
@@ -2403,7 +2412,7 @@ class Pymux:
             return
 
         for client_state, forward in zip(clients, forwards):
-            packet = {Field.CMD: Packet.OPEN, Field.DATA: url}
+            packet: dict[Field, object] = {Field.CMD: Packet.OPEN, Field.DATA: url}
             if forward is None:
                 client_state.message = (
                     "Opened %s in the browser of this machine." % (url,)
@@ -3131,6 +3140,8 @@ class Pymux:
         """
         if window is None:
             window = self.arrangement.get_active_window()
+        if window is None:
+            raise CommandException("no current window")
 
         pane = self._create_pane(
             window,

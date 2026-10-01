@@ -33,7 +33,7 @@ import base64
 import random
 import re
 import zlib
-from typing import Callable, Dict, Iterable, List, NamedTuple, Tuple
+from typing import Any, Callable, Dict, Iterable, List, NamedTuple, Tuple
 
 from prompt_toolkit.output import ColorDepth
 from pyte.images import PixelFormat
@@ -134,10 +134,10 @@ class PaneView(NamedTuple):
     height: int
     vertical_scroll: int
     horizontal_scroll: int
-    graphics: object
+    graphics: Any
     #: The screen of the pane. The unicode placeholders live in its
     #: cells, so drawing them needs the text and not only the images.
-    screen: object = None
+    screen: Any = None
 
 
 class _Placement:
@@ -205,7 +205,7 @@ class ClientGraphics:
         self._next_image_id = random.randrange(1 << 20, 1 << 28)
 
         # (pane id, pane image id) -> (pane image, outer image id)
-        self._images: Dict[Tuple[int, int], Tuple[object, int]] = {}
+        self._images: Dict[Tuple[int, int], Tuple[Any, int]] = {}
         self._transmitted_bytes = 0
 
         # (outer image id, slot) -> placement of the previous frame.
@@ -217,7 +217,7 @@ class ClientGraphics:
         # cached, because cropping means encoding again and a scrolling
         # image would otherwise pay for the encoder on every frame.
         self._cell_placements: Dict[Tuple[int, int, int], str] = {}
-        self._cell_cache: Dict[tuple, Tuple[object, object]] = {}
+        self._cell_cache: Dict[tuple, Tuple[Any, Any]] = {}
         self._cell_redraw = False
 
     # ------------------------------------------------------------------

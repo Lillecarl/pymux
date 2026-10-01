@@ -119,8 +119,13 @@ def _bound_command(pymux, prefix, parsed_args, **_):
     make against the whole tree. It re-enters itself, so the help of
     what it finds lands in the same batch of completions.
     """
-    matches = _finder._get_completions(["pymux", *parsed_args.arguments], prefix, "", None)
-    meta = _finder.get_display_completions()
+    finder = _finder
+    if finder is None:
+        return {}
+    matches = finder._get_completions(
+        ["pymux", *parsed_args.arguments], prefix, "", None
+    )
+    meta = finder.get_display_completions()
     return {m: meta.get(m, "") for m in matches}
 
 
@@ -193,9 +198,14 @@ class CommandCompleter(Completer):
         text = document.text_before_cursor
         prequote, prefix, _suffix, words, wordbreak = split_line(text, len(text))
 
-        _finder._display_completions = {}
-        matches = _finder._get_completions(["pymux"] + words, prefix, prequote, wordbreak)
-        meta = _finder.get_display_completions()
+        finder = _finder
+        if finder is None:
+            return
+        finder._display_completions = {}
+        matches = finder._get_completions(
+            ["pymux"] + words, prefix, prequote, wordbreak
+        )
+        meta = finder.get_display_completions()
 
         if not words:
             names = [m for m in matches if not m.startswith("-")]
@@ -302,7 +312,7 @@ class FuzzyFinder(argcomplete.CompletionFinder):
         return option_completions
 
 
-_finder = None
+_finder: FuzzyFinder | None = None
 
 
 def create_command_completer(pymux):
@@ -335,5 +345,5 @@ def create_command_completer(pymux):
         for action in command_parser._actions:
             fn = _VALUE_COMPLETERS.get((name, action.dest))
             if fn is not None:
-                action.completer = partial(fn, pymux)
+                setattr(action, "completer", partial(fn, pymux))
     return CommandCompleter()
