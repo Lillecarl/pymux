@@ -22,19 +22,27 @@ def list_forwards(pymux: "Pymux", args: argparse.Namespace) -> None:
     when a dropped link comes back, and this draws what last arrived.
     A forward that could not open is listed with the reason beside it,
     because that is the question a person has when the port is dead.
-    Lillecarl/pymux#436.
+
+    A line pymux opened by itself, for a loopback URL, is marked
+    `(pymux)`: it is reaped when idle, so it is not a person's to keep.
+    Lillecarl/pymux#436. Lillecarl/pymux#448.
     """
     lines = []
 
     for client in pymux.clients:
         for one in client.connection.forwards:
+            notes = []
+            if one.get("ours"):
+                notes.append("pymux")
+            if one.get("error"):
+                notes.append(one["error"])
             lines.append(
                 "%s: %s -> %s%s"
                 % (
                     client.connection.name,
                     _listen(one),
                     one.get("dest", ""),
-                    " (%s)" % (one["error"],) if one.get("error") else "",
+                    " (%s)" % (", ".join(notes),) if notes else "",
                 )
             )
 

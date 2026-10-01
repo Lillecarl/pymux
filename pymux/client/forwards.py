@@ -66,12 +66,15 @@ class Opened(NamedTuple):
     `port` is the number really bound. It differs from the number
     asked for when the person asked for any, and when a URL's own port
     was taken here. `error` is why it is not open, and is empty while
-    it is.
+    it is. `ours` is whether pymux opened it by itself, for a loopback
+    URL; one of those is reaped when idle, so the listing says so.
+    Lillecarl/pymux#448.
     """
 
     forward: Forward
     port: int
     error: str
+    ours: bool = False
 
     def report(self) -> dict:
         """
@@ -86,6 +89,7 @@ class Opened(NamedTuple):
             "port": self.port,
             "dest": self.forward.dest,
             "error": self.error,
+            "ours": self.ours,
         }
 
 
@@ -165,6 +169,7 @@ class Forwards:
                     forward,
                     forward.listen_port,
                     "%s already goes to %s" % (forward.listen, standing.forward.dest),
+                    ours=True,
                 )
             if where in self._open:
                 # The same URL again. The listener is up, so this is a
@@ -384,7 +389,9 @@ class Forwards:
 
         self._errors[where] = error
         self._ports[where] = forward.listen_port
-        return Opened(forward, forward.listen_port, error)
+        return Opened(
+            forward, forward.listen_port, error, ours=wanted.idle is not None
+        )
 
     async def _listen(
         self, connection: SSHClientConnection, forward: Forward, where: Where
@@ -456,6 +463,7 @@ class Forwards:
             wanted.forward,
             self._ports.get(where, wanted.forward.listen_port),
             self._errors.get(where, ""),
+            ours=wanted.idle is not None,
         )
 
     def opened(self) -> list[Opened]:

@@ -1341,6 +1341,39 @@ async def test_the_client_gives_an_idle_port_back_and_says_so(monkeypatch):
             await _spoken_through(opened.port)
 
 
+async def test_a_forward_pymux_made_is_marked_in_its_report():
+    """
+    The report carries which forwards are pymux's own, so the server's
+    listing can mark the line a person did not make.
+    Lillecarl/pymux#448.
+    """
+    async with echoing() as echo_port, ssh_connection() as connection:
+        forwards = Forwards()
+
+        person = await forwards.add(
+            connection,
+            Forward(
+                Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
+            ),
+        )
+        ours = await forwards.add(
+            connection,
+            Forward(
+                Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
+            ),
+            idle=600,
+        )
+        try:
+            assert person.ours is False
+            assert ours.ours is True
+
+            by_port = {one["port"]: one for one in forwards.report()}
+            assert by_port[person.port]["ours"] is False
+            assert by_port[ours.port]["ours"] is True
+        finally:
+            forwards.close()
+
+
 async def test_connecting_again_brings_the_forwards_back():
     """
     **The promise this feature makes**, through the client's own
@@ -1552,6 +1585,51 @@ async def test_the_listing_reads_what_the_client_reported():
 
     assert "-L localhost:8080 -> localhost:3000" in said, said
     assert "-R localhost:9222 -> localhost:9222 (Address already in use)" in said, said
+
+
+async def test_the_listing_marks_a_forward_pymux_made():
+    """
+    A line pymux opened for a URL is marked, so a person reading the
+    listing knows which one will go away by itself. A mark and a reason
+    share the parentheses when both are there.
+    Lillecarl/pymux#448.
+    """
+    async with over_connection() as session:
+        await session.attach("the client", SIZE)
+        connection = session.pymux.clients[0].connection
+        connection.can_forward = True
+        connection.forwards = [
+            {
+                "direction": "local",
+                "listen_host": "localhost",
+                "port": 8080,
+                "dest": "localhost:3000",
+                "error": "",
+                "ours": True,
+            },
+            {
+                "direction": "local",
+                "listen_host": "localhost",
+                "port": 8081,
+                "dest": "localhost:3001",
+                "error": "",
+            },
+            {
+                "direction": "local",
+                "listen_host": "localhost",
+                "port": 8082,
+                "dest": "localhost:3002",
+                "error": "Address already in use",
+                "ours": True,
+            },
+        ]
+
+        said = "\n".join(await _listed(session, "list-forwards"))
+
+    assert "-L localhost:8080 -> localhost:3000 (pymux)" in said, said
+    assert "-L localhost:8081 -> localhost:3001" in said, said
+    assert "8081 -> localhost:3001 (" not in said, said
+    assert "8082 -> localhost:3002 (pymux, Address already in use)" in said, said
 
 
 # ----------------------------------------------------------------------
