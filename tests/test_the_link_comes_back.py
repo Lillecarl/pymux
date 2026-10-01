@@ -23,9 +23,19 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import anyio
+import pytest
 
+from pymux.client import reconnect as reconnect_module
 from pymux.client import ssh as ssh_client
-from pymux.client.reconnect import Backoff, link_may_come_back, notice, why
+from pymux.client.reconnect import (
+    Backoff,
+    Internet,
+    internet_reachable,
+    link_may_come_back,
+    notice,
+    watch_internet,
+    why,
+)
 from pymux.client.ssh import SshClient
 from pymux.main import Pymux
 
@@ -36,6 +46,20 @@ PANE_COMMAND = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
 #: What the server asks the outer terminal for, and the client never
 #: does. A test waits for this to know that a frame arrived.
 ALTERNATE_SCREEN = "\x1b[?1049h"
+
+
+@pytest.fixture(autouse=True)
+def the_probe_does_not_leave_this_machine(monkeypatch):
+    """
+    Keep the round trip off the network. The probe has its own test,
+    and a reconnect that reaches for the real 9.9.9.9 would make every
+    test here depend on where it runs.
+    """
+
+    async def answers(*arguments, **keywords):
+        return True
+
+    monkeypatch.setattr(reconnect_module, "internet_reachable", answers)
 
 
 # ----------------------------------------------------------------------
@@ -146,9 +170,101 @@ def test_the_notice_says_both_keys():
     assert "q to leave" in said
 
 
+def test_the_notice_says_what_the_internet_answered():
+    "A lost link and a lost server look alike, so the probe is a line."
+    assert "9.9.9.9 answers" in "\n".join(notice("dynhetz", "", 4.0, internet=True))
+    assert "9.9.9.9 does not answer" in "\n".join(
+        notice("dynhetz", "", 4.0, internet=False)
+    )
+
+
+def test_the_notice_says_nothing_until_the_probe_answers():
+    "The first moment has no answer yet, and a guess would be a lie."
+    said = "\n".join(notice("dynhetz", "", 4.0))
+    assert "9.9.9.9" not in said
+
+
+def test_the_notice_says_it_is_trying_rather_than_counting():
+    "The last second of a countdown must not hold while an attempt runs."
+    said = "\n".join(notice("dynhetz", "", 0.0, internet=True, trying=True))
+
+    assert "Trying to reach dynhetz now." in said
+    assert "next try" not in said
+
+
 def test_a_failure_with_nothing_to_say_is_named_by_its_kind():
     assert why(TimeoutError()) == "TimeoutError"
     assert why(OSError("Network is unreachable")) == "Network is unreachable"
+
+
+async def test_the_probe_answers_whether_the_internet_is_there(monkeypatch):
+    "A connection that opens is a network; one that fails is none."
+
+    class Stream:
+        async def aclose(self) -> None:
+            pass
+
+    async def answers(host, port):
+        return Stream()
+
+    monkeypatch.setattr(anyio, "connect_tcp", answers)
+    assert await internet_reachable()
+
+    async def refused(host, port):
+        raise OSError(101, "Network is unreachable")
+
+    monkeypatch.setattr(anyio, "connect_tcp", refused)
+    assert not await internet_reachable()
+
+
+async def test_the_reconnect_bounds_the_attempt(monkeypatch):
+    """
+    `asyncssh.connect` is given a bound on a reconnection, so a
+    network that drops its packets cannot freeze the notice on the
+    countdown's last second. The first attach is left alone.
+    """
+    import asyncssh
+
+    seen = {}
+
+    async def record(host, **asking):
+        seen.update(asking)
+        raise OSError("stop here")
+
+    monkeypatch.setattr(asyncssh, "connect", record)
+    client = SshClient("ssh://127.0.0.1/tmp/nowhere.sock")
+
+    with pytest.raises(OSError):
+        await client._connect()
+    assert "connect_timeout" not in seen, "a first attach is not cut off"
+
+    with pytest.raises(OSError):
+        await client._connect(ssh_client.CONNECT_TIMEOUT)
+    assert seen["connect_timeout"] == ssh_client.CONNECT_TIMEOUT
+
+
+async def test_the_watch_keeps_the_last_answer(monkeypatch):
+    "The watch probes again, so a network that comes back shows up."
+
+    class Enough(Exception):
+        pass
+
+    answers = []
+
+    async def probe(*arguments, **keywords):
+        answers.append(len(answers))
+        if len(answers) == 3:
+            raise Enough
+        return len(answers) == 1  # Up once, then down.
+
+    monkeypatch.setattr(reconnect_module, "internet_reachable", probe)
+    state = Internet()
+
+    with pytest.raises(Enough):
+        await watch_internet(state, every=0.0)
+
+    assert len(answers) == 3
+    assert state.value is False
 
 
 # ----------------------------------------------------------------------
@@ -507,6 +623,29 @@ async def test_q_leaves_the_disconnected_screen(monkeypatch):
         await asyncio.wait_for(it.attach, 10)
 
         assert not it.pymux.connections
+
+
+async def test_the_screen_says_it_is_trying_while_the_attempt_runs(monkeypatch):
+    """
+    An attempt can outlast its wait by far, and the screen has to say
+    so instead of holding the last second of the countdown.
+    """
+    async with attached(monkeypatch) as it:
+        await it.until(lambda: len(it.pymux.connections) == 1, "the attach")
+        await it.until(lambda: ALTERNATE_SCREEN in it.terminal.said, "the first frame")
+
+        async def hangs():
+            await asyncio.sleep(30)
+
+        it.client._connect = hangs
+        it.drop_the_link()
+
+        await it.until(
+            lambda: "Trying to reach" in it.terminal.said, "the trying screen"
+        )
+
+        it.terminal.type("q")
+        await asyncio.wait_for(it.attach, 10)
 
 
 async def test_a_server_that_closes_the_connection_is_not_retried(monkeypatch):

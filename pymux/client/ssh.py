@@ -64,7 +64,16 @@ from pymux.utils import nonblocking
 
 from .defaults import SCHEME, is_ssh_url
 from .forwards import Forwards
-from .reconnect import Backoff, draw, link_may_come_back, notice, why
+from .reconnect import (
+    WAN_INTERVAL,
+    Backoff,
+    Internet,
+    draw,
+    link_may_come_back,
+    notice,
+    watch_internet,
+    why,
+)
 from .terminal import TerminalClient
 
 __all__ = [
@@ -112,6 +121,35 @@ SUSPEND_GAP = 4.0
 #: How often the disconnected screen draws its countdown, in seconds.
 COUNTDOWN_STEP = 1.0
 
+#: How long one reconnection attempt may last, in seconds.
+#:
+#: **Without this the screen freezes on the last second of the
+#: countdown.** asyncssh passes no timeout to the connect by default,
+#: so a network that drops packets without refusing them -- an uplink
+#: that went, a route that vanished -- leaves the TCP connect in the
+#: kernel's hands for the minute or two `tcp_syn_retries` takes. The
+#: countdown has already drawn "1 second" by then, and nothing moves
+#: until the connect returns. A bound makes the retry loop turn, and
+#: the wait grows the way it is meant to.
+#:
+#: **Only an attempt after a loss is bounded.** A person who just
+#: typed `attach` would rather wait than be told no too soon, so the
+#: first connect and a command keep asyncssh's own default. Eight
+#: seconds is above a slow handshake -- a mobile link with a second of
+#: round trip, a loaded far machine -- and well below the twenty a
+#: keepalive already spends before it calls a link dead.
+CONNECT_TIMEOUT = 8.0
+
+#: How long a link has to last before the backoff forgets it, in
+#: seconds.
+#:
+#: **A link that opens and drops at once is not a link that came
+#: back.** Resetting the backoff the moment the connect returns makes
+#: a flapping server a storm at half a second a try, and the person
+#: watches "1 second" for ever. A link that held this long was really
+#: there, and the next failure starts from the first wait again.
+STABLE_LINK = 5.0
+
 #: How often to look for a forward nothing is using, in seconds.
 #:
 #: It decides only how late a reap is, never whether one happens: the
@@ -122,6 +160,15 @@ REAP_POLL = 30.0
 
 #: What a person types to stop trying.
 LEAVE = ("q", "Q", "\x03")
+
+
+class _Left:
+    "The person stopped the client. A type, so a result can be told apart."
+
+
+#: What a try returns when the person stopped the client. A sentinel
+#: and not an exception, so nothing mistakes it for a failure to retry.
+_LEFT = _Left()
 
 
 #: What runs on the other machine when the address named no path. It
@@ -257,12 +304,15 @@ class SshClient(TerminalClient):
             # way.
             raise BrokenPipeError(str(error)) from error
 
-    async def _connect(self):
+    async def _connect(self, connect_timeout: float | None = None):
         """
         Open the channel to the socket on the far side.
 
         Returns the connection, so that the caller closes it. It is a
         context manager, and asyncssh closes the channel with it.
+
+        `connect_timeout` bounds the attempt, and only a reconnection
+        passes one: `CONNECT_TIMEOUT` says why.
         """
         import asyncssh
 
@@ -280,6 +330,11 @@ class SshClient(TerminalClient):
         asking = dict(self.connect_with)
         asking.setdefault("keepalive_interval", KEEPALIVE_INTERVAL)
         asking.setdefault("keepalive_count_max", KEEPALIVE_MISSES)
+        # A bound, when the caller named one, for the reason
+        # `CONNECT_TIMEOUT` gives. `setdefault`, so a person who named
+        # one in the address or their `~/.ssh/config` keeps it.
+        if connect_timeout is not None:
+            asking.setdefault("connect_timeout", connect_timeout)
         if target.port is not None:
             asking.setdefault("port", target.port)
         if target.username is not None:
@@ -818,58 +873,134 @@ class SshClient(TerminalClient):
         The connection and its reader, or `None` when the person
         stopped it. A failure that never comes back is raised, because
         there is nothing left for this client to do about it.
+
+        **The screen keeps saying what is happening.** A probe runs
+        beside the retries, so the notice can say whether this machine
+        can reach the internet at all, and each attempt is drawn while
+        it is in flight, because an attempt can outlast its wait by
+        far. `reconnect.notice` holds the lines.
         """
         output = Vt100_Output.from_pty(sys.stdout)
+        internet = Internet()
 
         try:
-            while True:
-                if not link_may_come_back(lost):
-                    raise lost
+            async with anyio.create_task_group() as watching:
+                watching.start_soon(watch_internet, internet, WAN_INTERVAL)
 
-                if not await self._count_down(output, stdin_fd, waits.next(), lost):
-                    return None
+                while True:
+                    if not link_may_come_back(lost):
+                        watching.cancel_scope.cancel()
+                        raise lost
 
-                try:
-                    return await self._connect()
-                except Exception as error:
-                    lost = error
+                    outcome = await self._one_try(
+                        output, stdin_fd, waits.next(), lost, internet
+                    )
+
+                    if isinstance(outcome, _Left):
+                        watching.cancel_scope.cancel()
+                        return None
+                    if isinstance(outcome, Exception):
+                        lost = outcome
+                        continue
+
+                    watching.cancel_scope.cancel()
+                    return outcome
         finally:
             output.show_cursor()
             output.flush()
 
-    async def _count_down(self, output, stdin_fd: int, wait: float, lost) -> bool:
+    async def _one_try(self, output, stdin_fd: int, wait: float, lost, internet):
         """
-        Draw the disconnected screen until the wait is over.
+        Count down one wait, then attempt the link.
 
-        False when the person stopped it. Any other key ends the wait
-        at once, which is what somebody does who knows the link is
-        back.
+        `_LEFT`, the failure, or the connection. Any key but q ends the
+        wait at once, which is what somebody does who knows the link
+        is back.
         """
         ends_at = anyio.current_time() + wait
 
         while True:
             left = ends_at - anyio.current_time()
             if left <= 0:
-                return True
+                break
 
-            rows, columns = self.size()
-            draw(output, rows, columns, notice(self.target.host, why(lost), left))
-
+            self._draw(output, lost, internet, left)
             with anyio.move_on_after(min(left, COUNTDOWN_STEP)) as when:
                 await anyio.wait_readable(stdin_fd)
-
             if when.cancelled_caught:
                 continue  # Nothing typed. Draw the countdown again.
 
-            with nonblocking(stdin_fd):
-                typed = self._stdin_reader.read()
-
-            if self._stdin_reader.closed:
-                return False  # No keyboard left to answer with.
-            if any(one in typed for one in LEAVE):
-                return False
+            typed = self._read_typed(stdin_fd)
+            if typed is None or any(one in typed for one in LEAVE):
+                return _LEFT  # No keyboard, or the person is done.
             if typed:
-                return True
+                break  # Somebody who knows the link is back already.
+
+        return await self._attempt(output, stdin_fd, lost, internet)
+
+    def _draw(
+        self, output, lost, internet, seconds: float, trying: bool = False
+    ) -> None:
+        "Put the notice of this moment on the terminal."
+        rows, columns = self.size()
+        draw(
+            output,
+            rows,
+            columns,
+            notice(self.target.host, why(lost), seconds, internet.value, trying),
+        )
+
+    def _read_typed(self, stdin_fd: int) -> str | None:
+        "What is typed right now, or None when the keyboard is gone."
+        with nonblocking(stdin_fd):
+            typed = self._stdin_reader.read()
+        if self._stdin_reader.closed:
+            return None
+        return typed
+
+    async def _attempt(self, output, stdin_fd: int, lost, internet):
+        """
+        Open the link while the screen keeps saying it is trying.
+
+        The connection, the failure, or `_LEFT`. The attempt runs as a
+        task of its own, so this one can draw and listen beside it;
+        cancelling the scope is how the winner ends the other.
+        """
+        link = None
+        failure: Exception | None = None
+        left = False
+
+        async with anyio.create_task_group() as tasks:
+
+            async def connect() -> None:
+                nonlocal link, failure
+                try:
+                    link = await self._connect(CONNECT_TIMEOUT)
+                except Exception as error:
+                    failure = error
+                finally:
+                    tasks.cancel_scope.cancel()
+
+            tasks.start_soon(connect)
+
+            while True:
+                self._draw(output, lost, internet, 0.0, trying=True)
+                with anyio.move_on_after(COUNTDOWN_STEP) as when:
+                    await anyio.wait_readable(stdin_fd)
+                if when.cancelled_caught:
+                    continue
+
+                typed = self._read_typed(stdin_fd)
+                if typed is None or any(one in typed for one in LEAVE):
+                    left = True
+                    tasks.cancel_scope.cancel()
+                    break
+
+        if left:
+            return _LEFT
+        if failure is not None:
+            return failure
+        return link
 
     # ------------------------------------------------------------------
 

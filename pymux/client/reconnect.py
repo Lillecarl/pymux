@@ -20,11 +20,16 @@ import math
 
 import random as _random
 
+import anyio
+
 __all__ = [
     "Backoff",
+    "Internet",
     "draw",
+    "internet_reachable",
     "link_may_come_back",
     "notice",
+    "watch_internet",
     "why",
 ]
 
@@ -38,6 +43,32 @@ LONGEST_WAIT = 30.0
 #: takes every client it lost at once -- a laptop that wakes, a link
 #: that returns -- and they all count from the same moment.
 JITTER = 0.5
+
+#: What the client asks to tell "no internet" from "no server".
+#:
+#: **An address that answers from anywhere.** Quad9 is a public
+#: resolver, and a DNS server answers a TCP connection on port 53 the
+#: way it answers a query. A TCP connection needs no privilege, where
+#: ICMP needs one a person's client does not have, and a name would
+#: need DNS -- the thing that is not answering when the internet is
+#: the problem.
+WAN_HOST = "9.9.9.9"
+WAN_PORT = 53
+
+#: How long the probe waits before it calls the address silent, in
+#: seconds.
+WAN_TIMEOUT = 2.0
+
+#: How often the probe measures again while the client is disconnected,
+#: in seconds. A network that comes back should show in the notice
+#: without the person doing anything.
+WAN_INTERVAL = 3.0
+
+#: What the notice says about that answer. Both name the address, so a
+#: reader knows the claim is about reaching one place and not the
+#: whole internet.
+INTERNET_UP = "9.9.9.9 answers, so this machine has a network."
+INTERNET_DOWN = "9.9.9.9 does not answer, so this machine looks offline."
 
 
 class Backoff:
@@ -106,15 +137,83 @@ def why(error: BaseException) -> str:
     return said or type(error).__name__
 
 
-def notice(host: str, said: str, seconds: float) -> list[str]:
-    "The lines of the screen a client shows while it has no server."
-    return [
+class Internet:
+    """
+    The last answer to "can this machine reach the internet".
+
+    `value` is `None` until the first probe answers, so the notice can
+    say nothing rather than guess.
+    """
+
+    def __init__(self) -> None:
+        self.value: bool | None = None
+
+
+async def internet_reachable(
+    host: str = WAN_HOST, port: int = WAN_PORT, timeout: float = WAN_TIMEOUT
+) -> bool:
+    """
+    Whether a TCP connection to this address opens.
+
+    **A connection, not a ping.** ICMP needs a privilege a person's
+    client does not have, and it answers about a different thing: a
+    network can pass an echo and still refuse every connection. What
+    matters here is whether a connection leaves this machine at all.
+    """
+    try:
+        with anyio.fail_after(timeout):
+            stream = await anyio.connect_tcp(host, port)
+        await stream.aclose()
+        return True
+    except Exception:
+        # Every failure means the same thing to the person reading it:
+        # no connection left this machine. Which errno did it is not
+        # worth a line of the notice.
+        return False
+
+
+async def watch_internet(state: Internet, every: float = WAN_INTERVAL) -> None:
+    "Keep `state` saying whether the internet answers, until cancelled."
+    while True:
+        state.value = await internet_reachable()
+        await anyio.sleep(every)
+
+
+def notice(
+    host: str,
+    said: str,
+    seconds: float,
+    internet: bool | None = None,
+    trying: bool = False,
+) -> list[str]:
+    """
+    The lines of the screen a client shows while it has no server.
+
+    `internet` is what the probe last saw: `True` when this machine
+    reached `WAN_HOST`, `False` when it did not, and `None` before the
+    first answer. It is a line of its own because a lost link and a
+    lost server look the same from here, and a person needs to know
+    which one they have.
+
+    `trying` is the moment a connection is in flight. The countdown
+    has run out, and `asyncssh.connect` can sit in a blackholed
+    network far longer than any wait, so the screen says what is
+    happening instead of holding the last second of the countdown.
+    """
+    lines = [
         "pymux lost the server on %s." % (host,),
         said,
-        "",
-        "The next try is in %s." % (_left(seconds),),
-        "Press any key to try now. Press q to leave.",
     ]
+    if internet is not None:
+        lines.append(INTERNET_UP if internet else INTERNET_DOWN)
+    lines.append("")
+    if trying:
+        lines.append("Trying to reach %s now." % (host,))
+        lines.append("Press q to leave.")
+    else:
+        lines.append("The next try is in %s." % (_left(seconds),))
+        lines.append("Press any key to try now. Press q to leave.")
+    return lines
 
 
 def _left(seconds: float) -> str:
