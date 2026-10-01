@@ -3258,87 +3258,93 @@ class HighlightBordersIfActive:
     edge is the window's, where a mark would land on the status line.
     So the foot of the mark is drawn only where that bar is.
     Lillecarl/pymux#401.
+
+    **Six cells are not six Floats.** The mark was one `Float` per
+    cell, and the two the foot added cost almost six thousand
+    instructions a frame in `checks.pymux-keystroke` -- enough to take
+    the whole render stage past its budget, for two corner glyphs. A
+    float draws through the whole container machinery to land one
+    character. The cells go straight into the screen now, at the
+    z-index a float would have inherited there, so the mark still wins
+    over the chrome it shares an edge with. Lillecarl/pymux#488.
     """
 
     def __init__(self, window, pane, style, content, has_bar_below):
-        @Condition
-        def is_selected() -> bool:
-            return window.active_pane == pane
-
-        @Condition
-        def foot_is_selected() -> bool:
-            return window.active_pane == pane and has_bar_below()
-
-        def conditional_float(
-            char,
-            filter=is_selected,
-            left=None,
-            right=None,
-            top=None,
-            bottom=None,
-            width=None,
-            height=None,
-        ):
-            return Float(
-                content=ConditionalContainer(
-                    Window(char=char, style="class:border"), filter=filter
-                ),
-                left=left,
-                right=right,
-                top=top,
-                bottom=bottom,
-                width=width,
-                height=height,
-                z_index=Z_INDEX.HIGHLIGHTED_BORDER,
-            )
-
-        self.container = FloatContainer(
-            content,
-            style=style,
-            floats=[
-                # Sides.
-                conditional_float(
-                    _focused_border_vertical, left=-1, top=0, bottom=0, width=1
-                ),
-                conditional_float(
-                    _focused_border_vertical, right=-1, top=0, bottom=0, width=1
-                ),
-                # Corners, and no horizontals between them.
-                #
-                # **The rows a horizontal would take belong to the pane's
-                # own chrome.** The title bar is the row above and the bar
-                # below names the neighbours, and each spans the same cells
-                # the horizontal would, so the horizontal would be drawn
-                # under a bar instead of beside it. The corners sit one
-                # cell outside both, so the rectangle closes without
-                # covering either bar. Lillecarl/pymux#401.
-                conditional_float(
-                    _focused_border_left_top, left=-1, top=-1, width=1, height=1
-                ),
-                conditional_float(
-                    _focused_border_right_top, right=-1, top=-1, width=1, height=1
-                ),
-                conditional_float(
-                    _focused_border_left_bottom,
-                    filter=foot_is_selected,
-                    left=-1,
-                    bottom=-1,
-                    width=1,
-                    height=1,
-                ),
-                conditional_float(
-                    _focused_border_right_bottom,
-                    filter=foot_is_selected,
-                    right=-1,
-                    bottom=-1,
-                    width=1,
-                    height=1,
-                ),
-            ],
+        self.container = _PaneMark(
+            FloatContainer(content, [], style=style), window, pane, has_bar_below
         )
 
     def __pt_container__(self) -> Container:
         return self.container
+
+
+class _PaneMark(_ContainerProxy):
+    """
+    The mark of the focused pane, written beside its cells.
+
+    The mark sits one cell outside the pane: a side down the column on
+    either hand, and the four corners between them. It is registered as
+    a deferred draw at the z-index a `Float` there would have inherited,
+    so a pane drawn later cannot cover it and it still lands over a bar
+    it shares an edge with.
+    """
+
+    #: What a mark cell is styled as.
+    STYLE = "class:border"
+
+    def __init__(self, content, window, pane, has_bar_below):
+        super().__init__(content)
+        self.window = window
+        self.pane = pane
+        self.has_bar_below = has_bar_below
+
+    def write_to_screen(
+        self,
+        screen: Screen,
+        mouse_handlers: MouseHandlers,
+        write_position: WritePosition,
+        parent_style: str,
+        erase_bg: bool,
+        z_index: int | None,
+    ) -> None:
+        super().write_to_screen(
+            screen, mouse_handlers, write_position, parent_style, erase_bg, z_index
+        )
+        # **The z is the parent's, plus the mark's**, as a `Float` in a
+        # `FloatContainer` inherits it. A body drawn late -- one whose
+        # own floats wait on a cursor -- runs its panes again, and a mark
+        # left at a bare `HIGHLIGHTED_BORDER` would be erased by that
+        # second pass. Adding the parent's z keeps the mark after it.
+        screen.draw_with_z_index(
+            (z_index or 0) + Z_INDEX.HIGHLIGHTED_BORDER,
+            partial(self._draw_mark, screen, write_position),
+        )
+
+    def _draw_mark(self, screen: Screen, rect: WritePosition) -> None:
+        "The six cells, once the pane's rectangle is known."
+        if self.window.active_pane != self.pane:
+            return
+
+        left = rect.xpos - 1
+        right = rect.xpos + rect.width
+        top = rect.ypos - 1
+        bottom = rect.ypos + rect.height
+
+        def put(x: int, y: int, glyph: str) -> None:
+            # A cell outside the screen is a key the diff never reads, so
+            # a mark at an edge needs no bound and simply draws nothing.
+            screen.data_buffer[y][x] = Char(glyph, self.STYLE)
+
+        for y in range(rect.ypos, bottom):
+            put(left, y, _focused_border_vertical)
+            put(right, y, _focused_border_vertical)
+
+        put(left, top, _focused_border_left_top)
+        put(right, top, _focused_border_right_top)
+
+        if self.has_bar_below():
+            put(left, bottom, _focused_border_left_bottom)
+            put(right, bottom, _focused_border_right_bottom)
 
 
 class TracePaneWritePosition(_ContainerProxy):  # XXX: replace with SizedBox
