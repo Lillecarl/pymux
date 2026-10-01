@@ -476,6 +476,9 @@ class SshClient(TerminalClient):
 
         with raw_mode(stdin_fd):
             while True:
+                # The moment this attachment began, so the backoff can
+                # tell a link that held from one that dropped at once.
+                lived_from = anyio.current_time()
                 lost = await self._attached(
                     connection, reader, stdin_fd, detach_others, color_depth
                 )
@@ -492,6 +495,13 @@ class SshClient(TerminalClient):
                     # Lillecarl/pymux#347.
                     break
 
+                # **A link that opened and dropped at once is not back.**
+                # Resetting here, at the top of every retry, made a
+                # server that accepts and drops a storm at the first
+                # wait, and the person watched "1 second" for ever.
+                if anyio.current_time() - lived_from >= STABLE_LINK:
+                    waits.reset()
+
                 try:
                     again = await self._link_again(stdin_fd, waits, lost)
                 except Exception as error:
@@ -502,7 +512,6 @@ class SshClient(TerminalClient):
                     break  # The person stopped it.
 
                 connection, reader = again
-                waits.reset()
 
         self._reset_terminal()
 
