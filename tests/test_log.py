@@ -203,8 +203,8 @@ def test_level_nobody_named_is_info():
 
 
 def test_person_debugging_asks_for_it():
-    assert _how_much_to_log("debug") == logging.DEBUG
-    assert _how_much_to_log("warning") == logging.WARNING
+    assert _how_much_to_log(log.LogLevel.DEBUG) == logging.DEBUG
+    assert _how_much_to_log(log.LogLevel.WARNING) == logging.WARNING
 
 
 def test_frame_is_not_logged_at_info():

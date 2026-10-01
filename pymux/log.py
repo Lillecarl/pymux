@@ -48,6 +48,7 @@ at. `set-option log-level debug` reaches a running server, and
 import logging
 import logging.handlers
 import os
+from enum import StrEnum
 from pathlib import Path
 
 __all__ = [
@@ -58,17 +59,30 @@ __all__ = [
     "level",
     "set_level",
     "LEVELS",
+    "LogLevel",
 ]
+
+class LogLevel(StrEnum):
+    """
+    A level a person may name, for `--log-level` and `set-option
+    log-level` alike.
+    """
+
+    DEBUG = "debug"
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+
 
 #: The levels a person may name, and what each one means to `logging`.
 #: Nothing below INFO and nothing above ERROR: a server that logs
 #: nothing at all cannot be debugged, and CRITICAL says nothing that
 #: ERROR does not.
 LEVELS = {
-    "debug": logging.DEBUG,
-    "info": logging.INFO,
-    "warning": logging.WARNING,
-    "error": logging.ERROR,
+    LogLevel.DEBUG: logging.DEBUG,
+    LogLevel.INFO: logging.INFO,
+    LogLevel.WARNING: logging.WARNING,
+    LogLevel.ERROR: logging.ERROR,
 }
 
 
@@ -119,9 +133,10 @@ def level() -> str:
 
 
 def set_level(name: str) -> None:
-    "Log at this level from now on. Raises `KeyError` for an unknown name."
+    "Log at this level from now on. Raises `ValueError` for an unknown name."
+    level = LogLevel(name)
     for one in LOGGERS:
-        one.setLevel(LEVELS[name])
+        one.setLevel(LEVELS[level])
 
 
 def default_logfile() -> Path:

@@ -55,7 +55,8 @@ import socket
 import sys
 import tempfile
 import time
-from typing import Dict, List, Set, Tuple
+from enum import StrEnum
+from typing import Dict, List, Set, Tuple, assert_never
 
 from pymux import __version__, log
 from pymux.client import create_client, is_ssh_url, list_clients
@@ -64,34 +65,51 @@ from pymux.utils import daemonize
 
 __all__ = ["run"]
 
-MODES = (
-    "standalone",
-    "integrated",
-    "start-server",
-    "attach",
-    "list-sessions",
-    "ls",
-    "find",
-    "diagnose",
-    "web",
-)
+class Mode(StrEnum):
+    """
+    The word that chooses what this invocation of pymux starts as.
+
+    A word that is not one of these is a pymux command for a running
+    server. `parse_arguments` answers a member or `None`, and `run`
+    matches on it, so a mode added and not handled is an error and not a
+    silent fall through.
+    """
+
+    STANDALONE = "standalone"
+    INTEGRATED = "integrated"
+    START_SERVER = "start-server"
+    ATTACH = "attach"
+    LIST_SESSIONS = "list-sessions"
+    LS = "ls"
+    FIND = "find"
+    DIAGNOSE = "diagnose"
+    WEB = "web"
+
+
+def _mode_of(word: str) -> Mode | None:
+    "The mode this word names, or `None` when the word is a command."
+    try:
+        return Mode(word)
+    except ValueError:
+        return None
+
 
 #: The modes that take the command of the first pane after the mode
 #: word, rather than a pymux command for a running server.
-MODES_WITH_A_FIRST_PANE = ("standalone", "integrated")
+MODES_WITH_A_FIRST_PANE = (Mode.STANDALONE, Mode.INTEGRATED)
 
 
 def _how_much_to_log(chosen: str | None) -> int:
     """
     What `--log-level` asked for, or INFO. `pymux/log.py` says why INFO.
 
-    The names are `log.LEVELS`, which is also what `set-option
+    The names are `log.LogLevel`, which is also what `set-option
     log-level` takes, so the flag and the option say the same words and
     reach the same place.
     """
     if not chosen:
         return logging.INFO
-    return log.LEVELS[chosen]
+    return log.LEVELS[log.LogLevel(chosen)]
 
 
 def filename_var() -> str | None:
@@ -278,7 +296,7 @@ def _socket_from_env_warning() -> None:
 
 def parse_arguments(
     argv: List[str] | None = None,
-) -> Tuple[argparse.Namespace, str | None, str | None]:
+) -> Tuple[argparse.Namespace, Mode | None, str | None]:
     """
     Read the command line: the options, the mode and the command.
 
@@ -294,13 +312,12 @@ def parse_arguments(
     a = _build_parser().parse_args(argv)
 
     rest = a.args
-    mode = None
     command = None
+    mode: Mode | None = _mode_of(rest[0]) if rest else None
 
-    if rest and rest[0] in MODES:
+    if mode is not None:
         # A mode word was given. The options after the mode word are parsed
         # as well. (argparse.REMAINDER above collected them verbatim.)
-        mode = rest[0]
         mode_parser = argparse.ArgumentParser(
             prog="pymux", description="pymux: Pure Python terminal multiplexer."
         )
@@ -319,7 +336,7 @@ def parse_arguments(
         if rest and rest[0] == "--":
             rest = rest[1:]
 
-        if mode == "diagnose":
+        if mode is Mode.DIAGNOSE:
             # Its own flags, before the fallthrough below would read
             # `--json` as a command for a server.
             flag_parser = argparse.ArgumentParser(add_help=False)
@@ -368,13 +385,20 @@ def _completion_parser() -> argparse.ArgumentParser:
     # `list-sessions` and `ls` come from the command tree below, with
     # the options the command takes; what is left here is the starts
     # that run a server or a client, and `find`, which takes nothing.
-    for name in ("standalone", "integrated", "start-server", "attach", "find", "diagnose"):
+    for mode in (
+        Mode.STANDALONE,
+        Mode.INTEGRATED,
+        Mode.START_SERVER,
+        Mode.ATTACH,
+        Mode.FIND,
+        Mode.DIAGNOSE,
+    ):
         mode_parser = modes.add_parser(
-            name,
+            str(mode),
             help="Run a server, or attach to one. See `pymux --help`.",
         )
         _add_options(mode_parser, suppress_defaults=True)
-        if name == "diagnose":
+        if mode is Mode.DIAGNOSE:
             mode_parser.add_argument(
                 "--json", action="store_true", help="Print the report as JSON."
             )
@@ -425,7 +449,7 @@ def run() -> None:
     # A machine is somewhere to attach to, never somewhere to listen.
     # `listen_on_socket` would try to bind a path called "ssh:" and
     # fail somewhere further in. Lillecarl/pymux#90.
-    if is_ssh_url(socket_name) and mode in ("integrated", "start-server"):
+    if is_ssh_url(socket_name) and mode in (Mode.INTEGRATED, Mode.START_SERVER):
         print("A server listens on this machine, so -S has to name a path here.")
         sys.exit(1)
 
@@ -456,7 +480,7 @@ def run() -> None:
     # that terminal. `pymux/log.py` says the rest.
     #
     # `start-server` sets this up for itself below, after it has forked.
-    if mode != "start-server":
+    if mode is not Mode.START_SERVER:
         log.configure(a.logfile, _how_much_to_log(a.log_level))
 
     if a.show_tmux_version:
@@ -466,189 +490,197 @@ def run() -> None:
         print("tmux 3.4")
         sys.exit(0)
 
-    if mode == "standalone":
-        # When a command was given (e.g. 'pymux standalone htop'), run it in
-        # the first pane.
-        from prompt_toolkit.output import ColorDepth
+    match mode:
+        case Mode.STANDALONE:
+            # When a command was given (e.g. 'pymux standalone htop'), run it in
+            # the first pane.
+            from prompt_toolkit.output import ColorDepth
 
-        mux = _new_pymux(source_file=filename, startup_command=command)
-        mux.run_standalone(
-            color_depth=_color_depth(ansi_colors_only, true_color) or ColorDepth.DEPTH_8_BIT
-        )
-
-    elif mode == "integrated":
-        if socket_name_from_env:
-            _socket_from_env_warning()
-            sys.exit(1)
-
-        # A server and one client in this process. The client reads a
-        # queue that this server writes, so it reaches this server and
-        # no other one.
-        mux = _new_pymux(source_file=filename, startup_command=command)
-
-        # Only when a socket was asked for. The user interface never
-        # reads it; it is there so that `pymux -S <socket> <command>`
-        # and libpymux reach this server. A client that asks to attach
-        # over it is refused: this server draws on the terminal it runs
-        # in. Lillecarl/pymux#159.
-        if socket_name:
-            mux.listen_on_socket(socket_name)
-
-        # No depth of its own. Like `attach`, this passes on what the
-        # flags asked for, and `None` leaves the answer to the probe of
-        # the terminal and to the environment.
-        mux.run_integrated(
-            color_depth=_color_depth(ansi_colors_only, true_color),
-            detach_other_clients=a.detach_others or a.hang_up_others,
-            chosen_name=a.client_name,
-            hang_up_others=a.hang_up_others,
-            read_only=a.read_only,
-        )
-
-    elif mode == "web":
-        sys.exit(_web(socket_name, a))
-
-    elif mode in ("list-sessions", "ls"):
-        if socket_name:
-            # With an explicit socket, ask the server. (The exit code tells
-            # whether there is a session. Like tmux.)
-            sys.exit(_send_command(socket_name, "list-sessions", pane_id))
-
-        clients = list(list_clients())
-        for c in clients:
-            print(c.socket_name)
-        if not clients:
-            # Like tmux, exit with a non-zero exit code when there is no
-            # server running.
-            sys.exit(1)
-
-    elif mode == "find":
-        # The socket a local `attach` without `-S` would take, newest
-        # first. The client of `ssh://host` runs this over its exec
-        # channel: the finding lives where the binding lives, so a
-        # change in where servers bind cannot leave that client
-        # looking in the old place. Lillecarl/pymux#90.
-        from libpymux.sockets import servers_newest_first
-
-        names = servers_newest_first()
-        if names:
-            print(names[0])
-        else:
-            sys.exit(1)
-
-    elif mode == "diagnose":
-        # One report of what this machine sees, for a paste into a
-        # support conversation. Read-only, and light: the imports of
-        # the report are stdlib only. Lillecarl/pymux#391.
-        from pymux.diagnose import as_json, diagnose, human
-
-        report = diagnose(socket_name=socket_name, config_file=filename)
-        print(as_json(report) if a.diagnose_json else human(report))
-
-    elif mode == "start-server":
-        if socket_name_from_env:
-            _socket_from_env_warning()
-            sys.exit(1)
-
-        # A daemon has no terminal to spoil, so its log may go to
-        # stdout. `daemonize` sends that to /dev/null, and a person who
-        # wants to read it runs the server in the foreground.
-        wanted = _how_much_to_log(a.log_level)
-        if a.logfile:
-            log.configure(a.logfile, wanted)
-        else:
-            logging.basicConfig(stream=sys.stdout, level=wanted)
-
-        # Create 'Pymux'. (Do this after the logging setup, so that crashes
-        # in Pymux() can be logged.)
-        mux = _new_pymux(source_file=filename)
-
-        # Run server.
-        socket_name = mux.listen_on_socket(socket_name)
-        try:
-            mux.run_server()
-        except KeyboardInterrupt:
-            sys.exit(1)
-
-    elif mode == "attach":
-        if socket_name_from_env:
-            _socket_from_env_warning()
-            sys.exit(1)
-
-        # `-x` is `-d` with a harsher message, which is how tmux reads
-        # it: `if (dflag || xflag)` in `cmd-attach-session.c:123`.
-        # Lillecarl/pymux#347.
-        detach_other_clients = a.detach_others or a.hang_up_others
-
-        # The code the client leaves with is the server's to name. A
-        # server that will not serve this client says so in an `exit`
-        # packet, and a person who detached leaves with nothing to
-        # report. Lillecarl/pymux#332.
-        if socket_name:
-            client = create_client(socket_name)
-            client.config_file = filename
-            client.chosen_name = a.client_name
-            client.hang_up_others = a.hang_up_others
-            client.read_only = a.read_only
-            client.attach(
-                detach_other_clients=detach_other_clients,
-                color_depth=_color_depth(ansi_colors_only, true_color),
+            mux = _new_pymux(source_file=filename, startup_command=command)
+            mux.run_standalone(
+                color_depth=_color_depth(ansi_colors_only, true_color)
+                or ColorDepth.DEPTH_8_BIT
             )
-            _leave(client)
-        else:
-            # Connect to the first server.
-            for c in list_clients():
-                c.config_file = filename
-                c.chosen_name = a.client_name
-                c.hang_up_others = a.hang_up_others
-                c.read_only = a.read_only
-                c.attach(
+
+        case Mode.INTEGRATED:
+            if socket_name_from_env:
+                _socket_from_env_warning()
+                sys.exit(1)
+
+            # A server and one client in this process. The client reads a
+            # queue that this server writes, so it reaches this server and
+            # no other one.
+            mux = _new_pymux(source_file=filename, startup_command=command)
+
+            # Only when a socket was asked for. The user interface never
+            # reads it; it is there so that `pymux -S <socket> <command>`
+            # and libpymux reach this server. A client that asks to attach
+            # over it is refused: this server draws on the terminal it runs
+            # in. Lillecarl/pymux#159.
+            if socket_name:
+                mux.listen_on_socket(socket_name)
+
+            # No depth of its own. Like `attach`, this passes on what the
+            # flags asked for, and `None` leaves the answer to the probe of
+            # the terminal and to the environment.
+            mux.run_integrated(
+                color_depth=_color_depth(ansi_colors_only, true_color),
+                detach_other_clients=a.detach_others or a.hang_up_others,
+                chosen_name=a.client_name,
+                hang_up_others=a.hang_up_others,
+                read_only=a.read_only,
+            )
+
+        case Mode.WEB:
+            sys.exit(_web(socket_name, a))
+
+        case Mode.LIST_SESSIONS | Mode.LS:
+            if socket_name:
+                # With an explicit socket, ask the server. (The exit code tells
+                # whether there is a session. Like tmux.)
+                sys.exit(_send_command(socket_name, "list-sessions", pane_id))
+
+            clients = list(list_clients())
+            for c in clients:
+                print(c.socket_name)
+            if not clients:
+                # Like tmux, exit with a non-zero exit code when there is no
+                # server running.
+                sys.exit(1)
+
+        case Mode.FIND:
+            # The socket a local `attach` without `-S` would take, newest
+            # first. The client of `ssh://host` runs this over its exec
+            # channel: the finding lives where the binding lives, so a
+            # change in where servers bind cannot leave that client
+            # looking in the old place. Lillecarl/pymux#90.
+            from libpymux.sockets import servers_newest_first
+
+            names = servers_newest_first()
+            if names:
+                print(names[0])
+            else:
+                sys.exit(1)
+
+        case Mode.DIAGNOSE:
+            # One report of what this machine sees, for a paste into a
+            # support conversation. Read-only, and light: the imports of
+            # the report are stdlib only. Lillecarl/pymux#391.
+            from pymux.diagnose import as_json, diagnose, human
+
+            report = diagnose(socket_name=socket_name, config_file=filename)
+            print(as_json(report) if a.diagnose_json else human(report))
+
+        case Mode.START_SERVER:
+            if socket_name_from_env:
+                _socket_from_env_warning()
+                sys.exit(1)
+
+            # A daemon has no terminal to spoil, so its log may go to
+            # stdout. `daemonize` sends that to /dev/null, and a person who
+            # wants to read it runs the server in the foreground.
+            wanted = _how_much_to_log(a.log_level)
+            if a.logfile:
+                log.configure(a.logfile, wanted)
+            else:
+                logging.basicConfig(stream=sys.stdout, level=wanted)
+
+            # Create 'Pymux'. (Do this after the logging setup, so that crashes
+            # in Pymux() can be logged.)
+            mux = _new_pymux(source_file=filename)
+
+            # Run server.
+            socket_name = mux.listen_on_socket(socket_name)
+            try:
+                mux.run_server()
+            except KeyboardInterrupt:
+                sys.exit(1)
+
+        case Mode.ATTACH:
+            if socket_name_from_env:
+                _socket_from_env_warning()
+                sys.exit(1)
+
+            # `-x` is `-d` with a harsher message, which is how tmux reads
+            # it: `if (dflag || xflag)` in `cmd-attach-session.c:123`.
+            # Lillecarl/pymux#347.
+            detach_other_clients = a.detach_others or a.hang_up_others
+
+            # The code the client leaves with is the server's to name. A
+            # server that will not serve this client says so in an `exit`
+            # packet, and a person who detached leaves with nothing to
+            # report. Lillecarl/pymux#332.
+            if socket_name:
+                client = create_client(socket_name)
+                client.config_file = filename
+                client.chosen_name = a.client_name
+                client.hang_up_others = a.hang_up_others
+                client.read_only = a.read_only
+                client.attach(
                     detach_other_clients=detach_other_clients,
                     color_depth=_color_depth(ansi_colors_only, true_color),
                 )
-                _leave(c)
+                _leave(client)
+            else:
+                # Connect to the first server.
+                for c in list_clients():
+                    c.config_file = filename
+                    c.chosen_name = a.client_name
+                    c.hang_up_others = a.hang_up_others
+                    c.read_only = a.read_only
+                    c.attach(
+                        detach_other_clients=detach_other_clients,
+                        color_depth=_color_depth(ansi_colors_only, true_color),
+                    )
+                    _leave(c)
 
-            print("No pymux instance found.")
-            sys.exit(1)
+                print("No pymux instance found.")
+                sys.exit(1)
 
-    elif command and socket_name:
-        # Run command in the given session.
-        sys.exit(_send_command(socket_name, command, pane_id))
+        case None:
+            if command and socket_name:
+                # Run command in the given session.
+                sys.exit(_send_command(socket_name, command, pane_id))
 
-    elif command:
-        # A command was given, but no socket was given. Try to send it to the
-        # first running server. (Like 'tmux split-window' without a target.)
-        for c in list_clients():
-            sys.exit(c.run_command(command, pane_id))
-        else:
-            print("No pymux instance found.")
-            sys.exit(1)
+            elif command:
+                # A command was given, but no socket was given. Try to send it to the
+                # first running server. (Like 'tmux split-window' without a target.)
+                for c in list_clients():
+                    sys.exit(c.run_command(command, pane_id))
+                else:
+                    print("No pymux instance found.")
+                    sys.exit(1)
 
-    elif not socket_name:
-        # Run client/server combination.
-        mux = _new_pymux(source_file=filename)
-        socket_name = mux.listen_on_socket(socket_name)
-        pid = daemonize()
+            elif not socket_name:
+                # Run client/server combination.
+                mux = _new_pymux(source_file=filename)
+                socket_name = mux.listen_on_socket(socket_name)
+                pid = daemonize()
 
-        if pid > 0:
-            # Create window. It is important that this happens in the daemon,
-            # because the parent of the process running inside should be this
-            # daemon. (Otherwise the `waitpid` call won't work.)
-            mux.run_server()
-        else:
-            client = create_client(socket_name)
-            client.config_file = filename
-            client.chosen_name = a.client_name
-            client.attach(color_depth=_color_depth(ansi_colors_only, true_color))
-            _leave(client)
+                if pid > 0:
+                    # Create window. It is important that this happens in the daemon,
+                    # because the parent of the process running inside should be this
+                    # daemon. (Otherwise the `waitpid` call won't work.)
+                    mux.run_server()
+                else:
+                    client = create_client(socket_name)
+                    client.config_file = filename
+                    client.chosen_name = a.client_name
+                    client.attach(
+                        color_depth=_color_depth(ansi_colors_only, true_color)
+                    )
+                    _leave(client)
 
-    else:
-        if socket_name_from_env:
-            _socket_from_env_warning()
-            sys.exit(1)
-        else:
-            print("Invalid command.")
-            sys.exit(1)
+            else:
+                if socket_name_from_env:
+                    _socket_from_env_warning()
+                    sys.exit(1)
+                else:
+                    print("Invalid command.")
+                    sys.exit(1)
+
+        case _:
+            assert_never(mode)
 
 
 def _new_pymux(

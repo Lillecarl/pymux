@@ -14,7 +14,7 @@ argument with a space in it in one piece on the way there.
 
 import pytest
 
-from pymux.entry_points.run_pymux import _flag_args, parse_arguments
+from pymux.entry_points.run_pymux import Mode, _flag_args, parse_arguments
 
 
 def parse(*argv):
@@ -31,7 +31,9 @@ def test_no_arguments_is_no_mode_and_no_command():
     assert parse() == (None, None)
 
 
-@pytest.mark.parametrize("mode", ["standalone", "integrated", "start-server"])
+@pytest.mark.parametrize(
+    "mode", [Mode.STANDALONE, Mode.INTEGRATED, Mode.START_SERVER]
+)
 def test_mode_word_is_read_as_mode(mode):
     assert parse(mode) == (mode, None)
 
@@ -56,17 +58,17 @@ def test_separator_does_not_become_command():
     It used to become the first word of the command, and a pane then
     ran "--" and closed at once. Lillecarl/pymux#41.
     """
-    assert parse("integrated", "--", "htop") == ("integrated", "htop")
+    assert parse("integrated", "--", "htop") == (Mode.INTEGRATED, "htop")
 
 
 def test_separator_on_its_own_leaves_no_command():
-    assert parse("integrated", "--") == ("integrated", None)
+    assert parse("integrated", "--") == (Mode.INTEGRATED, None)
 
 
 def test_only_first_separator_goes():
     "A second one is an argument of the program that runs."
     assert parse("integrated", "--", "sh", "--", "x") == (
-        "integrated",
+        Mode.INTEGRATED,
         "sh -- x",
     )
 
@@ -74,7 +76,7 @@ def test_only_first_separator_goes():
 def test_separator_keeps_option_of_program():
     "That is what a separator is for: the option belongs to the pane."
     assert parse("integrated", "--", "ls", "--color") == (
-        "integrated",
+        Mode.INTEGRATED,
         "ls --color",
     )
 
@@ -86,7 +88,7 @@ def test_separator_keeps_option_of_program():
 def test_argument_with_space_stays_one_argument():
     "Lillecarl/pymux#39 is the other half of this."
     assert parse("integrated", "python3", "-c", "import sys") == (
-        "integrated",
+        Mode.INTEGRATED,
         "python3 -c 'import sys'",
     )
 
@@ -113,12 +115,12 @@ def test_empty_argument_survives_as_well():
 
 def test_option_before_mode_word_is_read():
     options, mode, _command = parse_arguments(["-S", "/tmp/x", "integrated"])
-    assert (options.socket, mode) == ("/tmp/x", "integrated")
+    assert (options.socket, mode) == ("/tmp/x", Mode.INTEGRATED)
 
 
 def test_option_after_mode_word_is_read():
     options, mode, _command = parse_arguments(["integrated", "-S", "/tmp/x"])
-    assert (options.socket, mode) == ("/tmp/x", "integrated")
+    assert (options.socket, mode) == ("/tmp/x", Mode.INTEGRATED)
 
 
 def test_option_after_mode_word_wins():

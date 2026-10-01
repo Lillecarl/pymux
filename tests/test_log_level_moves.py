@@ -29,19 +29,19 @@ def test_option_is_there():
 
 def test_it_offers_levels_person_may_name():
     assert ALL_OPTIONS["log-level"].get_all_values(Pymux()) == [
-        "debug",
-        "error",
-        "info",
-        "warning",
+        log.LogLevel.DEBUG,
+        log.LogLevel.ERROR,
+        log.LogLevel.INFO,
+        log.LogLevel.WARNING,
     ]
 
 
 def test_setting_it_reaches_logger():
     pymux = Pymux()
-    ALL_OPTIONS["log-level"].set_value(pymux, "debug")
+    ALL_OPTIONS["log-level"].set_value(pymux, log.LogLevel.DEBUG)
     assert log.logger.level == logging.DEBUG
 
-    ALL_OPTIONS["log-level"].set_value(pymux, "warning")
+    ALL_OPTIONS["log-level"].set_value(pymux, log.LogLevel.WARNING)
     assert log.logger.level == logging.WARNING
 
 
@@ -52,8 +52,8 @@ def test_name_that_is_not_level_is_refused():
 
 def test_server_says_which_level_it_is_at():
     pymux = Pymux()
-    pymux.log_level = "error"
-    assert pymux.log_level == "error"
+    pymux.log_level = log.LogLevel.ERROR
+    assert pymux.log_level == log.LogLevel.ERROR
 
 
 def test_running_server_takes_command():
@@ -71,7 +71,7 @@ def test_server_says_its_level_when_asked_what_it_is_doing():
     from pymux.introspect import _server
 
     pymux = Pymux()
-    pymux.log_level = "debug"
+    pymux.log_level = log.LogLevel.DEBUG
     assert "at debug" in _server(pymux)
 
 
