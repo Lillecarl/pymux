@@ -23,6 +23,7 @@ import pytest
 from pymux.log import logger
 from pymux.main import Pymux
 from pymux.pipes.memory import connect_in_memory
+from pymux.protocol import Packet
 from pymux.server import ServerConnection
 from pymux.web.session import SessionScreen
 
@@ -201,3 +202,20 @@ async def test_a_resize_reaches_the_server(pymux):
             10.0,
             "the server never took the new size",
         )
+
+
+def test_a_dangling_sequence_does_not_swallow_the_next_output():
+    """
+    The parser here is the outer terminal, and a program can leave a
+    sequence open. Without the ground timer the viewer would show the
+    wrong screen for ever. Lillecarl/pymux#485.
+    """
+    session = SessionScreen(ROWS, COLUMNS, lambda packet: None)
+    session.take_packet({"cmd": Packet.OUT, "data": "abc\x1b[1;"})
+    assert session._stream.ground_timer_active
+
+    session._ground_timer.since -= 5  # The timeout passed with no byte.
+    session.take_packet({"cmd": Packet.OUT, "data": "def"})
+
+    assert not session._stream.ground_timer_active
+    assert rows_of(session)[0].startswith("abcdef")

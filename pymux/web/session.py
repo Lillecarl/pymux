@@ -24,6 +24,7 @@ callers of one thing.
 
 import asyncio
 import json
+import time
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Optional
 
 import anyio
@@ -31,7 +32,7 @@ import anyio
 from pyte.keys import Unhearable
 from pyte.modes import PrivateMode
 from pyte.screen import Screen
-from pyte.streams import Stream
+from pyte.streams import GroundTimer, Stream
 
 from pymux.key_spelling import event_however_it_is_written
 from pymux.log import logger
@@ -57,6 +58,10 @@ LARGEST = 1000
 #: How much of the socket to read at once, as `libpymux` does.
 _CHUNK = 65536
 
+#: How long a sequence may stay open before the next bytes drop it, the
+#: same five seconds a pane uses. Lillecarl/pymux#485.
+_GROUND_TIMEOUT = 5
+
 
 class SessionScreen:
     """
@@ -76,6 +81,7 @@ class SessionScreen:
         self.read_only = read_only
         self.screen = Screen(rows, columns, write_process_input=self._answer)
         self._stream = Stream(self.screen)
+        self._ground_timer = GroundTimer(self._stream, _GROUND_TIMEOUT, time.monotonic)
         self._view = PaneView()
 
     # -- the client side of the wire -----------------------------------
@@ -104,7 +110,7 @@ class SessionScreen:
         """
         kind = packet.get("cmd")
         if kind == Packet.OUT:
-            self._stream.feed(packet["data"])
+            self._ground_timer.feed(packet["data"])
         elif kind in (Packet.EXIT, Packet.ERR):
             return True
         return False
