@@ -19,7 +19,13 @@ from pymux.commands import CommandException
 from pymux.commands.show_client_options import show_client_options
 from pymux.commands.show_options import show_options
 from pymux.commands.show_window_options import show_window_options
-from pymux.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS, ALL_WINDOW_OPTIONS, Scope
+from pymux.options import (
+    ALL_CLIENT_OPTIONS,
+    ALL_OPTIONS,
+    ALL_WINDOW_OPTIONS,
+    KeyPrefixOption,
+    Scope,
+)
 
 
 async def test_session_option_reads_as_it_is_written():
@@ -70,6 +76,51 @@ async def test_window_option_reads_active_window():
             pymux.handle_command("show-window-options -g strip")
 
         assert state.message == "on"
+
+
+async def test_base_index_reads_as_it_is_written():
+    "It is set and working, so it must not read as not set. Lillecarl/pymux#494."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("set-option base-index 0")
+            pymux.handle_command("show-options base-index")
+
+        assert state.message == "0"
+
+
+async def test_window_size_default_reads_as_it_is_written():
+    "Lillecarl/pymux#494."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("set-window-option -g window-size latest")
+            pymux.handle_command("show-window-options -g window-size")
+
+        assert state.message == "latest"
+
+
+async def test_window_size_reads_active_window():
+    "Lillecarl/pymux#494."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("set-window-option window-size largest")
+            pymux.handle_command("show-window-options window-size")
+
+        assert state.message == "largest"
+
+
+def test_every_option_names_where_it_lives():
+    """
+    An option that keeps its value in an attribute names it, or the
+    read side answers "not set" for a value that is set. The prefix
+    key is the one deliberate exception: it lives in the binding
+    manager. Lillecarl/pymux#494.
+    """
+    tables = (ALL_OPTIONS, ALL_WINDOW_OPTIONS, ALL_CLIENT_OPTIONS)
+    for table in tables:
+        for name, option in table.items():
+            assert option.attribute_name is not None or isinstance(
+                option, KeyPrefixOption
+            ), name
 
 
 async def test_window_list_holds_window_options_only():

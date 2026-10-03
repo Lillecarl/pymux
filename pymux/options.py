@@ -271,8 +271,13 @@ class BaseIndexOption(Option):
 
     "Base index for window numbering."
 
+    attribute_name = "base_index"
+
     def get_all_values(self, pymux):
         return ["0", "1"]
+
+    def held_by(self, pymux, target=None):
+        return pymux.arrangement
 
     def set_value(self, pymux, value, target=None):
         try:
@@ -468,6 +473,8 @@ class WindowSizeOption(Option):
     """
 
     scope = Scope.WINDOW
+
+    attribute_name = "window_size"
 
     def get_all_values(self, pymux):
         return [str(one) for one in WindowSize]
