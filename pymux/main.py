@@ -2683,6 +2683,10 @@ class Pymux:
             # build that ends in a pane out of sight is exactly what a
             # notification is for.
             for connection in self._client_states:
+                # No connection is a socket command's temporary
+                # client: nothing to send to. Lillecarl/pymux#493.
+                if connection is None:
+                    continue
                 connection.forward_osc(sequence)
 
             # **The escape travels with the next frame, so there has to
@@ -2725,6 +2729,10 @@ class Pymux:
                 logger.warning("The copy is too long for the clipboard.")
                 return
             for connection in self._client_states:
+                # No connection is a socket command's temporary
+                # client: nothing to send to. Lillecarl/pymux#493.
+                if connection is None:
+                    continue
                 connection.forward_osc(sequence)
         except Exception:
             logger.exception("Writing the clipboard of the user failed.")
@@ -2791,6 +2799,12 @@ class Pymux:
         """
         try:
             for connection, client_state in self._client_states.items():
+                # A socket command runs under a temporary client with
+                # no connection: no terminal to send to, and stopping
+                # here would starve every client after it.
+                # Lillecarl/pymux#493.
+                if connection is None:
+                    continue
                 connection.set_pointer_shape(
                     self.pointer_shape_of(self.focused_pane_of(client_state))
                 )
