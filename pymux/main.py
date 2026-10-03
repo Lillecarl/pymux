@@ -927,6 +927,9 @@ class Pymux:
         self.open_url_shim = False
         self._open_url_shim_dir = None
 
+        self.notify_shim = False
+        self._notify_shim_dir = None
+
         # The paste buffer of the session. Copy mode writes it, a pane
         # that writes the clipboard of the user writes it too, and
         # "paste-buffer" reads it. Every client shares this one.
@@ -2030,9 +2033,9 @@ class Pymux:
                 if name not in merged and name in os.environ:
                     del os.environ[name]
 
-            # The shim, when it is on, reaches the opener of this
-            # session before anything else on the PATH of the pane,
-            # and names it for what reads $BROWSER.
+            # The shims, when they are on, reach the opener and the
+            # notifier of this session before anything else on the PATH
+            # of the pane, and name the opener for what reads $BROWSER.
             self._shim_pane_environment()
 
         if command:
@@ -2053,6 +2056,8 @@ class Pymux:
         # and two panes starting together would race for it.
         if self.open_url_shim:
             self._ensure_open_url_shim()
+        if self.notify_shim:
+            self._ensure_notify_shim()
 
         # Create new pane and terminal.
         terminal = Terminal(
@@ -2632,6 +2637,52 @@ class Pymux:
         os.chmod(script, 0o755)
         os.symlink("pymux-open-url", os.path.join(self._open_url_shim_dir, "xdg-open"))
 
+    #: What the `notify-send` shim understands, as a script. The
+    #: summary and the body reach `pymux notify`, and `-u` picks the
+    #: urgency. Every other flag of `notify-send` is accepted and
+    #: ignored -- the hub keeps no icon, category or timeout -- but a
+    #: flag that takes a value still eats it, so it is never mistaken
+    #: for the summary. Hand-parsed, the way the shell parses: this
+    #: runs wherever a pane runs, and BSD `getopt` knows no long
+    #: flags.
+    NOTIFY_SHIM_SCRIPT = r"""#!/bin/sh
+urgency=normal
+while [ $# -gt 0 ]; do
+    case "$1" in
+    -u|--urgency) urgency="$2"; shift 2 ;;
+    --urgency=*) urgency="${1#*=}"; shift ;;
+    -t|-i|-c|-h|-a) shift 2 ;;
+    --expire-time|--icon|--category|--hint|--app-name) shift 2 ;;
+    --expire-time=*|--icon=*|--category=*|--hint=*|--app-name=*) shift ;;
+    -p|--print-id|-w|--wait|-\?|--help|-v|--version) shift ;;
+    --) shift; break ;;
+    *) break ;;
+    esac
+done
+exec pymux notify -u "$urgency" -- "$@"
+"""
+
+    def _ensure_notify_shim(self) -> None:
+        """
+        Make the directory that puts the notifier of this session on
+        the PATH of a pane.
+
+        It holds one script, `notify-send`, which records what it was
+        given in the notification hub. It shadows the notifier of the
+        desktop on purpose: inside a pane a notification belongs to
+        the session first.
+
+        Only a pane that starts afterwards sees it: a running pane
+        keeps the PATH it was born with.
+        """
+        if self._notify_shim_dir is not None:
+            return
+        self._notify_shim_dir = tempfile.mkdtemp(prefix="pymux-notify-")
+        script = os.path.join(self._notify_shim_dir, "notify-send")
+        with open(script, "w") as f:
+            f.write(self.NOTIFY_SHIM_SCRIPT)
+        os.chmod(script, 0o755)
+
     def pane_environment(self) -> dict[str, str]:
         """
         The environment a new pane runs under, merged: the server's
@@ -2660,7 +2711,7 @@ class Pymux:
 
     def _shim_pane_environment(self) -> None:
         """
-        Put the shim on the PATH of a pane, and name the opener in
+        Put the shims on the PATH of a pane, and name the opener in
         $BROWSER. Runs in the fork, before the program of the pane.
         """
         if self.open_url_shim and self._open_url_shim_dir:
@@ -2669,6 +2720,10 @@ class Pymux:
             )
             os.environ["BROWSER"] = os.path.join(
                 self._open_url_shim_dir, "pymux-open-url"
+            )
+        if self.notify_shim and self._notify_shim_dir:
+            os.environ["PATH"] = (
+                self._notify_shim_dir + os.pathsep + os.environ["PATH"]
             )
 
     def forward_osc(self, pane, code: str, param: str) -> None:

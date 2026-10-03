@@ -698,6 +698,14 @@ ALL_OPTIONS = {
     # opens a browser here without knowing pymux. A pane that runs
     # already keeps the PATH it was born with; only new panes see it.
     "open-url-shim": OnOffOption("open_url_shim"),
+    # Put the notifier of this session on the PATH of a pane, as
+    # "notify-send", so that a program in a pane notifies the hub
+    # without knowing pymux. It shadows the notifier of the desktop:
+    # inside a pane a notification belongs to the session first, and
+    # the hub is where it waits until something emits it. A pane that
+    # runs already keeps the PATH it was born with; only new panes
+    # see it.
+    "notify-shim": OnOffOption("notify_shim"),
     # Bring the port with the URL. A "localhost" address opened on the
     # browser of the machine at the keyboard means a service on that
     # machine, which is the wrong one, so the client forwards the port
