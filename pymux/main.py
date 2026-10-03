@@ -58,7 +58,7 @@ from .layout import Justify, LayoutManager, change_pane_size
 from . import log
 from .log import logger
 from libpymux.protocol import Field, Packet
-from .notifications import NotificationCenter, NotificationRoutes
+from .notifications import NotificationCenter, NotificationRoutes, Urgency
 from .options import (
     ALL_CLIENT_OPTIONS,
     ALL_OPTIONS,
@@ -70,7 +70,17 @@ from .options import (
     OpenUrlTarget,
     Scope,
 )
-from .osc import build_osc, open_url_of
+from .osc import (
+    build_osc,
+    copy_data_of,
+    current_dir_of,
+    extension_key_of,
+    file_url_dir_of,
+    ftcs_of,
+    open_url_of,
+    request_attention_of,
+    set_user_var_of,
+)
 from .pipes import bind_and_listen_on_socket, connect_in_memory
 from .rc import STARTUP_COMMANDS
 from .server import ServerConnection
@@ -142,6 +152,17 @@ class PaneCursor(CursorShapeConfig):
 #: key repeats, and one line per repeat is a log nobody reads. A
 #: keyboard has fewer keys than this.
 MAX_KEYS_TO_REMEMBER = 512
+
+#: How many user variables one pane keeps, from "OSC 1337 ;
+#: SetUserVar". A shell sets the same handful on every prompt; a
+#: program that mints names without end loses the oldest, the way the
+#: notification hub does.
+MAX_USER_VARS = 64
+
+#: How many marked rows one pane keeps, from "OSC 1337 ; SetMark".
+#: Marks wait for a jump UI; until it comes they are bounded like
+#: every other unbounded thing a program in a pane may send.
+MAX_MARKS = 256
 
 #: What a client refreshes in the session it attaches to, by default.
 #: tmux's own list, which is every name that points at something on
@@ -2674,14 +2695,26 @@ class Pymux:
                 return
 
             if code == Osc.TERMINAL_EXTENSION:
-                # iTerm2's namespace. The one subcommand a pane may use
-                # is the one this session can serve; nothing else of
-                # the namespace goes out, because a payload that was
-                # not checked must not reach the terminal of the user.
-                url = open_url_of(param)
-                if url is not None:
-                    self.open_url(url)
-                return
+                # iTerm2's namespace, one subcommand at a time. A
+                # subcommand this session parsed may reach the terminal
+                # of the user; one it did not parse must not, because
+                # an unchecked payload drives that terminal instead of
+                # only naming a service.
+                if not self._read_terminal_extension(pane, param):
+                    return
+
+            if code == Osc.CURRENT_DIRECTORY:
+                # Where the program is, as a file URL. The outer
+                # terminal keeps its own copy, so this travels on; the
+                # pane keeps one too.
+                self._read_current_directory(pane, param)
+
+            if code == Osc.SHELL_INTEGRATION:
+                # The prompt, the command and the exit status it
+                # finished with. Same answer as above: the outer
+                # terminal reads zones of its own, and the pane keeps
+                # these.
+                self._read_shell_integration(pane, param)
 
             if code == Osc.CLIPBOARD:
                 # **Only "on" lets a program in a pane near the
@@ -2731,6 +2764,127 @@ class Pymux:
             self.invalidate(Woke.PANE_WROTE_AN_OSC)
         except Exception:
             logger.exception("Forwarding an OSC sequence failed.")
+
+    def _read_current_directory(self, pane, param: str) -> None:
+        """
+        Keep where the program says it is.
+
+        "OSC 7" carries a file URL with a host and a path. A URL that
+        does not parse stores nothing; the sequence still travels on,
+        because the outer terminal reads it for itself.
+        """
+        parsed = file_url_dir_of(param)
+        if parsed is None:
+            return
+        host, directory = parsed
+        pane.current_host = host
+        pane.current_directory = directory
+
+    def _read_shell_integration(self, pane, param: str) -> None:
+        """
+        Keep the shell integration zone and the exit status.
+
+        "OSC 133" names the prompt (A), the command (B), its output
+        (C) and its end (D, with the status or bare for an abort). An
+        abort clears the zone and the status; anything else that does
+        not parse stores nothing. The sequence travels on either way,
+        for the zones of the outer terminal.
+        """
+        parsed = ftcs_of(param)
+        if parsed is None:
+            return
+        letter, status = parsed
+        if letter == "D":
+            pane.command_zone = None
+            pane.last_exit_status = status
+        else:
+            pane.command_zone = letter
+
+    def _read_terminal_extension(self, pane, param: str) -> bool:
+        """
+        Read one subcommand of "OSC 1337". True when the sequence may
+        travel on to the terminal of the user.
+
+        The browser keeps its question (`open-url-mode` asks it). The
+        working directory, a user variable, a mark, an attention ask
+        and a clipboard write travel on once parsed, the way the
+        sequences they synonymise do. Anything else stays inside:
+        images wait for their slice, and an unchecked payload never
+        reaches the terminal of the user.
+        """
+        url = open_url_of(param)
+        if url is not None:
+            self.open_url(url)
+            return False
+
+        keyed = extension_key_of(param)
+        if keyed is None:
+            return False
+        key, rest = keyed
+
+        if key == "CurrentDir":
+            directory = current_dir_of(rest)
+            if directory is None:
+                return False
+            pane.current_directory = directory
+            return True
+
+        if key == "SetMark":
+            if rest:
+                return False
+            try:
+                row = pane.screen.cursor_y
+            except AttributeError:
+                return True
+            pane.marks.append(row)
+            while len(pane.marks) > MAX_MARKS:
+                del pane.marks[0]
+            return True
+
+        if key == "SetUserVar":
+            parsed = set_user_var_of(rest)
+            if parsed is None:
+                return False
+            name, value = parsed
+            if name not in pane.user_vars and len(pane.user_vars) >= MAX_USER_VARS:
+                del pane.user_vars[next(iter(pane.user_vars))]
+            pane.user_vars[name] = value
+            return True
+
+        if key == "RequestAttention":
+            value = request_attention_of(param)
+            if value is None:
+                return False
+            # A withdrawal cancels a request the hub never tracked as
+            # one: there is nothing to take back, so only the asks
+            # record anything.
+            if value != "no":
+                self.notification_center.add(
+                    "Attention requested",
+                    "With fireworks." if value == "fireworks" else "",
+                    Urgency.CRITICAL if value == "yes" else Urgency.NORMAL,
+                    pane.pane_id,
+                )
+            return True
+
+        if key == "Copy":
+            data = copy_data_of(param)
+            if data is None:
+                return False
+            # The same gate as OSC 52: only "on" lets a program in a
+            # pane near the clipboard.
+            if self.clipboard_mode is not Clipboard.ON:
+                return False
+            self._mirror_clipboard("c;" + data)
+            return True
+
+        if key == "ClearScrollback":
+            if rest:
+                return False
+            pane.screen.clear_history()
+            return True
+
+        return False
 
     def write_user_clipboard(self, text: str) -> None:
         """

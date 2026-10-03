@@ -121,6 +121,38 @@ class Pane:
         #: number cannot. Lillecarl/pymux#387.
         self.revision = 0
 
+        #: Where the program says it is, from "OSC 7" or "OSC 1337 ;
+        #: CurrentDir". A shell reports it on every prompt, and nothing
+        #: else sets it. `None` is a pane nobody asked about yet.
+        self.current_directory: str | None = None
+
+        #: The machine the directory sits on, from the host of the
+        #: "OSC 7" file URL. `None` is the machine here or a report
+        #: that named no host.
+        self.current_host: str | None = None
+
+        #: What the shell published about itself, from "OSC 1337 ;
+        #: SetUserVar". iTerm2 reads these for badges and triggers and
+        #: WezTerm for titles; here they wait for a reader, the way the
+        #: notification hub waited for its chooser.
+        self.user_vars: Dict[str, str] = {}
+
+        #: The screen rows a program marked, from "OSC 1337 ; SetMark",
+        #: oldest first. Rows move as output scrolls, so these are where
+        #: the marks were, not where they are; the jump UI that resolves
+        #: them comes later.
+        self.marks: List[int] = []
+
+        #: The shell integration zone the program stands in, from
+        #: "OSC 133": "A" a prompt, "B" a command, "C" its output.
+        #: `None` is outside every zone or after the command ended.
+        self.command_zone: str | None = None
+
+        #: The exit status the last command finished with, from
+        #: "OSC 133 ; D ; status". `None` is no finished command yet,
+        #: or one that was aborted.
+        self.last_exit_status: int | None = None
+
     def content_changed(self) -> None:
         "Say that what this pane shows may have changed."
         self.revision += 1
