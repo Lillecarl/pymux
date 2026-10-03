@@ -864,6 +864,7 @@ class LayoutManager:
         state.choose_window = True
         state.choose_buffer = False
         state.choose_options = False
+        state.choose_notifications = False
         state.menu_entries = []
         state.choose_window_command = template
         state.choose_window_filter.reset()
@@ -1004,6 +1005,7 @@ class LayoutManager:
         state.choose_window = False
         state.choose_buffer = False
         state.choose_options = False
+        state.choose_notifications = False
         state.chooser_return_to = None
 
         if restore and going_back is not None:
@@ -1023,6 +1025,7 @@ class LayoutManager:
         self.client_state.choose_buffer = True
         self.client_state.choose_window = False
         self.client_state.choose_options = False
+        self.client_state.choose_notifications = False
         self.client_state.menu_entries = []
         self.client_state.choose_window_command = ""
         self.client_state.choose_window_filter.reset()
@@ -1043,6 +1046,27 @@ class LayoutManager:
         self.client_state.choose_options = True
         self.client_state.choose_window = False
         self.client_state.choose_buffer = False
+        self.client_state.choose_notifications = False
+        self.client_state.menu_entries = []
+        self.client_state.choose_window_command = ""
+        self.client_state.choose_window_filter.reset()
+        self.client_state.choose_window_index = 0
+        self._chooser_box()
+        assert self._chooser_rows is not None
+        get_app().layout.focus(self._chooser_rows)
+
+    def display_notifications_chooser(self) -> None:
+        """
+        Show the notifications the hub keeps, newest first, to choose
+        from. Enter takes this client to the pane one came from; a
+        pane that is gone leaves a message saying so. Escape closes,
+        and there is nothing to put back: the hub previews nothing.
+        """
+        self.client_state.display_popup = False
+        self.client_state.choose_notifications = True
+        self.client_state.choose_window = False
+        self.client_state.choose_buffer = False
+        self.client_state.choose_options = False
         self.client_state.menu_entries = []
         self.client_state.choose_window_command = ""
         self.client_state.choose_window_filter.reset()
@@ -1061,6 +1085,7 @@ class LayoutManager:
         self.client_state.display_popup = False
         self.client_state.choose_window = False
         self.client_state.choose_buffer = False
+        self.client_state.choose_notifications = False
         self.client_state.menu_entries = entries
         self.client_state.menu_title = title
         self._menu_box()
@@ -1182,6 +1207,17 @@ class LayoutManager:
                 if text in name.lower()
                 or text in option_value_of(self.pymux, name).lower()
             ]
+        if self.client_state.choose_notifications:
+            records = list(
+                reversed(self.pymux.notification_center.notifications())
+            )
+            if not text:
+                return records
+            return [
+                record
+                for record in records
+                if text in record.title.lower() or text in record.body.lower()
+            ]
         if self.client_state.choose_buffer:
             buffers = self.pymux.named_buffers
             if not text:
@@ -1216,6 +1252,7 @@ class LayoutManager:
         matches = self.chooser_matches()
         self.client_state.choose_buffer = False
         self.client_state.choose_options = False
+        self.client_state.choose_notifications = False
         if not matches:
             return
         index = min(self.client_state.choose_window_index, len(matches) - 1)
@@ -1265,6 +1302,7 @@ class LayoutManager:
         self.client_state.choose_options = False
         self.client_state.choose_window = False
         self.client_state.choose_buffer = False
+        self.client_state.choose_notifications = False
         if not matches:
             return
         index = min(self.client_state.choose_window_index, len(matches) - 1)
@@ -1274,6 +1312,28 @@ class LayoutManager:
             "command-prompt -p '%s %s' -I '%s' '%s %s %%'"
             % (command, name, option_value_of(self.pymux, name), command, name)
         )
+
+    def choose_pointed_notification(self) -> None:
+        """
+        Take this client to the pane the pointed notification came
+        from. The hub closes either way; a pane that is gone, or a
+        notification no pane sent, leaves a message saying so instead
+        of moving.
+        """
+        matches = self.chooser_matches()
+        self.client_state.choose_notifications = False
+        if not matches:
+            return
+        index = min(self.client_state.choose_window_index, len(matches) - 1)
+        record = matches[index]
+        found = self.pymux.window_of_pane(record.pane_id)
+        if found is None:
+            self.client_state.message = "The pane the notification came from is gone."
+            return
+        _session, window, pane = found
+        self.show_window(window)
+        window.active_pane = pane
+        self.pymux.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
 
     def _create_select_window_handler(
         self, window: arrangement.Window
@@ -1818,6 +1878,8 @@ class LayoutManager:
         "What the box of the chooser says it is."
         if self.client_state.choose_options:
             return "Customize"
+        if self.client_state.choose_notifications:
+            return "Notifications"
         return "Choose a buffer"
 
     def _chooser_tokens(self) -> StyleAndTextTuples:
@@ -1829,6 +1891,8 @@ class LayoutManager:
         """
         if self.client_state.choose_options:
             return self._choose_options_tokens()
+        if self.client_state.choose_notifications:
+            return self._choose_notification_tokens()
         return self._choose_buffer_tokens()
 
     def _choose_options_tokens(self) -> StyleAndTextTuples:
@@ -1860,6 +1924,38 @@ class LayoutManager:
                     style,
                     "%s%s = %s%s\n"
                     % ("> " if i == chosen else "  ", name, value, kind),
+                    self._create_chooser_click_handler(i),
+                )
+            )
+        return tokens
+
+    def _choose_notification_tokens(self) -> StyleAndTextTuples:
+        """
+        The notifications, newest first: when each arrived, what it
+        says, and which pane it came from. The row the chooser points
+        at carries the gutter arrow and stands out, and a row answers
+        a click by jumping to its pane.
+        """
+        matches = self.chooser_matches()
+        if not matches:
+            return [("class:chooser.hint", " No notifications. ")]
+
+        chosen = min(self.client_state.choose_window_index, len(matches) - 1)
+        tokens: StyleAndTextTuples = []
+        for i, record in enumerate(matches):
+            style = "class:chooser.selected" if i == chosen else "class:commandpalette"
+            when = datetime.datetime.fromtimestamp(record.at).strftime("%H:%M:%S")
+            text = record.title
+            if record.body:
+                text += " - " + record.body
+            source = (
+                "%%%d" % record.pane_id if record.pane_id is not None else "-"
+            )
+            tokens.append(
+                (
+                    style,
+                    "%s%s %s (%s)\n"
+                    % ("> " if i == chosen else "  ", when, text[:120], source),
                     self._create_chooser_click_handler(i),
                 )
             )
@@ -1959,6 +2055,9 @@ class LayoutManager:
                 if self.client_state.choose_options:
                     self.client_state.choose_window_index = row
                     self.choose_pointed_option()
+                elif self.client_state.choose_notifications:
+                    self.client_state.choose_window_index = row
+                    self.choose_pointed_notification()
                 elif self.client_state.choose_buffer:
                     self.client_state.choose_window_index = row
                     self.choose_pointed_buffer()
@@ -2240,6 +2339,7 @@ class LayoutManager:
                         filter=Condition(
                             lambda: self.client_state.choose_buffer
                             or self.client_state.choose_options
+                            or self.client_state.choose_notifications
                         ),
                     ),
                     left=BOX_SIDE,

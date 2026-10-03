@@ -58,7 +58,7 @@ from .layout import Justify, LayoutManager, change_pane_size
 from . import log
 from .log import logger
 from libpymux.protocol import Field, Packet
-from .notifications import NotificationRoutes
+from .notifications import NotificationCenter, NotificationRoutes
 from .options import (
     ALL_CLIENT_OPTIONS,
     ALL_OPTIONS,
@@ -349,6 +349,7 @@ class ClientState:
         self.choose_window = False
         self.choose_buffer = False
         self.choose_options = False
+        self.choose_notifications = False
         self.choose_window_index = 0
         self.choose_window_command = ""
 
@@ -575,6 +576,8 @@ class ClientState:
             manager.choose_pointed_option()
         elif self.choose_buffer:
             manager.choose_pointed_buffer()
+        elif self.choose_notifications:
+            manager.choose_pointed_notification()
         else:
             manager.choose_pointed_window()
         return False
@@ -731,7 +734,12 @@ class ClientState:
         # chooser works, because its bindings ask what shows and not
         # what has the focus, which is why only the search broke.
         # Lillecarl/pymux#161, Lillecarl/pymux#337.
-        if self.choose_window or self.choose_buffer or self.choose_options:
+        if (
+            self.choose_window
+            or self.choose_buffer
+            or self.choose_options
+            or self.choose_notifications
+        ):
             return
 
         # An overlay pane takes the keyboard while it is open.
@@ -965,6 +973,11 @@ class Pymux:
         #: the user answers a notification by its identifier, and every
         #: pane names its own without knowing about the others.
         self.notifications = NotificationRoutes()
+
+        #: The notifications the hub shows, across every source. Kept
+        #: beside the routes and not in them: a route answers one
+        #: question, the hub lists everything.
+        self.notification_center = NotificationCenter()
 
         # When no panes are available.
         self.original_cwd = os.getcwd()
@@ -2331,6 +2344,22 @@ class Pymux:
                     return session
         return None
 
+    def window_of_pane(self, pane_id: int | None):
+        """
+        The session, window and pane for a pane id, or None when the
+        pane is gone. The hub jumps to a notification with this.
+        """
+        if pane_id is None:
+            return None
+        pane = self.panes_by_id.get(pane_id)
+        if pane is None:
+            return None
+        for session in self.sessions:
+            for window in session.arrangement.windows:
+                if pane in window.panes:
+                    return (session, window, pane)
+        return None
+
     def displayed_now(self) -> datetime.datetime:
         """
         The time that a screen shows, as of now.
@@ -2673,6 +2702,9 @@ class Pymux:
                 # Give the notification an identifier that names this
                 # pane, so that the answer finds its way back.
                 param = self.notifications.outgoing(pane.pane_id, param)
+                # And keep it for the hub, which lists what the
+                # terminal was asked, not only what it showed.
+                self.notification_center.add_osc99(pane.pane_id, param)
 
             sequence = build_osc(code, param)
             if sequence is None:

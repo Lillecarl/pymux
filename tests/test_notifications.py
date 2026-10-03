@@ -1,135 +1,182 @@
 """
-Tests for routing the answers to desktop notifications.
+The notifications hub: what it keeps, what feeds it, and the chooser
+that shows it.
 
-A program asks for a notification and names it. The terminal of the
-user answers by that name, but the answer arrives at the client, which
-serves every pane. pymux therefore renames a notification on the way
-out and puts the name of the program back on the way in.
+The hub lists what every source recorded -- a pane's OSC 99, a
+`notify` call -- newest first, with when each arrived and which pane
+it came from. Enter takes the client to that pane. The pipe the
+terminal reads stays as it was: collecting is beside forwarding, and
+not instead of it.
 """
 
-from pymux.notifications import (
-    NotificationRoutes,
-    read_identifier,
-    replace_identifier,
-    split_payload,
-)
+import pytest
+from prompt_toolkit.application.current import set_app
+
+from session import create_session
+from pymux.main import Pymux
+from pymux.notifications import NotificationCenter
 
 
-# ----------------------------------------------------------------------
-# Reading the payload.
+class FakePane:
+    "A pane is named by its id when a notification is recorded."
+
+    def __init__(self, pane_id=7):
+        self.pane_id = pane_id
 
 
-def test_text_may_hold_semicolon():
-    assert split_payload("i=1:d=0;a; b") == ("i=1:d=0", ";", "a; b")
+def test_records_come_back_oldest_first():
+    center = NotificationCenter()
+    first = center.add("One")
+    second = center.add("Two")
+    assert center.notifications() == [first, second]
+    assert second.id == first.id + 1
 
 
-def test_payload_without_text():
-    assert split_payload("i=1:p=close") == ("i=1:p=close", "", "")
+def test_a_noisy_pane_does_not_grow_the_hub_without_end():
+    center = NotificationCenter(limit=2)
+    center.add("One")
+    center.add("Two")
+    center.add("Three")
+    assert [one.title for one in center.notifications()] == ["Two", "Three"]
 
 
-def test_identifier_is_read_from_metadata():
-    assert read_identifier("i=mine") == "mine"
-    assert read_identifier("d=0:i=mine:p=title") == "mine"
-    assert read_identifier("i=a-b_c+d.e") == "a-b_c+d.e"
+def test_osc99_without_identifier_stands_alone():
+    """
+    Nothing assembles chunks without one, so each is its own
+    notification, by the type its metadata names.
+    """
+    center = NotificationCenter()
+    title = center.add_osc99(7, "p=title;Build done")
+    body = center.add_osc99(7, "p=body;Three files")
+    assert title is not None and body is not None
+    assert (title.title, title.body) == ("Build done", "")
+    assert (body.title, body.body) == ("", "Three files")
 
 
-def test_metadata_without_identifier():
-    assert read_identifier("d=0:p=title") is None
-    assert read_identifier("") is None
-
-
-def test_identifier_that_is_not_one_is_refused():
-    "Only the characters that kitty allows."
-    assert read_identifier("i=with space") is None
-    assert read_identifier("i=" + "x" * 65) is None
-    assert read_identifier("i=") is None
-
-
-def test_identifier_is_replaced_in_place():
-    assert replace_identifier("d=0:i=mine:p=title", "7") == "d=0:i=7:p=title"
-    assert replace_identifier("i=mine", "7") == "i=7"
-
-
-def test_metadata_without_identifier_is_not_changed():
-    assert replace_identifier("d=0:p=title", "7") == "d=0:p=title"
-
-
-# ----------------------------------------------------------------------
-# Out and back.
-
-
-def test_notification_is_renamed_on_way_out():
-    routes = NotificationRoutes()
-    assert routes.outgoing(1, "i=mine:a=report;Build ready") == (
-        "i=1:a=report;Build ready"
+def test_osc99_chunks_with_an_identifier_assemble():
+    center = NotificationCenter()
+    assert center.add_osc99(7, "i=9:p=title:d=0;Part one") is None
+    assert center.notifications() == []
+    record = center.add_osc99(7, "i=9:p=body;Part two")
+    assert record is not None
+    assert (record.title, record.body, record.pane_id) == (
+        "Part one",
+        "Part two",
+        7,
     )
 
 
-def test_answer_carries_name_of_program_back():
-    routes = NotificationRoutes()
-    routes.outgoing(4, "i=mine:a=report;Build ready")
-    assert routes.incoming("i=1") == (4, "i=mine")
-    assert routes.incoming("i=1:p=close;untracked") == (4, "i=mine:p=close;untracked")
+def test_osc99_urgency_defaults_to_normal():
+    center = NotificationCenter()
+    plain = center.add_osc99(7, "p=title;Hey")
+    loud = center.add_osc99(7, "i=1:u=2:p=title;Fire")
+    bogus = center.add_osc99(7, "i=2:u=9:p=title;Hey")
+    assert plain is not None and loud is not None and bogus is not None
+    assert (plain.urgency, loud.urgency, bogus.urgency) == (1, 2, 1)
 
 
-def test_same_notification_keeps_its_name():
-    "A program sends a notification in pieces, and updates it later."
-    routes = NotificationRoutes()
-    first = routes.outgoing(1, "i=mine:d=0;half ")
-    second = routes.outgoing(1, "i=mine:d=1;a message")
-    assert first.startswith("i=1:") and second.startswith("i=1:")
+def test_osc99_is_collected_for_the_hub():
+    pymux = Pymux()
+    pymux._client_states = {}
+    pane = FakePane()
+    pymux.forward_osc(pane, "99", "i=7:p=title:d=0;Part one")
+    assert pymux.notification_center.notifications() == []
+    pymux.forward_osc(pane, "99", "i=7:p=body;Part two")
+    (record,) = pymux.notification_center.notifications()
+    assert (record.title, record.body, record.pane_id) == (
+        "Part one",
+        "Part two",
+        7,
+    )
 
 
-def test_two_panes_that_pick_same_name_stay_apart():
-    "Panes name their notifications without knowing about each other."
-    routes = NotificationRoutes()
-    routes.outgoing(1, "i=build;done")
-    routes.outgoing(2, "i=build;done")
-    assert routes.incoming("i=1") == (1, "i=build")
-    assert routes.incoming("i=2") == (2, "i=build")
+async def test_notify_records_title_body_and_pane():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            window = pymux.current_session.arrangement.get_active_window()
+            assert window is not None and window.active_pane is not None
+            wanted = window.active_pane.pane_id
+            pymux.handle_command("notify Build Ready")
+
+        (record,) = pymux.notification_center.notifications()
+        assert record.title == "Build"
+        assert record.body == "Ready"
+        assert record.pane_id == wanted
 
 
-def test_notification_without_name_is_not_touched():
-    "The answer to one names nothing, so there is nothing to route."
-    routes = NotificationRoutes()
-    assert routes.outgoing(1, "d=0;a message") == "d=0;a message"
-    assert routes.incoming("i=0") is None
+async def test_notify_takes_urgency():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("notify Fire Down -u critical")
+
+        (record,) = pymux.notification_center.notifications()
+        assert record.urgency == 2
 
 
-def test_answer_that_names_nothing_of_ours_is_dropped():
-    routes = NotificationRoutes()
-    routes.outgoing(1, "i=mine;done")
-    assert routes.incoming("i=999") is None
-    assert routes.incoming("p=close") is None
+async def test_hub_lists_newest_first():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("notify First One")
+            pymux.handle_command("notify Second Two")
+            pymux.handle_command("choose-notifications")
+
+        assert state.choose_notifications
+        rows = state.layout_manager._choose_notification_tokens()
+        assert len(rows) == 2
+        assert "Second" in rows[0][1]
+        assert "First" in rows[1][1]
 
 
-def test_alive_poll_is_routed_like_rest():
-    "kitty puts an identifier on that one for multiplexers."
-    routes = NotificationRoutes()
-    routes.outgoing(3, "i=poll:p=alive;")
-    assert routes.incoming("i=1:p=alive;a,b,c") == (3, "i=poll:p=alive;a,b,c")
+async def test_empty_hub_says_so():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("choose-notifications")
+
+        rows = state.layout_manager._choose_notification_tokens()
+        assert len(rows) == 1
+        assert "No notifications" in rows[0][1]
 
 
-# ----------------------------------------------------------------------
-# The table does not grow without end.
+async def test_search_narrows_notification_rows():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("notify Build Ready")
+            pymux.handle_command("notify Test Green")
+            pymux.handle_command("choose-notifications")
+
+            state.choose_window_filter.insert_text("gree")
+
+        rows = state.layout_manager._choose_notification_tokens()
+        assert len(rows) == 1
+        assert "Test" in rows[0][1]
 
 
-def test_oldest_notification_is_forgotten():
-    routes = NotificationRoutes(limit=3)
-    for number in range(5):
-        routes.outgoing(1, "i=n%i;x" % number)
-    assert routes.incoming("i=1") is None  # The first two are gone.
-    assert routes.incoming("i=2") is None
-    assert routes.incoming("i=3") == (1, "i=n2")
-    assert routes.incoming("i=5") == (1, "i=n4")
+async def test_enter_from_hub_jumps_to_the_pane():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            first = pymux.current_session.arrangement.get_active_window()
+            assert first is not None and first.active_pane is not None
+            pane_id = first.active_pane.pane_id
+            pymux.handle_command("notify Build Ready")
+            pymux.handle_command("new-window")
+            assert pymux.current_session.arrangement.get_active_window() is not first
+            pymux.handle_command("choose-notifications")
+
+        state.layout_manager.choose_pointed_notification()
+
+        assert pymux.current_session.arrangement.get_active_window() is first
+        assert first.active_pane is not None
+        assert first.active_pane.pane_id == pane_id
+        assert not state.choose_notifications
 
 
-def test_notification_that_is_sent_again_stays():
-    "Sending it again makes it the newest, so it is not the first to go."
-    routes = NotificationRoutes(limit=2)
-    routes.outgoing(1, "i=old;x")
-    routes.outgoing(1, "i=other;x")
-    routes.outgoing(1, "i=old;x")  # Again: now the newest.
-    routes.outgoing(1, "i=third;x")
-    assert routes.incoming("i=1") == (1, "i=old")
-    assert routes.incoming("i=2") is None  # "other" went instead.
+async def test_enter_on_a_gone_pane_says_so():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.notification_center.add("Build", "Ready", pane_id=999999)
+            pymux.handle_command("choose-notifications")
+
+        state.layout_manager.choose_pointed_notification()
+
+        assert state.message == "The pane the notification came from is gone."
+        assert not state.choose_notifications

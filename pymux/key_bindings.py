@@ -299,12 +299,17 @@ class PymuxKeyBindings:
                 state.choose_window
                 or state.choose_buffer
                 or state.choose_options
+                or state.choose_notifications
             )
 
         @Condition
         def chooser_search_focused() -> bool:
             state = self.pymux.get_client_state()
-            return (state.choose_window or state.choose_buffer) and has_focus(
+            return (
+                state.choose_window
+                or state.choose_buffer
+                or state.choose_notifications
+            ) and has_focus(
                 state.choose_window_filter
             )()
 
@@ -363,6 +368,8 @@ class PymuxKeyBindings:
                 state.layout_manager.choose_pointed_option()
             elif state.choose_buffer:
                 state.layout_manager.choose_pointed_buffer()
+            elif state.choose_notifications:
+                state.layout_manager.choose_pointed_notification()
             else:
                 state.layout_manager.choose_pointed_window()
 

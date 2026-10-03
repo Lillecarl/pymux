@@ -19,10 +19,11 @@ one carries "i=0", which names nothing, so there is nothing to route.
 """
 
 import re
+import time
 from collections import OrderedDict
-from typing import Tuple
+from typing import NamedTuple, Tuple
 
-__all__ = ["NotificationRoutes"]
+__all__ = ["Notification", "NotificationCenter", "NotificationRoutes"]
 
 #: The characters that an identifier may hold. (The same set as kitty.)
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9_+.-]{1,64}$")
@@ -30,6 +31,153 @@ _IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9_+.-]{1,64}$")
 #: How many notifications to remember. A program that never reads its
 #: answers must not grow the table without end; the oldest goes first.
 MAX_ROUTES = 256
+
+#: How many notifications the hub keeps. Same rule as the routes: a
+#: noisy pane must not grow the list without end.
+MAX_NOTIFICATIONS = 256
+
+
+class Urgency:
+    """How insistently a notification asks, 0 low through 2 critical."""
+
+    LOW = 0
+    NORMAL = 1
+    CRITICAL = 2
+
+
+def read_urgency(metadata: str) -> int:
+    "The value of the 'u' key of the metadata, or normal."
+    for field in metadata.split(":"):
+        key, sign, value = field.partition("=")
+        if key == "u" and sign and value in ("0", "1", "2"):
+            return int(value)
+    return Urgency.NORMAL
+
+
+def read_payload_type(metadata: str) -> str:
+    "The value of the 'p' key of the metadata, or 'title'."
+    for field in metadata.split(":"):
+        key, sign, value = field.partition("=")
+        if key == "p" and sign:
+            return value
+    return "title"
+
+
+class Notification(NamedTuple):
+    """One notification the hub shows, oldest stored first."""
+
+    id: int
+    title: str
+    body: str
+    urgency: int
+    pane_id: int | None
+    at: float
+
+
+class NotificationCenter:
+    """
+    The notifications the hub shows, across every source.
+
+    A record is one finished notification: OSC 99 arrives in pieces --
+    a title chunk, a body chunk, the same identifier -- so chunks with
+    an identifier assemble here and a chunk without one stands alone.
+    A finished record never changes, which is what makes the hub a
+    list and not a stream.
+    """
+
+    def __init__(self, limit: int = MAX_NOTIFICATIONS) -> None:
+        self.limit = limit
+        self._next = 1
+        self._records: list[Notification] = []
+        self._pending: dict[Tuple[int | None, str], Notification] = {}
+
+    def add(
+        self,
+        title: str,
+        body: str = "",
+        urgency: int = Urgency.NORMAL,
+        pane_id: int | None = None,
+    ) -> Notification:
+        "Record a finished notification."
+        record = Notification(
+            id=self._next,
+            title=title,
+            body=body,
+            urgency=urgency,
+            pane_id=pane_id,
+            at=time.time(),
+        )
+        self._next += 1
+        self._records.append(record)
+        while len(self._records) > self.limit:
+            del self._records[0]
+        return record
+
+    def add_osc99(
+        self, pane_id: int | None, param: str
+    ) -> Notification | None:
+        """
+        Record one OSC 99 chunk, assembling chunks with an identifier.
+
+        A chunk whose metadata says it is done -- `d` missing or
+        non-zero -- finishes its notification and returns it. A chunk
+        that says more follows is held, and a chunk with no identifier
+        to assemble by stands alone. Nothing is returned for a held
+        chunk.
+        """
+        metadata, _semicolon, text = split_payload(param)
+        identifier = read_identifier(metadata)
+        payload_type = read_payload_type(metadata)
+        urgency = read_urgency(metadata)
+        done = True
+        for field in metadata.split(":"):
+            key, sign, value = field.partition("=")
+            if key == "d" and sign:
+                done = value != "0"
+
+        if identifier is None:
+            return self.add(
+                title=text if payload_type == "title" else "",
+                body=text if payload_type == "body" else "",
+                urgency=urgency,
+                pane_id=pane_id,
+            )
+
+        key = (pane_id, identifier)
+        pending = self._pending.get(key)
+        if pending is None:
+            pending = Notification(
+                id=self._next,
+                title="",
+                body="",
+                urgency=urgency,
+                pane_id=pane_id,
+                at=time.time(),
+            )
+            self._next += 1
+        title = pending.title
+        body = pending.body
+        if payload_type == "title":
+            title = title + text if title else text
+        elif payload_type == "body":
+            body = body + text if body else text
+        pending = pending._replace(title=title, body=body, urgency=urgency)
+        if not done:
+            self._pending[key] = pending
+            # A chunk train that never finalizes must not hold its
+            # seat for ever; the oldest waiting goes first.
+            while len(self._pending) > self.limit:
+                self._pending.pop(next(iter(self._pending)))
+            return None
+        self._pending.pop(key, None)
+        self._records.append(pending)
+        while len(self._records) > self.limit:
+            del self._records[0]
+        return pending
+
+    def notifications(self) -> list[Notification]:
+        "Every finished notification, oldest first."
+        return list(self._records)
 
 
 def split_payload(param: str) -> Tuple[str, str, str]:
