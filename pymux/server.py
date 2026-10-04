@@ -26,6 +26,7 @@ from .colors import ColorDetection, DefaultColors
 from .commands import handle_command
 from .enums import Woke
 from .graphics import ClientGraphics
+from .ids import PaneId
 from .keys import KittyVt100Parser
 from .log import logger
 from pymux.commands.common import find_pane
@@ -862,7 +863,7 @@ class ServerConnection:
             # doesn't hurt too much and makes the code easier.)
             pane_id = packet.get(Field.PANE_ID)
             pane = (
-                self.pymux.panes_by_id.get(int(pane_id))
+                self.pymux.panes_by_id.get(PaneId(int(pane_id)))
                 if pane_id is not None
                 else None
             )

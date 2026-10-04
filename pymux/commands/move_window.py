@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandException
 from pymux.commands import add_command
 from pymux.commands.common import the_window
+from pymux.ids import WindowIndex
 
 
 def move_window(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -29,12 +30,12 @@ def move_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
     dst_window = args.dst_window
     try:
-        new_index = int(dst_window)
+        new_index = WindowIndex(int(dst_window))
     except ValueError:
         raise CommandException("Invalid window index: %r" % (dst_window,))
 
     if args.after:
-        new_index += 1
+        new_index = WindowIndex(new_index + 1)
 
     window = the_window(pymux, None)
     occupant = pymux.arrangement.get_window_by_index(new_index)

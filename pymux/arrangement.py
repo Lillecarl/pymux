@@ -19,6 +19,7 @@ from prompt_toolkit.data_structures import Size
 from ptterm import Terminal
 
 from .enums import WindowSize
+from .ids import PaneId, PaneIndex, WindowId, WindowIndex
 
 __all__ = [
     "LayoutTypes",
@@ -94,7 +95,7 @@ class Pane:
 
         # Give unique ID.
         Pane._pane_counter += 1
-        self.pane_id = Pane._pane_counter
+        self.pane_id: PaneId = PaneId(Pane._pane_counter)
 
         #: How many times anything this pane shows may have changed. It
         #: only goes up, and `#{pane_revision}` is it.
@@ -291,7 +292,7 @@ class Window:
 
     _window_counter = 1000  # Start here, to avoid confusion with window index.
 
-    def __init__(self, index: int = 0) -> None:
+    def __init__(self, index: WindowIndex = WindowIndex(0)) -> None:
         self.index = index
         self.root: VSplit | HSplit = HSplit()
         self._active_pane: Pane | None = None
@@ -342,7 +343,7 @@ class Window:
 
         # Give unique ID.
         Window._window_counter += 1
-        self.window_id = Window._window_counter
+        self.window_id: WindowId = WindowId(Window._window_counter)
 
     @property
     def strip(self) -> bool:
@@ -961,9 +962,9 @@ class Window:
         handle_side(HSplit, True, up)
         handle_side(HSplit, False, down)
 
-    def get_pane_index(self, pane: Pane):
+    def get_pane_index(self, pane: Pane) -> PaneIndex:
         "Return the index of the given pane. ValueError if not found."
-        return self.panes.index(pane)
+        return PaneIndex(self.panes.index(pane))
 
 
 class Arrangement:
@@ -1083,7 +1084,7 @@ class Arrangement:
         self._active_window_for_cli[app] = window
         self._last_active_window = window
 
-    def set_active_window_from_pane_id(self, pane_id: int) -> None:
+    def set_active_window_from_pane_id(self, pane_id: PaneId) -> None:
         """
         Make the window with this pane ID the active Window.
         """
@@ -1101,19 +1102,19 @@ class Arrangement:
         except KeyError:
             return None
 
-    def get_window_by_index(self, index):
+    def get_window_by_index(self, index: WindowIndex):
         "Return the Window with this index or None if not found."
         for w in self.windows:
             if w.index == index:
                 return w
 
-    def lowest_free_index(self) -> int:
+    def lowest_free_index(self) -> WindowIndex:
         "The first index from `base_index` up that no window has."
         taken = {w.index for w in self.windows}
         index = self.base_index
         while index in taken:
             index += 1
-        return index
+        return WindowIndex(index)
 
     def renumber(self) -> None:
         """
@@ -1137,9 +1138,9 @@ class Arrangement:
         for number, window in enumerate(
             sorted(self.windows, key=lambda one: one.index), start=self.base_index
         ):
-            window.index = number
+            window.index = WindowIndex(number)
 
-    def make_room_at(self, index: int) -> None:
+    def make_room_at(self, index: WindowIndex) -> None:
         """
         Free one index by moving the windows at and above it up.
 
@@ -1158,19 +1159,19 @@ class Arrangement:
         displaced = []
         while index in by_index:
             displaced.append(by_index[index])
-            index += 1
+            index = WindowIndex(index + 1)
 
         # From the top down, so no window lands on one that has not
         # moved yet.
         for window in reversed(displaced):
-            window.index += 1
+            window.index = WindowIndex(window.index + 1)
 
     def create_window(
         self,
         pane: Pane,
         name: str | None = None,
         set_active: bool = True,
-        index: int | None = None,
+        index: WindowIndex | None = None,
     ) -> None:
         """
         Create a new window that contains just this pane.
@@ -1213,7 +1214,7 @@ class Arrangement:
         assert w.active_pane == pane
         assert w._get_parent(pane)
 
-    def move_window(self, window: Window, new_index: int) -> None:
+    def move_window(self, window: Window, new_index: WindowIndex) -> None:
         """
         Move window to a new index.
         """
@@ -1277,7 +1278,7 @@ class Arrangement:
         self.windows.remove(window)
         self._unlinked_windows.append(window)
 
-    def link_window(self, window: Window, index: int | None = None) -> None:
+    def link_window(self, window: Window, index: WindowIndex | None = None) -> None:
         """
         Put a window in the order at an index: one that unlink_window
         took out, or one that is in the order already, which is a
@@ -1286,7 +1287,7 @@ class Arrangement:
         if window in self._unlinked_windows:
             self._unlinked_windows.remove(window)
             if index is None:
-                index = max((w.index for w in self.windows), default=self.base_index - 1) + 1
+                index = WindowIndex(max((w.index for w in self.windows), default=self.base_index - 1) + 1)
             window.index = index
             self.windows.append(window)
 

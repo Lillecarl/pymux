@@ -16,6 +16,7 @@ from prompt_toolkit.document import Document
 from prompt_toolkit.key_binding.vi_state import InputMode
 from pymux.commands import CommandException
 from pymux.format import Language, format_pymux_string
+from pymux.ids import PaneId, PaneIndex, WindowId, WindowIndex
 from pymux.key_spelling import why_pane_cannot_read
 from pymux.options import Scope, SetOptionError
 from pyte.keys import Unhearable
@@ -66,7 +67,7 @@ def find_window(pymux: "Pymux", target: str | None) -> Optional["Window"]:
         if window_id.isdigit():
             for session in pymux.sessions:
                 for w in session.arrangement.windows:
-                    if w.window_id == int(window_id):
+                    if w.window_id == WindowId(int(window_id)):
                         return w
         return None
 
@@ -106,7 +107,7 @@ def window_in(session: "Session", target: str) -> Optional["Window"]:
         return session.arrangement.get_active_window()
 
     if target.isdigit():
-        return session.arrangement.get_window_by_index(int(target))
+        return session.arrangement.get_window_by_index(WindowIndex(int(target)))
 
     return None
 
@@ -153,7 +154,7 @@ def find_pane(pymux: "Pymux", target: str | None) -> Optional["Pane"]:
     if target.startswith("%"):
         pane_id = target[1:]
         if pane_id.isdigit():
-            return pymux.panes_by_id.get(int(pane_id))
+            return pymux.panes_by_id.get(PaneId(int(pane_id)))
         return None
 
     session, target = session_part(pymux, target)
@@ -184,7 +185,7 @@ def find_pane(pymux: "Pymux", target: str | None) -> Optional["Pane"]:
         return window.active_pane
 
     if pane_part.isdigit():
-        index = int(pane_part)
+        index = PaneIndex(int(pane_part))
         if 0 <= index < len(window.panes):
             return window.panes[index]
 

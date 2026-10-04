@@ -51,6 +51,7 @@ from .commands.completer import create_command_completer
 from .enums import CHOOSE, COMMAND, PROMPT, WindowSize, Woke
 from .forwarding import LOOPBACK_NAMES, loopback_port
 from .graphics import PaneView
+from .ids import PaneId, SessionId, WindowIndex
 from . import introspect
 from .key_bindings import PymuxKeyBindings
 from .key_spelling import why_pane_cannot_read
@@ -418,7 +419,7 @@ class ClientState:
         #: one: a real client looks at its focus, and a pane that died
         #: since resolves to nothing, which falls back as if no pane
         #: was named at all.
-        self.caller_pane_id: int | None = None
+        self.caller_pane_id: PaneId | None = None
 
         # What the last frame of this client drew of the strings that
         # time moves. The auto refresh compares against it, and asks
@@ -1120,7 +1121,7 @@ class Pymux:
         self._allow_remote_debugging = False
 
         # Keep track of all the panes, by ID. (For quick lookup.)
-        self.panes_by_id = weakref.WeakValueDictionary()
+        self.panes_by_id: weakref.WeakValueDictionary[PaneId, Pane] = weakref.WeakValueDictionary()
 
         # Socket information.
         self.socket = None
@@ -1177,7 +1178,7 @@ class Pymux:
         A session with no name takes its number, which is how tmux names
         one that `new-session -s` did not.
         """
-        session_id = self._session_counter
+        session_id = SessionId(self._session_counter)
         self._session_counter += 1
 
         session = Session(
@@ -1352,7 +1353,7 @@ class Pymux:
             name = name[1:]
 
         if name.startswith("$") and name[1:].isdigit():
-            session_id = int(name[1:])
+            session_id = SessionId(int(name[1:]))
             for session in self.sessions:
                 if session.session_id == session_id:
                     return session
@@ -2377,7 +2378,7 @@ class Pymux:
                     return session
         return None
 
-    def window_of_pane(self, pane_id: int | None):
+    def window_of_pane(self, pane_id: PaneId | None):
         """
         The session, window and pane for a pane id, or None when the
         pane is gone. The hub jumps to a notification with this.
@@ -3388,7 +3389,7 @@ exec pymux notify -u "$urgency" -- "$@"
         command: str | None = None,
         start_directory: str | None = None,
         name=None,
-        index: int | None = None,
+        index: WindowIndex | None = None,
         session: Session | None = None,
     ):
         """

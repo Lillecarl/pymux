@@ -23,6 +23,8 @@ import time
 from collections import OrderedDict
 from typing import NamedTuple, Tuple
 
+from pymux.ids import PaneId
+
 __all__ = ["Notification", "NotificationCenter", "NotificationRoutes"]
 
 #: The characters that an identifier may hold. (The same set as kitty.)
@@ -70,7 +72,7 @@ class Notification(NamedTuple):
     title: str
     body: str
     urgency: int
-    pane_id: int | None
+    pane_id: PaneId | None
     at: float
 
 
@@ -89,14 +91,14 @@ class NotificationCenter:
         self.limit = limit
         self._next = 1
         self._records: list[Notification] = []
-        self._pending: dict[Tuple[int | None, str], Notification] = {}
+        self._pending: dict[Tuple[PaneId | None, str], Notification] = {}
 
     def add(
         self,
         title: str,
         body: str = "",
         urgency: int = Urgency.NORMAL,
-        pane_id: int | None = None,
+        pane_id: PaneId | None = None,
     ) -> Notification:
         "Record a finished notification."
         record = Notification(
@@ -114,7 +116,7 @@ class NotificationCenter:
         return record
 
     def add_osc99(
-        self, pane_id: int | None, param: str
+        self, pane_id: PaneId | None, param: str
     ) -> Notification | None:
         """
         Record one OSC 99 chunk, assembling chunks with an identifier.
@@ -221,11 +223,11 @@ class NotificationRoutes:
         self.limit = limit
         self._next = 1
         # (pane id, identifier of the program) -> our identifier.
-        self._outgoing: "OrderedDict[Tuple[int, str], str]" = OrderedDict()
+        self._outgoing: "OrderedDict[Tuple[PaneId, str], str]" = OrderedDict()
         # Our identifier -> (pane id, identifier of the program).
-        self._incoming: "OrderedDict[str, Tuple[int, str]]" = OrderedDict()
+        self._incoming: "OrderedDict[str, Tuple[PaneId, str]]" = OrderedDict()
 
-    def outgoing(self, pane_id: int, param: str) -> str:
+    def outgoing(self, pane_id: PaneId, param: str) -> str:
         """
         The payload to send to the terminal of the user, with an
         identifier that names this pane.
@@ -249,7 +251,7 @@ class NotificationRoutes:
 
         return replace_identifier(metadata, ours) + semicolon + text
 
-    def incoming(self, param: str) -> Tuple[int, str] | None:
+    def incoming(self, param: str) -> Tuple[PaneId, str] | None:
         """
         The pane that an answer belongs to, and the payload to give it,
         with the identifier that the program chose. None when the

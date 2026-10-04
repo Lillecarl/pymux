@@ -7,6 +7,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException, add_command
 from pymux.commands.common import find_window
+from pymux.ids import WindowId, WindowIndex
 
 
 def _find_anywhere(pymux: "Pymux", target: str | None):
@@ -17,7 +18,7 @@ def _find_anywhere(pymux: "Pymux", target: str | None):
     """
     window = find_window(pymux, target)
     if window is None and target and target.startswith("@") and target[1:].isdigit():
-        window_id = int(target[1:])
+        window_id = WindowId(int(target[1:]))
         for unlinked in pymux.arrangement._unlinked_windows:
             if unlinked.window_id == window_id:
                 return unlinked
@@ -38,7 +39,7 @@ def link_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     if window is None:
         raise CommandException("can't find window: %s" % (args.s,))
 
-    index = int(args.t) if args.t else None
+    index = WindowIndex(int(args.t)) if args.t else None
     pymux.arrangement.link_window(window, index)
 
 

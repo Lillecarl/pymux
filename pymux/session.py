@@ -12,6 +12,7 @@ from typing import Dict
 from prompt_toolkit.data_structures import Size
 
 from .arrangement import Arrangement
+from .ids import SessionId
 
 __all__ = ["DEFAULT_SIZE", "Session"]
 
@@ -31,7 +32,7 @@ class Session:
     client's, and `Arrangement` keeps that per application.
     """
 
-    def __init__(self, session_id: int, name: str) -> None:
+    def __init__(self, session_id: SessionId, name: str) -> None:
         #: The number in `$0`, the way tmux spells a session. It counts
         #: from zero for each server, and no two sessions of one server
         #: ever share it, including after one is killed.

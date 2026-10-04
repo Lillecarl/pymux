@@ -11,9 +11,10 @@ from pymux.commands.common import (
     print_object_format,
     session_part,
 )
+from pymux.ids import WindowIndex
 
 
-def index(target):
+def index(target) -> WindowIndex | None:
     """
     The window number a target names, or None for one that is not a
     number.
@@ -24,7 +25,7 @@ def index(target):
     window they name -- a word (`word_window`) or the active one.
     """
     try:
-        return int(target)
+        return WindowIndex(int(target))
     except (TypeError, ValueError):
         return None
 
@@ -68,7 +69,7 @@ def which_session(pymux: "Pymux", args: argparse.Namespace):
     return session, rest
 
 
-def where_new_window_goes(pymux: "Pymux", args: argparse.Namespace, session, target):
+def where_new_window_goes(pymux: "Pymux", args: argparse.Namespace, session, target) -> WindowIndex:
     """
     The index a new window takes, from the options it was given.
 
@@ -108,10 +109,10 @@ def where_new_window_goes(pymux: "Pymux", args: argparse.Namespace, session, tar
     if args.b:
         return where.index
     if args.a:
-        return where.index + 1
+        return WindowIndex(where.index + 1)
     if number is not None:
         return number
-    return where.index + 1
+    return WindowIndex(where.index + 1)
 
 
 def new_window(pymux: "Pymux", args: argparse.Namespace) -> None:

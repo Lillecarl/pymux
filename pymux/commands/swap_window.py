@@ -7,6 +7,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import add_command
 from pymux.commands.common import find_window, the_window
+from pymux.ids import WindowIndex
 
 
 def swap_window(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -22,7 +23,7 @@ def swap_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     active = the_window(pymux, None)
 
     if dst.startswith(("+", "-")):
-        dst_window = pymux.arrangement.get_window_by_index(active.index + int(dst))
+        dst_window = pymux.arrangement.get_window_by_index(WindowIndex(active.index + int(dst)))
     else:
         dst_window = find_window(pymux, dst)
 
