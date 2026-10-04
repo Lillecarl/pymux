@@ -12,6 +12,7 @@ renders a template only when it is asked to.
 A template sees the same facts under the same names: `{{ session_name }}`
 is `#{session_name}`.
 """
+from __future__ import annotations
 
 import sys
 

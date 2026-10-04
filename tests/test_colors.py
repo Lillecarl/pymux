@@ -5,13 +5,22 @@ Two questions, and neither is about the session: how many colours the
 terminal takes, and which two it draws with when nothing says
 otherwise.
 """
+from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
 
 import pytest
 from prompt_toolkit.output import ColorDepth
+from pyte import escape
+from pyte.colors import DEFAULT_COLORS, PALETTE, Color
+from pyte.osc import COLOR_BASE
+from pyte.screen import Screen
+from pyte.sequences import Csi, apc, csi, dcs, osc
+from test_server_tasks import FakePipe, FakePymux
+from test_theme import create_client as a_client
 
+from pymux.client.terminal import DETECTION_QUERIES
 from pymux.colors import (
     COLOR_QUERIES,
     TRUECOLOR_PROBE,
@@ -21,18 +30,10 @@ from pymux.colors import (
     reports_truecolor,
     theme_color_base,
 )
-from pymux.client.terminal import DETECTION_QUERIES
 from pymux.main import Pymux
 from pymux.options import ALL_OPTIONS
 from pymux.server import ServerConnection
 from pymux.style import DEFAULT_THEME
-from pyte import escape
-from pyte.colors import DEFAULT_COLORS, PALETTE, Color
-from pyte.osc import COLOR_BASE
-from pyte.screen import Screen
-from pyte.sequences import Csi, apc, csi, dcs, osc
-from test_server_tasks import FakePipe, FakePymux
-from test_theme import create_client as a_client
 
 
 def detection(term="", colorterm="", forced=None):

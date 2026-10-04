@@ -14,15 +14,16 @@ as `tty_cmd_setselection` among the drawing commands (`tty.c:2140`);
 only its popup case, which has no pane, writes straight to the
 terminal. Lillecarl/pymux#478.
 """
+from __future__ import annotations
 
 import sys
 
 import pytest
+from libpymux.protocol import Packet
 from prompt_toolkit.output.vt100 import Vt100_Output
 
 from pymux.main import Pymux
 from pymux.options import Clipboard
-from libpymux.protocol import Packet
 from pymux.server import ServerConnection, _SocketStdout
 
 #: A clipboard write, as a pane writes one.

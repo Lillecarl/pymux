@@ -10,6 +10,7 @@ signal is the whole of what `-x` adds. Lillecarl/pymux#347.
 The rule about *which* clients is Lillecarl/pymux#345's and is judged
 in `test_attach_detaches_the_others.py`. This file judges the message.
 """
+from __future__ import annotations
 
 import contextvars
 import json
@@ -20,6 +21,7 @@ from contextlib import asynccontextmanager
 
 import anyio
 from prompt_toolkit.application.current import set_app
+from test_the_link_comes_back import Terminal
 
 from pymux.client.base import Client
 from pymux.client.memory import MemoryClient
@@ -27,8 +29,6 @@ from pymux.client.terminal import TerminalClient
 from pymux.main import Pymux
 from pymux.pipes.memory import connect_in_memory
 from pymux.server import ServerConnection
-
-from test_the_link_comes_back import Terminal
 
 #: A pane that stays, for the reason `test_attach_detaches_the_others`
 #: gives: a session whose last window ended detaches its own clients.

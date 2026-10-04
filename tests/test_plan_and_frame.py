@@ -15,6 +15,7 @@ the strip's own scrolling has pushed sideways. So what is compared is
 each pane's size, and its position **up to one offset shared by every
 pane**. An offset that is not shared is a real disagreement.
 """
+from __future__ import annotations
 
 from prompt_toolkit.data_structures import Size
 from test_strip_draws import CHROME, create_client

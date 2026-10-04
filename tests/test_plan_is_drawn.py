@@ -15,6 +15,7 @@ them. `test_strip.py` judges the older container the same way.
 Each pane is filled with a letter of its own, so a row of the screen
 says which part of the plane is on it.
 """
+from __future__ import annotations
 
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import set_app

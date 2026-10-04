@@ -6,10 +6,12 @@ moment: a person turns debug logging on because a server is already
 misbehaving, and a restart takes the thing they wanted to look at with
 it. Lillecarl/pymux#252.
 """
+from __future__ import annotations
 
 import logging
 
 import pytest
+
 from pymux import log
 from pymux.main import Pymux
 from pymux.options import ALL_OPTIONS, SetOptionError

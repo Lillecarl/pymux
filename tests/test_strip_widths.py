@@ -10,6 +10,7 @@ divided layout.
 
 Lillecarl/pymux#198, and the fourth width is Lillecarl/pymux#215.
 """
+from __future__ import annotations
 
 import pytest
 

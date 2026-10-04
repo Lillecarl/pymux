@@ -25,6 +25,7 @@ is taken by waiting for two identical frames.
 It parks until it is killed, so a photograph taken later still finds
 it on the screen.
 """
+from __future__ import annotations
 
 import re
 import shutil

@@ -9,14 +9,14 @@ answers `TMUX_PANE` the same way. An explicit target always wins, a
 real client keeps its focus, and a pane that died since falls back to
 the active one.
 """
+from __future__ import annotations
 
 import contextlib
-
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
-from session import create_session
 from prompt_toolkit.application.current import set_app
+from session import create_session
 
 from pymux.commands.common import find_pane
 

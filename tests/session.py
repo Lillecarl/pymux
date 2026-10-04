@@ -23,6 +23,7 @@ drives the connection route and counts what the event loop did.
 one client, one window, the shape most tests want. A coroutine test
 runs on anyio's pytest plugin, which `anyio_mode` turns on.
 """
+from __future__ import annotations
 
 import asyncio
 import contextvars
@@ -31,8 +32,8 @@ import json
 import sys
 import time
 import weakref
-from contextlib import asynccontextmanager, contextmanager
-from typing import Any, Callable, Dict, NamedTuple
+from contextlib import asynccontextmanager
+from typing import Any, Callable, NamedTuple
 
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
@@ -196,7 +197,7 @@ class Session(NamedTuple):
     watch: Callable
 
     #: Every watched object, by name.
-    watched: Dict[str, "weakref.ref | None"]
+    watched: dict[str, weakref.ref | None]
 
 
 def _watcher(watched: dict) -> Callable:
@@ -246,7 +247,7 @@ async def in_this_process(pymux=None):
     # it runs in. This is what test-mode is for. A Pymux a caller
     # brought is the caller's to pin.
     pymux.test_mode = True
-    watched: dict[str, "weakref.ref | None"] = {}
+    watched: dict[str, weakref.ref | None] = {}
     watch = _watcher(watched)
 
     with create_pipe_input() as pipe:
@@ -380,7 +381,7 @@ async def over_connection(pymux=None, read_packet=None):
     # it runs in. This is what test-mode is for. A Pymux a caller
     # brought is the caller's to pin.
     pymux.test_mode = True
-    watched: dict[str, "weakref.ref | None"] = {}
+    watched: dict[str, weakref.ref | None] = {}
     watch = _watcher(watched)
 
     #: The client half of each attached client, by the id of its state:

@@ -16,6 +16,7 @@ where a mistake is still cheap.
 
 Lillecarl/pymux#196.
 """
+from __future__ import annotations
 
 import pytest
 

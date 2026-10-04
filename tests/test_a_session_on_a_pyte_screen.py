@@ -9,6 +9,7 @@ and these read back what it drew. Lillecarl/pymux#481.
 The pane runs the shell that a first client's session gets, because
 that is the session a person attaching to a new server gets too.
 """
+from __future__ import annotations
 
 import asyncio
 import contextvars
@@ -19,15 +20,14 @@ import time
 from contextlib import asynccontextmanager
 
 import pytest
+from libpymux.protocol import Packet
+from session import once
 
 from pymux.log import logger
 from pymux.main import Pymux
 from pymux.pipes.memory import connect_in_memory
-from libpymux.protocol import Packet
 from pymux.server import ServerConnection
 from pymux.web.session import SessionScreen
-
-from session import once
 
 ROWS, COLUMNS = 12, 60
 

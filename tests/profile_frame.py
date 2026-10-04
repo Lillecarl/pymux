@@ -66,6 +66,7 @@ named phases, comma separated:
       PYMUX_PROFILE_PHASES=sparse,output PYMUX_PROFILE_FRAMES=200 \
       nix build --file . checks.pymux-profile.run
 """
+from __future__ import annotations
 
 import asyncio
 import io
@@ -77,15 +78,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
-from session import Connection, over_connection  # noqa: E402
-from prompt_toolkit.application.current import set_app  # noqa: E402
-from prompt_toolkit.data_structures import Size  # noqa: E402
-from prompt_toolkit.input import create_pipe_input  # noqa: E402
-from prompt_toolkit.output import ColorDepth  # noqa: E402
-from prompt_toolkit.output.vt100 import Vt100_Output  # noqa: E402
-from pyinstrument import Profiler  # noqa: E402
+from prompt_toolkit.application.current import set_app
+from prompt_toolkit.data_structures import Size
+from prompt_toolkit.input import create_pipe_input
+from prompt_toolkit.output import ColorDepth
+from prompt_toolkit.output.vt100 import Vt100_Output
+from pyinstrument import Profiler
+from session import Connection, over_connection
 
-from pymux.main import Pymux  # noqa: E402
+from pymux.main import Pymux
 
 #: The client this draws for. A terminal nobody resized, unless the
 #: environment said otherwise: the cost of a frame is the cost of the

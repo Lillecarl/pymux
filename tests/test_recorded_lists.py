@@ -1,9 +1,9 @@
 """
 The recorded lists, read and written and judged.
 """
+from __future__ import annotations
 
 import pytest
-
 from recorded import (
     how_to_record,
     lines,

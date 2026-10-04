@@ -7,14 +7,14 @@ store of its own on the server; without one the session's one buffer
 is the buffer, and `paste-buffer` pastes it. A name nothing holds is
 an error on every read and write of it.
 """
+from __future__ import annotations
 
 import argparse
-import os
 
 import pytest
 from prompt_toolkit.application.current import set_app
-
 from session import create_session
+
 from pymux.commands import CommandException
 from pymux.commands.delete_buffer import delete_buffer
 from pymux.commands.save_buffer import save_buffer

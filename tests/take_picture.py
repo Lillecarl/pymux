@@ -113,29 +113,24 @@ command:
     nix build --file . checks.pymux-pictures.run
     cp result/picture-differences.txt pymux/tests/picture-differences.txt
 """
+from __future__ import annotations
 
 import base64
 import json
 import os
 import shutil
-import subprocess
 import sys
-import time
 from functools import partial
 from pathlib import Path
 
 from PIL import Image
 from pyte import escape
 from pyte.images import PixelFormat
-from pyte.sequences import csi
 from pyte.modes import PrivateMode
-from pyte.sequences import reset_mode
-
+from pyte.sequences import csi, reset_mode
 from pyterm_pytest.seats import (
     APPEAR_TIMEOUT,
     BLINK_FRAMES,
-    BLINK_GAP,
-    BLINK_START,
     SETTLE_TIMEOUT,
     NothingToCompare,
     TheSeatIsGone,

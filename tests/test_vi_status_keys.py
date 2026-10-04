@@ -14,6 +14,7 @@ So two Escapes: the first leaves insert mode, the second closes. And
 the line says which mode it is in, because the mode is what decides
 which of the two a press is.
 """
+from __future__ import annotations
 
 import pytest
 from prompt_toolkit.application.current import set_app
@@ -21,7 +22,6 @@ from prompt_toolkit.enums import EditingMode
 from prompt_toolkit.formatted_text import fragment_list_to_text
 from prompt_toolkit.key_binding.vi_state import InputMode
 from prompt_toolkit.keys import Keys
-
 from session import create_session
 
 # The pair that presses a key and says whether it left command mode.

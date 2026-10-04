@@ -5,6 +5,7 @@ A scheme is sixteen colours and a documented meaning per colour: the
 roles derive from those, and the palette a pane answers with is the
 sixteen verbatim.
 """
+from __future__ import annotations
 
 import json
 
@@ -12,7 +13,6 @@ import pytest
 
 from pymux import style_base16
 from pymux.style import roles_of_palette
-
 
 A_DARK_SCHEME = {
     "base00": "#1e1e2e", "base01": "#181825", "base02": "#313244",

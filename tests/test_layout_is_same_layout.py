@@ -11,9 +11,9 @@ a key that never matches, so every key press rebuilt every binding.
 without saying why. This says which invariant the number rests on.
 Lillecarl/pymux#233.
 """
+from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app
-
 from session import create_session
 
 

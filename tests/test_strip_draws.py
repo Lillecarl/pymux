@@ -20,6 +20,7 @@ fault one layer along: the positions hang on the screen too, so a strip
 that drew on its own recorded no pane anywhere, and moving between
 panes did nothing.
 """
+from __future__ import annotations
 
 import io
 import sys
@@ -32,8 +33,8 @@ from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
-
 from session import Connection
+
 from pymux.main import Pymux
 
 ROWS, COLUMNS = 12, 40
@@ -166,7 +167,7 @@ def test_lone_column_takes_half_window_and_no_more():
 
     # The column's own right border, which the focused pane draws its
     # highlight over.
-    for number in range(0, ROWS - 1):
+    for number in range(ROWS - 1):
         assert rows[number][border] != " ", dump(rows)
 
         # Beyond it, background and nothing else.

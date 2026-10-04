@@ -26,6 +26,7 @@ another comes earlier in reading order" is false, and
 `test_reading_order_follows_splits_and_not_rows` shows the
 shape that breaks it.
 """
+from __future__ import annotations
 
 import itertools
 import math

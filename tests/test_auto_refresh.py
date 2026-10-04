@@ -15,6 +15,7 @@ The tests call the refresh. What runs it is `Pymux._auto_refresh`, one
 task of the server's own task group, and it is on the loop rather than
 on a thread for the reason in Lillecarl/pymux#155.
 """
+from __future__ import annotations
 
 import asyncio
 import datetime
@@ -27,8 +28,8 @@ from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
-
 from session import Connection
+
 from pymux.format import format_pymux_string
 from pymux.main import Pymux
 from pymux.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS

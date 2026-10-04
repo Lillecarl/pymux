@@ -8,17 +8,18 @@ piece of the image on the outer terminal.
 Each test builds a real `Screen`, feeds it what such a program
 sends, and checks the escape sequences that reach the terminal.
 """
+from __future__ import annotations
 
 import base64
 import re
 
+from pyte import escape
 from pyte.placeholders import DIACRITICS, PLACEHOLDER
 from pyte.screen import Screen
+from pyte.sequences import csi
 from pyte.streams import Stream
 
 from pymux.graphics import ClientGraphics, PaneView
-from pyte import escape
-from pyte.sequences import csi
 
 
 def make_client():

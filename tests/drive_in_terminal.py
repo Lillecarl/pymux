@@ -68,6 +68,7 @@ the program's own log beside it, and the two read together say which
 key the program never acted on. Before this the file was empty, and a
 lost key was a guess. Lillecarl/pymux#353.
 """
+from __future__ import annotations
 
 import ast
 import base64

@@ -18,6 +18,7 @@ The strip owned all three before, for one axis. They are here so that
 a divided window bigger than a client's screen scrolls by the same
 rule, rather than by a second one that drifts from it.
 """
+from __future__ import annotations
 
 from hypothesis import given
 from hypothesis import strategies as st

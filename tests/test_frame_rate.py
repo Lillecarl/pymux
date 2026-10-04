@@ -11,15 +11,17 @@ and what holds the programs that animate: the one with cmatrix in it
 can be told to draw ten times a second while the one being read stays
 sharp.
 """
+from __future__ import annotations
 
 import sys
 
 import pytest
 from prompt_toolkit.application.current import set_app
+from session import create_session
+
 from pymux.arrangement import DEFAULT_FRAME_RATE
 from pymux.main import Pymux
 from pymux.options import ALL_WINDOW_OPTIONS, SetOptionError
-from session import create_session
 
 PANE_COMMAND = "%s -c pass" % (sys.executable,)
 

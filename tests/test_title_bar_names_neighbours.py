@@ -9,6 +9,7 @@ bar belongs to, and which pane is beside it.
 Every pane is given a name, so a bar says out loud which panes it is
 naming. Lillecarl/pymux#207.
 """
+from __future__ import annotations
 
 from test_strip_draws import CHROME, create_client
 

@@ -9,12 +9,14 @@ per option sorted, the three commands keep their scopes apart
 (`Option.scope` says which), and `-g` on a window option reads what
 every new window starts with.
 """
+from __future__ import annotations
 
 import argparse
+
 import pytest
 from prompt_toolkit.application.current import set_app
-
 from session import create_session
+
 from pymux.commands import CommandException
 from pymux.commands.show_client_options import show_client_options
 from pymux.commands.show_options import show_options

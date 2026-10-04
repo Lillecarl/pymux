@@ -14,14 +14,15 @@ pinned ones are the anchors a person can check against pygments.
 
 Lillecarl/pymux#194.
 """
+from __future__ import annotations
 
 import pytest
 
-from pymux.options import ALL_CLIENT_OPTIONS, SetOptionError
-from pymux.style_pygments import names, pygments_theme
-
 # A theme belongs to a client, so every test of one needs a client.
 from test_theme import create_client as a_client
+
+from pymux.options import ALL_CLIENT_OPTIONS, SetOptionError
+from pymux.style_pygments import names, pygments_theme
 
 
 def attrs(theme, class_name):

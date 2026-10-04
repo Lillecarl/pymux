@@ -17,14 +17,14 @@ out of the tree rather than land as a hang. Lillecarl/pymux#302.
 `test_two_clients_take_turns_over_the_socket` is that pair, run for
 real over two connections. It is the test the issue asked for.
 """
+from __future__ import annotations
 
 import anyio
-
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
+from session import create_session, over_connection
 
 from pymux.commands import handle_command
-from session import create_session, over_connection
 
 SIZE = Size(rows=24, columns=80)
 

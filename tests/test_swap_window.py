@@ -5,9 +5,9 @@ unless `-d` keeps it. tmux's move-window refuses an occupied index,
 which is every index a chooser can name; the swap is what its tree
 template does. Lillecarl/pymux#296.
 """
+from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app
-
 from session import create_session
 
 

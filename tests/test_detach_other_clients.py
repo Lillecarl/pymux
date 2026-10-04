@@ -19,18 +19,17 @@ tmux's rules, from `cmd-detach-client.c`:
   from a pane it is the client that owns the pane -- which is why this
   reads `the_client_to_tell` and not `get_client_state`.
 """
+from __future__ import annotations
 
 import argparse
 
 import pytest
-
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
+from session import in_this_process, over_connection
 
 from pymux.commands import CommandException
 from pymux.commands.detach_client import detach_client
-
-from session import in_this_process, over_connection
 
 SIZE = Size(rows=24, columns=80)
 

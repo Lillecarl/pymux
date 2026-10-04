@@ -6,15 +6,15 @@ is what every attached person looks at; `sessions` holds every
 window and pane, with the directory each reported, the variables
 each published and the command each runs.
 """
+from __future__ import annotations
 
 import contextlib
 import json
-
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
-from session import create_session
 from prompt_toolkit.application.current import set_app
+from session import create_session
 
 
 @contextlib.contextmanager

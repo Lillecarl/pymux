@@ -40,6 +40,7 @@ Three variables reach this file from `pymux/nix/checks.nix`.
 `PYMUX_VTERM_HARNESS` names the built `t/harness`, and nothing works
 without it. `PYMUX_VTERM_TMP` is a directory to work in.
 """
+from __future__ import annotations
 
 import os
 import subprocess
@@ -49,7 +50,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tests.middleman import Pane  # noqa: E402
+from tests.middleman import Pane
 
 #: The screen that libvterm's `INIT` makes. A full screen pane is the
 #: whole terminal, so the pty of the client is the same size.

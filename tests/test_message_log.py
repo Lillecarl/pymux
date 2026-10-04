@@ -3,10 +3,9 @@ The commands of the batch Lillecarl/pymux#297 added with the message
 log: `new-pane`, `show-messages`, `attach-session` and
 `switch-client`.
 """
+from __future__ import annotations
 
-import pytest
 from prompt_toolkit.application.current import set_app
-
 from session import create_session
 
 

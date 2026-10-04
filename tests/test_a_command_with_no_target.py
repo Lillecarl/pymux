@@ -9,6 +9,7 @@ there is no such window, and the answer used to be invented:
 all. An `IndexError` is not a `CommandException`, so nothing turned it
 into a message. Lillecarl/pymux#473.
 """
+from __future__ import annotations
 
 import sys
 

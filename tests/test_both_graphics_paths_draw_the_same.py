@@ -31,19 +31,19 @@ Sixel holds a colour as three percentages, so every channel is
 approximated and the comparison allows the same 3 that
 `test_graphics_fallback.py` allows. Lillecarl/pymux#262.
 """
+from __future__ import annotations
 
 import base64
 import re
 import zlib
 
 import pytest
+from pyte.images import PixelFormat
 from pyte.sixel import decode_sixel
+from test_graphics_output import make_state, placement, view
 
 from pymux.graphics import ClientGraphics, _crop_rgba
 from pymux.sixel import scale_rgba, to_rgba
-from pyte.images import PixelFormat
-
-from test_graphics_output import IMAGE_DATA, make_state, placement, view
 
 #: What sixel's three percentages cost a channel. The same number
 #: `test_graphics_fallback.test_colours_of_image_survive` allows.

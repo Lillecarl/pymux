@@ -15,8 +15,7 @@ websocket library is an extra, so the failure to have it must say which
 extra rather than raising `ImportError` at somebody.
 Lillecarl/pymux#461.
 """
-
-from pathlib import Path
+from __future__ import annotations
 
 import pytest
 

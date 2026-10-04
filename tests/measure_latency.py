@@ -68,6 +68,7 @@ a mean of four hides it.
     PYMUX_LATENCY_SAMPLES=500 nix build --file . checks.pymux-latency.run
     PYMUX_ROUTE=integrated nix build --file . checks.pymux-latency.run
 """
+from __future__ import annotations
 
 import os
 import statistics
@@ -78,7 +79,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from drive_with_pty import (  # noqa: E402
+from drive_with_pty import (
     ROUTE,
     Attached,
     Failed,

@@ -13,6 +13,7 @@ mode" is the requirement and not a side effect.
 
 Lillecarl/pymux#198.
 """
+from __future__ import annotations
 
 from pymux.arrangement import (
     DEFAULT_COLUMN_WIDTH,

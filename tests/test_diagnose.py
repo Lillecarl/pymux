@@ -6,6 +6,7 @@ it back as a person and as a machine: the human lines name the facts,
 the JSON parses, and the socket facts say what is really there -- a
 server that answers, and a path where none is.
 """
+from __future__ import annotations
 
 import json
 import os
@@ -14,7 +15,7 @@ import subprocess
 import sys
 import time
 
-from pymux.diagnose import diagnose, human, as_json
+from pymux.diagnose import as_json, diagnose, human
 
 
 def test_a_report_without_a_server(tmp_path):

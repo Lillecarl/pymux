@@ -19,6 +19,7 @@ a directory in order, and this one covers what ran before it. It is
 correct anywhere -- every test it follows has been torn down by then --
 but last is the whole suite.
 """
+from __future__ import annotations
 
 import os
 

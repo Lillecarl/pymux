@@ -2,20 +2,19 @@
 Tests for what a client draws when its terminal does not speak the
 kitty graphics protocol, and for the detection that picks the way.
 """
+from __future__ import annotations
 
 import re
 
 import pytest
+from pyte import escape
+from pyte.sequences import Csi, apc, csi
 from pyte.sixel import decode_sixel
+from test_graphics_output import IMAGE_DATA, make_state, placement, view
 
 from pymux import graphics as graphics_module
 from pymux.blocks import LOWER_HALF, UPPER_HALF
 from pymux.graphics import ClientGraphics
-
-from test_graphics_output import IMAGE_DATA, make_state, placement, view
-from pyte import escape
-from pyte.sequences import Csi, csi
-from pyte.sequences import apc
 
 
 def make_client(kitty=False, sixel=False, repaint=None):

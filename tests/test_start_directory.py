@@ -7,15 +7,14 @@ reported directory wins over what the process table says, which
 covers a pane that never reported, and nothing covers the first pane
 of a session. An explicit `-c` already won before this was asked.
 """
+from __future__ import annotations
 
 import sys
-import time
-
 from types import SimpleNamespace
 
-from session import in_this_process, once
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
+from session import in_this_process, once
 
 from pymux.main import Pymux
 

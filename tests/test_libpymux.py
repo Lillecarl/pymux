@@ -6,17 +6,17 @@ strings it asks for, the rows it reads back, the commands it builds and
 the quoting it puts around them. `drive_with_pty.py` runs the same
 library against a server that is really there.
 """
+from __future__ import annotations
 
 import json
 import socket
 import threading
 
 import pytest
+from libpymux.connection import CommandResult
+from libpymux.objects import _PANE_FIELDS, _SEPARATOR, _format_string, _rows
 
 from libpymux import CommandError, Pane, Server, Window, quote
-from libpymux.connection import CommandResult, Connection
-from libpymux.objects import _PANE_FIELDS, _format_string, _rows, _SEPARATOR
-
 
 # ----------------------------------------------------------------------
 # A server that says what a test tells it to say.

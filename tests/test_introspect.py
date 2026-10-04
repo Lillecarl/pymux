@@ -8,6 +8,7 @@ what every asyncio task waits for -- and that a server takes the signal
 that answers when its loop is too wedged to read a command.
 Lillecarl/pymux#249.
 """
+from __future__ import annotations
 
 import asyncio
 import faulthandler
@@ -23,8 +24,8 @@ from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
-
 from session import Connection
+
 from pymux import introspect, log
 from pymux.commands import handle_command
 from pymux.enums import Woke

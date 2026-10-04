@@ -7,9 +7,9 @@ rather than the name, while `display-message -p` beside it formatted
 properly. A binding that asks the session something is the whole use of
 the command, and tmux expands it either way. Lillecarl/pymux#334.
 """
+from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app
-
 from session import create_session
 
 

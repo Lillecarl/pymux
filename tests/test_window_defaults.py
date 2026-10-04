@@ -11,6 +11,7 @@ every new window starts with and changes no window that is open.
 
 Lillecarl/pymux#199.
 """
+from __future__ import annotations
 
 import pytest
 

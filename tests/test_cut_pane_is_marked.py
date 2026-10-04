@@ -38,12 +38,12 @@ draws only where the theme owns the background. Lillecarl/pymux#352.
 This judges the frame a real session draws, because the question is
 what a person sees.
 """
+from __future__ import annotations
 
 import io
 from contextlib import contextmanager
 
 import pytest
-
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
@@ -51,13 +51,13 @@ from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
-
+from pyte.colors import parse_color
 from session import Connection
+
 from pymux.layout import CUT_IS_TINTED, cut_tint
 from pymux.main import Pymux
 from pymux.plan_container import PlanContainer
 from pymux.style import roles_of, roles_of_palette, tinted
-from pyte.colors import parse_color
 
 ROWS = 12
 COLUMNS = 80

@@ -18,6 +18,7 @@ and `pymux/style.py` turns the reverse back off for a selected cell.
 
 Lillecarl/pymux#99.
 """
+from __future__ import annotations
 
 from prompt_toolkit.styles import default_ui_style, merge_styles
 

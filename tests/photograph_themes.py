@@ -20,6 +20,7 @@ What these draw is not judged. The pictures are for a person, the same
 way the ones of chrome are. The arrangement behind them is judged, and
 `photograph_chrome.Fixture` says why.
 """
+from __future__ import annotations
 
 import os
 import shlex
@@ -32,9 +33,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pymux.style import THEMES  # noqa: E402
-from pymux.style_pygments import names  # noqa: E402
-from photograph_chrome import (  # noqa: E402
+from photograph_chrome import (
     CHROME,
     DEMO,
     DEMO_PANES,
@@ -47,7 +46,10 @@ from photograph_chrome import (  # noqa: E402
     keys,
     main,
 )
-from take_picture import LIGHT_TERMINALS, TERMINALS  # noqa: E402
+from take_picture import LIGHT_TERMINALS, TERMINALS
+
+from pymux.style import THEMES
+from pymux.style_pygments import names
 
 #: Where the pictures go. The check points this at `$out`.
 PICTURES = Path(os.environ.get("PYMUX_THEMES_OUT", "theme-pictures"))

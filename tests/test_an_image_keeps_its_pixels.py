@@ -29,6 +29,7 @@ its own reason:
 `tests/picture-differences.txt` measures the same thing with real
 terminals in front of it; this measures what pymux asks for.
 """
+from __future__ import annotations
 
 import re
 

@@ -16,14 +16,15 @@ race. It also took `check_second_terminal` down with it, and a red run
 of a check stays in the store until somebody deletes it by hand.
 Lillecarl/pymux#479.
 """
+from __future__ import annotations
 
 import json
 import socket
 
 import pytest
+from libpymux.protocol import Packet
 
 from pymux.client.posix import PosixClient
-from libpymux.protocol import Packet
 from pymux.server import CANNOT_ATTACH
 
 

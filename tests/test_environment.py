@@ -9,14 +9,15 @@ value rather than to nothing; and a name unset in both scopes leaves
 the environment entirely. `show-environment` prints `NAME=value`
 lines, `-s` escapes them for `eval`.
 """
-
-import os
+from __future__ import annotations
 
 import argparse
+import os
+
 import pytest
 from prompt_toolkit.application.current import set_app
-
 from session import create_session
+
 from pymux.commands import CommandException
 from pymux.commands.set_environment import set_environment
 from pymux.commands.show_environment import show_environment

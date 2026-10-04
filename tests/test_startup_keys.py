@@ -9,6 +9,7 @@ in it fails only when somebody presses the key.
 The strip's three commands added five lines to that file and made both
 worth testing. Lillecarl/pymux#212.
 """
+from __future__ import annotations
 
 import shlex
 

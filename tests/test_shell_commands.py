@@ -14,13 +14,14 @@ So a test awaits what the command answered with, and the ones that do
 not -- the `-F` form of if-shell, which asks a format and no shell --
 say so by passing on the spot.
 """
+from __future__ import annotations
 
 import anyio
 import pytest
 from prompt_toolkit.application.current import set_app
+from session import create_session
 
 from pymux.commands import handle_command
-from session import create_session
 
 
 async def _run(pymux, state, command) -> None:

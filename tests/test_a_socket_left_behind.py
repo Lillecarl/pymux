@@ -13,6 +13,7 @@ pymux does the same, and that it does not do it to a name that
 something is listening on, or to anything that is not a socket.
 Lillecarl/pymux#453.
 """
+from __future__ import annotations
 
 import errno
 import os

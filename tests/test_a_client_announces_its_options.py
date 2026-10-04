@@ -7,6 +7,7 @@ configuration is another machine's. So the client takes the
 `set-client-option` lines out of its own file and sends them with
 `start-gui`. Lillecarl/pymux#223.
 """
+from __future__ import annotations
 
 import contextvars
 import json
@@ -20,7 +21,6 @@ from pymux.nearest import NEAREST
 from pymux.pipes.memory import connect_in_memory
 from pymux.server import ServerConnection
 from pymux.style import DEFAULT_THEME
-
 
 # ----------------------------------------------------------------------
 # What the client takes out of the file.

@@ -24,6 +24,7 @@ nothing installs it, and each check's sandbox holds only the tests of
 the repository it judges. Copying twenty lines is cheaper than making
 one of these repositories depend on the other's test tree.
 """
+from __future__ import annotations
 
 import sys
 

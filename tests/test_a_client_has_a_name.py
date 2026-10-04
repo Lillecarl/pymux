@@ -9,6 +9,7 @@ chosen one: `desk`, `phone`, `the big screen`.
 from the tty path and nothing renames it (`server-client.c:2988`), so
 the shape here is pymux's own. Lillecarl/pymux#340.
 """
+from __future__ import annotations
 
 import asyncio
 import contextvars
@@ -18,6 +19,8 @@ from contextlib import asynccontextmanager
 
 import pytest
 from prompt_toolkit.data_structures import Size
+from session import over_connection
+from test_the_link_comes_back import Terminal
 
 from pymux.client.memory import MemoryClient
 from pymux.client.terminal import TerminalClient
@@ -26,9 +29,6 @@ from pymux.commands.common import clients_named
 from pymux.main import Pymux
 from pymux.pipes.memory import connect_in_memory
 from pymux.server import ServerConnection
-
-from session import over_connection
-from test_the_link_comes_back import Terminal
 
 SIZE = Size(rows=24, columns=80)
 

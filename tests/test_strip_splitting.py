@@ -16,6 +16,7 @@ a strip is one window's option and not a new way for pymux to work.
 
 Lillecarl/pymux#198.
 """
+from __future__ import annotations
 
 from pymux.arrangement import DEFAULT_COLUMN_WIDTH, HSplit, Pane, VSplit, Window
 

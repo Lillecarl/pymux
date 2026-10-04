@@ -7,14 +7,15 @@ what it was given in the notification hub. It shadows the notifier
 of the desktop on purpose: inside a pane a notification belongs to
 the session first. Only a pane that starts afterwards sees it.
 """
+from __future__ import annotations
 
 import contextlib
 import os
 import stat
 import subprocess
 
-from session import create_session
 from prompt_toolkit.application.current import set_app
+from session import create_session
 
 from pymux.main import Pymux
 

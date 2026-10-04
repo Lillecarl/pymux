@@ -12,11 +12,12 @@ The two draw the same window, so nothing about command mode changes but
 where it is. What the tests below read is which container the layout
 would draw, and that is the filter of each one.
 """
+from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.layout.containers import ConditionalContainer, Float
-
 from session import create_session
+
 from pymux.options import ALL_OPTIONS
 
 

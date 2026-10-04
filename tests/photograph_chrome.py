@@ -49,6 +49,7 @@ text, and `PYMUX_CHROME_TERMINALS` to the terminals whose name does.
 exactly, comma separated, and beat the substrings: three fixtures that
 share no substring are what a probe of the judge asks for.
 """
+from __future__ import annotations
 
 import os
 import shlex
@@ -65,14 +66,13 @@ from typing import NamedTuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pyterm_pytest.seats import (  # noqa: E402
+from middleman import FORWARDER, run_cli
+from pyterm_pytest.seats import (
     TheSeatIsGone,
     open_the_seats,
     with_no_answer,
 )
-
-from middleman import FORWARDER, run_cli  # noqa: E402
-from take_picture import (  # noqa: E402
+from take_picture import (
     HOLD,
     TERMINALS,
     every_log,

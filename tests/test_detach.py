@@ -9,8 +9,8 @@ to end every pane or kill the process.
 
 Lillecarl/pymux#160.
 """
+from __future__ import annotations
 
-import asyncio
 import io
 import sys
 from contextlib import asynccontextmanager
@@ -20,8 +20,8 @@ from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
-
 from session import Connection
+
 from pymux.main import Pymux
 
 ROWS, COLUMNS = 24, 80

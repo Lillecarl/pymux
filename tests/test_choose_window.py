@@ -20,17 +20,17 @@ The rules this judges, Lillecarl/pymux#295 and Lillecarl/pymux#327:
   chosen window instead of moving, and puts the client back first: the
   command is what the person asked for and being moved is not.
 """
+from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.formatted_text import fragment_list_to_text
-from prompt_toolkit.key_binding.key_processor import _Flush, KeyPress
+from prompt_toolkit.key_binding.key_processor import KeyPress, _Flush
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers
-from prompt_toolkit.layout.screen import Screen as PtScreen, WritePosition
+from prompt_toolkit.layout.screen import Screen as PtScreen
+from prompt_toolkit.layout.screen import WritePosition
 from prompt_toolkit.mouse_events import MouseEventType
-
 from pyte.streams import Stream
-
 from session import create_session
 
 #: prompt_toolkit keeps the keys it can name as `Keys` members and

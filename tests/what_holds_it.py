@@ -39,6 +39,7 @@ page of `gc` and it prints text a build log can hold, so the dependency
 is not worth it yet. It is worth naming when somebody wants the
 pictures.
 """
+from __future__ import annotations
 
 import gc
 import inspect

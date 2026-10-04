@@ -53,6 +53,7 @@ The fence is taken back out before anything sees the wire. A judge
 would only ignore it, but a stream that holds our own scaffolding is a
 stream nobody can read.
 """
+from __future__ import annotations
 
 import base64
 import os
@@ -65,7 +66,7 @@ from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tests.drive_with_pty import Terminal, run_cli  # noqa: E402
+from tests.drive_with_pty import Terminal, run_cli
 
 #: How long the wire has to stay quiet after the fence before a frame
 #: counts as finished, in seconds.

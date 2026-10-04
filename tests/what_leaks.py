@@ -89,6 +89,7 @@ the first kept too, and a healthy type is zero on both.
     PYMUX_LEAKS_TRACE=1         # count bytes as well, with tracemalloc
     PYMUX_LEAKS_ROUTE=connection  # one route, not both
 """
+from __future__ import annotations
 
 import asyncio
 import gc
@@ -105,12 +106,12 @@ sys.path.insert(0, str(Path(__file__).parent))
 # not the directory above it.
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
-from session import Session, routes  # noqa: E402
-from prompt_toolkit.application.current import set_app  # noqa: E402
-from prompt_toolkit.data_structures import Size  # noqa: E402
-from prompt_toolkit.layout.mouse_handlers import MouseHandlers  # noqa: E402
-from prompt_toolkit.layout.screen import Screen, WritePosition  # noqa: E402
-from what_holds_it import why_it_is_alive  # noqa: E402
+from prompt_toolkit.application.current import set_app
+from prompt_toolkit.data_structures import Size
+from prompt_toolkit.layout.mouse_handlers import MouseHandlers
+from prompt_toolkit.layout.screen import Screen, WritePosition
+from session import Session, routes
+from what_holds_it import why_it_is_alive
 
 #: How much a type may grow over one side before the check fails, as a
 #: number of objects.

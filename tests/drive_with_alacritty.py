@@ -191,6 +191,7 @@ the check, the same way the conformance lists work:
     less result/alacritty.log
     cp result/failures.txt pymux/tests/alacritty-failures.txt
 """
+from __future__ import annotations
 
 import json
 import os
@@ -202,7 +203,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tests.middleman import Pane  # noqa: E402
+from tests.middleman import Pane
 
 HERE = Path(__file__).parent
 

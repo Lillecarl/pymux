@@ -9,14 +9,15 @@ the pane that runs there is a new one, with a new id and an empty
 screen; the focus follows the replacement; and `respawn-window`
 respawns the active pane of the window it names.
 """
-
-import asyncio
+from __future__ import annotations
 
 import argparse
+import asyncio
+
 import pytest
 from prompt_toolkit.application.current import set_app
-
 from session import create_session
+
 from pymux.commands import CommandException
 from pymux.commands.respawn_pane import respawn_pane
 

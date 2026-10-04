@@ -10,6 +10,7 @@ columns and they never choose which of the two moves they meant.
 The two are each other's opposite, so the tests here go one way and come
 back and ask for the tree they started with. Lillecarl/pymux#213.
 """
+from __future__ import annotations
 
 from pymux.arrangement import HSplit, Pane, VSplit, Window
 

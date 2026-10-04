@@ -9,9 +9,9 @@ is alive whether or not a split happened. One run of
 two, stayed green, and its server log has no second process in it.
 Lillecarl/pymux#353.
 """
+from __future__ import annotations
 
 import pytest
-
 from photograph_chrome import FIXTURES as CHROME_FIXTURES
 from photograph_chrome import Fixture, chosen_by_name, count_panes, exact_list
 from photograph_themes import FIXTURES as THEME_FIXTURES

@@ -31,8 +31,6 @@ caller would return the bytes it was sent, and a test that only
 checked "something came back" would pass on it.
 """
 
-from __future__ import annotations
-
 import os
 import shutil
 import socket
@@ -56,9 +54,7 @@ SSHD = os.environ.get("PYMUX_SSHD", "")
 NSS_WRAPPER = os.environ.get("PYMUX_NSS_WRAPPER", "")
 LOGIN_SHELL = os.environ.get("PYMUX_LOGIN_SHELL", "/bin/sh")
 
-pytestmark = pytest.mark.skipif(
-    not SSHD, reason="PYMUX_SSHD names no sshd. checks.pymux-openssh sets it."
-)
+pytestmark = pytest.mark.skipif(not SSHD, reason="PYMUX_SSHD names no sshd. checks.pymux-openssh sets it.")
 
 #: How long to wait for sshd to answer on its port, in seconds.
 SSHD_STARTS_IN = 10.0
@@ -103,10 +99,7 @@ def _a_user_with_a_shell(where: Path) -> str:
         return me.pw_name
 
     passwd = where / "passwd"
-    passwd.write_text(
-        "%s:x:%d:%d:pymux test:%s:%s\n"
-        % (me.pw_name, me.pw_uid, me.pw_gid, where, LOGIN_SHELL)
-    )
+    passwd.write_text("%s:x:%d:%d:pymux test:%s:%s\n" % (me.pw_name, me.pw_uid, me.pw_gid, where, LOGIN_SHELL))
 
     group = where / "group"
     try:
@@ -123,7 +116,7 @@ def _a_user_with_a_shell(where: Path) -> str:
 
 
 @pytest.fixture(scope="module")
-def sshd() -> "tuple[int, str]":
+def sshd() -> tuple[int, str]:
     """
     A real sshd on loopback, and the key that authenticates to it.
 
@@ -282,9 +275,7 @@ async def test_openssh_takes_a_remote_forward(sshd):
             forwards = Forwards()
             opened = await forwards.add(
                 connection,
-                Forward(
-                    Direction.REMOTE, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port
-                ),
+                Forward(Direction.REMOTE, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port),
             )
 
             assert opened.error == "", opened.error
@@ -345,9 +336,7 @@ async def test_a_forward_comes_back_on_a_new_openssh_connection(sshd):
     async with anyio.create_task_group() as tasks:
         echo_port = await _echoing(tasks)
         forwards = Forwards()
-        wanted = Forward(
-            Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port
-        )
+        wanted = Forward(Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port)
 
         async with _connect_to(sshd) as first:
             was = await forwards.add(first, wanted)

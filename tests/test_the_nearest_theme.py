@@ -10,12 +10,14 @@ colours in and that theme has to come back: a scheme is exactly zero
 away from itself, and anything else scoring lower means the distance
 is wrong.
 """
+from __future__ import annotations
 
 import pytest
+from prompt_toolkit.data_structures import Size
+from pyte.colors import parse_color
+from session import over_connection
 
 from pymux.colors import DefaultColors
-from prompt_toolkit.data_structures import Size
-
 from pymux.nearest import (
     NEAREST,
     WEIGHT_BACKGROUND,
@@ -26,9 +28,6 @@ from pymux.nearest import (
     wanted_from,
 )
 from pymux.style import DEFAULT_THEME, roles_of
-from pyte.colors import parse_color
-
-from session import over_connection
 
 #: Three themes, one out of each source pymux offers.
 ONE_OF_EACH = ["default", "base16:gruvbox-dark-hard", "pygments:monokai"]

@@ -6,6 +6,7 @@ One key has one binding, whatever a person calls it.
 keyed by the text, so each of those was a binding of its own.
 Lillecarl/pymux#235.
 """
+from __future__ import annotations
 
 import pytest
 

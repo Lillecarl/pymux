@@ -6,6 +6,7 @@ completes through, and what the command bar of a client completes
 from -- in process, through argcomplete. These tests ask each reader
 the questions a person asks it. Lillecarl/pymux#307.
 """
+from __future__ import annotations
 
 import os
 import shlex
@@ -18,7 +19,6 @@ from prompt_toolkit.document import Document
 from pymux.commands import call_command_handler, parser_tree
 from pymux.commands.completer import create_command_completer
 from pymux.main import Pymux
-
 
 # ----------------------------------------------------------------------
 # The tree: what a command takes.
@@ -425,7 +425,6 @@ async def test_unforward_port_offers_the_listenings_that_were_shown():
     not the word being typed. Lillecarl/pymux#441.
     """
     from prompt_toolkit.data_structures import Size
-
     from session import over_connection
 
     async with over_connection() as session:

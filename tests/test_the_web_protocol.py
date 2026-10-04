@@ -10,9 +10,9 @@ needs a server, a websocket or a pty. That is the reason the protocol is
 a module of its own: the transport carries frames and decides nothing,
 and it is the deciding that is worth testing. Lillecarl/pymux#461.
 """
+from __future__ import annotations
 
 import pytest
-
 from pyte.screen import Screen
 from pyte.streams import Stream
 

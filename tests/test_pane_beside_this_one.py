@@ -21,6 +21,7 @@ laid out first. What the tree used to say -- a pane in a stack takes
 the stack's neighbours, a column on our left gives its rightmost pane
 -- falls out of that, because those are the panes that share the edge.
 """
+from __future__ import annotations
 
 from prompt_toolkit.data_structures import Size
 

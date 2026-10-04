@@ -114,6 +114,7 @@ Every run writes the list it saw and the log that says why:
     less result/vterm.log
     cp result/failures.txt pymux/tests/vterm-failures.txt
 """
+from __future__ import annotations
 
 import os
 import re
@@ -124,7 +125,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from recorded import how_to_record, lines as recorded_lines  # noqa: E402
+from recorded import how_to_record
+from recorded import lines as recorded_lines
 
 HERE = Path(__file__).parent
 

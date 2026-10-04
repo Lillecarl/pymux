@@ -9,6 +9,7 @@ change when the window does. These tests hold a size that a test can
 change under the client, the way a person dragging the edge of a
 terminal changes it.
 """
+from __future__ import annotations
 
 import io
 import sys
@@ -21,8 +22,8 @@ from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
-
 from session import Connection
+
 from pymux.main import Pymux
 
 ROWS = 12

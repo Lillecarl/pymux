@@ -18,6 +18,7 @@ a real sshd, is the check that would say the rest.
 
 The tests are coroutines, which anyio's pytest plugin runs.
 """
+from __future__ import annotations
 
 import asyncio
 import os
@@ -26,9 +27,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
+
 from pymux.client.ssh import SshClient, is_ssh_url, ssh_target
 from pymux.main import Pymux
-
 
 PANE_COMMAND = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
 

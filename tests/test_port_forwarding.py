@@ -11,8 +11,6 @@ loops back to the caller would return the same bytes, and a test that
 only checked "something came back" would pass on it.
 """
 
-from __future__ import annotations
-
 import json
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
@@ -20,29 +18,26 @@ from pathlib import Path
 import anyio
 import pytest
 from anyio.abc import SocketAttribute
+from prompt_toolkit.application.current import set_app
+from prompt_toolkit.data_structures import Size
+from session import once, over_connection
+from test_ssh_client import create_ssh_server, live_servers
 
+from pymux.client import ssh as ssh_module
 from pymux.client.forwards import Forwards
+from pymux.client.ssh import SshClient
 from pymux.forwarding import (
     ANY_PORT,
+    LOOPBACK,
     BadForward,
     Direction,
     Forward,
-    LOOPBACK,
     loopback_port,
     parse_forward,
     parse_listen,
     the_far_side_may_narrow,
     with_port,
 )
-
-from prompt_toolkit.application.current import set_app
-from prompt_toolkit.data_structures import Size
-
-from pymux.client import ssh as ssh_module
-from pymux.client.ssh import SshClient
-
-from session import once, over_connection
-from test_ssh_client import create_ssh_server, live_servers
 
 SIZE = Size(rows=24, columns=80)
 
@@ -105,9 +100,7 @@ def test_only_a_remote_bind_off_loopback_may_be_narrowed():
     """
     assert the_far_side_may_narrow(parse_forward(Direction.REMOTE, "0.0.0.0:22:h:22"))
     assert not the_far_side_may_narrow(parse_forward(Direction.REMOTE, "22:h:22"))
-    assert not the_far_side_may_narrow(
-        parse_forward(Direction.LOCAL, "0.0.0.0:22:h:22")
-    )
+    assert not the_far_side_may_narrow(parse_forward(Direction.LOCAL, "0.0.0.0:22:h:22"))
 
 
 # ----------------------------------------------------------------------
@@ -147,10 +140,7 @@ def test_only_a_loopback_url_names_a_port_to_forward(url, expected):
 
 def test_a_url_moves_to_the_port_that_was_free():
     "The path, the query and the fragment are the person's, so they stay."
-    assert (
-        with_port("http://localhost:3000/app?x=1#y", 54321)
-        == "http://localhost:54321/app?x=1#y"
-    )
+    assert with_port("http://localhost:3000/app?x=1#y", 54321) == "http://localhost:54321/app?x=1#y"
     assert with_port("http://[::1]:5000/", 54321) == "http://[::1]:54321/"
     assert with_port("http://carl@localhost/", 8080) == "http://carl@localhost:8080/"
 
@@ -223,7 +213,7 @@ async def pushing():
                 while True:
                     await stream.send(b"PUSHED")
                     await anyio.sleep(0.05)
-            except (anyio.BrokenResourceError, anyio.ClosedResourceError):
+            except anyio.BrokenResourceError, anyio.ClosedResourceError:
                 pass
 
     listener = await anyio.create_tcp_listener(local_host="127.0.0.1")
@@ -249,9 +239,7 @@ async def ssh_connection(**server_options):
 
     where = Path(tempfile.mkdtemp())
     socket_path = str(where / "pymux.sock")
-    server, port, client_key = await create_ssh_server(
-        where, socket_path, allow_exec=False, **server_options
-    )
+    server, port, client_key = await create_ssh_server(where, socket_path, allow_exec=False, **server_options)
 
     try:
         async with asyncssh.connect(
@@ -398,9 +386,7 @@ async def test_the_wanted_set_comes_back_on_a_new_connection():
     """
     async with echoing() as echo_port:
         forwards = Forwards()
-        wanted = Forward(
-            Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port
-        )
+        wanted = Forward(Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port)
 
         async with ssh_connection() as first:
             was = await forwards.add(first, wanted)
@@ -428,9 +414,7 @@ async def test_a_reconnect_that_changed_nothing_says_nothing():
     "A named port comes back as itself, so there is nothing to tell."
     async with echoing() as echo_port:
         forwards = Forwards()
-        wanted = Forward(
-            Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
-        )
+        wanted = Forward(Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port)
 
         async with ssh_connection() as first:
             assert (await forwards.add(first, wanted)).error == ""
@@ -449,9 +433,7 @@ async def test_a_forward_that_came_back_on_another_port_says_so():
     """
     async with echoing() as echo_port:
         forwards = Forwards()
-        wanted = Forward(
-            Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port
-        )
+        wanted = Forward(Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port)
 
         async with ssh_connection() as first:
             was = await forwards.add(first, wanted)
@@ -485,9 +467,7 @@ async def test_a_forward_that_could_not_come_back_says_why():
         forwards.close()
 
         # Somebody else took it while the link was down.
-        squatter = await anyio.create_tcp_listener(
-            local_host="127.0.0.1", local_port=port
-        )
+        squatter = await anyio.create_tcp_listener(local_host="127.0.0.1", local_port=port)
         try:
             async with ssh_connection() as second:
                 said = await forwards.reopen(second)
@@ -502,17 +482,13 @@ async def test_a_forward_that_is_removed_does_not_come_back():
     "Removing stops the wanting, so the next reconnect does not undo it."
     async with echoing() as echo_port:
         forwards = Forwards()
-        wanted = Forward(
-            Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port
-        )
+        wanted = Forward(Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port)
 
         async with ssh_connection() as first:
             await forwards.add(first, wanted)
             assert len(forwards) == 1
 
-            gone = forwards.remove(
-                (Direction.LOCAL, "127.0.0.1", ANY_PORT)
-            )
+            gone = forwards.remove((Direction.LOCAL, "127.0.0.1", ANY_PORT))
             assert gone == wanted
             assert len(forwards) == 0
 
@@ -529,9 +505,7 @@ async def test_a_forward_is_removed_by_the_port_it_was_shown_at():
     """
     async with echoing() as echo_port, ssh_connection() as connection:
         forwards = Forwards()
-        wanted = Forward(
-            Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port
-        )
+        wanted = Forward(Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port)
         opened = await forwards.add(connection, wanted)
         assert opened.port != ANY_PORT, "A bound listener reports its port."
 
@@ -549,9 +523,7 @@ async def test_a_forward_is_removed_by_any_name_for_loopback():
     """
     async with echoing() as echo_port, ssh_connection() as connection:
         forwards = Forwards()
-        wanted = Forward(
-            Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
-        )
+        wanted = Forward(Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port)
         await forwards.add(connection, wanted)
 
         gone = forwards.remove((Direction.LOCAL, "localhost", wanted.listen_port))
@@ -564,14 +536,10 @@ async def test_removing_a_name_nobody_holds_removes_nothing():
     "A name that reaches no entry answers `None` and leaves the table alone."
     async with echoing() as echo_port, ssh_connection() as connection:
         forwards = Forwards()
-        wanted = Forward(
-            Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
-        )
+        wanted = Forward(Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port)
         await forwards.add(connection, wanted)
 
-        gone = forwards.remove(
-            (Direction.LOCAL, "127.0.0.1", wanted.listen_port + 1)
-        )
+        gone = forwards.remove((Direction.LOCAL, "127.0.0.1", wanted.listen_port + 1))
 
         assert gone is None
         assert len(forwards) == 1
@@ -636,9 +604,7 @@ async def test_a_url_forward_moves_when_its_port_is_taken():
     """
     async with echoing() as echo_port, ssh_connection() as connection:
         asked = _free_port()
-        squatter = await anyio.create_tcp_listener(
-            local_host="127.0.0.1", local_port=asked
-        )
+        squatter = await anyio.create_tcp_listener(local_host="127.0.0.1", local_port=asked)
         try:
             forwards = Forwards()
             opened = await forwards.add(
@@ -669,8 +635,7 @@ async def test_two_url_forwards_that_both_moved_keep_their_own_entries():
         assert first != second
 
         squatters = [
-            await anyio.create_tcp_listener(local_host="127.0.0.1", local_port=port)
-            for port in (first, second)
+            await anyio.create_tcp_listener(local_host="127.0.0.1", local_port=port) for port in (first, second)
         ]
         try:
             forwards = Forwards()
@@ -725,9 +690,7 @@ async def test_the_same_url_twice_keeps_the_one_listener():
     "Opening a page again is a use of the forward, not a second one."
     async with echoing() as echo_port, ssh_connection() as connection:
         forwards = Forwards()
-        wanted = Forward(
-            Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
-        )
+        wanted = Forward(Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port)
 
         first = await forwards.add(connection, wanted, idle=60)
         again = await forwards.add(connection, wanted, idle=60)
@@ -748,9 +711,7 @@ async def test_a_url_forward_nobody_used_is_reaped():
         with _clock(forwards) as stands_at:
             opened = await forwards.add(
                 connection,
-                Forward(
-                    Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
-                ),
+                Forward(Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port),
                 idle=60,
             )
             assert opened.error == ""
@@ -776,9 +737,7 @@ async def test_using_a_url_forward_puts_off_the_reaping():
         with _clock(forwards) as stands_at:
             opened = await forwards.add(
                 connection,
-                Forward(
-                    Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
-                ),
+                Forward(Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port),
                 idle=60,
             )
 
@@ -814,9 +773,7 @@ async def test_a_forward_carrying_a_connection_is_never_idle():
         with _clock(forwards) as stands_at:
             opened = await forwards.add(
                 connection,
-                Forward(
-                    Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
-                ),
+                Forward(Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port),
                 idle=60,
             )
             assert opened.error == ""
@@ -860,9 +817,7 @@ async def test_a_forward_that_only_receives_is_not_reaped():
         with _clock(forwards) as stands_at:
             opened = await forwards.add(
                 connection,
-                Forward(
-                    Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", pushed_port
-                ),
+                Forward(Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", pushed_port),
                 idle=60,
             )
             assert opened.error == ""
@@ -873,9 +828,7 @@ async def test_a_forward_that_only_receives_is_not_reaped():
                 assert await listening.receive() == b"PUSHED"
 
                 stands_at[0] += 60 * 60
-                assert forwards.reap() == [], (
-                    "A forward that was receiving was reaped as idle."
-                )
+                assert forwards.reap() == [], "A forward that was receiving was reaped as idle."
                 assert len(forwards) == 1
 
                 # Still receiving, an hour of idle time later.
@@ -892,9 +845,7 @@ async def test_the_idle_clock_starts_when_the_last_connection_ends():
         with _clock(forwards) as stands_at:
             opened = await forwards.add(
                 connection,
-                Forward(
-                    Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
-                ),
+                Forward(Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port),
                 idle=60,
             )
 
@@ -930,9 +881,7 @@ async def test_bytes_through_a_forward_are_use_of_it():
         with _clock(forwards) as stands_at:
             opened = await forwards.add(
                 connection,
-                Forward(
-                    Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
-                ),
+                Forward(Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port),
                 idle=60,
             )
             where = (Direction.LOCAL, "127.0.0.1", opened.port)
@@ -963,17 +912,13 @@ async def test_a_refused_channel_reports_its_end_twice_and_is_counted_once():
     A counter would have gone below zero here, and a forward that reads
     as carrying -1 connections is never reaped again.
     """
-    async with echoing() as echo_port, ssh_connection(
-        allow_forward=False
-    ) as connection:
+    async with echoing() as echo_port, ssh_connection(allow_forward=False) as connection:
         forwards = Forwards()
 
         with _clock(forwards) as stands_at:
             opened = await forwards.add(
                 connection,
-                Forward(
-                    Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
-                ),
+                Forward(Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port),
                 idle=60,
             )
             where = (Direction.LOCAL, "127.0.0.1", opened.port)
@@ -1003,9 +948,7 @@ async def test_a_forward_somebody_typed_is_never_reaped():
         with _clock(forwards) as stands_at:
             await forwards.add(
                 connection,
-                Forward(
-                    Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port
-                ),
+                Forward(Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port),
             )
 
             stands_at[0] += 60 * 60 * 24
@@ -1019,9 +962,7 @@ async def test_a_url_forward_that_went_idle_while_the_link_was_down_stays_gone()
     "There is nothing to come back for, so the reconnect does not bring it."
     async with echoing() as echo_port:
         forwards = Forwards()
-        wanted = Forward(
-            Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
-        )
+        wanted = Forward(Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port)
 
         with _clock(forwards) as stands_at:
             async with ssh_connection() as first:
@@ -1352,15 +1293,11 @@ async def test_a_forward_pymux_made_is_marked_in_its_report():
 
         person = await forwards.add(
             connection,
-            Forward(
-                Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
-            ),
+            Forward(Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port),
         )
         ours = await forwards.add(
             connection,
-            Forward(
-                Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port
-            ),
+            Forward(Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port),
             idle=600,
         )
         try:
@@ -1400,9 +1337,7 @@ async def test_connecting_again_brings_the_forwards_back():
             connection, _reader = await client._connect()
             was = await client.forwards.add(
                 connection,
-                Forward(
-                    Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port
-                ),
+                Forward(Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port),
             )
             assert was.error == ""
 

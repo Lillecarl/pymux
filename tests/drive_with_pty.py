@@ -38,6 +38,7 @@ Run with:
     nix build --file . checks.pymux-pty
     nix build --file . checks.pymux-integrated
 """
+from __future__ import annotations
 
 import datetime
 import fcntl
@@ -56,19 +57,22 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pyte.modes import PrivateMode  # noqa: E402
-from pyte.screen import Screen  # noqa: E402
-from pyte.sequences import set_mode  # noqa: E402
-from pyte.sixel import decode_sixel  # noqa: E402
-from pyte.streams import Stream  # noqa: E402
-
-from pymux.colors import TRUECOLOR_PROBE  # noqa: E402
-from pymux.graphics import CELL_SIZE_QUERY  # noqa: E402
-from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY  # noqa: E402
-from pymux.blocks import LOWER_HALF, UPPER_HALF  # noqa: E402
-from pyte.environment import terminal_name  # noqa: E402
+from pyte.environment import terminal_name
+from pyte.modes import PrivateMode
 from pyte.osc import Osc
-from pyte.sequences import dcs, osc
+from pyte.screen import Screen
+from pyte.sequences import (
+    dcs,
+    osc,
+    set_mode,
+)
+from pyte.sixel import decode_sixel
+from pyte.streams import Stream
+
+from pymux.blocks import LOWER_HALF, UPPER_HALF
+from pymux.colors import TRUECOLOR_PROBE
+from pymux.graphics import CELL_SIZE_QUERY
+from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
 
 REPO_ROOT = Path(__file__).parent.parent
 

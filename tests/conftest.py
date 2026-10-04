@@ -11,6 +11,7 @@ suite has.
 `pyte/tests/conftest.py` is the same section, with the groups of that
 suite around it.
 """
+from __future__ import annotations
 
 import asyncio
 import faulthandler
@@ -24,7 +25,7 @@ from ptyhost.process import Process
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pymux.main import Pymux  # noqa: E402
+from pymux.main import Pymux
 
 #: How long one test may take before it is stuck. The check sets it.
 HANG_SECONDS = float(os.environ.get("PYMUX_HANG_SECONDS") or 0)

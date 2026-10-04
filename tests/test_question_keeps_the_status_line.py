@@ -15,11 +15,12 @@ list is the context for.
 
 Lillecarl/pymux#339.
 """
+from __future__ import annotations
 
 from prompt_toolkit.data_structures import Size
+from session import in_this_process
 
 from pymux.layout import Z_INDEX
-from session import in_this_process
 
 SIZE = Size(rows=24, columns=80)
 

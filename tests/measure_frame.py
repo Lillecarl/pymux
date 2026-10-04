@@ -65,6 +65,7 @@ Two knobs reach this file from `pymux/nix/checks.nix`:
     PYMUX_FRAME_INCLUDE=strip nix build --file . checks.pymux-frame
     PYMUX_FRAME_TOLERANCE=2 nix build --file . checks.pymux-frame
 """
+from __future__ import annotations
 
 import os
 import re
@@ -78,29 +79,30 @@ sys.path.insert(0, str(Path(__file__).parent))
 # not the directory above it.
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
-from instructions import count_instructions  # noqa: E402
-from recorded import how_to_record, moved, read_counts, write_list  # noqa: E402
-from prompt_toolkit.application import Application  # noqa: E402
-from prompt_toolkit.application.current import set_app  # noqa: E402
-from prompt_toolkit.data_structures import Size  # noqa: E402
-from prompt_toolkit.input import create_pipe_input  # noqa: E402
-from prompt_toolkit.layout.containers import Window  # noqa: E402
-from prompt_toolkit.layout.layout import Layout  # noqa: E402
-from prompt_toolkit.layout.mouse_handlers import MouseHandlers  # noqa: E402
-from prompt_toolkit.layout.screen import Screen, WritePosition  # noqa: E402
-from prompt_toolkit.output import DummyOutput  # noqa: E402
+from instructions import count_instructions
+from prompt_toolkit.application import Application
+from prompt_toolkit.application.current import set_app
+from prompt_toolkit.data_structures import Size
+from prompt_toolkit.input import create_pipe_input
+from prompt_toolkit.layout.containers import Window
+from prompt_toolkit.layout.layout import Layout
+from prompt_toolkit.layout.mouse_handlers import MouseHandlers
+from prompt_toolkit.layout.screen import Screen, WritePosition
+from prompt_toolkit.output import DummyOutput
+from recorded import how_to_record, moved, read_counts, write_list
 
-from pymux.arrangement import Pane, Window as ArrangementWindow  # noqa: E402
-from pymux.divided import Divided  # noqa: E402
-from pymux.layout import (  # noqa: E402
+from pymux.arrangement import Pane
+from pymux.arrangement import Window as ArrangementWindow
+from pymux.divided import Divided
+from pymux.layout import (
     layout_of,
     pane_beside,
     room_for_panes,
 )
-from pymux.plan_container import PlanContainer  # noqa: E402
-from pymux.plane import Side  # noqa: E402
-from pymux.strip import Strip  # noqa: E402
-from pymux.zoomed import Zoomed  # noqa: E402
+from pymux.plan_container import PlanContainer
+from pymux.plane import Side
+from pymux.strip import Strip
+from pymux.zoomed import Zoomed
 
 HERE = Path(__file__).parent
 

@@ -7,9 +7,9 @@ the other events carry tmux's names. The tests keep to hooks that
 answer on the message line, so what fired is what is read back.
 Lillecarl/pymux#297.
 """
+from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app
-
 from session import create_session
 
 

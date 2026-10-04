@@ -10,6 +10,7 @@ draws on the slave and the test reads the master, which is how the
 notice is judged: the bytes a person would see. `test_ssh_client.py`
 says why an asyncssh server stands in for sshd.
 """
+from __future__ import annotations
 
 import array
 import asyncio
@@ -24,6 +25,7 @@ from pathlib import Path
 
 import anyio
 import pytest
+from test_ssh_client import create_key
 
 from pymux.client import reconnect as reconnect_module
 from pymux.client import ssh as ssh_client
@@ -38,8 +40,6 @@ from pymux.client.reconnect import (
 )
 from pymux.client.ssh import SshClient
 from pymux.main import Pymux
-
-from test_ssh_client import create_key
 
 PANE_COMMAND = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
 

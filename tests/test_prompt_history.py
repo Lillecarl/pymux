@@ -7,9 +7,9 @@ The rules this judges, Lillecarl/pymux#305: a command typed at the
 reads it back through `answer`, `clear-prompt-history` empties it,
 and both buffers of every client share it.
 """
+from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app
-
 from session import create_session
 
 

@@ -11,6 +11,7 @@ Lillecarl/pymux#215.
 pane of it. What it wraps is untouched, which is what tmux does as
 well: `window_zoom` saves the tree and `window_unzoom` puts it back.
 """
+from __future__ import annotations
 
 from prompt_toolkit.data_structures import Size
 from test_strip_draws import CHROME, create_client, dump

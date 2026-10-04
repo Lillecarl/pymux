@@ -7,7 +7,9 @@ A socketpair and not a listener: the server end is the same
 `PosixSocketConnection` an accepted socket becomes, so the bytes are the
 socket route's and no path on disk is needed.
 """
+from __future__ import annotations
 
+import asyncio
 import contextvars
 import json
 import re
@@ -15,7 +17,6 @@ import socket
 import time
 
 import anyio
-import asyncio
 import pytest
 
 from pymux.main import Pymux

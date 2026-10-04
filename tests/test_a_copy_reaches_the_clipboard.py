@@ -12,6 +12,7 @@ whether it goes out.
 that a pane of pymux hands the ask over, that the payload survives the
 check, and that every client hears it. Lillecarl/pymux#376.
 """
+from __future__ import annotations
 
 import base64
 import sys
@@ -19,11 +20,10 @@ import sys
 import pytest
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.application.dummy import DummyApplication
+from session import create_session
 
 from pymux.main import Pymux
 from pymux.options import Clipboard
-
-from session import create_session
 
 COLUMNS = 20
 LINES = 5

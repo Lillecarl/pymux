@@ -47,6 +47,7 @@ check does nothing when it is not set. `PYMUX_ESCTEST_INCLUDE` is the
 regular expression of test names to run. `PYMUX_ESCTEST_OUT` names the
 directory to write the list and the log into.
 """
+from __future__ import annotations
 
 import os
 import re
@@ -56,8 +57,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tests.drive_with_pty import Failed, Terminal, run_cli  # noqa: E402
-from tests.recorded import how_to_record, read_names  # noqa: E402
+from tests.drive_with_pty import Failed, Terminal, run_cli
+from tests.recorded import how_to_record, read_names
 
 HERE = Path(__file__).parent
 

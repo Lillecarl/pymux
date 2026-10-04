@@ -14,6 +14,7 @@ ran. Lillecarl/pymux#38.
 pymux takes `-g` now, so that line works and is no longer the example
 of one that fails. `test_window_defaults.py` says what it does.
 """
+from __future__ import annotations
 
 from pymux.commands import call_command_handler
 from pymux.main import Pymux

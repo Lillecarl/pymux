@@ -11,9 +11,9 @@ looking at.
 So a client reports its environment when it attaches, the session takes
 the names the option lists, and nothing keeps the rest.
 """
+from __future__ import annotations
 
 from prompt_toolkit.data_structures import Size
-
 from session import in_this_process, over_connection
 
 SIZE = Size(rows=24, columns=80)

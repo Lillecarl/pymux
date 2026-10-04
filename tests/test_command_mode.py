@@ -12,15 +12,16 @@ draws the same line, so the binding here is for emacs status keys only.
 The tests are coroutines. Focusing the command line starts a background
 task, and prompt_toolkit asks the running loop for one.
 """
+from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.enums import EditingMode
-from prompt_toolkit.key_binding.key_processor import _Flush, KeyPress
+from prompt_toolkit.key_binding.key_processor import KeyPress, _Flush
 from prompt_toolkit.keys import Keys
-
-from session import create_session
-from pymux.options import ALL_OPTIONS
 from pyte.sequences import Csi, csi
+from session import create_session
+
+from pymux.options import ALL_OPTIONS
 
 
 def in_command_mode(state):

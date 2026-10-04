@@ -7,6 +7,7 @@ receives the request and whether it asks first, and that is what these
 tests judge. The client half is one call to `webbrowser`, judged on its
 own at the bottom.
 """
+from __future__ import annotations
 
 import asyncio
 import base64
@@ -17,12 +18,11 @@ import sys
 import webbrowser
 
 import pytest
-
-from session import once, over_connection, in_this_process
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
+from session import in_this_process, once, over_connection
+
 from pymux.client.terminal import TerminalClient
-from pymux.osc import open_url_of
 from pymux.options import ALL_OPTIONS, SetOptionError
 
 URL = "https://example.com/auth"

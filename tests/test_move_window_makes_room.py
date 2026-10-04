@@ -9,14 +9,14 @@ and both are flags on this command: `-a`, `-b` and `-k`
 `new-window -a` already used. Lillecarl/pymux#191,
 Lillecarl/pymux#343.
 """
+from __future__ import annotations
 
 import sys
 
 from prompt_toolkit.application.current import set_app
+from session import DEFAULT_SIZE, in_this_process
 
 from pymux.main import Pymux
-
-from session import DEFAULT_SIZE, in_this_process
 
 #: A pane that stays up, so a window lives until a test closes it.
 WAITS = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)

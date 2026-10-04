@@ -5,12 +5,12 @@ It belongs to the session, like a window does, so every client sees the
 same one. It takes the keyboard while it is open, and it closes when
 the program in it ends.
 """
+from __future__ import annotations
 
 import pytest
 
 from pymux.layout import DEFAULT_OVERLAY_SIZE, MIN_OVERLAY_SIZE, overlay_size
 from pymux.main import Pymux
-
 
 # ----------------------------------------------------------------------
 # How large it is.

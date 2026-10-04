@@ -8,16 +8,17 @@ nothing: it called `reset` on prompt_toolkit's `Screen`, which has no
 such method, so the call after it never ran. Nothing tested it.
 Lillecarl/pymux#118.
 """
+from __future__ import annotations
 
 import sys
 
 import pytest
-
-from pymux.commands import call_command_handler
-from pymux.main import Pymux
 from pyte import escape
 from pyte.modes import PrivateMode
 from pyte.sequences import Csi, csi, set_mode
+
+from pymux.commands import call_command_handler
+from pymux.main import Pymux
 
 COLUMNS = 20
 LINES = 5

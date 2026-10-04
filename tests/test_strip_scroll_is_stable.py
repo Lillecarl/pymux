@@ -18,9 +18,9 @@ for its own sake:
 The scroll is read off the container, and what is on screen is read off
 the cells, because those are two different claims.
 """
+from __future__ import annotations
 
 import io
-import sys
 from contextlib import contextmanager
 
 from prompt_toolkit.application.current import set_app
@@ -30,8 +30,8 @@ from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
-
 from session import Connection
+
 from pymux.main import Pymux
 from pymux.plan_container import PlanContainer
 

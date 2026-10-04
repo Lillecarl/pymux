@@ -15,6 +15,7 @@ These tests read the cells of the real layout, because that is the only
 place the difference exists: the whole message reaches
 `client_state.message` either way.
 """
+from __future__ import annotations
 
 from test_strip_draws import ROWS, create_client
 

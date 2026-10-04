@@ -23,13 +23,14 @@ purpose. The hidden window one records the half that already held. The
 title one guards the other side: it passes before and after, and fails
 if somebody takes the wake away rather than narrowing it.
 """
+from __future__ import annotations
 
 import asyncio
 import sys
 
-from session import over_connection
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
+from session import over_connection
 
 #: A pane that is still there when the test looks at it. A program that
 #: exits takes its pane, and then its window, with it.

@@ -15,6 +15,7 @@ experiment: it is the server's own dispatch, with no socket and no sleep.
 `tests/test_libpymux_streams.py` is the other half, over a real socket,
 which is the only thing that says the two agree.
 """
+from __future__ import annotations
 
 import json
 import sys
@@ -26,7 +27,6 @@ from pymux.main import Pymux
 from pymux.pipes.memory import connect_in_memory
 from pymux.server import ServerConnection
 from pymux.web.stream import LOOK_AGAIN, PaneStream
-
 
 #: A program that stays alive until something kills it.
 #:

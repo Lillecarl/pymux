@@ -10,14 +10,15 @@ The panes run a program that waits, so no shell starts and no pane
 ends while a test is looking. A pane that ends takes its session with
 it, which `test_a_session_that_empties_goes` is about.
 """
+from __future__ import annotations
 
 import sys
 
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
+from session import in_this_process, once, over_connection
 
 from pymux.main import Pymux
-from session import in_this_process, once, over_connection
 
 SIZE = Size(rows=24, columns=80)
 

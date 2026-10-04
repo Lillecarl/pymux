@@ -17,13 +17,14 @@ So this is a prompt with the key names on it. What the tests below read
 is which container the layout would draw, which is the filter of each
 float, and what reaches the pane when the answer is accepted.
 """
+from __future__ import annotations
 
 import pytest
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.document import Document
 from prompt_toolkit.layout.containers import ConditionalContainer, Float
-
 from session import create_session
+
 from pymux.commands import call_command_handler
 from pymux.key_spelling import PREFIX, KeyCompleter
 

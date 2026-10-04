@@ -17,11 +17,11 @@ answered with the first window.
 
 Lillecarl/pymux#191.
 """
+from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
 from prompt_toolkit.application.current import set_app
-
 from session import DEFAULT_SIZE, NOTHING, in_this_process
 
 

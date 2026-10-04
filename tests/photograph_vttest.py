@@ -84,6 +84,7 @@ on its own. `tests/vttest-picture-differences.txt` records each
 difference that stands and says why, and a run is judged against it in
 both directions.
 """
+from __future__ import annotations
 
 import os
 import shlex
@@ -102,7 +103,6 @@ from pyterm_pytest.seats import (
     open_the_seats,
     with_no_answer,
 )
-
 from recorded import read_verdicts, write_list
 from take_picture import TERMINALS, every_log, pymux_command
 

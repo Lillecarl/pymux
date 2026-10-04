@@ -17,16 +17,13 @@ client notices its own machine slept. This is what the server does
 about the client it was left with.
 """
 
-from __future__ import annotations
-
 import json
 
 from prompt_toolkit.data_structures import Size
+from session import once, over_connection
 
 from pymux import server as pymux_server
 from pymux.client.ssh import SshClient
-
-from session import once, over_connection
 
 SIZE = Size(rows=24, columns=80)
 

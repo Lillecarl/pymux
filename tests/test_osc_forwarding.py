@@ -6,17 +6,16 @@ A pane cannot serve the clipboard, a desktop notification or the shape
 of the pointer. pymux writes those to the outer terminal. The payload
 comes from a program in a pane, so it is checked first.
 """
+from __future__ import annotations
 
 import pytest
-
+from pyte import escape
 from pyte.osc import PointerShapes
+from pyte.sequences import Terminator, csi, osc
 
 from pymux.main import Pymux
 from pymux.options import Clipboard
 from pymux.osc import MAX_OSC_LENGTH, build_osc
-from pyte import escape
-from pyte.sequences import csi
-from pyte.sequences import Terminator, osc
 
 
 def sequence(code, param):

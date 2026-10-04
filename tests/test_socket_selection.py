@@ -10,13 +10,13 @@ So a person who started a second server and attached could land on
 either one. They usually landed on the old one, and every change in the
 new server looked like it had done nothing.
 """
+from __future__ import annotations
 
 import os
 import socket
 import time
 
 import pytest
-
 from libpymux.sockets import servers_newest_first
 
 pytestmark = pytest.mark.skipif(
@@ -204,6 +204,7 @@ def test_a_new_server_takes_the_dead_name_rather_than_the_next(
     starting at all.
     """
     from libpymux.sockets import socket_directory
+
     from pymux.pipes.posix import _bind_posix_socket
 
     room = socket_directory()
@@ -224,6 +225,7 @@ def test_a_new_server_takes_the_dead_name_rather_than_the_next(
 def test_a_name_somebody_answers_on_is_left_alone(sockets, tmp_path):
     "The next index, which is what a second server has always taken."
     from libpymux.sockets import socket_directory
+
     from pymux.pipes.posix import _bind_posix_socket
 
     room = socket_directory()

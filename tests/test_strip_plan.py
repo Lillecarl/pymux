@@ -11,6 +11,7 @@ something outside itself: `test_plane.py` holds every plan to the
 promises every layout makes, and `test_plan_and_frame.py` holds this
 plan against the frame prompt_toolkit actually draws.
 """
+from __future__ import annotations
 
 from hypothesis import given
 from hypothesis import strategies as st

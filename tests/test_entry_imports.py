@@ -10,6 +10,7 @@ address names a machine, and never before. Lillecarl/pymux#392.
 The assertions read the modules of a fresh interpreter, because this
 one has already imported whatever the rest of the suite pulled in.
 """
+from __future__ import annotations
 
 import json
 import subprocess

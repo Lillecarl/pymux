@@ -19,6 +19,7 @@ same two flags the same way and calls the result `default-size`
 means a size to stay -- this one gives way to a client that attaches.
 Lillecarl/pymux#459.
 """
+from __future__ import annotations
 
 import os
 import sys

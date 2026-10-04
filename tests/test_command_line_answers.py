@@ -6,9 +6,9 @@ nothing, and the answers it asks for -- a listing, a value, an id --
 have to come back on stdout. They used to go to a popup on that
 client, which went nowhere. Lillecarl/pymux#288, #289, #292.
 """
+from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app
-
 from session import create_session
 
 

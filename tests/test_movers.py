@@ -7,14 +7,15 @@ goes out of the order and back with the pen of unlinked windows.
 The harness starts with two windows of one pane, and the tests say
 which is which. Lillecarl/pymux#297.
 """
+from __future__ import annotations
 
 import argparse
 
 import pytest
 from prompt_toolkit.application.current import set_app
+from session import create_session
 
 from pymux.commands import CommandException
-from session import create_session
 
 
 async def test_move_pane_puts_pane_in_other_window():

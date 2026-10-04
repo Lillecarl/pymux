@@ -22,6 +22,7 @@ group and the press is done.
 The order of a line holds either way: `a ; b` means b after a, and it
 still does when a is one that waits.
 """
+from __future__ import annotations
 
 import json
 import sys
@@ -33,15 +34,15 @@ from prompt_toolkit.data_structures import Size
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from pymux.commands import (  # noqa: E402
+from session import create_session, over_connection
+
+from pymux.commands import (
     CommandException,
     add_command,
     call_command_handler,
     handle_command,
     parser_tree,
 )
-
-from session import create_session, over_connection  # noqa: E402
 
 #: What a client of the socket route reports.
 SIZE = Size(rows=24, columns=80)

@@ -14,6 +14,7 @@ One left running for four days reached 86 MB, because the level was
 DEBUG and a server writes a line for every frame it draws -- eleven a
 second on a session where the panes animate. Lillecarl/pymux#248.
 """
+from __future__ import annotations
 
 import io
 import logging

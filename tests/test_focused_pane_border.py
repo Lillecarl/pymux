@@ -13,6 +13,7 @@ stray mark on the window's chrome. So the foot is drawn only where the
 pane has a bar below it, and the sides and top corners are drawn
 always.
 """
+from __future__ import annotations
 
 import io
 from contextlib import contextmanager
@@ -24,8 +25,8 @@ from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
-
 from session import Connection
+
 from pymux.layout import pane_write_positions
 from pymux.main import Pymux
 

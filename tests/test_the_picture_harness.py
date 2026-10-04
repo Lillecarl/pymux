@@ -6,6 +6,7 @@ and three terminal emulators, so it is asked in `checks.pymux-pictures`
 and takes twenty minutes. These are the ones that need none of that,
 and the first of them is the one a burst got wrong.
 """
+from __future__ import annotations
 
 from pyterm_pytest.seats import (
     APPEAR_TIMEOUT,
@@ -14,7 +15,6 @@ from pyterm_pytest.seats import (
     BLINK_START,
     SETTLE_TIMEOUT,
 )
-
 from take_picture import BLINK_FIXTURES, HOLD, blink_program
 
 #: The longest one picture took on this machine, measured with three

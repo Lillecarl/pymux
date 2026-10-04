@@ -16,6 +16,7 @@ Run with:
     nix build --file . checks.pymux-wire.run
     less result/log
 """
+from __future__ import annotations
 
 import asyncio
 import json
@@ -32,11 +33,11 @@ sys.path.insert(0, str(Path(__file__).parent))
 # not the directory above it.
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
-from session import over_connection  # noqa: E402
-from prompt_toolkit.application.current import set_app  # noqa: E402
-from prompt_toolkit.data_structures import Size  # noqa: E402
+from prompt_toolkit.application.current import set_app
+from prompt_toolkit.data_structures import Size
+from session import over_connection
 
-from pymux.main import Pymux  # noqa: E402
+from pymux.main import Pymux
 
 #: The client's terminal.
 SIZE = Size(rows=24, columns=80)

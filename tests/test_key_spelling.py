@@ -13,10 +13,12 @@ So the parity test below is mechanical. Every entry of
 `PYMUX_TO_PROMPT_TOOLKIT_KEYS` is re-spelled as a chord and has to
 reach the same keys. Nothing is written out twice.
 """
+from __future__ import annotations
 
 import pytest
 from prompt_toolkit.document import Document
 from prompt_toolkit.keys import Keys
+from pyte.keys import FIRST_FUNCTIONAL_KEY, KeyEvent, Modifier
 
 from pymux.key_mappings import (
     PYMUX_TO_PROMPT_TOOLKIT_KEYS,
@@ -28,16 +30,15 @@ from pymux.key_spelling import (
     PREFIX,
     TOGETHER,
     KeyCompleter,
+    as_chord,
     chord,
+    event,
     key_however_it_is_written,
     key_written_out,
-    event,
-    as_chord,
     keys_of,
     why_pane_cannot_read,
 )
 from pymux.keys import KEYS_A_KEYBOARD_SPELLS_OUT
-from pyte.keys import FIRST_FUNCTIONAL_KEY, KeyEvent, Modifier
 
 # ----------------------------------------------------------------------
 # Everything the older spelling reaches.

@@ -6,8 +6,9 @@ with what it is told. The pane answers what it holds, which is the
 theme's palette when the theme owns the screen -- so the pictures of
 a theme show the theme's colours inside the pane too.
 """
+from __future__ import annotations
 
-from demo_application import CONVENTIONAL, Painter, parse_replies, ASKS
+from demo_application import ASKS, CONVENTIONAL, Painter, parse_replies
 
 
 def test_asks_name_sixteen_and_two_defaults():

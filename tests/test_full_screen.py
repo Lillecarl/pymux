@@ -20,13 +20,14 @@ rest of what two clients on one window do.
 `tests/drive_with_pty.py::check_full_screen_pane` measures the cells
 themselves, over a real pty.
 """
+from __future__ import annotations
 
 import pytest
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
+from session import in_this_process
 
 from pymux.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS, SetOptionError
-from session import in_this_process
 
 #: One terminal with room, and one without.
 BIG = Size(rows=24, columns=100)

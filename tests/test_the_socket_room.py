@@ -8,12 +8,12 @@ creates mode 0700 and every user of it verifies before it uses, the
 way tmux keeps its sockets in `tmux-<uid>`.
 Lillecarl/pymux#405.
 """
+from __future__ import annotations
 
 import os
 import stat
 
 import pytest
-
 from libpymux.sockets import socket_directory
 
 pytestmark = pytest.mark.skipif(

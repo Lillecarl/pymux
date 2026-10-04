@@ -5,15 +5,16 @@ Each test builds the pane state with the real `pyte.images`
 classes, renders one or more frames, and checks the escape sequences
 that reach the outer terminal.
 """
+from __future__ import annotations
 
 import base64
 import re
 import zlib
 
 from pyte.images import GraphicsImage, GraphicsPlacement, GraphicsState
+from pyte.sequences import apc
 
 from pymux.graphics import ClientGraphics, PaneView
-from pyte.sequences import apc
 
 # 2x2 pixels, RGB.
 IMAGE_DATA = bytes(range(12))

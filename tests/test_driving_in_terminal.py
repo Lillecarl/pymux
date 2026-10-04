@@ -13,6 +13,7 @@ direction and keys in the other, and a pty of the test's own is a
 terminal as far as it is concerned. The picture check is what needs a
 compositor, and this is the part of it that can be judged without one.
 """
+from __future__ import annotations
 
 import os
 import pty

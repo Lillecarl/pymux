@@ -5,6 +5,7 @@ One cell carries two pixels. The foreground paints the top half and the
 background paints the bottom, so a grid of cells holds an image at twice
 the vertical resolution.
 """
+from __future__ import annotations
 
 import pytest
 from prompt_toolkit.output import ColorDepth

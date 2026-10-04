@@ -18,6 +18,7 @@ holds its own copy of the counting helper on purpose, because the
 repositories are separate and no test tree depends on the other's.
 Everything this module serves is inside this one repository.
 """
+from __future__ import annotations
 
 from pathlib import Path
 

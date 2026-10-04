@@ -9,11 +9,12 @@ the sequences on, so the outer terminal reads them for itself. An
 attention ask ("RequestAttention") records a notification too, and a
 clipboard write ("Copy") follows the clipboard option.
 """
+from __future__ import annotations
 
 import pytest
 from prompt_toolkit.application.current import set_app
-
 from session import create_session
+
 from pymux.main import MAX_MARKS, MAX_USER_VARS, Pymux
 from pymux.notifications import Urgency
 from pymux.options import Clipboard

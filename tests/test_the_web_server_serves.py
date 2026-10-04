@@ -15,6 +15,7 @@ a unit test sees:
 nothing else can, which is why a headless one runs against this separately.
 Lillecarl/pymux#461.
 """
+from __future__ import annotations
 
 import json
 import sys

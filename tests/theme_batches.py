@@ -9,6 +9,7 @@ of themes) pairs the gallery builds -- one seat boot per batch, which
 is what the cost of a combo is -- and the check reads it back with
 `fromJSON`.
 """
+from __future__ import annotations
 
 import json
 import os
@@ -16,8 +17,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from photograph_themes import FIXTURES  # noqa: E402
-from take_picture import LIGHT_TERMINALS, TERMINALS  # noqa: E402
+from photograph_themes import FIXTURES
+from take_picture import LIGHT_TERMINALS, TERMINALS
 
 BATCH = int(os.environ.get("PYMUX_THEME_BATCH", "12"))
 

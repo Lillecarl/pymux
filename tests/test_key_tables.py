@@ -10,16 +10,16 @@ time, the way it does in tmux's own modes. Lillecarl/pymux#394.
 
 Pane-management is the first mode in the table. Lillecarl/pymux#395.
 """
+from __future__ import annotations
 
 import pytest
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.keys import Keys
+from session import create_session
+from test_command_mode import press
 
 from pymux.commands import handle_command
 from pymux.main import Pymux
-
-from session import create_session
-from test_command_mode import press
 
 
 @pytest.fixture

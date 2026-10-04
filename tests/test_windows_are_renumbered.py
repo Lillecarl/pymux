@@ -9,14 +9,14 @@ its trigger is the close. One difference, on purpose: setting the
 option on packs an order that is open already, where tmux leaves the
 gap until the next close. Lillecarl/pymux#342.
 """
+from __future__ import annotations
 
 import sys
 
 from prompt_toolkit.application.current import set_app
+from session import DEFAULT_SIZE, in_this_process
 
 from pymux.main import Pymux
-
-from session import DEFAULT_SIZE, in_this_process
 
 #: A pane that stays up, so a window lives until a test closes it.
 WAITS = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)

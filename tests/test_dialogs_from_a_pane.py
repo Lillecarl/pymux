@@ -16,9 +16,9 @@ command came over the command line (Lillecarl/pymux#288) -- and the two
 that talk to `get_client_state()` directly were not.
 Lillecarl/pymux#272.
 """
+from __future__ import annotations
 
 from prompt_toolkit.data_structures import Size
-
 from session import once, over_connection
 
 SIZE = Size(rows=24, columns=80)

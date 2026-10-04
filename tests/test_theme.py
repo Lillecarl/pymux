@@ -22,6 +22,7 @@ and fails these.
 
 Lillecarl/pymux#194, Lillecarl/pymux#195.
 """
+from __future__ import annotations
 
 import io
 import sys
@@ -33,8 +34,8 @@ from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
-
 from session import Connection
+
 from pymux.main import Pymux
 from pymux.nearest import NEAREST
 from pymux.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS, SetOptionError
@@ -331,7 +332,7 @@ def test_roles_produce_rules_grey_drew():
         key: value
         for key, value in {
             **RULES,
-            **{
+            
                 "terminal.focused border": "#8787af bold",
                 "terminal.focused titlebar": "bg:#5f5f87 #ffffff",
                 "terminal.focused titlebar name": "bg:#8787af #ffffff",
@@ -345,8 +346,8 @@ def test_roles_produce_rules_grey_drew():
                 "search-toolbar.prompt": "bg:#8787af #ffffff",
                 "search-toolbar.text": "bg:#8787af #000000",
                 "search-match": "#000000 bg:#8888aa",
-                "search-match.current": "#ffffff bg:#5f5f87 underline",
-            },
+                "search-match.current": "#ffffff bg:#5f5f87 underline"
+            ,
         }.items()
     }
 

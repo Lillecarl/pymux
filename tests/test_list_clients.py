@@ -8,9 +8,9 @@ reader: one line per client, tmux's shape, with the machine in place of
 the tty -- a pymux client can be on another machine, and a tty path of
 a machine you are not on names nothing. Lillecarl/pymux#330.
 """
+from __future__ import annotations
 
 from prompt_toolkit.data_structures import Size
-
 from session import OTHER_MACHINE, over_connection
 
 SIZE = Size(rows=24, columns=80)

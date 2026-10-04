@@ -20,6 +20,7 @@ itself, the way `ptterm` compares reverse video. A reader holding only
 this number cannot, so the number has to be the wider one.
 Lillecarl/pymux#387.
 """
+from __future__ import annotations
 
 import sys
 

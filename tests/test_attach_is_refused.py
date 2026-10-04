@@ -13,6 +13,7 @@ person meant. So a connection that arrives over the socket of such a
 server may run commands and may not attach, and `ctrl+b d` means quit
 with nothing to argue about. Lillecarl/pymux#159.
 """
+from __future__ import annotations
 
 import json
 import socket

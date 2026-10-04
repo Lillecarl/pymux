@@ -11,13 +11,14 @@ So the name travels in the `start-gui` packet, beside `term` and
 `colorterm`, and `ServerConnection` keeps it the way it keeps the
 colours the terminal reported. Lillecarl/pymux#287.
 """
+from __future__ import annotations
 
 import socket
 
 from prompt_toolkit.data_structures import Size
+from session import OTHER_MACHINE, in_this_process, over_connection
 
 from pymux.client.terminal import TerminalClient
-from session import OTHER_MACHINE, in_this_process, over_connection
 
 SIZE = Size(rows=24, columns=80)
 

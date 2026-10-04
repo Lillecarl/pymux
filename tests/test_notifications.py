@@ -8,11 +8,11 @@ it came from. Enter takes the client to that pane. The pipe the
 terminal reads stays as it was: collecting is beside forwarding, and
 not instead of it.
 """
+from __future__ import annotations
 
-import pytest
 from prompt_toolkit.application.current import set_app
-
 from session import create_session
+
 from pymux.main import Pymux
 from pymux.notifications import NotificationCenter
 

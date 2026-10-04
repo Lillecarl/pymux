@@ -21,6 +21,7 @@ connection is every other client of the server. The work a connection
 spawns answers one client, so it is logged there and the connection
 lives on. Lillecarl/pymux#87.
 """
+from __future__ import annotations
 
 import inspect
 import logging

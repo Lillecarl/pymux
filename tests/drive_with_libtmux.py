@@ -9,6 +9,7 @@ Run with:
 
     nix develop --file . shell --command python3 tests/drive_with_libtmux.py
 """
+from __future__ import annotations
 
 import stat
 import sys

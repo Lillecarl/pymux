@@ -7,9 +7,9 @@ the pane below. The difference is deliberate and lives in the ledger
 probe beside it. The name ends in `_product_divergence` so the ledger
 and the tests can find each other. Lillecarl/pymux#400.
 """
+from __future__ import annotations
 
 import pytest
-
 from session import create_session
 
 

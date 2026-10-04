@@ -15,10 +15,10 @@ again. So `pyte.html` runs here, and a caller needs no pyte at all.
 properties, so a page that defines none of them draws nothing.
 Lillecarl/pymux#452.
 """
+from __future__ import annotations
 
 import sys
 from html.parser import HTMLParser
-from typing import List, Tuple
 
 import pytest
 
@@ -89,7 +89,7 @@ class _Read(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         #: One entry per piece of text, as (text, classes, style, href).
-        self.pieces: List[Tuple[str, str, str, str]] = []
+        self.pieces: list[tuple[str, str, str, str]] = []
         self._classes = ""
         self._style = ""
         self._href = ""

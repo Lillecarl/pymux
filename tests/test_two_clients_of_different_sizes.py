@@ -22,6 +22,7 @@ everything slice 5 did is judged here. The rest of the suite has one
 client, where the plane and the view are the same rectangle and every
 question about the difference is unaskable.
 """
+from __future__ import annotations
 
 import io
 from contextlib import contextmanager
@@ -33,8 +34,8 @@ from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Screen, WritePosition
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
-
 from session import Connection
+
 from pymux.enums import WindowSize
 from pymux.main import Pymux
 from pymux.plan_container import PlanContainer

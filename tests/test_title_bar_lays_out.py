@@ -9,6 +9,7 @@ The picture check is what says whether it reads as one bar. This says
 whether the cells are where they were meant to be.
 Lillecarl/pymux#207.
 """
+from __future__ import annotations
 
 import pytest
 from prompt_toolkit.formatted_text.utils import fragment_list_to_text

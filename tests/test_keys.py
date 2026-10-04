@@ -5,6 +5,7 @@ Each test feeds a sequence (or a mix of sequences and plain text) into
 the parser and checks the key presses that reach the feed_key callback.
 That is the same path that the server uses for client input.
 """
+from __future__ import annotations
 
 import logging
 
@@ -12,8 +13,8 @@ from prompt_toolkit.key_binding.key_processor import _Flush
 from prompt_toolkit.keys import Keys
 
 from pymux.keys import (
-    DropReason,
     Dropped,
+    DropReason,
     KittyVt100Parser,
     parse_kitty_key,
 )

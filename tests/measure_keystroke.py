@@ -71,6 +71,7 @@ that.
     less result/log
     cp result/keystroke-budgets.txt pymux/tests/keystroke-budgets.txt
 """
+from __future__ import annotations
 
 import asyncio
 import io
@@ -85,18 +86,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
-from prompt_toolkit.application.current import set_app  # noqa: E402
-from recorded import how_to_record, moved, read_counts, write_list  # noqa: E402
-from prompt_toolkit.data_structures import Size  # noqa: E402
-from prompt_toolkit.input import create_pipe_input  # noqa: E402
-from prompt_toolkit.key_binding.key_processor import KeyPress  # noqa: E402
-from prompt_toolkit.output import ColorDepth  # noqa: E402
-from prompt_toolkit.output.vt100 import Vt100_Output  # noqa: E402
+from instructions import count_instructions
+from prompt_toolkit.application.current import set_app
+from prompt_toolkit.data_structures import Size
+from prompt_toolkit.input import create_pipe_input
+from prompt_toolkit.key_binding.key_processor import KeyPress
+from prompt_toolkit.output import ColorDepth
+from prompt_toolkit.output.vt100 import Vt100_Output
+from recorded import how_to_record, moved, read_counts, write_list
+from session import Connection
 
-from session import Connection  # noqa: E402
-from instructions import count_instructions  # noqa: E402
-
-from pymux.main import Pymux  # noqa: E402
+from pymux.main import Pymux
 
 #: The tool slot the walk below registers as. It is the one
 #: `instructions.py` uses, and the two never run at the same time.

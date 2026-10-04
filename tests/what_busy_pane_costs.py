@@ -33,6 +33,7 @@ Knobs:
     PYMUX_BUSY_SECONDS    how long to measure each one
     PYMUX_BUSY_CEILING    the most of one core a background pane may take
 """
+from __future__ import annotations
 
 import asyncio
 import os
@@ -47,9 +48,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 # not the directory above it.
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
-from session import over_connection  # noqa: E402
-from prompt_toolkit.application.current import set_app  # noqa: E402
-from prompt_toolkit.data_structures import Size  # noqa: E402
+from prompt_toolkit.application.current import set_app
+from prompt_toolkit.data_structures import Size
+from session import over_connection
 
 #: The programs that animate, by the name a knob takes. Each one writes
 #: a screenful at its own rate and never stops.

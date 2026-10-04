@@ -9,6 +9,7 @@ call does nothing -- but the same pass also sweeps up a window that is
 already empty, and that sweep is what the skip loses.
 Lillecarl/pymux#351.
 """
+from __future__ import annotations
 
 import sys
 

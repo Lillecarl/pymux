@@ -16,12 +16,12 @@ move, and to see who else is here.
 
 Lillecarl/pymux#467.
 """
+from __future__ import annotations
 
 import sys
 
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
-
 from session import in_this_process, once, over_connection
 
 SIZE = Size(rows=24, columns=80)

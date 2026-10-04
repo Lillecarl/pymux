@@ -13,12 +13,13 @@ no layout at all. What a person sees is the title bars: each one names
 the panes on either side (Lillecarl/pymux#207), so a move renames
 three bars, and nothing in the move says so.
 """
+from __future__ import annotations
 
 from test_strip_draws import CHROME, create_client
 from test_title_bar_names_neighbours import (
     COLUMNS,
-    create_row_of_named_panes,
     bars_of,
+    create_row_of_named_panes,
 )
 
 from pymux.arrangement import Pane, Window

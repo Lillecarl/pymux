@@ -9,14 +9,15 @@ corner diagonally opposite only when the cursor is in its own way; and
 the fast typist pays nothing, because the box takes no focus and the
 key after the prefix reaches the bindings as it always did.
 """
+from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Point, Size
-from prompt_toolkit.layout.containers import ConditionalContainer, Float
+from prompt_toolkit.layout.containers import Float
 from prompt_toolkit.layout.layout import walk
 from prompt_toolkit.layout.screen import Screen
-
 from session import create_session
+
 from pymux.options import ALL_OPTIONS
 
 

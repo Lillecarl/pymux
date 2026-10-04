@@ -5,6 +5,7 @@ Most of them run the encoded image back through the decoder of ptterm,
 which is an independent implementation: what the encoder writes has to
 mean what it was given.
 """
+from __future__ import annotations
 
 import re
 import struct
