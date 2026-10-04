@@ -18,6 +18,7 @@ a `bind-key` binding runs.
 
 import argparse
 from functools import partial
+from typing import TYPE_CHECKING, Any
 
 import argcomplete
 from argcomplete.completers import SuppressCompleter
@@ -27,10 +28,13 @@ from prompt_toolkit.document import Document
 from typing_extensions import override
 
 from pymux.arrangement import LayoutTypes
-from pymux.commands import CommandException, parser_tree
+from pymux.commands import CommandException, CommandParser, parser_tree
 from pymux.commands.aliases import ALIASES
 from pymux.forwarding import Direction
 from pymux.key_spelling import KeyCompleter
+
+if TYPE_CHECKING:
+    from pymux.main import Pymux
 
 __all__ = ["create_command_completer", "stop_shlex_comments"]
 
@@ -54,7 +58,7 @@ def stop_shlex_comments() -> None:
     from argcomplete.packages import _shlex
 
     class _Uncommented(_shlex.shlex):
-        def __init__(self, *args, **kwargs):
+        def __init__(self, *args: Any, **kwargs: Any):
             super().__init__(*args, **kwargs)
             self.commenters = ""
 
@@ -65,7 +69,7 @@ def stop_shlex_comments() -> None:
 stop_shlex_comments()
 
 
-def _keys(pymux, prefix, **_):
+def _keys(pymux: "Pymux", prefix: str, **_) -> list[str]:
     """
     The key names for `bind-key` and `compose-key`.
 
@@ -81,38 +85,38 @@ def _keys(pymux, prefix, **_):
     return [c.text for c in completer.get_completions(Document(prefix), CompleteEvent())]
 
 
-def _session_option_names(pymux, **_):
+def _session_option_names(pymux: "Pymux", **_) -> list[str]:
     return sorted(pymux.options)
 
 
-def _window_option_names(pymux, **_):
+def _window_option_names(pymux: "Pymux", **_) -> list[str]:
     return sorted(pymux.window_options)
 
 
-def _option_values(pymux, parsed_args, **_):
+def _option_values(pymux: "Pymux", parsed_args: argparse.Namespace, **_) -> list[str]:
     option = pymux.options.get(parsed_args.option)
     return sorted(option.get_all_values(pymux)) if option else []
 
 
-def _window_option_values(pymux, parsed_args, **_):
+def _window_option_values(pymux: "Pymux", parsed_args: argparse.Namespace, **_) -> list[str]:
     option = pymux.window_options.get(parsed_args.option)
     return sorted(option.get_all_values(pymux)) if option else []
 
 
-def _client_option_names(pymux, **_):
+def _client_option_names(pymux: "Pymux", **_) -> list[str]:
     return sorted(pymux.client_options)
 
 
-def _client_option_values(pymux, parsed_args, **_):
+def _client_option_values(pymux: "Pymux", parsed_args: argparse.Namespace, **_) -> list[str]:
     option = pymux.client_options.get(parsed_args.option)
     return sorted(option.get_all_values(pymux)) if option else []
 
 
-def _layout_names(pymux, **_):
+def _layout_names(pymux: "Pymux", **_) -> list[str]:
     return sorted(t.value for t in LayoutTypes)
 
 
-def _bound_command(pymux, prefix, parsed_args, **_):
+def _bound_command(pymux: "Pymux", prefix: str, parsed_args: argparse.Namespace, **_) -> dict[str, str]:
     """
     The command a `bind-key` binding runs, and its arguments: the same
     question again, one word further in. The words already given land
@@ -130,14 +134,14 @@ def _bound_command(pymux, prefix, parsed_args, **_):
     return {m: meta.get(m, "") for m in matches}
 
 
-def _send_keys_names(pymux, prefix, parsed_args, **_):
+def _send_keys_names(pymux: "Pymux", prefix: str, parsed_args: argparse.Namespace, **_) -> list[str]:
     "The keys are names while they are the first thing, and no `-l` says they are text."
     if parsed_args.keys or parsed_args.l:
         return []
     return _keys(pymux, prefix)
 
 
-def _forward_listenings(pymux, parsed_args, direction, **_):
+def _forward_listenings(pymux: "Pymux", parsed_args: argparse.Namespace, direction: Direction, **_) -> dict[str, str]:
     """
     The listening ends `unforward-port` can name.
 
@@ -182,7 +186,7 @@ _VALUE_COMPLETERS = {
 }
 
 
-def _command_help(name, subparsers):
+def _command_help(name: str, subparsers: "argparse._SubParsersAction[CommandParser]"):
     "The help of one command, which argparse records on a pseudo action."
     for action in subparsers._choices_actions:
         if action.metavar == name:
@@ -196,7 +200,7 @@ class CommandCompleter(Completer):
     """
 
     @override
-    def get_completions(self, document, complete_event):
+    def get_completions(self, document: Document, complete_event: CompleteEvent):
         text = document.text_before_cursor
         prequote, prefix, _suffix, words, wordbreak = split_line(text, len(text))
 
@@ -232,7 +236,7 @@ class CommandCompleter(Completer):
             yield Completion(m, start_position=-len(prefix), display_meta=meta.get(m, ""))
 
 
-def matches_loosely(word, candidate) -> bool:
+def matches_loosely(word: str, candidate: str) -> bool:
     """
     The word is in the candidate, without case, anywhere in it.
 
@@ -261,10 +265,10 @@ class FuzzyFinder(argcomplete.CompletionFinder):
     itself, while "Leave the new window unfocused" says plenty.
     """
 
-    def _matches(self, word, candidate) -> bool:
+    def _matches(self, word: str, candidate: str) -> bool:
         return matches_loosely(word, candidate)
 
-    def _flag_matches(self, action, word, option_string) -> bool:
+    def _flag_matches(self, action: argparse.Action, word: str, option_string: str) -> bool:
         if self._matches(word, option_string):
             return True
         if word and not word.startswith("-") and action.help:
@@ -272,8 +276,8 @@ class FuzzyFinder(argcomplete.CompletionFinder):
         return False
 
     @override
-    def _get_subparser_completions(self, parser, cword_prefix):
-        aliases_by_parser: dict = {}
+    def _get_subparser_completions(self, parser: "argparse._SubParsersAction[CommandParser]", cword_prefix: str):
+        aliases_by_parser: dict[argparse.ArgumentParser, list[str]] = {}
         for key in parser.choices.keys():
             p = parser.choices[key]
             aliases_by_parser.setdefault(p, []).append(key)
@@ -290,14 +294,14 @@ class FuzzyFinder(argcomplete.CompletionFinder):
         ]
 
     @override
-    def _get_option_completions(self, parser, cword_prefix):
+    def _get_option_completions(self, parser: argparse.ArgumentParser, cword_prefix: str):
         for action in parser._actions:
             if action.option_strings:
                 for option_string in action.option_strings:
                     if self._matches(cword_prefix, option_string):
                         self._display_completions[option_string] = self._get_action_help(action)
 
-        option_completions = []
+        option_completions: list[str] = []
         for action in parser._actions:
             if not self.print_suppressed:
                 completer = getattr(action, "completer", None)
@@ -319,7 +323,7 @@ class FuzzyFinder(argcomplete.CompletionFinder):
 _finder: FuzzyFinder | None = None
 
 
-def create_command_completer(pymux):
+def create_command_completer(pymux: "Pymux"):
     """
     The completer of the command bar, with the completers of the
     values attached to the arguments they complete.

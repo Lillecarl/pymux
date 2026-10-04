@@ -6,20 +6,21 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pymux.arrangement import Pane
-    from pymux.main import Pymux
+    from pymux.main import ClientState, Pymux
     from pymux.arrangement import Window
     from pymux.session import Session
 
 
 from prompt_toolkit.application.current import get_app
+from prompt_toolkit.completion import Completer
 from prompt_toolkit.document import Document
 from prompt_toolkit.key_binding.vi_state import InputMode
 from pymux.commands import CommandException
 from pymux.format import Language, format_pymux_string
 from pymux.ids import PaneId, PaneIndex, WindowId, WindowIndex
 from pymux.key_spelling import why_pane_cannot_read
-from pymux.options import Scope, SetOptionError
-from pyte.keys import Unhearable
+from pymux.options import Option, Scope, SetOptionError
+from pyte.keys import KeyEvent, Unhearable
 
 
 def session_part(pymux: "Pymux", target: str) -> "tuple[Session | None, str]":
@@ -214,7 +215,7 @@ def ask_person(
     message: str,
     command: str,
     default: str = "",
-    completer=None,
+    completer: Completer | None = None,
 ) -> None:
     """
     Ask a question on the prompt, and run `command` with the answer in
@@ -236,7 +237,7 @@ def ask_person(
     get_app().vi_state.input_mode = InputMode.INSERT
 
 
-def send_key(pane, event, written: str) -> None:
+def send_key(pane: "Pane", event: KeyEvent, written: str) -> None:
     """
     Write one key to a pane, or say that the pane cannot read it.
 
@@ -259,7 +260,7 @@ def why_not(written: str, cannot: Unhearable) -> str:
     )
 
 
-def clients_named(pymux: "Pymux", wanted: str) -> list:
+def clients_named(pymux: "Pymux", wanted: str) -> list["ClientState"]:
     """
     Every client of that name, as `list-clients` prints it first on a
     line.
@@ -292,7 +293,7 @@ def clients_named(pymux: "Pymux", wanted: str) -> list:
 
 
 def option_as_written(
-    pymux: "Pymux", option, args: argparse.Namespace, target=None
+    pymux: "Pymux", option: Option, args: argparse.Namespace, target: "ClientState" | None = None
 ) -> str:
     """
     What an option holds, as a person wrote it.
@@ -395,7 +396,7 @@ class ChosenFormat(NamedTuple):
     asked: bool
 
 
-def add_format_arguments(parser, help_text: str) -> None:
+def add_format_arguments(parser: argparse.ArgumentParser, help_text: str) -> None:
     """
     Add `-F` and `-J` to a command that prints a format.
 

@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command
+from pymux.commands import CommandParser, add_command
 from pymux.commands.common import add_format_arguments, chosen_format, show_listing
 from pymux.format import format_pymux_string
 
@@ -49,7 +49,7 @@ def list_sessions(pymux: "Pymux", args: argparse.Namespace) -> None:
         show_listing(pymux, "list-sessions", "\n".join(lines))
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, list_sessions, aliases=("ls",))
     parser.add_argument("-a", dest="a", action="store_true", help="Accepted for tmux. Every session of this server is listed anyway.")
     add_format_arguments(parser, "Print this format for each session.")

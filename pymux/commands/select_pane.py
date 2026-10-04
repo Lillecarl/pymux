@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException
+from pymux.commands import CommandException, CommandParser
 from pymux.commands import add_command
 from pymux.commands.common import find_pane, the_window
 from pymux.layout import focus_down
@@ -48,7 +48,7 @@ def select_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
         h(pymux)
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, select_pane)
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("-L", dest="L", action="store_true", help="Focus the pane to the left.")

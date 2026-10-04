@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException
+from pymux.commands import CommandException, CommandParser
 from pymux.commands import add_command
 
 
@@ -25,6 +25,6 @@ def enter_mode(pymux: "Pymux", args: argparse.Namespace) -> None:
         raise CommandException("no client attached: a mode belongs to a client")
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, enter_mode)
     parser.add_argument("table", metavar="<key-table>", help="The mode to enter.")

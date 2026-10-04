@@ -10,7 +10,7 @@ import anyio
 
 from prompt_toolkit.application.current import get_app, set_app
 
-from pymux.commands import add_command
+from pymux.commands import CommandParser, add_command
 from pymux.commands.common import show_listing
 
 
@@ -36,7 +36,7 @@ def run_shell(pymux: "Pymux", args: argparse.Namespace):
 
     app = get_app()
 
-    def show(out):
+    def show(out: str):
         try:
             with set_app(app):
                 show_listing(pymux, "run-shell", out.rstrip("\n"))
@@ -71,11 +71,11 @@ def run_shell(pymux: "Pymux", args: argparse.Namespace):
     return job()
 
 
-def _text(data) -> str:
+def _text(data: bytes | None) -> str:
     return data.decode("utf-8", "replace") if data else ""
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, run_shell)
     parser.add_argument("-b", dest="b", action="store_true", help="Run in the background: the command that asked does not wait, and the output goes to the view of the client that asked.")
     parser.add_argument("shell_command", nargs=argparse.REMAINDER, metavar="<shell-command>", help="The command to run, through the shell.")

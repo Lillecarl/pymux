@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command
+from pymux.commands import CommandParser, add_command
 from pymux.commands.common import the_window
 
 
@@ -23,7 +23,7 @@ def swap_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
     )
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, swap_pane)
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("-D", dest="D", action="store_true", help="Swap with the pane above.")

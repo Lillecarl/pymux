@@ -2,10 +2,10 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.main import ClientState, Pymux
 
 
-from pymux.commands import CommandException
+from pymux.commands import CommandException, CommandParser
 from pymux.commands import add_command
 from pymux.commands.common import answer
 from pymux.commands.common import option_as_written
@@ -40,7 +40,7 @@ def set_option(
     pymux: "Pymux",
     args: argparse.Namespace,
     scope: Scope = Scope.SESSION,
-    target=None,
+    target: "ClientState" | None = None,
 ) -> None:
     """
     Set an option, of the session, of a window or of a client.
@@ -92,7 +92,7 @@ def set_option(
         raise CommandException(e.message)
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, set_option)
     parser.add_argument("-g", dest="g", action="store_true", help="For a window option: what every new window starts with.")
     parser.add_argument("option", metavar="<option>")

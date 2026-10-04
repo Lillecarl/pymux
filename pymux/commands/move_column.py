@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException
+from pymux.commands import CommandException, CommandParser
 from pymux.commands import add_command
 from pymux.commands.common import the_window
 from pymux.enums import Woke
@@ -52,7 +52,7 @@ def move_column(pymux: "Pymux", args: argparse.Namespace) -> None:
         pymux.invalidate(Woke.COLUMN_MOVED)
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, move_column)
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("-L", dest="L", action="store_true", help="Move the column one place to the left.")

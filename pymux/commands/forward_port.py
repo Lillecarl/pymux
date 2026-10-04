@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, add_command
+from pymux.commands import CommandException, CommandParser, add_command
 from pymux.forwarding import (
     MAY_NARROW,
     BadForward,
@@ -94,7 +94,7 @@ def forward_port(pymux: "Pymux", args: argparse.Namespace) -> None:
     )
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, forward_port)
     parser.add_argument(
         "-L",

@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException
+from pymux.commands import CommandException, CommandParser
 from pymux.commands import add_command
 
 
@@ -32,7 +32,7 @@ def set_environment(pymux: "Pymux", args: argparse.Namespace) -> None:
         scope[name] = value
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, set_environment)
     parser.add_argument("-g", dest="g", action="store_true", help="Fill the global scope, which new sessions start from.")
     parser.add_argument("-u", dest="u", action="store_true", help="Remove the variable from the scope.")

@@ -3,9 +3,10 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pymux.main import Pymux
+    from pymux.session import Session
 
 
-from pymux.commands import CommandException, add_command
+from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import (
     add_format_arguments,
     print_object_format,
@@ -14,7 +15,7 @@ from pymux.commands.common import (
 from pymux.ids import WindowIndex
 
 
-def index(target) -> WindowIndex | None:
+def index(target: str | None) -> WindowIndex | None:
     """
     The window number a target names, or None for one that is not a
     number.
@@ -24,13 +25,15 @@ def index(target) -> WindowIndex | None:
     rest read as "no number" here, and the placement goes to the
     window they name -- a word (`word_window`) or the active one.
     """
+    if target is None:
+        return None
     try:
         return WindowIndex(int(target))
-    except (TypeError, ValueError):
+    except ValueError:
         return None
 
 
-def word_window(session, target):
+def word_window(session: "Session", target: str | None):
     """
     The window one of tmux's target words names, or None for a target
     that is not one.
@@ -69,7 +72,7 @@ def which_session(pymux: "Pymux", args: argparse.Namespace):
     return session, rest
 
 
-def where_new_window_goes(pymux: "Pymux", args: argparse.Namespace, session, target) -> WindowIndex:
+def where_new_window_goes(pymux: "Pymux", args: argparse.Namespace, session: "Session", target: str | None) -> WindowIndex | None:
     """
     The index a new window takes, from the options it was given.
 
@@ -105,6 +108,8 @@ def where_new_window_goes(pymux: "Pymux", args: argparse.Namespace, session, tar
         where = session.arrangement.get_window_by_index(number)
     if where is None:
         where = session.arrangement.get_active_window()
+    if where is None:
+        return None
 
     if args.b:
         return where.index
@@ -179,7 +184,7 @@ def new_window(pymux: "Pymux", args: argparse.Namespace) -> None:
         )
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, new_window)
     parser.add_argument("-a", dest="a", action="store_true", help="After the target window.")
     parser.add_argument("-b", dest="b", action="store_true", help="Before the target window.")

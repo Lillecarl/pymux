@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, add_command, this_client
+from pymux.commands import CommandException, CommandParser, add_command, this_client
 from pymux.commands.sessions import move_this_client
 
 
@@ -40,7 +40,7 @@ def switch_client(pymux: "Pymux", args: argparse.Namespace) -> None:
     move_this_client(pymux, target)
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, switch_client, read_only=True)
     parser.add_argument("-t", dest="target_session", metavar="<target-session>", help="The session to switch to.")
     parser.add_argument("-n", dest="n", action="store_true", help="The next session.")

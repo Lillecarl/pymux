@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, add_command
+from pymux.commands import CommandException, CommandParser, add_command
 
 
 def display_menu(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -42,7 +42,7 @@ def display_menu(pymux: "Pymux", args: argparse.Namespace) -> None:
     state.layout_manager.display_menu(entries, args.T or "")
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, display_menu)
     parser.add_argument("-T", dest="T", metavar="<title>", help="The name on the title bar.")
     parser.add_argument("-x", dest="x", metavar="<position>", help="Accepted for tmux and changes nothing: the box draws where the other boxes draw.")

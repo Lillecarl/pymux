@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 from prompt_toolkit.data_structures import Size
 
-from pymux.commands import CommandException
+from pymux.commands import CommandException, CommandParser
 from pymux.commands import add_command
 from pymux.commands.common import add_format_arguments, print_object_format
 from pymux.enums import Woke
@@ -122,7 +122,7 @@ def new_session(pymux: "Pymux", args: argparse.Namespace) -> None:
         )
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, new_session)
     parser.add_argument("-s", dest="session_name", metavar="<session-name>", help="The name of the session.")
     parser.add_argument("-n", dest="window_name", metavar="<window-name>", help="The name of the first window.")

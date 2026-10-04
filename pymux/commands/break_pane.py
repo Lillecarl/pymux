@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command
+from pymux.commands import CommandParser, add_command
 from pymux.enums import Woke
 
 
@@ -19,6 +19,6 @@ def break_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
     pymux.invalidate(Woke.PANE_BROKE_OUT)
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, break_pane)
     parser.add_argument("-d", dest="d", action="store_true", help="Leave the new window unfocused.")

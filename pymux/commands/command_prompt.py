@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.key_binding.vi_state import InputMode
-from pymux.commands import add_command
+from pymux.commands import CommandParser, add_command
 from pymux.commands.common import ask_person
 
 
@@ -35,7 +35,7 @@ def command_prompt(pymux: "Pymux", args: argparse.Namespace) -> None:
     get_app().vi_state.input_mode = InputMode.INSERT
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, command_prompt)
     parser.add_argument("-p", dest="message", metavar="<message>", help="The question to ask.")
     parser.add_argument("-I", dest="default", metavar="<default>", help="What the answer starts with.")

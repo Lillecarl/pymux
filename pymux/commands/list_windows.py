@@ -1,11 +1,13 @@
 import argparse
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
+    from pymux.arrangement import Pane
     from pymux.main import Pymux
+    from pymux.session import Session
 
 
-from pymux.commands import CommandException, add_command
+from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import (
     add_format_arguments,
     chosen_format,
@@ -15,7 +17,7 @@ from pymux.commands.common import (
 from pymux.format import format_pymux_string
 
 
-def _sessions(pymux: "Pymux", args: argparse.Namespace) -> list:
+def _sessions(pymux: "Pymux", args: argparse.Namespace) -> list[Session]:
     """
     The sessions this listing covers.
 
@@ -68,7 +70,7 @@ def list_windows(pymux: "Pymux", args: argparse.Namespace) -> None:
             # The size of this window's own pane. Every row used to
             # carry the size of the active window's pane, which read as
             # every window being the same size.
-            process = window.active_pane.process
+            process = cast("Pane", window.active_pane).process
             result.append(
                 "%i %s%s [%sx%s]"
                 % (
@@ -82,7 +84,7 @@ def list_windows(pymux: "Pymux", args: argparse.Namespace) -> None:
         show_listing(pymux, "list-windows", "\n".join(result))
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, list_windows)
     parser.add_argument("-a", dest="a", action="store_true", help="Every window of every session.")
     parser.add_argument("-t", dest="target_window", metavar="<target-window>", help="The session whose windows to list.")

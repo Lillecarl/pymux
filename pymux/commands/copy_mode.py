@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, add_command
+from pymux.commands import CommandException, CommandParser, add_command
 
 
 def copy_mode(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -30,7 +30,7 @@ def copy_mode(pymux: "Pymux", args: argparse.Namespace) -> None:
         pass
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     # **Not `read_only`, although tmux marks it.** Copy mode belongs to
     # the pane, so a client that entered one stops the live screen for
     # everybody else watching it. And the keys that drive it are

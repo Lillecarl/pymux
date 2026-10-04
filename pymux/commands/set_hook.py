@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, add_command
+from pymux.commands import CommandException, CommandParser, add_command
 
 
 def set_hook(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -34,7 +34,7 @@ def set_hook(pymux: "Pymux", args: argparse.Namespace) -> None:
     pymux.hooks.setdefault(args.hook, []).append(args.hook_command)
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, set_hook)
     parser.add_argument("-g", dest="g", action="store_true", help="Accepted for tmux and changes nothing: there is one session per server.")
     parser.add_argument("-u", dest="u", action="store_true", help="Forget the hook, and everything it was given.")

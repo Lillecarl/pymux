@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException
+from pymux.commands import CommandException, CommandParser
 from pymux.commands import add_command
 
 
@@ -33,7 +33,7 @@ def save_buffer(pymux: "Pymux", args: argparse.Namespace) -> None:
         raise CommandException("IOError: %s" % (e,))
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, save_buffer)
     parser.add_argument("-b", dest="buffer_name", metavar="<buffer-name>", help="The named buffer to write.")
     parser.add_argument("filename", metavar="<filename>")

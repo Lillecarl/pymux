@@ -6,7 +6,7 @@ if TYPE_CHECKING:
 
 
 from prompt_toolkit.data_structures import Size
-from pymux.commands import CommandException
+from pymux.commands import CommandException, CommandParser
 from pymux.commands import add_command
 from pymux.commands.common import the_window
 from pymux.enums import WindowSize
@@ -71,7 +71,7 @@ def resize_window(pymux: "Pymux", args: argparse.Namespace) -> None:
 
     now = cast(Size, pymux.plane_size(window))
 
-    def number(given, instead):
+    def number(given: str | None, instead: int):
         if given is None:
             return instead
         try:
@@ -79,7 +79,7 @@ def resize_window(pymux: "Pymux", args: argparse.Namespace) -> None:
         except ValueError:
             raise CommandException("Expecting an integer.")
 
-    def asked_for(given, then):
+    def asked_for(given: str, then: int):
         wanted = number(given, then)
         if wanted < 1:
             raise CommandException("A window is at least one cell.")
@@ -99,7 +99,7 @@ def resize_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     size_the_panes_of(pymux, window)
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, resize_window)
     parser.add_argument("-t", dest="target_window", metavar="<target-window>", help="The window to resize. Without it, the one this client is looking at.")
     parser.add_argument("-x", dest="columns", metavar="<columns>", help="How many columns the window is.")

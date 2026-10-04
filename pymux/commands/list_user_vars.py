@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command
+from pymux.commands import CommandParser, add_command
 from pymux.commands.common import answer, the_pane
 
 
@@ -24,6 +24,6 @@ def list_user_vars(pymux: "Pymux", args: argparse.Namespace) -> None:
     answer(pymux, "\n".join(lines))
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, list_user_vars)
     parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane whose variables to list.")

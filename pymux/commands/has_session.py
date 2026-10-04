@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException
+from pymux.commands import CommandException, CommandParser
 from pymux.commands import add_command
 
 
@@ -32,6 +32,6 @@ def has_session(pymux: "Pymux", args: argparse.Namespace) -> None:
         raise CommandException("can't find session: %s" % (target,))
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, has_session)
     parser.add_argument("-t", dest="target_session", metavar="<target-session>", help="The session to look for.")

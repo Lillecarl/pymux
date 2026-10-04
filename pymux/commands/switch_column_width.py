@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException
+from pymux.commands import CommandException, CommandParser
 from pymux.commands import add_command
 from pymux.commands.common import the_window
 from pymux.enums import Woke
@@ -41,6 +41,6 @@ def switch_column_width(pymux: "Pymux", args: argparse.Namespace) -> None:
     pymux.invalidate(Woke.COLUMN_CHANGED_WIDTH)
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, switch_column_width)
     parser.add_argument("-p", dest="p", action="store_true", help="The previous width instead.")

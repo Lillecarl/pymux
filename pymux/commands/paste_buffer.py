@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, add_command
+from pymux.commands import CommandException, CommandParser, add_command
 
 
 def paste_buffer(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -22,5 +22,5 @@ def paste_buffer(pymux: "Pymux", args: argparse.Namespace) -> None:
     pane.process.write_input(pane.screen.wrap_paste(pymux.clipboard.get_data().text))
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     add_command(subparsers, paste_buffer)

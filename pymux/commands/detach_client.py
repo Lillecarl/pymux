@@ -2,12 +2,13 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
+    from pymux.main import ClientState, Pymux
 
 
 from prompt_toolkit.application.current import get_app
 from pymux.commands import (
     CommandException,
+    CommandParser,
     add_command,
     not_past_this_client,
     this_client,
@@ -15,7 +16,7 @@ from pymux.commands import (
 from pymux.commands.common import clients_named
 
 
-def _detach(pymux: "Pymux", client_state, hang_up: bool = False) -> None:
+def _detach(pymux: "Pymux", client_state: "ClientState", hang_up: bool = False) -> None:
     """
     Detach one client that is not necessarily this one.
 
@@ -97,7 +98,7 @@ def detach_client(pymux: "Pymux", args: argparse.Namespace) -> None:
     pymux.detach_client(get_app(), hang_up=hang_up)
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     # A client that only watches has to be able to leave, or the one
     # key it needs is the one it cannot press. Lillecarl/pymux#467.
     parser = add_command(subparsers, detach_client, read_only=True)

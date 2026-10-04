@@ -6,8 +6,9 @@ if TYPE_CHECKING:
 
 
 from pyte.html import SCREEN_CLASS, html_of_page
+from pyte.screen import Page, Screen
 
-from pymux.commands import CommandException
+from pymux.commands import CommandException, CommandParser
 from pymux.commands import add_command
 from pymux.commands.common import the_pane
 from pymux.commands.common import show_listing
@@ -33,7 +34,7 @@ def _row_of(
         raise CommandException("Invalid %s line: %s" % (name, given))
 
 
-def _the_rows_of(screen) -> tuple[int, int]:
+def _the_rows_of(screen: Screen, page: Page) -> tuple[int, int]:
     """
     The first and the last row a capture of this pane may answer with.
 
@@ -53,7 +54,7 @@ def _the_rows_of(screen) -> tuple[int, int]:
     defaultdict and a row made below the floor of the history is a row
     that came back from the dead.
     """
-    rows = screen.page.data_buffer.keys()
+    rows = page.data_buffer.keys()
     top = screen.line_offset
     bottom = top + screen.lines - 1
     return (
@@ -62,7 +63,7 @@ def _the_rows_of(screen) -> tuple[int, int]:
     )
 
 
-def _html(screen, args: argparse.Namespace) -> str:
+def _html(screen: Screen, page: Page, args: argparse.Namespace) -> str:
     """
     The rows of a pane as the element `pyte.html` is written for.
 
@@ -76,7 +77,7 @@ def _html(screen, args: argparse.Namespace) -> str:
     line_offset = screen.line_offset
     top = line_offset
     bottom = line_offset + screen.lines - 1
-    lowest, highest = _the_rows_of(screen)
+    lowest, highest = _the_rows_of(screen, page)
 
     first = max(_row_of(args.start, "start", top, lowest, line_offset), lowest)
     last = min(_row_of(args.end, "end", bottom, highest, line_offset), highest)
@@ -84,7 +85,7 @@ def _html(screen, args: argparse.Namespace) -> str:
     body = ""
     if first <= last:
         body = html_of_page(
-            screen.page, first, last, screen.columns, screen.has_reverse_video
+            page, first, last, screen.columns, screen.has_reverse_video
         )
 
     return '<pre class="%s">%s</pre>' % (SCREEN_CLASS, body)
@@ -127,7 +128,7 @@ def capture_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
         )
 
     if args.H:
-        text = _html(screen, args)
+        text = _html(screen, page, args)
     else:
         # **As tall as the pane, whatever a program wrote.** The rows
         # came from the buffer alone, so a fresh pane running `sleep
@@ -135,7 +136,7 @@ def capture_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
         # caller drawing a pane could not use the count and had to
         # learn the height another way and pad. `_the_rows_of` says
         # what tmux does. Lillecarl/pymux#476.
-        first_row, last_row = _the_rows_of(screen)
+        first_row, last_row = _the_rows_of(screen, page)
 
         if args.J:
             # One entry per line a program wrote, with the rows it was
@@ -203,7 +204,7 @@ def capture_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
         show_listing(pymux, "capture-pane", text)
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, capture_pane)
     parser.add_argument("-p", dest="p", action="store_true", help="Print to the output of the command line, not a pop-up.")
     parser.add_argument("-J", dest="J", action="store_true", help="Join the pieces a wrapped line was cut into.")

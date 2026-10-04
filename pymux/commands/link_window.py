@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, add_command
+from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import find_window
 from pymux.ids import WindowId, WindowIndex
 
@@ -43,7 +43,7 @@ def link_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     pymux.arrangement.link_window(window, index)
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, link_window)
     parser.add_argument("-s", dest="s", metavar="<src-window>", help="The window to link; the active one is the default.")
     parser.add_argument("-t", dest="t", metavar="<dst-index>", type=WindowIndex, help="The index to put it at.")

@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command
+from pymux.commands import CommandParser, add_command
 
 
 def refresh_client(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -21,5 +21,5 @@ def refresh_client(pymux: "Pymux", args: argparse.Namespace) -> None:
     pymux.get_client_state().app.invalidate()
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     add_command(subparsers, refresh_client)

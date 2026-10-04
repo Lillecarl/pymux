@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command
+from pymux.commands import CommandParser, add_command
 from pymux.commands.common import answer
 from pymux.format import format_pymux_string
 
@@ -44,7 +44,7 @@ def display_message(pymux: "Pymux", args: argparse.Namespace) -> None:
     )
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, display_message)
     parser.add_argument("-p", dest="p", action="store_true", help="Print the message instead of showing it.")
     parser.add_argument("message", metavar="<message>")

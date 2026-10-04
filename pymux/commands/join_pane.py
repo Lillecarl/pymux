@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, add_command
+from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import find_pane, find_window
 from pymux.commands.move_pane import add_arguments, move_pane
 
@@ -21,5 +21,5 @@ def join_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
     move_pane(pymux, args)
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     add_arguments(add_command(subparsers, join_pane))

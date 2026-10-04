@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command
+from pymux.commands import CommandParser, add_command
 from pymux.commands.common import show_listing
 
 
@@ -22,5 +22,5 @@ def show_messages(pymux: "Pymux", args: argparse.Namespace) -> None:
     show_listing(pymux, "show-messages", "\n".join(pymux.message_log))
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     add_command(subparsers, show_messages)

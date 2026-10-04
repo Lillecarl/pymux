@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException
+from pymux.commands import CommandException, CommandParser
 from pymux.commands import add_command
 from pymux.commands.common import the_pane
 from pymux.commands.common import send_key
@@ -57,7 +57,7 @@ def send_keys(pymux: "Pymux", args: argparse.Namespace) -> None:
         send_key(pane, event, key)
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, send_keys)
     parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to send to.")
     parser.add_argument("-l", dest="l", action="store_true", help="Send the keys as text, not key names.")

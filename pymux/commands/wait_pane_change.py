@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 import anyio
 
-from pymux.commands import CommandException, add_command
+from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import refuse_without_a_waiter, the_pane
 
 #: How long a wait runs when nobody says. Short enough that a caller
@@ -125,7 +125,7 @@ def _seconds(given: str | None) -> float:
     return seconds
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, wait_pane_change)
     parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to watch.")
     parser.add_argument("--since", dest="since", metavar="<revision>", help="The revision last seen. Answers at once when the pane has left it.")

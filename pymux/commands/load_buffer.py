@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 
 from prompt_toolkit.clipboard import ClipboardData
-from pymux.commands import CommandException
+from pymux.commands import CommandException, CommandParser
 from pymux.commands import add_command
 
 
@@ -32,7 +32,7 @@ def load_buffer(pymux: "Pymux", args: argparse.Namespace) -> None:
         pymux.clipboard.set_data(ClipboardData(text))
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, load_buffer)
     parser.add_argument("-b", dest="buffer_name", metavar="<buffer-name>", help="The named buffer to fill.")
     parser.add_argument("filename", metavar="<filename>")

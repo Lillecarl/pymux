@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command
+from pymux.commands import CommandParser, add_command
 from pymux.commands.common import the_pane, the_window
 
 
@@ -31,7 +31,7 @@ def move_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
         pymux.arrangement.set_active_window(window)
 
 
-def add_arguments(parser):
+def add_arguments(parser: argparse.ArgumentParser):
     "What a command that moves a pane between windows takes."
     group = parser.add_mutually_exclusive_group()
     group.add_argument("-v", dest="v", action="store_true", help="Stack the panes.")
@@ -41,5 +41,5 @@ def add_arguments(parser):
     parser.add_argument("-t", dest="t", metavar="<dst-window>", help="The window the pane goes to.")
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     add_arguments(add_command(subparsers, move_pane))

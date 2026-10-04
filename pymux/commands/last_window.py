@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command
+from pymux.commands import CommandParser, add_command
 
 
 def last_window(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -16,5 +16,5 @@ def last_window(pymux: "Pymux", args: argparse.Namespace) -> None:
         pymux.arrangement.set_active_window(w)
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     add_command(subparsers, last_window, name="last-window")

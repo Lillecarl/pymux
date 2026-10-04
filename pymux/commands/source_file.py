@@ -1,12 +1,12 @@
 import argparse
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Awaitable
 
 if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException
+from pymux.commands import CommandException, CommandParser
 from pymux.commands import add_command
 from pymux.commands import handle_command
 
@@ -25,7 +25,7 @@ def source_file(pymux: "Pymux", args: argparse.Namespace):
     return _read_lines(pymux, filename, list(enumerate(lines, start=1)))
 
 
-def _read_lines(pymux: "Pymux", filename: str, lines: list):
+def _read_lines(pymux: "Pymux", filename: str, lines: list[tuple[int, str]]):
     """
     Run the lines of the file, top to bottom.
 
@@ -52,7 +52,7 @@ def _read_lines(pymux: "Pymux", filename: str, lines: list):
 
 
 async def _then_the_rest(
-    pymux: "Pymux", filename: str, number: int, answer, rest: list
+    pymux: "Pymux", filename: str, number: int, answer: Awaitable[Any], rest: list[tuple[int, str]]
 ) -> None:
     pymux.sourcing = "%s line %i" % (filename, number)
     try:
@@ -65,6 +65,6 @@ async def _then_the_rest(
         await more
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, source_file)
     parser.add_argument("filename", metavar="<filename>", help="The configuration file to read.")

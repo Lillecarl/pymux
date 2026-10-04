@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException
+from pymux.commands import CommandException, CommandParser
 from pymux.commands import add_command
 from pymux.commands.common import the_pane
 from pymux.enums import Woke
@@ -53,7 +53,7 @@ def replace_pane_program(pymux: "Pymux", pane: "Pane", args: argparse.Namespace)
     pymux.invalidate(Woke.PANE_WAS_RESPAWNED)
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, respawn_pane)
     parser.add_argument("-k", dest="k", action="store_true", help="Kill a program that still runs.")
     parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to respawn.")

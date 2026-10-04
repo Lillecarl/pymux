@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, add_command
+from pymux.commands import CommandException, CommandParser, add_command
 
 
 def rename_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -18,6 +18,6 @@ def rename_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
     pane.chosen_name = args.name
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, rename_pane)
     parser.add_argument("name", metavar="<name>", help="The new name of the pane.")

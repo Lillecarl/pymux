@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException
+from pymux.commands import CommandException, CommandParser
 from pymux.commands import add_command
 
 
@@ -36,7 +36,7 @@ def bind_key(pymux: "Pymux", args: argparse.Namespace) -> None:
         raise CommandException("Invalid key: %r" % (key,))
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, bind_key)
     table = parser.add_mutually_exclusive_group()
     table.add_argument("-n", dest="n", action="store_true", help="Bind without the prefix.")

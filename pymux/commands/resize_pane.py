@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException
+from pymux.commands import CommandException, CommandParser
 from pymux.commands import add_command
 from pymux.commands.common import the_window
 from pymux.layout import change_pane_size
@@ -35,7 +35,7 @@ def resize_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
             w.zoom = not w.zoom
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, resize_pane)
     parser.add_argument("-L", dest="left", metavar="<left>", help="That many columns narrower.")
     parser.add_argument("-U", dest="up", metavar="<up>", help="That many rows shorter.")

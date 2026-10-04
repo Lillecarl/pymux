@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command, not_past_this_client, this_client
+from pymux.commands import CommandParser, add_command, not_past_this_client, this_client
 from pymux.commands.common import clients_named
 from pymux.commands.set_option import set_option
 from pymux.options import Scope
@@ -60,7 +60,7 @@ def set_client_option(pymux: "Pymux", args: argparse.Namespace) -> None:
     set_option(pymux, args, scope=Scope.CLIENT, target=target)
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, set_client_option, read_only=True)
     parser.add_argument("-t", dest="target_client", metavar="<target-client>", help="The client of this name, as list-clients prints it.")
     parser.add_argument("option", metavar="<option>")

@@ -6,7 +6,7 @@ if TYPE_CHECKING:
 
 
 from prompt_toolkit.history import InMemoryHistory
-from pymux.commands import add_command
+from pymux.commands import CommandParser, add_command
 
 
 def clear_prompt_history(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -23,5 +23,5 @@ def clear_prompt_history(pymux: "Pymux", args: argparse.Namespace) -> None:
         client_state.prompt_buffer.history = pymux.prompt_history
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     add_command(subparsers, clear_prompt_history)

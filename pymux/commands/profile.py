@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException
+from pymux.commands import CommandException, CommandParser
 from pymux.commands import add_command
 from pymux import introspect
 
@@ -39,6 +39,6 @@ def profile(pymux: "Pymux", args: argparse.Namespace) -> None:
     )
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, profile)
     parser.add_argument("seconds", nargs="?", metavar="<seconds>", help="How long to watch, in seconds.")

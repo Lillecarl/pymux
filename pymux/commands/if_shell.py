@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 import anyio
 
-from pymux.commands import add_command, handle_command
+from pymux.commands import CommandParser, add_command, handle_command
 from pymux.format import Language, format_pymux_string
 
 
@@ -70,7 +70,7 @@ def _then_run(pymux: "Pymux", args: argparse.Namespace, yes: bool):
     return None
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, if_shell)
     parser.add_argument("-F", dest="F", action="store_true", help="Ask a format, not a shell: no program runs, and a non-empty answer is yes.")
     parser.add_argument("-J", dest="J", action="store_true", help="Ask a jinja2 template, not a shell. Like -F, in the other language.")

@@ -4,14 +4,16 @@ import os
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from pymux.arrangement import Pane, Window
     from pymux.main import Pymux
+    from pymux.session import Session
 
 
-from pymux.commands import add_command
+from pymux.commands import CommandParser, add_command
 from pymux.commands.common import answer
 
 
-def _pane_tree(pane, index):
+def _pane_tree(pane: "Pane", index: int):
     """
     Everything an agent needs to aim at a pane, in JSON types.
 
@@ -44,7 +46,7 @@ def _pane_tree(pane, index):
     }
 
 
-def _window_tree(pymux, session, window):
+def _window_tree(pymux: "Pymux", session: "Session", window: "Window"):
     """A window with its panes, marking the one in focus."""
     active = window.active_pane
     return {
@@ -60,7 +62,7 @@ def _window_tree(pymux, session, window):
     }
 
 
-def _caller_tree(pymux):
+def _caller_tree(pymux: "Pymux"):
     """
     The window and pane the command arrived from, or None.
 
@@ -88,7 +90,7 @@ def _caller_tree(pymux):
     }
 
 
-def _clients_tree(pymux):
+def _clients_tree(pymux: "Pymux"):
     """
     What every attached client looks at.
 
@@ -140,5 +142,5 @@ def info(pymux: "Pymux", args: argparse.Namespace) -> None:
     answer(pymux, json.dumps(tree))
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     add_command(subparsers, info, read_only=True)

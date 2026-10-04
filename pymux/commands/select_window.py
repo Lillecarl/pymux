@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException
+from pymux.commands import CommandException, CommandParser
 from pymux.commands import add_command, this_client
 from pymux.commands.common import the_window
 
@@ -33,6 +33,6 @@ def select_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     session.arrangement.set_active_window(w)
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, select_window)
     parser.add_argument("-t", dest="target_window", metavar="<target-window>", required=True, help="The window to focus.")

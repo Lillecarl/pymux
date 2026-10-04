@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 
 import anyio
 
-from pymux.commands import CommandException, add_command
+from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import refuse_without_a_waiter
 
 
@@ -147,7 +147,7 @@ def _forget_if_spent(pymux: "Pymux", name: str, channel: WaitChannel) -> None:
         pymux.wait_channels.pop(name, None)
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, wait_for, aliases=["wait"])
     parser.add_argument("-S", dest="S", action="store_true", help="Signal the channel: every waiter goes on, or the next one does.")
     parser.add_argument("-L", dest="L", action="store_true", help="Lock the channel, and wait while somebody else holds it.")

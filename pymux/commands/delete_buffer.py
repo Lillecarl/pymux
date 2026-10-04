@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException
+from pymux.commands import CommandException, CommandParser
 from pymux.commands import add_command
 
 
@@ -19,6 +19,6 @@ def delete_buffer(pymux: "Pymux", args: argparse.Namespace) -> None:
     del pymux.named_buffers[name]
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, delete_buffer)
     parser.add_argument("-b", dest="buffer_name", metavar="<buffer-name>", required=True, help="The named buffer to remove.")

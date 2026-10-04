@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command
+from pymux.commands import CommandParser, add_command
 
 
 def customize_mode(pymux: "Pymux", args: argparse.Namespace) -> None:
@@ -27,5 +27,5 @@ def customize_mode(pymux: "Pymux", args: argparse.Namespace) -> None:
     state.layout_manager.display_options_chooser()
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     add_command(subparsers, customize_mode)

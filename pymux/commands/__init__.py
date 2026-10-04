@@ -12,7 +12,7 @@ import argparse
 import inspect
 import shlex
 from importlib import import_module
-from typing import TYPE_CHECKING, List, NoReturn
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, List, NoReturn, overload
 
 from typing_extensions import override
 
@@ -100,7 +100,7 @@ class CommandParser(argparse.ArgumentParser):
         raise BadLine(message)
 
 
-def add_command(subparsers, handler, *, name=None, aliases=(), read_only=False):
+def add_command(subparsers: "argparse._SubParsersAction[CommandParser]", handler: Callable[..., Any], *, name: str | None = None, aliases: tuple[str, ...] | list[str] = (), read_only: bool = False):
     """
     The parser of one command: named after its handler, described by
     the first line of its docstring.
@@ -127,7 +127,19 @@ def add_command(subparsers, handler, *, name=None, aliases=(), read_only=False):
     return parser
 
 
-def add_commands_to(subparsers):
+@overload
+def add_commands_to(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    """The commands under the entry point, which exits on a bad line."""
+    ...
+
+
+@overload
+def add_commands_to(subparsers: "argparse._SubParsersAction[CommandParser]") -> None:
+    """The commands under the in-process tree, which raises instead."""
+    ...
+
+
+def add_commands_to(subparsers: Any) -> None:
     """
     Mount every command of the tree on a subparsers action.
 
@@ -135,6 +147,11 @@ def add_commands_to(subparsers):
     that holds the options of the entry point and every command under
     it. This is what fills the tree under it. It parses nothing on
     its own.
+
+    Both shapes arrive here: the entry point parses a real command
+    line and exits on a bad one, while the in-process tree raises.
+    Invariance keeps the two spellings apart, so each has its own
+    overload and the body takes what both give it.
     """
     for name in MODULES:
         import_module("." + name, __name__).register(subparsers)
@@ -229,7 +246,7 @@ def _run_in_order(pymux: "Pymux", commands: List[List[str]]):
     return None
 
 
-async def _then_the_rest(pymux: "Pymux", answer, rest: List[List[str]]) -> None:
+async def _then_the_rest(pymux: "Pymux", answer: Awaitable[Any], rest: List[List[str]]) -> None:
     await answer
 
     more = _run_in_order(pymux, rest)
@@ -292,7 +309,7 @@ def call_command_handler(command: str, pymux: "Pymux", arguments: List[str]):
     return None
 
 
-async def _finish(pymux: "Pymux", command: str, answer) -> None:
+async def _finish(pymux: "Pymux", command: str, answer: Awaitable[Any]) -> None:
     "Wait for a handler that answers later, and end it the same way."
     try:
         await answer

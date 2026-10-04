@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, add_command
+from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import find_window, the_window
 from pymux.commands.common import add_format_arguments, print_object_format
 
@@ -38,7 +38,7 @@ def split_window(pymux: "Pymux", args: argparse.Namespace) -> None:
         print_object_format(pymux, args, window=window, pane=pane)
 
 
-def add_arguments(parser):
+def add_arguments(parser: argparse.ArgumentParser):
     "What a command that opens a pane in a window takes."
     group = parser.add_mutually_exclusive_group()
     group.add_argument("-v", dest="v", action="store_true", help="Split top over bottom.")
@@ -51,5 +51,5 @@ def add_arguments(parser):
     parser.add_argument("executable", nargs="?", metavar="<executable>")
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     add_arguments(add_command(subparsers, split_window))

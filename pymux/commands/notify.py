@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command
+from pymux.commands import CommandParser, add_command
 from pymux.notifications import Urgency
 
 
@@ -36,7 +36,7 @@ def notify(pymux: "Pymux", args: argparse.Namespace) -> None:
     )
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, notify)
     parser.add_argument("title", metavar="<title>", help="What the notification is.")
     parser.add_argument(

@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command, not_past_this_client
+from pymux.commands import CommandParser, add_command, not_past_this_client
 from pymux.commands.sessions import move_this_client
 
 
@@ -48,7 +48,7 @@ def attach_session(pymux: "Pymux", args: argparse.Namespace) -> None:
         client_state.ignore_size = True
 
 
-def register(subparsers):
+def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
     parser = add_command(subparsers, attach_session, read_only=True)
     parser.add_argument("-t", dest="target_session", metavar="<target-session>", help="The session to attach to.")
     parser.add_argument("-d", dest="d", action="store_true", help="Detach the other clients of that session.")
