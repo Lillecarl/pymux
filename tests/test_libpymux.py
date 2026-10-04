@@ -6,6 +6,7 @@ strings it asks for, the rows it reads back, the commands it builds and
 the quoting it puts around them. `drive_with_pty.py` runs the same
 library against a server that is really there.
 """
+
 from __future__ import annotations
 
 import json
@@ -13,10 +14,9 @@ import socket
 import threading
 
 import pytest
+from libpymux import CommandError, Pane, Server, Window, quote
 from libpymux.connection import CommandResult
 from libpymux.objects import _PANE_FIELDS, _SEPARATOR, _format_string, _rows
-
-from libpymux import CommandError, Pane, Server, Window, quote
 
 # ----------------------------------------------------------------------
 # A server that says what a test tells it to say.
@@ -58,12 +58,8 @@ class FakeServer:
                 out, err, code = answer
                 for kind, text in (("out", out), ("err", err)):
                     if text:
-                        connection.sendall(
-                            json.dumps({"cmd": kind, "data": text}).encode() + b"\0"
-                        )
-                connection.sendall(
-                    json.dumps({"cmd": "exit", "code": code}).encode() + b"\0"
-                )
+                        connection.sendall(json.dumps({"cmd": kind, "data": text}).encode() + b"\0")
+                connection.sendall(json.dumps({"cmd": "exit", "code": code}).encode() + b"\0")
 
     def close(self):
         self.socket.close()

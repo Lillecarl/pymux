@@ -16,6 +16,7 @@ token that this prints once. `--bind` widens it and says what that costs.
 
 It needs `pymux[web]`. Lillecarl/pymux#461.
 """
+
 from __future__ import annotations
 
 import json
@@ -24,6 +25,7 @@ from pathlib import Path
 from typing import Callable
 
 from libpymux import PaneStream, Server, StreamRefused
+
 from pymux.log import logger
 
 __all__ = ["MISSING", "serve", "a_token"]
@@ -31,8 +33,7 @@ __all__ = ["MISSING", "serve", "a_token"]
 #: What to say when the extra is not installed. Named here so the command
 #: and this module cannot drift about it.
 MISSING = (
-    "pymux web needs the web extra: install pymux[web], "
-    "or use `stream-pane` over the socket, which needs nothing."
+    "pymux web needs the web extra: install pymux[web], or use `stream-pane` over the socket, which needs nothing."
 )
 
 #: What is served. Two things fill it: `pyproject.toml` declares the files

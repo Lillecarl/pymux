@@ -44,6 +44,8 @@
   xclip,
   # The static checker that the `types` check runs.
   pyrefly,
+  # The linter and formatter that the `ruff` check runs.
+  ruff,
 }:
 let
   # pymux's own version. The element is published as an npm package as
@@ -214,6 +216,7 @@ let
       wl-clipboard
       xclip
       pyrefly
+      ruff
       ;
     waylandProtocols = pyterm-pytest.waylandProtocols;
     # The base16 collection the package carries, for the gallery that

@@ -210,3 +210,15 @@ select = [
     "UP037",
     "UP045",
 ]
+
+[tool.ruff.lint.isort]
+# Mirror of the umbrella `ruff.toml` above: the build sandbox sees
+# only this tree, so discovery from a file under it must end here.
+# libpymux is a distribution of its own, installed like any other
+# dependency: third-party by installation, wherever it is developed.
+# pymux is the project under check: first-party, always. Without the
+# pins the grouping follows PYTHONPATH -- with the dev shell's set
+# `ruff check` merges `libpymux` with `pymux`, without it (and in the
+# sandbox, which sets none) it splits them.
+known-first-party = ["pymux"]
+known-third-party = ["libpymux"]

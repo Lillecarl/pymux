@@ -79,6 +79,8 @@
   # The static checker of the `types` check. It reads the sources and
   # the interpreter's site-packages and runs nothing itself.
   pyrefly,
+  # The linter and formatter that the `ruff` check runs.
+  ruff,
 }:
 let
   inherit (callPackage ./suite.nix { }) suite;
@@ -488,6 +490,34 @@ in
         pyrefly check --preset default \
           --python-interpreter-path "${testEnv}/bin/python" \
           pymux
+      '';
+
+  # The style of pymux, held by the linter and the formatter rather
+  # than by a run.
+  #
+  # `ruff check` holds the selected rules and `ruff format --check`
+  # holds the layout at width 120, both read from the `pyproject.toml`
+  # beside them. Neither can see the one thing the lazy annotations
+  # rest on -- the presence of `from __future__ import annotations`
+  # in every file -- so a grep holds that: UP037 unquotes only where
+  # the import made the annotation lazy, and stays silent without it.
+  # `ruff.toml` beside the umbrella says what each rule is for.
+  ruff =
+    runInSandbox
+      {
+        name = "pymux-ruff";
+        inputs = [ ruff ];
+      }
+      ''
+        export RUFF_CACHE_DIR="$TMPDIR/ruff"
+        ruff check pymux tests
+        ruff format --check pymux tests
+        missing=$(grep -rL '^from __future__ import annotations' --include='*.py' pymux tests || true)
+        if [ -n "$missing" ]; then
+          echo "files without the future import:"
+          echo "$missing"
+          exit 1
+        fi
       '';
 
   # What it costs to lay a window out and draw the frame around its
