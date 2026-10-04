@@ -16,6 +16,7 @@ race. It also took `check_second_terminal` down with it, and a red run
 of a check stays in the store until somebody deletes it by hand.
 Lillecarl/pymux#479.
 """
+
 from __future__ import annotations
 
 import json
@@ -78,9 +79,5 @@ def test_the_code_to_leave_with_is_there_too(refused):
     "A script has only the code to tell a refusal from a detach. #332."
     refused._send_packet({"cmd": Packet.KITTY_DETECT})
 
-    codes = [
-        json.loads(one.decode("utf-8"))
-        for one in refused.socket.recv(4096).split(b"\0")
-        if one
-    ]
+    codes = [json.loads(one.decode("utf-8")) for one in refused.socket.recv(4096).split(b"\0") if one]
     assert [one["code"] for one in codes if one["cmd"] == Packet.EXIT] == [1]

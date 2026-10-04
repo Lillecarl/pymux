@@ -9,6 +9,7 @@ change when the window does. These tests hold a size that a test can
 change under the client, the way a person dragging the edge of a
 terminal changes it.
 """
+
 from __future__ import annotations
 
 import io
@@ -71,9 +72,7 @@ def create_client(commands=(), rows=ROWS, columns=NARROW):
                     state.app.layout.container.write_to_screen(
                         screen,
                         MouseHandlers(),
-                        WritePosition(
-                            xpos=0, ypos=0, width=size.columns, height=size.rows
-                        ),
+                        WritePosition(xpos=0, ypos=0, width=size.columns, height=size.rows),
                         "",
                         False,
                         None,
@@ -167,6 +166,4 @@ def test_panes_are_told_new_size():
         draw()
 
         for pane in panes:
-            assert pane.terminal.screen.columns == content_of(WIDE // 2), (
-                pane.terminal.screen.columns,
-            )
+            assert pane.terminal.screen.columns == content_of(WIDE // 2), (pane.terminal.screen.columns,)

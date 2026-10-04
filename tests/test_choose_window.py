@@ -20,6 +20,7 @@ The rules this judges, Lillecarl/pymux#295 and Lillecarl/pymux#327:
   chosen window instead of moving, and puts the client back first: the
   command is what the person asked for and being moved is not.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app
@@ -47,6 +48,7 @@ _KEYS = {
 
 class _Click:
     "The one mouse event an entry answers."
+
     event_type = MouseEventType.MOUSE_DOWN
 
 
@@ -63,9 +65,7 @@ def fire(state, key: str) -> None:
     wanted = _KEYS.get(key, key)
     with set_app(state.app):
         answers = [
-            b
-            for b in state.pymux.key_bindings_manager.key_bindings.bindings
-            if b.keys == (wanted,) and b.filter()
+            b for b in state.pymux.key_bindings_manager.key_bindings.bindings if b.keys == (wanted,) and b.filter()
         ]
         assert answers, "no binding answered %r" % (key,)
         # The handler asks the app for its client state, so it runs
@@ -217,9 +217,7 @@ async def test_j_and_k_move_a_line_and_keep_the_place_along_it():
                 pymux.handle_command("new-window")
                 pymux.handle_command("rename-window a-long-window-name-%i" % number)
             pymux.handle_command("choose-window")
-            lines = state.layout_manager.chooser_lines(
-                state.layout_manager._bar_width()
-            )
+            lines = state.layout_manager.chooser_lines(state.layout_manager._bar_width())
 
             # Onto the second entry of the first line, then down.
             state.layout_manager.point_at(lines[0][1])
@@ -421,9 +419,7 @@ async def test_the_keyboard_stays_with_the_chooser_after_a_key():
 
         with set_app(state.app):
             pane = pymux.arrangement.get_active_pane()
-            assert not state.app.layout.has_focus(pane.terminal), (
-                "the pane took the keyboard back from the chooser"
-            )
+            assert not state.app.layout.has_focus(pane.terminal), "the pane took the keyboard back from the chooser"
 
 
 async def test_slash_moves_the_focus_to_the_search():
@@ -434,9 +430,9 @@ async def test_slash_moves_the_focus_to_the_search():
         type_bytes(state, "/")
 
         with set_app(state.app):
-            assert state.app.layout.has_focus(
-                state.layout_manager.chooser_search_control()
-            ), "the slash did not reach the search"
+            assert state.app.layout.has_focus(state.layout_manager.chooser_search_control()), (
+                "the slash did not reach the search"
+            )
 
 
 async def test_typed_keys_reach_the_search_and_narrow_the_list():
@@ -541,9 +537,9 @@ async def test_escape_in_the_search_from_a_key_press_keeps_the_chooser():
         assert state.choose_window, "the search took the chooser with it"
         assert state.choose_window_filter.text == ""
         with set_app(state.app):
-            assert state.app.layout.has_focus(
-                state.layout_manager.chooser_rows_control()
-            ), "the keys did not come back to the bar"
+            assert state.app.layout.has_focus(state.layout_manager.chooser_rows_control()), (
+                "the keys did not come back to the bar"
+            )
 
 
 # ----------------------------------------------------------------------
@@ -553,9 +549,7 @@ async def test_escape_in_the_search_from_a_key_press_keeps_the_chooser():
 async def test_prefix_w_binding_opens_it():
     "The tmux key: prefix w opens the chooser, as it opens the tree."
     async with create_session() as (pymux, state):
-        assert ("w", "choose-window") in (
-            pymux.key_bindings_manager.prefix_keys()
-        )
+        assert ("w", "choose-window") in (pymux.key_bindings_manager.prefix_keys())
 
 
 async def test_click_on_an_entry_takes_its_window():
@@ -564,11 +558,7 @@ async def test_click_on_an_entry_takes_its_window():
             pymux.handle_command("new-window")
             pymux.handle_command("choose-window")
 
-        tokens = [
-            token
-            for token in state.layout_manager._choose_window_tokens()
-            if len(token) == 3
-        ]
+        tokens = [token for token in state.layout_manager._choose_window_tokens() if len(token) == 3]
         handler = tokens[0][2]
 
         # The click reaches the handler with the client's app
@@ -617,10 +607,7 @@ def _drawn(state) -> list:
             None,
         )
         screen.draw_all_floats()
-    return [
-        "".join(screen.data_buffer[y][x].char for x in range(columns)).rstrip()
-        for y in range(rows)
-    ]
+    return ["".join(screen.data_buffer[y][x].char for x in range(columns)).rstrip() for y in range(rows)]
 
 
 async def test_the_window_draws_under_the_bar():
@@ -652,7 +639,5 @@ async def test_the_window_draws_under_the_bar():
         assert rows[1].strip().startswith("/")
 
         showing = [i for i, text in enumerate(rows) if "a line of output" in text]
-        assert showing, "the window did not draw under the bar:\n" + "\n".join(
-            "|" + r for r in rows
-        )
+        assert showing, "the window did not draw under the bar:\n" + "\n".join("|" + r for r in rows)
         assert min(showing) > 1

@@ -11,6 +11,7 @@ suite has.
 `pyte/tests/conftest.py` is the same section, with the groups of that
 suite around it.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -40,7 +41,7 @@ def pytest_configure(config):
     global _stacks_go_to
     try:
         fileno = sys.stderr.fileno()
-    except (AttributeError, ValueError, OSError):
+    except AttributeError, ValueError, OSError:
         fileno = sys.__stderr__.fileno()
     _stacks_go_to = os.dup(fileno)
 
@@ -56,9 +57,7 @@ def pytest_runtest_protocol(item):
     Lillecarl/pymux#482.
     """
     if HANG_SECONDS:
-        faulthandler.dump_traceback_later(
-            HANG_SECONDS, exit=True, file=_stacks_go_to
-        )
+        faulthandler.dump_traceback_later(HANG_SECONDS, exit=True, file=_stacks_go_to)
     try:
         yield
     finally:
@@ -171,6 +170,7 @@ def every_pty_this_test_opened(a_loop_for_this_test, monkeypatch):
                 backend.close()
             except OSError:
                 pass
+
 
 # The gate. `derandomize` seeds each property test from its own source,
 # so a run draws the examples the run before it drew, and a green gate

@@ -10,6 +10,7 @@ needs a server, a websocket or a pty. That is the reason the protocol is
 a module of its own: the transport carries frames and decides nothing,
 and it is the deciding that is worth testing. Lillecarl/pymux#461.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -32,10 +33,7 @@ def feed(screen, text: str) -> None:
 
 def drawn(frame) -> dict:
     "The text of each row a frame holds, by row number."
-    return {
-        number: "".join(text for _style, text in runs)
-        for number, runs in frame["rows"].items()
-    }
+    return {number: "".join(text for _style, text in runs) for number, runs in frame["rows"].items()}
 
 
 # ----------------------------------------------------------------------

@@ -71,6 +71,7 @@ that.
     less result/log
     cp result/keystroke-budgets.txt pymux/tests/keystroke-budgets.txt
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -172,6 +173,7 @@ def on(stage, size_name):
 def every_measurement():
     "Every stage on every terminal, grouped by terminal."
     return [on(stage, name) for name in SIZES for stage in ORDER]
+
 
 #: What the program in the pane answers with, and what a person typed.
 #: One cell either way, which is the steady state a keystroke is: a
@@ -319,17 +321,13 @@ def where_instructions_are(work, most=WHERE):
 
     sys.monitoring.use_tool_id(_TOOL, "pymux-keystroke-where")
     try:
-        sys.monitoring.register_callback(
-            _TOOL, sys.monitoring.events.INSTRUCTION, one_instruction
-        )
+        sys.monitoring.register_callback(_TOOL, sys.monitoring.events.INSTRUCTION, one_instruction)
         sys.monitoring.set_events(_TOOL, sys.monitoring.events.INSTRUCTION)
         try:
             work()
         finally:
             sys.monitoring.set_events(_TOOL, 0)
-            sys.monitoring.register_callback(
-                _TOOL, sys.monitoring.events.INSTRUCTION, None
-            )
+            sys.monitoring.register_callback(_TOOL, sys.monitoring.events.INSTRUCTION, None)
     finally:
         sys.monitoring.free_tool_id(_TOOL)
 
@@ -466,19 +464,22 @@ def write_budgets(counts):
     out = os.environ.get("PYMUX_KEYSTROKE_OUT", "")
     if not out:
         return
-    header = "\n".join(
-        [
-            "# What one keystroke costs pymux, in bytecode instructions.",
-            "# `tests/measure_keystroke.py` says what each stage covers",
-            "# and why the number is the same on every machine.",
-            "#",
-        ]
-        + how_to_record(
-            "pymux-keystroke",
-            "keystroke-budgets.txt",
-            "pymux/tests/keystroke-budgets.txt",
+    header = (
+        "\n".join(
+            [
+                "# What one keystroke costs pymux, in bytecode instructions.",
+                "# `tests/measure_keystroke.py` says what each stage covers",
+                "# and why the number is the same on every machine.",
+                "#",
+            ]
+            + how_to_record(
+                "pymux-keystroke",
+                "keystroke-budgets.txt",
+                "pymux/tests/keystroke-budgets.txt",
+            )
         )
-    ) + "\n"
+        + "\n"
+    )
     write_list(Path(out) / "keystroke-budgets.txt", header, counts.items())
 
 
@@ -560,10 +561,7 @@ def main() -> int:
         if name in counts:
             print("%-18s %14d %10.1f us" % (name, counts[name], microseconds[name]))
 
-    print(
-        "%-18s %14d %10.1f us"
-        % ("all of it", sum(counts.values()), sum(microseconds.values()))
-    )
+    print("%-18s %14d %10.1f us" % ("all of it", sum(counts.values()), sum(microseconds.values())))
 
     for name in every_measurement():
         if name in where:
@@ -610,10 +608,7 @@ def main() -> int:
             continue
         distance = abs(moved(count, budget))
         if distance > tolerance:
-            over.append(
-                "%s takes %d, and its budget is %d: %.1f%% away"
-                % (name, count, budget, distance)
-            )
+            over.append("%s takes %d, and its budget is %d: %.1f%% away" % (name, count, budget, distance))
 
     if over:
         print("\n--- past the budget ---")

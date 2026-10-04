@@ -15,6 +15,7 @@ cannot do this: `~C` and its forwards go with the link.
 
 `pymux/forwarding.py` holds what a forward is. This holds the live ones.
 """
+
 from __future__ import annotations
 
 import time
@@ -333,9 +334,7 @@ class Forwards:
             if opened.error:
                 lost.append("%s (%s)" % (forward.spell(), opened.error))
             elif where in was and was[where] != opened.port:
-                moved.append(
-                    "%s is now on %d" % (forward.spell(), opened.port)
-                )
+                moved.append("%s is now on %d" % (forward.spell(), opened.port))
 
         return " ".join(
             part
@@ -346,9 +345,7 @@ class Forwards:
             if part
         )
 
-    async def _open_one(
-        self, connection: SSHClientConnection, wanted: Wanted
-    ) -> Opened:
+    async def _open_one(self, connection: SSHClientConnection, wanted: Wanted) -> Opened:
         forward = wanted.forward
         where = _where(forward)
 
@@ -390,13 +387,9 @@ class Forwards:
 
         self._errors[where] = error
         self._ports[where] = forward.listen_port
-        return Opened(
-            forward, forward.listen_port, error, ours=wanted.idle is not None
-        )
+        return Opened(forward, forward.listen_port, error, ours=wanted.idle is not None)
 
-    async def _listen(
-        self, connection: SSHClientConnection, forward: Forward, where: Where
-    ) -> SSHListener:
+    async def _listen(self, connection: SSHClientConnection, forward: Forward, where: Where) -> SSHListener:
         """
         Ask asyncssh for the listener of this forward.
 

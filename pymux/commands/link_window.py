@@ -47,5 +47,7 @@ def link_window(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, link_window)
-    parser.add_argument("-s", dest="s", metavar="<src-window>", help="The window to link; the active one is the default.")
+    parser.add_argument(
+        "-s", dest="s", metavar="<src-window>", help="The window to link; the active one is the default."
+    )
     parser.add_argument("-t", dest="t", metavar="<dst-index>", type=WindowIndex, help="The index to put it at.")

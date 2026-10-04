@@ -9,6 +9,7 @@ its trigger is the close. One difference, on purpose: setting the
 option on packs an order that is open already, where tmux leaves the
 gap until the next close. Lillecarl/pymux#342.
 """
+
 from __future__ import annotations
 
 import sys
@@ -86,10 +87,7 @@ def test_the_order_is_kept():
         _kill(pymux, 1)
 
         assert [window.index for window in pymux.arrangement.windows] == [
-            window.index
-            for window in sorted(
-                pymux.arrangement.windows, key=lambda one: one.index
-            )
+            window.index for window in sorted(pymux.arrangement.windows, key=lambda one: one.index)
         ]
         assert third.index == 2
     finally:

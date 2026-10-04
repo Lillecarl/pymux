@@ -15,6 +15,7 @@ The tests call the refresh. What runs it is `Pymux._auto_refresh`, one
 task of the server's own task group, and it is on the loop rather than
 on a thread for the reason in Lillecarl/pymux#155.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -59,9 +60,7 @@ def session():
     pymux.test_mode = True
     pymux.create_window("%s -c 'import time; time.sleep(30)'" % (sys.executable,))
 
-    output = Vt100_Output(
-        stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS)
-    )
+    output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS))
     with create_pipe_input() as pipe:
         state = pymux.add_client(
             output=output,

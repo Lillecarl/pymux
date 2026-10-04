@@ -9,6 +9,7 @@ The picture check is what says whether it reads as one bar. This says
 whether the cells are where they were meant to be.
 Lillecarl/pymux#207.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -151,9 +152,7 @@ def test_number_does_not_take_from_neighbour_s_share():
 
 def test_number_does_not_move_title():
     "It is centred over the pane, and the number is over the pane too."
-    assert bar(middle="title").index("title") == bar(
-        number=NUMBER, middle="title"
-    ).index("title")
+    assert bar(middle="title").index("title") == bar(number=NUMBER, middle="title").index("title")
 
 
 def test_one_neighbour_and_no_other():

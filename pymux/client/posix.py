@@ -193,7 +193,7 @@ class PosixClient(TerminalClient):
 
         try:
             self.socket.send(data + b"\0")
-        except (BrokenPipeError, ConnectionResetError):
+        except BrokenPipeError, ConnectionResetError:
             pass
 
 

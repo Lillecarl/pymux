@@ -21,6 +21,7 @@ It holds no socket: `send` is how a packet leaves, and `take_packet` is
 how one arrives, so a unix socket, a test's pipe and a relay are three
 callers of one thing.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -121,9 +122,7 @@ class SessionScreen:
         self._send_size()
 
     def _send_size(self) -> None:
-        self._send(
-            {Field.CMD: Packet.SIZE, Field.DATA: [self.screen.lines, self.screen.columns]}
-        )
+        self._send({Field.CMD: Packet.SIZE, Field.DATA: [self.screen.lines, self.screen.columns]})
 
     def _answer(self, data: str) -> None:
         "What the terminal says back to a query goes in as input."

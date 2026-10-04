@@ -13,6 +13,7 @@ mode over the client while a pane reads a password; a client that ends
 in between puts it back, or every key the person types next echoes.
 Lillecarl/pymux#411.
 """
+
 from __future__ import annotations
 
 import os

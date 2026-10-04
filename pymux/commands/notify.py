@@ -21,9 +21,7 @@ def notify(pymux: Pymux, args: argparse.Namespace) -> None:
     client being told looks at, or none when no client does -- a
     notification from a script has no pane, and the hub says so.
     """
-    urgency = {"low": Urgency.LOW, "normal": Urgency.NORMAL, "critical": Urgency.CRITICAL}[
-        args.urgency
-    ]
+    urgency = {"low": Urgency.LOW, "normal": Urgency.NORMAL, "critical": Urgency.CRITICAL}[args.urgency]
 
     pane_id = None
     try:
@@ -33,17 +31,13 @@ def notify(pymux: Pymux, args: argparse.Namespace) -> None:
     except Exception:
         pane_id = None
 
-    pymux.notification_center.add(
-        title=args.title, body=args.body, urgency=urgency, pane_id=pane_id
-    )
+    pymux.notification_center.add(title=args.title, body=args.body, urgency=urgency, pane_id=pane_id)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, notify)
     parser.add_argument("title", metavar="<title>", help="What the notification is.")
-    parser.add_argument(
-        "body", metavar="<body>", nargs="?", default="", help="What else it says."
-    )
+    parser.add_argument("body", metavar="<body>", nargs="?", default="", help="What else it says.")
     parser.add_argument(
         "-u",
         dest="urgency",

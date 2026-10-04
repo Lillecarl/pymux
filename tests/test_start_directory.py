@@ -7,6 +7,7 @@ reported directory wins over what the process table says, which
 covers a pane that never reported, and nothing covers the first pane
 of a session. An explicit `-c` already won before this was asked.
 """
+
 from __future__ import annotations
 
 import sys
@@ -75,10 +76,7 @@ async def test_new_window_starts_in_reported_directory():
             window = pymux.current_session.arrangement.get_active_window()
             window.active_pane.current_directory = "/tmp"
 
-            program = (
-                "%s -c 'import os, time; print(\"CWD=\" + os.getcwd());"
-                " time.sleep(30)'" % (sys.executable,)
-            )
+            program = "%s -c 'import os, time; print(\"CWD=\" + os.getcwd()); time.sleep(30)'" % (sys.executable,)
             pymux.create_window(program)
 
         pane = pymux.current_session.arrangement.get_active_window().panes[0]
@@ -96,10 +94,7 @@ async def test_explicit_directory_wins_over_report():
             window = pymux.current_session.arrangement.get_active_window()
             window.active_pane.current_directory = "/tmp"
 
-            program = (
-                "%s -c 'import os, time; print(\"CWD=\" + os.getcwd());"
-                " time.sleep(30)'" % (sys.executable,)
-            )
+            program = "%s -c 'import os, time; print(\"CWD=\" + os.getcwd()); time.sleep(30)'" % (sys.executable,)
             pymux.create_window(program, start_directory="/")
 
         pane = pymux.current_session.arrangement.get_active_window().panes[0]

@@ -11,6 +11,7 @@ and what holds the programs that animate: the one with cmatrix in it
 can be told to draw ten times a second while the one being read stays
 sharp.
 """
+
 from __future__ import annotations
 
 import sys

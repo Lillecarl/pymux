@@ -39,6 +39,7 @@ page of `gc` and it prints text a build log can hold, so the dependency
 is not worth it yet. It is worth naming when somebody wants the
 pictures.
 """
+
 from __future__ import annotations
 
 import gc
@@ -106,11 +107,7 @@ def _owns_this_dict(mapping):
 
 def _closes_over(cell):
     "The functions that keep this closure cell."
-    return [
-        holder
-        for holder in gc.get_referrers(cell)
-        if isinstance(holder, types.FunctionType)
-    ]
+    return [holder for holder in gc.get_referrers(cell) if isinstance(holder, types.FunctionType)]
 
 
 def _referrers_of(obj, seen: set) -> list:

@@ -12,6 +12,7 @@ whether it goes out.
 that a pane of pymux hands the ask over, that the payload survives the
 check, and that every client hears it. Lillecarl/pymux#376.
 """
+
 from __future__ import annotations
 
 import base64

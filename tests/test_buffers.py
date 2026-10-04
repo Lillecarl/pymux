@@ -7,6 +7,7 @@ store of its own on the server; without one the session's one buffer
 is the buffer, and `paste-buffer` pastes it. A name nothing holds is
 an error on every read and write of it.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -111,6 +112,7 @@ async def test_buffer_nobody_holds_is_error():
         with set_app(state.app), pytest.raises(CommandException):
             save_buffer(pymux, argparse.Namespace(buffer_name="nope", filename="/tmp/opencode/none"))
 
+
 async def test_buffer_chooser_opens_and_lists_buffers():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -181,4 +183,3 @@ async def test_choosers_are_one_at_time():
 
         assert state.choose_window
         assert not state.choose_buffer
-

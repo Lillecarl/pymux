@@ -6,6 +6,7 @@ The rows are the options with what they hold; the search narrows
 them; taking a row opens the command prompt with the option named
 and what it holds as the default answer. Lillecarl/pymux#297.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app

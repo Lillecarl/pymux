@@ -7,6 +7,7 @@ it keeps is the umask every file a pane writes gets. It used to set
 pane write mode 0666 files on a machine whose login shell sets 077.
 Lillecarl/pymux#398.
 """
+
 from __future__ import annotations
 
 import os

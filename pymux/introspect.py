@@ -138,7 +138,7 @@ def answer_signal() -> Path | None:
         path.parent.mkdir(parents=True, exist_ok=True)
         _stacks_file = open(path, "a", buffering=1)
         faulthandler.register(signal.SIGUSR1, file=_stacks_file, all_threads=True, chain=False)
-    except (OSError, ValueError, RuntimeError):
+    except OSError, ValueError, RuntimeError:
         # A read only home, a full disk, or not the main thread.
         _stacks_file = None
         return None
@@ -186,7 +186,7 @@ def let_debugger_attach(allowed: bool) -> bool:
             0,
             0,
         )
-    except (AttributeError, OSError, TypeError):
+    except AttributeError, OSError, TypeError:
         logger.info("This system has no prctl, so nothing can attach to it.")
         return False
 

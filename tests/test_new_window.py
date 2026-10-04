@@ -17,6 +17,7 @@ answered with the first window.
 
 Lillecarl/pymux#191.
 """
+
 from __future__ import annotations
 
 from contextlib import asynccontextmanager

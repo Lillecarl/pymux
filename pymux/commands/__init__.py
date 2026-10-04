@@ -7,6 +7,7 @@ parsed arguments. argparse parses with the tree; the shell completes
 through it with argcomplete, and the command bar of a client
 completes through the same tree in process. Lillecarl/pymux#307.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -36,7 +37,119 @@ __all__ = [
 ]
 
 #: One module per command, in the order the commands were written.
-MODULES = ['break_pane', 'select_pane', 'select_window', 'move_window', 'swap_window', 'rotate_window', 'swap_pane', 'kill_pane', 'kill_window', 'suspend_client', 'clock_mode', 'last_pane', 'next_layout', 'previous_layout', 'new_window', 'split_window', 'new_pane', 'last_window', 'next_window', 'previous_window', 'select_layout', 'switch_column_width', 'move_column', 'consume_or_expel', 'rename_window', 'rename_pane', 'rename_session', 'resize_pane', 'resize_window', 'detach_client', 'confirm_before', 'open_url', 'compose_key', 'command_prompt', 'send_prefix', 'bind_key', 'unbind_key', 'send_keys', 'copy_mode', 'paste_buffer', 'source_file', 'set_option', 'set_window_option', 'set_client_option', 'set_environment', 'show_options', 'show_window_options', 'show_client_options','list_commands', 'refresh_client', 'show_prompt_history', 'clear_prompt_history', 'respawn_pane', 'respawn_window', 'show_environment', 'display_panes', 'choose_window', 'choose_buffer', 'choose_notifications', 'display_message', 'notify', 'get', 'clear_history', 'list_keys', 'list_panes', 'list_windows', 'list_sessions', 'list_clients', 'has_session', 'new_session', 'kill_session', 'kill_server', 'dump_stacks', 'counters', 'profile', 'display_popup', 'close_popup', 'capture_pane', 'show_buffer', 'set_buffer', 'list_buffers', 'list_user_vars', 'info', 'delete_buffer', 'load_buffer', 'save_buffer', 'show_messages', 'show_html_stylesheet', 'attach_session', 'switch_client', 'run_shell', 'if_shell', 'move_pane', 'join_pane', 'link_window', 'unlink_window', 'set_hook', 'show_hooks', 'lock_client', 'lock_session', 'lock_server', 'display_menu', 'customize_mode', 'wait_for', 'wait_pane_change', 'enter_mode', 'leave_mode', 'noop', 'forward_port', 'unforward_port', 'list_forwards']
+MODULES = [
+    "break_pane",
+    "select_pane",
+    "select_window",
+    "move_window",
+    "swap_window",
+    "rotate_window",
+    "swap_pane",
+    "kill_pane",
+    "kill_window",
+    "suspend_client",
+    "clock_mode",
+    "last_pane",
+    "next_layout",
+    "previous_layout",
+    "new_window",
+    "split_window",
+    "new_pane",
+    "last_window",
+    "next_window",
+    "previous_window",
+    "select_layout",
+    "switch_column_width",
+    "move_column",
+    "consume_or_expel",
+    "rename_window",
+    "rename_pane",
+    "rename_session",
+    "resize_pane",
+    "resize_window",
+    "detach_client",
+    "confirm_before",
+    "open_url",
+    "compose_key",
+    "command_prompt",
+    "send_prefix",
+    "bind_key",
+    "unbind_key",
+    "send_keys",
+    "copy_mode",
+    "paste_buffer",
+    "source_file",
+    "set_option",
+    "set_window_option",
+    "set_client_option",
+    "set_environment",
+    "show_options",
+    "show_window_options",
+    "show_client_options",
+    "list_commands",
+    "refresh_client",
+    "show_prompt_history",
+    "clear_prompt_history",
+    "respawn_pane",
+    "respawn_window",
+    "show_environment",
+    "display_panes",
+    "choose_window",
+    "choose_buffer",
+    "choose_notifications",
+    "display_message",
+    "notify",
+    "get",
+    "clear_history",
+    "list_keys",
+    "list_panes",
+    "list_windows",
+    "list_sessions",
+    "list_clients",
+    "has_session",
+    "new_session",
+    "kill_session",
+    "kill_server",
+    "dump_stacks",
+    "counters",
+    "profile",
+    "display_popup",
+    "close_popup",
+    "capture_pane",
+    "show_buffer",
+    "set_buffer",
+    "list_buffers",
+    "list_user_vars",
+    "info",
+    "delete_buffer",
+    "load_buffer",
+    "save_buffer",
+    "show_messages",
+    "show_html_stylesheet",
+    "attach_session",
+    "switch_client",
+    "run_shell",
+    "if_shell",
+    "move_pane",
+    "join_pane",
+    "link_window",
+    "unlink_window",
+    "set_hook",
+    "show_hooks",
+    "lock_client",
+    "lock_session",
+    "lock_server",
+    "display_menu",
+    "customize_mode",
+    "wait_for",
+    "wait_pane_change",
+    "enter_mode",
+    "leave_mode",
+    "noop",
+    "forward_port",
+    "unforward_port",
+    "list_forwards",
+]
 
 
 class CommandException(Exception):
@@ -101,7 +214,14 @@ class CommandParser(argparse.ArgumentParser):
         raise BadLine(message)
 
 
-def add_command(subparsers: argparse._SubParsersAction[CommandParser], handler: Callable[..., Any], *, name: str | None = None, aliases: tuple[str, ...] | list[str] = (), read_only: bool = False):
+def add_command(
+    subparsers: argparse._SubParsersAction[CommandParser],
+    handler: Callable[..., Any],
+    *,
+    name: str | None = None,
+    aliases: tuple[str, ...] | list[str] = (),
+    read_only: bool = False,
+):
     """
     The parser of one command: named after its handler, described by
     the first line of its docstring.
@@ -272,7 +392,7 @@ def call_command_handler(command: str, pymux: Pymux, arguments: list[str]):
     try:
         namespace = parser.parse_args(list(arguments))
     except BadLine as e:
-        usage = parser.format_usage()[len("usage: "):].rstrip()
+        usage = parser.format_usage()[len("usage: ") :].rstrip()
         message = "%s (%s)" % (e.message, usage)
         pymux.show_message(message)
         pymux.add_command_error("pymux: %s" % (message,))

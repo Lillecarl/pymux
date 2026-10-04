@@ -20,6 +20,7 @@ itself, the way `ptterm` compares reverse video. A reader holding only
 this number cannot, so the number has to be the wider one.
 Lillecarl/pymux#387.
 """
+
 from __future__ import annotations
 
 import sys
@@ -205,8 +206,7 @@ async def test_a_wait_ends_when_the_pane_changes(pymux):
     pymux.command_output = []
     try:
         waiting = call_command_handler(
-            "wait-pane-change", pymux, ["-t", "%%%i" % pane.pane_id, "--since",
-                                       str(pane.revision)]
+            "wait-pane-change", pymux, ["-t", "%%%i" % pane.pane_id, "--since", str(pane.revision)]
         )
         assert waiting is not None, "the command has to answer a coroutine"
 
@@ -309,9 +309,7 @@ def test_a_wait_from_nobody_is_refused(pymux):
     pymux.show_message = lambda message: None
 
     # No `command_output`, which is what says a client is reading.
-    answer = call_command_handler(
-        "wait-pane-change", pymux, ["-t", "%%%i" % pane.pane_id]
-    )
+    answer = call_command_handler("wait-pane-change", pymux, ["-t", "%%%i" % pane.pane_id])
 
     assert answer is None
     assert errors == ["pymux: not able to wait"]
@@ -332,9 +330,7 @@ def test_what_cannot_be_read_is_refused(pymux, arguments, message):
     pymux.show_message = lambda message: None
     pymux.command_output = []
     try:
-        call_command_handler(
-            "wait-pane-change", pymux, ["-t", "%%%i" % pane.pane_id, *arguments]
-        )
+        call_command_handler("wait-pane-change", pymux, ["-t", "%%%i" % pane.pane_id, *arguments])
     finally:
         pymux.command_output = None
 

@@ -63,9 +63,7 @@ def list_windows(pymux: Pymux, args: argparse.Namespace) -> None:
                     )
                 )
     else:
-        windows = [
-            window for session in sessions for window in session.arrangement.windows
-        ]
+        windows = [window for session in sessions for window in session.arrangement.windows]
         w = sessions[0].arrangement.get_active_window()
         result = []
         for window in windows:
@@ -89,5 +87,7 @@ def list_windows(pymux: Pymux, args: argparse.Namespace) -> None:
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, list_windows)
     parser.add_argument("-a", dest="a", action="store_true", help="Every window of every session.")
-    parser.add_argument("-t", dest="target_window", metavar="<target-window>", help="The session whose windows to list.")
+    parser.add_argument(
+        "-t", dest="target_window", metavar="<target-window>", help="The session whose windows to list."
+    )
     add_format_arguments(parser, "Print this format for every window.")

@@ -10,6 +10,7 @@ This file judges the plan on its own, in cells. `test_plane.py`
 holds it to the promises every layout makes, and the cell tests
 elsewhere in this suite hold what is drawn against what a person sees.
 """
+
 from __future__ import annotations
 
 from hypothesis import given

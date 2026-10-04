@@ -38,7 +38,12 @@ def set_hook(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, set_hook)
-    parser.add_argument("-g", dest="g", action="store_true", help="Accepted for tmux and changes nothing: there is one session per server.")
+    parser.add_argument(
+        "-g",
+        dest="g",
+        action="store_true",
+        help="Accepted for tmux and changes nothing: there is one session per server.",
+    )
     parser.add_argument("-u", dest="u", action="store_true", help="Forget the hook, and everything it was given.")
     parser.add_argument("hook", metavar="<hook>", help="The event to run on.")
     parser.add_argument("hook_command", metavar="<command>", nargs="?")

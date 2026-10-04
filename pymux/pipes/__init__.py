@@ -2,6 +2,7 @@
 Platform specific (Windows+posix) implementations for inter process
 communication through pipes between the Pymux server and clients.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.utils import is_windows

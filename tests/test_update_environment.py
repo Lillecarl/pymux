@@ -11,6 +11,7 @@ looking at.
 So a client reports its environment when it attaches, the session takes
 the names the option lists, and nothing keeps the rest.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.data_structures import Size
@@ -49,9 +50,7 @@ async def test_the_second_client_refreshes_what_the_first_one_set():
         first, _ = await session.attach("first", SIZE, environment={"DISPLAY": ":0"})
         assert first.session.environment["DISPLAY"] == ":0"
 
-        second, _ = await session.attach(
-            "second", SIZE, environment={"DISPLAY": ":1"}
-        )
+        second, _ = await session.attach("second", SIZE, environment={"DISPLAY": ":1"})
 
         assert second.session.environment["DISPLAY"] == ":1"
 

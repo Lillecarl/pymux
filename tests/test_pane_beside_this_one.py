@@ -21,6 +21,7 @@ laid out first. What the tree used to say -- a pane in a stack takes
 the stack's neighbours, a column on our left gives its rightmost pane
 -- falls out of that, because those are the panes that share the edge.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.data_structures import Size
@@ -156,9 +157,7 @@ def test_row_beside_us_gives_pane_that_touches_us():
     That is the nearest one, and nearest wins before anything else.
     """
     first, second, middle, third, fourth = (create_pane() for _ in range(5))
-    window = create_window(
-        VSplit([VSplit([first, second]), middle, VSplit([third, fourth])])
-    )
+    window = create_window(VSplit([VSplit([first, second]), middle, VSplit([third, fourth])]))
 
     assert beside(window, middle, Side.LEFT) is second
     assert beside(window, middle, Side.RIGHT) is third

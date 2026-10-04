@@ -9,6 +9,7 @@ call does nothing -- but the same pass also sweeps up a window that is
 already empty, and that sweep is what the skip loses.
 Lillecarl/pymux#351.
 """
+
 from __future__ import annotations
 
 import sys
@@ -47,9 +48,7 @@ def test_an_empty_window_after_a_closing_one_is_swept_up():
         pymux.arrangement.remove_pane(first.panes[0])
 
         assert first not in pymux.arrangement.windows
-        assert second not in pymux.arrangement.windows, (
-            "the window after the one that closed was skipped"
-        )
+        assert second not in pymux.arrangement.windows, "the window after the one that closed was skipped"
     finally:
         _stop(pymux)
 

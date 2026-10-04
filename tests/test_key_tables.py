@@ -10,6 +10,7 @@ time, the way it does in tmux's own modes. Lillecarl/pymux#394.
 
 Pane-management is the first mode in the table. Lillecarl/pymux#395.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -207,9 +208,7 @@ async def test_the_mode_s_own_keys_answer_without_the_prefix():
 
         press(state, "o")
 
-        assert (
-            pymux.arrangement.get_active_window().active_pane is not pane_before
-        )
+        assert pymux.arrangement.get_active_window().active_pane is not pane_before
 
 
 async def test_the_mode_masks_the_root_table():

@@ -5,6 +5,7 @@ It is the command a driver asks first, so a wrong answer stops
 everything that follows. With no target it means "is there a session",
 and a server that answers at all has one.
 """
+
 from __future__ import annotations
 
 from pymux.commands.has_session import pane_matches_session_name

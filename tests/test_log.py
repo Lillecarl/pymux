@@ -14,6 +14,7 @@ One left running for four days reached 86 MB, because the level was
 DEBUG and a server writes a line for every frame it draws -- eleven a
 second on a session where the panes animate. Lillecarl/pymux#248.
 """
+
 from __future__ import annotations
 
 import io
@@ -58,9 +59,7 @@ def test_without_name_it_goes_under_state_directory(tmp_path, monkeypatch):
 def test_state_directory_has_default(monkeypatch):
     monkeypatch.delenv("XDG_STATE_HOME", raising=False)
     monkeypatch.setenv("HOME", "/home/somebody")
-    assert log.default_logfile() == (
-        log.Path("/home/somebody/.local/state/pymux/server.log")
-    )
+    assert log.default_logfile() == (log.Path("/home/somebody/.local/state/pymux/server.log"))
 
 
 def test_directory_that_is_missing_is_made(tmp_path):

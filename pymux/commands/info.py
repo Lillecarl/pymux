@@ -56,11 +56,7 @@ def _window_tree(pymux: Pymux, session: Session, window: Window):
         "index": window.index,
         "name": window.name,
         "active": window == session.arrangement.get_active_window(),
-        "panes": [
-            _pane_tree(pane, index)
-            | {"active": pane is active}
-            for index, pane in enumerate(window.panes)
-        ],
+        "panes": [_pane_tree(pane, index) | {"active": pane is active} for index, pane in enumerate(window.panes)],
     }
 
 
@@ -102,9 +98,7 @@ def _clients_tree(pymux: Pymux):
     clients = []
     for state in pymux.clients:
         pane = pymux.focused_pane_of(state)
-        found = (
-            pymux.window_of_pane(pane.pane_id) if pane is not None else None
-        )
+        found = pymux.window_of_pane(pane.pane_id) if pane is not None else None
         clients.append(
             {
                 "session_id": state.session.session_id,
@@ -133,10 +127,7 @@ def info(pymux: Pymux, args: argparse.Namespace) -> None:
             {
                 "session_id": session.session_id,
                 "session_name": session.name,
-                "windows": [
-                    _window_tree(pymux, session, window)
-                    for window in session.arrangement.windows
-                ],
+                "windows": [_window_tree(pymux, session, window) for window in session.arrangement.windows],
             }
             for session in pymux.sessions
         ],

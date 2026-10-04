@@ -26,6 +26,7 @@ another comes earlier in reading order" is false, and
 `test_reading_order_follows_splits_and_not_rows` shows the
 shape that breaks it.
 """
+
 from __future__ import annotations
 
 import itertools
@@ -211,9 +212,7 @@ def walk(plan: Plan, slot: Slot, side: Side) -> list[Slot]:
         if slot is None:
             return seen
 
-        assert not any(slot is before for before in seen), (
-            "walking %s came back to %r" % (side.name, slot)
-        )
+        assert not any(slot is before for before in seen), "walking %s came back to %r" % (side.name, slot)
         seen.append(slot)
 
 
@@ -239,8 +238,9 @@ def every_promise_holds(plan: Plan) -> None:
 
     for layer in plan.layers.values():
         for one, other in itertools.combinations(layer.slots, 2):
-            assert not layer.rects[one].overlaps(layer.rects[other]), (
-                "%r and %r share a cell of one plane" % (one, other)
+            assert not layer.rects[one].overlaps(layer.rects[other]), "%r and %r share a cell of one plane" % (
+                one,
+                other,
             )
 
     for slot in slots:
@@ -282,9 +282,7 @@ def every_promise_holds(plan: Plan) -> None:
                 side.name,
                 slot,
             )
-            assert overlap_of(mine.span(side), theirs.span(side)) > 0, (
-                "%r is not across from %r" % (other, slot)
-            )
+            assert overlap_of(mine.span(side), theirs.span(side)) > 0, "%r is not across from %r" % (other, slot)
 
             walk(plan, slot, side)
 
@@ -576,9 +574,7 @@ def test_ray_never_beats_neighbour(plan):
 
             beside = plan.neighbour(slot, side)
             assert beside is not None, "a ray found %r and no key does" % (hit,)
-            assert mine.gap_to(plan.rects[beside], side) <= mine.gap_to(
-                plan.rects[hit], side
-            )
+            assert mine.gap_to(plan.rects[beside], side) <= mine.gap_to(plan.rects[hit], side)
 
 
 # ----------------------------------------------------------------------
@@ -811,9 +807,7 @@ def test_pane_in_two_planes_is_fault():
     pane = _Pane("shared")
 
     try:
-        Plan(
-            {GROUND: {Slot(pane): Rect(0, 0, 2, 2)}, 1: {Slot(pane): Rect(4, 0, 2, 2)}}
-        )
+        Plan({GROUND: {Slot(pane): Rect(0, 0, 2, 2)}, 1: {Slot(pane): Rect(4, 0, 2, 2)}})
     except ValueError:
         return
     raise AssertionError("one pane went onto two planes")
@@ -839,9 +833,7 @@ def test_neighbour_stays_on_the_plane_of_the_slot():
 
 
 def test_layer_of_says_which_plane_a_slot_is_on():
-    plan = Plan(
-        {GROUND: on_plane(under=Rect(0, 0, 4, 4)), 3: on_plane(over=Rect(0, 0, 2, 2))}
-    )
+    plan = Plan({GROUND: on_plane(under=Rect(0, 0, 4, 4)), 3: on_plane(over=Rect(0, 0, 2, 2))})
 
     assert plan.layer_of(named(plan, "under")) is plan.layers[GROUND]
     assert plan.layer_of(named(plan, "over")) is plan.layers[3]
@@ -850,9 +842,7 @@ def test_layer_of_says_which_plane_a_slot_is_on():
 
 def test_bounds_holds_every_plane():
     "A floating window past the panes is still where the panes are."
-    plan = Plan(
-        {GROUND: on_plane(pane=Rect(0, 0, 4, 4)), 1: on_plane(over=Rect(6, 6, 2, 2))}
-    )
+    plan = Plan({GROUND: on_plane(pane=Rect(0, 0, 4, 4)), 1: on_plane(over=Rect(6, 6, 2, 2))})
 
     assert plan.bounds == Rect(0, 0, 8, 8)
 
@@ -877,18 +867,14 @@ def test_at_answers_the_topmost_slot():
     the highest plane that covers the cell. A float nobody can click is
     not a float. Lillecarl/pymux#356.
     """
-    plan = Plan(
-        {GROUND: on_plane(under=Rect(0, 0, 4, 4)), 1: on_plane(over=Rect(0, 0, 4, 4))}
-    )
+    plan = Plan({GROUND: on_plane(under=Rect(0, 0, 4, 4)), 1: on_plane(over=Rect(0, 0, 4, 4))})
 
     assert plan.at(Point(x=1, y=1)) is named(plan, "over")
 
 
 def test_at_falls_through_a_plane_that_does_not_cover_the_cell():
     "A higher plane takes the cells it holds and no others."
-    plan = Plan(
-        {GROUND: on_plane(under=Rect(0, 0, 8, 4)), 1: on_plane(over=Rect(0, 0, 4, 4))}
-    )
+    plan = Plan({GROUND: on_plane(under=Rect(0, 0, 8, 4)), 1: on_plane(over=Rect(0, 0, 4, 4))})
 
     assert plan.at(Point(x=1, y=1)) is named(plan, "over")
     assert plan.at(Point(x=5, y=1)) is named(plan, "under")
@@ -915,9 +901,7 @@ def test_a_layer_still_answers_within_its_own_plane():
     service needs "which slot of *this* plane", because neighbours only
     mean something among rectangles that do not overlap.
     """
-    plan = Plan(
-        {GROUND: on_plane(under=Rect(0, 0, 4, 4)), 1: on_plane(over=Rect(0, 0, 4, 4))}
-    )
+    plan = Plan({GROUND: on_plane(under=Rect(0, 0, 4, 4)), 1: on_plane(over=Rect(0, 0, 4, 4))})
 
     assert plan.layers[GROUND].at(Point(x=1, y=1)) is named(plan, "under")
     assert plan.layers[1].at(Point(x=1, y=1)) is named(plan, "over")
@@ -975,9 +959,7 @@ def test_what_is_left_holds_exactly_the_cells_nothing_covered(rect, over):
         assert not (cells & kept), "two pieces share a cell"
         kept |= cells
 
-    wanted = {
-        cell for cell in rect.cells() if not any(one.holds(cell) for one in over)
-    }
+    wanted = {cell for cell in rect.cells() if not any(one.holds(cell) for one in over)}
     assert kept == wanted
 
 

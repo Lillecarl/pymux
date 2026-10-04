@@ -27,9 +27,7 @@ def resize_pane(pymux: Pymux, args: argparse.Namespace) -> None:
     w = the_window(pymux, None)
 
     if w and w.active_pane is not None:
-        change_pane_size(
-            pymux, w, w.active_pane, up=up, right=right, down=down, left=left
-        )
+        change_pane_size(pymux, w, w.active_pane, up=up, right=right, down=down, left=left)
 
         # Zoom in/out.
         if args.Z:

@@ -38,6 +38,7 @@ Run with:
     nix build --file . checks.pymux-pty
     nix build --file . checks.pymux-integrated
 """
+
 from __future__ import annotations
 
 import datetime
@@ -127,10 +128,7 @@ def keys_read(data: bytes) -> bytes:
     file, because the store path moved and the reads fell differently.
     So the blobs are joined and the check reads the stream inside them.
     """
-    return b"".join(
-        bytes.fromhex(blob.decode("ascii"))
-        for blob in re.findall(rb"<<([0-9a-f]*)>>", data)
-    )
+    return b"".join(bytes.fromhex(blob.decode("ascii")) for blob in re.findall(rb"<<([0-9a-f]*)>>", data))
 
 
 # The kitty image that the pane child transmits: 2x2 pixels, RGB. It
@@ -434,9 +432,7 @@ def run_on_pty(args, stderr_path, colorterm="", rows=24, columns=80):
     )
 
 
-def attach_client(
-    sock_path, stderr_path, colorterm="", rows=24, columns=80, configuration=()
-):
+def attach_client(sock_path, stderr_path, colorterm="", rows=24, columns=80, configuration=()):
     """
     Attach a client to a server that is already running, over its
     socket.
@@ -502,10 +498,7 @@ class Attached:
                 self.passed = max(self.passed, found + len(pattern))
                 return
             if time.time() > deadline:
-                raise Failed(
-                    "Timeout waiting for %r. Got: %r"
-                    % (pattern, self.seen[start:][:2000])
-                )
+                raise Failed("Timeout waiting for %r. Got: %r" % (pattern, self.seen[start:][:2000]))
             self.read_once()
 
     def wait_for_input(self, keys, timeout=15.0):
@@ -523,8 +516,7 @@ class Attached:
                 return
             if time.time() > deadline:
                 raise Failed(
-                    "Timeout waiting for the pane to read %r. It read: %r"
-                    % (keys, read[self.passed_keys :][:400])
+                    "Timeout waiting for the pane to read %r. It read: %r" % (keys, read[self.passed_keys :][:400])
                 )
             self.read_once()
 
@@ -607,11 +599,7 @@ class Attached:
         """
         out = []
         for index, (landed, offset) in enumerate(self.arrivals):
-            end = (
-                self.arrivals[index + 1][1]
-                if index + 1 < len(self.arrivals)
-                else len(self.seen)
-            )
+            end = self.arrivals[index + 1][1] if index + 1 < len(self.arrivals) else len(self.seen)
             if end <= mark:
                 continue
             out.append((landed - start, self.seen[max(offset, mark) : end]))
@@ -654,9 +642,7 @@ class Attached:
     def report(self):
         print(self.seen[-4000:].decode("utf-8", "replace"))
         if self.stderr_path is not None and self.stderr_path.exists():
-            print(
-                "--- client stderr ---\n" + self.stderr_path.read_text(errors="replace")
-            )
+            print("--- client stderr ---\n" + self.stderr_path.read_text(errors="replace"))
         log = getattr(self, "server_log", None)
         if log is not None and log.exists():
             # Only what the server complained about: the whole log is
@@ -668,11 +654,7 @@ class Attached:
             ]
             if lines:
                 print("--- server errors ---\n" + "\n".join(lines[-60:]))
-            probes = [
-                line
-                for line in log.read_text(errors="replace").splitlines()
-                if "PROBE" in line
-            ]
+            probes = [line for line in log.read_text(errors="replace").splitlines() if "PROBE" in line]
             if probes:
                 print("--- probes ---\n" + "\n".join(probes[-25:]))
 
@@ -695,9 +677,7 @@ class SecondClient(Attached):
     def __init__(self, tmp, sock_path, name, colorterm=""):
         self.sock_path = sock_path
         self.stderr_path = tmp / ("%s-stderr.log" % name)
-        self.master_fd, self.client, self.stderr = attach_client(
-            sock_path, self.stderr_path, colorterm
-        )
+        self.master_fd, self.client, self.stderr = attach_client(sock_path, self.stderr_path, colorterm)
         self.seen = b""
         self.arrivals = []
         self.passed = 0
@@ -837,12 +817,8 @@ def check_osc_sequences(terminal, tail):
     Lillecarl/pymux#378.
     """
     assert OSC_POINTER.encode() in tail, "the pointer shape did not arrive"
-    assert OSC_CLIPBOARD.encode() not in tail, (
-        "a pane wrote the clipboard of the user with the shipped option"
-    )
-    assert OSC_CLIPBOARD_QUERY.encode() not in tail, (
-        "the pane read the clipboard of the user"
-    )
+    assert OSC_CLIPBOARD.encode() not in tail, "a pane wrote the clipboard of the user with the shipped option"
+    assert OSC_CLIPBOARD_QUERY.encode() not in tail, "the pane read the clipboard of the user"
 
     found = re.search(OSC_NOTIFICATION_RE, tail)
     assert found, "the notification did not arrive"
@@ -861,9 +837,7 @@ def check_hyperlink(terminal):
     after = terminal.seen[terminal.seen.index(opened) + len(opened) :]
     assert b"L" in after[:40], "no text after the link opened"
     assert b"\x1b]8;;\x1b\\" in after, "the hyperlink never closed"
-    assert terminal.seen.count(HYPERLINK_TARGET.encode()) == 1, (
-        "the target was written more than once"
-    )
+    assert terminal.seen.count(HYPERLINK_TARGET.encode()) == 1, "the target was written more than once"
     print("hyperlink: ok")
 
 
@@ -921,16 +895,12 @@ def check_kitty_terminal(tmp):
         check_underline(terminal)
 
         assert b"a=T" not in terminal.seen, "graphics command leaked as text"
-        assert IMAGE_PAYLOAD.encode() not in terminal.seen, (
-            "graphics payload leaked as text"
-        )
+        assert IMAGE_PAYLOAD.encode() not in terminal.seen, "graphics payload leaked as text"
 
         # 4. The server re-transmits the image and puts it on screen.
         terminal.wait_for(b"\x1b_Ga=t,i=")
         terminal.wait_for(b"a=p,i=")
-        transmit = re.search(
-            rb"\x1b_Ga=t,i=(\d+),t=d,q=2,f=24,s=2,v=2,o=z", terminal.seen
-        )
+        transmit = re.search(rb"\x1b_Ga=t,i=(\d+),t=d,q=2,f=24,s=2,v=2,o=z", terminal.seen)
         assert transmit, "no image transmission on the outer terminal"
         image_id = transmit.group(1)
         put = re.search(
@@ -1020,9 +990,7 @@ def check_kitty_terminal(tmp):
         terminal.drain(1.0)
         said = terminal.since(quiet)
         for reply in (background, foreground):
-            assert reply.hex().encode() not in said, (
-                "a reply of the terminal reached the pane"
-            )
+            assert reply.hex().encode() not in said, "a reply of the terminal reached the pane"
             assert reply not in said, "a reply of the terminal reached the pane"
 
         # 10. The server goes away: the client pops what it pushed, and
@@ -1074,9 +1042,7 @@ def check_sixel_terminal(tmp):
         assert found, "no sixel image on the outer terminal"
         decoded = decode_sixel(found.group(3).decode("latin-1"))
         assert decoded is not None, "the sixel image does not decode"
-        assert (decoded[0], decoded[1]) == (20, 12), (
-            "the image did not keep its own pixels: %r" % (decoded[:2],)
-        )
+        assert (decoded[0], decoded[1]) == (20, 12), "the image did not keep its own pixels: %r" % (decoded[:2],)
         assert 3 * CELL_WIDTH >= 20 and 1 * CELL_HEIGHT >= 12, (
             "the cells this test reasons about no longer hold the image"
         )
@@ -1174,9 +1140,7 @@ def check_closing_split(tmp):
         terminal.wait_for(b"READY")
 
         # A second pane that ends on its own.
-        split = run_cli(
-            terminal.sock_path, ["split-window", "%s -c pass" % sys.executable]
-        )
+        split = run_cli(terminal.sock_path, ["split-window", "%s -c pass" % sys.executable])
         assert split.returncode == 0, split.stderr
         terminal.drain(2.0)
 
@@ -1184,13 +1148,8 @@ def check_closing_split(tmp):
         terminal.drain(3.0)
         tail = terminal.since(quiet)
 
-        assert b"\x1b[?1049l" not in tail, (
-            "the client left the alternate screen after a split closed"
-        )
-        assert len(tail) < 200000, (
-            "the client repainted without end after a split closed: %i bytes"
-            % len(tail)
-        )
+        assert b"\x1b[?1049l" not in tail, "the client left the alternate screen after a split closed"
+        assert len(tail) < 200000, "the client repainted without end after a split closed: %i bytes" % len(tail)
     except BaseException:
         terminal.report()
         raise
@@ -1231,18 +1190,14 @@ def check_pointer_shape(tmp):
         assert split.returncode == 0, split.stderr
         terminal.wait_for(b"QUIET")
         terminal.drain(1.0)
-        assert b"\x1b]22;\x1b\\" in terminal.since(mark), (
-            "the pointer kept the shape of the pane that the user left"
-        )
+        assert b"\x1b]22;\x1b\\" in terminal.since(mark), "the pointer kept the shape of the pane that the user left"
 
         # Back to the pane that asked for the shape.
         mark = terminal.mark()
         back = run_cli(terminal.sock_path, ["last-pane"])
         assert back.returncode == 0, back.stderr
         terminal.drain(1.0)
-        assert OSC_POINTER.encode() in terminal.since(mark), (
-            "the shape did not come back with the pane"
-        )
+        assert OSC_POINTER.encode() in terminal.since(mark), "the shape did not come back with the pane"
     except BaseException:
         terminal.report()
         raise
@@ -1295,9 +1250,7 @@ def check_cursor_shape(tmp):
         assert split.returncode == 0, split.stderr
         terminal.wait_for(b"CURSORMARK")
         terminal.drain(1.0)
-        assert b"\x1b[6 q" in terminal.since(mark), (
-            "the bar that the pane asked for never reached the terminal"
-        )
+        assert b"\x1b[6 q" in terminal.since(mark), "the bar that the pane asked for never reached the terminal"
 
         # Back to the pane that asked for nothing. The bar of the other
         # pane is on the terminal now, so saying nothing would leave it
@@ -1306,13 +1259,9 @@ def check_cursor_shape(tmp):
         back = run_cli(terminal.sock_path, ["last-pane"])
         assert back.returncode == 0, back.stderr
         terminal.drain(1.0)
-        assert b"\x1b[0 q" in terminal.since(mark), (
-            "the cursor of the person never came back"
-        )
+        assert b"\x1b[0 q" in terminal.since(mark), "the cursor of the person never came back"
 
-        assert b"\x1b[?12l" not in terminal.seen, (
-            "the client stopped the cursor of the user blinking"
-        )
+        assert b"\x1b[?12l" not in terminal.seen, "the client stopped the cursor of the user blinking"
     except BaseException:
         terminal.report()
         raise
@@ -1372,13 +1321,8 @@ def check_overlay_pane(tmp):
         quiet = terminal.mark()
         terminal.drain(2.0)
         after = terminal.since(quiet)
-        assert b"\x1b[?1049l" not in after, (
-            "the client left the alternate screen after the overlay closed"
-        )
-        assert len(after) < 200000, (
-            "the client repainted without end after the overlay closed: %i bytes"
-            % len(after)
-        )
+        assert b"\x1b[?1049l" not in after, "the client left the alternate screen after the overlay closed"
+        assert len(after) < 200000, "the client repainted without end after the overlay closed: %i bytes" % len(after)
     except BaseException:
         terminal.report()
         raise
@@ -1448,14 +1392,10 @@ def check_two_terminals_of_different_abilities(tmp):
         # Each terminal drew the image the way it can.
         assert b"\x1b_Ga=" in terminal.seen, "the kitty client drew no image"
         assert b"READY" in second.seen, "the second client never drew the pane"
-        assert UPPER_HALF.encode() in drawn or LOWER_HALF.encode() in drawn, (
-            "the plain client drew no half blocks"
-        )
+        assert UPPER_HALF.encode() in drawn or LOWER_HALF.encode() in drawn, "the plain client drew no half blocks"
 
         # And neither got what it cannot read.
-        assert b"\x1b_Ga=" not in drawn, (
-            "kitty graphics reached a terminal that never claimed them"
-        )
+        assert b"\x1b_Ga=" not in drawn, "kitty graphics reached a terminal that never claimed them"
         assert b"\x1bP0;" not in drawn, "sixel reached a terminal without it"
 
         # The pane keeps both flags. The client that cannot report a
@@ -1542,9 +1482,7 @@ def check_second_terminal(tmp):
 
             # And the server kept serving: the first terminal still has
             # its pane, and a command still reaches the socket.
-            listed = run_cli(
-                terminal.sock_path, ["list-panes", "-a", "-F", "#{pane_id}"]
-            )
+            listed = run_cli(terminal.sock_path, ["list-panes", "-a", "-F", "#{pane_id}"])
             assert listed.returncode == 0, listed.stderr
             assert len(listed.stdout.split()) == 1, listed.stdout
         else:
@@ -1630,8 +1568,7 @@ def check_full_screen_pane(tmp):
 
         if screen != wanted:
             raise AssertionError(
-                "the screen of the client is not the screen of the pane\n"
-                + _side_by_side(wanted, screen)
+                "the screen of the client is not the screen of the pane\n" + _side_by_side(wanted, screen)
             )
 
         print("full screen pane: ok")
@@ -1684,9 +1621,7 @@ def check_strip_follows_resize(tmp):
     # A window option cannot be set for a window that does not exist
     # yet, and a configuration file is read before the first one. `-g`
     # says what every new window starts with. Lillecarl/pymux#199.
-    config.write_text(
-        "set-option pane-border-status on\nset-window-option -g strip on\n"
-    )
+    config.write_text("set-option pane-border-status on\nset-window-option -g strip on\n")
 
     def every_column_at(wide, high):
         """
@@ -1709,9 +1644,7 @@ def check_strip_follows_resize(tmp):
 
     def sizes():
         "What the server says each pane is, as `widthxheight` strings."
-        listed = run_cli(
-            terminal.sock_path, ["list-panes", "-F", "#{pane_width}x#{pane_height}"]
-        )
+        listed = run_cli(terminal.sock_path, ["list-panes", "-F", "#{pane_width}x#{pane_height}"])
         assert listed.returncode == 0, listed.stderr
         return sorted(one.decode() for one in listed.stdout.split())
 
@@ -1814,10 +1747,7 @@ def check_quoted_argument(tmp):
                 found = row[start : row.index(">", start) + 1]
                 break
         if found != "ARGV<%s>" % wanted:
-            raise AssertionError(
-                "the pane got %r, and the argument was %r\n%s"
-                % (found, wanted, "\n".join(screen))
-            )
+            raise AssertionError("the pane got %r, and the argument was %r\n%s" % (found, wanted, "\n".join(screen)))
 
         print("quoted argument: ok")
     except Exception:
@@ -1918,9 +1848,7 @@ def check_cursor_of_drawing_pane(tmp):
         since = terminal.since(mark)
 
         toggles = len(re.findall(rb"\x1b\[\?25[lh]", since))
-        assert toggles == 0, (
-            "the client touched the cursor %d times while the pane drew" % toggles
-        )
+        assert toggles == 0, "the client touched the cursor %d times while the pane drew" % toggles
 
         # And it held each frame back instead.
         assert b"\x1b[?2026h" in since, "no frame was held back"
@@ -2048,27 +1976,26 @@ def check_command_palette(tmp):
         terminal.drain(2.0)
 
         screen = read_screen(terminal.seen)
-        rows_with_prompt = [
-            number for number, row in enumerate(screen) if ":new" in row
-        ]
+        rows_with_prompt = [number for number, row in enumerate(screen) if ":new" in row]
         assert rows_with_prompt, "the command line drew nothing\n%s" % "\n".join(screen)
 
         first = rows_with_prompt[0]
-        assert 5 <= first <= 18, (
-            "the command line landed on row %d, and the box is rows 5 to 18"
-            "\n%s" % (first, "\n".join(screen))
+        assert 5 <= first <= 18, "the command line landed on row %d, and the box is rows 5 to 18\n%s" % (
+            first,
+            "\n".join(screen),
         )
 
         # The title says what the box is, and it is above the input.
         titles = [number for number, row in enumerate(screen) if "Command" in row]
-        assert titles and titles[0] == first - 1, (
-            "the title of the box is on row %r and the input on %d\n%s"
-            % (titles, first, "\n".join(screen))
+        assert titles and titles[0] == first - 1, "the title of the box is on row %r and the input on %d\n%s" % (
+            titles,
+            first,
+            "\n".join(screen),
         )
 
         # And the box starts where the keys pop-up starts.
-        assert screen[first].index(":new") >= 3, (
-            "the box reaches further left than three columns\n%s" % "\n".join(screen)
+        assert screen[first].index(":new") >= 3, "the box reaches further left than three columns\n%s" % "\n".join(
+            screen
         )
 
         print("command palette: ok")
@@ -2112,26 +2039,19 @@ def check_detach_ends_client(tmp):
         try:
             code = terminal.client.wait(timeout=20)
         except subprocess.TimeoutExpired:
-            raise AssertionError(
-                "the client was still running 20 seconds after the detach"
-            )
+            raise AssertionError("the client was still running 20 seconds after the detach")
         assert code == 0, "the client left with %r" % (code,)
 
         errors = Path(terminal.stderr_path).read_bytes()
         assert b"Traceback" not in errors, (
-            "the detach wrote a traceback on the terminal:\n%s"
-            % errors.decode("utf-8", "replace")[-2000:]
+            "the detach wrote a traceback on the terminal:\n%s" % errors.decode("utf-8", "replace")[-2000:]
         )
 
         answers = run_cli(terminal.sock_path, ["has-session"])
         if ROUTE == "integrated":
-            assert answers.returncode != 0, (
-                "the session outlived the process that held it"
-            )
+            assert answers.returncode != 0, "the session outlived the process that held it"
         else:
-            assert answers.returncode == 0, "the detach took the session down: %r" % (
-                answers.stderr,
-            )
+            assert answers.returncode == 0, "the detach took the session down: %r" % (answers.stderr,)
 
         print("a detach ends the client: ok")
     except Exception:
@@ -2178,9 +2098,7 @@ def check_a_stopped_client_does_not_stop_the_server(tmp):
 
         child = tmp / "flood-child.py"
         child.write_text(FLOOD_CHILD)
-        made = run_cli(
-            terminal.sock_path, ["split-window", "%s %s" % (sys.executable, child)]
-        )
+        made = run_cli(terminal.sock_path, ["split-window", "%s %s" % (sys.executable, child)])
         assert made.returncode == 0, made.stderr
         terminal.wait_for(b"FLOOD")
 
@@ -2194,8 +2112,7 @@ def check_a_stopped_client_does_not_stop_the_server(tmp):
             answer = run_cli(terminal.sock_path, ["list-sessions"])
         except subprocess.TimeoutExpired:
             raise AssertionError(
-                "list-sessions did not answer in 20s: the server is "
-                "wedged on the client that stopped reading"
+                "list-sessions did not answer in 20s: the server is wedged on the client that stopped reading"
             )
         assert answer.returncode == 0, answer.stderr
 
@@ -2258,8 +2175,7 @@ def check_a_client_whose_stdin_ends_leaves(tmp):
             [
                 "sh",
                 "-c",
-                "exec %s -m pymux -S %s attach < /dev/null"
-                % (sys.executable, terminal.sock_path),
+                "exec %s -m pymux -S %s attach < /dev/null" % (sys.executable, terminal.sock_path),
             ],
             eof_stderr_path,
             env={
@@ -2273,9 +2189,7 @@ def check_a_client_whose_stdin_ends_leaves(tmp):
             assert code == 0, code
         except subprocess.TimeoutExpired:
             eof_client.kill()
-            raise AssertionError(
-                "the client whose stdin ended did not leave in 20s"
-            )
+            raise AssertionError("the client whose stdin ended did not leave in 20s")
 
         # Leaving is a detach and not a quit: the session it was
         # attached to is still there for the next client.
@@ -2428,12 +2342,8 @@ def check_detached_pane_has_a_width(tmp):
                 "Every row holding one character is this bug:\n%r" % (captured,)
             )
 
-        one_character_rows = [
-            row for row in captured.splitlines() if len(row.strip()) == 1
-        ]
-        assert len(one_character_rows) < 5, "the pane wrapped at one column: %r" % (
-            one_character_rows[:10],
-        )
+        one_character_rows = [row for row in captured.splitlines() if len(row.strip()) == 1]
+        assert len(one_character_rows) < 5, "the pane wrapped at one column: %r" % (one_character_rows[:10],)
     finally:
         run_cli(sock_path, ["kill-server"])
     print("detached pane has a width: ok")
@@ -2482,16 +2392,14 @@ def check_relative_socket_name_survives_the_daemon(tmp):
         seen = cli(["capture-pane", "-p"]).stdout.decode("utf-8", "replace")
         told = [row for row in seen.splitlines() if row.startswith("MARK=")]
         assert told, "the pane never answered: %r" % (seen,)
-        assert told[0].startswith("MARK=%s," % absolute), (
-            "a pane was given a socket path it cannot follow: %r" % (told[0],)
+        assert told[0].startswith("MARK=%s," % absolute), "a pane was given a socket path it cannot follow: %r" % (
+            told[0],
         )
 
         stopped = cli(["kill-server"])
         assert stopped.returncode == 0, stopped.stderr
         time.sleep(1.0)
-        assert not absolute.exists(), (
-            "the server left its socket file behind at %s" % absolute
-        )
+        assert not absolute.exists(), "the server left its socket file behind at %s" % absolute
     finally:
         cli(["kill-server"])
     print("relative socket name survives the daemon: ok")
@@ -2547,8 +2455,7 @@ def chosen_checks():
     unknown = [name for name in wanted if name not in by_name]
     if unknown:
         raise SystemExit(
-            "PYMUX_PTY_CHECKS names %s, and the checks are:\n  %s"
-            % (", ".join(unknown), "\n  ".join(by_name))
+            "PYMUX_PTY_CHECKS names %s, and the checks are:\n  %s" % (", ".join(unknown), "\n  ".join(by_name))
         )
     return [by_name[name] for name in wanted]
 

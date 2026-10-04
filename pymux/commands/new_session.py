@@ -50,9 +50,7 @@ def _size_with_no_client(pymux: Pymux, args: argparse.Namespace) -> Size:
 
     return Size(
         rows=_axis(args.rows, DEFAULT_SIZE.rows, watching.rows if watching else 0),
-        columns=_axis(
-            args.columns, DEFAULT_SIZE.columns, watching.columns if watching else 0
-        ),
+        columns=_axis(args.columns, DEFAULT_SIZE.columns, watching.columns if watching else 0),
     )
 
 
@@ -127,10 +125,22 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, new_session)
     parser.add_argument("-s", dest="session_name", metavar="<session-name>", help="The name of the session.")
     parser.add_argument("-n", dest="window_name", metavar="<window-name>", help="The name of the first window.")
-    parser.add_argument("-c", dest="start_directory", metavar="<start-directory>", help="The working directory of the first pane.")
+    parser.add_argument(
+        "-c", dest="start_directory", metavar="<start-directory>", help="The working directory of the first pane."
+    )
     parser.add_argument("-d", dest="d", action="store_true", help="Do not attach.")
-    parser.add_argument("-x", dest="columns", metavar="<columns>", help="How many columns a window is while nobody watches it. \"-\" is the size of the client that asks.")
-    parser.add_argument("-y", dest="rows", metavar="<rows>", help="How many rows a window is while nobody watches it. \"-\" is the size of the client that asks.")
+    parser.add_argument(
+        "-x",
+        dest="columns",
+        metavar="<columns>",
+        help='How many columns a window is while nobody watches it. "-" is the size of the client that asks.',
+    )
+    parser.add_argument(
+        "-y",
+        dest="rows",
+        metavar="<rows>",
+        help='How many rows a window is while nobody watches it. "-" is the size of the client that asks.',
+    )
     parser.add_argument("-P", dest="P", action="store_true", help="Print information about the session.")
     add_format_arguments(parser, "The format to print with -P.")
     parser.add_argument("command", metavar="<shell-command>", nargs="?", help="What the first pane runs.")

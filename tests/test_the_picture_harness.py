@@ -6,6 +6,7 @@ and three terminal emulators, so it is asked in `checks.pymux-pictures`
 and takes twenty minutes. These are the ones that need none of that,
 and the first of them is the one a burst got wrong.
 """
+
 from __future__ import annotations
 
 from pyterm_pytest.seats import (
@@ -39,9 +40,7 @@ def test_a_blink_fixture_holds_its_window_past_its_whole_burst():
     burst = BLINK_START + BLINK_FRAMES * (BLINK_GAP + A_SLOW_PICTURE)
 
     for name in BLINK_FIXTURES:
-        assert holds_for(blink_program(name)) >= burst, (
-            "%s holds its window for less than its burst takes" % (name,)
-        )
+        assert holds_for(blink_program(name)) >= burst, "%s holds its window for less than its burst takes" % (name,)
 
 
 def test_a_still_fixture_holds_its_window_past_all_three_waits():

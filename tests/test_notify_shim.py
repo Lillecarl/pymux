@@ -7,6 +7,7 @@ what it was given in the notification hub. It shadows the notifier
 of the desktop on purpose: inside a pane a notification belongs to
 the session first. Only a pane that starts afterwards sees it.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -140,9 +141,9 @@ def test_short_urgency_flag_picks_urgency(tmp_path, monkeypatch):
     pymux.notify_shim = True
     pymux._ensure_notify_shim()
 
-    assert run_script(
-        pymux, ["-u", "critical", "Fire", "Down"], tmp_path, monkeypatch
-    ) == ["notify -u critical -- Fire Down"]
+    assert run_script(pymux, ["-u", "critical", "Fire", "Down"], tmp_path, monkeypatch) == [
+        "notify -u critical -- Fire Down"
+    ]
 
 
 def test_long_urgency_flag_picks_urgency(tmp_path, monkeypatch):
@@ -150,9 +151,7 @@ def test_long_urgency_flag_picks_urgency(tmp_path, monkeypatch):
     pymux.notify_shim = True
     pymux._ensure_notify_shim()
 
-    assert run_script(
-        pymux, ["--urgency=low", "Note"], tmp_path, monkeypatch
-    ) == ["notify -u low -- Note"]
+    assert run_script(pymux, ["--urgency=low", "Note"], tmp_path, monkeypatch) == ["notify -u low -- Note"]
 
 
 def test_other_flags_are_eaten_not_summaries(tmp_path, monkeypatch):
@@ -173,6 +172,4 @@ def test_dashes_end_flags(tmp_path, monkeypatch):
     pymux.notify_shim = True
     pymux._ensure_notify_shim()
 
-    assert run_script(
-        pymux, ["--", "-not-a-flag"], tmp_path, monkeypatch
-    ) == ["notify -u normal -- -not-a-flag"]
+    assert run_script(pymux, ["--", "-not-a-flag"], tmp_path, monkeypatch) == ["notify -u normal -- -not-a-flag"]

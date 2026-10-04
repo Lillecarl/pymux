@@ -7,6 +7,7 @@ because three things have to agree or the rows drift: the padding
 between stacked panes, the row kept under the whole layout, and the
 float that draws the bar. Lillecarl/pymux#211.
 """
+
 from __future__ import annotations
 
 from test_strip_draws import CHROME, ROWS, create_client

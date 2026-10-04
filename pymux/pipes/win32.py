@@ -1,6 +1,7 @@
 """
 Common Win32 pipe operations.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -102,9 +103,7 @@ async def read_message_bytes_from_pipe(pipe_handle):
         buff = create_string_buffer(BUFSIZE + 1)
         c_read = DWORD()
 
-        success = windll.kernel32.ReadFile(
-            pipe_handle, buff, DWORD(BUFSIZE), byref(c_read), byref(overlapped)
-        )
+        success = windll.kernel32.ReadFile(pipe_handle, buff, DWORD(BUFSIZE), byref(c_read), byref(overlapped))
 
         if success:
             buff[c_read.value] = b"\0"
@@ -115,9 +114,7 @@ async def read_message_bytes_from_pipe(pipe_handle):
         if error_code == ERROR_IO_PENDING:
             await wait_for_event(overlapped.hEvent)
 
-            success = windll.kernel32.GetOverlappedResult(
-                pipe_handle, byref(overlapped), byref(c_read), BOOL(False)
-            )
+            success = windll.kernel32.GetOverlappedResult(pipe_handle, byref(overlapped), byref(c_read), BOOL(False))
 
             if success:
                 buff[c_read.value] = b"\0"
@@ -132,9 +129,7 @@ async def read_message_bytes_from_pipe(pipe_handle):
                     more_data = await read_message_bytes_from_pipe(pipe_handle)
                     return buff.value + more_data
                 else:
-                    raise Exception(
-                        "reading overlapped IO failed. error_code=%r" % error_code
-                    )
+                    raise Exception("reading overlapped IO failed. error_code=%r" % error_code)
 
         elif error_code == ERROR_BROKEN_PIPE:
             raise BrokenPipeError
@@ -176,18 +171,14 @@ async def write_message_bytes_to_pipe(pipe_handle, data):
         if error_code == ERROR_IO_PENDING:
             await wait_for_event(overlapped.hEvent)
 
-            success = windll.kernel32.GetOverlappedResult(
-                pipe_handle, byref(overlapped), byref(c_written), BOOL(False)
-            )
+            success = windll.kernel32.GetOverlappedResult(pipe_handle, byref(overlapped), byref(c_written), BOOL(False))
 
             if not success:
                 error_code = windll.kernel32.GetLastError()
                 if error_code == ERROR_BROKEN_PIPE:
                     raise BrokenPipeError
                 else:
-                    raise Exception(
-                        "Writing overlapped IO failed. error_code=%r" % error_code
-                    )
+                    raise Exception("Writing overlapped IO failed. error_code=%r" % error_code)
 
         elif error_code == ERROR_BROKEN_PIPE:
             raise BrokenPipeError

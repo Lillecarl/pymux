@@ -66,6 +66,7 @@ named phases, comma separated:
       PYMUX_PROFILE_PHASES=sparse,output PYMUX_PROFILE_FRAMES=200 \
       nix build --file . checks.pymux-profile.run
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -152,9 +153,7 @@ def create_server(panes: int):
     asyncio.set_event_loop(loop)
 
     pymux = Pymux()
-    output = Vt100_Output(
-        stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS)
-    )
+    output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS))
     pipe = create_pipe_input()
     state = pymux.add_client(
         output=output,
@@ -174,9 +173,7 @@ def create_server(panes: int):
         pymux.handle_command("new-window '%s'" % QUIET)
 
         for number in range(1, panes):
-            pymux.handle_command(
-                "split-window %s '%s'" % ("-h" if number % 2 else "-v", QUIET)
-            )
+            pymux.handle_command("split-window %s '%s'" % ("-h" if number % 2 else "-v", QUIET))
 
     return pymux, state, pipe, loop
 
@@ -285,9 +282,7 @@ def output(pymux, state, frames: int):
 
     def work() -> None:
         for number in range(frames):
-            pane.terminal.terminal_control.stream.feed(
-                "a line of output, number %d\r\n" % number
-            )
+            pane.terminal.terminal_control.stream.feed("a line of output, number %d\r\n" % number)
             draw()
 
     return work
@@ -509,10 +504,7 @@ def main() -> int:
     phases = [(n, f) for n, f in PHASES if not chosen or n in chosen.split(",")]
     unknown = {n for n in chosen.split(",") if n} - set(names)
     if unknown:
-        raise SystemExit(
-            "no such phase: %s (have %s)"
-            % (", ".join(sorted(unknown)), ", ".join(names))
-        )
+        raise SystemExit("no such phase: %s (have %s)" % (", ".join(sorted(unknown)), ", ".join(names)))
 
     print(
         "%dx%d, %d panes, %d frames per phase, sampling every %.1f ms.\n"
@@ -541,10 +533,7 @@ def main() -> int:
                 profiler.stop()
 
             print("=" * 70)
-            print(
-                "%s: %d frames in %.3fs, %.2f ms each"
-                % (name, frames, took, 1000 * took / frames)
-            )
+            print("%s: %d frames in %.3fs, %.2f ms each" % (name, frames, took, 1000 * took / frames))
             print("=" * 70)
             # PYMUX_PROFILE_SHOW_ALL names the frames the default view
             # hides, which is where a hot path hides when it is made of

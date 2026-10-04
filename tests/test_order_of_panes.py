@@ -13,6 +13,7 @@ on the screen. A strip meets that at once, because `Window.strip`
 wraps the window it turns into a row: the first column is a nested
 split, so its panes came last. Lillecarl/pymux#210.
 """
+
 from __future__ import annotations
 
 from pymux.arrangement import HSplit, Pane, VSplit, Window

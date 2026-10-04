@@ -7,8 +7,6 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-
-
 def lock(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Cover the screen with the program `lock-command` names, and give

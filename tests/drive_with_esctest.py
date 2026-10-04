@@ -47,6 +47,7 @@ check does nothing when it is not set. `PYMUX_ESCTEST_INCLUDE` is the
 regular expression of test names to run. `PYMUX_ESCTEST_OUT` names the
 directory to write the list and the log into.
 """
+
 from __future__ import annotations
 
 import os
@@ -105,8 +106,7 @@ FINISHED = b"ESCTEST-FINISHED"
 NOT_OURS = (
     (
         r"^XtermWinopsTests\.test_XtermWinops_(IconifyDeiconfiy|MoveToXY)",
-        "a pane has no window to move, to iconify, or to report the "
-        "position of. DEVIATIONS.md entry 15.",
+        "a pane has no window to move, to iconify, or to report the position of. DEVIATIONS.md entry 15.",
     ),
 )
 
@@ -210,24 +210,25 @@ def keep(directory: Path, failed, log: str) -> None:
     do not say what a pane did wrong.
     """
     directory.mkdir(parents=True, exist_ok=True)
-    header = "\n".join(
-        [
-            "# The esctest2 tests that failed in this run. Every name here is a",
-            "# real difference between a pymux pane and xterm.",
-            "#",
-            "# ptterm/tests/esctest-failures.txt is the same list for ptterm on a",
-            "# pty of its own. A name here and not there is what the pane adds.",
-            "#",
-        ]
-        + how_to_record(
-            "pymux-esctest",
-            "failures.txt",
-            "pymux/tests/esctest-failures.txt",
+    header = (
+        "\n".join(
+            [
+                "# The esctest2 tests that failed in this run. Every name here is a",
+                "# real difference between a pymux pane and xterm.",
+                "#",
+                "# ptterm/tests/esctest-failures.txt is the same list for ptterm on a",
+                "# pty of its own. A name here and not there is what the pane adds.",
+                "#",
+            ]
+            + how_to_record(
+                "pymux-esctest",
+                "failures.txt",
+                "pymux/tests/esctest-failures.txt",
+            )
         )
-    ) + "\n"
-    (directory / "failures.txt").write_text(
-        header + "".join(name + "\n" for name in sorted(failed))
+        + "\n"
     )
+    (directory / "failures.txt").write_text(header + "".join(name + "\n" for name in sorted(failed)))
     (directory / "esctest.log").write_text(log)
 
 
@@ -282,9 +283,7 @@ def run(tmp: Path, directory: Path) -> str:
 
         # The pane has to be the size the suite asks for, or every test
         # that counts columns means nothing.
-        listed = run_cli(
-            terminal.sock_path, ["list-panes", "-F", "#{pane_height}x#{pane_width}"]
-        )
+        listed = run_cli(terminal.sock_path, ["list-panes", "-F", "#{pane_height}x#{pane_width}"])
         assert listed.returncode == 0, listed.stderr
         size = listed.stdout.decode().strip()
         if size != "25x80":
@@ -325,16 +324,12 @@ def report(log: str, include: str) -> int:
     chosen = {name for name in known if re.search(include, name)}
     out = left_out(log)
 
-    print(
-        "esctest: %d tests ran, %d failed, %d left out"
-        % (len(ran), len(failed), len(out))
-    )
+    print("esctest: %d tests ran, %d failed, %d left out" % (len(ran), len(failed), len(out)))
     for pattern, reason in NOT_OURS:
         print(
             "esctest: left out %s, because %s"
             % (
-                ", ".join(sorted(name for name in out if re.search(pattern, name)))
-                or "nothing",
+                ", ".join(sorted(name for name in out if re.search(pattern, name))) or "nothing",
                 reason,
             )
         )
@@ -352,11 +347,7 @@ def report(log: str, include: str) -> int:
     # chooses too few tests to say either, so it says neither.
     stale = []
     if include == ".*":
-        stale = [
-            pattern
-            for pattern, _ in NOT_OURS
-            if not any(re.search(pattern, name) for name in out)
-        ]
+        stale = [pattern for pattern, _ in NOT_OURS if not any(re.search(pattern, name) for name in out)]
     both = sorted(out & known)
 
     for name in new:
@@ -371,10 +362,7 @@ def report(log: str, include: str) -> int:
         print("esctest: left out, and named in the list as well: " + name)
 
     if stale or both:
-        print(
-            "\nesctest: NOT_OURS in %s no longer describes the suite."
-            % Path(__file__).name
-        )
+        print("\nesctest: NOT_OURS in %s no longer describes the suite." % Path(__file__).name)
         return 1
 
     if new or fixed or missing:
@@ -382,8 +370,7 @@ def report(log: str, include: str) -> int:
             "\nesctest: %s no longer describes the run. Write it again with:\n"
             "    nix build --file . checks.pymux-esctest.run\n"
             "    cp result/failures.txt pymux/tests/%s\n"
-            "and read result/esctest.log for what each one did."
-            % (BASELINE.name, BASELINE.name)
+            "and read result/esctest.log for what each one did." % (BASELINE.name, BASELINE.name)
         )
         return 1
 

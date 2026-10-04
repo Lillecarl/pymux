@@ -10,6 +10,7 @@ trip per pane per tick while nothing happens.
 So the caller hands over the revision it last saw and this holds until
 the pane leaves it. Lillecarl/pymux#387.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -129,5 +130,15 @@ def _seconds(given: str | None) -> float:
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, wait_pane_change)
     parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to watch.")
-    parser.add_argument("--since", dest="since", metavar="<revision>", help="The revision last seen. Answers at once when the pane has left it.")
-    parser.add_argument("--timeout", dest="timeout", metavar="<seconds>", help="Give up after this long and answer the revision the pane holds. %g by default." % (DEFAULT_TIMEOUT,))
+    parser.add_argument(
+        "--since",
+        dest="since",
+        metavar="<revision>",
+        help="The revision last seen. Answers at once when the pane has left it.",
+    )
+    parser.add_argument(
+        "--timeout",
+        dest="timeout",
+        metavar="<seconds>",
+        help="Give up after this long and answer the revision the pane holds. %g by default." % (DEFAULT_TIMEOUT,),
+    )

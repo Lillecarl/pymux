@@ -18,6 +18,7 @@ a real sshd, is the check that would say the rest.
 
 The tests are coroutines, which anyio's pytest plugin runs.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -194,9 +195,7 @@ async def create_ssh_server(
             # so a fault cannot reach anything else on the machine.
             return dest_path == socket_path
 
-        def connection_requested(
-            self, dest_host: str, dest_port: int, orig_host: str, orig_port: int
-        ):
+        def connection_requested(self, dest_host: str, dest_port: int, orig_host: str, orig_port: int):
             # What `-L` asks of sshd: open this destination and join the
             # two ends. Loopback only, so a fault reaches nothing off
             # this machine.
@@ -259,9 +258,7 @@ async def live_servers(socket_path: str, **server_options):
         pymux.create_window(PANE_COMMAND)
         await asyncio.sleep(0.5)
 
-        server, port, client_key = await create_ssh_server(
-            where, socket_path, **server_options
-        )
+        server, port, client_key = await create_ssh_server(where, socket_path, **server_options)
         try:
             yield pymux, port, client_key
         finally:
@@ -294,9 +291,7 @@ async def test_command_reaches_server_over_ssh():
         said = []
         # A command whose answer is certainly not empty, so that an
         # empty one means the channel carried nothing.
-        exit_code = await _what_it_says(
-            client, "list-sessions -F '#{session_name}'", said
-        )
+        exit_code = await _what_it_says(client, "list-sessions -F '#{session_name}'", said)
 
     assert exit_code == 0
     assert "".join(said).strip() == pymux.session_name, said
@@ -341,9 +336,7 @@ async def test_a_server_in_its_room_is_found():
         assert client.target.path is None, "the address named no path"
 
         said = []
-        exit_code = await _what_it_says(
-            client, "list-sessions -F '#{session_name}'", said
-        )
+        exit_code = await _what_it_says(client, "list-sessions -F '#{session_name}'", said)
 
     assert client.path == socket_path, client.path
     assert exit_code == 0
@@ -384,9 +377,7 @@ async def test_the_flat_guess_when_find_cannot_run(monkeypatch):
         assert client.target.path is None, "the address named no path"
 
         said = []
-        exit_code = await _what_it_says(
-            client, "list-sessions -F '#{session_name}'", said
-        )
+        exit_code = await _what_it_says(client, "list-sessions -F '#{session_name}'", said)
 
     assert client.path == socket_path, client.path
     assert exit_code == 0

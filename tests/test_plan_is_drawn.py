@@ -15,6 +15,7 @@ them. `test_strip.py` judges the older container the same way.
 Each pane is filled with a letter of its own, so a row of the screen
 says which part of the plane is on it.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.application import Application
@@ -180,9 +181,7 @@ def test_view_moves_down_as_well_as_sideways():
     plan = Plan({GROUND: {Slot(pane): Rect(x=0, y=2, width=4, height=4)}})
 
     on_plane = drawn(plan, {pane: container}, visible=4, rows=4, row=2)
-    moved = drawn(
-        plan, {pane: container}, visible=4, rows=4, offset=Point(x=0, y=2), row=0
-    )
+    moved = drawn(plan, {pane: container}, visible=4, rows=4, offset=Point(x=0, y=2), row=0)
 
     assert on_plane == "aaaa"
     assert moved == "aaaa"

@@ -10,6 +10,7 @@ colours in and that theme has to come back: a scheme is exactly zero
 away from itself, and anything else scoring lower means the distance
 is wrong.
 """
+
 from __future__ import annotations
 
 import pytest

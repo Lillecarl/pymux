@@ -79,6 +79,7 @@ loaded machine misses the poll, which is a property of the machine.
     PYMUX_TURNS_SAMPLES=1000 nix build --file . checks.pymux-turns.run
     PYMUX_TURNS_TRACE=3    # three traces of each distinct count
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -323,9 +324,7 @@ async def measure(loop, samples: int) -> tuple:
 
             for number in range(samples):
                 marker = MARKERS[number % len(MARKERS)]
-                turns, ran = await create_keystroke(
-                    loop, session, state, coming_back, marker
-                )
+                turns, ran = await create_keystroke(loop, session, state, coming_back, marker)
                 counted.append(turns)
                 if len(traced.setdefault(turns, [])) < TRACE:
                     traced[turns].append(ran)
@@ -340,10 +339,7 @@ def report(counted: list, traced: list) -> int:
 
     print("\n--- turns of the event loop, per keystroke ---")
     for turns, times in sorted(seen.items()):
-        print(
-            "%3d turns %8d keystrokes  %5.1f%%"
-            % (turns, times, times * 100.0 / len(counted))
-        )
+        print("%3d turns %8d keystrokes  %5.1f%%" % (turns, times, times * 100.0 / len(counted)))
 
     print(
         "\nmedian %d, mean %.2f, %d to %d over %d keystrokes."

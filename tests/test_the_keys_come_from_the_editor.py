@@ -8,6 +8,7 @@ person used, so the vi keys of copy mode reached nothing: `v`, `y` and
 pressing them read that as copy mode being unable to copy.
 Lillecarl/pymux#375.
 """
+
 from __future__ import annotations
 
 import pytest

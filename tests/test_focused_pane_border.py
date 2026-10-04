@@ -13,6 +13,7 @@ stray mark on the window's chrome. So the foot is drawn only where the
 pane has a bar below it, and the sides and top corners are drawn
 always.
 """
+
 from __future__ import annotations
 
 import io
@@ -37,9 +38,7 @@ COLUMNS = 40
 @contextmanager
 def create_client(commands=(), rows=ROWS, columns=COLUMNS):
     pymux = Pymux()
-    output = Vt100_Output(
-        stdout=io.StringIO(), get_size=lambda: Size(rows=rows, columns=columns)
-    )
+    output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=rows, columns=columns))
     with create_pipe_input() as pipe:
         state = pymux.add_client(
             output=output,
@@ -80,10 +79,7 @@ def _char(screen, x, y) -> str:
 
 
 def _frame(screen) -> str:
-    return "\n".join(
-        "".join(screen.data_buffer[y][x].char for x in range(COLUMNS))
-        for y in range(ROWS)
-    )
+    return "\n".join("".join(screen.data_buffer[y][x].char for x in range(COLUMNS)) for y in range(ROWS))
 
 
 def test_the_mark_closes_at_the_foot_of_a_stacked_pane():
@@ -93,9 +89,11 @@ def test_the_mark_closes_at_the_foot_of_a_stacked_pane():
     and the two lower ones close the rectangle. They are the mark a
     stack's bottom pane was missing. Lillecarl/pymux#401.
     """
-    with create_client(
-        ["split-window -h", "split-window -h", "select-pane -L", "split-window"]
-    ) as (pymux, state, draw):
+    with create_client(["split-window -h", "split-window -h", "select-pane -L", "split-window"]) as (
+        pymux,
+        state,
+        draw,
+    ):
         state.sync_focus()
         screen = draw()
 

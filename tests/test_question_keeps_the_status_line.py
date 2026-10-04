@@ -15,6 +15,7 @@ list is the context for.
 
 Lillecarl/pymux#339.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.data_structures import Size
@@ -56,10 +57,7 @@ async def test_it_sits_where_a_message_sits():
     async with in_this_process() as session:
         state, _ = await session.attach("only", SIZE)
 
-        assert (
-            the_confirmation_float(state).bottom
-            == the_message_float(state).bottom
-        )
+        assert the_confirmation_float(state).bottom == the_message_float(state).bottom
 
 
 async def test_a_question_draws_over_a_message():

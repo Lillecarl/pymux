@@ -10,6 +10,7 @@ draws on the slave and the test reads the master, which is how the
 notice is judged: the bytes a person would see. `test_ssh_client.py`
 says why an asyncssh server stands in for sshd.
 """
+
 from __future__ import annotations
 
 import array
@@ -173,9 +174,7 @@ def test_the_notice_says_both_keys():
 def test_the_notice_says_what_the_internet_answered():
     "A lost link and a lost server look alike, so the probe is a line."
     assert "9.9.9.9 answers" in "\n".join(notice("dynhetz", "", 4.0, internet=True))
-    assert "9.9.9.9 does not answer" in "\n".join(
-        notice("dynhetz", "", 4.0, internet=False)
-    )
+    assert "9.9.9.9 does not answer" in "\n".join(notice("dynhetz", "", 4.0, internet=False))
 
 
 def test_the_notice_says_nothing_until_the_probe_answers():
@@ -313,9 +312,7 @@ async def test_a_clock_that_keeps_up_never_ends_the_link(monkeypatch):
     monkeypatch.setattr(ssh_client, "SUSPEND_POLL", 0.01)
 
     client = a_client()
-    client._clocks = moving_clocks(
-        [(100.0, 100.0), (101.0, 101.0), (102.0, 102.0), (103.0, 103.0)]
-    )
+    client._clocks = moving_clocks([(100.0, 100.0), (101.0, 101.0), (102.0, 102.0), (103.0, 103.0)])
     link = Link()
 
     await _watched(client, link, seconds=0.2)
@@ -543,18 +540,12 @@ async def test_a_dropped_link_shows_a_notice_and_comes_back(monkeypatch):
         # The alternate screen, which only the server asks for. The
         # client writes its own detection queries before that, so
         # "anything at all" would not say a frame arrived.
-        await it.until(
-            lambda: ALTERNATE_SCREEN in it.terminal.said, "the first frame"
-        )
+        await it.until(lambda: ALTERNATE_SCREEN in it.terminal.said, "the first frame")
 
         it.drop_the_link()
 
-        await it.until(
-            lambda: not it.pymux.connections, "the server to let the old client go"
-        )
-        await it.until(
-            lambda: "lost the server" in it.terminal.said, "the disconnected screen"
-        )
+        await it.until(lambda: not it.pymux.connections, "the server to let the old client go")
+        await it.until(lambda: "lost the server" in it.terminal.said, "the disconnected screen")
         assert "any key to try now" in it.terminal.said
 
         # A person who knows the link is back does not wait for the
@@ -585,9 +576,7 @@ async def test_a_machine_that_slept_comes_back_without_waiting(monkeypatch):
     """
     async with attached(monkeypatch) as it:
         await it.until(lambda: len(it.pymux.connections) == 1, "the first attach")
-        await it.until(
-            lambda: ALTERNATE_SCREEN in it.terminal.said, "the first frame"
-        )
+        await it.until(lambda: ALTERNATE_SCREEN in it.terminal.said, "the first frame")
 
         # An hour of sleep, from inside the process. Every later read
         # keeps the same offset, which is a machine that woke up and
@@ -595,12 +584,8 @@ async def test_a_machine_that_slept_comes_back_without_waiting(monkeypatch):
         real = it.client._clocks
         it.client._clocks = lambda: (real()[0] + 3600.0, real()[1])
 
-        await it.until(
-            lambda: not it.pymux.connections, "the server to let the old client go"
-        )
-        await it.until(
-            lambda: "lost the server" in it.terminal.said, "the disconnected screen"
-        )
+        await it.until(lambda: not it.pymux.connections, "the server to let the old client go")
+        await it.until(lambda: "lost the server" in it.terminal.said, "the disconnected screen")
 
         it.terminal.type("\r")
         await it.until(lambda: len(it.pymux.connections) == 1, "the second attach")
@@ -615,9 +600,7 @@ async def test_q_leaves_the_disconnected_screen(monkeypatch):
     async with attached(monkeypatch) as it:
         await it.until(lambda: len(it.pymux.connections) == 1, "the attach")
         it.drop_the_link()
-        await it.until(
-            lambda: "lost the server" in it.terminal.said, "the disconnected screen"
-        )
+        await it.until(lambda: "lost the server" in it.terminal.said, "the disconnected screen")
 
         it.terminal.type("q")
         await asyncio.wait_for(it.attach, 10)
@@ -640,9 +623,7 @@ async def test_the_screen_says_it_is_trying_while_the_attempt_runs(monkeypatch):
         it.client._connect = hangs
         it.drop_the_link()
 
-        await it.until(
-            lambda: "Trying to reach" in it.terminal.said, "the trying screen"
-        )
+        await it.until(lambda: "Trying to reach" in it.terminal.said, "the trying screen")
 
         it.terminal.type("q")
         await asyncio.wait_for(it.attach, 10)
@@ -655,9 +636,7 @@ async def test_a_server_that_closes_the_connection_is_not_retried(monkeypatch):
     """
     async with attached(monkeypatch) as it:
         await it.until(lambda: len(it.pymux.connections) == 1, "the attach")
-        await it.until(
-            lambda: ALTERNATE_SCREEN in it.terminal.said, "the first frame"
-        )
+        await it.until(lambda: ALTERNATE_SCREEN in it.terminal.said, "the first frame")
 
         for connection in list(it.pymux.connections):
             connection.detach_and_close()
@@ -696,18 +675,14 @@ async def test_only_the_first_attach_detaches_the_other_clients(monkeypatch):
 
     async def _attached(self, connection, reader, stdin_fd, detach_others, color_depth):
         asked.append(detach_others)
-        return await original(
-            self, connection, reader, stdin_fd, detach_others, color_depth
-        )
+        return await original(self, connection, reader, stdin_fd, detach_others, color_depth)
 
     monkeypatch.setattr(SshClient, "_attached", _attached)
 
     async with attached(monkeypatch, detach_other_clients=True) as it:
         await it.until(lambda: len(it.pymux.connections) == 1, "the first attach")
         it.drop_the_link()
-        await it.until(
-            lambda: "lost the server" in it.terminal.said, "the disconnected screen"
-        )
+        await it.until(lambda: "lost the server" in it.terminal.said, "the disconnected screen")
 
         it.terminal.type("\r")
         await it.until(lambda: len(asked) == 2, "the second attach")

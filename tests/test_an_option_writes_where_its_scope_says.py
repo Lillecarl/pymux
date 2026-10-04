@@ -14,6 +14,7 @@ Lillecarl/pymux#348.
 This judges the classes and not the table. Which options exist is
 `options.py`; what a class does with a scope is here.
 """
+
 from __future__ import annotations
 
 from types import SimpleNamespace

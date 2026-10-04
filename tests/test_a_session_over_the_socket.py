@@ -7,6 +7,7 @@ A socketpair and not a listener: the server end is the same
 `PosixSocketConnection` an accepted socket becomes, so the bytes are the
 socket route's and no path on disk is needed.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -84,17 +85,13 @@ async def test_a_session_travels_over_the_socket(pymux):
 
     async with pymux.running():
         context = contextvars.copy_context()
-        connection = context.run(
-            lambda: ServerConnection(pymux, PosixSocketConnection(theirs))
-        )
+        connection = context.run(lambda: ServerConnection(pymux, PosixSocketConnection(theirs)))
         pymux.connections.append(connection)
 
         reader, writer = await asyncio.open_unix_connection(sock=ours)
 
         async with anyio.create_task_group() as tasks:
-            tasks.start_soon(
-                run_session, reader, writer, viewer.take, viewer.messages(), 12, 60
-            )
+            tasks.start_soon(run_session, reader, writer, viewer.take, viewer.messages(), 12, 60)
 
             await until(
                 lambda: "$" in viewer.text(),

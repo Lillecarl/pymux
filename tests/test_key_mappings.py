@@ -6,6 +6,7 @@ of a configuration file. Nothing tested it until Lillecarl/pymux#204,
 which is how "M-J" came to be unbindable: the table names "M-a" to
 "M-z" one at a time and no uppercase form, and tmux binds "M-J".
 """
+
 from __future__ import annotations
 
 import pytest

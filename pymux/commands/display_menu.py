@@ -32,9 +32,7 @@ def display_menu(pymux: Pymux, args: argparse.Namespace) -> None:
         rest = rest[3:]
 
     if rest:
-        raise CommandException(
-            "A menu entry is a name, a key and a command; %r is not." % " ".join(rest)
-        )
+        raise CommandException("A menu entry is a name, a key and a command; %r is not." % " ".join(rest))
 
     try:
         state = pymux.get_client_state()
@@ -47,6 +45,21 @@ def display_menu(pymux: Pymux, args: argparse.Namespace) -> None:
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, display_menu)
     parser.add_argument("-T", dest="T", metavar="<title>", help="The name on the title bar.")
-    parser.add_argument("-x", dest="x", metavar="<position>", help="Accepted for tmux and changes nothing: the box draws where the other boxes draw.")
-    parser.add_argument("-y", dest="y", metavar="<position>", help="Accepted for tmux and changes nothing: the box draws where the other boxes draw.")
-    parser.add_argument("entries", nargs=argparse.REMAINDER, metavar="<name> <key> <command>", help="One entry is a name, a key and a command; the rest of the line is entries.")
+    parser.add_argument(
+        "-x",
+        dest="x",
+        metavar="<position>",
+        help="Accepted for tmux and changes nothing: the box draws where the other boxes draw.",
+    )
+    parser.add_argument(
+        "-y",
+        dest="y",
+        metavar="<position>",
+        help="Accepted for tmux and changes nothing: the box draws where the other boxes draw.",
+    )
+    parser.add_argument(
+        "entries",
+        nargs=argparse.REMAINDER,
+        metavar="<name> <key> <command>",
+        help="One entry is a name, a key and a command; the rest of the line is entries.",
+    )

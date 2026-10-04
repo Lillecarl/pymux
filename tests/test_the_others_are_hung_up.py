@@ -10,6 +10,7 @@ signal is the whole of what `-x` adds. Lillecarl/pymux#347.
 The rule about *which* clients is Lillecarl/pymux#345's and is judged
 in `test_attach_detaches_the_others.py`. This file judges the message.
 """
+
 from __future__ import annotations
 
 import contextvars
@@ -230,9 +231,7 @@ async def test_detach_client_takes_the_same_flag():
             pymux.attach_client_to(sitting.client_state, here)
 
             with set_app(asking.client_state.app):
-                pymux.handle_command(
-                    "detach-client -P -t %s" % (sitting.client_state.connection.name,)
-                )
+                pymux.handle_command("detach-client -P -t %s" % (sitting.client_state.connection.name,))
 
             await _until(lambda: heard.exits, "the exit packet")
             assert heard.exits[-1]["hang-up"] is True
@@ -249,9 +248,7 @@ async def test_detach_client_without_it_says_nothing():
             pymux.attach_client_to(sitting.client_state, here)
 
             with set_app(asking.client_state.app):
-                pymux.handle_command(
-                    "detach-client -t %s" % (sitting.client_state.connection.name,)
-                )
+                pymux.handle_command("detach-client -t %s" % (sitting.client_state.connection.name,))
 
             await _until(lambda: sitting._closed, "the other client to go")
             assert heard.exits == []

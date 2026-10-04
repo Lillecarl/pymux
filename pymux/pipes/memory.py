@@ -12,6 +12,7 @@ to a socket reaches whatever server holds that socket, which can be an
 older build; a client that reads a queue reaches the server in its own
 process, and nothing else.
 """
+
 from __future__ import annotations
 
 import anyio
@@ -41,9 +42,7 @@ class MemoryConnection(PipeConnection):
     """
 
     def __init__(self) -> None:
-        self._send, self._incoming = anyio.create_memory_object_stream(
-            max_buffer_size=float("inf")
-        )
+        self._send, self._incoming = anyio.create_memory_object_stream(max_buffer_size=float("inf"))
         self._peer: MemoryConnection | None = None
         self._closed = False
 
@@ -61,7 +60,7 @@ class MemoryConnection(PipeConnection):
 
         try:
             return await self._incoming.receive()
-        except (anyio.EndOfStream, anyio.ClosedResourceError):
+        except anyio.EndOfStream, anyio.ClosedResourceError:
             self._closed = True
             raise BrokenPipeError
 
@@ -81,7 +80,7 @@ class MemoryConnection(PipeConnection):
 
         try:
             self._peer._send.send_nowait(message.encode("utf-8"))
-        except (anyio.BrokenResourceError, anyio.ClosedResourceError):
+        except anyio.BrokenResourceError, anyio.ClosedResourceError:
             raise BrokenPipeError
 
     @override

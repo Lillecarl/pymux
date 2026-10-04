@@ -10,6 +10,7 @@ So a person who started a second server and attached could land on
 either one. They usually landed on the old one, and every change in the
 new server looked like it had done nothing.
 """
+
 from __future__ import annotations
 
 import os
@@ -19,9 +20,7 @@ import time
 import pytest
 from libpymux.sockets import servers_newest_first
 
-pytestmark = pytest.mark.skipif(
-    os.name == "nt", reason="the posix client needs a unix socket"
-)
+pytestmark = pytest.mark.skipif(os.name == "nt", reason="the posix client needs a unix socket")
 
 
 @pytest.fixture
@@ -166,9 +165,7 @@ def test_the_library_answers_the_same_list(sockets, a_dead_socket):
     a_dead_socket("pymux.sock.someone.0")
     sockets(["pymux.sock.someone.1"])
 
-    assert [os.path.basename(one) for one in socket_paths()] == [
-        "pymux.sock.someone.1"
-    ]
+    assert [os.path.basename(one) for one in socket_paths()] == ["pymux.sock.someone.1"]
 
 
 def test_the_two_orders_are_two_orders_of_one_set(sockets):
@@ -195,9 +192,7 @@ def test_the_two_orders_are_two_orders_of_one_set(sockets):
 # Taking a name back.
 
 
-def test_a_new_server_takes_the_dead_name_rather_than_the_next(
-    sockets, a_dead_socket, tmp_path
-):
+def test_a_new_server_takes_the_dead_name_rather_than_the_next(sockets, a_dead_socket, tmp_path):
     """
     The numbers only ever went up, so a person read a bigger one in
     `PYMUX` after every crash, and a hundred of them stopped a server

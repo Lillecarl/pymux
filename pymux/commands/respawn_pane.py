@@ -47,9 +47,7 @@ def replace_pane_program(pymux: Pymux, pane: Pane, args: argparse.Namespace) -> 
     # The pane stays where it was: a respawn restarts the program in
     # the directory it reported, and a pane that never reported starts
     # the way a new one does.
-    new_pane = pymux._create_pane(
-        command=args.command or None, start_directory=pane.current_directory
-    )
+    new_pane = pymux._create_pane(command=args.command or None, start_directory=pane.current_directory)
     pymux.arrangement.replace_pane(pane, new_pane)
     pymux.invalidate(Woke.PANE_WAS_RESPAWNED)
 
@@ -58,4 +56,6 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, respawn_pane)
     parser.add_argument("-k", dest="k", action="store_true", help="Kill a program that still runs.")
     parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to respawn.")
-    parser.add_argument("command", nargs="?", metavar="<command>", help="The program to run, instead of the default shell.")
+    parser.add_argument(
+        "command", nargs="?", metavar="<command>", help="The program to run, instead of the default shell."
+    )

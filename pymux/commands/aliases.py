@@ -2,6 +2,7 @@
 Aliases for all commands.
 (On purpose kept compatible with tmux.)
 """
+
 from __future__ import annotations
 
 __all__ = ["ALIASES"]

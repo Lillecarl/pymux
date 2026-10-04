@@ -73,7 +73,9 @@ class Option(ABC):
     #: not set. Lillecarl/pymux#298.
     attribute_name: str | None = None
 
-    def held_by(self, pymux: Pymux, target: ClientState | None = None) -> Arrangement | ClientState | Pymux | Window | None:
+    def held_by(
+        self, pymux: Pymux, target: ClientState | None = None
+    ) -> Arrangement | ClientState | Pymux | Window | None:
         """
         The object this option is written on and read from.
 
@@ -158,9 +160,7 @@ class Option(ABC):
         has anything to say: a session option is already one value for
         the whole session. Lillecarl/pymux#199.
         """
-        raise SetOptionError(
-            "This option belongs to the session, so it is already global."
-        )
+        raise SetOptionError("This option belongs to the session, so it is already global.")
 
 
 class SetOptionError(Exception):
@@ -210,7 +210,9 @@ class StringOption(Option):
     String option, written on whatever the scope says holds it.
     """
 
-    def __init__(self, attribute_name: str, possible_values: Iterable[str] | None=None, scope: Scope = Scope.SESSION) -> None:
+    def __init__(
+        self, attribute_name: str, possible_values: Iterable[str] | None = None, scope: Scope = Scope.SESSION
+    ) -> None:
         self.attribute_name = attribute_name
         self.possible_values = possible_values or []
         self.scope = scope
@@ -233,7 +235,9 @@ class PositiveIntOption(Option):
     Positive integer option, the attribute is set as a Pymux attribute.
     """
 
-    def __init__(self, attribute_name: str, possible_values: Iterable[int] | None=None, scope: Scope = Scope.SESSION) -> None:
+    def __init__(
+        self, attribute_name: str, possible_values: Iterable[int] | None = None, scope: Scope = Scope.SESSION
+    ) -> None:
         self.attribute_name = attribute_name
         self.possible_values = ["%s" % i for i in (possible_values or [])]
         self.scope = scope
@@ -297,7 +301,9 @@ class BaseIndexOption(Option):
         return ["0", "1"]
 
     @override
-    def held_by(self, pymux: Pymux, target: ClientState | None = None) -> Arrangement | ClientState | Pymux | Window | None:
+    def held_by(
+        self, pymux: Pymux, target: ClientState | None = None
+    ) -> Arrangement | ClientState | Pymux | Window | None:
         return pymux.arrangement
 
     @override
@@ -329,7 +335,9 @@ class RenumberOption(Option):
         return ["on", "off"]
 
     @override
-    def held_by(self, pymux: Pymux, target: ClientState | None = None) -> Arrangement | ClientState | Pymux | Window | None:
+    def held_by(
+        self, pymux: Pymux, target: ClientState | None = None
+    ) -> Arrangement | ClientState | Pymux | Window | None:
         return pymux.arrangement
 
     @override
@@ -471,10 +479,7 @@ class EnumOption(Option):
         try:
             chosen = self.choices(value)
         except ValueError:
-            raise SetOptionError(
-                "Expecting one of: %s."
-                % ", ".join('"%s"' % one for one in self.choices)
-            )
+            raise SetOptionError("Expecting one of: %s." % ", ".join('"%s"' % one for one in self.choices))
         setattr(self.held_by(pymux, target), self._attribute(), chosen)
         self.after(pymux)
 
@@ -515,9 +520,7 @@ class WindowSizeOption(Option):
         try:
             return WindowSize(value)
         except ValueError:
-            raise SetOptionError(
-                "Expecting one of: %s." % ", ".join('"%s"' % one for one in WindowSize)
-            ) from None
+            raise SetOptionError("Expecting one of: %s." % ", ".join('"%s"' % one for one in WindowSize)) from None
 
     @override
     def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
@@ -584,11 +587,12 @@ class ThemeOption(Option):
         from pymux.style_base16 import names as base16_names
         from pymux.style_pygments import names
 
-        return [NEAREST] + sorted(THEMES) + [
-            "pygments:%s" % (name,) for name in names()
-        ] + [
-            "base16:%s" % (name,) for name in base16_names()
-        ]
+        return (
+            [NEAREST]
+            + sorted(THEMES)
+            + ["pygments:%s" % (name,) for name in names()]
+            + ["base16:%s" % (name,) for name in base16_names()]
+        )
 
     @override
     def as_written(self, value: object, holder: Arrangement | ClientState | Pymux | Window | None) -> str:
@@ -615,18 +619,12 @@ class ThemeOption(Option):
             from pymux.style_pygments import names
 
             if rest not in names():
-                raise SetOptionError(
-                    "Expecting the name of a pygments style, like: %s."
-                    % (", ".join(names()[:6]),)
-                )
+                raise SetOptionError("Expecting the name of a pygments style, like: %s." % (", ".join(names()[:6]),))
         elif source == "base16":
             from pymux.style_base16 import names
 
             if rest not in names():
-                raise SetOptionError(
-                    "Expecting the name of a base16 scheme, like: %s."
-                    % (", ".join(names()[:6]),)
-                )
+                raise SetOptionError("Expecting the name of a base16 scheme, like: %s." % (", ".join(names()[:6]),))
         elif value not in THEMES:
             raise SetOptionError("Expecting one of: %s." % ", ".join(sorted(THEMES)))
 
@@ -657,9 +655,7 @@ class LogLevelOption(Option):
     @override
     def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
         if value not in log.LEVELS:
-            raise SetOptionError(
-                "Expecting one of: %s." % ", ".join(sorted(log.LEVELS))
-            )
+            raise SetOptionError("Expecting one of: %s." % ", ".join(sorted(log.LEVELS)))
         pymux.log_level = value
 
 
@@ -705,9 +701,7 @@ class ChoiceOption(Option):
     @override
     def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
         if value not in self.choices:
-            raise SetOptionError(
-                "Expecting one of: %s." % ", ".join(sorted(self.choices))
-            )
+            raise SetOptionError("Expecting one of: %s." % ", ".join(sorted(self.choices)))
         setattr(self.held_by(pymux, target), self._attribute(), value)
 
 
@@ -757,15 +751,11 @@ ALL_OPTIONS = {
     # A forward carrying a connection is never idle, however quiet it
     # is, so this measures a page nobody has open. Opening the URL
     # again brings a reaped forward back.
-    "open-url-forward-idle": PositiveIntOption(
-        "open_url_forward_idle", [60, 300, 600, 3600]
-    ),
+    "open-url-forward-idle": PositiveIntOption("open_url_forward_idle", [60, 300, 600, 3600]),
     # What happens to a request to forward a port, and the two
     # cases that ask whatever it says. `ForwardMode` says.
     "forward-mode": EnumOption(ForwardMode, "forward_mode"),
-    "history-limit": PositiveIntOption(
-        "history_limit", [200, 500, 1000, 2000, 5000, 10000]
-    ),
+    "history-limit": PositiveIntOption("history_limit", [200, 500, 1000, 2000, 5000, 10000]),
     "mouse": OnOffOption("enable_mouse_support"),
     "prefix": KeyPrefixOption(),
     "remain-on-exit": OnOffOption("remain_on_exit"),
@@ -784,9 +774,7 @@ ALL_OPTIONS = {
     "which-key": OnOffOption("which_key"),
     "status-keys": KeysOption("status_keys_vi_mode"),
     "mode-keys": KeysOption("mode_keys_vi_mode"),
-    "default-terminal": StringOption(
-        "default_terminal", ["xterm", "xterm-256color", "screen"]
-    ),
+    "default-terminal": StringOption("default_terminal", ["xterm", "xterm-256color", "screen"]),
     # What lock-server, lock-session and lock-client run to hold the
     # keyboard. tmux's default is vlock.
     "lock-command": StringOption("lock_command", ["vlock"]),
@@ -862,9 +850,7 @@ ALL_CLIENT_OPTIONS = {
     # The theme is the other way round from this terminal: draw it
     # swapped. A correction to a theme, and therefore as much a fact
     # of one terminal as the theme is.
-    "swap-light-and-dark-colors": OnOffOption(
-        "swap_dark_and_light", scope=Scope.CLIENT
-    ),
+    "swap-light-and-dark-colors": OnOffOption("swap_dark_and_light", scope=Scope.CLIENT),
     # One pane over every cell of this terminal, with nothing that
     # pymux draws for itself. It hides `status` and
     # `pane-border-status` without changing them, so turning it off
@@ -899,7 +885,5 @@ ALL_WINDOW_OPTIONS = {
     # window. Zero is as many as it can, which is what pymux did
     # before there was an option. `arrangement.DEFAULT_FRAME_RATE`
     # says why thirty. Lillecarl/pymux#254.
-    "frame-rate": PositiveIntOption(
-        "frame_rate", [0, 10, 30, 60, 120], scope=Scope.WINDOW
-    ),
+    "frame-rate": PositiveIntOption("frame_rate", [0, 10, 30, 60, 120], scope=Scope.WINDOW),
 }

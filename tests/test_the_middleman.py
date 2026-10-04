@@ -12,6 +12,7 @@ These need no pymux. `settle` reads one file descriptor and appends to
 `terminal.seen`, so a pipe and a stub say everything about it, in
 milliseconds rather than in a suite.
 """
+
 from __future__ import annotations
 
 import os

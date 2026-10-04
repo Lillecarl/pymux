@@ -113,6 +113,7 @@ command:
     nix build --file . checks.pymux-pictures.run
     cp result/picture-differences.txt pymux/tests/picture-differences.txt
 """
+
 from __future__ import annotations
 
 import base64
@@ -270,9 +271,7 @@ def sgr(fixture):
 def underlines(fixture):
     "The shapes of an underline, and the colour of one."
     fixture.append(csi(escape.ED, 2) + csi(escape.CUP))
-    for shape, name in enumerate(
-        ["none", "straight", "double", "curly", "dotted", "dashed"]
-    ):
+    for shape, name in enumerate(["none", "straight", "double", "curly", "dotted", "dashed"]):
         fixture.append("\x1b[4:%dm%s\x1b[4:0m\r\n" % (shape, name))
     fixture.append("\x1b[4:3m\x1b[58:2::255:0:0mred curly\x1b[59m\x1b[4:0m\r\n")
     fixture.append("\x1b[4:1m\x1b[58:5:33mblue straight\x1b[59m\x1b[4:0m\r\n")
@@ -434,12 +433,8 @@ KITTY_CHUNK = 4096
 
 def kitty_rgb(height):
     "The same four quadrants as `sixel_image`, as raw RGB bytes."
-    top = as_bytes(IMAGE_COLOURS[0]) * EDGE_X + as_bytes(IMAGE_COLOURS[1]) * (
-        IMAGE_WIDTH - EDGE_X
-    )
-    bottom = as_bytes(IMAGE_COLOURS[2]) * EDGE_X + as_bytes(IMAGE_COLOURS[3]) * (
-        IMAGE_WIDTH - EDGE_X
-    )
+    top = as_bytes(IMAGE_COLOURS[0]) * EDGE_X + as_bytes(IMAGE_COLOURS[1]) * (IMAGE_WIDTH - EDGE_X)
+    bottom = as_bytes(IMAGE_COLOURS[2]) * EDGE_X + as_bytes(IMAGE_COLOURS[3]) * (IMAGE_WIDTH - EDGE_X)
     return top * EDGE_Y + bottom * (height - EDGE_Y)
 
 
@@ -474,9 +469,7 @@ def kitty_image(fixture, height):
     fixture.append(csi(escape.ED, 2) + csi(escape.CUP))
 
     payload = base64.b64encode(kitty_rgb(height)).decode("ascii")
-    chunks = [
-        payload[at : at + KITTY_CHUNK] for at in range(0, len(payload), KITTY_CHUNK)
-    ]
+    chunks = [payload[at : at + KITTY_CHUNK] for at in range(0, len(payload), KITTY_CHUNK)]
     for index, chunk in enumerate(chunks):
         more = 1 if index < len(chunks) - 1 else 0
         if index == 0:
@@ -527,12 +520,7 @@ FIXTURES = {
     "wide-characters": wide_characters,
     "box-drawing": box_drawing,
 }
-FIXTURES.update(
-    {
-        name: partial(writer, height=height)
-        for name, (writer, height) in IMAGE_FIXTURES.items()
-    }
-)
+FIXTURES.update({name: partial(writer, height=height) for name, (writer, height) in IMAGE_FIXTURES.items()})
 
 
 # ----------------------------------------------------------------------
@@ -570,10 +558,7 @@ FIXTURES.update(
 #: soon as the burst has its frames.
 BLINK_FIXTURES = {
     "cursor-blink": (
-        "printf '\\033[2J\\033[H'\n"
-        "printf 'the cursor is after this: '\n"
-        "printf '\\033[10;1Hx'\n"
-        "exec sleep %d\n" % HOLD
+        "printf '\\033[2J\\033[H'\nprintf 'the cursor is after this: '\nprintf '\\033[10;1Hx'\nexec sleep %d\n" % HOLD
     ),
 }
 
@@ -604,9 +589,7 @@ def recorded_fixtures():
     "Every recording there is, as {fixture name: the .bin file}."
     if not RECORDINGS.is_dir():
         return {}
-    return {
-        "recorded-%s" % path.stem: path for path in sorted(RECORDINGS.glob("*.bin"))
-    }
+    return {"recorded-%s" % path.stem: path for path in sorted(RECORDINGS.glob("*.bin"))}
 
 
 RECORDED_FIXTURES = recorded_fixtures()
@@ -658,9 +641,7 @@ def fixture_bytes(name):
         # that blinks.
         return b"\x1b[?25l" + recording.read_bytes() + b"\x1b[?25l"
 
-    pieces = [
-        reset_mode(PrivateMode.SHOW_CURSOR)
-    ]  # No cursor: it is not what this measures.
+    pieces = [reset_mode(PrivateMode.SHOW_CURSOR)]  # No cursor: it is not what this measures.
     FIXTURES[name](pieces)
     return "".join(pieces).encode("utf-8")
 
@@ -1109,9 +1090,7 @@ def two_protocols_of(name, out):
     first, second = THE_TWO_PROTOCOLS
     drawn = {side: out / side / name / "pymux.png" for side in THE_TWO_PROTOCOLS}
     difference = room / "difference.png"
-    count, first_box, second_box = the_same_drawing(
-        drawn[first], drawn[second], difference
-    )
+    count, first_box, second_box = the_same_drawing(drawn[first], drawn[second], difference)
 
     for side, box in ((first, first_box), (second, second_box)):
         leave_it_where_it_can_be_seen(drawn[side], box, room / ("%s.png" % side))
@@ -1208,9 +1187,7 @@ def blink_of(terminal, seat, name, work, out):
         # cursor at work.
         boxes = []
         for number, (first, second) in enumerate(zip(shots, shots[1:])):
-            count, box = changed_region(
-                first, second, room / ("%s-diff-%d.png" % (side, number))
-            )
+            count, box = changed_region(first, second, room / ("%s-diff-%d.png" % (side, number)))
             if box is not None:
                 boxes.append(box)
         run = longest = 0
@@ -1294,9 +1271,7 @@ def main():
         # behave the same with pymux as without it.
         for terminal in terminals:
             for name in blink_names:
-                bare, through = blink_of(
-                    terminal, seats[terminal.seat], name, work, out
-                )
+                bare, through = blink_of(terminal, seats[terminal.seat], name, work, out)
                 blinks[(terminal.name, name)] = (bare, through)
                 print(
                     "%s %s: the cursor changed one cell %d times bare, "
@@ -1354,8 +1329,7 @@ def main():
             continue
         seen[(BOTH_PROTOCOLS, name)] = count
         where = " and ".join(
-            "%s at %d,%d" % (side, box[0], box[1])
-            for side, box in zip(THE_TWO_PROTOCOLS, (first_box, second_box))
+            "%s at %d,%d" % (side, box[0], box[1]) for side, box in zip(THE_TWO_PROTOCOLS, (first_box, second_box))
         )
         print(
             "%s %s: %d pixels differ. Both draw it %dx%d, %s"
@@ -1387,10 +1361,7 @@ def main():
     for key, found in sorted(seen.items()):
         expected = standing.get(key, 0)
         if found != expected:
-            wrong.append(
-                "%s %s: %d pixels differ, %d were recorded"
-                % (key[0], key[1], found, expected)
-            )
+            wrong.append("%s %s: %d pixels differ, %d were recorded" % (key[0], key[1], found, expected))
 
     # A cursor has to behave the same in a pane as without one. How
     # often a terminal blinks is the terminal's business, and one that

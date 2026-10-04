@@ -19,6 +19,7 @@ tmux's rules, from `cmd-detach-client.c`:
   from a pane it is the client that owns the pane -- which is why this
   reads `the_client_to_tell` and not `get_client_state`.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -218,12 +219,8 @@ async def test_the_name_carries_the_machine_so_two_ttys_do_not_collide():
     hostname always, and this is what it is for.
     """
     async with over_connection() as session:
-        one, _ = await session.attach(
-            "one", SIZE, hostname="laptop", ttyname="/dev/pts/3"
-        )
-        two, _ = await session.attach(
-            "two", SIZE, hostname="desktop", ttyname="/dev/pts/3"
-        )
+        one, _ = await session.attach("one", SIZE, hostname="laptop", ttyname="/dev/pts/3")
+        two, _ = await session.attach("two", SIZE, hostname="desktop", ttyname="/dev/pts/3")
 
         assert one.connection.name == "laptop:/dev/pts/3"
         assert two.connection.name == "desktop:/dev/pts/3"

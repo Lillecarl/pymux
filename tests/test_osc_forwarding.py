@@ -6,6 +6,7 @@ A pane cannot serve the clipboard, a desktop notification or the shape
 of the pointer. pymux writes those to the outer terminal. The payload
 comes from a program in a pane, so it is checked first.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -120,6 +121,7 @@ class FakeConnection:
 
 class FakeSession:
     "A session with no overlay, which is what `focused_pane_of` reads."
+
     overlay_pane = None
     arrangement = None
 
@@ -165,9 +167,7 @@ def make_pymux(focused=(), pane=None, clipboard=Clipboard.ON):
     connections = [FakeConnection(), FakeConnection()]
     states = [FakeClientState(), FakeClientState()]
     pymux._client_states = dict(zip(connections, states))
-    pymux.focused_pane_of = lambda state: (
-        pane if states.index(state) in focused else None
-    )
+    pymux.focused_pane_of = lambda state: pane if states.index(state) in focused else None
     return pymux, connections
 
 
@@ -289,9 +289,7 @@ def test_no_pane_asks_for_no_shape():
 
 def test_unsafe_payload_reaches_nobody():
     pymux, connections = make_pymux()
-    pymux.forward_osc(
-        FakePane(), "99", ("i=1;done" + osc("0", "owned", end=Terminator.BEL))
-    )
+    pymux.forward_osc(FakePane(), "99", ("i=1;done" + osc("0", "owned", end=Terminator.BEL)))
     for connection in connections:
         assert connection.written == []
 

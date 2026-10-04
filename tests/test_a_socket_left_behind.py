@@ -13,6 +13,7 @@ pymux does the same, and that it does not do it to a name that
 something is listening on, or to anything that is not a socket.
 Lillecarl/pymux#453.
 """
+
 from __future__ import annotations
 
 import errno
@@ -24,9 +25,7 @@ import pytest
 
 from pymux.pipes.posix import bind_and_listen_on_posix_socket
 
-pytestmark = pytest.mark.skipif(
-    os.name == "nt", reason="a unix socket and flock"
-)
+pytestmark = pytest.mark.skipif(os.name == "nt", reason="a unix socket and flock")
 
 
 def _killed_server(path):

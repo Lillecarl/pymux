@@ -13,6 +13,7 @@ So the parity test below is mechanical. Every entry of
 `PYMUX_TO_PROMPT_TOOLKIT_KEYS` is re-spelled as a chord and has to
 reach the same keys. Nothing is written out twice.
 """
+
 from __future__ import annotations
 
 import pytest

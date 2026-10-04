@@ -14,6 +14,7 @@ ran. Lillecarl/pymux#38.
 pymux takes `-g` now, so that line works and is no longer the example
 of one that fails. `test_window_defaults.py` says what it does.
 """
+
 from __future__ import annotations
 
 from pymux.commands import call_command_handler
@@ -68,9 +69,7 @@ def test_bad_value_is_reported(tmp_path):
 
 
 def test_every_failing_line_is_reported(tmp_path):
-    _pymux, errors = source(
-        tmp_path, "set status maybe\nnot-a-command\nset status off\n"
-    )
+    _pymux, errors = source(tmp_path, "set status maybe\nnot-a-command\nset status off\n")
     assert len(errors) == 2
 
 

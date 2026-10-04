@@ -34,15 +34,11 @@ def show_environment(pymux: Pymux, args: argparse.Namespace) -> None:
                 raise CommandException("Can't find variable: %s" % (name,))
             answer(
                 pymux,
-                "-%s" % (name,)
-                if value is None
-                else "%s=%s" % (name, shlex.quote(value) if escaped else value),
+                "-%s" % (name,) if value is None else "%s=%s" % (name, shlex.quote(value) if escaped else value),
             )
             return
         lines = [
-            "-%s" % (key,)
-            if value is None
-            else "%s=%s" % (key, shlex.quote(value) if escaped else value)
+            "-%s" % (key,) if value is None else "%s=%s" % (key, shlex.quote(value) if escaped else value)
             for key, value in sorted(scope.items())
         ]
         answer(pymux, "\n".join(lines))
@@ -58,15 +54,14 @@ def show_environment(pymux: Pymux, args: argparse.Namespace) -> None:
         )
         return
 
-    lines = [
-        "%s=%s" % (key, shlex.quote(value) if escaped else value)
-        for key, value in sorted(merged.items())
-    ]
+    lines = ["%s=%s" % (key, shlex.quote(value) if escaped else value) for key, value in sorted(merged.items())]
     answer(pymux, "\n".join(lines))
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, show_environment)
-    parser.add_argument("-g", dest="g", action="store_true", help="Read the global scope rather than what a new pane runs under.")
+    parser.add_argument(
+        "-g", dest="g", action="store_true", help="Read the global scope rather than what a new pane runs under."
+    )
     parser.add_argument("-s", dest="s", action="store_true", help="Escape the values for the shell.")
     parser.add_argument("name", metavar="<name>", nargs="?")

@@ -13,7 +13,7 @@ from pymux.format import format_pymux_string
 
 
 def display_message(pymux: Pymux, args: argparse.Namespace) -> None:
-    '''
+    """
     Show a message on the status line.
 
     The message is a format, the way every other message is: `#{...}`
@@ -23,7 +23,7 @@ def display_message(pymux: Pymux, args: argparse.Namespace) -> None:
     With `-p`, print the message instead: the way a script asks the
     session a question and reads the answer. tmux spells it the same.
     Lillecarl/pymux#289.
-    '''
+    """
     if args.p:
         answer(pymux, format_pymux_string(pymux, args.message))
         return
@@ -41,9 +41,7 @@ def display_message(pymux: Pymux, args: argparse.Namespace) -> None:
     # answered with the format string. tmux expands it either way, and
     # a binding that asks the session something is the whole use of
     # this command. Lillecarl/pymux#334.
-    client_state.message = format_pymux_string(
-        pymux, args.message, session=client_state.session, client=client_state
-    )
+    client_state.message = format_pymux_string(pymux, args.message, session=client_state.session, client=client_state)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

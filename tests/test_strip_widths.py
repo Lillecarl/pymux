@@ -10,6 +10,7 @@ divided layout.
 
 Lillecarl/pymux#198, and the fourth width is Lillecarl/pymux#215.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -121,17 +122,13 @@ def test_width_that_is_not_preset_steps_onto_list(back):
 def test_only_column_person_is_on_changes():
     window = create_strip(3)
     others = [
-        window.column_width(column)
-        for column in window.root
-        if column is not window._column_of(window.active_pane)
+        window.column_width(column) for column in window.root if column is not window._column_of(window.active_pane)
     ]
 
     window.switch_column_width(window.active_pane)
 
     assert [
-        window.column_width(column)
-        for column in window.root
-        if column is not window._column_of(window.active_pane)
+        window.column_width(column) for column in window.root if column is not window._column_of(window.active_pane)
     ] == others
 
 

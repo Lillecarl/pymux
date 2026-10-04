@@ -5,6 +5,7 @@ Each test builds the pane state with the real `pyte.images`
 classes, renders one or more frames, and checks the escape sequences
 that reach the outer terminal.
 """
+
 from __future__ import annotations
 
 import base64
@@ -80,13 +81,9 @@ def test_placement_is_transmitted_and_put():
     client.render([view(make_state(placement()), x=10, y=5)])
 
     image_id = outer_id(written)
-    assert transmissions(written) == [
-        "\x1b_Ga=t,i=%i,t=d,q=2,f=24,s=2,v=2,o=z,m=0;" % image_id
-    ]
+    assert transmissions(written) == ["\x1b_Ga=t,i=%i,t=d,q=2,f=24,s=2,v=2,o=z,m=0;" % image_id]
     # The cell is one based in the cursor position sequence.
-    assert puts(written) == [
-        "\x1b[6;11H\x1b_Ga=p,i=%i,p=1,c=3,r=2,C=1,q=2\x1b\\" % image_id
-    ]
+    assert puts(written) == ["\x1b[6;11H\x1b_Ga=p,i=%i,p=1,c=3,r=2,C=1,q=2\x1b\\" % image_id]
 
 
 def test_transmitted_data_is_image():
@@ -102,9 +99,7 @@ def test_png_is_sent_as_is():
     data = b"\x89PNG\r\n\x1a\n" + b"x" * 20
     client.render([view(make_state(placement(), data=data, format=100))])
 
-    assert transmissions(written) == [
-        "\x1b_Ga=t,i=%i,t=d,q=2,f=100,m=0;" % outer_id(written)
-    ]
+    assert transmissions(written) == ["\x1b_Ga=t,i=%i,t=d,q=2,f=100,m=0;" % outer_id(written)]
 
 
 def test_unchanged_frame_sends_nothing():
@@ -128,9 +123,7 @@ def test_moved_placement_is_replaced_without_delete():
     client.render([view(state)])
     assert deletes(written) == []
     assert transmissions(written) == []  # The pixels are already there.
-    assert puts(written) == [
-        "\x1b[5;1H\x1b_Ga=p,i=%i,p=1,c=3,r=2,C=1,q=2\x1b\\" % image_id
-    ]
+    assert puts(written) == ["\x1b[5;1H\x1b_Ga=p,i=%i,p=1,c=3,r=2,C=1,q=2\x1b\\" % image_id]
 
 
 def test_removed_placement_is_deleted():
@@ -181,9 +174,7 @@ def test_placement_above_pane_is_cropped():
 
     image_id = outer_id(written)
     # One of the two rows is left: the top half of the image is cut.
-    assert puts(written) == [
-        "\x1b[1;1H\x1b_Ga=p,i=%i,p=1,c=2,r=1,C=1,q=2,x=0,y=1,w=2,h=1\x1b\\" % image_id
-    ]
+    assert puts(written) == ["\x1b[1;1H\x1b_Ga=p,i=%i,p=1,c=2,r=1,C=1,q=2,x=0,y=1,w=2,h=1\x1b\\" % image_id]
 
 
 def test_placement_over_right_edge_is_cropped():
@@ -193,9 +184,7 @@ def test_placement_over_right_edge_is_cropped():
     image_id = outer_id(written)
     # Two of the four columns fit. The image is 2 pixels wide, so half
     # a pixel per column: the width rounds up to one pixel.
-    assert puts(written) == [
-        "\x1b[1;3H\x1b_Ga=p,i=%i,p=1,c=2,r=2,C=1,q=2,x=0,y=0,w=1,h=2\x1b\\" % image_id
-    ]
+    assert puts(written) == ["\x1b[1;3H\x1b_Ga=p,i=%i,p=1,c=2,r=2,C=1,q=2,x=0,y=0,w=1,h=2\x1b\\" % image_id]
 
 
 def test_placement_outside_pane_is_skipped():

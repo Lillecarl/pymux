@@ -37,6 +37,7 @@ running one; spawning one is the other half of Lillecarl/pymux#90.
 other machine, so this client shows a notice and opens the link again.
 `client/reconnect.py` holds that part. Lillecarl/pymux#256.
 """
+
 from __future__ import annotations
 
 import json
@@ -61,6 +62,7 @@ from pymux.forwarding import (
 )
 from pymux.utils import nonblocking
 
+from .defaults import is_ssh_url as is_ssh_url
 from .forwards import Forwards
 from .reconnect import (
     WAN_INTERVAL,
@@ -425,9 +427,7 @@ class SshClient(TerminalClient):
         connection, reader = await self._connect()
 
         try:
-            self._send_packet(
-                {Field.CMD: Packet.RUN_COMMAND, Field.DATA: command, Field.PANE_ID: pane_id}
-            )
+            self._send_packet({Field.CMD: Packet.RUN_COMMAND, Field.DATA: command, Field.PANE_ID: pane_id})
 
             exit_code = 0
             try:
@@ -444,9 +444,7 @@ class SshClient(TerminalClient):
                 # The link went before the answer arrived. Nothing here
                 # knows whether the command ran, so the code has to say
                 # that it does not.
-                sys.stderr.write(
-                    "pymux lost the server on %s: %s\n" % (self.target.host, why(error))
-                )
+                sys.stderr.write("pymux lost the server on %s: %s\n" % (self.target.host, why(error)))
                 return 1
             return exit_code
         finally:
@@ -456,9 +454,7 @@ class SshClient(TerminalClient):
     def attach(self, detach_other_clients: bool = False, color_depth=None) -> None:
         anyio.run(self._attach, detach_other_clients, color_depth)
 
-    async def _attach(
-        self, detach_other_clients: bool = False, color_depth=None
-    ) -> None:
+    async def _attach(self, detach_other_clients: bool = False, color_depth=None) -> None:
         """
         Attach the user interface, and return when the person is done
         with it.
@@ -483,9 +479,7 @@ class SshClient(TerminalClient):
                 # The moment this attachment began, so the backoff can
                 # tell a link that held from one that dropped at once.
                 lived_from = anyio.current_time()
-                lost = await self._attached(
-                    connection, reader, stdin_fd, detach_others, color_depth
-                )
+                lost = await self._attached(connection, reader, stdin_fd, detach_others, color_depth)
                 detach_others = False
 
                 if lost is None:
@@ -520,15 +514,10 @@ class SshClient(TerminalClient):
         self._reset_terminal()
 
         if cannot is not None:
-            sys.stderr.write(
-                "pymux cannot reach the server on %s: %s\n"
-                % (self.target.host, why(cannot))
-            )
+            sys.stderr.write("pymux cannot reach the server on %s: %s\n" % (self.target.host, why(cannot)))
             self.exit_code = 1
 
-    async def _attached(
-        self, connection, reader, stdin_fd, detach_other_clients, color_depth
-    ):
+    async def _attached(self, connection, reader, stdin_fd, detach_other_clients, color_depth):
         """
         Draw one attachment, until it ends.
 
@@ -765,8 +754,7 @@ class SshClient(TerminalClient):
             gone = self.forwards.reap()
             if gone:
                 self._report_forwards(
-                    "Stopped forwarding %s: nothing used it."
-                    % ("; ".join(one.listen for one in gone),)
+                    "Stopped forwarding %s: nothing used it." % ("; ".join(one.listen for one in gone),)
                 )
 
     def _report_forwards(self, message: str = "") -> None:
@@ -861,9 +849,7 @@ class SshClient(TerminalClient):
             was_wall, was_loop = wall, loop
 
             if asleep >= SUSPEND_GAP:
-                self._slept_through = ConnectionResetError(
-                    "This machine was asleep for %s." % (_how_long(asleep),)
-                )
+                self._slept_through = ConnectionResetError("This machine was asleep for %s." % (_how_long(asleep),))
                 connection.abort()
                 return
 
@@ -873,7 +859,7 @@ class SshClient(TerminalClient):
             with anyio.open_signal_receiver(signal.SIGWINCH) as signals:
                 async for _signum in signals:
                     self._send_size()
-        except (NotImplementedError, ValueError, RuntimeError):
+        except NotImplementedError, ValueError, RuntimeError:
             pass  # No signals here. The size stays as it was.
 
     # ------------------------------------------------------------------
@@ -905,9 +891,7 @@ class SshClient(TerminalClient):
                         watching.cancel_scope.cancel()
                         raise lost
 
-                    outcome = await self._one_try(
-                        output, stdin_fd, waits.next(), lost, internet
-                    )
+                    outcome = await self._one_try(output, stdin_fd, waits.next(), lost, internet)
 
                     if isinstance(outcome, _Left):
                         watching.cancel_scope.cancel()
@@ -951,9 +935,7 @@ class SshClient(TerminalClient):
 
         return await self._attempt(output, stdin_fd, lost, internet)
 
-    def _draw(
-        self, output, lost, internet, seconds: float, trying: bool = False
-    ) -> None:
+    def _draw(self, output, lost, internet, seconds: float, trying: bool = False) -> None:
         "Put the notice of this moment on the terminal."
         rows, columns = self.size()
         draw(

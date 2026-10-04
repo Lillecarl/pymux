@@ -21,6 +21,7 @@ land on.
 
 Lillecarl/pymux#193.
 """
+
 from __future__ import annotations
 
 import io
@@ -66,9 +67,7 @@ async def create_server(windows):
 
     def attach():
         "One more client, and the application it draws with."
-        output = Vt100_Output(
-            stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS)
-        )
+        output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS))
         pipe = create_pipe_input()
         pipes.append(pipe)
         return pymux.add_client(
@@ -102,9 +101,7 @@ async def test_new_client_lands_where_session_is():
         arrangement = pymux.arrangement
         arrangement.set_active_window(arrangement.windows[2])
 
-        assert (
-            arrangement.get_active_window_for(_NotLookedYet()) is arrangement.windows[2]
-        )
+        assert arrangement.get_active_window_for(_NotLookedYet()) is arrangement.windows[2]
 
 
 async def test_first_answer_is_one_it_keeps():
@@ -125,9 +122,7 @@ async def test_with_nowhere_to_land_it_takes_first_window():
         arrangement = pymux.arrangement
         arrangement._last_active_window = None
 
-        assert (
-            arrangement.get_active_window_for(_NotLookedYet()) is arrangement.windows[0]
-        )
+        assert arrangement.get_active_window_for(_NotLookedYet()) is arrangement.windows[0]
 
 
 async def test_window_that_is_gone_is_not_offered():

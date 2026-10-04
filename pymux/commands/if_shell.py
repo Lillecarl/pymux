@@ -74,9 +74,23 @@ def _then_run(pymux: Pymux, args: argparse.Namespace, yes: bool):
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, if_shell)
-    parser.add_argument("-F", dest="F", action="store_true", help="Ask a format, not a shell: no program runs, and a non-empty answer is yes.")
-    parser.add_argument("-J", dest="J", action="store_true", help="Ask a jinja2 template, not a shell. Like -F, in the other language.")
-    parser.add_argument("-b", dest="b", action="store_true", help="Run in the background: the command that asked does not wait for the shell. -F answers at once either way.")
-    parser.add_argument("shell_command", metavar="<shell-command>", help="The question, through the shell, or the format with -F.")
+    parser.add_argument(
+        "-F",
+        dest="F",
+        action="store_true",
+        help="Ask a format, not a shell: no program runs, and a non-empty answer is yes.",
+    )
+    parser.add_argument(
+        "-J", dest="J", action="store_true", help="Ask a jinja2 template, not a shell. Like -F, in the other language."
+    )
+    parser.add_argument(
+        "-b",
+        dest="b",
+        action="store_true",
+        help="Run in the background: the command that asked does not wait for the shell. -F answers at once either way.",
+    )
+    parser.add_argument(
+        "shell_command", metavar="<shell-command>", help="The question, through the shell, or the format with -F."
+    )
     parser.add_argument("then_command", metavar="<then-command>", nargs="?")
     parser.add_argument("else_command", metavar="<else-command>", nargs="?")

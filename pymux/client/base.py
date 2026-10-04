@@ -51,9 +51,7 @@ class Client(ABC):
         """
         return 0
 
-    def attach(
-        self, detach_other_clients=False, color_depth=None
-    ) -> Awaitable[None] | None:
+    def attach(self, detach_other_clients=False, color_depth=None) -> Awaitable[None] | None:
         """
         Attach client user interface.
 

@@ -115,7 +115,7 @@ def open_url_of(param: str) -> str | None:
 
     try:
         url = base64.b64decode(param[len(OPEN_URL_PREFIX) :], validate=True).decode("utf-8")
-    except (ValueError, UnicodeDecodeError):
+    except ValueError, UnicodeDecodeError:
         return None
 
     for char in url:

@@ -24,9 +24,7 @@ def switch_client(pymux: Pymux, args: argparse.Namespace) -> None:
     if args.n or args.p or args.l:
         client_state = this_client(pymux)
         if client_state is None:
-            raise CommandException(
-                "no client to move: this command did not come from an attached client."
-            )
+            raise CommandException("no client to move: this command did not come from an attached client.")
 
         if args.l:
             previous = client_state.previous_session

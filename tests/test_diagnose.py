@@ -6,6 +6,7 @@ it back as a person and as a machine: the human lines name the facts,
 the JSON parses, and the socket facts say what is really there -- a
 server that answers, and a path where none is.
 """
+
 from __future__ import annotations
 
 import json

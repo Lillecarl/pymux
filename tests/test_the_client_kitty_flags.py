@@ -8,6 +8,7 @@ own push, and the way out pops -- never a set back to zero, which
 would leave the state beneath ours gone.
 Lillecarl/pymux#403.
 """
+
 from __future__ import annotations
 
 import json

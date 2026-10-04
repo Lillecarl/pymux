@@ -29,6 +29,7 @@ its own reason:
 `tests/picture-differences.txt` measures the same thing with real
 terminals in front of it; this measures what pymux asks for.
 """
+
 from __future__ import annotations
 
 import re
@@ -63,9 +64,7 @@ def client(kitty=False, sixel=False, cell=REAL_CELL):
 def state(columns, rows, asked_for_the_box=False, virtual=False):
     "A pane holding one image, placed over `columns` by `rows` cells."
     graphics = GraphicsState()
-    graphics.images_by_id[1] = GraphicsImage(
-        24, IMAGE_WIDTH, IMAGE_HEIGHT, image_bytes()
-    )
+    graphics.images_by_id[1] = GraphicsImage(24, IMAGE_WIDTH, IMAGE_HEIGHT, image_bytes())
     graphics.placements = [
         GraphicsPlacement(
             1,

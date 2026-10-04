@@ -11,6 +11,7 @@ what a server reads over the socket, and `shlex.quote` is what keeps an
 argument with a space in it in one piece on the way there.
 `Pymux._create_pane` takes it apart again with `shlex.split`.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -32,9 +33,7 @@ def test_no_arguments_is_no_mode_and_no_command():
     assert parse() == (None, None)
 
 
-@pytest.mark.parametrize(
-    "mode", [Mode.STANDALONE, Mode.INTEGRATED, Mode.START_SERVER]
-)
+@pytest.mark.parametrize("mode", [Mode.STANDALONE, Mode.INTEGRATED, Mode.START_SERVER])
 def test_mode_word_is_read_as_mode(mode):
     assert parse(mode) == (mode, None)
 
@@ -126,16 +125,12 @@ def test_option_after_mode_word_is_read():
 
 def test_option_after_mode_word_wins():
     "The second pass suppresses defaults, so it only sets what is given."
-    options, _mode, _command = parse_arguments(
-        ["-S", "/tmp/before", "integrated", "-S", "/tmp/after"]
-    )
+    options, _mode, _command = parse_arguments(["-S", "/tmp/before", "integrated", "-S", "/tmp/after"])
     assert options.socket == "/tmp/after"
 
 
 def test_option_before_mode_word_is_not_lost_by_second_pass():
-    options, _mode, _command = parse_arguments(
-        ["-S", "/tmp/before", "integrated", "-d"]
-    )
+    options, _mode, _command = parse_arguments(["-S", "/tmp/before", "integrated", "-d"])
     assert options.socket == "/tmp/before"
     assert options.detach_others is True
 

@@ -9,6 +9,7 @@ is alive whether or not a split happened. One run of
 two, stayed green, and its server log has no second process in it.
 Lillecarl/pymux#353.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -89,9 +90,7 @@ def test_a_fixture_asks_for_no_mode_and_no_prefix_unless_it_says_otherwise():
     assert Fixture("").prefix is False
 
 
-@pytest.mark.parametrize(
-    "name", sorted(CHROME_FIXTURES) + sorted(THEME_FIXTURES)
-)
+@pytest.mark.parametrize("name", sorted(CHROME_FIXTURES) + sorted(THEME_FIXTURES))
 def test_every_fixture_says_what_its_keys_build(name):
     """
     A fixture written as a bare tuple has no `panes`, and a farm that

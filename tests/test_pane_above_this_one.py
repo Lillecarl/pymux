@@ -11,6 +11,7 @@ beyond our top edge that shares most of our width, and nearest wins
 first. A pane inside a row therefore takes the row's neighbour, and a
 row below us gives its leftmost pane.
 """
+
 from __future__ import annotations
 
 from test_pane_beside_this_one import beside, create_pane, create_window

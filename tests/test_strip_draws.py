@@ -20,6 +20,7 @@ fault one layer along: the positions hang on the screen too, so a strip
 that drew on its own recorded no pane anywhere, and moving between
 panes did nothing.
 """
+
 from __future__ import annotations
 
 import io
@@ -53,9 +54,7 @@ def create_client(commands=(), rows=ROWS, columns=COLUMNS):
     way a person would type them.
     """
     pymux = Pymux()
-    output = Vt100_Output(
-        stdout=io.StringIO(), get_size=lambda: Size(rows=rows, columns=columns)
-    )
+    output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=rows, columns=columns))
     with create_pipe_input() as pipe:
         state = pymux.add_client(
             output=output,
@@ -93,12 +92,7 @@ def create_client(commands=(), rows=ROWS, columns=COLUMNS):
                     # From above the screen, because a title bar is a
                     # float that hangs one row above its pane and the
                     # question is which row it landed on.
-                    return {
-                        y: "".join(
-                            screen.data_buffer[y][x].char for x in range(columns)
-                        )
-                        for y in range(-2, rows)
-                    }
+                    return {y: "".join(screen.data_buffer[y][x].char for x in range(columns)) for y in range(-2, rows)}
 
                 yield pymux, draw
         finally:

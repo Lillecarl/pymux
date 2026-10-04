@@ -49,6 +49,7 @@ text, and `PYMUX_CHROME_TERMINALS` to the terminals whose name does.
 exactly, comma separated, and beat the substrings: three fixtures that
 share no substring are what a probe of the judge asks for.
 """
+
 from __future__ import annotations
 
 import os
@@ -98,10 +99,7 @@ STILL = ("kitty", "foot")
 
 def holding_still(terminals):
     "The same terminals, with every cursor asked to hold still."
-    return [
-        one.asked(blink=False) if one.program in STILL else one
-        for one in terminals
-    ]
+    return [one.asked(blink=False) if one.program in STILL else one for one in terminals]
 
 
 CHROME_TERMINALS = holding_still(TERMINALS)
@@ -140,10 +138,7 @@ def chosen_by_name(have, wanted, what):
     """
     missing = [one for one in wanted if one not in have]
     if missing:
-        raise SystemExit(
-            "no %s is named %s. There is: %s"
-            % (what, ", ".join(missing), ", ".join(have))
-        )
+        raise SystemExit("no %s is named %s. There is: %s" % (what, ", ".join(missing), ", ".join(have)))
     return [one for one in have if one in set(wanted)]
 
 
@@ -173,17 +168,13 @@ DEMO = Path(__file__).parent / "demo_application.py"
 #: edges. That is the point of photographing a theme at all.
 #: `photograph_themes.py` set it on two fixtures by hand before this,
 #: which is the same thing said once.
-CHROME = (
-    "set-option status on\n"
-    "set-option pane-border-status on\n"
-    "set-option test-mode on\n"
-    "set-option paint-screen on\n"
-)
+CHROME = "set-option status on\nset-option pane-border-status on\nset-option test-mode on\nset-option paint-screen on\n"
 
 #: The prefix, and the keys that reach a binding behind it. `rc.py` is
 #: where these are bound: `"` splits a pane in two, top and bottom, and
 #: `%` splits it left and right.
 PREFIX = b"\x02"
+
 
 def keys(*steps):
     """
@@ -267,11 +258,7 @@ def answers_to(socket_path, argv):
 
 def panes_now(socket_path):
     "How many panes each window of this server holds, window 0 first."
-    return count_panes(
-        " ".join(
-            answers_to(socket_path, ["list-panes", "-a", "-F", "#{window_index}"])
-        )
-    )
+    return count_panes(" ".join(answers_to(socket_path, ["list-panes", "-a", "-F", "#{window_index}"])))
 
 
 def mode_now(socket_path):
@@ -283,9 +270,7 @@ def mode_now(socket_path):
     split made and never the forwarder. `list-panes` with no `-a` lists
     that window alone, so there is exactly one active pane to read.
     """
-    lines = answers_to(
-        socket_path, ["list-panes", "-F", "#{pane_active}\t#{pane_mode}"]
-    )
+    lines = answers_to(socket_path, ["list-panes", "-F", "#{pane_active}\t#{pane_mode}"])
     active = [line.split("\t", 1)[1] for line in lines if line.startswith("1\t")]
     if len(active) != 1:
         raise RuntimeError("the window has %d active panes: %r" % (len(active), lines))
@@ -305,23 +290,16 @@ def judge_the_fixture(socket_path, fixture):
     found = panes_now(socket_path)
     if found != tuple(fixture.panes):
         raise RuntimeError(
-            "the keys ask for %r panes per window and the server holds %r"
-            % (tuple(fixture.panes), found)
+            "the keys ask for %r panes per window and the server holds %r" % (tuple(fixture.panes), found)
         )
 
     mode = mode_now(socket_path)
     if mode != fixture.mode:
-        raise RuntimeError(
-            "the keys ask for %r over the active pane and the server draws %r"
-            % (fixture.mode, mode)
-        )
+        raise RuntimeError("the keys ask for %r over the active pane and the server draws %r" % (fixture.mode, mode))
 
     prefix = prefix_now(socket_path)
     if prefix != fixture.prefix:
-        raise RuntimeError(
-            "the keys ask for the prefix held=%r and the client holds it=%r"
-            % (fixture.prefix, prefix)
-        )
+        raise RuntimeError("the keys ask for the prefix held=%r and the client holds it=%r" % (fixture.prefix, prefix))
 
 
 def create_command(text):
@@ -613,22 +591,15 @@ def chrome_command(
     # itself carries is the one pymux gives a pane.
     shell = os.environ.get("SHELL")
     inside = (
-        (
-            "export SHELL=%s\n" % shlex.quote(shell)
-            if shell is not None
-            else ""
-        )
-        + "exec python3 -m pymux -S %s -f %s --log %s"
-        " integrated python3 %s %s %s 2>%s"
-        % (
-            shlex.quote(str(socket_path)),
-            shlex.quote(str(config_path)),
-            shlex.quote(str(log_path)),
-            shlex.quote(str(forwarder_path)),
-            shlex.quote(str(fifo_path)),
-            shlex.quote(str(size_path)),
-            shlex.quote(str(error_path)),
-        )
+        "export SHELL=%s\n" % shlex.quote(shell) if shell is not None else ""
+    ) + "exec python3 -m pymux -S %s -f %s --log %s integrated python3 %s %s %s 2>%s" % (
+        shlex.quote(str(socket_path)),
+        shlex.quote(str(config_path)),
+        shlex.quote(str(log_path)),
+        shlex.quote(str(forwarder_path)),
+        shlex.quote(str(fifo_path)),
+        shlex.quote(str(size_path)),
+        shlex.quote(str(error_path)),
     )
     return "exec python3 %s %s %d %s %s 2>%s -- sh -c %s" % (
         shlex.quote(str(RELAY)),
@@ -748,11 +719,7 @@ def main(
             raise SystemExit("no fixture holds %r" % only)
 
     if only_terminals_list is not None:
-        wanted = set(
-            chosen_by_name(
-                [t.name for t in terminals], only_terminals_list, "terminal"
-            )
-        )
+        wanted = set(chosen_by_name([t.name for t in terminals], only_terminals_list, "terminal"))
         terminals = [t for t in terminals if t.name in wanted]
     else:
         terminals = [t for t in terminals if only_terminals in t.name]
@@ -775,9 +742,7 @@ def main(
             for name in names:
                 started = time.time()
                 try:
-                    path = picture_of(
-                        terminal, seats[terminal.seat], name, work, out, fixtures
-                    )
+                    path = picture_of(terminal, seats[terminal.seat], name, work, out, fixtures)
                 except RuntimeError as reason:
                     # **Ask the seat before blaming the fixture.** A
                     # display server that went away makes every picture
@@ -790,8 +755,7 @@ def main(
                     room = out / terminal.name / name
                     lost.append("%s %s" % (terminal.name, name))
                     print(
-                        "%s %s: no picture (%s)\n%s"
-                        % (terminal.name, name, reason, every_log(room)),
+                        "%s %s: no picture (%s)\n%s" % (terminal.name, name, reason, every_log(room)),
                         flush=True,
                     )
                 else:

@@ -22,6 +22,7 @@ everything slice 5 did is judged here. The rest of the suite has one
 client, where the plane and the view are the same rectangle and every
 question about the difference is unaskable.
 """
+
 from __future__ import annotations
 
 import io
@@ -60,9 +61,7 @@ class _Client:
             self.state.app.layout.container.write_to_screen(
                 screen,
                 MouseHandlers(),
-                WritePosition(
-                    xpos=0, ypos=0, width=self.size.columns, height=self.size.rows
-                ),
+                WritePosition(xpos=0, ypos=0, width=self.size.columns, height=self.size.rows),
                 "",
                 False,
                 None,

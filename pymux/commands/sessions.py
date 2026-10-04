@@ -1,4 +1,5 @@
 """Helpers the session commands share."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -51,9 +52,7 @@ def move_this_client(
 
     client_state = this_client(pymux)
     if client_state is None:
-        raise CommandException(
-            "no client to move: this command did not come from an attached client."
-        )
+        raise CommandException("no client to move: this command did not come from an attached client.")
 
     if detach_others or hang_up_others:
         for other in pymux.clients_on(session, except_for=client_state):

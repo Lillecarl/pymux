@@ -18,6 +18,7 @@ for its own sake:
 The scroll is read off the container, and what is on screen is read off
 the cells, because those are two different claims.
 """
+
 from __future__ import annotations
 
 import io
@@ -44,9 +45,7 @@ STRIP = ["set-option pane-border-status on", "set-window-option strip on"]
 @contextmanager
 def create_client(commands=(), rows=ROWS, columns=COLUMNS):
     pymux = Pymux()
-    output = Vt100_Output(
-        stdout=io.StringIO(), get_size=lambda: Size(rows=rows, columns=columns)
-    )
+    output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=rows, columns=columns))
     with create_pipe_input() as pipe:
         state = pymux.add_client(
             output=output,

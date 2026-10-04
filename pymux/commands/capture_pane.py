@@ -14,9 +14,7 @@ from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import show_listing, the_pane
 
 
-def _row_of(
-    given: str | None, name: str, here: int, far_end: int, line_offset: int
-) -> int:
+def _row_of(given: str | None, name: str, here: int, far_end: int, line_offset: int) -> int:
     """
     One end of a range, as a row of the buffer.
 
@@ -84,9 +82,7 @@ def _html(screen: Screen, page: Page, args: argparse.Namespace) -> str:
 
     body = ""
     if first <= last:
-        body = html_of_page(
-            page, first, last, screen.columns, screen.has_reverse_video
-        )
+        body = html_of_page(page, first, last, screen.columns, screen.has_reverse_video)
 
     return '<pre class="%s">%s</pre>' % (SCREEN_CLASS, body)
 
@@ -123,9 +119,7 @@ def capture_pane(pymux: Pymux, args: argparse.Namespace) -> None:
         raise CommandException("capture-pane: the screen has no page")
 
     if args.H and args.J:
-        raise CommandException(
-            "capture-pane: -J joins rows into one line, which -H cannot draw"
-        )
+        raise CommandException("capture-pane: -J joins rows into one line, which -H cannot draw")
 
     if args.H:
         text = _html(screen, page, args)
@@ -148,11 +142,7 @@ def capture_pane(pymux: Pymux, args: argparse.Namespace) -> None:
             # wrap can carry a line from the history onto the screen,
             # and the whole of that line is line zero.
             visible_top = next(
-                (
-                    index
-                    for index, line in enumerate(lines)
-                    if line.last >= screen.line_offset
-                ),
+                (index for index, line in enumerate(lines) if line.last >= screen.line_offset),
                 0,
             )
         else:
@@ -194,9 +184,7 @@ def capture_pane(pymux: Pymux, args: argparse.Namespace) -> None:
                 raise CommandException("Invalid end line: %s" % (end_str,))
             last_index = min(last_index, len(captured) - 1)
 
-        text = "\n".join(
-            line.rstrip() for line in captured[first_index : last_index + 1]
-        )
+        text = "\n".join(line.rstrip() for line in captured[first_index : last_index + 1])
 
     if args.p:
         pymux.print_command_line(text)
@@ -206,9 +194,15 @@ def capture_pane(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, capture_pane)
-    parser.add_argument("-p", dest="p", action="store_true", help="Print to the output of the command line, not a pop-up.")
+    parser.add_argument(
+        "-p", dest="p", action="store_true", help="Print to the output of the command line, not a pop-up."
+    )
     parser.add_argument("-J", dest="J", action="store_true", help="Join the pieces a wrapped line was cut into.")
-    parser.add_argument("-H", dest="H", action="store_true", help="Answer HTML instead of text. The default range is the visible pane.")
+    parser.add_argument(
+        "-H", dest="H", action="store_true", help="Answer HTML instead of text. The default range is the visible pane."
+    )
     parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to capture.")
-    parser.add_argument("-S", dest="start", metavar="<start>", help="The first line. 0 is the top of the pane, negative is history.")
+    parser.add_argument(
+        "-S", dest="start", metavar="<start>", help="The first line. 0 is the top of the pane, negative is history."
+    )
     parser.add_argument("-E", dest="end", metavar="<end>", help="The last line.")

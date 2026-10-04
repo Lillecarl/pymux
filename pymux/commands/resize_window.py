@@ -103,7 +103,12 @@ def resize_window(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, resize_window)
-    parser.add_argument("-t", dest="target_window", metavar="<target-window>", help="The window to resize. Without it, the one this client is looking at.")
+    parser.add_argument(
+        "-t",
+        dest="target_window",
+        metavar="<target-window>",
+        help="The window to resize. Without it, the one this client is looking at.",
+    )
     parser.add_argument("-x", dest="columns", metavar="<columns>", help="How many columns the window is.")
     parser.add_argument("-y", dest="rows", metavar="<rows>", help="How many rows the window is.")
     parser.add_argument("-L", dest="left", metavar="<left>", help="That many columns narrower.")

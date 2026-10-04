@@ -8,6 +8,7 @@ nothing: it called `reset` on prompt_toolkit's `Screen`, which has no
 such method, so the call after it never ran. Nothing tested it.
 Lillecarl/pymux#118.
 """
+
 from __future__ import annotations
 
 import sys

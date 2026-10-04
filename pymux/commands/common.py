@@ -1,4 +1,5 @@
 """Helpers shared by the command modules."""
+
 from __future__ import annotations
 
 import argparse
@@ -173,11 +174,7 @@ def find_pane(pymux: Pymux, target: str | None) -> Pane | None:
         # Inside the session the target named, and not the one the
         # client is on: `work:2.1` is the second pane of window 2 of
         # `work`.
-        window = (
-            find_window(pymux, target)
-            if target.startswith("@")
-            else window_in(session, target)
-        )
+        window = find_window(pymux, target) if target.startswith("@") else window_in(session, target)
 
     if window is None:
         return None
@@ -292,9 +289,7 @@ def clients_named(pymux: Pymux, wanted: str) -> list[ClientState]:
     return found
 
 
-def option_as_written(
-    pymux: Pymux, option: Option, args: argparse.Namespace, target: ClientState | None = None
-) -> str:
+def option_as_written(pymux: Pymux, option: Option, args: argparse.Namespace, target: ClientState | None = None) -> str:
     """
     What an option holds, as a person wrote it.
 

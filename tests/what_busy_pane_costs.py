@@ -33,6 +33,7 @@ Knobs:
     PYMUX_BUSY_SECONDS    how long to measure each one
     PYMUX_BUSY_CEILING    the most of one core a background pane may take
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -98,10 +99,7 @@ def programs() -> list:
 
     for name in chosen:
         if name not in PROGRAMS:
-            raise SystemExit(
-                "PYMUX_BUSY_PROGRAMS names %s, not %r"
-                % (", ".join(sorted(PROGRAMS)), name)
-            )
+            raise SystemExit("PYMUX_BUSY_PROGRAMS names %s, not %r" % (", ".join(sorted(PROGRAMS)), name))
     return chosen
 
 

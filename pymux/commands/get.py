@@ -32,7 +32,8 @@ def get(pymux: Pymux, args: argparse.Namespace) -> None:
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, get)
     parser.add_argument(
-        "-t", dest="target_pane",
+        "-t",
+        dest="target_pane",
         metavar="<target-pane>",
         help="The pane to read, rather than the active one.",
     )

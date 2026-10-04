@@ -13,6 +13,7 @@ person meant. So a connection that arrives over the socket of such a
 server may run commands and may not attach, and `ctrl+b d` means quit
 with nothing to argue about. Lillecarl/pymux#159.
 """
+
 from __future__ import annotations
 
 import json
@@ -142,9 +143,7 @@ async def test_a_refused_connection_still_runs_a_command():
         server_end, client_end = connect_in_memory()
         ServerConnection(pymux, server_end, may_attach=False)
 
-        client_end.write_nowait(
-            json.dumps({"cmd": "run-command", "data": "has-session", "pane_id": None})
-        )
+        client_end.write_nowait(json.dumps({"cmd": "run-command", "data": "has-session", "pane_id": None}))
         said = await _packets(client_end, seconds=5.0)
 
         # A command answers with its output and an exit code, and the

@@ -24,6 +24,7 @@ nothing installs it, and each check's sandbox holds only the tests of
 the repository it judges. Copying twenty lines is cheaper than making
 one of these repositories depend on the other's test tree.
 """
+
 from __future__ import annotations
 
 import sys
@@ -53,17 +54,13 @@ def count_instructions(work) -> int:
 
     sys.monitoring.use_tool_id(_TOOL, "pymux-instructions")
     try:
-        sys.monitoring.register_callback(
-            _TOOL, sys.monitoring.events.INSTRUCTION, one_instruction
-        )
+        sys.monitoring.register_callback(_TOOL, sys.monitoring.events.INSTRUCTION, one_instruction)
         sys.monitoring.set_events(_TOOL, sys.monitoring.events.INSTRUCTION)
         try:
             work()
         finally:
             sys.monitoring.set_events(_TOOL, 0)
-            sys.monitoring.register_callback(
-                _TOOL, sys.monitoring.events.INSTRUCTION, None
-            )
+            sys.monitoring.register_callback(_TOOL, sys.monitoring.events.INSTRUCTION, None)
     finally:
         sys.monitoring.free_tool_id(_TOOL)
 

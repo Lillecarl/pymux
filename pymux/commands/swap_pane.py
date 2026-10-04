@@ -20,9 +20,7 @@ def swap_pane(pymux: Pymux, args: argparse.Namespace) -> None:
     # and recorded: tests/reference/tmux_compat/divergences.toml.
     # Lillecarl/pymux#400. -D used to pass neither flag, which
     # rotated every pane of the window instead of swapping one.
-    the_window(pymux, None).rotate(
-        with_pane_before_only=args.D, with_pane_after_only=args.U
-    )
+    the_window(pymux, None).rotate(with_pane_before_only=args.D, with_pane_after_only=args.U)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

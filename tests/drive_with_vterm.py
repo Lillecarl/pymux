@@ -114,6 +114,7 @@ Every run writes the list it saw and the log that says why:
     less result/vterm.log
     cp result/failures.txt pymux/tests/vterm-failures.txt
 """
+
 from __future__ import annotations
 
 import os
@@ -165,8 +166,7 @@ NOT_OURS = (
     ),
     (
         r"^(02parser|29state_fallback|03encoding_utf8)\.test$",
-        "the file reads the parser and the encoder of libvterm, which "
-        "is neither our model nor our wire.",
+        "the file reads the parser and the encoder of libvterm, which is neither our model nor our wire.",
     ),
     (
         r"^(17state_mouse|18state_termprops|22state_save|25state_input"
@@ -230,8 +230,7 @@ def run_one(directory: Path, name: str):
         said = (expired.stdout or b"").decode("utf-8", "replace")
         errors = (expired.stderr or b"").decode("utf-8", "replace")
         raise Failed(
-            "%s did not end in %d seconds. It had said:\n%s\n%s"
-            % (name, FILE_TIMEOUT, said[-2000:], errors[-2000:])
+            "%s did not end in %d seconds. It had said:\n%s\n%s" % (name, FILE_TIMEOUT, said[-2000:], errors[-2000:])
         )
     return done.stdout, done.stderr
 
@@ -257,40 +256,35 @@ def keep(directory: Path, failed: Counter, log: str) -> None:
     names = []
     for name in sorted(failed):
         names.extend([name] * failed[name])
-    header = "\n".join(
-        [
-            "# The libvterm assertions that failed with pymux in the middle.",
-            "# Each line names the test file, the line in it, and the",
-            "# assertion. Each one is a difference between what pymux emits",
-            "# and what the program in the pane asked for.",
-            "#",
-            "# ptterm/tests/vterm-failures.txt is the same list for ptterm",
-            "# alone, judged on its own model. A name here and not there is",
-            "# what the wire loses.",
-            "#",
-        ]
-        + how_to_record(
-            "pymux-vterm",
-            "failures.txt",
-            "pymux/tests/vterm-failures.txt",
+    header = (
+        "\n".join(
+            [
+                "# The libvterm assertions that failed with pymux in the middle.",
+                "# Each line names the test file, the line in it, and the",
+                "# assertion. Each one is a difference between what pymux emits",
+                "# and what the program in the pane asked for.",
+                "#",
+                "# ptterm/tests/vterm-failures.txt is the same list for ptterm",
+                "# alone, judged on its own model. A name here and not there is",
+                "# what the wire loses.",
+                "#",
+            ]
+            + how_to_record(
+                "pymux-vterm",
+                "failures.txt",
+                "pymux/tests/vterm-failures.txt",
+            )
         )
-    ) + "\n"
-    (directory / "failures.txt").write_text(
-        header + "".join(line + "\n" for line in names)
+        + "\n"
     )
+    (directory / "failures.txt").write_text(header + "".join(line + "\n" for line in names))
     (directory / "vterm.log").write_text(log)
 
 
 def report(failed: Counter, include: str) -> int:
     "Compare the run with the recorded list. Returns the exit status."
     known = read_baseline()
-    chosen = Counter(
-        {
-            entry: count
-            for entry, count in known.items()
-            if re.search(include, entry.split(":")[0])
-        }
-    )
+    chosen = Counter({entry: count for entry, count in known.items() if re.search(include, entry.split(":")[0])})
 
     new = sorted((failed - chosen).elements())
     fixed = sorted((chosen - failed).elements())
@@ -305,8 +299,7 @@ def report(failed: Counter, include: str) -> int:
             "\nvterm: %s no longer describes the run. Write it again with:\n"
             "    nix build --file . checks.pymux-vterm.run\n"
             "    cp result/failures.txt pymux/tests/%s\n"
-            "and read result/vterm.log for what each answer was."
-            % (BASELINE.name, BASELINE.name)
+            "and read result/vterm.log for what each answer was." % (BASELINE.name, BASELINE.name)
         )
         return 1
 
@@ -337,10 +330,7 @@ def check_exclusions(names, include: str) -> int:
         status = 1
 
     if status:
-        print(
-            "\nvterm: NOT_OURS in %s no longer describes the suite."
-            % Path(__file__).name
-        )
+        print("\nvterm: NOT_OURS in %s no longer describes the suite." % Path(__file__).name)
     return status
 
 

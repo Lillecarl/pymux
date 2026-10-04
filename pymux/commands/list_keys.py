@@ -20,9 +20,7 @@ def list_keys(pymux: Pymux, args: argparse.Namespace) -> None:
     # Create help string.
     result = []
 
-    for (table, _keys), custom_binding in (
-        pymux.key_bindings_manager.custom_bindings.items()
-    ):
+    for (table, _keys), custom_binding in pymux.key_bindings_manager.custom_bindings.items():
         if args.table and args.table != table:
             continue
 
@@ -31,10 +29,7 @@ def list_keys(pymux: Pymux, args: argparse.Namespace) -> None:
             % (
                 table,
                 custom_binding.written,
-                " ".join(
-                    [custom_binding.command]
-                    + list(map(wrap_argument, custom_binding.arguments))
-                ),
+                " ".join([custom_binding.command] + list(map(wrap_argument, custom_binding.arguments))),
             )
         )
 
@@ -43,6 +38,4 @@ def list_keys(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, list_keys)
-    parser.add_argument(
-        "-T", dest="table", metavar="<key-table>", help="List only this key table."
-    )
+    parser.add_argument("-T", dest="table", metavar="<key-table>", help="List only this key table.")

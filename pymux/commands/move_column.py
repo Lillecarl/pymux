@@ -41,9 +41,7 @@ def move_column(pymux: Pymux, args: argparse.Namespace) -> None:
     window = the_window(pymux, None)
 
     if not window.strip:
-        raise CommandException(
-            "This window is not a strip. `set-window-option strip on` first."
-        )
+        raise CommandException("This window is not a strip. `set-window-option strip on` first.")
 
     pane = window.active_pane
     if pane is None:

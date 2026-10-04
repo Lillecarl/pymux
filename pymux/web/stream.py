@@ -12,6 +12,7 @@ own. `send` is a coroutine the caller gives, because a socket and a
 websocket say "send" differently and neither belongs here.
 Lillecarl/pymux#461.
 """
+
 from __future__ import annotations
 
 import json
@@ -76,11 +77,7 @@ class PaneStream:
         changed = self.pane.terminal.terminal_control.on_content_changed
         changed.add_handler(self._it_changed)
         try:
-            await self._send(
-                self._view.welcome(
-                    self.pane.screen, self.pane.revision, self.writable
-                )
-            )
+            await self._send(self._view.welcome(self.pane.screen, self.pane.revision, self.writable))
             await self._push()
 
             while not self._closed:

@@ -52,9 +52,7 @@ class WindowsClient(Client):
         self._tasks: anyio.abc.TaskGroup | None = None
 
     @override
-    def attach(
-        self, detach_other_clients: bool = False, color_depth=ColorDepth.DEPTH_8_BIT
-    ):
+    def attach(self, detach_other_clients: bool = False, color_depth=ColorDepth.DEPTH_8_BIT):
         anyio.run(self._attach, detach_other_clients, color_depth)
 
     async def _attach(self, detach_other_clients: bool, color_depth) -> None:

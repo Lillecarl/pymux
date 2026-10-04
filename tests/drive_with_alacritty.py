@@ -191,6 +191,7 @@ the check, the same way the conformance lists work:
     less result/alacritty.log
     cp result/failures.txt pymux/tests/alacritty-failures.txt
 """
+
 from __future__ import annotations
 
 import json
@@ -278,9 +279,7 @@ def read_baseline() -> set:
 
 def reference_tests(directory: Path):
     "Every reference test Alacritty ships, by name, in a stable order."
-    return sorted(
-        path.name for path in directory.iterdir() if (path / "grid.json").is_file()
-    )
+    return sorted(path.name for path in directory.iterdir() if (path / "grid.json").is_file())
 
 
 def left_out(name: str) -> bool:
@@ -313,10 +312,7 @@ def wire(tmp: Path, name: str, directory: Path) -> bytes:
     )
     pane.start()
     try:
-        _trace(
-            "%s: %d bytes onto %d by %d"
-            % (name, len(recording), size["screen_lines"], size["columns"])
-        )
+        _trace("%s: %d bytes onto %d by %d" % (name, len(recording), size["screen_lines"], size["columns"]))
         pane.write(recording, timeout=FENCE_TIMEOUT)
         if os.environ.get("PYMUX_ALACRITTY_TRACE"):
             pane.trace_pane()
@@ -344,9 +340,7 @@ def run_one(tmp: Path, judge: str, name: str, directory: Path):
     except subprocess.TimeoutExpired:
         return False, "the judge did not answer in %d seconds" % JUDGE_TIMEOUT
 
-    said = done.stdout.decode("utf-8", "replace") + done.stderr.decode(
-        "utf-8", "replace"
-    )
+    said = done.stdout.decode("utf-8", "replace") + done.stderr.decode("utf-8", "replace")
     if done.returncode == 0:
         return True, said
     if done.returncode == 1:
@@ -391,8 +385,7 @@ def report(differed, include: str) -> int:
             "\nalacritty: %s no longer describes the run. Write it again with:\n"
             "    nix build --file . checks.pymux-alacritty.run\n"
             "    cp result/failures.txt pymux/tests/%s\n"
-            "and read result/alacritty.log for what each cell was."
-            % (BASELINE.name, BASELINE.name)
+            "and read result/alacritty.log for what each cell was." % (BASELINE.name, BASELINE.name)
         )
         return 1
 
@@ -414,10 +407,7 @@ def check_exclusions(names, include: str) -> int:
         print("alacritty: left out %s," % (", ".join(matched) or "nothing"))
         print("alacritty:     because %s" % reason)
         if not matched:
-            print(
-                "alacritty: NOT_OURS leaves out %r, and no test has that name."
-                % pattern
-            )
+            print("alacritty: NOT_OURS leaves out %r, and no test has that name." % pattern)
             status = 1
 
     both = sorted(known & set(out))
@@ -426,10 +416,7 @@ def check_exclusions(names, include: str) -> int:
         status = 1
 
     if status:
-        print(
-            "\nalacritty: NOT_OURS in %s no longer describes the suite."
-            % Path(__file__).name
-        )
+        print("\nalacritty: NOT_OURS in %s no longer describes the suite." % Path(__file__).name)
     return status
 
 

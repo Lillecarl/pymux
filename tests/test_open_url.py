@@ -7,6 +7,7 @@ receives the request and whether it asks first, and that is what these
 tests judge. The client half is one call to `webbrowser`, judged on its
 own at the bottom.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -36,9 +37,7 @@ SIZE = Size(rows=24, columns=80)
 
 def opens(packets):
     "The open packets among everything the server wrote."
-    return [
-        json.loads(packet) for packet in packets if json.loads(packet).get("cmd") == "open"
-    ]
+    return [json.loads(packet) for packet in packets if json.loads(packet).get("cmd") == "open"]
 
 
 @contextlib.contextmanager
@@ -103,9 +102,7 @@ async def test_last_targets_client_used_last():
         # Attaching counts as using, so b is the last one until a types.
         assert pymux.clients_to_open_on() == [b]
         session.typed(a, "x")
-        await once(
-            lambda: a.last_used > b.last_used, 5.0, "the typing never counted"
-        )
+        await once(lambda: a.last_used > b.last_used, 5.0, "the typing never counted")
         assert pymux.clients_to_open_on() == [a]
 
         pymux.handle_command("open-url %s" % URL)
@@ -125,9 +122,7 @@ async def test_broadcast_reaches_every_client():
 
         pymux.handle_command("open-url %s" % URL)
 
-        await once(
-            lambda: len(opens(packets)) == 2, 5.0, "the broadcast never reached both"
-        )
+        await once(lambda: len(opens(packets)) == 2, 5.0, "the broadcast never reached both")
         assert opens(packets) == [{"cmd": "open", "data": URL}] * 2
 
 
@@ -220,9 +215,7 @@ async def test_a_pane_cannot_confirm_its_own_open():
 
         await session.command("open-url -c %s" % URL)
 
-        await once(
-            lambda: state.confirm_command, 5.0, "the pane's -c was taken as an answer"
-        )
+        await once(lambda: state.confirm_command, 5.0, "the pane's -c was taken as an answer")
         assert opens(packets) == []
 
 
@@ -275,9 +268,7 @@ async def test_a_second_question_waits_its_turn():
         # `confirm-before` asks the client that ran it, so it needs the
         # app in context; `open-url` walks the attached clients instead.
         with set_app(state.app):
-            pymux.handle_command(
-                "confirm-before -p 'Really? (y/n)' 'display-message kept'"
-            )
+            pymux.handle_command("confirm-before -p 'Really? (y/n)' 'display-message kept'")
         pymux.handle_command("open-url %s" % URL)
 
         # The first question is still the one on screen.
@@ -285,9 +276,7 @@ async def test_a_second_question_waits_its_turn():
         assert state.confirm_command == "display-message kept"
 
         session.typed(state, "y")
-        await once(
-            lambda: state.message == "kept", 5.0, "the first command never ran"
-        )
+        await once(lambda: state.message == "kept", 5.0, "the first command never ran")
 
         # Answering it brings the second one up rather than losing it.
         assert URL in state.confirm_text
@@ -306,12 +295,8 @@ async def test_no_answers_one_question_and_leaves_the_rest():
         state, _ = await session.attach("only", SIZE)
 
         with set_app(state.app):
-            pymux.handle_command(
-                "confirm-before -p 'First? (y/n)' 'display-message one'"
-            )
-            pymux.handle_command(
-                "confirm-before -p 'Second? (y/n)' 'display-message two'"
-            )
+            pymux.handle_command("confirm-before -p 'First? (y/n)' 'display-message one'")
+            pymux.handle_command("confirm-before -p 'Second? (y/n)' 'display-message two'")
 
         session.typed(state, "n")
         await once(
@@ -530,9 +515,7 @@ async def test_shim_rides_path_of_new_pane():
             pymux._shim_pane_environment()
 
             assert os.environ["PATH"].startswith(pymux._open_url_shim_dir + os.pathsep)
-            assert os.environ["BROWSER"] == os.path.join(
-                pymux._open_url_shim_dir, "pymux-open-url"
-            )
+            assert os.environ["BROWSER"] == os.path.join(pymux._open_url_shim_dir, "pymux-open-url")
 
 
 async def test_pane_that_starts_with_shim_finds_opener():
@@ -552,10 +535,10 @@ async def test_pane_that_starts_with_shim_finds_opener():
         # a row and the reader below saw it cut. Lillecarl/pymux#267,
         # fixed with Lillecarl/pymux#321.
         program = (
-            "%s -c 'import os, time; p = os.environ[\"PATH\"].split(\":\")[0];"
-            " b = os.environ.get(\"BROWSER\");"
-            " print(\"MATCH=\" + str(b == p + \"/pymux-open-url\") +"
-            " \" and the shim directory leads PATH\"); time.sleep(30)'"
+            '%s -c \'import os, time; p = os.environ["PATH"].split(":")[0];'
+            ' b = os.environ.get("BROWSER");'
+            ' print("MATCH=" + str(b == p + "/pymux-open-url") +'
+            ' " and the shim directory leads PATH"); time.sleep(30)\''
         ) % (sys.executable,)
         with set_app(state.app):
             pymux.create_window(program)

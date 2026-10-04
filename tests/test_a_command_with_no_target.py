@@ -9,6 +9,7 @@ there is no such window, and the answer used to be invented:
 all. An `IndexError` is not a `CommandException`, so nothing turned it
 into a message. Lillecarl/pymux#473.
 """
+
 from __future__ import annotations
 
 import sys
@@ -78,6 +79,4 @@ def test_a_server_that_holds_a_window_somewhere_finds_it(pymux):
 
 def test_a_window_command_with_no_target_says_there_is_none(pymux):
     "An IndexError out of the handler reached nobody."
-    assert run(pymux, "resize-window", "-x", "200") == [
-        "pymux: no current window"
-    ]
+    assert run(pymux, "resize-window", "-x", "200") == ["pymux: no current window"]

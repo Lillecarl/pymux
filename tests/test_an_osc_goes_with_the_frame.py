@@ -14,6 +14,7 @@ as `tty_cmd_setselection` among the drawing commands (`tty.c:2140`);
 only its popup case, which has no pane, writes straight to the
 terminal. Lillecarl/pymux#478.
 """
+
 from __future__ import annotations
 
 import sys
@@ -59,9 +60,7 @@ def wire():
 
 def written(sent) -> str:
     "Everything the client has been sent, in order."
-    return "".join(
-        packet["data"] for packet in sent if packet["cmd"] == Packet.OUT
-    )
+    return "".join(packet["data"] for packet in sent if packet["cmd"] == Packet.OUT)
 
 
 def test_nothing_goes_out_before_the_frame(wire):

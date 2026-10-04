@@ -26,6 +26,7 @@ appearances that spell alike share one number.
 Nothing here does any I/O, imports no transport and holds no socket.
 Lillecarl/pymux#461.
 """
+
 from __future__ import annotations
 
 from typing import Any, NamedTuple
@@ -133,11 +134,7 @@ class PaneView:
 
         # Any of these changes how every row draws, so a viewer holding
         # rows under the old answer holds nothing worth keeping.
-        whole = (
-            size != self._size
-            or reverse_video != self._reverse_video
-            or palette != self._palette
-        )
+        whole = size != self._size or reverse_video != self._reverse_video or palette != self._palette
         if whole:
             self._drawn_at.clear()
             self._size = size
@@ -161,9 +158,7 @@ class PaneView:
             if not whole and self._drawn_at.get(index) == at:
                 continue
             self._drawn_at[index] = at
-            rows[str(index)] = self._runs(
-                data_buffer.get(number), columns, reverse_video, styles
-            )
+            rows[str(index)] = self._runs(data_buffer.get(number), columns, reverse_video, styles)
 
         cursor = self._cursor_of(screen)
 
@@ -223,9 +218,7 @@ class PaneView:
             answer.append([self._style_number(appearance, reverse_video, styles), text])
         return answer
 
-    def _style_number(
-        self, appearance, reverse_video: bool, styles: dict[str, dict[str, str]]
-    ) -> int:
+    def _style_number(self, appearance, reverse_video: bool, styles: dict[str, dict[str, str]]) -> int:
         "The number this way of drawing goes out as, naming it if it is new."
         drawn = style_of(appearance, reverse_video)
         key = (drawn.classes, drawn.style, href_of(appearance.hyperlink))

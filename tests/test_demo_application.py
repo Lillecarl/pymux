@@ -6,6 +6,7 @@ with what it is told. The pane answers what it holds, which is the
 theme's palette when the theme owns the screen -- so the pictures of
 a theme show the theme's colours inside the pane too.
 """
+
 from __future__ import annotations
 
 from demo_application import ASKS, CONVENTIONAL, Painter, parse_replies
@@ -22,9 +23,7 @@ def test_palette_reply_is_read_by_index():
 
 
 def test_default_replies_are_read_by_name():
-    colours = parse_replies(
-        b"\x1b]10;#aabbcc\x1b\\\x1b]11;rgb:1111/2222/3333\x1b\\"
-    )
+    colours = parse_replies(b"\x1b]10;#aabbcc\x1b\\\x1b]11;rgb:1111/2222/3333\x1b\\")
     assert colours == {"foreground": (0xAA, 0xBB, 0xCC), "background": (0x11, 0x22, 0x33)}
 
 

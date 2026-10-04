@@ -53,5 +53,7 @@ def list_sessions(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, list_sessions, aliases=("ls",))
-    parser.add_argument("-a", dest="a", action="store_true", help="Accepted for tmux. Every session of this server is listed anyway.")
+    parser.add_argument(
+        "-a", dest="a", action="store_true", help="Accepted for tmux. Every session of this server is listed anyway."
+    )
     add_format_arguments(parser, "Print this format for each session.")

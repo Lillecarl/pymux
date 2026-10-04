@@ -7,6 +7,7 @@ configuration is another machine's. So the client takes the
 `set-client-option` lines out of its own file and sends them with
 `start-gui`. Lillecarl/pymux#223.
 """
+
 from __future__ import annotations
 
 import contextvars
@@ -172,9 +173,7 @@ async def test_the_client_draws_with_what_it_announced():
         client = (await _attached(pymux, [["theme", "grey"]])).client_state
 
         assert client.theme == "grey"
-        assert (
-            client.style.get_attrs_for_style_str("class:statusbar").bgcolor == "5f5f87"
-        )
+        assert client.style.get_attrs_for_style_str("class:statusbar").bgcolor == "5f5f87"
 
 
 async def test_a_client_that_announces_nothing_starts_on_the_search():
@@ -205,11 +204,7 @@ async def test_a_bad_value_never_fails_the_attach():
     they may not be able to reach.
     """
     async with a_server() as pymux:
-        client = (
-            await _attached(
-                pymux, [["theme", "nosuchtheme"], ["swap-light-and-dark-colors", "on"]]
-            )
-        ).client_state
+        client = (await _attached(pymux, [["theme", "nosuchtheme"], ["swap-light-and-dark-colors", "on"]])).client_state
 
         assert client is not None, "the attach was refused"
         assert client.theme == NEAREST

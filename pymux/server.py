@@ -753,7 +753,7 @@ class ServerConnection:
             try:
                 name, value = one
                 option = self.pymux.client_options[name]
-            except (KeyError, TypeError, ValueError):
+            except KeyError, TypeError, ValueError:
                 self.client_state.message = "Invalid client option: %s" % (one,)
                 continue
 

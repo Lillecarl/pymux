@@ -9,6 +9,7 @@ answers `TMUX_PANE` the same way. An explicit target always wins, a
 real client keeps its focus, and a pane that died since falls back to
 the active one.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -58,40 +59,30 @@ async def two_panes():
 
 async def test_calling_pane_wins_over_active_pane():
     async with two_panes() as (pymux, state, session, caller, _active):
-        with set_app(state.app), calling_as(
-            pymux, session, caller_pane_id=caller.pane_id
-        ):
+        with set_app(state.app), calling_as(pymux, session, caller_pane_id=caller.pane_id):
             assert find_pane(pymux, None) is caller
             assert find_pane(pymux, "") is caller
 
 
 async def test_explicit_target_wins_over_calling_pane():
     async with two_panes() as (pymux, state, session, caller, active):
-        with set_app(state.app), calling_as(
-            pymux, session, caller_pane_id=caller.pane_id
-        ):
+        with set_app(state.app), calling_as(pymux, session, caller_pane_id=caller.pane_id):
             assert find_pane(pymux, "%%%d" % active.pane_id) is active
 
 
 async def test_real_client_keeps_its_focus():
     async with two_panes() as (pymux, state, session, caller, active):
-        with set_app(state.app), calling_as(
-            pymux, session, temporary=False, caller_pane_id=caller.pane_id
-        ):
+        with set_app(state.app), calling_as(pymux, session, temporary=False, caller_pane_id=caller.pane_id):
             assert find_pane(pymux, None) is active
 
 
 async def test_dead_calling_pane_falls_back_to_active():
     async with two_panes() as (pymux, state, session, _caller, active):
-        with set_app(state.app), calling_as(
-            pymux, session, caller_pane_id=999999
-        ):
+        with set_app(state.app), calling_as(pymux, session, caller_pane_id=999999):
             assert find_pane(pymux, None) is active
 
 
 async def test_command_without_caller_keeps_active_pane():
     async with two_panes() as (pymux, state, session, _caller, active):
-        with set_app(state.app), calling_as(
-            pymux, session, caller_pane_id=None
-        ):
+        with set_app(state.app), calling_as(pymux, session, caller_pane_id=None):
             assert find_pane(pymux, None) is active

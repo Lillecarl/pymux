@@ -20,9 +20,7 @@ def list_user_vars(pymux: Pymux, args: argparse.Namespace) -> None:
     named. The active pane answers when no target names one.
     """
     pane = the_pane(pymux, args.target_pane)
-    lines = [
-        "%s=%s" % (name, value) for name, value in sorted(pane.user_vars.items())
-    ]
+    lines = ["%s=%s" % (name, value) for name, value in sorted(pane.user_vars.items())]
     answer(pymux, "\n".join(lines))
 
 

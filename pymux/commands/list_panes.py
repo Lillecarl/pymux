@@ -24,16 +24,12 @@ def list_panes(pymux: Pymux, args: argparse.Namespace) -> None:
     if args.target_pane:
         window = find_window(pymux, args.target_pane.rsplit(".", 1)[0])
         if window is None:
-            raise CommandException(
-                "can't find window: %s" % (args.target_pane,)
-            )
+            raise CommandException("can't find window: %s" % (args.target_pane,))
         windows: list[Window] = [window]
     elif args.a:
         # Every window of every session. tmux reads `-a` as the whole
         # server too. Lillecarl/pymux#323.
-        windows = [
-            w for session in pymux.sessions for w in session.arrangement.windows
-        ]
+        windows = [w for session in pymux.sessions for w in session.arrangement.windows]
     elif args.s:
         windows = list(pymux.arrangement.windows)
     else:

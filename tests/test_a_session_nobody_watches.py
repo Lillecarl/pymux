@@ -19,6 +19,7 @@ same two flags the same way and calls the result `default-size`
 means a size to stay -- this one gives way to a client that attaches.
 Lillecarl/pymux#459.
 """
+
 from __future__ import annotations
 
 import os
@@ -242,9 +243,7 @@ def test_a_dash_reads_the_terminal_of_whoever_typed_it(monkeypatch):
     """
     import shutil
 
-    monkeypatch.setattr(
-        shutil, "get_terminal_size", lambda fallback=None: os.terminal_size((123, 45))
-    )
+    monkeypatch.setattr(shutil, "get_terminal_size", lambda fallback=None: os.terminal_size((123, 45)))
 
     assert _axis_of({"x": "-"}, "x", 80) == 123
     assert _axis_of({"y": "-"}, "y", 24) == 45
@@ -335,9 +334,7 @@ def test_a_target_nothing_holds_says_so(pymux):
     "A silent no-op is what this command used to be. Lillecarl/pymux#458."
     new_session(pymux)
 
-    assert resize_window(pymux, "-t", "@9999", "-x", "200") == [
-        "pymux: can't find window: @9999"
-    ]
+    assert resize_window(pymux, "-t", "@9999", "-x", "200") == ["pymux: can't find window: @9999"]
 
 
 def test_the_titlebar_row_comes_out_of_the_size_that_was_named(pymux):

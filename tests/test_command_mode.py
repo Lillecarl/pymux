@@ -12,6 +12,7 @@ draws the same line, so the binding here is for emacs status keys only.
 The tests are coroutines. Focusing the command line starts a background
 task, and prompt_toolkit asks the running loop for one.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app
@@ -146,9 +147,7 @@ async def test_spelled_out_escape_leaves_on_press():
     async with create_session() as (pymux, state):
         in_command_mode(state)
 
-        assert leaves_command_mode(
-            pymux, state, None, typing=csi(Csi.KITTY_KEYBOARD, 27)
-        )
+        assert leaves_command_mode(pymux, state, None, typing=csi(Csi.KITTY_KEYBOARD, 27))
 
 
 async def test_legacy_escape_still_waits():
@@ -173,9 +172,7 @@ async def test_spelled_out_alt_key_does_not_leave():
         in_command_mode(state)
 
         # alt+f, as a terminal that disambiguates writes it.
-        assert not leaves_command_mode(
-            pymux, state, None, typing=csi(Csi.KITTY_KEYBOARD, 102, 3)
-        )
+        assert not leaves_command_mode(pymux, state, None, typing=csi(Csi.KITTY_KEYBOARD, 102, 3))
 
 
 async def test_escape_stays_with_vi_when_status_keys_are_vi():

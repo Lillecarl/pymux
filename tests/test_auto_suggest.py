@@ -9,6 +9,7 @@ its own key bindings gets the grey text and no way to accept it.
 
 Lillecarl/pymux#163.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app

@@ -9,6 +9,7 @@ chosen one: `desk`, `phone`, `the big screen`.
 from the tty path and nothing renames it (`server-client.c:2988`), so
 the shape here is pymux's own. Lillecarl/pymux#340.
 """
+
 from __future__ import annotations
 
 import asyncio

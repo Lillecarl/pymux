@@ -18,6 +18,7 @@ and `pymux/style.py` turns the reverse back off for a selected cell.
 
 Lillecarl/pymux#99.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.styles import default_ui_style, merge_styles
@@ -59,9 +60,7 @@ def test_a_selected_cell_of_an_ordinary_pane_is_still_reversed():
 
 
 def test_the_search_match_follows_the_same_rule():
-    reversed_pane = resolved(
-        the_style(), "reverse class:reversed-pane class:incsearch.current"
-    )
+    reversed_pane = resolved(the_style(), "reverse class:reversed-pane class:incsearch.current")
     ordinary = resolved(the_style(), "class:incsearch.current")
 
     assert reversed_pane.reverse is False
@@ -71,9 +70,7 @@ def test_the_search_match_follows_the_same_rule():
 def test_every_theme_carries_the_rule():
     "A theme that dropped it would lose the selection again."
     for name in THEMES:
-        attrs = resolved(
-            the_style(name), "reverse class:reversed-pane class:selected"
-        )
+        attrs = resolved(the_style(name), "reverse class:reversed-pane class:selected")
         assert attrs.reverse is False, "%s loses the selection" % (name,)
 
 
@@ -81,9 +78,7 @@ def test_the_class_only_arrives_when_the_pane_is_reversed():
     "`Terminal._copy_style` is what puts it on, and only then."
     from ptterm.terminal import Terminal
 
-    reversed_style = Terminal._copy_style(
-        type("T", (), {"copy_reverse_video": True})()
-    )
+    reversed_style = Terminal._copy_style(type("T", (), {"copy_reverse_video": True})())
     plain = Terminal._copy_style(type("T", (), {"copy_reverse_video": False})())
 
     assert "class:reversed-pane" in reversed_style

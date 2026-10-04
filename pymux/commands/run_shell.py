@@ -78,5 +78,15 @@ def _text(data: bytes | None) -> str:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, run_shell)
-    parser.add_argument("-b", dest="b", action="store_true", help="Run in the background: the command that asked does not wait, and the output goes to the view of the client that asked.")
-    parser.add_argument("shell_command", nargs=argparse.REMAINDER, metavar="<shell-command>", help="The command to run, through the shell.")
+    parser.add_argument(
+        "-b",
+        dest="b",
+        action="store_true",
+        help="Run in the background: the command that asked does not wait, and the output goes to the view of the client that asked.",
+    )
+    parser.add_argument(
+        "shell_command",
+        nargs=argparse.REMAINDER,
+        metavar="<shell-command>",
+        help="The command to run, through the shell.",
+    )

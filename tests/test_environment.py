@@ -9,6 +9,7 @@ value rather than to nothing; and a name unset in both scopes leaves
 the environment entirely. `show-environment` prints `NAME=value`
 lines, `-s` escapes them for `eval`.
 """
+
 from __future__ import annotations
 
 import argparse

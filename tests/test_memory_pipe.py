@@ -6,6 +6,7 @@ pair of ends joins them. It has to behave like the socket: packets
 arrive whole and in order, and the end of one side is the end of the
 other.
 """
+
 from __future__ import annotations
 
 import asyncio

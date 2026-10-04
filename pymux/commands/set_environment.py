@@ -35,7 +35,9 @@ def set_environment(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, set_environment)
-    parser.add_argument("-g", dest="g", action="store_true", help="Fill the global scope, which new sessions start from.")
+    parser.add_argument(
+        "-g", dest="g", action="store_true", help="Fill the global scope, which new sessions start from."
+    )
     parser.add_argument("-u", dest="u", action="store_true", help="Remove the variable from the scope.")
     parser.add_argument("name", metavar="<name>")
     parser.add_argument("value", metavar="<value>", nargs="?")

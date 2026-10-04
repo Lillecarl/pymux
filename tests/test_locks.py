@@ -6,6 +6,7 @@ the overlay, which belongs to the session -- so the tests say the
 overlay opened, and that `lock-command` is what runs in it.
 Lillecarl/pymux#297.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app

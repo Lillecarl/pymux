@@ -7,6 +7,7 @@ goes out of the order and back with the pen of unlinked windows.
 The harness starts with two windows of one pane, and the tests say
 which is which. Lillecarl/pymux#297.
 """
+
 from __future__ import annotations
 
 import argparse

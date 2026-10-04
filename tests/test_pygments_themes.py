@@ -14,6 +14,7 @@ pinned ones are the anchors a person can check against pygments.
 
 Lillecarl/pymux#194.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -139,6 +140,4 @@ async def test_client_draws_with_pygments_theme_it_is_given():
         client.theme = "pygments:dracula"
 
         assert client.style is pygments_theme("dracula")
-        assert (
-            client.style.get_attrs_for_style_str("class:statusbar").bgcolor == "ff79c6"
-        )
+        assert client.style.get_attrs_for_style_str("class:statusbar").bgcolor == "ff79c6"

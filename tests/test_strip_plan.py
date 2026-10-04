@@ -11,6 +11,7 @@ something outside itself: `test_plane.py` holds every plan to the
 promises every layout makes, and `test_plan_and_frame.py` holds this
 plan against the frame prompt_toolkit actually draws.
 """
+
 from __future__ import annotations
 
 from hypothesis import given
@@ -271,11 +272,7 @@ def test_stack_has_line_across_every_gap_in_it():
 def test_line_across_stack_grows_with_gap():
     "Two rows when a pane draws a bar below it and the next one above."
     window, _ = create_strip((2,))
-    across = [
-        line
-        for line in lines_of(window, gaps=Gaps(between_panes=2))
-        if line.char == BORDER_HORIZONTAL
-    ]
+    across = [line for line in lines_of(window, gaps=Gaps(between_panes=2)) if line.char == BORDER_HORIZONTAL]
 
     assert across[0].rect.height == 2
 

@@ -15,6 +15,7 @@ a unit test sees:
 nothing else can, which is why a headless one runs against this separately.
 Lillecarl/pymux#461.
 """
+
 from __future__ import annotations
 
 import json
@@ -33,7 +34,7 @@ COLUMNS = 30
 #: A program that stays until something kills it. `python -c pass` ends
 #: before the first frame, and a pane that is already dead says nothing
 #: about a stream of one that is not.
-STAYS = "%s -c \"import time; time.sleep(60)\"" % (sys.executable,)
+STAYS = '%s -c "import time; time.sleep(60)"' % (sys.executable,)
 
 
 @pytest.fixture
@@ -77,9 +78,7 @@ async def _serving(mux, tasks, writable: bool) -> _Serving:
     # wait below is what says it came up.
     port = 18100 + (hash(mux.socket_name) % 400)
 
-    tasks.start_soon(
-        lambda: serve(mux.socket_name, "127.0.0.1", port, token, writable)
-    )
+    tasks.start_soon(lambda: serve(mux.socket_name, "127.0.0.1", port, token, writable))
 
     with anyio.fail_after(10):
         while True:
@@ -272,10 +271,7 @@ async def _http(port: int, path: str):
     "One GET, without a client library: the answer's head and body."
     stream = await anyio.connect_tcp("127.0.0.1", port)
     async with stream:
-        await stream.send(
-            ("GET %s HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n" % path)
-            .encode()
-        )
+        await stream.send(("GET %s HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n" % path).encode())
         said = b""
         with anyio.move_on_after(5):
             while True:

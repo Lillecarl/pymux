@@ -9,6 +9,7 @@ of themes) pairs the gallery builds -- one seat boot per batch, which
 is what the cost of a combo is -- and the check reads it back with
 `fromJSON`.
 """
+
 from __future__ import annotations
 
 import json

@@ -8,6 +8,7 @@ what every asyncio task waits for -- and that a server takes the signal
 that answers when its loop is too wedged to read a command.
 Lillecarl/pymux#249.
 """
+
 from __future__ import annotations
 
 import asyncio

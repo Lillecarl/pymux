@@ -22,6 +22,7 @@ and fails these.
 
 Lillecarl/pymux#194, Lillecarl/pymux#195.
 """
+
 from __future__ import annotations
 
 import io
@@ -78,9 +79,7 @@ LOUD_ONES = frozenset(
 async def create_client():
     "A server with one client attached, and the client's application."
     pymux = Pymux()
-    output = Vt100_Output(
-        stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS)
-    )
+    output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS))
     with create_pipe_input() as pipe:
         state = pymux.add_client(
             output=output,
@@ -106,9 +105,7 @@ def bar_of(app):
 
 def _another_client(pymux, ttyname="/dev/pts/9"):
     "A second terminal on the same server, with a name `-t` can say."
-    output = Vt100_Output(
-        stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS)
-    )
+    output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS))
     with create_pipe_input() as pipe:
         return pymux.add_client(
             output=output,
@@ -154,9 +151,7 @@ async def test_the_active_pane_s_number_reads_louder_than_the_others():
     Lillecarl/pymux#161. Lillecarl/pymux#395.
     """
     async with create_client() as (pymux, client):
-        loud = client.app.style.get_attrs_for_style_str(
-            "class:terminal.focused class:panenumber"
-        )
+        loud = client.app.style.get_attrs_for_style_str("class:terminal.focused class:panenumber")
         quiet = client.app.style.get_attrs_for_style_str("class:panenumber")
 
         assert loud.bgcolor != quiet.bgcolor
@@ -185,10 +180,7 @@ async def test_every_theme_reaches_client():
         for name, theme in THEMES.items():
             pymux.handle_command("set-client-option theme %s" % name)
 
-            assert (
-                bar_of(client.app)
-                == theme.get_attrs_for_style_str("class:statusbar").bgcolor
-            )
+            assert bar_of(client.app) == theme.get_attrs_for_style_str("class:statusbar").bgcolor
 
 
 async def test_the_theme_belongs_to_one_client():
@@ -200,9 +192,7 @@ async def test_the_theme_belongs_to_one_client():
     async with create_client() as (pymux, one):
         two = _another_client(pymux)
 
-        pymux.handle_command(
-            "set-client-option -t %s theme grey" % (two.connection.name,)
-        )
+        pymux.handle_command("set-client-option -t %s theme grey" % (two.connection.name,))
 
         assert bar_of(one.app) == "ansigreen"
         assert bar_of(two.app) == "5f5f87"
@@ -314,6 +304,7 @@ GREY_ROLES = {
     "search-match-current-text": "#ffffff",
 }
 
+
 def test_roles_produce_rules_default_drew():
     from pymux.style import ROLES, derive
 
@@ -332,22 +323,20 @@ def test_roles_produce_rules_grey_drew():
         key: value
         for key, value in {
             **RULES,
-            
-                "terminal.focused border": "#8787af bold",
-                "terminal.focused titlebar": "bg:#5f5f87 #ffffff",
-                "terminal.focused titlebar name": "bg:#8787af #ffffff",
-                "terminal.focused titlebar paneindex": "bg:#8787af",
-                "statusbar": "noreverse bg:#5f5f87 #ffffff",
-                "statusbar window.current": "bg:#8787af #ffffff",
-                "auto-suggestion": "bg:#4e4e5e #8888aa",
-                "message": "bg:#8787af #ffffff",
-                "clock": "bg:#5f5f87",
-                "terminal.focused panenumber": "bg:#5f5f87",
-                "search-toolbar.prompt": "bg:#8787af #ffffff",
-                "search-toolbar.text": "bg:#8787af #000000",
-                "search-match": "#000000 bg:#8888aa",
-                "search-match.current": "#ffffff bg:#5f5f87 underline"
-            ,
+            "terminal.focused border": "#8787af bold",
+            "terminal.focused titlebar": "bg:#5f5f87 #ffffff",
+            "terminal.focused titlebar name": "bg:#8787af #ffffff",
+            "terminal.focused titlebar paneindex": "bg:#8787af",
+            "statusbar": "noreverse bg:#5f5f87 #ffffff",
+            "statusbar window.current": "bg:#8787af #ffffff",
+            "auto-suggestion": "bg:#4e4e5e #8888aa",
+            "message": "bg:#8787af #ffffff",
+            "clock": "bg:#5f5f87",
+            "terminal.focused panenumber": "bg:#5f5f87",
+            "search-toolbar.prompt": "bg:#8787af #ffffff",
+            "search-toolbar.text": "bg:#8787af #000000",
+            "search-match": "#000000 bg:#8888aa",
+            "search-match.current": "#ffffff bg:#5f5f87 underline",
         }.items()
     }
 

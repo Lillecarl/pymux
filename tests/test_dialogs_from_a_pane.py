@@ -16,6 +16,7 @@ command came over the command line (Lillecarl/pymux#288) -- and the two
 that talk to `get_client_state()` directly were not.
 Lillecarl/pymux#272.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.data_structures import Size
@@ -42,9 +43,7 @@ async def test_confirm_before_from_a_pane_asks_the_person():
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
-        await session.command(
-            "confirm-before -p 'Really? (y/n)' 'display-message kept'"
-        )
+        await session.command("confirm-before -p 'Really? (y/n)' 'display-message kept'")
 
         await once(
             lambda: state.confirm_text == "Really? (y/n)",
@@ -55,9 +54,7 @@ async def test_confirm_before_from_a_pane_asks_the_person():
         # And it is answerable, which is the whole point: the command
         # behind a question nobody can see never runs.
         session.typed(state, "y")
-        await once(
-            lambda: state.message == "kept", 5.0, "the yes never ran the command"
-        )
+        await once(lambda: state.message == "kept", 5.0, "the yes never ran the command")
         assert pymux is not None
 
 

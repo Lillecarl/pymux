@@ -17,6 +17,7 @@ out of the tree rather than land as a hang. Lillecarl/pymux#302.
 `test_two_clients_take_turns_over_the_socket` is that pair, run for
 real over two connections. It is the test the issue asked for.
 """
+
 from __future__ import annotations
 
 import anyio

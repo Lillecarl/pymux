@@ -12,6 +12,7 @@ renders a template only when it is asked to.
 A template sees the same facts under the same names: `{{ session_name }}`
 is `#{session_name}`.
 """
+
 from __future__ import annotations
 
 import sys
@@ -67,21 +68,12 @@ def test_a_template_reads_the_same_facts(pymux):
 
 def test_a_template_can_ask_a_question(pymux):
     "The whole reason for this: the tmux language here cannot."
-    assert (
-        format_pymux_string(
-            pymux, "{% if window_panes == '1' %}alone{% else %}shared{% endif %}"
-        )
-        == "alone"
-    )
+    assert format_pymux_string(pymux, "{% if window_panes == '1' %}alone{% else %}shared{% endif %}") == "alone"
 
 
 def test_a_template_can_do_arithmetic_and_filters(pymux):
-    assert format_pymux_string(pymux, "{{ session_name | upper }}") == (
-        pymux.session_name.upper()
-    )
-    assert format_pymux_string(pymux, "{{ (history_limit | int) + 1 }}") == str(
-        pymux.history_limit + 1
-    )
+    assert format_pymux_string(pymux, "{{ session_name | upper }}") == (pymux.session_name.upper())
+    assert format_pymux_string(pymux, "{{ (history_limit | int) + 1 }}") == str(pymux.history_limit + 1)
 
 
 def test_a_name_nobody_knows_draws_nothing(pymux):
@@ -114,10 +106,7 @@ def test_the_clock_a_template_prints_is_the_pinned_one(pymux):
 
 def test_a_format_is_not_sniffed_when_the_language_is_named(pymux):
     "`-F` says tmux, so two braces are two braces."
-    assert (
-        format_pymux_string(pymux, "{{ session_name }}", language=Language.TMUX)
-        == "{{ session_name }}"
-    )
+    assert format_pymux_string(pymux, "{{ session_name }}", language=Language.TMUX) == "{{ session_name }}"
 
 
 def test_a_tmux_format_can_be_asked_for_as_a_template(pymux):
@@ -167,9 +156,7 @@ def test_only_the_facts_a_template_asks_for_are_read(pymux, monkeypatch):
         monkeypatch.setitem(
             tmux_variables,
             name,
-            lambda context, name=name, handler=handler: (
-                read.append(name) or handler(context)
-            ),
+            lambda context, name=name, handler=handler: read.append(name) or handler(context),
         )
 
     format_pymux_string(pymux, "{{ session_name }}")

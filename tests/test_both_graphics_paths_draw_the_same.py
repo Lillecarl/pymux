@@ -31,6 +31,7 @@ Sixel holds a colour as three percentages, so every channel is
 approximated and the comparison allows the same 3 that
 `test_graphics_fallback.py` allows. Lillecarl/pymux#262.
 """
+
 from __future__ import annotations
 
 import base64
@@ -120,9 +121,7 @@ def _drawn_by_kitty(written, cell_width, cell_height):
 
     if "w" in asked:
         assert width is not None, "a cropped PNG is not covered here"
-        pixels = _crop_rgba(
-            pixels, width, height, (asked["x"], asked["y"], asked["w"], asked["h"])
-        )
+        pixels = _crop_rgba(pixels, width, height, (asked["x"], asked["y"], asked["w"], asked["h"]))
         width, height = asked["w"], asked["h"]
 
     if "c" in asked:
@@ -141,14 +140,10 @@ def _drawn_by_kitty(written, cell_width, cell_height):
 def _both(state_args, cell=(1, 1), **view_args):
     "One pane state rendered down each path, reduced to pixels."
     kitty_client, kitty_written = _client(kitty=True, cell=cell)
-    kitty_client.render(
-        [view(make_state(*state_args[0], **state_args[1]), **view_args)]
-    )
+    kitty_client.render([view(make_state(*state_args[0], **state_args[1]), **view_args)])
 
     sixel_client, sixel_written = _client(sixel=True, cell=cell)
-    sixel_client.render(
-        [view(make_state(*state_args[0], **state_args[1]), **view_args)]
-    )
+    sixel_client.render([view(make_state(*state_args[0], **state_args[1]), **view_args)])
 
     return (
         _drawn_by_kitty(kitty_written, *cell),
@@ -163,9 +158,7 @@ def _same_pixels(kitty, sixel):
         for channel in range(3):
             a = kitty[index + channel]
             b = sixel[index + channel]
-            assert abs(a - b) <= CHANNEL_SLACK, (
-                "pixel %d channel %d: kitty %d, sixel %d" % (index // 4, channel, a, b)
-            )
+            assert abs(a - b) <= CHANNEL_SLACK, "pixel %d channel %d: kitty %d, sixel %d" % (index // 4, channel, a, b)
         assert kitty[index + 3] == sixel[index + 3]
 
 
@@ -204,8 +197,7 @@ def test_the_two_paths_draw_the_same_picture(name, placements, state, cell, view
 
     assert kitty_at == sixel_at, "%s: the two paths draw at different cells" % name
     assert (kitty_width, kitty_height) == (sixel_width, sixel_height), (
-        "%s: kitty asks for %dx%d and sixel drew %dx%d"
-        % (name, kitty_width, kitty_height, sixel_width, sixel_height)
+        "%s: kitty asks for %dx%d and sixel drew %dx%d" % (name, kitty_width, kitty_height, sixel_width, sixel_height)
     )
     _same_pixels(kitty_pixels, sixel_pixels)
 

@@ -6,6 +6,7 @@ reads it. **The session, and not the server**: tmux's rule is one
 line, and `detach-client -a` is the gesture for every client there is.
 Lillecarl/pymux#344, Lillecarl/pymux#345.
 """
+
 from __future__ import annotations
 
 import contextvars

@@ -8,6 +8,7 @@ reader: one line per client, tmux's shape, with the machine in place of
 the tty -- a pymux client can be on another machine, and a tty path of
 a machine you are not on names nothing. Lillecarl/pymux#330.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.data_structures import Size
@@ -50,9 +51,7 @@ async def test_a_client_is_listed_with_its_size_and_terminal():
     async with over_connection() as session:
         await session.attach("the client", SIZE)
 
-        said = await _lines(session, "list-clients -F '%s'" % (
-            "#{client_width}x#{client_height} #{client_termname}",
-        ))
+        said = await _lines(session, "list-clients -F '%s'" % ("#{client_width}x#{client_height} #{client_termname}",))
 
         assert said == ["80x24 xterm-256color"]
 

@@ -15,6 +15,7 @@ websocket library is an extra, so the failure to have it must say which
 extra rather than raising `ImportError` at somebody.
 Lillecarl/pymux#461.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -59,9 +60,7 @@ def test_the_source_is_not_beside_what_it_compiles_to():
     source twice and say nothing about what was emitted.
     """
     beside = [
-        found.name
-        for found in web.STATIC.iterdir()
-        if found.suffix == ".ts" and not found.name.endswith(".d.ts")
+        found.name for found in web.STATIC.iterdir() if found.suffix == ".ts" and not found.name.endswith(".d.ts")
     ]
     assert beside == [], beside
 

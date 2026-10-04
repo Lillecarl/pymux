@@ -5,6 +5,7 @@ Each test feeds a sequence (or a mix of sequences and plain text) into
 the parser and checks the key presses that reach the feed_key callback.
 That is the same path that the server uses for client input.
 """
+
 from __future__ import annotations
 
 import logging
@@ -584,11 +585,7 @@ def test_terminal_that_does_not_speak_protocol_is_read_old_way():
     nobody has asked yet, counts four modifiers with meta fourth, and
     prompt_toolkit's table is the one that knows those forms.
     """
-    old = [
-        (key.key, key.data)
-        for key in fed("\x1b[1;9A", speaks_protocol=False)
-        if key is not _Flush
-    ]
+    old = [(key.key, key.data) for key in fed("\x1b[1;9A", speaks_protocol=False) if key is not _Flush]
     assert old == [(Keys.Escape, "\x1b[1;9A"), (Keys.Up, "")]
 
 
@@ -663,10 +660,7 @@ def test_reason_says_what_kind_of_key_it_was():
     assert create_dropped_key("\x1b[57399;5u").reason == DropReason.KEYPAD_WITH_A_MODIFIER
     assert create_dropped_key("\x1b[233;5u").reason == DropReason.CTRL_AND_A_CHARACTER
     assert create_dropped_key("\x1b[99;5~").reason == DropReason.TILDE_KEY_WITH_NO_NAME
-    assert (
-        create_dropped_key("\x1b[27;5u").reason
-        == DropReason.MODIFIER_THIS_KEY_HAS_NO_NAME_FOR
-    )
+    assert create_dropped_key("\x1b[27;5u").reason == DropReason.MODIFIER_THIS_KEY_HAS_NO_NAME_FOR
 
 
 def test_log_says_key_and_reason(caplog):

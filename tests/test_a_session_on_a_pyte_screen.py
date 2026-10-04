@@ -9,6 +9,7 @@ and these read back what it drew. Lillecarl/pymux#481.
 The pane runs the shell that a first client's session gets, because
 that is the session a person attaching to a new server gets too.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -106,9 +107,7 @@ async def attached(pymux, read_only: bool = False):
 def rows_of(session: SessionScreen) -> list:
     screen = session.screen
     top = screen.line_offset
-    return [
-        line.text for line in screen.page.text_lines(top, top + screen.lines - 1)
-    ]
+    return [line.text for line in screen.page.text_lines(top, top + screen.lines - 1)]
 
 
 async def shows(session: SessionScreen, wanted, seconds: float = 10.0) -> None:
@@ -119,6 +118,7 @@ async def shows(session: SessionScreen, wanted, seconds: float = 10.0) -> None:
     first, it described the screen at the start and blamed a server that
     had not been given a turn yet.
     """
+
     def there() -> bool:
         text = "\n".join(rows_of(session))
         if isinstance(wanted, str):
@@ -175,11 +175,7 @@ async def test_a_frame_carries_what_it_drew(pymux):
         await shows(session, "$")
 
         assert session.welcome()["size"] == {"columns": COLUMNS, "rows": ROWS}
-        drawn = "".join(
-            text
-            for runs in session.frame()["rows"].values()
-            for _style, text in runs
-        )
+        drawn = "".join(text for runs in session.frame()["rows"].values() for _style, text in runs)
         assert "$" in drawn
 
 

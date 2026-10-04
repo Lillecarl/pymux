@@ -74,7 +74,9 @@ def which_session(pymux: Pymux, args: argparse.Namespace):
     return session, rest
 
 
-def where_new_window_goes(pymux: Pymux, args: argparse.Namespace, session: Session, target: str | None) -> WindowIndex | None:
+def where_new_window_goes(
+    pymux: Pymux, args: argparse.Namespace, session: Session, target: str | None
+) -> WindowIndex | None:
     """
     The index a new window takes, from the options it was given.
 
@@ -190,7 +192,12 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, new_window)
     parser.add_argument("-a", dest="a", action="store_true", help="After the target window.")
     parser.add_argument("-b", dest="b", action="store_true", help="Before the target window.")
-    parser.add_argument("-t", dest="target_window", metavar="<target-window>", help="The window to sit next to, or the index to create at.")
+    parser.add_argument(
+        "-t",
+        dest="target_window",
+        metavar="<target-window>",
+        help="The window to sit next to, or the index to create at.",
+    )
     parser.add_argument("-n", dest="name", metavar="<name>", help="The name of the window.")
     parser.add_argument("-c", dest="start_directory", metavar="<start-directory>", help="Where the program starts.")
     parser.add_argument("-d", dest="d", action="store_true", help="Leave the new window unfocused.")

@@ -64,6 +64,11 @@ def set_client_option(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, set_client_option, read_only=True)
-    parser.add_argument("-t", dest="target_client", metavar="<target-client>", help="The client of this name, as list-clients prints it.")
+    parser.add_argument(
+        "-t",
+        dest="target_client",
+        metavar="<target-client>",
+        help="The client of this name, as list-clients prints it.",
+    )
     parser.add_argument("option", metavar="<option>")
     parser.add_argument("value", metavar="<value>", nargs="?")

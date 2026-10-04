@@ -14,6 +14,7 @@ So a test awaits what the command answered with, and the ones that do
 not -- the `-F` form of if-shell, which asks a format and no shell --
 say so by passing on the spot.
 """
+
 from __future__ import annotations
 
 import anyio
@@ -136,9 +137,7 @@ async def test_if_shell_takes_format_for_question():
     "No shell runs, so there is nothing to wait for and it answers here."
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            answer = handle_command(
-                pymux, "if-shell -F 'i-am-a-format' 'display format-said-yes' 'display no'"
-            )
+            answer = handle_command(pymux, "if-shell -F 'i-am-a-format' 'display format-said-yes' 'display no'")
 
         assert answer is None, "asking a format waited for something"
         assert state.message == "format-said-yes"
@@ -151,9 +150,7 @@ async def test_if_shell_keeps_the_question_output_off_the_terminal(capfd):
     routes, and drew over the frame. Lillecarl/pymux#312.
     """
     async with create_session() as (pymux, state):
-        await _run(
-            pymux, state, "if-shell 'echo scribble; echo noise >&2' 'display yes'"
-        )
+        await _run(pymux, state, "if-shell 'echo scribble; echo noise >&2' 'display yes'")
 
         assert state.message == "yes"
 

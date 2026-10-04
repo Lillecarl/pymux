@@ -10,6 +10,7 @@ unix socket in `posix.py`, a pair of queues in `memory.py`. Both sides
 speak the same packets, so a difference between the two routes is a
 difference of the transport and nothing else.
 """
+
 from __future__ import annotations
 
 import json
@@ -77,7 +78,7 @@ def _ttyname() -> str:
     """
     try:
         return os.ttyname(sys.stdout.fileno())
-    except (OSError, ValueError, AttributeError):
+    except OSError, ValueError, AttributeError:
         return ""
 
 

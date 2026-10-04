@@ -29,7 +29,5 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, unbind_key)
     table = parser.add_mutually_exclusive_group()
     table.add_argument("-n", dest="n", action="store_true", help="Remove a binding that needs no prefix.")
-    table.add_argument(
-        "-T", dest="table", metavar="<key-table>", help="Remove it from this key table."
-    )
+    table.add_argument("-T", dest="table", metavar="<key-table>", help="Remove it from this key table.")
     parser.add_argument("key", metavar="<key>")

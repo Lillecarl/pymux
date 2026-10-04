@@ -7,6 +7,7 @@ rather than the name, while `display-message -p` beside it formatted
 properly. A binding that asks the session something is the whole use of
 the command, and tmux expands it either way. Lillecarl/pymux#334.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app
@@ -28,9 +29,7 @@ async def test_a_message_is_a_format():
 async def test_a_message_may_be_a_template():
     "The other language reaches here too. Lillecarl/pymux#333."
     async with create_session() as (pymux, state):
-        await _run(
-            pymux, state, "display-message '{{ session_name | upper }}'"
-        )
+        await _run(pymux, state, "display-message '{{ session_name | upper }}'")
 
         assert state.message == pymux.session_name.upper()
 

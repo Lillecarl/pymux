@@ -8,6 +8,7 @@ piece of the image on the outer terminal.
 Each test builds a real `Screen`, feeds it what such a program
 sends, and checks the escape sequences that reach the terminal.
 """
+
 from __future__ import annotations
 
 import base64
@@ -42,9 +43,7 @@ def rgb_image(width, height):
 def transmit_virtual(stream, image_id=5, width=40, height=40):
     "What a program sends before it writes the placeholder cells."
     data = base64.b64encode(rgb_image(width, height)).decode()
-    stream.feed(
-        "\x1b_Ga=T,U=1,f=24,s=%i,v=%i,i=%i;%s\x1b\\" % (width, height, image_id, data)
-    )
+    stream.feed("\x1b_Ga=T,U=1,f=24,s=%i,v=%i,i=%i;%s\x1b\\" % (width, height, image_id, data))
 
 
 def mark(number):
@@ -80,9 +79,7 @@ def view(screen, **kw):
 
 def puts(written):
     "The (row, column, keys) of every put command."
-    found = re.findall(
-        r"\x1b\[(\d+);(\d+)H\x1b_Ga=p,([^\x1b]*)\x1b\\", "".join(written)
-    )
+    found = re.findall(r"\x1b\[(\d+);(\d+)H\x1b_Ga=p,([^\x1b]*)\x1b\\", "".join(written))
     return [(int(row), int(column), keys) for row, column, keys in found]
 
 

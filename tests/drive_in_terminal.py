@@ -68,6 +68,7 @@ the program's own log beside it, and the two read together say which
 key the program never acted on. Before this the file was empty, and a
 lost key was a guess. Lillecarl/pymux#353.
 """
+
 from __future__ import annotations
 
 import ast
@@ -349,9 +350,7 @@ def wait_for_first_frame(master, seen, out, copied, started, writer, stdin_fd=No
     return came, time.monotonic(), copied
 
 
-def frame_and_fence(
-    master, seen, out, copied, writer, mark, token, deadline, stdin_fd=None
-):
+def frame_and_fence(master, seen, out, copied, writer, mark, token, deadline, stdin_fd=None):
     """
     The frame for what came before, then the fence, then the quiet
     after it. Gives back whether the fence came, and where the copying
@@ -464,15 +463,12 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
             pass
         writer = take_fifo(fifo, started)
         note(started, "the pane took the fifo")
-        drawn, when, copied = wait_for_first_frame(
-            master, seen, out, copied, started, writer, stdin_fd
-        )
+        drawn, when, copied = wait_for_first_frame(master, seen, out, copied, started, writer, stdin_fd)
         note(
             started,
             "the first frame: the boot fence came back, %d bytes" % (len(seen),)
             if drawn
-            else "the first frame: no boot fence in %gs, pressing the keys anyway"
-            % (BOOT_TIMEOUT,),
+            else "the first frame: no boot fence in %gs, pressing the keys anyway" % (BOOT_TIMEOUT,),
         )
     else:
         writer = None
@@ -505,9 +501,7 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
                 # one that gets lost.
                 note(
                     started,
-                    "key %r, %.3fs late" % (keys, now - when)
-                    if keys
-                    else "a wait, %.3fs late" % (now - when,),
+                    "key %r, %.3fs late" % (keys, now - when) if keys else "a wait, %.3fs late" % (now - when,),
                 )
                 # The mark is where the wire was when the keys went in,
                 # and the fence waits for one byte past it. **A step

@@ -11,6 +11,7 @@ So the name travels in the `start-gui` packet, beside `term` and
 `colorterm`, and `ServerConnection` keeps it the way it keeps the
 colours the terminal reported. Lillecarl/pymux#287.
 """
+
 from __future__ import annotations
 
 import socket

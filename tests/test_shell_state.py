@@ -9,6 +9,7 @@ the sequences on, so the outer terminal reads them for itself. An
 attention ask ("RequestAttention") records a notification too, and a
 clipboard write ("Copy") follows the clipboard option.
 """
+
 from __future__ import annotations
 
 import pytest

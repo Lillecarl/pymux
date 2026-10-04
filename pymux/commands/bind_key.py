@@ -30,9 +30,7 @@ def bind_key(pymux: Pymux, args: argparse.Namespace) -> None:
     bound_arguments = arguments[1:]
 
     try:
-        pymux.key_bindings_manager.add_custom_binding(
-            key, command, bound_arguments, table=table
-        )
+        pymux.key_bindings_manager.add_custom_binding(key, command, bound_arguments, table=table)
     except ValueError:
         raise CommandException("Invalid key: %r" % (key,))
 
@@ -42,8 +40,10 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     table = parser.add_mutually_exclusive_group()
     table.add_argument("-n", dest="n", action="store_true", help="Bind without the prefix.")
     table.add_argument(
-        "-T", dest="table", metavar="<key-table>", help="Bind into this key table: "
-        "a mode's name, which the first `bind-key -T` names."
+        "-T",
+        dest="table",
+        metavar="<key-table>",
+        help="Bind into this key table: a mode's name, which the first `bind-key -T` names.",
     )
     parser.add_argument("key", metavar="<key>", help="The key to bind.")
     # Everything from the bound command on is a remainder, so an

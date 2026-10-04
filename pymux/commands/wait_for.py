@@ -25,6 +25,7 @@ out of the tree. Lillecarl/pymux#302.
 A handler may answer later now, so the waiting is one task and the
 server keeps serving. Lillecarl/pymux#87.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -150,7 +151,13 @@ def _forget_if_spent(pymux: Pymux, name: str, channel: WaitChannel) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, wait_for, aliases=["wait"])
-    parser.add_argument("-S", dest="S", action="store_true", help="Signal the channel: every waiter goes on, or the next one does.")
-    parser.add_argument("-L", dest="L", action="store_true", help="Lock the channel, and wait while somebody else holds it.")
-    parser.add_argument("-U", dest="U", action="store_true", help="Unlock the channel, and hand it to the first waiting locker.")
+    parser.add_argument(
+        "-S", dest="S", action="store_true", help="Signal the channel: every waiter goes on, or the next one does."
+    )
+    parser.add_argument(
+        "-L", dest="L", action="store_true", help="Lock the channel, and wait while somebody else holds it."
+    )
+    parser.add_argument(
+        "-U", dest="U", action="store_true", help="Unlock the channel, and hand it to the first waiting locker."
+    )
     parser.add_argument("name", metavar="<channel>", help="The name of the channel.")

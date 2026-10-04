@@ -9,6 +9,7 @@ the pane that runs there is a new one, with a new id and an empty
 screen; the focus follows the replacement; and `respawn-window`
 respawns the active pane of the window it names.
 """
+
 from __future__ import annotations
 
 import argparse

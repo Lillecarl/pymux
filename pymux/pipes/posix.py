@@ -208,10 +208,7 @@ def _bind_posix_socket(socket_name: str | None = None):
 
                 # When 100 times failed, cancel server
                 if i == 100:
-                    logger.warning(
-                        "100 times failed to listen on posix socket. "
-                        "Please clean up old sockets."
-                    )
+                    logger.warning("100 times failed to listen on posix socket. Please clean up old sockets.")
                     raise
 
 
@@ -273,7 +270,7 @@ class PosixSocketConnection(PipeConnection):
 
         try:
             await anyio.wait_readable(self.socket)
-        except (anyio.ClosedResourceError, OSError):
+        except anyio.ClosedResourceError, OSError:
             # `close()` says the socket is going, so that this wakes
             # rather than waiting on a descriptor that is taken away.
             raise BrokenPipeError
@@ -285,9 +282,7 @@ class PosixSocketConnection(PipeConnection):
             # new-window" in a centain pane, very often we get the following
             # error: "OSError: [Errno 9] Bad file descriptor."
             # This doesn't seem very harmful, and we can just try again.
-            logger.warning(
-                "Got OSError while reading data from client: %s. Trying again.", e
-            )
+            logger.warning("Got OSError while reading data from client: %s. Trying again.", e)
             return b""
 
         if not data:
@@ -336,7 +331,7 @@ class PosixSocketConnection(PipeConnection):
             except BlockingIOError:
                 try:
                     await anyio.wait_writable(self.socket)
-                except (anyio.ClosedResourceError, OSError):
+                except anyio.ClosedResourceError, OSError:
                     # `close()` says the socket is going (it calls
                     # `notify_closing`, which wakes this), or the peer
                     # is gone. Either way this connection is over.

@@ -10,6 +10,7 @@ The tests are coroutines, for the reason `test_command_mode.py` gives:
 the key processor starts a background task and asks the running loop
 for one. Lillecarl/pymux#214.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app

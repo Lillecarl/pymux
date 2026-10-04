@@ -22,6 +22,7 @@ group and the press is done.
 The order of a line holds either way: `a ; b` means b after a, and it
 still does when a is one that waits.
 """
+
 from __future__ import annotations
 
 import json
@@ -107,9 +108,7 @@ def commands_of_this_file():
             subparsers.choices.pop(name, None)
             subparsers._name_parser_map.pop(name, None)
         subparsers._choices_actions = [
-            action
-            for action in subparsers._choices_actions
-            if not action.metavar.startswith("test-")
+            action for action in subparsers._choices_actions if not action.metavar.startswith("test-")
         ]
 
 

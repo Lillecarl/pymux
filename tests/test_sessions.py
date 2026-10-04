@@ -10,6 +10,7 @@ The panes run a program that waits, so no shell starts and no pane
 ends while a test is looking. A pane that ends takes its session with
 it, which `test_a_session_that_empties_goes` is about.
 """
+
 from __future__ import annotations
 
 import sys

@@ -20,6 +20,7 @@ rest of what two clients on one window do.
 `tests/drive_with_pty.py::check_full_screen_pane` measures the cells
 themselves, over a real pty.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -187,9 +188,7 @@ async def test_set_option_says_which_command_takes_it():
         with set_app(state.app):
             pymux.handle_command("set-option full-screen on")
 
-        assert state.message == (
-            "full-screen is a client option: use set-client-option"
-        )
+        assert state.message == ("full-screen is a client option: use set-client-option")
         assert shows(pymux, state) == (True, True)
 
 

@@ -15,6 +15,7 @@ experiment: it is the server's own dispatch, with no socket and no sleep.
 `tests/test_libpymux_streams.py` is the other half, over a real socket,
 which is the only thing that says the two agree.
 """
+
 from __future__ import annotations
 
 import json
@@ -35,7 +36,7 @@ from pymux.web.stream import LOOK_AGAIN, PaneStream
 #: the server, and a test about a pane dying cannot say when it died. A
 #: probe measured `is_terminated` as true at the moment of a kill that had
 #: not happened yet, which is what that looks like from the outside.
-STAYS = "%s -c \"import time; time.sleep(60)\"" % (sys.executable,)
+STAYS = '%s -c "import time; time.sleep(60)"' % (sys.executable,)
 
 
 @pytest.fixture
@@ -119,10 +120,7 @@ def ended(pane):
 
 
 def text_of(frame) -> dict:
-    return {
-        number: "".join(text for _style, text in runs)
-        for number, runs in frame["rows"].items()
-    }
+    return {number: "".join(text for _style, text in runs) for number, runs in frame["rows"].items()}
 
 
 # ----------------------------------------------------------------------
@@ -155,9 +153,7 @@ async def test_a_pane_nobody_can_find_is_refused(pymux):
     async with pymux.running():
         server_end, client_end = connect_in_memory()
         ServerConnection(pymux, server_end)
-        client_end.write_nowait(
-            json.dumps({"cmd": "stream-pane", "pane": "%9999"})
-        )
+        client_end.write_nowait(json.dumps({"cmd": "stream-pane", "pane": "%9999"}))
 
         said = await frames_of(client_end, 2)
 
@@ -403,9 +399,7 @@ async def test_input_for_no_stream_is_ignored_and_not_a_crash(pymux):
         server_end, client_end = connect_in_memory()
         connection = ServerConnection(pymux, server_end)
 
-        client_end.write_nowait(
-            json.dumps({"cmd": "stream-in", "data": "{}"})
-        )
+        client_end.write_nowait(json.dumps({"cmd": "stream-in", "data": "{}"}))
         await anyio.sleep(0.05)
 
         assert not connection._closed

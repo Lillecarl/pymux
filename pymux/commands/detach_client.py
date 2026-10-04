@@ -73,9 +73,7 @@ def detach_client(pymux: Pymux, args: argparse.Namespace) -> None:
         not_past_this_client(pymux, True)
         session = pymux.get_session(args.target_session)
         if session is None:
-            raise CommandException(
-                "can't find session: %s" % (args.target_session,)
-            )
+            raise CommandException("can't find session: %s" % (args.target_session,))
         for client_state in pymux.clients:
             if client_state.session is session:
                 _detach(pymux, client_state, hang_up)
@@ -106,6 +104,15 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     # key it needs is the one it cannot press. Lillecarl/pymux#467.
     parser = add_command(subparsers, detach_client, read_only=True)
     parser.add_argument("-a", dest="all_but_this_one", action="store_true", help="Every client but this one.")
-    parser.add_argument("-s", dest="target_session", metavar="<target-session>", help="Every client watching this session.")
-    parser.add_argument("-t", dest="target_client", metavar="<target-client>", help="The client of this name, as list-clients prints it.")
-    parser.add_argument("-P", dest="hang_up", action="store_true", help="Hang up the process each detached client was started by.")
+    parser.add_argument(
+        "-s", dest="target_session", metavar="<target-session>", help="Every client watching this session."
+    )
+    parser.add_argument(
+        "-t",
+        dest="target_client",
+        metavar="<target-client>",
+        help="The client of this name, as list-clients prints it.",
+    )
+    parser.add_argument(
+        "-P", dest="hang_up", action="store_true", help="Hang up the process each detached client was started by."
+    )

@@ -23,21 +23,15 @@ def profile(pymux: Pymux, args: argparse.Namespace) -> None:
     try:
         seconds = float(args.seconds or introspect.HOW_LONG_TO_WATCH)
     except ValueError:
-        raise CommandException(
-            "Not a number of seconds: %r" % (args.seconds,)
-        )
+        raise CommandException("Not a number of seconds: %r" % (args.seconds,))
 
     try:
         path = introspect.start_watching(pymux, seconds)
     except ImportError:
-        raise CommandException(
-            "pyinstrument is not installed, so this server cannot profile itself."
-        )
+        raise CommandException("pyinstrument is not installed, so this server cannot profile itself.")
 
     pymux.print_command_line(str(path))
-    pymux.show_message(
-        "Watching for %.1f seconds. It lands in %s" % (seconds, path.name)
-    )
+    pymux.show_message("Watching for %.1f seconds. It lands in %s" % (seconds, path.name))
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

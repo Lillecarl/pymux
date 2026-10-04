@@ -30,8 +30,7 @@ def show_window_options(pymux: Pymux, args: argparse.Namespace) -> None:
         return
 
     lines = [
-        "%s %s" % (key, option_as_written(pymux, option, args))
-        for key, option in sorted(ALL_WINDOW_OPTIONS.items())
+        "%s %s" % (key, option_as_written(pymux, option, args)) for key, option in sorted(ALL_WINDOW_OPTIONS.items())
     ]
     answer(pymux, "\n".join(lines))
 

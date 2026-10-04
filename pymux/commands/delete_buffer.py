@@ -22,4 +22,6 @@ def delete_buffer(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, delete_buffer)
-    parser.add_argument("-b", dest="buffer_name", metavar="<buffer-name>", required=True, help="The named buffer to remove.")
+    parser.add_argument(
+        "-b", dest="buffer_name", metavar="<buffer-name>", required=True, help="The named buffer to remove."
+    )

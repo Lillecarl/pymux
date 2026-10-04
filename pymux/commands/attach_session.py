@@ -41,9 +41,7 @@ def attach_session(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     not_past_this_client(pymux, args.d or args.x)
 
-    client_state = move_this_client(
-        pymux, args.target_session, detach_others=args.d, hang_up_others=args.x
-    )
+    client_state = move_this_client(pymux, args.target_session, detach_others=args.d, hang_up_others=args.x)
 
     if args.r:
         client_state.read_only = True
@@ -54,5 +52,9 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, attach_session, read_only=True)
     parser.add_argument("-t", dest="target_session", metavar="<target-session>", help="The session to attach to.")
     parser.add_argument("-d", dest="d", action="store_true", help="Detach the other clients of that session.")
-    parser.add_argument("-x", dest="x", action="store_true", help="Detach them, and hang up the process each one was started by.")
-    parser.add_argument("-r", dest="r", action="store_true", help="Only watch: type nothing, and do not shrink the session.")
+    parser.add_argument(
+        "-x", dest="x", action="store_true", help="Detach them, and hang up the process each one was started by."
+    )
+    parser.add_argument(
+        "-r", dest="r", action="store_true", help="Only watch: type nothing, and do not shrink the session."
+    )

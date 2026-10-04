@@ -6,6 +6,7 @@ completes through, and what the command bar of a client completes
 from -- in process, through argcomplete. These tests ask each reader
 the questions a person asks it. Lillecarl/pymux#307.
 """
+
 from __future__ import annotations
 
 import os
@@ -142,11 +143,7 @@ def _offered(line, pymux):
 
 def _flags_of(command):
     "Every option string the command's parser takes."
-    return {
-        option
-        for action in _parser_of(command)._actions
-        for option in action.option_strings
-    }
+    return {option for action in _parser_of(command)._actions for option in action.option_strings}
 
 
 def test_every_command_offers_its_flags():
@@ -294,28 +291,20 @@ def test_every_command_says_what_it_does():
     assert len(said) == len(parsers)
     empty = sorted(name for name, text in said.items() if not text.strip())
     assert empty == []
-    unfinished = sorted(
-        name
-        for name, text in said.items()
-        if not text.rstrip().endswith((".", ":", ")", "`"))
-    )
+    unfinished = sorted(name for name, text in said.items() if not text.rstrip().endswith((".", ":", ")", "`")))
     assert unfinished == []
 
 
 def test_palette_says_what_command_does():
     pymux = Pymux()
     offered = dict(_offered("split-w", pymux))
-    assert "Split this window into two panes, side by side or stacked." in (
-        offered["split-window"]
-    )
+    assert "Split this window into two panes, side by side or stacked." in (offered["split-window"])
 
 
 def test_alias_says_what_command_it_names_does():
     pymux = Pymux()
     offered = dict(_offered("selectp", pymux))
-    assert "Focus a pane beside this one, or rotate the panes of the window." in (
-        offered["select-pane"]
-    )
+    assert "Focus a pane beside this one, or rotate the panes of the window." in (offered["select-pane"])
 
 
 # ----------------------------------------------------------------------
@@ -328,11 +317,7 @@ def _shell_completes(line: str) -> set:
     does, and read what it answers on file descriptor 8.
     """
     bootstrap = "from pymux.entry_points.run_pymux import run; run()"
-    environment = {
-        key: value
-        for key, value in os.environ.items()
-        if key not in ("PYMUX", "PYTHONPATH")
-    } | {
+    environment = {key: value for key, value in os.environ.items() if key not in ("PYMUX", "PYTHONPATH")} | {
         "_ARGCOMPLETE": "1",
         "_ARGCOMPLETE_IFS": "\013",
         "_ARGCOMPLETE_SHELL": "bash",
@@ -345,8 +330,7 @@ def _shell_completes(line: str) -> set:
         [
             "bash",
             "-c",
-            "exec %s -c %s 8>&1 1>/dev/null"
-            % (sys.executable, shlex.quote(bootstrap)),
+            "exec %s -c %s 8>&1 1>/dev/null" % (sys.executable, shlex.quote(bootstrap)),
         ],
         env=environment,
         capture_output=True,
@@ -399,9 +383,7 @@ def test_the_completer_reads_the_server_it_was_made_for():
     create_command_completer(second)
 
     _parser, subparsers = parser_tree()
-    action = next(
-        a for a in subparsers.choices["set-option"]._actions if a.dest == "option"
-    )
+    action = next(a for a in subparsers.choices["set-option"]._actions if a.dest == "option")
     assert action.completer.args[0] is second
 
 
@@ -412,9 +394,7 @@ def test_the_completer_reads_the_server_it_was_made_for():
 def _offered_words(line, pymux):
     "The whole words the command bar offers for a line typed to its end."
     completer = create_command_completer(pymux)
-    return [
-        c.text for c in completer.get_completions(Document(line, len(line)), None)
-    ]
+    return [c.text for c in completer.get_completions(Document(line, len(line)), None)]
 
 
 async def test_unforward_port_offers_the_listenings_that_were_shown():

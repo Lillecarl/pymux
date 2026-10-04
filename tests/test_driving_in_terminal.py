@@ -13,6 +13,7 @@ direction and keys in the other, and a pty of the test's own is a
 terminal as far as it is concerned. The picture check is what needs a
 compositor, and this is the part of it that can be judged without one.
 """
+
 from __future__ import annotations
 
 import os
@@ -151,8 +152,7 @@ def test_what_the_terminal_answers_reaches_the_program(tmp_path):
             # is up and watching rather than to one still starting.
             # `read -r`, because an answer holds a backslash and `read`
             # without it reads that as "the line goes on".
-            "stty -echo; printf 'asking.'; read -r x;"
-            " printf 'answered:%s.' \"$x\"; exec sleep 30",
+            "stty -echo; printf 'asking.'; read -r x; printf 'answered:%s.' \"$x\"; exec sleep 30",
         ],
         wanted=b"answered:",
         answer=b"\x1b]11;rgb:1d1d/2020/2121\x1b\\\n",
@@ -336,10 +336,7 @@ def test_fence_comes_back_and_is_taken_out(tmp_path):
     sees it: what the relay copies is the frame, and not the
     scaffolding. Lillecarl/pymux#275.
     """
-    pane = (
-        "stty -echo; printf 'up.'; (sleep 0.3; printf 'framed.') &"
-        " exec python3 %s %s %s"
-    )
+    pane = "stty -echo; printf 'up.'; (sleep 0.3; printf 'framed.') & exec python3 %s %s %s"
     from drive_in_terminal import BOOT_TOKEN, KEYS_TOKEN
 
     seen, fence_seen, error = run_fenced(tmp_path, '0.1 b"hello\\n"\n', pane)
@@ -424,13 +421,8 @@ def test_no_key_is_pressed_before_the_boot_fence_comes_back(tmp_path):
     # after "drawn.". The frame for the last key comes from the
     # background write: the forwarder reads no keys, and the keys' own
     # fence waits for the program to answer one.
-    pane = (
-        "stty -echo; printf 'asking.';"
-        " (sleep 1.4; printf 'framed.') & exec python3 %s %s %s"
-    )
-    seen, fence_seen, error = run_fenced(
-        tmp_path, '0.0 b"k"\n', pane, forwarder_text=LATE_FORWARDER
-    )
+    pane = "stty -echo; printf 'asking.'; (sleep 1.4; printf 'framed.') & exec python3 %s %s %s"
+    seen, fence_seen, error = run_fenced(tmp_path, '0.0 b"k"\n', pane, forwarder_text=LATE_FORWARDER)
 
     assert fence_seen.exists()
     assert b"asking." in seen and b"drawn." in seen
@@ -449,10 +441,7 @@ def test_the_timeline_says_what_happened_and_when(tmp_path):
     key the program never acted on. It was empty before, and a lost
     key was a guess. Lillecarl/pymux#353.
     """
-    pane = (
-        "stty -echo; printf 'up.'; (sleep 0.3; printf 'framed.') &"
-        " exec python3 %s %s %s"
-    )
+    pane = "stty -echo; printf 'up.'; (sleep 0.3; printf 'framed.') & exec python3 %s %s %s"
     _, fence_seen, error = run_fenced(tmp_path, '0.1 b"hello\\n"\n', pane)
 
     assert fence_seen.exists()

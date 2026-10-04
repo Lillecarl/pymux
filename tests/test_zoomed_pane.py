@@ -11,6 +11,7 @@ Lillecarl/pymux#215.
 pane of it. What it wraps is untouched, which is what tmux does as
 well: `window_zoom` saves the tree and `window_unzoom` puts it back.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.data_structures import Size
@@ -159,9 +160,7 @@ def test_window_comes_back_way_it_was_left():
         window.zoom = False
         after = plan_of(pymux, window)
 
-        assert [after.rect_of(pane) for pane in (first, second)] == [
-            before.rect_of(pane) for pane in (first, second)
-        ]
+        assert [after.rect_of(pane) for pane in (first, second)] == [before.rect_of(pane) for pane in (first, second)]
 
 
 def test_zoomed_window_of_one_pane_is_that_pane():

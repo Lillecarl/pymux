@@ -65,6 +65,7 @@ Two knobs reach this file from `pymux/nix/checks.nix`:
     PYMUX_FRAME_INCLUDE=strip nix build --file . checks.pymux-frame
     PYMUX_FRAME_TOLERANCE=2 nix build --file . checks.pymux-frame
 """
+
 from __future__ import annotations
 
 import os
@@ -234,9 +235,7 @@ def create_window(count: int, strip: bool = False):
 
 def create_container(pymux, window, panes):
     "The container that draws this window, with an empty pane in each."
-    return PlanContainer(
-        layout_of(pymux, window), {pane: Window() for pane in panes}
-    )
+    return PlanContainer(layout_of(pymux, window), {pane: Window() for pane in panes})
 
 
 @contextmanager
@@ -409,21 +408,24 @@ def plans_of_create_frame(pymux, include: str):
     return found
 
 
-HEADER = "\n".join(
-    [
-        "# What it costs pymux to lay a window out and draw the frame around its",
-        "# panes, in bytecode instructions. `tests/measure_frame.py` says why",
-        "# the unit is not a second, and what each measurement covers.",
-        "#",
-        '# The "(plans)" lines are not instructions. They count how many plans',
-        "# one frame measures, and a frame needs one.",
-    ]
-    + how_to_record(
-        "pymux-frame",
-        "frame-budgets.txt",
-        "pymux/tests/frame-budgets.txt",
+HEADER = (
+    "\n".join(
+        [
+            "# What it costs pymux to lay a window out and draw the frame around its",
+            "# panes, in bytecode instructions. `tests/measure_frame.py` says why",
+            "# the unit is not a second, and what each measurement covers.",
+            "#",
+            '# The "(plans)" lines are not instructions. They count how many plans',
+            "# one frame measures, and a frame needs one.",
+        ]
+        + how_to_record(
+            "pymux-frame",
+            "frame-budgets.txt",
+            "pymux/tests/frame-budgets.txt",
+        )
     )
-) + "\n"
+    + "\n"
+)
 
 
 def main() -> int:
@@ -450,10 +452,7 @@ def main() -> int:
 
         distance = moved(counted, budget)
         mark = "ok " if abs(distance) <= tolerance else "OFF"
-        print(
-            "%-34s %12d  budget %12d  %+6.2f%%  %s"
-            % (name, counted, budget, distance, mark)
-        )
+        print("%-34s %12d  budget %12d  %+6.2f%%  %s" % (name, counted, budget, distance, mark))
         if abs(distance) > tolerance:
             wrong.append(name)
 
@@ -476,15 +475,11 @@ def main() -> int:
         write_list(Path(out) / "frame-budgets.txt", HEADER, counts.items())
 
     if include:
-        print(
-            "\nThis run measured %d of the shapes, so it makes no claim "
-            "about the rest." % (len(found) + len(plans))
-        )
+        print("\nThis run measured %d of the shapes, so it makes no claim about the rest." % (len(found) + len(plans)))
 
     if wrong:
         print(
-            "\n%d of %d moved by more than %.1f%%: %s"
-            % (len(wrong), len(counts), tolerance, ", ".join(sorted(wrong)))
+            "\n%d of %d moved by more than %.1f%%: %s" % (len(wrong), len(counts), tolerance, ", ".join(sorted(wrong)))
         )
         print(
             "A count that climbed is what this check is for. A count that "

@@ -30,9 +30,7 @@ def choose_window(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     if pymux.command_output is not None:
         return
-    pymux.get_client_state().layout_manager.display_chooser(
-        template=args.command
-    )
+    pymux.get_client_state().layout_manager.display_chooser(template=args.command)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

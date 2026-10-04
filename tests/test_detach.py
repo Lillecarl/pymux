@@ -9,6 +9,7 @@ to end every pane or kill the process.
 
 Lillecarl/pymux#160.
 """
+
 from __future__ import annotations
 
 import io
@@ -39,9 +40,7 @@ async def create_standalone_session():
     pymux = Pymux()
     pymux._runs_standalone = True
     pymux.create_window("%s -c pass" % (sys.executable,))
-    output = Vt100_Output(
-        stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS)
-    )
+    output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS))
     with create_pipe_input() as pipe:
         state = pymux.add_client(
             output=output,
@@ -127,9 +126,7 @@ async def test_client_over_connection_still_detaches():
 
     pymux = Pymux()
     pymux.create_window("%s -c pass" % (sys.executable,))
-    output = Vt100_Output(
-        stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS)
-    )
+    output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS))
     with create_pipe_input() as pipe:
         state = pymux.add_client(
             output=output,

@@ -34,5 +34,9 @@ def respawn_window(pymux: Pymux, args: argparse.Namespace) -> None:
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, respawn_window)
     parser.add_argument("-k", dest="k", action="store_true", help="Kill a program that still runs.")
-    parser.add_argument("-t", dest="target_window", metavar="<target-window>", help="The window whose active pane respawns.")
-    parser.add_argument("command", nargs="?", metavar="<command>", help="The program to run, instead of the default shell.")
+    parser.add_argument(
+        "-t", dest="target_window", metavar="<target-window>", help="The window whose active pane respawns."
+    )
+    parser.add_argument(
+        "command", nargs="?", metavar="<command>", help="The program to run, instead of the default shell."
+    )

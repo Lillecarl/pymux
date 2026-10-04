@@ -8,6 +8,7 @@ makes up what a legacy keyboard cannot send, so a pane keeps both. It
 still has to know what the terminal of every client can report: a
 keyboard that sends its own key release may not get a second one.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -62,10 +63,7 @@ def make_pymux(*masks):
     "A pymux with one attached client for each mask."
     pymux = Pymux()
     connections = [FakeConnection(mask) for mask in masks]
-    pymux._client_states = {
-        connection: FakeClientState(pymux.current_session)
-        for connection in connections
-    }
+    pymux._client_states = {connection: FakeClientState(pymux.current_session) for connection in connections}
     return pymux, connections
 
 
@@ -244,9 +242,7 @@ def test_what_pane_asks_for_reaches_terminal_as_well():
 
     pymux = Pymux()
     pymux.get_focused_pane = lambda: PaneThatAsked()
-    assert pymux.keyboard_flags_for_client() == (
-        KeyboardFlag.DISAMBIGUATE | KeyboardFlag.REPORT_EVENT_TYPES
-    )
+    assert pymux.keyboard_flags_for_client() == (KeyboardFlag.DISAMBIGUATE | KeyboardFlag.REPORT_EVENT_TYPES)
 
 
 # ----------------------------------------------------------------------

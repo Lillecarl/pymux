@@ -9,6 +9,7 @@ per option sorted, the three commands keep their scopes apart
 (`Option.scope` says which), and `-g` on a window option reads what
 every new window starts with.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -66,9 +67,7 @@ async def test_session_list_holds_session_options_only():
         names = {row.split()[0] for row in rows}
         assert "status" in names
         assert "strip" not in names  # a window option
-        assert names == {
-            name for name, o in ALL_OPTIONS.items() if o.scope is Scope.SESSION
-        }
+        assert names == {name for name, o in ALL_OPTIONS.items() if o.scope is Scope.SESSION}
 
 
 async def test_window_option_reads_active_window():
@@ -120,9 +119,7 @@ def test_every_option_names_where_it_lives():
     tables = (ALL_OPTIONS, ALL_WINDOW_OPTIONS, ALL_CLIENT_OPTIONS)
     for table in tables:
         for name, option in table.items():
-            assert option.attribute_name is not None or isinstance(
-                option, KeyPrefixOption
-            ), name
+            assert option.attribute_name is not None or isinstance(option, KeyPrefixOption), name
 
 
 async def test_window_list_holds_window_options_only():
@@ -184,9 +181,7 @@ async def test_wrong_kind_of_option_is_unknown():
             show_window_options(pymux, argparse.Namespace(g=False, option="status"))
 
         with pytest.raises(CommandException):
-            show_client_options(
-                pymux, argparse.Namespace(target_client=None, option="status")
-            )
+            show_client_options(pymux, argparse.Namespace(target_client=None, option="status"))
 
         with pytest.raises(CommandException):
             show_options(pymux, argparse.Namespace(g=False, option="theme"))

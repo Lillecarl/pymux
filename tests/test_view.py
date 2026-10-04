@@ -18,6 +18,7 @@ The strip owned all three before, for one axis. They are here so that
 a divided window bigger than a client's screen scrolls by the same
 rule, rather than by a second one that drifts from it.
 """
+
 from __future__ import annotations
 
 from hypothesis import given
@@ -66,16 +67,12 @@ def test_rectangle_already_in_view_moves_nothing():
     already see is not a reason to scroll. Lillecarl/pymux#207.
     """
     view = create_view(x=10)
-    assert view.moved_onto(Rect(x=12, y=1, width=4, height=2), PLANE) == Point(
-        x=10, y=0
-    )
+    assert view.moved_onto(Rect(x=12, y=1, width=4, height=2), PLANE) == Point(x=10, y=0)
 
 
 def test_rectangle_off_right_brings_its_left_edge_in():
     view = create_view(x=0)
-    assert view.moved_onto(Rect(x=25, y=0, width=8, height=5), PLANE) == Point(
-        x=25, y=0
-    )
+    assert view.moved_onto(Rect(x=25, y=0, width=8, height=5), PLANE) == Point(x=25, y=0)
 
 
 def test_rectangle_off_left_brings_its_left_edge_in():
@@ -187,7 +184,5 @@ def test_start_of_rectangle_is_shown_where_plane_allows(view, rect):
     """
     view.offset = view.moved_onto(rect, PLANE)
 
-    if rect.x <= PLANE.right - view.size.columns and rect.y <= (
-        PLANE.bottom - view.size.rows
-    ):
+    if rect.x <= PLANE.right - view.size.columns and rect.y <= (PLANE.bottom - view.size.rows):
         assert view.shows(Rect(x=rect.x, y=rect.y, width=1, height=1))

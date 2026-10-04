@@ -84,6 +84,7 @@ on its own. `tests/vttest-picture-differences.txt` records each
 difference that stands and says why, and a run is judged against it in
 both directions.
 """
+
 from __future__ import annotations
 
 import os
@@ -139,11 +140,7 @@ INCLUDE = os.environ.get("PYMUX_VTTEST_INCLUDE", "^4 ")
 #:   blinks, so a still picture of it never settles at all.
 #:
 #: vttest was written for a VT100 and xterm is what answers it.
-WANTED = [
-    name.strip()
-    for name in os.environ.get("PYMUX_VTTEST_TERMINALS", "xterm").split(",")
-    if name.strip()
-]
+WANTED = [name.strip() for name in os.environ.get("PYMUX_VTTEST_TERMINALS", "xterm").split(",") if name.strip()]
 
 #: The differences that stand, as a file of "terminal identity verdict".
 RECORDED = Path(__file__).parent / "vttest-picture-differences.txt"
@@ -222,15 +219,11 @@ def walker_script(walker_room: Path, side_room: Path) -> str:
         "TMPDIR": str(side_room),
         "HOME": str(side_room),
     }
-    exports = "".join(
-        "export %s=%s\n" % (name, shlex.quote(value))
-        for name, value in settings.items()
-    )
+    exports = "".join("export %s=%s\n" % (name, shlex.quote(value)) for name, value in settings.items())
     return (
         "stty -echo\n"
         + exports
-        + "python3 %s 2>%s\n"
-        % (shlex.quote(WALKER), shlex.quote(str(side_room / "walker.log")))
+        + "python3 %s 2>%s\n" % (shlex.quote(WALKER), shlex.quote(str(side_room / "walker.log")))
         + "echo $? > %s\n" % shlex.quote(str(side_room / "status"))
     )
 
@@ -343,10 +336,7 @@ class Camera:
             time.sleep(STILL_GAP)
             gone = ended()
             if gone is not None:
-                raise RuntimeError(
-                    "%r ended while it was drawing (exit %s)\n%s"
-                    % (identity, gone, _tail(log_path))
-                )
+                raise RuntimeError("%r ended while it was drawing (exit %s)\n%s" % (identity, gone, _tail(log_path)))
             take_one(scratch)
             same = differences(path, scratch) == 0
             shutil.copy(scratch, path)
@@ -375,18 +365,11 @@ class Camera:
                 time.sleep(BLINK_GAP)
             gone = ended()
             if gone is not None:
-                raise RuntimeError(
-                    "%r ended while it was blinking (exit %s)\n%s"
-                    % (identity, gone, _tail(log_path))
-                )
+                raise RuntimeError("%r ended while it was blinking (exit %s)\n%s" % (identity, gone, _tail(log_path)))
             shot = self.into / ("%04d.%d.png" % (number, frame))
             take_one(shot)
             shots.append(shot)
-        return sum(
-            1
-            for first, second in zip(shots, shots[1:])
-            if differences(first, second) != 0
-        )
+        return sum(1 for first, second in zip(shots, shots[1:]) if differences(first, second) != 0)
 
     def take_them(self, work: Path, log_path: Path):
         """
@@ -416,8 +399,7 @@ class Camera:
                         return self.identities
                     if time.monotonic() > deadline:
                         raise RuntimeError(
-                            "the walker named no screen in %g seconds\n%s"
-                            % (NEXT_SCREEN_TIMEOUT, _tail(log_path))
+                            "the walker named no screen in %g seconds\n%s" % (NEXT_SCREEN_TIMEOUT, _tail(log_path))
                         )
                     time.sleep(TICK)
                     continue
@@ -436,9 +418,7 @@ class Camera:
                     #
                     # Then the still picture, taken once everything
                     # that was going to happen has happened.
-                    self.blinked[identity] = self._burst(
-                        take_one, ended, identity, number, log_path
-                    )
+                    self.blinked[identity] = self._burst(take_one, ended, identity, number, log_path)
                     self._hold_still(
                         work,
                         take_one,
@@ -498,14 +478,9 @@ def one_side(terminal, seat, side, into_pane, work, room):
         camera.close()
 
     if not status.exists():
-        raise RuntimeError(
-            "the %s walk left no status behind\n%s" % (side, every_log(side_room))
-        )
+        raise RuntimeError("the %s walk left no status behind\n%s" % (side, every_log(side_room)))
     if status.read_text().strip() != "0":
-        raise RuntimeError(
-            "the %s walk ended with %s\n%s"
-            % (side, status.read_text().strip(), every_log(side_room))
-        )
+        raise RuntimeError("the %s walk ended with %s\n%s" % (side, status.read_text().strip(), every_log(side_room)))
     return camera
 
 
@@ -549,8 +524,7 @@ def compare_one(terminal, seat, work, out):
     if bare.identities != through.identities:
         raise RuntimeError(
             "the two walks drew different screens, so no picture of one "
-            "can be compared with a picture of the other.\n%s"
-            % first_difference(bare.identities, through.identities)
+            "can be compared with a picture of the other.\n%s" % first_difference(bare.identities, through.identities)
         )
 
     differ = room / "differ"
@@ -659,8 +633,7 @@ def write_recorded(path, found):
 def main():
     if not WALKER or not VTTEST:
         raise SystemExit(
-            "PYMUX_VTTEST_WALKER and PYMUX_VTTEST name the walker and the "
-            "vttest binary, and one of them is not set."
+            "PYMUX_VTTEST_WALKER and PYMUX_VTTEST name the walker and the vttest binary, and one of them is not set."
         )
 
     work = Path(os.environ.get("TMPDIR", "/tmp")) / "pymux-vttest-pictures"
@@ -671,10 +644,7 @@ def main():
     by_name = {terminal.name: terminal for terminal in TERMINALS}
     unknown = [name for name in WANTED if name not in by_name]
     if unknown:
-        raise SystemExit(
-            "no terminal is called %s. There is %s."
-            % (", ".join(unknown), ", ".join(sorted(by_name)))
-        )
+        raise SystemExit("no terminal is called %s. There is %s." % (", ".join(unknown), ", ".join(sorted(by_name))))
     terminals = [by_name[name] for name in WANTED]
 
     missing = [t.name for t in terminals if not t.is_available()]
@@ -729,10 +699,7 @@ def main():
     for key, (verdict, default) in sorted(seen.items()):
         expected = standing.get(key, default)
         if verdict != expected:
-            wrong.append(
-                "%s %s: this run says %s, and %s was recorded"
-                % (key[0], key[1], verdict, expected)
-            )
+            wrong.append("%s %s: this run says %s, and %s was recorded" % (key[0], key[1], verdict, expected))
 
     if wrong:
         print("\n--- pymux draws something else ---", file=sys.stderr)

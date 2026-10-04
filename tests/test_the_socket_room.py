@@ -8,6 +8,7 @@ creates mode 0700 and every user of it verifies before it uses, the
 way tmux keeps its sockets in `tmux-<uid>`.
 Lillecarl/pymux#405.
 """
+
 from __future__ import annotations
 
 import os
@@ -16,9 +17,7 @@ import stat
 import pytest
 from libpymux.sockets import socket_directory
 
-pytestmark = pytest.mark.skipif(
-    os.name == "nt", reason="the room needs a unix uid and lstat"
-)
+pytestmark = pytest.mark.skipif(os.name == "nt", reason="the room needs a unix uid and lstat")
 
 
 @pytest.fixture
@@ -33,9 +32,7 @@ def bases(tmp_path, monkeypatch):
     monkeypatch.delenv("PYMUX_TMPDIR", raising=False)
     monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
     monkeypatch.setattr("tempfile.gettempdir", lambda: str(tmp_path))
-    monkeypatch.setattr(
-        "platformdirs.PlatformDirs", lambda: FakePlatformDirs(str(tmp_path))
-    )
+    monkeypatch.setattr("platformdirs.PlatformDirs", lambda: FakePlatformDirs(str(tmp_path)))
     return tmp_path
 
 
@@ -87,9 +84,7 @@ def test_xdg_runtime_dir_comes_before_the_temp_dir(bases, monkeypatch):
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(bases / "runtime"))
     (bases / "runtime").mkdir()
 
-    assert socket_directory() == str(
-        bases / "runtime" / ("pymux-%d" % os.getuid())
-    )
+    assert socket_directory() == str(bases / "runtime" / ("pymux-%d" % os.getuid()))
 
 
 def test_the_platform_runtime_dir_comes_before_the_temp_dir(bases, monkeypatch):
@@ -107,9 +102,7 @@ def test_the_platform_runtime_dir_comes_before_the_temp_dir(bases, monkeypatch):
     assert socket_directory() == str(platform / ("pymux-%d" % os.getuid()))
 
 
-def test_a_squatted_platform_room_falls_through_to_the_temp_dir(
-    bases, monkeypatch
-):
+def test_a_squatted_platform_room_falls_through_to_the_temp_dir(bases, monkeypatch):
     platform = bases / "platform"
     platform.mkdir()
     (platform / ("pymux-%d" % os.getuid())).mkdir(mode=0o755)
@@ -124,9 +117,7 @@ def test_a_relative_base_is_skipped(bases, monkeypatch):
     assert socket_directory() == str(bases / ("pymux-%d" % os.getuid()))
 
 
-def test_a_base_that_cannot_hold_a_room_falls_through(
-    bases, monkeypatch
-):
+def test_a_base_that_cannot_hold_a_room_falls_through(bases, monkeypatch):
     unwritable = bases / "unwritable"
     unwritable.mkdir()
     unwritable.chmod(0o555)

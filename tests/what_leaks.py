@@ -89,6 +89,7 @@ the first kept too, and a healthy type is zero on both.
     PYMUX_LEAKS_TRACE=1         # count bytes as well, with tracemalloc
     PYMUX_LEAKS_ROUTE=connection  # one route, not both
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -189,8 +190,7 @@ def load_recordings() -> list[tuple[str, str]]:
     """
     if not RECORDINGS:
         raise SystemExit(
-            "PYMUX_LEAKS_RECORDINGS names the directory of recordings. "
-            "`nix build --file . checks.pymux-leaks` sets it."
+            "PYMUX_LEAKS_RECORDINGS names the directory of recordings. `nix build --file . checks.pymux-leaks` sets it."
         )
 
     root = Path(RECORDINGS)
@@ -202,9 +202,7 @@ def load_recordings() -> list[tuple[str, str]]:
             continue
         if INCLUDE and INCLUDE not in directory.name:
             continue
-        found.append(
-            (directory.name, recording.read_bytes().decode("utf-8", "replace"))
-        )
+        found.append((directory.name, recording.read_bytes().decode("utf-8", "replace")))
 
     if not found:
         raise SystemExit("No recording of %r under %s." % (INCLUDE, root))
@@ -344,9 +342,7 @@ async def create_round(session: Session, recordings) -> bool:
         watch("window", window)
 
         for number in range(PANES - 1):
-            pymux.handle_command(
-                "split-window -h" if number % 2 == 0 else "split-window -v"
-            )
+            pymux.handle_command("split-window -h" if number % 2 == 0 else "split-window -v")
 
         panes = list(window.panes)
         for place, pane in enumerate(panes):
@@ -438,9 +434,7 @@ def survivors(watched: dict) -> list[str]:
         if obj is None:
             found.append("%s: cannot be watched, so nothing is known" % (name,))
             continue
-        found.append(
-            why_it_is_alive(name, obj, ignore=[watched, alive, ring, found] + ring)
-        )
+        found.append(why_it_is_alive(name, obj, ignore=[watched, alive, ring, found] + ring))
 
     del alive, ring
     return found
@@ -470,13 +464,8 @@ async def run(rounds: int, recordings) -> list[str]:
         for name, route in routes(ROUTE, "PYMUX_LEAKS_ROUTE"):
             async with route() as session:
                 if not await create_round(session, recordings):
-                    alive.append(
-                        "a pane never reported itself terminated, so this "
-                        "round measured nothing"
-                    )
-                alive.extend(
-                    "%s: %s" % (name, line) for line in survivors(session.watched)
-                )
+                    alive.append("a pane never reported itself terminated, so this round measured nothing")
+                alive.extend("%s: %s" % (name, line) for line in survivors(session.watched))
 
     return alive
 
@@ -585,15 +574,11 @@ def report(alive: list[str], first: Counter, second: Counter, bytes_grown) -> in
     # own arenas and the size of the recordings. A budget on it would
     # fail on a machine that reads a file differently.
     if TRACE:
-        print(
-            "\n%s of traced memory, over both sides. Nothing judges it."
-            % (_bytes(bytes_grown),)
-        )
+        print("\n%s of traced memory, over both sides. Nothing judges it." % (_bytes(bytes_grown),))
 
     tolerance = int(os.environ.get("PYMUX_LEAKS_TOLERANCE") or DEFAULT_TOLERANCE)
     over = [
-        "%s grew by %d, and %d is the most that is noise"
-        % (name, second[name], tolerance)
+        "%s grew by %d, and %d is the most that is noise" % (name, second[name], tolerance)
         for name in second
         if second[name] > tolerance
     ]

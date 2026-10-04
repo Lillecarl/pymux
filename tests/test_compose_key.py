@@ -17,6 +17,7 @@ So this is a prompt with the key names on it. What the tests below read
 is which container the layout would draw, which is the filter of each
 float, and what reaches the pane when the answer is accepted.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -121,9 +122,7 @@ async def test_ordinary_prompt_still_uses_bottom_row():
     """
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            call_command_handler(
-                "command-prompt", pymux, ["-p", "Name", "rename-window %%"]
-            )
+            call_command_handler("command-prompt", pymux, ["-p", "Name", "rename-window %%"])
 
         assert not is_drawn(state, float_of(state, "_key_box"))
         assert is_drawn(state, bottom_prompt(state))
@@ -142,9 +141,7 @@ async def test_menu_under_cursor_steps_aside_for_box():
     async with create_session() as (pymux, state):
         compose(pymux, state)
 
-        cursor_menu = next(
-            one for one in state.layout_manager.layout.floats if one.xcursor
-        )
+        cursor_menu = next(one for one in state.layout_manager.layout.floats if one.xcursor)
         assert not is_drawn(state, cursor_menu)
 
 
@@ -256,12 +253,7 @@ async def test_it_offers_keys_keyboard_leaves_out():
         compose(pymux, state)
 
         with set_app(state.app):
-            offered = [
-                completion.text
-                for completion in state.prompt_completer.get_completions(
-                    Document("ho"), None
-                )
-            ]
+            offered = [completion.text for completion in state.prompt_completer.get_completions(Document("ho"), None)]
         assert offered == ["home"]
 
 
@@ -271,11 +263,6 @@ def test_box_does_not_offer_prefix():
     wants it. This box sends a key to a pane, and the prefix is the one
     key pymux keeps for itself: `send-prefix` is what sends it on.
     """
-    offered = [
-        completion.text
-        for completion in KeyCompleter(offer_prefix=False).get_completions(
-            Document(""), None
-        )
-    ]
+    offered = [completion.text for completion in KeyCompleter(offer_prefix=False).get_completions(Document(""), None)]
     assert PREFIX not in offered
     assert offered

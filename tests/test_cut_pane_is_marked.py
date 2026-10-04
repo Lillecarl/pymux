@@ -38,6 +38,7 @@ draws only where the theme owns the background. Lillecarl/pymux#352.
 This judges the frame a real session draws, because the question is
 what a person sees.
 """
+
 from __future__ import annotations
 
 import io
@@ -68,9 +69,7 @@ STRIP = ["set-option pane-border-status on", "set-window-option strip on"]
 @contextmanager
 def create_client(commands=(), rows=ROWS, columns=COLUMNS):
     pymux = Pymux()
-    output = Vt100_Output(
-        stdout=io.StringIO(), get_size=lambda: Size(rows=rows, columns=columns)
-    )
+    output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=rows, columns=columns))
     with create_pipe_input() as pipe:
         state = pymux.add_client(
             output=output,
@@ -127,10 +126,7 @@ def marked(screen, row: int) -> str:
     A hash for a cell that is marked cut and a space for one that is
     not, so a row reads as a picture.
     """
-    return "".join(
-        "#" if CUT_IS_TINTED in screen.data_buffer[row][x].style else " "
-        for x in range(COLUMNS)
-    )
+    return "".join("#" if CUT_IS_TINTED in screen.data_buffer[row][x].style else " " for x in range(COLUMNS))
 
 
 def create_wide_column(pymux, state):
@@ -193,9 +189,7 @@ def test_tint_sits_before_what_pane_wrote():
         create_wide_column(pymux, state)
         screen = draw()
 
-        cut = panes_of(state).plan.rect_of(
-            pymux.arrangement.get_active_window().panes[1]
-        )
+        cut = panes_of(state).plan.rect_of(pymux.arrangement.get_active_window().panes[1])
         style = screen.data_buffer[ROWS // 2][cut.x].style
 
         assert CUT_IS_TINTED in style
@@ -233,9 +227,7 @@ def test_a_light_terminal_is_darkened():
     assert _lightness(tinted("#ffffff")) < _lightness("#ffffff")
 
 
-@pytest.mark.parametrize(
-    "name", ["default", "grey", "base16:gruvbox-dark-hard", "pygments:monokai"]
-)
+@pytest.mark.parametrize("name", ["default", "grey", "base16:gruvbox-dark-hard", "pygments:monokai"])
 def test_every_source_moves_its_own_background(name):
     """
     One number, so a tint is the same mark in every scheme.
@@ -273,9 +265,7 @@ def test_the_column_wears_the_colour_of_the_terminal():
         create_wide_column(pymux, state)
         screen = draw()
 
-        cut = panes_of(state).plan.rect_of(
-            pymux.arrangement.get_active_window().panes[1]
-        )
+        cut = panes_of(state).plan.rect_of(pymux.arrangement.get_active_window().panes[1])
         style = screen.data_buffer[ROWS // 2][cut.x].style
 
         assert "bg:%s" % (tinted("#404040"),) in style

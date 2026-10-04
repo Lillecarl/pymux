@@ -1,6 +1,7 @@
 """
 The background of dots must keep its pattern.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.layout.screen import Screen, WritePosition

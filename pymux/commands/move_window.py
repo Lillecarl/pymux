@@ -59,7 +59,15 @@ def move_window(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, move_window)
-    parser.add_argument("-t", dest="dst_window", metavar="<dst-window>", required=True, type=WindowIndex, help="The index to move to.")
-    parser.add_argument("-a", dest="after", action="store_true", help="Insert after that index, moving the windows in the way up.")
-    parser.add_argument("-b", dest="before", action="store_true", help="Insert at that index, moving the windows in the way up.")
-    parser.add_argument("-k", dest="kill", action="store_true", help="Kill whatever is at that index, and take its place.")
+    parser.add_argument(
+        "-t", dest="dst_window", metavar="<dst-window>", required=True, type=WindowIndex, help="The index to move to."
+    )
+    parser.add_argument(
+        "-a", dest="after", action="store_true", help="Insert after that index, moving the windows in the way up."
+    )
+    parser.add_argument(
+        "-b", dest="before", action="store_true", help="Insert at that index, moving the windows in the way up."
+    )
+    parser.add_argument(
+        "-k", dest="kill", action="store_true", help="Kill whatever is at that index, and take its place."
+    )

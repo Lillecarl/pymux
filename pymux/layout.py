@@ -2811,7 +2811,7 @@ def cut_tint(pymux: Pymux) -> str:
 
     try:
         background = pymux.get_client_state().default_colors.background
-    except (ValueError, AttributeError):
+    except ValueError, AttributeError:
         # No client is drawing, or its connection never asked its
         # terminal -- which is what `latest_client_color_base` allows
         # for as well.

@@ -57,10 +57,7 @@ def bind_and_listen_on_win32_socket(socket_name, accept_callback):
     assert callable(accept_callback)
     socket_name = r"\\.\pipe\pymux.sock.jonathan.42"
 
-    pipes = [
-        PipeInstance(socket_name, pipe_connection_cb=accept_callback)
-        for i in range(INSTANCES)
-    ]
+    pipes = [PipeInstance(socket_name, pipe_connection_cb=accept_callback) for i in range(INSTANCES)]
 
     return Win32PipeListener(socket_name, pipes)
 
@@ -197,9 +194,7 @@ class PipeInstance:
         overlapped.hEvent = create_event()
 
         while True:
-            success = windll.kernel32.ConnectNamedPipe(
-                self.pipe_handle, byref(overlapped)
-            )
+            success = windll.kernel32.ConnectNamedPipe(self.pipe_handle, byref(overlapped))
 
             if success:
                 return

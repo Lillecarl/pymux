@@ -23,6 +23,7 @@ drives the connection route and counts what the event loop did.
 one client, one window, the shape most tests want. A coroutine test
 runs on anyio's pytest plugin, which `anyio_mode` turns on.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -262,9 +263,7 @@ async def in_this_process(pymux=None):
         # A real one never reuses a path a live client holds either.
         ttys = iter("/dev/pts/%d" % number for number in range(1, 1000))
 
-        async def attach(
-            name, size, hostname=OTHER_MACHINE, environment=None, ttyname=None
-        ):
+        async def attach(name, size, hostname=OTHER_MACHINE, environment=None, ttyname=None):
             output = Vt100_Output(stdout=_Sink(), get_size=lambda: size)
             state = pymux.add_client(
                 output=output,
@@ -317,9 +316,7 @@ async def in_this_process(pymux=None):
 
         async with pymux.running():
             try:
-                yield Session(
-                    pymux, attach, detach, typed, create_command, watch, watched
-                )
+                yield Session(pymux, attach, detach, typed, create_command, watch, watched)
             finally:
                 pymux.stop()
 
@@ -445,9 +442,7 @@ async def over_connection(pymux=None, read_packet=None):
 
         # What `client/terminal.py` sends when it attaches, in the
         # order it sends it.
-        client_end.write_nowait(
-            json.dumps({"cmd": "size", "data": [size.rows, size.columns]})
-        )
+        client_end.write_nowait(json.dumps({"cmd": "size", "data": [size.rows, size.columns]}))
         client_end.write_nowait(
             json.dumps(
                 {
@@ -552,9 +547,7 @@ async def over_connection(pymux=None, read_packet=None):
         draining = asyncio.create_task(drain_command())
         command_ends.append((client_end, draining))
 
-        client_end.write_nowait(
-            json.dumps({"cmd": "run-command", "data": text, "pane_id": pane_id})
-        )
+        client_end.write_nowait(json.dumps({"cmd": "run-command", "data": text, "pane_id": pane_id}))
         return got
 
     async with pymux.running():
@@ -584,7 +577,5 @@ def routes(chosen: str, knob: str) -> list:
     if not chosen:
         return list(ROUTES.items())
     if chosen not in ROUTES:
-        raise SystemExit(
-            "%s is one of %s, not %r" % (knob, ", ".join(sorted(ROUTES)), chosen)
-        )
+        raise SystemExit("%s is one of %s, not %r" % (knob, ", ".join(sorted(ROUTES)), chosen))
     return [(chosen, ROUTES[chosen])]

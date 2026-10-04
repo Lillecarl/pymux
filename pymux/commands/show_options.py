@@ -30,14 +30,16 @@ def show_options(pymux: Pymux, args: argparse.Namespace) -> None:
         answer(pymux, option_as_written(pymux, option, args))
         return
 
-    lines = [
-        "%s %s" % (key, option_as_written(pymux, option, args))
-        for key, option in sorted(ALL_OPTIONS.items())
-    ]
+    lines = ["%s %s" % (key, option_as_written(pymux, option, args)) for key, option in sorted(ALL_OPTIONS.items())]
     answer(pymux, "\n".join(lines))
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, show_options)
-    parser.add_argument("-g", dest="g", action="store_true", help="Accepted for tmux and changes nothing: there is one session per server.")
+    parser.add_argument(
+        "-g",
+        dest="g",
+        action="store_true",
+        help="Accepted for tmux and changes nothing: there is one session per server.",
+    )
     parser.add_argument("option", metavar="<option>", nargs="?")

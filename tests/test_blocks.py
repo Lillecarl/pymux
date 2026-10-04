@@ -5,6 +5,7 @@ One cell carries two pixels. The foreground paints the top half and the
 background paints the bottom, so a grid of cells holds an image at twice
 the vertical resolution.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -128,16 +129,12 @@ def test_image_that_is_too_small_draws_nothing():
 
 
 def test_twenty_four_bits_write_pixel():
-    lines = blocks_for(
-        rgba(RED, GREEN), columns=1, rows=1, depth=ColorDepth.DEPTH_24_BIT
-    )
+    lines = blocks_for(rgba(RED, GREEN), columns=1, rows=1, depth=ColorDepth.DEPTH_24_BIT)
     assert "38;2;255;0;0" in lines[0]
 
 
 def test_two_hundred_and_fifty_six_colours_take_index():
-    lines = blocks_for(
-        rgba(RED, GREEN), columns=1, rows=1, depth=ColorDepth.DEPTH_8_BIT
-    )
+    lines = blocks_for(rgba(RED, GREEN), columns=1, rows=1, depth=ColorDepth.DEPTH_8_BIT)
     assert "38;5;" in lines[0]
     assert "48;5;" in lines[0]
     assert ";2;" not in lines[0]

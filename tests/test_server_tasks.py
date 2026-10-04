@@ -21,6 +21,7 @@ connection is every other client of the server. The work a connection
 spawns answers one client, so it is logged there and the connection
 lives on. Lillecarl/pymux#87.
 """
+
 from __future__ import annotations
 
 import inspect
@@ -215,8 +216,8 @@ async def test_a_read_that_keeps_failing_ends_the_connection():
         # closed pipe is what says the loop gave up.
         await _until(lambda: pipe.closed)
 
-        assert pipe.reads == FAILURES_THAT_END_A_CONNECTION, (
-            "it read %d times: the count is not what ends it" % (pipe.reads,)
+        assert pipe.reads == FAILURES_THAT_END_A_CONNECTION, "it read %d times: the count is not what ends it" % (
+            pipe.reads,
         )
         assert pymux.removed == [connection]
 

@@ -25,6 +25,7 @@ is taken by waiting for two identical frames.
 It parks until it is killed, so a photograph taken later still finds
 it on the screen.
 """
+
 from __future__ import annotations
 
 import re
@@ -43,10 +44,22 @@ RESET = "\x1b[0m"
 #: leaves this program painting the colours every terminal paints,
 #: which is what it did before it learned to ask.
 CONVENTIONAL = [
-    "#000000", "#cd0000", "#00cd00", "#cdcd00",
-    "#0000ee", "#cd00cd", "#00cdcd", "#e5e5e5",
-    "#7f7f7f", "#ff0000", "#00ff00", "#ffff00",
-    "#5c5cff", "#ff00ff", "#00ffff", "#ffffff",
+    "#000000",
+    "#cd0000",
+    "#00cd00",
+    "#cdcd00",
+    "#0000ee",
+    "#cd00cd",
+    "#00cdcd",
+    "#e5e5e5",
+    "#7f7f7f",
+    "#ff0000",
+    "#00ff00",
+    "#ffff00",
+    "#5c5cff",
+    "#ff00ff",
+    "#00ffff",
+    "#ffffff",
 ]
 
 #: The names, for the row under the swatches.
@@ -70,9 +83,7 @@ ANSI_NAMES = [
 ]
 
 #: The asks: the sixteen by number, then the two defaults.
-ASKS = "".join("\x1b]4;%d;?\x1b\\" % index for index in range(16)) + (
-    "\x1b]10;?\x1b\\\x1b]11;?\x1b\\"
-)
+ASKS = "".join("\x1b]4;%d;?\x1b\\" % index for index in range(16)) + ("\x1b]10;?\x1b\\\x1b]11;?\x1b\\")
 
 
 def _rgb(spec):
@@ -112,8 +123,6 @@ def parse_replies(data: bytes) -> dict:
             if rgb is not None:
                 colours["foreground" if code == "10" else "background"] = rgb
     return colours
-
-
 
 
 class Painter:
@@ -193,12 +202,8 @@ def diff(p):
     return [
         create_line("  ", p.fg(8), "@@ -12,4 +12,5 @@", RESET),
         create_line("  ", p.fg(1), "-", "the colour of the pane, chosen once", RESET),
-        create_line(
-            "  ", p.fg(2), "+", "a role named once, and the rules it makes", RESET
-        ),
-        create_line(
-            "  ", p.fg(2), "+", "a theme from the styles of pygments", RESET
-        ),
+        create_line("  ", p.fg(2), "+", "a role named once, and the rules it makes", RESET),
+        create_line("  ", p.fg(2), "+", "a theme from the styles of pygments", RESET),
         create_line("  ", " ", "  the border keeps its own colour", RESET),
     ]
 

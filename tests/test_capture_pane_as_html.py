@@ -15,6 +15,7 @@ again. So `pyte.html` runs here, and a caller needs no pyte at all.
 properties, so a page that defines none of them draws nothing.
 Lillecarl/pymux#452.
 """
+
 from __future__ import annotations
 
 import sys
@@ -184,9 +185,7 @@ def test_a_hyperlink_becomes_an_anchor(pymux):
     create_pane(pymux, "\x1b]8;;https://example.com/\x1b\\link\x1b]8;;\x1b\\")
     reader = read(capture(pymux))
 
-    assert [href for _piece, _c, _s, href in reader.pieces if href] == [
-        "https://example.com/"
-    ]
+    assert [href for _piece, _c, _s, href in reader.pieces if href] == ["https://example.com/"]
 
 
 def test_what_a_program_writes_cannot_become_markup(pymux):
@@ -272,9 +271,7 @@ def test_joining_the_rows_is_refused(pymux):
 
     call_command_handler("capture-pane", pymux, ["-p", "-H", "-J"])
 
-    assert errors == [
-        "pymux: capture-pane: -J joins rows into one line, which -H cannot draw"
-    ]
+    assert errors == ["pymux: capture-pane: -J joins rows into one line, which -H cannot draw"]
 
 
 # ----------------------------------------------------------------------

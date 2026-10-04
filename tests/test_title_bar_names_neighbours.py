@@ -9,6 +9,7 @@ bar belongs to, and which pane is beside it.
 Every pane is given a name, so a bar says out loud which panes it is
 naming. Lillecarl/pymux#207.
 """
+
 from __future__ import annotations
 
 from test_strip_draws import CHROME, create_client
@@ -55,9 +56,7 @@ def bars_of(pymux, draw, panes):
     drawn_at = pymux.get_client_state().layout_manager.pane_write_positions
 
     return [
-        None
-        if pane not in drawn_at
-        else rows[0][drawn_at[pane].xpos : drawn_at[pane].xpos + drawn_at[pane].width]
+        None if pane not in drawn_at else rows[0][drawn_at[pane].xpos : drawn_at[pane].xpos + drawn_at[pane].width]
         for pane in panes
     ]
 

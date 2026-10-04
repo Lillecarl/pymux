@@ -33,6 +33,7 @@ reason of its own -- `Application._poll_output_size` names "situations
 where `attach_winch_signal_handler` is not sufficient" -- and a size
 that is read on a timer costs nothing and covers what a signal misses.
 """
+
 from __future__ import annotations
 
 import json
@@ -80,9 +81,7 @@ class MemoryClient(TerminalClient):
             pass  # The server is gone. The read loop ends on its own.
 
     @override
-    async def attach(
-        self, detach_other_clients: bool = False, color_depth=None
-    ) -> None:
+    async def attach(self, detach_other_clients: bool = False, color_depth=None) -> None:
         """
         Attach the user interface, and return when it ends.
 
@@ -147,7 +146,7 @@ class MemoryClient(TerminalClient):
             with anyio.open_signal_receiver(signal.SIGWINCH) as signals:
                 async for _signum in signals:
                     self._send_size()
-        except (NotImplementedError, ValueError, RuntimeError):
+        except NotImplementedError, ValueError, RuntimeError:
             pass  # No signals here. The size stays as it was.
 
     async def _watch_size(self) -> None:

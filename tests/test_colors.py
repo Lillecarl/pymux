@@ -5,6 +5,7 @@ Two questions, and neither is about the session: how many colours the
 terminal takes, and which two it draws with when nothing says
 otherwise.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -179,9 +180,7 @@ def test_forced_depth_beats_probe():
 
 def test_queries_ask_for_two_defaults_and_sixteen_ansi():
     "The cube beyond sixteen is convention, so it is not asked about."
-    assert COLOR_QUERIES == osc("10", "?") + osc("11", "?") + "".join(
-        osc("4", "%i;?" % index) for index in range(16)
-    )
+    assert COLOR_QUERIES == osc("10", "?") + osc("11", "?") + "".join(osc("4", "%i;?" % index) for index in range(16))
 
 
 def test_fresh_terminal_has_said_nothing():
@@ -274,10 +273,7 @@ def test_color_base_carries_learned_sixteen_over_cube():
 
     base = colors.color_base()
 
-    assert base.palette[:16] == [
-        red if index == 1 else blue if index == 14 else PALETTE[index]
-        for index in range(16)
-    ]
+    assert base.palette[:16] == [red if index == 1 else blue if index == 14 else PALETTE[index] for index in range(16)]
     assert base.palette[16:] == list(PALETTE[16:])
 
 
@@ -333,9 +329,7 @@ async def test_theme_that_owns_screen_gives_pane_its_palette():
     async with a_client() as (pymux, client):
         pymux.paint_screen = True
         client.theme = "pygments:dracula"
-        pane = SimpleNamespace(
-            screen=Screen(24, 80, write_process_input=lambda data: None)
-        )
+        pane = SimpleNamespace(screen=Screen(24, 80, write_process_input=lambda data: None))
 
         pymux.tell_pane_about_colours(pane)
 
@@ -416,6 +410,7 @@ def test_colour_arriving_after_detection_is_still_read():
 
 # ----------------------------------------------------------------------
 # And what the panes answer with follows.
+
 
 def test_learned_colour_tells_panes_again():
     "The panes answer their programs with what this terminal paints."

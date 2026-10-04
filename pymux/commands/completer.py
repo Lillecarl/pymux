@@ -15,6 +15,7 @@ second finder would find them already bound to the first. The same
 finder serves every client, and it re-enters itself for the command
 a `bind-key` binding runs.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -128,9 +129,7 @@ def _bound_command(pymux: Pymux, prefix: str, parsed_args: argparse.Namespace, *
     finder = _finder
     if finder is None:
         return {}
-    matches = finder._get_completions(
-        ["pymux", *parsed_args.arguments], prefix, "", None
-    )
+    matches = finder._get_completions(["pymux", *parsed_args.arguments], prefix, "", None)
     meta = finder.get_display_completions()
     return {m: meta.get(m, "") for m in matches}
 
@@ -153,13 +152,11 @@ def _forward_listenings(pymux: Pymux, parsed_args: argparse.Namespace, direction
     """
     try:
         connection = pymux.forwarding_client().client_state.connection
-    except (CommandException, ValueError):
+    except CommandException, ValueError:
         return {}
 
     return {
-        "%s:%s" % (one.get("listen_host", ""), one.get("port", "")): one.get(
-            "dest", ""
-        )
+        "%s:%s" % (one.get("listen_host", ""), one.get("port", "")): one.get("dest", "")
         for one in connection.forwards
         if one.get("direction") == direction.value
     }
@@ -178,12 +175,8 @@ _VALUE_COMPLETERS = {
     ("bind-key", "key"): _keys,
     ("bind-key", "arguments"): _bound_command,
     ("send-keys", "keys"): _send_keys_names,
-    ("unforward-port", "local"): partial(
-        _forward_listenings, direction=Direction.LOCAL
-    ),
-    ("unforward-port", "remote"): partial(
-        _forward_listenings, direction=Direction.REMOTE
-    ),
+    ("unforward-port", "local"): partial(_forward_listenings, direction=Direction.LOCAL),
+    ("unforward-port", "remote"): partial(_forward_listenings, direction=Direction.REMOTE),
 }
 
 
@@ -209,9 +202,7 @@ class CommandCompleter(Completer):
         if finder is None:
             return
         finder._display_completions = {}
-        matches = finder._get_completions(
-            ["pymux"] + words, prefix, prequote, wordbreak
-        )
+        matches = finder._get_completions(["pymux"] + words, prefix, prequote, wordbreak)
         meta = finder.get_display_completions()
 
         if not words:
@@ -288,11 +279,7 @@ class FuzzyFinder(argcomplete.CompletionFinder):
                 if self._matches(cword_prefix, alias):
                     self._display_completions[alias] = self._get_action_help(action)
 
-        return [
-            subcmd
-            for subcmd in parser.choices.keys()
-            if self._matches(cword_prefix, subcmd)
-        ]
+        return [subcmd for subcmd in parser.choices.keys() if self._matches(cword_prefix, subcmd)]
 
     @override
     def _get_option_completions(self, parser: argparse.ArgumentParser, cword_prefix: str):

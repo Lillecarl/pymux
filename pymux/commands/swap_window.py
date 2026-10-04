@@ -40,8 +40,15 @@ def swap_window(pymux: Pymux, args: argparse.Namespace) -> None:
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, swap_window)
     parser.add_argument(
-        "-d", dest="d",
+        "-d",
+        dest="d",
         action="store_true",
         help="Keep the active window active. The windows trade places either way.",
     )
-    parser.add_argument("-t", dest="dst_window", metavar="<dst-window>", required=True, help="The index to swap with. `+1` and `-1` count from the active window.")
+    parser.add_argument(
+        "-t",
+        dest="dst_window",
+        metavar="<dst-window>",
+        required=True,
+        help="The index to swap with. `+1` and `-1` count from the active window.",
+    )

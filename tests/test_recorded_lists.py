@@ -1,6 +1,7 @@
 """
 The recorded lists, read and written and judged.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -18,13 +19,7 @@ from recorded import (
 def test_comments_and_blank_lines_are_not_verdicts(tmp_path):
     "And a comment is a line that starts with a hash, not one that has one."
     path = tmp_path / "lists.txt"
-    path.write_text(
-        "# a comment\n"
-        "\n"
-        "the first screen 12\n"
-        "the second screen #3 5\n"
-        "  # an indented comment\n"
-    )
+    path.write_text("# a comment\n\nthe first screen 12\nthe second screen #3 5\n  # an indented comment\n")
 
     assert read_verdicts(path) == {
         "the first screen": "12",
@@ -70,9 +65,7 @@ def test_lines_reads_back_what_write_list_wrote(tmp_path):
 
 
 def test_how_to_record_says_how(tmp_path):
-    advice = how_to_record(
-        "pymux-frame", "frame-budgets.txt", "pymux/tests/frame-budgets.txt"
-    )
+    advice = how_to_record("pymux-frame", "frame-budgets.txt", "pymux/tests/frame-budgets.txt")
 
     assert advice == [
         "# This is what the run saw. To make it what the check expects:",

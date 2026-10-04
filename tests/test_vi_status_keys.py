@@ -14,6 +14,7 @@ So two Escapes: the first leaves insert mode, the second closes. And
 the line says which mode it is in, because the mode is what decides
 which of the two a press is.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -149,9 +150,7 @@ async def test_the_tag_stands_before_the_colon():
         state.app.vi_state.input_mode = InputMode.NAVIGATION
 
         with set_app(state.app):
-            before = fragment_list_to_text(
-                state.layout_manager._before_command_tokens()
-            )
+            before = fragment_list_to_text(state.layout_manager._before_command_tokens())
 
         assert before.endswith(":")
         assert "NORMAL" in before
@@ -165,9 +164,7 @@ async def test_the_prompt_says_it_too():
         state.app.vi_state.input_mode = InputMode.NAVIGATION
 
         with set_app(state.app):
-            before = fragment_list_to_text(
-                state.layout_manager._before_prompt_command_tokens()
-            )
+            before = fragment_list_to_text(state.layout_manager._before_prompt_command_tokens())
 
         assert "NORMAL" in before
         assert "Rename to" in before

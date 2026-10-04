@@ -6,6 +6,7 @@ is what every attached person looks at; `sessions` holds every
 window and pane, with the directory each reported, the variables
 each published and the command each runs.
 """
+
 from __future__ import annotations
 
 import contextlib
@@ -25,9 +26,7 @@ def calling_as(pymux, session, caller_pane_id=None):
     go to the stdout of a real socket caller.
     """
     real = pymux.get_client_state
-    fake = SimpleNamespace(
-        temporary=True, caller_pane_id=caller_pane_id, session=session
-    )
+    fake = SimpleNamespace(temporary=True, caller_pane_id=caller_pane_id, session=session)
     pymux.get_client_state = lambda: fake
     try:
         yield fake
@@ -116,26 +115,20 @@ async def test_calling_pane_names_caller():
     async with reported_session() as (pymux, state, tree):
         window, reported = reported_pane(tree)
         caller_id = reported["pane_id"]
-        with set_app(state.app), calling_as(
-            pymux, pymux.current_session, caller_pane_id=caller_id
-        ) as caller_state:
+        with set_app(state.app), calling_as(pymux, pymux.current_session, caller_pane_id=caller_id) as caller_state:
             pymux.handle_command("info")
 
         caller = json.loads(caller_state.message)["caller"]
         assert caller["pane_id"] == caller_id
         assert caller["window_id"] == window["window_id"]
         assert caller["pane_index"] == next(
-            index
-            for index, pane in enumerate(window["panes"])
-            if pane["pane_id"] == caller_id
+            index for index, pane in enumerate(window["panes"]) if pane["pane_id"] == caller_id
         )
 
 
 async def test_dead_caller_names_nobody():
     async with reported_session() as (pymux, state, _tree):
-        with set_app(state.app), calling_as(
-            pymux, pymux.current_session, caller_pane_id=999999
-        ) as caller_state:
+        with set_app(state.app), calling_as(pymux, pymux.current_session, caller_pane_id=999999) as caller_state:
             pymux.handle_command("info")
 
         assert json.loads(caller_state.message)["caller"] is None

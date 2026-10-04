@@ -20,6 +20,7 @@ What these draw is not judged. The pictures are for a person, the same
 way the ones of chrome are. The arrangement behind them is judged, and
 `photograph_chrome.Fixture` says why.
 """
+
 from __future__ import annotations
 
 import os
@@ -103,9 +104,7 @@ for _name in (
 #: the demo's swatches are the scheme's. The one above is the
 #: off half, where the pane follows the terminal. Lillecarl/pymux#283.
 FIXTURES["theme-base16-painted-mocha"] = Fixture(
-    CHROME
-    + "set-client-option theme base16:catppuccin-mocha\n"
-    + "set-option paint-screen on\n",
+    CHROME + "set-client-option theme base16:catppuccin-mocha\n" + "set-option paint-screen on\n",
     demo_keys(),
     DEMO_PANES,
 )
@@ -142,9 +141,7 @@ FIXTURES["theme-nearest"] = Fixture(
 #: is the off half of the pair, same theme, same keys.
 #: Lillecarl/pymux#273.
 FIXTURES["painted-screen"] = Fixture(
-    CHROME
-    + "set-client-option theme pygments:catppuccin-mocha\n"
-    + "set-option paint-screen on\n",
+    CHROME + "set-client-option theme pygments:catppuccin-mocha\n" + "set-option paint-screen on\n",
     demo_keys(),
     DEMO_PANES,
 )
@@ -159,9 +156,7 @@ FIXTURES["painted-screen"] = Fixture(
 #: and one colour could only do one of those. Lillecarl/pymux#222,
 #: Lillecarl/pymux#352.
 FIXTURES["cut-follows-the-terminal"] = Fixture(
-    CHROME
-    + "set-option paint-screen off\n"
-    + "set-window-option -g strip on\n",
+    CHROME + "set-option paint-screen off\n" + "set-window-option -g strip on\n",
     keys(
         (0.0, PREFIX),
         (0.4, b"%"),

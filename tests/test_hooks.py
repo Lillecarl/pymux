@@ -7,6 +7,7 @@ the other events carry tmux's names. The tests keep to hooks that
 answer on the message line, so what fired is what is read back.
 Lillecarl/pymux#297.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app
@@ -61,8 +62,5 @@ async def test_show_hooks_lists_them():
             pymux.command_output = []
             pymux.handle_command("show-hooks")
 
-        assert any(
-            "after-select-pane" in line and "display pane-was-selected" in line
-            for line in pymux.command_output
-        )
+        assert any("after-select-pane" in line and "display pane-was-selected" in line for line in pymux.command_output)
         pymux.command_output = None

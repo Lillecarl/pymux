@@ -44,9 +44,7 @@ def _read_lines(pymux: Pymux, filename: str, lines: list[tuple[int, str]]):
             pymux.sourcing = None
 
         if answer is not None:
-            return _then_the_rest(
-                pymux, filename, number, answer, lines[index + 1 :]
-            )
+            return _then_the_rest(pymux, filename, number, answer, lines[index + 1 :])
 
     return None
 

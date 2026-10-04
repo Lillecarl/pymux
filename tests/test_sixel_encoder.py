@@ -5,6 +5,7 @@ Most of them run the encoded image back through the decoder of ptterm,
 which is an independent implementation: what the encoder writes has to
 mean what it was given.
 """
+
 from __future__ import annotations
 
 import re
@@ -22,13 +23,7 @@ def rgba(pixels):
 
 
 def checkerboard(width, height, first=(255, 0, 0, 255), second=(0, 0, 255, 255)):
-    return rgba(
-        [
-            first if (x + y) % 2 == 0 else second
-            for y in range(height)
-            for x in range(width)
-        ]
-    )
+    return rgba([first if (x + y) % 2 == 0 else second for y in range(height) for x in range(width)])
 
 
 def round_trip(width, height, data):
@@ -107,11 +102,7 @@ def test_every_colour_gets_palette_entry():
 
 def test_many_colours_are_reduced_to_palette_size():
     # A gradient with far more colours than sixel can hold.
-    pixels = [
-        (x * 4 % 256, y * 4 % 256, (x + y) * 3 % 256, 255)
-        for y in range(24)
-        for x in range(64)
-    ]
+    pixels = [(x * 4 % 256, y * 4 % 256, (x + y) * 3 % 256, 255) for y in range(24) for x in range(64)]
     sequence = encode_sixel(64, 24, rgba(pixels))
     definitions = re.findall(r"#(\d+);2;", sequence)
     assert len(definitions) <= 255

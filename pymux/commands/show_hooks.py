@@ -18,10 +18,7 @@ def show_hooks(pymux: Pymux, args: argparse.Namespace) -> None:
     The commands run in the order they were given.
     Lillecarl/pymux#297.
     """
-    lines = [
-        "%s: %s" % (name, "; ".join(commands))
-        for name, commands in sorted(pymux.hooks.items())
-    ]
+    lines = ["%s: %s" % (name, "; ".join(commands)) for name, commands in sorted(pymux.hooks.items())]
     show_listing(pymux, "show-hooks", "\n".join(lines))
 
 

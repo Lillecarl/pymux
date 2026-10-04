@@ -7,6 +7,7 @@ and a broken variable can sit there for as long as nobody looks.
 `pane_synchronized` did: it took two arguments where every other takes
 four.
 """
+
 from __future__ import annotations
 
 import sys
@@ -100,10 +101,7 @@ def test_the_client_is_what_a_client_variable_reads(pymux):
         connection = Connection()
         session = pymux.current_session
 
-    assert (
-        format_pymux_string(pymux, "#{client_hostname}", client=Client())
-        == "buildbox-3"
-    )
+    assert format_pymux_string(pymux, "#{client_hostname}", client=Client()) == "buildbox-3"
 
 
 def test_a_client_variable_with_no_client_is_empty(pymux):
@@ -166,9 +164,7 @@ def test_the_prefix_a_client_holds_is_a_format(pymux):
     client.has_prefix = False
     client.key_tables = ["pane-management"]
 
-    assert format_pymux_string(pymux, "#{client_key_table}", client=client) == (
-        "pane-management"
-    )
+    assert format_pymux_string(pymux, "#{client_key_table}", client=client) == ("pane-management")
 
 
 def test_a_prefix_with_no_client_is_empty(pymux):

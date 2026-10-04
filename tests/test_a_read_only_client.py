@@ -16,6 +16,7 @@ move, and to see who else is here.
 
 Lillecarl/pymux#467.
 """
+
 from __future__ import annotations
 
 import sys
@@ -158,9 +159,7 @@ async def test_a_read_only_client_cannot_detach_a_named_client():
         working, watching = await _two_clients(session)
 
         with set_app(watching.app):
-            session.pymux.handle_command(
-                "detach-client -t %s" % (working.connection.name,)
-            )
+            session.pymux.handle_command("detach-client -t %s" % (working.connection.name,))
 
         assert watching.message == "client is read-only"
         assert not working.connection._closed
@@ -220,9 +219,7 @@ async def test_a_read_only_client_cannot_set_somebody_else_up():
         was = working.theme
 
         with set_app(watching.app):
-            session.pymux.handle_command(
-                "set-client-option -t %s theme grey" % (working.connection.name,)
-            )
+            session.pymux.handle_command("set-client-option -t %s theme grey" % (working.connection.name,))
 
         assert watching.message == "client is read-only"
         assert working.theme == was

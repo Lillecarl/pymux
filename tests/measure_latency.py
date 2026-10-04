@@ -68,6 +68,7 @@ a mean of four hides it.
     PYMUX_LATENCY_SAMPLES=500 nix build --file . checks.pymux-latency.run
     PYMUX_ROUTE=integrated nix build --file . checks.pymux-latency.run
 """
+
 from __future__ import annotations
 
 import os
@@ -316,8 +317,7 @@ def main() -> int:
 
         print(
             "%d keystrokes a path, %.0f ms apart, over the %s route, "
-            "on a terminal of %dx%d."
-            % (SAMPLES, PACE * 1000.0, ROUTE, COLUMNS, ROWS)
+            "on a terminal of %dx%d." % (SAMPLES, PACE * 1000.0, ROUTE, COLUMNS, ROWS)
         )
 
         measured = {}

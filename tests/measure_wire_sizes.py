@@ -16,6 +16,7 @@ Run with:
     nix build --file . checks.pymux-wire.run
     less result/log
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -164,10 +165,7 @@ def scenario_report(name, packets) -> dict:
     print("\n--- %s: %d packets, %d wire bytes ---" % (name, len(packets), total))
     for cmd in sorted(by_cmd):
         raws = by_cmd[cmd]
-        print(
-            "  %-14s %5d packets %9d bytes"
-            % (cmd, len(raws), sum(wire_len(r) for r in raws))
-        )
+        print("  %-14s %5d packets %9d bytes" % (cmd, len(raws), sum(wire_len(r) for r in raws)))
 
     out = [wire_len(r) for r in by_cmd.get("out", [])]
     if out:
@@ -202,10 +200,7 @@ def compression_report(all_out) -> None:
     import msgpack
 
     wire = b"".join(raw + b"\0" for raw in all_out)
-    print(
-        "\n--- compression over %d out packets, %d wire bytes ---"
-        % (len(all_out), len(wire))
-    )
+    print("\n--- compression over %d out packets, %d wire bytes ---" % (len(all_out), len(wire)))
 
     for level in (1, 6):
         per_packet = sum(len(zlib.compress(raw + b"\0", level)) for raw in all_out)
@@ -222,9 +217,7 @@ def compression_report(all_out) -> None:
         )
 
     # Where the per-packet cost goes: the smallest and largest tenth.
-    sizes = sorted(
-        (len(zlib.compress(raw + b"\0", 1)) / (len(raw) + 1)) for raw in all_out
-    )
+    sizes = sorted((len(zlib.compress(raw + b"\0", 1)) / (len(raw) + 1)) for raw in all_out)
     if sizes:
         print(
             "  per-packet level-1 ratio: median %.1f%%, worst tenth %.1f%%"
@@ -235,9 +228,7 @@ def compression_report(all_out) -> None:
         )
 
     # The same packets as msgpack, then zlib on top of that.
-    packed = [
-        msgpack.packb(json.loads(raw.decode("utf-8"))) for raw in all_out
-    ]
+    packed = [msgpack.packb(json.loads(raw.decode("utf-8"))) for raw in all_out]
     mp_wire = sum(len(p) for p in packed)
     print(
         "\n--- the same %d packets as msgpack: %d bytes (%.1f%% of JSON) ---"
@@ -266,10 +257,7 @@ def compression_report(all_out) -> None:
         buckets.setdefault(len(p) // 100 * 100, [0, 0])[won] += 1
     for floor in sorted(buckets):
         lost, won = buckets[floor]
-        print(
-            "  %4d-%4d bytes: zlib wins %d, raw wins %d"
-            % (floor, floor + 99, won, lost)
-        )
+        print("  %4d-%4d bytes: zlib wins %d, raw wins %d" % (floor, floor + 99, won, lost))
 
 
 async def scenario_idle(tmp, recorder) -> list:

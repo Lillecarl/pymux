@@ -8,6 +8,7 @@ test that pins it and the probe that proved it. The ledger's rule --
 entry names a test that exists, and every `_product_divergence` test
 is in the ledger. Lillecarl/pymux#385.
 """
+
 from __future__ import annotations
 
 import re

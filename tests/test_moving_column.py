@@ -13,6 +13,7 @@ no layout at all. What a person sees is the title bars: each one names
 the panes on either side (Lillecarl/pymux#207), so a move renames
 three bars, and nothing in the move says so.
 """
+
 from __future__ import annotations
 
 from test_strip_draws import CHROME, create_client
@@ -191,6 +192,4 @@ def test_moving_column_outside_strip_is_refused():
 
         pymux.handle_command("move-column -L")
 
-        assert "not a strip" in (pymux.get_client_state().message or ""), (
-            pymux.get_client_state().message
-        )
+        assert "not a strip" in (pymux.get_client_state().message or ""), pymux.get_client_state().message

@@ -6,6 +6,7 @@ command it carries, Escape leaves, and a line answers a click. The
 tests drive `menu_key_pressed` the way a key press would.
 Lillecarl/pymux#297.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app

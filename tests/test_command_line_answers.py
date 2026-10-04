@@ -6,6 +6,7 @@ nothing, and the answers it asks for -- a listing, a value, an id --
 have to come back on stdout. They used to go to a popup on that
 client, which went nowhere. Lillecarl/pymux#288, #289, #292.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app
@@ -37,9 +38,7 @@ async def test_listing_shows_in_pane_and_prints_on_command_line():
     """
     async with create_session() as (pymux, state):
         shown = []
-        state.layout_manager.display_popup = lambda title, text: shown.append(
-            (title, text)
-        )
+        state.layout_manager.display_popup = lambda title, text: shown.append((title, text))
 
         with set_app(state.app):
             pymux.handle_command("list-windows")
@@ -69,9 +68,7 @@ async def test_capture_pane_p_answers_one_entry_per_call():
 
         pymux.handle_command("capture-pane -p")
 
-        assert len(pymux.command_output) == 1, (
-            "one call, one entry -- got %r" % (pymux.command_output,)
-        )
+        assert len(pymux.command_output) == 1, "one call, one entry -- got %r" % (pymux.command_output,)
         assert all(isinstance(entry, str) for entry in pymux.command_output)
 
 

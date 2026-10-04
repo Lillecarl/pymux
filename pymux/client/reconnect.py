@@ -13,6 +13,7 @@ machine and its socket is gone with it, so a link that ends is a server
 that ended. A client that waits for that one to come back waits for
 ever.
 """
+
 from __future__ import annotations
 
 import math
@@ -147,9 +148,7 @@ class Internet:
         self.value: bool | None = None
 
 
-async def internet_reachable(
-    host: str = WAN_HOST, port: int = WAN_PORT, timeout: float = WAN_TIMEOUT
-) -> bool:
+async def internet_reachable(host: str = WAN_HOST, port: int = WAN_PORT, timeout: float = WAN_TIMEOUT) -> bool:
     """
     Whether a TCP connection to this address opens.
 

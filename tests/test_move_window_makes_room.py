@@ -9,6 +9,7 @@ and both are flags on this command: `-a`, `-b` and `-k`
 `new-window -a` already used. Lillecarl/pymux#191,
 Lillecarl/pymux#343.
 """
+
 from __future__ import annotations
 
 import sys

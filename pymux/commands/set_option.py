@@ -94,6 +94,8 @@ def set_option(
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, set_option)
-    parser.add_argument("-g", dest="g", action="store_true", help="For a window option: what every new window starts with.")
+    parser.add_argument(
+        "-g", dest="g", action="store_true", help="For a window option: what every new window starts with."
+    )
     parser.add_argument("option", metavar="<option>")
     parser.add_argument("value", metavar="<value>", nargs="?")

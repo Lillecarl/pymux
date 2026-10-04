@@ -36,4 +36,6 @@ def select_window(pymux: Pymux, args: argparse.Namespace) -> None:
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, select_window)
-    parser.add_argument("-t", dest="target_window", metavar="<target-window>", required=True, help="The window to focus.")
+    parser.add_argument(
+        "-t", dest="target_window", metavar="<target-window>", required=True, help="The window to focus."
+    )

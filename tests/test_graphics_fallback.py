@@ -2,6 +2,7 @@
 Tests for what a client draws when its terminal does not speak the
 kitty graphics protocol, and for the detection that picks the way.
 """
+
 from __future__ import annotations
 
 import re
@@ -221,9 +222,7 @@ def test_png_image_is_drawn():
     client, written = make_client(sixel=True)
     client.cell_width, client.cell_height = 1, 1
     png = _png(2, 1, [(10, 20, 30), (200, 100, 50)])
-    state = make_state(
-        placement(columns=2, rows=1), data=png, format=100, width=2, height=1
-    )
+    state = make_state(placement(columns=2, rows=1), data=png, format=100, width=2, height=1)
     client.render([view(state)])
 
     _row, _column, sequence = sixels(written)[0]

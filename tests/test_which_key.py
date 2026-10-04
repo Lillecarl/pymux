@@ -9,6 +9,7 @@ corner diagonally opposite only when the cursor is in its own way; and
 the fast typist pays nothing, because the box takes no focus and the
 key after the prefix reaches the bindings as it always did.
 """
+
 from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app

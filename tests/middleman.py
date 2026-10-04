@@ -53,6 +53,7 @@ The fence is taken back out before anything sees the wire. A judge
 would only ignore it, but a stream that holds our own scaffolding is a
 stream nobody can read.
 """
+
 from __future__ import annotations
 
 import base64
