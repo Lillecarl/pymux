@@ -882,7 +882,7 @@ class KittyVt100Parser(Vt100Parser):
             return False
 
     @override
-    def _get_match(self, prefix: str) -> None | Keys | tuple[Keys, ...]:
+    def _get_match(self, prefix: str) -> Keys | tuple[Keys, ...] | None:
         # A modifier above ctrl is read here first, but only from a
         # terminal that counts them the way the protocol does. xterm
         # has four and the fourth is meta; the protocol has eight and
@@ -904,7 +904,7 @@ class KittyVt100Parser(Vt100Parser):
         result = super()._get_match(prefix)
         if result is not None:
             return result
-        return cast("None | Keys | tuple[Keys, ...]", parse_kitty_key(prefix))
+        return cast("Keys | tuple[Keys, ...] | None", parse_kitty_key(prefix))
 
     @override
     def _call_handler(self, key: str | Keys | tuple, insert_text: str) -> None:

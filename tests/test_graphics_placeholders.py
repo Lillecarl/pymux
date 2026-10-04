@@ -64,15 +64,15 @@ def cells(image_id, row, columns):
 
 
 def view(screen, **kw):
-    settings = dict(
-        pane_id=1,
-        x=0,
-        y=0,
-        width=80,
-        height=24,
-        vertical_scroll=0,
-        horizontal_scroll=0,
-    )
+    settings = {
+        "pane_id": 1,
+        "x": 0,
+        "y": 0,
+        "width": 80,
+        "height": 24,
+        "vertical_scroll": 0,
+        "horizontal_scroll": 0,
+    }
     settings.update(kw)
     return PaneView(graphics=screen.graphics, screen=screen, **settings)
 

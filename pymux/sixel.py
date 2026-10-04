@@ -92,7 +92,7 @@ def scale_rgba(rgba: bytes, width: int, height: int, new_width: int, new_height:
     for y in range(new_height):
         source_row = (y * height // new_height) * width
         target = y * new_width * 4
-        for x, source_column in enumerate(columns):
+        for _x, source_column in enumerate(columns):
             source = (source_row + source_column) * 4
             out[target : target + 4] = rgba[source : source + 4]
             target += 4
@@ -149,7 +149,7 @@ def _palette(
 
     palette = []
     mapping: dict[tuple[int, int, int], int] = {}
-    for index, bucket in enumerate(_median_cut(counts, max_colors)):
+    for _index, bucket in enumerate(_median_cut(counts, max_colors)):
         if not bucket:
             continue
         weight = sum(counts[color] for color in bucket)

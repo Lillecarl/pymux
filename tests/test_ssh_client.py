@@ -220,11 +220,11 @@ async def create_ssh_server(
                 "0.0.0.0",
             )
 
-    options = dict(
-        server_factory=OneSocket,
-        server_host_keys=[str(host_key)],
-        authorized_client_keys=str(client_pub),
-    )
+    options = {
+        "server_factory": OneSocket,
+        "server_host_keys": [str(host_key)],
+        "authorized_client_keys": str(client_pub),
+    }
     if allow_exec:
         # The session that runs `pymux find`. sshd offers it; nothing
         # is installed for it.

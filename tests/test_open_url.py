@@ -544,7 +544,9 @@ async def test_pane_that_starts_with_shim_finds_opener():
             pymux.create_window(program)
         pane = pymux.arrangement.get_active_window().panes[0]
 
-        page_text = lambda: pane.screen.page.text(0, 23)
+        def page_text():
+            return pane.screen.page.text(0, 23)
+
         await once(
             lambda: "MATCH=" in page_text(),
             5.0,

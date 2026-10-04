@@ -122,6 +122,7 @@ import os
 import shutil
 import sys
 from functools import partial
+from itertools import pairwise
 from pathlib import Path
 
 from PIL import Image
@@ -1186,12 +1187,12 @@ def blink_of(terminal, seat, name, work, out):
         # run of boxes that do not hold one another is more than a
         # cursor at work.
         boxes = []
-        for number, (first, second) in enumerate(zip(shots, shots[1:])):
+        for number, (first, second) in enumerate(pairwise(shots)):
             count, box = changed_region(first, second, room / ("%s-diff-%d.png" % (side, number)))
             if box is not None:
                 boxes.append(box)
         run = longest = 0
-        for first, second in zip(boxes, boxes[1:]):
+        for first, second in pairwise(boxes):
             run = run + 1 if fully_overlaps(first, second) else 0
             longest = max(longest, run)
         answers.append(longest)

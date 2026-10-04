@@ -92,6 +92,7 @@ import shlex
 import shutil
 import sys
 import time
+from itertools import pairwise
 from pathlib import Path
 
 from pyterm_pytest.seats import (
@@ -369,7 +370,7 @@ class Camera:
             shot = self.into / ("%04d.%d.png" % (number, frame))
             take_one(shot)
             shots.append(shot)
-        return sum(1 for first, second in zip(shots, shots[1:]) if differences(first, second) != 0)
+        return sum(1 for first, second in pairwise(shots) if differences(first, second) != 0)
 
     def take_them(self, work: Path, log_path: Path):
         """

@@ -180,13 +180,13 @@ def test_a_spelling_already_sent_is_only_a_number():
     feed(screen, "\x1b[1mbold\x1b[0m")
     view = PaneView()
     first = view.frame(screen, 1)
-    was = [style for style, _text in first["rows"]["0"]][0]
+    was = next(style for style, _text in first["rows"]["0"])
 
     feed(screen, "\x1b[2;1H\x1b[1mmore\x1b[0m")
     second = view.frame(screen, 2)
 
     assert "styles" not in second
-    assert [style for style, _text in second["rows"]["1"]][0] == was
+    assert next(style for style, _text in second["rows"]["1"]) == was
 
 
 def test_plain_cells_need_no_entry():

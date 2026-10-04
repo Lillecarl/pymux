@@ -204,7 +204,7 @@ async def test_list_commands_lists_every_command_with_its_description():
         assert "list-commands" in names
         assert "swap-window" in names
         # Each row carries the first line of the handler's docstring.
-        row = [one for one in rows if one.split()[0] == "swap-window"][0]
+        row = next(one for one in rows if one.split()[0] == "swap-window")
         assert "Swap" in row
 
 

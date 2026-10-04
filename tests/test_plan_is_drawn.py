@@ -321,7 +321,7 @@ def test_container_names_pane_that_has_keyboard():
 def test_pane_with_no_container_is_not_drawn():
     "And does not stop the frame: a bar is drawn on every one."
     plan, containers = create_row([4, 4])
-    containers.pop(list(containers)[0])
+    containers.pop(next(iter(containers)))
 
     assert drawn(plan, containers, visible=8) == "    bbbb"
 

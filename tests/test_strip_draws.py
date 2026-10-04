@@ -26,6 +26,7 @@ from __future__ import annotations
 import io
 import sys
 from contextlib import contextmanager
+from itertools import pairwise
 
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
@@ -225,7 +226,7 @@ def test_strip_records_where_it_drew_columns_it_drew():
         assert xs == sorted(xs), xs
 
         # Adjacent, with the one border cell between them.
-        for left, right in zip(where, where[1:]):
+        for left, right in pairwise(where):
             assert right.xpos == left.xpos + left.width + 1, xs
 
         # The leftmost one drawn starts at the left of the screen, and

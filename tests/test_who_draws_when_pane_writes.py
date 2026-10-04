@@ -83,7 +83,7 @@ async def test_pane_in_window_nobody_looks_at_draws_nothing():
         await create_window_of_its_own(pymux, state)
 
         shown = looks_at(pymux, state)
-        hidden = [w for w in pymux.arrangement.windows if w is not shown][0]
+        hidden = next(w for w in pymux.arrangement.windows if w is not shown)
 
         drawn = state.app.render_counter
         await five_writes(hidden.panes[0], "nobody is looking\r\n")

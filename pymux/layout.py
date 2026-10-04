@@ -940,7 +940,7 @@ class LayoutManager:
         lines = self.chooser_lines(self._bar_width())
         here = self.client_state.choose_window_index
 
-        for number, line in enumerate(lines):
+        for number, line in enumerate(lines):  # noqa: B007 -- the index leaves the loop
             if here in line:
                 break
         else:
@@ -2492,7 +2492,7 @@ class DynamicBody(Container):
 
     @override
     def reset(self) -> None:
-        for invalidation_hash, body in self._bodies_for_app.values():
+        for _invalidation_hash, body in self._bodies_for_app.values():
             body.reset()
 
     @override

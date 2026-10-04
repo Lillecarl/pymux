@@ -94,7 +94,7 @@ def test_flag_and_option_take_same_words():
     for name, level in log.LEVELS.items():
         assert _how_much_to_log(name) == level
 
-    action = [one for one in _build_parser()._actions if one.dest == "log_level"][0]
+    action = next(one for one in _build_parser()._actions if one.dest == "log_level")
     assert sorted(action.choices) == sorted(log.LEVELS)
 
 

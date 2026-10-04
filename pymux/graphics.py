@@ -826,7 +826,7 @@ class ClientGraphics:
 
         if not self._images and not self._placements:
             return
-        for image, outer_id in self._images.values():
+        for _image, outer_id in self._images.values():
             self._delete_image(outer_id)
         self._images = {}
         self._placements = {}

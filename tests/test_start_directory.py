@@ -80,7 +80,10 @@ async def test_new_window_starts_in_reported_directory():
             pymux.create_window(program)
 
         pane = pymux.current_session.arrangement.get_active_window().panes[0]
-        page_text = lambda: pane.screen.page.text(0, 23)
+
+        def page_text():
+            return pane.screen.page.text(0, 23)
+
         await once(lambda: "CWD=" in page_text(), 5.0, "the pane never printed its directory")
         assert "CWD=/tmp" in page_text()
 
@@ -98,6 +101,9 @@ async def test_explicit_directory_wins_over_report():
             pymux.create_window(program, start_directory="/")
 
         pane = pymux.current_session.arrangement.get_active_window().panes[0]
-        page_text = lambda: pane.screen.page.text(0, 23)
+
+        def page_text():
+            return pane.screen.page.text(0, 23)
+
         await once(lambda: "CWD=" in page_text(), 5.0, "the pane never printed its directory")
         assert "CWD=/" in page_text()
