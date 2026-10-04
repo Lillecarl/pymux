@@ -28,9 +28,9 @@ from pyte.keys import Modifier
 from .keys import KEY_BY_ITS_NAME, MODIFIERS_WITH_NO_MEMBER, name_of
 
 __all__ = [
-    "pymux_key_to_prompt_toolkit_key_sequence",
-    "prompt_toolkit_key_to_vt100_key",
     "PYMUX_TO_PROMPT_TOOLKIT_KEYS",
+    "prompt_toolkit_key_to_vt100_key",
+    "pymux_key_to_prompt_toolkit_key_sequence",
 ]
 
 

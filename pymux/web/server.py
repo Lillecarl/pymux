@@ -28,7 +28,7 @@ from libpymux import PaneStream, Server, StreamRefused
 
 from pymux.log import logger
 
-__all__ = ["MISSING", "serve", "a_token"]
+__all__ = ["MISSING", "a_token", "serve"]
 
 #: What to say when the extra is not installed. Named here so the command
 #: and this module cannot drift about it.

@@ -22,9 +22,9 @@ from .win32 import (
 windll = getattr(ctypes, "windll")
 
 __all__ = [
-    "bind_and_listen_on_win32_socket",
-    "Win32PipeConnection",
     "PipeInstance",
+    "Win32PipeConnection",
+    "bind_and_listen_on_win32_socket",
 ]
 
 

@@ -17,17 +17,17 @@ from urllib.parse import urlparse, urlunparse
 
 __all__ = [
     "ANY_PORT",
-    "BadForward",
-    "Direction",
-    "Forward",
     "LOOPBACK",
     "LOOPBACK_NAMES",
     "MAY_NARROW",
     "SCHEME_PORTS",
+    "BadForward",
+    "Direction",
+    "Forward",
     "loopback_port",
-    "the_far_side_may_narrow",
     "parse_forward",
     "parse_listen",
+    "the_far_side_may_narrow",
     "with_port",
 ]
 

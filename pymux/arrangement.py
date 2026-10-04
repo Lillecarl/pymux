@@ -24,12 +24,12 @@ from .enums import WindowSize
 from .ids import PaneId, PaneIndex, WindowId, WindowIndex
 
 __all__ = [
+    "Arrangement",
+    "HSplit",
     "LayoutTypes",
     "Pane",
-    "HSplit",
     "VSplit",
     "Window",
-    "Arrangement",
     "panes_of",
 ]
 

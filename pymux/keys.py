@@ -61,16 +61,16 @@ logger = logging.getLogger(__name__)
 CSI = "\x1b["
 
 __all__ = [
+    "CODE_AND_FORM_OF",
+    "KEYS_A_KEYBOARD_SPELLS_OUT",
     "KEY_BY_ITS_NAME",
+    "NAME_OF_A_KEY",
     "DropReason",
     "Dropped",
-    "KEYS_A_KEYBOARD_SPELLS_OUT",
     "KittyVt100Parser",
-    "CODE_AND_FORM_OF",
-    "NAME_OF_A_KEY",
     "event_named",
-    "parse_kitty_key",
     "key_named",
+    "parse_kitty_key",
 ]
 
 

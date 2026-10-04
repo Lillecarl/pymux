@@ -16,9 +16,9 @@ from ..log import logger
 from .base import BrokenPipeError, PipeConnection
 
 __all__ = [
-    "bind_and_listen_on_posix_socket",
     "PosixSocketConnection",
     "PosixSocketListener",
+    "bind_and_listen_on_posix_socket",
 ]
 
 

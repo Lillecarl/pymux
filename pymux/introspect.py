@@ -51,10 +51,10 @@ if TYPE_CHECKING:
 
 __all__ = [
     "Counters",
-    "write_dump",
     "answer_signal",
     "stacks_file",
     "where_dump_goes",
+    "write_dump",
 ]
 
 #: The file `faulthandler` writes to, held open for the life of the

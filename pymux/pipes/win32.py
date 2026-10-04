@@ -19,11 +19,11 @@ from .base import BrokenPipeError
 windll = getattr(ctypes, "windll")
 
 __all__ = [
-    "read_message_from_pipe",
     "read_message_bytes_from_pipe",
-    "write_message_to_pipe",
-    "write_message_bytes_to_pipe",
+    "read_message_from_pipe",
     "wait_for_event",
+    "write_message_bytes_to_pipe",
+    "write_message_to_pipe",
 ]
 
 BUFSIZE = 4096

@@ -23,15 +23,15 @@ if TYPE_CHECKING:
     from pymux.main import ClientState, Pymux
 
 __all__ = [
+    "ALL_CLIENT_OPTIONS",
+    "ALL_OPTIONS",
+    "ALL_WINDOW_OPTIONS",
+    "Clipboard",
+    "ExtendedKeys",
+    "OnOffOption",
     "Option",
     "Scope",
     "SetOptionError",
-    "OnOffOption",
-    "Clipboard",
-    "ExtendedKeys",
-    "ALL_OPTIONS",
-    "ALL_CLIENT_OPTIONS",
-    "ALL_WINDOW_OPTIONS",
 ]
 
 

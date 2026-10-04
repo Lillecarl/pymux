@@ -29,7 +29,7 @@ import sys
 import termios
 import time
 
-__all__ = ["diagnose", "human", "as_json"]
+__all__ = ["as_json", "diagnose", "human"]
 
 #: How long the outer terminal has to answer a query.
 REPLY_TIMEOUT = 0.4

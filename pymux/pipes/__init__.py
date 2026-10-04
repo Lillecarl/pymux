@@ -11,13 +11,13 @@ from .base import BrokenPipeError, PipeConnection
 from .memory import MemoryConnection, connect_in_memory
 
 __all__ = [
-    "bind_and_listen_on_socket",
-    # In memory, for a server and a client in one process.
-    "connect_in_memory",
+    "BrokenPipeError",
     "MemoryConnection",
     # Base.
     "PipeConnection",
-    "BrokenPipeError",
+    "bind_and_listen_on_socket",
+    # In memory, for a server and a client in one process.
+    "connect_in_memory",
 ]
 
 

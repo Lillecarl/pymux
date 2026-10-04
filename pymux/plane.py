@@ -72,10 +72,10 @@ __all__ = [
     "GROUND",
     "Layer",
     "Line",
+    "Plan",
     "Rect",
     "Side",
     "Slot",
-    "Plan",
     "View",
 ]
 

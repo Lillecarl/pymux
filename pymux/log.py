@@ -54,14 +54,14 @@ from enum import StrEnum
 from pathlib import Path
 
 __all__ = [
-    "logger",
-    "configure",
-    "default_logfile",
-    "logfile",
-    "level",
-    "set_level",
     "LEVELS",
     "LogLevel",
+    "configure",
+    "default_logfile",
+    "level",
+    "logfile",
+    "logger",
+    "set_level",
 ]
 
 

@@ -3,9 +3,9 @@ from __future__ import annotations
 from enum import StrEnum
 
 __all__ = [
+    "CHOOSE",
     "COMMAND",
     "PROMPT",
-    "CHOOSE",
     "WindowSize",
     "Woke",
 ]

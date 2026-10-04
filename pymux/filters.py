@@ -4,11 +4,11 @@ from prompt_toolkit.filters import Filter
 
 __all__ = [
     "HasPrefix",
-    "WaitsForConfirmation",
     "InCommandMode",
-    "WaitsForPrompt",
     "KeyTableIs",
     "ModeActive",
+    "WaitsForConfirmation",
+    "WaitsForPrompt",
 ]
 
 

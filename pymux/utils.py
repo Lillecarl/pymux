@@ -9,9 +9,9 @@ import sys
 
 __all__ = [
     "daemonize",
-    "nonblocking",
     "get_default_shell",
     "keys_are_vi",
+    "nonblocking",
 ]
 
 

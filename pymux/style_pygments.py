@@ -48,7 +48,7 @@ from pymux.style import (
     tinted,
 )
 
-__all__ = ["pygments_roles", "pygments_theme", "names"]
+__all__ = ["names", "pygments_roles", "pygments_theme"]
 
 
 def names() -> list[str]:

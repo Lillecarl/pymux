@@ -61,20 +61,20 @@ from .keys import (
 
 __all__ = [
     "AFTER",
-    "KeyCompleter",
-    "MODIFIERS_A_PERSON_WRITES",
     "ALIASES",
+    "MODIFIERS_A_PERSON_WRITES",
     "PREFIX",
     "SAME_MODIFIER",
     "TOGETHER",
+    "KeyCompleter",
+    "as_chord",
     "chord",
-    "key_however_it_is_written",
-    "key_written_out",
     "event",
     "event_however_it_is_written",
-    "as_chord",
-    "keys_of",
     "events_of",
+    "key_however_it_is_written",
+    "key_written_out",
+    "keys_of",
     "why_pane_cannot_read",
 ]
 
