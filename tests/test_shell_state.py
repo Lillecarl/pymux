@@ -2,7 +2,7 @@
 The shell state a pane reports: where it is, what it published, what
 it marked and how its commands finished.
 
-A shell reports its directory ("OSC 7", "OSC 1337 ; CurrentDir"), its
+A shell reports its directory ("OSC 7", "CurrentDir"), its
 variables ("SetUserVar"), its marks ("SetMark") and its command zones
 ("OSC 133") on every prompt. pymux keeps each per pane and forwards
 the sequences on, so the outer terminal reads them for itself. An
@@ -11,7 +11,9 @@ clipboard write ("Copy") follows the clipboard option.
 """
 
 import pytest
+from prompt_toolkit.application.current import set_app
 
+from session import create_session
 from pymux.main import MAX_MARKS, MAX_USER_VARS, Pymux
 from pymux.notifications import Urgency
 from pymux.options import Clipboard
@@ -478,3 +480,38 @@ def test_unparsed_namespace_stays_inside(param):
     assert pymux.notification_center.notifications() == []
     for connection in connections:
         assert connection.written == []
+
+
+# ----------------------------------------------------------------------
+# Reading the variables back.
+
+
+async def test_list_user_vars_reads_active_pane():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            window = pymux.current_session.arrangement.get_active_window()
+            pane = window.active_pane
+            pane.user_vars["BRANCH"] = "main"
+            pane.user_vars["APP"] = "pymux"
+
+            pymux.handle_command("list-user-vars")
+
+        assert state.message == "APP=pymux\nBRANCH=main"
+
+
+async def test_list_user_vars_empty_pane_answers_empty():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("list-user-vars")
+
+        assert state.message == ""
+
+
+async def test_list_user_vars_missing_pane_is_an_error():
+    async with create_session() as (pymux, state):
+        errors = []
+        pymux.add_command_error = errors.append
+        with set_app(state.app):
+            pymux.handle_command("list-user-vars -t %999999")
+
+        assert errors == ["pymux: can't find pane: %999999"]
