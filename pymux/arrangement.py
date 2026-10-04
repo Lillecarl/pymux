@@ -191,11 +191,10 @@ class Pane:
         # Name, explicitely set for the pane.
         if self.chosen_name:
             return self.chosen_name
-        else:
-            # Name from the process running inside the pane.
-            name = self.process.get_name()
-            if name:
-                return os.path.basename(name)
+        # Name from the process running inside the pane.
+        name = self.process.get_name()
+        if name:
+            return os.path.basename(name)
 
         return ""
 
@@ -509,8 +508,7 @@ class Window:
 
             if isinstance(split, HSplit):
                 return "HSplit(%s)" % (",".join(result))
-            else:
-                return "VSplit(%s)" % (",".join(result))
+            return "VSplit(%s)" % (",".join(result))
 
         # `strip` is in it because turning the mode on changes how the
         # same panes are laid out and nothing else, so without it the
@@ -563,10 +561,9 @@ class Window:
         # Name, explicitely set for the window.
         if self.chosen_name:
             return self.chosen_name
-        else:
-            pane = self.active_pane
-            if pane:
-                return pane.name
+        pane = self.active_pane
+        if pane:
+            return pane.name
 
         return ""
 

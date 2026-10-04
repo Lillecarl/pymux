@@ -89,13 +89,13 @@ def wait_for(pymux: Pymux, args: argparse.Namespace):
 def _signal(pymux: Pymux, name: str, channel: WaitChannel) -> None:
     if not channel.waiters:
         channel.woken = True
-        return None
+        return
 
     for waiting in channel.waiters:
         waiting.set()
     channel.waiters = []
     _forget_if_spent(pymux, name, channel)
-    return None
+    return
 
 
 def _wait(pymux: Pymux, name: str, channel: WaitChannel):
@@ -137,11 +137,11 @@ def _unlock(pymux: Pymux, name: str, channel: WaitChannel) -> None:
         # The lock passes rather than opens: the next locker holds it
         # from here, and the channel stays locked.
         channel.lockers.pop(0).set()
-        return None
+        return
 
     channel.locked = False
     _forget_if_spent(pymux, name, channel)
-    return None
+    return
 
 
 def _forget_if_spent(pymux: Pymux, name: str, channel: WaitChannel) -> None:

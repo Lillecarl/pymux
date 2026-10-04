@@ -1763,8 +1763,7 @@ class Pymux:
 
         if title:
             return "%s - Pymux" % (title,)
-        else:
-            return "Pymux"
+        return "Pymux"
 
     def plane_size(self, window: Window | None = None) -> Size:
         """

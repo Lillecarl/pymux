@@ -18,8 +18,7 @@ def clear_history(pymux: Pymux, args: argparse.Namespace) -> None:
 
     if pane.is_copying:
         raise CommandException("Not available in copy mode")
-    else:
-        pane.screen.clear_history()
+    pane.screen.clear_history()
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

@@ -38,7 +38,6 @@ def bind_and_listen_on_socket(socket_name, accept_callback):
         from .win32_server import bind_and_listen_on_win32_socket
 
         return bind_and_listen_on_win32_socket(socket_name, accept_callback)
-    else:
-        from .posix import bind_and_listen_on_posix_socket
+    from .posix import bind_and_listen_on_posix_socket
 
-        return bind_and_listen_on_posix_socket(socket_name, accept_callback)
+    return bind_and_listen_on_posix_socket(socket_name, accept_callback)

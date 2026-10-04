@@ -9,5 +9,4 @@ def wrap_argument(text: str) -> str:
     """
     if not any(x in text for x in [" ", '"', "'", "\\"]):
         return text
-    else:
-        return '"%s"' % (text.replace("\\", r"\\").replace('"', r"\""),)
+    return '"%s"' % (text.replace("\\", r"\\").replace('"', r"\""),)

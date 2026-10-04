@@ -120,26 +120,23 @@ async def read_message_bytes_from_pipe(pipe_handle):
                 buff[c_read.value] = b"\0"
                 return buff.value
 
-            else:
-                error_code = windll.kernel32.GetLastError()
-                if error_code == ERROR_BROKEN_PIPE:
-                    raise BrokenPipeError
+            error_code = windll.kernel32.GetLastError()
+            if error_code == ERROR_BROKEN_PIPE:
+                raise BrokenPipeError
 
-                elif error_code == ERROR_MORE_DATA:
-                    more_data = await read_message_bytes_from_pipe(pipe_handle)
-                    return buff.value + more_data
-                else:
-                    raise Exception("reading overlapped IO failed. error_code=%r" % error_code)
+            if error_code == ERROR_MORE_DATA:
+                more_data = await read_message_bytes_from_pipe(pipe_handle)
+                return buff.value + more_data
+            raise Exception("reading overlapped IO failed. error_code=%r" % error_code)
 
-        elif error_code == ERROR_BROKEN_PIPE:
+        if error_code == ERROR_BROKEN_PIPE:
             raise BrokenPipeError
 
-        elif error_code == ERROR_MORE_DATA:
+        if error_code == ERROR_MORE_DATA:
             more_data = await read_message_bytes_from_pipe(pipe_handle)
             return buff.value + more_data
 
-        else:
-            raise Exception("Reading pipe failed, error_code=%s" % error_code)
+        raise Exception("Reading pipe failed, error_code=%s" % error_code)
     finally:
         windll.kernel32.CloseHandle(overlapped.hEvent)
 
@@ -177,8 +174,7 @@ async def write_message_bytes_to_pipe(pipe_handle, data):
                 error_code = windll.kernel32.GetLastError()
                 if error_code == ERROR_BROKEN_PIPE:
                     raise BrokenPipeError
-                else:
-                    raise Exception("Writing overlapped IO failed. error_code=%r" % error_code)
+                raise Exception("Writing overlapped IO failed. error_code=%r" % error_code)
 
         elif error_code == ERROR_BROKEN_PIPE:
             raise BrokenPipeError

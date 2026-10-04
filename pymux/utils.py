@@ -140,13 +140,11 @@ def get_default_shell():
 
     if is_windows():
         return "cmd.exe"
-    else:
-        import getpass
-        import pwd
+    import getpass
+    import pwd
 
-        if "SHELL" in os.environ:
-            return os.environ["SHELL"]
-        else:
-            username = getpass.getuser()
-            shell = pwd.getpwnam(username).pw_shell
-            return shell
+    if "SHELL" in os.environ:
+        return os.environ["SHELL"]
+    username = getpass.getuser()
+    shell = pwd.getpwnam(username).pw_shell
+    return shell

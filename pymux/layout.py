@@ -572,15 +572,13 @@ class MessageToolbar(Window):
             # If there is a message to be shown for this client, show that.
             if client_state.message:
                 return client_state.message
-            else:
-                return ""
+            return ""
 
         def get_tokens():
             message = get_message()
             if message:
                 return FormattedText([("class:message", message + " ")])
-            else:
-                return ""
+            return ""
 
         # The style rides on the fragments, the way it did before: the
         # toolbar itself carried none, so the rows past the end of the
@@ -1125,8 +1123,7 @@ class LayoutManager:
             if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
                 self._run_menu_entry(entry)
                 return None
-            else:
-                return NotImplemented  # Event not handled here.
+            return NotImplemented  # Event not handled here.
 
         return handler
 
@@ -1321,8 +1318,7 @@ class LayoutManager:
                 self.client_state.session.arrangement.set_active_window(window)
                 self.pymux.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
                 return None
-            else:
-                return NotImplemented  # Event not handled here.
+            return NotImplemented  # Event not handled here.
 
         return handler
 
@@ -1443,10 +1439,9 @@ class LayoutManager:
     def _get_align(self) -> WindowAlign:
         if self.pymux.status_justify == Justify.RIGHT:
             return WindowAlign.RIGHT
-        elif self.pymux.status_justify == Justify.CENTER:
+        if self.pymux.status_justify == Justify.CENTER:
             return WindowAlign.CENTER
-        else:
-            return WindowAlign.LEFT
+        return WindowAlign.LEFT
 
     def _vi_mode_tokens(self) -> StyleAndTextTuples:
         """

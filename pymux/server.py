@@ -572,13 +572,13 @@ class ServerConnection:
 
         # "Send me this pane as frames." A stream holds the connection
         # and writes many packets, so it is not a command that prints.
-        elif packet[Field.CMD] == Packet.STREAM_PANE:
+        if packet[Field.CMD] == Packet.STREAM_PANE:
             self._spawn(self._stream_pane(packet))
             return
 
         # One input message of a stream, which the stream itself reads:
         # a packet that arrives with no stream running has nowhere to go.
-        elif packet[Field.CMD] == Packet.STREAM_IN:
+        if packet[Field.CMD] == Packet.STREAM_IN:
             if self._stream is None:
                 logger.warning("Input for a stream that is not running. Ignoring.")
             else:

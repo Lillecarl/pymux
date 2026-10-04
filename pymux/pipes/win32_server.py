@@ -206,5 +206,4 @@ class PipeInstance:
                 # XXX: Call GetOverlappedResult.
                 return  # Connection succeeded.
 
-            else:
-                raise Exception("connect failed with error code" + str(last_error))
+            raise Exception("connect failed with error code" + str(last_error))

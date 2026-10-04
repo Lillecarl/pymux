@@ -127,13 +127,12 @@ class PosixClient(TerminalClient):
                             # the terminal back -- once, whatever ended
                             # the loop. Lillecarl/pymux#404.
                             return
-                        else:
-                            data_buffer += data
+                        data_buffer += data
 
-                            while b"\0" in data_buffer:
-                                pos = data_buffer.index(b"\0")
-                                self._process(data_buffer[:pos])
-                                data_buffer = data_buffer[pos + 1 :]
+                        while b"\0" in data_buffer:
+                            pos = data_buffer.index(b"\0")
+                            self._process(data_buffer[:pos])
+                            data_buffer = data_buffer[pos + 1 :]
 
                     elif stdin_fd in r:
                         # Got user input. An ended stdin is the

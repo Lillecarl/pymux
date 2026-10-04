@@ -857,15 +857,14 @@ def _send_command(socket_name: str, command: str, pane_id=None) -> int:
 
     if name == "new-session":
         return _new_session(socket_name, command, args, pane_id)
-    elif name in ("kill-session", "kill-server"):
+    if name in ("kill-session", "kill-server"):
         return _kill(socket_name, command)
-    else:
-        try:
-            client = create_client(socket_name)
-        except OSError:
-            _no_server_error(socket_name)
-            return 1
-        return client.run_command(command, pane_id)
+    try:
+        client = create_client(socket_name)
+    except OSError:
+        _no_server_error(socket_name)
+        return 1
+    return client.run_command(command, pane_id)
 
 
 def _flag_args(

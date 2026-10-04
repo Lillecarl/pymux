@@ -38,10 +38,9 @@ def create_client(socket_name):
         from .windows import WindowsClient
 
         return WindowsClient(socket_name)
-    else:
-        from .posix import PosixClient
+    from .posix import PosixClient
 
-        return PosixClient(socket_name)
+    return PosixClient(socket_name)
 
 
 def list_clients():
@@ -49,7 +48,6 @@ def list_clients():
         from .windows import list_clients
 
         return list_clients()
-    else:
-        from .posix import list_clients
+    from .posix import list_clients
 
-        return list_clients()
+    return list_clients()

@@ -340,13 +340,12 @@ def _symbol_window_flags(context: FormatContext) -> str:
 
     if window == arrangement.get_active_window():
         return "*" + z
-    elif window == arrangement.get_previous_active_window():
+    if window == arrangement.get_previous_active_window():
         return "-" + z
-    else:
-        # One column wide either way, so the windows beside this one do
-        # not move when it becomes the current one. `#{window_flags}`
-        # answers the flags alone.
-        return z + " "
+    # One column wide either way, so the windows beside this one do
+    # not move when it becomes the current one. `#{window_flags}`
+    # answers the flags alone.
+    return z + " "
 
 
 def _symbol_pane_id(context: FormatContext) -> str:
@@ -439,10 +438,9 @@ def _window_flags(context: FormatContext) -> str:
 
     if window == arrangement.get_active_window():
         return "*" + z
-    elif window == arrangement.get_previous_active_window():
+    if window == arrangement.get_previous_active_window():
         return "-" + z
-    else:
-        return z
+    return z
 
 
 def _window_panes(context: FormatContext) -> str:

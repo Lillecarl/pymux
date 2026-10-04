@@ -182,34 +182,33 @@ def _bind_posix_socket(socket_name: str | None = None):
         socket_name = os.path.abspath(socket_name)
         _bind_or_take_over(s, socket_name)
         return socket_name, s
-    else:
-        room = socket_directory()
-        i = 0
-        while True:
-            try:
-                socket_name = "%s/pymux.sock.%s.%i" % (
-                    room,
-                    getpass.getuser(),
-                    i,
-                )
-                # **A dead name is taken and not stepped over.** A
-                # killed server leaves its file behind and nothing ever
-                # took one away, so the numbers only ever went up: a
-                # person read a bigger one in `PYMUX` every time, and
-                # after a hundred of them no server could start at all.
-                # The explicit path has answered this since
-                # Lillecarl/pymux#453 and the room gets the same answer.
-                # A name something answers on raises EADDRINUSE here,
-                # which is the next index. Lillecarl/pymux#454.
-                _bind_or_take_over(s, socket_name)
-                return socket_name, s
-            except OSError:
-                i += 1
+    room = socket_directory()
+    i = 0
+    while True:
+        try:
+            socket_name = "%s/pymux.sock.%s.%i" % (
+                room,
+                getpass.getuser(),
+                i,
+            )
+            # **A dead name is taken and not stepped over.** A
+            # killed server leaves its file behind and nothing ever
+            # took one away, so the numbers only ever went up: a
+            # person read a bigger one in `PYMUX` every time, and
+            # after a hundred of them no server could start at all.
+            # The explicit path has answered this since
+            # Lillecarl/pymux#453 and the room gets the same answer.
+            # A name something answers on raises EADDRINUSE here,
+            # which is the next index. Lillecarl/pymux#454.
+            _bind_or_take_over(s, socket_name)
+            return socket_name, s
+        except OSError:
+            i += 1
 
-                # When 100 times failed, cancel server
-                if i == 100:
-                    logger.warning("100 times failed to listen on posix socket. Please clean up old sockets.")
-                    raise
+            # When 100 times failed, cancel server
+            if i == 100:
+                logger.warning("100 times failed to listen on posix socket. Please clean up old sockets.")
+                raise
 
 
 #: What may wait to be read by one client before it is left behind.
