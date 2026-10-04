@@ -343,7 +343,7 @@ def _shell_completes(line: str) -> set:
 
 
 @pytest.mark.parametrize(
-    "line, wanted",
+    ("line", "wanted"),
     (
         ("pymux spl", {"split-window"}),
         ("pymux select-l", {"select-layout"}),

@@ -392,7 +392,7 @@ def test_the_three_kinds_are_three_because_of_composition():
 
 
 @pytest.mark.parametrize(
-    "message,reason",
+    ("message", "reason"),
     [
         ({"type": "input"}, "keys string"),
         ({"type": "input", "keys": ""}, "keys string"),

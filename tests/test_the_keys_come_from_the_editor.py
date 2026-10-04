@@ -32,7 +32,7 @@ EDITORS = [
 ]
 
 
-@pytest.mark.parametrize("editor, vi", EDITORS)
+@pytest.mark.parametrize(("editor", "vi"), EDITORS)
 def test_the_editor_says_which_keys(editor, vi):
     assert keys_are_vi({"EDITOR": editor}) is vi
 

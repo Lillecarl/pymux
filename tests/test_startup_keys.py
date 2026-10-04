@@ -58,13 +58,13 @@ def bindings():
     return result
 
 
-@pytest.mark.parametrize("table,key,command", bindings())
+@pytest.mark.parametrize(("table", "key", "command"), bindings())
 def test_every_key_of_default_table_has_name(table, key, command):
     "A name the table does not know is dropped, and says nothing."
     assert pymux_key_to_prompt_toolkit_key_sequence(key)
 
 
-@pytest.mark.parametrize("table,key,command", bindings())
+@pytest.mark.parametrize(("table", "key", "command"), bindings())
 def test_every_default_binding_reaches_command(table, key, command):
     assert command in command_names()
 
@@ -93,7 +93,7 @@ def test_a_mode_binds_its_own_keys_beside_the_prefix_table():
 
 
 @pytest.mark.parametrize(
-    "key,command",
+    ("key", "command"),
     [
         ("<", "consume-or-expel"),
         (">", "consume-or-expel"),

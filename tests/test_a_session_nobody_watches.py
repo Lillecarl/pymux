@@ -214,7 +214,7 @@ def test_the_startup_window_is_the_size_the_client_asked_for():
 
 
 @pytest.mark.parametrize(
-    "given,expected",
+    ("given", "expected"),
     [(None, 80), ("200", 200), ("1", 1)],
 )
 def test_the_client_reads_a_number_the_same_way(given, expected):

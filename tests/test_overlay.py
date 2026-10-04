@@ -18,7 +18,7 @@ from pymux.main import Pymux
 
 
 @pytest.mark.parametrize(
-    "given,available,expected",
+    ("given", "available", "expected"),
     [
         (None, 80, 48),  # The default is 60%.
         ("50%", 80, 40),

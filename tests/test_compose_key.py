@@ -179,7 +179,7 @@ async def test_box_says_what_it_is_asking_for_once():
 
 
 @pytest.mark.parametrize(
-    "written,expected",
+    ("written", "expected"),
     [
         ("ctrl+home", "\x1b[1;5H"),
         ("C-Home", "\x1b[1;5H"),

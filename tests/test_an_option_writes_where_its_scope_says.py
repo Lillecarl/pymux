@@ -58,7 +58,7 @@ WRITERS = [
 
 
 @pytest.mark.parametrize(
-    "option,written,becomes",
+    ("option", "written", "becomes"),
     [(make, written, becomes) for _name, make, written, becomes in WRITERS],
     ids=[name for name, _make, _written, _becomes in WRITERS],
 )
@@ -73,7 +73,7 @@ def test_a_client_option_is_written_on_the_client(option, written, becomes):
 
 
 @pytest.mark.parametrize(
-    "option,written,becomes",
+    ("option", "written", "becomes"),
     [(make, written, becomes) for _name, make, written, becomes in WRITERS],
     ids=[name for name, _make, _written, _becomes in WRITERS],
 )

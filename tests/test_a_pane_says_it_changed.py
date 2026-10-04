@@ -131,7 +131,7 @@ def test_it_only_goes_up(pymux):
 
 
 @pytest.mark.parametrize(
-    "name,data",
+    ("name", "data"),
     [
         # Each of these leaves `screen.writes` where it was, so a
         # revision built on that counter would miss it.
@@ -316,7 +316,7 @@ def test_a_wait_from_nobody_is_refused(pymux):
 
 
 @pytest.mark.parametrize(
-    "arguments,message",
+    ("arguments", "message"),
     [
         (["--since", "nope"], "Expecting a revision: nope"),
         (["--timeout", "nope"], "Expecting a number of seconds: nope"),

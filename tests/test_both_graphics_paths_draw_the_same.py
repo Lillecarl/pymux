@@ -163,7 +163,7 @@ def _same_pixels(kitty, sixel):
 
 
 @pytest.mark.parametrize(
-    "name,placements,state,cell,viewed",
+    ("name", "placements", "state", "cell", "viewed"),
     [
         # The plain case: one placement, one cell each way.
         ("one cell", [placement(columns=2, rows=2)], {}, (1, 1), {}),

@@ -58,7 +58,7 @@ def test_chord_reaches_what_tmux_name_reaches(name):
 
 
 @pytest.mark.parametrize(
-    "written,name",
+    ("written", "name"),
     [
         ("DC", "delete"),
         ("IC", "insert"),
@@ -94,7 +94,7 @@ def test_tmux_modifier_is_not_chord():
 
 
 @pytest.mark.parametrize(
-    "written,key",
+    ("written", "key"),
     [
         ("ctrl+home", Keys.ControlHome),
         ("ctrl+end", Keys.ControlEnd),
@@ -167,7 +167,7 @@ def test_super_hyper_and_meta_get_built_name():
 
 
 @pytest.mark.parametrize(
-    "written,same_as",
+    ("written", "same_as"),
     [("control+a", "ctrl+a"), ("option+a", "alt+a"), ("cmd+a", "super+a")],
 )
 def test_word_keyboard_prints_on_key(written, same_as):
@@ -249,7 +249,7 @@ def test_alt_flattens_same_way_sequence_does():
 
 
 @pytest.mark.parametrize(
-    "written,said",
+    ("written", "said"),
     [
         ("ctrl+", "no key after"),
         ("ctrl+nope", "No key is named"),
@@ -400,7 +400,7 @@ def test_tmux_vocabulary_reads_unchanged(name):
 
 
 @pytest.mark.parametrize(
-    "name,key",
+    ("name", "key"),
     [
         ("C-Home", Keys.ControlHome),
         ("C-End", Keys.ControlEnd),

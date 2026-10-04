@@ -87,7 +87,7 @@ def make_pymux(clipboard=Clipboard.ON):
 
 
 @pytest.mark.parametrize(
-    "param,wanted",
+    ("param", "wanted"),
     [
         ("SetMark", ("SetMark", "")),
         ("CurrentDir=/home/you", ("CurrentDir", "/home/you")),
@@ -208,7 +208,7 @@ def test_copy_rejects_empty_and_not_base64(param):
 
 
 @pytest.mark.parametrize(
-    "param,wanted",
+    ("param", "wanted"),
     [
         ("A", ("A", None)),
         ("B", ("B", None)),
@@ -386,7 +386,7 @@ def test_zone_garbage_stores_nothing_but_travels_on():
 
 
 @pytest.mark.parametrize(
-    "value,urgency",
+    ("value", "urgency"),
     [
         ("yes", Urgency.CRITICAL),
         ("once", Urgency.NORMAL),

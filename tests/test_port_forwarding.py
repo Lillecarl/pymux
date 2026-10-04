@@ -110,7 +110,7 @@ def test_only_a_remote_bind_off_loopback_may_be_narrowed():
 
 
 @pytest.mark.parametrize(
-    "url, expected",
+    ("url", "expected"),
     [
         ("http://localhost:3000/", ("localhost", 3000)),
         ("http://127.0.0.1:8080", ("127.0.0.1", 8080)),

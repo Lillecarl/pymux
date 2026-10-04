@@ -121,7 +121,7 @@ def test_unrelated_reply_changes_nothing():
 
 
 @pytest.mark.parametrize(
-    "term,colorterm,expected",
+    ("term", "colorterm", "expected"),
     [
         # COLORTERM is the second answer.
         ("xterm-256color", "truecolor", ColorDepth.DEPTH_24_BIT),
@@ -216,7 +216,7 @@ def test_second_reply_of_colour_replaces_first():
 
 
 @pytest.mark.parametrize(
-    "code, payload",
+    ("code", "payload"),
     [
         # A colour pymux does not draw with: the cursor, and the
         # selection. `DYNAMIC_COLOR_CODES` numbers them and this reads

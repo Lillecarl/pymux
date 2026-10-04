@@ -175,7 +175,7 @@ KEYS = [
 ]
 
 
-@pytest.mark.parametrize("name, expected", KEYS)
+@pytest.mark.parametrize(("name", "expected"), KEYS)
 def test_key_sends_what_keyboard_sends(pymux, name, expected):
     create_pane(pymux)
     written, errors = send(pymux, name)
@@ -207,7 +207,7 @@ KEYS_A_LEGACY_PANE_CANNOT_READ = [
 ]
 
 
-@pytest.mark.parametrize("name, lost", KEYS_A_LEGACY_PANE_CANNOT_READ)
+@pytest.mark.parametrize(("name", "lost"), KEYS_A_LEGACY_PANE_CANNOT_READ)
 def test_key_pane_cannot_read_is_refused(pymux, name, lost):
     create_pane(pymux)
 
@@ -220,7 +220,7 @@ def test_key_pane_cannot_read_is_refused(pymux, name, lost):
 
 
 @pytest.mark.parametrize(
-    "name, expected",
+    ("name", "expected"),
     [
         ("C-S-a", "\x1b[97;6u"),
         ("super+a", "\x1b[97;9u"),
@@ -292,7 +292,7 @@ KEYS_A_KEYBOARD_LEAVES_OUT = [
 ]
 
 
-@pytest.mark.parametrize("name, expected", KEYS_A_KEYBOARD_LEAVES_OUT)
+@pytest.mark.parametrize(("name", "expected"), KEYS_A_KEYBOARD_LEAVES_OUT)
 def test_modified_key_older_table_never_named(pymux, name, expected):
     create_pane(pymux)
     written, errors = send(pymux, name)

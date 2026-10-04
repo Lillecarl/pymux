@@ -74,7 +74,7 @@ def test_black_is_the_darkest_there_is():
 
 
 @pytest.mark.parametrize(
-    "colour,wanted",
+    ("colour", "wanted"),
     [
         # The three primaries, as Bjorn Ottosson's reference
         # implementation of oklab gives them for linear sRGB 1.0 --

@@ -46,7 +46,7 @@ def pymux():
 
 
 @pytest.mark.parametrize(
-    "string,is_template",
+    ("string", "is_template"),
     [
         ("{{ session_name }}", True),
         ("{% if window_active %}x{% endif %}", True),

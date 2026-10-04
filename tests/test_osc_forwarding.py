@@ -28,7 +28,7 @@ def sequence(code, param):
 
 
 @pytest.mark.parametrize(
-    "code,param",
+    ("code", "param"),
     [
         ("52", "c;aGVsbG8="),
         ("52", "p;"),  # Clear the primary selection.

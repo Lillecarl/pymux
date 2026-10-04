@@ -108,7 +108,7 @@ async def test_emacs_status_keys_say_nothing():
 
 
 @pytest.mark.parametrize(
-    "mode,says",
+    ("mode", "says"),
     [
         (InputMode.INSERT, "INSERT"),
         (InputMode.INSERT_MULTIPLE, "INSERT"),

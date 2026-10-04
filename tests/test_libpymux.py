@@ -373,7 +373,7 @@ def test_finding_pane_by_id(fake):
 
 
 @pytest.mark.parametrize(
-    "argument, expected",
+    ("argument", "expected"),
     [
         ("plain", "plain"),
         ("two words", "'two words'"),
