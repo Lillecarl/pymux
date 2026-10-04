@@ -155,34 +155,44 @@ FILE_TIMEOUT = int(os.environ.get("PYMUX_VTERM_FILE_TIMEOUT") or 900)
 #: list fails the check.
 NOT_OURS = (
     (
-        r"^(10state_putglyph|14state_encoding|16state_resize|20state_wrapping"
-        r"|21state_tabstops|28state_dbl_wh|31state_rep|12state_scroll"
-        r"|13state_edit|15state_mode|27state_reset|60screen_ascii"
-        r"|62screen_damage|63screen_resize|69screen_sb_clear)\.test$",
-        "the file is a list of libvterm's own callbacks: every glyph it "
-        "laid down, and every rectangle it damaged, scrolled or moved. "
-        "The runner compares emitted lines in order and neither harness "
-        "emits any, so this is left out of both checks.",
+        (
+            r"^(10state_putglyph|14state_encoding|16state_resize|20state_wrapping"
+            r"|21state_tabstops|28state_dbl_wh|31state_rep|12state_scroll"
+            r"|13state_edit|15state_mode|27state_reset|60screen_ascii"
+            r"|62screen_damage|63screen_resize|69screen_sb_clear)\.test$"
+        ),
+        (
+            "the file is a list of libvterm's own callbacks: every glyph it "
+            "laid down, and every rectangle it damaged, scrolled or moved. "
+            "The runner compares emitted lines in order and neither harness "
+            "emits any, so this is left out of both checks."
+        ),
     ),
     (
         r"^(02parser|29state_fallback|03encoding_utf8)\.test$",
         "the file reads the parser and the encoder of libvterm, which is neither our model nor our wire.",
     ),
     (
-        r"^(17state_mouse|18state_termprops|22state_save|25state_input"
-        r"|26state_query|64screen_pen|68screen_termprops|40state_selection"
-        r"|92lp1640917)\.test$",
-        "the file reads what libvterm writes back to the program. pymux "
-        "answers a program itself and does not pass the answer on, so "
-        "the wire never carries it.",
+        (
+            r"^(17state_mouse|18state_termprops|22state_save|25state_input"
+            r"|26state_query|64screen_pen|68screen_termprops|40state_selection"
+            r"|92lp1640917)\.test$"
+        ),
+        (
+            "the file reads what libvterm writes back to the program. pymux "
+            "answers a program itself and does not pass the answer on, so "
+            "the wire never carries it."
+        ),
     ),
     (
         r"^(30state_pen|32state_flow)\.test$",
-        'the file asks about state that a wire does not carry. "?pen" '
-        "is the style the next character will take, and nothing has "
-        'been drawn with it yet; "?lineinfo" is whether a line '
-        "continues the one above. Both are real questions, and "
-        "checks.ptterm-vterm is where they are asked.",
+        (
+            'the file asks about state that a wire does not carry. "?pen" '
+            "is the style the next character will take, and nothing has "
+            'been drawn with it yet; "?lineinfo" is whether a line '
+            "continues the one above. Both are real questions, and "
+            "checks.ptterm-vterm is where they are asked."
+        ),
     ),
 )
 

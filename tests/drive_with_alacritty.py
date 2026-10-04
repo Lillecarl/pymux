@@ -228,13 +228,17 @@ JUDGE_TIMEOUT = 120.0
 #: list fails the check.
 NOT_OURS = (
     (
-        r"^(grid_reset|history|region_scroll_down|row_reset"
-        r"|scroll_in_region_up_preserves_history)$",
-        "the test keeps a scrollback, and the recorded grid holds the "
-        "lines that scrolled away. A wire carries a screen and nothing "
-        "else: pymux draws the pane, and what left the top of it was "
-        "never emitted. The judge refuses these by name as well, rather "
-        "than answering a question it cannot answer.",
+        (
+            r"^(grid_reset|history|region_scroll_down|row_reset"
+            r"|scroll_in_region_up_preserves_history)$"
+        ),
+        (
+            "the test keeps a scrollback, and the recorded grid holds the "
+            "lines that scrolled away. A wire carries a screen and nothing "
+            "else: pymux draws the pane, and what left the top of it was "
+            "never emitted. The judge refuses these by name as well, rather "
+            "than answering a question it cannot answer."
+        ),
     ),
 )
 
