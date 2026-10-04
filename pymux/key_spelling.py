@@ -37,12 +37,12 @@ module reads a name, and a name only.
 from __future__ import annotations
 
 import re
-from typing import Sequence
+from collections.abc import Sequence
+from typing import override
 
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.keys import Keys
 from pyte.keys import FIRST_FUNCTIONAL_KEY, KeyEvent, Modifier
-from typing_extensions import override
 
 from .key_mappings import (
     MODIFIERS_BY_TMUX_SPELLING,

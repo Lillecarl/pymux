@@ -39,10 +39,10 @@ from __future__ import annotations
 import json
 import signal
 import sys
+from typing import override
 
 import anyio
 from prompt_toolkit.input.vt100 import raw_mode
-from typing_extensions import override
 
 from ..pipes import BrokenPipeError, MemoryConnection
 from .terminal import TerminalClient

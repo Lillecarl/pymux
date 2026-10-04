@@ -7,6 +7,7 @@ import socket
 import sys
 from ctypes import byref
 from ctypes.wintypes import DWORD
+from typing import override
 
 import anyio
 from libpymux.protocol import Field, Packet
@@ -14,7 +15,6 @@ from prompt_toolkit.input.win32 import Win32Input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.win32 import Win32Output
 from prompt_toolkit.win32_types import STD_OUTPUT_HANDLE
-from typing_extensions import override
 
 from ..config import client_options_in, find_config
 from ..log import logger

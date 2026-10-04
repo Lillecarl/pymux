@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import argparse
 import os
-from typing import TYPE_CHECKING, Any, Awaitable
+from collections.abc import Awaitable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from pymux.main import Pymux

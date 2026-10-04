@@ -33,8 +33,9 @@ import json
 import sys
 import time
 import weakref
+from collections.abc import Callable
 from contextlib import asynccontextmanager
-from typing import Any, Callable, NamedTuple
+from typing import Any, NamedTuple
 
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size

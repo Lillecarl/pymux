@@ -37,6 +37,8 @@ answer, which is the whole point of the work.
 
 from __future__ import annotations
 
+from typing import override
+
 from prompt_toolkit.application import get_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.key_binding import KeyBindingsBase
@@ -44,7 +46,6 @@ from prompt_toolkit.layout.containers import Container, to_container
 from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Char, Screen, WritePosition
-from typing_extensions import override
 
 from .plane import Pane, Plan, Rect, View
 

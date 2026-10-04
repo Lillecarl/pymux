@@ -28,7 +28,7 @@ here so that a picture that looks wrong has somewhere to be answered.
 
 from __future__ import annotations
 
-from typing import Iterable, Sequence
+from collections.abc import Iterable, Sequence
 
 from pyte.colors import Color, parse_color
 

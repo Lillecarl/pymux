@@ -5,11 +5,11 @@ import signal
 import socket
 import sys
 from select import select
+from typing import override
 
 from libpymux.protocol import Field, Packet
 from libpymux.sockets import servers_newest_first
 from prompt_toolkit.input.vt100 import raw_mode
-from typing_extensions import override
 
 from .terminal import TerminalClient
 

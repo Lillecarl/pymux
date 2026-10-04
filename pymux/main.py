@@ -14,8 +14,9 @@ import time
 import traceback
 import weakref
 from collections import deque
+from collections.abc import Callable
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Callable, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple, override
 
 import anyio
 from libpymux.protocol import Field, Packet
@@ -45,7 +46,6 @@ from pyte.environment import terminal_name
 from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
 from pyte.keys import KeyboardFlag
 from pyte.osc import Osc
-from typing_extensions import override
 
 from . import introspect, log
 from .arrangement import Arrangement, Pane, Window

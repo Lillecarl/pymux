@@ -15,8 +15,9 @@ process, and nothing else.
 
 from __future__ import annotations
 
+from typing import override
+
 import anyio
-from typing_extensions import override
 
 from .base import BrokenPipeError, PipeConnection
 

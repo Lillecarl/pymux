@@ -13,10 +13,9 @@ from __future__ import annotations
 import argparse
 import inspect
 import shlex
+from collections.abc import Awaitable, Callable
 from importlib import import_module
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, NoReturn, overload
-
-from typing_extensions import override
+from typing import TYPE_CHECKING, Any, NoReturn, overload, override
 
 from pymux.commands.aliases import ALIASES
 from pymux.enums import Woke

@@ -3,11 +3,11 @@ from __future__ import annotations
 import json
 import re
 import time
+from collections.abc import Callable
+from contextlib import AbstractContextManager
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
-    ContextManager,
     TextIO,
     cast,
 )
@@ -1244,13 +1244,13 @@ class _ClientInput:
 
     # Implement raw/cooked mode by sending this to the attached client.
 
-    def raw_mode(self) -> ContextManager[None]:
+    def raw_mode(self) -> AbstractContextManager[None]:
         return self._create_context_manager(Mode.RAW)
 
-    def cooked_mode(self) -> ContextManager[None]:
+    def cooked_mode(self) -> AbstractContextManager[None]:
         return self._create_context_manager(Mode.COOKED)
 
-    def _create_context_manager(self, mode: Mode) -> ContextManager[None]:
+    def _create_context_manager(self, mode: Mode) -> AbstractContextManager[None]:
         "Create a context manager that sends 'mode' commands to the client."
 
         class mode_context_manager:

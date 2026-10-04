@@ -193,6 +193,8 @@ line-length = 120
 # TC001-TC003 are deferred: should a runtime reader ever need a
 # name, that name keeps a runtime import through the
 # `runtime-evaluated-*` exemptions, per symbol.
+#
+# UP035 moves the typing names to `collections.abc`.
 select = [
     "B035",
     "F401",
@@ -294,6 +296,7 @@ select = [
     "UP029",
     "UP033",
     "UP034",
+    "UP035",
     "UP036",
     "UP037",
     "UP039",

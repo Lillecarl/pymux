@@ -18,9 +18,7 @@ these, and everything else only carries them. Lillecarl/pymux#508.
 
 from __future__ import annotations
 
-from typing import NewType
-
-from typing_extensions import override
+from typing import NewType, override
 
 #: What `Pane.pane_id` is: server-unique, never reused, spelled `%id`.
 PaneId = NewType("PaneId", int)

@@ -25,7 +25,7 @@ by which rule.
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from prompt_toolkit.data_structures import Point, Size
 

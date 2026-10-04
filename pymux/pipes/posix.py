@@ -6,11 +6,11 @@ import getpass
 import os
 import socket
 import stat
-from typing import Callable
+from collections.abc import Callable
+from typing import override
 
 import anyio
 from libpymux.sockets import nobody_answers, socket_directory
-from typing_extensions import override
 
 from ..log import logger
 from .base import BrokenPipeError, PipeConnection

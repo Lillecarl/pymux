@@ -20,9 +20,7 @@ from __future__ import annotations
 
 import time
 import weakref
-from typing import TYPE_CHECKING, NamedTuple
-
-from typing_extensions import override
+from typing import TYPE_CHECKING, NamedTuple, override
 
 from pymux.forwarding import ANY_PORT, LOOPBACK_NAMES, Direction, Forward
 

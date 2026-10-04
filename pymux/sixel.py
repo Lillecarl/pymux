@@ -14,7 +14,7 @@ pixels that are more transparent than half undrawn, which the sixel
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from pyte.images import PixelFormat
 

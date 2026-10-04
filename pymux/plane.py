@@ -62,8 +62,9 @@ is kept.
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable, Iterator
 from enum import Enum
-from typing import Iterable, Iterator, NamedTuple
+from typing import NamedTuple
 
 from prompt_toolkit.data_structures import Point, Size
 

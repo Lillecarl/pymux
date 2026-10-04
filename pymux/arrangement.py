@@ -13,12 +13,12 @@ from __future__ import annotations
 import math
 import os
 from enum import Enum
+from typing import override
 from weakref import WeakKeyDictionary, ref
 
 from prompt_toolkit.application import Application, get_app, get_app_or_none, set_app
 from prompt_toolkit.data_structures import Size
 from ptterm import Terminal
-from typing_extensions import override
 
 from .enums import WindowSize
 from .ids import PaneId, PaneIndex, WindowId, WindowIndex

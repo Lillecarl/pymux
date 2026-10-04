@@ -51,7 +51,7 @@ instead. Lillecarl/pymux#207.
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from prompt_toolkit.data_structures import Point, Size
 

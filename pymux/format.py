@@ -18,8 +18,9 @@ from __future__ import annotations
 
 import os
 import socket
+from collections.abc import Callable
 from enum import Enum
-from typing import TYPE_CHECKING, Callable, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
     from pymux.arrangement import Pane, Window

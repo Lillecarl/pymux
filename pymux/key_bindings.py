@@ -5,7 +5,8 @@ Key bindings.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.filters import (

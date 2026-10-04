@@ -7,8 +7,9 @@ from __future__ import annotations
 import argparse
 import datetime
 import weakref
+from collections.abc import Callable
 from functools import partial
-from typing import TYPE_CHECKING, Callable, cast
+from typing import TYPE_CHECKING, cast, override
 
 from prompt_toolkit.application import Application, get_app
 from prompt_toolkit.clipboard import ClipboardData
@@ -51,7 +52,6 @@ from prompt_toolkit.layout.processors import (
 from prompt_toolkit.layout.screen import Char, Screen
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.widgets import Dialog, SearchToolbar, TextArea
-from typing_extensions import override
 
 import pymux.arrangement as arrangement
 

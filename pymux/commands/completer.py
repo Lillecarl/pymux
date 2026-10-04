@@ -20,14 +20,13 @@ from __future__ import annotations
 
 import argparse
 from functools import partial
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 import argcomplete
 from argcomplete.completers import SuppressCompleter
 from argcomplete.lexers import split_line
 from prompt_toolkit.completion import CompleteEvent, Completer, Completion
 from prompt_toolkit.document import Document
-from typing_extensions import override
 
 from pymux.arrangement import LayoutTypes
 from pymux.commands import CommandException, CommandParser, parser_tree

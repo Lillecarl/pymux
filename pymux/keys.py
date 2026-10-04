@@ -36,7 +36,7 @@ import logging
 import re
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import cast
+from typing import cast, override
 
 from prompt_toolkit.input.vt100_parser import (
     Vt100Parser,
@@ -52,7 +52,6 @@ from pyte.keys import (
     Modifier,
     parse_key_data,
 )
-from typing_extensions import override
 
 logger = logging.getLogger(__name__)
 

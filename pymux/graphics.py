@@ -35,7 +35,8 @@ import base64
 import random
 import re
 import zlib
-from typing import Any, Callable, Iterable, NamedTuple
+from collections.abc import Callable, Iterable
+from typing import Any, NamedTuple
 
 from prompt_toolkit.output import ColorDepth
 from pyte import escape

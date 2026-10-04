@@ -21,8 +21,8 @@ from __future__ import annotations
 
 import json
 import secrets
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from libpymux import PaneStream, Server, StreamRefused
 

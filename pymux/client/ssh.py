@@ -44,14 +44,13 @@ import json
 import signal
 import sys
 import time
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple, override
 from urllib.parse import urlparse
 
 import anyio
 from libpymux.protocol import Field, Packet
 from prompt_toolkit.input.vt100 import raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output
-from typing_extensions import override
 
 from pymux.forwarding import (
     MAY_NARROW,

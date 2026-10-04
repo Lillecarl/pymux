@@ -30,8 +30,9 @@ that asks for one fact costs one fact and not forty.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import lru_cache
-from typing import TYPE_CHECKING, Callable, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 from jinja2 import ChainableUndefined, Template
 from jinja2.exceptions import TemplateSyntaxError

@@ -62,8 +62,8 @@ import re
 import select
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 

@@ -41,11 +41,12 @@ The order the parts give way in is the order they matter:
 
 from __future__ import annotations
 
+from typing import override
+
 from prompt_toolkit.formatted_text import StyleAndTextTuples
 from prompt_toolkit.formatted_text.utils import fragment_list_width
 from prompt_toolkit.layout.controls import UIContent, UIControl
 from prompt_toolkit.utils import get_cwidth
-from typing_extensions import override
 
 __all__ = ["PaneTitleBar", "lay_out_bar"]
 
