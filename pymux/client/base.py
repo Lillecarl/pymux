@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import signal
 from abc import ABC
@@ -89,9 +90,7 @@ class Client(ABC):
         if parent <= 1:
             return
 
-        try:
+        # The parent went between the question and the signal.
+        # Nothing to hang up, and nothing to say about it.
+        with contextlib.suppress(OSError):
             os.kill(parent, signal.SIGHUP)
-        except OSError:
-            # The parent went between the question and the signal.
-            # Nothing to hang up, and nothing to say about it.
-            pass

@@ -34,6 +34,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 # not the directory above it.
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
+import contextlib
+
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from session import over_connection
@@ -176,10 +178,8 @@ def scenario_report(name, packets) -> dict:
         # The framing share: JSON around the frame versus the frame.
         payload = 0
         for raw in by_cmd["out"]:
-            try:
+            with contextlib.suppress(ValueError):
                 payload += len(json.loads(raw.decode("utf-8")).get("data", ""))
-            except ValueError:
-                pass
         print(
             "  frame text %d bytes of %d wire bytes (%.0f%% framing)"
             % (payload, sum(out), 100.0 * (sum(out) - payload) / sum(out))

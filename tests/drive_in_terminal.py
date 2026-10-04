@@ -73,6 +73,7 @@ from __future__ import annotations
 
 import ast
 import base64
+import contextlib
 import fcntl
 import os
 import pty
@@ -152,10 +153,8 @@ def stop_echo(fd):
         return
 
     attributes[3] &= ~(termios.ECHO | termios.ECHONL)
-    try:
+    with contextlib.suppress(termios.error):
         termios.tcsetattr(fd, termios.TCSANOW, attributes)
-    except termios.error:
-        pass
 
 
 def take_input(fd):
@@ -179,10 +178,8 @@ def take_input(fd):
     attributes[3] &= ~(termios.ECHO | termios.ECHONL | termios.ICANON)
     attributes[6][termios.VMIN] = 0
     attributes[6][termios.VTIME] = 0
-    try:
+    with contextlib.suppress(termios.error):
         termios.tcsetattr(fd, termios.TCSANOW, attributes)
-    except termios.error:
-        pass
 
 
 def carry_the_answer(master, stdin_fd, ready) -> None:
@@ -457,10 +454,8 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
         # own. Opening for writing is what lets the forwarder in the
         # pane past its own open, and the first frame is what the keys
         # are counted from.
-        try:
+        with contextlib.suppress(FileExistsError):
             os.mkfifo(fifo)
-        except FileExistsError:
-            pass
         writer = take_fifo(fifo, started)
         note(started, "the pane took the fifo")
         drawn, when, copied = wait_for_first_frame(master, seen, out, copied, started, writer, stdin_fd)

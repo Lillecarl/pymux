@@ -40,6 +40,7 @@ other machine, so this client shows a notice and opens the link again.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import signal
 import sys
@@ -782,10 +783,8 @@ class SshClient(TerminalClient):
         the task group, which is not a fault: the read loop has seen
         the same end and is about to cancel these anyway.
         """
-        try:
+        with contextlib.suppress(BrokenPipeError):
             await work(*arguments)
-        except BrokenPipeError:
-            pass
 
     def _clocks(self) -> tuple[float, float]:
         """

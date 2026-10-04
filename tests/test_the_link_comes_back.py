@@ -21,7 +21,7 @@ import sys
 import termios
 import threading
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 import anyio
@@ -445,15 +445,11 @@ class Terminal:
 
     def close(self) -> None:
         for one in (self.stdin, self.stdout):
-            try:
+            with suppress(Exception):
                 one.close()
-            except Exception:
-                pass
         for fd in (self.slave, self.master):
-            try:
+            with suppress(OSError):
                 os.close(fd)
-            except OSError:
-                pass
 
 
 class Attached:

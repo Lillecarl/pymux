@@ -4,7 +4,7 @@ import json
 import re
 import time
 from collections.abc import Callable
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, suppress
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -1008,10 +1008,8 @@ class ServerConnection:
 
         # Close input pipe and remove connection from eventloop.
         self._pipeinput.close()
-        try:
+        with suppress(Exception):
             self.pipe_connection.close()
-        except Exception:
-            pass
 
     def suspend_client_to_background(self) -> None:
         """
@@ -1208,10 +1206,8 @@ class _ClientInput:
     def close(self) -> None:
         "Close the input pipe. (Idempotent.)"
         if self._input is not None:
-            try:
+            with suppress(Exception):
                 self._input_cm.__exit__(None, None, None)
-            except Exception:
-                pass
             self._input = None
 
     @property

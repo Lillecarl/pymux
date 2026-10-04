@@ -13,6 +13,7 @@ difference of the transport and nothing else.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import signal
@@ -221,10 +222,8 @@ class TerminalClient(Client):
         Lillecarl/pymux#256.
         """
         while self._mode_context_managers:
-            try:
+            with contextlib.suppress(Exception):
                 self._mode_context_managers.pop().__exit__()
-            except Exception:
-                pass
 
     def _client_options(self) -> list:
         """

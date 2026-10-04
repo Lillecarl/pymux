@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import errno
 import fcntl
 import getpass
@@ -77,10 +78,8 @@ class PosixSocketListener:
             self._accept_callback(PosixSocketConnection(connection))
 
     def close(self) -> None:
-        try:
+        with contextlib.suppress(OSError):
             self.socket.close()
-        except OSError:
-            pass
 
 
 def _bind_or_take_over(sock: socket.socket, socket_name: str) -> None:
@@ -348,15 +347,11 @@ class PosixSocketConnection(PipeConnection):
         if self._closed:
             return
         self._closed = True
-        try:
-            # Wake whatever is parked on this descriptor **before** the
-            # descriptor goes. A reader that learns about the close
-            # afterwards waits on a number the kernel has already given
-            # to somebody else.
+        # Wake whatever is parked on this descriptor **before** the
+        # descriptor goes. A reader that learns about the close
+        # afterwards waits on a number the kernel has already given
+        # to somebody else. No loop here: nothing is parked on it either.
+        with contextlib.suppress(Exception):
             anyio.notify_closing(self.socket)
-        except Exception:
-            pass  # No loop here: nothing is parked on it either.
-        try:
+        with contextlib.suppress(OSError):
             self.socket.close()
-        except OSError:
-            pass

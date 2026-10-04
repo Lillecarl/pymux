@@ -49,6 +49,7 @@ Options:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import getpass
 import logging
 import os
@@ -1034,10 +1035,8 @@ def _new_session(socket_name: str, command: str, args: list[str], pane_id=None) 
 
     # Start a new daemonized server.
     if start_directory:
-        try:
+        with contextlib.suppress(OSError):
             os.chdir(os.path.abspath(os.path.expanduser(start_directory)))
-        except OSError:
-            pass
 
     mux = _new_pymux(
         source_file=filename_var(),

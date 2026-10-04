@@ -15,7 +15,7 @@ import traceback
 import weakref
 from collections import deque
 from collections.abc import Callable
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from typing import TYPE_CHECKING, NamedTuple, override
 
 import anyio
@@ -1988,10 +1988,9 @@ class Pymux:
         def before_exec():
             "Called in the process fork (in the child process)."
             # Go to this directory.
-            try:
+            # No such file or directory.
+            with suppress(OSError):
                 os.chdir(path or self.original_cwd)
-            except OSError:
-                pass  # No such file or directory.
 
             # A pane is not the terminal that the client attached
             # from: it answers the protocol queries for itself. ptterm
@@ -3142,12 +3141,10 @@ exec pymux notify -u "$urgency" -- "$@"
         client attaches and when a pane starts, and neither may stop
         for it.
         """
-        try:
+        # An older ptterm has a screen that cannot be told. It then
+        # keeps the size `pyte` assumes, as before.
+        with suppress(AttributeError):
             pane.screen.set_cell_size(*self.cell_size())
-        except AttributeError:
-            # An older ptterm has a screen that cannot be told. It then
-            # keeps the size `pyte` assumes, as before.
-            pass
 
     def sync_keyboard(self) -> None:
         """
@@ -3325,13 +3322,11 @@ exec pymux notify -u "$urgency" -- "$@"
                 process.kill()
 
         for app in self.apps:
-            try:
+            # `Application.exit()` raises for applications that never
+            # started running. (E.g. temporary CLIs that only handled a
+            # command.)
+            with suppress(Exception):
                 app.exit()
-            except Exception:
-                # `Application.exit()` raises for applications that never
-                # started running. (E.g. temporary CLIs that only handled a
-                # command.)
-                pass
         self.done.set()
 
     def create_window(
@@ -3699,10 +3694,8 @@ exec pymux notify -u "$urgency" -- "$@"
             self.listener.close()
         if not self.socket_name:
             return
-        try:
+        with suppress(OSError):
             os.remove(self.socket_name)
-        except OSError:
-            pass
 
     def run_integrated(
         self,

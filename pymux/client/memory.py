@@ -36,6 +36,7 @@ that is read on a timer costs nothing and covers what a signal misses.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import signal
 import sys
@@ -75,10 +76,9 @@ class MemoryClient(TerminalClient):
     @override
     def _send_packet(self, data) -> None:
         "Send to the server. (The queue has no limit, so this waits for nothing.)"
-        try:
+        # The server is gone. The read loop ends on its own.
+        with contextlib.suppress(BrokenPipeError):
             self.connection.write_nowait(json.dumps(data))
-        except BrokenPipeError:
-            pass  # The server is gone. The read loop ends on its own.
 
     @override
     async def attach(self, detach_other_clients: bool = False, color_depth=None) -> None:

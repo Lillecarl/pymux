@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import signal
 import socket
@@ -160,10 +161,8 @@ class PosixClient(TerminalClient):
                 # behind. stdout may be the thing that failed, so the
                 # original error outranks anything this raises.
                 # Lillecarl/pymux#404.
-                try:
+                with contextlib.suppress(Exception):
                     self._reset_terminal()
-                except Exception:
-                    pass
 
     @override
     def _send_packet(self, data):
@@ -190,10 +189,8 @@ class PosixClient(TerminalClient):
         # raise `BlockingIOError` if the buffer is full.
         self.socket.setblocking(True)
 
-        try:
+        with contextlib.suppress(BrokenPipeError, ConnectionResetError):
             self.socket.send(data + b"\0")
-        except BrokenPipeError, ConnectionResetError:
-            pass
 
 
 def list_clients():
@@ -207,7 +204,5 @@ def list_clients():
     was a socket at all. Lillecarl/pymux#451.
     """
     for path in servers_newest_first():
-        try:
+        with contextlib.suppress(OSError):
             yield PosixClient(path)
-        except OSError:
-            pass

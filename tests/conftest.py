@@ -26,6 +26,8 @@ from ptyhost.process import Process
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import contextlib
+
 from pymux.main import Pymux
 
 #: How long one test may take before it is stuck. The check sets it.
@@ -162,14 +164,10 @@ def every_pty_this_test_opened(a_loop_for_this_test, monkeypatch):
             slave = getattr(backend, "slave", None)
             if slave is not None:
                 backend.slave = None
-                try:
+                with contextlib.suppress(OSError):
                     os.close(slave)
-                except OSError:
-                    pass
-            try:
+            with contextlib.suppress(OSError):
                 backend.close()
-            except OSError:
-                pass
 
 
 # The gate. `derandomize` seeds each property test from its own source,

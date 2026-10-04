@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -24,12 +25,10 @@ def copy_mode(pymux: Pymux, args: argparse.Namespace) -> None:
     # Copy mode is a mode of its own, and its keys are the pane
     # widget's, under every table this client holds: a key table left
     # on the stack eats them. tmux's rule is one mode at a time.
-    try:
+    # No client: a copy mode entered over the socket has nobody in
+    # a mode to take out of one.
+    with contextlib.suppress(ValueError):
         pymux.key_bindings_manager.leave_all_modes()
-    except ValueError:
-        # No client: a copy mode entered over the socket has nobody in
-        # a mode to take out of one.
-        pass
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
