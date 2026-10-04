@@ -1990,12 +1990,8 @@ class Pymux:
 
         if start_directory:
             path = start_directory
-        elif window and window.active_process:
-            # When the path of the active process is known,
-            # start the new process at the same location.
-            path = window.active_process.get_cwd()
         else:
-            path = None
+            path = self._directory_to_start_in(window, session)
 
         def before_exec():
             "Called in the process fork (in the child process)."
@@ -2819,6 +2815,32 @@ exec pymux notify -u "$urgency" -- "$@"
             self.invalidate(Woke.PANE_WROTE_AN_OSC)
         except Exception:
             logger.exception("Forwarding an OSC sequence failed.")
+
+    def _directory_to_start_in(self, window, session) -> str | None:
+        """
+        Where a new pane starts when `-c` named nothing.
+
+        What a pane reported about itself wins over what the operating
+        system says about it: the shell knows its logical directory on
+        every system, and the process table only on some. What the OS
+        says covers a pane that never reported, and nothing covers the
+        first pane of a session. An explicit `-c` already won before
+        this was asked.
+        """
+        pane = None
+        if window is not None:
+            pane = window.active_pane
+        if pane is None and session is not None:
+            active = session.arrangement.get_active_window()
+            if active is not None:
+                pane = active.active_pane
+        if pane is not None and pane.current_directory:
+            return pane.current_directory
+        if window is not None and window.active_process:
+            # When the path of the active process is known, start the
+            # new process at the same location.
+            return window.active_process.get_cwd()
+        return None
 
     def _read_current_directory(self, pane, param: str) -> None:
         """
