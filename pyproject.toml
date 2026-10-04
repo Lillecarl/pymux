@@ -154,16 +154,58 @@ missing-override-decorator = "error"
 missing-attribute = "error"
 implicit-any-attribute = "error"
 
-[tool.black]
-target-version = ['py311']
+[tool.ruff]
+# Mirror of the `ruff.toml` beside the umbrella: the build sandbox
+# sees only this tree, so discovery from a file under it must end
+# here. Keep the two in step; the why lives up there.
+target-version = "py311"
+# Pinned: a ruff upgrade must never silently reflow the tree.
+line-length = 120
 
-
-[tool.isort]
-# isort configuration that is compatible with Black.
-multi_line_output = 3
-include_trailing_comma = true
-known_first_party = "prompt_toolkit"
-known_third_party = "asyncssh,pygments"
-force_grid_wrap = 0
-use_parentheses = true
-line_length = 88
+[tool.ruff.lint]
+# Mirror of the umbrella `ruff.toml`, rule for rule and comment for
+# comment: the build sandbox sees only this tree, so discovery from
+# a file under it must end here. Change the rules in both places.
+# Every rule here autofixes cleanly through the editor pipeline, and
+# the gate below holds what the pipeline leaves behind. One family
+# per commit on the way in; nothing here arrived in bulk.
+#
+# UP037 unquotes an annotation once the future import makes it lazy.
+# I001 sorts the imports the pipeline already organizes. UP006,
+# UP007 and UP045 spell the modern syntax the floor already runs.
+# UP009, UP015, UP024 and UP033 are four trivial modernizations.
+# F401 drops the imports nothing reads. RUF100 drops the `noqa`
+# comments nothing needs. RUF023 sorts the slots. PIE790, PIE800
+# and PIE808 drop three kinds of dead weight.
+#
+# Strings: `%` stays where it is. New code prefers f-strings, and a
+# `%` a touch already rewrites may ride along, but there is no bulk
+# migration: UP031 has no autofix, and its thousand sites are a
+# manual, trap-laden rewrite (a tuple on the right of `%` formats
+# its elements, an f-string its repr). Measured on this machine the
+# difference is fourteen nanoseconds a format -- style, not speed,
+# decides. UP031 and UP032 stay off for the same reason.
+#
+# FA100 is absent: on this floor it fires only where a rewrite needs
+# the import, and its fix is unsafe, so the editor never applies it.
+# The presence of the import is held per package by its own gate.
+# TC001-TC003 are deferred: should a runtime reader ever need a
+# name, that name keeps a runtime import through the
+# `runtime-evaluated-*` exemptions, per symbol.
+select = [
+    "F401",
+    "I001",
+    "PIE790",
+    "PIE800",
+    "PIE808",
+    "RUF023",
+    "RUF100",
+    "UP006",
+    "UP007",
+    "UP009",
+    "UP015",
+    "UP024",
+    "UP033",
+    "UP037",
+    "UP045",
+]
