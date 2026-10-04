@@ -228,25 +228,23 @@ def processes():
 
 def screen_rows(p):
     "Everything the screen says, in order."
-    return (
-        [
-            create_line("", REVERSE, BOLD, " THE PANE, HOLDING A PROGRAM ", RESET),
-            "",
-            "  A theme draws around this: the status line,",
-            "  the title bars, the borders. The colours in",
-            "  the pane are what it asked for, and got.",
-            "",
-        ]
-        + files(p)
-        + [""]
-        + diff(p)
-        + [""]
-        + [progress(p)]
-        + [""]
-        + colours(p)
-        + [""]
-        + processes()
-    )
+    return [
+        create_line("", REVERSE, BOLD, " THE PANE, HOLDING A PROGRAM ", RESET),
+        "",
+        "  A theme draws around this: the status line,",
+        "  the title bars, the borders. The colours in",
+        "  the pane are what it asked for, and got.",
+        "",
+        *files(p),
+        "",
+        *diff(p),
+        "",
+        progress(p),
+        "",
+        *colours(p),
+        "",
+        *processes(),
+    ]
 
 
 def draw(p, rows):

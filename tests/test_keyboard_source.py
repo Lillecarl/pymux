@@ -94,7 +94,7 @@ def test_two_clients_report_what_they_share():
 def test_connection_that_never_attached_does_not_count():
     "It runs one command and leaves. No terminal of a user is behind it."
     pymux, _ = make_pymux(0b11111)
-    pymux.connections = list(pymux._client_states) + [FakeConnection(0)]
+    pymux.connections = [*list(pymux._client_states), FakeConnection(0)]
     assert pymux.keyboard_source_flags() == 0b11111
 
 

@@ -246,7 +246,7 @@ class PositiveIntOption(Option):
             now = getattr(self.held_by(pymux), self._attribute())
         except SetOptionError:
             return sorted(set(self.possible_values))
-        return sorted(set(self.possible_values + ["%s" % now]))
+        return sorted(set([*self.possible_values, "%s" % now]))
 
     def _read(self, value: str) -> int:
         "The value as a positive integer, or a `SetOptionError`."
@@ -694,7 +694,7 @@ class ChoiceOption(Option):
             now = getattr(self.held_by(pymux), self._attribute())
         except SetOptionError:
             return sorted(set(self.choices))
-        return sorted(set(self.choices + (now,)))
+        return sorted(set((*self.choices, now)))
 
     @override
     def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:

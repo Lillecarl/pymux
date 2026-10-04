@@ -260,7 +260,7 @@ def test_a_mid_grey_terminal_is_lifted_and_not_holed():
 
 
 def test_the_column_wears_the_colour_of_the_terminal():
-    with create_client(STRIP + [PAINT_SCREEN_OFF]) as (pymux, state, draw):
+    with create_client([*STRIP, PAINT_SCREEN_OFF]) as (pymux, state, draw):
         _says(state, "#404040")
         create_wide_column(pymux, state)
         screen = draw()
@@ -276,7 +276,7 @@ def test_the_column_wears_the_colour_of_the_terminal():
 
 def test_a_terminal_that_answered_nothing_keeps_the_theme_rule():
     "Which is every client with no connection, and every dumb terminal."
-    with create_client(STRIP + [PAINT_SCREEN_OFF]) as (pymux, state, draw):
+    with create_client([*STRIP, PAINT_SCREEN_OFF]) as (pymux, state, draw):
         create_wide_column(pymux, state)
 
         assert state.connection.default_colors.background is None
@@ -289,7 +289,7 @@ def test_the_theme_owns_the_background_when_it_paints_the_screen():
     the theme's `cut` role is picked against the background it is
     really drawn over. Lillecarl/pymux#273.
     """
-    with create_client(STRIP + [PAINT_SCREEN_OFF]) as (pymux, state, draw):
+    with create_client([*STRIP, PAINT_SCREEN_OFF]) as (pymux, state, draw):
         _says(state, "#404040")
         create_wide_column(pymux, state)
         assert cut_tint(pymux) != CUT_IS_TINTED

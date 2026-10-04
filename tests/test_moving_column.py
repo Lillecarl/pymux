@@ -25,7 +25,7 @@ from test_title_bar_names_neighbours import (
 
 from pymux.arrangement import Pane, Window
 
-STRIP = CHROME + ["set-window-option strip on"]
+STRIP = [*CHROME, "set-window-option strip on"]
 
 
 class _Fake:

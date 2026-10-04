@@ -128,7 +128,7 @@ def test_strip_keeps_title_bar():
     above the pane, and a strip draws onto a screen whose first row is
     the pane's own, so that row is off the top of it.
     """
-    rows = drawn(CHROME + ["set-window-option strip on"])
+    rows = drawn([*CHROME, "set-window-option strip on"])
 
     assert rows[0].strip(), dump(rows)
 
@@ -152,7 +152,7 @@ def test_lone_column_takes_half_window_and_no_more():
     column window is 19 cells of pane and the border at cell 19.
     Lillecarl/pymux#206.
     """
-    rows = drawn(CHROME + ["set-window-option strip on"])
+    rows = drawn([*CHROME, "set-window-option strip on"])
     share = COLUMNS // 2
     border = share - 1
 
@@ -172,7 +172,7 @@ def test_lone_column_takes_half_window_and_no_more():
 # Moving between the columns.
 
 
-STRIP = CHROME + ["set-window-option strip on"]
+STRIP = [*CHROME, "set-window-option strip on"]
 
 
 def columns_of(pymux, how_many):

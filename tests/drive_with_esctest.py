@@ -219,12 +219,8 @@ def keep(directory: Path, failed, log: str) -> None:
                 "# ptterm/tests/esctest-failures.txt is the same list for ptterm on a",
                 "# pty of its own. A name here and not there is what the pane adds.",
                 "#",
+                *how_to_record("pymux-esctest", "failures.txt", "pymux/tests/esctest-failures.txt"),
             ]
-            + how_to_record(
-                "pymux-esctest",
-                "failures.txt",
-                "pymux/tests/esctest-failures.txt",
-            )
         )
         + "\n"
     )

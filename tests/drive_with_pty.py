@@ -340,7 +340,7 @@ def _clock(when):
 def run_cli(sock_path, args):
     "Run a pymux CLI command against the server (like libtmux does)."
     return subprocess.run(
-        [sys.executable, "-m", "pymux", "-S", str(sock_path)] + args,
+        [sys.executable, "-m", "pymux", "-S", str(sock_path), *args],
         cwd=str(REPO_ROOT),
         capture_output=True,
         timeout=20,
@@ -2373,7 +2373,7 @@ def check_relative_socket_name_survives_the_daemon(tmp):
 
     def cli(args):
         return subprocess.run(
-            [sys.executable, "-m", "pymux", "-S", sock_name] + args,
+            [sys.executable, "-m", "pymux", "-S", sock_name, *args],
             cwd=str(tmp),
             capture_output=True,
             timeout=20,

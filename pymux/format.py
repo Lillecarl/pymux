@@ -235,7 +235,7 @@ def _expand_variable(context: FormatContext, content: str) -> str:
 
     if content.startswith("==:") or content.startswith("!=:"):
         equal = content.startswith("==:")
-        left, right = (_split_arguments(content[3:]) + ["", ""])[:2]
+        left, right = ([*_split_arguments(content[3:]), "", ""])[:2]
         same = _format_variables(context, left) == _format_variables(context, right)
         return "1" if same == equal else "0"
 

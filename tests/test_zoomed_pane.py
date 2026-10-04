@@ -25,7 +25,7 @@ from pymux.zoomed import Zoomed
 
 ROWS, COLUMNS = 12, 40
 
-STRIP = CHROME + ["set-window-option strip on"]
+STRIP = [*CHROME, "set-window-option strip on"]
 
 
 def two_panes(pymux, command="split-window -h"):

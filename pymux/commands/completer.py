@@ -201,7 +201,7 @@ class CommandCompleter(Completer):
         if finder is None:
             return
         finder._display_completions = {}
-        matches = finder._get_completions(["pymux"] + words, prefix, prequote, wordbreak)
+        matches = finder._get_completions(["pymux", *words], prefix, prequote, wordbreak)
         meta = finder.get_display_completions()
 
         if not words:

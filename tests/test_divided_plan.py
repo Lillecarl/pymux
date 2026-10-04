@@ -225,7 +225,7 @@ def test_view_as_big_as_plane_never_moves():
     layout = Divided(window)
     view = View(Point(x=5, y=5), SIZE)
 
-    for pane in panes + [None]:
+    for pane in [*panes, None]:
         assert layout.look_at(plan, view, pane) == Point(x=0, y=0)
 
 

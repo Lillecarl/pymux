@@ -434,7 +434,7 @@ def survivors(watched: dict) -> list[str]:
         if obj is None:
             found.append("%s: cannot be watched, so nothing is known" % (name,))
             continue
-        found.append(why_it_is_alive(name, obj, ignore=[watched, alive, ring, found] + ring))
+        found.append(why_it_is_alive(name, obj, ignore=[watched, alive, ring, found, *ring]))
 
     del alive, ring
     return found

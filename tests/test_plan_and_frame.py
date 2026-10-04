@@ -30,7 +30,7 @@ COLUMNS = 80
 #: Deep enough for a stack of two to be worth dividing.
 ROWS = 24
 
-STRIP = CHROME + ["set-window-option strip on"]
+STRIP = [*CHROME, "set-window-option strip on"]
 
 
 def create_row_of_panes(pymux, count=3):

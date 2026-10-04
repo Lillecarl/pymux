@@ -268,12 +268,8 @@ def keep(directory: Path, failed: Counter, log: str) -> None:
                 "# alone, judged on its own model. A name here and not there is",
                 "# what the wire loses.",
                 "#",
+                *how_to_record("pymux-vterm", "failures.txt", "pymux/tests/vterm-failures.txt"),
             ]
-            + how_to_record(
-                "pymux-vterm",
-                "failures.txt",
-                "pymux/tests/vterm-failures.txt",
-            )
         )
         + "\n"
     )

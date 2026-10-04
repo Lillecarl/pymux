@@ -116,10 +116,7 @@ def wanted_from(colors) -> list[Lab | None]:
     `colors` is a `DefaultColors`: an entry it never learned is `None`
     here, and the search then scores the candidates on the rest.
     """
-    answers: list[Color | None] = list(colors.ansi) + [
-        colors.background,
-        colors.foreground,
-    ]
+    answers: list[Color | None] = [*list(colors.ansi), colors.background, colors.foreground]
     return [None if one is None else oklab(one) for one in answers]
 
 

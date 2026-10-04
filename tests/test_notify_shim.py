@@ -118,7 +118,7 @@ def run_script(pymux, arguments, tmp_path, monkeypatch):
     fake, record = make_fake_pymux(tmp_path)
     monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.environ["PATH"])
     subprocess.run(
-        [os.path.join(pymux._notify_shim_dir, "notify-send")] + arguments,
+        [os.path.join(pymux._notify_shim_dir, "notify-send"), *arguments],
         check=False,
         capture_output=True,
     )

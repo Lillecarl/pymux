@@ -29,7 +29,7 @@ def list_keys(pymux: Pymux, args: argparse.Namespace) -> None:
             % (
                 table,
                 custom_binding.written,
-                " ".join([custom_binding.command] + list(map(wrap_argument, custom_binding.arguments))),
+                " ".join([custom_binding.command, *list(map(wrap_argument, custom_binding.arguments))]),
             )
         )
 

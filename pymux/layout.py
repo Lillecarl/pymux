@@ -1477,7 +1477,7 @@ class LayoutManager:
 
     def _before_command_tokens(self) -> StyleAndTextTuples:
         'What stands before what a person types after ":".'
-        return self._vi_mode_tokens() + [("class:commandline-prompt", ":")]
+        return [*self._vi_mode_tokens(), ("class:commandline-prompt", ":")]
 
     def _before_prompt_command_tokens(self) -> StyleAndTextTuples:
         if self.client_state.prompt_completer is not None:
@@ -1485,7 +1485,7 @@ class LayoutManager:
             # line. Saying it twice is one row wasted and one thing to
             # read. Lillecarl/pymux#220.
             return []
-        return self._vi_mode_tokens() + [("class:commandline.prompt", "%s " % (self.client_state.prompt_text,))]
+        return [*self._vi_mode_tokens(), ("class:commandline.prompt", "%s " % (self.client_state.prompt_text,))]
 
     def _overlay_container(self) -> Container:
         """

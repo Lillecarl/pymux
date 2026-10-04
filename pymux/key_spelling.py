@@ -260,7 +260,7 @@ def _modifiers_and_base_of(text: str) -> tuple[int, str]:
             # The plus key itself, which is written "+", and with
             # modifiers "ctrl++". Splitting leaves two empty parts
             # where the key was.
-            parts = parts[:-2] + [TOGETHER]
+            parts = [*parts[:-2], TOGETHER]
         else:
             raise ValueError("%r names no key after the %r." % (text, TOGETHER))
 

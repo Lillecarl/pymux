@@ -471,12 +471,8 @@ def write_budgets(counts):
                 "# `tests/measure_keystroke.py` says what each stage covers",
                 "# and why the number is the same on every machine.",
                 "#",
+                *how_to_record("pymux-keystroke", "keystroke-budgets.txt", "pymux/tests/keystroke-budgets.txt"),
             ]
-            + how_to_record(
-                "pymux-keystroke",
-                "keystroke-budgets.txt",
-                "pymux/tests/keystroke-budgets.txt",
-            )
         )
         + "\n"
     )

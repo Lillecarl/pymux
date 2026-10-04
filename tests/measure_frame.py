@@ -417,12 +417,8 @@ HEADER = (
             "#",
             '# The "(plans)" lines are not instructions. They count how many plans',
             "# one frame measures, and a frame needs one.",
+            *how_to_record("pymux-frame", "frame-budgets.txt", "pymux/tests/frame-budgets.txt"),
         ]
-        + how_to_record(
-            "pymux-frame",
-            "frame-budgets.txt",
-            "pymux/tests/frame-budgets.txt",
-        )
     )
     + "\n"
 )

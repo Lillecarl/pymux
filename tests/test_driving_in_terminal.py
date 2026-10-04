@@ -57,7 +57,7 @@ def run(keys, argv, rows=24, columns=80, hold=HOLD, wanted=b"", answer=b""):
     """
     master, slave = create_terminal(rows, columns)
     process = subprocess.Popen(
-        [sys.executable, RELAY, str(keys), str(hold), "--"] + argv,
+        [sys.executable, RELAY, str(keys), str(hold), "--", *argv],
         stdin=slave,
         stdout=slave,
         stderr=subprocess.PIPE,

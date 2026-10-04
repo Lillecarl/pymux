@@ -134,13 +134,13 @@ def lay_out_bar(
     start = (width - middle_width) // 2
     start = max(left_width, min(start, width - right_width - middle_width))
 
-    return (
-        left
-        + [("", " " * (start - left_width))]
-        + middle
-        + [("", " " * (width - start - middle_width - right_width))]
-        + right
-    )
+    return [
+        *left,
+        ("", " " * (start - left_width)),
+        *middle,
+        ("", " " * (width - start - middle_width - right_width)),
+        *right,
+    ]
 
 
 def _cut_to(fragments: StyleAndTextTuples, width: int) -> StyleAndTextTuples:
@@ -184,4 +184,4 @@ def _cut_to(fragments: StyleAndTextTuples, width: int) -> StyleAndTextTuples:
         if text:
             kept.append((style, text))
 
-    return kept + [(style, ELLIPSIS)]
+    return [*kept, (style, ELLIPSIS)]

@@ -142,7 +142,7 @@ def test_strip_names_column_that_is_off_screen():
     side of the middle one is always on the screen. The one asked
     about here is the other.
     """
-    with create_client(CHROME + ["set-window-option strip on"], columns=COLUMNS) as (
+    with create_client([*CHROME, "set-window-option strip on"], columns=COLUMNS) as (
         pymux,
         draw,
     ):
