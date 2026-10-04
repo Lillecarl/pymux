@@ -8,6 +8,7 @@ from typing import Callable
 
 import anyio
 from libpymux.sockets import nobody_answers, socket_directory
+from typing_extensions import override
 
 from ..log import logger
 from .base import BrokenPipeError, PipeConnection
@@ -242,6 +243,7 @@ class PosixSocketConnection(PipeConnection):
         self._outstanding = 0
         self._write_lock: "anyio.Lock | None" = None
 
+    @override
     async def read(self) -> bytes:
         r"""
         Coroutine that reads the next packet.
@@ -291,6 +293,7 @@ class PosixSocketConnection(PipeConnection):
 
         return data
 
+    @override
     async def write(self, message: str) -> None:
         """
         Write the next packet. (Packets are \\0 separated.)
@@ -341,6 +344,7 @@ class PosixSocketConnection(PipeConnection):
                 raise BrokenPipeError
             view = view[sent:]
 
+    @override
     def close(self) -> None:
         """
         Close connection.

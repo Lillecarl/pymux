@@ -6,6 +6,8 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from enum import StrEnum
 
+from typing_extensions import override
+
 from .enums import WindowSize, Woke
 from .key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS
 from .key_spelling import key_however_it_is_written
@@ -172,6 +174,7 @@ class OnOffOption(Option):
         self.attribute_name = attribute_name
         self.scope = scope
 
+    @override
     def get_all_values(self, pymux):
         return ["on", "off"]
 
@@ -182,9 +185,11 @@ class OnOffOption(Option):
             raise SetOptionError('Expecting "yes" or "no".')
         return value == "on"
 
+    @override
     def set_value(self, pymux, value, target=None):
         setattr(self.held_by(pymux, target), self._attribute(), self._read(value))
 
+    @override
     def set_default(self, pymux, value):
         "What every new window starts with. Changes no window that is open."
         if self.scope is not Scope.WINDOW:
@@ -203,6 +208,7 @@ class StringOption(Option):
         self.possible_values = possible_values or []
         self.scope = scope
 
+    @override
     def get_all_values(self, pymux):
         try:
             now = getattr(self.held_by(pymux), self._attribute())
@@ -210,6 +216,7 @@ class StringOption(Option):
             return sorted(set(self.possible_values))
         return sorted(set(self.possible_values + [now]))
 
+    @override
     def set_value(self, pymux, value, target=None):
         setattr(self.held_by(pymux, target), self._attribute(), value)
 
@@ -224,6 +231,7 @@ class PositiveIntOption(Option):
         self.possible_values = ["%s" % i for i in (possible_values or [])]
         self.scope = scope
 
+    @override
     def get_all_values(self, pymux):
         try:
             now = getattr(self.held_by(pymux), self._attribute())
@@ -241,9 +249,11 @@ class PositiveIntOption(Option):
             raise SetOptionError("Expecting an integer.")
         return number
 
+    @override
     def set_value(self, pymux, value, target=None):
         setattr(self.held_by(pymux, target), self._attribute(), self._read(value))
 
+    @override
     def set_default(self, pymux, value):
         "What every new window starts with. Changes no window that is open."
         if self.scope is not Scope.WINDOW:
@@ -253,9 +263,11 @@ class PositiveIntOption(Option):
 
 
 class KeyPrefixOption(Option):
+    @override
     def get_all_values(self, pymux):
         return PYMUX_TO_PROMPT_TOOLKIT_KEYS.keys()
 
+    @override
     def set_value(self, pymux, value, target=None):
         # Translate prefix to prompt_toolkit
         try:
@@ -273,12 +285,15 @@ class BaseIndexOption(Option):
 
     attribute_name = "base_index"
 
+    @override
     def get_all_values(self, pymux):
         return ["0", "1"]
 
+    @override
     def held_by(self, pymux, target=None):
         return pymux.arrangement
 
+    @override
     def set_value(self, pymux, value, target=None):
         try:
             value = int(value)
@@ -302,12 +317,15 @@ class RenumberOption(Option):
 
     attribute_name = "renumber_windows"
 
+    @override
     def get_all_values(self, pymux):
         return ["on", "off"]
 
+    @override
     def held_by(self, pymux, target=None):
         return pymux.arrangement
 
+    @override
     def set_value(self, pymux, value, target=None):
         value = value.lower()
         if value not in ("on", "off"):
@@ -324,9 +342,11 @@ class KeysOption(Option):
         self.attribute_name = attribute_name
         self.scope = scope
 
+    @override
     def get_all_values(self, pymux):
         return ["emacs", "vi"]
 
+    @override
     def as_written(self, value, holder) -> str:
         """
         The mode is a bool inside and a word outside: tmux answers
@@ -334,6 +354,7 @@ class KeysOption(Option):
         """
         return "vi" if value else "emacs"
 
+    @override
     def set_value(self, pymux, value, target=None):
         if value not in ("emacs", "vi"):
             raise SetOptionError('Expecting "vi" or "emacs".')
@@ -434,9 +455,11 @@ class EnumOption(Option):
         self.attribute_name = attribute_name
         self.scope = scope
 
+    @override
     def get_all_values(self, pymux):
         return [str(one) for one in self.choices]
 
+    @override
     def set_value(self, pymux, value, target=None):
         try:
             chosen = self.choices(value)
@@ -458,6 +481,7 @@ class ExtendedKeysOption(EnumOption):
     def __init__(self, attribute_name, scope=Scope.SESSION):
         super().__init__(ExtendedKeys, attribute_name, scope)
 
+    @override
     def after(self, pymux):
         # The server tells every client what its terminal should send
         # now, whoever holds the value.
@@ -476,6 +500,7 @@ class WindowSizeOption(Option):
 
     attribute_name = "window_size"
 
+    @override
     def get_all_values(self, pymux):
         return [str(one) for one in WindowSize]
 
@@ -487,6 +512,7 @@ class WindowSizeOption(Option):
                 "Expecting one of: %s." % ", ".join('"%s"' % one for one in WindowSize)
             ) from None
 
+    @override
     def set_value(self, pymux, value, target=None):
         chosen = self._read(value)
 
@@ -508,6 +534,7 @@ class WindowSizeOption(Option):
 
         window.window_size = chosen
 
+    @override
     def set_default(self, pymux, value):
         "What every new window starts with. Changes no window that is open."
         pymux.arrangement.window_defaults["window_size"] = self._read(value)
@@ -539,6 +566,7 @@ class ThemeOption(Option):
 
     scope = Scope.CLIENT
 
+    @override
     def get_all_values(self, pymux):
         """
         Every name this option takes, `nearest` first because it is
@@ -556,6 +584,7 @@ class ThemeOption(Option):
             "base16:%s" % (name,) for name in base16_names()
         ]
 
+    @override
     def as_written(self, value, holder) -> str:
         """
         `nearest` alone says nothing about what is on the screen, so it
@@ -566,6 +595,7 @@ class ThemeOption(Option):
         matched = getattr(holder, "matched", None)
         return NEAREST if matched is None else "%s (%s)" % (NEAREST, matched)
 
+    @override
     def set_value(self, pymux, value, target=None):
         if value == NEAREST:
             # Not a theme, and not checked against the sources: it is
@@ -614,9 +644,11 @@ class LogLevelOption(Option):
 
     attribute_name = "log_level"
 
+    @override
     def get_all_values(self, pymux):
         return sorted(log.LEVELS)
 
+    @override
     def set_value(self, pymux, value, target=None):
         if value not in log.LEVELS:
             raise SetOptionError(
@@ -630,9 +662,11 @@ class JustifyOption(Option):
         self.attribute_name = attribute_name
         self.scope = scope
 
+    @override
     def get_all_values(self, pymux):
         return Justify._ALL
 
+    @override
     def set_value(self, pymux, value, target=None):
         if value not in Justify._ALL:
             raise SetOptionError("Invalid justify option.")
@@ -654,6 +688,7 @@ class ChoiceOption(Option):
         self.choices = tuple(choices)
         self.scope = scope
 
+    @override
     def get_all_values(self, pymux):
         try:
             now = getattr(self.held_by(pymux), self._attribute())
@@ -661,6 +696,7 @@ class ChoiceOption(Option):
             return sorted(set(self.choices))
         return sorted(set(self.choices + (now,)))
 
+    @override
     def set_value(self, pymux, value, target=None):
         if value not in self.choices:
             raise SetOptionError(

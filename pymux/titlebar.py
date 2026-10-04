@@ -43,6 +43,7 @@ from prompt_toolkit.formatted_text import StyleAndTextTuples
 from prompt_toolkit.formatted_text.utils import fragment_list_width
 from prompt_toolkit.layout.controls import UIContent, UIControl
 from prompt_toolkit.utils import get_cwidth
+from typing_extensions import override
 
 __all__ = ["PaneTitleBar", "lay_out_bar"]
 
@@ -80,6 +81,7 @@ class PaneTitleBar(UIControl):
         self.get_middle = get_middle
         self.get_right = get_right
 
+    @override
     def create_content(self, width: int, height: int) -> UIContent:
         line = lay_out_bar(
             self.get_number(),

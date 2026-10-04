@@ -13,7 +13,7 @@ import tempfile
 import time
 import traceback
 import weakref
-from typing import Callable, List, NamedTuple, Tuple
+from typing import TYPE_CHECKING, Callable, List, NamedTuple, Tuple
 
 import anyio
 
@@ -43,6 +43,7 @@ from pyte.environment import terminal_name
 from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
 from pyte.keys import KeyboardFlag
 from pyte.osc import Osc
+from typing_extensions import override
 
 from .arrangement import Arrangement, Pane, Window
 from .colors import DefaultColors, theme_color_base
@@ -90,6 +91,10 @@ from .nearest import NEAREST
 from .style import DEFAULT_THEME, THEMES, theme
 from .utils import get_default_shell, keys_are_vi
 
+if TYPE_CHECKING:
+    from .pipes.posix import PosixSocketListener
+    from .pipes.win32_server import Win32PipeListener
+
 __all__ = [
     "Pymux",
 ]
@@ -125,6 +130,7 @@ class PaneCursor(CursorShapeConfig):
     def __init__(self, pymux: "Pymux") -> None:
         self.pymux = pymux
 
+    @override
     def get_cursor_shape(self, application) -> CursorShape:
         session = self.pymux.session_of(application)
         pane = session.overlay_pane
@@ -324,7 +330,7 @@ class ClientState:
         self.key_tables: List[str] = []
 
         #: Error/info message.
-        self.message = None
+        self.message: str | None = None
 
         #: The questions waiting for a yes or a no, oldest first, each
         #: one a (text, command) pair.
@@ -339,8 +345,8 @@ class ClientState:
         self.confirmations: List[Tuple[str, str]] = []
 
         # When a "command-prompt" command is running.
-        self.prompt_text = None
-        self.prompt_command = None
+        self.prompt_text: str | None = None
+        self.prompt_command: str | None = None
 
         #: What completes the prompt, when anything does.
         #:
@@ -380,7 +386,7 @@ class ClientState:
         #: this client to the window it points at, so a person reads
         #: the real thing. Leaving it has to undo that.
         #: Lillecarl/pymux#327.
-        self.chooser_return_to = None
+        self.chooser_return_to: tuple[Session, Window] | None = None
         self.choose_window_filter = Buffer(
             name=CHOOSE,
             multiline=False,
@@ -937,10 +943,10 @@ class Pymux:
         self.open_url_forward_idle = 600
 
         self.open_url_shim = False
-        self._open_url_shim_dir = None
+        self._open_url_shim_dir: str | None = None
 
         self.notify_shim = False
-        self._notify_shim_dir = None
+        self._notify_shim_dir: str | None = None
 
         # The paste buffer of the session. Copy mode writes it, a pane
         # that writes the clipboard of the user writes it too, and
@@ -1033,7 +1039,7 @@ class Pymux:
         #: Kitty keyboard protocol flags last sent to the clients. (The
         #: flags of the focused pane; clients enable the protocol on
         #: their outer terminals accordingly.)
-        self._kitty_flags_sent = None
+        self._kitty_flags_sent: int | None = None
 
         #: Make up the halves of a key event that the keyboard of a
         #: client cannot send: the release of a key, and the shifted
@@ -1057,7 +1063,7 @@ class Pymux:
         # What the panes were last told about the keyboards of the
         # clients: the flags and the switch above. (None: nothing was
         # told yet.)
-        self._keyboard_state_sent = None
+        self._keyboard_state_sent: tuple[int, bool, ExtendedKeys] | None = None
 
         # The cell size the panes were last told. (None: nothing yet.)
         self._cell_size_sent: Tuple[int, int] | None = None
@@ -1124,11 +1130,11 @@ class Pymux:
         self.panes_by_id: weakref.WeakValueDictionary[PaneId, Pane] = weakref.WeakValueDictionary()
 
         # Socket information.
-        self.socket = None
-        self.socket_name = None
+        self.socket: None = None
+        self.socket_name: str | None = None
         #: The bound socket that waits for clients, once
         #: `listen_on_socket` made one. `running()` serves it.
-        self.listener = None
+        self.listener: "PosixSocketListener | Win32PipeListener | None" = None
 
         # Key bindings manager.
         self.key_bindings_manager = PymuxKeyBindings(self)

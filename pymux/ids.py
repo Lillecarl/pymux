@@ -18,6 +18,8 @@ these, and everything else only carries them. Lillecarl/pymux#508.
 
 from typing import NewType
 
+from typing_extensions import override
+
 #: What `Pane.pane_id` is: server-unique, never reused, spelled `%id`.
 PaneId = NewType("PaneId", int)
 
@@ -31,9 +33,11 @@ SessionId = NewType("SessionId", int)
 class PaneIndex(int):
     """A pane's slot in its window. Recycled, 0-based, display only."""
 
+    @override
     def __add__(self, other: int) -> "PaneIndex":
         return PaneIndex(super().__add__(other))
 
+    @override
     def __sub__(self, other: int) -> "PaneIndex":
         return PaneIndex(super().__sub__(other))
 
@@ -41,8 +45,10 @@ class PaneIndex(int):
 class WindowIndex(int):
     """A window's slot in its session. Recycled, display only."""
 
+    @override
     def __add__(self, other: int) -> "WindowIndex":
         return WindowIndex(super().__add__(other))
 
+    @override
     def __sub__(self, other: int) -> "WindowIndex":
         return WindowIndex(super().__sub__(other))

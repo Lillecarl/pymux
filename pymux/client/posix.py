@@ -7,6 +7,7 @@ from select import select
 from libpymux.sockets import servers_newest_first
 from prompt_toolkit.input.vt100 import raw_mode
 from libpymux.protocol import Field, Packet
+from typing_extensions import override
 
 from .terminal import TerminalClient
 
@@ -33,6 +34,7 @@ class PosixClient(TerminalClient):
         self.socket.connect(socket_name)
         self.socket.setblocking(True)
 
+    @override
     def run_command(self, command, pane_id=None, timeout=None) -> int:
         """
         Ask the server to run this command. Print the output that the server
@@ -86,6 +88,7 @@ class PosixClient(TerminalClient):
 
         return exit_code
 
+    @override
     def attach(self, detach_other_clients: bool = False, color_depth=None):
         """
         Attach client user interface.
@@ -161,6 +164,7 @@ class PosixClient(TerminalClient):
                 except Exception:
                     pass
 
+    @override
     def _send_packet(self, data):
         """
         Send to server, and say nothing when the server has gone.

@@ -11,7 +11,7 @@ from typing import Dict
 
 from prompt_toolkit.data_structures import Size
 
-from .arrangement import Arrangement
+from .arrangement import Arrangement, Pane
 from .ids import SessionId
 
 __all__ = ["DEFAULT_SIZE", "Session"]
@@ -51,7 +51,7 @@ class Session:
         #: to the session, so every client of this session sees the
         #: same one, and it takes the keyboard while it is open.
         #: Lillecarl/pymux#324.
-        self.overlay_pane = None
+        self.overlay_pane: Pane | None = None
         self.overlay_title = ""
         self.overlay_width: str | None = None
         self.overlay_height: str | None = None

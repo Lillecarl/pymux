@@ -49,6 +49,10 @@ dependencies = [
     # format path; `-F` stays tmux format, because libtmux reads it.
     # Lillecarl/pymux#333.
     "jinja2>=3.1.0",
+    # `@override` on every override: the type check asks for it, and
+    # `typing` only carries it from 3.12 while this package promises
+    # 3.11. Lillecarl/pymux#510.
+    "typing-extensions",
 ]
 
 [project.optional-dependencies]
@@ -135,6 +139,20 @@ artifacts = ["pymux/web/static/*"]
 # the check cannot read is a setting that holds by hand and not where it
 # counts.
 anyio_mode = "auto"
+
+[tool.pyrefly]
+# Strict with boundaries: the default preset, plus the three strict
+# codes that find bugs or are mechanical. Annotation completeness
+# (`implicit-any-parameter` and friends) is Lillecarl/pymux#511 and
+# stays off until somebody annotates 750 sites.
+#
+# Third-party code is a boundary by construction: the check passes
+# only `pymux/`, so prompt-toolkit's bodies are never checked no
+# matter the preset. Nothing here reaches upstream.
+[tool.pyrefly.errors]
+missing-override-decorator = "error"
+missing-attribute = "error"
+implicit-any-attribute = "error"
 
 [tool.black]
 target-version = ['py311']

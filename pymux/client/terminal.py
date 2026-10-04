@@ -107,9 +107,9 @@ class TerminalClient(Client):
         # ("CSI ? u" query + device attributes). The currently enabled
         # flags follow the focused pane.
         self._kitty_supported = False
-        self._kitty_flags = None
+        self._kitty_flags: int | None = None
 
-        self.__stdin_reader = None
+        self.__stdin_reader: PosixStdinReader | None = None
 
         #: What this client leaves with when it is attached. The server
         #: names it in an `exit` packet, which it sends before it closes

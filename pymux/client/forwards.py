@@ -22,6 +22,8 @@ import time
 import weakref
 from typing import TYPE_CHECKING, NamedTuple
 
+from typing_extensions import override
+
 from pymux.forwarding import ANY_PORT, LOOPBACK_NAMES, Direction, Forward
 
 if TYPE_CHECKING:
@@ -528,10 +530,12 @@ def _counting_forwarder() -> type:
             self._table = table
             self._where = where
 
+        @override
         def connection_made(self, transport) -> None:
             self._table._began(self._where, self)
             super().connection_made(transport)
 
+        @override
         def connection_lost(self, exc) -> None:
             # **asyncssh reports this twice when the far side refuses
             # the channel**: `SSHLocalForwarder._forward` calls it by
@@ -542,6 +546,7 @@ def _counting_forwarder() -> type:
             self._table._ended(self._where, self)
             super().connection_lost(exc)
 
+        @override
         def data_received(self, data, datatype=None) -> None:
             # **One direction only: bytes from the browser.** The peer
             # that carries the other way is built by asyncssh inside

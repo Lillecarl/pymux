@@ -53,6 +53,7 @@ from prompt_toolkit.widgets import Dialog, SearchToolbar, TextArea
 
 
 import pymux.arrangement as arrangement
+from typing_extensions import override
 
 from .enums import Woke
 from .filters import WaitsForConfirmation
@@ -260,15 +261,19 @@ class Background(Container):
     def __init__(self, painted=lambda: False) -> None:
         self._painted = painted
 
+    @override
     def reset(self) -> None:
         pass
 
+    @override
     def preferred_width(self, max_available_width: int) -> D:
         return D()
 
+    @override
     def preferred_height(self, width: int, max_available_height: int) -> D:
         return D()
 
+    @override
     def write_to_screen(
         self,
         screen: Screen,
@@ -302,6 +307,7 @@ class Background(Container):
         for y in range(ypos, ypos + write_position.height):
             data_buffer[y].update(rows[y % 3])
 
+    @override
     def get_children(self) -> List[Container]:
         return []
 
@@ -403,9 +409,11 @@ class BigClock(Container):
         self.pymux = pymux
         self.on_click = on_click
 
+    @override
     def reset(self):
         pass
 
+    @override
     def write_to_screen(
         self,
         screen: Screen,
@@ -457,12 +465,15 @@ class BigClock(Container):
         if mouse_event.event_type == MouseEventType.MOUSE_UP:
             self.on_click()
 
+    @override
     def preferred_width(self, max_available_width: int) -> D:
         return D.exact(BigClock.WIDTH)
 
+    @override
     def preferred_height(self, width: int, max_available_height: int) -> D:
         return D.exact(BigClock.HEIGHT)
 
+    @override
     def get_children(self) -> List[Container]:
         return []
 
@@ -479,6 +490,7 @@ class PaneNumber(Container):  # XXX: make FormattedTextControl
         self.pymux = pymux
         self.arrangement_pane = arrangement_pane
 
+    @override
     def reset(self) -> None:
         pass
 
@@ -492,13 +504,16 @@ class PaneNumber(Container):  # XXX: make FormattedTextControl
         except ValueError:
             return 0
 
+    @override
     def preferred_width(self, max_available_width: int) -> D:
         # Enough to display all the digits.
         return D.exact(6 * len("%s" % self._get_index()) - 1)
 
+    @override
     def preferred_height(self, width: int, max_available_height: int) -> D:
         return D.exact(self.HEIGHT)
 
+    @override
     def write_to_screen(
         self,
         screen: Screen,
@@ -523,6 +538,7 @@ class PaneNumber(Container):  # XXX: make FormattedTextControl
 
         screen.draw_with_z_index(z_index=Z_INDEX.PANE_NUMBER, draw_func=draw_func)
 
+    @override
     def get_children(self) -> List[Container]:
         return []
 
@@ -2582,18 +2598,22 @@ class DynamicBody(Container):
             ]
         )
 
+    @override
     def reset(self) -> None:
         for invalidation_hash, body in self._bodies_for_app.values():
             body.reset()
 
+    @override
     def preferred_width(self, max_available_width: int) -> D:
         body = self._get_body()
         return body.preferred_width(max_available_width)
 
+    @override
     def preferred_height(self, width: int, max_available_height: int) -> D:
         body = self._get_body()
         return body.preferred_height(width, max_available_height)
 
+    @override
     def write_to_screen(
         self,
         screen: Screen,
@@ -2608,6 +2628,7 @@ class DynamicBody(Container):
             screen, mouse_handlers, write_position, parent_style, erase_bg, z_index
         )
 
+    @override
     def get_children(self) -> List[Container]:
         # (Required for prompt_toolkit.layout.utils.find_window_for_buffer_name.)
         body = self._get_body()
@@ -3308,15 +3329,19 @@ class _ContainerProxy(Container):
     def __init__(self, content: Container) -> None:
         self.content = content
 
+    @override
     def reset(self) -> None:
         self.content.reset()
 
+    @override
     def preferred_width(self, max_available_width: int) -> D:
         return self.content.preferred_width(max_available_width)
 
+    @override
     def preferred_height(self, width: int, max_available_height: int) -> D:
         return self.content.preferred_height(width, max_available_height)
 
+    @override
     def write_to_screen(
         self,
         screen: Screen,
@@ -3330,6 +3355,7 @@ class _ContainerProxy(Container):
             screen, mouse_handlers, write_position, parent_style, erase_bg, z_index
         )
 
+    @override
     def get_children(self) -> List[Container]:
         return [self.content]
 
@@ -3398,6 +3424,7 @@ class _PaneMark(_ContainerProxy):
         self.pane = pane
         self.has_bar_below = has_bar_below
 
+    @override
     def write_to_screen(
         self,
         screen: Screen,
@@ -3459,6 +3486,7 @@ class TracePaneWritePosition(_ContainerProxy):  # XXX: replace with SizedBox
         self.pymux = pymux
         self.arrangement_pane = arrangement_pane
 
+    @override
     def write_to_screen(
         self,
         screen: Screen,

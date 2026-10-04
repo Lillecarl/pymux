@@ -3,6 +3,7 @@ from ctypes import byref
 from ctypes.wintypes import DWORD
 
 import anyio
+from typing_extensions import override
 
 from ptyhost.backends.win32_pipes import OVERLAPPED
 
@@ -97,6 +98,7 @@ class Win32PipeConnection(PipeConnection):
         #: pipe waits for it and then takes the pipe back.
         self.done = anyio.Event()
 
+    @override
     async def read(self):
         """
         (coroutine)
@@ -112,6 +114,7 @@ class Win32PipeConnection(PipeConnection):
             self.done.set()
             raise
 
+    @override
     async def write(self, message):
         """
         (coroutine)
@@ -126,6 +129,7 @@ class Win32PipeConnection(PipeConnection):
             self.done.set()
             raise
 
+    @override
     def close(self):
         pass
 

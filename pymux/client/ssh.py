@@ -44,13 +44,14 @@ import json
 import signal
 import sys
 import time
-from typing import NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 from urllib.parse import urlparse
 
 import anyio
 
 from prompt_toolkit.input.vt100 import raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output
+from typing_extensions import override
 
 from pymux.forwarding import (
     MAY_NARROW,
@@ -75,6 +76,9 @@ from .reconnect import (
     why,
 )
 from .terminal import TerminalClient
+
+if TYPE_CHECKING:
+    from asyncssh import SSHWriter
 
 __all__ = [
     "SshClient",
@@ -273,7 +277,7 @@ class SshClient(TerminalClient):
         #: The socket that was really opened, once it has been. It is
         #: the address's path, or the one the listing found.
         self.path = self.target.path
-        self._writer = None
+        self._writer: SSHWriter | None = None
         #: What changed about the forwards when the link came back, for
         #: `_attached` to say once it has a client to say it to.
         #: Lillecarl/pymux#442.
@@ -291,6 +295,7 @@ class SshClient(TerminalClient):
     # ------------------------------------------------------------------
     # The transport.
 
+    @override
     def _send_packet(self, data) -> None:
         "Send to the server."
         if self._writer is None:
@@ -406,6 +411,7 @@ class SshClient(TerminalClient):
     # ------------------------------------------------------------------
     # What a person runs.
 
+    @override
     def run_command(self, command, pane_id=None) -> int:
         return anyio.run(self._run_command, command, pane_id)
 
@@ -449,6 +455,7 @@ class SshClient(TerminalClient):
         finally:
             connection.close()
 
+    @override
     def attach(self, detach_other_clients: bool = False, color_depth=None) -> None:
         anyio.run(self._attach, detach_other_clients, color_depth)
 

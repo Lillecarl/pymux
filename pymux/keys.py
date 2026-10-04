@@ -51,6 +51,7 @@ from pyte.keys import (
     Modifier,
     parse_key_data,
 )
+from typing_extensions import override
 
 logger = logging.getLogger(__name__)
 
@@ -893,6 +894,7 @@ class KittyVt100Parser(Vt100Parser):
             logger.exception("Asking what the terminal reports failed.")
             return False
 
+    @override
     def _get_match(self, prefix: str) -> None | Keys | tuple[Keys, ...]:
         # A modifier above ctrl is read here first, but only from a
         # terminal that counts them the way the protocol does. xterm
@@ -917,6 +919,7 @@ class KittyVt100Parser(Vt100Parser):
             return result
         return cast("None | Keys | tuple[Keys, ...]", parse_kitty_key(prefix))
 
+    @override
     def _call_handler(self, key: str | Keys | tuple, insert_text: str) -> None:
         if isinstance(key, tuple):
             # A key that arrives as several, such as alt and a letter.

@@ -16,6 +16,7 @@ process, and nothing else.
 from typing import Tuple
 
 import anyio
+from typing_extensions import override
 
 from .base import BrokenPipeError, PipeConnection
 
@@ -51,6 +52,7 @@ class MemoryConnection(PipeConnection):
         self._peer = peer
         peer._peer = self
 
+    @override
     async def read(self) -> bytes:
         """
         Take the next packet. Raise `BrokenPipeError` at the end.
@@ -83,12 +85,14 @@ class MemoryConnection(PipeConnection):
         except (anyio.BrokenResourceError, anyio.ClosedResourceError):
             raise BrokenPipeError
 
+    @override
     async def write(self, message: str) -> None:
         """
         Give the next packet to the peer.
         """
         self.write_nowait(message)
 
+    @override
     def close(self) -> None:
         """
         Close this end. Tell the peer, so that a read of it ends.

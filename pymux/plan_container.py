@@ -42,6 +42,7 @@ from prompt_toolkit.layout.containers import Container, to_container
 from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Char, Screen, WritePosition
+from typing_extensions import override
 
 from .plane import Pane, Plan, Rect, View
 
@@ -116,10 +117,12 @@ class PlanContainer(Container):
     def __repr__(self) -> str:
         return "PlanContainer(%r)" % (self.layout,)
 
+    @override
     def reset(self) -> None:
         for container in self.containers.values():
             container.reset()
 
+    @override
     def preferred_width(self, max_available_width: int) -> D:
         """
         Whatever it is given.
@@ -130,10 +133,12 @@ class PlanContainer(Container):
         """
         return D(min=1)
 
+    @override
     def preferred_height(self, width: int, max_available_height: int) -> D:
         "Whatever it is given, for the same reason."
         return D(min=1)
 
+    @override
     def write_to_screen(
         self,
         screen: Screen,
@@ -270,12 +275,15 @@ class PlanContainer(Container):
                 return pane
         return None
 
+    @override
     def is_modal(self) -> bool:
         return False
 
+    @override
     def get_key_bindings(self) -> KeyBindingsBase | None:
         return None
 
+    @override
     def get_children(self) -> list[Container]:
         return list(self.containers.values())
 

@@ -39,6 +39,7 @@ import signal
 import sys
 
 import anyio
+from typing_extensions import override
 
 from prompt_toolkit.input.vt100 import raw_mode
 
@@ -70,6 +71,7 @@ class MemoryClient(TerminalClient):
         super().__init__()
         self.connection = connection
 
+    @override
     def _send_packet(self, data) -> None:
         "Send to the server. (The queue has no limit, so this waits for nothing.)"
         try:
@@ -77,6 +79,7 @@ class MemoryClient(TerminalClient):
         except BrokenPipeError:
             pass  # The server is gone. The read loop ends on its own.
 
+    @override
     async def attach(
         self, detach_other_clients: bool = False, color_depth=None
     ) -> None:

@@ -14,6 +14,8 @@ import shlex
 from importlib import import_module
 from typing import TYPE_CHECKING, List, NoReturn
 
+from typing_extensions import override
+
 from pymux.commands.aliases import ALIASES
 from pymux.enums import Woke
 from pymux.log import logger
@@ -93,6 +95,7 @@ def not_past_this_client(pymux: "Pymux", reaches_another: bool) -> None:
 class CommandParser(argparse.ArgumentParser):
     "An argparse parser that raises instead of exiting."
 
+    @override
     def error(self, message: str) -> NoReturn:
         raise BadLine(message)
 

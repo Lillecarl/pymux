@@ -7,6 +7,7 @@ from ctypes import byref
 from ctypes.wintypes import DWORD
 
 import anyio
+from typing_extensions import override
 
 from prompt_toolkit.input.win32 import Win32Input
 from prompt_toolkit.output import ColorDepth
@@ -49,6 +50,7 @@ class WindowsClient(Client):
         #: which is not a coroutine. Lillecarl/pymux#87.
         self._tasks: "anyio.abc.TaskGroup" | None = None
 
+    @override
     def attach(
         self, detach_other_clients: bool = False, color_depth=ColorDepth.DEPTH_8_BIT
     ):

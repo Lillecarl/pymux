@@ -22,8 +22,9 @@ from functools import partial
 import argcomplete
 from argcomplete.completers import SuppressCompleter
 from argcomplete.lexers import split_line
-from prompt_toolkit.completion import Completer, Completion
+from prompt_toolkit.completion import CompleteEvent, Completer, Completion
 from prompt_toolkit.document import Document
+from typing_extensions import override
 
 from pymux.arrangement import LayoutTypes
 from pymux.commands import CommandException, parser_tree
@@ -77,7 +78,7 @@ def _keys(pymux, prefix, **_):
     command that sends the prefix on. Neither takes it as part of a key.
     """
     completer = KeyCompleter(offer_prefix=False)
-    return [c.text for c in completer.get_completions(Document(prefix), None)]
+    return [c.text for c in completer.get_completions(Document(prefix), CompleteEvent())]
 
 
 def _session_option_names(pymux, **_):
@@ -194,6 +195,7 @@ class CommandCompleter(Completer):
     The completer of the command bar.
     """
 
+    @override
     def get_completions(self, document, complete_event):
         text = document.text_before_cursor
         prequote, prefix, _suffix, words, wordbreak = split_line(text, len(text))
@@ -269,6 +271,7 @@ class FuzzyFinder(argcomplete.CompletionFinder):
             return self._matches(word, action.help)
         return False
 
+    @override
     def _get_subparser_completions(self, parser, cword_prefix):
         aliases_by_parser: dict = {}
         for key in parser.choices.keys():
@@ -286,6 +289,7 @@ class FuzzyFinder(argcomplete.CompletionFinder):
             if self._matches(cword_prefix, subcmd)
         ]
 
+    @override
     def _get_option_completions(self, parser, cword_prefix):
         for action in parser._actions:
             if action.option_strings:

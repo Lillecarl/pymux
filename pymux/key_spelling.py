@@ -40,6 +40,7 @@ from typing import Dict, Sequence, Tuple
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.keys import Keys
 from pyte.keys import FIRST_FUNCTIONAL_KEY, KeyEvent, Modifier
+from typing_extensions import override
 
 from .key_mappings import (
     PYMUX_TO_PROMPT_TOOLKIT_KEYS,
@@ -568,6 +569,7 @@ class KeyCompleter(Completer):
     def __init__(self, offer_prefix: bool = True) -> None:
         self.offer_prefix = offer_prefix
 
+    @override
     def get_completions(self, document, complete_event):
         step = document.text_before_cursor.rsplit(AFTER, 1)[-1]
         written, _, word = step.rpartition(TOGETHER)
