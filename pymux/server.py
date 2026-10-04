@@ -876,6 +876,7 @@ class ServerConnection:
             self._create_app(start=False, session=session)
             client_state = self.client_state
             if client_state is not None and pane is not None and session is not None:
+                client_state.caller_pane_id = pane.pane_id
                 with set_app(client_state.app):
                     session.arrangement.set_active_window_from_pane_id(pane.pane_id)
 

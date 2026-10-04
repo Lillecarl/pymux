@@ -409,6 +409,17 @@ class ClientState:
         #: anything.
         self.temporary = False
 
+        #: The pane a socket command arrived from, by id, or None.
+        #: `$PYMUX` names it ("socket,pane-id"), and the run-command
+        #: packet carries it. An untargeted command defaults to this
+        #: pane instead of the active one, so a program in a pane
+        #: reaches its own pane without naming it -- tmux answers
+        #: `TMUX_PANE` the same way. Only temporary clients carry
+        #: one: a real client looks at its focus, and a pane that died
+        #: since resolves to nothing, which falls back as if no pane
+        #: was named at all.
+        self.caller_pane_id: int | None = None
+
         # What the last frame of this client drew of the strings that
         # time moves. The auto refresh compares against it, and asks
         # for a frame only when they differ. Lillecarl/pymux#154.

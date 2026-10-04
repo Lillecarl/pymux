@@ -111,6 +111,29 @@ def window_in(session: "Session", target: str) -> Optional["Window"]:
     return None
 
 
+def _pane_of_asking_client(pymux: "Pymux") -> Optional["Pane"]:
+    """
+    The pane a socket command arrived from, or None.
+
+    A command typed in a pane names it in the run-command packet, and
+    the temporary client it runs under keeps the id. A program in a
+    pane then reaches its own pane without naming it. A real client
+    looks at its focus instead, a command with no client behind it
+    has no caller, and a pane that died since resolves to nothing --
+    each of those falls back to the active pane below.
+    """
+    try:
+        asking = pymux.get_client_state()
+    except ValueError:
+        return None
+    if not asking.temporary:
+        return None
+    pane_id = asking.caller_pane_id
+    if pane_id is None:
+        return None
+    return pymux.panes_by_id.get(pane_id)
+
+
 def find_pane(pymux: "Pymux", target: str | None) -> Optional["Pane"]:
     """
     Find a pane for a tmux-style target.
@@ -120,6 +143,9 @@ def find_pane(pymux: "Pymux", target: str | None) -> Optional["Pane"]:
     `session:window.pane`.
     """
     if target is None or target == "":
+        caller = _pane_of_asking_client(pymux)
+        if caller is not None:
+            return caller
         return pymux.arrangement.get_active_pane()
 
     # A pane ID target: `%<id>`. The server knows every pane by id, so
