@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -5,11 +7,11 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandParser, add_command
 from pymux import introspect
+from pymux.commands import CommandParser, add_command
 
 
-def dump_stacks(pymux: "Pymux", args: argparse.Namespace) -> None:
+def dump_stacks(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Write down what this server is doing now, and say where.
 
@@ -22,5 +24,5 @@ def dump_stacks(pymux: "Pymux", args: argparse.Namespace) -> None:
     pymux.show_message("Wrote a dump to %s" % (path,))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     add_command(subparsers, dump_stacks)

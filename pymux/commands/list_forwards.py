@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING, Any
 
@@ -13,7 +15,7 @@ from pymux.commands.common import show_listing
 NOTHING = "No client is forwarding a port."
 
 
-def list_forwards(pymux: "Pymux", args: argparse.Namespace) -> None:
+def list_forwards(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     List the ports the clients of this server forward.
 
@@ -60,5 +62,5 @@ def _listen(one: dict[str, Any]) -> str:
     return "%s %s:%s" % (flag, one.get("listen_host", ""), one.get("port", ""))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     add_command(subparsers, list_forwards, aliases=("lsf",))

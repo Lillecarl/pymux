@@ -1,20 +1,19 @@
+from __future__ import annotations
+
 import argparse
-from typing import List
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pymux.main import Pymux
     from pymux.arrangement import Window
+    from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser
-from pymux.commands import add_command
-from pymux.commands.common import add_format_arguments, chosen_format, find_window, the_window
-from pymux.commands.common import show_listing
+from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands.common import add_format_arguments, chosen_format, find_window, show_listing, the_window
 from pymux.format import format_pymux_string
 
 
-def list_panes(pymux: "Pymux", args: argparse.Namespace) -> None:
+def list_panes(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Display a list of all the panes.
 
@@ -28,7 +27,7 @@ def list_panes(pymux: "Pymux", args: argparse.Namespace) -> None:
             raise CommandException(
                 "can't find window: %s" % (args.target_pane,)
             )
-        windows: List["Window"] = [window]
+        windows: list[Window] = [window]
     elif args.a:
         # Every window of every session. tmux reads `-a` as the whole
         # server too. Lillecarl/pymux#323.
@@ -83,7 +82,7 @@ def list_panes(pymux: "Pymux", args: argparse.Namespace) -> None:
         show_listing(pymux, "list-panes", "\n".join(sorted(result)))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, list_panes)
     parser.add_argument("-a", dest="a", action="store_true", help="The panes of every window of every session.")
     parser.add_argument("-s", dest="s", action="store_true", help="The panes of every window of this session.")

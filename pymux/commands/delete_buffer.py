@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -5,11 +7,10 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser
-from pymux.commands import add_command
+from pymux.commands import CommandException, CommandParser, add_command
 
 
-def delete_buffer(pymux: "Pymux", args: argparse.Namespace) -> None:
+def delete_buffer(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Remove a named buffer. Lillecarl/pymux#303.
     """
@@ -19,6 +20,6 @@ def delete_buffer(pymux: "Pymux", args: argparse.Namespace) -> None:
     del pymux.named_buffers[name]
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, delete_buffer)
     parser.add_argument("-b", dest="buffer_name", metavar="<buffer-name>", required=True, help="The named buffer to remove.")

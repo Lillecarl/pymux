@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -8,7 +10,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandException, CommandParser, add_command
 
 
-def copy_mode(pymux: "Pymux", args: argparse.Namespace) -> None:
+def copy_mode(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Enter copy mode.
     """
@@ -30,7 +32,7 @@ def copy_mode(pymux: "Pymux", args: argparse.Namespace) -> None:
         pass
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     # **Not `read_only`, although tmux marks it.** Copy mode belongs to
     # the pane, so a client that entered one stops the live screen for
     # everybody else watching it. And the keys that drive it are

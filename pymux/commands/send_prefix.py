@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -10,7 +12,7 @@ from pymux.commands.common import send_key
 from pymux.key_spelling import event_however_it_is_written
 
 
-def send_prefix(pymux: "Pymux", args: argparse.Namespace) -> None:
+def send_prefix(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Send the prefix on to the pane, so a program can read it.
     """
@@ -27,5 +29,5 @@ def send_prefix(pymux: "Pymux", args: argparse.Namespace) -> None:
         send_key(pane, event_however_it_is_written(key), key)
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     add_command(subparsers, send_prefix)

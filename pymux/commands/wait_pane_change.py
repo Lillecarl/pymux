@@ -10,6 +10,7 @@ trip per pane per tick while nothing happens.
 So the caller hands over the revision it last saw and this holds until
 the pane leaves it. Lillecarl/pymux#387.
 """
+from __future__ import annotations
 
 import argparse
 from typing import TYPE_CHECKING
@@ -30,7 +31,7 @@ from pymux.commands.common import refuse_without_a_waiter, the_pane
 DEFAULT_TIMEOUT = 60.0
 
 
-def wait_pane_change(pymux: "Pymux", args: argparse.Namespace):
+def wait_pane_change(pymux: Pymux, args: argparse.Namespace):
     """
     Hold until this pane shows something other than `--since`.
 
@@ -95,7 +96,7 @@ def wait_pane_change(pymux: "Pymux", args: argparse.Namespace):
     return until_it_changes()
 
 
-def _the_pane(pymux: "Pymux", args: argparse.Namespace):
+def _the_pane(pymux: Pymux, args: argparse.Namespace):
     if not args.target_pane:
         pane = pymux.arrangement.get_active_pane()
         if pane is None:
@@ -125,7 +126,7 @@ def _seconds(given: str | None) -> float:
     return seconds
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, wait_pane_change)
     parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to watch.")
     parser.add_argument("--since", dest="since", metavar="<revision>", help="The revision last seen. Answers at once when the pane has left it.")

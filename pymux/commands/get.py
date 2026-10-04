@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -5,13 +7,11 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser
-from pymux.commands import add_command
-from pymux.commands.common import answer
-from pymux.commands.common import the_pane
+from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands.common import answer, the_pane
 
 
-def get(pymux: "Pymux", args: argparse.Namespace) -> None:
+def get(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Read an id, by the thing it names.
 
@@ -29,7 +29,7 @@ def get(pymux: "Pymux", args: argparse.Namespace) -> None:
     answer(pymux, str(pane.pane_id))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, get)
     parser.add_argument(
         "-t", dest="target_pane",

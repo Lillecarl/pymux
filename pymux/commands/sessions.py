@@ -1,4 +1,5 @@
 """Helpers the session commands share."""
+from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
@@ -10,7 +11,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandException, this_client
 
 
-def find_session(pymux: "Pymux", target: str | None) -> "Session":
+def find_session(pymux: Pymux, target: str | None) -> Session:
     """
     The session a `-t` names.
 
@@ -27,11 +28,11 @@ def find_session(pymux: "Pymux", target: str | None) -> "Session":
 
 
 def move_this_client(
-    pymux: "Pymux",
+    pymux: Pymux,
     target: str | None,
     detach_others: bool = False,
     hang_up_others: bool = False,
-) -> "ClientState":
+) -> ClientState:
     """
     Put the calling client on the session a `-t` names, and answer
     with it.

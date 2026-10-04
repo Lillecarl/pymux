@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -8,7 +10,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandParser, add_command
 
 
-def choose_buffer(pymux: "Pymux", args: argparse.Namespace) -> None:
+def choose_buffer(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Show the named buffers, to choose from.
 
@@ -25,5 +27,5 @@ def choose_buffer(pymux: "Pymux", args: argparse.Namespace) -> None:
     pymux.get_client_state().layout_manager.display_buffer_chooser()
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     add_command(subparsers, choose_buffer)

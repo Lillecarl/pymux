@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -9,7 +11,7 @@ from pymux.commands import CommandParser, add_command
 from pymux.commands.common import the_window
 
 
-def swap_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
+def swap_pane(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Swap the active pane with the one above or below.
     """
@@ -23,7 +25,7 @@ def swap_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
     )
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, swap_pane)
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("-D", dest="D", action="store_true", help="Swap with the pane above.")

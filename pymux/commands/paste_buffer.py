@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -8,7 +10,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandException, CommandParser, add_command
 
 
-def paste_buffer(pymux: "Pymux", args: argparse.Namespace) -> None:
+def paste_buffer(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Paste the buffer of the session into the pane.
 
@@ -22,5 +24,5 @@ def paste_buffer(pymux: "Pymux", args: argparse.Namespace) -> None:
     pane.process.write_input(pane.screen.wrap_paste(pymux.clipboard.get_data().text))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     add_command(subparsers, paste_buffer)

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -24,7 +26,7 @@ DEFAULT_FORMAT = (
 )
 
 
-def list_clients(pymux: "Pymux", args: argparse.Namespace) -> None:
+def list_clients(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     List the clients of this server, one to a line.
 
@@ -66,7 +68,7 @@ def list_clients(pymux: "Pymux", args: argparse.Namespace) -> None:
         show_listing(pymux, "list-clients", "\n".join(lines))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, list_clients, aliases=("lsc",), read_only=True)
     parser.add_argument("-t", dest="target_session", metavar="<target-session>", help="Only the clients of this session.")
     add_format_arguments(parser, "Print this format for each client.")

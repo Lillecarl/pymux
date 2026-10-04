@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -10,7 +12,7 @@ from pymux.commands.common import the_window
 from pymux.commands.respawn_pane import replace_pane_program
 
 
-def respawn_window(pymux: "Pymux", args: argparse.Namespace) -> None:
+def respawn_window(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Kill the program a window's active pane runs, and start a new one in its place.
 
@@ -29,7 +31,7 @@ def respawn_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     replace_pane_program(pymux, pane, args)
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, respawn_window)
     parser.add_argument("-k", dest="k", action="store_true", help="Kill a program that still runs.")
     parser.add_argument("-t", dest="target_window", metavar="<target-window>", help="The window whose active pane respawns.")

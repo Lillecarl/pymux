@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -6,11 +8,11 @@ if TYPE_CHECKING:
 
 
 from prompt_toolkit.application.current import get_app
-from pymux.commands import CommandException, CommandParser
-from pymux.commands import add_command
+
+from pymux.commands import CommandException, CommandParser, add_command
 
 
-def show_buffer(pymux: "Pymux", args: argparse.Namespace) -> None:
+def show_buffer(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Display the content of a buffer.
 
@@ -27,6 +29,6 @@ def show_buffer(pymux: "Pymux", args: argparse.Namespace) -> None:
     pymux.get_client_state().layout_manager.display_popup("show-buffer", text)
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, show_buffer)
     parser.add_argument("-b", dest="buffer_name", metavar="<buffer-name>", help="The named buffer to show.")

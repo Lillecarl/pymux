@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -10,7 +12,7 @@ from pymux.commands.common import answer
 from pymux.format import format_pymux_string
 
 
-def display_message(pymux: "Pymux", args: argparse.Namespace) -> None:
+def display_message(pymux: Pymux, args: argparse.Namespace) -> None:
     '''
     Show a message on the status line.
 
@@ -44,7 +46,7 @@ def display_message(pymux: "Pymux", args: argparse.Namespace) -> None:
     )
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, display_message)
     parser.add_argument("-p", dest="p", action="store_true", help="Print the message instead of showing it.")
     parser.add_argument("message", metavar="<message>")

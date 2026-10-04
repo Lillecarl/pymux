@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -6,10 +8,11 @@ if TYPE_CHECKING:
 
 
 from prompt_toolkit.history import InMemoryHistory
+
 from pymux.commands import CommandParser, add_command
 
 
-def clear_prompt_history(pymux: "Pymux", args: argparse.Namespace) -> None:
+def clear_prompt_history(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Forget everything the command line and the prompts took.
 
@@ -23,5 +26,5 @@ def clear_prompt_history(pymux: "Pymux", args: argparse.Namespace) -> None:
         client_state.prompt_buffer.history = pymux.prompt_history
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     add_command(subparsers, clear_prompt_history)

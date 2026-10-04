@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -9,10 +11,10 @@ from pymux.commands import CommandParser, add_command
 from pymux.commands.common import the_window
 
 
-def next_layout(pymux: "Pymux", args: argparse.Namespace) -> None:
+def next_layout(pymux: Pymux, args: argparse.Namespace) -> None:
     "Select next layout."
     the_window(pymux, None).select_next_layout()
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     add_command(subparsers, next_layout)

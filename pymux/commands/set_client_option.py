@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -11,7 +13,7 @@ from pymux.commands.set_option import set_option
 from pymux.options import Scope
 
 
-def set_client_option(pymux: "Pymux", args: argparse.Namespace) -> None:
+def set_client_option(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Set an option of one attached terminal.
 
@@ -60,7 +62,7 @@ def set_client_option(pymux: "Pymux", args: argparse.Namespace) -> None:
     set_option(pymux, args, scope=Scope.CLIENT, target=target)
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, set_client_option, read_only=True)
     parser.add_argument("-t", dest="target_client", metavar="<target-client>", help="The client of this name, as list-clients prints it.")
     parser.add_argument("option", metavar="<option>")

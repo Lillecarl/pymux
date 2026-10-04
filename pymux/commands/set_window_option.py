@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -10,7 +12,7 @@ from pymux.commands.set_option import set_option
 from pymux.options import Scope
 
 
-def set_window_option(pymux: "Pymux", args: argparse.Namespace) -> None:
+def set_window_option(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Set a window option.
 
@@ -20,7 +22,7 @@ def set_window_option(pymux: "Pymux", args: argparse.Namespace) -> None:
     set_option(pymux, args, scope=Scope.WINDOW)
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, set_window_option)
     parser.add_argument("-g", dest="g", action="store_true", help="What every new window starts with.")
     parser.add_argument("option", metavar="<option>")

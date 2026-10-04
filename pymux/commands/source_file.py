@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import os
 from typing import TYPE_CHECKING, Any, Awaitable
@@ -6,26 +8,24 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser
-from pymux.commands import add_command
-from pymux.commands import handle_command
+from pymux.commands import CommandException, CommandParser, add_command, handle_command
 
 
-def source_file(pymux: "Pymux", args: argparse.Namespace):
+def source_file(pymux: Pymux, args: argparse.Namespace):
     """
     Read a configuration file.
     """
     filename = os.path.expanduser(args.filename)
     try:
-        with open(filename, "r") as f:
+        with open(filename) as f:
             lines = list(f)
-    except IOError as e:
+    except OSError as e:
         raise CommandException("IOError: %s" % (e,))
 
     return _read_lines(pymux, filename, list(enumerate(lines, start=1)))
 
 
-def _read_lines(pymux: "Pymux", filename: str, lines: list[tuple[int, str]]):
+def _read_lines(pymux: Pymux, filename: str, lines: list[tuple[int, str]]):
     """
     Run the lines of the file, top to bottom.
 
@@ -52,7 +52,7 @@ def _read_lines(pymux: "Pymux", filename: str, lines: list[tuple[int, str]]):
 
 
 async def _then_the_rest(
-    pymux: "Pymux", filename: str, number: int, answer: Awaitable[Any], rest: list[tuple[int, str]]
+    pymux: Pymux, filename: str, number: int, answer: Awaitable[Any], rest: list[tuple[int, str]]
 ) -> None:
     pymux.sourcing = "%s line %i" % (filename, number)
     try:
@@ -65,6 +65,6 @@ async def _then_the_rest(
         await more
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, source_file)
     parser.add_argument("filename", metavar="<filename>", help="The configuration file to read.")

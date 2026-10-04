@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -5,13 +7,12 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser
-from pymux.commands import add_command
+from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import the_window
 from pymux.ids import WindowIndex
 
 
-def move_window(pymux: "Pymux", args: argparse.Namespace) -> None:
+def move_window(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Move this window to another index.
 
@@ -56,7 +57,7 @@ def move_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     pymux.arrangement.move_window(window, new_index)
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, move_window)
     parser.add_argument("-t", dest="dst_window", metavar="<dst-window>", required=True, type=WindowIndex, help="The index to move to.")
     parser.add_argument("-a", dest="after", action="store_true", help="Insert after that index, moving the windows in the way up.")

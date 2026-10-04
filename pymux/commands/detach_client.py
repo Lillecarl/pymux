@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -6,6 +8,7 @@ if TYPE_CHECKING:
 
 
 from prompt_toolkit.application.current import get_app
+
 from pymux.commands import (
     CommandException,
     CommandParser,
@@ -16,7 +19,7 @@ from pymux.commands import (
 from pymux.commands.common import clients_named
 
 
-def _detach(pymux: "Pymux", client_state: "ClientState", hang_up: bool = False) -> None:
+def _detach(pymux: Pymux, client_state: ClientState, hang_up: bool = False) -> None:
     """
     Detach one client that is not necessarily this one.
 
@@ -29,7 +32,7 @@ def _detach(pymux: "Pymux", client_state: "ClientState", hang_up: bool = False) 
         connection.detach_and_close(hang_up=hang_up)
 
 
-def detach_client(pymux: "Pymux", args: argparse.Namespace) -> None:
+def detach_client(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Detach a client from its session. The panes stay with the server.
 
@@ -98,7 +101,7 @@ def detach_client(pymux: "Pymux", args: argparse.Namespace) -> None:
     pymux.detach_client(get_app(), hang_up=hang_up)
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     # A client that only watches has to be able to leave, or the one
     # key it needs is the one it cannot press. Lillecarl/pymux#467.
     parser = add_command(subparsers, detach_client, read_only=True)

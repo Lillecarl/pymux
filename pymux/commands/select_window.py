@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -5,12 +7,11 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser
-from pymux.commands import add_command, this_client
+from pymux.commands import CommandException, CommandParser, add_command, this_client
 from pymux.commands.common import the_window
 
 
-def select_window(pymux: "Pymux", args: argparse.Namespace) -> None:
+def select_window(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Focus a window by index, by id, or by the pane that holds it.
     E.g:  select-window -t :3  or  select-window -t @1001
@@ -33,6 +34,6 @@ def select_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     session.arrangement.set_active_window(w)
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, select_window)
     parser.add_argument("-t", dest="target_window", metavar="<target-window>", required=True, help="The window to focus.")

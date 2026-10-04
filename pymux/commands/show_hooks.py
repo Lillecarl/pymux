@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -9,7 +11,7 @@ from pymux.commands import CommandParser, add_command
 from pymux.commands.common import show_listing
 
 
-def show_hooks(pymux: "Pymux", args: argparse.Namespace) -> None:
+def show_hooks(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     One line per hook: the event, and the commands it runs.
 
@@ -23,5 +25,5 @@ def show_hooks(pymux: "Pymux", args: argparse.Namespace) -> None:
     show_listing(pymux, "show-hooks", "\n".join(lines))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     add_command(subparsers, show_hooks)

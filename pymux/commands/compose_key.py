@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -10,7 +12,7 @@ from pymux.commands.common import ask_person
 from pymux.key_spelling import KeyCompleter
 
 
-def compose_key(pymux: "Pymux", args: argparse.Namespace) -> None:
+def compose_key(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Compose a key this keyboard cannot type, and send it to the pane.
 
@@ -35,7 +37,7 @@ def compose_key(pymux: "Pymux", args: argparse.Namespace) -> None:
     )
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, compose_key)
     parser.add_argument("-p", dest="message", metavar="<message>", help="The question to ask.")
     parser.add_argument("-I", dest="default", metavar="<default>", help="What the answer starts with.")

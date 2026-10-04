@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -8,10 +10,8 @@ if TYPE_CHECKING:
 from pyte.html import SCREEN_CLASS, html_of_page
 from pyte.screen import Page, Screen
 
-from pymux.commands import CommandException, CommandParser
-from pymux.commands import add_command
-from pymux.commands.common import the_pane
-from pymux.commands.common import show_listing
+from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands.common import show_listing, the_pane
 
 
 def _row_of(
@@ -91,7 +91,7 @@ def _html(screen: Screen, page: Page, args: argparse.Namespace) -> str:
     return '<pre class="%s">%s</pre>' % (SCREEN_CLASS, body)
 
 
-def capture_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
+def capture_pane(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Capture the content of a pane.
 
@@ -204,7 +204,7 @@ def capture_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
         show_listing(pymux, "capture-pane", text)
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, capture_pane)
     parser.add_argument("-p", dest="p", action="store_true", help="Print to the output of the command line, not a pop-up.")
     parser.add_argument("-J", dest="J", action="store_true", help="Join the pieces a wrapped line was cut into.")

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -9,7 +11,7 @@ from pymux.commands import CommandParser, add_command
 from pymux.commands.sessions import find_session
 
 
-def kill_session(pymux: "Pymux", args: argparse.Namespace) -> None:
+def kill_session(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Kill a session, and every pane in it.
 
@@ -20,6 +22,6 @@ def kill_session(pymux: "Pymux", args: argparse.Namespace) -> None:
     pymux.kill_session(find_session(pymux, args.target_session))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, kill_session)
     parser.add_argument("-t", dest="target_session", metavar="<target-session>", help="The session to kill.")

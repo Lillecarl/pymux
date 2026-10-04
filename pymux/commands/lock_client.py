@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -9,7 +11,7 @@ from pymux.commands import CommandParser, add_command
 from pymux.commands.lock import lock
 
 
-def lock_client(pymux: "Pymux", args: argparse.Namespace) -> None:
+def lock_client(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Lock the calling client, and take the keyboard until it is done.
 
@@ -22,5 +24,5 @@ def lock_client(pymux: "Pymux", args: argparse.Namespace) -> None:
     lock(pymux, args)
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     add_command(subparsers, lock_client)

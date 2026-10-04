@@ -7,12 +7,13 @@ parsed arguments. argparse parses with the tree; the shell completes
 through it with argcomplete, and the command bar of a client
 completes through the same tree in process. Lillecarl/pymux#307.
 """
+from __future__ import annotations
 
 import argparse
 import inspect
 import shlex
 from importlib import import_module
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, List, NoReturn, overload
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, NoReturn, overload
 
 from typing_extensions import override
 
@@ -52,7 +53,7 @@ class BadLine(Exception):
         self.message = message
 
 
-def this_client(pymux: "Pymux") -> "ClientState | None":
+def this_client(pymux: Pymux) -> ClientState | None:
     """
     The client that ran this command, or None when no person did.
 
@@ -68,7 +69,7 @@ def this_client(pymux: "Pymux") -> "ClientState | None":
     return None if client_state.temporary else client_state
 
 
-def not_past_this_client(pymux: "Pymux", reaches_another: bool) -> None:
+def not_past_this_client(pymux: Pymux, reaches_another: bool) -> None:
     """
     Refuse what a read-only client aimed at somebody else.
 
@@ -100,7 +101,7 @@ class CommandParser(argparse.ArgumentParser):
         raise BadLine(message)
 
 
-def add_command(subparsers: "argparse._SubParsersAction[CommandParser]", handler: Callable[..., Any], *, name: str | None = None, aliases: tuple[str, ...] | list[str] = (), read_only: bool = False):
+def add_command(subparsers: argparse._SubParsersAction[CommandParser], handler: Callable[..., Any], *, name: str | None = None, aliases: tuple[str, ...] | list[str] = (), read_only: bool = False):
     """
     The parser of one command: named after its handler, described by
     the first line of its docstring.
@@ -128,15 +129,13 @@ def add_command(subparsers: "argparse._SubParsersAction[CommandParser]", handler
 
 
 @overload
-def add_commands_to(subparsers: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+def add_commands_to(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """The commands under the entry point, which exits on a bad line."""
-    ...
 
 
 @overload
-def add_commands_to(subparsers: "argparse._SubParsersAction[CommandParser]") -> None:
+def add_commands_to(subparsers: argparse._SubParsersAction[CommandParser]) -> None:
     """The commands under the in-process tree, which raises instead."""
-    ...
 
 
 def add_commands_to(subparsers: Any) -> None:
@@ -174,7 +173,7 @@ def parser_tree():
     return _parser_tree
 
 
-def handle_command(pymux: "Pymux", input_string: str):
+def handle_command(pymux: Pymux, input_string: str):
     """
     Handle command.
 
@@ -210,7 +209,7 @@ def handle_command(pymux: "Pymux", input_string: str):
             # Lillecarl/pymux#313.
             first = ALIASES.get(parts[0], parts[0])
             no_semicolon_split = first in ("bind-key", "unbind-key")
-            commands: List[List[str]] = [[]]
+            commands: list[list[str]] = [[]]
             for part in parts:
                 if part == ";" and not no_semicolon_split:
                     commands.append([])
@@ -222,7 +221,7 @@ def handle_command(pymux: "Pymux", input_string: str):
     return None
 
 
-def _run_in_order(pymux: "Pymux", commands: List[List[str]]):
+def _run_in_order(pymux: Pymux, commands: list[list[str]]):
     """
     Run the commands of one line, left to right.
 
@@ -246,7 +245,7 @@ def _run_in_order(pymux: "Pymux", commands: List[List[str]]):
     return None
 
 
-async def _then_the_rest(pymux: "Pymux", answer: Awaitable[Any], rest: List[List[str]]) -> None:
+async def _then_the_rest(pymux: Pymux, answer: Awaitable[Any], rest: list[list[str]]) -> None:
     await answer
 
     more = _run_in_order(pymux, rest)
@@ -254,7 +253,7 @@ async def _then_the_rest(pymux: "Pymux", answer: Awaitable[Any], rest: List[List
         await more
 
 
-def call_command_handler(command: str, pymux: "Pymux", arguments: List[str]):
+def call_command_handler(command: str, pymux: Pymux, arguments: list[str]):
     """
     Execute one command, given its words.
 
@@ -309,7 +308,7 @@ def call_command_handler(command: str, pymux: "Pymux", arguments: List[str]):
     return None
 
 
-async def _finish(pymux: "Pymux", command: str, answer: Awaitable[Any]) -> None:
+async def _finish(pymux: Pymux, command: str, answer: Awaitable[Any]) -> None:
     "Wait for a handler that answers later, and end it the same way."
     try:
         await answer
@@ -320,6 +319,6 @@ async def _finish(pymux: "Pymux", command: str, answer: Awaitable[Any]) -> None:
     pymux.invalidate(Woke.COMMAND_RAN % command)
 
 
-def _failed(pymux: "Pymux", error: CommandException) -> None:
+def _failed(pymux: Pymux, error: CommandException) -> None:
     pymux.show_message(error.message)
     pymux.add_command_error("pymux: %s" % (error.message,))

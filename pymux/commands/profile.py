@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -5,12 +7,11 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser
-from pymux.commands import add_command
 from pymux import introspect
+from pymux.commands import CommandException, CommandParser, add_command
 
 
-def profile(pymux: "Pymux", args: argparse.Namespace) -> None:
+def profile(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Watch this server for a few seconds, and write down where its time went.
 
@@ -39,6 +40,6 @@ def profile(pymux: "Pymux", args: argparse.Namespace) -> None:
     )
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, profile)
     parser.add_argument("seconds", nargs="?", metavar="<seconds>", help="How long to watch, in seconds.")

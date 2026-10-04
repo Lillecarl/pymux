@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -5,16 +7,12 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser
-from pymux.commands import add_command
+from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import find_pane, the_window
-from pymux.layout import focus_down
-from pymux.layout import focus_left
-from pymux.layout import focus_right
-from pymux.layout import focus_up
+from pymux.layout import focus_down, focus_left, focus_right, focus_up
 
 
-def select_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
+def select_pane(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Focus a pane beside this one, or rotate the panes of the window.
     """
@@ -48,7 +46,7 @@ def select_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
         h(pymux)
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, select_pane)
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("-L", dest="L", action="store_true", help="Focus the pane to the left.")

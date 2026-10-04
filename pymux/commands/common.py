@@ -1,13 +1,12 @@
 """Helpers shared by the command modules."""
+from __future__ import annotations
 
 import argparse
-from typing import NamedTuple, Optional
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
-    from pymux.arrangement import Pane
+    from pymux.arrangement import Pane, Window
     from pymux.main import ClientState, Pymux
-    from pymux.arrangement import Window
     from pymux.session import Session
 
 
@@ -15,15 +14,16 @@ from prompt_toolkit.application.current import get_app
 from prompt_toolkit.completion import Completer
 from prompt_toolkit.document import Document
 from prompt_toolkit.key_binding.vi_state import InputMode
+from pyte.keys import KeyEvent, Unhearable
+
 from pymux.commands import CommandException
 from pymux.format import Language, format_pymux_string
 from pymux.ids import PaneId, PaneIndex, WindowId, WindowIndex
 from pymux.key_spelling import why_pane_cannot_read
 from pymux.options import Option, Scope, SetOptionError
-from pyte.keys import KeyEvent, Unhearable
 
 
-def session_part(pymux: "Pymux", target: str) -> "tuple[Session | None, str]":
+def session_part(pymux: Pymux, target: str) -> tuple[Session | None, str]:
     """
     Split a `session:rest` target into the session and the rest.
 
@@ -43,7 +43,7 @@ def session_part(pymux: "Pymux", target: str) -> "tuple[Session | None, str]":
     return pymux.get_session(name), rest
 
 
-def find_window(pymux: "Pymux", target: str | None) -> Optional["Window"]:
+def find_window(pymux: Pymux, target: str | None) -> Window | None:
     """
     Find a window for a tmux-style target.
 
@@ -79,7 +79,7 @@ def find_window(pymux: "Pymux", target: str | None) -> Optional["Window"]:
     return window_in(session, target)
 
 
-def the_window(pymux: "Pymux", target: str | None) -> "Window":
+def the_window(pymux: Pymux, target: str | None) -> Window:
     """
     The window a target names, or a `CommandException` saying why not.
 
@@ -102,7 +102,7 @@ def the_window(pymux: "Pymux", target: str | None) -> "Window":
     raise CommandException("no current window")
 
 
-def window_in(session: "Session", target: str) -> Optional["Window"]:
+def window_in(session: Session, target: str) -> Window | None:
     "The window a target names inside one session."
     if target == "":
         return session.arrangement.get_active_window()
@@ -113,7 +113,7 @@ def window_in(session: "Session", target: str) -> Optional["Window"]:
     return None
 
 
-def _pane_of_asking_client(pymux: "Pymux") -> Optional["Pane"]:
+def _pane_of_asking_client(pymux: Pymux) -> Pane | None:
     """
     The pane a socket command arrived from, or None.
 
@@ -136,7 +136,7 @@ def _pane_of_asking_client(pymux: "Pymux") -> Optional["Pane"]:
     return pymux.panes_by_id.get(pane_id)
 
 
-def find_pane(pymux: "Pymux", target: str | None) -> Optional["Pane"]:
+def find_pane(pymux: Pymux, target: str | None) -> Pane | None:
     """
     Find a pane for a tmux-style target.
 
@@ -193,7 +193,7 @@ def find_pane(pymux: "Pymux", target: str | None) -> Optional["Pane"]:
     return None
 
 
-def the_pane(pymux: "Pymux", target: str | None) -> "Pane":
+def the_pane(pymux: Pymux, target: str | None) -> Pane:
     """
     The pane a target names, or a `CommandException` saying why not.
 
@@ -211,7 +211,7 @@ def the_pane(pymux: "Pymux", target: str | None) -> "Pane":
 
 
 def ask_person(
-    pymux: "Pymux",
+    pymux: Pymux,
     message: str,
     command: str,
     default: str = "",
@@ -237,7 +237,7 @@ def ask_person(
     get_app().vi_state.input_mode = InputMode.INSERT
 
 
-def send_key(pane: "Pane", event: KeyEvent, written: str) -> None:
+def send_key(pane: Pane, event: KeyEvent, written: str) -> None:
     """
     Write one key to a pane, or say that the pane cannot read it.
 
@@ -260,7 +260,7 @@ def why_not(written: str, cannot: Unhearable) -> str:
     )
 
 
-def clients_named(pymux: "Pymux", wanted: str) -> list["ClientState"]:
+def clients_named(pymux: Pymux, wanted: str) -> list[ClientState]:
     """
     Every client of that name, as `list-clients` prints it first on a
     line.
@@ -293,7 +293,7 @@ def clients_named(pymux: "Pymux", wanted: str) -> list["ClientState"]:
 
 
 def option_as_written(
-    pymux: "Pymux", option: Option, args: argparse.Namespace, target: "ClientState" | None = None
+    pymux: Pymux, option: Option, args: argparse.Namespace, target: ClientState | None = None
 ) -> str:
     """
     What an option holds, as a person wrote it.
@@ -330,7 +330,7 @@ def option_as_written(
     return option.as_written(value, holder)
 
 
-def answer(pymux: "Pymux", text: str) -> None:
+def answer(pymux: Pymux, text: str) -> None:
     """
     Answer a question on the channel the asker reads.
 
@@ -345,7 +345,7 @@ def answer(pymux: "Pymux", text: str) -> None:
         pymux.get_client_state().message = text
 
 
-def refuse_without_a_waiter(pymux: "Pymux", what: str) -> None:
+def refuse_without_a_waiter(pymux: Pymux, what: str) -> None:
     """
     A wait belongs to somebody who is waiting for the answer.
 
@@ -363,7 +363,7 @@ def refuse_without_a_waiter(pymux: "Pymux", what: str) -> None:
         raise CommandException("not able to %s" % (what,))
 
 
-def show_listing(pymux: "Pymux", title: str, text: str) -> None:
+def show_listing(pymux: Pymux, title: str, text: str) -> None:
     """
     A listing, to the person who asked for it.
 
@@ -433,11 +433,11 @@ NEW_OBJECT_FORMAT = "#{session_name}:#{window_index}.#{pane_index}"
 
 
 def print_object_format(
-    pymux: "Pymux",
+    pymux: Pymux,
     args: argparse.Namespace,
-    window: "Window",
-    pane: "Pane",
-    session: "Session | None" = None,
+    window: Window,
+    pane: Pane,
+    session: Session | None = None,
 ) -> None:
     """
     Print the information of a newly created object. (Like `tmux

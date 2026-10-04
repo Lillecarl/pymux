@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -5,10 +7,8 @@ if TYPE_CHECKING:
     from pymux.main import ClientState, Pymux
 
 
-from pymux.commands import CommandException, CommandParser
-from pymux.commands import add_command
-from pymux.commands.common import answer
-from pymux.commands.common import option_as_written
+from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands.common import answer, option_as_written
 from pymux.options import Scope, SetOptionError
 
 #: Which command sets an option of each scope.
@@ -19,7 +19,7 @@ _COMMAND_FOR = {
 }
 
 
-def _not_here(pymux: "Pymux", name: str, scope: Scope) -> str:
+def _not_here(pymux: Pymux, name: str, scope: Scope) -> str:
     """
     What to say about a name this command does not hold.
 
@@ -37,10 +37,10 @@ def _not_here(pymux: "Pymux", name: str, scope: Scope) -> str:
 
 
 def set_option(
-    pymux: "Pymux",
+    pymux: Pymux,
     args: argparse.Namespace,
     scope: Scope = Scope.SESSION,
-    target: "ClientState" | None = None,
+    target: ClientState | None = None,
 ) -> None:
     """
     Set an option, of the session, of a window or of a client.
@@ -92,7 +92,7 @@ def set_option(
         raise CommandException(e.message)
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, set_option)
     parser.add_argument("-g", dest="g", action="store_true", help="For a window option: what every new window starts with.")
     parser.add_argument("option", metavar="<option>")

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -9,7 +11,7 @@ from pymux.commands import CommandParser, add_command
 from pymux.commands.common import answer, the_pane
 
 
-def list_user_vars(pymux: "Pymux", args: argparse.Namespace) -> None:
+def list_user_vars(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     One line per user variable of a pane: the name and the value.
 
@@ -24,6 +26,6 @@ def list_user_vars(pymux: "Pymux", args: argparse.Namespace) -> None:
     answer(pymux, "\n".join(lines))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, list_user_vars)
     parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane whose variables to list.")

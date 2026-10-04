@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -5,13 +7,12 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser
-from pymux.commands import add_command
+from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import the_window
 from pymux.enums import Woke
 
 
-def consume_or_expel(pymux: "Pymux", args: argparse.Namespace) -> None:
+def consume_or_expel(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Move this pane into the next column of the strip, or out of its own.
 
@@ -53,7 +54,7 @@ def consume_or_expel(pymux: "Pymux", args: argparse.Namespace) -> None:
         pymux.invalidate(Woke.PANE_CHANGED_COLUMN)
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, consume_or_expel)
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("-L", dest="L", action="store_true", help="Move the pane into the column to the left.")

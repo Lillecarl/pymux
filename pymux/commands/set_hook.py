@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -8,7 +10,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandException, CommandParser, add_command
 
 
-def set_hook(pymux: "Pymux", args: argparse.Namespace) -> None:
+def set_hook(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Run a command when the event it is named for happens.
 
@@ -34,7 +36,7 @@ def set_hook(pymux: "Pymux", args: argparse.Namespace) -> None:
     pymux.hooks.setdefault(args.hook, []).append(args.hook_command)
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, set_hook)
     parser.add_argument("-g", dest="g", action="store_true", help="Accepted for tmux and changes nothing: there is one session per server.")
     parser.add_argument("-u", dest="u", action="store_true", help="Forget the hook, and everything it was given.")

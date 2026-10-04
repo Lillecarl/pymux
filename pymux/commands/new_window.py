@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -33,7 +35,7 @@ def index(target: str | None) -> WindowIndex | None:
         return None
 
 
-def word_window(session: "Session", target: str | None):
+def word_window(session: Session, target: str | None):
     """
     The window one of tmux's target words names, or None for a target
     that is not one.
@@ -53,7 +55,7 @@ def word_window(session: "Session", target: str | None):
     return None
 
 
-def which_session(pymux: "Pymux", args: argparse.Namespace):
+def which_session(pymux: Pymux, args: argparse.Namespace):
     """
     The session a new window goes in, and the target with its session
     part taken off.
@@ -72,7 +74,7 @@ def which_session(pymux: "Pymux", args: argparse.Namespace):
     return session, rest
 
 
-def where_new_window_goes(pymux: "Pymux", args: argparse.Namespace, session: "Session", target: str | None) -> WindowIndex | None:
+def where_new_window_goes(pymux: Pymux, args: argparse.Namespace, session: Session, target: str | None) -> WindowIndex | None:
     """
     The index a new window takes, from the options it was given.
 
@@ -120,7 +122,7 @@ def where_new_window_goes(pymux: "Pymux", args: argparse.Namespace, session: "Se
     return where.index + 1
 
 
-def new_window(pymux: "Pymux", args: argparse.Namespace) -> None:
+def new_window(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Open a window, next to the one a person is on.
 
@@ -184,7 +186,7 @@ def new_window(pymux: "Pymux", args: argparse.Namespace) -> None:
         )
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, new_window)
     parser.add_argument("-a", dest="a", action="store_true", help="After the target window.")
     parser.add_argument("-b", dest="b", action="store_true", help="Before the target window.")

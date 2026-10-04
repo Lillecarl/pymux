@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -8,7 +10,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandParser, add_command
 
 
-def suspend_client(pymux: "Pymux", args: argparse.Namespace) -> None:
+def suspend_client(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Suspend this client, the way ctrl+z suspends a program in a shell.
     """
@@ -18,5 +20,5 @@ def suspend_client(pymux: "Pymux", args: argparse.Namespace) -> None:
         connection.suspend_client_to_background()
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     add_command(subparsers, suspend_client)

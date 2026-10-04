@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -13,7 +15,7 @@ from pymux.commands import CommandParser, add_command
 from pymux.commands.common import answer
 
 
-def _pane_tree(pane: "Pane", index: int):
+def _pane_tree(pane: Pane, index: int):
     """
     Everything an agent needs to aim at a pane, in JSON types.
 
@@ -46,7 +48,7 @@ def _pane_tree(pane: "Pane", index: int):
     }
 
 
-def _window_tree(pymux: "Pymux", session: "Session", window: "Window"):
+def _window_tree(pymux: Pymux, session: Session, window: Window):
     """A window with its panes, marking the one in focus."""
     active = window.active_pane
     return {
@@ -62,7 +64,7 @@ def _window_tree(pymux: "Pymux", session: "Session", window: "Window"):
     }
 
 
-def _caller_tree(pymux: "Pymux"):
+def _caller_tree(pymux: Pymux):
     """
     The window and pane the command arrived from, or None.
 
@@ -90,7 +92,7 @@ def _caller_tree(pymux: "Pymux"):
     }
 
 
-def _clients_tree(pymux: "Pymux"):
+def _clients_tree(pymux: Pymux):
     """
     What every attached client looks at.
 
@@ -114,7 +116,7 @@ def _clients_tree(pymux: "Pymux"):
     return clients
 
 
-def info(pymux: "Pymux", args: argparse.Namespace) -> None:
+def info(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     The whole server as JSON, for an agent to orient itself.
 
@@ -142,5 +144,5 @@ def info(pymux: "Pymux", args: argparse.Namespace) -> None:
     answer(pymux, json.dumps(tree))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     add_command(subparsers, info, read_only=True)

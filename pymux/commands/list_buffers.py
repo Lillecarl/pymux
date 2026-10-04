@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -9,7 +11,7 @@ from pymux.commands import CommandParser, add_command
 from pymux.commands.common import answer
 
 
-def list_buffers(pymux: "Pymux", args: argparse.Namespace) -> None:
+def list_buffers(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     One line per named buffer: the name, and how much it holds.
     Lillecarl/pymux#303.
@@ -21,5 +23,5 @@ def list_buffers(pymux: "Pymux", args: argparse.Namespace) -> None:
     answer(pymux, "\n".join(lines))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     add_command(subparsers, list_buffers)

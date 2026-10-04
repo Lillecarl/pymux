@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -9,7 +11,7 @@ from pymux.commands import CommandParser, add_command
 from pymux.commands.common import the_window
 
 
-def kill_window(pymux: "Pymux", args: argparse.Namespace) -> None:
+def kill_window(pymux: Pymux, args: argparse.Namespace) -> None:
     "Kill all panes in the current window."
     w = the_window(pymux, args.target_window)
 
@@ -17,6 +19,6 @@ def kill_window(pymux: "Pymux", args: argparse.Namespace) -> None:
         pymux.kill_pane(pane)
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, kill_window)
     parser.add_argument("-t", dest="target_window", metavar="<target-window>", help="The window to kill.")

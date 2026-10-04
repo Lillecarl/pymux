@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import os
 from typing import TYPE_CHECKING
@@ -7,11 +9,11 @@ if TYPE_CHECKING:
 
 
 from prompt_toolkit.clipboard import ClipboardData
-from pymux.commands import CommandException, CommandParser
-from pymux.commands import add_command
+
+from pymux.commands import CommandException, CommandParser, add_command
 
 
-def load_buffer(pymux: "Pymux", args: argparse.Namespace) -> None:
+def load_buffer(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Read a file into a buffer.
 
@@ -20,7 +22,7 @@ def load_buffer(pymux: "Pymux", args: argparse.Namespace) -> None:
     """
     filename = os.path.expanduser(args.filename)
     try:
-        with open(filename, "r") as f:
+        with open(filename) as f:
             text = f.read()
     except OSError as e:
         raise CommandException("IOError: %s" % (e,))
@@ -32,7 +34,7 @@ def load_buffer(pymux: "Pymux", args: argparse.Namespace) -> None:
         pymux.clipboard.set_data(ClipboardData(text))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, load_buffer)
     parser.add_argument("-b", dest="buffer_name", metavar="<buffer-name>", help="The named buffer to fill.")
     parser.add_argument("filename", metavar="<filename>")

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -8,7 +10,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandParser, add_command
 
 
-def open_url(pymux: "Pymux", args: argparse.Namespace) -> None:
+def open_url(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Open a URL in the browser of a client.
 
@@ -19,7 +21,7 @@ def open_url(pymux: "Pymux", args: argparse.Namespace) -> None:
     pymux.open_url(args.url, confirmed=bool(args.c))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, open_url)
     parser.add_argument("-c", dest="c", action="store_true", help="Open without asking again.")
     parser.add_argument("url", metavar="<url>")

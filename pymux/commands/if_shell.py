@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -11,7 +13,7 @@ from pymux.commands import CommandParser, add_command, handle_command
 from pymux.format import Language, format_pymux_string
 
 
-def if_shell(pymux: "Pymux", args: argparse.Namespace):
+def if_shell(pymux: Pymux, args: argparse.Namespace):
     """
     Run one command or the other, by what a shell answers.
 
@@ -45,7 +47,7 @@ def if_shell(pymux: "Pymux", args: argparse.Namespace):
     return _ask_the_shell(pymux, args)
 
 
-async def _ask_the_shell(pymux: "Pymux", args: argparse.Namespace) -> None:
+async def _ask_the_shell(pymux: Pymux, args: argparse.Namespace) -> None:
     # Captured and dropped. Only the status is read, and the output
     # would otherwise go to whatever the server's stdout is: /dev/null
     # under a daemon, and the person's own terminal in the integrated
@@ -58,7 +60,7 @@ async def _ask_the_shell(pymux: "Pymux", args: argparse.Namespace) -> None:
         await answer
 
 
-def _then_run(pymux: "Pymux", args: argparse.Namespace, yes: bool):
+def _then_run(pymux: Pymux, args: argparse.Namespace, yes: bool):
     command = args.then_command if yes else args.else_command
 
     if command:
@@ -70,7 +72,7 @@ def _then_run(pymux: "Pymux", args: argparse.Namespace, yes: bool):
     return None
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, if_shell)
     parser.add_argument("-F", dest="F", action="store_true", help="Ask a format, not a shell: no program runs, and a non-empty answer is yes.")
     parser.add_argument("-J", dest="J", action="store_true", help="Ask a jinja2 template, not a shell. Like -F, in the other language.")

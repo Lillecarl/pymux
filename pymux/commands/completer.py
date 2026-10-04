@@ -15,6 +15,7 @@ second finder would find them already bound to the first. The same
 finder serves every client, and it re-enters itself for the command
 a `bind-key` binding runs.
 """
+from __future__ import annotations
 
 import argparse
 from functools import partial
@@ -69,7 +70,7 @@ def stop_shlex_comments() -> None:
 stop_shlex_comments()
 
 
-def _keys(pymux: "Pymux", prefix: str, **_) -> list[str]:
+def _keys(pymux: Pymux, prefix: str, **_) -> list[str]:
     """
     The key names for `bind-key` and `compose-key`.
 
@@ -85,38 +86,38 @@ def _keys(pymux: "Pymux", prefix: str, **_) -> list[str]:
     return [c.text for c in completer.get_completions(Document(prefix), CompleteEvent())]
 
 
-def _session_option_names(pymux: "Pymux", **_) -> list[str]:
+def _session_option_names(pymux: Pymux, **_) -> list[str]:
     return sorted(pymux.options)
 
 
-def _window_option_names(pymux: "Pymux", **_) -> list[str]:
+def _window_option_names(pymux: Pymux, **_) -> list[str]:
     return sorted(pymux.window_options)
 
 
-def _option_values(pymux: "Pymux", parsed_args: argparse.Namespace, **_) -> list[str]:
+def _option_values(pymux: Pymux, parsed_args: argparse.Namespace, **_) -> list[str]:
     option = pymux.options.get(parsed_args.option)
     return sorted(option.get_all_values(pymux)) if option else []
 
 
-def _window_option_values(pymux: "Pymux", parsed_args: argparse.Namespace, **_) -> list[str]:
+def _window_option_values(pymux: Pymux, parsed_args: argparse.Namespace, **_) -> list[str]:
     option = pymux.window_options.get(parsed_args.option)
     return sorted(option.get_all_values(pymux)) if option else []
 
 
-def _client_option_names(pymux: "Pymux", **_) -> list[str]:
+def _client_option_names(pymux: Pymux, **_) -> list[str]:
     return sorted(pymux.client_options)
 
 
-def _client_option_values(pymux: "Pymux", parsed_args: argparse.Namespace, **_) -> list[str]:
+def _client_option_values(pymux: Pymux, parsed_args: argparse.Namespace, **_) -> list[str]:
     option = pymux.client_options.get(parsed_args.option)
     return sorted(option.get_all_values(pymux)) if option else []
 
 
-def _layout_names(pymux: "Pymux", **_) -> list[str]:
+def _layout_names(pymux: Pymux, **_) -> list[str]:
     return sorted(t.value for t in LayoutTypes)
 
 
-def _bound_command(pymux: "Pymux", prefix: str, parsed_args: argparse.Namespace, **_) -> dict[str, str]:
+def _bound_command(pymux: Pymux, prefix: str, parsed_args: argparse.Namespace, **_) -> dict[str, str]:
     """
     The command a `bind-key` binding runs, and its arguments: the same
     question again, one word further in. The words already given land
@@ -134,14 +135,14 @@ def _bound_command(pymux: "Pymux", prefix: str, parsed_args: argparse.Namespace,
     return {m: meta.get(m, "") for m in matches}
 
 
-def _send_keys_names(pymux: "Pymux", prefix: str, parsed_args: argparse.Namespace, **_) -> list[str]:
+def _send_keys_names(pymux: Pymux, prefix: str, parsed_args: argparse.Namespace, **_) -> list[str]:
     "The keys are names while they are the first thing, and no `-l` says they are text."
     if parsed_args.keys or parsed_args.l:
         return []
     return _keys(pymux, prefix)
 
 
-def _forward_listenings(pymux: "Pymux", parsed_args: argparse.Namespace, direction: Direction, **_) -> dict[str, str]:
+def _forward_listenings(pymux: Pymux, parsed_args: argparse.Namespace, direction: Direction, **_) -> dict[str, str]:
     """
     The listening ends `unforward-port` can name.
 
@@ -186,7 +187,7 @@ _VALUE_COMPLETERS = {
 }
 
 
-def _command_help(name: str, subparsers: "argparse._SubParsersAction[CommandParser]"):
+def _command_help(name: str, subparsers: argparse._SubParsersAction[CommandParser]):
     "The help of one command, which argparse records on a pseudo action."
     for action in subparsers._choices_actions:
         if action.metavar == name:
@@ -276,7 +277,7 @@ class FuzzyFinder(argcomplete.CompletionFinder):
         return False
 
     @override
-    def _get_subparser_completions(self, parser: "argparse._SubParsersAction[CommandParser]", cword_prefix: str):
+    def _get_subparser_completions(self, parser: argparse._SubParsersAction[CommandParser], cword_prefix: str):
         aliases_by_parser: dict[argparse.ArgumentParser, list[str]] = {}
         for key in parser.choices.keys():
             p = parser.choices[key]
@@ -323,7 +324,7 @@ class FuzzyFinder(argcomplete.CompletionFinder):
 _finder: FuzzyFinder | None = None
 
 
-def create_command_completer(pymux: "Pymux"):
+def create_command_completer(pymux: Pymux):
     """
     The completer of the command bar, with the completers of the
     values attached to the arguments they complete.

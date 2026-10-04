@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -8,7 +10,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandParser, add_command
 
 
-def rotate_window(pymux: "Pymux", args: argparse.Namespace) -> None:
+def rotate_window(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Rotate the panes of the window.
     """
@@ -18,7 +20,7 @@ def rotate_window(pymux: "Pymux", args: argparse.Namespace) -> None:
         pymux.arrangement.rotate_window()
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, rotate_window)
     group = parser.add_mutually_exclusive_group()
     group.add_argument("-D", dest="D", action="store_true", help="Rotate the other way.")

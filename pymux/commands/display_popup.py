@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -8,7 +10,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandParser, add_command
 
 
-def display_popup(pymux: "Pymux", args: argparse.Namespace) -> None:
+def display_popup(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Open an overlay pane in the middle of the screen.
 
@@ -28,7 +30,7 @@ def display_popup(pymux: "Pymux", args: argparse.Namespace) -> None:
     )
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, display_popup)
     parser.add_argument("-E", dest="E", action="store_true", help="Accepted for tmux. The overlay always closes when its program ends.")
     parser.add_argument("-w", dest="width", metavar="<width>", help="How many cells wide, or a share like '60%%'.")

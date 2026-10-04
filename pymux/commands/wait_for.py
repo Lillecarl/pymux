@@ -25,6 +25,7 @@ out of the tree. Lillecarl/pymux#302.
 A handler may answer later now, so the waiting is one task and the
 server keeps serving. Lillecarl/pymux#87.
 """
+from __future__ import annotations
 
 import argparse
 from typing import TYPE_CHECKING
@@ -59,7 +60,7 @@ class WaitChannel:
         return not (self.woken or self.locked or self.waiters or self.lockers)
 
 
-def wait_for(pymux: "Pymux", args: argparse.Namespace):
+def wait_for(pymux: Pymux, args: argparse.Namespace):
     """
     Wait on a named channel, or wake one.
 
@@ -84,7 +85,7 @@ def wait_for(pymux: "Pymux", args: argparse.Namespace):
     return _wait(pymux, args.name, channel)
 
 
-def _signal(pymux: "Pymux", name: str, channel: WaitChannel) -> None:
+def _signal(pymux: Pymux, name: str, channel: WaitChannel) -> None:
     if not channel.waiters:
         channel.woken = True
         return None
@@ -96,7 +97,7 @@ def _signal(pymux: "Pymux", name: str, channel: WaitChannel) -> None:
     return None
 
 
-def _wait(pymux: "Pymux", name: str, channel: WaitChannel):
+def _wait(pymux: Pymux, name: str, channel: WaitChannel):
     if channel.woken:
         # The signal that arrived first. One waiter takes it.
         channel.woken = False
@@ -126,7 +127,7 @@ def _lock(channel: WaitChannel):
     return until_it_is_ours()
 
 
-def _unlock(pymux: "Pymux", name: str, channel: WaitChannel) -> None:
+def _unlock(pymux: Pymux, name: str, channel: WaitChannel) -> None:
     if not channel.locked:
         _forget_if_spent(pymux, name, channel)
         raise CommandException("channel %s not locked" % (name,))
@@ -142,12 +143,12 @@ def _unlock(pymux: "Pymux", name: str, channel: WaitChannel) -> None:
     return None
 
 
-def _forget_if_spent(pymux: "Pymux", name: str, channel: WaitChannel) -> None:
+def _forget_if_spent(pymux: Pymux, name: str, channel: WaitChannel) -> None:
     if channel.is_spent:
         pymux.wait_channels.pop(name, None)
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, wait_for, aliases=["wait"])
     parser.add_argument("-S", dest="S", action="store_true", help="Signal the channel: every waiter goes on, or the next one does.")
     parser.add_argument("-L", dest="L", action="store_true", help="Lock the channel, and wait while somebody else holds it.")

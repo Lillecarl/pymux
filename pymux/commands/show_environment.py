@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import shlex
 from typing import TYPE_CHECKING
@@ -6,12 +8,11 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser
-from pymux.commands import add_command
+from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import answer
 
 
-def show_environment(pymux: "Pymux", args: argparse.Namespace) -> None:
+def show_environment(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Read the environment a new pane runs under.
 
@@ -64,7 +65,7 @@ def show_environment(pymux: "Pymux", args: argparse.Namespace) -> None:
     answer(pymux, "\n".join(lines))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, show_environment)
     parser.add_argument("-g", dest="g", action="store_true", help="Read the global scope rather than what a new pane runs under.")
     parser.add_argument("-s", dest="s", action="store_true", help="Escape the values for the shell.")

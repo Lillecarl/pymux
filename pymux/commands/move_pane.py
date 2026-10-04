@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -9,7 +11,7 @@ from pymux.commands import CommandParser, add_command
 from pymux.commands.common import the_pane, the_window
 
 
-def move_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
+def move_pane(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Move a pane into another window, beside or above the pane focused there.
 
@@ -41,5 +43,5 @@ def add_arguments(parser: argparse.ArgumentParser):
     parser.add_argument("-t", dest="t", metavar="<dst-window>", help="The window the pane goes to.")
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     add_arguments(add_command(subparsers, move_pane))

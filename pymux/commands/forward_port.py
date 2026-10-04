@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import shlex
 from typing import TYPE_CHECKING
@@ -5,6 +7,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pymux.main import Pymux
 
+
+from libpymux.protocol import Field, Packet
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.forwarding import (
@@ -15,10 +19,9 @@ from pymux.forwarding import (
     the_far_side_may_narrow,
 )
 from pymux.options import ForwardMode
-from libpymux.protocol import Field, Packet
 
 
-def forward_port(pymux: "Pymux", args: argparse.Namespace) -> None:
+def forward_port(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Forward a port through the SSH connection of this client.
 
@@ -94,7 +97,7 @@ def forward_port(pymux: "Pymux", args: argparse.Namespace) -> None:
     )
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, forward_port)
     parser.add_argument(
         "-L",

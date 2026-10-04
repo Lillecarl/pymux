@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -8,7 +10,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandParser, add_command
 
 
-def customize_mode(pymux: "Pymux", args: argparse.Namespace) -> None:
+def customize_mode(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     The options of every scope, in a box, to change.
 
@@ -27,5 +29,5 @@ def customize_mode(pymux: "Pymux", args: argparse.Namespace) -> None:
     state.layout_manager.display_options_chooser()
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     add_command(subparsers, customize_mode)

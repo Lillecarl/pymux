@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -9,7 +11,7 @@ from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import the_window
 
 
-def unlink_window(pymux: "Pymux", args: argparse.Namespace) -> None:
+def unlink_window(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Take a window out of the order, with its panes still running.
 
@@ -27,6 +29,6 @@ def unlink_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     pymux.arrangement.unlink_window(window)
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, unlink_window)
     parser.add_argument("-t", dest="target_window", metavar="<target-window>", help="The window to take out.")

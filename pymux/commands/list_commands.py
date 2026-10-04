@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from operator import attrgetter
 from typing import TYPE_CHECKING
@@ -6,12 +8,11 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandParser, add_command
-from pymux.commands import CommandParser, add_commands_to
+from pymux.commands import CommandParser, add_command, add_commands_to
 from pymux.commands.common import answer
 
 
-def list_commands(pymux: "Pymux", args: argparse.Namespace) -> None:
+def list_commands(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     One line per command: the name, and what it does.
     """
@@ -28,5 +29,5 @@ def list_commands(pymux: "Pymux", args: argparse.Namespace) -> None:
     answer(pymux, "\n".join(lines))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     add_command(subparsers, list_commands)

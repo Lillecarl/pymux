@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -9,7 +11,7 @@ from pymux.commands import CommandParser, add_command, not_past_this_client
 from pymux.commands.sessions import move_this_client
 
 
-def attach_session(pymux: "Pymux", args: argparse.Namespace) -> None:
+def attach_session(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Attach the calling client to a session of this server.
 
@@ -48,7 +50,7 @@ def attach_session(pymux: "Pymux", args: argparse.Namespace) -> None:
         client_state.ignore_size = True
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, attach_session, read_only=True)
     parser.add_argument("-t", dest="target_session", metavar="<target-session>", help="The session to attach to.")
     parser.add_argument("-d", dest="d", action="store_true", help="Detach the other clients of that session.")

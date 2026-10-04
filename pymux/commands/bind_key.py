@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -5,11 +7,10 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser
-from pymux.commands import add_command
+from pymux.commands import CommandException, CommandParser, add_command
 
 
-def bind_key(pymux: "Pymux", args: argparse.Namespace) -> None:
+def bind_key(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Bind a key sequence to a command.
     -n: Not necessary to use the prefix.
@@ -36,7 +37,7 @@ def bind_key(pymux: "Pymux", args: argparse.Namespace) -> None:
         raise CommandException("Invalid key: %r" % (key,))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, bind_key)
     table = parser.add_mutually_exclusive_group()
     table.add_argument("-n", dest="n", action="store_true", help="Bind without the prefix.")

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -10,7 +12,7 @@ from pymux.commands.common import show_listing
 from pymux.commands.utils import wrap_argument
 
 
-def list_keys(pymux: "Pymux", args: argparse.Namespace) -> None:
+def list_keys(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Display all configured key bindings.
     -T: Only this key table.
@@ -39,7 +41,7 @@ def list_keys(pymux: "Pymux", args: argparse.Namespace) -> None:
     show_listing(pymux, "list-keys", "\n".join(sorted(result)))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, list_keys)
     parser.add_argument(
         "-T", dest="table", metavar="<key-table>", help="List only this key table."

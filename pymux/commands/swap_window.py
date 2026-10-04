@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -7,10 +9,9 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandParser, add_command
 from pymux.commands.common import find_window, the_window
-from pymux.ids import WindowIndex
 
 
-def swap_window(pymux: "Pymux", args: argparse.Namespace) -> None:
+def swap_window(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Swap the active window with the window a target names.
 
@@ -36,7 +37,7 @@ def swap_window(pymux: "Pymux", args: argparse.Namespace) -> None:
         pymux.arrangement.set_active_window(dst_window)
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, swap_window)
     parser.add_argument(
         "-d", dest="d",

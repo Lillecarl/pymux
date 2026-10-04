@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -7,8 +9,7 @@ if TYPE_CHECKING:
 
 from prompt_toolkit.data_structures import Size
 
-from pymux.commands import CommandException, CommandParser
-from pymux.commands import add_command
+from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import add_format_arguments, print_object_format
 from pymux.enums import Woke
 from pymux.session import DEFAULT_SIZE
@@ -36,7 +37,7 @@ def _axis(given: str | None, standing: int, watching: int) -> int:
     return wanted
 
 
-def _size_with_no_client(pymux: "Pymux", args: argparse.Namespace) -> Size:
+def _size_with_no_client(pymux: Pymux, args: argparse.Namespace) -> Size:
     "What `-x` and `-y` say about a session nobody is watching."
     watching = None
     try:
@@ -55,7 +56,7 @@ def _size_with_no_client(pymux: "Pymux", args: argparse.Namespace) -> Size:
     )
 
 
-def new_session(pymux: "Pymux", args: argparse.Namespace) -> None:
+def new_session(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Create a session on this server.
 
@@ -122,7 +123,7 @@ def new_session(pymux: "Pymux", args: argparse.Namespace) -> None:
         )
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, new_session)
     parser.add_argument("-s", dest="session_name", metavar="<session-name>", help="The name of the session.")
     parser.add_argument("-n", dest="window_name", metavar="<window-name>", help="The name of the first window.")

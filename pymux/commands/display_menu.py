@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -8,7 +10,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandException, CommandParser, add_command
 
 
-def display_menu(pymux: "Pymux", args: argparse.Namespace) -> None:
+def display_menu(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     A menu where a person is looking, with a key for each line.
 
@@ -42,7 +44,7 @@ def display_menu(pymux: "Pymux", args: argparse.Namespace) -> None:
     state.layout_manager.display_menu(entries, args.T or "")
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, display_menu)
     parser.add_argument("-T", dest="T", metavar="<title>", help="The name on the title bar.")
     parser.add_argument("-x", dest="x", metavar="<position>", help="Accepted for tmux and changes nothing: the box draws where the other boxes draw.")

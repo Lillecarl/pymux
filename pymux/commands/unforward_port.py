@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -5,12 +7,13 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser, add_command
-from pymux.forwarding import BadForward, Direction, parse_listen
 from libpymux.protocol import Field, Packet
 
+from pymux.commands import CommandException, CommandParser, add_command
+from pymux.forwarding import BadForward, Direction, parse_listen
 
-def unforward_port(pymux: "Pymux", args: argparse.Namespace) -> None:
+
+def unforward_port(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Stop forwarding a port.
 
@@ -50,7 +53,7 @@ def unforward_port(pymux: "Pymux", args: argparse.Namespace) -> None:
     )
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, unforward_port)
     parser.add_argument(
         "-L",

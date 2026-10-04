@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -6,10 +8,11 @@ if TYPE_CHECKING:
 
 
 from prompt_toolkit.clipboard import ClipboardData
+
 from pymux.commands import CommandParser, add_command
 
 
-def set_buffer(pymux: "Pymux", args: argparse.Namespace) -> None:
+def set_buffer(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Put text in a buffer.
 
@@ -24,7 +27,7 @@ def set_buffer(pymux: "Pymux", args: argparse.Namespace) -> None:
         pymux.clipboard.set_data(ClipboardData(text))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, set_buffer)
     parser.add_argument("-b", dest="buffer_name", metavar="<buffer-name>", help="The named buffer to fill.")
     parser.add_argument("value", metavar="<value>", nargs="?")

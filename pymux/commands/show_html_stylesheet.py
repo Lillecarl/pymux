@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING, cast
 
@@ -9,11 +11,10 @@ from pyte.html import CSS, theme_css
 from pyte.osc import ColorOverrides
 
 from pymux.commands import CommandParser, add_command
-from pymux.commands.common import the_pane
-from pymux.commands.common import show_listing
+from pymux.commands.common import show_listing, the_pane
 
 
-def show_html_stylesheet(pymux: "Pymux", args: argparse.Namespace) -> None:
+def show_html_stylesheet(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     The stylesheet that `capture-pane -H` is written against.
 
@@ -43,7 +44,7 @@ def show_html_stylesheet(pymux: "Pymux", args: argparse.Namespace) -> None:
     show_listing(pymux, "show-html-stylesheet", CSS + "\n" + theme_css(colors))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, show_html_stylesheet)
     parser.add_argument(
         "-t",

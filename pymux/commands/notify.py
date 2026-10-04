@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -9,7 +11,7 @@ from pymux.commands import CommandParser, add_command
 from pymux.notifications import Urgency
 
 
-def notify(pymux: "Pymux", args: argparse.Namespace) -> None:
+def notify(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Record a notification for the hub to show.
 
@@ -36,7 +38,7 @@ def notify(pymux: "Pymux", args: argparse.Namespace) -> None:
     )
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, notify)
     parser.add_argument("title", metavar="<title>", help="What the notification is.")
     parser.add_argument(

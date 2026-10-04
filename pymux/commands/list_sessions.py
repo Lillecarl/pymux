@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -14,7 +16,7 @@ from pymux.format import format_pymux_string
 DEFAULT_FORMAT = "#{session_name}: #{session_windows} windows"
 
 
-def list_sessions(pymux: "Pymux", args: argparse.Namespace) -> None:
+def list_sessions(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     List the sessions of this server, one to a line.
 
@@ -49,7 +51,7 @@ def list_sessions(pymux: "Pymux", args: argparse.Namespace) -> None:
         show_listing(pymux, "list-sessions", "\n".join(lines))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, list_sessions, aliases=("ls",))
     parser.add_argument("-a", dest="a", action="store_true", help="Accepted for tmux. Every session of this server is listed anyway.")
     add_format_arguments(parser, "Print this format for each session.")

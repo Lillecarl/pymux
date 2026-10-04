@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -10,7 +12,7 @@ from pymux.commands.common import find_window
 from pymux.ids import WindowId, WindowIndex
 
 
-def _find_anywhere(pymux: "Pymux", target: str | None):
+def _find_anywhere(pymux: Pymux, target: str | None):
     """
     A window of the order, or one that unlink_window took out: the
     pen is the window's own place while it waits, and link-window is
@@ -25,7 +27,7 @@ def _find_anywhere(pymux: "Pymux", target: str | None):
     return window
 
 
-def link_window(pymux: "Pymux", args: argparse.Namespace) -> None:
+def link_window(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Put a window in the order at the index -t names.
 
@@ -43,7 +45,7 @@ def link_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     pymux.arrangement.link_window(window, index)
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, link_window)
     parser.add_argument("-s", dest="s", metavar="<src-window>", help="The window to link; the active one is the default.")
     parser.add_argument("-t", dest="t", metavar="<dst-index>", type=WindowIndex, help="The index to put it at.")

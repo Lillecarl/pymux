@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -5,10 +7,9 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import add_command
 
 
-def lock(pymux: "Pymux", args: argparse.Namespace) -> None:
+def lock(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Cover the screen with the program `lock-command` names, and give
     it the keyboard until it is done. The overlay of `display-popup`

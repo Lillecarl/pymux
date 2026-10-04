@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -5,11 +7,10 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser
-from pymux.commands import add_command
+from pymux.commands import CommandException, CommandParser, add_command
 
 
-def pane_matches_session_name(pymux: "Pymux", target: str) -> bool:
+def pane_matches_session_name(pymux: Pymux, target: str) -> bool:
     "Whether a target names a session of this server. (For has-session.)"
     # No target asks whether the server has a session at all, which is
     # what `has-session` with no `-t` means in tmux. A server with no
@@ -20,7 +21,7 @@ def pane_matches_session_name(pymux: "Pymux", target: str) -> bool:
     return pymux.get_session(target) is not None
 
 
-def has_session(pymux: "Pymux", args: argparse.Namespace) -> None:
+def has_session(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Check whether the session exists.
 
@@ -32,6 +33,6 @@ def has_session(pymux: "Pymux", args: argparse.Namespace) -> None:
         raise CommandException("can't find session: %s" % (target,))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, has_session)
     parser.add_argument("-t", dest="target_session", metavar="<target-session>", help="The session to look for.")

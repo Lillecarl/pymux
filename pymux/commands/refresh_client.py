@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -8,7 +10,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandParser, add_command
 
 
-def refresh_client(pymux: "Pymux", args: argparse.Namespace) -> None:
+def refresh_client(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Ask this client for a frame.
 
@@ -21,5 +23,5 @@ def refresh_client(pymux: "Pymux", args: argparse.Namespace) -> None:
     pymux.get_client_state().app.invalidate()
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     add_command(subparsers, refresh_client)

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -6,11 +8,10 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandException, CommandParser, add_command
-from pymux.commands.common import find_window, the_window
-from pymux.commands.common import add_format_arguments, print_object_format
+from pymux.commands.common import add_format_arguments, find_window, print_object_format, the_window
 
 
-def split_window(pymux: "Pymux", args: argparse.Namespace) -> None:
+def split_window(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Split this window into two panes, side by side or stacked.
     """
@@ -51,5 +52,5 @@ def add_arguments(parser: argparse.ArgumentParser):
     parser.add_argument("executable", nargs="?", metavar="<executable>")
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     add_arguments(add_command(subparsers, split_window))

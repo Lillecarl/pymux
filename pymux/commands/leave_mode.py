@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -5,11 +7,10 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser
-from pymux.commands import add_command
+from pymux.commands import CommandException, CommandParser, add_command
 
 
-def leave_mode(pymux: "Pymux", args: argparse.Namespace) -> None:
+def leave_mode(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Leave the innermost mode, and put back what entering it changed.
 
@@ -23,5 +24,5 @@ def leave_mode(pymux: "Pymux", args: argparse.Namespace) -> None:
         raise CommandException("no client attached: a mode belongs to a client")
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     add_command(subparsers, leave_mode)

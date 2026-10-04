@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING
 
@@ -6,13 +8,12 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser
-from pymux.commands import add_command
+from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import the_pane
 from pymux.enums import Woke
 
 
-def respawn_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
+def respawn_pane(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Kill the program of a pane and run a new one in its place.
 
@@ -29,7 +30,7 @@ def respawn_pane(pymux: "Pymux", args: argparse.Namespace) -> None:
     replace_pane_program(pymux, pane, args)
 
 
-def replace_pane_program(pymux: "Pymux", pane: "Pane", args: argparse.Namespace) -> None:
+def replace_pane_program(pymux: Pymux, pane: Pane, args: argparse.Namespace) -> None:
     """
     The tail `respawn-window` shares: the pane is chosen, and the
     program that runs in it is replaced.
@@ -53,7 +54,7 @@ def replace_pane_program(pymux: "Pymux", pane: "Pane", args: argparse.Namespace)
     pymux.invalidate(Woke.PANE_WAS_RESPAWNED)
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, respawn_pane)
     parser.add_argument("-k", dest="k", action="store_true", help="Kill a program that still runs.")
     parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to respawn.")

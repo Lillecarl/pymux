@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 from typing import TYPE_CHECKING, cast
 
@@ -17,7 +19,7 @@ from pymux.commands.common import (
 from pymux.format import format_pymux_string
 
 
-def _sessions(pymux: "Pymux", args: argparse.Namespace) -> list[Session]:
+def _sessions(pymux: Pymux, args: argparse.Namespace) -> list[Session]:
     """
     The sessions this listing covers.
 
@@ -36,7 +38,7 @@ def _sessions(pymux: "Pymux", args: argparse.Namespace) -> list[Session]:
     return [pymux.current_session]
 
 
-def list_windows(pymux: "Pymux", args: argparse.Namespace) -> None:
+def list_windows(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     List the windows of the session.
 
@@ -84,7 +86,7 @@ def list_windows(pymux: "Pymux", args: argparse.Namespace) -> None:
         show_listing(pymux, "list-windows", "\n".join(result))
 
 
-def register(subparsers: "argparse._SubParsersAction[CommandParser]"):
+def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, list_windows)
     parser.add_argument("-a", dest="a", action="store_true", help="Every window of every session.")
     parser.add_argument("-t", dest="target_window", metavar="<target-window>", help="The session whose windows to list.")
