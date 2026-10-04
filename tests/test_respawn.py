@@ -87,3 +87,46 @@ async def test_respawn_window_takes_active_pane_of_its_target():
             pymux.handle_command("respawn-window -k 'sleep 30'")
 
             assert window.active_pane.pane_id != old_id
+
+
+async def test_respawn_restarts_in_reported_directory():
+    "The new program starts where the old pane said it was."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pane = pymux.arrangement.get_active_pane()
+            pane.current_directory = "/tmp"
+
+            seen = {}
+            real_create_pane = pymux._create_pane
+
+            def spy(*args, **kwargs):
+                seen.update(kwargs)
+                return real_create_pane(*args, **kwargs)
+
+            pymux._create_pane = spy
+            respawn_pane(
+                pymux,
+                argparse.Namespace(k=True, target_pane=None, command="sleep 30"),
+            )
+
+            assert seen.get("start_directory") == "/tmp"
+
+
+async def test_respawn_without_report_starts_nowhere_special():
+    "A pane that never reported respawns the way a new one starts."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            seen = {}
+            real_create_pane = pymux._create_pane
+
+            def spy(*args, **kwargs):
+                seen.update(kwargs)
+                return real_create_pane(*args, **kwargs)
+
+            pymux._create_pane = spy
+            respawn_pane(
+                pymux,
+                argparse.Namespace(k=True, target_pane=None, command="sleep 30"),
+            )
+
+            assert seen.get("start_directory") is None

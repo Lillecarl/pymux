@@ -43,7 +43,12 @@ def replace_pane_program(pymux: "Pymux", pane: "Pane", args: argparse.Namespace)
         raise CommandException("Pane is busy: -k kills a program that runs.")
 
     pane.process.kill()
-    new_pane = pymux._create_pane(command=args.command or None)
+    # The pane stays where it was: a respawn restarts the program in
+    # the directory it reported, and a pane that never reported starts
+    # the way a new one does.
+    new_pane = pymux._create_pane(
+        command=args.command or None, start_directory=pane.current_directory
+    )
     pymux.arrangement.replace_pane(pane, new_pane)
     pymux.invalidate(Woke.PANE_WAS_RESPAWNED)
 
