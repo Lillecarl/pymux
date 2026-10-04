@@ -19,7 +19,7 @@ from .win32 import (
 
 #: The loaded Win32 library. `ctypes` exposes it on Windows only, so it
 #: is reached by name rather than imported.
-windll = getattr(ctypes, "windll")
+windll = ctypes.windll
 
 __all__ = [
     "PipeInstance",

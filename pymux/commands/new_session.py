@@ -27,7 +27,7 @@ def _axis(given: str | None, standing: int, watching: int) -> int:
     if given is None:
         return standing
     if given == "-":
-        return watching if watching else standing
+        return watching or standing
     try:
         wanted = int(given)
     except ValueError:

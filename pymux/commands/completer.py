@@ -340,5 +340,5 @@ def create_command_completer(pymux: Pymux):
         for action in command_parser._actions:
             fn = _VALUE_COMPLETERS.get((name, action.dest))
             if fn is not None:
-                setattr(action, "completer", partial(fn, pymux))
+                action.completer = partial(fn, pymux)
     return CommandCompleter()

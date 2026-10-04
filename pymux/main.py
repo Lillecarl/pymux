@@ -1344,8 +1344,7 @@ class Pymux:
         A target is the name, tmux's exact-match `=name`, or the id
         `$<number>`.
         """
-        if name.startswith("="):
-            name = name[1:]
+        name = name.removeprefix("=")
 
         if name.startswith("$") and name[1:].isdigit():
             session_id = SessionId(int(name[1:]))
@@ -3667,7 +3666,7 @@ exec pymux notify -u "$urgency" -- "$@"
             # (Otherwise, when running as a daemon, and stdout/stderr are not
             # available, it's hard to see what went wrong.)
             fd, path = tempfile.mkstemp(prefix="pymux.crash-")
-            logger.fatal("Pymux has crashed, dumping traceback to {0}".format(path))
+            logger.fatal(f"Pymux has crashed, dumping traceback to {path}")
             os.write(fd, traceback.format_exc().encode("utf-8"))
             os.close(fd)
             raise

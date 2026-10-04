@@ -53,7 +53,7 @@ from prompt_toolkit.layout.screen import Char, Screen
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.widgets import Dialog, SearchToolbar, TextArea
 
-import pymux.arrangement as arrangement
+from pymux import arrangement
 
 from .divided import Divided
 from .enums import Woke
@@ -3117,7 +3117,6 @@ def _create_container_for_process(
                     TracePaneWritePosition(pymux, arrangement_pane, content=arrangement_pane.terminal),
                 ]
             ),
-            #
             floats=[
                 # The title bar: this pane's title in the middle, and
                 # the panes beside it named at the edges.

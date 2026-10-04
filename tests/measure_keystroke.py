@@ -574,7 +574,7 @@ def main() -> int:
         crossed, counted_by_class, childless, shape = census
         print("\n--- the tree every key press walks ---")
         print("  %d containers, and %d of them hold nothing" % (crossed, sum(childless.values())))
-        print("")
+        print()
         print("  %8s %8s  %s" % ("crossed", "leaves", "class"))
         for name, count in counted_by_class.most_common():
             print("  %8d %8d  %s" % (count, childless[name], name))

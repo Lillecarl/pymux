@@ -6,7 +6,7 @@ from .win32 import connect_to_pipe, read_message_from_pipe, write_message_to_pip
 
 #: The loaded Win32 library. `ctypes` exposes it on Windows only, so it
 #: is reached by name rather than imported.
-windll = getattr(ctypes, "windll")
+windll = ctypes.windll
 
 __all__ = [
     "PipeClient",

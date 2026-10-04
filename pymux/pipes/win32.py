@@ -16,7 +16,7 @@ from .base import BrokenPipeError
 
 #: The loaded Win32 library. `ctypes` exposes it on Windows only, so it
 #: is reached by name rather than imported.
-windll = getattr(ctypes, "windll")
+windll = ctypes.windll
 
 __all__ = [
     "read_message_bytes_from_pipe",
@@ -193,8 +193,8 @@ async def wait_for_event(event):
     """
     ready = anyio.Event()
     loop = asyncio.get_running_loop()
-    add_win32_handle = getattr(loop, "add_win32_handle")
-    remove_win32_handle = getattr(loop, "remove_win32_handle")
+    add_win32_handle = loop.add_win32_handle
+    remove_win32_handle = loop.remove_win32_handle
 
     def handle_is_ready() -> None:
         remove_win32_handle(event)

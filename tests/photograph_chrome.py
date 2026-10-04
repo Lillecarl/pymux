@@ -778,15 +778,15 @@ def main(
             seat.keep_the_log(out)
             seat.stop()
 
-    print("")
+    print()
     print("%d pictures of pymux's chrome, under:" % len(taken))
     print("    %s" % out)
-    print("")
+    print()
     # Only the arrangement is judged, and a picture of the wrong one is
     # not kept. What the chrome looks like is still for a person.
     print("What these draw is not judged. Reading them is the work.")
     if lost:
-        print("")
+        print()
         print("%d took no picture:" % len(lost))
         for one in lost:
             print("    %s" % one)
