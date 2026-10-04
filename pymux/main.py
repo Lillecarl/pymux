@@ -1756,10 +1756,7 @@ class Pymux:
         """
         w = self.arrangement.get_active_window()
 
-        if w and w.active_pane:
-            title = w.active_pane.screen.titles.window
-        else:
-            title = ""
+        title = w.active_pane.screen.titles.window if w and w.active_pane else ""
 
         if title:
             return "%s - Pymux" % (title,)
@@ -1980,10 +1977,7 @@ class Pymux:
         # Start directory.
         path: str | None
 
-        if start_directory:
-            path = start_directory
-        else:
-            path = self._directory_to_start_in(window, session)
+        path = start_directory or self._directory_to_start_in(window, session)
 
         def before_exec():
             "Called in the process fork (in the child process)."
@@ -2025,18 +2019,15 @@ class Pymux:
             # of the pane, and name the opener for what reads $BROWSER.
             self._shim_pane_environment()
 
-        if command:
-            # `shlex.split` and not `str.split`: a command reaches this as
-            # one string, and the quoting inside it is what says where one
-            # argument ends. A plain split on whitespace tears
-            # `sh -c 'echo one two'` into seven words, and `sh` then reads
-            # `'echo` as the whole of its script.
-            #
-            # `run_pymux.run` builds the string with `shlex.quote`, so this
-            # undoes exactly what that did.
-            command_list = shlex.split(command)
-        else:
-            command_list = [self.default_shell]
+        # `shlex.split` and not `str.split`: a command reaches this as
+        # one string, and the quoting inside it is what says where one
+        # argument ends. A plain split on whitespace tears
+        # `sh -c 'echo one two'` into seven words, and `sh` then reads
+        # `'echo` as the whole of its script.
+        #
+        # `run_pymux.run` builds the string with `shlex.quote`, so this
+        # undoes exactly what that did.
+        command_list = shlex.split(command) if command else [self.default_shell]
 
         # The shim directory has to exist in this process, before the
         # fork: a directory made in the child is made once per pane,
@@ -3187,19 +3178,16 @@ exec pymux notify -u "$urgency" -- "$@"
         Lillecarl/pymux#283.
         """
         try:
-            if self.paint_screen:
-                # The theme colours the whole screen, and the palette
-                # a program asks for is part of that screen.
-                #
-                # **A pane has one palette and its clients may have two
-                # themes.** So this takes the theme of the client a
-                # person used last, which is the rule the line below
-                # already follows for a terminal's own colours, and the
-                # one that decides where a browser opens.
-                # Lillecarl/pymux#223.
-                base = theme_color_base(self.latest_theme())
-            else:
-                base = self.latest_client_color_base()
+            # The theme colours the whole screen, and the palette
+            # a program asks for is part of that screen.
+            #
+            # **A pane has one palette and its clients may have two
+            # themes.** So this takes the theme of the client a
+            # person used last, which is the rule the line below
+            # already follows for a terminal's own colours, and the
+            # one that decides where a browser opens.
+            # Lillecarl/pymux#223.
+            base = theme_color_base(self.latest_theme()) if self.paint_screen else self.latest_client_color_base()
             if base is None:
                 return
             pane.screen.set_color_base(base)

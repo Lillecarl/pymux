@@ -123,10 +123,7 @@ class Recorder:
         return future
 
     def __call__(self, packet) -> None:
-        if isinstance(packet, (bytes, bytearray)):
-            raw = bytes(packet)
-        else:
-            raw = str(packet).encode("utf-8")
+        raw = bytes(packet) if isinstance(packet, (bytes, bytearray)) else str(packet).encode("utf-8")
         self.packets.append(raw)
 
         try:

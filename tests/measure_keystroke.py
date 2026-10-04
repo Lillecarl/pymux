@@ -407,10 +407,7 @@ def _where(code) -> str:
     stays.
     """
     parts = Path(code.co_filename).parts
-    if "site-packages" in parts:
-        parts = parts[parts.index("site-packages") + 1 :]
-    else:
-        parts = parts[-2:]
+    parts = parts[parts.index("site-packages") + 1 :] if "site-packages" in parts else parts[-2:]
     return "%s:%d %s" % ("/".join(parts), code.co_firstlineno, code.co_qualname)
 
 

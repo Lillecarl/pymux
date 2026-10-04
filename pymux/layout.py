@@ -235,10 +235,7 @@ def overlay_size(given: str | None, available: int) -> int:
     text = (given or DEFAULT_OVERLAY_SIZE).strip()
 
     try:
-        if text.endswith("%"):
-            cells = available * int(text[:-1]) // 100
-        else:
-            cells = int(text)
+        cells = available * int(text[:-1]) // 100 if text.endswith("%") else int(text)
     except ValueError:
         cells = available * int(DEFAULT_OVERLAY_SIZE[:-1]) // 100
 
@@ -2975,10 +2972,7 @@ def _create_container_for_process(
     terminal_is_focused = has_focus(arrangement_pane.terminal)
 
     def get_terminal_style() -> str:
-        if terminal_is_focused():
-            result = "class:terminal.focused"
-        else:
-            result = "class:terminal"
+        result = "class:terminal.focused" if terminal_is_focused() else "class:terminal"
 
         if pymux.paint_screen:
             # The theme's background behind every cell the program left

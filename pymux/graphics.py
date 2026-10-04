@@ -597,11 +597,8 @@ class ClientGraphics:
 
         for index, chunk in enumerate(chunks):
             more = 1 if index < len(chunks) - 1 else 0
-            if index == 0:
-                # The keys of the first chunk govern the transmission.
-                control = "a=t,i=%i,t=d,q=2,%s,m=%i" % (outer_id, keys, more)
-            else:
-                control = "m=%i" % more
+            # The keys of the first chunk govern the transmission.
+            control = "a=t,i=%i,t=d,q=2,%s,m=%i" % (outer_id, keys, more) if index == 0 else "m=%i" % more
             self._write_raw("\x1b_G%s;%s\x1b\\" % (control, chunk))
             self._flush()
 
