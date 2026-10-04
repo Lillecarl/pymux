@@ -19,7 +19,7 @@ of the same key sent the plain one. One table now, and
 `tests/test_send_keys.py` reads the bytes. Lillecarl/pymux#119.
 """
 
-from typing import Dict, Tuple
+from __future__ import annotations
 
 from prompt_toolkit.input.vt100_parser import ANSI_SEQUENCES
 from prompt_toolkit.keys import KeyName, Keys
@@ -143,7 +143,7 @@ def pymux_key_to_prompt_toolkit_key_sequence(key):
 _LINUX_CONSOLE_FORM = "\x1b[["
 
 
-def _keys_to_data() -> Dict[Keys, str]:
+def _keys_to_data() -> dict[Keys, str]:
     """
     The bytes of each prompt_toolkit key, out of the table that reads
     them.
@@ -159,7 +159,7 @@ def _keys_to_data() -> Dict[Keys, str]:
     The Linux console forms are left out as well, for the reason above
     them.
     """
-    result: Dict[Keys, str] = {}
+    result: dict[Keys, str] = {}
     for vt100_data, key in ANSI_SEQUENCES.items():
         if vt100_data.startswith(_LINUX_CONSOLE_FORM):
             continue
@@ -178,9 +178,7 @@ def _keys_to_data() -> Dict[Keys, str]:
 #: of these keys: they reach pymux through the reader in `keys.py`,
 #: out of a terminal that speaks a newer encoding.
 #: Lillecarl/pymux#168.
-_CTRL_SHIFT_TO_VT100 = {
-    getattr(Keys, "ControlShift%s" % chr(ord("A") + i)): chr(i + 1) for i in range(26)
-}
+_CTRL_SHIFT_TO_VT100 = {getattr(Keys, "ControlShift%s" % chr(ord("A") + i)): chr(i + 1) for i in range(26)}
 
 _PROMPT_TOOLKIT_KEY_TO_VT100 = {**_keys_to_data(), **_CTRL_SHIFT_TO_VT100}
 
@@ -194,7 +192,7 @@ def prompt_toolkit_key_to_vt100_key(key: str, application_mode: bool = False) ->
     SS3 form of an arrow. Only the four arrows have one, and a program
     that never asked for it must not be given it.
     """
-    application_mode_keys: Dict[str, str] = {
+    application_mode_keys: dict[str, str] = {
         Keys.Up: "\x1bOA",
         Keys.Left: "\x1bOD",
         Keys.Right: "\x1bOC",
@@ -265,12 +263,11 @@ def _built_name_as_legacy_bytes(key: str) -> str | None:
 #: the key and `prompt_toolkit_key_to_vt100_key` gives what ctrl alone
 #: gives, which is what a legacy keyboard would have sent.
 #: Lillecarl/pymux#168.
-_CTRL_SHIFT_LETTERS: Dict[str, Tuple[str, ...]] = {
-    "C-S-%s" % chr(ord("a") + i): (getattr(Keys, "ControlShift%s" % chr(ord("A") + i)),)
-    for i in range(26)
+_CTRL_SHIFT_LETTERS: dict[str, tuple[str, ...]] = {
+    "C-S-%s" % chr(ord("a") + i): (getattr(Keys, "ControlShift%s" % chr(ord("A") + i)),) for i in range(26)
 }
 
-PYMUX_TO_PROMPT_TOOLKIT_KEYS: Dict[str, Tuple[str, ...]] = {
+PYMUX_TO_PROMPT_TOOLKIT_KEYS: dict[str, tuple[str, ...]] = {
     **_CTRL_SHIFT_LETTERS,
     # The comma is what makes this a tuple of one. Without it the value
     # is the string, and a caller that walks the keys of a sequence

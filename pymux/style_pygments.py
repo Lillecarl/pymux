@@ -30,6 +30,8 @@ So the rest is derived, by three rules:
   because "a pane ended" must never be quiet.
 """
 
+from __future__ import annotations
+
 from functools import lru_cache
 from typing import overload
 
@@ -113,9 +115,7 @@ def _roles(style_cls) -> dict[str, str]:
     from pygments.token import Token
 
     @overload
-    def color(
-        token, fallback: None = None, accept_bg: bool = False
-    ) -> str | None: ...
+    def color(token, fallback: None = None, accept_bg: bool = False) -> str | None: ...
     @overload
     def color(token, fallback: str, accept_bg: bool = False) -> str: ...
 
@@ -156,9 +156,7 @@ def _roles(style_cls) -> dict[str, str]:
             or color(Token.Error, fallback=None, accept_bg=True)
             or "#ff0000"
         )
-    highlight = _hex(style_cls.highlight_color) if style_cls.highlight_color else _blend(
-        surface, text, 0.1
-    )
+    highlight = _hex(style_cls.highlight_color) if style_cls.highlight_color else _blend(surface, text, 0.1)
 
     def on(a):
         return _readable(a)
@@ -185,9 +183,7 @@ def _roles(style_cls) -> dict[str, str]:
         "color-0": _blend(surface, "#000000", 0.35),
         "color-1": error,
         "color-2": base(Token.String, conventional_key="color-2"),
-        "color-3": base(
-            Token.Literal.String.Escape, Token.Number, conventional_key="color-3"
-        ),
+        "color-3": base(Token.Literal.String.Escape, Token.Number, conventional_key="color-3"),
         "color-4": base(Token.Name.Builtin, Token.Name.Tag, conventional_key="color-4"),
         "color-5": base(
             Token.Keyword.Type,
@@ -255,9 +251,7 @@ def _roles(style_cls) -> dict[str, str]:
 
 #: The words of a pygments fragment that say how a colour is drawn
 #: rather than what it is.
-_WEIGHTS = frozenset(
-    {"bold", "italic", "underline", "noinherit", "reverse", "blink", "strike"}
-)
+_WEIGHTS = frozenset({"bold", "italic", "underline", "noinherit", "reverse", "blink", "strike"})
 
 
 def _hex(word: str) -> str:

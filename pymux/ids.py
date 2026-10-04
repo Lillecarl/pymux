@@ -16,6 +16,8 @@ and the two parsing sites (`-t` spellings, client packets) construct
 these, and everything else only carries them. Lillecarl/pymux#508.
 """
 
+from __future__ import annotations
+
 from typing import NewType
 
 from typing_extensions import override
@@ -34,11 +36,11 @@ class PaneIndex(int):
     """A pane's slot in its window. Recycled, 0-based, display only."""
 
     @override
-    def __add__(self, other: int) -> "PaneIndex":
+    def __add__(self, other: int) -> PaneIndex:
         return PaneIndex(super().__add__(other))
 
     @override
-    def __sub__(self, other: int) -> "PaneIndex":
+    def __sub__(self, other: int) -> PaneIndex:
         return PaneIndex(super().__sub__(other))
 
 
@@ -46,9 +48,9 @@ class WindowIndex(int):
     """A window's slot in its session. Recycled, display only."""
 
     @override
-    def __add__(self, other: int) -> "WindowIndex":
+    def __add__(self, other: int) -> WindowIndex:
         return WindowIndex(super().__add__(other))
 
     @override
-    def __sub__(self, other: int) -> "WindowIndex":
+    def __sub__(self, other: int) -> WindowIndex:
         return WindowIndex(super().__sub__(other))

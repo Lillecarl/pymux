@@ -1,19 +1,19 @@
-# encoding: utf-8
 """
 The layout engine. This builds the prompt_toolkit layout.
 """
+
+from __future__ import annotations
 
 import argparse
 import datetime
 import weakref
 from functools import partial
-from typing import TYPE_CHECKING, Callable, Dict, List, Tuple, cast
+from typing import TYPE_CHECKING, Callable, cast
 
 from prompt_toolkit.application import Application, get_app
-from prompt_toolkit.enums import EditingMode
-from prompt_toolkit.key_binding.vi_state import InputMode
 from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.data_structures import Point, Size
+from prompt_toolkit.enums import EditingMode
 from prompt_toolkit.filters import (
     Condition,
     has_completions,
@@ -21,6 +21,7 @@ from prompt_toolkit.filters import (
     is_done,
 )
 from prompt_toolkit.formatted_text import HTML, FormattedText, StyleAndTextTuples
+from prompt_toolkit.key_binding.vi_state import InputMode
 from prompt_toolkit.layout.containers import (
     AnyContainer,
     ConditionalContainer,
@@ -29,10 +30,10 @@ from prompt_toolkit.layout.containers import (
     Float,
     FloatContainer,
     HSplit,
+    ScrollOffsets,
     VSplit,
     Window,
     WindowAlign,
-    ScrollOffsets,
     WritePosition,
     to_container,
 )
@@ -50,23 +51,22 @@ from prompt_toolkit.layout.processors import (
 from prompt_toolkit.layout.screen import Char, Screen
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.widgets import Dialog, SearchToolbar, TextArea
-
-
-import pymux.arrangement as arrangement
 from typing_extensions import override
 
+import pymux.arrangement as arrangement
+
+from .divided import Divided
 from .enums import Woke
 from .filters import WaitsForConfirmation
 from .format import format_pymux_string
 from .log import logger
-from .divided import Divided
 from .plan_container import PlanContainer
 from .plane import Plan, Side, View, bounding_box
 from .strip import Strip
 from .style import tinted
 from .tiling import BORDER_WIDTH, Gaps
-from .zoomed import Zoomed
 from .titlebar import PaneTitleBar
+from .zoomed import Zoomed
 
 if TYPE_CHECKING:
     from prompt_toolkit.layout.controls import BufferControl, NotImplementedOrNone
@@ -297,10 +297,7 @@ class Background(Container):
         # The pattern repeats every three rows. Build one row of each of
         # the three, and copy it. `dict.update` runs in C, which makes a
         # render of a wide screen about a tenth cheaper.
-        rows = [
-            {x: (dot if (x + phase) % 3 == 0 else default_char) for x in columns}
-            for phase in range(3)
-        ]
+        rows = [{x: (dot if (x + phase) % 3 == 0 else default_char) for x in columns} for phase in range(3)]
 
         data_buffer = screen.data_buffer
 
@@ -308,7 +305,7 @@ class Background(Container):
             data_buffer[y].update(rows[y % 3])
 
     @override
-    def get_children(self) -> List[Container]:
+    def get_children(self) -> list[Container]:
         return []
 
 
@@ -381,9 +378,7 @@ _numbers = list(
 )
 
 
-def _draw_number(
-    screen, x_offset, y_offset, number, style="class:clock", transparent=False
-):
+def _draw_number(screen, x_offset, y_offset, number, style="class:clock", transparent=False):
     "Write number at position."
     fg = Char(" ", "class:clock")
     bg = Char(" ", "")
@@ -405,7 +400,7 @@ class BigClock(Container):
     WIDTH = 28
     HEIGHT = 5
 
-    def __init__(self, pymux: "Pymux", on_click: Callable[[], None]):
+    def __init__(self, pymux: Pymux, on_click: Callable[[], None]):
         self.pymux = pymux
         self.on_click = on_click
 
@@ -474,7 +469,7 @@ class BigClock(Container):
         return D.exact(BigClock.HEIGHT)
 
     @override
-    def get_children(self) -> List[Container]:
+    def get_children(self) -> list[Container]:
         return []
 
 
@@ -486,7 +481,7 @@ class PaneNumber(Container):  # XXX: make FormattedTextControl
     WIDTH = 5
     HEIGHT = 5
 
-    def __init__(self, pymux: "Pymux", arrangement_pane: arrangement.Pane) -> None:
+    def __init__(self, pymux: Pymux, arrangement_pane: arrangement.Pane) -> None:
         self.pymux = pymux
         self.arrangement_pane = arrangement_pane
 
@@ -539,7 +534,7 @@ class PaneNumber(Container):  # XXX: make FormattedTextControl
         screen.draw_with_z_index(z_index=Z_INDEX.PANE_NUMBER, draw_func=draw_func)
 
     @override
-    def get_children(self) -> List[Container]:
+    def get_children(self) -> list[Container]:
         return []
 
 
@@ -603,7 +598,7 @@ class LayoutManager:
     The main layout class, that contains the whole Pymux layout.
     """
 
-    def __init__(self, pymux: "Pymux", client_state) -> None:
+    def __init__(self, pymux: Pymux, client_state) -> None:
         self.pymux = pymux
         self.client_state = client_state
 
@@ -621,7 +616,7 @@ class LayoutManager:
         self._popup_textarea: TextArea | None = None
 
         # The container of the overlay pane, and the pane it belongs to.
-        self._overlay_for_pane: Tuple[arrangement.Pane, Container] | None = None
+        self._overlay_for_pane: tuple[arrangement.Pane, Container] | None = None
 
         #: What a `DynamicContainer` gets when there is nothing to draw.
         #:
@@ -680,14 +675,14 @@ class LayoutManager:
         #: was measured for, and the plan itself. Everything drawn in
         #: one frame asks the same question, so it is worked out once.
         #: `forget_plan` says when it goes. Lillecarl/pymux#217.
-        self._frame_plan: "Tuple[object, Size, Plan] | None" = None
+        self._frame_plan: tuple[object, Size, Plan] | None = None
 
         self.layout = self._create_layout()
 
         # Keep track of render information.
 
     @property
-    def pane_write_positions(self) -> Dict[arrangement.Pane, WritePosition]:
+    def pane_write_positions(self) -> dict[arrangement.Pane, WritePosition]:
         """
         Where each pane was drawn, in the last render of this client.
 
@@ -736,7 +731,7 @@ class LayoutManager:
             columns=min(plane.columns, mine.columns),
         )
 
-    def pane_container(self) -> "PlanContainer | None":
+    def pane_container(self) -> PlanContainer | None:
         """
         The container that drew the panes of the window this client
         shows, or `None` before it has built one.
@@ -746,7 +741,7 @@ class LayoutManager:
         """
         return self._body.panes()
 
-    def plan_of_this_frame(self, window, size: Size) -> "Plan | None":
+    def plan_of_this_frame(self, window, size: Size) -> Plan | None:
         """
         The plan already worked out for this window, this frame.
 
@@ -806,9 +801,7 @@ class LayoutManager:
             return
 
         search_textarea = SearchToolbar()
-        self._popup_textarea = TextArea(
-            scrollbar=True, read_only=True, search_field=search_textarea
-        )
+        self._popup_textarea = TextArea(scrollbar=True, read_only=True, search_field=search_textarea)
         self.popup_dialog = Dialog(
             title="Keys",
             body=HSplit(
@@ -817,11 +810,7 @@ class LayoutManager:
                     self._popup_textarea,
                     search_textarea,
                     Window(
-                        FormattedTextControl(
-                            text=HTML(
-                                "Press [<b>q</b>] to quit or [<b>/</b>] for searching."
-                            )
-                        ),
+                        FormattedTextControl(text=HTML("Press [<b>q</b>] to quit or [<b>/</b>] for searching.")),
                         align=WindowAlign.CENTER,
                         height=1,
                     ),
@@ -841,7 +830,7 @@ class LayoutManager:
         self.client_state.display_popup = True
         get_app().layout.focus(self._popup_textarea)
 
-    def every_window(self) -> List["arrangement.Window"]:
+    def every_window(self) -> list[arrangement.Window]:
         """
         The windows of every session of this server, in session order.
 
@@ -849,11 +838,7 @@ class LayoutManager:
         first having to name the session it is in. tmux's choose-tree
         does the same thing with a tree. Lillecarl/pymux#323.
         """
-        return [
-            window
-            for session in self.pymux.sessions
-            for window in session.arrangement.windows
-        ]
+        return [window for session in self.pymux.sessions for window in session.arrangement.windows]
 
     def display_chooser(self, template: str = "") -> None:
         """
@@ -884,9 +869,7 @@ class LayoutManager:
         state.menu_entries = []
         state.choose_window_command = template
         state.choose_window_filter.reset()
-        state.choose_window_index = (
-            windows.index(active) if active in windows else 0
-        )
+        state.choose_window_index = windows.index(active) if active in windows else 0
         self._window_bar()
         assert self._bar_rows is not None
         get_app().layout.focus(self._bar_rows)
@@ -895,7 +878,7 @@ class LayoutManager:
         "The columns the bar flows its entries across."
         return max(1, self.room_this_client_has.columns)
 
-    def chooser_entries(self) -> List[str]:
+    def chooser_entries(self) -> list[str]:
         """
         What the bar says about each window it lists, in its order.
 
@@ -928,7 +911,7 @@ class LayoutManager:
             entries.append(label)
         return entries
 
-    def chooser_lines(self, width: int) -> List[List[int]]:
+    def chooser_lines(self, width: int) -> list[list[int]]:
         """
         The entries packed into lines, as places in the list.
 
@@ -937,7 +920,7 @@ class LayoutManager:
         and the screen cuts it, which is what a long word does too.
         Lillecarl/pymux#327.
         """
-        lines: List[List[int]] = [[]]
+        lines: list[list[int]] = [[]]
         room = width
 
         for index, label in enumerate(self.chooser_entries()):
@@ -1135,10 +1118,10 @@ class LayoutManager:
         self.close_menu()
         self.pymux.handle_command(command)
 
-    def _create_menu_click_handler(self, entry) -> Callable[[MouseEvent], "NotImplementedOrNone"]:
+    def _create_menu_click_handler(self, entry) -> Callable[[MouseEvent], NotImplementedOrNone]:
         "Return a mouse handler that runs the entry when clicking."
 
-        def handler(mouse_event: MouseEvent) -> "NotImplementedOrNone":
+        def handler(mouse_event: MouseEvent) -> NotImplementedOrNone:
             if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
                 self._run_menu_entry(entry)
                 return None
@@ -1212,46 +1195,27 @@ class LayoutManager:
                 ALL_WINDOW_OPTIONS,
             )
 
-            names = sorted(
-                set(ALL_OPTIONS) | set(ALL_WINDOW_OPTIONS) | set(ALL_CLIENT_OPTIONS)
-            )
+            names = sorted(set(ALL_OPTIONS) | set(ALL_WINDOW_OPTIONS) | set(ALL_CLIENT_OPTIONS))
             if not text:
                 return names
-            return [
-                name
-                for name in names
-                if text in name.lower()
-                or text in option_value_of(self.pymux, name).lower()
-            ]
+            return [name for name in names if text in name.lower() or text in option_value_of(self.pymux, name).lower()]
         if self.client_state.choose_notifications:
-            records = list(
-                reversed(self.pymux.notification_center.notifications())
-            )
+            records = list(reversed(self.pymux.notification_center.notifications()))
             if not text:
                 return records
-            return [
-                record
-                for record in records
-                if text in record.title.lower() or text in record.body.lower()
-            ]
+            return [record for record in records if text in record.title.lower() or text in record.body.lower()]
         if self.client_state.choose_buffer:
             buffers = self.pymux.named_buffers
             if not text:
                 return sorted(buffers)
-            return [
-                name
-                for name in sorted(buffers)
-                if text in name.lower() or text in str(len(buffers[name]))
-            ]
+            return [name for name in sorted(buffers) if text in name.lower() or text in str(len(buffers[name]))]
         windows = self.every_window()
         if not text:
             return windows
         return [
             w
             for w in windows
-            if text in w.name.lower()
-            or text in str(w.index)
-            or text in self._session_name_of(w).lower()
+            if text in w.name.lower() or text in str(w.index) or text in self._session_name_of(w).lower()
         ]
 
     def _session_name_of(self, window) -> str:
@@ -1298,9 +1262,7 @@ class LayoutManager:
 
         if template and session is not None:
             self.leave_chooser(restore=True)
-            self.pymux.handle_command(
-                template.replace("%%", "%s:%i" % (session.name, window.index))
-            )
+            self.pymux.handle_command(template.replace("%%", "%s:%i" % (session.name, window.index)))
             return
 
         self.leave_chooser(restore=False)
@@ -1351,12 +1313,10 @@ class LayoutManager:
         window.active_pane = pane
         self.pymux.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
 
-    def _create_select_window_handler(
-        self, window: arrangement.Window
-    ) -> Callable[[MouseEvent], "NotImplementedOrNone"]:
+    def _create_select_window_handler(self, window: arrangement.Window) -> Callable[[MouseEvent], NotImplementedOrNone]:
         "Return a mouse handler that selects the given window when clicking."
 
-        def handler(mouse_event: MouseEvent) -> "NotImplementedOrNone":
+        def handler(mouse_event: MouseEvent) -> NotImplementedOrNone:
             if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
                 self.client_state.session.arrangement.set_active_window(window)
                 self.pymux.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
@@ -1415,7 +1375,7 @@ class LayoutManager:
             client=self.client_state,
         )
 
-    def what_time_moves(self) -> Tuple[str, ...]:
+    def what_time_moves(self) -> tuple[str, ...]:
         """
         Every string on this client's screen that changes on its own.
 
@@ -1447,7 +1407,7 @@ class LayoutManager:
         are in the window it looks at. Lillecarl/pymux#251.
         """
         pymux = self.pymux
-        parts: List[str] = []
+        parts: list[str] = []
 
         if pymux.show_status:
             parts.append(self._get_status_left_tokens())
@@ -1470,7 +1430,7 @@ class LayoutManager:
 
         return tuple(parts)
 
-    def _panes_in_view(self) -> List:
+    def _panes_in_view(self) -> list:
         "The panes of the window this client looks at, or none."
         try:
             return list(self.client_state.session.arrangement.get_active_window().panes)
@@ -1530,9 +1490,7 @@ class LayoutManager:
             # line. Saying it twice is one row wasted and one thing to
             # read. Lillecarl/pymux#220.
             return []
-        return self._vi_mode_tokens() + [
-            ("class:commandline.prompt", "%s " % (self.client_state.prompt_text,))
-        ]
+        return self._vi_mode_tokens() + [("class:commandline.prompt", "%s " % (self.client_state.prompt_text,))]
 
     def _overlay_container(self) -> Container:
         """
@@ -1671,9 +1629,7 @@ class LayoutManager:
                 Window(
                     height=1,
                     align=WindowAlign.CENTER,
-                    content=FormattedTextControl(
-                        lambda: [("class:commandpalette.title", title())]
-                    ),
+                    content=FormattedTextControl(lambda: [("class:commandpalette.title", title())]),
                     style="class:commandpalette.titlebar",
                 ),
                 window,
@@ -1717,9 +1673,7 @@ class LayoutManager:
                 Window(
                     height=1,
                     align=WindowAlign.CENTER,
-                    content=FormattedTextControl(
-                        lambda: [("class:commandpalette.title", " Prefix ")]
-                    ),
+                    content=FormattedTextControl(lambda: [("class:commandpalette.title", " Prefix ")]),
                     style="class:commandpalette.titlebar",
                 ),
                 Window(
@@ -1770,9 +1724,7 @@ class LayoutManager:
                 self._chooser_tokens,
                 focusable=True,
                 show_cursor=False,
-                get_cursor_position=lambda: Point(
-                    0, self.client_state.choose_window_index
-                ),
+                get_cursor_position=lambda: Point(0, self.client_state.choose_window_index),
             ),
             height=lambda: D(min=1, max=self._chooser_room()),
             style="class:commandpalette",
@@ -1783,15 +1735,11 @@ class LayoutManager:
                 Window(
                     width=2,
                     height=1,
-                    content=FormattedTextControl(
-                        lambda: [("class:chooser.hint", "/ ")]
-                    ),
+                    content=FormattedTextControl(lambda: [("class:chooser.hint", "/ ")]),
                     style="class:commandpalette",
                 ),
                 Window(
-                    content=BufferControl(
-                        buffer=self.client_state.choose_window_filter
-                    ),
+                    content=BufferControl(buffer=self.client_state.choose_window_filter),
                     height=1,
                     style="class:commandpalette",
                 ),
@@ -1803,9 +1751,7 @@ class LayoutManager:
                     height=1,
                     align=WindowAlign.CENTER,
                     content=FormattedTextControl(
-                        lambda: [
-                            ("class:commandpalette.title", " %s " % self._chooser_title())
-                        ]
+                        lambda: [("class:commandpalette.title", " %s " % self._chooser_title())]
                     ),
                     style="class:commandpalette.titlebar",
                 ),
@@ -1837,9 +1783,7 @@ class LayoutManager:
                 focusable=True,
                 show_cursor=False,
             ),
-            height=lambda: D.exact(
-                len(self.chooser_lines(self._bar_width()))
-            ),
+            height=lambda: D.exact(len(self.chooser_lines(self._bar_width()))),
             wrap_lines=False,
             style="class:commandpalette",
         )
@@ -1849,15 +1793,11 @@ class LayoutManager:
                 Window(
                     width=2,
                     height=1,
-                    content=FormattedTextControl(
-                        lambda: [("class:chooser.hint", "/ ")]
-                    ),
+                    content=FormattedTextControl(lambda: [("class:chooser.hint", "/ ")]),
                     style="class:commandpalette",
                 ),
                 Window(
-                    content=BufferControl(
-                        buffer=self.client_state.choose_window_filter
-                    ),
+                    content=BufferControl(buffer=self.client_state.choose_window_filter),
                     height=1,
                     style="class:commandpalette",
                 ),
@@ -1938,8 +1878,7 @@ class LayoutManager:
             tokens.append(
                 (
                     style,
-                    "%s%s = %s%s\n"
-                    % ("> " if i == chosen else "  ", name, value, kind),
+                    "%s%s = %s%s\n" % ("> " if i == chosen else "  ", name, value, kind),
                     self._create_chooser_click_handler(i),
                 )
             )
@@ -1964,14 +1903,11 @@ class LayoutManager:
             text = record.title
             if record.body:
                 text += " - " + record.body
-            source = (
-                "%%%d" % record.pane_id if record.pane_id is not None else "-"
-            )
+            source = "%%%d" % record.pane_id if record.pane_id is not None else "-"
             tokens.append(
                 (
                     style,
-                    "%s%s %s (%s)\n"
-                    % ("> " if i == chosen else "  ", when, text[:120], source),
+                    "%s%s %s (%s)\n" % ("> " if i == chosen else "  ", when, text[:120], source),
                     self._create_chooser_click_handler(i),
                 )
             )
@@ -2006,12 +1942,10 @@ class LayoutManager:
             )
         return tokens
 
-    def _create_buffer_click_handler(
-        self, row: int
-    ) -> Callable[[MouseEvent], "NotImplementedOrNone"]:
+    def _create_buffer_click_handler(self, row: int) -> Callable[[MouseEvent], NotImplementedOrNone]:
         "Return a mouse handler that chooses the buffer on this row."
 
-        def handler(mouse_event: MouseEvent) -> "NotImplementedOrNone":
+        def handler(mouse_event: MouseEvent) -> NotImplementedOrNone:
             if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
                 self.client_state.choose_window_index = row
                 self.choose_pointed_buffer()
@@ -2048,25 +1982,21 @@ class LayoutManager:
                     tokens.append(("class:commandpalette", " "))
                 tokens.append(
                     (
-                        "class:chooser.selected"
-                        if index == chosen
-                        else "class:commandpalette",
+                        "class:chooser.selected" if index == chosen else "class:commandpalette",
                         entries[index],
                         self._create_chooser_click_handler(index),
                     )
                 )
         return tokens
 
-    def _create_chooser_click_handler(
-        self, row: int
-    ) -> Callable[[MouseEvent], "NotImplementedOrNone"]:
+    def _create_chooser_click_handler(self, row: int) -> Callable[[MouseEvent], NotImplementedOrNone]:
         """
         Return a mouse handler that takes the row: the window it
         names, the buffer it names, or the option it names, by the
         kind that shows.
         """
 
-        def handler(mouse_event: MouseEvent) -> "NotImplementedOrNone":
+        def handler(mouse_event: MouseEvent) -> NotImplementedOrNone:
             if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
                 if self.client_state.choose_options:
                     self.client_state.choose_window_index = row
@@ -2164,15 +2094,11 @@ class LayoutManager:
         palette = Condition(lambda: self.pymux.command_palette)
         # A prompt that knows its answers draws in a box, because the
         # completions are what need the room. Lillecarl/pymux#220.
-        asks_for_key = Condition(
-            lambda: self.client_state.prompt_completer is not None
-        )
+        asks_for_key = Condition(lambda: self.client_state.prompt_completer is not None)
         in_box = (has_focus(self.client_state.command_buffer) & palette) | (
             has_focus(self.client_state.prompt_buffer) & asks_for_key
         )
-        which_key_shows = Condition(lambda: self.pymux.which_key) & Condition(
-            lambda: self.client_state.has_prefix
-        )
+        which_key_shows = Condition(lambda: self.pymux.which_key) & Condition(lambda: self.client_state.has_prefix)
 
         return FloatContainer(
             content=HSplit(
@@ -2195,34 +2121,24 @@ class LayoutManager:
                                 # Left.
                                 Window(
                                     height=1,
-                                    width=(
-                                        lambda: D(max=self.pymux.status_left_length)
-                                    ),
+                                    width=(lambda: D(max=self.pymux.status_left_length)),
                                     dont_extend_width=True,
-                                    content=FormattedTextControl(
-                                        self._get_status_left_tokens
-                                    ),
+                                    content=FormattedTextControl(self._get_status_left_tokens),
                                 ),
                                 # List of windows in the middle.
                                 Window(
                                     height=1,
                                     char=" ",
                                     align=self._get_align,
-                                    content=FormattedTextControl(
-                                        self._get_status_tokens
-                                    ),
+                                    content=FormattedTextControl(self._get_status_tokens),
                                 ),
                                 # Right.
                                 Window(
                                     height=1,
-                                    width=(
-                                        lambda: D(max=self.pymux.status_right_length)
-                                    ),
+                                    width=(lambda: D(max=self.pymux.status_right_length)),
                                     dont_extend_width=True,
                                     align=WindowAlign.RIGHT,
-                                    content=FormattedTextControl(
-                                        self._get_status_right_tokens
-                                    ),
+                                    content=FormattedTextControl(self._get_status_right_tokens),
                                 ),
                             ],
                             z_index=Z_INDEX.STATUS_BAR,
@@ -2258,9 +2174,7 @@ class LayoutManager:
                     content=ConditionalContainer(
                         content=Window(
                             height=1,
-                            content=ConfirmationToolbar(
-                                self.pymux, self.client_state
-                            ),
+                            content=ConfirmationToolbar(self.pymux, self.client_state),
                         ),
                         filter=waits_for_confirmation,
                     ),
@@ -2274,14 +2188,12 @@ class LayoutManager:
                             # ':' prompt toolbar.
                             ConditionalContainer(
                                 content=self._command_line_window(),
-                                filter=has_focus(self.client_state.command_buffer)
-                                & ~palette,
+                                filter=has_focus(self.client_state.command_buffer) & ~palette,
                             ),
                             # Other command-prompt commands toolbar.
                             ConditionalContainer(
                                 content=self._prompt_window(),
-                                filter=has_focus(self.client_state.prompt_buffer)
-                                & ~asks_for_key,
+                                filter=has_focus(self.client_state.prompt_buffer) & ~asks_for_key,
                             ),
                         ]
                     ),
@@ -2325,8 +2237,7 @@ class LayoutManager:
                 Float(
                     content=ConditionalContainer(
                         content=DynamicContainer(self._key_box),
-                        filter=has_focus(self.client_state.prompt_buffer)
-                        & asks_for_key,
+                        filter=has_focus(self.client_state.prompt_buffer) & asks_for_key,
                     ),
                     left=BOX_SIDE,
                     right=BOX_SIDE,
@@ -2353,9 +2264,11 @@ class LayoutManager:
                     content=ConditionalContainer(
                         content=DynamicContainer(self._chooser_box),
                         filter=Condition(
-                            lambda: self.client_state.choose_buffer
-                            or self.client_state.choose_options
-                            or self.client_state.choose_notifications
+                            lambda: (
+                                self.client_state.choose_buffer
+                                or self.client_state.choose_options
+                                or self.client_state.choose_notifications
+                            )
                         ),
                     ),
                     left=BOX_SIDE,
@@ -2378,7 +2291,6 @@ class LayoutManager:
                     top=0,
                     z_index=Z_INDEX.POPUP,
                 ),
-
                 # The menu that `display-menu` opened. The same
                 # kind of box as the two choosers above, one at a
                 # time with them, and no bottom of its own: it takes
@@ -2408,10 +2320,7 @@ class LayoutManager:
                 Float(
                     content=ConditionalContainer(
                         content=DynamicContainer(self._which_key_box),
-                        filter=which_key_shows
-                        & Condition(
-                            lambda: not self._cursor_is_in_top_right()
-                        ),
+                        filter=which_key_shows & Condition(lambda: not self._cursor_is_in_top_right()),
                     ),
                     top=0,
                     right=1,
@@ -2420,8 +2329,7 @@ class LayoutManager:
                 Float(
                     content=ConditionalContainer(
                         content=DynamicContainer(self._which_key_box),
-                        filter=which_key_shows
-                        & Condition(lambda: self._cursor_is_in_top_right()),
+                        filter=which_key_shows & Condition(lambda: self._cursor_is_in_top_right()),
                     ),
                     # The status line keeps its row.
                     bottom=2,
@@ -2460,9 +2368,7 @@ class ConfirmationToolbar(FormattedTextControl):
                 ("class:question", " "),
                 (
                     "class:question",
-                    format_pymux_string(
-                        pymux, client_state.confirm_text or "", client=client_state
-                    ),
+                    format_pymux_string(pymux, client_state.confirm_text or "", client=client_state),
                 ),
                 ("class:question", " "),
                 ("class:yesno", "  y/n"),
@@ -2483,19 +2389,17 @@ class DynamicBody(Container):
     arrangement changes, without doing any synchronisation.
     """
 
-    def __init__(self, pymux: "Pymux") -> None:
+    def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
-        self._bodies_for_app: weakref.WeakKeyDictionary[
-            Application, Tuple[str, Container]
-        ] = weakref.WeakKeyDictionary()  # Maps Application to (hash, Container)
+        self._bodies_for_app: weakref.WeakKeyDictionary[Application, tuple[str, Container]] = (
+            weakref.WeakKeyDictionary()
+        )  # Maps Application to (hash, Container)
 
         #: The container that draws the panes, per client. It holds the
         #: plan of the frame it drew, and everything drawn inside that
         #: frame reads it rather than measuring again.
         #: Lillecarl/pymux#217.
-        self._panes_for_app: weakref.WeakKeyDictionary[Application, PlanContainer] = (
-            weakref.WeakKeyDictionary()
-        )
+        self._panes_for_app: weakref.WeakKeyDictionary[Application, PlanContainer] = weakref.WeakKeyDictionary()
 
         #: Where this client looks at each window's plane, by window.
         #:
@@ -2508,9 +2412,7 @@ class DynamicBody(Container):
         #:
         #: One per window, because a window is a plane. Switching
         #: window and switching back leaves the strip where it was.
-        self._views: weakref.WeakKeyDictionary[object, View] = (
-            weakref.WeakKeyDictionary()
-        )
+        self._views: weakref.WeakKeyDictionary[object, View] = weakref.WeakKeyDictionary()
 
     def _get_body(self) -> Container:
         "Return the Container object for the current CLI."
@@ -2529,7 +2431,7 @@ class DynamicBody(Container):
         self._bodies_for_app[app] = (new_hash, new_layout)
         return new_layout
 
-    def panes(self) -> "PlanContainer | None":
+    def panes(self) -> PlanContainer | None:
         """
         The container that draws the panes of this client's window.
 
@@ -2591,9 +2493,7 @@ class DynamicBody(Container):
                 # there anything to name. Lillecarl/pymux#211.
                 ConditionalContainer(
                     content=Window(height=1),
-                    filter=Condition(
-                        lambda: _bar_below_is_drawn(self.pymux, window)
-                    ),
+                    filter=Condition(lambda: _bar_below_is_drawn(self.pymux, window)),
                 ),
             ]
         )
@@ -2624,18 +2524,16 @@ class DynamicBody(Container):
         z_index: int | None,
     ) -> None:
         body = self._get_body()
-        body.write_to_screen(
-            screen, mouse_handlers, write_position, parent_style, erase_bg, z_index
-        )
+        body.write_to_screen(screen, mouse_handlers, write_position, parent_style, erase_bg, z_index)
 
     @override
-    def get_children(self) -> List[Container]:
+    def get_children(self) -> list[Container]:
         # (Required for prompt_toolkit.layout.utils.find_window_for_buffer_name.)
         body = self._get_body()
         return [body]
 
 
-def _create_panes(pymux: "Pymux", window, view: View) -> PlanContainer:
+def _create_panes(pymux: Pymux, window, view: View) -> PlanContainer:
     """
     The container that draws every pane of a window.
 
@@ -2660,10 +2558,7 @@ def _create_panes(pymux: "Pymux", window, view: View) -> PlanContainer:
     strip a person scrolled stays where they left it when a pane opens
     or closes.
     """
-    containers = {
-        pane: _create_container_for_process(pymux, window, pane)
-        for pane in window.panes
-    }
+    containers = {pane: _create_container_for_process(pymux, window, pane) for pane in window.panes}
 
     return PlanContainer(
         layout_of(pymux, window),
@@ -2689,7 +2584,7 @@ def _tell_pane_its_size(pane: arrangement.Pane, rect) -> None:
     pane.terminal.set_size(rect.width, rect.height)
 
 
-def layout_of(pymux: "Pymux", window):
+def layout_of(pymux: Pymux, window):
     """
     What says where the panes of this window are.
 
@@ -2721,7 +2616,7 @@ def layout_of(pymux: "Pymux", window):
     return inner
 
 
-def _bar_below_is_drawn(pymux: "Pymux", window) -> bool:
+def _bar_below_is_drawn(pymux: Pymux, window) -> bool:
     """
     Whether every pane of this window keeps a row under it.
 
@@ -2747,16 +2642,12 @@ def _bar_below_is_drawn(pymux: "Pymux", window) -> bool:
     return pymux.show_pane_status and not window.zoom and window.has_stack()
 
 
-def _the_plane_keeps_a_bar_below(pymux: "Pymux", window) -> bool:
+def _the_plane_keeps_a_bar_below(pymux: Pymux, window) -> bool:
     "The same rows, asked of every client watching. Lillecarl/pymux#471."
-    return (
-        pymux.any_watcher_shows_pane_status(window)
-        and not window.zoom
-        and window.has_stack()
-    )
+    return pymux.any_watcher_shows_pane_status(window) and not window.zoom and window.has_stack()
 
 
-def gaps_of(pymux: "Pymux", window) -> Gaps:
+def gaps_of(pymux: Pymux, window) -> Gaps:
     """
     The cells this window leaves between the things in it.
 
@@ -2774,7 +2665,7 @@ def gaps_of(pymux: "Pymux", window) -> Gaps:
     )
 
 
-def room_for_panes(pymux: "Pymux", window) -> Size:
+def room_for_panes(pymux: Pymux, window) -> Size:
     """
     How much of the plane the panes get.
 
@@ -2804,7 +2695,7 @@ def room_for_panes(pymux: "Pymux", window) -> Size:
     return Size(rows=max(1, rows), columns=size.columns)
 
 
-def plan_of(pymux: "Pymux", window) -> Plan:
+def plan_of(pymux: Pymux, window) -> Plan:
     """
     Where the panes of this window are, in cells.
 
@@ -2843,7 +2734,7 @@ def plan_of(pymux: "Pymux", window) -> Plan:
     return plan
 
 
-def size_the_panes_of(pymux: "Pymux", window) -> None:
+def size_the_panes_of(pymux: Pymux, window) -> None:
     """
     Give every pane of this window the size the plan gives it.
 
@@ -2865,7 +2756,7 @@ def size_the_panes_of(pymux: "Pymux", window) -> None:
             _tell_pane_its_size(cast(arrangement.Pane, pane), rect)
 
 
-def pane_is_cut(pymux: "Pymux", pane: arrangement.Pane) -> bool:
+def pane_is_cut(pymux: Pymux, pane: arrangement.Pane) -> bool:
     """
     Whether this pane runs off the edge of the view this client has.
 
@@ -2898,7 +2789,7 @@ def pane_is_cut(pymux: "Pymux", pane: arrangement.Pane) -> bool:
     return container.view.cuts(rect)
 
 
-def cut_tint(pymux: "Pymux") -> str:
+def cut_tint(pymux: Pymux) -> str:
     """
     The tint a cut pane wears, for the client drawing this frame.
 
@@ -2932,7 +2823,7 @@ def cut_tint(pymux: "Pymux") -> str:
     return "bg:%s" % (tinted(background.hex),)
 
 
-def _frame_plan(manager, window, size: Size) -> "Plan | None":
+def _frame_plan(manager, window, size: Size) -> Plan | None:
     """
     The plan the container of this frame measured, when it is still the
     answer.
@@ -2962,7 +2853,7 @@ def _frame_plan(manager, window, size: Size) -> "Plan | None":
     return container.plan
 
 
-def write_sizes_into_weights(pymux: "Pymux", window) -> None:
+def write_sizes_into_weights(pymux: Pymux, window) -> None:
     """
     Write the size each thing has now into the weight that decides it.
 
@@ -2996,9 +2887,7 @@ def write_sizes_into_weights(pymux: "Pymux", window) -> None:
             split.weights[child] = box.width if sideways else box.height
 
 
-def change_pane_size(
-    pymux: "Pymux", window, pane: arrangement.Pane, up=0, right=0, down=0, left=0
-) -> None:
+def change_pane_size(pymux: Pymux, window, pane: arrangement.Pane, up=0, right=0, down=0, left=0) -> None:
     """
     Make one pane bigger or smaller, by that many cells on each side.
 
@@ -3011,9 +2900,7 @@ def change_pane_size(
     window.change_size_for_pane(pane, up=up, right=right, down=down, left=left)
 
 
-def pane_beside(
-    pymux: "Pymux", window, pane: arrangement.Pane, side: Side
-) -> "arrangement.Pane | None":
+def pane_beside(pymux: Pymux, window, pane: arrangement.Pane, side: Side) -> arrangement.Pane | None:
     """
     The pane on one side of this one. **One answer, for one window.**
 
@@ -3051,7 +2938,7 @@ def pane_beside(
     return cast(arrangement.Pane, beside.shown)
 
 
-def _short_name_of(pymux: "Pymux", pane: arrangement.Pane) -> str:
+def _short_name_of(pymux: Pymux, pane: arrangement.Pane) -> str:
     """
     A pane in a few cells, for the title bar of the pane beside it.
 
@@ -3063,7 +2950,7 @@ def _short_name_of(pymux: "Pymux", pane: arrangement.Pane) -> str:
 
 
 def _create_container_for_process(
-    pymux: "Pymux",
+    pymux: Pymux,
     window: arrangement.Window,
     arrangement_pane: arrangement.Pane,
 ):
@@ -3134,9 +3021,7 @@ def _create_container_for_process(
         # off the middle of the pane by half of that space. The title
         # used to be drawn from the left, where a trailing space costs
         # nothing. Lillecarl/pymux#207.
-        title = format_pymux_string(
-            pymux, PANE_TITLE_FORMAT, pane=arrangement_pane
-        ).strip()
+        title = format_pymux_string(pymux, PANE_TITLE_FORMAT, pane=arrangement_pane).strip()
 
         if title:
             result.append(("", " %s " % title))
@@ -3240,9 +3125,7 @@ def _create_container_for_process(
             HSplit(
                 [
                     # The terminal.
-                    TracePaneWritePosition(
-                        pymux, arrangement_pane, content=arrangement_pane.terminal
-                    ),
+                    TracePaneWritePosition(pymux, arrangement_pane, content=arrangement_pane.terminal),
                 ]
             ),
             #
@@ -3304,11 +3187,7 @@ def _create_container_for_process(
                     z_index=Z_INDEX.WINDOW_TITLE_BAR,
                 ),
                 # The clock.
-                Float(
-                    content=ConditionalContainer(
-                        BigClock(pymux, on_click), filter=clock_is_visible
-                    )
-                ),
+                Float(content=ConditionalContainer(BigClock(pymux, on_click), filter=clock_is_visible)),
                 # Pane number.
                 Float(
                     content=ConditionalContainer(
@@ -3351,12 +3230,10 @@ class _ContainerProxy(Container):
         erase_bg: bool,
         z_index: int | None,
     ) -> None:
-        self.content.write_to_screen(
-            screen, mouse_handlers, write_position, parent_style, erase_bg, z_index
-        )
+        self.content.write_to_screen(screen, mouse_handlers, write_position, parent_style, erase_bg, z_index)
 
     @override
-    def get_children(self) -> List[Container]:
+    def get_children(self) -> list[Container]:
         return [self.content]
 
 
@@ -3396,9 +3273,7 @@ class HighlightBordersIfActive:
     """
 
     def __init__(self, window, pane, style, content, has_bar_below):
-        self.container = _PaneMark(
-            FloatContainer(content, [], style=style), window, pane, has_bar_below
-        )
+        self.container = _PaneMark(FloatContainer(content, [], style=style), window, pane, has_bar_below)
 
     def __pt_container__(self) -> Container:
         return self.container
@@ -3434,9 +3309,7 @@ class _PaneMark(_ContainerProxy):
         erase_bg: bool,
         z_index: int | None,
     ) -> None:
-        super().write_to_screen(
-            screen, mouse_handlers, write_position, parent_style, erase_bg, z_index
-        )
+        super().write_to_screen(screen, mouse_handlers, write_position, parent_style, erase_bg, z_index)
         # **The z is the parent's, plus the mark's**, as a `Float` in a
         # `FloatContainer` inherits it. A body drawn late -- one whose
         # own floats wait on a cursor -- runs its panes again, and a mark
@@ -3477,9 +3350,7 @@ class _PaneMark(_ContainerProxy):
 class TracePaneWritePosition(_ContainerProxy):  # XXX: replace with SizedBox
     "Trace the write position of this pane."
 
-    def __init__(
-        self, pymux: "Pymux", arrangement_pane: arrangement.Pane, content
-    ) -> None:
+    def __init__(self, pymux: Pymux, arrangement_pane: arrangement.Pane, content) -> None:
         content = to_container(content)
         _ContainerProxy.__init__(self, content)
 
@@ -3512,27 +3383,27 @@ class TracePaneWritePosition(_ContainerProxy):  # XXX: replace with SizedBox
         pane_write_positions(screen)[self.arrangement_pane] = write_position
 
 
-def focus_left(pymux: "Pymux") -> None:
+def focus_left(pymux: Pymux) -> None:
     "Move focus to the left."
     _move_focus(pymux, Side.LEFT)
 
 
-def focus_right(pymux: "Pymux") -> None:
+def focus_right(pymux: Pymux) -> None:
     "Move focus to the right."
     _move_focus(pymux, Side.RIGHT)
 
 
-def focus_down(pymux: "Pymux") -> None:
+def focus_down(pymux: Pymux) -> None:
     "Move focus down."
     _move_focus(pymux, Side.BELOW)
 
 
-def focus_up(pymux: "Pymux") -> None:
+def focus_up(pymux: Pymux) -> None:
     "Move focus up."
     _move_focus(pymux, Side.ABOVE)
 
 
-def _move_focus(pymux: "Pymux", side: Side) -> None:
+def _move_focus(pymux: Pymux, side: Side) -> None:
     """
     Move the focus one pane that way, and stay where it is at the edge.
 

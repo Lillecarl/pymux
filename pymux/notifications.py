@@ -18,10 +18,12 @@ An OSC 99 without an identifier is passed on untouched. The answer to
 one carries "i=0", which names nothing, so there is nothing to route.
 """
 
+from __future__ import annotations
+
 import re
 import time
 from collections import OrderedDict
-from typing import NamedTuple, Tuple
+from typing import NamedTuple
 
 from pymux.ids import PaneId
 
@@ -91,7 +93,7 @@ class NotificationCenter:
         self.limit = limit
         self._next = 1
         self._records: list[Notification] = []
-        self._pending: dict[Tuple[PaneId | None, str], Notification] = {}
+        self._pending: dict[tuple[PaneId | None, str], Notification] = {}
 
     def add(
         self,
@@ -115,9 +117,7 @@ class NotificationCenter:
             del self._records[0]
         return record
 
-    def add_osc99(
-        self, pane_id: PaneId | None, param: str
-    ) -> Notification | None:
+    def add_osc99(self, pane_id: PaneId | None, param: str) -> Notification | None:
         """
         Record one OSC 99 chunk, assembling chunks with an identifier.
 
@@ -182,7 +182,7 @@ class NotificationCenter:
         return list(self._records)
 
 
-def split_payload(param: str) -> Tuple[str, str, str]:
+def split_payload(param: str) -> tuple[str, str, str]:
     """
     The payload of an OSC 99 is "<metadata> ; <text>". The text may
     hold a semicolon of its own, so only the first one counts.
@@ -223,9 +223,9 @@ class NotificationRoutes:
         self.limit = limit
         self._next = 1
         # (pane id, identifier of the program) -> our identifier.
-        self._outgoing: "OrderedDict[Tuple[PaneId, str], str]" = OrderedDict()
+        self._outgoing: OrderedDict[tuple[PaneId, str], str] = OrderedDict()
         # Our identifier -> (pane id, identifier of the program).
-        self._incoming: "OrderedDict[str, Tuple[PaneId, str]]" = OrderedDict()
+        self._incoming: OrderedDict[str, tuple[PaneId, str]] = OrderedDict()
 
     def outgoing(self, pane_id: PaneId, param: str) -> str:
         """
@@ -251,7 +251,7 @@ class NotificationRoutes:
 
         return replace_identifier(metadata, ours) + semicolon + text
 
-    def incoming(self, param: str) -> Tuple[PaneId, str] | None:
+    def incoming(self, param: str) -> tuple[PaneId, str] | None:
         """
         The pane that an answer belongs to, and the payload to give it,
         with the identifier that the program chose. None when the

@@ -124,10 +124,7 @@ def the_far_side_may_narrow(forward: Forward) -> bool:
     then `check_end()`. A listener reports back the address it asked
     for, because that is the only one it has. Lillecarl/pymux#444.
     """
-    return (
-        forward.direction is Direction.REMOTE
-        and forward.listen_host not in LOOPBACK_NAMES
-    )
+    return forward.direction is Direction.REMOTE and forward.listen_host not in LOOPBACK_NAMES
 
 
 #: What to tell a person about a bind the far side may narrow. It is
@@ -157,10 +154,7 @@ def parse_forward(direction: Direction, spec: str) -> Forward:
     elif len(parts) == 4:
         listen_host, listen_port, dest_host, dest_port = parts
     else:
-        raise BadForward(
-            "%r is not a forward. Spell it "
-            "[listen_host:]listen_port:host:port." % (spec,)
-        )
+        raise BadForward("%r is not a forward. Spell it [listen_host:]listen_port:host:port." % (spec,))
 
     if not dest_host:
         raise BadForward("%r names no host to forward to." % (spec,))

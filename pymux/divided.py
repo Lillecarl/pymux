@@ -23,6 +23,8 @@ a client smaller than the plane has one that does, and `look_at` says
 by which rule.
 """
 
+from __future__ import annotations
+
 from typing import Callable
 
 from prompt_toolkit.data_structures import Point, Size
@@ -53,9 +55,7 @@ class Divided:
     function.
     """
 
-    def __init__(
-        self, window: "arrangement.Window", gaps: Gaps | Callable[[], Gaps] = Gaps()
-    ) -> None:
+    def __init__(self, window: arrangement.Window, gaps: Gaps | Callable[[], Gaps] = Gaps()) -> None:
         self.window = window
         self._gaps = gaps
 
@@ -134,7 +134,7 @@ class Divided:
         """
         return self._lines
 
-    def look_at(self, plan: Plan, view: View, focus: "Pane | None") -> Point:
+    def look_at(self, plan: Plan, view: View, focus: Pane | None) -> Point:
         """
         The origin, whenever the view is as big as the plane.
 
@@ -154,6 +154,4 @@ class Divided:
         `View.moved_onto` holds the rules, and `Strip` uses the same
         ones over a wider row.
         """
-        return view.moved_onto(
-            None if focus is None else plan.rect_of(focus), plan.bounds
-        )
+        return view.moved_onto(None if focus is None else plan.rect_of(focus), plan.bounds)

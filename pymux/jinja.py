@@ -28,8 +28,10 @@ line is formatted several times a frame:
 that asks for one fact costs one fact and not forty.
 """
 
+from __future__ import annotations
+
 from functools import lru_cache
-from typing import TYPE_CHECKING, Callable, Dict, NamedTuple, Union
+from typing import TYPE_CHECKING, Callable, NamedTuple
 
 from jinja2 import ChainableUndefined, Template
 from jinja2.exceptions import TemplateSyntaxError
@@ -58,7 +60,7 @@ BROKEN = "<template error>"
 #: Facts that are not `#{name}` variables. `now` is the clock that
 #: test-mode pins, so a template that prints the time holds still in a
 #: test the same way a `%H:%M` status line does.
-EXTRA_FACTS: Dict[str, Callable[["FormatContext"], object]] = {
+EXTRA_FACTS: dict[str, Callable[[FormatContext], object]] = {
     "now": lambda context: context.pymux.displayed_now(),
 }
 
@@ -78,7 +80,7 @@ _environment = SandboxedEnvironment(undefined=ChainableUndefined)
 
 
 @lru_cache(maxsize=TEMPLATES_TO_KEEP)
-def _compile(source: str) -> Union[_Compiled, TemplateSyntaxError]:
+def _compile(source: str) -> _Compiled | TemplateSyntaxError:
     "The compiled template, or the reason there is none."
     try:
         return _Compiled(
@@ -93,7 +95,7 @@ def _compile(source: str) -> Union[_Compiled, TemplateSyntaxError]:
         return error
 
 
-def render(context: "FormatContext", source: str) -> str:
+def render(context: FormatContext, source: str) -> str:
     "Draw this template with the facts of this context."
     from .format import tmux_variables
 

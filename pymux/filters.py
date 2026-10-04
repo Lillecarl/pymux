@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from prompt_toolkit.filters import Filter
 
 __all__ = [
@@ -122,11 +124,7 @@ def _confirm_or_prompt_or_command(pymux):
         client_state = pymux.get_client_state()
     except ValueError:
         return False
-    if (
-        client_state.confirm_text
-        or client_state.prompt_command
-        or client_state.command_mode
-    ):
+    if client_state.confirm_text or client_state.prompt_command or client_state.command_mode:
         return True
 
 

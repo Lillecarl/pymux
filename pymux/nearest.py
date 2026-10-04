@@ -26,7 +26,9 @@ The weights are a judgement, not a measurement, and they are named
 here so that a picture that looks wrong has somewhere to be answered.
 """
 
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from __future__ import annotations
+
+from typing import Iterable, Sequence
 
 from pyte.colors import Color, parse_color
 
@@ -59,7 +61,7 @@ _WEIGHTS = [WEIGHT_PALETTE] * 16 + [WEIGHT_BACKGROUND, WEIGHT_FOREGROUND]
 _BACKGROUND_ROLE = "pane"
 _FOREGROUND_ROLE = "text"
 
-Lab = Tuple[float, float, float]
+Lab = tuple[float, float, float]
 
 
 def _from_srgb(channel: int) -> float:
@@ -70,7 +72,7 @@ def _from_srgb(channel: int) -> float:
     return ((value + 0.055) / 1.055) ** 2.4
 
 
-def oklab(colour: "Color | str") -> Lab:
+def oklab(colour: Color | str) -> Lab:
     """
     One colour in OKLab: lightness, and two axes of hue.
 
@@ -107,21 +109,21 @@ def _apart(one: Lab, other: Lab) -> float:
     return sum((a - b) ** 2 for a, b in zip(one, other))
 
 
-def wanted_from(colors) -> List[Optional[Lab]]:
+def wanted_from(colors) -> list[Lab | None]:
     """
     What one terminal said about itself, in this module's order.
 
     `colors` is a `DefaultColors`: an entry it never learned is `None`
     here, and the search then scores the candidates on the rest.
     """
-    answers: List[Color | None] = list(colors.ansi) + [
+    answers: list[Color | None] = list(colors.ansi) + [
         colors.background,
         colors.foreground,
     ]
     return [None if one is None else oklab(one) for one in answers]
 
 
-def _theme_names() -> List[str]:
+def _theme_names() -> list[str]:
     """
     Every theme `set-client-option theme` takes.
 
@@ -136,7 +138,7 @@ def _theme_names() -> List[str]:
     return [name for name in offered if name != NEAREST]
 
 
-def _candidate(name: str) -> Optional[List[Lab]]:
+def _candidate(name: str) -> list[Lab] | None:
     "One theme's eighteen colours, or None when it cannot be read."
     from pymux.style import roles_of
 
@@ -159,17 +161,17 @@ def _candidate(name: str) -> Optional[List[Lab]]:
 #: themes -- and a client learns its colours one reply at a time, so a
 #: search that rebuilt them would pay that for each of eighteen
 #: replies.
-_CANDIDATES: Dict[str, List[Lab]] = {}
+_CANDIDATES: dict[str, list[Lab]] = {}
 
 #: The names the table above was built from. **Not a plain "built
 #: yet" flag**: the collection of schemes is read from a path that the
 #: environment names, so a process where that path changes has a table
 #: of themes that are no longer offered. Reading the names again is
 #: cheap; reading every scheme is not.
-_BUILT_FROM: Tuple[str, ...] = ()
+_BUILT_FROM: tuple[str, ...] = ()
 
 
-def candidates() -> Dict[str, List[Lab]]:
+def candidates() -> dict[str, list[Lab]]:
     "Every theme that can be matched, by name, built once."
     global _BUILT_FROM
 
@@ -184,7 +186,7 @@ def candidates() -> Dict[str, List[Lab]]:
     return _CANDIDATES
 
 
-def _score(wanted: Sequence[Optional[Lab]], candidate: Sequence[Lab]) -> float:
+def _score(wanted: Sequence[Lab | None], candidate: Sequence[Lab]) -> float:
     "How far one theme is from what a terminal said."
     return sum(
         weight * _apart(one, candidate[index])
@@ -193,7 +195,7 @@ def _score(wanted: Sequence[Optional[Lab]], candidate: Sequence[Lab]) -> float:
     )
 
 
-def nearest_theme(wanted: Iterable[Optional[Lab]]) -> Optional[str]:
+def nearest_theme(wanted: Iterable[Lab | None]) -> str | None:
     """
     The theme closest to what a terminal said, or `None` when it said
     nothing.

@@ -19,6 +19,8 @@ status bar while a pane is zoomed and so do we, and the pane keeps the
 row its title bar hangs in.
 """
 
+from __future__ import annotations
+
 from prompt_toolkit.data_structures import Point, Size
 
 from .plane import GROUND, Line, Pane, Plan, Rect, Slot, View
@@ -37,7 +39,7 @@ class Zoomed:
     :param pane: The one pane a person sees.
     """
 
-    def __init__(self, inner, pane: "Pane") -> None:
+    def __init__(self, inner, pane: Pane) -> None:
         self.inner = inner
         self.pane = pane
 
@@ -57,15 +59,7 @@ class Zoomed:
 
     def measure(self, available: Size) -> Plan:
         "One slot, the size of the plane."
-        return Plan(
-            {
-                GROUND: {
-                    Slot(self.pane): Rect(
-                        x=0, y=0, width=available.columns, height=available.rows
-                    )
-                }
-            }
-        )
+        return Plan({GROUND: {Slot(self.pane): Rect(x=0, y=0, width=available.columns, height=available.rows)}})
 
     def chrome(self, plan: Plan) -> list[Line]:
         """
@@ -76,7 +70,7 @@ class Zoomed:
         """
         return []
 
-    def look_at(self, plan: Plan, view: View, focus: "Pane | None") -> Point:
+    def look_at(self, plan: Plan, view: View, focus: Pane | None) -> Point:
         """
         The origin: the pane is the whole plane.
 

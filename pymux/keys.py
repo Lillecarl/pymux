@@ -30,11 +30,13 @@ for the cell size. Without this the replies would arrive as bursts of
 key presses, and land in whichever pane has the focus.
 """
 
+from __future__ import annotations
+
 import logging
 import re
-from typing import Tuple, cast
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import cast
 
 from prompt_toolkit.input.vt100_parser import (
     Vt100Parser,
@@ -42,7 +44,6 @@ from prompt_toolkit.input.vt100_parser import (
 )
 from prompt_toolkit.key_binding.key_processor import _Flush
 from prompt_toolkit.keys import KeyName, Keys
-
 from pyte.keys import (
     FIRST_FUNCTIONAL_KEY,
     EventType,
@@ -101,9 +102,7 @@ _LOOKS_LIKE_A_KEY_RE = re.compile(r"^\x1b\[[\d;:]*[u~ABCDEFHPQS]$")
 #: The third parameter is in here so that the modifyOtherKeys form,
 #: "CSI 27 ; mods ; code ~", and the kitty form that carries the text
 #: of a key are both covered.
-_CARRIES_A_HIGH_MODIFIER_RE = re.compile(
-    r"^\x1b\[[\d:]*;(\d+)[\d:]*(?:;[\d:]*)?[u~ABCDEFHPQS]$"
-)
+_CARRIES_A_HIGH_MODIFIER_RE = re.compile(r"^\x1b\[[\d:]*;(\d+)[\d:]*(?:;[\d:]*)?[u~ABCDEFHPQS]$")
 
 #: The largest modifier value the legacy numbering can mean: shift and
 #: alt and ctrl together, which is one plus seven.
@@ -145,10 +144,7 @@ MAX_KEYS_TO_REMEMBER = 512
 # ctrl+<char> legacy control codes. (ctrl+[ is the escape character; it
 # is not in this table.)
 _CTRL_KEYS = {
-    **{
-        chr(ord("a") + i): getattr(Keys, "Control%s" % chr(ord("A") + i))
-        for i in range(26)
-    },
+    **{chr(ord("a") + i): getattr(Keys, "Control%s" % chr(ord("A") + i)) for i in range(26)},
     " ": Keys.ControlSpace,
     "@": Keys.ControlAt,
     "\\": Keys.ControlBackslash,
@@ -254,10 +250,7 @@ def name_of(base: str, mods: int) -> KeyName:
 #: terminal that says more than the legacy encoding sends one: there,
 #: ctrl+a and ctrl+shift+a are the same control code.
 #: Lillecarl/pymux#168.
-_CTRL_SHIFT_LETTERS = {
-    chr(ord("a") + i): getattr(Keys, "ControlShift%s" % chr(ord("A") + i))
-    for i in range(26)
-}
+_CTRL_SHIFT_LETTERS = {chr(ord("a") + i): getattr(Keys, "ControlShift%s" % chr(ord("A") + i)) for i in range(26)}
 
 # Keys that use the "CSI 1 ; modifier <letter>" form.
 _LETTER_KEYS = {
@@ -301,9 +294,7 @@ _TILDE_KEYS = {
 #: It is the two tables above, read for their keys. A list written
 #: beside them would be a second list to keep right, which is what
 #: Lillecarl/pymux#234 cost ctrl+Home.
-KEYS_A_KEYBOARD_SPELLS_OUT = frozenset(
-    str.__str__(key) for key in (*_TILDE_KEYS.values(), *_LETTER_KEYS.values())
-)
+KEYS_A_KEYBOARD_SPELLS_OUT = frozenset(str.__str__(key) for key in (*_TILDE_KEYS.values(), *_LETTER_KEYS.values()))
 
 # Keypad keys (private use area). Plain key presses map to their base
 # key; modified keypad keys are dropped.
@@ -354,10 +345,7 @@ class DropReason(StrEnum):
     "Why pymux has no name for a key. The text goes in the log."
 
     KEYPAD_WITH_A_MODIFIER = "a keypad key with ctrl or alt"
-    KEY_THAT_WRITES_NOTHING = (
-        "a key of the private use area: a lock key, a modifier key, a "
-        "media key or F13 upwards"
-    )
+    KEY_THAT_WRITES_NOTHING = "a key of the private use area: a lock key, a modifier key, a media key or F13 upwards"
     CTRL_AND_A_CHARACTER = "ctrl and a character that has no control code"
     TILDE_KEY_WITH_NO_NAME = "a key of the tilde form that pymux cannot name"
     LETTER_KEY_WITH_NO_NAME = "a key of the letter form that pymux cannot name"
@@ -523,7 +511,7 @@ def _code_and_final_of_name() -> dict:
 CODE_AND_FORM_OF = _code_and_final_of_name()
 
 
-def _modifiers_written_into(name: str) -> Tuple[int, str]:
+def _modifiers_written_into(name: str) -> tuple[int, str]:
     '`name_of` read back: "s-tab" is shift on tab.'
     mods = 0
     found = True
@@ -954,11 +942,7 @@ class KittyVt100Parser(Vt100Parser):
             super()._call_handler(Keys.KeyRelease, insert_text)
             return
         super()._call_handler(key, insert_text)
-        if (
-            key is Keys.Escape
-            and not self._one_key_of_several
-            and insert_text.startswith(CSI)
-        ):
+        if key is Keys.Escape and not self._one_key_of_several and insert_text.startswith(CSI):
             # The outer terminal spelled this Escape out as "CSI 27 u",
             # so it is the Escape key and not the first byte of a
             # sequence. Say so, by ending the key buffer here.

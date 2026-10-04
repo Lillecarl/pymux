@@ -11,11 +11,11 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
+from . import log
 from .enums import WindowSize, Woke
 from .key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS
 from .key_spelling import key_however_it_is_written
 from .layout import Justify
-from . import log
 from .nearest import NEAREST
 from .style import THEMES
 from .utils import get_default_shell
@@ -73,7 +73,7 @@ class Option(ABC):
     #: not set. Lillecarl/pymux#298.
     attribute_name: str | None = None
 
-    def held_by(self, pymux: "Pymux", target: "ClientState" | None = None) -> "Arrangement" | "ClientState" | "Pymux" | "Window" | None:
+    def held_by(self, pymux: Pymux, target: ClientState | None = None) -> Arrangement | ClientState | Pymux | Window | None:
         """
         The object this option is written on and read from.
 
@@ -127,7 +127,7 @@ class Option(ABC):
             raise SetOptionError("This option holds its value somewhere else.")
         return self.attribute_name
 
-    def as_written(self, value: object, holder: "Arrangement" | "ClientState" | "Pymux" | "Window" | None) -> str:
+    def as_written(self, value: object, holder: Arrangement | ClientState | Pymux | Window | None) -> str:
         """
         What `show-options` prints for a value this option holds.
 
@@ -141,16 +141,16 @@ class Option(ABC):
         return str(value)
 
     @abstractmethod
-    def get_all_values(self, pymux: "Pymux") -> Iterable[str]:
+    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
         """
         Return the possible values, as strings. (For autocompletion.)
         """
 
     @abstractmethod
-    def set_value(self, pymux: "Pymux", value: str, target: "ClientState" | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
         "Set option. This can raise SetOptionError."
 
-    def set_default(self, pymux: "Pymux", value: str) -> None:
+    def set_default(self, pymux: Pymux, value: str) -> None:
         """
         Say what a new window starts with, without changing one.
 
@@ -182,7 +182,7 @@ class OnOffOption(Option):
         self.scope = scope
 
     @override
-    def get_all_values(self, pymux: "Pymux") -> Iterable[str]:
+    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
         return ["on", "off"]
 
     def _read(self, value: str) -> bool:
@@ -193,11 +193,11 @@ class OnOffOption(Option):
         return value == "on"
 
     @override
-    def set_value(self, pymux: "Pymux", value: str, target: "ClientState" | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
         setattr(self.held_by(pymux, target), self._attribute(), self._read(value))
 
     @override
-    def set_default(self, pymux: "Pymux", value: str) -> None:
+    def set_default(self, pymux: Pymux, value: str) -> None:
         "What every new window starts with. Changes no window that is open."
         if self.scope is not Scope.WINDOW:
             return super().set_default(pymux, value)
@@ -216,7 +216,7 @@ class StringOption(Option):
         self.scope = scope
 
     @override
-    def get_all_values(self, pymux: "Pymux") -> Iterable[str]:
+    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
         try:
             now: str = getattr(self.held_by(pymux), self._attribute())
         except SetOptionError:
@@ -224,7 +224,7 @@ class StringOption(Option):
         return sorted(set(self.possible_values) | {now})
 
     @override
-    def set_value(self, pymux: "Pymux", value: str, target: "ClientState" | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
         setattr(self.held_by(pymux, target), self._attribute(), value)
 
 
@@ -239,7 +239,7 @@ class PositiveIntOption(Option):
         self.scope = scope
 
     @override
-    def get_all_values(self, pymux: "Pymux") -> Iterable[str]:
+    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
         try:
             now = getattr(self.held_by(pymux), self._attribute())
         except SetOptionError:
@@ -257,11 +257,11 @@ class PositiveIntOption(Option):
         return number
 
     @override
-    def set_value(self, pymux: "Pymux", value: str, target: "ClientState" | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
         setattr(self.held_by(pymux, target), self._attribute(), self._read(value))
 
     @override
-    def set_default(self, pymux: "Pymux", value: str) -> None:
+    def set_default(self, pymux: Pymux, value: str) -> None:
         "What every new window starts with. Changes no window that is open."
         if self.scope is not Scope.WINDOW:
             return super().set_default(pymux, value)
@@ -271,11 +271,11 @@ class PositiveIntOption(Option):
 
 class KeyPrefixOption(Option):
     @override
-    def get_all_values(self, pymux: "Pymux") -> Iterable[str]:
+    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
         return PYMUX_TO_PROMPT_TOOLKIT_KEYS.keys()
 
     @override
-    def set_value(self, pymux: "Pymux", value: str, target: "ClientState" | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
         # Translate prefix to prompt_toolkit
         try:
             keys = key_however_it_is_written(value)
@@ -293,15 +293,15 @@ class BaseIndexOption(Option):
     attribute_name = "base_index"
 
     @override
-    def get_all_values(self, pymux: "Pymux") -> Iterable[str]:
+    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
         return ["0", "1"]
 
     @override
-    def held_by(self, pymux: "Pymux", target: "ClientState" | None = None) -> "Arrangement" | "ClientState" | "Pymux" | "Window" | None:
+    def held_by(self, pymux: Pymux, target: ClientState | None = None) -> Arrangement | ClientState | Pymux | Window | None:
         return pymux.arrangement
 
     @override
-    def set_value(self, pymux: "Pymux", value: str, target: "ClientState" | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
         try:
             number = int(value)
         except ValueError:
@@ -325,15 +325,15 @@ class RenumberOption(Option):
     attribute_name = "renumber_windows"
 
     @override
-    def get_all_values(self, pymux: "Pymux") -> Iterable[str]:
+    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
         return ["on", "off"]
 
     @override
-    def held_by(self, pymux: "Pymux", target: "ClientState" | None = None) -> "Arrangement" | "ClientState" | "Pymux" | "Window" | None:
+    def held_by(self, pymux: Pymux, target: ClientState | None = None) -> Arrangement | ClientState | Pymux | Window | None:
         return pymux.arrangement
 
     @override
-    def set_value(self, pymux: "Pymux", value: str, target: "ClientState" | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
         value = value.lower()
         if value not in ("on", "off"):
             raise SetOptionError('Expecting "on" or "off".')
@@ -350,11 +350,11 @@ class KeysOption(Option):
         self.scope = scope
 
     @override
-    def get_all_values(self, pymux: "Pymux") -> Iterable[str]:
+    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
         return ["emacs", "vi"]
 
     @override
-    def as_written(self, value: object, holder: "Arrangement" | "ClientState" | "Pymux" | "Window" | None) -> str:
+    def as_written(self, value: object, holder: Arrangement | ClientState | Pymux | Window | None) -> str:
         """
         The mode is a bool inside and a word outside: tmux answers
         `vi` and `emacs`, and `on` answers nothing. #382.
@@ -362,7 +362,7 @@ class KeysOption(Option):
         return "vi" if value else "emacs"
 
     @override
-    def set_value(self, pymux: "Pymux", value: str, target: "ClientState" | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
         if value not in ("emacs", "vi"):
             raise SetOptionError('Expecting "vi" or "emacs".')
         setattr(self.held_by(pymux, target), self._attribute(), value == "vi")
@@ -463,11 +463,11 @@ class EnumOption(Option):
         self.scope = scope
 
     @override
-    def get_all_values(self, pymux: "Pymux") -> Iterable[str]:
+    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
         return [str(one) for one in self.choices]
 
     @override
-    def set_value(self, pymux: "Pymux", value: str, target: "ClientState" | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
         try:
             chosen = self.choices(value)
         except ValueError:
@@ -478,7 +478,7 @@ class EnumOption(Option):
         setattr(self.held_by(pymux, target), self._attribute(), chosen)
         self.after(pymux)
 
-    def after(self, pymux: "Pymux") -> None:
+    def after(self, pymux: Pymux) -> None:
         "What the server does once the value has changed."
 
 
@@ -489,7 +489,7 @@ class ExtendedKeysOption(EnumOption):
         super().__init__(ExtendedKeys, attribute_name, scope)
 
     @override
-    def after(self, pymux: "Pymux") -> None:
+    def after(self, pymux: Pymux) -> None:
         # The server tells every client what its terminal should send
         # now, whoever holds the value.
         pymux.sync_keyboard()
@@ -508,7 +508,7 @@ class WindowSizeOption(Option):
     attribute_name = "window_size"
 
     @override
-    def get_all_values(self, pymux: "Pymux") -> Iterable[str]:
+    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
         return [str(one) for one in WindowSize]
 
     def _read(self, value: str) -> WindowSize:
@@ -520,7 +520,7 @@ class WindowSizeOption(Option):
             ) from None
 
     @override
-    def set_value(self, pymux: "Pymux", value: str, target: "ClientState" | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
         chosen = self._read(value)
 
         window = pymux.arrangement.get_active_window()
@@ -541,7 +541,7 @@ class WindowSizeOption(Option):
         window.window_size = chosen
 
     @override
-    def set_default(self, pymux: "Pymux", value: str) -> None:
+    def set_default(self, pymux: Pymux, value: str) -> None:
         "What every new window starts with. Changes no window that is open."
         pymux.arrangement.window_defaults["window_size"] = self._read(value)
 
@@ -573,7 +573,7 @@ class ThemeOption(Option):
     scope = Scope.CLIENT
 
     @override
-    def get_all_values(self, pymux: "Pymux" | None) -> Iterable[str]:
+    def get_all_values(self, pymux: Pymux | None) -> Iterable[str]:
         """
         Every name this option takes, `nearest` first because it is
         the default: a person types it to go back to the search after
@@ -581,8 +581,8 @@ class ThemeOption(Option):
         find. The search itself reads this list and skips `nearest`,
         because it is not a theme to be matched to.
         """
-        from pymux.style_pygments import names
         from pymux.style_base16 import names as base16_names
+        from pymux.style_pygments import names
 
         return [NEAREST] + sorted(THEMES) + [
             "pygments:%s" % (name,) for name in names()
@@ -591,7 +591,7 @@ class ThemeOption(Option):
         ]
 
     @override
-    def as_written(self, value: object, holder: "Arrangement" | "ClientState" | "Pymux" | "Window" | None) -> str:
+    def as_written(self, value: object, holder: Arrangement | ClientState | Pymux | Window | None) -> str:
         """
         `nearest` alone says nothing about what is on the screen, so it
         names the theme it found as well. Lillecarl/pymux#346.
@@ -602,7 +602,7 @@ class ThemeOption(Option):
         return NEAREST if matched is None else "%s (%s)" % (NEAREST, matched)
 
     @override
-    def set_value(self, pymux: "Pymux", value: str, target: "ClientState" | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
         if value == NEAREST:
             # Not a theme, and not checked against the sources: it is
             # the name for letting the terminal decide.
@@ -651,11 +651,11 @@ class LogLevelOption(Option):
     attribute_name = "log_level"
 
     @override
-    def get_all_values(self, pymux: "Pymux") -> Iterable[str]:
+    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
         return sorted(log.LEVELS)
 
     @override
-    def set_value(self, pymux: "Pymux", value: str, target: "ClientState" | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
         if value not in log.LEVELS:
             raise SetOptionError(
                 "Expecting one of: %s." % ", ".join(sorted(log.LEVELS))
@@ -669,11 +669,11 @@ class JustifyOption(Option):
         self.scope = scope
 
     @override
-    def get_all_values(self, pymux: "Pymux") -> Iterable[str]:
+    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
         return Justify._ALL
 
     @override
-    def set_value(self, pymux: "Pymux", value: str, target: "ClientState" | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
         if value not in Justify._ALL:
             raise SetOptionError("Invalid justify option.")
         setattr(self.held_by(pymux, target), self._attribute(), value)
@@ -695,7 +695,7 @@ class ChoiceOption(Option):
         self.scope = scope
 
     @override
-    def get_all_values(self, pymux: "Pymux") -> Iterable[str]:
+    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
         try:
             now = getattr(self.held_by(pymux), self._attribute())
         except SetOptionError:
@@ -703,7 +703,7 @@ class ChoiceOption(Option):
         return sorted(set(self.choices + (now,)))
 
     @override
-    def set_value(self, pymux: "Pymux", value: str, target: "ClientState" | None = None) -> None:
+    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
         if value not in self.choices:
             raise SetOptionError(
                 "Expecting one of: %s." % ", ".join(sorted(self.choices))

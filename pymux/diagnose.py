@@ -18,12 +18,13 @@ toolkit it never draws with -- the same rule
 Lillecarl/pymux#392.
 """
 
+from __future__ import annotations
+
 import curses
 import json
 import locale
 import os
 import select
-import socket
 import sys
 import termios
 import time
@@ -79,11 +80,7 @@ def _has_terminfo_entry(term: str) -> bool:
 
 def _locale_report() -> dict:
     "What the locale machinery answers, and what a pane would encode with."
-    names = {
-        name: os.environ.get(name) or ""
-        for name in ("LC_ALL", "LC_CTYPE", "LANG")
-        if os.environ.get(name)
-    }
+    names = {name: os.environ.get(name) or "" for name in ("LC_ALL", "LC_CTYPE", "LANG") if os.environ.get(name)}
     try:
         preferred = locale.getpreferredencoding(False)
     except Exception:
@@ -136,9 +133,7 @@ def _socket_report(socket_name: str | None) -> dict:
     # two seconds, and then it is called mute. Only the unix-socket
     # client takes a timeout; the others answer or fail on their own.
     if isinstance(client, PosixClient):
-        answer = _io_capture(
-            lambda: client.run_command("list-sessions", timeout=2.0)
-        )
+        answer = _io_capture(lambda: client.run_command("list-sessions", timeout=2.0))
     else:
         answer = _io_capture(lambda: client.run_command("list-sessions"))
     report["sessions"] = answer.strip() or None
@@ -184,12 +179,7 @@ def _terminal_report() -> dict:
         # Raw mode, so the answer is read whole and not echoed or
         # line-buffered into something else.
         raw = termios.tcgetattr(stdin)
-        raw[3] &= ~(
-            termios.ECHO
-            | termios.ICANON
-            | termios.ISIG
-            | termios.IEXTEN
-        )
+        raw[3] &= ~(termios.ECHO | termios.ICANON | termios.ISIG | termios.IEXTEN)
         termios.tcsetattr(stdin, termios.TCSANOW, raw)
 
         sys.stdout.write("\x1b[c")  # DA1: what are you?

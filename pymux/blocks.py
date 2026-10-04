@@ -31,7 +31,7 @@ picture away at that size. This averages the pixels that fall into each
 cell instead, weighted by how opaque they are.
 """
 
-from typing import List, Tuple
+from __future__ import annotations
 
 from prompt_toolkit.output import ColorDepth
 
@@ -95,15 +95,13 @@ _WRITER = {
 }
 
 
-def _pixel(rgba: bytes, columns: int, x: int, y: int) -> Tuple[int, int, int, int]:
+def _pixel(rgba: bytes, columns: int, x: int, y: int) -> tuple[int, int, int, int]:
     "One pixel of an RGBA buffer that is `columns` pixels wide."
     at = (y * columns + x) * 4
     return (rgba[at], rgba[at + 1], rgba[at + 2], rgba[at + 3])
 
 
-def average_rgba(
-    rgba: bytes, width: int, height: int, new_width: int, new_height: int
-) -> bytes:
+def average_rgba(rgba: bytes, width: int, height: int, new_width: int, new_height: int) -> bytes:
     """
     Resize RGBA pixels by averaging the ones that fall into each new
     pixel.
@@ -161,7 +159,7 @@ def blocks_for(
     columns: int,
     rows: int,
     depth: ColorDepth = ColorDepth.DEPTH_24_BIT,
-) -> List[str]:
+) -> list[str]:
     """
     One string for each row of cells, drawing `rgba` as half blocks.
 
@@ -187,10 +185,10 @@ def blocks_for(
     lines = []
 
     for row in range(rows):
-        parts: List[str] = []
+        parts: list[str] = []
         #: What the cell before set, so a run of one colour writes the
         #: sequence once.
-        current: Tuple[str, str] | None = None
+        current: tuple[str, str] | None = None
         #: Cells passed over since the last one that drew.
         skipped = 0
 

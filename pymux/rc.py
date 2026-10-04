@@ -2,6 +2,8 @@
 Initial configuration.
 """
 
+from __future__ import annotations
+
 __all__ = ["STARTUP_COMMANDS"]
 
 STARTUP_COMMANDS = """

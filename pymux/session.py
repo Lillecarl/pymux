@@ -6,8 +6,9 @@ sessions are managed by a single server" -- and pymux held exactly one
 until Lillecarl/pymux#323.
 """
 
+from __future__ import annotations
+
 import time
-from typing import Dict
 
 from prompt_toolkit.data_structures import Size
 
@@ -44,7 +45,7 @@ class Session:
         #: What `set-environment` without `-g` fills. A new pane of this
         #: session reads this over the global environment.
         #: Lillecarl/pymux#270.
-        self.environment: Dict[str, str | None] = {}
+        self.environment: dict[str, str | None] = {}
 
         #: The overlay pane: a pane that floats in the middle of the
         #: screen over the layout, like the popup of tmux. It belongs

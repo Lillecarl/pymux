@@ -49,6 +49,8 @@ something was out there and nothing about what; the title bar names it
 instead. Lillecarl/pymux#207.
 """
 
+from __future__ import annotations
+
 from typing import Callable
 
 from prompt_toolkit.data_structures import Point, Size
@@ -80,9 +82,7 @@ class Strip:
     against what was measured.
     """
 
-    def __init__(
-        self, window: "arrangement.Window", gaps: Gaps | Callable[[], Gaps] = Gaps()
-    ) -> None:
+    def __init__(self, window: arrangement.Window, gaps: Gaps | Callable[[], Gaps] = Gaps()) -> None:
         self.window = window
         self._gaps = gaps
 
@@ -196,7 +196,7 @@ class Strip:
 
         return lines
 
-    def look_at(self, plan: Plan, view: View, focus: "Pane | None") -> Point:
+    def look_at(self, plan: Plan, view: View, focus: Pane | None) -> Point:
         """
         Where the view goes: the focused column's left edge at the
         left of the view, and never past the end of the row.
@@ -221,8 +221,6 @@ class Strip:
         column = None
         if focus is not None:
             rect = plan.rect_of(focus)
-            column = Rect(
-                x=rect.x, y=rect.y, width=rect.width + gap, height=rect.height
-            )
+            column = Rect(x=rect.x, y=rect.y, width=rect.width + gap, height=rect.height)
 
         return view.moved_onto(column, row)

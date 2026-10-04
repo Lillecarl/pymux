@@ -19,9 +19,11 @@ light one; nothing here needs that, because the roles say so by
 contrast and not by assertion.
 """
 
+from __future__ import annotations
+
 import json
 import os
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 from pymux.style import _blend, _other_of, _readable, create_theme, derive, tinted
@@ -44,7 +46,7 @@ def _schemes_path() -> Path | None:
     return beside if beside.is_file() else None
 
 
-@lru_cache(maxsize=None)
+@cache
 def _schemes() -> dict:
     """
     Every scheme the collection holds, by its name.
@@ -141,10 +143,22 @@ def base16_roles(name: str) -> dict[str, str]:
             "color-%i" % index: p[letter]
             for index, letter in enumerate(
                 (
-                    "base00", "base08", "base0B", "base0A",
-                    "base0D", "base0E", "base0C", "base05",
-                    "base03", "base08", "base0B", "base0A",
-                    "base0D", "base0E", "base0C", "base07",
+                    "base00",
+                    "base08",
+                    "base0B",
+                    "base0A",
+                    "base0D",
+                    "base0E",
+                    "base0C",
+                    "base05",
+                    "base03",
+                    "base08",
+                    "base0B",
+                    "base0A",
+                    "base0D",
+                    "base0E",
+                    "base0C",
+                    "base07",
                 )
             )
         },

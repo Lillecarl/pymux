@@ -14,10 +14,12 @@ context too, which is what Lillecarl/pymux#333 is for.
 Lillecarl/pymux#330.
 """
 
+from __future__ import annotations
+
 import os
 import socket
 from enum import Enum
-from typing import TYPE_CHECKING, Callable, Dict, List, NamedTuple, Optional
+from typing import TYPE_CHECKING, Callable, NamedTuple
 
 if TYPE_CHECKING:
     from pymux.arrangement import Pane, Window
@@ -70,11 +72,11 @@ class FormatContext(NamedTuple):
     the same case (`ft->c == NULL` in its `format.c`).
     """
 
-    pymux: "Pymux"
-    session: "Session"
-    window: "Window"
-    pane: "Pane"
-    client: Optional["ClientState"] = None
+    pymux: Pymux
+    session: Session
+    window: Window
+    pane: Pane
+    client: ClientState | None = None
 
 
 def _hostname() -> str:
@@ -94,12 +96,12 @@ def _hostname_short() -> str:
 
 
 def format_pymux_string(
-    pymux: "Pymux",
+    pymux: Pymux,
     string: str,
-    window: Optional["Window"] = None,
-    pane: Optional["Pane"] = None,
-    session: Optional["Session"] = None,
-    client: Optional["ClientState"] = None,
+    window: Window | None = None,
+    pane: Pane | None = None,
+    session: Session | None = None,
+    client: ClientState | None = None,
     language: Language = Language.SNIFF,
 ) -> str:
     """
@@ -132,9 +134,7 @@ def format_pymux_string(
     if pane is None:
         raise ValueError("No active pane to format for.")
 
-    return format_in_context(
-        FormatContext(pymux, session, window, pane, client), string, language
-    )
+    return format_in_context(FormatContext(pymux, session, window, pane, client), string, language)
 
 
 def _find_closing(string: str, start: int) -> int:
@@ -160,9 +160,9 @@ def _find_closing(string: str, start: int) -> int:
     return -1
 
 
-def _split_arguments(string: str) -> List[str]:
+def _split_arguments(string: str) -> list[str]:
     "Every argument, split on the commas that are not inside a `#{...}`."
-    parts: List[str] = []
+    parts: list[str] = []
     depth = 0
     start = 0
     i = 0
@@ -260,7 +260,7 @@ def _format_variables(context: FormatContext, string: str) -> str:
     if "#{" not in string:
         return string
 
-    out: List[str] = []
+    out: list[str] = []
     i = 0
     n = len(string)
     while i < n:
@@ -285,9 +285,7 @@ def format_in_context(
     language: Language = Language.SNIFF,
 ) -> str:
     "Apply the formatting to a question that is already complete."
-    if language is Language.JINJA or (
-        language is Language.SNIFF and holds_a_template(string)
-    ):
+    if language is Language.JINJA or (language is Language.SNIFF and holds_a_template(string)):
         # Here, and not at the top of the file: a `pymux list-sessions`
         # that formats no template must not pay for importing jinja2.
         from . import jinja
@@ -368,7 +366,7 @@ def _symbol_pane_title(context: FormatContext) -> str:
 
 #: The `#X` symbols, in the order they are applied. `##` is last, so
 #: that the symbols above it are read first.
-symbol_variables: Dict[str, Callable[[FormatContext], str]] = {
+symbol_variables: dict[str, Callable[[FormatContext], str]] = {
     "#D": _symbol_pane_id,
     "#F": _symbol_window_flags,
     "#H": lambda context: _hostname(),
@@ -415,9 +413,7 @@ def _pane_current_path(context: FormatContext) -> str:
 def _history_size(context: FormatContext) -> str:
     "Number of lines in the history."
     pane = context.pane
-    return str(
-        min(context.pymux.history_limit, pane.screen.line_offset + pane.process.sy)
-    )
+    return str(min(context.pymux.history_limit, pane.screen.line_offset + pane.process.sy))
 
 
 def _pane_active(context: FormatContext) -> str:
@@ -432,11 +428,7 @@ def _pane_index(context: FormatContext) -> str:
 
 
 def _window_active(context: FormatContext) -> str:
-    return (
-        "1"
-        if context.window == context.session.arrangement.get_active_window()
-        else "0"
-    )
+    return "1" if context.window == context.session.arrangement.get_active_window() else "0"
 
 
 def _window_flags(context: FormatContext) -> str:
@@ -484,15 +476,7 @@ def _session_id(context: FormatContext) -> str:
 
 def _session_attached(context: FormatContext) -> str:
     "Number of clients attached to this session."
-    return str(
-        len(
-            [
-                client
-                for client in context.pymux.clients
-                if client.session is context.session
-            ]
-        )
-    )
+    return str(len([client for client in context.pymux.clients if client.session is context.session]))
 
 
 def _session_windows(context: FormatContext) -> str:
@@ -679,7 +663,7 @@ def _client_flags(context: FormatContext) -> str:
 #: Mapping of tmux `#{variable}` names. Variables that pymux doesn't know
 #: resolve to an empty string. (libtmux requires all fields of its format
 #: template to be present, but it ignores the empty ones.)
-tmux_variables: Dict[str, Callable[[FormatContext], str]] = {
+tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     # Pane.
     "pane_id": _pane_id,
     "pane_index": _pane_index,

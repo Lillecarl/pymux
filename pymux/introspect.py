@@ -31,6 +31,8 @@ and a dump is only useful with the log around it: the log says what led
 here, and the dump says where "here" is.
 """
 
+from __future__ import annotations
+
 import faulthandler
 import os
 import signal
@@ -42,7 +44,7 @@ from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .log import logger, level, logfile
+from .log import level, logfile, logger
 
 if TYPE_CHECKING:
     from pymux.main import Pymux
@@ -85,7 +87,7 @@ class Counters:
         #: How many times each `Woke` reason asked for a frame. The
         #: reason is the whole value of this: a count of invalidates
         #: says a server is busy, and the reasons say what is doing it.
-        self.invalidates: "Counter[str]" = Counter()
+        self.invalidates: Counter[str] = Counter()
 
         #: Frames that reached a client, and how many characters they
         #: were. A frame that went out is one a client had to draw, so
@@ -135,9 +137,7 @@ def answer_signal() -> Path | None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         _stacks_file = open(path, "a", buffering=1)
-        faulthandler.register(
-            signal.SIGUSR1, file=_stacks_file, all_threads=True, chain=False
-        )
+        faulthandler.register(signal.SIGUSR1, file=_stacks_file, all_threads=True, chain=False)
     except (OSError, ValueError, RuntimeError):
         # A read only home, a full disk, or not the main thread.
         _stacks_file = None
@@ -206,7 +206,7 @@ def let_debugger_attach(allowed: bool) -> bool:
     return allowed
 
 
-def write_dump(pymux: "Pymux") -> Path:
+def write_dump(pymux: Pymux) -> Path:
     """
     Write down what this server is doing now, and answer with the file.
 
@@ -231,7 +231,7 @@ HOW_LONG_TO_WATCH = 5.0
 HOW_OFTEN_TO_LOOK = 0.001
 
 
-def start_watching(pymux: "Pymux", seconds: float = HOW_LONG_TO_WATCH) -> Path:
+def start_watching(pymux: Pymux, seconds: float = HOW_LONG_TO_WATCH) -> Path:
     """
     Watch this server for a few seconds, and answer with the file it
     will land in.
@@ -300,7 +300,7 @@ def start_watching(pymux: "Pymux", seconds: float = HOW_LONG_TO_WATCH) -> Path:
     return written
 
 
-def _over_window(counters: "Counters", before, seconds: float) -> str:
+def _over_window(counters: Counters, before, seconds: float) -> str:
     "What the server did while the profiler watched, and nothing before."
     frames, frame_bytes, invalidates = before
     moved = Counter(counters.invalidates)
@@ -326,7 +326,7 @@ def _over_window(counters: "Counters", before, seconds: float) -> str:
     return "\n".join(lines)
 
 
-def what_it_is_doing(pymux: "Pymux") -> str:
+def what_it_is_doing(pymux: Pymux) -> str:
     "The whole answer, as text."
     return "\n".join(
         [
@@ -342,7 +342,7 @@ def what_it_is_doing(pymux: "Pymux") -> str:
     )
 
 
-def counters(pymux: "Pymux") -> str:
+def counters(pymux: Pymux) -> str:
     """
     What this server has done, and how often.
 
@@ -358,8 +358,7 @@ def counters(pymux: "Pymux") -> str:
         "",
         "%-46s %10s %9s" % ("", "total", "per second"),
         "%-46s %10d %9.2f" % ("frames out", counters.frames, counters.frames / seconds),
-        "%-46s %10d %9.0f"
-        % ("characters in them", counters.frame_bytes, counters.frame_bytes / seconds),
+        "%-46s %10d %9.0f" % ("characters in them", counters.frame_bytes, counters.frame_bytes / seconds),
         "",
         "%-46s %10s %9s" % ("what asked for a frame", "total", "per second"),
     ]
@@ -377,7 +376,7 @@ def _now() -> str:
     return time.strftime("%Y%m%d-%H%M%S")
 
 
-def _server(pymux: "Pymux") -> str:
+def _server(pymux: Pymux) -> str:
     "One paragraph: which server this is, and how big it has got."
     windows = list(pymux.arrangement.windows)
     panes = [pane for window in windows for pane in window.panes]
@@ -390,15 +389,13 @@ def _server(pymux: "Pymux") -> str:
                 _for_how_long(time.time() - pymux.created),
                 time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(pymux.created)),
             ),
-            "%d clients, %d windows, %d panes"
-            % (len(pymux.apps), len(windows), len(panes)),
+            "%d clients, %d windows, %d panes" % (len(pymux.apps), len(windows), len(panes)),
             # And the level, because `set-option log-level debug`
             # reaches a running server and pymux has no `show-options`
             # to read it back with. A person who turned it up and
             # forgot needs somewhere to find out. Lillecarl/pymux#252.
             "log %s, at %s" % (logfile() or "nowhere", level()),
-            "a debugger may attach: %s"
-            % ("yes" if pymux.allow_remote_debugging else "no"),
+            "a debugger may attach: %s" % ("yes" if pymux.allow_remote_debugging else "no"),
         ]
     )
 
@@ -430,14 +427,12 @@ def _threads() -> str:
     for ident, frame in sorted(frames.items()):
         lines.append("")
         lines.append("thread %s (%s)" % (named.get(ident, "?"), ident))
-        lines.extend(
-            "  " + line for line in "".join(traceback.format_stack(frame)).splitlines()
-        )
+        lines.extend("  " + line for line in "".join(traceback.format_stack(frame)).splitlines())
 
     return "\n".join(lines)
 
 
-def _tasks(pymux: "Pymux") -> str:
+def _tasks(pymux: Pymux) -> str:
     """
     Every asyncio task, and what it waits for.
 
@@ -469,10 +464,7 @@ def _tasks(pymux: "Pymux") -> str:
         lines.append("")
         lines.append("task %s: %s" % (task.get_name(), _what_task_is_doing(task)))
         for frame in task.get_stack(limit=20):
-            lines.extend(
-                "  " + line
-                for line in "".join(traceback.format_stack(frame, limit=1)).splitlines()
-            )
+            lines.extend("  " + line for line in "".join(traceback.format_stack(frame, limit=1)).splitlines())
 
     return "\n".join(lines)
 

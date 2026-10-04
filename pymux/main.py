@@ -1,6 +1,6 @@
+from __future__ import annotations
+
 import asyncio
-from collections import deque
-from contextlib import asynccontextmanager
 import base64
 import contextvars
 import datetime
@@ -13,13 +13,14 @@ import tempfile
 import time
 import traceback
 import weakref
-from typing import TYPE_CHECKING, Callable, List, NamedTuple, Tuple
+from collections import deque
+from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING, Callable, NamedTuple
 
 import anyio
-
+from libpymux.protocol import Field, Packet
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app, set_app
-from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.clipboard import ClipboardData, InMemoryClipboard
@@ -28,6 +29,7 @@ from prompt_toolkit.cursor_shapes import CursorShape, CursorShapeConfig
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.enums import EditingMode
 from prompt_toolkit.filters import Condition
+from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.input.defaults import create_input
 from prompt_toolkit.key_binding.vi_state import InputMode
 from prompt_toolkit.layout.layout import Layout
@@ -45,6 +47,7 @@ from pyte.keys import KeyboardFlag
 from pyte.osc import Osc
 from typing_extensions import override
 
+from . import introspect, log
 from .arrangement import Arrangement, Pane, Window
 from .colors import DefaultColors, theme_color_base
 from .commands import CommandException, call_command_handler, handle_command
@@ -53,13 +56,11 @@ from .enums import CHOOSE, COMMAND, PROMPT, WindowSize, Woke
 from .forwarding import LOOPBACK_NAMES, loopback_port
 from .graphics import PaneView
 from .ids import PaneId, SessionId, WindowIndex
-from . import introspect
 from .key_bindings import PymuxKeyBindings
 from .key_spelling import why_pane_cannot_read
 from .layout import Justify, LayoutManager, change_pane_size
-from . import log
 from .log import logger
-from libpymux.protocol import Field, Packet
+from .nearest import NEAREST
 from .notifications import NotificationCenter, NotificationRoutes, Urgency
 from .options import (
     ALL_CLIENT_OPTIONS,
@@ -87,8 +88,7 @@ from .pipes import bind_and_listen_on_socket, connect_in_memory
 from .rc import STARTUP_COMMANDS
 from .server import ServerConnection
 from .session import DEFAULT_SIZE, Session
-from .nearest import NEAREST
-from .style import DEFAULT_THEME, THEMES, theme
+from .style import DEFAULT_THEME, theme
 from .utils import get_default_shell, keys_are_vi
 
 if TYPE_CHECKING:
@@ -127,7 +127,7 @@ class PaneCursor(CursorShapeConfig):
     render of one client another may be current.
     """
 
-    def __init__(self, pymux: "Pymux") -> None:
+    def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
 
     @override
@@ -229,7 +229,7 @@ class Asker(NamedTuple):
     it has to be confirmed. Lillecarl/pymux#440.
     """
 
-    client_state: "ClientState"
+    client_state: ClientState
     in_person: bool
 
 
@@ -238,9 +238,7 @@ class ClientState:
     State information that is independent for each client.
     """
 
-    def __init__(
-        self, pymux: "Pymux", input, output, color_depth, connection, session: "Session"
-    ) -> None:
+    def __init__(self, pymux: Pymux, input, output, color_depth, connection, session: Session) -> None:
         self.pymux = pymux
         self.input = input
         self.output = output
@@ -254,7 +252,7 @@ class ClientState:
         self.session = session
 
         #: Where this client was before, for `switch-client -l`.
-        self.previous_session: "Session | None" = None
+        self.previous_session: Session | None = None
 
         #: The colour scheme this client draws with, and whether it
         #: draws it the other way round.
@@ -327,7 +325,7 @@ class ClientState:
         #: session manage panes separately.
         #: `enter-mode` and `leave-mode` move the top.
         #: Lillecarl/pymux#394.
-        self.key_tables: List[str] = []
+        self.key_tables: list[str] = []
 
         #: Error/info message.
         self.message: str | None = None
@@ -342,7 +340,7 @@ class ClientState:
         #: was lost with nothing said about either. Ask mode exists so
         #: that nothing happens without a yes, and losing a yes is the
         #: same surprise the other way round. Lillecarl/pymux#266.
-        self.confirmations: List[Tuple[str, str]] = []
+        self.confirmations: list[tuple[str, str]] = []
 
         # When a "command-prompt" command is running.
         self.prompt_text: str | None = None
@@ -430,7 +428,7 @@ class ClientState:
         # What the last frame of this client drew of the strings that
         # time moves. The auto refresh compares against it, and asks
         # for a frame only when they differ. Lillecarl/pymux#154.
-        self.last_time_text: Tuple[str, ...] = ()
+        self.last_time_text: tuple[str, ...] = ()
 
         # Input buffers.
         self.command_buffer = Buffer(
@@ -773,12 +771,7 @@ class ClientState:
         # chooser works, because its bindings ask what shows and not
         # what has the focus, which is why only the search broke.
         # Lillecarl/pymux#161, Lillecarl/pymux#337.
-        if (
-            self.choose_window
-            or self.choose_buffer
-            or self.choose_options
-            or self.choose_notifications
-        ):
+        if self.choose_window or self.choose_buffer or self.choose_options or self.choose_notifications:
             return
 
         # An overlay pane takes the keyboard while it is open.
@@ -850,12 +843,8 @@ def _hook_of(reason: str) -> str | None:
 #: A task copies the context that started it, so the two lists a
 #: `run-command` packet makes belong to that packet alone.
 #: Lillecarl/pymux#87.
-_command_output: contextvars.ContextVar[list | None] = contextvars.ContextVar(
-    "pymux-command-output", default=None
-)
-_command_error: contextvars.ContextVar[list | None] = contextvars.ContextVar(
-    "pymux-command-error", default=None
-)
+_command_output: contextvars.ContextVar[list | None] = contextvars.ContextVar("pymux-command-output", default=None)
+_command_error: contextvars.ContextVar[list | None] = contextvars.ContextVar("pymux-command-error", default=None)
 
 
 class Pymux:
@@ -1066,7 +1055,7 @@ class Pymux:
         self._keyboard_state_sent: tuple[int, bool, ExtendedKeys] | None = None
 
         # The cell size the panes were last told. (None: nothing yet.)
-        self._cell_size_sent: Tuple[int, int] | None = None
+        self._cell_size_sent: tuple[int, int] | None = None
         #: The task group every route runs in. `running()` owns it, so
         #: it is there for exactly as long as this server serves, and
         #: `None` before and after. Lillecarl/pymux#87.
@@ -1134,7 +1123,7 @@ class Pymux:
         self.socket_name: str | None = None
         #: The bound socket that waits for clients, once
         #: `listen_on_socket` made one. `running()` serves it.
-        self.listener: "PosixSocketListener | Win32PipeListener | None" = None
+        self.listener: PosixSocketListener | Win32PipeListener | None = None
 
         # Key bindings manager.
         self.key_bindings_manager = PymuxKeyBindings(self)
@@ -1457,17 +1446,13 @@ class Pymux:
         """
         if not self._anyone_is_full_screen():
             return self.enable_status
-        return self.enable_status and _any_of_them_wants_chrome(
-            self.clients_watching(window)
-        )
+        return self.enable_status and _any_of_them_wants_chrome(self.clients_watching(window))
 
     def any_watcher_shows_pane_status(self, window=None) -> bool:
         "The same question for the titlebar of a pane."
         if not self._anyone_is_full_screen():
             return self.enable_pane_status
-        return self.enable_pane_status and _any_of_them_wants_chrome(
-            self.clients_watching(window)
-        )
+        return self.enable_pane_status and _any_of_them_wants_chrome(self.clients_watching(window))
 
     def refresh_what_time_moves(self, but_not=None) -> None:
         """
@@ -1628,10 +1613,7 @@ class Pymux:
         async. This is the one line between the two.
         """
         if self.tasks is None:
-            raise RuntimeError(
-                "A connection was made outside `Pymux.running`, so nothing "
-                "would read it."
-            )
+            raise RuntimeError("A connection was made outside `Pymux.running`, so nothing would read it.")
         self.tasks.start_soon(connection.serve)
 
     async def _auto_refresh(self) -> None:
@@ -1698,15 +1680,13 @@ class Pymux:
         if asking is not None and not asking.temporary:
             return asking
 
-        watching = [
-            client for client in self._client_states.values() if not client.temporary
-        ]
+        watching = [client for client in self._client_states.values() if not client.temporary]
         if not watching:
             return None
         return max(watching, key=lambda client: client.last_used)
 
     @property
-    def clients(self) -> "list[ClientState]":
+    def clients(self) -> list[ClientState]:
         """
         Every client a person is sitting at.
 
@@ -1715,11 +1695,9 @@ class Pymux:
         answered. Nobody is at one of those, so it is not a client to
         count, to list or to tell anything.
         """
-        return [
-            client for client in self._client_states.values() if not client.temporary
-        ]
+        return [client for client in self._client_states.values() if not client.temporary]
 
-    def clients_on(self, session, except_for=None) -> "list[ClientState]":
+    def clients_on(self, session, except_for=None) -> list[ClientState]:
         """
         Every client that holds this session, other than one.
 
@@ -1767,9 +1745,7 @@ class Pymux:
 
             # Source the given file.
             if self.source_file:
-                self.spawn_command(
-                    call_command_handler("source-file", self, [self.source_file])
-                )
+                self.spawn_command(call_command_handler("source-file", self, [self.source_file]))
 
             # Make sure that there is one window created.
             self.create_window(command=self.startup_command)
@@ -1892,7 +1868,7 @@ class Pymux:
         client_state.last_used = self._uses
         client_state.session.last_used = self._uses
 
-    def clients_watching(self, window=None) -> "list[ClientState]":
+    def clients_watching(self, window=None) -> list[ClientState]:
         """
         Every client that is looking at that window.
 
@@ -1911,8 +1887,7 @@ class Pymux:
         return [
             client_state
             for client_state in self._client_states.values()
-            if not client_state.temporary
-            and active_window_for_app(client_state.app) == window
+            if not client_state.temporary and active_window_for_app(client_state.app) == window
         ]
 
     def _create_pane(
@@ -2317,9 +2292,7 @@ class Pymux:
             return 0
         return pane.screen.kitty_keyboard_flags
 
-    def resize_pane_for_program(
-        self, pane, lines: int | None, columns: int | None
-    ) -> None:
+    def resize_pane_for_program(self, pane, lines: int | None, columns: int | None) -> None:
         """
         Give a pane the size that the program inside it asks for.
 
@@ -2410,12 +2383,10 @@ class Pymux:
         """
         now = datetime.datetime.now()
         if self.test_mode:
-            now = now.replace(
-                month=3, day=14, hour=13, minute=37, second=0, microsecond=0
-            )
+            now = now.replace(month=3, day=14, hour=13, minute=37, second=0, microsecond=0)
         return now
 
-    def clients_to_open_on(self) -> "list[ClientState]":
+    def clients_to_open_on(self) -> list[ClientState]:
         """
         The clients that receive what "open-url" opens.
 
@@ -2426,9 +2397,7 @@ class Pymux:
         it is the connection that ran the command, and it closes while
         the answer is still being sent.
         """
-        clients = [
-            client for client in self._client_states.values() if not client.temporary
-        ]
+        clients = [client for client in self._client_states.values() if not client.temporary]
         if self.open_url_target != OpenUrlTarget.BROADCAST and clients:
             return [max(clients, key=lambda client: client.last_used)]
         return clients
@@ -2470,9 +2439,7 @@ class Pymux:
         # and is not one. Lillecarl/pymux#443.
         confirmed = confirmed and self.a_person_asked()
 
-        asking = self.open_url_mode == OpenUrlMode.ASK or (
-            self.forward_mode == ForwardMode.ASK and any(forwards)
-        )
+        asking = self.open_url_mode == OpenUrlMode.ASK or (self.forward_mode == ForwardMode.ASK and any(forwards))
 
         if asking and not confirmed:
             command = "open-url -c %s" % (shlex.quote(url),)
@@ -2483,9 +2450,7 @@ class Pymux:
         for client_state, forward in zip(clients, forwards):
             packet: dict[Field, object] = {Field.CMD: Packet.OPEN, Field.DATA: url}
             if forward is None:
-                client_state.message = (
-                    "Opened %s in the browser of this machine." % (url,)
-                )
+                client_state.message = "Opened %s in the browser of this machine." % (url,)
             else:
                 # The client says what it opened, once it knows: a port
                 # that was taken here moves the URL, and a message from
@@ -2493,7 +2458,7 @@ class Pymux:
                 packet[Field.FORWARD] = forward
             client_state.connection._send_packet(packet)
 
-    def url_forward(self, url: str, client_state: "ClientState") -> dict | None:
+    def url_forward(self, url: str, client_state: ClientState) -> dict | None:
         """
         What to forward so that this URL works on that client, or
         `None`.
@@ -2538,7 +2503,7 @@ class Pymux:
 
         return not asking.temporary
 
-    def forwarding_client(self) -> "Asker":
+    def forwarding_client(self) -> Asker:
         """
         The client that a forward is asked of, and who asked.
 
@@ -2556,27 +2521,19 @@ class Pymux:
         Lillecarl/pymux#436.
         """
         if self.a_person_asked():
-            return self._can_it_forward(
-                Asker(self.get_client_state(), in_person=True)
-            )
+            return self._can_it_forward(Asker(self.get_client_state(), in_person=True))
 
-        attached = [
-            client for client in self._client_states.values() if not client.temporary
-        ]
+        attached = [client for client in self._client_states.values() if not client.temporary]
         if not attached:
-            raise CommandException(
-                "Nobody is attached, so there is nothing to forward through."
-            )
+            raise CommandException("Nobody is attached, so there is nothing to forward through.")
         if len(attached) > 1:
-            raise CommandException(
-                "Several clients are attached. Run this from the one that should forward."
-            )
+            raise CommandException("Several clients are attached. Run this from the one that should forward.")
         # A temporary client is the fake CLI of a command that arrived
         # over the socket, which is how a program in a pane runs one.
         # Nobody typed this.
         return self._can_it_forward(Asker(attached[0], in_person=False))
 
-    def _can_it_forward(self, asker: "Asker") -> "Asker":
+    def _can_it_forward(self, asker: Asker) -> Asker:
         """
         Refuse a client with no SSH connection, before anything else.
 
@@ -2613,7 +2570,7 @@ class Pymux:
 
         return not in_person or forward.listen_host not in LOOPBACK_NAMES
 
-    def forward_through(self, client_state: "ClientState", packet: dict) -> None:
+    def forward_through(self, client_state: ClientState, packet: dict) -> None:
         """
         Ask a client to open or close a forward.
 
@@ -2729,16 +2686,10 @@ exec pymux notify -u "$urgency" -- "$@"
         $BROWSER. Runs in the fork, before the program of the pane.
         """
         if self.open_url_shim and self._open_url_shim_dir:
-            os.environ["PATH"] = (
-                self._open_url_shim_dir + os.pathsep + os.environ["PATH"]
-            )
-            os.environ["BROWSER"] = os.path.join(
-                self._open_url_shim_dir, "pymux-open-url"
-            )
+            os.environ["PATH"] = self._open_url_shim_dir + os.pathsep + os.environ["PATH"]
+            os.environ["BROWSER"] = os.path.join(self._open_url_shim_dir, "pymux-open-url")
         if self.notify_shim and self._notify_shim_dir:
-            os.environ["PATH"] = (
-                self._notify_shim_dir + os.pathsep + os.environ["PATH"]
-            )
+            os.environ["PATH"] = self._notify_shim_dir + os.pathsep + os.environ["PATH"]
 
     def forward_osc(self, pane, code: str, param: str) -> None:
         """
@@ -3086,9 +3037,7 @@ exec pymux notify -u "$urgency" -- "$@"
                 # Lillecarl/pymux#493.
                 if connection is None:
                     continue
-                connection.set_pointer_shape(
-                    self.pointer_shape_of(self.focused_pane_of(client_state))
-                )
+                connection.set_pointer_shape(self.pointer_shape_of(self.focused_pane_of(client_state)))
         except Exception:
             logger.exception("Sending the shape of the pointer failed.")
 
@@ -3145,7 +3094,7 @@ exec pymux notify -u "$urgency" -- "$@"
         for pane in list(self.panes_by_id.values()):
             self.tell_pane_about_keyboard(pane)
 
-    def cell_size(self) -> Tuple[int, int]:
+    def cell_size(self) -> tuple[int, int]:
         """
         How big one cell is, in pixels, for the panes of this server.
 
@@ -3287,9 +3236,7 @@ exec pymux notify -u "$urgency" -- "$@"
         attached. The fake CLI of a socket command is never it, for the
         reason `clients_to_open_on` names.
         """
-        clients = [
-            client for client in self._client_states.values() if not client.temporary
-        ]
+        clients = [client for client in self._client_states.values() if not client.temporary]
         if not clients:
             return None
         return max(clients, key=lambda client: client.last_used)
@@ -3364,9 +3311,7 @@ exec pymux notify -u "$urgency" -- "$@"
         self._kitty_flags_sent = flags
         try:
             for connection in self.connections:
-                connection._send_packet(
-                    {Field.CMD: Packet.KITTY_KEYBOARD, Field.DATA: {"flags": flags}}
-                )
+                connection._send_packet({Field.CMD: Packet.KITTY_KEYBOARD, Field.DATA: {"flags": flags}})
         except Exception:
             logger.exception("Sending kitty keyboard flags failed.")
 
@@ -3413,9 +3358,7 @@ exec pymux notify -u "$urgency" -- "$@"
         if session is None:
             session = asked_for
 
-        pane = self._create_pane(
-            None, command, start_directory=start_directory, session=session
-        )
+        pane = self._create_pane(None, command, start_directory=start_directory, session=session)
 
         session.arrangement.create_window(pane, name=name, index=index)
         if session is asked_for:
@@ -3512,10 +3455,7 @@ exec pymux notify -u "$urgency" -- "$@"
 
         if self.tasks is None:
             answer.close()
-            raise RuntimeError(
-                "A command that waits was run outside `Pymux.running`, so "
-                "nothing would finish it."
-            )
+            raise RuntimeError("A command that waits was run outside `Pymux.running`, so nothing would finish it.")
 
         self.tasks.start_soon(self._finish_command, answer)
 
@@ -3699,9 +3639,7 @@ exec pymux notify -u "$urgency" -- "$@"
             # the bind. Lillecarl/pymux#159.
             may_attach = not self._serves_one_terminal
             context = contextvars.copy_context()
-            connection = context.run(
-                lambda: ServerConnection(self, pipe_connection, may_attach=may_attach)
-            )
+            connection = context.run(lambda: ServerConnection(self, pipe_connection, may_attach=may_attach))
 
             self.connections.append(connection)
 

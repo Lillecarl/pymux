@@ -17,6 +17,8 @@ plan file says the tree becomes these layouts' own state later; today
 it is the arrangement's, and this measures it.
 """
 
+from __future__ import annotations
+
 from typing import NamedTuple
 
 from . import arrangement
@@ -48,9 +50,7 @@ class Gaps(NamedTuple):
     between_panes: int = 1
 
 
-def lay_out(
-    item, rect: Rect, gaps: Gaps, into: list, lines: list | None = None
-) -> Rect:
+def lay_out(item, rect: Rect, gaps: Gaps, into: list, lines: list | None = None) -> Rect:
     """
     Put every pane of this item on the plane, inside that rectangle.
 
@@ -87,14 +87,10 @@ def lay_out(
 
     for place, (child, share) in enumerate(zip(item, parts)):
         if sideways:
-            used = lay_out(
-                child, Rect(at, rect.y, share, rect.height), gaps, into, lines
-            )
+            used = lay_out(child, Rect(at, rect.y, share, rect.height), gaps, into, lines)
             at = max(at + share, used.right)
         else:
-            used = lay_out(
-                child, Rect(rect.x, at, rect.width, share), gaps, into, lines
-            )
+            used = lay_out(child, Rect(rect.x, at, rect.width, share), gaps, into, lines)
             at = max(at + share, used.bottom)
 
         taken.append(used)

@@ -38,12 +38,13 @@ terminals are. This module answers the factual half -- what this
 terminal is -- and nothing here decides what to do about it.
 """
 
+from __future__ import annotations
+
 import re
-from typing import List
 
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.utils import is_dumb_terminal
-from pyte.colors import Color, DEFAULT_COLORS, PALETTE, parse_color
+from pyte.colors import DEFAULT_COLORS, PALETTE, Color, parse_color
 from pyte.osc import DYNAMIC_COLOR_CODES, QUERY, ColorBase, Osc
 from pyte.sequences import osc
 
@@ -73,9 +74,7 @@ TRUECOLOR_PROBE = "\x1b[38;2;%i;%i;%im\x1bP$qm\x1b\\\x1b[0m" % (
 _WANTED_COLORS = ("foreground", "background")
 
 #: The codes to ask for, in the order they go out.
-_COLOR_CODES = tuple(
-    code for code, name in DYNAMIC_COLOR_CODES.items() if name in _WANTED_COLORS
-)
+_COLOR_CODES = tuple(code for code, name in DYNAMIC_COLOR_CODES.items() if name in _WANTED_COLORS)
 
 #: Ask the outer terminal which two colours it draws with when nothing
 #: says otherwise, and which sixteen it paints the palette's first
@@ -132,9 +131,7 @@ def reports_truecolor(reply: str) -> bool:
     if found is None:
         return False
 
-    numbers = [int(part) for part in re.split(r"[:;]", found.group(1)) if part != ""][
-        :4
-    ]
+    numbers = [int(part) for part in re.split(r"[:;]", found.group(1)) if part != ""][:4]
     probe = [PROBE_RED, PROBE_GREEN, PROBE_BLUE]
 
     # The colon form may carry a colour space id before the three
@@ -203,7 +200,7 @@ class DefaultColors:
         #: the terminal did not say stays `None`, and a pane then
         #: answers with the conventional one. The cube beyond sixteen
         #: is convention in every terminal, so it is not asked about.
-        self.ansi: List[Color | None] = [None] * 16
+        self.ansi: list[Color | None] = [None] * 16
 
     def __repr__(self) -> str:
         return "DefaultColors(foreground=%r, background=%r)" % (
@@ -264,9 +261,7 @@ class DefaultColors:
         describes the theme that the person in front of this terminal
         is looking at. Lillecarl/pymux#283.
         """
-        palette = [
-            learned or PALETTE[index] for index, learned in enumerate(self.ansi)
-        ] + list(PALETTE[16:])
+        palette = [learned or PALETTE[index] for index, learned in enumerate(self.ansi)] + list(PALETTE[16:])
         defaults = dict(DEFAULT_COLORS)
         if self.foreground is not None:
             defaults["foreground"] = self.foreground
@@ -292,9 +287,7 @@ def theme_color_base(name: str) -> ColorBase:
 
     roles = roles_of(name)
     ansi = [parse_color(roles["color-%i" % index]) for index in range(16)]
-    palette = [learned or PALETTE[index] for index, learned in enumerate(ansi)] + list(
-        PALETTE[16:]
-    )
+    palette = [learned or PALETTE[index] for index, learned in enumerate(ansi)] + list(PALETTE[16:])
     defaults = dict(DEFAULT_COLORS)
     foreground = parse_color(roles["text"])
     background = parse_color(roles["pane"])

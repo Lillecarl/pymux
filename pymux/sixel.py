@@ -12,7 +12,9 @@ pixels that are more transparent than half undrawn, which the sixel
 "P2 = 1" mode keeps clear.
 """
 
-from typing import Dict, List, Sequence, Tuple
+from __future__ import annotations
+
+from typing import Sequence
 
 from pyte.images import PixelFormat
 
@@ -77,9 +79,7 @@ def to_rgba(image_format: int, width: int, height: int, data: bytes) -> bytes | 
     return None
 
 
-def scale_rgba(
-    rgba: bytes, width: int, height: int, new_width: int, new_height: int
-) -> bytes:
+def scale_rgba(rgba: bytes, width: int, height: int, new_width: int, new_height: int) -> bytes:
     """
     Resize RGBA pixels with the nearest neighbour. (The outer terminal
     decides how many pixels a cell holds; the image has to match.)
@@ -103,16 +103,14 @@ def scale_rgba(
 # Colour reduction.
 
 
-def _median_cut(
-    counts: Dict[Tuple[int, int, int], int], max_colors: int
-) -> List[List[Tuple[int, int, int]]]:
+def _median_cut(counts: dict[tuple[int, int, int], int], max_colors: int) -> list[list[tuple[int, int, int]]]:
     """
     Split the colours into at most `max_colors` buckets.
 
     Every step cuts the bucket with the widest channel in half at the
     median of that channel, which is the median cut of Heckbert.
     """
-    buckets: List[List[Tuple[int, int, int]]] = [list(counts)]
+    buckets: list[list[tuple[int, int, int]]] = [list(counts)]
 
     while len(buckets) < max_colors:
         widest = -1
@@ -139,8 +137,8 @@ def _median_cut(
 
 
 def _palette(
-    counts: Dict[Tuple[int, int, int], int], max_colors: int
-) -> Tuple[List[Tuple[int, int, int]], Dict[Tuple[int, int, int], int]]:
+    counts: dict[tuple[int, int, int], int], max_colors: int
+) -> tuple[list[tuple[int, int, int]], dict[tuple[int, int, int], int]]:
     """
     A palette of at most `max_colors` entries, and the map from every
     colour of the image to its entry.
@@ -150,15 +148,12 @@ def _palette(
         return palette, {color: index for index, color in enumerate(palette)}
 
     palette = []
-    mapping: Dict[Tuple[int, int, int], int] = {}
+    mapping: dict[tuple[int, int, int], int] = {}
     for index, bucket in enumerate(_median_cut(counts, max_colors)):
         if not bucket:
             continue
         weight = sum(counts[color] for color in bucket)
-        red, green, blue = (
-            sum(color[channel] * counts[color] for color in bucket) // weight
-            for channel in range(3)
-        )
+        red, green, blue = (sum(color[channel] * counts[color] for color in bucket) // weight for channel in range(3))
         entry = (red, green, blue)
         palette.append(entry)
         for color in bucket:
@@ -182,7 +177,7 @@ def _runs(row: Sequence[int], width: int) -> str:
     if end == 0:
         return ""
 
-    out: List[str] = []
+    out: list[str] = []
     index = 0
     while index < end:
         value = row[index]
@@ -198,9 +193,7 @@ def _runs(row: Sequence[int], width: int) -> str:
     return "".join(out)
 
 
-def encode_sixel(
-    width: int, height: int, rgba: bytes, max_colors: int = MAX_COLORS
-) -> str | None:
+def encode_sixel(width: int, height: int, rgba: bytes, max_colors: int = MAX_COLORS) -> str | None:
     """
     The full DCS sequence that draws `rgba` as a sixel image, or None
     when there is nothing to draw.
@@ -214,8 +207,8 @@ def encode_sixel(
         return None
 
     # Index every pixel, and count the colours on the way.
-    counts: Dict[Tuple[int, int, int], int] = {}
-    indexed: List[Tuple[int, int, int] | None] = [None] * (width * height)
+    counts: dict[tuple[int, int, int], int] = {}
+    indexed: list[tuple[int, int, int] | None] = [None] * (width * height)
     for index in range(width * height):
         offset = index * 4
         if rgba[offset + 3] < ALPHA_THRESHOLD:
@@ -242,7 +235,7 @@ def encode_sixel(
         )
 
     for band in range(0, height, 6):
-        rows: Dict[int, List[int]] = {}
+        rows: dict[int, list[int]] = {}
         for offset in range(6):
             y = band + offset
             if y >= height:

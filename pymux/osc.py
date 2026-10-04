@@ -17,6 +17,8 @@ payload that carries an escape byte can drive the terminal of the user
 instead of only naming a clipboard or a notification.
 """
 
+from __future__ import annotations
+
 import base64
 import string
 from urllib.parse import unquote
@@ -112,9 +114,7 @@ def open_url_of(param: str) -> str | None:
         return None
 
     try:
-        url = base64.b64decode(param[len(OPEN_URL_PREFIX) :], validate=True).decode(
-            "utf-8"
-        )
+        url = base64.b64decode(param[len(OPEN_URL_PREFIX) :], validate=True).decode("utf-8")
     except (ValueError, UnicodeDecodeError):
         return None
 
@@ -144,9 +144,7 @@ def extension_key_of(param: str) -> tuple[str, str] | None:
 #: The characters a user variable name may hold. The value travels
 #: base64, but the name travels plain, so it stays clear of the
 #: separators of the sequence.
-_USER_VAR_NAME = frozenset(
-    string.ascii_letters + string.digits + "_-."
-)
+_USER_VAR_NAME = frozenset(string.ascii_letters + string.digits + "_-.")
 
 
 def set_user_var_of(rest: str) -> tuple[str, str] | None:

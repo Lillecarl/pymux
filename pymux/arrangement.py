@@ -8,10 +8,11 @@ An arrangement consists of a list of windows. And a window has a list of panes,
 arranged by ordering them in HSplit/VSplit instances.
 """
 
+from __future__ import annotations
+
 import math
 import os
 from enum import Enum
-from typing import Dict, List
 from weakref import WeakKeyDictionary, ref
 
 from prompt_toolkit.application import Application, get_app, get_app_or_none, set_app
@@ -83,9 +84,7 @@ class Pane:
     mode or displaying the help.
     """
 
-    _pane_counter = (
-        1000  # Start at 1000, to be sure to not confuse this with pane indexes.
-    )
+    _pane_counter = 1000  # Start at 1000, to be sure to not confuse this with pane indexes.
 
     def __init__(self, terminal: Terminal) -> None:
         self.terminal = terminal
@@ -137,13 +136,13 @@ class Pane:
         #: SetUserVar". iTerm2 reads these for badges and triggers and
         #: WezTerm for titles; here they wait for a reader, the way the
         #: notification hub waited for its chooser.
-        self.user_vars: Dict[str, str] = {}
+        self.user_vars: dict[str, str] = {}
 
         #: The screen rows a program marked, from "OSC 1337 ; SetMark",
         #: oldest first. Rows move as output scrolls, so these are where
         #: the marks were, not where they are; the jump UI that resolves
         #: them comes later.
-        self.marks: List[int] = []
+        self.marks: list[int] = []
 
         #: The shell integration zone the program stands in, from
         #: "OSC 133": "A" a prompt, "B" a command, "C" its output.
@@ -276,12 +275,12 @@ def _place_of(split: _Split, item: object) -> int:
     raise ValueError("%r is not in %r" % (item, split))
 
 
-def panes_of(item) -> "List[Pane]":
+def panes_of(item) -> list[Pane]:
     "Every pane under this item, in the order they are drawn."
     if isinstance(item, Pane):
         return [item]
 
-    result: List[Pane] = []
+    result: list[Pane] = []
     for child in item:
         result.extend(panes_of(child))
     return result
@@ -298,7 +297,7 @@ class Window:
         self.index = index
         self.root: VSplit | HSplit = HSplit()
         self._active_pane: Pane | None = None
-        self._prev_active_pane: "ref[Pane]" | None = None
+        self._prev_active_pane: ref[Pane] | None = None
         self.chosen_name: str | None = None
         self.previous_selected_layout: LayoutTypes | None = None
 
@@ -313,7 +312,7 @@ class Window:
         #: `DEFAULT_COLUMN_WIDTH`. The keys are the children of `root`,
         #: weakly held, so a column that closes takes its width with
         #: it.
-        self.column_widths: "WeakKeyDictionary[object, float]" = WeakKeyDictionary()
+        self.column_widths: WeakKeyDictionary[object, float] = WeakKeyDictionary()
 
         #: Which client's terminal decides how big this window's plane
         #: is, when more than one watches it. `set-window-option
@@ -403,9 +402,7 @@ class Window:
             # it, from the end a person asked for.
             where = len(widths) - 1 if back else -1
 
-        self.column_widths[column] = widths[
-            (where - 1 if back else where + 1) % len(widths)
-        ]
+        self.column_widths[column] = widths[(where - 1 if back else where + 1) % len(widths)]
 
     def move_column(self, pane: Pane, step: int) -> bool:
         """
@@ -671,7 +668,7 @@ class Window:
             parent = above
 
     @property
-    def panes(self) -> List[Pane]:
+    def panes(self) -> list[Pane]:
         """
         Every pane of this window, in the order they are drawn.
 
@@ -693,7 +690,7 @@ class Window:
         return panes_of(self.root)
 
     @property
-    def splits(self) -> List[HSplit | VSplit]:
+    def splits(self) -> list[HSplit | VSplit]:
         "Return a list with all HSplit/VSplit instances."
         result = []
 
@@ -736,9 +733,7 @@ class Window:
         in it has nothing to put there and does not reserve the row.
         Lillecarl/pymux#211.
         """
-        return any(
-            isinstance(split, HSplit) and len(split) > 1 for split in self.splits
-        )
+        return any(isinstance(split, HSplit) and len(split) > 1 for split in self.splits)
 
     @property
     def has_panes(self) -> bool:
@@ -757,9 +752,7 @@ class Window:
         "Focus the next pane."
         panes = self.panes
         if panes:
-            self.active_pane = panes[
-                (panes.index(self.active_pane or panes[0]) + count) % len(panes)
-            ]
+            self.active_pane = panes[(panes.index(self.active_pane or panes[0]) + count) % len(panes)]
         else:
             self.active_pane = None  # No panes left.
 
@@ -894,9 +887,7 @@ class Window:
     def select_previous_layout(self) -> None:
         self.select_next_layout(count=-1)
 
-    def change_size_for_active_pane(
-        self, up: int = 0, right: int = 0, down: int = 0, left: int = 0
-    ) -> None:
+    def change_size_for_active_pane(self, up: int = 0, right: int = 0, down: int = 0, left: int = 0) -> None:
         """
         Increase the size of the current pane in any of the four directions.
         """
@@ -955,9 +946,7 @@ class Window:
                     # case it's logical to move the left border to the right
                     # instead.
                     if not trying_other_side:
-                        handle_side(
-                            split_cls, not is_before, -amount, trying_other_side=True
-                        )
+                        handle_side(split_cls, not is_before, -amount, trying_other_side=True)
 
         handle_side(VSplit, True, left)
         handle_side(VSplit, False, right)
@@ -978,12 +967,12 @@ class Arrangement:
     """
 
     def __init__(self) -> None:
-        self.windows: List[Window] = []
+        self.windows: list[Window] = []
 
         # The windows that link-window can put back. An unlinked
         # window keeps its panes running; it is only out of the order
         # nobody sees. Lillecarl/pymux#297.
-        self._unlinked_windows: List[Window] = []
+        self._unlinked_windows: list[Window] = []
 
         # The number of the first window. tmux starts at zero, but a
         # keyboard starts at one: the "1" key is easier to reach than
@@ -1010,14 +999,10 @@ class Arrangement:
         #
         # Like tmux, setting one changes no window that is already
         # open. It says what the next one starts as.
-        self.window_defaults: Dict[str, object] = {}
+        self.window_defaults: dict[str, object] = {}
 
-        self._active_window_for_cli: "WeakKeyDictionary[Application, Window]" = (
-            WeakKeyDictionary()
-        )
-        self._prev_active_window_for_cli: WeakKeyDictionary[
-            Application, Window | None
-        ] = WeakKeyDictionary()
+        self._active_window_for_cli: WeakKeyDictionary[Application, Window] = WeakKeyDictionary()
+        self._prev_active_window_for_cli: WeakKeyDictionary[Application, Window | None] = WeakKeyDictionary()
 
         # The active window of the last CLI. Used as default when a new session
         # is attached.
@@ -1137,9 +1122,7 @@ class Arrangement:
         is not shown would move a window a person never closed.
         Lillecarl/pymux#297, Lillecarl/pymux#342.
         """
-        for number, window in enumerate(
-            sorted(self.windows, key=lambda one: one.index), start=self.base_index
-        ):
+        for number, window in enumerate(sorted(self.windows, key=lambda one: one.index), start=self.base_index):
             window.index = WindowIndex(number)
 
     def make_room_at(self, index: WindowIndex) -> None:
@@ -1346,17 +1329,13 @@ class Arrangement:
         w = self.get_active_window()
         assert w is not None
 
-        self.set_active_window(
-            self.windows[(self.windows.index(w) - 1) % len(self.windows)]
-        )
+        self.set_active_window(self.windows[(self.windows.index(w) - 1) % len(self.windows)])
 
     def focus_next_window(self) -> None:
         w = self.get_active_window()
         assert w is not None
 
-        self.set_active_window(
-            self.windows[(self.windows.index(w) + 1) % len(self.windows)]
-        )
+        self.set_active_window(self.windows[(self.windows.index(w) + 1) % len(self.windows)])
 
     def break_pane(self, set_active: bool = True) -> None:
         """

@@ -208,12 +208,7 @@ class Rect(NamedTuple):
 
     def overlaps(self, other: Rect) -> bool:
         "True when the two share a cell."
-        return (
-            self.x < other.right
-            and other.x < self.right
-            and self.y < other.bottom
-            and other.y < self.bottom
-        )
+        return self.x < other.right and other.x < self.right and self.y < other.bottom and other.y < self.bottom
 
     def encloses(self, other: Rect) -> bool:
         """
@@ -225,12 +220,7 @@ class Rect(NamedTuple):
         """
         if other.width <= 0 or other.height <= 0:
             return True
-        return (
-            self.x <= other.x
-            and other.right <= self.right
-            and self.y <= other.y
-            and other.bottom <= self.bottom
-        )
+        return self.x <= other.x and other.right <= self.right and self.y <= other.y and other.bottom <= self.bottom
 
     def cells(self) -> Iterator[Point]:
         "Every cell of this rectangle, a row at a time."
@@ -325,7 +315,7 @@ class View:
         """
         return self.shows(rect) and not self.rect.encloses(rect)
 
-    def moved_onto(self, rect: "Rect | None", plane: Rect) -> Point:
+    def moved_onto(self, rect: Rect | None, plane: Rect) -> Point:
         """
         Where this view goes to show that rectangle, on that plane.
 
@@ -729,9 +719,7 @@ class Plan:
     ) -> None:
         #: One `Layer` for each plane, lowest number first, which is
         #: the order they paint in.
-        self.layers: dict[int, Layer] = {
-            number: Layer(rects) for number, rects in sorted(layers.items())
-        }
+        self.layers: dict[int, Layer] = {number: Layer(rects) for number, rects in sorted(layers.items())}
 
         planes = list(self.layers.values())
 
@@ -747,9 +735,7 @@ class Plan:
             self.rects: dict[Slot, Rect] = planes[0].rects
             self.bounds: Rect = planes[0].bounds
         else:
-            self.rects = {
-                slot: rect for layer in planes for slot, rect in layer.rects.items()
-            }
+            self.rects = {slot: rect for layer in planes for slot, rect in layer.rects.items()}
             self.bounds = bounding_box(self.rects.values())
 
         #: Which slot each pane is in, and which plane each slot is
@@ -872,9 +858,7 @@ class Plan:
         question about one plane: a floating window is not in the row
         it happens to sit over.
         """
-        return [
-            pane for layer in self.layers.values() for pane in layer.reading_order()
-        ]
+        return [pane for layer in self.layers.values() for pane in layer.reading_order()]
 
     # ------------------------------------------------------------------
     # What reaches the screen.
@@ -900,13 +884,7 @@ class Plan:
         kept: list[dict[Slot, Rect]] = []
 
         for layer in reversed(self.layers.values()):
-            kept.append(
-                {
-                    slot: rect
-                    for slot, rect in layer.rects.items()
-                    if not _covered(rect, over)
-                }
-            )
+            kept.append({slot: rect for slot, rect in layer.rects.items() if not _covered(rect, over)})
             over.extend(layer.rects.values())
 
         return {slot: rect for held in reversed(kept) for slot, rect in held.items()}
@@ -931,9 +909,7 @@ def _without(rect: Rect, cut: Rect) -> list[Rect]:
     if cut.y > rect.y:
         pieces.append(Rect(rect.x, rect.y, rect.width, cut.y - rect.y))
     if cut.bottom < rect.bottom:
-        pieces.append(
-            Rect(rect.x, cut.bottom, rect.width, rect.bottom - cut.bottom)
-        )
+        pieces.append(Rect(rect.x, cut.bottom, rect.width, rect.bottom - cut.bottom))
 
     # The rows the cut covers, which is where it can leave a side.
     top = max(rect.y, cut.y)
@@ -973,9 +949,7 @@ def _covered(rect: Rect, over: Iterable[Rect]) -> bool:
     return not left
 
 
-def _enters(
-    rect: Rect, start: tuple[float, float], step: tuple[float, float]
-) -> float | None:
+def _enters(rect: Rect, start: tuple[float, float], step: tuple[float, float]) -> float | None:
     """
     How far along the ray it first reaches inside that rectangle.
 
@@ -1017,9 +991,7 @@ def _cut(items: list[tuple[Slot, Rect]], side: Side) -> int | None:
     edges = sorted({rect.edge(side.opposite) for _, rect in items})
 
     for at in edges[1:]:
-        if all(
-            rect.edge(side) <= at or rect.edge(side.opposite) >= at for _, rect in items
-        ):
+        if all(rect.edge(side) <= at or rect.edge(side.opposite) >= at for _, rect in items):
             return at
 
     return None

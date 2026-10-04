@@ -2,8 +2,10 @@
 Key bindings.
 """
 
+from __future__ import annotations
+
 import logging
-from typing import TYPE_CHECKING, Callable, Dict, Tuple
+from typing import TYPE_CHECKING, Callable
 
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.filters import (
@@ -42,7 +44,7 @@ PREFIX_TABLE = "prefix"
 #: One binding: the table its key is read from, and the keys
 #: themselves. The keys are prompt_toolkit's, so every spelling of one
 #: key gives the same one.
-_ABinding = Tuple[str, Tuple[str, ...]]
+_ABinding = tuple[str, tuple[str, ...]]
 
 
 class KeyTable:
@@ -68,16 +70,16 @@ class KeyTable:
         self.on_leave = on_leave
 
 
-def _hold_pane_numbers_up(pymux: "Pymux") -> None:
+def _hold_pane_numbers_up(pymux: Pymux) -> None:
     "The numbers are how a person reads a mode that moves the focus."
     pymux.display_pane_numbers = True
 
 
-def _put_pane_numbers_back(pymux: "Pymux") -> None:
+def _put_pane_numbers_back(pymux: Pymux) -> None:
     pymux.display_pane_numbers = False
 
 
-def _register_builtin_mode_tables(manager: "PymuxKeyBindings") -> None:
+def _register_builtin_mode_tables(manager: PymuxKeyBindings) -> None:
     """
     The modes pymux ships with, with the side effects their keys
     cannot say.
@@ -99,7 +101,7 @@ class PymuxKeyBindings:
     Pymux key binding manager.
     """
 
-    def __init__(self, pymux: "Pymux") -> None:
+    def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
 
         self.custom_key_bindings = KeyBindings()
@@ -107,7 +109,7 @@ class PymuxKeyBindings:
         #: The modes a person can be in, by the name `enter-mode`
         #: takes. `bind-key -T` creates a table without hooks here
         #: when it meets a name this does not hold. Lillecarl/pymux#394.
-        self.mode_tables: Dict[str, KeyTable] = {}
+        self.mode_tables: dict[str, KeyTable] = {}
         _register_builtin_mode_tables(self)
 
         self.key_bindings = merge_key_bindings(
@@ -128,7 +130,7 @@ class PymuxKeyBindings:
             ]
         )
 
-        self._prefix: Tuple[str, ...] = ("c-b",)
+        self._prefix: tuple[str, ...] = ("c-b",)
         self._prefix_binding: Callable[[E], None] | None = None
 
         # Load initial bindings.
@@ -142,7 +144,7 @@ class PymuxKeyBindings:
         #: `unbind-key` under a second spelling removed nothing while
         #: `bind-key` under it left two handlers on one key.
         #: Lillecarl/pymux#235.
-        self.custom_bindings: Dict[_ABinding, CustomBinding] = {}
+        self.custom_bindings: dict[_ABinding, CustomBinding] = {}
 
     def _load_prefix_binding(self) -> None:
         """
@@ -157,12 +159,7 @@ class PymuxKeyBindings:
         # Create new Python binding.
         @self.custom_key_bindings.add(
             *self._prefix,
-            filter=~(
-                HasPrefix(pymux)
-                | has_focus(COMMAND)
-                | has_focus(PROMPT)
-                | WaitsForConfirmation(pymux)
-            ),
+            filter=~(HasPrefix(pymux) | has_focus(COMMAND) | has_focus(PROMPT) | WaitsForConfirmation(pymux)),
         )
         def enter_prefix_handler(event: E) -> None:
             "Enter prefix mode."
@@ -178,12 +175,12 @@ class PymuxKeyBindings:
         self._prefix_binding = enter_prefix_handler
 
     @property
-    def prefix(self) -> Tuple[str, ...]:
+    def prefix(self) -> tuple[str, ...]:
         "Get the prefix key."
         return self._prefix
 
     @prefix.setter
-    def prefix(self, keys: Tuple[str, ...]) -> None:
+    def prefix(self, keys: tuple[str, ...]) -> None:
         """
         Set a new prefix key.
         """
@@ -295,21 +292,12 @@ class PymuxKeyBindings:
         @Condition
         def chooser_displayed() -> bool:
             state = self.pymux.get_client_state()
-            return (
-                state.choose_window
-                or state.choose_buffer
-                or state.choose_options
-                or state.choose_notifications
-            )
+            return state.choose_window or state.choose_buffer or state.choose_options or state.choose_notifications
 
         @Condition
         def chooser_search_focused() -> bool:
             state = self.pymux.get_client_state()
-            return (
-                state.choose_window
-                or state.choose_buffer
-                or state.choose_notifications
-            ) and has_focus(
+            return (state.choose_window or state.choose_buffer or state.choose_notifications) and has_focus(
                 state.choose_window_filter
             )()
 
@@ -321,9 +309,7 @@ class PymuxKeyBindings:
         @kb.add("/", filter=chooser_displayed & ~chooser_search_focused)
         def _chooser_search(event: E) -> None:
             "Search the names; what is typed narrows the list."
-            get_app().layout.focus(
-                self.pymux.get_client_state().layout_manager.chooser_search_control()
-            )
+            get_app().layout.focus(self.pymux.get_client_state().layout_manager.chooser_search_control())
 
         @kb.add("left", filter=chooser_displayed & ~chooser_search_focused)
         @kb.add("h", filter=chooser_displayed & ~chooser_search_focused)
@@ -374,9 +360,7 @@ class PymuxKeyBindings:
                 state.layout_manager.choose_pointed_window()
 
         @kb.add("q", filter=chooser_displayed & ~chooser_search_focused, eager=True)
-        @kb.add(
-            "escape", filter=chooser_displayed & ~chooser_search_focused, eager=True
-        )
+        @kb.add("escape", filter=chooser_displayed & ~chooser_search_focused, eager=True)
         @kb.add("c-c", filter=chooser_displayed & ~chooser_search_focused, eager=True)
         def _quit_chooser(event: E) -> None:
             """
@@ -409,9 +393,7 @@ class PymuxKeyBindings:
         @kb.add("enter", filter=menu_displayed, eager=True)
         def _menu_enter(event: E) -> None:
             "The entry whose key is Enter, when there is one."
-            self.pymux.get_client_state().layout_manager.menu_key_pressed(
-                event.key_sequence[-1].key
-            )
+            self.pymux.get_client_state().layout_manager.menu_key_pressed(event.key_sequence[-1].key)
 
         @kb.add("escape", filter=menu_displayed, eager=True)
         @kb.add("c-c", filter=menu_displayed, eager=True)
@@ -422,9 +404,7 @@ class PymuxKeyBindings:
         @kb.add(Keys.Any, filter=menu_displayed, eager=True)
         def _menu_key(event: E) -> None:
             "The entry whose key this is, or nothing: the menu stays."
-            self.pymux.get_client_state().layout_manager.menu_key_pressed(
-                event.key_sequence[-1].key, event.data
-            )
+            self.pymux.get_client_state().layout_manager.menu_key_pressed(event.key_sequence[-1].key, event.data)
 
         @kb.add(Keys.KeyRelease, eager=True)
         def _forward_key_release(event: E) -> object:
@@ -490,9 +470,7 @@ class PymuxKeyBindings:
 
         return kb
 
-    def add_custom_binding(
-        self, key_name: str, command: str, arguments: list, table: str = PREFIX_TABLE
-    ) -> None:
+    def add_custom_binding(self, key_name: str, command: str, arguments: list, table: str = PREFIX_TABLE) -> None:
         """
         Add custom binding (for the "bind-key" command.)
         Raises ValueError if the give `key_name` is an invalid name.
@@ -521,9 +499,7 @@ class PymuxKeyBindings:
         # masking: while a mode is on top, the root table and the
         # prefix table hold nothing the mode does not.
         filter: Filter = KeyTableIs(self.pymux, table)
-        filter = filter & ~(
-            WaitsForConfirmation(self.pymux) | has_focus(COMMAND) | has_focus(PROMPT)
-        )
+        filter = filter & ~(WaitsForConfirmation(self.pymux) | has_focus(COMMAND) | has_focus(PROMPT))
 
         def key_handler(event: E) -> None:
             """
@@ -539,9 +515,7 @@ class PymuxKeyBindings:
             client has gone changes nothing that anybody reads.
             """
             client_state = self.pymux.get_client_state()
-            self.pymux.spawn_command(
-                call_command_handler(command, self.pymux, arguments)
-            )
+            self.pymux.spawn_command(call_command_handler(command, self.pymux, arguments))
             client_state.has_prefix = False
 
         # An `Any` binding is eager, or it loses to an eager one below
@@ -549,13 +523,9 @@ class PymuxKeyBindings:
         # bindings too, and waiting for a longer sequence that cannot
         # come hands the key to them. The same lesson
         # `_load_builtins` records on `_hide_numbers`.
-        self.custom_key_bindings.add(
-            *keys_sequence, filter=filter, eager=(keys_sequence == (Keys.Any,))
-        )(key_handler)
+        self.custom_key_bindings.add(*keys_sequence, filter=filter, eager=(keys_sequence == (Keys.Any,)))(key_handler)
 
-        self.custom_bindings[table, keys_sequence] = CustomBinding(
-            key_handler, command, arguments, key_name
-        )
+        self.custom_bindings[table, keys_sequence] = CustomBinding(key_handler, command, arguments, key_name)
 
     def enter_mode(self, name: str) -> None:
         """
@@ -602,7 +572,7 @@ class PymuxKeyBindings:
         while client_state.key_tables:
             self.leave_mode()
 
-    def prefix_keys(self) -> "list[tuple[str, str]]":
+    def prefix_keys(self) -> list[tuple[str, str]]:
         """
         The keys that follow the prefix, each with what it does.
 
@@ -623,17 +593,13 @@ class PymuxKeyBindings:
             rows.append((binding.written, meaning))
         return sorted(rows)
 
-    def binding_on(
-        self, key_name: str, table: str = PREFIX_TABLE
-    ) -> "CustomBinding | None":
+    def binding_on(self, key_name: str, table: str = PREFIX_TABLE) -> CustomBinding | None:
         """
         What a key runs, under any name for that key, or None.
 
         Raises `ValueError` when the name reads as no key at all.
         """
-        return self.custom_bindings.get(
-            (table, key_however_it_is_written(key_name))
-        )
+        return self.custom_bindings.get((table, key_however_it_is_written(key_name)))
 
     def remove_custom_binding(self, key_name: str, table: str = PREFIX_TABLE) -> None:
         """

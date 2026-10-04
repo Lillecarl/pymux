@@ -95,7 +95,7 @@ def client_options_in(path: str | None) -> list[tuple[str, str]]:
         return []
 
     try:
-        with open(path, "r") as opened:
+        with open(path) as opened:
             lines = opened.readlines()
     except OSError:
         return []

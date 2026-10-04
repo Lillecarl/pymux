@@ -45,6 +45,8 @@ at. `set-option log-level debug` reaches a running server, and
 `level` is what `show-options` reads back. Lillecarl/pymux#252.
 """
 
+from __future__ import annotations
+
 import logging
 import logging.handlers
 import os
@@ -61,6 +63,7 @@ __all__ = [
     "LEVELS",
     "LogLevel",
 ]
+
 
 class LogLevel(StrEnum):
     """
@@ -175,12 +178,8 @@ def configure(logfile: str | None = None, level: int = logging.INFO) -> Path | N
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         # `delay` opens the file when the first record arrives.
-        handler = logging.handlers.RotatingFileHandler(
-            path, maxBytes=HOW_BIG, backupCount=HOW_MANY, delay=True
-        )
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
-        )
+        handler = logging.handlers.RotatingFileHandler(path, maxBytes=HOW_BIG, backupCount=HOW_MANY, delay=True)
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
     except OSError:
         # A read only home, a full disk, a path that is a directory. The
         # messages are lost, and that is better than painting them over

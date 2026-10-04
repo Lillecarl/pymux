@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import re
 import time
@@ -6,14 +8,12 @@ from typing import (
     Any,
     Callable,
     ContextManager,
-    Dict,
-    List,
     TextIO,
     cast,
 )
 
 import anyio
-
+from libpymux.protocol import Field, Mode, Packet
 from prompt_toolkit.application.current import create_app_session, set_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import PipeInput
@@ -22,6 +22,8 @@ from prompt_toolkit.input.vt100 import Vt100Input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
+from pymux.commands.common import find_pane
+
 from .colors import ColorDetection, DefaultColors
 from .commands import handle_command
 from .enums import Woke
@@ -29,8 +31,6 @@ from .graphics import ClientGraphics
 from .ids import PaneId
 from .keys import KittyVt100Parser
 from .log import logger
-from pymux.commands.common import find_pane
-from libpymux.protocol import Field, Mode, Packet
 from .nearest import NEAREST, nearest_theme, wanted_from
 from .options import ExtendedKeys, SetOptionError
 from .pipes import BrokenPipeError
@@ -49,9 +49,7 @@ __all__ = ["ServerConnection"]
 #: three say the terminal understands it.
 _SYNCHRONIZED_REPLY_RE = re.compile(r"^\x1b\[\?2026;(\d+)\$y$")
 
-_OSC_REPLY_RE = re.compile(
-    r"^(?:\x1b\]|\x9d)(\d+);(.*?)(?:\x1b\\|\x9c|\x07)$", re.DOTALL
-)
+_OSC_REPLY_RE = re.compile(r"^(?:\x1b\]|\x9d)(\d+);(.*?)(?:\x1b\\|\x9c|\x07)$", re.DOTALL)
 
 #: How many reads in a row may fail before a connection is closed.
 #: A packet that cannot be read is answered and the next one is taken,
@@ -90,9 +88,7 @@ class ServerConnection:
     For each client that connects, we have one instance of this class.
     """
 
-    def __init__(
-        self, pymux: "Pymux", pipe_connection, may_attach: bool = True
-    ) -> None:
+    def __init__(self, pymux: Pymux, pipe_connection, may_attach: bool = True) -> None:
         self.pymux = pymux
 
         self.pipe_connection = pipe_connection
@@ -111,16 +107,16 @@ class ServerConnection:
         #: `serve()` opens it, so every task of a client ends when that
         #: client goes, and none of them can outlive the server: the
         #: group is a child of `Pymux.running`'s. Lillecarl/pymux#87.
-        self._tasks: "anyio.abc.TaskGroup" | None = None
+        self._tasks: anyio.abc.TaskGroup | None = None
 
         self._recv_buffer = b""
-        self.client_state: "ClientState" | None = None
+        self.client_state: ClientState | None = None
 
         #: The pane this connection is streaming, when it asked for one.
         #: A connection streams at most one pane: a caller that watches
         #: two opens two, so one slow viewer never holds up another.
         #: Lillecarl/pymux#461.
-        self._stream: "PaneStream | None" = None
+        self._stream: PaneStream | None = None
 
         # Kitty keyboard protocol support of the outer terminal. The
         # client sends "kitty-detect" right after querying its terminal;
@@ -164,7 +160,7 @@ class ServerConnection:
         #: client reported it when it attached. The session keeps the
         #: names "update-environment" lists, and nothing keeps the rest.
         #: Lillecarl/pymux#271.
-        self.environment: Dict[str, str] = {}
+        self.environment: dict[str, str] = {}
 
         #: The terminal this client draws on, as the client named it,
         #: and the process it runs as. Both are of the client's own
@@ -178,7 +174,7 @@ class ServerConnection:
         #: connection, so the list here is a copy to draw and never the
         #: truth. Lillecarl/pymux#436.
         self.can_forward = False
-        self.forwards: List[Dict] = []
+        self.forwards: list[dict] = []
 
         #: Whether this client answers a ping, and how many have gone
         #: unanswered. Only a client that said it answers is ever
@@ -435,9 +431,7 @@ class ServerConnection:
         synchronized = _SYNCHRONIZED_REPLY_RE.match(data)
         if synchronized is not None:
             if self.client_state is not None:
-                self.client_state.output.synchronized_output = (
-                    synchronized.group(1) != "0"
-                )
+                self.client_state.output.synchronized_output = synchronized.group(1) != "0"
             return
 
         # The graphics query reply, the cell size report and the device
@@ -669,10 +663,7 @@ class ServerConnection:
         # there too, and it names the URL to copy.
         elif packet[Field.CMD] == Packet.OPEN_FAILED:
             if self.client_state is not None:
-                self.client_state.message = (
-                    "Could not open %s in a browser on this machine."
-                    % (packet[Field.DATA],)
-                )
+                self.client_state.message = "Could not open %s in a browser on this machine." % (packet[Field.DATA],)
 
         # What this client is forwarding, after it changed or after the
         # link came back. The server keeps a copy and never the truth:
@@ -715,9 +706,7 @@ class ServerConnection:
         if self.client_state is None:
             return
 
-        others = self.pymux.clients_on(
-            self.client_state.session, except_for=self.client_state
-        )
+        others = self.pymux.clients_on(self.client_state.session, except_for=self.client_state)
         for other in others:
             connection = getattr(other, "connection", None)
             if connection is not None:
@@ -814,7 +803,7 @@ class ServerConnection:
         logger.info("A client asked to attach to a server that serves one terminal.")
         self.detach_and_close()
 
-    async def _stream_pane(self, packet: Dict[str, Any]) -> None:
+    async def _stream_pane(self, packet: dict[str, Any]) -> None:
         """
         Send a pane to this client as frames, until it goes away.
 
@@ -827,21 +816,15 @@ class ServerConnection:
         target = packet.get(Field.PANE)
         pane = find_pane(self.pymux, target) if target else None
         if pane is None:
-            await self._write_packet(
-                {Field.CMD: Packet.ERR, Field.DATA: "can't find pane: %s\n" % (target,)}
-            )
+            await self._write_packet({Field.CMD: Packet.ERR, Field.DATA: "can't find pane: %s\n" % (target,)})
             await self._write_packet({Field.CMD: Packet.EXIT, Field.CODE: 1})
             self._close_connection()
             return
 
-        async def send(frame: Dict[str, Any]) -> None:
-            await self._write_packet(
-                {Field.CMD: Packet.STREAM_OUT, Field.DATA: json.dumps(frame)}
-            )
+        async def send(frame: dict[str, Any]) -> None:
+            await self._write_packet({Field.CMD: Packet.STREAM_OUT, Field.DATA: json.dumps(frame)})
 
-        self._stream = PaneStream(
-            self.pymux, pane, send, writable=bool(packet.get(Field.WRITABLE))
-        )
+        self._stream = PaneStream(self.pymux, pane, send, writable=bool(packet.get(Field.WRITABLE)))
         try:
             await self._stream.run()
         except BrokenPipeError:
@@ -850,7 +833,7 @@ class ServerConnection:
             self._stream = None
             self._close_connection()
 
-    async def _run_command(self, packet: Dict[str, Any]) -> None:
+    async def _run_command(self, packet: dict[str, Any]) -> None:
         """
         Execute a run command from the client.
         """
@@ -862,11 +845,7 @@ class ServerConnection:
             # will be removed right after the command handler ran, so it
             # doesn't hurt too much and makes the code easier.)
             pane_id = packet.get(Field.PANE_ID)
-            pane = (
-                self.pymux.panes_by_id.get(PaneId(int(pane_id)))
-                if pane_id is not None
-                else None
-            )
+            pane = self.pymux.panes_by_id.get(PaneId(int(pane_id))) if pane_id is not None else None
 
             # The session of the pane the command was typed in. Without
             # it the fake client lands on the session a person looked at
@@ -911,16 +890,10 @@ class ServerConnection:
 
                 try:
                     if output:
-                        await self._write_packet(
-                            {Field.CMD: Packet.OUT, Field.DATA: "\n".join(output) + "\n"}
-                        )
+                        await self._write_packet({Field.CMD: Packet.OUT, Field.DATA: "\n".join(output) + "\n"})
                     if errors:
-                        await self._write_packet(
-                            {Field.CMD: Packet.ERR, Field.DATA: "\n".join(errors) + "\n"}
-                        )
-                    await self._write_packet(
-                        {Field.CMD: Packet.EXIT, Field.CODE: 1 if errors else 0}
-                    )
+                        await self._write_packet({Field.CMD: Packet.ERR, Field.DATA: "\n".join(errors) + "\n"})
+                    await self._write_packet({Field.CMD: Packet.EXIT, Field.CODE: 1 if errors else 0})
                 except BrokenPipeError:
                     pass
                 self._close_connection()
@@ -956,11 +929,7 @@ class ServerConnection:
         :param session: The session this client is on. Without one it is
             the session a person looked at last.
         """
-        stdout = (
-            _SocketStdout(self._send_packet, self.pymux.counters)
-            if start
-            else _NoStdout()
-        )
+        stdout = _SocketStdout(self._send_packet, self.pymux.counters) if start else _NoStdout()
         output = Vt100_Output(
             cast(TextIO, stdout),
             lambda: self.size,
@@ -1107,9 +1076,7 @@ class ServerConnection:
             await anyio.sleep(PING_INTERVAL)
 
             if self._unanswered >= PING_MISSES:
-                logger.info(
-                    "Dropping %s: %d pings unanswered.", self.name, self._unanswered
-                )
+                logger.info("Dropping %s: %d pings unanswered.", self.name, self._unanswered)
                 self.detach_and_close()
                 return
 
@@ -1157,7 +1124,7 @@ class _SocketStdout:
     def __init__(self, send_packet: Callable, counters=None) -> None:
         self.send_packet = send_packet
         self.counters = counters
-        self._buffer: List[str] = []
+        self._buffer: list[str] = []
 
     def write(self, data: str) -> int:
         self._buffer.append(data)

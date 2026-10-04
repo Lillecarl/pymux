@@ -18,6 +18,8 @@ copy-mode cursor keeps its ANSI colours in every theme, because a
 person looking for their place in a scrollback does not want it quiet.
 """
 
+from __future__ import annotations
+
 from prompt_toolkit.styles import BaseStyle, Priority, Style
 
 __all__ = ["DEFAULT_THEME", "THEMES"]
@@ -37,12 +39,7 @@ def create_theme(rules: dict[str, str]) -> Style:
 
 def _blend(a: str, b: str, towards_b: float) -> str:
     "The colour `towards_b` of the way from `a` to `b`."
-    return _from_rgb(
-        tuple(
-            round(r + (s - r) * towards_b)
-            for r, s in zip(_to_rgb(a), _to_rgb(b))
-        )
-    )
+    return _from_rgb(tuple(round(r + (s - r) * towards_b) for r, s in zip(_to_rgb(a), _to_rgb(b))))
 
 
 def _to_rgb(a: str) -> tuple[int, int, int]:
@@ -66,6 +63,7 @@ def _readable(a: str) -> str:
     light enough to mistake for white by one measure and is still
     nearly four times closer to black than to white.
     """
+
     def contrast(other):
         base = _lightness(other) / 255.0
         base = base / 12.92 if base <= 0.04045 else ((base + 0.055) / 1.055) ** 2.4
@@ -123,8 +121,7 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         "terminal.focused border": "%s bold" % (r["focus-border"],),
         "terminal titlebar": "bg:%s %s" % (r["border"], r["text-bright"]),
         "terminal.focused titlebar": "bg:%s %s" % (r["focus"], r["text-bright"]),
-        "terminal.focused titlebar name": "bg:%s %s"
-        % (r["focus-strong"], r["text-bright"]),
+        "terminal.focused titlebar name": "bg:%s %s" % (r["focus-strong"], r["text-bright"]),
         "terminal.focused titlebar paneindex": "bg:%s" % (r["alarm"],),
         # The names of the panes on either side, which a title bar carries
         # so that a strip can be navigated. They are not this pane, so they
@@ -143,8 +140,7 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         "background": r["border"],
         "statusbar": "noreverse bg:%s %s" % (r["signal"], r["signal-text"]),
         "statusbar window": r["text-bright"],
-        "statusbar window.current": "bg:%s %s"
-        % (r["signal-bright"], r["signal-text"]),
+        "statusbar window.current": "bg:%s %s" % (r["signal-bright"], r["signal-text"]),
         "auto-suggestion": "bg:%s %s" % (r["suggestion"], r["suggestion-text"]),
         "message": "bg:%s %s" % (r["notice"], r["notice-text"]),
         # A selection on a pane that a program reversed with DECSCNM.
@@ -203,8 +199,7 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         "search-toolbar.prompt": "bg:%s %s" % (r["search"], r["search-prompt-text"]),
         "search-toolbar.text": "bg:%s %s" % (r["search"], r["text-dark"]),
         "search-match": "%s bg:%s" % (r["text-dark"], r["search-match"]),
-        "search-match.current": "%s bg:%s underline"
-        % (r["search-match-current-text"], r["search-match-current"]),
+        "search-match.current": "%s bg:%s underline" % (r["search-match-current-text"], r["search-match-current"]),
         # The completions. prompt_toolkit draws them on light grey,
         # which is a slab of daylight in the middle of a dark screen
         # once a box holds a whole screenful of them. They take the
@@ -212,12 +207,9 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         # the colour of its title bar.
         "completion-menu": "bg:%s %s" % (r["surface"], r["text"]),
         "completion-menu.completion": "bg:%s %s" % (r["surface"], r["text"]),
-        "completion-menu.completion.current": "bg:%s %s"
-        % (r["accent"], r["text-bright"]),
-        "completion-menu.meta.completion": "bg:%s %s"
-        % (r["surface-raised"], r["text-muted"]),
-        "completion-menu.meta.completion.current": "bg:%s %s"
-        % (r["accent"], r["text-bright"]),
+        "completion-menu.completion.current": "bg:%s %s" % (r["accent"], r["text-bright"]),
+        "completion-menu.meta.completion": "bg:%s %s" % (r["surface-raised"], r["text-muted"]),
+        "completion-menu.meta.completion.current": "bg:%s %s" % (r["accent"], r["text-bright"]),
         "scrollbar.background": "bg:%s" % (r["surface-raised"],),
         "scrollbar.button": "bg:%s" % (r["accent"],),
         # The ":" command line as a box in the middle of the screen.

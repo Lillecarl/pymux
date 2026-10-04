@@ -29,22 +29,23 @@ The placements of the previous frame are remembered, so an unchanged
 screen emits nothing.
 """
 
+from __future__ import annotations
+
 import base64
 import random
 import re
 import zlib
-from typing import Any, Callable, Dict, Iterable, List, NamedTuple, Tuple
+from typing import Any, Callable, Iterable, NamedTuple
 
 from prompt_toolkit.output import ColorDepth
+from pyte import escape
 from pyte.images import PixelFormat
+from pyte.sequences import Csi, csi, esc
 from pyte.terminfo import DeviceExtension
 
 from .blocks import average_rgba, blocks_for, rows_for_cells
 from .log import logger
 from .sixel import encode_sixel, scale_rgba, to_rgba
-from pyte.sequences import Csi, csi
-from pyte import escape
-from pyte.sequences import esc
 
 __all__ = [
     "CELL_SIZE_QUERY",
@@ -143,7 +144,7 @@ class PaneView(NamedTuple):
 class _Placement:
     "One placement as it is emitted to the outer terminal."
 
-    __slots__ = ("image_id", "slot", "command")
+    __slots__ = ("command", "image_id", "slot")
 
     def __init__(self, image_id: int, slot: int, command: str) -> None:
         self.image_id = image_id
@@ -205,19 +206,19 @@ class ClientGraphics:
         self._next_image_id = random.randrange(1 << 20, 1 << 28)
 
         # (pane id, pane image id) -> (pane image, outer image id)
-        self._images: Dict[Tuple[int, int], Tuple[Any, int]] = {}
+        self._images: dict[tuple[int, int], tuple[Any, int]] = {}
         self._transmitted_bytes = 0
 
         # (outer image id, slot) -> placement of the previous frame.
-        self._placements: Dict[Tuple[int, int], _Placement] = {}
+        self._placements: dict[tuple[int, int], _Placement] = {}
 
         # The state of a way of drawing whose pixels are the cells:
         # sixel, and half blocks. A client draws one way or the other,
         # never both, so the two share this. The encoded images are
         # cached, because cropping means encoding again and a scrolling
         # image would otherwise pay for the encoder on every frame.
-        self._cell_placements: Dict[Tuple[int, int, int], str] = {}
-        self._cell_cache: Dict[tuple, Tuple[Any, Any]] = {}
+        self._cell_placements: dict[tuple[int, int, int], str] = {}
+        self._cell_cache: dict[tuple, tuple[Any, Any]] = {}
         self._cell_redraw = False
 
     # ------------------------------------------------------------------
@@ -309,17 +310,14 @@ class ClientGraphics:
             logger.exception("Collecting graphics placements failed.")
             return
 
-        commands: List[str] = []
+        commands: list[str] = []
 
         # Placements that are gone. (A placement that only moved is
         # replaced in place by the put command below, so it is not
         # deleted first: that would make the image flicker.)
         for key, placement in self._placements.items():
             if key not in desired:
-                commands.append(
-                    "\x1b_Ga=d,d=i,i=%i,p=%i,q=2\x1b\\"
-                    % (placement.image_id, placement.slot)
-                )
+                commands.append("\x1b_Ga=d,d=i,i=%i,p=%i,q=2\x1b\\" % (placement.image_id, placement.slot))
 
         # New and changed placements.
         for key, placement in desired.items():
@@ -335,9 +333,7 @@ class ClientGraphics:
         self._write_raw(SAVE_CURSOR + "".join(commands) + RESTORE_CURSOR)
         self._flush()
 
-    def draws_at_its_own_size(
-        self, placement, image, source, columns: int, rows: int
-    ) -> bool:
+    def draws_at_its_own_size(self, placement, image, source, columns: int, rows: int) -> bool:
         """
         Whether this placement should be drawn at the size of its own
         pixels, rather than fitted to the cells it covers.
@@ -374,9 +370,9 @@ class ClientGraphics:
         width, height = _drawn_size(image, source)
         return columns * self.cell_width >= width and rows * self.cell_height >= height
 
-    def _collect(self, views: Iterable[PaneView]) -> Dict[Tuple[int, int], _Placement]:
+    def _collect(self, views: Iterable[PaneView]) -> dict[tuple[int, int], _Placement]:
         "The placements that this frame should show."
-        desired: Dict[Tuple[int, int], _Placement] = {}
+        desired: dict[tuple[int, int], _Placement] = {}
         live_keys = set()
 
         for view in views:
@@ -386,7 +382,7 @@ class ClientGraphics:
             for image_id in view.graphics.images_by_id:
                 live_keys.add((view.pane_id, image_id))
 
-            slots: Dict[int, int] = {}
+            slots: dict[int, int] = {}
 
             for placement in self._pane_placements(view):
                 (
@@ -418,9 +414,7 @@ class ClientGraphics:
                         rows,
                         pane_placement.z,
                         source,
-                        natural=self.draws_at_its_own_size(
-                            pane_placement, image, source, columns, rows
-                        ),
+                        natural=self.draws_at_its_own_size(pane_placement, image, source, columns, rows),
                     ),
                 )
 
@@ -524,12 +518,7 @@ class ClientGraphics:
             if columns <= 0 or rows <= 0:
                 continue  # Fully outside the pane.
 
-            if (
-                crop_left
-                or crop_top
-                or columns != placement.columns
-                or rows != placement.rows
-            ):
+            if crop_left or crop_top or columns != placement.columns or rows != placement.rows:
                 # Crop in pixels: the cell box of the placement maps
                 # onto the pixels of the image.
                 px_per_column = image.width / placement.columns
@@ -603,9 +592,7 @@ class ClientGraphics:
             )
             payload = base64.b64encode(zlib.compress(image.data, 1)).decode("ascii")
 
-        chunks = [
-            payload[i : i + CHUNK_SIZE] for i in range(0, len(payload), CHUNK_SIZE)
-        ] or [""]
+        chunks = [payload[i : i + CHUNK_SIZE] for i in range(0, len(payload), CHUNK_SIZE)] or [""]
 
         for index, chunk in enumerate(chunks):
             more = 1 if index < len(chunks) - 1 else 0
@@ -688,22 +675,16 @@ class ClientGraphics:
         if not desired:
             return
 
-        self._write_raw(
-            SAVE_CURSOR
-            + "".join(desired[key] for key in sorted(desired))
-            + RESTORE_CURSOR
-        )
+        self._write_raw(SAVE_CURSOR + "".join(desired[key] for key in sorted(desired)) + RESTORE_CURSOR)
         self._flush()
 
-    def _collect_sixel(
-        self, views: Iterable[PaneView]
-    ) -> Tuple[Dict[Tuple[int, int, int], str], set]:
+    def _collect_sixel(self, views: Iterable[PaneView]) -> tuple[dict[tuple[int, int, int], str], set]:
         "The sixel commands of one frame, and the cache keys they used."
-        desired: Dict[Tuple[int, int, int], str] = {}
+        desired: dict[tuple[int, int, int], str] = {}
         live = set()
 
         for view in views:
-            slots: Dict[int, int] = {}
+            slots: dict[int, int] = {}
             for (
                 placement,
                 image,
@@ -716,9 +697,7 @@ class ClientGraphics:
                 slot = slots.get(placement.image_id, 0) + 1
                 slots[placement.image_id] = slot
 
-                own_size = self.draws_at_its_own_size(
-                    placement, image, source, columns, rows
-                )
+                own_size = self.draws_at_its_own_size(placement, image, source, columns, rows)
                 key = (
                     id(image),
                     source,
@@ -739,16 +718,14 @@ class ClientGraphics:
 
         return desired, live
 
-    def _collect_blocks(
-        self, views: Iterable[PaneView]
-    ) -> Tuple[Dict[Tuple[int, int, int], str], set]:
+    def _collect_blocks(self, views: Iterable[PaneView]) -> tuple[dict[tuple[int, int, int], str], set]:
         "The half block rows of one frame, and the cache keys they used."
-        desired: Dict[Tuple[int, int, int], str] = {}
+        desired: dict[tuple[int, int, int], str] = {}
         live = set()
         depth = self.color_depth
 
         for view in views:
-            slots: Dict[int, int] = {}
+            slots: dict[int, int] = {}
             for (
                 placement,
                 image,
@@ -772,16 +749,12 @@ class ClientGraphics:
                 # not the rows of the screen once a pane is not at the
                 # left edge.
                 desired[(view.pane_id, placement.image_id, slot)] = "".join(
-                    "\x1b[%i;%iH%s" % (y + offset + 1, x + 1, line)
-                    for offset, line in enumerate(lines)
-                    if line
+                    "\x1b[%i;%iH%s" % (y + offset + 1, x + 1, line) for offset, line in enumerate(lines) if line
                 )
 
         return desired, live
 
-    def _blocks_for(
-        self, key: tuple, image, source, columns: int, rows: int, depth
-    ) -> List[str]:
+    def _blocks_for(self, key: tuple, image, source, columns: int, rows: int, depth) -> list[str]:
         "The half block rows of one placement. (Cached by geometry.)"
         known = self._cell_cache.get(key)
         if known is not None and known[0] is image:
@@ -805,9 +778,7 @@ class ClientGraphics:
         self._cell_cache[key] = (image, lines)
         return lines
 
-    def _sixel_for(
-        self, key: tuple, image, source, columns: int, rows: int, own_size: bool = False
-    ) -> str | None:
+    def _sixel_for(self, key: tuple, image, source, columns: int, rows: int, own_size: bool = False) -> str | None:
         "The sixel sequence of one placement. (Cached by geometry.)"
         known = self._cell_cache.get(key)
         if known is not None and known[0] is image:
@@ -865,16 +836,14 @@ class ClientGraphics:
         self._flush()
 
 
-def _drawn_size(image, source: Tuple[int, int, int, int] | None) -> Tuple[int, int]:
+def _drawn_size(image, source: tuple[int, int, int, int] | None) -> tuple[int, int]:
     "The pixels a placement shows: the image, or the crop out of it."
     if source is not None:
         return (source[2], source[3])
     return (image.width, image.height)
 
 
-def _crop_rgba(
-    pixels: bytes, width: int, height: int, source: Tuple[int, int, int, int]
-) -> bytes | None:
+def _crop_rgba(pixels: bytes, width: int, height: int, source: tuple[int, int, int, int]) -> bytes | None:
     "Cut the source rectangle out of RGBA pixels."
     left, top, crop_width, crop_height = source
     if left < 0 or top < 0 or crop_width <= 0 or crop_height <= 0:
@@ -889,9 +858,7 @@ def _crop_rgba(
     return bytes(out)
 
 
-def _placeholder_source(
-    image, placement, image_column, image_row, columns, rows, cell_width, cell_height
-):
+def _placeholder_source(image, placement, image_column, image_row, columns, rows, cell_width, cell_height):
     """
     The rectangle of `image`, in pixels, that a run of placeholder
     cells shows. None when the run falls outside the image.
@@ -951,7 +918,7 @@ def _put_command(
     columns: int,
     rows: int,
     z: int,
-    source: Tuple[int, int, int, int] | None,
+    source: tuple[int, int, int, int] | None,
     natural: bool = False,
 ) -> str:
     """

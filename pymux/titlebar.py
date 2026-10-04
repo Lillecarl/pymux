@@ -39,6 +39,8 @@ The order the parts give way in is the order they matter:
 - Below a handful of cells the neighbours go, and the title stays.
 """
 
+from __future__ import annotations
+
 from prompt_toolkit.formatted_text import StyleAndTextTuples
 from prompt_toolkit.formatted_text.utils import fragment_list_width
 from prompt_toolkit.layout.controls import UIContent, UIControl

@@ -35,6 +35,8 @@ what the frame is: `select-pane -L` and a title bar then read the same
 answer, which is the whole point of the work.
 """
 
+from __future__ import annotations
+
 from prompt_toolkit.application import get_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.key_binding import KeyBindingsBase
@@ -92,9 +94,7 @@ class PlanContainer(Container):
         room=None,
     ) -> None:
         self.layout = layout
-        self.containers = {
-            pane: to_container(container) for pane, container in containers.items()
-        }
+        self.containers = {pane: to_container(container) for pane, container in containers.items()}
         self.tell_its_size = tell_its_size
         self.room = room
 
@@ -156,9 +156,7 @@ class PlanContainer(Container):
         self.measured_for = plane
 
         self.view.size = seen
-        self.view.offset = self.layout.look_at(
-            self.plan, self.view, self.focused_pane()
-        )
+        self.view.offset = self.layout.look_at(self.plan, self.view, self.focused_pane())
         view = self.view.rect
 
         self._draw_chrome(screen, write_position, parent_style, view)
