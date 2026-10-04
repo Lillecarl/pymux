@@ -124,6 +124,11 @@ async def test_calling_pane_names_caller():
         caller = json.loads(caller_state.message)["caller"]
         assert caller["pane_id"] == caller_id
         assert caller["window_id"] == window["window_id"]
+        assert caller["pane_index"] == next(
+            index
+            for index, pane in enumerate(window["panes"])
+            if pane["pane_id"] == caller_id
+        )
 
 
 async def test_dead_caller_names_nobody():

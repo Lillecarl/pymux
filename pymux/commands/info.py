@@ -84,6 +84,7 @@ def _caller_tree(pymux):
         "window_id": window.window_id,
         "window_index": window.index,
         "pane_id": pane.pane_id,
+        "pane_index": window.get_pane_index(pane),
     }
 
 
