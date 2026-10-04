@@ -46,6 +46,8 @@ Options:
     --version      : Print version and exit.
 """
 
+from __future__ import annotations
+
 import argparse
 import getpass
 import logging
@@ -56,7 +58,7 @@ import sys
 import tempfile
 import time
 from enum import StrEnum
-from typing import Dict, List, Set, Tuple, assert_never
+from typing import assert_never
 
 from pymux import __version__, log
 from pymux.client import create_client, is_ssh_url, list_clients
@@ -64,6 +66,7 @@ from pymux.config import find_config
 from pymux.utils import daemonize
 
 __all__ = ["run"]
+
 
 class Mode(StrEnum):
     """
@@ -135,9 +138,7 @@ def _add_options(parser: argparse.ArgumentParser, suppress_defaults: bool) -> No
     default = argparse.SUPPRESS if suppress_defaults else None
     false = argparse.SUPPRESS if suppress_defaults else False
 
-    parser.add_argument(
-        "--version", action="version", version="%(prog)s " + __version__
-    )
+    parser.add_argument("--version", action="version", version="%(prog)s " + __version__)
     parser.add_argument(
         "-V",
         dest="show_tmux_version",
@@ -278,8 +279,7 @@ def _build_parser(with_positionals: bool = True) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pymux",
         description="pymux: Pure Python terminal multiplexer.",
-        epilog="Any other arguments are sent to the running server as a "
-        "pymux command. Example: pymux split-window",
+        epilog="Any other arguments are sent to the running server as a pymux command. Example: pymux split-window",
     )
     _add_options(parser, suppress_defaults=False)
     if with_positionals:
@@ -295,8 +295,8 @@ def _socket_from_env_warning() -> None:
 
 
 def parse_arguments(
-    argv: List[str] | None = None,
-) -> Tuple[argparse.Namespace, Mode | None, str | None]:
+    argv: list[str] | None = None,
+) -> tuple[argparse.Namespace, Mode | None, str | None]:
     """
     Read the command line: the options, the mode and the command.
 
@@ -318,9 +318,7 @@ def parse_arguments(
     if mode is not None:
         # A mode word was given. The options after the mode word are parsed
         # as well. (argparse.REMAINDER above collected them verbatim.)
-        mode_parser = argparse.ArgumentParser(
-            prog="pymux", description="pymux: Pure Python terminal multiplexer."
-        )
+        mode_parser = argparse.ArgumentParser(prog="pymux", description="pymux: Pure Python terminal multiplexer.")
         _add_options(mode_parser, suppress_defaults=True)
         mode_args, extra = mode_parser.parse_known_args(rest[1:])
         for key, value in vars(mode_args).items():
@@ -399,9 +397,7 @@ def _completion_parser() -> argparse.ArgumentParser:
         )
         _add_options(mode_parser, suppress_defaults=True)
         if mode is Mode.DIAGNOSE:
-            mode_parser.add_argument(
-                "--json", action="store_true", help="Print the report as JSON."
-            )
+            mode_parser.add_argument("--json", action="store_true", help="Print the report as JSON.")
     add_commands_to(modes)
     return parser
 
@@ -431,9 +427,7 @@ def run() -> None:
     socket_name_from_env = not a.socket and bool(os.environ.get("PYMUX"))
     filename = a.filename
     true_color = a.truecolor
-    ansi_colors_only = a.ansicolor or bool(
-        os.environ.get("PROMPT_TOOLKIT_ANSI_COLORS_ONLY", False)
-    )
+    ansi_colors_only = a.ansicolor or bool(os.environ.get("PROMPT_TOOLKIT_ANSI_COLORS_ONLY", False))
 
     # Parse pane_id from socket_name. It looks like "socket_name,pane_id".
     pane_id = None
@@ -497,10 +491,7 @@ def run() -> None:
             from prompt_toolkit.output import ColorDepth
 
             mux = _new_pymux(source_file=filename, startup_command=command)
-            mux.run_standalone(
-                color_depth=_color_depth(ansi_colors_only, true_color)
-                or ColorDepth.DEPTH_8_BIT
-            )
+            mux.run_standalone(color_depth=_color_depth(ansi_colors_only, true_color) or ColorDepth.DEPTH_8_BIT)
 
         case Mode.INTEGRATED:
             if socket_name_from_env:
@@ -666,9 +657,7 @@ def run() -> None:
                     client = create_client(socket_name)
                     client.config_file = filename
                     client.chosen_name = a.client_name
-                    client.attach(
-                        color_depth=_color_depth(ansi_colors_only, true_color)
-                    )
+                    client.attach(color_depth=_color_depth(ansi_colors_only, true_color))
                     _leave(client)
 
             else:
@@ -683,9 +672,7 @@ def run() -> None:
             assert_never(mode)
 
 
-def _new_pymux(
-    source_file, startup_command=None, session_name=None, size_with_no_client=None
-):
+def _new_pymux(source_file, startup_command=None, session_name=None, size_with_no_client=None):
     """
     Build the thing that runs a server.
 
@@ -706,14 +693,12 @@ def _new_pymux(
         startup_command=startup_command,
         session_name=session_name,
         size_with_no_client=(
-            None
-            if size_with_no_client is None
-            else Size(rows=size_with_no_client[1], columns=size_with_no_client[0])
+            None if size_with_no_client is None else Size(rows=size_with_no_client[1], columns=size_with_no_client[0])
         ),
     )
 
 
-def _axis_of(values: Dict[str, str], flag: str, standing: int) -> int:
+def _axis_of(values: dict[str, str], flag: str, standing: int) -> int:
     """
     One axis of `new-session -x -y`, on the route that starts a server.
 
@@ -855,8 +840,7 @@ def _leave(client) -> None:
 def _no_server_error(socket_name: str | None) -> None:
     "Print the 'no server running' error, like tmux does."
     sys.stderr.write(
-        "no server running on %s\n"
-        % (socket_name or os.path.join(tempfile.gettempdir(), "pymux.sock.*"),)
+        "no server running on %s\n" % (socket_name or os.path.join(tempfile.gettempdir(), "pymux.sock.*"),)
     )
 
 
@@ -885,10 +869,10 @@ def _send_command(socket_name: str, command: str, pane_id=None) -> int:
 
 
 def _flag_args(
-    args: List[str],
-    flags_with_value: Tuple[str, ...],
-    flags_alone: Tuple[str, ...],
-) -> Tuple[Set[str], Dict[str, str], List[str]]:
+    args: list[str],
+    flags_with_value: tuple[str, ...],
+    flags_alone: tuple[str, ...],
+) -> tuple[set[str], dict[str, str], list[str]]:
     """
     Parse a list of short flags, given either glued to their value
     (e.g. `-sname`) or as a separate argument (e.g. `-s name`).
@@ -912,9 +896,9 @@ def _flag_args(
     so `-dP` is both of them. Only the first was taken before, which is
     the same silent drop one character along.
     """
-    flags: Set[str] = set()
-    values: Dict[str, str] = {}
-    positional: List[str] = []
+    flags: set[str] = set()
+    values: dict[str, str] = {}
+    positional: list[str] = []
 
     def unknown(arg: str) -> ValueError:
         return ValueError("unrecognized arguments: %s" % (arg,))
@@ -991,7 +975,7 @@ def _wait_for_server(socket_name: str, timeout: float = 5.0) -> bool:
     return False
 
 
-def _new_session(socket_name: str, command: str, args: List[str], pane_id=None) -> int:
+def _new_session(socket_name: str, command: str, args: list[str], pane_id=None) -> int:
     """
     Handle `new-session`. Start a new server when there is no server yet.
     Otherwise, pass the command to the running server. (Which will report
