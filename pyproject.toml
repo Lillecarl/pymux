@@ -10,7 +10,7 @@ readme = "README.rst"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
 # asyncio context variables and the modern event loop.
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 authors = [
     { name = "Jonathan Slenders" },
 ]
@@ -49,9 +49,10 @@ dependencies = [
     # format path; `-F` stays tmux format, because libtmux reads it.
     # Lillecarl/pymux#333.
     "jinja2>=3.1.0",
-    # `@override` on every override: the type check asks for it, and
-    # `typing` only carries it from 3.12 while this package promises
-    # 3.11. Lillecarl/pymux#510.
+    # `@override` on every override: the type check asks for it.
+    # `typing` carries it from 3.12, so on this floor the shim is
+    # vestigial; it stays until somebody rewrites the imports that
+    # name it, which is its own change. Lillecarl/pymux#510.
     "typing-extensions",
 ]
 
@@ -158,7 +159,7 @@ implicit-any-attribute = "error"
 # Mirror of the `ruff.toml` beside the umbrella: the build sandbox
 # sees only this tree, so discovery from a file under it must end
 # here. Keep the two in step; the why lives up there.
-target-version = "py311"
+target-version = "py314"
 # Pinned: a ruff upgrade must never silently reflow the tree.
 line-length = 120
 

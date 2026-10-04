@@ -18,7 +18,7 @@ description = "Drive a pymux server from python."
 readme = "README.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dependencies = [
     # Where a server binds its socket room, after the `$PYMUX_TMPDIR`
     # override: the per-user runtime directory the platform prefers.
