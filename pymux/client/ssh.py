@@ -37,7 +37,6 @@ running one; spawning one is the other half of Lillecarl/pymux#90.
 other machine, so this client shows a notice and opens the link again.
 `client/reconnect.py` holds that part. Lillecarl/pymux#256.
 """
-
 from __future__ import annotations
 
 import json
@@ -48,7 +47,7 @@ from typing import TYPE_CHECKING, NamedTuple
 from urllib.parse import urlparse
 
 import anyio
-
+from libpymux.protocol import Field, Packet
 from prompt_toolkit.input.vt100 import raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output
 from typing_extensions import override
@@ -60,10 +59,8 @@ from pymux.forwarding import (
     the_far_side_may_narrow,
     with_port,
 )
-from libpymux.protocol import Field, Packet
 from pymux.utils import nonblocking
 
-from .defaults import SCHEME, is_ssh_url
 from .forwards import Forwards
 from .reconnect import (
     WAN_INTERVAL,
@@ -803,7 +800,7 @@ class SshClient(TerminalClient):
         except BrokenPipeError:
             pass
 
-    def _clocks(self) -> "tuple[float, float]":
+    def _clocks(self) -> tuple[float, float]:
         """
         The world's clock and the loop's, read together.
 

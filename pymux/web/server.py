@@ -16,14 +16,14 @@ token that this prints once. `--bind` widens it and says what that costs.
 
 It needs `pymux[web]`. Lillecarl/pymux#461.
 """
+from __future__ import annotations
 
 import json
 import secrets
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable
 
 from libpymux import PaneStream, Server, StreamRefused
-
 from pymux.log import logger
 
 __all__ = ["MISSING", "serve", "a_token"]
@@ -91,7 +91,7 @@ async def serve(
     port: int,
     token: str,
     writable: bool = False,
-    ready: Optional[Callable[[], None]] = None,
+    ready: Callable[[], None] | None = None,
 ) -> None:
     """
     Serve panes of that pymux server until this is cancelled.
@@ -107,8 +107,8 @@ async def serve(
     """
     try:
         from websockets.asyncio.server import serve as websocket_serve
-        from websockets.http11 import Response
         from websockets.datastructures import Headers
+        from websockets.http11 import Response
     except ImportError as missing:
         raise RuntimeError(MISSING) from missing
 
@@ -176,7 +176,7 @@ async def serve(
             # websockets have instead of a 404 once the upgrade is done.
             logger.info("A viewer asked for %s: %s", pane_id, refused)
             await connection.close(1008, str(refused)[:120])
-        except Exception as ended:  # noqa: BLE001 - said, then the socket closes
+        except Exception as ended:
             logger.info("A viewer of %s ended: %s", pane_id, ended)
 
     async with websocket_serve(handle, host, port, process_request=check):
@@ -253,13 +253,13 @@ async def _serve_a_session(socket_path: str, connection, query: str, writable: b
             cells("columns", 80),
             read_only=not writable,
         )
-    except Exception as ended:  # noqa: BLE001 - said, then the socket closes
+    except Exception as ended:
         logger.info("A viewer of the session ended: %s", ended)
     finally:
         writer.close()
 
 
-def _one_of(query: str, name: str) -> Optional[str]:
+def _one_of(query: str, name: str) -> str | None:
     "One value out of a query string, without importing a URL parser."
     for part in query.split("&"):
         key, _, value = part.partition("=")
@@ -268,7 +268,7 @@ def _one_of(query: str, name: str) -> Optional[str]:
     return None
 
 
-def the_server(socket_path: Optional[str]) -> Server:
+def the_server(socket_path: str | None) -> Server:
     "The pymux server to serve panes of."
     if socket_path:
         return Server(socket_path)

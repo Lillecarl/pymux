@@ -1,6 +1,7 @@
 """
 Common Win32 pipe operations.
 """
+from __future__ import annotations
 
 import asyncio
 import ctypes
@@ -8,7 +9,6 @@ from ctypes import byref, create_string_buffer
 from ctypes.wintypes import BOOL, DWORD
 
 import anyio
-
 from ptyhost.backends.win32_pipes import OVERLAPPED
 
 from .base import BrokenPipeError

@@ -1,8 +1,9 @@
+from __future__ import annotations
+
 import os
 import signal
 from abc import ABC
 from collections.abc import Awaitable
-
 
 __all__ = [
     "Client",

@@ -33,15 +33,15 @@ reason of its own -- `Application._poll_output_size` names "situations
 where `attach_winch_signal_handler` is not sufficient" -- and a size
 that is read on a timer costs nothing and covers what a signal misses.
 """
+from __future__ import annotations
 
 import json
 import signal
 import sys
 
 import anyio
-from typing_extensions import override
-
 from prompt_toolkit.input.vt100 import raw_mode
+from typing_extensions import override
 
 from ..pipes import BrokenPipeError, MemoryConnection
 from .terminal import TerminalClient

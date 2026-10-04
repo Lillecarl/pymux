@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import ctypes
 import json
 import os
@@ -7,13 +9,12 @@ from ctypes import byref
 from ctypes.wintypes import DWORD
 
 import anyio
-from typing_extensions import override
-
+from libpymux.protocol import Field, Packet
 from prompt_toolkit.input.win32 import Win32Input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.win32 import Win32Output
-from libpymux.protocol import Field, Packet
 from prompt_toolkit.win32_types import STD_OUTPUT_HANDLE
+from typing_extensions import override
 
 from ..config import client_options_in, find_config
 from ..log import logger
@@ -48,7 +49,7 @@ class WindowsClient(Client):
         #: The scope the writes of this client run in. `_attach` opens
         #: it, and `_send_packet` is called from a keyboard callback,
         #: which is not a coroutine. Lillecarl/pymux#87.
-        self._tasks: "anyio.abc.TaskGroup" | None = None
+        self._tasks: anyio.abc.TaskGroup | None = None
 
     @override
     def attach(

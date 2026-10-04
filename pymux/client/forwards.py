@@ -15,7 +15,6 @@ cannot do this: `~C` and its forwards go with the link.
 
 `pymux/forwarding.py` holds what a forward is. This holds the live ones.
 """
-
 from __future__ import annotations
 
 import time
@@ -124,7 +123,7 @@ class Forwards:
         #: that a forwarder nothing else holds cannot keep a forward
         #: looking busy for ever: if it has been collected, its
         #: connection is gone.
-        self._live: dict[Where, "weakref.WeakSet"] = {}
+        self._live: dict[Where, weakref.WeakSet] = {}
 
     def __len__(self) -> int:
         return len(self._wanted)
@@ -525,7 +524,7 @@ def _counting_forwarder() -> type:
     class _Counting(SSHLocalPortForwarder):
         "One forwarded connection, telling the table what it does."
 
-        def __init__(self, connection, coro, table: "Forwards", where: Where):
+        def __init__(self, connection, coro, table: Forwards, where: Where):
             super().__init__(connection, coro)
             self._table = table
             self._where = where

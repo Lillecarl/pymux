@@ -12,9 +12,10 @@ own. `send` is a coroutine the caller gives, because a socket and a
 websocket say "send" differently and neither belongs here.
 Lillecarl/pymux#461.
 """
+from __future__ import annotations
 
 import json
-from typing import Any, Awaitable, Callable, Dict, Optional
+from typing import Any, Awaitable, Callable
 
 import anyio
 from pyte.modes import PrivateMode
@@ -22,7 +23,6 @@ from pyte.modes import PrivateMode
 from pymux.commands import CommandException
 from pymux.commands.common import send_key
 from pymux.key_spelling import event_however_it_is_written
-from pymux.log import logger
 from pymux.web.protocol import PaneView, Typed, typed_of
 
 __all__ = ["PaneStream"]
@@ -52,7 +52,7 @@ class PaneStream:
         self,
         pymux,
         pane,
-        send: Callable[[Dict[str, Any]], Awaitable[None]],
+        send: Callable[[dict[str, Any]], Awaitable[None]],
         writable: bool = False,
     ) -> None:
         self.pymux = pymux
@@ -116,7 +116,7 @@ class PaneStream:
 
     # -- what the viewer says ------------------------------------------
 
-    def take(self, data: str) -> Optional[str]:
+    def take(self, data: str) -> str | None:
         """
         Read one message from the viewer, and answer why not if refused.
 

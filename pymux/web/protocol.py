@@ -26,8 +26,9 @@ appearances that spell alike share one number.
 Nothing here does any I/O, imports no transport and holds no socket.
 Lillecarl/pymux#461.
 """
+from __future__ import annotations
 
-from typing import Any, Dict, List, NamedTuple, Optional, Tuple
+from typing import Any, NamedTuple
 
 from pyte.html import CSS, href_of, runs_of_row, style_of, theme_css
 
@@ -74,27 +75,27 @@ class PaneView:
     def __init__(self) -> None:
         #: The write count this viewer has drawn, per screen row. A row
         #: that is not in here has never been drawn.
-        self._drawn_at: Dict[int, int] = {}
+        self._drawn_at: dict[int, int] = {}
 
         #: The declarations this viewer has been given, and the number
         #: each one went out as.
-        self._styles: Dict[Tuple[str, str, str], int] = {}
+        self._styles: dict[tuple[str, str, str], int] = {}
         self._next_style = PLAIN_STYLE + 1
 
         #: The screen-wide answers a row does not carry. Each one changes
         #: how every row draws, and pyte's per-row count does not move for
         #: any of them -- measured. So they are compared here, the way
         #: `ptterm` compares reverse video.
-        self._size: Optional[Tuple[int, int]] = None
-        self._reverse_video: Optional[bool] = None
-        self._palette: Optional[str] = None
+        self._size: tuple[int, int] | None = None
+        self._reverse_video: bool | None = None
+        self._palette: str | None = None
 
-        self._cursor: Optional[Tuple[int, int]] = None
+        self._cursor: tuple[int, int] | None = None
         self._welcomed = False
 
     # -- what to send --------------------------------------------------
 
-    def welcome(self, screen, revision: int, writable: bool) -> Dict[str, Any]:
+    def welcome(self, screen, revision: int, writable: bool) -> dict[str, Any]:
         """
         The message that goes before any frame.
 
@@ -116,7 +117,7 @@ class PaneView:
             "size": {"columns": screen.columns, "rows": screen.lines},
         }
 
-    def frame(self, screen, revision: int) -> Optional[Dict[str, Any]]:
+    def frame(self, screen, revision: int) -> dict[str, Any] | None:
         """
         What this viewer has not seen, or None when it has seen it all.
 
@@ -151,8 +152,8 @@ class PaneView:
         everything_at = screen.everything_at
         top = screen.line_offset
 
-        styles: Dict[str, Dict[str, str]] = {}
-        rows: Dict[str, List[Any]] = {}
+        styles: dict[str, dict[str, str]] = {}
+        rows: dict[str, list[Any]] = {}
 
         for index in range(lines):
             number = top + index
@@ -171,7 +172,7 @@ class PaneView:
 
         self._cursor = cursor
 
-        answer: Dict[str, Any] = {
+        answer: dict[str, Any] = {
             "type": FRAME,
             "revision": revision,
             "rows": rows,
@@ -205,8 +206,8 @@ class PaneView:
         row,
         columns: int,
         reverse_video: bool,
-        styles: Dict[str, Dict[str, str]],
-    ) -> List[Any]:
+        styles: dict[str, dict[str, str]],
+    ) -> list[Any]:
         """
         One row as `[[style, text], ...]`, filling `styles` on the way.
 
@@ -217,13 +218,13 @@ class PaneView:
         if row is None:
             return []
 
-        answer: List[Any] = []
+        answer: list[Any] = []
         for appearance, text in runs_of_row(row, columns, reverse_video):
             answer.append([self._style_number(appearance, reverse_video, styles), text])
         return answer
 
     def _style_number(
-        self, appearance, reverse_video: bool, styles: Dict[str, Dict[str, str]]
+        self, appearance, reverse_video: bool, styles: dict[str, dict[str, str]]
     ) -> int:
         "The number this way of drawing goes out as, naming it if it is new."
         drawn = style_of(appearance, reverse_video)
@@ -244,7 +245,7 @@ class PaneView:
         # already fetched answers every one of those, so the wire holds
         # a word rather than the declarations again.
         # Lillecarl/pymux#460.
-        entry: Dict[str, str] = {}
+        entry: dict[str, str] = {}
         if key[0]:
             entry["c"] = key[0]
         if key[1]:
@@ -254,7 +255,7 @@ class PaneView:
         styles[str(held)] = entry
         return held
 
-    def _cursor_of(self, screen) -> Tuple[int, int]:
+    def _cursor_of(self, screen) -> tuple[int, int]:
         """
         Where the cursor is, in rows of the screen.
 
@@ -289,7 +290,7 @@ class Typed(NamedTuple):
     bracketed: bool
 
 
-def typed_of(message: Dict[str, Any]) -> Typed:
+def typed_of(message: dict[str, Any]) -> Typed:
     """
     What a viewer's message asks to put into the pane.
 

@@ -21,14 +21,15 @@ It holds no socket: `send` is how a packet leaves, and `take_packet` is
 how one arrives, so a unix socket, a test's pipe and a relay are three
 callers of one thing.
 """
+from __future__ import annotations
 
 import asyncio
 import json
 import time
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Optional
+from typing import Any, AsyncIterator, Awaitable, Callable
 
 import anyio
-
+from libpymux.protocol import Field, Packet
 from pyte.keys import Unhearable
 from pyte.modes import PrivateMode
 from pyte.screen import Screen
@@ -36,7 +37,6 @@ from pyte.streams import GroundTimer, Stream
 
 from pymux.key_spelling import event_however_it_is_written
 from pymux.log import logger
-from libpymux.protocol import Field, Packet
 from pymux.web.protocol import PaneView, Typed, typed_of
 
 __all__ = ["SessionScreen", "run_session"]
@@ -74,7 +74,7 @@ class SessionScreen:
         self,
         rows: int,
         columns: int,
-        send: Callable[[Dict[str, Any]], None],
+        send: Callable[[dict[str, Any]], None],
         read_only: bool = False,
     ) -> None:
         self._send = send
@@ -100,7 +100,7 @@ class SessionScreen:
             }
         )
 
-    def take_packet(self, packet: Dict[str, Any]) -> bool:
+    def take_packet(self, packet: dict[str, Any]) -> bool:
         """
         Read one packet from the server. True when the connection ends.
 
@@ -131,14 +131,14 @@ class SessionScreen:
 
     # -- the viewer side -----------------------------------------------
 
-    def welcome(self) -> Dict[str, Any]:
+    def welcome(self) -> dict[str, Any]:
         return self._view.welcome(self.screen, self.screen.writes, not self.read_only)
 
-    def frame(self) -> Optional[Dict[str, Any]]:
+    def frame(self) -> dict[str, Any] | None:
         "What the viewer has not seen, or None."
         return self._view.frame(self.screen, self.screen.writes)
 
-    def take(self, data: str) -> Optional[str]:
+    def take(self, data: str) -> str | None:
         """
         Read one message from the viewer, and answer why not if refused.
 
@@ -211,7 +211,7 @@ class SessionScreen:
 async def run_session(
     reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,
-    to_viewer: Callable[[Dict[str, Any]], Awaitable[None]],
+    to_viewer: Callable[[dict[str, Any]], Awaitable[None]],
     from_viewer: AsyncIterator[str],
     rows: int,
     columns: int,
@@ -227,7 +227,7 @@ async def run_session(
     has arrived, which is usually the whole frame.
     """
 
-    def send(packet: Dict[str, Any]) -> None:
+    def send(packet: dict[str, Any]) -> None:
         writer.write(json.dumps(packet).encode("utf-8") + b"\0")
 
     session = SessionScreen(rows, columns, send, read_only=read_only)

@@ -12,8 +12,7 @@ to a socket reaches whatever server holds that socket, which can be an
 older build; a client that reads a queue reaches the server in its own
 process, and nothing else.
 """
-
-from typing import Tuple
+from __future__ import annotations
 
 import anyio
 from typing_extensions import override
@@ -45,10 +44,10 @@ class MemoryConnection(PipeConnection):
         self._send, self._incoming = anyio.create_memory_object_stream(
             max_buffer_size=float("inf")
         )
-        self._peer: "MemoryConnection" | None = None
+        self._peer: MemoryConnection | None = None
         self._closed = False
 
-    def _join(self, peer: "MemoryConnection") -> None:
+    def _join(self, peer: MemoryConnection) -> None:
         self._peer = peer
         peer._peer = self
 
@@ -109,7 +108,7 @@ class MemoryConnection(PipeConnection):
             self._peer._send.close()
 
 
-def connect_in_memory() -> Tuple[MemoryConnection, MemoryConnection]:
+def connect_in_memory() -> tuple[MemoryConnection, MemoryConnection]:
     """
     Return the two ends of one connection: (server_end, client_end).
 

@@ -13,11 +13,9 @@ machine and its socket is gone with it, so a link that ends is a server
 that ended. A client that waits for that one to come back waits for
 ever.
 """
-
 from __future__ import annotations
 
 import math
-
 import random as _random
 
 import anyio

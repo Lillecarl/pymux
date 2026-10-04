@@ -1,12 +1,14 @@
+from __future__ import annotations
+
 import json
 import signal
 import socket
 import sys
 from select import select
 
+from libpymux.protocol import Field, Packet
 from libpymux.sockets import servers_newest_first
 from prompt_toolkit.input.vt100 import raw_mode
-from libpymux.protocol import Field, Packet
 from typing_extensions import override
 
 from .terminal import TerminalClient
@@ -208,5 +210,5 @@ def list_clients():
     for path in servers_newest_first():
         try:
             yield PosixClient(path)
-        except socket.error:
+        except OSError:
             pass

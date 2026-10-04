@@ -1,11 +1,12 @@
+from __future__ import annotations
+
 import ctypes
 from ctypes import byref
 from ctypes.wintypes import DWORD
 
 import anyio
-from typing_extensions import override
-
 from ptyhost.backends.win32_pipes import OVERLAPPED
+from typing_extensions import override
 
 from ..log import logger
 from .base import BrokenPipeError, PipeConnection

@@ -10,6 +10,7 @@ unix socket in `posix.py`, a pair of queues in `memory.py`. Both sides
 speak the same packets, so a difference between the two routes is a
 difference of the transport and nothing else.
 """
+from __future__ import annotations
 
 import json
 import os
@@ -18,6 +19,7 @@ import socket
 import sys
 import webbrowser
 
+from libpymux.protocol import Field, Mode, Packet
 from prompt_toolkit.input.posix_utils import PosixStdinReader
 from prompt_toolkit.input.vt100 import cooked_mode, raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output, _get_size
@@ -26,7 +28,6 @@ from pymux.colors import COLOR_QUERIES, TRUECOLOR_PROBE
 from pymux.config import client_options_in, find_config
 from pymux.graphics import CELL_SIZE_QUERY
 from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
-from libpymux.protocol import Field, Mode, Packet
 from pymux.utils import nonblocking
 
 from .base import Client

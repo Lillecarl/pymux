@@ -12,4 +12,6 @@ protocols.
 anything installed: `pymux[web]`. A caller with a front end of its own
 does not want it -- it relays frames over the socket it already holds --
 so nothing here is imported until something asks for it.
+
+from __future__ import annotations
 """

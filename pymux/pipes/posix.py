@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import errno
 import fcntl
 import getpass
@@ -201,7 +203,7 @@ def _bind_posix_socket(socket_name: str | None = None):
                 # which is the next index. Lillecarl/pymux#454.
                 _bind_or_take_over(s, socket_name)
                 return socket_name, s
-            except (OSError, socket.error):
+            except OSError:
                 i += 1
 
                 # When 100 times failed, cancel server
@@ -241,7 +243,7 @@ class PosixSocketConnection(PipeConnection):
 
         #: Bytes given to `write` and not yet taken by the kernel.
         self._outstanding = 0
-        self._write_lock: "anyio.Lock | None" = None
+        self._write_lock: anyio.Lock | None = None
 
     @override
     async def read(self) -> bytes:

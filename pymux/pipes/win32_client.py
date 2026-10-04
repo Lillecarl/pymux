@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import ctypes
 
 from .win32 import connect_to_pipe, read_message_from_pipe, write_message_to_pipe
