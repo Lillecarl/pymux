@@ -28,14 +28,10 @@ def move_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     tmux spells all three on this command (`cmd-move-window.c:93`),
     so a script written for tmux runs. Lillecarl/pymux#343.
     """
-    dst_window = args.dst_window
-    try:
-        new_index = WindowIndex(int(dst_window))
-    except ValueError:
-        raise CommandException("Invalid window index: %r" % (dst_window,))
+    new_index = args.dst_window
 
     if args.after:
-        new_index = WindowIndex(new_index + 1)
+        new_index += 1
 
     window = the_window(pymux, None)
     occupant = pymux.arrangement.get_window_by_index(new_index)
@@ -62,7 +58,7 @@ def move_window(pymux: "Pymux", args: argparse.Namespace) -> None:
 
 def register(subparsers):
     parser = add_command(subparsers, move_window)
-    parser.add_argument("-t", dest="dst_window", metavar="<dst-window>", required=True, help="The index to move to.")
+    parser.add_argument("-t", dest="dst_window", metavar="<dst-window>", required=True, type=WindowIndex, help="The index to move to.")
     parser.add_argument("-a", dest="after", action="store_true", help="Insert after that index, moving the windows in the way up.")
     parser.add_argument("-b", dest="before", action="store_true", help="Insert at that index, moving the windows in the way up.")
     parser.add_argument("-k", dest="kill", action="store_true", help="Kill whatever is at that index, and take its place.")

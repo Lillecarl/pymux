@@ -39,11 +39,11 @@ def link_window(pymux: "Pymux", args: argparse.Namespace) -> None:
     if window is None:
         raise CommandException("can't find window: %s" % (args.s,))
 
-    index = WindowIndex(int(args.t)) if args.t else None
+    index = args.t
     pymux.arrangement.link_window(window, index)
 
 
 def register(subparsers):
     parser = add_command(subparsers, link_window)
     parser.add_argument("-s", dest="s", metavar="<src-window>", help="The window to link; the active one is the default.")
-    parser.add_argument("-t", dest="t", metavar="<dst-index>", help="The index to put it at.")
+    parser.add_argument("-t", dest="t", metavar="<dst-index>", type=WindowIndex, help="The index to put it at.")

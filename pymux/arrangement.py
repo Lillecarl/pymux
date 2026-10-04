@@ -1159,12 +1159,12 @@ class Arrangement:
         displaced = []
         while index in by_index:
             displaced.append(by_index[index])
-            index = WindowIndex(index + 1)
+            index += 1
 
         # From the top down, so no window lands on one that has not
         # moved yet.
         for window in reversed(displaced):
-            window.index = WindowIndex(window.index + 1)
+            window.index += 1
 
     def create_window(
         self,
@@ -1287,7 +1287,7 @@ class Arrangement:
         if window in self._unlinked_windows:
             self._unlinked_windows.remove(window)
             if index is None:
-                index = WindowIndex(max((w.index for w in self.windows), default=self.base_index - 1) + 1)
+                index = max((w.index for w in self.windows), default=WindowIndex(self.base_index - 1)) + 1
             window.index = index
             self.windows.append(window)
 

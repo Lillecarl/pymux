@@ -109,10 +109,10 @@ def where_new_window_goes(pymux: "Pymux", args: argparse.Namespace, session, tar
     if args.b:
         return where.index
     if args.a:
-        return WindowIndex(where.index + 1)
+        return where.index + 1
     if number is not None:
         return number
-    return WindowIndex(where.index + 1)
+    return where.index + 1
 
 
 def new_window(pymux: "Pymux", args: argparse.Namespace) -> None:
