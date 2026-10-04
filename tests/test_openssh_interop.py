@@ -31,6 +31,8 @@ caller would return the bytes it was sent, and a test that only
 checked "something came back" would pass on it.
 """
 
+from __future__ import annotations
+
 import os
 import shutil
 import socket

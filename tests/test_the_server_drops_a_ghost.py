@@ -17,6 +17,8 @@ client notices its own machine slept. This is what the server does
 about the client it was left with.
 """
 
+from __future__ import annotations
+
 import json
 
 from prompt_toolkit.data_structures import Size

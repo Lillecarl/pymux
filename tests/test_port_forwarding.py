@@ -11,6 +11,8 @@ loops back to the caller would return the same bytes, and a test that
 only checked "something came back" would pass on it.
 """
 
+from __future__ import annotations
+
 import json
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
