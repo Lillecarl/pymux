@@ -49,6 +49,10 @@ Three phases, because "what a frame costs" is three questions:
   what `vim` and `fzf` emit) or `scroll` (one inserted or deleted line
   in a scroll region, what `less` emits moving a line), and
   `PYMUX_PROFILE_SCROLL_STYLED=0` turns the colours off.
+  `PYMUX_PROFILE_SCROLL_START=bottom` starts on the last viewport and
+  `PYMUX_PROFILE_SCROLL_AT_END=stay` keeps pushing past the end,
+  feeding nothing: the fling that hits the bottom, where scrolling is
+  slow and no line is even moving.
 
 And **animated**, which is different: it runs a real program in the
 pane and profiles the live loop for a few seconds, counting renders
@@ -353,6 +357,18 @@ SCROLL_MODE = os.environ.get("PYMUX_PROFILE_SCROLL_MODE", "") or "redraw"
 #: the program a person actually scrolls.
 SCROLL_STYLED = os.environ.get("PYMUX_PROFILE_SCROLL_STYLED", "") or "1"
 
+#: The document line the `scroll` phase starts on. `1` walks from the
+#: top; `bottom` starts on the last viewport, where every step down
+#: pushes past the end.
+SCROLL_START = os.environ.get("PYMUX_PROFILE_SCROLL_START", "") or "1"
+
+#: What a step past either end does. `turn` walks back the way it
+#: came; `stay` keeps pushing, feeding nothing and drawing the same
+#: screen again. That is the fling that hits the bottom and keeps
+#: going: the program sits silent -- `tests/scroll_app.py` says so --
+#: and every frame redraws a screen that did not change.
+SCROLL_AT_END = os.environ.get("PYMUX_PROFILE_SCROLL_AT_END", "") or "turn"
+
 
 def scroll(pymux, state, frames: int):
     """
@@ -366,8 +382,10 @@ def scroll(pymux, state, frames: int):
     client would, so no line wraps and the width sweep measures the
     screen.
 
-    The walk turns around at both ends of the document, so any number
-    of frames runs without falling off either end.
+    Past either end a step feeds nothing: the program has nothing to
+    say there, and the frame draws the screen again unchanged. That
+    is the frame this phase is really for -- what scrolling costs
+    when no line is even moving.
     """
     draw = create_frame(state)
     window = pymux.arrangement.get_active_window()
@@ -378,14 +396,25 @@ def scroll(pymux, state, frames: int):
     mode = SCROLL_MODE
     styled = SCROLL_STYLED != "0"
     last = LINES - (rows - 1) + 1
+    first = 1 if SCROLL_START == "1" else last
+    if SCROLL_START not in ("1", "bottom"):
+        raise SystemExit("no such scroll start: %r (have 1, bottom)" % (SCROLL_START,))
+    at_end = SCROLL_AT_END
+    if at_end not in ("turn", "stay"):
+        raise SystemExit("no such scroll end: %r (have turn, stay)" % (at_end,))
 
     def work() -> None:
-        top = 1
+        top = first
         direction = +1
         control.stream.feed(viewport_bytes(top, rows, columns, styled=styled).decode())
         for _ in range(frames):
             coming = top + direction
             if coming < 1 or coming > last:
+                if at_end == "stay":
+                    # Past the end: the program says nothing, and the
+                    # frame draws the same screen again.
+                    draw()
+                    continue
                 direction = -direction
                 coming = top + direction
             control.stream.feed(scroll_step(top, direction, rows, columns, mode=mode, styled=styled).decode())

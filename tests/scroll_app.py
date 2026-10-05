@@ -202,10 +202,19 @@ class Viewer:
         sys.stdout.write(viewport_bytes(self.top, self.rows, self.columns, styled=self.styled).decode())
         sys.stdout.flush()
 
-    def move(self, direction: int, pages: bool = False) -> None:
+    def move(self, direction: int, pages: bool = False) -> bool:
+        """
+        Move one step, redrawing what the move needs. Past either end
+        there is nothing to draw -- `less` sits silent there rather
+        than repainting the viewport -- so nothing is written and the
+        answer is whether the viewport moved at all.
+        """
         step = self.height if pages else 1
         coming = self.top + direction * step
-        self.top = min(max(1, coming), LINES - self.height + 1)
+        clamped = min(max(1, coming), LINES - self.height + 1)
+        if clamped == self.top:
+            return False
+        self.top = clamped
         if self.mode == "redraw" or pages:
             # Pages redraw whole even in scroll mode: that is what
             # `less` does, and one region step per line would be a
@@ -214,10 +223,16 @@ class Viewer:
         else:
             sys.stdout.write(
                 scroll_step(
-                    self.top - direction, direction, self.rows, self.columns, mode="scroll", styled=self.styled
+                    self.top - direction,
+                    direction,
+                    self.rows,
+                    self.columns,
+                    mode="scroll",
+                    styled=self.styled,
                 ).decode()
             )
             sys.stdout.flush()
+        return True
 
 
 def read_key() -> str:

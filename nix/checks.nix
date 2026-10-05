@@ -228,6 +228,8 @@ let
   #  nix build --file . checks.pymux-profile.run`.
   profileScrollMode = builtins.getEnv "PYMUX_PROFILE_SCROLL_MODE";
   profileScrollStyled = builtins.getEnv "PYMUX_PROFILE_SCROLL_STYLED";
+  profileScrollStart = builtins.getEnv "PYMUX_PROFILE_SCROLL_START";
+  profileScrollAtEnd = builtins.getEnv "PYMUX_PROFILE_SCROLL_AT_END";
 
   # Which animating programs the busy check runs, for how long each,
   # and the most of one core a background pane may take. One of them
@@ -677,6 +679,8 @@ in
             profileAnimatedSeconds
             profileScrollMode
             profileScrollStyled
+            profileScrollStart
+            profileScrollAtEnd
             ;
         };
         setup = ''
@@ -689,6 +693,8 @@ in
           export PYMUX_PROFILE_ANIMATED_SECONDS="$profileAnimatedSeconds"
           export PYMUX_PROFILE_SCROLL_MODE="$profileScrollMode"
           export PYMUX_PROFILE_SCROLL_STYLED="$profileScrollStyled"
+          export PYMUX_PROFILE_SCROLL_START="$profileScrollStart"
+          export PYMUX_PROFILE_SCROLL_AT_END="$profileScrollAtEnd"
           export PYMUX_PROFILE_OUT="$out"
         '';
       }
