@@ -340,5 +340,8 @@ def create_command_completer(pymux: Pymux):
         for action in command_parser._actions:
             fn = _VALUE_COMPLETERS.get((name, action.dest))
             if fn is not None:
-                action.completer = partial(fn, pymux)
+                # A custom completer, which is argcomplete's own
+                # extension point: it reads `action.completer` when one
+                # is set, and argparse never declares it.
+                action.completer = partial(fn, pymux)  # pyrefly: ignore[missing-attribute]
     return CommandCompleter()

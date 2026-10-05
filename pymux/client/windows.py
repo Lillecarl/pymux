@@ -23,7 +23,7 @@ from .base import Client
 
 #: The loaded Win32 library. `ctypes` exposes it on Windows only, so it
 #: is reached by name rather than imported.
-windll = ctypes.windll
+windll = ctypes.windll  # pyrefly: ignore[missing-attribute]
 
 __all__ = [
     "WindowsClient",

@@ -1155,19 +1155,21 @@ class LayoutManager:
             ),
             style="class:commandpalette",
         )
+
+        def get_title() -> StyleAndTextTuples:
+            return [
+                (
+                    "class:commandpalette.title",
+                    " %s " % (self.client_state.menu_title or "Menu"),
+                )
+            ]
+
         self._menu = HSplit(
             [
                 Window(
                     height=1,
                     align=WindowAlign.CENTER,
-                    content=FormattedTextControl(
-                        lambda: [
-                            (
-                                "class:commandpalette.title",
-                                " %s " % (self.client_state.menu_title or "Menu"),
-                            )
-                        ]
-                    ),
+                    content=FormattedTextControl(get_title),
                     style="class:commandpalette.titlebar",
                 ),
                 self._menu_rows,
@@ -1616,12 +1618,16 @@ class LayoutManager:
         `title` is asked each frame, so a box can say what it is asking
         for rather than what kind of box it is.
         """
+
+        def get_title() -> StyleAndTextTuples:
+            return [("class:commandpalette.title", title())]
+
         return HSplit(
             [
                 Window(
                     height=1,
                     align=WindowAlign.CENTER,
-                    content=FormattedTextControl(lambda: [("class:commandpalette.title", title())]),
+                    content=FormattedTextControl(get_title),
                     style="class:commandpalette.titlebar",
                 ),
                 window,
@@ -1665,7 +1671,7 @@ class LayoutManager:
                 Window(
                     height=1,
                     align=WindowAlign.CENTER,
-                    content=FormattedTextControl(lambda: [("class:commandpalette.title", " Prefix ")]),
+                    content=FormattedTextControl([("class:commandpalette.title", " Prefix ")]),
                     style="class:commandpalette.titlebar",
                 ),
                 Window(
@@ -1727,7 +1733,7 @@ class LayoutManager:
                 Window(
                     width=2,
                     height=1,
-                    content=FormattedTextControl(lambda: [("class:chooser.hint", "/ ")]),
+                    content=FormattedTextControl([("class:chooser.hint", "/ ")]),
                     style="class:commandpalette",
                 ),
                 Window(
@@ -1737,14 +1743,16 @@ class LayoutManager:
                 ),
             ]
         )
+
+        def get_title() -> StyleAndTextTuples:
+            return [("class:commandpalette.title", " %s " % self._chooser_title())]
+
         self._chooser = HSplit(
             [
                 Window(
                     height=1,
                     align=WindowAlign.CENTER,
-                    content=FormattedTextControl(
-                        lambda: [("class:commandpalette.title", " %s " % self._chooser_title())]
-                    ),
+                    content=FormattedTextControl(get_title),
                     style="class:commandpalette.titlebar",
                 ),
                 rows,
@@ -1785,7 +1793,7 @@ class LayoutManager:
                 Window(
                     width=2,
                     height=1,
-                    content=FormattedTextControl(lambda: [("class:chooser.hint", "/ ")]),
+                    content=FormattedTextControl([("class:chooser.hint", "/ ")]),
                     style="class:commandpalette",
                 ),
                 Window(
@@ -2355,7 +2363,7 @@ class ConfirmationToolbar(FormattedTextControl):
     """
 
     def __init__(self, pymux, client_state):
-        def get_tokens():
+        def get_tokens() -> StyleAndTextTuples:
             return [
                 ("class:question", " "),
                 (
