@@ -1,0 +1,4 @@
+# Every difference between a picture with pymux and one without,
+# at each step of each exercised scenario.
+# `tests/exercise_images.py` says what this is and how to write it.
+
