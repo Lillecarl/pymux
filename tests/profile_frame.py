@@ -361,8 +361,10 @@ def scroll(pymux, state, frames: int):
     The bytes are the viewer's own: `viewport_bytes` draws the first
     viewport and `scroll_step` moves it a line, so the profile holds
     byte for byte what scrolling the program costs. The viewport fills
-    the pane exactly -- its size is read off the pane, not the client
-    -- so no line wraps and the width sweep measures the screen.
+    the pane exactly -- its size is read off the pane at construction,
+    after the frame `main` draws first let the plan size it the way a
+    client would, so no line wraps and the width sweep measures the
+    screen.
 
     The walk turns around at both ends of the document, so any number
     of frames runs without falling off either end.
@@ -578,12 +580,16 @@ def main() -> int:
         pymux, state, pipe, loop = create_server(panes)
         try:
             with set_app(state.app):
-                work = phase(pymux, state, frames)
-
-                # One frame outside the profile. The first frame of a
-                # client draws every cell and builds every container,
-                # and that is startup and not a frame.
+                # One frame outside the profile, and before the phase
+                # is built. The first frame of a client draws every
+                # cell and builds every container, and that is startup
+                # and not a frame -- and the plan gives each pane its
+                # rectangle while it draws, so a phase that fills its
+                # pane reads the size a client would give it rather
+                # than the size with no client. Lillecarl/pymux#224.
                 create_frame(state)()
+
+                work = phase(pymux, state, frames)
 
                 profiler = Profiler(interval=INTERVAL)
                 profiler.start()

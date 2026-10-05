@@ -222,6 +222,12 @@ let
   #  nix build --file . checks.pymux-profile.run`.
   profileAnimated = builtins.getEnv "PYMUX_PROFILE_ANIMATED";
   profileAnimatedSeconds = builtins.getEnv "PYMUX_PROFILE_ANIMATED_SECONDS";
+  # How the scroll phase moves (`redraw` or `scroll`) and whether what
+  # it scrolls is styled, for instance
+  # `PYMUX_PROFILE_SCROLL_MODE=scroll PYMUX_PROFILE_SCROLL_STYLED=0
+  #  nix build --file . checks.pymux-profile.run`.
+  profileScrollMode = builtins.getEnv "PYMUX_PROFILE_SCROLL_MODE";
+  profileScrollStyled = builtins.getEnv "PYMUX_PROFILE_SCROLL_STYLED";
 
   # Which animating programs the busy check runs, for how long each,
   # and the most of one core a background pane may take. One of them
@@ -669,6 +675,8 @@ in
             profilePhases
             profileAnimated
             profileAnimatedSeconds
+            profileScrollMode
+            profileScrollStyled
             ;
         };
         setup = ''
@@ -679,6 +687,8 @@ in
           export PYMUX_PROFILE_PHASES="$profilePhases"
           export PYMUX_PROFILE_ANIMATED="$profileAnimated"
           export PYMUX_PROFILE_ANIMATED_SECONDS="$profileAnimatedSeconds"
+          export PYMUX_PROFILE_SCROLL_MODE="$profileScrollMode"
+          export PYMUX_PROFILE_SCROLL_STYLED="$profileScrollStyled"
           export PYMUX_PROFILE_OUT="$out"
         '';
       }
