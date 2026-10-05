@@ -3294,6 +3294,19 @@ class _PaneMark(_ContainerProxy):
         self.window = window
         self.pane = pane
         self.has_bar_below = has_bar_below
+        # The cells the mark is made of, built once. A frame draws
+        # close to two hundred of them on a big screen, and a `Char`
+        # built per cell per frame was most of a millisecond of it.
+        self._cells = {
+            glyph: Char(glyph, self.STYLE)
+            for glyph in {
+                _focused_border_vertical,
+                _focused_border_left_top,
+                _focused_border_right_top,
+                _focused_border_left_bottom,
+                _focused_border_right_bottom,
+            }
+        }
 
     @override
     def write_to_screen(
@@ -3326,10 +3339,12 @@ class _PaneMark(_ContainerProxy):
         top = rect.ypos - 1
         bottom = rect.ypos + rect.height
 
+        cells = self._cells
+
         def put(x: int, y: int, glyph: str) -> None:
             # A cell outside the screen is a key the diff never reads, so
             # a mark at an edge needs no bound and simply draws nothing.
-            screen.data_buffer[y][x] = Char(glyph, self.STYLE)
+            screen.data_buffer[y][x] = cells[glyph]
 
         for y in range(rect.ypos, bottom):
             put(left, y, _focused_border_vertical)
@@ -3341,6 +3356,19 @@ class _PaneMark(_ContainerProxy):
         if self.has_bar_below():
             put(left, bottom, _focused_border_left_bottom)
             put(right, bottom, _focused_border_right_bottom)
+
+        # The columns the mark reaches, for the renderer's trim: these
+        # cells land after the copies measured their rows, and a row
+        # that ends before them would erase what it just drew. Only
+        # past what shows: a mark outside the screen is a key the diff
+        # never reads, and measuring it would walk every blank between
+        # the pane and the edge on every frame.
+        width = screen.visible_width
+        if width is None or right < width:
+            max_index = screen.max_column_index
+            for y in range(top, bottom + 1):
+                if max_index.get(y, -1) < right:
+                    max_index[y] = right
 
 
 class TracePaneWritePosition(_ContainerProxy):  # XXX: replace with SizedBox
