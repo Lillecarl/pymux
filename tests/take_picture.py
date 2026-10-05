@@ -295,6 +295,15 @@ def box_drawing(fixture):
     fixture.append("└" + "─" * 20 + "┘\r\n")
 
 
+def shell(fixture):
+    "A shell prompt with output: a few written lines, the rest empty."
+    fixture.append(csi(escape.ED, 2) + csi(escape.CUP))
+    fixture.append("lillecarl ~ dynhetz > echo hi\r\n")
+    fixture.append("hi\r\n")
+    fixture.append("\r\n")
+    fixture.append("lillecarl ~ dynhetz > ")
+
+
 #: The width of every image fixture, in pixels. A pane reserves
 #: `ceil(width / cell) x ceil(height / cell)` cells for an image,
 #: against the cell size its client reported. 120 is twelve columns of
@@ -520,6 +529,7 @@ FIXTURES = {
     "underlines": underlines,
     "wide-characters": wide_characters,
     "box-drawing": box_drawing,
+    "shell": shell,
 }
 FIXTURES.update({name: partial(writer, height=height) for name, (writer, height) in IMAGE_FIXTURES.items()})
 

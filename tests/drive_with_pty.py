@@ -1861,6 +1861,69 @@ def check_cursor_of_drawing_pane(tmp):
         terminal.close()
 
 
+def check_empty_rows_draw_default(tmp):
+    """
+    The first frame erases every row it draws, and program rows draw default.
+
+    A program leaves the rows it never wrote at the default
+    background, and the terminal draws those. The wire paints them in
+    two ways: the first frame erases the whole screen before it draws
+    anything, and a row the program wrote carries its own cells. What
+    neither reaches is a row the wire never speaks of -- and with the
+    pane filling its rectangle with blanks before the content lands,
+    there is no such row: the copy writes every cell of every row it
+    covers, and the erase covers the rest.
+
+    The status bar stays on. It draws the last row itself, so the walk
+    reaches every row of the pane: with nothing below the content the
+    diff ends where the content ends.
+    """
+    config = tmp / "bare.conf"
+    config.write_text("set-option status on\nset-option pane-border-status off\n")
+
+    program = tmp / "few.sh"
+    program.write_text("printf 'l1\\nl2\\n'\nsleep 5\n")
+
+    terminal = Terminal(tmp, "empty-rows", command="sh %s" % program, config=config)
+    try:
+        terminal.wait_for_queries()
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"l2")
+        terminal.drain(2.0)
+
+        wire = terminal.seen.decode("utf-8", "replace")
+        if "\x1b[J" not in wire and "\x1b[2J" not in wire:
+            raise Failed("the first frame erased nothing")
+
+        judge = Screen(24, 80, write_process_input=lambda answer: None)
+        feed = Stream(judge).feed
+        feed(wire)
+
+        buffer = judge.page.data_buffer
+        offset = judge.line_offset
+        # The rows the program wrote, which is what this wire says of
+        # the rest: the erase above drew the rows it never wrote.
+        tinted = [
+            (y, x)
+            for y in range(offset, offset + 2)
+            for x in range(80)
+            if y in buffer and buffer[y][x].appearance.rendition.bgcolor is not None
+        ]
+        if tinted:
+            cell = buffer[tinted[0][0]][tinted[0][1]]
+            raise Failed(
+                "%d cells drew with a background %r, for instance row %d column %d"
+                % (len(tinted), cell.appearance.rendition.bgcolor, tinted[0][0], tinted[0][1])
+            )
+
+        print("empty rows draw the default: ok")
+    except Exception:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+
+
 def check_pane_that_changes_nothing(tmp):
     """
     A frame that changes nothing writes nothing.
@@ -2423,6 +2486,7 @@ CHECKS = (
     check_quoted_argument,
     check_non_breaking_space,
     check_cursor_of_drawing_pane,
+    check_empty_rows_draw_default,
     check_pane_that_changes_nothing,
     check_command_palette,
     check_detach_ends_client,
