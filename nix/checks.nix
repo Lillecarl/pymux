@@ -238,6 +238,11 @@ let
   profileEmitMode = builtins.getEnv "PYMUX_PROFILE_EMIT_MODE";
   profileEmitLines = builtins.getEnv "PYMUX_PROFILE_EMIT_LINES";
   profileEmitStyled = builtins.getEnv "PYMUX_PROFILE_EMIT_STYLED";
+  # Whether the profiler shows the frames the default view hides,
+  # which is where a hot path hides when it is made of many small
+  # functions, for instance `PYMUX_PROFILE_SHOW_ALL=1
+  # nix build --file . checks.pymux-profile.run`.
+  profileShowAll = builtins.getEnv "PYMUX_PROFILE_SHOW_ALL";
 
   # Which animating programs the busy check runs, for how long each,
   # and the most of one core a background pane may take. One of them
@@ -692,6 +697,7 @@ in
             profileEmitMode
             profileEmitLines
             profileEmitStyled
+            profileShowAll
             ;
         };
         setup = ''
@@ -709,6 +715,7 @@ in
           export PYMUX_PROFILE_EMIT_MODE="$profileEmitMode"
           export PYMUX_PROFILE_EMIT_LINES="$profileEmitLines"
           export PYMUX_PROFILE_EMIT_STYLED="$profileEmitStyled"
+          export PYMUX_PROFILE_SHOW_ALL="$profileShowAll"
           export PYMUX_PROFILE_OUT="$out"
         '';
       }
