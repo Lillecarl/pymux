@@ -587,6 +587,11 @@ class ServerConnection:
         # Handle stdin.
         elif packet[Field.CMD] == Packet.IN:
             self._pipeinput.send_text(packet[Field.DATA])
+            # Input newer than a scheduled redraw makes that frame
+            # stale: the renderer skips it and asks for another one
+            # instead, so this is handled first. Lillecarl/pymux#524.
+            if self.client_state is not None:
+                self.client_state.input_tick += 1
 
         # The client queried its terminal for kitty keyboard protocol
         # support. (The replies come back as input on this connection.)

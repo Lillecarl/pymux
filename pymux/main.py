@@ -319,6 +319,17 @@ class ClientState:
         #: True when the prefix key (Ctrl-B) has been pressed.
         self.has_prefix = False
 
+        #: Ticks of the input this client sent against ticks of the
+        #: frames it asked for. A redraw is scheduled, and input
+        #: arrives before it runs: the frame it would draw predates
+        #: the input, so the renderer skips it and asks for another
+        #: one instead, which the input's own handling brings. Every
+        #: schedule records the tick, so equality is the steady state
+        #: and a frame whose input has been handled always draws.
+        #: Lillecarl/pymux#524.
+        self.input_tick = 0
+        self.schedule_tick = 0
+
         #: The mode tables this client sits in, the innermost last.
         #: Empty when every key is read from root or prefix. A mode is
         #: client state, the way the chooser is: two people on one
@@ -484,6 +495,16 @@ class ClientState:
                 logger.exception("Drawing the pane images failed.")
 
         self.app.after_render += after_render
+
+    def should_skip_render(self) -> bool:
+        """
+        Whether a frame this client asked for is already stale.
+
+        Equality is the steady state: every scheduled redraw records
+        the tick, so input that has been handled reads equal and the
+        frame draws. Lillecarl/pymux#524.
+        """
+        return self.input_tick != self.schedule_tick
 
     @property
     def active_key_table(self) -> str:
@@ -696,6 +717,23 @@ class ClientState:
             pymux.client_was_used(self)
 
         app.key_processor.before_key_press += key_pressed
+
+        # A frame this client asked for is already stale when input
+        # arrived after it was scheduled: the renderer skips it and
+        # asks for another one instead, so the input is handled first.
+        # Lillecarl/pymux#524.
+        app.should_skip_render = self.should_skip_render
+
+        # The frame that answers these keys goes now: postponing it
+        # would hold the answer behind a busy loop for the whole wait.
+        # Stamped when the keys are handled, and not when they arrive:
+        # terminal replies ride the same packets and want no fast
+        # frame. The stamp expires by itself, so a loop with no input
+        # behind it postpones as always. Lillecarl/pymux#524.
+        def rushed(_):
+            app._urgent_until = time.time() + 0.2
+
+        app.key_processor.before_key_press += rushed
 
         # The following code needs to run with the application active.
         # Especially, `create_window` needs to know what the current
@@ -1477,6 +1515,11 @@ class Pymux:
         leave that one alone.
         """
         for client_state in self._client_states.values():
+            # Every scheduled redraw records the tick, for its own
+            # client and the skipped one alike: the renderer compares
+            # it against the input since, and skips a frame that
+            # input arrived after. Lillecarl/pymux#524.
+            client_state.schedule_tick = client_state.input_tick
             if client_state.app is but_not:
                 continue
 

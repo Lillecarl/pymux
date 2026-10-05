@@ -1920,6 +1920,67 @@ def check_empty_rows_draw_the_pane(tmp):
         terminal.close()
 
 
+def check_switch_window_under_flood(tmp):
+    """
+    A window switch lands while another window floods.
+
+    Window zero scrolls as fast as the pty gives it; window one holds
+    a marker and sleeps. Switching to window one paints the marker:
+    the flood must not hold the switch behind it. The bound is
+    generous on purpose -- this pins that a switch lands at all under
+    a flood, not how fast. Measured here at a sixtieth of a second;
+    without the urgent frame after input it waits out the postpone
+    behind the flood, a quarter of one. Lillecarl/pymux#524.
+    """
+    config = tmp / "bare.conf"
+    config.write_text("set-option status on\nset-option pane-border-status off\n")
+
+    child = tmp / "flood_child.py"
+    child.write_text(
+        "import os, sys, threading, tty\n"
+        "tty.setraw(0)\n"
+        "sys.stdout.write('READY\\n')\n"
+        "sys.stdout.flush()\n"
+        "def flood():\n"
+        "    n = 0\n"
+        "    while True:\n"
+        "        n += 1\n"
+        "        try:\n"
+        "            os.write(1, ('flood line %d\\n' % n).encode())\n"
+        "        except OSError:\n"
+        "            break\n"
+        "threading.Thread(target=flood, daemon=True).start()\n"
+        "while True:\n"
+        "    if not sys.stdin.buffer.read1(256):\n"
+        "        break\n"
+    )
+    marker = tmp / "marker.py"
+    marker.write_text("import sys, time\nsys.stdout.write('IDLEMARK\\n')\nsys.stdout.flush()\ntime.sleep(30)\n")
+
+    terminal = Terminal(tmp, "switch-flood", command="python3 %s" % child, config=config)
+    try:
+        terminal.wait_for_queries()
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"flood line 1")
+        opened = run_cli(terminal.sock_path, ["new-window", "-d", "-t", "test:", "-n", "idle", "python3 %s" % marker])
+        assert opened.returncode == 0, opened.stderr
+        listed = run_cli(terminal.sock_path, ["list-windows", "-t", "test", "-F", "#{window_id}:#{window_name}"])
+        idle = [line.split(":")[0] for line in listed.stdout.decode().splitlines() if line.endswith(":idle")]
+        assert len(idle) == 1, listed.stdout
+        bound = run_cli(terminal.sock_path, ["bind-key", "-n", "F12", "select-window", "-t", idle[0]])
+        assert bound.returncode == 0, bound.stderr
+
+        before = time.time()
+        terminal.write(b"\x1b[24~")
+        terminal.wait_for(b"IDLEMARK", timeout=30.0)
+        print("switch under flood: %.1f ms" % ((time.time() - before) * 1000.0))
+    except Exception:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+
+
 def check_pane_that_changes_nothing(tmp):
     """
     A frame that changes nothing writes nothing.
@@ -2483,6 +2544,7 @@ CHECKS = (
     check_non_breaking_space,
     check_cursor_of_drawing_pane,
     check_empty_rows_draw_the_pane,
+    check_switch_window_under_flood,
     check_pane_that_changes_nothing,
     check_command_palette,
     check_detach_ends_client,
