@@ -41,6 +41,14 @@ Three phases, because "what a frame costs" is three questions:
 - **keys**, `select-pane` left and right with a frame between. The path
   a person's hand is on, and the one that asks the layout where the
   panes are.
+- **scroll**, one scroll step of `tests/scroll_app.py` before each
+  frame: the exact bytes the viewer emits moving a line, fed into the
+  pane. That is what scrolling an alt-screen program costs -- parse,
+  screen, diff and escape writer -- at whatever width the run sizes.
+  `PYMUX_PROFILE_SCROLL_MODE` picks `redraw` (the whole viewport again,
+  what `vim` and `fzf` emit) or `scroll` (one inserted or deleted line
+  in a scroll region, what `less` emits moving a line), and
+  `PYMUX_PROFILE_SCROLL_STYLED=0` turns the colours off.
 
 And **animated**, which is different: it runs a real program in the
 pane and profiles the live loop for a few seconds, counting renders
@@ -85,6 +93,7 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 from pyinstrument import Profiler
+from scroll_app import LINES, scroll_step, viewport_bytes
 from session import Connection, over_connection
 
 from pymux.main import Pymux
@@ -334,6 +343,56 @@ def sparse(pymux, state, frames: int):
     return work
 
 
+#: How the `scroll` phase moves: `redraw` rewrites the whole viewport
+#: every step, `scroll` inserts or deletes one line in a scroll region.
+#: `tests/scroll_app.py` says which programs each one stands in for.
+SCROLL_MODE = os.environ.get("PYMUX_PROFILE_SCROLL_MODE", "") or "redraw"
+
+#: Whether the `scroll` phase colours what it scrolls. Styled cells
+#: cost the diff and the escape writer more, so the default measures
+#: the program a person actually scrolls.
+SCROLL_STYLED = os.environ.get("PYMUX_PROFILE_SCROLL_STYLED", "") or "1"
+
+
+def scroll(pymux, state, frames: int):
+    """
+    One scroll step of the viewer before each frame, and nothing else.
+
+    The bytes are the viewer's own: `viewport_bytes` draws the first
+    viewport and `scroll_step` moves it a line, so the profile holds
+    byte for byte what scrolling the program costs. The viewport fills
+    the pane exactly -- its size is read off the pane, not the client
+    -- so no line wraps and the width sweep measures the screen.
+
+    The walk turns around at both ends of the document, so any number
+    of frames runs without falling off either end.
+    """
+    draw = create_frame(state)
+    window = pymux.arrangement.get_active_window()
+    pane = window.panes[0]
+    control = pane.terminal.terminal_control
+    rows = control.screen.lines
+    columns = control.screen.columns
+    mode = SCROLL_MODE
+    styled = SCROLL_STYLED != "0"
+    last = LINES - (rows - 1) + 1
+
+    def work() -> None:
+        top = 1
+        direction = +1
+        control.stream.feed(viewport_bytes(top, rows, columns, styled=styled).decode())
+        for _ in range(frames):
+            coming = top + direction
+            if coming < 1 or coming > last:
+                direction = -direction
+                coming = top + direction
+            control.stream.feed(scroll_step(top, direction, rows, columns, mode=mode, styled=styled).decode())
+            top = coming
+            draw()
+
+    return work
+
+
 #: How many cells a frame of the `rain` phase changes. cmatrix at
 #: 187x59 measured 8.5 KB parsed a frame, which is about 700 styled
 #: cells: a head and a trail cell per column, each with its colour.
@@ -377,6 +436,7 @@ PHASES = (
     ("rain", rain),
     ("output", output),
     ("keys", keys),
+    ("scroll", scroll),
 )
 
 #: The `animated` phase runs a real program in the pane, the way
