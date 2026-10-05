@@ -304,9 +304,7 @@ class Viewer:
 
     def draw(self) -> None:
         if self.mode == "region":
-            sys.stdout.write(
-                region_viewport_bytes(self.top, self.rows, self.columns, styled=self.styled).decode()
-            )
+            sys.stdout.write(region_viewport_bytes(self.top, self.rows, self.columns, styled=self.styled).decode())
         else:
             sys.stdout.write(viewport_bytes(self.top, self.rows, self.columns, styled=self.styled).decode())
         sys.stdout.flush()

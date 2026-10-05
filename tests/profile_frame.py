@@ -105,7 +105,15 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 from pyinstrument import Profiler
-from scroll_app import FOOTER_ROWS, HEADER_ROWS, LINES, region_scroll_step, region_viewport_bytes, scroll_step, viewport_bytes
+from scroll_app import (
+    FOOTER_ROWS,
+    HEADER_ROWS,
+    LINES,
+    region_scroll_step,
+    region_viewport_bytes,
+    scroll_step,
+    viewport_bytes,
+)
 from session import Connection, over_connection
 
 from pymux.main import Pymux
