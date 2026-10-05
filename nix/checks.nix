@@ -198,6 +198,10 @@ let
   # `PYMUX_PICTURES=underlines nix build --file . checks.pymux-pictures`.
   pictureSelection = builtins.getEnv "PYMUX_PICTURES";
 
+  # Which image scenarios run. It is a piece of a name, for instance
+  # `PYMUX_IMAGE_EXERCISE=move nix build --file . checks.pymux-image-exercise`.
+  exerciseSelection = builtins.getEnv "PYMUX_IMAGE_EXERCISE";
+
   # Which shapes the frame measurement takes, and how far a count may
   # move from its budget, for instance
   # `PYMUX_FRAME_INCLUDE=strip nix build --file . checks.pymux-frame`.
@@ -963,6 +967,35 @@ in
           export PYMUX_PICTURES="$pictureSelection"
           export PYMUX_PICTURES_OUT="$out"
           python tests/take_picture.py
+        ''
+      );
+
+  # An image through a move and two resizes, in kitty and through a
+  # pane, photographed at each step.
+  #
+  # `pictures` above draws once and holds still. A preview a program
+  # really shows moves and survives resizes, and graphics are
+  # write-once bytes rather than cells, so every step asks the pane to
+  # retain the image and write it out again. The window itself is
+  # resized through the compositor, so both sides take a real
+  # configure event; kitty authored the protocol, so what it draws
+  # bare is what the bytes mean.
+  #
+  # The result is a directory, so a run always leaves its pictures behind:
+  # `result/kitty/<side>/{drawn,moved,smaller,restored}.png`.
+  imageExercise =
+    runInSandbox
+      {
+        name = "pymux-image-exercise";
+        inputs = seatInputs;
+        env = { inherit exerciseSelection; };
+      }
+      (
+        seatSetup
+        + ''
+          export PYMUX_IMAGE_EXERCISE="$exerciseSelection"
+          export PYMUX_IMAGE_EXERCISE_OUT="$out"
+          python tests/exercise_images.py
         ''
       );
 
