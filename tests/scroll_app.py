@@ -205,14 +205,19 @@ class Viewer:
     def move(self, direction: int, pages: bool = False) -> bool:
         """
         Move one step, redrawing what the move needs. Past either end
-        there is nothing to draw -- `less` sits silent there rather
-        than repainting the viewport -- so nothing is written and the
-        answer is whether the viewport moved at all.
+        the viewport stays, and what is written depends on the program
+        this viewer stands in for: `scroll` sits silent like `less`,
+        and `redraw` paints the same viewport again, the way a program
+        that redraws on every key does when the key moves nothing.
+        The answer is whether anything was written at all.
         """
         step = self.height if pages else 1
         coming = self.top + direction * step
         clamped = min(max(1, coming), LINES - self.height + 1)
         if clamped == self.top:
+            if self.mode == "redraw":
+                self.draw()
+                return True
             return False
         self.top = clamped
         if self.mode == "redraw" or pages:

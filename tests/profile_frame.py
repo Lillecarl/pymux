@@ -363,10 +363,10 @@ SCROLL_STYLED = os.environ.get("PYMUX_PROFILE_SCROLL_STYLED", "") or "1"
 SCROLL_START = os.environ.get("PYMUX_PROFILE_SCROLL_START", "") or "1"
 
 #: What a step past either end does. `turn` walks back the way it
-#: came; `stay` keeps pushing, feeding nothing and drawing the same
-#: screen again. That is the fling that hits the bottom and keeps
-#: going: the program sits silent -- `tests/scroll_app.py` says so --
-#: and every frame redraws a screen that did not change.
+#: came; `stay` keeps pushing past the end. What the program feeds
+#: there follows the mode -- the same viewport again in `redraw`,
+#: nothing in `scroll` -- and the frame draws the screen again either
+#: way. That is the fling that hits the bottom and keeps going.
 SCROLL_AT_END = os.environ.get("PYMUX_PROFILE_SCROLL_AT_END", "") or "turn"
 
 
@@ -382,10 +382,12 @@ def scroll(pymux, state, frames: int):
     client would, so no line wraps and the width sweep measures the
     screen.
 
-    Past either end a step feeds nothing: the program has nothing to
-    say there, and the frame draws the screen again unchanged. That
-    is the frame this phase is really for -- what scrolling costs
-    when no line is even moving.
+    Past either end a step feeds what the program would: the same
+    viewport again in `redraw` mode, nothing at all in `scroll` mode.
+    The frame draws the screen again either way -- changed in one
+    case, identical in both -- and that no-change frame is the one
+    this phase is really for: what scrolling costs when no line is
+    even moving.
     """
     draw = create_frame(state)
     window = pymux.arrangement.get_active_window()
@@ -411,8 +413,11 @@ def scroll(pymux, state, frames: int):
             coming = top + direction
             if coming < 1 or coming > last:
                 if at_end == "stay":
-                    # Past the end: the program says nothing, and the
-                    # frame draws the same screen again.
+                    # Past the end: what the program would feed --
+                    # the same viewport in `redraw` mode, nothing in
+                    # `scroll` mode -- and the frame draws again.
+                    if mode == "redraw":
+                        control.stream.feed(viewport_bytes(top, rows, columns, styled=styled).decode())
                     draw()
                     continue
                 direction = -direction
