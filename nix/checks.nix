@@ -230,6 +230,14 @@ let
   profileScrollStyled = builtins.getEnv "PYMUX_PROFILE_SCROLL_STYLED";
   profileScrollStart = builtins.getEnv "PYMUX_PROFILE_SCROLL_START";
   profileScrollAtEnd = builtins.getEnv "PYMUX_PROFILE_SCROLL_AT_END";
+  # What the emit phase writes (`wide`, `broken`, `alt-wide` or
+  # `alt-broken`), how many lines each burst holds, and whether they
+  # are styled, for instance
+  # `PYMUX_PROFILE_EMIT_MODE=wide PYMUX_PROFILE_EMIT_LINES=89
+  #  nix build --file . checks.pymux-profile.run`.
+  profileEmitMode = builtins.getEnv "PYMUX_PROFILE_EMIT_MODE";
+  profileEmitLines = builtins.getEnv "PYMUX_PROFILE_EMIT_LINES";
+  profileEmitStyled = builtins.getEnv "PYMUX_PROFILE_EMIT_STYLED";
 
   # Which animating programs the busy check runs, for how long each,
   # and the most of one core a background pane may take. One of them
@@ -681,6 +689,9 @@ in
             profileScrollStyled
             profileScrollStart
             profileScrollAtEnd
+            profileEmitMode
+            profileEmitLines
+            profileEmitStyled
             ;
         };
         setup = ''
@@ -695,6 +706,9 @@ in
           export PYMUX_PROFILE_SCROLL_STYLED="$profileScrollStyled"
           export PYMUX_PROFILE_SCROLL_START="$profileScrollStart"
           export PYMUX_PROFILE_SCROLL_AT_END="$profileScrollAtEnd"
+          export PYMUX_PROFILE_EMIT_MODE="$profileEmitMode"
+          export PYMUX_PROFILE_EMIT_LINES="$profileEmitLines"
+          export PYMUX_PROFILE_EMIT_STYLED="$profileEmitStyled"
           export PYMUX_PROFILE_OUT="$out"
         '';
       }

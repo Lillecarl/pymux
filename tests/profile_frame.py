@@ -53,6 +53,11 @@ Three phases, because "what a frame costs" is three questions:
   `PYMUX_PROFILE_SCROLL_AT_END=stay` keeps pushing past the end,
   feeding nothing: the fling that hits the bottom, where scrolling is
   slow and no line is even moving.
+- **emit**, a burst of `tests/emit_app.py` before each frame: what a
+  program flooding the terminal costs. `PYMUX_PROFILE_EMIT_MODE`
+  picks `wide` (the terminal wraps), `broken` (the program broke the
+  lines), or the `alt-` variants on the alternate screen, and
+  `PYMUX_PROFILE_EMIT_LINES` how many lines each burst holds.
 
 And **animated**, which is different: it runs a real program in the
 pane and profiles the live loop for a few seconds, counting renders
@@ -91,6 +96,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
+from emit_app import emit_chunk
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
@@ -429,6 +435,61 @@ def scroll(pymux, state, frames: int):
     return work
 
 
+#: How the `emit` phase writes: `wide` lines run past the edge and
+#: the terminal wraps them, `broken` lines are broken at the width by
+#: the program. An `alt-` prefix prints on the alternate screen,
+#: where a line past the bottom scrolls. `tests/emit_app.py` says
+#: which programs each one stands in for.
+EMIT_MODE = os.environ.get("PYMUX_PROFILE_EMIT_MODE", "") or "broken"
+
+#: How many lines the `emit` phase writes before each frame. The
+#: default is a screenful: a program flooding the terminal.
+EMIT_LINES = int(os.environ.get("PYMUX_PROFILE_EMIT_LINES", "") or 0)
+
+#: Whether the `emit` phase colours what it writes.
+EMIT_STYLED = os.environ.get("PYMUX_PROFILE_EMIT_STYLED", "") or "1"
+
+
+def emit(pymux, state, frames: int):
+    """
+    One burst of the emitter before each frame, and nothing else.
+
+    The bytes are the emitter's own: `emit_chunk` writes numbered
+    lines, so the profile holds byte for byte what a program flooding
+    the terminal costs -- parse, scrollback, diff and escape writer.
+    The lines are numbered ever upwards, which is an endless scroll a
+    test can read the position of.
+
+    In `wide` mode the terminal wraps each line itself; in `broken`
+    mode the program broke them. On the alternate screen there is no
+    scrollback and a line past the bottom scrolls instead.
+    """
+    draw = create_frame(state)
+    window = pymux.arrangement.get_active_window()
+    pane = window.panes[0]
+    control = pane.terminal.terminal_control
+    rows = control.screen.lines
+    columns = control.screen.columns
+    mode = EMIT_MODE
+    if mode not in ("wide", "broken", "alt-wide", "alt-broken"):
+        raise SystemExit("no such emit mode: %r (have wide, broken, alt-wide, alt-broken)" % (mode,))
+    alt = mode.startswith("alt-")
+    base = mode[4:] if alt else mode
+    per = EMIT_LINES or rows
+    styled = EMIT_STYLED != "0"
+
+    def work() -> None:
+        number = 1
+        if alt:
+            control.stream.feed("\x1b[?1049h")
+        for _ in range(frames):
+            control.stream.feed(emit_chunk(number, per, columns, mode=base, styled=styled).decode())
+            number += per
+            draw()
+
+    return work
+
+
 #: How many cells a frame of the `rain` phase changes. cmatrix at
 #: 187x59 measured 8.5 KB parsed a frame, which is about 700 styled
 #: cells: a head and a trail cell per column, each with its colour.
@@ -473,6 +534,7 @@ PHASES = (
     ("output", output),
     ("keys", keys),
     ("scroll", scroll),
+    ("emit", emit),
 )
 
 #: The `animated` phase runs a real program in the pane, the way
