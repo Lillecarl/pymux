@@ -45,10 +45,12 @@ Three phases, because "what a frame costs" is three questions:
   frame: the exact bytes the viewer emits moving a line, fed into the
   pane. That is what scrolling an alt-screen program costs -- parse,
   screen, diff and escape writer -- at whatever width the run sizes.
-  `PYMUX_PROFILE_SCROLL_MODE` picks `redraw` (the whole viewport again,
-  what `vim` and `fzf` emit) or `scroll` (one inserted or deleted line
-  in a scroll region, what `less` emits moving a line), and
-  `PYMUX_PROFILE_SCROLL_STYLED=0` turns the colours off.
+   `PYMUX_PROFILE_SCROLL_MODE` picks `redraw` (the whole viewport again,
+   what `vim` and `fzf` emit), `scroll` (one inserted or deleted line
+   in a scroll region, what `less` emits moving a line), or `region`
+   (the middle scrolls inside chrome that never moves, what an agent
+   harness emits), and `PYMUX_PROFILE_SCROLL_STYLED=0` turns the
+   colours off.
   `PYMUX_PROFILE_SCROLL_START=bottom` starts on the last viewport and
   `PYMUX_PROFILE_SCROLL_AT_END=stay` keeps pushing past the end,
   feeding nothing: the fling that hits the bottom, where scrolling is
@@ -103,7 +105,7 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 from pyinstrument import Profiler
-from scroll_app import LINES, scroll_step, viewport_bytes
+from scroll_app import FOOTER_ROWS, HEADER_ROWS, LINES, region_scroll_step, region_viewport_bytes, scroll_step, viewport_bytes
 from session import Connection, over_connection
 
 from pymux.main import Pymux
@@ -354,8 +356,10 @@ def sparse(pymux, state, frames: int):
 
 
 #: How the `scroll` phase moves: `redraw` rewrites the whole viewport
-#: every step, `scroll` inserts or deletes one line in a scroll region.
-#: `tests/scroll_app.py` says which programs each one stands in for.
+#: every step, `scroll` inserts or deletes one line in a scroll region,
+#: and `region` scrolls only the middle inside chrome that never
+#: moves. `tests/scroll_app.py` says which programs each one stands
+#: in for.
 SCROLL_MODE = os.environ.get("PYMUX_PROFILE_SCROLL_MODE", "") or "redraw"
 
 #: Whether the `scroll` phase colours what it scrolls. Styled cells
@@ -380,20 +384,20 @@ def scroll(pymux, state, frames: int):
     """
     One scroll step of the viewer before each frame, and nothing else.
 
-    The bytes are the viewer's own: `viewport_bytes` draws the first
-    viewport and `scroll_step` moves it a line, so the profile holds
-    byte for byte what scrolling the program costs. The viewport fills
-    the pane exactly -- its size is read off the pane at construction,
-    after the frame `main` draws first let the plan size it the way a
-    client would, so no line wraps and the width sweep measures the
-    screen.
+    The bytes are the viewer's own: the viewport function draws the
+    first screen and the step function moves it a line, so the
+    profile holds byte for byte what scrolling the program costs.
+    The viewport fills the pane exactly -- its size is read off the
+    pane at construction, after the frame `main` draws first let the
+    plan size it the way a client would, so no line wraps and the
+    width sweep measures the screen.
 
     Past either end a step feeds what the program would: the same
-    viewport again in `redraw` mode, nothing at all in `scroll` mode.
-    The frame draws the screen again either way -- changed in one
-    case, identical in both -- and that no-change frame is the one
-    this phase is really for: what scrolling costs when no line is
-    even moving.
+    viewport again in `redraw` mode, nothing at all in the scrolling
+    modes. The frame draws the screen again either way -- changed in
+    one case, identical in both -- and that no-change frame is the
+    one this phase is really for: what scrolling costs when no line
+    is even moving.
     """
     draw = create_frame(state)
     window = pymux.arrangement.get_active_window()
@@ -403,7 +407,14 @@ def scroll(pymux, state, frames: int):
     columns = control.screen.columns
     mode = SCROLL_MODE
     styled = SCROLL_STYLED != "0"
-    last = LINES - (rows - 1) + 1
+    if mode == "region":
+        paint = region_viewport_bytes
+    elif mode in ("redraw", "scroll"):
+        paint = viewport_bytes
+    else:
+        raise SystemExit("no such scroll mode: %r (have redraw, scroll, region)" % (mode,))
+    span = rows - HEADER_ROWS - FOOTER_ROWS if mode == "region" else rows - 1
+    last = LINES - span + 1
     first = 1 if SCROLL_START == "1" else last
     if SCROLL_START not in ("1", "bottom"):
         raise SystemExit("no such scroll start: %r (have 1, bottom)" % (SCROLL_START,))
@@ -414,21 +425,24 @@ def scroll(pymux, state, frames: int):
     def work() -> None:
         top = first
         direction = +1
-        control.stream.feed(viewport_bytes(top, rows, columns, styled=styled).decode())
+        control.stream.feed(paint(top, rows, columns, styled=styled).decode())
         for _ in range(frames):
             coming = top + direction
             if coming < 1 or coming > last:
                 if at_end == "stay":
                     # Past the end: what the program would feed --
                     # the same viewport in `redraw` mode, nothing in
-                    # `scroll` mode -- and the frame draws again.
+                    # the scrolling modes -- and the frame draws again.
                     if mode == "redraw":
-                        control.stream.feed(viewport_bytes(top, rows, columns, styled=styled).decode())
+                        control.stream.feed(paint(top, rows, columns, styled=styled).decode())
                     draw()
                     continue
                 direction = -direction
                 coming = top + direction
-            control.stream.feed(scroll_step(top, direction, rows, columns, mode=mode, styled=styled).decode())
+            if mode == "region":
+                control.stream.feed(region_scroll_step(top, direction, rows, columns, styled=styled).decode())
+            else:
+                control.stream.feed(scroll_step(top, direction, rows, columns, mode=mode, styled=styled).decode())
             top = coming
             draw()
 
