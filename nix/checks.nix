@@ -275,6 +275,14 @@ let
   turnsPace = builtins.getEnv "PYMUX_TURNS_PACE";
   turnsTrace = builtins.getEnv "PYMUX_TURNS_TRACE";
 
+  # How many keystrokes each phase of the contention measurement takes,
+  # how far apart, and how fast the other pane streams. For instance
+  # `PYMUX_CONTENTION_SAMPLES=100 nix build --file . checks.pymux-contention.run`.
+  contentionSamples = builtins.getEnv "PYMUX_CONTENTION_SAMPLES";
+  contentionPace = builtins.getEnv "PYMUX_CONTENTION_PACE";
+  contentionSpinMs = builtins.getEnv "PYMUX_CONTENTION_SPIN_MS";
+  contentionSettle = builtins.getEnv "PYMUX_CONTENTION_SETTLE";
+
   # Which item of vttest's main menu gets photographed, and in which
   # terminals, for instance
   # `PYMUX_VTTEST_INCLUDE='^9 ' nix build --file . checks.pymux-vttest-pictures.run`.
@@ -772,6 +780,27 @@ in
       }
       ''
         python tests/count_turns.py
+      '';
+
+  # What a keystroke costs while another pane streams, in turns of the
+  # event loop. The same shortest-keystroke budget the turns check
+  # holds, measured alone and then under a stream, in one server.
+  # `tests/measure_stream_contention.py` says what the two phases are.
+  # Lillecarl/pymux#507.
+  contention =
+    runInSandbox
+      {
+        name = "pymux-contention";
+        env = { inherit contentionSamples contentionPace contentionSpinMs contentionSettle; };
+        setup = ''
+          export PYMUX_CONTENTION_SAMPLES="$contentionSamples"
+          export PYMUX_CONTENTION_PACE="$contentionPace"
+          export PYMUX_CONTENTION_SPIN_MS="$contentionSpinMs"
+          export PYMUX_CONTENTION_SETTLE="$contentionSettle"
+        '';
+      }
+      ''
+        python tests/measure_stream_contention.py
       '';
 
   # What pymux costs a keystroke, in milliseconds, against the same
