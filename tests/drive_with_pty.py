@@ -1861,62 +1861,58 @@ def check_cursor_of_drawing_pane(tmp):
         terminal.close()
 
 
-def check_empty_rows_draw_default(tmp):
+def check_empty_rows_draw_the_pane(tmp):
     """
-    The first frame erases every row it draws, and program rows draw default.
+    Every row of the pane draws the pane, even the empty ones.
 
-    A program leaves the rows it never wrote at the default
-    background, and the terminal draws those. The wire paints them in
-    two ways: the first frame erases the whole screen before it draws
-    anything, and a row the program wrote carries its own cells. What
-    neither reaches is a row the wire never speaks of -- and with the
-    pane filling its rectangle with blanks before the content lands,
-    there is no such row: the copy writes every cell of every row it
-    covers, and the erase covers the rest.
+    A row the program never wrote still reaches the terminal: the
+    first frame erases the tail of every row it touches, carrying the
+    background the fill painted, and a row the program shrinks keeps
+    it the same way. What neither reaches is a row the wire wipes with
+    the default instead -- and a judge that drops erased cells cannot
+    see that absence, so this counts the cells of every row: each one
+    of the pane's rows holds every column, all in the one background
+    of the pane.
 
-    The status bar stays on. It draws the last row itself, so the walk
-    reaches every row of the pane: with nothing below the content the
-    diff ends where the content ends.
+    The program writes one long row and then shrinks it to five
+    columns, the way a shell redraws a shorter prompt. The theme is a
+    pygments one with `paint-screen` on, so the pane's background is a
+    colour the terminal would never draw by itself. The last row is
+    the status bar, which draws itself and is not the pane.
     """
     config = tmp / "bare.conf"
-    config.write_text("set-option status on\nset-option pane-border-status off\n")
+    config.write_text(
+        "set-option status on\nset-option pane-border-status off\nset-option paint-screen on\nset-client-option theme pygments:catppuccin-mocha\n"
+    )
 
     program = tmp / "few.sh"
-    program.write_text("printf 'l1\\nl2\\n'\nsleep 5\n")
+    program.write_text(
+        "printf 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\\n'; sleep 2; printf '\\x1b[1A\\r\\x1b[Kshort\\n'; sleep 6\n"
+    )
 
-    terminal = Terminal(tmp, "empty-rows", command="sh %s" % program, config=config)
+    terminal = Terminal(tmp, "empty-rows", command="sh %s" % program, config=config, rows=30, columns=100)
     try:
         terminal.wait_for_queries()
         terminal.write(b"\x1b[?62;1;6c")
-        terminal.wait_for(b"l2")
-        terminal.drain(2.0)
+        terminal.wait_for(b"short")
+        terminal.drain(4.0)
 
-        wire = terminal.seen.decode("utf-8", "replace")
-        if "\x1b[J" not in wire and "\x1b[2J" not in wire:
-            raise Failed("the first frame erased nothing")
-
-        judge = Screen(24, 80, write_process_input=lambda answer: None)
+        judge = Screen(30, 100, write_process_input=lambda answer: None)
         feed = Stream(judge).feed
-        feed(wire)
+        feed(terminal.seen.decode("utf-8", "replace"))
 
         buffer = judge.page.data_buffer
         offset = judge.line_offset
-        # The rows the program wrote, which is what this wire says of
-        # the rest: the erase above drew the rows it never wrote.
-        tinted = [
-            (y, x)
-            for y in range(offset, offset + 2)
-            for x in range(80)
-            if y in buffer and buffer[y][x].appearance.rendition.bgcolor is not None
-        ]
-        if tinted:
-            cell = buffer[tinted[0][0]][tinted[0][1]]
-            raise Failed(
-                "%d cells drew with a background %r, for instance row %d column %d"
-                % (len(tinted), cell.appearance.rendition.bgcolor, tinted[0][0], tinted[0][1])
-            )
+        for y in range(offset, offset + 29):
+            row = buffer[y] if y in buffer else {}
+            cells = [row[x] for x in range(100) if x in row]
+            if len(cells) < 100:
+                raise Failed("row %d drew %d of 100 cells" % (y - offset, len(cells)))
+            bgs = {cell.appearance.rendition.bgcolor for cell in cells}
+            if len(bgs) != 1 or None in bgs:
+                raise Failed("row %d drew the backgrounds %r" % (y - offset, sorted(bgs, key=repr)))
 
-        print("empty rows draw the default: ok")
+        print("empty rows draw the pane: ok")
     except Exception:
         terminal.report()
         raise
@@ -2486,7 +2482,7 @@ CHECKS = (
     check_quoted_argument,
     check_non_breaking_space,
     check_cursor_of_drawing_pane,
-    check_empty_rows_draw_default,
+    check_empty_rows_draw_the_pane,
     check_pane_that_changes_nothing,
     check_command_palette,
     check_detach_ends_client,
