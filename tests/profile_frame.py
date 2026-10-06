@@ -60,6 +60,12 @@ Three phases, because "what a frame costs" is three questions:
   picks `wide` (the terminal wraps), `broken` (the program broke the
   lines), or the `alt-` variants on the alternate screen, and
   `PYMUX_PROFILE_EMIT_LINES` how many lines each burst holds.
+- **redraw**, a forced full redraw before each frame: the C-l of the
+  viewport, what resize, reconnect and flicker recovery cost. The
+  viewport is painted once outside the profile and the committed
+  screen is dropped before every frame, so the diff rediffs against
+  stale state and the wire carries everything.
+  `PYMUX_PROFILE_REDRAW_STYLED=0` turns the colours off.
 
 And **animated**, which is different: it runs a real program in the
 pane and profiles the live loop for a few seconds, counting renders
@@ -512,6 +518,48 @@ def emit(pymux, state, frames: int):
     return work
 
 
+#: Whether the `redraw` phase colours what it repaints. Styled cells
+#: cost the diff and the escape writer more, so the default measures
+#: the program a person actually looks at.
+REDRAW_STYLED = os.environ.get("PYMUX_PROFILE_REDRAW_STYLED", "") or "1"
+
+
+def redraw(pymux, state, frames: int):
+    """
+    A forced full redraw before each frame: the C-l of the viewport.
+
+    The viewport is painted once, outside the profile, and the frame
+    after it commits, so every profiled frame starts from a painted
+    screen. A redraw repaints what is already there -- resize,
+    reconnect, flicker recovery -- so no bytes flow and the parse
+    costs nothing; what is measured is the render and the wire.
+
+    Each frame drops the committed screen first, which is what resize
+    does to it (`Renderer.render` forgets it when the size changes).
+    The diff rediffs against stale state: every row rebuilds, every
+    measure is fresh, the wire carries everything, and none of the
+    reuse paths -- carried widths, stable rows, row equality -- can
+    help it. That is the number the rotation and scroll-op work will
+    move, so it is taken before they land.
+    """
+    draw = create_frame(state)
+    window = pymux.arrangement.get_active_window()
+    pane = window.panes[0]
+    control = pane.terminal.terminal_control
+    rows = control.screen.lines
+    columns = control.screen.columns
+    styled = REDRAW_STYLED != "0"
+    control.stream.feed(viewport_bytes(1, rows, columns, styled=styled).decode())
+    draw()
+
+    def work() -> None:
+        for _ in range(frames):
+            state.app.renderer._last_screen = None
+            draw()
+
+    return work
+
+
 #: How many cells a frame of the `rain` phase changes. cmatrix at
 #: 187x59 measured 8.5 KB parsed a frame, which is about 700 styled
 #: cells: a head and a trail cell per column, each with its colour.
@@ -557,6 +605,7 @@ PHASES = (
     ("keys", keys),
     ("scroll", scroll),
     ("emit", emit),
+    ("redraw", redraw),
 )
 
 #: The `animated` phase runs a real program in the pane, the way
