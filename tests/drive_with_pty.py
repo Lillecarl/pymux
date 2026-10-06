@@ -2525,6 +2525,108 @@ def check_relative_socket_name_survives_the_daemon(tmp):
     print("relative socket name survives the daemon: ok")
 
 
+def _active_pane_index(sock_path):
+    "Which pane `list-panes` names active, by its place in the list."
+    listed = run_cli(sock_path, ["list-panes"])
+    assert listed.returncode == 0, listed.stderr
+    for index, line in enumerate(listed.stdout.decode().splitlines()):
+        if "(active)" in line:
+            return index
+    raise Failed("no active pane in:\n%s" % listed.stdout.decode())
+
+
+def _two_cats_side_by_side(tmp, mode):
+    """
+    One client on two `cat` panes, the left one active, settled.
+
+    Both programs echo what they read, so a capture says where keys
+    went; the geometry is fixed (no status line, 24 by 80), so column
+    sixty of row ten is always the right pane. Returns the terminal
+    and the two pane ids, left first.
+    """
+    config = tmp / ("%s.conf" % mode)
+    config.write_text("set-option status off\nset-option pane-border-status off\n")
+
+    terminal = Terminal(tmp, mode, command="cat", config=config, rows=24, columns=80)
+    terminal.wait_for_queries()
+    terminal.write(b"\x1b[?62;1;6c")
+    made = run_cli(terminal.sock_path, ["split-window", "-h", "cat"])
+    assert made.returncode == 0, made.stderr
+    ids = run_cli(terminal.sock_path, ["list-panes", "-F", "#{pane_id}"]).stdout.decode().split()
+    assert len(ids) == 2, ids
+    selected = run_cli(terminal.sock_path, ["select-pane", "-t", ids[0]])
+    assert selected.returncode == 0, selected.stderr
+    terminal.drain(3.0)
+    assert _active_pane_index(terminal.sock_path) == 0
+    return terminal, ids
+
+
+def check_click_in_unfocused_pane_selects_it(tmp):
+    """
+    A click in a pane selects it.
+
+    The press alone selects nothing -- the focus lands on the
+    release, the way the clock does -- and the click itself never
+    reaches either program: the unfocused pane drops the press, and
+    the release focuses instead of forwarding. What the click moves
+    is the arrangement as well as the layout focus: without it the
+    next keypress would sync the layout straight back to the pane
+    that is active. Lillecarl/pymux#527.
+    """
+    terminal, ids = _two_cats_side_by_side(tmp, "click-selects")
+    try:
+        terminal.write(b"\x1b[<0;60;10M")
+        time.sleep(0.3)
+        terminal.write(b"\x1b[<0;60;10m")
+        terminal.drain(2.0)
+        assert _active_pane_index(terminal.sock_path) == 1, "the click did not select the right pane"
+
+        terminal.write(b"clickmark\n")
+        terminal.drain(2.0)
+        left, right = (run_cli(terminal.sock_path, ["capture-pane", "-t", pid, "-p"]).stdout for pid in ids)
+        assert b"clickmark" in right, "keys did not follow the click:\n%r" % (right[-200:],)
+        assert b"clickmark" not in left, "keys reached both panes:\n%r" % (left[-200:],)
+        assert b"\x1b" not in right, "the click leaked into the program:\n%r" % (right[-200:],)
+
+        print("click in unfocused pane selects it: ok")
+    except Exception:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+
+
+def check_wheel_over_unfocused_pane_does_nothing(tmp):
+    """
+    A wheel over a pane that has no focus does nothing at all.
+
+    No copy mode, no focus, no bytes to the program: scrolling
+    belongs to the pane under the focus, and a wheel that also
+    selected would scroll one pane while looking at another.
+    Lillecarl/pymux#527.
+    """
+    terminal, ids = _two_cats_side_by_side(tmp, "wheel-unfocused")
+    try:
+        before = run_cli(terminal.sock_path, ["capture-pane", "-t", ids[1], "-p"]).stdout
+        terminal.write(b"\x1b[<64;60;10M")
+        terminal.drain(2.0)
+        assert _active_pane_index(terminal.sock_path) == 0, "the wheel selected the right pane"
+        after = run_cli(terminal.sock_path, ["capture-pane", "-t", ids[1], "-p"]).stdout
+        assert after == before, "the wheel reached the program:\n%r" % (after[-200:],)
+
+        terminal.write(b"wheelmark\n")
+        terminal.drain(2.0)
+        left, right = (run_cli(terminal.sock_path, ["capture-pane", "-t", pid, "-p"]).stdout for pid in ids)
+        assert b"wheelmark" in left and b"wheelmark" not in right
+
+        print("wheel over unfocused pane does nothing: ok")
+    except Exception:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+
+
 CHECKS = (
     check_detached_pane_has_a_width,
     check_relative_socket_name_survives_the_daemon,
@@ -2545,6 +2647,8 @@ CHECKS = (
     check_cursor_of_drawing_pane,
     check_empty_rows_draw_the_pane,
     check_switch_window_under_flood,
+    check_click_in_unfocused_pane_selects_it,
+    check_wheel_over_unfocused_pane_does_nothing,
     check_pane_that_changes_nothing,
     check_command_palette,
     check_detach_ends_client,

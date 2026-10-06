@@ -2114,6 +2114,27 @@ class Pymux:
         # every read from the program, whatever the bytes were.
         # Lillecarl/pymux#387.
         terminal_control.on_content_changed += lambda _sender: pane.content_changed()
+
+        def focus_pane_on_click() -> None:
+            """
+            Select this pane: the mouse focused it.
+
+            The widget moves the layout focus on a click in a pane
+            that had none; the arrangement follows here, or the next
+            keypress syncs the layout focus straight back to the pane
+            that is active. A pane in no window -- an overlay, or one
+            already gone -- stays as it is. Lillecarl/pymux#527.
+            """
+            found = self.window_of_pane(pane.pane_id)
+            if found is None:
+                return
+            _, window, _ = found
+            window.active_pane = pane
+
+        # What a click selects. It is wired here and not in `Pane`,
+        # for the reason `on_content_changed` gives above: a pane is
+        # about the arrangement and knows nothing about a widget.
+        terminal_control.on_mouse_focus = focus_pane_on_click
         if not terminal_control._running:
             # The size of the session this pane is going into, until a
             # client attaches. `new-session -x -y` is what names it, and
