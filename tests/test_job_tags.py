@@ -20,7 +20,7 @@ from session import create_session
 from pymux.commands import CommandException, handle_command
 from pymux.commands.run import run_job
 from pymux.commands.show_job import show_job
-from pymux.jobs import find_job, session_id
+from pymux.jobs import find_job
 
 
 async def _tags_of(store, job_id) -> dict:
@@ -125,24 +125,15 @@ async def test_reaping_forgets_the_tags_with_the_job(monkeypatch):
         assert await _tags_of(pymux.jobs.store, second.job_id) == {"stays": None}
 
 
-def test_session_id_prefers_agent_env(monkeypatch):
-    import pymux.jobs as jobs_module
-
-    for name in jobs_module.SESSION_ENV_VARS:
-        monkeypatch.delenv(name, raising=False)
-    assert session_id() is not None and len(session_id()) == 12
-
-    monkeypatch.setenv("CURSOR_TRACE_ID", "trace-1")
-    monkeypatch.setenv("OPENCODE_SESSION_ID", "session-1")
-    assert session_id() == "session-1"
-
-
-async def test_jobs_share_the_tables_session():
+async def test_jobs_default_to_no_session():
     async with create_session() as (pymux, state):
         first = await pymux.jobs.submit("true", None)
         second = await pymux.jobs.submit("true", None, [], "someone-else")
-        assert first.session == pymux.jobs.session
+        assert first.session is None
         assert second.session == "someone-else"
+        async with pymux.jobs.store.reader() as conn:
+            cursor = await conn.execute("SELECT session FROM jobs ORDER BY id")
+            assert [row[0] for row in await cursor.fetchall()] == [None, "someone-else"]
 
 
 async def test_run_stamps_and_overrides_the_session():
@@ -157,22 +148,21 @@ async def test_run_stamps_and_overrides_the_session():
         finally:
             pymux.command_output = None
         by_tag = {tag: job.session for job in pymux.jobs.listing() for tag in job.tags}
-        assert by_tag == {"a": pymux.jobs.session, "b": "s1"}
+        assert by_tag == {"a": None, "b": "s1"}
 
 
 async def test_the_newest_tagged_job_wins():
     async with create_session() as (pymux, state):
-        session = pymux.jobs.session
-        first = await pymux.jobs.submit("echo first", None, [("deploy", None)])
+        first = await pymux.jobs.submit("echo first", None, [("deploy", None)], "s1")
         await pymux.jobs.supervise(first)
-        second = await pymux.jobs.submit("echo second", None, [("deploy", None)])
+        second = await pymux.jobs.submit("echo second", None, [("deploy", None)], "s1")
         await pymux.jobs.supervise(second)
-        assert pymux.jobs.resolve([("deploy", None)], session) is second
+        assert pymux.jobs.resolve([("deploy", None)], "s1") is second
 
         pymux.command_output = []
         try:
             with set_app(state.app):
-                show_job(pymux, argparse.Namespace(job=None, e=False, tags=["deploy"], session=None))
+                show_job(pymux, argparse.Namespace(job=None, e=False, tags=["deploy"], session="s1"))
                 said = list(pymux.command_output)
         finally:
             pymux.command_output = None
@@ -181,21 +171,21 @@ async def test_the_newest_tagged_job_wins():
 
 async def test_a_bare_key_matches_any_value():
     async with create_session() as (pymux, state):
-        session = pymux.jobs.session
-        job = await pymux.jobs.submit("true", None, [("branch", "main")])
-        assert pymux.jobs.resolve([("branch", None)], session) is job
-        assert pymux.jobs.resolve([("branch", "main")], session) is job
-        assert pymux.jobs.resolve([("branch", "other")], session) is None
-        assert pymux.jobs.resolve([("missing", None)], session) is None
+        job = await pymux.jobs.submit("true", None, [("branch", "main")], "s1")
+        assert pymux.jobs.resolve([("branch", None)], "s1") is job
+        assert pymux.jobs.resolve([("branch", "main")], "s1") is job
+        assert pymux.jobs.resolve([("branch", "other")], "s1") is None
+        assert pymux.jobs.resolve([("missing", None)], "s1") is None
 
 
 async def test_resolution_stays_in_session():
     async with create_session() as (pymux, state):
-        await pymux.jobs.submit("true", None, [("deploy", None)])
-        assert pymux.jobs.resolve([("deploy", None)], "someone-else") is None
+        await pymux.jobs.submit("true", None, [("deploy", None)], "s1")
+        assert pymux.jobs.resolve([("deploy", None)], "s2") is None
+        assert pymux.jobs.resolve([("deploy", None)], None) is None
         with pytest.raises(CommandException, match="in this session"):
-            find_job(pymux, None, ["deploy"], "someone-else")
-        assert find_job(pymux, None, ["deploy"], None).command == "true"
+            find_job(pymux, None, ["deploy"], "s2")
+        assert find_job(pymux, None, ["deploy"], "s1").command == "true"
 
 
 async def test_an_id_and_tags_together_refuse():

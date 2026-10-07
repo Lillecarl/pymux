@@ -21,7 +21,6 @@ from __future__ import annotations
 import codecs
 import os
 import re
-import secrets
 import subprocess
 import time
 from collections import deque
@@ -55,30 +54,6 @@ FINISHED_KEEP = 50
 #: distinct type to the checker, so a pane id, a window id, or a bare
 #: number never passes where a job is expected without saying so.
 JobId = NewType("JobId", int)
-
-
-#: Where the agent session id comes from, in order. First-party names
-#: first -- their values are session ids -- then the harness names
-#: other agents document, newest thread and shell ids before a trace
-#: id, which correlates but never names a session. The list follows
-#: the harness survey in nixidae's pytest-agent (`_harness_detect`).
-SESSION_ENV_VARS = (
-    "OPENCODE_SESSION_ID",
-    "OCAHUB_SESSION",
-    "OC_SESSION",
-    "CODEX_THREAD_ID",
-    "TRAE_AI_SHELL_ID",
-    "CURSOR_TRACE_ID",
-)
-
-
-def session_id() -> str:
-    "The agent session this server runs in, or a fresh one."
-    for name in SESSION_ENV_VARS:
-        value = os.environ.get(name)
-        if value:
-            return value
-    return secrets.token_hex(6)
 
 
 def parse_tag(word: str) -> tuple[str, str | None]:
@@ -210,11 +185,6 @@ class JobTable:
     def __init__(self) -> None:
         self._jobs: dict[JobId, Job] = {}
         self.store = JobStore()
-        #: The session every job is stamped with unless told
-        #: otherwise. Read once: the server's environment does not
-        #: change under it, so reading it per job would only invent
-        #: a new random one per job when nothing is set.
-        self.session = session_id()
 
     async def open(self) -> None:
         "Build the database. The server calls this; the rest is lazy."
@@ -236,15 +206,17 @@ class JobTable:
 
         The id comes from the database, so it is the row and the job
         or neither: nothing hands out an id the table cannot answer.
-        The tags and the session go down with the row, in the same step.
+        The tags and the session go down with the row, in the same
+        step. The session is whatever the caller said -- the server
+        never reads the caller's environment, so an unnamed job
+        belongs to no session at all.
         """
         now = time.time()
-        stamped = session if session is not None else self.session
         cursor = await self.store.write(
             "INSERT INTO jobs(command, directory, status, started, session) VALUES (?, ?, 'running', ?, ?)",
-            (command, directory, now, stamped),
+            (command, directory, now, session),
         )
-        job = Job(JobId(cursor.lastrowid), command, directory, now, tags, stamped)
+        job = Job(JobId(cursor.lastrowid), command, directory, now, tags, session)
         self._jobs[job.job_id] = job
         for key, value in job.tags.items():
             await self.store.write(
@@ -260,16 +232,16 @@ class JobTable:
         "Every job, oldest first, which is id order."
         return [self._jobs[key] for key in sorted(self._jobs)]
 
-    def resolve(self, tags: list[tuple[str, str | None]], session: str) -> Job | None:
+    def resolve(self, tags: list[tuple[str, str | None]], session: str | None) -> Job | None:
         """
         The newest job in this session carrying every tag, or nothing.
 
         Tags are not unique -- the same key names a series of jobs --
         so the newest wins: later submits start later, and the id
         breaks a tie inside one instant. A bare key matches whatever
-        value it carries; a valued tag matches that value exactly.
-        Nothing crosses sessions: another session's job is not a
-        surprising match, it is no match at all.
+        value it carries; a valued tag matches that value exactly. An
+        unnamed session holds the jobs no caller claimed; naming one
+        holds only its own, and nothing crosses between them.
         """
         found = [job for job in self._jobs.values() if job.session == session and _matches(job, tags)]
         if not found:
@@ -599,8 +571,7 @@ def find_job(pymux, job: int | None, words: list[str], session: str | None) -> J
     if not words:
         raise CommandException("give a job id or --tag")
     tags = [parse_tag(word) for word in words]
-    current = session if session is not None else table.session
-    found = table.resolve(tags, current)
+    found = table.resolve(tags, session)
     if found is None:
         raise CommandException("no job tagged %s in this session" % ",".join(words))
     return found

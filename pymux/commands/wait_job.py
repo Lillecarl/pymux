@@ -49,5 +49,5 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         "--session",
         metavar="<id>",
         default=None,
-        help="Whose tags to read. The server's agent session otherwise.",
+        help="Whose tags to read: a session id like the one --session stamps. Unnamed jobs otherwise.",
     )

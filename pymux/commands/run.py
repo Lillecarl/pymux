@@ -103,7 +103,7 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         "--session",
         metavar="<id>",
         default=None,
-        help="Whose job this is. The server's agent session otherwise.",
+        help="Whose job this is: the caller's agent session id, so its later lookups find it. Unnamed otherwise.",
     )
     parser.add_argument(
         "shell_command",
