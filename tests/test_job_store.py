@@ -33,7 +33,11 @@ async def test_open_builds_a_versioned_schema():
             cursor = await conn.execute("PRAGMA user_version")
             assert (await cursor.fetchone())[0] == SCHEMA_VERSION
             cursor = await conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
-            assert {row[0] for row in await cursor.fetchall()} == {"jobs", "sqlite_sequence"}
+            assert {row[0] for row in await cursor.fetchall()} == {
+                "jobs",
+                "saved_queries",
+                "sqlite_sequence",
+            }
     finally:
         await store.close()
 

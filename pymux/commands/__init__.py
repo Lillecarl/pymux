@@ -154,6 +154,7 @@ MODULES = [
     "show_job",
     "kill_job",
     "view_job",
+    "sql",
 ]
 
 

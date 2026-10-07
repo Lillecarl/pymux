@@ -33,7 +33,7 @@ import anyio
 
 #: What this server built. Agents read it with `PRAGMA user_version`
 #: and re-read the schema when it differs from what they were told.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs(
@@ -46,7 +46,36 @@ CREATE TABLE IF NOT EXISTS jobs(
   started REAL NOT NULL,
   finished REAL
 );
+CREATE TABLE IF NOT EXISTS saved_queries(
+  name TEXT PRIMARY KEY,
+  sql TEXT NOT NULL,
+  description TEXT
+);
 """
+
+#: The queries every boot starts with. A name an agent saves later
+#: replaces one of these for the rest of the boot; the next boot
+#: seeds again.
+SEEDS = [
+    (
+        "running",
+        "SELECT id, command FROM jobs WHERE status = 'running' ORDER BY id",
+        "Jobs still running, oldest first.",
+    ),
+    (
+        "failed",
+        (
+            "SELECT id, command, returncode, error FROM jobs "
+            "WHERE status = 'done' AND (returncode != 0 OR error IS NOT NULL) ORDER BY id"
+        ),
+        "Finished jobs that did not succeed.",
+    ),
+    (
+        "recent",
+        "SELECT id, command, status, returncode FROM jobs ORDER BY id DESC LIMIT :n",
+        "Newest jobs first; :n caps them.",
+    ),
+]
 
 #: The shape of the one database every connection of one store sees.
 #: sqlite cannot share a plain `:memory:` database between connections,
@@ -100,6 +129,11 @@ class JobStore:
             try:
                 await rw.execute("PRAGMA foreign_keys = ON")
                 await rw.executescript(SCHEMA)
+                for name, sql, description in SEEDS:
+                    await rw.execute(
+                        "INSERT OR IGNORE INTO saved_queries(name, sql, description) VALUES (?, ?, ?)",
+                        (name, sql, description),
+                    )
                 await rw.execute("PRAGMA user_version = %d" % SCHEMA_VERSION)
                 await rw.commit()
             except BaseException:
@@ -202,3 +236,53 @@ class JobStore:
         "How many readers the pool holds. Tests read this, nothing else."
         async with self._state:
             return len(self._idle)
+
+
+#: What a question may start with, after comments and whitespace are
+#: gone. Everything else -- INSERT, UPDATE, DELETE, DROP, ATTACH, and
+#: the pragmas that write -- is refused before sqlite ever sees it;
+#: the reader's `query_only` stands behind this, not instead of it.
+_READ_STARTS = ("select", "with", "explain", "pragma", "values")
+
+
+def is_read_only_query(sql: str) -> bool:
+    "True when the statement reads. Comments do not hide a write."
+    text = _without_comments(sql).strip().lower()
+    return text.startswith(_READ_STARTS)
+
+
+def _without_comments(sql: str) -> str:
+    """
+    The statement with `--` and `/* */` comments taken out.
+
+    A character loop rather than a pattern, because a pattern cannot
+    tell a comment from a string that looks like one: `'-- x'` is a
+    value, and stripping it would both corrupt the query and teach
+    the gate to misread what follows it.
+    """
+    out = []
+    i, n = 0, len(sql)
+    while i < n:
+        char = sql[i]
+        two = sql[i : i + 2]
+        if two == "--":
+            end = sql.find("\n", i)
+            i = n if end < 0 else end + 1
+        elif two == "/*":
+            end = sql.find("*/", i + 2)
+            i = n if end < 0 else end + 2
+        elif char in ("'", '"', "`"):
+            end = i + 1
+            while end < n:
+                if sql[end] == char:
+                    if end + 1 < n and sql[end + 1] == char:
+                        end += 1
+                    else:
+                        break
+                end += 1
+            out.append(sql[i : end + 1])
+            i = end + 1
+        else:
+            out.append(char)
+            i += 1
+    return "".join(out)
