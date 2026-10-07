@@ -99,6 +99,7 @@ import io
 import os
 import sys
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -122,6 +123,7 @@ from scroll_app import (
 )
 from session import Connection, over_connection
 
+from pymux.commands import handle_command
 from pymux.main import Pymux
 
 #: The client this draws for. A terminal nobody resized, unless the
@@ -169,71 +171,47 @@ class _Connection(Connection):
     graphics = _Graphics()
 
 
-def create_server(panes: int):
+@asynccontextmanager
+async def server(panes: int):
     """
-    A server with one client and that many panes, the client's
-    application, and the loop they were built against.
+    A server with one client and that many panes, and the client's
+    application.
 
     The panes are opened the way a person opens them, alternating the
-    two splits, so the tree is the shape a hand builds.
-
-    **A loop has to exist before a pane does.** Opening one reaches
-    `ptyhost.backends.posix.PosixBackend.__init__`, which builds an
-    `asyncio.Future` and therefore asks for the loop of this thread.
-    Nothing runs it: a turn would let the panes write and the frame
-    after it would differ for a reason this file did not choose.
-    `measure_keystroke.py` says the same thing at more length.
+    two splits, so the tree is the shape a hand builds. The panes run
+    a program that never writes, so no turn of the loop changes what
+    a frame draws.
     """
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
     pymux = Pymux()
     output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS))
-    pipe = create_pipe_input()
-    state = pymux.add_client(
-        output=output,
-        input=pipe.__enter__(),
-        color_depth=ColorDepth.DEPTH_8_BIT,
-        connection=_Connection(),
-    )
+    async with pymux.running():
+        with create_pipe_input() as pipe:
+            state = pymux.add_client(
+                output=output,
+                input=pipe,
+                color_depth=ColorDepth.DEPTH_8_BIT,
+                connection=_Connection(),
+            )
+            with set_app(state.app):
+                # What attaching brings: the bindings, and the window
+                # the profile draws.
+                await pymux.startup()
+                for command in CHROME:
+                    answer = handle_command(pymux, command)
+                    if answer is not None:
+                        await answer
+                answer = handle_command(pymux, "new-window '%s'" % QUIET)
+                if answer is not None:
+                    await answer
 
-    # `Application.create_background_task` reads this and only asks
-    # asyncio for a running loop when it is `None`. `run_async` is what
-    # usually sets it, and nothing runs the application here.
-    state.app.loop = loop
-
-    with set_app(state.app):
-        for command in CHROME:
-            pymux.handle_command(command)
-        pymux.handle_command("new-window '%s'" % QUIET)
-
-        for number in range(1, panes):
-            pymux.handle_command("split-window %s '%s'" % ("-h" if number % 2 else "-v", QUIET))
-
-    return pymux, state, pipe, loop
-
-
-def close_server(pymux, pipe, loop) -> None:
-    """
-    Kill the panes, then take the loop down under whatever it armed.
-
-    A flush timer armed against a loop that never turned prints "Task
-    was destroyed but it is pending" when the loop closes, once for
-    each. So they are cancelled and the loop is turned until they have
-    taken it -- **after the profile**, which is why a turn here costs
-    the measurement nothing.
-    """
-    stop_panes(pymux)
-    pipe.__exit__(None, None, None)
-
-    pending = asyncio.all_tasks(loop)
-    for task in pending:
-        task.cancel()
-    if pending:
-        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-
-    asyncio.set_event_loop(None)
-    loop.close()
+                for number in range(1, panes):
+                    answer = handle_command(pymux, "split-window %s '%s'" % ("-h" if number % 2 else "-v", QUIET))
+                    if answer is not None:
+                        await answer
+            try:
+                yield pymux, state
+            finally:
+                stop_panes(pymux)
 
 
 def create_frame(state):
@@ -662,7 +640,7 @@ async def _animated(command: str, seconds: float, out: Path) -> None:
         pyte.streams.Stream.feed = timing_feed
 
         with set_app(state.app):
-            pymux.create_window(command)
+            await pymux.create_window(command)
         await asyncio.sleep(1.5)
 
         # Every render, timed, whether or not it emitted a frame.
@@ -724,7 +702,7 @@ async def _animated(command: str, seconds: float, out: Path) -> None:
         print("=" * 70)
 
 
-def main() -> int:
+async def main() -> int:
     panes = int(os.environ.get("PYMUX_PROFILE_PANES", "") or 8)
     frames = int(os.environ.get("PYMUX_PROFILE_FRAMES", "") or 200)
     out = Path(os.environ.get("PYMUX_PROFILE_OUT", "") or ".")
@@ -741,11 +719,10 @@ def main() -> int:
     )
 
     if ANIMATED:
-        asyncio.run(_animated(ANIMATED, ANIMATED_SECONDS, out))
+        await _animated(ANIMATED, ANIMATED_SECONDS, out)
 
     for name, phase in phases:
-        pymux, state, pipe, loop = create_server(panes)
-        try:
+        async with server(panes) as (pymux, state):
             with set_app(state.app):
                 # One frame outside the profile, and before the phase
                 # is built. The first frame of a client draws every
@@ -782,11 +759,9 @@ def main() -> int:
             self_time_report(name, profiler)
 
             (out / ("%s.html" % name)).write_text(profiler.output_html())
-        finally:
-            close_server(pymux, pipe, loop)
 
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(asyncio.run(main()))

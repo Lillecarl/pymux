@@ -65,10 +65,10 @@ def create_environment(**values):
                 os.environ[name] = value
 
 
-def create_pane(pymux, state):
+async def create_pane(pymux, state):
     "A window with a pane in it, so a pane can ask for something."
     with set_app(state.app):
-        pymux.create_window(PANE_THAT_STAYS)
+        await pymux.create_window(PANE_THAT_STAYS)
     return pymux.arrangement.get_active_window().panes[0]
 
 
@@ -365,7 +365,7 @@ async def test_openurl_of_pane_opens():
     async with over_connection(read_packet=packets.append) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
-        pane = create_pane(pymux, state)
+        pane = await create_pane(pymux, state)
 
         payload = "OpenURL=:" + base64.b64encode(URL.encode()).decode()
         pymux.forward_osc(pane, "1337", payload)
@@ -379,7 +379,7 @@ async def test_another_subcommand_of_1337_opens_nothing():
     async with over_connection(read_packet=packets.append) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
-        pane = create_pane(pymux, state)
+        pane = await create_pane(pymux, state)
 
         pymux.forward_osc(pane, "1337", "File=name=t.png;inline=1:AAAA")
         await asyncio.sleep(0.3)
@@ -541,7 +541,7 @@ async def test_pane_that_starts_with_shim_finds_opener():
             ' " and the shim directory leads PATH"); time.sleep(30)\''
         ) % (sys.executable,)
         with set_app(state.app):
-            pymux.create_window(program)
+            await pymux.create_window(program)
         pane = pymux.arrangement.get_active_window().panes[0]
 
         def page_text():

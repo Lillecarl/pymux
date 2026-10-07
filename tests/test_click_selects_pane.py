@@ -16,16 +16,18 @@ from prompt_toolkit.layout.screen import Point
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
 from session import create_session
 
+from pymux.commands import handle_command
+
 
 def _click(kind):
     return MouseEvent(position=Point(x=0, y=0), event_type=kind, button=MouseButton.LEFT, modifiers=frozenset())
 
 
-def _two_panes_left_active(pymux, state):
+async def _two_panes_left_active(pymux, state):
     "Two panes side by side, the left one active and focused, and the window that holds them."
     with set_app(state.app):
-        pymux.handle_command("split-window -h")
-        pymux.handle_command("select-pane -L")
+        await run(pymux, state, "split-window -h")
+        await run(pymux, state, "select-pane -L")
         state.sync_focus()
     window = pymux.arrangement.get_active_window()
     left, right = window.panes
@@ -34,9 +36,22 @@ def _two_panes_left_active(pymux, state):
     return window, left, right
 
 
+async def run(pymux, state, command):
+    """
+    Run a command as the person at this client, and wait for it.
+
+    A key binding does not wait, but a test that did not would assert
+    before the window exists. The end state is the same either way.
+    """
+    with set_app(state.app):
+        answer = handle_command(pymux, command)
+        if answer is not None:
+            await answer
+
+
 async def test_a_press_in_an_unfocused_pane_selects_nothing():
     async with create_session() as (pymux, state):
-        window, left, right = _two_panes_left_active(pymux, state)
+        window, left, right = await _two_panes_left_active(pymux, state)
         with set_app(state.app):
             right.terminal.terminal_control.mouse_handler(_click(MouseEventType.MOUSE_DOWN))
         assert window.active_pane is left
@@ -45,7 +60,7 @@ async def test_a_press_in_an_unfocused_pane_selects_nothing():
 
 async def test_a_click_in_an_unfocused_pane_selects_it():
     async with create_session() as (pymux, state):
-        window, left, right = _two_panes_left_active(pymux, state)
+        window, left, right = await _two_panes_left_active(pymux, state)
         with set_app(state.app):
             right.terminal.terminal_control.mouse_handler(_click(MouseEventType.MOUSE_UP))
         assert window.active_pane is right
@@ -55,7 +70,7 @@ async def test_a_click_in_an_unfocused_pane_selects_it():
 async def test_a_click_on_a_pane_in_no_window_selects_nothing():
     "An overlay pane sits in no window, and a gone one neither."
     async with create_session() as (pymux, state):
-        window, left, right = _two_panes_left_active(pymux, state)
+        window, left, right = await _two_panes_left_active(pymux, state)
         with set_app(state.app):
             pymux.arrangement.remove_pane(right)
             # The hook itself, past the focus the layout refuses a

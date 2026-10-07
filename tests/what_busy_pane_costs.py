@@ -53,6 +53,8 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from session import over_connection
 
+from pymux.commands import handle_command
+
 #: The programs that animate, by the name a knob takes. Each one writes
 #: a screenful at its own rate and never stops.
 PROGRAMS = {
@@ -122,12 +124,12 @@ async def what_it_costs(name: str) -> tuple:
         state, _ = await session.attach("only", SIZE)
 
         with set_app(state.app):
-            pymux.create_window(WATCHED_PROGRAM)
+            await pymux.create_window(WATCHED_PROGRAM)
         await asyncio.sleep(0.5)
         watched = looks_at(pymux, state)
 
         with set_app(state.app):
-            pymux.create_window(command)
+            await pymux.create_window(command)
         await asyncio.sleep(1.0)
 
         # Back to the watched window, so nobody looks at the animation.
@@ -162,8 +164,10 @@ async def what_it_costs_watched(name: str, rate: int) -> tuple:
         state, _ = await session.attach("only", SIZE)
 
         with set_app(state.app):
-            pymux.create_window(command)
-            pymux.handle_command("set-window-option frame-rate %d" % rate)
+            await pymux.create_window(command)
+            answer = handle_command(pymux, "set-window-option frame-rate %d" % rate)
+            if answer is not None:
+                await answer
         await asyncio.sleep(1.5)
 
         before = time.process_time()

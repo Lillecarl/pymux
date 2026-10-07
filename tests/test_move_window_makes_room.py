@@ -33,7 +33,7 @@ async def _ready(session, how_many: int = 3):
     """
     state, _ = await session.attach("here", DEFAULT_SIZE)
     for _ in range(how_many - len(session.pymux.arrangement.windows)):
-        session.pymux.create_window(WAITS)
+        await session.pymux.create_window(WAITS)
     return state
 
 

@@ -124,7 +124,7 @@ def where_new_window_goes(
     return where.index + 1
 
 
-def new_window(pymux: Pymux, args: argparse.Namespace) -> None:
+def new_window(pymux: Pymux, args: argparse.Namespace):
     """
     Open a window, next to the one a person is on.
 
@@ -145,19 +145,18 @@ def new_window(pymux: Pymux, args: argparse.Namespace) -> None:
     session part in the target -- `-t work:` -- opens the window in
     that session. Lillecarl/pymux#323.
     """
-    executable = args.executable
-    start_directory = args.start_directory
-    name = args.name
-    dont_select = args.d
-
     session, target = which_session(pymux, args)
     arrangement = session.arrangement
 
     window = arrangement.get_active_window()
-    pymux.create_window(
-        executable,
-        start_directory=start_directory,
-        name=name,
+    return _open(pymux, args, session, target, arrangement, window)
+
+
+async def _open(pymux: Pymux, args: argparse.Namespace, session, target, arrangement, window) -> None:
+    await pymux.create_window(
+        args.executable,
+        start_directory=args.start_directory,
+        name=args.name,
         index=where_new_window_goes(pymux, args, session, target),
         session=session,
     )
@@ -168,7 +167,7 @@ def new_window(pymux: Pymux, args: argparse.Namespace) -> None:
     # the only thing that says which one it is.
     new_window = arrangement.get_active_window()
 
-    if dont_select:
+    if args.d:
         # Don't make the new window active.
         if window is not None:
             arrangement.set_active_window(window)

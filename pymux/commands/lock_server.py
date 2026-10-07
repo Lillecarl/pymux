@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandParser, add_command
 
 
-def lock_server(pymux: Pymux, args: argparse.Namespace) -> None:
+def lock_server(pymux: Pymux, args: argparse.Namespace):
     """
     Lock the server: every session of it, and every client on them.
 
@@ -20,8 +20,12 @@ def lock_server(pymux: Pymux, args: argparse.Namespace) -> None:
     which is what "the server" means with more than one session, and
     what separates this from lock-session. Lillecarl/pymux#324.
     """
+    return _lock_each(pymux)
+
+
+async def _lock_each(pymux: Pymux) -> None:
     for session in list(pymux.sessions):
-        pymux.display_overlay(
+        await pymux.display_overlay(
             command=pymux.lock_command,
             width="100%",
             height="100%",

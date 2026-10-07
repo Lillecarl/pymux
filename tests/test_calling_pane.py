@@ -19,6 +19,7 @@ from types import SimpleNamespace
 from prompt_toolkit.application.current import set_app
 from session import create_session
 
+from pymux.commands import handle_command
 from pymux.commands.common import find_pane
 
 
@@ -49,7 +50,9 @@ async def two_panes():
     """
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("split-window 'sleep 30'")
+            answer = handle_command(pymux, "split-window 'sleep 30'")
+            if answer is not None:
+                await answer
             window = pymux.arrangement.get_active_window()
             assert len(window.panes) == 2
             active = pymux.arrangement.get_active_pane()

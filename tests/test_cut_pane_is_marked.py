@@ -42,7 +42,7 @@ what a person sees.
 from __future__ import annotations
 
 import io
-from contextlib import contextmanager
+from contextlib import asynccontextmanager
 
 import pytest
 from prompt_toolkit.application.current import set_app
@@ -55,6 +55,7 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 from pyte.colors import parse_color
 from session import Connection
 
+from pymux.commands import handle_command
 from pymux.layout import CUT_IS_TINTED, cut_tint
 from pymux.main import Pymux
 from pymux.plan_container import PlanContainer
@@ -66,43 +67,59 @@ COLUMNS = 80
 STRIP = ["set-option pane-border-status on", "set-window-option strip on"]
 
 
-@contextmanager
-def create_client(commands=(), rows=ROWS, columns=COLUMNS):
+@asynccontextmanager
+async def create_client(commands=(), rows=ROWS, columns=COLUMNS):
     pymux = Pymux()
     output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=rows, columns=columns))
-    with create_pipe_input() as pipe:
-        state = pymux.add_client(
-            output=output,
-            input=pipe,
-            color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=Connection(),
-        )
-        try:
-            with set_app(state.app):
-                for command in commands:
-                    pymux.handle_command(command)
+    async with pymux.running():
+        with create_pipe_input() as pipe:
+            state = pymux.add_client(
+                output=output,
+                input=pipe,
+                color_depth=ColorDepth.DEPTH_8_BIT,
+                connection=Connection(),
+            )
+            try:
+                with set_app(state.app):
+                    # What attaching brings: the bindings, and the
+                    # window the drawing below looks at.
+                    await pymux.startup()
+                    for command in commands:
+                        await run(pymux, command)
 
-                def draw():
-                    screen = Screen()
-                    state.app.layout.container.write_to_screen(
-                        screen,
-                        MouseHandlers(),
-                        WritePosition(xpos=0, ypos=0, width=columns, height=rows),
-                        "",
-                        False,
-                        None,
-                    )
-                    screen.draw_all_floats()
-                    state.app.renderer._last_screen = screen
-                    return screen
+                    def draw():
+                        screen = Screen()
+                        state.app.layout.container.write_to_screen(
+                            screen,
+                            MouseHandlers(),
+                            WritePosition(xpos=0, ypos=0, width=columns, height=rows),
+                            "",
+                            False,
+                            None,
+                        )
+                        screen.draw_all_floats()
+                        state.app.renderer._last_screen = screen
+                        return screen
 
-                yield pymux, state, draw
-        finally:
-            for window in list(pymux.arrangement.windows):
-                for pane in list(window.panes):
-                    process = getattr(pane, "process", None)
-                    if process is not None and not process.is_terminated:
-                        process.kill()
+                    yield pymux, state, draw
+            finally:
+                for window in list(pymux.arrangement.windows):
+                    for pane in list(window.panes):
+                        process = getattr(pane, "process", None)
+                        if process is not None and not process.is_terminated:
+                            process.kill()
+
+
+async def run(pymux, command):
+    """
+    Run a command, and wait for what it started.
+
+    A key binding does not wait, but a test that did not would draw
+    before the pane exists. The end state is the same either way.
+    """
+    answer = handle_command(pymux, command)
+    if answer is not None:
+        await answer
 
 
 def panes_of(state) -> PlanContainer:
@@ -129,7 +146,7 @@ def marked(screen, row: int) -> str:
     return "".join("#" if CUT_IS_TINTED in screen.data_buffer[row][x].style else " " for x in range(COLUMNS))
 
 
-def create_wide_column(pymux, state):
+async def create_wide_column(pymux, state):
     """
     Two columns, the second one two thirds of the window, with the
     focus back on the first.
@@ -139,25 +156,25 @@ def create_wide_column(pymux, state):
     goes back to the first column because the view follows the focus:
     on the second one the view scrolls and the first is what is cut.
     """
-    pymux.handle_command("split-window -h")
-    pymux.handle_command("switch-column-width")
-    pymux.handle_command("select-pane -L")
+    await run(pymux, "split-window -h")
+    await run(pymux, "switch-column-width")
+    await run(pymux, "select-pane -L")
     state.sync_focus()
 
 
-def test_nothing_is_marked_when_every_column_fits():
+async def test_nothing_is_marked_when_every_column_fits():
     "Two columns of half a window each, which is the default."
-    with create_client(STRIP) as (pymux, state, draw):
-        pymux.handle_command("split-window -h")
+    async with create_client(STRIP) as (pymux, state, draw):
+        await run(pymux, "split-window -h")
         state.sync_focus()
         screen = draw()
 
         assert marked(screen, ROWS // 2).strip() == ""
 
 
-def test_column_that_runs_off_edge_is_marked():
-    with create_client(STRIP) as (pymux, state, draw):
-        create_wide_column(pymux, state)
+async def test_column_that_runs_off_edge_is_marked():
+    async with create_client(STRIP) as (pymux, state, draw):
+        await create_wide_column(pymux, state)
         screen = draw()
 
         panes = panes_of(state)
@@ -176,7 +193,7 @@ def test_column_that_runs_off_edge_is_marked():
         assert panes.plan.rect_of(left).right <= cut.x
 
 
-def test_tint_sits_before_what_pane_wrote():
+async def test_tint_sits_before_what_pane_wrote():
     """
     Which is what makes a program's own colours survive it.
 
@@ -185,8 +202,8 @@ def test_tint_sits_before_what_pane_wrote():
     the right wins. A cell the program coloured keeps its colour; one
     it left alone takes the tint.
     """
-    with create_client(STRIP) as (pymux, state, draw):
-        create_wide_column(pymux, state)
+    async with create_client(STRIP) as (pymux, state, draw):
+        await create_wide_column(pymux, state)
         screen = draw()
 
         cut = panes_of(state).plan.rect_of(pymux.arrangement.get_active_window().panes[1])
@@ -218,17 +235,17 @@ def _lightness(colour: str) -> int:
     return sum(int(colour[at : at + 2], 16) for at in (1, 3, 5))
 
 
-def test_a_dark_terminal_is_lifted():
+async def test_a_dark_terminal_is_lifted():
     assert _lightness(tinted("#000000")) > _lightness("#000000")
 
 
-def test_a_light_terminal_is_darkened():
+async def test_a_light_terminal_is_darkened():
     "The same step, the other way. A fixed colour can only do one of these."
     assert _lightness(tinted("#ffffff")) < _lightness("#ffffff")
 
 
 @pytest.mark.parametrize("name", ["default", "grey", "base16:gruvbox-dark-hard", "pygments:monokai"])
-def test_every_source_moves_its_own_background(name):
+async def test_every_source_moves_its_own_background(name):
     """
     One number, so a tint is the same mark in every scheme.
 
@@ -241,14 +258,14 @@ def test_every_source_moves_its_own_background(name):
     assert roles["cut"] == tinted(roles["pane"])
 
 
-def test_a_palette_moves_its_own_background_too():
+async def test_a_palette_moves_its_own_background_too():
     "The fifth source: a theme built from sixteen colours a terminal named."
     roles = roles_of_palette(["#101018"] + ["#808080"] * 15)
 
     assert roles["cut"] == tinted(roles["pane"])
 
 
-def test_a_mid_grey_terminal_is_lifted_and_not_holed():
+async def test_a_mid_grey_terminal_is_lifted_and_not_holed():
     """
     The case that says a fixed colour is wrong, and it needs no light
     terminal: a screen on `#404040` under the `default` theme, whose
@@ -259,10 +276,10 @@ def test_a_mid_grey_terminal_is_lifted_and_not_holed():
     assert _lightness(tinted("#404040")) > _lightness("#404040")
 
 
-def test_the_column_wears_the_colour_of_the_terminal():
-    with create_client([*STRIP, PAINT_SCREEN_OFF]) as (pymux, state, draw):
+async def test_the_column_wears_the_colour_of_the_terminal():
+    async with create_client([*STRIP, PAINT_SCREEN_OFF]) as (pymux, state, draw):
         _says(state, "#404040")
-        create_wide_column(pymux, state)
+        await create_wide_column(pymux, state)
         screen = draw()
 
         cut = panes_of(state).plan.rect_of(pymux.arrangement.get_active_window().panes[1])
@@ -274,26 +291,26 @@ def test_the_column_wears_the_colour_of_the_terminal():
         assert CUT_IS_TINTED not in style
 
 
-def test_a_terminal_that_answered_nothing_keeps_the_theme_rule():
+async def test_a_terminal_that_answered_nothing_keeps_the_theme_rule():
     "Which is every client with no connection, and every dumb terminal."
-    with create_client([*STRIP, PAINT_SCREEN_OFF]) as (pymux, state, draw):
-        create_wide_column(pymux, state)
+    async with create_client([*STRIP, PAINT_SCREEN_OFF]) as (pymux, state, draw):
+        await create_wide_column(pymux, state)
 
         assert state.connection.default_colors.background is None
         assert cut_tint(pymux) == CUT_IS_TINTED
 
 
-def test_the_theme_owns_the_background_when_it_paints_the_screen():
+async def test_the_theme_owns_the_background_when_it_paints_the_screen():
     """
     `paint-screen` puts the theme's own colour behind every cell, so
     the theme's `cut` role is picked against the background it is
     really drawn over. Lillecarl/pymux#273.
     """
-    with create_client([*STRIP, PAINT_SCREEN_OFF]) as (pymux, state, draw):
+    async with create_client([*STRIP, PAINT_SCREEN_OFF]) as (pymux, state, draw):
         _says(state, "#404040")
-        create_wide_column(pymux, state)
+        await create_wide_column(pymux, state)
         assert cut_tint(pymux) != CUT_IS_TINTED
 
-        pymux.handle_command("set-option paint-screen on")
+        await run(pymux, "set-option paint-screen on")
 
         assert cut_tint(pymux) == CUT_IS_TINTED

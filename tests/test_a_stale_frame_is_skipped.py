@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 
 from libpymux.protocol import Field, Packet
-from profile_frame import close_server, create_server
+from profile_frame import server
 
 from pymux.server import ServerConnection
 
@@ -29,9 +29,8 @@ class _Pipe:
         self.sent.append(data)
 
 
-def test_a_stale_frame_is_skipped_and_asked_for_again() -> None:
-    pymux, state, pipe, loop = create_server(1)
-    try:
+async def test_a_stale_frame_is_skipped_and_asked_for_again() -> None:
+    async with server(1) as (pymux, state):
         # The renderer draws through the binding on the application.
         assert state.app.should_skip_render == state.should_skip_render
         # Steady state draws.
@@ -43,13 +42,10 @@ def test_a_stale_frame_is_skipped_and_asked_for_again() -> None:
         pymux.client_asked_for_frame(state.app)
         assert not state.should_skip_render()
         assert state.schedule_tick == state.input_tick
-    finally:
-        close_server(pymux, pipe, loop)
 
 
-def test_input_from_the_client_moves_the_tick() -> None:
-    pymux, state, pipe, loop = create_server(1)
-    try:
+async def test_input_from_the_client_moves_the_tick() -> None:
+    async with server(1) as (pymux, state):
         newcomer = _Pipe()
         connection = ServerConnection.__new__(ServerConnection)
         connection._pipeinput = newcomer
@@ -57,5 +53,3 @@ def test_input_from_the_client_moves_the_tick() -> None:
         connection._process(json.dumps({Field.CMD: Packet.IN, Field.DATA: "x"}))
         assert newcomer.sent == ["x"]
         assert state.should_skip_render()
-    finally:
-        close_server(pymux, pipe, loop)

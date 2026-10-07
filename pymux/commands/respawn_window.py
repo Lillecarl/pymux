@@ -28,7 +28,7 @@ def respawn_window(pymux: Pymux, args: argparse.Namespace) -> None:
     if pane is None:
         raise CommandException("no current pane")
 
-    replace_pane_program(pymux, pane, args)
+    return replace_pane_program(pymux, pane, args)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

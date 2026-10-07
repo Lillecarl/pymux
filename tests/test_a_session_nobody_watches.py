@@ -35,32 +35,36 @@ from pymux.session import DEFAULT_SIZE
 
 
 @pytest.fixture
-def pymux():
+async def pymux():
     """
     A server with no window, so each test makes its own session.
 
     It holds one session already: `Pymux.__init__` makes one, so the
-    session each test names is the last of them.
+    session each test names is the last of them. Inside `running()`,
+    which is the scope a pane's program runs in.
     """
     mux = Pymux()
-    try:
-        yield mux
-    finally:
-        for session in list(mux.sessions):
-            for window in list(session.arrangement.windows):
-                for pane in list(window.panes):
-                    process = getattr(pane, "process", None)
-                    if process is not None and not process.is_terminated:
-                        process.kill()
+    async with mux.running():
+        try:
+            yield mux
+        finally:
+            for session in list(mux.sessions):
+                for window in list(session.arrangement.windows):
+                    for pane in list(window.panes):
+                        process = getattr(pane, "process", None)
+                        if process is not None and not process.is_terminated:
+                            process.kill()
 
 
 ENDS_AT_ONCE = "%s -c pass" % (sys.executable,)
 
 
-def new_session(mux, *arguments) -> None:
+async def new_session(mux, *arguments) -> None:
     mux.command_output = []
     try:
-        call_command_handler("new-session", mux, ["-d", *arguments, ENDS_AT_ONCE])
+        answer = call_command_handler("new-session", mux, ["-d", *arguments, ENDS_AT_ONCE])
+        if answer is not None:
+            await answer
     finally:
         mux.command_output = None
 
@@ -75,20 +79,20 @@ def size_of(pane):
     return (pane.process.sx, pane.process.sy)
 
 
-def test_a_session_nobody_named_a_size_for_is_the_standing_answer(pymux):
-    new_session(pymux)
+async def test_a_session_nobody_named_a_size_for_is_the_standing_answer(pymux):
+    await new_session(pymux)
     session, pane = one_pane(pymux)
 
     assert session.default_size == DEFAULT_SIZE
     assert size_of(pane) == (DEFAULT_SIZE.columns, DEFAULT_SIZE.rows)
 
 
-def test_the_size_reaches_the_program_and_not_only_the_session(pymux):
+async def test_the_size_reaches_the_program_and_not_only_the_session(pymux):
     """
     The whole point. The size used to be written after the pane was
     made, so the session knew one number and the pty another.
     """
-    new_session(pymux, "-x", "200", "-y", "50")
+    await new_session(pymux, "-x", "200", "-y", "50")
     session, pane = one_pane(pymux)
 
     assert session.default_size.columns == 200
@@ -96,50 +100,50 @@ def test_the_size_reaches_the_program_and_not_only_the_session(pymux):
     assert size_of(pane) == (200, 50)
 
 
-def test_the_screen_is_sized_and_not_only_the_pty(pymux):
+async def test_the_screen_is_sized_and_not_only_the_pty(pymux):
     """
     `TerminalControl.set_size` tells both. Sizing the pty alone left the
     screen at nought columns, and every character wrapped onto a row of
     its own. Lillecarl/pymux#321.
     """
-    new_session(pymux, "-x", "120", "-y", "40")
+    await new_session(pymux, "-x", "120", "-y", "40")
     _session, pane = one_pane(pymux)
 
     assert pane.screen.columns == 120
     assert pane.screen.lines == 40
 
 
-def test_one_axis_alone_keeps_the_other(pymux):
-    new_session(pymux, "-x", "200")
+async def test_one_axis_alone_keeps_the_other(pymux):
+    await new_session(pymux, "-x", "200")
     session, _pane = one_pane(pymux)
 
     assert session.default_size.columns == 200
     assert session.default_size.rows == DEFAULT_SIZE.rows
 
 
-def test_the_plane_of_a_window_nobody_watches_is_that_size(pymux):
+async def test_the_plane_of_a_window_nobody_watches_is_that_size(pymux):
     "So a layout agrees with the pty, rather than holding its own number."
-    new_session(pymux, "-x", "200", "-y", "50")
+    await new_session(pymux, "-x", "200", "-y", "50")
     session, _pane = one_pane(pymux)
     window = session.arrangement.windows[0]
 
     assert pymux.plane_size(window) == session.default_size
 
 
-def test_a_pane_split_off_later_is_the_same_size(pymux):
+async def test_a_pane_split_off_later_is_the_same_size(pymux):
     "The session says it, so a second pane reads the same answer."
-    new_session(pymux, "-x", "200", "-y", "50")
+    await new_session(pymux, "-x", "200", "-y", "50")
     session, _pane = one_pane(pymux)
     window = session.arrangement.windows[0]
 
-    pymux.add_process(ENDS_AT_ONCE, window=window)
+    await pymux.add_process(ENDS_AT_ONCE, window=window)
 
     assert size_of(window.panes[-1]) == (200, 50)
 
 
-def test_each_session_has_its_own(pymux):
-    new_session(pymux, "-s", "wide", "-x", "200", "-y", "50")
-    new_session(pymux, "-s", "narrow")
+async def test_each_session_has_its_own(pymux):
+    await new_session(pymux, "-s", "wide", "-x", "200", "-y", "50")
+    await new_session(pymux, "-s", "narrow")
 
     sizes = {session.name: session.default_size for session in pymux.sessions}
     assert sizes["wide"].columns == 200
@@ -151,7 +155,7 @@ def test_each_session_has_its_own(pymux):
 
 
 @pytest.mark.parametrize("given", ["nope", "12x40", ""])
-def test_a_size_that_is_not_a_number_is_an_error(pymux, given):
+async def test_a_size_that_is_not_a_number_is_an_error(pymux, given):
     errors = []
     pymux.add_command_error = errors.append
     pymux.show_message = lambda message: None
@@ -162,7 +166,7 @@ def test_a_size_that_is_not_a_number_is_an_error(pymux, given):
 
 
 @pytest.mark.parametrize("given", ["0", "-1"])
-def test_a_size_below_one_cell_is_an_error(pymux, given):
+async def test_a_size_below_one_cell_is_an_error(pymux, given):
     errors = []
     pymux.add_command_error = errors.append
     pymux.show_message = lambda message: None
@@ -172,7 +176,7 @@ def test_a_size_below_one_cell_is_an_error(pymux, given):
     assert errors == ["pymux: A window is at least one cell."]
 
 
-def test_a_size_that_cannot_be_read_leaves_no_session_behind(pymux):
+async def test_a_size_that_cannot_be_read_leaves_no_session_behind(pymux):
     """
     The numbers are read before anything is made, so a caller that
     mistyped one has no half-made session to clean up.
@@ -197,20 +201,21 @@ def test_a_size_that_cannot_be_read_leaves_no_session_behind(pymux):
 # `pymux -S <path> new-session -d` is how a server comes to exist.
 
 
-def test_the_startup_window_is_the_size_the_client_asked_for():
+async def test_the_startup_window_is_the_size_the_client_asked_for():
     "The window `startup` makes, before any client has ever rendered."
     mux = Pymux(size_with_no_client=Size(rows=50, columns=200))
-    try:
-        mux.startup()
-        _session, pane = one_pane(mux)
-        assert size_of(pane) == (200, 50)
-    finally:
-        for session in list(mux.sessions):
-            for window in list(session.arrangement.windows):
-                for pane in list(window.panes):
-                    process = getattr(pane, "process", None)
-                    if process is not None and not process.is_terminated:
-                        process.kill()
+    async with mux.running():
+        try:
+            await mux.startup()
+            _session, pane = one_pane(mux)
+            assert size_of(pane) == (200, 50)
+        finally:
+            for session in list(mux.sessions):
+                for window in list(session.arrangement.windows):
+                    for pane in list(window.panes):
+                        process = getattr(pane, "process", None)
+                        if process is not None and not process.is_terminated:
+                            process.kill()
 
 
 @pytest.mark.parametrize(
@@ -249,13 +254,13 @@ def test_a_dash_reads_the_terminal_of_whoever_typed_it(monkeypatch):
     assert _axis_of({"y": "-"}, "y", 24) == 45
 
 
-def test_a_dash_with_no_client_watching_is_the_standing_answer(pymux):
+async def test_a_dash_with_no_client_watching_is_the_standing_answer(pymux):
     """
     tmux reads "-" as the size of the client that asked, and answers 80
     or 24 when none did. A command over the socket has no client that
     draws.
     """
-    new_session(pymux, "-x", "-", "-y", "-")
+    await new_session(pymux, "-x", "-", "-y", "-")
     session, _pane = one_pane(pymux)
 
     assert session.default_size == DEFAULT_SIZE
@@ -290,22 +295,22 @@ def named(window) -> list:
     return ["-t", "@%d" % (window.window_id,)]
 
 
-def test_a_window_of_a_detached_session_can_be_resized(pymux):
-    new_session(pymux)
+async def test_a_window_of_a_detached_session_can_be_resized(pymux):
+    await new_session(pymux)
     window = window_of(pymux)
 
     assert resize_window(pymux, *named(window), "-x", "200", "-y", "50") == []
     assert pymux.plane_size(window) == Size(rows=50, columns=200)
 
 
-def test_the_new_size_reaches_the_program(pymux):
+async def test_the_new_size_reaches_the_program(pymux):
     """
     **The whole point.** A frame is what tells a pane its size, and a
     window nobody watches gets no frame: the plane answered the new
     number and the pty kept the old one, so the program wrapped its
     output at eighty columns whatever anybody asked for.
     """
-    new_session(pymux)
+    await new_session(pymux)
     window = window_of(pymux)
     pane = window.panes[0]
     assert size_of(pane) == (DEFAULT_SIZE.columns, DEFAULT_SIZE.rows)
@@ -318,11 +323,11 @@ def test_the_new_size_reaches_the_program(pymux):
     assert (pane.screen.columns, pane.screen.lines) == (200, 49)
 
 
-def test_every_pane_of_the_window_hears_it(pymux):
+async def test_every_pane_of_the_window_hears_it(pymux):
     "Two panes divide the new plane between them, and both are told."
-    new_session(pymux)
+    await new_session(pymux)
     window = window_of(pymux)
-    pymux.add_process(ENDS_AT_ONCE, window=window)
+    await pymux.add_process(ENDS_AT_ONCE, window=window)
 
     resize_window(pymux, *named(window), "-x", "200", "-y", "50")
 
@@ -330,14 +335,14 @@ def test_every_pane_of_the_window_hears_it(pymux):
     assert widths == {200}, widths
 
 
-def test_a_target_nothing_holds_says_so(pymux):
+async def test_a_target_nothing_holds_says_so(pymux):
     "A silent no-op is what this command used to be. Lillecarl/pymux#458."
-    new_session(pymux)
+    await new_session(pymux)
 
     assert resize_window(pymux, "-t", "@9999", "-x", "200") == ["pymux: can't find window: @9999"]
 
 
-def test_the_titlebar_row_comes_out_of_the_size_that_was_named(pymux):
+async def test_the_titlebar_row_comes_out_of_the_size_that_was_named(pymux):
     """
     `-y 50` is the window's fifty rows, and the titlebar of a pane
     draws in one of them, so the program gets forty-nine. That is what
@@ -348,7 +353,7 @@ def test_the_titlebar_row_comes_out_of_the_size_that_was_named(pymux):
     client watches has no titlebar on any screen, so the plan keeps a
     row that stays empty. Lillecarl/pymux#474.
     """
-    new_session(pymux)
+    await new_session(pymux)
     window = window_of(pymux)
 
     resize_window(pymux, *named(window), "-x", "200", "-y", "50")
@@ -357,9 +362,9 @@ def test_the_titlebar_row_comes_out_of_the_size_that_was_named(pymux):
     assert size_of(window.panes[0]) == (200, 49)
 
 
-def test_a_nudge_counts_from_the_size_that_window_has(pymux):
+async def test_a_nudge_counts_from_the_size_that_window_has(pymux):
     "Not from the active window's, which is the target's whole purpose."
-    new_session(pymux, "-x", "100", "-y", "30")
+    await new_session(pymux, "-x", "100", "-y", "30")
     window = window_of(pymux)
 
     resize_window(pymux, *named(window), "-R", "10", "-D", "5")

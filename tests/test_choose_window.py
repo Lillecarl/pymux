@@ -34,6 +34,8 @@ from prompt_toolkit.mouse_events import MouseEventType
 from pyte.streams import Stream
 from session import create_session
 
+from pymux.commands import handle_command
+
 #: prompt_toolkit keeps the keys it can name as `Keys` members and
 #: the printable ones as themselves.
 _KEYS = {
@@ -105,6 +107,19 @@ def _bar_float(state):
 # Where it draws.
 
 
+async def run(pymux, state, command):
+    """
+    Run a command as the person at this client, and wait for it.
+
+    A key binding does not wait, but a test that did not would assert
+    before the window exists. The end state is the same either way.
+    """
+    with set_app(state.app):
+        answer = handle_command(pymux, command)
+        if answer is not None:
+            await answer
+
+
 async def test_the_bar_is_at_the_very_top():
     async with create_session() as (pymux, state):
         one = _bar_float(state)
@@ -116,7 +131,7 @@ async def test_the_bar_is_at_the_very_top():
 
         with set_app(state.app):
             assert not one.content.filter()
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "choose-window")
             assert one.content.filter()
 
 
@@ -124,9 +139,9 @@ async def test_the_entries_flow_across_the_bar():
     "One line while they fit, and no row of its own for each."
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("new-window")
-            pymux.handle_command("new-window")
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "choose-window")
 
         assert len(entries(state)) == len(pymux.arrangement.windows)
         assert "\n" not in bar_text(state)
@@ -136,9 +151,9 @@ async def test_the_entries_wrap_when_the_line_is_full():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             for number in range(8):
-                pymux.handle_command("new-window")
-                pymux.handle_command("rename-window a-long-window-name-%i" % number)
-            pymux.handle_command("choose-window")
+                await run(pymux, state, "new-window")
+                await run(pymux, state, "rename-window a-long-window-name-%i" % number)
+            await run(pymux, state, "choose-window")
 
             width = state.layout_manager._bar_width()
             lines = state.layout_manager.chooser_lines(width)
@@ -156,7 +171,7 @@ async def test_the_entries_wrap_when_the_line_is_full():
 async def test_the_bar_takes_the_rows_its_entries_need():
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "choose-window")
             rows = state.layout_manager._bar_rows.height()
 
         # One window, so one line. The search line is under it.
@@ -171,8 +186,8 @@ async def test_moving_the_point_switches_this_client():
     "The whole of the preview: a person reads the window itself."
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("new-window")
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "choose-window")
 
         first, second = pymux.arrangement.windows[-2:]
         assert here(pymux, state) is second
@@ -191,8 +206,8 @@ async def test_moving_past_an_end_rolls_over():
     """
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("new-window")
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "choose-window")
 
         last = len(pymux.arrangement.windows) - 1
         assert state.choose_window_index == last
@@ -214,9 +229,9 @@ async def test_j_and_k_move_a_line_and_keep_the_place_along_it():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             for number in range(8):
-                pymux.handle_command("new-window")
-                pymux.handle_command("rename-window a-long-window-name-%i" % number)
-            pymux.handle_command("choose-window")
+                await run(pymux, state, "new-window")
+                await run(pymux, state, "rename-window a-long-window-name-%i" % number)
+            await run(pymux, state, "choose-window")
             lines = state.layout_manager.chooser_lines(state.layout_manager._bar_width())
 
             # Onto the second entry of the first line, then down.
@@ -232,8 +247,8 @@ async def test_j_and_k_move_a_line_and_keep_the_place_along_it():
 async def test_escape_goes_back_to_the_window_it_started_on():
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("new-window")
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "choose-window")
 
         started_on = here(pymux, state)
         fire(state, "h")
@@ -248,8 +263,8 @@ async def test_escape_goes_back_to_the_window_it_started_on():
 async def test_q_goes_back_as_well():
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("new-window")
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "choose-window")
 
         started_on = here(pymux, state)
         fire(state, "h")
@@ -262,8 +277,8 @@ async def test_q_goes_back_as_well():
 async def test_enter_keeps_the_window_the_point_is_on():
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("new-window")
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "choose-window")
 
         fire(state, "h")
         chosen = here(pymux, state)
@@ -276,8 +291,8 @@ async def test_enter_keeps_the_window_the_point_is_on():
 async def test_a_star_marks_the_window_escape_goes_back_to():
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("new-window")
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "choose-window")
 
         marked = [label for label in entries(state) if label.endswith("*")]
         assert len(marked) == 1
@@ -295,10 +310,10 @@ async def test_a_star_marks_the_window_escape_goes_back_to():
 async def test_search_narrows_and_the_client_follows():
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("new-window")
-            pymux.handle_command("rename-window needle")
-            pymux.handle_command("new-window")
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "rename-window needle")
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "choose-window")
 
             state.choose_window_filter.insert_text("needle")
 
@@ -311,10 +326,10 @@ async def test_search_narrows_and_the_client_follows():
 async def test_enter_from_search_takes_the_first_match():
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("new-window")
-            pymux.handle_command("rename-window needle")
-            pymux.handle_command("new-window")
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "rename-window needle")
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "choose-window")
 
             state.choose_window_filter.insert_text("needle")
 
@@ -327,7 +342,7 @@ async def test_enter_from_search_takes_the_first_match():
 async def test_search_that_matches_nothing_says_so():
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "choose-window")
             state.choose_window_filter.insert_text("no window is numbered 99")
 
         assert "No window matches." in bar_text(state)
@@ -336,8 +351,8 @@ async def test_search_that_matches_nothing_says_so():
 async def test_escape_in_the_search_keeps_the_chooser():
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("new-window")
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "choose-window")
 
         # The search has to have the focus for Escape to mean "leave
         # the search"; `/` is what gives it that.
@@ -413,7 +428,7 @@ async def test_the_keyboard_stays_with_the_chooser_after_a_key():
     """
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "choose-window")
 
         type_bytes(state, "/")
 
@@ -425,7 +440,7 @@ async def test_the_keyboard_stays_with_the_chooser_after_a_key():
 async def test_slash_moves_the_focus_to_the_search():
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "choose-window")
 
         type_bytes(state, "/")
 
@@ -439,10 +454,10 @@ async def test_typed_keys_reach_the_search_and_narrow_the_list():
     "The whole road: prefix w, slash, letters, a narrowed bar."
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("new-window")
-            pymux.handle_command("rename-window needle")
-            pymux.handle_command("new-window")
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "rename-window needle")
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "choose-window")
 
         type_bytes(state, "/")
         type_bytes(state, "needle")
@@ -458,8 +473,8 @@ async def test_the_search_line_shows_what_was_typed():
     "What the picture looked for and did not find."
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("rename-window needle")
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "rename-window needle")
+            await run(pymux, state, "choose-window")
 
         type_bytes(state, "/")
         type_bytes(state, "need")
@@ -471,8 +486,8 @@ async def test_walking_the_entries_from_a_key_press():
     "What `fire` asserts, down the road a keyboard takes."
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("new-window")
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "choose-window")
 
         first, second = pymux.arrangement.windows[-2:]
         assert here(pymux, state) is second
@@ -487,8 +502,8 @@ async def test_walking_the_entries_from_a_key_press():
 async def test_enter_from_a_key_press_keeps_the_window():
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("new-window")
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "choose-window")
 
         first = pymux.arrangement.windows[-2]
         type_bytes(state, "h")
@@ -507,8 +522,8 @@ async def test_escape_from_a_key_press_goes_back():
     """
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("new-window")
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "choose-window")
 
         started_on = here(pymux, state)
         type_bytes(state, "h")
@@ -524,9 +539,9 @@ async def test_escape_in_the_search_from_a_key_press_keeps_the_chooser():
     "The other of the two eager Escapes."
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("new-window")
-            pymux.handle_command("rename-window needle")
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "rename-window needle")
+            await run(pymux, state, "choose-window")
 
         type_bytes(state, "/")
         type_bytes(state, "need")
@@ -555,8 +570,8 @@ async def test_prefix_w_binding_opens_it():
 async def test_click_on_an_entry_takes_its_window():
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("new-window")
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "choose-window")
 
         tokens = [token for token in state.layout_manager._choose_window_tokens() if len(token) == 3]
         handler = tokens[0][2]
@@ -573,8 +588,8 @@ async def test_click_on_an_entry_takes_its_window():
 async def test_template_runs_on_chosen_window_and_leaves_the_client():
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("new-window")
-            pymux.handle_command("choose-window \"kill-window -t '%%'\"")
+            await run(pymux, state, "new-window")
+            await run(pymux, state, "choose-window \"kill-window -t '%%'\"")
 
         started_on = here(pymux, state)
         fire(state, "h")
@@ -621,8 +636,8 @@ async def test_the_window_draws_under_the_bar():
     """
     async with create_session() as (pymux, state):
         with set_app(state.app):
-            pymux.handle_command("rename-window needle")
-            pymux.handle_command("choose-window")
+            await run(pymux, state, "rename-window needle")
+            await run(pymux, state, "choose-window")
 
         window = here(pymux, state)
 

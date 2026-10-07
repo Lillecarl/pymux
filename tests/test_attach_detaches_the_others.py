@@ -150,7 +150,7 @@ async def test_it_reaches_this_session_and_no_other():
         # A window of its own, because a client draws a status line and
         # a session with no window has nothing to put in it.
         elsewhere = pymux.create_session()
-        pymux.create_window(WAITS, session=elsewhere)
+        await pymux.create_window(WAITS, session=elsewhere)
         pymux.attach_client_to(two.client_state, elsewhere)
 
         was_on = {one: one.client_state.session, two: two.client_state.session}
@@ -172,7 +172,7 @@ async def test_it_reaches_this_session_and_no_other():
 async def _a_session_with_a_window(pymux: Pymux, name: str):
     "A session a client can sit on. A status line needs a window."
     session = pymux.create_session(name)
-    pymux.create_window(WAITS, session=session)
+    await pymux.create_window(WAITS, session=session)
     return session
 
 

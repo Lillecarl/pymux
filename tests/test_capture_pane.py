@@ -24,18 +24,19 @@ LINES = 5
 
 
 @pytest.fixture
-def pymux():
+async def pymux():
     "A server with one window, whose program ends at once."
     mux = Pymux()
-    mux.create_window("%s -c pass" % (sys.executable,))
-    try:
-        yield mux
-    finally:
-        for window in list(mux.arrangement.windows):
-            for pane in list(window.panes):
-                process = getattr(pane, "process", None)
-                if process is not None and not process.is_terminated:
-                    process.kill()
+    async with mux.running():
+        await mux.create_window("%s -c pass" % (sys.executable,))
+        try:
+            yield mux
+        finally:
+            for window in list(mux.arrangement.windows):
+                for pane in list(window.panes):
+                    process = getattr(pane, "process", None)
+                    if process is not None and not process.is_terminated:
+                        process.kill()
 
 
 def create_pane(mux, data: str):
@@ -71,7 +72,7 @@ def rows_of(text: str) -> list:
     return text.split("\n")
 
 
-def test_capture_of_rows_holds_cut(pymux):
+async def test_capture_of_rows_holds_cut(pymux):
     "And the rows below the line are the rest of the pane. #476."
     create_pane(pymux, LONG)
     assert rows_of(capture(pymux)) == [
@@ -83,30 +84,30 @@ def test_capture_of_rows_holds_cut(pymux):
     ]
 
 
-def test_capture_of_lines_joins_cut(pymux):
+async def test_capture_of_lines_joins_cut(pymux):
     create_pane(pymux, LONG)
     joined = rows_of(capture(pymux, "-J"))
     assert joined[0] == LONG
     assert set(joined[1:]) == {""}
 
 
-def test_rows_and_lines_agree_on_line_that_fits(pymux):
+async def test_rows_and_lines_agree_on_line_that_fits(pymux):
     "Nothing wrapped, so joining changes nothing."
     create_pane(pymux, "one\r\ntwo")
     assert capture(pymux) == capture(pymux, "-J") == "one\ntwo\n\n\n"
 
 
-def test_line_zero_of_rows_is_first_row_of_screen(pymux):
+async def test_line_zero_of_rows_is_first_row_of_screen(pymux):
     create_pane(pymux, "".join("line %d\r\n" % number for number in range(9)))
     assert capture(pymux, "-S", "0", "-E", "0") == "line 5"
 
 
-def test_negative_line_reaches_into_history(pymux):
+async def test_negative_line_reaches_into_history(pymux):
     create_pane(pymux, "".join("line %d\r\n" % number for number in range(9)))
     assert capture(pymux, "-S", "-2", "-E", "-1") == "line 3\nline 4"
 
 
-def test_line_that_wrap_carried_onto_screen_is_whole(pymux):
+async def test_line_that_wrap_carried_onto_screen_is_whole(pymux):
     """
     The long line starts above the first visible row and ends below
     it. Asking for the screen gives the whole line, because the line
@@ -138,19 +139,19 @@ def test_line_that_wrap_carried_onto_screen_is_whole(pymux):
 SCROLLED = "".join("line %d\r\n" % number for number in range(9))
 
 
-def test_no_range_is_the_visible_pane(pymux):
+async def test_no_range_is_the_visible_pane(pymux):
     create_pane(pymux, SCROLLED)
     assert capture(pymux).splitlines() == ["line 5", "line 6", "line 7", "line 8"]
 
 
-def test_a_start_of_dash_reaches_the_history(pymux):
+async def test_a_start_of_dash_reaches_the_history(pymux):
     create_pane(pymux, SCROLLED)
     lines = capture(pymux, "-S", "-").splitlines()
     assert lines[0] == "line 0"
     assert lines[-1] == "line 8"
 
 
-def test_no_range_is_the_visible_pane_with_joined_lines(pymux):
+async def test_no_range_is_the_visible_pane_with_joined_lines(pymux):
     "`-J` numbers lines and not rows, and the default is the same idea."
     create_pane(pymux, SCROLLED)
     assert capture(pymux, "-J").splitlines() == [
@@ -161,12 +162,12 @@ def test_no_range_is_the_visible_pane_with_joined_lines(pymux):
     ]
 
 
-def test_a_start_of_dash_reaches_the_history_with_joined_lines(pymux):
+async def test_a_start_of_dash_reaches_the_history_with_joined_lines(pymux):
     create_pane(pymux, SCROLLED)
     assert capture(pymux, "-J", "-S", "-").splitlines()[0] == "line 0"
 
 
-def test_a_wrapped_line_of_the_history_is_not_in_the_default(pymux):
+async def test_a_wrapped_line_of_the_history_is_not_in_the_default(pymux):
     """
     The pane is what a caller asked for, so a row above it stays out
     however long the line on it was.
@@ -186,33 +187,33 @@ def test_a_wrapped_line_of_the_history_is_not_in_the_default(pymux):
 # (`cmd-capture-pane.c:311-325, 349`). Lillecarl/pymux#476.
 
 
-def test_a_capture_is_as_tall_as_the_pane(pymux):
+async def test_a_capture_is_as_tall_as_the_pane(pymux):
     "A fresh pane answered one line, where tmux answers twenty-four."
     create_pane(pymux, "one")
 
     assert rows_of(capture(pymux)) == ["one", "", "", "", ""]
 
 
-def test_a_pane_nothing_wrote_on_is_still_that_tall(pymux):
+async def test_a_pane_nothing_wrote_on_is_still_that_tall(pymux):
     create_pane(pymux, "")
 
     assert rows_of(capture(pymux)) == [""] * LINES
 
 
-def test_a_row_below_the_text_is_a_line_of_its_own(pymux):
+async def test_a_row_below_the_text_is_a_line_of_its_own(pymux):
     "And the row the cursor stands on is one of them."
     create_pane(pymux, "one\r\ntwo")
 
     assert rows_of(capture(pymux)) == ["one", "two", "", "", ""]
 
 
-def test_joined_lines_are_as_tall_as_the_pane_too(pymux):
+async def test_joined_lines_are_as_tall_as_the_pane_too(pymux):
     create_pane(pymux, "one")
 
     assert rows_of(capture(pymux, "-J")) == ["one", "", "", "", ""]
 
 
-def test_a_range_beyond_the_pane_answers_no_more_than_the_pane(pymux):
+async def test_a_range_beyond_the_pane_answers_no_more_than_the_pane(pymux):
     """
     A row outside both the buffer and the screen is nothing at all, so
     a big `-E` may not answer with a hundred thousand blank lines.
@@ -222,7 +223,7 @@ def test_a_range_beyond_the_pane_answers_no_more_than_the_pane(pymux):
     assert len(rows_of(capture(pymux, "-E", "100000"))) == LINES
 
 
-def test_the_two_spellings_answer_the_same_rows(pymux):
+async def test_the_two_spellings_answer_the_same_rows(pymux):
     "The HTML path spanned the screen first; now they share the span."
     create_pane(pymux, SCROLLED)
     printed = []
@@ -234,7 +235,7 @@ def test_the_two_spellings_answer_the_same_rows(pymux):
         assert line in drawn
 
 
-def test_line_number_that_is_not_number_is_error(pymux):
+async def test_line_number_that_is_not_number_is_error(pymux):
     create_pane(pymux, "one")
     errors = []
     pymux.add_command_error = errors.append

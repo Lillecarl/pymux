@@ -96,6 +96,19 @@ def a_server_in_test_mode(monkeypatch):
     monkeypatch.setattr(Pymux, "__init__", __init__)
 
 
+@pytest.fixture
+def anyio_backend():
+    """
+    asyncio, and nothing else.
+
+    anyio runs each coroutine test on every backend the `anyio_backend`
+    fixture names, which is a second dimension on every test id. This
+    suite never ran on trio -- ptyhost speaks asyncio underneath -- so
+    the dimension carried no information, only brackets.
+    """
+    return "asyncio"
+
+
 @pytest.fixture(autouse=True)
 def a_loop_for_this_test():
     """

@@ -14,6 +14,7 @@ from __future__ import annotations
 from prompt_toolkit.application.current import set_app
 from session import create_session
 
+from pymux.commands import handle_command
 from pymux.main import Pymux
 from pymux.notifications import NotificationCenter
 
@@ -91,6 +92,19 @@ def test_osc99_is_collected_for_the_hub():
     )
 
 
+async def run(pymux, state, command):
+    """
+    Run a command as the person at this client, and wait for it.
+
+    A key binding does not wait, but a test that did not would assert
+    before the window exists. The end state is the same either way.
+    """
+    with set_app(state.app):
+        answer = handle_command(pymux, command)
+        if answer is not None:
+            await answer
+
+
 async def test_notify_records_title_body_and_pane():
     async with create_session() as (pymux, state):
         with set_app(state.app):
@@ -158,10 +172,10 @@ async def test_enter_from_hub_jumps_to_the_pane():
             first = pymux.current_session.arrangement.get_active_window()
             assert first is not None and first.active_pane is not None
             pane_id = first.active_pane.pane_id
-            pymux.handle_command("notify Build Ready")
-            pymux.handle_command("new-window")
+            await run(pymux, state, "notify Build Ready")
+            await run(pymux, state, "new-window")
             assert pymux.current_session.arrangement.get_active_window() is not first
-            pymux.handle_command("choose-notifications")
+            await run(pymux, state, "choose-notifications")
 
         state.layout_manager.choose_pointed_notification()
 

@@ -54,7 +54,7 @@ def _size_with_no_client(pymux: Pymux, args: argparse.Namespace) -> Size:
     )
 
 
-def new_session(pymux: Pymux, args: argparse.Namespace) -> None:
+def new_session(pymux: Pymux, args: argparse.Namespace):
     """
     Create a session on this server.
 
@@ -88,7 +88,11 @@ def new_session(pymux: Pymux, args: argparse.Namespace) -> None:
 
     session = pymux.create_session(name=name)
     session.default_size = size
-    pymux.create_window(
+    return _open(pymux, args, session)
+
+
+async def _open(pymux: Pymux, args: argparse.Namespace, session) -> None:
+    await pymux.create_window(
         command=args.command,
         start_directory=args.start_directory,
         name=args.window_name,

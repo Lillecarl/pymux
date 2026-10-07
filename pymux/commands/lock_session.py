@@ -11,7 +11,7 @@ from pymux.commands import CommandParser, add_command
 from pymux.commands.lock import lock
 
 
-def lock_session(pymux: Pymux, args: argparse.Namespace) -> None:
+def lock_session(pymux: Pymux, args: argparse.Namespace):
     """
     Lock the session, and take the keyboard until it is done.
 
@@ -21,7 +21,7 @@ def lock_session(pymux: Pymux, args: argparse.Namespace) -> None:
     this locks every client of this session and no other.
     Lillecarl/pymux#324.
     """
-    lock(pymux, args)
+    return lock(pymux, args)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

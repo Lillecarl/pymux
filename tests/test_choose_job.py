@@ -14,7 +14,7 @@ from __future__ import annotations
 import anyio
 import pytest
 from prompt_toolkit.application.current import set_app
-from session import create_session
+from session import create_session, once
 
 from pymux.commands import call_command_handler, handle_command
 from pymux.jobs import JobFeed
@@ -81,6 +81,13 @@ async def test_enter_shows_the_job_in_the_overlay(pymux_state):
     with set_app(state.app):
         state.layout_manager.choose_pointed_job()
 
+    # The key handler hands the work to the server's task group, so
+    # the overlay arrives a turn later.
+    await once(
+        lambda: pymux.current_session.overlay_pane is not None,
+        5.0,
+        "the overlay the key opened never arrived",
+    )
     assert not state.choose_job
     overlay = pymux.current_session.overlay_pane
     assert overlay is not None
@@ -96,6 +103,11 @@ async def test_closing_the_overlay_leaves_the_job_running(pymux_state):
 
     with set_app(state.app):
         state.layout_manager.choose_pointed_job()
+    await once(
+        lambda: pymux.current_session.overlay_pane is not None,
+        5.0,
+        "the overlay the key opened never arrived",
+    )
     overlay = pymux.current_session.overlay_pane
     assert overlay is not None and not overlay.process.is_terminated
 
@@ -117,6 +129,11 @@ async def test_o_opens_the_job_as_a_pane(pymux_state):
     with set_app(state.app):
         state.layout_manager.open_pointed_job_in_pane()
 
+    await once(
+        lambda: len([window for window in _windows(pymux) if window not in before]) == 1,
+        5.0,
+        "the window the key opened never arrived",
+    )
     assert not state.choose_job
     opened = [window for window in _windows(pymux) if window not in before]
     assert len(opened) == 1
@@ -135,6 +152,11 @@ async def test_t_runs_the_command_again(pymux_state):
     with set_app(state.app):
         state.layout_manager.take_over_pointed_job()
 
+    await once(
+        lambda: len([window for window in _windows(pymux) if window not in before]) == 1,
+        5.0,
+        "the window the key opened never arrived",
+    )
     assert not state.choose_job
     opened = [window for window in _windows(pymux) if window not in before]
     assert len(opened) == 1

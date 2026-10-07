@@ -255,7 +255,7 @@ async def live_servers(socket_path: str, **server_options):
     # `running()`. A server that binds and does not serve takes no
     # client at all. Lillecarl/pymux#87.
     async with pymux.running():
-        pymux.create_window(PANE_COMMAND)
+        await pymux.create_window(PANE_COMMAND)
         await asyncio.sleep(0.5)
 
         server, port, client_key = await create_ssh_server(where, socket_path, **server_options)

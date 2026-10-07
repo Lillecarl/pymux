@@ -13,6 +13,7 @@ gap until the next close. Lillecarl/pymux#342.
 from __future__ import annotations
 
 import sys
+from contextlib import asynccontextmanager
 
 from prompt_toolkit.application.current import set_app
 from session import DEFAULT_SIZE, in_this_process
@@ -23,9 +24,9 @@ from pymux.main import Pymux
 WAITS = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
 
 
-def _three_windows(pymux: Pymux) -> list:
+async def _three_windows(pymux: Pymux) -> list:
     for _ in range(3):
-        pymux.create_window(WAITS)
+        await pymux.create_window(WAITS)
     return [window.index for window in pymux.arrangement.windows]
 
 
@@ -46,41 +47,45 @@ def _stop(pymux: Pymux) -> None:
                 pane.process.kill()
 
 
+@asynccontextmanager
+async def running_server():
+    "A server with a task group, so a test can make windows."
+    pymux = Pymux()
+    async with pymux.running():
+        try:
+            yield pymux
+        finally:
+            _stop(pymux)
+
+
 # ----------------------------------------------------------------------
 # What the option does.
 
 
-def test_without_it_the_gap_stays():
+async def test_without_it_the_gap_stays():
     "The behaviour pymux had, and the default it keeps."
-    pymux = Pymux()
-    try:
-        assert _three_windows(pymux) == [1, 2, 3]
+    async with running_server() as pymux:
+        assert await _three_windows(pymux) == [1, 2, 3]
 
         _kill(pymux, 2)
 
         assert _indices(pymux) == [1, 3]
-    finally:
-        _stop(pymux)
 
 
-def test_with_it_the_windows_pack_down():
-    pymux = Pymux()
-    try:
-        _three_windows(pymux)
+async def test_with_it_the_windows_pack_down():
+    async with running_server() as pymux:
+        await _three_windows(pymux)
         pymux.handle_command("set-option renumber-windows on")
 
         _kill(pymux, 2)
 
         assert _indices(pymux) == [1, 2]
-    finally:
-        _stop(pymux)
 
 
-def test_the_order_is_kept():
+async def test_the_order_is_kept():
     "A pass that sorted by anything else would shuffle a person's windows."
-    pymux = Pymux()
-    try:
-        _three_windows(pymux)
+    async with running_server() as pymux:
+        await _three_windows(pymux)
         pymux.handle_command("set-option renumber-windows on")
         third = pymux.arrangement.get_window_by_index(3)
 
@@ -90,23 +95,18 @@ def test_the_order_is_kept():
             window.index for window in sorted(pymux.arrangement.windows, key=lambda one: one.index)
         ]
         assert third.index == 2
-    finally:
-        _stop(pymux)
 
 
-def test_it_counts_from_the_base_index():
-    pymux = Pymux()
-    try:
+async def test_it_counts_from_the_base_index():
+    async with running_server() as pymux:
         pymux.handle_command("set-option base-index 0")
-        _three_windows(pymux)
+        await _three_windows(pymux)
         pymux.handle_command("set-option renumber-windows on")
         assert _indices(pymux) == [0, 1, 2]
 
         _kill(pymux, 1)
 
         assert _indices(pymux) == [0, 1]
-    finally:
-        _stop(pymux)
 
 
 async def test_nobody_loses_the_window_they_were_on():
@@ -117,7 +117,7 @@ async def test_nobody_loses_the_window_they_were_on():
     """
     async with in_this_process() as session:
         pymux = session.pymux
-        _three_windows(pymux)
+        await _three_windows(pymux)
         pymux.handle_command("set-option renumber-windows on")
         state, _ = await session.attach("here", DEFAULT_SIZE)
 
@@ -131,16 +131,15 @@ async def test_nobody_loses_the_window_they_were_on():
         assert watching.index == 2
 
 
-def test_an_unlinked_window_keeps_its_index():
+async def test_an_unlinked_window_keeps_its_index():
     """
     `unlink-window` parks a window out of the order, and
     `link-window` puts it back where it was. Packing an order nobody
     sees would move a window a person never closed.
     Lillecarl/pymux#297.
     """
-    pymux = Pymux()
-    try:
-        _three_windows(pymux)
+    async with running_server() as pymux:
+        await _three_windows(pymux)
         pymux.handle_command("set-option renumber-windows on")
         parked = pymux.arrangement.get_window_by_index(3)
         pymux.arrangement.unlink_window(parked)
@@ -149,8 +148,6 @@ def test_an_unlinked_window_keeps_its_index():
 
         assert parked.index == 3
         assert _indices(pymux) == [1]
-    finally:
-        _stop(pymux)
 
 
 # ----------------------------------------------------------------------
@@ -179,53 +176,43 @@ def test_a_word_it_does_not_know_is_refused():
 # Setting the option.
 
 
-def test_setting_it_on_packs_the_gap_that_is_already_there():
+async def test_setting_it_on_packs_the_gap_that_is_already_there():
     "The setting itself is a trigger; the next close need not wait for it."
-    pymux = Pymux()
-    try:
-        _three_windows(pymux)
+    async with running_server() as pymux:
+        await _three_windows(pymux)
         _kill(pymux, 2)
         assert _indices(pymux) == [1, 3]
 
         pymux.handle_command("set-option renumber-windows on")
 
         assert _indices(pymux) == [1, 2]
-    finally:
-        _stop(pymux)
 
 
-def test_setting_it_on_again_changes_nothing():
+async def test_setting_it_on_again_changes_nothing():
     "A renumber of an order without gaps is a walk that moves nobody."
-    pymux = Pymux()
-    try:
-        _three_windows(pymux)
+    async with running_server() as pymux:
+        await _three_windows(pymux)
 
         pymux.handle_command("set-option renumber-windows on")
 
         assert _indices(pymux) == [1, 2, 3]
-    finally:
-        _stop(pymux)
 
 
-def test_setting_it_off_leaves_the_gap_it_finds():
-    pymux = Pymux()
-    try:
-        _three_windows(pymux)
+async def test_setting_it_off_leaves_the_gap_it_finds():
+    async with running_server() as pymux:
+        await _three_windows(pymux)
         _kill(pymux, 2)
         assert _indices(pymux) == [1, 3]
 
         pymux.handle_command("set-option renumber-windows off")
 
         assert _indices(pymux) == [1, 3]
-    finally:
-        _stop(pymux)
 
 
-def test_setting_it_on_leaves_a_parked_window_where_it_was():
+async def test_setting_it_on_leaves_a_parked_window_where_it_was():
     "The same guarantee the close gives, through the new trigger."
-    pymux = Pymux()
-    try:
-        _three_windows(pymux)
+    async with running_server() as pymux:
+        await _three_windows(pymux)
         parked = pymux.arrangement.get_window_by_index(3)
         pymux.arrangement.unlink_window(parked)
         _kill(pymux, 1)
@@ -235,8 +222,6 @@ def test_setting_it_on_leaves_a_parked_window_where_it_was():
 
         assert _indices(pymux) == [1]
         assert parked.index == 3
-    finally:
-        _stop(pymux)
 
 
 def test_setting_it_before_any_window_exists():

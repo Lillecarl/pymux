@@ -26,45 +26,47 @@ def _stop(pymux: Pymux) -> None:
                 pane.process.kill()
 
 
-def test_an_empty_window_after_a_closing_one_is_swept_up():
+async def test_an_empty_window_after_a_closing_one_is_swept_up():
     """
     Two windows, the second already empty. Closing the first used to
     leave the second in the order for ever: the list shrank under the
     loop and the empty one was the element it skipped.
     """
     pymux = Pymux()
-    try:
-        pymux.create_window(WAITS)
-        pymux.create_window(WAITS)
-        first, second = pymux.arrangement.windows
+    async with pymux.running():
+        try:
+            await pymux.create_window(WAITS)
+            await pymux.create_window(WAITS)
+            first, second = pymux.arrangement.windows
 
-        # Empty the second one without going through `remove_pane`,
-        # which is what a window looks like the moment its last pane
-        # has gone and before anybody has swept it.
-        for pane in list(second.panes):
-            second.remove_pane(pane)
-        assert not second.has_panes
+            # Empty the second one without going through `remove_pane`,
+            # which is what a window looks like the moment its last pane
+            # has gone and before anybody has swept it.
+            for pane in list(second.panes):
+                second.remove_pane(pane)
+            assert not second.has_panes
 
-        pymux.arrangement.remove_pane(first.panes[0])
+            pymux.arrangement.remove_pane(first.panes[0])
 
-        assert first not in pymux.arrangement.windows
-        assert second not in pymux.arrangement.windows, "the window after the one that closed was skipped"
-    finally:
-        _stop(pymux)
+            assert first not in pymux.arrangement.windows
+            assert second not in pymux.arrangement.windows, "the window after the one that closed was skipped"
+        finally:
+            _stop(pymux)
 
 
-def test_the_pane_still_goes_from_the_window_that_held_it():
+async def test_the_pane_still_goes_from_the_window_that_held_it():
     pymux = Pymux()
-    try:
-        pymux.create_window(WAITS)
-        window = pymux.arrangement.windows[0]
-        pymux.add_process(WAITS, window=window)
-        assert len(window.panes) == 2
-        going = window.panes[1]
+    async with pymux.running():
+        try:
+            await pymux.create_window(WAITS)
+            window = pymux.arrangement.windows[0]
+            await pymux.add_process(WAITS, window=window)
+            assert len(window.panes) == 2
+            going = window.panes[1]
 
-        pymux.arrangement.remove_pane(going)
+            pymux.arrangement.remove_pane(going)
 
-        assert going not in window.panes
-        assert window in pymux.arrangement.windows
-    finally:
-        _stop(pymux)
+            assert going not in window.panes
+            assert window in pymux.arrangement.windows
+        finally:
+            _stop(pymux)

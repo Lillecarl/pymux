@@ -114,6 +114,8 @@ from prompt_toolkit.layout.screen import Screen, WritePosition
 from session import Session, routes
 from what_holds_it import why_it_is_alive
 
+from pymux.commands import handle_command
+
 #: How much a type may grow over one side before the check fails, as a
 #: number of objects.
 #:
@@ -335,14 +337,20 @@ async def create_round(session: Session, recordings) -> bool:
     with set_app(big.app):
         # A second window, so that closing one is exercised as well as
         # closing the last.
-        pymux.handle_command("new-window")
-        pymux.handle_command("set-option pane-border-status on")
+        answer = handle_command(pymux, "new-window")
+        if answer is not None:
+            await answer
+        answer = handle_command(pymux, "set-option pane-border-status on")
+        if answer is not None:
+            await answer
 
         window = pymux.arrangement.get_active_window()
         watch("window", window)
 
         for number in range(PANES - 1):
-            pymux.handle_command("split-window -h" if number % 2 == 0 else "split-window -v")
+            answer = handle_command(pymux, "split-window -h" if number % 2 == 0 else "split-window -v")
+            if answer is not None:
+                await answer
 
         panes = list(window.panes)
         for place, pane in enumerate(panes):

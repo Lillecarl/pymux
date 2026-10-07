@@ -177,7 +177,7 @@ async def test_the_packet_arrives_before_the_close():
 
 async def _a_session_with_a_window(pymux: Pymux, name: str):
     session = pymux.create_session(name)
-    pymux.create_window(WAITS, session=session)
+    await pymux.create_window(WAITS, session=session)
     return session
 
 

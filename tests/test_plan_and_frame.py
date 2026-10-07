@@ -21,6 +21,7 @@ from __future__ import annotations
 from prompt_toolkit.data_structures import Size
 from test_strip_draws import CHROME, create_client
 
+from pymux.commands import handle_command
 from pymux.layout import plan_of
 
 #: Wide enough for two columns of half a window, so a third runs past
@@ -33,16 +34,28 @@ ROWS = 24
 STRIP = [*CHROME, "set-window-option strip on"]
 
 
-def create_row_of_panes(pymux, count=3):
+async def create_row_of_panes(pymux, count=3):
     "One column per pane, the way `split-window -h` makes them."
     window = pymux.arrangement.get_active_window()
     panes = [window.active_pane]
 
     for _ in range(count - 1):
-        pymux.handle_command("split-window -h")
+        await run(pymux, "split-window -h")
         panes.append(window.active_pane)
 
     return panes
+
+
+async def run(pymux, command):
+    """
+    Run a command, and wait for what it started.
+
+    A key binding does not wait, but a test that did not would draw
+    before the pane exists. The end state is the same either way.
+    """
+    answer = handle_command(pymux, command)
+    if answer is not None:
+        await answer
 
 
 def frame(pymux):
@@ -71,30 +84,30 @@ def offsets(pymux, plan):
     return offsets
 
 
-def test_plan_puts_columns_where_frame_does():
-    with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
-        create_row_of_panes(pymux)
+async def test_plan_puts_columns_where_frame_does():
+    async with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
+        await create_row_of_panes(pymux)
         draw()
 
         assert len(offsets(pymux, plan_of(pymux, pymux.arrangement.get_active_window()))) == 1
 
 
-def test_plan_divides_stack_way_frame_does():
+async def test_plan_divides_stack_way_frame_does():
     """
     The part that is arithmetic rather than order. A stack shares its
     column out by weight, and the cells that do not divide evenly have
     to fall the same way on both sides.
     """
-    with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
-        create_row_of_panes(pymux, count=2)
-        pymux.handle_command("split-window -v")
-        pymux.handle_command("split-window -v")
+    async with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
+        await create_row_of_panes(pymux, count=2)
+        await run(pymux, "split-window -v")
+        await run(pymux, "split-window -v")
         draw()
 
         assert len(offsets(pymux, plan_of(pymux, pymux.arrangement.get_active_window()))) == 1
 
 
-def test_plan_follows_resize():
+async def test_plan_follows_resize():
     """
     A person drags a border, and the frame follows.
 
@@ -102,30 +115,30 @@ def test_plan_follows_resize():
     measures the plan, puts the cells each pane holds into its weight,
     and then applies the delta, so one row asked for is one row given.
     """
-    with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
-        panes = create_row_of_panes(pymux, count=2)
-        pymux.handle_command("split-window -v")
+    async with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
+        panes = await create_row_of_panes(pymux, count=2)
+        await run(pymux, "split-window -v")
         draw()
 
         was = plan_of(pymux, pymux.arrangement.get_active_window()).rect_of(panes[-1]).height
-        pymux.handle_command("resize-pane -U 3")
+        await run(pymux, "resize-pane -U 3")
         draw()
 
         assert plan_of(pymux, pymux.arrangement.get_active_window()).rect_of(panes[-1]).height == was - 3
         assert len(offsets(pymux, plan_of(pymux, pymux.arrangement.get_active_window()))) == 1
 
 
-def test_divided_window_is_drawn_where_its_plan_says_too():
+async def test_divided_window_is_drawn_where_its_plan_says_too():
     "The layout pymux uses unless a person asks for something else."
-    with create_client(CHROME, rows=ROWS, columns=COLUMNS) as (pymux, draw):
-        create_row_of_panes(pymux, count=2)
-        pymux.handle_command("split-window -v")
+    async with create_client(CHROME, rows=ROWS, columns=COLUMNS) as (pymux, draw):
+        await create_row_of_panes(pymux, count=2)
+        await run(pymux, "split-window -v")
         draw()
 
         assert len(offsets(pymux, plan_of(pymux, pymux.arrangement.get_active_window()))) == 1
 
 
-def test_plan_holds_column_frame_never_drew():
+async def test_plan_holds_column_frame_never_drew():
     """
     The case the frame alone cannot answer, and the reason for all of
     this. A strip scrolls, so a column can be off the screen -- and the
@@ -136,15 +149,15 @@ def test_plan_holds_column_frame_never_drew():
     it is not drawn (Lillecarl/pymux#224). Everything that asks where
     that pane is asks the plan.
     """
-    with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
-        panes = create_row_of_panes(pymux)
+    async with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
+        panes = await create_row_of_panes(pymux)
         state = pymux.get_client_state()
 
         # A frame first, so that the strip has scrolled to the column
         # the focus is on. Then one step back, which leaves the view
         # where it is because that column is already wholly on screen.
         draw()
-        pymux.handle_command("select-pane -L")
+        await run(pymux, "select-pane -L")
         state.sync_focus()
         draw()
 
@@ -156,10 +169,10 @@ def test_plan_holds_column_frame_never_drew():
         assert len(offsets(pymux, plan)) == 1
 
 
-def test_plan_uses_size_window_was_given():
+async def test_plan_uses_size_window_was_given():
     "So that a client of another size cannot be what it measured."
-    with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
-        create_row_of_panes(pymux, count=1)
+    async with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
+        await create_row_of_panes(pymux, count=1)
         draw()
 
         assert pymux.plane_size() == Size(rows=ROWS - 1, columns=COLUMNS)
@@ -169,7 +182,7 @@ def test_plan_uses_size_window_was_given():
 # What the frame cannot answer.
 
 
-def test_key_moves_focus_before_anything_is_drawn():
+async def test_key_moves_focus_before_anything_is_drawn():
     """
     **The frame is not there yet, and the plan is.**
 
@@ -182,11 +195,11 @@ def test_key_moves_focus_before_anything_is_drawn():
     This is a change a person sees, and it is what the whole of
     Lillecarl/pymux#217 is for.
     """
-    with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, _draw):
-        panes = create_row_of_panes(pymux)
+    async with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, _draw):
+        panes = await create_row_of_panes(pymux)
         window = pymux.arrangement.get_active_window()
         assert window.active_pane is panes[-1]
 
-        pymux.handle_command("select-pane -L")
+        await run(pymux, "select-pane -L")
 
         assert window.active_pane is panes[-2]

@@ -71,7 +71,7 @@ def looks_at(pymux, state):
 async def create_window_of_its_own(pymux, state):
     "A new window, made by this client, so this client looks at it."
     with set_app(state.app):
-        pymux.create_window(PANE_THAT_STAYS)
+        await pymux.create_window(PANE_THAT_STAYS)
     await asyncio.sleep(LONG_ENOUGH)
 
 

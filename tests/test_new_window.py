@@ -25,6 +25,8 @@ from contextlib import asynccontextmanager
 from prompt_toolkit.application.current import set_app
 from session import DEFAULT_SIZE, NOTHING, in_this_process
 
+from pymux.commands import handle_command
+
 
 @asynccontextmanager
 async def create_session(*indexes):
@@ -42,7 +44,7 @@ async def create_session(*indexes):
         state, _ = await session.attach("the client", DEFAULT_SIZE)
         with set_app(state.app):
             while len(pymux.arrangement.windows) < len(indexes):
-                pymux.create_window(NOTHING)
+                await pymux.create_window(NOTHING)
             assert len(pymux.arrangement.windows) == len(indexes)
 
             for window, index in zip(pymux.arrangement.windows, indexes):
@@ -56,15 +58,22 @@ def indexes(pymux):
     return [w.index for w in pymux.arrangement.windows]
 
 
-def run(pymux, command):
-    "Run a command the way a key binding or the command line does."
-    pymux.handle_command("%s %s" % (command, NOTHING))
+async def run(pymux, command):
+    """
+    Run a command, and wait for what it started.
+
+    A key binding does not wait, but a test that did not would assert
+    before the window exists. The end state is the same either way.
+    """
+    answer = handle_command(pymux, "%s %s" % (command, NOTHING))
+    if answer is not None:
+        await answer
 
 
 async def test_new_window_lands_next_to_one_person_is_on():
     "The report: on five of one, two, five, it gave three."
     async with create_session(1, 2, 5) as (pymux, _):
-        run(pymux, "new-window")
+        await run(pymux, "new-window")
 
         assert indexes(pymux) == [1, 2, 5, 6]
 
@@ -73,7 +82,7 @@ async def test_it_makes_room_when_next_index_is_taken():
     async with create_session(1, 2, 3) as (pymux, _):
         pymux.arrangement.set_active_window(pymux.arrangement.windows[0])
 
-        run(pymux, "new-window")
+        await run(pymux, "new-window")
 
         assert indexes(pymux) == [1, 2, 3, 4]
         assert pymux.arrangement.get_active_window().index == 2
@@ -82,7 +91,7 @@ async def test_it_makes_room_when_next_index_is_taken():
 async def test_session_with_no_gaps_is_what_it_always_was():
     "Which is why nobody saw this for so long."
     async with create_session(1, 2, 3) as (pymux, _):
-        run(pymux, "new-window")
+        await run(pymux, "new-window")
 
         assert indexes(pymux) == [1, 2, 3, 4]
 
@@ -92,7 +101,7 @@ async def test_only_run_that_is_in_way_moves():
     async with create_session(1, 2, 3, 7) as (pymux, _):
         pymux.arrangement.set_active_window(pymux.arrangement.windows[0])
 
-        run(pymux, "new-window")
+        await run(pymux, "new-window")
 
         assert indexes(pymux) == [1, 2, 3, 4, 7]
 
@@ -100,7 +109,7 @@ async def test_only_run_that_is_in_way_moves():
 async def test_before_active_window():
     "It takes that window's index, and that window moves up."
     async with create_session(1, 2, 5) as (pymux, _):
-        run(pymux, "new-window -b")
+        await run(pymux, "new-window -b")
 
         assert indexes(pymux) == [1, 2, 5, 6]
         assert pymux.arrangement.get_active_window().index == 5
@@ -108,7 +117,7 @@ async def test_before_active_window():
 
 async def test_after_window_that_is_not_active_one():
     async with create_session(1, 2, 5) as (pymux, _):
-        run(pymux, "new-window -a -t 1")
+        await run(pymux, "new-window -a -t 1")
 
         assert indexes(pymux) == [1, 2, 3, 5]
         assert pymux.arrangement.get_active_window().index == 2
@@ -117,7 +126,7 @@ async def test_after_window_that_is_not_active_one():
 async def test_bare_target_names_index_to_open_at():
     "Which is how tmux reads one for this command."
     async with create_session(1, 2, 5) as (pymux, _):
-        run(pymux, "new-window -t 9")
+        await run(pymux, "new-window -t 9")
 
         assert indexes(pymux) == [1, 2, 5, 9]
 
@@ -131,7 +140,7 @@ async def test_the_end_of_the_stack_is_not_the_window_a_person_is_on():
     async with create_session(1, 2, 5) as (pymux, _):
         pymux.arrangement.set_active_window(pymux.arrangement.windows[0])
 
-        run(pymux, "new-window -a -t {end}")
+        await run(pymux, "new-window -a -t {end}")
 
         assert indexes(pymux) == [1, 2, 5, 6]
         assert pymux.arrangement.get_active_window().index == 6
@@ -140,7 +149,7 @@ async def test_the_end_of_the_stack_is_not_the_window_a_person_is_on():
 async def test_the_start_of_the_stack_takes_the_first_index():
     "It makes room, the way `-b` before any window does."
     async with create_session(1, 2, 5) as (pymux, _):
-        run(pymux, "new-window -b -t {start}")
+        await run(pymux, "new-window -b -t {start}")
 
         assert indexes(pymux) == [1, 2, 3, 5]
         assert pymux.arrangement.get_active_window().index == 1
@@ -151,7 +160,7 @@ async def test_a_word_without_a_side_is_next_to_the_window_it_names():
     async with create_session(1, 2, 5) as (pymux, _):
         pymux.arrangement.set_active_window(pymux.arrangement.windows[0])
 
-        run(pymux, "new-window -t {end}")
+        await run(pymux, "new-window -t {end}")
 
         assert indexes(pymux) == [1, 2, 5, 6]
         assert pymux.arrangement.get_active_window().index == 6
@@ -160,7 +169,7 @@ async def test_a_word_without_a_side_is_next_to_the_window_it_names():
 async def test_on_a_packed_stack_the_word_gives_the_default():
     "Which is why the old lowest-free rule hid the fact that the answer was gone."
     async with create_session(1, 2, 3) as (pymux, _):
-        run(pymux, "new-window -a -t {end}")
+        await run(pymux, "new-window -a -t {end}")
 
         assert indexes(pymux) == [1, 2, 3, 4]
 
@@ -168,7 +177,7 @@ async def test_on_a_packed_stack_the_word_gives_the_default():
 async def test_a_word_it_does_not_know_falls_back_like_a_name():
     "`{last}` is tmux's previously active window, and pymux does not track one."
     async with create_session(1, 2, 5) as (pymux, _):
-        run(pymux, "new-window -a -t {last}")
+        await run(pymux, "new-window -a -t {last}")
 
         assert indexes(pymux) == [1, 2, 5, 6]
 
@@ -179,7 +188,7 @@ async def test_target_nobody_can_find_falls_back_to_active_window():
     opening one does not want the window not to open.
     """
     async with create_session(1, 2, 5) as (pymux, _):
-        run(pymux, "new-window -a -t nosuchwindow")
+        await run(pymux, "new-window -a -t nosuchwindow")
 
         assert indexes(pymux) == [1, 2, 5, 6]
 
@@ -192,7 +201,7 @@ async def test_window_that_is_reported_is_one_that_opened():
     async with create_session(1, 2, 3) as (pymux, _):
         pymux.arrangement.set_active_window(pymux.arrangement.windows[0])
 
-        run(pymux, "new-window")
+        await run(pymux, "new-window")
 
         assert pymux.arrangement.get_active_window().index == 2
 
@@ -200,7 +209,7 @@ async def test_window_that_is_reported_is_one_that_opened():
 async def test_dash_d_leaves_window_person_was_on():
     "And the new one still lands where it would have."
     async with create_session(1, 2, 5) as (pymux, _):
-        run(pymux, "new-window -d")
+        await run(pymux, "new-window -d")
 
         assert indexes(pymux) == [1, 2, 5, 6]
         assert pymux.arrangement.get_active_window().index == 5

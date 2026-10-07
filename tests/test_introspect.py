@@ -37,7 +37,7 @@ SIZE = Size(rows=24, columns=80)
 
 
 @pytest.fixture
-def create_server(tmp_path, monkeypatch):
+async def create_server(tmp_path, monkeypatch):
     """
     A server with one client and one pane, in a state directory of its
     own.
@@ -52,25 +52,30 @@ def create_server(tmp_path, monkeypatch):
     pymux = Pymux(startup_command="%s -c pass" % (sys.executable,))
 
     output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: SIZE)
-    with create_pipe_input() as pipe:
-        state = pymux.add_client(
-            output=output,
-            input=pipe,
-            color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=Connection(),
-        )
-        try:
-            yield pymux, state
-        finally:
-            for window in list(pymux.arrangement.windows):
-                for pane in list(window.panes):
-                    process = getattr(pane, "process", None)
-                    if process is not None and not process.is_terminated:
-                        process.kill()
-            pymux.stop()
+    async with pymux.running():
+        with create_pipe_input() as pipe:
+            state = pymux.add_client(
+                output=output,
+                input=pipe,
+                color_depth=ColorDepth.DEPTH_8_BIT,
+                connection=Connection(),
+            )
+            # What the first client brings: the window this server is
+            # described by, holding the pane the command runs in.
+            with set_app(state.app):
+                await pymux.startup()
+            try:
+                yield pymux, state
+            finally:
+                for window in list(pymux.arrangement.windows):
+                    for pane in list(window.panes):
+                        process = getattr(pane, "process", None)
+                        if process is not None and not process.is_terminated:
+                            process.kill()
+                pymux.stop()
 
 
-def test_dump_goes_beside_log(create_server, tmp_path):
+async def test_dump_goes_beside_log(create_server, tmp_path):
     "A dump is read with the log around it, so it lives in the same place."
     pymux, _state = create_server
     path = introspect.write_dump(pymux)
@@ -79,7 +84,7 @@ def test_dump_goes_beside_log(create_server, tmp_path):
     assert path.is_file()
 
 
-def test_dump_says_which_server_it_is(create_server):
+async def test_dump_says_which_server_it_is(create_server):
     "A person reading a dump has several servers, and has to tell them apart."
     pymux, _state = create_server
     said = introspect.what_it_is_doing(pymux)
@@ -88,7 +93,7 @@ def test_dump_says_which_server_it_is(create_server):
     assert "1 clients, 1 windows, 1 panes" in said
 
 
-def test_dump_holds_every_thread(create_server):
+async def test_dump_holds_every_thread(create_server):
     pymux, _state = create_server
     said = introspect.what_it_is_doing(pymux)
 
@@ -97,7 +102,7 @@ def test_dump_holds_every_thread(create_server):
     assert "test_dump_holds_every_thread" in said
 
 
-def test_dump_says_what_task_waits_for(create_server):
+async def test_dump_says_what_task_waits_for(create_server):
     """
     The half a thread dump cannot show.
 
@@ -119,7 +124,7 @@ def test_dump_says_what_task_waits_for(create_server):
         task.cancel()
         return said
 
-    said = asyncio.run(check())
+    said = await check()
 
     assert "task a-task-of-the-test: pending in " in said
     assert "waits_forever" in said
@@ -127,16 +132,16 @@ def test_dump_says_what_task_waits_for(create_server):
     assert "await asyncio.Event().wait()" in said
 
 
-def test_dump_of_create_server_that_never_ran_says_so(create_server):
+async def test_dump_of_create_server_that_never_ran_says_so():
     "No loop is a state a dump reports, not one it raises on."
-    pymux, _state = create_server
+    pymux = Pymux()
     said = introspect.what_it_is_doing(pymux)
 
     assert "--- asyncio tasks" in said
     assert "task " not in said
 
 
-def test_command_writes_dump_and_says_where(create_server, tmp_path):
+async def test_command_writes_dump_and_says_where(create_server, tmp_path):
     pymux, state = create_server
 
     # Put it back, the way `_run_command` does. This is a plain `def
@@ -158,7 +163,7 @@ def test_command_writes_dump_and_says_where(create_server, tmp_path):
     assert (tmp_path / written[0].rsplit("/", 1)[-1]).is_file()
 
 
-def test_create_server_takes_signal_that_answers_wedged_loop(create_server, tmp_path):
+async def test_create_server_takes_signal_that_answers_wedged_loop(create_server, tmp_path):
     """
     `SIGUSR1`, through `faulthandler`.
 
@@ -181,7 +186,7 @@ def test_create_server_takes_signal_that_answers_wedged_loop(create_server, tmp_
     assert "test_create_server_takes_signal_that_answers_wedged_loop" in written
 
 
-def test_counters_name_what_asked_for_each_frame(create_server):
+async def test_counters_name_what_asked_for_each_frame(create_server):
     """
     The finding a count alone cannot carry.
 
@@ -203,7 +208,7 @@ def test_counters_name_what_asked_for_each_frame(create_server):
     assert "what asked for a frame" in said
 
 
-def test_frame_that_went_out_is_counted():
+async def test_frame_that_went_out_is_counted():
     """
     One flush is one frame, and several invalidates become one of them.
     So the frames are counted where they are written and not where they
@@ -220,7 +225,7 @@ def test_frame_that_went_out_is_counted():
     assert counters.frame_bytes == len("hello there")
 
 
-def test_create_server_with_no_counters_still_writes(create_server):
+async def test_create_server_with_no_counters_still_writes(create_server):
     "The counting is not what a frame is for."
     sent = []
     stdout = _SocketStdout(sent.append, None)
@@ -231,7 +236,7 @@ def test_create_server_with_no_counters_still_writes(create_server):
     assert sent == [{"cmd": "out", "data": "hello"}]
 
 
-def test_profile_returns_at_once_and_writes_later(create_server, tmp_path):
+async def test_profile_returns_at_once_and_writes_later(create_server, tmp_path):
     """
     A profile of a server is taken while the server serves.
 
@@ -251,7 +256,7 @@ def test_profile_returns_at_once_and_writes_later(create_server, tmp_path):
         await asyncio.sleep(0.3)
         return path
 
-    path = asyncio.run(check())
+    path = await check()
 
     written = path.read_text()
     assert "what it did over these 0.1 seconds" in written
@@ -259,7 +264,7 @@ def test_profile_returns_at_once_and_writes_later(create_server, tmp_path):
     assert path.with_suffix(".html").is_file()
 
 
-def test_nothing_may_attach_to_create_server_nobody_asked_about(create_server):
+async def test_nothing_may_attach_to_create_server_nobody_asked_about(create_server):
     """
     `PR_SET_PTRACER_ANY` lets anything this user runs read the server's
     memory, and a server holds every pane's scrollback. So it is off.
@@ -271,7 +276,7 @@ def test_nothing_may_attach_to_create_server_nobody_asked_about(create_server):
 
 
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="prctl is Linux")
-def test_option_tells_kernel(create_server):
+async def test_option_tells_kernel(create_server):
     "It is a setting the kernel has to be told about, so it is a property."
     pymux, state = create_server
 
@@ -284,7 +289,7 @@ def test_option_tells_kernel(create_server):
         assert pymux.allow_remote_debugging is False
 
 
-def test_every_route_that_starts_create_server_takes_signal():
+async def test_every_route_that_starts_create_server_takes_signal():
     """
     Three routes start a server, and a person sending a signal does not
     know which one this is.

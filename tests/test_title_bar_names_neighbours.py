@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from test_strip_draws import CHROME, create_client
 
+from pymux.commands import handle_command
 from pymux.layout import LEFT_MARK, RIGHT_MARK
 
 NAMES = ["alpha", "beta", "gamma"]
@@ -24,19 +25,31 @@ NAMES = ["alpha", "beta", "gamma"]
 COLUMNS = 120
 
 
-def create_row_of_named_panes(pymux, names=NAMES):
+async def create_row_of_named_panes(pymux, names=NAMES):
     "One pane for each name, side by side, named in order."
     window = pymux.arrangement.get_active_window()
     panes = [window.active_pane]
 
     for _ in names[1:]:
-        pymux.handle_command("split-window -h")
+        await run(pymux, "split-window -h")
         panes.append(window.active_pane)
 
     for pane, name in zip(panes, names):
         pane.chosen_name = name
 
     return panes
+
+
+async def run(pymux, command):
+    """
+    Run a command, and wait for what it started.
+
+    A key binding does not wait, but a test that did not would draw
+    before the pane exists. The end state is the same either way.
+    """
+    answer = handle_command(pymux, command)
+    if answer is not None:
+        await answer
 
 
 def bars_of(pymux, draw, panes):
@@ -70,9 +83,9 @@ def middle_of(bar, name):
 # The three parts.
 
 
-def test_pane_names_pane_on_each_side():
-    with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
-        panes = create_row_of_named_panes(pymux)
+async def test_pane_names_pane_on_each_side():
+    async with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
+        panes = await create_row_of_named_panes(pymux)
         bar = bars_of(pymux, draw, panes)[1]
 
         # The left edge: the pane's own number, then a mark pointing
@@ -85,9 +98,9 @@ def test_pane_names_pane_on_each_side():
         assert "beta" in bar, repr(bar)
 
 
-def test_pane_at_left_end_names_nothing_on_its_left():
-    with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
-        panes = create_row_of_named_panes(pymux)
+async def test_pane_at_left_end_names_nothing_on_its_left():
+    async with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
+        panes = await create_row_of_named_panes(pymux)
         bar = bars_of(pymux, draw, panes)[0]
 
         assert "alpha" in bar, repr(bar)
@@ -95,9 +108,9 @@ def test_pane_at_left_end_names_nothing_on_its_left():
         assert bar.rstrip().endswith("beta " + RIGHT_MARK), repr(bar)
 
 
-def test_pane_at_right_end_names_nothing_on_its_right():
-    with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
-        panes = create_row_of_named_panes(pymux)
+async def test_pane_at_right_end_names_nothing_on_its_right():
+    async with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
+        panes = await create_row_of_named_panes(pymux)
         bar = bars_of(pymux, draw, panes)[2]
 
         assert bar.split()[:3] == ["2", LEFT_MARK, "beta"], repr(bar)
@@ -105,9 +118,9 @@ def test_pane_at_right_end_names_nothing_on_its_right():
         assert bar.rstrip().endswith("gamma"), repr(bar)
 
 
-def test_lone_pane_names_neither_side():
-    with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
-        panes = create_row_of_named_panes(pymux, ["alone"])
+async def test_lone_pane_names_neither_side():
+    async with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
+        panes = await create_row_of_named_panes(pymux, ["alone"])
         bar = bars_of(pymux, draw, panes)[0]
 
         assert middle_of(bar, "alone") <= 1, repr(bar)
@@ -117,20 +130,20 @@ def test_lone_pane_names_neither_side():
 # The middle stays in the middle.
 
 
-def test_pane_s_own_name_is_in_middle_of_its_bar():
+async def test_pane_s_own_name_is_in_middle_of_its_bar():
     """
     Centred over the pane, and not over what the neighbours left of
     it: a name growing on one side may not slide the title sideways.
     """
-    with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
-        panes = create_row_of_named_panes(pymux)
+    async with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
+        panes = await create_row_of_named_panes(pymux)
         bars = bars_of(pymux, draw, panes)
 
         for bar, name in zip(bars, NAMES):
             assert middle_of(bar, name) <= 1, (name, repr(bar))
 
 
-def test_strip_names_column_that_is_off_screen():
+async def test_strip_names_column_that_is_off_screen():
     """
     The reason the bar carries the names at all. A strip runs past the
     edge of the screen, and a name is how a person knows what is out
@@ -142,11 +155,11 @@ def test_strip_names_column_that_is_off_screen():
     side of the middle one is always on the screen. The one asked
     about here is the other.
     """
-    with create_client([*CHROME, "set-window-option strip on"], columns=COLUMNS) as (
+    async with create_client([*CHROME, "set-window-option strip on"], columns=COLUMNS) as (
         pymux,
         draw,
     ):
-        panes = create_row_of_named_panes(pymux)
+        panes = await create_row_of_named_panes(pymux)
         state = pymux.get_client_state()
 
         # A frame first, so that the strip has scrolled to the column
@@ -159,7 +172,7 @@ def test_strip_names_column_that_is_off_screen():
         draw()
 
         # Onto the middle column, the way a key does it.
-        pymux.handle_command("select-pane -L")
+        await run(pymux, "select-pane -L")
         state.sync_focus()
         bar = bars_of(pymux, draw, panes)[1]
 

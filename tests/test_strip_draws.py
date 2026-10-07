@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import io
 import sys
-from contextlib import contextmanager
+from contextlib import asynccontextmanager
 from itertools import pairwise
 
 from prompt_toolkit.application.current import set_app
@@ -37,6 +37,7 @@ from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 from session import Connection
 
+from pymux.commands import handle_command
 from pymux.main import Pymux
 
 ROWS, COLUMNS = 12, 40
@@ -46,8 +47,8 @@ ROWS, COLUMNS = 12, 40
 QUIET = "%s -c 'import time; time.sleep(600)'" % (sys.executable,)
 
 
-@contextmanager
-def create_client(commands=(), rows=ROWS, columns=COLUMNS):
+@asynccontextmanager
+async def create_client(commands=(), rows=ROWS, columns=COLUMNS):
     """
     A server with one client, and a way to draw what it draws.
 
@@ -56,55 +57,63 @@ def create_client(commands=(), rows=ROWS, columns=COLUMNS):
     """
     pymux = Pymux()
     output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=rows, columns=columns))
-    with create_pipe_input() as pipe:
-        state = pymux.add_client(
-            output=output,
-            input=pipe,
-            color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=Connection(),
-        )
-        try:
-            with set_app(state.app):
-                for command in commands:
-                    pymux.handle_command(command)
+    async with pymux.running():
+        with create_pipe_input() as pipe:
+            state = pymux.add_client(
+                output=output,
+                input=pipe,
+                color_depth=ColorDepth.DEPTH_8_BIT,
+                connection=Connection(),
+            )
+            try:
+                with set_app(state.app):
+                    # What attaching brings: the bindings, and the
+                    # window the drawing below looks at.
+                    await pymux.startup()
+                    for command in commands:
+                        answer = handle_command(pymux, command)
+                        if answer is not None:
+                            await answer
 
-                def draw():
-                    """
-                    Every row of the screen, as strings.
+                    def draw():
+                        """
+                        Every row of the screen, as strings.
 
-                    The screen is left where the renderer leaves its
-                    own, because that is where pymux reads back the
-                    positions it drew each pane at, and `select-pane
-                    -L` and `-R` ask for those. A draw that skips this
-                    can never see them.
-                    """
-                    screen = Screen()
-                    state.app.layout.container.write_to_screen(
-                        screen,
-                        MouseHandlers(),
-                        WritePosition(xpos=0, ypos=0, width=columns, height=rows),
-                        "",
-                        False,
-                        None,
-                    )
-                    screen.draw_all_floats()
-                    state.app.renderer._last_screen = screen
+                        The screen is left where the renderer leaves its
+                        own, because that is where pymux reads back the
+                        positions it drew each pane at, and `select-pane
+                        -L` and `-R` ask for those. A draw that skips this
+                        can never see them.
+                        """
+                        screen = Screen()
+                        state.app.layout.container.write_to_screen(
+                            screen,
+                            MouseHandlers(),
+                            WritePosition(xpos=0, ypos=0, width=columns, height=rows),
+                            "",
+                            False,
+                            None,
+                        )
+                        screen.draw_all_floats()
+                        state.app.renderer._last_screen = screen
 
-                    # From above the screen, because a title bar is a
-                    # float that hangs one row above its pane and the
-                    # question is which row it landed on.
-                    return {y: "".join(screen.data_buffer[y][x].char for x in range(columns)) for y in range(-2, rows)}
+                        # From above the screen, because a title bar is a
+                        # float that hangs one row above its pane and the
+                        # question is which row it landed on.
+                        return {
+                            y: "".join(screen.data_buffer[y][x].char for x in range(columns)) for y in range(-2, rows)
+                        }
 
-                yield pymux, draw
-        finally:
-            # `stop` kills every pane process, and this one runs a
-            # program that would outlive the test otherwise.
-            pymux.stop()
+                    yield pymux, draw
+            finally:
+                # `stop` kills every pane process, and this one runs a
+                # program that would outlive the test otherwise.
+                pymux.stop()
 
 
-def drawn(commands=(), rows=ROWS, columns=COLUMNS):
+async def drawn(commands=(), rows=ROWS, columns=COLUMNS):
     "Every row of the screen a client draws, as strings."
-    with create_client(commands, rows, columns) as (_, draw):
+    async with create_client(commands, rows, columns) as (_, draw):
         return draw()
 
 
@@ -116,25 +125,25 @@ def dump(rows):
 CHROME = ["set-option pane-border-status on"]
 
 
-def test_pane_has_title_bar():
+async def test_pane_has_title_bar():
     "What the strip has to keep. Every other layout draws this."
-    rows = drawn(CHROME)
+    rows = await drawn(CHROME)
 
     assert rows[0].strip(), dump(rows)
 
 
-def test_strip_keeps_title_bar():
+async def test_strip_keeps_title_bar():
     """
     The one a picture found missing. The title bar is a float one row
     above the pane, and a strip draws onto a screen whose first row is
     the pane's own, so that row is off the top of it.
     """
-    rows = drawn([*CHROME, "set-window-option strip on"])
+    rows = await drawn([*CHROME, "set-window-option strip on"])
 
     assert rows[0].strip(), dump(rows)
 
 
-def test_lone_column_takes_half_window_and_no_more():
+async def test_lone_column_takes_half_window_and_no_more():
     """
     niri's own behaviour, and the reason a strip is not a layout: a
     column has the width it was given, and a strip of one leaves the
@@ -153,7 +162,7 @@ def test_lone_column_takes_half_window_and_no_more():
     column window is 19 cells of pane and the border at cell 19.
     Lillecarl/pymux#206.
     """
-    rows = drawn([*CHROME, "set-window-option strip on"])
+    rows = await drawn([*CHROME, "set-window-option strip on"])
     share = COLUMNS // 2
     border = share - 1
 
@@ -176,7 +185,7 @@ def test_lone_column_takes_half_window_and_no_more():
 STRIP = [*CHROME, "set-window-option strip on"]
 
 
-def columns_of(pymux, how_many):
+async def columns_of(pymux, how_many):
     """
     A strip of this many columns, and its panes from left to right.
 
@@ -189,13 +198,15 @@ def columns_of(pymux, how_many):
     opened = [window.active_pane]
 
     for _ in range(how_many - 1):
-        pymux.handle_command("split-window -h")
+        answer = handle_command(pymux, "split-window -h")
+        if answer is not None:
+            await answer
         opened.append(window.active_pane)
 
     return window, opened
 
 
-def test_strip_records_where_it_drew_columns_it_drew():
+async def test_strip_records_where_it_drew_columns_it_drew():
     """
     Where each column landed on the screen, which is what a mouse click
     has to reach.
@@ -213,8 +224,8 @@ def test_strip_records_where_it_drew_columns_it_drew():
     The plan answers that question now, so nothing needs the position
     of a pane that was never drawn. Lillecarl/pymux#217.
     """
-    with create_client(STRIP) as (pymux, draw):
-        _, columns = columns_of(pymux, 3)
+    async with create_client(STRIP) as (pymux, draw):
+        _, columns = await columns_of(pymux, 3)
         draw()
 
         drawn_at = pymux.get_client_state().layout_manager.pane_write_positions
@@ -235,13 +246,13 @@ def test_strip_records_where_it_drew_columns_it_drew():
         assert xs[-1] + where[-1].width <= COLUMNS, xs
 
 
-def test_moving_right_reaches_next_column():
+async def test_moving_right_reaches_next_column():
     """
     `select-pane -R` steps one cell past the active pane's right edge
     and looks for the pane drawn there.
     """
-    with create_client(STRIP) as (pymux, draw):
-        window, columns = columns_of(pymux, 2)
+    async with create_client(STRIP) as (pymux, draw):
+        window, columns = await columns_of(pymux, 2)
         draw()
 
         window.active_pane = columns[0]
@@ -250,9 +261,9 @@ def test_moving_right_reaches_next_column():
         assert window.active_pane is columns[1]
 
 
-def test_moving_left_comes_back():
-    with create_client(STRIP) as (pymux, draw):
-        window, columns = columns_of(pymux, 2)
+async def test_moving_left_comes_back():
+    async with create_client(STRIP) as (pymux, draw):
+        window, columns = await columns_of(pymux, 2)
         draw()
 
         pymux.handle_command("select-pane -L")
@@ -260,14 +271,14 @@ def test_moving_left_comes_back():
         assert window.active_pane is columns[0]
 
 
-def test_moving_right_reaches_column_that_is_off_screen():
+async def test_moving_right_reaches_column_that_is_off_screen():
     """
     Three columns are wider than this screen, so the third one is past
     the right edge. It is drawn all the same, at a position the
     renderer never reads, and that is what makes it reachable.
     """
-    with create_client(STRIP) as (pymux, draw):
-        window, columns = columns_of(pymux, 3)
+    async with create_client(STRIP) as (pymux, draw):
+        window, columns = await columns_of(pymux, 3)
         draw()
 
         window.active_pane = columns[0]
@@ -277,10 +288,10 @@ def test_moving_right_reaches_column_that_is_off_screen():
         assert window.active_pane is columns[2]
 
 
-def test_next_pane_still_works_in_strip():
+async def test_next_pane_still_works_in_strip():
     "`ctrl+b o`, which walks the panes rather than the geometry."
-    with create_client(STRIP) as (pymux, draw):
-        window, columns = columns_of(pymux, 2)
+    async with create_client(STRIP) as (pymux, draw):
+        window, columns = await columns_of(pymux, 2)
         draw()
 
         window.active_pane = columns[0]

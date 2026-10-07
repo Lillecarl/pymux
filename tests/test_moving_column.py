@@ -24,6 +24,7 @@ from test_title_bar_names_neighbours import (
 )
 
 from pymux.arrangement import Pane, Window
+from pymux.commands import handle_command
 
 STRIP = [*CHROME, "set-window-option strip on"]
 
@@ -76,21 +77,33 @@ def order_of(window):
 # The order of the row.
 
 
-def test_column_moves_to_left():
+async def run(pymux, command):
+    """
+    Run a command, and wait for what it started.
+
+    A key binding does not wait, but a test that did not would draw
+    before the pane exists. The end state is the same either way.
+    """
+    answer = handle_command(pymux, command)
+    if answer is not None:
+        await answer
+
+
+async def test_column_moves_to_left():
     window, panes = create_strip(3)
 
     assert window.move_column(panes[2], -1) is True
     assert order_of(window) == [[panes[0]], [panes[2]], [panes[1]]]
 
 
-def test_column_moves_to_right():
+async def test_column_moves_to_right():
     window, panes = create_strip(3)
 
     assert window.move_column(panes[0], +1) is True
     assert order_of(window) == [[panes[1]], [panes[0]], [panes[2]]]
 
 
-def test_column_at_end_of_row_stays_there():
+async def test_column_at_end_of_row_stays_there():
     """
     And says that it did not move, rather than raising. A key held
     down at the edge of the row does nothing, the way it does nothing
@@ -103,7 +116,7 @@ def test_column_at_end_of_row_stays_there():
     assert order_of(window) == [[pane] for pane in panes]
 
 
-def test_pane_in_stack_moves_whole_column():
+async def test_pane_in_stack_moves_whole_column():
     """
     The column is what moves, panes and all. Taking one pane out of a
     stack is a different move, and `break-pane` is the command for
@@ -120,7 +133,7 @@ def test_pane_in_stack_moves_whole_column():
     assert order_of(window) == [[panes[1], stacked], [panes[0]]]
 
 
-def test_column_keeps_its_width_when_it_moves():
+async def test_column_keeps_its_width_when_it_moves():
     """
     `column_widths` is keyed by the column object, so nothing has to
     carry the width across.
@@ -134,7 +147,7 @@ def test_column_keeps_its_width_when_it_moves():
     assert window.column_width(panes[1]) == was
 
 
-def test_layout_is_rebuilt_after_move():
+async def test_layout_is_rebuilt_after_move():
     """
     `invalidation_hash` names every pane in the order they sit in, so
     a swap of two columns that hold the same shapes still changes it.
@@ -153,14 +166,14 @@ def test_layout_is_rebuilt_after_move():
 # What a person sees.
 
 
-def test_moving_column_renames_title_bars():
+async def test_moving_column_renames_title_bars():
     """
     The bar of a pane names the panes on either side, so a move
     renames them. Nothing in the move does that: the names are read
     off the tree on every render. Lillecarl/pymux#207.
     """
-    with create_client(STRIP, columns=COLUMNS) as (pymux, draw):
-        panes = create_row_of_named_panes(pymux)
+    async with create_client(STRIP, columns=COLUMNS) as (pymux, draw):
+        panes = await create_row_of_named_panes(pymux)
         moved = panes[2]
 
         def halves():
@@ -173,7 +186,7 @@ def test_moving_column_renames_title_bars():
         assert "beta" in left, (left, right)
         assert "alpha" not in left + right, (left, right)
 
-        pymux.handle_command("move-column -L")
+        await run(pymux, "move-column -L")
 
         # Now it is between the two, and its bar says so.
         left, right = halves()
@@ -181,15 +194,15 @@ def test_moving_column_renames_title_bars():
         assert "beta" in right, (left, right)
 
 
-def test_moving_column_outside_strip_is_refused():
+async def test_moving_column_outside_strip_is_refused():
     """
     Every other layout divides the window, so there is no row to move
     a column along. `switch-column-width` refuses the same way.
     """
-    with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
-        create_row_of_named_panes(pymux)
+    async with create_client(CHROME, columns=COLUMNS) as (pymux, draw):
+        await create_row_of_named_panes(pymux)
         draw()
 
-        pymux.handle_command("move-column -L")
+        await run(pymux, "move-column -L")
 
         assert "not a strip" in (pymux.get_client_state().message or ""), pymux.get_client_state().message

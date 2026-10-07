@@ -11,7 +11,7 @@ from pymux.commands import CommandParser, add_command
 from pymux.commands.split_window import add_arguments, split_window
 
 
-def new_pane(pymux: Pymux, args: argparse.Namespace) -> None:
+def new_pane(pymux: Pymux, args: argparse.Namespace):
     """
     Open a pane in a window.
 
@@ -20,7 +20,7 @@ def new_pane(pymux: Pymux, args: argparse.Namespace) -> None:
     pymux's tree, so a new pane splits the window: this is
     split-window under the name the ask means. Lillecarl/pymux#297.
     """
-    split_window(pymux, args)
+    return split_window(pymux, args)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

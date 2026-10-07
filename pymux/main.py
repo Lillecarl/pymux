@@ -741,14 +741,16 @@ class ClientState:
         app.key_processor.before_key_press += rushed
 
         # The following code needs to run with the application active.
-        # Especially, `create_window` needs to know what the current
+        # Especially, `startup` needs to know what the current
         # application is, in order to focus the new pane.
         with set_app(app):
             # Redraw all CLIs. (Adding a new client could mean that the others
             # change size, so everything has to be redrawn.)
             pymux.invalidate(Woke.CLIENT_ATTACHED)
 
-            pymux.startup()
+            # Not here: making the first window waits for a process,
+            # and this runs in `__init__`. Each route awaits `startup`
+            # after `add_client` instead, under this same application.
 
         return app
 
@@ -1816,7 +1818,7 @@ class Pymux:
             raise ValueError("Connection for app %r not found" % (app,))
         return connection
 
-    def startup(self):
+    async def startup(self):
         # Handle start-up comands.
         # (Does initial key bindings.)
         if not self._startup_done:
@@ -1831,7 +1833,7 @@ class Pymux:
                 self.spawn_command(call_command_handler("source-file", self, [self.source_file]))
 
             # Make sure that there is one window created.
-            self.create_window(command=self.startup_command)
+            await self.create_window(command=self.startup_command)
 
     def get_title(self):
         """
@@ -1969,7 +1971,7 @@ class Pymux:
             if not client_state.temporary and active_window_for_app(client_state.app) == window
         ]
 
-    def _create_pane(
+    async def _create_pane(
         self,
         window: Window | None = None,
         command: str | None = None,
@@ -1977,6 +1979,7 @@ class Pymux:
         on_done: Callable[[], None] | None = None,
         session: Session | None = None,
         job: Job | None = None,
+        task_group: anyio.TaskGroup | None = None,
     ):
         """
         Create a new :class:`pymux.arrangement.Pane` instance. (Don't put it in
@@ -1992,7 +1995,17 @@ class Pymux:
         :param job: If given, show this job instead of running anything:
             a viewer pane, read-only, that replays the tail and follows
             the rest. Nothing forks and no program runs.
+        :param task_group: Whose scope the program runs in. Without one
+            it is the server's, and a pane made outside `Pymux.running`
+            names its own: tests hold one for the test. Nothing is
+            started without a group to watch it.
         """
+        if task_group is None:
+            task_group = self.tasks
+        if task_group is None:
+            raise RuntimeError(
+                "A pane was made outside `Pymux.running` with no task group, so nothing would watch its program."
+            )
 
         def done_callback():
             "When the process finishes."
@@ -2151,9 +2164,6 @@ class Pymux:
         )
         pane = Pane(terminal)
 
-        # ptterm starts the process only when the terminal is rendered for
-        # the first time. Start it right away, so that panes in detached
-        # sessions also run and produce output. (Like tmux does.)
         terminal_control = terminal.terminal_control
 
         # What moves `#{pane_revision}`. It is wired here and not in
@@ -2222,8 +2232,15 @@ class Pymux:
             # together. Lillecarl/pymux#321.
             size = self.size_with_no_client(session)
             terminal_control.set_size(size.columns, size.rows)
-            terminal_control.process.start()
-            terminal_control._running = True
+            # A viewer has no program: the feed stands where the process
+            # would, and starting it is starting nothing. A program
+            # starts watched, so that panes in detached sessions also
+            # run and produce output. (Like tmux does.)
+            if job is None:
+                await terminal_control.start(task_group)
+            else:
+                terminal_control.process.start()
+                terminal_control._running = True
 
         # Keep track of panes. This is a WeakKeyDictionary, we only add, but
         # don't remove.
@@ -2241,7 +2258,7 @@ class Pymux:
 
         return pane
 
-    def display_overlay(
+    async def display_overlay(
         self,
         command: str | None = None,
         width: str | None = None,
@@ -2280,7 +2297,7 @@ class Pymux:
         except Exception:
             window = None
 
-        pane = self._create_pane(window=window, command=command, on_done=done)
+        pane = await self._create_pane(window=window, command=command, on_done=done)
 
         session.overlay_pane = pane
         session.overlay_title = title or command or "overlay"
@@ -2312,7 +2329,7 @@ class Pymux:
         self._sync_focus_everywhere()
         self.invalidate(Woke.OVERLAY_CLOSED)
 
-    def display_job_overlay(
+    async def display_job_overlay(
         self,
         job: Job,
         session: Session | None = None,
@@ -2334,7 +2351,7 @@ class Pymux:
             session = self.current_session
         self.close_overlay(session)
 
-        pane = self._create_pane(session=session, job=job)
+        pane = await self._create_pane(session=session, job=job)
 
         session.overlay_pane = pane
         session.overlay_title = describe(job)
@@ -2345,7 +2362,7 @@ class Pymux:
 
         return pane
 
-    def open_job_in_pane(self, job: Job, session: Session | None = None) -> Window:
+    async def open_job_in_pane(self, job: Job, session: Session | None = None) -> Window:
         """
         Open a job as a pane in a new window of a session.
 
@@ -2357,7 +2374,7 @@ class Pymux:
         if session is None:
             session = self.current_session
 
-        pane = self._create_pane(session=session, job=job)
+        pane = await self._create_pane(session=session, job=job)
         session.arrangement.create_window(pane, name="job %d" % job.job_id)
         if session is self.current_session:
             pane.focus()
@@ -2367,7 +2384,7 @@ class Pymux:
         assert window is not None  # The arrangement just took the pane.
         return window
 
-    def take_over_job(self, job: Job, session: Session | None = None) -> None:
+    async def take_over_job(self, job: Job, session: Session | None = None) -> None:
         """
         Run a job's command again, interactively, in a new window.
 
@@ -2380,7 +2397,7 @@ class Pymux:
         """
         if session is None:
             session = self.current_session
-        self.create_window(command=job.command, start_directory=job.directory, session=session)
+        await self.create_window(command=job.command, start_directory=job.directory, session=session)
 
     def _sync_focus_everywhere(self) -> None:
         "Give every client the focus that its state asks for."
@@ -3522,13 +3539,14 @@ exec pymux notify -u "$urgency" -- "$@"
                 app.exit()
         self.done.set()
 
-    def create_window(
+    async def create_window(
         self,
         command: str | None = None,
         start_directory: str | None = None,
         name=None,
         index: WindowIndex | None = None,
         session: Session | None = None,
+        task_group: anyio.TaskGroup | None = None,
     ):
         """
         Create a new :class:`pymux.arrangement.Window` in the arrangement.
@@ -3540,24 +3558,31 @@ exec pymux notify -u "$urgency" -- "$@"
         session of the client that asks. A window made for another
         session is not focused: its pane is in no layout the asking
         client draws.
+
+        `task_group` is whose scope the pane's program runs in, and
+        without one it is the server's. A window made outside
+        `Pymux.running` names its own.
         """
         asked_for = self.current_session
         if session is None:
             session = asked_for
 
-        pane = self._create_pane(None, command, start_directory=start_directory, session=session)
+        pane = await self._create_pane(
+            None, command, start_directory=start_directory, session=session, task_group=task_group
+        )
 
         session.arrangement.create_window(pane, name=name, index=index)
         if session is asked_for:
             pane.focus()
         self.invalidate(Woke.WINDOW_OPENED)
 
-    def add_process(
+    async def add_process(
         self,
         command: str | None = None,
         vsplit: bool = False,
         start_directory: str | None = None,
         window: Window | None = None,
+        task_group: anyio.TaskGroup | None = None,
     ):
         """
         Add a new process to the given window (or the active window).
@@ -3568,11 +3593,12 @@ exec pymux notify -u "$urgency" -- "$@"
         if window is None:
             raise CommandException("no current window")
 
-        pane = self._create_pane(
+        pane = await self._create_pane(
             window,
             command,
             start_directory=start_directory,
             session=self.session_showing(window),
+            task_group=task_group,
         )
         window.add_pane(pane, vsplit=vsplit)
         pane.focus()
@@ -4044,6 +4070,10 @@ exec pymux notify -u "$urgency" -- "$@"
                         color_depth=color_depth,
                         connection=None,
                     )
+                    # Under this client's application: the new pane is
+                    # focused where it is looked at.
+                    with set_app(client_state.app):
+                        await self.startup()
 
                     # The same as for a client over a socket: an
                     # exception in the event loop is logged, not turned

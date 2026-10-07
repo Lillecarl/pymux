@@ -36,17 +36,18 @@ LINES = 5
 
 
 @pytest.fixture
-def pymux():
+async def pymux():
     mux = Pymux()
-    mux.create_window("%s -c pass" % (sys.executable,))
-    try:
-        yield mux
-    finally:
-        for window in list(mux.arrangement.windows):
-            for pane in list(window.panes):
-                process = getattr(pane, "process", None)
-                if process is not None and not process.is_terminated:
-                    process.kill()
+    async with mux.running():
+        await mux.create_window("%s -c pass" % (sys.executable,))
+        try:
+            yield mux
+        finally:
+            for window in list(mux.arrangement.windows):
+                for pane in list(window.panes):
+                    process = getattr(pane, "process", None)
+                    if process is not None and not process.is_terminated:
+                        process.kill()
 
 
 def the_pane(mux):
@@ -100,16 +101,34 @@ def revision_of(mux, pane) -> str:
     return run(mux, "list-panes", "-F", "#{pane_revision}")
 
 
+async def settled(pane) -> None:
+    """
+    Wait until the pane's program has ended and its output has landed.
+
+    A program starts in the background now, so a pane made a moment
+    ago still has output coming: a revision read before it lands is a
+    race with every wait below. The pane object itself stays usable
+    after its program ends.
+    """
+    while not pane.process.is_terminated:
+        await anyio.sleep(0.005)
+    while True:
+        revision = pane.revision
+        await anyio.sleep(0.02)
+        if pane.revision == revision:
+            return
+
+
 # ----------------------------------------------------------------------
 # The number.
 
 
-def test_a_fresh_pane_has_a_revision(pymux):
+async def test_a_fresh_pane_has_a_revision(pymux):
     pane = the_pane(pymux)
     assert pane.revision >= 0
 
 
-def test_output_moves_it(pymux):
+async def test_output_moves_it(pymux):
     pane = the_pane(pymux)
     before = pane.revision
 
@@ -118,7 +137,7 @@ def test_output_moves_it(pymux):
     assert pane.revision > before
 
 
-def test_it_only_goes_up(pymux):
+async def test_it_only_goes_up(pymux):
     "So a caller may keep the last one it saw and compare."
     pane = the_pane(pymux)
     seen = [pane.revision]
@@ -140,7 +159,7 @@ def test_it_only_goes_up(pymux):
         ("the foreground", "\x1b]10;#ff0000\x1b\\"),
     ],
 )
-def test_it_moves_for_what_the_row_counter_does_not_see(pymux, name, data):
+async def test_it_moves_for_what_the_row_counter_does_not_see(pymux, name, data):
     pane = the_pane(pymux)
     arrives(pane, "text")  # Something on the screen to change the look of.
 
@@ -156,17 +175,17 @@ def test_it_moves_for_what_the_row_counter_does_not_see(pymux, name, data):
     assert pane.revision > before
 
 
-def test_the_format_field_reads_it(pymux):
+async def test_the_format_field_reads_it(pymux):
     pane = the_pane(pymux)
     arrives(pane, "hello")
 
     assert revision_of(pymux, pane) == str(pane.revision)
 
 
-def test_two_panes_count_apart(pymux):
+async def test_two_panes_count_apart(pymux):
     pane = the_pane(pymux)
     window = pymux.arrangement.get_active_window()
-    pymux.add_process("%s -c pass" % (sys.executable,), window=window)
+    await pymux.add_process("%s -c pass" % (sys.executable,), window=window)
     other = window.panes[-1]
 
     arrives(pane, "hello")
@@ -203,6 +222,7 @@ async def test_a_pane_that_already_moved_answers_at_once(pymux):
 
 async def test_a_wait_ends_when_the_pane_changes(pymux):
     pane = the_pane(pymux)
+    await settled(pane)
     pymux.command_output = []
     try:
         waiting = call_command_handler(
@@ -227,6 +247,7 @@ async def test_a_wait_ends_when_the_pane_changes(pymux):
 async def test_a_wait_that_runs_out_answers_the_same_revision(pymux):
     "So a caller compares rather than trusting that something happened."
     pane = the_pane(pymux)
+    await settled(pane)
     standing = pane.revision
 
     with anyio.fail_after(2):
@@ -297,7 +318,7 @@ async def test_a_wait_nobody_awaits_hooks_nothing(pymux):
     answer.close()
 
 
-def test_a_wait_from_nobody_is_refused(pymux):
+async def test_a_wait_from_nobody_is_refused(pymux):
     """
     `bind-key X wait-pane-change` would put a task in the server's group
     per press and nobody would read the answer. The same rule as
@@ -323,7 +344,7 @@ def test_a_wait_from_nobody_is_refused(pymux):
         (["--timeout", "0"], "A wait is longer than no time at all."),
     ],
 )
-def test_what_cannot_be_read_is_refused(pymux, arguments, message):
+async def test_what_cannot_be_read_is_refused(pymux, arguments, message):
     pane = the_pane(pymux)
     errors = []
     pymux.add_command_error = errors.append

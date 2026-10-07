@@ -147,7 +147,7 @@ async def test_view_job_refuses_a_busy_pane_without_k():
         await _run(pymux, state, "new-window sleep 30")
 
         with pytest.raises(CommandException, match="Pane is busy"):
-            view_job(pymux, argparse.Namespace(k=False, target_pane=None, job=1, tags=[], session=None))
+            await view_job(pymux, argparse.Namespace(k=False, target_pane=None, job=1, tags=[], session=None))
 
         await _run(pymux, state, "view-job -k 1")
         pane = _viewer(pymux)
@@ -157,4 +157,4 @@ async def test_view_job_refuses_a_busy_pane_without_k():
 async def test_view_job_of_no_job_says_so():
     async with create_session() as (pymux, state):
         with pytest.raises(CommandException, match="no job 12"):
-            view_job(pymux, argparse.Namespace(k=False, target_pane=None, job=12, tags=[], session=None))
+            await view_job(pymux, argparse.Namespace(k=False, target_pane=None, job=12, tags=[], session=None))

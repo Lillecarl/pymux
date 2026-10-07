@@ -21,34 +21,35 @@ from pymux.options import ALL_OPTIONS
 
 
 @pytest.fixture
-def pymux():
+async def pymux():
     "A server with one window, whose program ends at once."
     mux = Pymux()
-    mux.create_window("%s -c pass" % (sys.executable,))
-    try:
-        yield mux
-    finally:
-        for window in list(mux.arrangement.windows):
-            for pane in list(window.panes):
-                process = getattr(pane, "process", None)
-                if process is not None and not process.is_terminated:
-                    process.kill()
+    async with mux.running():
+        await mux.create_window("%s -c pass" % (sys.executable,))
+        try:
+            yield mux
+        finally:
+            for window in list(mux.arrangement.windows):
+                for pane in list(window.panes):
+                    process = getattr(pane, "process", None)
+                    if process is not None and not process.is_terminated:
+                        process.kill()
 
 
 def pane_of(mux):
     return mux.arrangement.get_active_window().active_pane
 
 
-def test_pane_keeps_what_option_says(pymux):
+async def test_pane_keeps_what_option_says(pymux):
     ALL_OPTIONS["history-limit"].set_value(pymux, "10000")
     assert pane_of(pymux).screen.get_history_limit() == 10000
 
 
-def test_default_is_one_tmux_keeps(pymux):
+async def test_default_is_one_tmux_keeps(pymux):
     assert pane_of(pymux).screen.get_history_limit() == 2000
 
 
-def test_option_reaches_pane_that_is_already_running(pymux):
+async def test_option_reaches_pane_that_is_already_running(pymux):
     pane = pane_of(pymux)
     assert pane.screen.get_history_limit() == 2000
     ALL_OPTIONS["history-limit"].set_value(pymux, "5000")

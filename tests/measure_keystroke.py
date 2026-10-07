@@ -81,7 +81,7 @@ import re
 import sys
 import time
 from collections import Counter
-from contextlib import contextmanager
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -182,69 +182,43 @@ ANSWER = "~"
 KEY = "a"
 
 
-@contextmanager
-def create_client(size):
+@asynccontextmanager
+async def create_client(size):
     """
-    One session, one pane, one client, and no loop turning.
+    One session, one pane and one client.
 
-    The loop is made and never run. `KeyProcessor.process_keys` arms a
-    flush timer, which needs a loop to arm against; nothing has to
-    fire it, and nothing may, because a turn of the loop would let the
-    pane's program write to the screen and the next frame would differ
-    for a reason this file did not choose.
-
-    **The application is told which loop that is.**
-    `Application.create_background_task` reads `self.loop` and asks
-    asyncio for a running one only when it is `None`, and `run_async`
-    is what usually sets it. Nothing runs the application here, so
-    this does what `run_async` would: the timer is armed against a
-    loop that exists and never turns.
+    The pane runs the default shell, which writes nothing on its own,
+    so no turn of the loop changes what a stage draws or counts.
     """
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
     pymux = Pymux()
-    try:
-        with create_pipe_input() as pipe:
-            output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: size)
-            state = pymux.add_client(
-                output=output,
-                input=pipe,
-                color_depth=ColorDepth.DEPTH_8_BIT,
-                connection=Connection(),
-            )
+    async with pymux.running():
+        try:
+            with create_pipe_input() as pipe:
+                output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: size)
+                state = pymux.add_client(
+                    output=output,
+                    input=pipe,
+                    color_depth=ColorDepth.DEPTH_8_BIT,
+                    connection=Connection(),
+                )
 
-            state.app.loop = loop
+                with set_app(state.app):
+                    # What attaching brings: the bindings, and the pane
+                    # the keystroke lands in.
+                    await pymux.startup()
+                    # The clock moves by itself, and a frame drawn either
+                    # side of a second is two different diffs.
+                    #
+                    # **`test-mode` pins it rather than emptying it.** This
+                    # used to set `status-right` to nothing, which measured
+                    # a status line no person has: the clock is the widest
+                    # thing on the right of it and the diff of a frame is
+                    # what this counts.
+                    pymux.handle_command("set-option test-mode on")
 
-            with set_app(state.app):
-                # The clock moves by itself, and a frame drawn either
-                # side of a second is two different diffs.
-                #
-                # **`test-mode` pins it rather than emptying it.** This
-                # used to set `status-right` to nothing, which measured
-                # a status line no person has: the clock is the widest
-                # thing on the right of it and the diff of a frame is
-                # what this counts.
-                pymux.handle_command("set-option test-mode on")
-
-            yield pymux, state
-    finally:
-        pymux.stop()
-
-        # The flush timers were armed and never fired, because nothing
-        # turned the loop. Closing it under them prints "Task was
-        # destroyed but it is pending" once for each keystroke, so
-        # they are cancelled and the loop is turned until they have
-        # taken it. **After the measurement**, which is why a turn
-        # here costs it nothing.
-        pending = asyncio.all_tasks(loop)
-        for task in pending:
-            task.cancel()
-        if pending:
-            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-
-        asyncio.set_event_loop(None)
-        loop.close()
+                yield pymux, state
+        finally:
+            pymux.stop()
 
 
 def stages(pymux, state):
@@ -507,7 +481,7 @@ def the_tree_a_key_press_walks(layout):
     return crossed, counted, childless, shape
 
 
-def main() -> int:
+async def main() -> int:
     include = os.environ.get("PYMUX_KEYSTROKE_INCLUDE", "")
     tolerance = float(os.environ.get("PYMUX_KEYSTROKE_TOLERANCE") or DEFAULT_TOLERANCE)
 
@@ -518,7 +492,7 @@ def main() -> int:
     # attaches, and a resize is a different measurement from a
     # keystroke, so each size gets a session of its own.
     for size_name, size in SIZES.items():
-        with create_client(size) as (pymux, state):
+        async with create_client(size) as (pymux, state):
             picked = stages(pymux, state)
             if include:
                 picked = {n: w for n, w in picked.items() if re.search(include, n)}
@@ -615,4 +589,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(asyncio.run(main()))

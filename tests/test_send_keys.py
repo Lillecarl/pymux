@@ -26,18 +26,19 @@ LINES = 5
 
 
 @pytest.fixture
-def pymux():
+async def pymux():
     "A server with one window, whose program ends at once."
     mux = Pymux()
-    mux.create_window("%s -c pass" % (sys.executable,))
-    try:
-        yield mux
-    finally:
-        for window in list(mux.arrangement.windows):
-            for pane in list(window.panes):
-                process = getattr(pane, "process", None)
-                if process is not None and not process.is_terminated:
-                    process.kill()
+    async with mux.running():
+        await mux.create_window("%s -c pass" % (sys.executable,))
+        try:
+            yield mux
+        finally:
+            for window in list(mux.arrangement.windows):
+                for pane in list(window.panes):
+                    process = getattr(pane, "process", None)
+                    if process is not None and not process.is_terminated:
+                        process.kill()
 
 
 def create_pane(mux, data: str = ""):
@@ -62,7 +63,7 @@ def send(mux, *arguments):
     return "".join(written), errors
 
 
-def test_reset_clears_what_program_drew(pymux):
+async def test_reset_clears_what_program_drew(pymux):
     pane = create_pane(pymux, "hello\r\nworld")
     assert pane.screen.page.data_buffer
 
@@ -71,7 +72,7 @@ def test_reset_clears_what_program_drew(pymux):
     assert not pane.screen.page.data_buffer
 
 
-def test_reset_puts_cursor_home(pymux):
+async def test_reset_puts_cursor_home(pymux):
     pane = create_pane(pymux, "hello\r\nworld")
 
     send(pymux, "-R")
@@ -82,7 +83,7 @@ def test_reset_puts_cursor_home(pymux):
     )
 
 
-def test_reset_takes_back_mode_program_set(pymux):
+async def test_reset_takes_back_mode_program_set(pymux):
     "DECSCNM turns the whole pane over, and a person cannot type it off."
     pane = create_pane(pymux, set_mode(PrivateMode.REVERSE_VIDEO))
     assert pane.screen.has_reverse_video
@@ -92,7 +93,7 @@ def test_reset_takes_back_mode_program_set(pymux):
     assert not pane.screen.has_reverse_video
 
 
-def test_reset_leaves_alternate_screen(pymux):
+async def test_reset_leaves_alternate_screen(pymux):
     "A program that died inside vim leaves the pane on the other screen."
     pane = create_pane(pymux, set_mode(PrivateMode.ALTERNATE_SCREEN_WITH_CURSOR))
     assert pane.screen.in_alternate_screen
@@ -102,13 +103,13 @@ def test_reset_leaves_alternate_screen(pymux):
     assert not pane.screen.in_alternate_screen
 
 
-def test_reset_says_nothing_to_program(pymux):
+async def test_reset_says_nothing_to_program(pymux):
     "It puts the terminal back. The program hears nothing of it."
     create_pane(pymux, "hello")
     assert send(pymux, "-R") == ("", [])
 
 
-def test_keys_reach_program(pymux):
+async def test_keys_reach_program(pymux):
     create_pane(pymux)
     written, errors = send(pymux, "Enter")
     assert errors == []
@@ -176,7 +177,7 @@ KEYS = [
 
 
 @pytest.mark.parametrize(("name", "expected"), KEYS)
-def test_key_sends_what_keyboard_sends(pymux, name, expected):
+async def test_key_sends_what_keyboard_sends(pymux, name, expected):
     create_pane(pymux)
     written, errors = send(pymux, name)
     assert errors == []
@@ -208,7 +209,7 @@ KEYS_A_LEGACY_PANE_CANNOT_READ = [
 
 
 @pytest.mark.parametrize(("name", "lost"), KEYS_A_LEGACY_PANE_CANNOT_READ)
-def test_key_pane_cannot_read_is_refused(pymux, name, lost):
+async def test_key_pane_cannot_read_is_refused(pymux, name, lost):
     create_pane(pymux)
 
     written, errors = send(pymux, name)
@@ -228,7 +229,7 @@ def test_key_pane_cannot_read_is_refused(pymux, name, lost):
         ("ctrl+shift+a", "\x1b[97;6u"),
     ],
 )
-def test_same_keys_reach_pane_that_asked_for_them(pymux, name, expected):
+async def test_same_keys_reach_pane_that_asked_for_them(pymux, name, expected):
     """
     Nothing about the key changed. The pane did, and that is the whole
     point: what can be sent belongs to the pane.
@@ -238,7 +239,7 @@ def test_same_keys_reach_pane_that_asked_for_them(pymux, name, expected):
     assert send(pymux, name) == (expected, [])
 
 
-def test_modifiers_legacy_pane_can_read_still_go(pymux):
+async def test_modifiers_legacy_pane_can_read_still_go(pymux):
     """
     ctrl is a control code and alt is an escape in front of the key.
     Both are ambiguous there, and ambiguous is not the same as absent.
@@ -251,7 +252,7 @@ def test_modifiers_legacy_pane_can_read_still_go(pymux):
     assert send(pymux, "shift+a") == ("A", [])
 
 
-def test_arrow_is_application_form_for_pane_that_asked(pymux):
+async def test_arrow_is_application_form_for_pane_that_asked(pymux):
     """
     "\\x1bOA" is the application cursor form, and DECCKM turns it on.
 
@@ -293,26 +294,26 @@ KEYS_A_KEYBOARD_LEAVES_OUT = [
 
 
 @pytest.mark.parametrize(("name", "expected"), KEYS_A_KEYBOARD_LEAVES_OUT)
-def test_modified_key_older_table_never_named(pymux, name, expected):
+async def test_modified_key_older_table_never_named(pymux, name, expected):
     create_pane(pymux)
     written, errors = send(pymux, name)
     assert errors == []
     assert written == expected
 
 
-def test_key_name_nobody_knows_goes_as_text(pymux):
+async def test_key_name_nobody_knows_goes_as_text(pymux):
     "tmux sends an argument it cannot name as the text it is."
     create_pane(pymux)
     assert send(pymux, "notakey")[0] == "notakey"
 
 
-def test_dash_l_sends_names_as_text(pymux):
+async def test_dash_l_sends_names_as_text(pymux):
     "`-l` says to send what is written, so `Enter` is five letters."
     create_pane(pymux)
     assert send(pymux, "-l", "Enter")[0] == "Enter"
 
 
-def test_keys_are_refused_while_person_reads_history(pymux):
+async def test_keys_are_refused_while_person_reads_history(pymux):
     """
     The program is suspended in copy mode, so it cannot answer.
     Lillecarl/pymux#133.

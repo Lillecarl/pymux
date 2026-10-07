@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-def lock(pymux: Pymux, args: argparse.Namespace) -> None:
+def lock(pymux: Pymux, args: argparse.Namespace):
     """
     Cover the screen with the program `lock-command` names, and give
     it the keyboard until it is done. The overlay of `display-popup`
@@ -20,4 +20,4 @@ def lock(pymux: Pymux, args: argparse.Namespace) -> None:
     arrive at the same screen: the one the asking client is on.
     Lillecarl/pymux#324.
     """
-    pymux.display_overlay(command=pymux.lock_command, width="100%", height="100%")
+    return pymux.display_overlay(command=pymux.lock_command, width="100%", height="100%")

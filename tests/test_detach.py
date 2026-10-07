@@ -39,23 +39,28 @@ async def create_standalone_session():
     """
     pymux = Pymux()
     pymux._runs_standalone = True
-    pymux.create_window("%s -c pass" % (sys.executable,))
-    output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS))
-    with create_pipe_input() as pipe:
-        state = pymux.add_client(
-            output=output,
-            input=pipe,
-            color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=None,
-        )
-        try:
-            yield pymux, state
-        finally:
-            for window in list(pymux.arrangement.windows):
-                for pane in list(window.panes):
-                    process = getattr(pane, "process", None)
-                    if process is not None and not process.is_terminated:
-                        process.kill()
+    async with pymux.running():
+        await pymux.create_window("%s -c pass" % (sys.executable,))
+        output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS))
+        with create_pipe_input() as pipe:
+            state = pymux.add_client(
+                output=output,
+                input=pipe,
+                color_depth=ColorDepth.DEPTH_8_BIT,
+                connection=None,
+            )
+            # What `run_standalone` does after: the bindings and the
+            # window that attaching brings.
+            with set_app(state.app):
+                await pymux.startup()
+            try:
+                yield pymux, state
+            finally:
+                for window in list(pymux.arrangement.windows):
+                    for pane in list(window.panes):
+                        process = getattr(pane, "process", None)
+                        if process is not None and not process.is_terminated:
+                            process.kill()
 
 
 async def test_detach_ends_create_standalone_session():
@@ -125,20 +130,21 @@ async def test_client_over_connection_still_detaches():
             detached.append(True)
 
     pymux = Pymux()
-    pymux.create_window("%s -c pass" % (sys.executable,))
-    output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS))
-    with create_pipe_input() as pipe:
-        state = pymux.add_client(
-            output=output,
-            input=pipe,
-            color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=_Connection(),
-        )
-        try:
-            with set_app(state.app):
-                pymux.handle_command("detach-client")
+    async with pymux.running():
+        await pymux.create_window("%s -c pass" % (sys.executable,))
+        output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS))
+        with create_pipe_input() as pipe:
+            state = pymux.add_client(
+                output=output,
+                input=pipe,
+                color_depth=ColorDepth.DEPTH_8_BIT,
+                connection=_Connection(),
+            )
+            try:
+                with set_app(state.app):
+                    pymux.handle_command("detach-client")
 
-            assert detached == [True]
-            assert not pymux.done.is_set()
-        finally:
-            pymux.stop()
+                assert detached == [True]
+                assert not pymux.done.is_set()
+            finally:
+                pymux.stop()

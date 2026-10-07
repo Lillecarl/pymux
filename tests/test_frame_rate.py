@@ -21,6 +21,7 @@ from prompt_toolkit.application.current import set_app
 from session import create_session
 
 from pymux.arrangement import DEFAULT_FRAME_RATE
+from pymux.commands import handle_command
 from pymux.main import Pymux
 from pymux.options import ALL_WINDOW_OPTIONS, SetOptionError
 
@@ -28,47 +29,50 @@ PANE_COMMAND = "%s -c pass" % (sys.executable,)
 
 
 @pytest.fixture
-def pymux():
+async def pymux():
     mux = Pymux()
-    mux.create_window(PANE_COMMAND)
-    return mux
+    async with mux.running():
+        await mux.create_window(PANE_COMMAND)
+        yield mux
 
 
 def window(pymux):
     return pymux.arrangement.windows[0]
 
 
-def test_window_starts_at_thirty(pymux):
+async def test_window_starts_at_thirty(pymux):
     assert DEFAULT_FRAME_RATE == 30
     assert window(pymux).frame_rate == 30
 
 
-def test_option_writes_active_window(pymux):
+async def test_option_writes_active_window(pymux):
     ALL_WINDOW_OPTIONS["frame-rate"].set_value(pymux, "10")
     assert window(pymux).frame_rate == 10
 
 
-def test_command_writes_it(pymux):
-    pymux.handle_command("set-window-option frame-rate 12")
+async def test_command_writes_it(pymux):
+    answer = handle_command(pymux, "set-window-option frame-rate 12")
+    if answer is not None:
+        await answer
     assert window(pymux).frame_rate == 12
 
 
-def test_zero_means_as_fast_as_it_can(pymux):
+async def test_zero_means_as_fast_as_it_can(pymux):
     ALL_WINDOW_OPTIONS["frame-rate"].set_value(pymux, "0")
     assert window(pymux).frame_rate == 0
 
 
-def test_number_that_is_not_one_is_refused(pymux):
+async def test_number_that_is_not_one_is_refused(pymux):
     with pytest.raises(SetOptionError):
         ALL_WINDOW_OPTIONS["frame-rate"].set_value(pymux, "smooth")
 
 
-def test_negative_rate_is_refused(pymux):
+async def test_negative_rate_is_refused(pymux):
     with pytest.raises(SetOptionError):
         ALL_WINDOW_OPTIONS["frame-rate"].set_value(pymux, "-1")
 
 
-def test_global_form_says_what_new_window_starts_with(pymux):
+async def test_global_form_says_what_new_window_starts_with(pymux):
     """
     `-g` on a window option is the default for the next window, and
     changes none that is open. Lillecarl/pymux#199.
@@ -78,11 +82,11 @@ def test_global_form_says_what_new_window_starts_with(pymux):
 
     assert window(pymux).frame_rate == was, "it changed a window that was open"
 
-    pymux.create_window(PANE_COMMAND)
+    await pymux.create_window(PANE_COMMAND)
     assert pymux.arrangement.windows[-1].frame_rate == 15
 
 
-def test_option_offers_rates_worth_naming(pymux):
+async def test_option_offers_rates_worth_naming(pymux):
     assert "30" in ALL_WINDOW_OPTIONS["frame-rate"].get_all_values(pymux)
 
 
@@ -122,10 +126,14 @@ async def test_client_follows_window_it_looks_at():
     async with create_session() as (mux, state):
         with set_app(state.app):
             first = mux.arrangement.get_active_window()
-            mux.handle_command("set-window-option frame-rate 10")
+            answer = handle_command(mux, "set-window-option frame-rate 10")
+            if answer is not None:
+                await answer
 
-            mux.create_window(PANE_COMMAND)
-            mux.handle_command("set-window-option frame-rate 60")
+            await mux.create_window(PANE_COMMAND)
+            answer = handle_command(mux, "set-window-option frame-rate 60")
+            if answer is not None:
+                await answer
 
         assert state.app.min_redraw_interval == pytest.approx(1 / 60)
 

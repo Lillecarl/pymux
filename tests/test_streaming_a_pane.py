@@ -40,18 +40,19 @@ STAYS = '%s -c "import time; time.sleep(60)"' % (sys.executable,)
 
 
 @pytest.fixture
-def pymux():
+async def pymux():
     mux = Pymux()
     mux.test_mode = True
-    mux.create_window(STAYS)
-    try:
-        yield mux
-    finally:
-        for window in list(mux.arrangement.windows):
-            for pane in list(window.panes):
-                process = getattr(pane, "process", None)
-                if process is not None and not process.is_terminated:
-                    process.kill()
+    async with mux.running():
+        await mux.create_window(STAYS)
+        try:
+            yield mux
+        finally:
+            for window in list(mux.arrangement.windows):
+                for pane in list(window.panes):
+                    process = getattr(pane, "process", None)
+                    if process is not None and not process.is_terminated:
+                        process.kill()
 
 
 def the_pane(mux, lines: int = 5, columns: int = 20):

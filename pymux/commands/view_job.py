@@ -13,7 +13,7 @@ from pymux.enums import Woke
 from pymux.jobs import find_job
 
 
-def view_job(pymux: Pymux, args: argparse.Namespace) -> None:
+def view_job(pymux: Pymux, args: argparse.Namespace):
     """
     Replace a pane with a viewer for a job.
 
@@ -30,6 +30,11 @@ def view_job(pymux: Pymux, args: argparse.Namespace) -> None:
 
     pane = the_pane(pymux, args.target_pane)
 
+    return _replace(pymux, pane, job, args)
+
+
+async def _replace(pymux: Pymux, pane, job, args: argparse.Namespace) -> None:
+
     if pymux._window_holding(pane) is None:
         raise CommandException(
             "Can't view in a pane whose window is gone: a pane that ends leaves the tree, unless remain-on-exit holds it."
@@ -39,7 +44,7 @@ def view_job(pymux: Pymux, args: argparse.Namespace) -> None:
         raise CommandException("Pane is busy: -k kills a program that runs.")
 
     pane.process.kill()
-    new_pane = pymux._create_pane(job=job)
+    new_pane = await pymux._create_pane(job=job)
     pymux.arrangement.replace_pane(pane, new_pane)
     pymux.invalidate(Woke.PANE_WAS_RESPAWNED)
 

@@ -53,18 +53,19 @@ class FakeClientState:
 
 
 @pytest.fixture
-def pymux():
+async def pymux():
     "A server with one window, whose program ends at once."
     mux = Pymux()
-    mux.create_window("%s -c pass" % (sys.executable,))
-    try:
-        yield mux
-    finally:
-        for window in list(mux.arrangement.windows):
-            for pane in list(window.panes):
-                process = getattr(pane, "process", None)
-                if process is not None and not process.is_terminated:
-                    process.kill()
+    async with mux.running():
+        await mux.create_window("%s -c pass" % (sys.executable,))
+        try:
+            yield mux
+        finally:
+            for window in list(mux.arrangement.windows):
+                for pane in list(window.panes):
+                    process = getattr(pane, "process", None)
+                    if process is not None and not process.is_terminated:
+                        process.kill()
 
 
 def a_selection(mux):
@@ -94,7 +95,7 @@ def asked_for(text):
     return "\x1b]52;c;%s\x1b\\" % (payload,)
 
 
-def test_a_copy_reaches_the_terminal_of_the_client(pymux):
+async def test_a_copy_reaches_the_terminal_of_the_client(pymux):
     connection = listening(pymux)
     pane, buffer = a_selection(pymux)
 
@@ -103,7 +104,7 @@ def test_a_copy_reaches_the_terminal_of_the_client(pymux):
     assert connection.written == [asked_for(SELECTED)]
 
 
-def test_a_copy_reaches_the_paste_buffer_of_the_session(pymux):
+async def test_a_copy_reaches_the_paste_buffer_of_the_session(pymux):
     """
     Which is what `paste-buffer` reads.
 
@@ -129,7 +130,7 @@ async def test_the_clipboard_of_a_client_is_the_buffer_of_the_session():
 
 
 @pytest.mark.parametrize("mode", [Clipboard.EXTERNAL, Clipboard.ON])
-def test_a_copy_goes_out_on_both_of_the_values_that_allow_it(pymux, mode):
+async def test_a_copy_goes_out_on_both_of_the_values_that_allow_it(pymux, mode):
     """
     `set-clipboard` answers two questions, and tmux gives them
     different answers. A copy the person makes goes out on "external"
@@ -145,7 +146,7 @@ def test_a_copy_goes_out_on_both_of_the_values_that_allow_it(pymux, mode):
     assert connection.written == [asked_for(SELECTED)]
 
 
-def test_set_clipboard_off_keeps_the_copy_inside(pymux):
+async def test_set_clipboard_off_keeps_the_copy_inside(pymux):
     "The one value that says no to the person as well."
     connection = listening(pymux)
     pymux.clipboard_mode = Clipboard.OFF

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import io
 import sys
-from contextlib import contextmanager
+from contextlib import asynccontextmanager
 
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
@@ -25,6 +25,7 @@ from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 from session import Connection
 
+from pymux.commands import handle_command
 from pymux.main import Pymux
 
 ROWS = 12
@@ -46,56 +47,64 @@ class _Screen:
         return self.size
 
 
-@contextmanager
-def create_client(commands=(), rows=ROWS, columns=NARROW):
+@asynccontextmanager
+async def create_client(commands=(), rows=ROWS, columns=NARROW):
     "A server with one client, a way to draw, and a way to resize."
     pymux = Pymux()
     terminal = _Screen(rows, columns)
     output = Vt100_Output(stdout=io.StringIO(), get_size=terminal.get_size)
 
-    with create_pipe_input() as pipe:
-        state = pymux.add_client(
-            output=output,
-            input=pipe,
-            color_depth=ColorDepth.DEPTH_8_BIT,
-            connection=Connection(),
-        )
-        try:
-            with set_app(state.app):
-                for command in commands:
-                    pymux.handle_command(command)
+    async with pymux.running():
+        with create_pipe_input() as pipe:
+            state = pymux.add_client(
+                output=output,
+                input=pipe,
+                color_depth=ColorDepth.DEPTH_8_BIT,
+                connection=Connection(),
+            )
+            try:
+                with set_app(state.app):
+                    # What attaching brings: the bindings, and the
+                    # window the drawing below looks at.
+                    await pymux.startup()
+                    for command in commands:
+                        answer = handle_command(pymux, command)
+                        if answer is not None:
+                            await answer
 
-                def draw():
-                    "Every row of the screen, at whatever size it is now."
-                    size = terminal.get_size()
-                    screen = Screen()
-                    state.app.layout.container.write_to_screen(
-                        screen,
-                        MouseHandlers(),
-                        WritePosition(xpos=0, ypos=0, width=size.columns, height=size.rows),
-                        "",
-                        False,
-                        None,
-                    )
-                    screen.draw_all_floats()
-                    state.app.renderer._last_screen = screen
-                    return screen, size
+                    def draw():
+                        "Every row of the screen, at whatever size it is now."
+                        size = terminal.get_size()
+                        screen = Screen()
+                        state.app.layout.container.write_to_screen(
+                            screen,
+                            MouseHandlers(),
+                            WritePosition(xpos=0, ypos=0, width=size.columns, height=size.rows),
+                            "",
+                            False,
+                            None,
+                        )
+                        screen.draw_all_floats()
+                        state.app.renderer._last_screen = screen
+                        return screen, size
 
-                yield pymux, terminal, draw
-        finally:
-            for window in list(pymux.arrangement.windows):
-                for pane in list(window.panes):
-                    process = getattr(pane, "process", None)
-                    if process is not None and not process.is_terminated:
-                        process.kill()
+                    yield pymux, terminal, draw
+            finally:
+                for window in list(pymux.arrangement.windows):
+                    for pane in list(window.panes):
+                        process = getattr(pane, "process", None)
+                        if process is not None and not process.is_terminated:
+                            process.kill()
 
 
-def columns_of(pymux, how_many):
+async def columns_of(pymux, how_many):
     "A strip of this many columns, and its panes left to right."
     window = pymux.arrangement.get_active_window()
     opened = [window.active_pane]
     for _ in range(how_many - 1):
-        pymux.handle_command("split-window -h")
+        answer = handle_command(pymux, "split-window -h")
+        if answer is not None:
+            await answer
         opened.append(window.active_pane)
     return window, opened
 
@@ -113,13 +122,13 @@ def content_of(share):
     return share - 1
 
 
-def test_two_default_columns_fill_window_exactly():
+async def test_two_default_columns_fill_window_exactly():
     """
     Half a window each, borders included, so the strip does not
     overflow and nothing is shaved. Lillecarl/pymux#206.
     """
-    with create_client(STRIP) as (pymux, _terminal, draw):
-        _window, panes = columns_of(pymux, 2)
+    async with create_client(STRIP) as (pymux, _terminal, draw):
+        _window, panes = await columns_of(pymux, 2)
         draw()
 
         drawn = widths(pymux, panes)
@@ -128,10 +137,10 @@ def test_two_default_columns_fill_window_exactly():
         assert sum(drawn) + 2 == NARROW
 
 
-def test_wider_terminal_makes_every_column_wider():
+async def test_wider_terminal_makes_every_column_wider():
     "The reported bug. A column is a fraction, so it has to follow."
-    with create_client(STRIP) as (pymux, terminal, draw):
-        _window, panes = columns_of(pymux, 2)
+    async with create_client(STRIP) as (pymux, terminal, draw):
+        _window, panes = await columns_of(pymux, 2)
         draw()
         before = widths(pymux, panes)
 
@@ -142,9 +151,9 @@ def test_wider_terminal_makes_every_column_wider():
         assert after == [content_of(WIDE // 2)] * 2, (before, after)
 
 
-def test_narrower_terminal_makes_every_column_narrower():
-    with create_client(STRIP, columns=WIDE) as (pymux, terminal, draw):
-        _window, panes = columns_of(pymux, 2)
+async def test_narrower_terminal_makes_every_column_narrower():
+    async with create_client(STRIP, columns=WIDE) as (pymux, terminal, draw):
+        _window, panes = await columns_of(pymux, 2)
         draw()
 
         terminal.size = Size(rows=ROWS, columns=NARROW)
@@ -153,13 +162,13 @@ def test_narrower_terminal_makes_every_column_narrower():
         assert widths(pymux, panes) == [content_of(NARROW // 2)] * 2
 
 
-def test_panes_are_told_new_size():
+async def test_panes_are_told_new_size():
     """
     A column that is drawn wider has to tell the program in it, or the
     program keeps writing at the old width.
     """
-    with create_client(STRIP) as (pymux, terminal, draw):
-        _window, panes = columns_of(pymux, 2)
+    async with create_client(STRIP) as (pymux, terminal, draw):
+        _window, panes = await columns_of(pymux, 2)
         draw()
 
         terminal.size = Size(rows=ROWS, columns=WIDE)

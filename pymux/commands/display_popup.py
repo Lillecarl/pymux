@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandParser, add_command
 
 
-def display_popup(pymux: Pymux, args: argparse.Namespace) -> None:
+def display_popup(pymux: Pymux, args: argparse.Namespace):
     """
     Open an overlay pane in the middle of the screen.
 
@@ -22,7 +22,7 @@ def display_popup(pymux: Pymux, args: argparse.Namespace) -> None:
     first. `-E` is accepted for the tmux command line and changes
     nothing: an overlay of pymux always closes when its program ends.
     """
-    pymux.display_overlay(
+    return pymux.display_overlay(
         command=args.executable,
         width=args.width,
         height=args.height,

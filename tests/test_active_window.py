@@ -58,9 +58,8 @@ async def create_server(windows):
     """
     A server with this many windows, and a way to attach a client.
 
-    Attaching the first client is what gives a server with no window
-    one, so the count is reached by topping up rather than by creating
-    every window here.
+    No `startup` runs here, so every window is topped up below rather
+    than the first arriving with the client.
     """
     pymux = Pymux()
     pipes = []
@@ -77,22 +76,23 @@ async def create_server(windows):
             connection=Connection(),
         ).app
 
-    try:
-        first = attach()
-        with set_app(first):
-            while len(pymux.arrangement.windows) < windows:
-                pymux.create_window(NOTHING)
-        assert len(pymux.arrangement.windows) == windows
+    async with pymux.running():
+        try:
+            first = attach()
+            with set_app(first):
+                while len(pymux.arrangement.windows) < windows:
+                    await pymux.create_window(NOTHING)
+            assert len(pymux.arrangement.windows) == windows
 
-        yield pymux, attach
-    finally:
-        for window in list(pymux.arrangement.windows):
-            for pane in list(window.panes):
-                process = getattr(pane, "process", None)
-                if process is not None and not process.is_terminated:
-                    process.kill()
-        for pipe in pipes:
-            pipe.__exit__(None, None, None)
+            yield pymux, attach
+        finally:
+            for window in list(pymux.arrangement.windows):
+                for pane in list(window.panes):
+                    process = getattr(pane, "process", None)
+                    if process is not None and not process.is_terminated:
+                        process.kill()
+            for pipe in pipes:
+                pipe.__exit__(None, None, None)
 
 
 async def test_new_client_lands_where_session_is():

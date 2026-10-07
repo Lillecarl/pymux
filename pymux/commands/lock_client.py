@@ -11,7 +11,7 @@ from pymux.commands import CommandParser, add_command
 from pymux.commands.lock import lock
 
 
-def lock_client(pymux: Pymux, args: argparse.Namespace) -> None:
+def lock_client(pymux: Pymux, args: argparse.Namespace):
     """
     Lock the calling client, and take the keyboard until it is done.
 
@@ -21,7 +21,7 @@ def lock_client(pymux: Pymux, args: argparse.Namespace) -> None:
     session see it too -- which is what lock-session says; there is no
     per-client screen to cover alone. Lillecarl/pymux#324.
     """
-    lock(pymux, args)
+    return lock(pymux, args)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

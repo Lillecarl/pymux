@@ -31,18 +31,19 @@ LINES = 5
 
 
 @pytest.fixture
-def pymux():
+async def pymux():
     "A server with one window, whose program ends at once."
     mux = Pymux()
-    mux.create_window("%s -c pass" % (sys.executable,))
-    try:
-        yield mux
-    finally:
-        for window in list(mux.arrangement.windows):
-            for pane in list(window.panes):
-                process = getattr(pane, "process", None)
-                if process is not None and not process.is_terminated:
-                    process.kill()
+    async with mux.running():
+        await mux.create_window("%s -c pass" % (sys.executable,))
+        try:
+            yield mux
+        finally:
+            for window in list(mux.arrangement.windows):
+                for pane in list(window.panes):
+                    process = getattr(pane, "process", None)
+                    if process is not None and not process.is_terminated:
+                        process.kill()
 
 
 def create_pane(mux, data: str):
@@ -144,7 +145,7 @@ def read(markup: str) -> _Read:
 NINE_LINES = "".join("line %d\r\n" % number for number in range(9))
 
 
-def test_the_answer_is_one_element_a_page_can_hold(pymux):
+async def test_the_answer_is_one_element_a_page_can_hold(pymux):
     create_pane(pymux, "hello")
     reader = read(capture(pymux))
 
@@ -153,34 +154,34 @@ def test_the_answer_is_one_element_a_page_can_hold(pymux):
     assert reader.screen_class == "pyte-screen"
 
 
-def test_the_characters_are_the_ones_the_text_capture_gives(pymux):
+async def test_the_characters_are_the_ones_the_text_capture_gives(pymux):
     "The spelling is new; what is on the screen is not."
     create_pane(pymux, "one\r\ntwo")
 
     assert read(capture(pymux)).text.rstrip("\n") == "one\ntwo"
 
 
-def test_a_colour_reaches_the_drawing(pymux):
+async def test_a_colour_reaches_the_drawing(pymux):
     "The whole reason for this command: the text drops it."
     create_pane(pymux, "\x1b[31mred\x1b[0m")
 
     assert "pyte-fg-1" in read(capture(pymux)).drawn_by("red")
 
 
-def test_a_rendition_reaches_the_drawing(pymux):
+async def test_a_rendition_reaches_the_drawing(pymux):
     create_pane(pymux, "\x1b[1mbold\x1b[0m")
 
     assert "pyte-bold" in read(capture(pymux)).drawn_by("bold")
 
 
-def test_a_colour_a_program_named_carries_its_value(pymux):
+async def test_a_colour_a_program_named_carries_its_value(pymux):
     "No rule of a stylesheet can answer one, so it stays an attribute."
     create_pane(pymux, "\x1b[38;2;30;170;90mgreen\x1b[0m")
 
     assert "color:#1eaa5a" in read(capture(pymux)).drawn_by("green")
 
 
-def test_a_hyperlink_becomes_an_anchor(pymux):
+async def test_a_hyperlink_becomes_an_anchor(pymux):
     'What "OSC 8" opened, which no text capture can carry.'
     create_pane(pymux, "\x1b]8;;https://example.com/\x1b\\link\x1b]8;;\x1b\\")
     reader = read(capture(pymux))
@@ -188,7 +189,7 @@ def test_a_hyperlink_becomes_an_anchor(pymux):
     assert [href for _piece, _c, _s, href in reader.pieces if href] == ["https://example.com/"]
 
 
-def test_what_a_program_writes_cannot_become_markup(pymux):
+async def test_what_a_program_writes_cannot_become_markup(pymux):
     "A program in the pane writes every character of this document."
     create_pane(pymux, "<b>&")
 
@@ -199,7 +200,7 @@ def test_what_a_program_writes_cannot_become_markup(pymux):
 # The range.
 
 
-def test_the_default_range_is_the_visible_pane(pymux):
+async def test_the_default_range_is_the_visible_pane(pymux):
     """
     A caller that draws a pane a few times a second wants the screen,
     not ten thousand rows of history.
@@ -220,19 +221,19 @@ def test_the_default_range_is_the_visible_pane(pymux):
     assert text(pymux).splitlines() == drawn.splitlines()
 
 
-def test_a_dash_reaches_as_far_back_as_the_buffer_goes(pymux):
+async def test_a_dash_reaches_as_far_back_as_the_buffer_goes(pymux):
     create_pane(pymux, NINE_LINES)
 
     assert read(capture(pymux, "-S", "-")).text.splitlines()[0] == "line 0"
 
 
-def test_a_negative_line_reaches_into_the_history(pymux):
+async def test_a_negative_line_reaches_into_the_history(pymux):
     create_pane(pymux, NINE_LINES)
 
     assert read(capture(pymux, "-S", "-2", "-E", "-1")).text == "line 3\nline 4"
 
 
-def test_a_pane_is_as_tall_as_the_pane(pymux):
+async def test_a_pane_is_as_tall_as_the_pane(pymux):
     """
     A row the program never wrote is a blank line, so a caller's box
     does not change height with what is on the screen.
@@ -242,13 +243,13 @@ def test_a_pane_is_as_tall_as_the_pane(pymux):
     assert read(capture(pymux)).text == "one" + "\n" * (LINES - 1)
 
 
-def test_a_range_outside_the_buffer_is_empty(pymux):
+async def test_a_range_outside_the_buffer_is_empty(pymux):
     create_pane(pymux, "one")
 
     assert read(capture(pymux, "-S", "40", "-E", "50")).text == ""
 
 
-def test_a_line_number_that_is_not_a_number_is_an_error(pymux):
+async def test_a_line_number_that_is_not_a_number_is_an_error(pymux):
     create_pane(pymux, "one")
     errors = []
     pymux.add_command_error = errors.append
@@ -259,7 +260,7 @@ def test_a_line_number_that_is_not_a_number_is_an_error(pymux):
     assert errors == ["pymux: Invalid start line: nope"]
 
 
-def test_joining_the_rows_is_refused(pymux):
+async def test_joining_the_rows_is_refused(pymux):
     """
     `-J` answers the lines a program wrote, which have no width. HTML
     draws a screen, so the two ask for different things.
@@ -278,7 +279,7 @@ def test_joining_the_rows_is_refused(pymux):
 # The stylesheet.
 
 
-def test_the_stylesheet_answers_the_properties_the_spans_name(pymux):
+async def test_the_stylesheet_answers_the_properties_the_spans_name(pymux):
     "Without these the page draws nothing at all."
     create_pane(pymux, "one")
     stylesheet = run(pymux, "show-html-stylesheet")
@@ -288,7 +289,7 @@ def test_the_stylesheet_answers_the_properties_the_spans_name(pymux):
     assert "--pyte-fg:" in stylesheet
 
 
-def test_a_pane_carries_the_colours_a_program_set(pymux):
+async def test_a_pane_carries_the_colours_a_program_set(pymux):
     '"OSC 4" from inside the pane reaches the browser.'
     pane = create_pane(pymux, "\x1b]4;1;rgb:12/34/56\x1b\\")
     stylesheet = run(pymux, "show-html-stylesheet", "-t", "%%%i" % pane.pane_id)
@@ -298,7 +299,7 @@ def test_a_pane_carries_the_colours_a_program_set(pymux):
     assert "--pyte-1: #123456;" in stylesheet
 
 
-def test_the_stylesheet_of_no_pane_holds_one_rule(pymux):
+async def test_the_stylesheet_of_no_pane_holds_one_rule(pymux):
     "One stylesheet for every pane is what a caller should serve."
     create_pane(pymux, "one")
 

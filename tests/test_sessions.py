@@ -19,6 +19,7 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from session import in_this_process, once, over_connection
 
+from pymux.commands import handle_command
 from pymux.main import Pymux
 
 SIZE = Size(rows=24, columns=80)
@@ -37,10 +38,12 @@ def _server():
     return Pymux(startup_command=WAITING)
 
 
-def _command(pymux, state, text):
-    "Run a command as the person at this client."
+async def _command(pymux, state, text):
+    "Run a command as the person at this client, and wait for it."
     with set_app(state.app):
-        pymux.handle_command(text)
+        answer = handle_command(pymux, text)
+        if answer is not None:
+            await answer
 
 
 async def test_a_server_starts_with_one_session():
@@ -57,7 +60,7 @@ async def test_new_session_adds_one_and_moves_the_client():
         state, _ = await session.attach("only", SIZE)
 
         first = state.session
-        _command(pymux, state, "new-session -s work '%s'" % (WAITING,))
+        await _command(pymux, state, "new-session -s work '%s'" % (WAITING,))
 
         assert [s.name for s in pymux.sessions] == ["0", "work"]
         assert state.session.name == "work"
@@ -69,7 +72,7 @@ async def test_new_session_with_d_leaves_the_client_where_it_is():
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
-        _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
+        await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
 
         assert len(pymux.sessions) == 2
         assert state.session.name == "0"
@@ -80,8 +83,8 @@ async def test_a_second_session_cannot_take_a_name_that_is_taken():
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
-        _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
-        _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
+        await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
+        await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
 
         assert len(pymux.sessions) == 2
         assert "duplicate session: work" in state.message
@@ -92,8 +95,8 @@ async def test_each_session_holds_its_own_windows():
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
-        _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
-        _command(pymux, state, "new-window '%s'" % (WAITING,))
+        await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
+        await _command(pymux, state, "new-window '%s'" % (WAITING,))
 
         first, work = pymux.sessions
         assert len(first.arrangement.windows) == 2
@@ -105,15 +108,15 @@ async def test_a_client_switches_between_sessions():
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
-        _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
+        await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
 
-        _command(pymux, state, "switch-client -t work")
+        await _command(pymux, state, "switch-client -t work")
         assert state.session.name == "work"
 
-        _command(pymux, state, "switch-client -l")
+        await _command(pymux, state, "switch-client -l")
         assert state.session.name == "0"
 
-        _command(pymux, state, "attach-session -t work")
+        await _command(pymux, state, "attach-session -t work")
         assert state.session.name == "work"
 
 
@@ -131,8 +134,8 @@ async def test_two_clients_watch_two_sessions_at_once():
         here, _ = await session.attach("here", SIZE)
         there, _ = await session.attach("there", SIZE)
 
-        _command(pymux, here, "new-session -d -s work '%s'" % (WAITING,))
-        _command(pymux, there, "switch-client -t work")
+        await _command(pymux, here, "new-session -d -s work '%s'" % (WAITING,))
+        await _command(pymux, there, "switch-client -t work")
 
         assert here.session.name == "0"
         assert there.session.name == "work"
@@ -148,10 +151,10 @@ async def test_list_sessions_names_every_session():
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
-        _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
+        await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
 
         pymux.command_output = []
-        _command(pymux, state, "list-sessions -F '#{session_id} #{session_name}'")
+        await _command(pymux, state, "list-sessions -F '#{session_id} #{session_name}'")
         assert pymux.command_output == ["$0 0", "$1 work"]
         pymux.command_output = None
 
@@ -161,13 +164,13 @@ async def test_has_session_answers_for_every_session():
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
-        _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
+        await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
 
         state.message = None
-        _command(pymux, state, "has-session -t work")
+        await _command(pymux, state, "has-session -t work")
         assert state.message is None
 
-        _command(pymux, state, "has-session -t play")
+        await _command(pymux, state, "has-session -t play")
         assert "can't find session: play" in state.message
 
 
@@ -176,8 +179,8 @@ async def test_rename_session_leaves_the_other_alone():
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
-        _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
-        _command(pymux, state, "rename-session -t work office")
+        await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
+        await _command(pymux, state, "rename-session -t work office")
 
         assert [s.name for s in pymux.sessions] == ["0", "office"]
 
@@ -187,10 +190,10 @@ async def test_kill_session_takes_its_clients_somewhere_else():
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
-        _command(pymux, state, "new-session -s work '%s'" % (WAITING,))
+        await _command(pymux, state, "new-session -s work '%s'" % (WAITING,))
         assert state.session.name == "work"
 
-        _command(pymux, state, "kill-session -t work")
+        await _command(pymux, state, "kill-session -t work")
 
         assert [s.name for s in pymux.sessions] == ["0"]
         assert state.session.name == "0"
@@ -210,11 +213,11 @@ async def test_killing_a_session_moves_both_its_clients():
         here, _ = await session.attach("here", SIZE)
         there, _ = await session.attach("there", SIZE)
 
-        _command(pymux, here, "new-session -d -s work '%s'" % (WAITING,))
-        _command(pymux, here, "switch-client -t work")
-        _command(pymux, there, "switch-client -t work")
+        await _command(pymux, here, "new-session -d -s work '%s'" % (WAITING,))
+        await _command(pymux, here, "switch-client -t work")
+        await _command(pymux, there, "switch-client -t work")
 
-        _command(pymux, here, "kill-session -t work")
+        await _command(pymux, here, "kill-session -t work")
 
         assert [s.name for s in pymux.sessions] == ["0"]
         assert here.session.name == "0"
@@ -235,7 +238,7 @@ async def test_a_command_from_a_pane_runs_in_that_pane_s_session():
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
-        _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
+        await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
         work = pymux.get_session("work")
         pane = work.arrangement.windows[0].panes[0]
 
@@ -255,8 +258,8 @@ async def test_the_session_environment_belongs_to_the_session():
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
-        _command(pymux, state, "set-environment HERE first")
-        _command(pymux, state, "new-session -s work '%s'" % (WAITING,))
+        await _command(pymux, state, "set-environment HERE first")
+        await _command(pymux, state, "new-session -s work '%s'" % (WAITING,))
 
         assert state.session.environment == {}
         assert pymux.sessions[0].environment == {"HERE": "first"}
@@ -268,8 +271,8 @@ async def test_a_target_reaches_a_window_of_another_session():
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
-        _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
-        _command(pymux, state, "select-window -t work:1")
+        await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
+        await _command(pymux, state, "select-window -t work:1")
 
         assert state.session.name == "work"
 
@@ -283,7 +286,7 @@ async def test_a_target_that_names_no_session_finds_nothing():
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
-        _command(pymux, state, "select-window -t nowhere:1")
+        await _command(pymux, state, "select-window -t nowhere:1")
 
         assert "can't find window: nowhere:1" in state.message
 
@@ -294,11 +297,11 @@ async def test_a_pane_id_reaches_across_the_sessions():
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
-        _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
+        await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
         work = pymux.sessions[1]
         pane = work.arrangement.windows[0].panes[0]
 
-        _command(pymux, state, "kill-pane -t %%%s" % (pane.pane_id,))
+        await _command(pymux, state, "kill-pane -t %%%s" % (pane.pane_id,))
 
         assert work.arrangement.windows == []
         assert len(pymux.sessions[0].arrangement.windows) == 1
@@ -309,7 +312,7 @@ async def test_the_chooser_lists_every_session():
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
-        _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
+        await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
         with set_app(state.app):
             state.layout_manager.display_chooser()
             labels = state.layout_manager.chooser_entries()
@@ -323,7 +326,7 @@ async def test_choosing_a_window_of_another_session_moves_the_client():
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
-        _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
+        await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
         with set_app(state.app):
             state.layout_manager.display_chooser()
             # Pointing at it is the switch: the chooser has no picture
@@ -347,7 +350,7 @@ async def test_a_session_that_empties_goes():
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
 
-        _command(pymux, state, "new-session -d -s work '%s'" % (ENDING,))
+        await _command(pymux, state, "new-session -d -s work '%s'" % (ENDING,))
 
         await once(
             lambda: [s.name for s in pymux.sessions] == ["0"],
@@ -370,10 +373,10 @@ async def test_an_overlay_stays_in_its_own_session():
         here, _ = await session.attach("here", SIZE)
         there, _ = await session.attach("there", SIZE)
 
-        _command(pymux, here, "new-session -d -s work '%s'" % (WAITING,))
-        _command(pymux, there, "switch-client -t work")
+        await _command(pymux, here, "new-session -d -s work '%s'" % (WAITING,))
+        await _command(pymux, there, "switch-client -t work")
 
-        _command(pymux, here, "display-popup '%s'" % (WAITING,))
+        await _command(pymux, here, "display-popup '%s'" % (WAITING,))
 
         assert here.session.overlay_pane is not None
         assert there.session.overlay_pane is None
@@ -383,7 +386,7 @@ async def test_an_overlay_stays_in_its_own_session():
         assert pymux._has_focus(here, popup) is True
         assert pymux._has_focus(there, popup) is False
 
-        _command(pymux, here, "close-popup")
+        await _command(pymux, here, "close-popup")
         assert here.session.overlay_pane is None
 
 
@@ -398,13 +401,13 @@ async def test_lock_server_covers_every_session():
         state, _ = await session.attach("only", SIZE)
         pymux.lock_command = WAITING
 
-        _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
+        await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
 
-        _command(pymux, state, "lock-session")
+        await _command(pymux, state, "lock-session")
         assert pymux.sessions[0].overlay_pane is not None
         assert pymux.sessions[1].overlay_pane is None
 
-        _command(pymux, state, "close-popup")
+        await _command(pymux, state, "close-popup")
 
-        _command(pymux, state, "lock-server")
+        await _command(pymux, state, "lock-server")
         assert all(s.overlay_pane is not None for s in pymux.sessions)

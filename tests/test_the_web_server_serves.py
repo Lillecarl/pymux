@@ -38,21 +38,22 @@ STAYS = '%s -c "import time; time.sleep(60)"' % (sys.executable,)
 
 
 @pytest.fixture
-def pymux(tmp_path):
+async def pymux(tmp_path):
     mux = Pymux()
     mux.test_mode = True
-    mux.create_window(STAYS)
-    pane = mux.arrangement.get_active_window().active_pane
-    pane.screen.resize(LINES, COLUMNS)
-    mux.listen_on_socket(str(tmp_path / "s.sock"))
-    try:
-        yield mux
-    finally:
-        for window in list(mux.arrangement.windows):
-            for held in list(window.panes):
-                process = getattr(held, "process", None)
-                if process is not None and not process.is_terminated:
-                    process.kill()
+    async with mux.running():
+        await mux.create_window(STAYS)
+        pane = mux.arrangement.get_active_window().active_pane
+        pane.screen.resize(LINES, COLUMNS)
+        mux.listen_on_socket(str(tmp_path / "s.sock"))
+        try:
+            yield mux
+        finally:
+            for window in list(mux.arrangement.windows):
+                for held in list(window.panes):
+                    process = getattr(held, "process", None)
+                    if process is not None and not process.is_terminated:
+                        process.kill()
 
 
 class _Serving:

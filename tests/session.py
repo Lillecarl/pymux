@@ -277,6 +277,12 @@ async def in_this_process(pymux=None):
                     next(ttys) if ttyname is None else ttyname,
                 ),
             )
+            # The first window, before the test looks: attaching is what
+            # gave a server with no window one, and `add_client` no
+            # longer does that by itself. Under this client's
+            # application, so the new pane is focused where it looks.
+            with set_app(state.app):
+                await pymux.startup()
             # The socket route takes these from the `start-gui` packet.
             # This route has no packet, so the attach is here.
             # Lillecarl/pymux#271.
@@ -336,7 +342,7 @@ async def create_session(pymux=None, window=NOTHING):
     """
     async with in_this_process(pymux) as session:
         if window is not None:
-            session.pymux.create_window(window)
+            await session.pymux.create_window(window)
         state, _size = await session.attach("the client", DEFAULT_SIZE)
         yield session.pymux, state
 

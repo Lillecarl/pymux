@@ -114,20 +114,21 @@ def test_a_client_with_no_terminal_is_written_nothing(wire):
 
 
 @pytest.fixture
-def pymux():
+async def pymux():
     mux = Pymux()
-    mux.create_window("%s -c pass" % (sys.executable,))
-    try:
-        yield mux
-    finally:
-        for window in list(mux.arrangement.windows):
-            for pane in list(window.panes):
-                process = getattr(pane, "process", None)
-                if process is not None and not process.is_terminated:
-                    process.kill()
+    async with mux.running():
+        await mux.create_window("%s -c pass" % (sys.executable,))
+        try:
+            yield mux
+        finally:
+            for window in list(mux.arrangement.windows):
+                for pane in list(window.panes):
+                    process = getattr(pane, "process", None)
+                    if process is not None and not process.is_terminated:
+                        process.kill()
 
 
-def test_forwarding_asks_for_a_frame(pymux):
+async def test_forwarding_asks_for_a_frame(pymux):
     """
     A pane in a window nobody looks at draws no frame of its own, and a
     notification from one is exactly what forwarding is for. Without a

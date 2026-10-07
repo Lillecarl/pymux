@@ -20,12 +20,14 @@ async def pymux():
         yield pymux
 
 
-def run(pymux, command):
+async def run(pymux, command):
     "Run one command and give back what it said about it."
     from pymux.commands import handle_command
 
     before = len(pymux.message_log)
-    handle_command(pymux, command)
+    answer = handle_command(pymux, command)
+    if answer is not None:
+        await answer
     return list(pymux.message_log)[before:]
 
 
@@ -35,13 +37,13 @@ async def test_swap_pane_swaps_the_other_way_from_tmux_product_divergence(pymux)
     up and -D down. The pair is one divergence, recorded under one
     entry, with the tmux 3.7c probe beside it. Lillecarl/pymux#400.
     """
-    run(pymux, "split-window -v")
-    run(pymux, "split-window -v")
+    await run(pymux, "split-window -v")
+    await run(pymux, "split-window -v")
     window = pymux.arrangement.get_active_window()
     before = list(window.panes)
 
-    run(pymux, "select-pane -t .1")
-    run(pymux, "swap-pane -U")
+    await run(pymux, "select-pane -t .1")
+    await run(pymux, "swap-pane -U")
 
     after = list(window.panes)
     # The pane below (the one after in index order) came up, ours went
@@ -52,7 +54,7 @@ async def test_swap_pane_swaps_the_other_way_from_tmux_product_divergence(pymux)
     assert after[0] == before[0]
     assert window.active_pane == before[1]
 
-    run(pymux, "swap-pane -D")
+    await run(pymux, "swap-pane -D")
 
     after = list(window.panes)
     # -D is the mirror: our pane back up, the pane below back down.

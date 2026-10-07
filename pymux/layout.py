@@ -1370,7 +1370,7 @@ class LayoutManager:
         self.client_state.choose_job = False
         if job is None:
             return
-        self.pymux.display_job_overlay(job, self.client_state.session)
+        self.pymux.spawn_command(self.pymux.display_job_overlay(job, self.client_state.session))
 
     def open_pointed_job_in_pane(self) -> None:
         """
@@ -1382,7 +1382,7 @@ class LayoutManager:
         self.client_state.choose_job = False
         if job is None:
             return
-        self.pymux.open_job_in_pane(job, self.client_state.session)
+        self.pymux.spawn_command(self.pymux.open_job_in_pane(job, self.client_state.session))
 
     def take_over_pointed_job(self) -> None:
         """
@@ -1393,7 +1393,7 @@ class LayoutManager:
         self.client_state.choose_job = False
         if job is None:
             return
-        self.pymux.take_over_job(job, self.client_state.session)
+        self.pymux.spawn_command(self.pymux.take_over_job(job, self.client_state.session))
 
     def _choose_job_tokens(self) -> StyleAndTextTuples:
         """

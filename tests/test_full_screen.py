@@ -108,7 +108,7 @@ async def test_the_status_line_costs_a_row_and_full_screen_gives_it_back():
     """
     async with in_this_process() as session:
         pymux = session.pymux
-        pymux.create_window(NOTHING)
+        await pymux.create_window(NOTHING)
         state, _ = await session.attach("only", BIG)
 
         with_chrome = pymux.plane_size().rows

@@ -20,8 +20,8 @@ from test_focused_pane_border import create_client
 MARK = "\u2503"
 
 
-def test_a_split_pane_marks_its_first_frame():
-    with create_client(["split-window -h", "select-pane -L"]) as (pymux, state, _draw):
+async def test_a_split_pane_marks_its_first_frame():
+    async with create_client(["split-window -h", "select-pane -L"]) as (pymux, state, _draw):
         window = pymux.arrangement.get_active_window()
         assert len(window.panes) == 2
 

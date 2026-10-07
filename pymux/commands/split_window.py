@@ -11,7 +11,7 @@ from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import add_format_arguments, find_window, print_object_format, the_window
 
 
-def split_window(pymux: Pymux, args: argparse.Namespace) -> None:
+def split_window(pymux: Pymux, args: argparse.Namespace):
     """
     Split this window into two panes, side by side or stacked.
     """
@@ -21,8 +21,12 @@ def split_window(pymux: Pymux, args: argparse.Namespace) -> None:
     # Split in the target window. (libtmux targets the pane of the window.)
     target_window = find_window(pymux, args.target_window)
 
+    return _split(pymux, executable, start_directory, target_window, args)
+
+
+async def _split(pymux: Pymux, executable, start_directory, target_window, args: argparse.Namespace) -> None:
     # The tmux definition of horizontal is the opposite of prompt_toolkit.
-    pymux.add_process(
+    await pymux.add_process(
         executable,
         vsplit=args.h,
         start_directory=start_directory,

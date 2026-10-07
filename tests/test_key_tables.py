@@ -16,7 +16,7 @@ from __future__ import annotations
 import pytest
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.keys import Keys
-from session import create_session
+from session import create_session, once
 from test_command_mode import press
 
 from pymux.commands import handle_command
@@ -28,10 +28,12 @@ def pymux():
     return Pymux()
 
 
-def run(pymux, command):
+async def run(pymux, command):
     "Run one command and give back what it said about it."
     before = len(pymux.message_log)
-    handle_command(pymux, command)
+    answer = handle_command(pymux, command)
+    if answer is not None:
+        await answer
     return list(pymux.message_log)[before:]
 
 
@@ -53,18 +55,18 @@ def written_keys(pymux):
     return written
 
 
-def split(pymux):
+async def split(pymux):
     "A second pane, so focus has somewhere to go."
-    run(pymux, "split-window -v")
+    await run(pymux, "split-window -v")
 
 
 # ----------------------------------------------------------------------
 # The table of a binding.
 
 
-def test_bind_into_a_named_table(pymux):
+async def test_bind_into_a_named_table(pymux):
     "-T names the table, and the first -T names a mode nobody had."
-    run(pymux, "bind-key -T my-mode x new-window")
+    await run(pymux, "bind-key -T my-mode x new-window")
 
     manager = pymux.key_bindings_manager
     assert "my-mode" in manager.mode_tables
@@ -72,18 +74,18 @@ def test_bind_into_a_named_table(pymux):
     assert manager.binding_on("x") is None
 
 
-def test_n_still_binds_the_root_table(pymux):
+async def test_n_still_binds_the_root_table(pymux):
     "The spelling every configuration file already has keeps its meaning."
-    run(pymux, "bind-key -n x new-window")
+    await run(pymux, "bind-key -n x new-window")
 
     assert pymux.key_bindings_manager.binding_on("x", table="root") is not None
 
 
-def test_one_key_is_bindings_apart_by_table(pymux):
+async def test_one_key_is_bindings_apart_by_table(pymux):
     "The same key in three tables is three bindings."
-    run(pymux, "bind-key -n x new-window")
-    run(pymux, "bind-key x kill-window")
-    run(pymux, "bind-key -T my-mode x kill-pane")
+    await run(pymux, "bind-key -n x new-window")
+    await run(pymux, "bind-key x kill-window")
+    await run(pymux, "bind-key -T my-mode x kill-pane")
 
     manager = pymux.key_bindings_manager
     assert manager.binding_on("x", table="root").command == "new-window"
@@ -91,22 +93,22 @@ def test_one_key_is_bindings_apart_by_table(pymux):
     assert manager.binding_on("x", table="my-mode").command == "kill-pane"
 
 
-def test_unbind_from_the_table_it_was_bound_into(pymux):
+async def test_unbind_from_the_table_it_was_bound_into(pymux):
     "A binding under another name's table is not the one this touches."
-    run(pymux, "bind-key -T my-mode x new-window")
-    run(pymux, "unbind-key x")
+    await run(pymux, "bind-key -T my-mode x new-window")
+    await run(pymux, "unbind-key x")
 
     assert pymux.key_bindings_manager.binding_on("x", table="my-mode") is not None
 
-    run(pymux, "unbind-key -T my-mode x")
+    await run(pymux, "unbind-key -T my-mode x")
 
     assert pymux.key_bindings_manager.binding_on("x", table="my-mode") is None
 
 
-def test_prefix_keys_list_skips_the_other_tables(pymux):
+async def test_prefix_keys_list_skips_the_other_tables(pymux):
     "which-key draws what the prefix reaches, and nothing else."
-    run(pymux, "bind-key -T my-mode x new-window")
-    run(pymux, "bind-key -n y new-window")
+    await run(pymux, "bind-key -T my-mode x new-window")
+    await run(pymux, "bind-key -n y new-window")
 
     rows = pymux.key_bindings_manager.prefix_keys()
 
@@ -137,7 +139,7 @@ async def test_leave_mode_puts_root_back():
 
 async def test_entering_an_unknown_mode_is_said_so():
     async with create_session() as (pymux, state):
-        complaints = run(pymux, "enter-mode no-such-mode")
+        complaints = await run(pymux, "enter-mode no-such-mode")
 
         assert complaints
         assert "no-such-mode" in complaints[0]
@@ -146,7 +148,7 @@ async def test_entering_an_unknown_mode_is_said_so():
 
 async def test_leaving_with_no_mode_to_leave_is_said_so():
     async with create_session() as (pymux, state):
-        complaints = run(pymux, "leave-mode")
+        complaints = await run(pymux, "leave-mode")
 
         assert complaints
 
@@ -176,7 +178,11 @@ async def test_a_prefix_pressed_inside_a_mode_sits_on_top_of_it():
 
         press(state, Keys.ControlB, "c")
 
-        assert len(pymux.arrangement.windows) == before + 1
+        await once(
+            lambda: len(pymux.arrangement.windows) == before + 1,
+            5.0,
+            "the window the key opens never arrived",
+        )
         assert state.key_tables == ["pane-management"]
         assert not state.has_prefix
 
@@ -202,7 +208,7 @@ async def test_a_bare_key_reaches_the_pane_while_the_mode_holds():
 
 async def test_the_mode_s_own_keys_answer_without_the_prefix():
     async with create_session() as (pymux, state):
-        split(pymux)
+        await split(pymux)
         pane_before = pymux.arrangement.get_active_window().active_pane
         in_mode(pymux, state)
 
@@ -218,7 +224,7 @@ async def test_the_mode_masks_the_root_table():
     the only one that answers.
     """
     async with create_session() as (pymux, state):
-        run(pymux, "bind-key -n c-e new-window")
+        await run(pymux, "bind-key -n c-e new-window")
         before = len(pymux.arrangement.windows)
 
         in_mode(pymux, state)
@@ -229,7 +235,11 @@ async def test_the_mode_masks_the_root_table():
         run_as_client(pymux, state, "leave-mode")
         press(state, Keys.ControlE)
 
-        assert len(pymux.arrangement.windows) == before + 1
+        await once(
+            lambda: len(pymux.arrangement.windows) == before + 1,
+            5.0,
+            "the window the key opens never arrived",
+        )
 
 
 async def test_strictness_is_a_binding_of_any():
@@ -239,8 +249,8 @@ async def test_strictness_is_a_binding_of_any():
     own keys do not name reaches the pane.
     """
     async with create_session() as (pymux, state):
-        run(pymux, "bind-key -T strict x new-window")
-        run(pymux, "bind-key -T strict Any noop")
+        await run(pymux, "bind-key -T strict x new-window")
+        await run(pymux, "bind-key -T strict Any noop")
         written = written_keys(pymux)
 
         in_mode(pymux, state, "strict")
@@ -308,19 +318,19 @@ async def test_client_key_table_names_the_mode():
         assert state.active_key_table == "prefix"
 
 
-def listed(pymux, command):
+async def listed(pymux, command):
     "Run a listing the way the command line runs it, and read it back."
     pymux.command_output = []
-    run(pymux, command)
+    await run(pymux, command)
     out, pymux.command_output = "\n".join(pymux.command_output), None
     return out
 
 
-def test_list_keys_spells_the_table(pymux):
-    run(pymux, "bind-key -T my-mode x new-window")
-    run(pymux, "bind-key y kill-window")
+async def test_list_keys_spells_the_table(pymux):
+    await run(pymux, "bind-key -T my-mode x new-window")
+    await run(pymux, "bind-key y kill-window")
 
-    out = listed(pymux, "list-keys")
+    out = await listed(pymux, "list-keys")
 
     assert "-T my-mode" in out
     assert "x new-window" in out
@@ -328,11 +338,11 @@ def test_list_keys_spells_the_table(pymux):
     assert "y kill-window" in out
 
 
-def test_list_keys_only_one_table(pymux):
-    run(pymux, "bind-key -T my-mode x new-window")
-    run(pymux, "bind-key y kill-window")
+async def test_list_keys_only_one_table(pymux):
+    await run(pymux, "bind-key -T my-mode x new-window")
+    await run(pymux, "bind-key y kill-window")
 
-    out = listed(pymux, "list-keys -T my-mode")
+    out = await listed(pymux, "list-keys -T my-mode")
 
     assert "my-mode" in out
     assert "y kill-window" not in out

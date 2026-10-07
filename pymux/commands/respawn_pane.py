@@ -27,10 +27,10 @@ def respawn_pane(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     pane = the_pane(pymux, args.target_pane)
 
-    replace_pane_program(pymux, pane, args)
+    return replace_pane_program(pymux, pane, args)
 
 
-def replace_pane_program(pymux: Pymux, pane: Pane, args: argparse.Namespace) -> None:
+async def replace_pane_program(pymux: Pymux, pane: Pane, args: argparse.Namespace) -> None:
     """
     The tail `respawn-window` shares: the pane is chosen, and the
     program that runs in it is replaced.
@@ -47,7 +47,7 @@ def replace_pane_program(pymux: Pymux, pane: Pane, args: argparse.Namespace) -> 
     # The pane stays where it was: a respawn restarts the program in
     # the directory it reported, and a pane that never reported starts
     # the way a new one does.
-    new_pane = pymux._create_pane(command=args.command or None, start_directory=pane.current_directory)
+    new_pane = await pymux._create_pane(command=args.command or None, start_directory=pane.current_directory)
     pymux.arrangement.replace_pane(pane, new_pane)
     pymux.invalidate(Woke.PANE_WAS_RESPAWNED)
 

@@ -866,6 +866,14 @@ class ServerConnection:
                 with set_app(client_state.app):
                     session.arrangement.set_active_window_from_pane_id(pane.pane_id)
 
+            # A command can be the first touch of a server nobody
+            # attached to yet: the bindings and the first window it
+            # would have gotten then arrive now. Later ones noop.
+            # Under the temporary application, so the new pane focuses.
+            if client_state is not None:
+                with set_app(client_state.app):
+                    await self.pymux.startup()
+
         pymux = self.pymux
         pymux.command_output = []
         pymux.command_error = []
@@ -970,6 +978,12 @@ class ServerConnection:
 
             async def run() -> None:
                 try:
+                    # The first window, before the first frame: a client
+                    # that arrives finds a session with a window, the
+                    # way attaching always did. Under its application,
+                    # so the new pane is focused where it is looked at.
+                    with set_app(client_state.app):
+                        await self.pymux.startup()
                     # A server has no terminal of its own to print a
                     # traceback on, and nobody to press ENTER, which is
                     # what prompt_toolkit does with an exception in the
