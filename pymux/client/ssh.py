@@ -54,6 +54,7 @@ from libpymux.protocol import Field, Packet
 from prompt_toolkit.input.vt100 import raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output
 
+from pymux.agentic import caller_cwd, caller_environment
 from pymux.forwarding import (
     MAY_NARROW,
     Direction,
@@ -63,7 +64,6 @@ from pymux.forwarding import (
 )
 from pymux.utils import nonblocking
 
-from .agentic import caller_cwd, caller_environment
 from .defaults import is_ssh_url as is_ssh_url
 from .forwards import Forwards
 from .reconnect import (
@@ -436,7 +436,7 @@ class SshClient(TerminalClient):
                     Field.PANE_ID: pane_id,
                     # Resolved on this machine, where the agent's
                     # environment is: the far side only forwards it.
-                    # `client/agentic.py` holds the names.
+                    # `pymux/agentic.py` holds the names.
                     Field.ENVIRONMENT: {**dict(os.environ), **caller_environment()},
                     Field.CWD: caller_cwd(),
                 }

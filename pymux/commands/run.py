@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shlex
 from typing import TYPE_CHECKING
 
@@ -10,7 +11,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import answer, refuse_without_a_waiter
-from pymux.jobs import Job, outcome_text, parse_tag
+from pymux.jobs import SESSION_TAG, Job, outcome_text, parse_env, parse_tag
 
 
 def run_job(pymux: Pymux, args: argparse.Namespace):
@@ -41,7 +42,26 @@ def run_job(pymux: Pymux, args: argparse.Namespace):
 
 
 async def _submit(pymux: Pymux, args: argparse.Namespace, shell_command: str) -> None:
-    job = await pymux.jobs.submit(shell_command, args.directory, [parse_tag(word) for word in args.tags], args.session)
+    caller = pymux.caller_context
+    tags = dict(parse_tag(word) for word in args.tags)
+    # An explicit session wins; the caller's stamps the rest, so its
+    # later lookups prefer this job. A hand-typed session tag is left
+    # alone: it filters like any other tag.
+    if args.session is not None:
+        tags[SESSION_TAG] = args.session
+    elif SESSION_TAG not in tags and caller is not None and caller.session_id is not None:
+        tags[SESSION_TAG] = caller.session_id
+    # An explicit directory wins; the caller's is second, which is
+    # where the command would have run had the caller run it itself.
+    directory = args.directory or (caller.cwd if caller is not None else None)
+    # The caller's environment, with the explicit variables last. A
+    # key binding and an old client send no caller, and then the job
+    # runs where the server stands, the way it always has.
+    env = dict(caller.environment) if caller is not None else dict(os.environ)
+    for word in args.env:
+        key, value = parse_env(word)
+        env[key] = value
+    job = await pymux.jobs.submit(shell_command, directory, list(tags.items()), env)
 
     if args.w:
         refuse_without_a_waiter(pymux, "wait")
@@ -88,7 +108,15 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         dest="directory",
         metavar="<directory>",
         default=None,
-        help="Run in this directory. The server's own otherwise.",
+        help="Run in this directory. The caller's own otherwise, and the server's where no caller said.",
+    )
+    parser.add_argument(
+        "--env",
+        dest="env",
+        action="append",
+        default=[],
+        metavar="<key=value>",
+        help="Set a variable for the job, over the caller's environment. A bare key sets the empty string.",
     )
     parser.add_argument(
         "--tag",
@@ -103,7 +131,7 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         "--session",
         metavar="<id>",
         default=None,
-        help="Whose job this is: the caller's agent session id, so its later lookups find it. Unnamed otherwise.",
+        help="Stamp this session onto the job instead of the caller's. Unstamped jobs belong to no session.",
     )
     parser.add_argument(
         "shell_command",

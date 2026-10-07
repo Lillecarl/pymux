@@ -13,7 +13,8 @@ from libpymux.protocol import Field, Packet
 from libpymux.sockets import servers_newest_first
 from prompt_toolkit.input.vt100 import raw_mode
 
-from .agentic import caller_cwd, caller_environment
+from pymux.agentic import caller_cwd, caller_environment
+
 from .terminal import TerminalClient
 
 __all__ = [
@@ -62,7 +63,7 @@ class PosixClient(TerminalClient):
                 # caller's context itself, so the client sends the
                 # whole environment -- resolved to one id under
                 # `PYMUX_AGENTIC_ID` beside it -- and the directory it
-                # stands in. `client/agentic.py` holds the names.
+                # stands in. `pymux/agentic.py` holds the names.
                 Field.ENVIRONMENT: {**dict(os.environ), **caller_environment()},
                 Field.CWD: caller_cwd(),
             }

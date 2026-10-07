@@ -24,6 +24,7 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 
 from pymux.commands.common import find_pane
 
+from .agentic import caller_context
 from .colors import ColorDetection, DefaultColors
 from .commands import handle_command
 from .enums import Woke
@@ -868,6 +869,11 @@ class ServerConnection:
         pymux = self.pymux
         pymux.command_output = []
         pymux.command_error = []
+        # Who sent this, and from where: the client resolves both fresh
+        # on every invocation and says them in the packet, because the
+        # server's own environment names nothing about the caller.
+        # `pymux/agentic.py` holds the names.
+        pymux.caller_context = caller_context(packet.get(Field.ENVIRONMENT), packet.get(Field.CWD))
 
         client_state = self.client_state
         if client_state is None:
@@ -892,6 +898,7 @@ class ServerConnection:
                 errors = pymux.command_error
                 pymux.command_output = None
                 pymux.command_error = None
+                pymux.caller_context = None
 
                 try:
                     if output:

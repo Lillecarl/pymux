@@ -94,7 +94,7 @@ async def test_run_wait_fails_on_a_nonzero_exit():
                 answer = run_job(
                     pymux,
                     argparse.Namespace(
-                        w=True, directory=None, tags=[], session=None, shell_command=["sh", "-c", "exit 3"]
+                        w=True, directory=None, tags=[], session=None, env=[], shell_command=["sh", "-c", "exit 3"]
                     ),
                 )
                 assert answer is not None
@@ -204,7 +204,12 @@ async def test_a_job_that_never_starts_says_why():
                 answer = run_job(
                     pymux,
                     argparse.Namespace(
-                        w=True, directory="/no-such-directory", tags=[], session=None, shell_command=["echo", "hi"]
+                        w=True,
+                        directory="/no-such-directory",
+                        tags=[],
+                        session=None,
+                        env=[],
+                        shell_command=["echo", "hi"],
                     ),
                 )
                 assert answer is not None

@@ -3,7 +3,7 @@ What a detached command says about who sent it.
 
 The client sends its whole environment -- resolved to one id under
 `PYMUX_AGENTIC_ID` beside it -- and the directory it stands in, on
-every `run-command` packet (`client/agentic.py`). The server end
+every `run-command` packet (`pymux/agentic.py`). The server end
 reads the caller out of that, because its own environment names
 nothing about who called. These tests read what such a packet
 carries, without a server: a stub socket replays the answer, and the
@@ -17,7 +17,7 @@ import os
 
 from libpymux.protocol import Field, Packet
 
-from pymux.client.agentic import AGENT_SESSION_VARS, PYMUX_AGENTIC_ID, caller_cwd, caller_environment
+from pymux.agentic import AGENT_SESSION_VARS, PYMUX_AGENTIC_ID, caller_cwd, caller_environment
 from pymux.client.posix import PosixClient
 
 # ----------------------------------------------------------------------

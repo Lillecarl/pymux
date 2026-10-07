@@ -24,7 +24,7 @@ import re
 import subprocess
 import time
 from collections import deque
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from contextlib import suppress
 from typing import NewType
 
@@ -70,6 +70,26 @@ def parse_tag(word: str) -> tuple[str, str | None]:
     return key, value if separator else None
 
 
+def parse_env(word: str) -> tuple[str, str]:
+    """
+    One `--env`: a key with a value.
+
+    A bare key sets the empty string: there is no NULL in a process
+    environment, so `KEY` and `KEY=` cannot stay two different things
+    the way two tags can.
+    """
+    key, separator, value = word.partition("=")
+    if not key:
+        raise CommandException("a variable names a key: %r" % word)
+    return key, value if separator else ""
+
+
+#: The tag a job's session is stamped as. The client never writes it
+#: into the command: the packet says who called, and `run` stamps what
+#: it said. A hand-typed tag of this name filters like any other tag.
+SESSION_TAG = "session"
+
+
 class Job:
     "One command the server ran, running or remembered."
 
@@ -80,18 +100,21 @@ class Job:
         directory: str | None,
         started: float | None = None,
         tags: Iterable[tuple[str, str | None]] = (),
-        session: str | None = None,
+        env: Mapping[str, str] | None = None,
     ) -> None:
         self.job_id = job_id
         self.command = command
         self.directory = directory
-        #: Whose job this is: the agent session that ran it. Lookups
-        #: stay inside it, so one agent never waits on another's job
-        #: by mistake.
-        self.session = session
         #: What the job is called by, as key to value: a bare key
         #: carries no value, and a repeated key keeps its last one.
+        #: The `session` key names the agent session that ran it, when
+        #: one did: `run` stamps what the calling packet said.
         self.tags: dict[str, str | None] = dict(tags)
+        #: What the process starts with: the caller's environment and
+        #: the `--env` of the `run`, or the server's own where no
+        #: caller said anything. In-memory only, like everything else
+        #: here but the queryable columns.
+        self.env: dict[str, str] = dict(env) if env else {}
         #: `running` until the process ends or fails to start.
         self.status = "running"
         #: What the process exited with, or the negative signal that
@@ -130,6 +153,11 @@ class Job:
     @property
     def is_done(self) -> bool:
         return self.status == "done"
+
+    @property
+    def session(self) -> str | None:
+        "Whose job this is: the agent session stamped onto its tags, if any."
+        return self.tags.get(SESSION_TAG)
 
     def kept(self, stream: str) -> bytes:
         "The tail of one stream, as one piece."
@@ -199,24 +227,24 @@ class JobTable:
         command: str,
         directory: str | None = None,
         tags: Iterable[tuple[str, str | None]] = (),
-        session: str | None = None,
+        env: Mapping[str, str] | None = None,
     ) -> Job:
         """
         Record a job. Starting it is `supervise`, in the caller's task.
 
         The id comes from the database, so it is the row and the job
         or neither: nothing hands out an id the table cannot answer.
-        The tags and the session go down with the row, in the same
-        step. The session is whatever the caller said -- the server
-        never reads the caller's environment, so an unnamed job
-        belongs to no session at all.
+        The tags go down with the row, in the same step. The
+        environment falls back to the server's own: `run` passes what
+        the calling packet said, and anything else -- a key binding,
+        an old client -- runs where the server stands.
         """
         now = time.time()
         cursor = await self.store.write(
-            "INSERT INTO jobs(command, directory, status, started, session) VALUES (?, ?, 'running', ?, ?)",
-            (command, directory, now, session),
+            "INSERT INTO jobs(command, directory, status, started) VALUES (?, ?, 'running', ?)",
+            (command, directory, now),
         )
-        job = Job(JobId(cursor.lastrowid), command, directory, now, tags, session)
+        job = Job(JobId(cursor.lastrowid), command, directory, now, tags, env or dict(os.environ))
         self._jobs[job.job_id] = job
         for key, value in job.tags.items():
             await self.store.write(
@@ -232,21 +260,31 @@ class JobTable:
         "Every job, oldest first, which is id order."
         return [self._jobs[key] for key in sorted(self._jobs)]
 
-    def resolve(self, tags: list[tuple[str, str | None]], session: str | None) -> Job | None:
+    def resolve(
+        self,
+        tags: list[tuple[str, str | None]],
+        hint: str | None = None,
+        scope: str | None = None,
+    ) -> Job | None:
         """
-        The newest job in this session carrying every tag, or nothing.
+        The job a set of tags names: the newest carrying every tag.
 
         Tags are not unique -- the same key names a series of jobs --
         so the newest wins: later submits start later, and the id
         breaks a tie inside one instant. A bare key matches whatever
-        value it carries; a valued tag matches that value exactly. An
-        unnamed session holds the jobs no caller claimed; naming one
-        holds only its own, and nothing crosses between them.
+        value it carries; a valued tag matches that value exactly.
+
+        A session only prioritizes, never filters. The hint is the
+        calling packet's session: its jobs sort first, and anything
+        else is the fallback rather than a miss, so an agent finds its
+        own job and still reaches another's. The scope is an explicit
+        `--session`: only that session is searched at all. Neither
+        given is pure newness, the way lookups always read.
         """
-        found = [job for job in self._jobs.values() if job.session == session and _matches(job, tags)]
+        found = [job for job in self._jobs.values() if (scope is None or job.session == scope) and _matches(job, tags)]
         if not found:
             return None
-        return max(found, key=lambda job: (job.started, job.job_id))
+        return max(found, key=lambda job: (hint is not None and job.session == hint, job.started, job.job_id))
 
     async def supervise(self, job: Job) -> None:
         """
@@ -265,7 +303,10 @@ class JobTable:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 cwd=job.directory,
-                env={**os.environ, "PYMUX_JOB": str(job.job_id)},
+                # The caller's environment, as the submit stamped it,
+                # with the id last: nothing a caller sent overrides
+                # which job this is.
+                env={**job.env, "PYMUX_JOB": str(job.job_id)},
             )
         except OSError as e:
             job.error = "%s: %s" % (job.command, e)
@@ -552,13 +593,14 @@ def _matches(job: Job, tags: list[tuple[str, str | None]]) -> bool:
 
 def find_job(pymux, job: int | None, words: list[str], session: str | None) -> Job:
     """
-    The job an id or a set of tags names: the id as given, or the
-    newest job carrying every tag in this session.
+    The job an id or a set of tags names: the id as given, or what the
+    tags resolve to.
 
     An id and tags together refuse, and so does neither: guessing
-    which of the two was meant is how the wrong job gets waited on.
-    A tag that names nothing here names nothing anywhere else either
-    -- no session is ever searched but this one.
+    which of the two was meant is how the wrong job gets waited on. A
+    tag that names nothing names nothing anywhere: the session never
+    hides a job, it only sorts the caller's own first, unless an
+    explicit `--session` scoped the search to that session alone.
     """
     table: JobTable = pymux.jobs
     if job is not None and words:
@@ -571,9 +613,15 @@ def find_job(pymux, job: int | None, words: list[str], session: str | None) -> J
     if not words:
         raise CommandException("give a job id or --tag")
     tags = [parse_tag(word) for word in words]
-    found = table.resolve(tags, session)
+    if session is not None:
+        found = table.resolve(tags, scope=session)
+        if found is None:
+            raise CommandException("no job tagged %s in session %s" % (",".join(words), session))
+        return found
+    caller = pymux.caller_context
+    found = table.resolve(tags, hint=caller.session_id if caller else None)
     if found is None:
-        raise CommandException("no job tagged %s in this session" % ",".join(words))
+        raise CommandException("no job tagged %s" % ",".join(words))
     return found
 
 

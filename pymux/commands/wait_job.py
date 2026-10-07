@@ -49,5 +49,5 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         "--session",
         metavar="<id>",
         default=None,
-        help="Whose tags to read: a session id like the one --session stamps. Unnamed jobs otherwise.",
+        help="Scope to this session only. Without it the caller's session sorts first and the rest is fallback.",
     )

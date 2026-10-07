@@ -48,6 +48,7 @@ from pyte.keys import KeyboardFlag
 from pyte.osc import Osc
 
 from . import introspect, log
+from .agentic import CallerContext
 from .arrangement import Arrangement, Pane, Window
 from .colors import DefaultColors, theme_color_base
 from .commands import CommandException, call_command_handler, handle_command
@@ -884,6 +885,9 @@ def _hook_of(reason: str) -> str | None:
 #: Lillecarl/pymux#87.
 _command_output: contextvars.ContextVar[list | None] = contextvars.ContextVar("pymux-command-output", default=None)
 _command_error: contextvars.ContextVar[list | None] = contextvars.ContextVar("pymux-command-error", default=None)
+_caller_context: contextvars.ContextVar[CallerContext | None] = contextvars.ContextVar(
+    "pymux-caller-context", default=None
+)
 
 
 class Pymux:
@@ -3618,6 +3622,23 @@ exec pymux notify -u "$urgency" -- "$@"
     @command_error.setter
     def command_error(self, lines: list | None) -> None:
         _command_error.set(lines)
+
+    @property
+    def caller_context(self) -> CallerContext | None:
+        """
+        Who sent the command this task runs, and from where.
+
+        Set while a `run-command` packet is answered, and `None` for
+        anything else: a key binding, the command bar, a configuration
+        file. The job commands read it -- `run` stamps the session and
+        inherits the directory and the environment, the lookups prefer
+        the session -- and every other command ignores it.
+        """
+        return _caller_context.get()
+
+    @caller_context.setter
+    def caller_context(self, caller: CallerContext | None) -> None:
+        _caller_context.set(caller)
 
     def print_command_line(self, text: str) -> None:
         """
