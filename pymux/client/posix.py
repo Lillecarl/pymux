@@ -12,6 +12,7 @@ from libpymux.protocol import Field, Packet
 from libpymux.sockets import servers_newest_first
 from prompt_toolkit.input.vt100 import raw_mode
 
+from .agentic import caller_environment
 from .terminal import TerminalClient
 
 __all__ = [
@@ -51,7 +52,18 @@ class PosixClient(TerminalClient):
             the path. `None`, the default, waits the way the attach
             always has.
         """
-        self._send_packet({Field.CMD: Packet.RUN_COMMAND, Field.DATA: command, Field.PANE_ID: pane_id})
+        self._send_packet(
+            {
+                Field.CMD: Packet.RUN_COMMAND,
+                Field.DATA: command,
+                Field.PANE_ID: pane_id,
+                # The agent this command comes from, if any. The server
+                # cannot read the caller's environment itself, so the
+                # client resolves it fresh on every invocation and says
+                # it here. `client/agentic.py` holds the names.
+                Field.ENVIRONMENT: caller_environment(),
+            }
+        )
         if timeout is not None:
             # After the send, which asked for blocking again: the read
             # is the side that needs the patience.

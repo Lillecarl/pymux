@@ -62,6 +62,7 @@ from pymux.forwarding import (
 )
 from pymux.utils import nonblocking
 
+from .agentic import caller_environment
 from .defaults import is_ssh_url as is_ssh_url
 from .forwards import Forwards
 from .reconnect import (
@@ -427,7 +428,17 @@ class SshClient(TerminalClient):
         connection, reader = await self._connect()
 
         try:
-            self._send_packet({Field.CMD: Packet.RUN_COMMAND, Field.DATA: command, Field.PANE_ID: pane_id})
+            self._send_packet(
+                {
+                    Field.CMD: Packet.RUN_COMMAND,
+                    Field.DATA: command,
+                    Field.PANE_ID: pane_id,
+                    # Resolved on this machine, where the agent's
+                    # environment is: the far side only forwards it.
+                    # `client/agentic.py` holds the names.
+                    Field.ENVIRONMENT: caller_environment(),
+                }
+            )
 
             exit_code = 0
             try:
