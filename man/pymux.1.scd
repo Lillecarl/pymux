@@ -36,6 +36,11 @@ its own instead of pipes, for the program that needs one to behave;
 the waiting and the reading stay the same, with the whole terminal
 output in the stdout tail, and *list-jobs* names it *pty*.
 
+A job that does nothing is forgotten past *job-ttl* seconds, an hour
+unless set: output and completion both count as doing something, a
+running job is ended first, a waited job never goes, and zero keeps
+every job until the cap forgets the finished ones.
+
 # JOB CONTROL
 
 *run* [_OPTION_]... _COMMAND_...++

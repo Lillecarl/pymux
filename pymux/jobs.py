@@ -55,6 +55,11 @@ STREAM_KEEP = 256 * 1024
 #: neither is a finished one somebody still waits for.
 FINISHED_KEEP = 50
 
+#: How often the idle sweep looks: a minute. The time to live is an
+#: hour by default, so a minute's lateness never matters, and a test
+#: in a hurry calls `sweep` itself rather than waiting for the clock.
+JOB_SWEEP_EVERY = 60
+
 #: The size a pty job's terminal reports: no viewer sizes it, so it
 #: starts at the common default and stays there.
 PTY_ROWS = 24
@@ -146,6 +151,9 @@ class Job:
         #: to the instant. `submit` passes it; a direct `Job` takes now.
         self.started = time.time() if started is None else started
         self.finished: float | None = None
+        #: When the job last did anything: output landing counts, and
+        #: so does finishing. The sweep measures idleness from here.
+        self.last_active = self.started
         #: The tail of each stream, as (start offset, bytes): offsets
         #: never move, so a follower that holds one always knows what
         #: it has seen, even past what fell off the front.
@@ -435,6 +443,7 @@ class JobTable:
         job.returncode = returncode
         job.status = "done"
         job.finished = time.time()
+        job.last_active = job.finished
         await self.store.write(
             "UPDATE jobs SET status = 'done', returncode = ?, error = ?, finished = ? WHERE id = ?",
             (returncode, job.error, job.finished, job.job_id),
@@ -450,9 +459,40 @@ class JobTable:
             oldest = finished[0]
             if oldest.waiters:
                 return
-            del self._jobs[oldest.job_id]
-            await self.store.write("DELETE FROM jobs WHERE id = ?", (oldest.job_id,))
+            await self._forget(oldest)
             finished.pop(0)
+
+    async def _forget(self, job: Job) -> None:
+        """
+        Forget one job: out of the table and out of the database, tags
+        with it through the cascade.
+
+        A supervise that still runs does not mind: it finishes onto
+        the job, whose update then matches no row, and the reap finds
+        no listing. A waiter that arrives after the forgetting finds
+        no job, the way one arriving after the cap does.
+        """
+        self._jobs.pop(job.job_id, None)
+        await self.store.write("DELETE FROM jobs WHERE id = ?", (job.job_id,))
+
+    async def sweep(self, ttl_seconds: float) -> None:
+        """
+        Forget every job idle past its time, ending the running ones.
+
+        Idleness is output or completion, whichever came last, so a
+        job that logs stays while a job that hangs silent goes. Zero
+        keeps everything: it is how long nothing has lasted. The
+        waited stay -- somebody watches, so nothing here is garbage.
+        """
+        if not ttl_seconds > 0:
+            return
+        now = time.time()
+        for job in self.listing():
+            if job.waiters or now - job.last_active < ttl_seconds:
+                continue
+            if not job.is_done:
+                self.kill(job)
+            await self._forget(job)
 
     async def wait(self, job: Job) -> Job:
         "Hold until the job ends, then answer it. Reaping waits too."
@@ -777,6 +817,7 @@ async def _pump(stream: anyio.abc.ByteStream, job: Job, name: str) -> None:
     try:
         async for data in stream:
             chunks.append((job.end(name), data))
+            job.last_active = time.time()
             if name == "stdout":
                 job.stdout_kept += len(data)
             else:
@@ -819,11 +860,13 @@ async def _pump_pty(primary: int, job: Job) -> None:
             data = data.replace(b"\r\n", b"\n")
             if data:
                 job.stdout_chunks.append((job.end("stdout"), data))
+                job.last_active = time.time()
                 job.stdout_kept += len(data)
                 _trim(job, "stdout")
                 _poke(job)
         if pending:
             job.stdout_chunks.append((job.end("stdout"), pending))
+            job.last_active = time.time()
             job.stdout_kept += len(pending)
             _trim(job, "stdout")
             _poke(job)

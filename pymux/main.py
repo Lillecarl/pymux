@@ -57,7 +57,7 @@ from .enums import CHOOSE, COMMAND, PROMPT, WindowSize, Woke
 from .forwarding import LOOPBACK_NAMES, loopback_port
 from .graphics import PaneView
 from .ids import PaneId, SessionId, WindowIndex
-from .jobs import Job, JobFeed, JobTable, describe
+from .jobs import JOB_SWEEP_EVERY, Job, JobFeed, JobTable, describe
 from .key_bindings import PymuxKeyBindings
 from .key_spelling import why_pane_cannot_read
 from .layout import Justify, LayoutManager, change_pane_size
@@ -1012,6 +1012,11 @@ class Pymux:
         # what the clock in the status bar costs when nothing else is
         # happening.
         self.status_interval = 4
+        # How long a job outlives its last activity, in seconds. An
+        # hour: a finished job lingers for a look back, and a running
+        # job that hangs silent is ended and forgotten. Zero keeps
+        # every job until the cap forgets the finished ones.
+        self.job_ttl = 3600
         # What a pane is told it is. The entry of pyte describes what a
         # pane really does; a build without one falls back to xterm.
         #
@@ -1649,6 +1654,7 @@ class Pymux:
             self.loop = asyncio.get_running_loop()
             await self.jobs.open()
             tasks.start_soon(self._auto_refresh)
+            tasks.start_soon(self._sweep_jobs)
             if self.listener is not None:
                 tasks.start_soon(self.listener.serve)
             try:
@@ -1697,6 +1703,23 @@ class Pymux:
                 # group an exception cancels the siblings, and the
                 # siblings here are every client of the server.
                 logger.exception("The refresh on the clock failed.")
+
+    async def _sweep_jobs(self) -> None:
+        """
+        Forget the jobs idle past `job_ttl`, on a slow clock.
+
+        The time to live is read each turn, so a `set-option job-ttl`
+        reaches the sweep after this one. A sweep that failed must not
+        take the server with it, for the same reason the refresh
+        above says the same.
+        """
+        while True:
+            await anyio.sleep(JOB_SWEEP_EVERY)
+            try:
+                if self.job_ttl:
+                    await self.jobs.sweep(self.job_ttl)
+            except Exception:
+                logger.exception("The sweep of idle jobs failed.")
 
     @property
     def apps(self):

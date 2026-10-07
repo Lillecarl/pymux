@@ -754,6 +754,12 @@ ALL_OPTIONS = {
     # cases that ask whatever it says. `ForwardMode` says.
     "forward-mode": EnumOption(ForwardMode, "forward_mode"),
     "history-limit": PositiveIntOption("history_limit", [200, 500, 1000, 2000, 5000, 10000]),
+    # How long a job outlives its last activity, in seconds. Output
+    # and completion both count, so a job that logs stays while a job
+    # that hangs silent goes; a running one is ended first, a
+    # finished one just forgotten, and a waited one never. Zero keeps
+    # every job until the cap forgets the finished ones.
+    "job-ttl": PositiveIntOption("job_ttl", [0, 600, 3600, 86400]),
     "mouse": OnOffOption("enable_mouse_support"),
     "prefix": KeyPrefixOption(),
     "remain-on-exit": OnOffOption("remain_on_exit"),
