@@ -38,6 +38,7 @@
   pyterm-pytest,
   installShellFiles,
   callPackage,
+  scdoc,
   mesa,
   # Only the checks use these: the readers of the clipboard fence.
   wl-clipboard,
@@ -107,7 +108,7 @@ let
         #
         # The renderer's own `nativeBuildInputs` carry the hooks, so this
         # appends rather than replaces.
-        nativeBuildInputs = rendered.nativeBuildInputs ++ [ installShellFiles ];
+        nativeBuildInputs = rendered.nativeBuildInputs ++ [ installShellFiles scdoc ];
 
         # `render-completions.py` imports pymux, which imports
         # prompt_toolkit and ptterm. A builders package propagates nothing,
@@ -126,6 +127,15 @@ let
               --bash rendered/bash \
               --zsh rendered/zsh \
               --fish rendered/fish
+            # The agent skill, at the layout the installAgentSkills
+            # hook standardizes (NixOS/nixpkgs#547426:
+            # share/skills/$pname/<skill>), installed by hand until the
+            # pin carries that hook (NixOS/nixpkgs#558216). The switch
+            # is one line when it catches up.
+            install -Dm444 ${./skills/pymux/SKILL.md} \
+              "$out/share/skills/pymux/pymux/SKILL.md"
+            scdoc < ${./man/pymux.1.scd} > pymux.1
+            installManPage pymux.1
             install -Dm644 ${base16-schemes-json}/base16-schemes.json \
               "$out/${python.sitePackages}/pymux/base16-schemes.json"
             ${installElement "$out/${python.sitePackages}/pymux/web/static"}
