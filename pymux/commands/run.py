@@ -35,8 +35,12 @@ def run_job(pymux: Pymux, args: argparse.Namespace):
     # read, the way `run-shell` beside this reads them; but one word
     # is already a whole command line -- `run 'echo a; echo b'` --
     # and joining would quote it once more, so the shell would look
-    # for a program by that whole name and answer 127.
+    # for a program by that whole name and answer 127. A leading `--`
+    # separated the command from the options of `run` on the line;
+    # the command starts after it.
     words = args.shell_command
+    if words and words[0] == "--":
+        words = words[1:]
     shell_command = words[0] if len(words) == 1 else shlex.join(words)
     if not shell_command:
         raise CommandException("nothing to run")

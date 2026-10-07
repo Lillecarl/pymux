@@ -85,6 +85,17 @@ async def test_run_takes_a_whole_command_line_as_one_word():
         assert any("second" in line for line in said)
 
 
+async def test_run_strips_a_leading_separator():
+    # `run -- echo hi`: the `--` separates the command from the
+    # options on the line, and must not reach the shell.
+    async with create_session() as (pymux, state):
+        said = await _run_answering(pymux, state, "run -w -- echo stripped")
+        assert any("stripped" in line for line in said)
+
+        job = pymux.jobs.get(1)
+        assert job is not None and job.command == "echo stripped" and job.returncode == 0
+
+
 async def test_run_wait_fails_on_a_nonzero_exit():
     # Through `handle_command` the failure would become a message;
     # the handler itself fails, so it is called directly.

@@ -53,6 +53,18 @@ async def test_run_shell_from_command_line_answers_on_it():
         assert any("straight-back" in line for line in said)
 
 
+async def test_run_shell_strips_a_leading_separator():
+    async with create_session() as (pymux, state):
+        pymux.command_output = []
+        try:
+            await _run(pymux, state, "run-shell -- echo stripped")
+            said = pymux.command_output
+        finally:
+            pymux.command_output = None
+
+        assert any("stripped" in line for line in said)
+
+
 async def test_run_shell_says_why_a_shell_that_will_not_start_failed(monkeypatch):
     """
     A shell that cannot start says so, on both routes.

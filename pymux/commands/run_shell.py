@@ -32,8 +32,13 @@ def run_shell(pymux: Pymux, args: argparse.Namespace):
     all of that for thirty seconds. Lillecarl/pymux#311.
     """
     # The command is the rest of the line, whatever words it holds:
-    # they go back together, with the quoting the shell read.
-    shell_command = shlex.join(args.shell_command)
+    # they go back together, with the quoting the shell read. A
+    # leading `--` separated the command from the options of
+    # `run-shell` on the line; the command starts after it.
+    words = args.shell_command
+    if words and words[0] == "--":
+        words = words[1:]
+    shell_command = shlex.join(words)
 
     app = get_app()
 

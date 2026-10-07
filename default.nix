@@ -134,6 +134,8 @@ let
             # is one line when it catches up.
             install -Dm444 ${./skills/pymux/SKILL.md} \
               "$out/share/skills/pymux/pymux/SKILL.md"
+            install -Dm444 ${./skills/pymux-jobs/SKILL.md} \
+              "$out/share/skills/pymux/pymux-jobs/SKILL.md"
             scdoc < ${./man/pymux.1.scd} > pymux.1
             installManPage pymux.1
             install -Dm644 ${base16-schemes-json}/base16-schemes.json \
