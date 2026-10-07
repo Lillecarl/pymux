@@ -26,10 +26,12 @@ import time
 from collections import deque
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
+from typing import NewType
 
 import anyio
 import anyio.abc
 
+from pymux.jobstore import JobStore
 from pymux.log import logger
 
 #: A newline with no return before it. What the viewer turns into a
@@ -47,10 +49,16 @@ STREAM_KEEP = 256 * 1024
 FINISHED_KEEP = 50
 
 
+#: A job's id. An int at run time -- sqlite stores it as one -- but a
+#: distinct type to the checker, so a pane id, a window id, or a bare
+#: number never passes where a job is expected without saying so.
+JobId = NewType("JobId", int)
+
+
 class Job:
     "One command the server ran, running or remembered."
 
-    def __init__(self, job_id: int, command: str, directory: str | None) -> None:
+    def __init__(self, job_id: JobId, command: str, directory: str | None, started: float | None = None) -> None:
         self.job_id = job_id
         self.command = command
         self.directory = directory
@@ -61,7 +69,9 @@ class Job:
         self.returncode: int | None = None
         #: Why it never started, when starting it raised.
         self.error: str | None = None
-        self.started = time.time()
+        #: When the row was written, so the table and the database agree
+        #: to the instant. `submit` passes it; a direct `Job` takes now.
+        self.started = time.time() if started is None else started
         self.finished: float | None = None
         #: The tail of each stream, as (start offset, bytes): offsets
         #: never move, so a follower that holds one always knows what
@@ -132,20 +142,45 @@ class Job:
 
 
 class JobTable:
-    "Every job, by id. Ids never repeat, so `wait-job 3` means one job."
+    """
+    Every job, by id. Ids never repeat, so `wait-job 3` means one job.
+
+    The live jobs live in a dict; what a question could filter on lives
+    in sqlite beside it, written at every transition. The dict answers
+    the live operations -- get, wait, kill, follow -- and the database
+    answers the questions; neither mirrors the other's shape, and both
+    change in the same step, so they cannot disagree.
+    """
 
     def __init__(self) -> None:
-        self._next_id = 1
-        self._jobs: dict[int, Job] = {}
+        self._jobs: dict[JobId, Job] = {}
+        self.store = JobStore()
 
-    def submit(self, command: str, directory: str | None = None) -> Job:
-        "Record a job. Starting it is `supervise`, in the caller's task."
-        job = Job(self._next_id, command, directory)
-        self._next_id += 1
+    async def open(self) -> None:
+        "Build the database. The server calls this; the rest is lazy."
+        await self.store.open()
+
+    async def close(self) -> None:
+        "Forget the database. In-memory, so this is also forgetting."
+        await self.store.close()
+
+    async def submit(self, command: str, directory: str | None = None) -> Job:
+        """
+        Record a job. Starting it is `supervise`, in the caller's task.
+
+        The id comes from the database, so it is the row and the job
+        or neither: nothing hands out an id the table cannot answer.
+        """
+        now = time.time()
+        cursor = await self.store.write(
+            "INSERT INTO jobs(command, directory, status, started) VALUES (?, ?, 'running', ?)",
+            (command, directory, now),
+        )
+        job = Job(JobId(cursor.lastrowid), command, directory, now)
         self._jobs[job.job_id] = job
         return job
 
-    def get(self, job_id: int) -> Job | None:
+    def get(self, job_id: JobId) -> Job | None:
         return self._jobs.get(job_id)
 
     def listing(self) -> list[Job]:
@@ -173,7 +208,7 @@ class JobTable:
             )
         except OSError as e:
             job.error = "%s: %s" % (job.command, e)
-            self._finish(job, None)
+            await self._finish(job, None)
             return
 
         job.process = process
@@ -199,17 +234,21 @@ class JobTable:
                 job.error = "%s: %s" % (job.command, e)
         finally:
             if job.status == "running":
-                self._finish(job, job.returncode)
+                await self._finish(job, job.returncode)
 
-    def _finish(self, job: Job, returncode: int | None) -> None:
+    async def _finish(self, job: Job, returncode: int | None) -> None:
         job.returncode = returncode
         job.status = "done"
         job.finished = time.time()
+        await self.store.write(
+            "UPDATE jobs SET status = 'done', returncode = ?, error = ?, finished = ? WHERE id = ?",
+            (returncode, job.error, job.finished, job.job_id),
+        )
         job.done.set()
         _poke(job)
-        self._reap()
+        await self._reap()
 
-    def _reap(self) -> None:
+    async def _reap(self) -> None:
         "Forget the oldest finished past the cap. The waited stay."
         finished = [job for job in self.listing() if job.is_done]
         while len(finished) > FINISHED_KEEP:
@@ -217,6 +256,7 @@ class JobTable:
             if oldest.waiters:
                 return
             del self._jobs[oldest.job_id]
+            await self.store.write("DELETE FROM jobs WHERE id = ?", (oldest.job_id,))
             finished.pop(0)
 
     async def wait(self, job: Job) -> Job:

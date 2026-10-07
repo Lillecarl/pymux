@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import the_pane
 from pymux.enums import Woke
+from pymux.jobs import JobId
 
 
 def view_job(pymux: Pymux, args: argparse.Namespace) -> None:
@@ -24,7 +25,7 @@ def view_job(pymux: Pymux, args: argparse.Namespace) -> None:
     without it a pane whose program is alive refuses, the same rule
     `respawn-pane` holds.
     """
-    job = pymux.jobs.get(args.job)
+    job = pymux.jobs.get(JobId(args.job))
     if job is None:
         raise CommandException("no job %d" % args.job)
 

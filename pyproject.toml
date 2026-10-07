@@ -44,6 +44,12 @@ dependencies = [
     # `notify_closing` needs, and the posix pipe needs that to wake a
     # reader parked on a socket that is closing. Lillecarl/pymux#87.
     "anyio>=4.7.0",
+    # The jobs table: an in-memory sqlite database the server owns, so
+    # agents can ask arbitrary questions of what runs without learning
+    # a flag for each one. One read/write connection plus a small pool
+    # of read-only readers, managed here rather than by aiosqlite.
+    # Lillecarl/pymux#528.
+    "aiosqlite>=0.21.0",
     # The template language a person writes. A status line holding `{{`
     # or `{%` is rendered by jinja2, and everything else takes the tmux
     # format path; `-F` stays tmux format, because libtmux reads it.

@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import refuse_without_a_waiter
 from pymux.commands.run import report_outcome
-from pymux.jobs import Job
+from pymux.jobs import Job, JobId
 
 
 def wait_job(pymux: Pymux, args: argparse.Namespace):
@@ -23,7 +23,7 @@ def wait_job(pymux: Pymux, args: argparse.Namespace):
     says so instead of waiting forever.
     """
     refuse_without_a_waiter(pymux, "wait")
-    job = _find(pymux, args.job)
+    job = _find(pymux, JobId(args.job))
 
     async def until_it_ends() -> None:
         await pymux.jobs.wait(job)
@@ -32,7 +32,7 @@ def wait_job(pymux: Pymux, args: argparse.Namespace):
     return until_it_ends()
 
 
-def _find(pymux: Pymux, job_id: int) -> Job:
+def _find(pymux: Pymux, job_id: JobId) -> Job:
     job = pymux.jobs.get(job_id)
     if job is None:
         raise CommandException("no job %d" % job_id)

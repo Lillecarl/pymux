@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import answer
+from pymux.jobs import JobId
 
 
 def kill_job(pymux: Pymux, args: argparse.Namespace):
@@ -20,7 +21,7 @@ def kill_job(pymux: Pymux, args: argparse.Namespace):
     ending is one signal, and `wait-job` after it reports the exit
     the program chose. A job that already ended says so instead.
     """
-    job = pymux.jobs.get(args.job)
+    job = pymux.jobs.get(JobId(args.job))
     if job is None:
         raise CommandException("no job %d" % args.job)
     if not pymux.jobs.kill(job):

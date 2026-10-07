@@ -1640,6 +1640,7 @@ class Pymux:
         async with anyio.create_task_group() as tasks:
             self.tasks = tasks
             self.loop = asyncio.get_running_loop()
+            await self.jobs.open()
             tasks.start_soon(self._auto_refresh)
             if self.listener is not None:
                 tasks.start_soon(self.listener.serve)
@@ -1651,6 +1652,9 @@ class Pymux:
                 # on its own.
                 tasks.cancel_scope.cancel()
                 self.tasks = None
+                # No task touches the jobs past here, so the database
+                # closes with nobody left to read it.
+                await self.jobs.close()
 
     def serve_connection(self, connection) -> None:
         """

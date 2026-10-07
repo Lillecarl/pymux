@@ -37,18 +37,22 @@ def run_job(pymux: Pymux, args: argparse.Namespace):
     if not shell_command:
         raise CommandException("nothing to run")
 
-    job = pymux.jobs.submit(shell_command, args.directory)
+    return _submit(pymux, args, shell_command)
+
+
+async def _submit(pymux: Pymux, args: argparse.Namespace, shell_command: str) -> None:
+    job = await pymux.jobs.submit(shell_command, args.directory)
 
     if args.w:
         refuse_without_a_waiter(pymux, "wait")
-        return _run_and_report(pymux, job)
+        await _run_and_report(pymux, job)
+        return
 
     # `spawn_command` refuses outside `running`, where nothing would
     # finish the supervise; `-w` awaits it here instead, so it runs
     # anywhere a waiter stands.
     pymux.spawn_command(pymux.jobs.supervise(job))
     answer(pymux, "%d" % job.job_id)
-    return None
 
 
 async def _run_and_report(pymux: Pymux, job: Job) -> None:

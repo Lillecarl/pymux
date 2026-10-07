@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import answer
-from pymux.jobs import Job, decode
+from pymux.jobs import Job, JobId, decode
 
 
 def show_job(pymux: Pymux, args: argparse.Namespace):
@@ -21,7 +21,7 @@ def show_job(pymux: Pymux, args: argparse.Namespace):
     that ended: the pumps fill the tail from the start, so this is
     how an agent tails a long job between polls of `list-jobs`.
     """
-    job = pymux.jobs.get(args.job)
+    job = pymux.jobs.get(JobId(args.job))
     if job is None:
         raise CommandException("no job %d" % args.job)
     answer(pymux, _stream(job, "stderr" if args.e else "stdout"))
