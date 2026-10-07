@@ -293,14 +293,24 @@ class PymuxKeyBindings:
         @Condition
         def chooser_displayed() -> bool:
             state = self.pymux.get_client_state()
-            return state.choose_window or state.choose_buffer or state.choose_options or state.choose_notifications
+            return (
+                state.choose_window
+                or state.choose_buffer
+                or state.choose_options
+                or state.choose_notifications
+                or state.choose_job
+            )
 
         @Condition
         def chooser_search_focused() -> bool:
             state = self.pymux.get_client_state()
-            return (state.choose_window or state.choose_buffer or state.choose_notifications) and has_focus(
-                state.choose_window_filter
-            )()
+            return (
+                state.choose_window
+                or state.choose_buffer
+                or state.choose_options
+                or state.choose_notifications
+                or state.choose_job
+            ) and has_focus(state.choose_window_filter)()
 
         @Condition
         def window_bar() -> bool:
@@ -357,8 +367,25 @@ class PymuxKeyBindings:
                 state.layout_manager.choose_pointed_buffer()
             elif state.choose_notifications:
                 state.layout_manager.choose_pointed_notification()
+            elif state.choose_job:
+                state.layout_manager.choose_pointed_job()
             else:
                 state.layout_manager.choose_pointed_window()
+
+        @Condition
+        def job_chooser_displayed() -> bool:
+            "The job picker, with its rows under the keys."
+            return self.pymux.get_client_state().choose_job
+
+        @kb.add("o", filter=job_chooser_displayed & ~chooser_search_focused)
+        def _chooser_open_job_in_pane(event: E) -> None:
+            "Open the pointed job as a pane in a new window."
+            self.pymux.get_client_state().layout_manager.open_pointed_job_in_pane()
+
+        @kb.add("t", filter=job_chooser_displayed & ~chooser_search_focused)
+        def _chooser_take_over_job(event: E) -> None:
+            "Run the pointed job's command again, interactively."
+            self.pymux.get_client_state().layout_manager.take_over_pointed_job()
 
         @kb.add("q", filter=chooser_displayed & ~chooser_search_focused, eager=True)
         @kb.add("escape", filter=chooser_displayed & ~chooser_search_focused, eager=True)

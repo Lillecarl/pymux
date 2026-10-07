@@ -60,6 +60,7 @@ bind-key n next-window
 bind-key p previous-window
 bind-key w choose-window
 bind-key N choose-notifications
+bind-key J choose-job
 bind-key o select-pane -t :.+
 bind-key { swap-pane -U
 bind-key } swap-pane -D

@@ -861,6 +861,7 @@ class LayoutManager:
         state.choose_buffer = False
         state.choose_options = False
         state.choose_notifications = False
+        state.choose_job = False
         state.menu_entries = []
         state.choose_window_command = template
         state.choose_window_filter.reset()
@@ -1000,6 +1001,7 @@ class LayoutManager:
         state.choose_buffer = False
         state.choose_options = False
         state.choose_notifications = False
+        state.choose_job = False
         state.chooser_return_to = None
 
         if restore and going_back is not None:
@@ -1020,6 +1022,7 @@ class LayoutManager:
         self.client_state.choose_window = False
         self.client_state.choose_options = False
         self.client_state.choose_notifications = False
+        self.client_state.choose_job = False
         self.client_state.menu_entries = []
         self.client_state.choose_window_command = ""
         self.client_state.choose_window_filter.reset()
@@ -1041,6 +1044,7 @@ class LayoutManager:
         self.client_state.choose_window = False
         self.client_state.choose_buffer = False
         self.client_state.choose_notifications = False
+        self.client_state.choose_job = False
         self.client_state.menu_entries = []
         self.client_state.choose_window_command = ""
         self.client_state.choose_window_filter.reset()
@@ -1061,6 +1065,32 @@ class LayoutManager:
         self.client_state.choose_window = False
         self.client_state.choose_buffer = False
         self.client_state.choose_options = False
+        self.client_state.choose_job = False
+        self.client_state.menu_entries = []
+        self.client_state.choose_window_command = ""
+        self.client_state.choose_window_filter.reset()
+        self.client_state.choose_window_index = 0
+        self._chooser_box()
+        assert self._chooser_rows is not None
+        get_app().layout.focus(self._chooser_rows)
+
+    def display_job_chooser(self) -> None:
+        """
+        Show the jobs of this server, newest first, to choose from.
+
+        Enter shows the pointed job in this session's overlay,
+        read-only; `o` opens it as a pane in a new window, and `t`
+        runs its command again, interactively, in a new window.
+        Escape closes, and there is nothing to put back: the hub
+        previews nothing, the way the notifications say.
+        Lillecarl/pymux#528.
+        """
+        self.client_state.display_popup = False
+        self.client_state.choose_job = True
+        self.client_state.choose_window = False
+        self.client_state.choose_buffer = False
+        self.client_state.choose_options = False
+        self.client_state.choose_notifications = False
         self.client_state.menu_entries = []
         self.client_state.choose_window_command = ""
         self.client_state.choose_window_filter.reset()
@@ -1200,6 +1230,13 @@ class LayoutManager:
             if not text:
                 return records
             return [record for record in records if text in record.title.lower() or text in record.body.lower()]
+        if self.client_state.choose_job:
+            from pymux.jobs import describe
+
+            jobs = list(reversed(self.pymux.jobs.listing()))
+            if not text:
+                return jobs
+            return [job for job in jobs if text in describe(job).lower()]
         if self.client_state.choose_buffer:
             buffers = self.pymux.named_buffers
             if not text:
@@ -1308,6 +1345,81 @@ class LayoutManager:
         self.show_window(window)
         window.active_pane = pane
         self.pymux.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
+
+    def pointed_job(self):
+        """
+        The job the chooser points at, or None for an empty list.
+
+        The chooser lists newest first, so the point opens at the
+        latest job without moving.
+        """
+        if not self.client_state.choose_job:
+            return None
+        matches = self.chooser_matches()
+        if not matches:
+            return None
+        return matches[min(self.client_state.choose_window_index, len(matches) - 1)]
+
+    def choose_pointed_job(self) -> None:
+        """
+        Show the pointed job in this session's overlay: the tail and
+        the follow, read-only. The picker closes; Escape closes the
+        viewer, which never touches the job. Lillecarl/pymux#528.
+        """
+        job = self.pointed_job()
+        self.client_state.choose_job = False
+        if job is None:
+            return
+        self.pymux.display_job_overlay(job, self.client_state.session)
+
+    def open_pointed_job_in_pane(self) -> None:
+        """
+        Open the pointed job as a pane in a new window: a viewer,
+        read-only, that follows the job. Closing the window never
+        touches the job. Lillecarl/pymux#528.
+        """
+        job = self.pointed_job()
+        self.client_state.choose_job = False
+        if job is None:
+            return
+        self.pymux.open_job_in_pane(job, self.client_state.session)
+
+    def take_over_pointed_job(self) -> None:
+        """
+        Run the pointed job's command again, interactively, in a new
+        window. The recorded job is untouched. Lillecarl/pymux#528.
+        """
+        job = self.pointed_job()
+        self.client_state.choose_job = False
+        if job is None:
+            return
+        self.pymux.take_over_job(job, self.client_state.session)
+
+    def _choose_job_tokens(self) -> StyleAndTextTuples:
+        """
+        The jobs, newest first, one `list-jobs` line each. The row
+        the chooser points at carries the gutter arrow and stands
+        out, and a row answers a click by showing its job in the
+        overlay, the way Enter does.
+        """
+        from pymux.jobs import describe
+
+        matches = self.chooser_matches()
+        if not matches:
+            return [("class:chooser.hint", " No jobs. ")]
+
+        chosen = min(self.client_state.choose_window_index, len(matches) - 1)
+        tokens: StyleAndTextTuples = []
+        for i, job in enumerate(matches):
+            style = "class:chooser.selected" if i == chosen else "class:commandpalette"
+            tokens.append(
+                (
+                    style,
+                    "%s%s\n" % ("> " if i == chosen else "  ", describe(job)),
+                    self._create_chooser_click_handler(i),
+                )
+            )
+        return tokens
 
     def _create_select_window_handler(self, window: arrangement.Window) -> Callable[[MouseEvent], NotImplementedOrNone]:
         "Return a mouse handler that selects the given window when clicking."
@@ -1836,6 +1948,8 @@ class LayoutManager:
             return "Customize"
         if self.client_state.choose_notifications:
             return "Notifications"
+        if self.client_state.choose_job:
+            return "Jobs"
         return "Choose a buffer"
 
     def _chooser_tokens(self) -> StyleAndTextTuples:
@@ -1849,6 +1963,8 @@ class LayoutManager:
             return self._choose_options_tokens()
         if self.client_state.choose_notifications:
             return self._choose_notification_tokens()
+        if self.client_state.choose_job:
+            return self._choose_job_tokens()
         return self._choose_buffer_tokens()
 
     def _choose_options_tokens(self) -> StyleAndTextTuples:
@@ -1992,8 +2108,8 @@ class LayoutManager:
     def _create_chooser_click_handler(self, row: int) -> Callable[[MouseEvent], NotImplementedOrNone]:
         """
         Return a mouse handler that takes the row: the window it
-        names, the buffer it names, or the option it names, by the
-        kind that shows.
+        names, the buffer or option it names, the notification it
+        came from, or the job it names, by the kind that shows.
         """
 
         def handler(mouse_event: MouseEvent) -> NotImplementedOrNone:
@@ -2007,6 +2123,9 @@ class LayoutManager:
                 elif self.client_state.choose_buffer:
                     self.client_state.choose_window_index = row
                     self.choose_pointed_buffer()
+                elif self.client_state.choose_job:
+                    self.client_state.choose_window_index = row
+                    self.choose_pointed_job()
                 else:
                     # Through `point_at`, so the click switches to the
                     # window before taking it -- the same path the keys

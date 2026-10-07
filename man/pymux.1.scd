@@ -40,7 +40,8 @@ somebody still waits for.
 *show-job* [_ID_|--tag _KEY_[=_VALUE_]...] [_--session ID_]++
 *kill-job* [_ID_|--tag _KEY_[=_VALUE_]...] [_--session ID_]++
 *view-job* [_-k_] [_-t _PANE_] [_ID_|--tag _KEY_[=_VALUE_]...] [_--session ID_]++
-*list-jobs*
+*list-jobs*++
+*choose-job*
 
 Start a tagged job, then wait on the tag: the tag resolves the job
 after its id has scrolled past. A tag is *key* or *key=value*; a bare
@@ -54,7 +55,11 @@ so does neither.
 *-w* waits in *run* itself and answers with the output instead of the
 id. *show-job* reads a job that still runs; *-e* reads stderr.
 *view-job* tails one live in a read-only pane: *-k* replaces a program
-that still runs, *-t* names the pane to replace.
+that still runs, *-t* names the pane to replace. *choose-job* is the
+picker: the jobs newest first in a centered box, Enter shows one in
+the session's overlay, *o* opens one as a pane in a new window, *t*
+runs one's command again in a new window, and */* searches. None of
+the three touches the recorded job.
 
 A lookup prefers the caller's session -- its jobs sort first -- and
 anything else is fallback rather than a miss. Only *--session ID*

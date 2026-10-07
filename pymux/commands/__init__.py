@@ -96,6 +96,7 @@ MODULES = [
     "choose_window",
     "choose_buffer",
     "choose_notifications",
+    "choose_job",
     "display_message",
     "notify",
     "get",

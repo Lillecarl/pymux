@@ -96,4 +96,8 @@ reads `$?` the way a shell does. Bound every wait the harness allows
 rather than polling asleep in a loop; `show-job` reads a job that
 still runs when one peek is enough, and `view-job` tails one live in
 a read-only pane (`-k` replaces a running program, `-t` names the
-pane).
+pane). At a keyboard `choose-job` (prefix `J`) is the picker: the jobs
+newest first in a centered box, Enter showing one in the session's
+overlay, `o` opening one as a pane in a new window, `t` running one's
+command again interactively, `/` searching. None of the three touches
+the recorded job.
