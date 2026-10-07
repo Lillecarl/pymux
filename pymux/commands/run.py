@@ -25,7 +25,10 @@ def run_job(pymux: Pymux, args: argparse.Namespace):
     forgets it past its cap. The answer is the id: `run 'sleep 30'`
     says `1`, and `wait-job 1` holds until it ends. `-w` waits here
     instead and answers with the output, for the agent that submits
-    one command and reads the result.
+    one command and reads the result. `--pty` runs the command on a
+    terminal instead of pipes, for the command that needs one to
+    behave; the waiting and the reading stay the same, with the whole
+    terminal output in the stdout tail.
     """
     # The command is the rest of the line, whatever words it holds.
     # Several words go back together, with the quoting the shell
@@ -61,7 +64,7 @@ async def _submit(pymux: Pymux, args: argparse.Namespace, shell_command: str) ->
     for word in args.env:
         key, value = parse_env(word)
         env[key] = value
-    job = await pymux.jobs.submit(shell_command, directory, list(tags.items()), env)
+    job = await pymux.jobs.submit(shell_command, directory, list(tags.items()), env, args.pty)
 
     if args.w:
         refuse_without_a_waiter(pymux, "wait")
@@ -132,6 +135,12 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         metavar="<id>",
         default=None,
         help="Stamp this session onto the job instead of the caller's. Unstamped jobs belong to no session.",
+    )
+    parser.add_argument(
+        "--pty",
+        dest="pty",
+        action="store_true",
+        help="Run on a terminal instead of pipes, for a command that needs one. Waiting and reading stay the same.",
     )
     parser.add_argument(
         "shell_command",

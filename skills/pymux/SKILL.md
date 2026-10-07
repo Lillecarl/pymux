@@ -18,7 +18,10 @@ pymux show-job --tag deploy
 
 A job keeps the tail of both streams past a cap and counts what fell
 off, the exit code, and the times, until the table forgets it past
-fifty finished. Running jobs are never forgotten.
+fifty finished. Running jobs are never forgotten. `run --pty` runs
+the command on a terminal of its own instead of pipes, for the
+program that needs one to behave; waiting and reading stay the same,
+with the whole terminal output in the stdout tail.
 
 ## Run
 

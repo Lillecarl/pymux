@@ -31,7 +31,10 @@ output later. The answer is the id, and *wait-job* holds until it ends.
 Jobs keep the tail of both streams past a cap and count what fell off,
 with the exit code and the times, until the table forgets them past
 fifty finished. Running jobs are never forgotten, and neither is one
-somebody still waits for.
+somebody still waits for. *--pty* runs the command on a terminal of
+its own instead of pipes, for the program that needs one to behave;
+the waiting and the reading stay the same, with the whole terminal
+output in the stdout tail, and *list-jobs* names it *pty*.
 
 # JOB CONTROL
 

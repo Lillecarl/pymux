@@ -7,7 +7,9 @@ by the server rather than by any view, so an agent can submit it, go
 away, and ask for the exit code and the output later. `run-shell`
 already runs a command this way, but it shows the output once and
 forgets it; a job keeps the tail of both streams, the exit, and the
-times, until the table forgets it.
+times, until the table forgets it. `run --pty` is the exception to
+the pipes: the command runs on a terminal of its own, for the program
+that needs one to behave, and everything else stays the same.
 
 The streams are pumped from the start rather than collected at the
 end, so `show-job` reads a job that still runs and a pane attached
@@ -19,9 +21,13 @@ says how much of its answer is missing.
 from __future__ import annotations
 
 import codecs
+import fcntl
 import os
+import pty
 import re
+import struct
 import subprocess
+import termios
 import time
 from collections import deque
 from collections.abc import Awaitable, Callable, Iterable, Mapping
@@ -48,6 +54,15 @@ STREAM_KEEP = 256 * 1024
 #: ones, not half a million. Running jobs are never forgotten, and
 #: neither is a finished one somebody still waits for.
 FINISHED_KEEP = 50
+
+#: The size a pty job's terminal reports: no viewer sizes it, so it
+#: starts at the common default and stays there.
+PTY_ROWS = 24
+PTY_COLUMNS = 80
+
+#: The terminal a pty job claims when the caller sent no TERM: enough
+#: for colors and cursor motion, without promising anything rarer.
+PTY_TERM = "xterm-256color"
 
 
 #: A job's id. An int at run time -- sqlite stores it as one -- but a
@@ -101,10 +116,15 @@ class Job:
         started: float | None = None,
         tags: Iterable[tuple[str, str | None]] = (),
         env: Mapping[str, str] | None = None,
+        pty: bool = False,
     ) -> None:
         self.job_id = job_id
         self.command = command
         self.directory = directory
+        #: Whether the process runs on a pty rather than pipes: `run
+        #: --pty` sets it for the command that needs a terminal to
+        #: behave -- colors, cursor motion, `test -t`.
+        self.pty = pty
         #: What the job is called by, as key to value: a bare key
         #: carries no value, and a repeated key keeps its last one.
         #: The `session` key names the agent session that ran it, when
@@ -228,6 +248,7 @@ class JobTable:
         directory: str | None = None,
         tags: Iterable[tuple[str, str | None]] = (),
         env: Mapping[str, str] | None = None,
+        pty: bool = False,
     ) -> Job:
         """
         Record a job. Starting it is `supervise`, in the caller's task.
@@ -241,10 +262,10 @@ class JobTable:
         """
         now = time.time()
         cursor = await self.store.write(
-            "INSERT INTO jobs(command, directory, status, started) VALUES (?, ?, 'running', ?)",
-            (command, directory, now),
+            "INSERT INTO jobs(command, directory, status, started, pty) VALUES (?, ?, 'running', ?, ?)",
+            (command, directory, now, 1 if pty else 0),
         )
-        job = Job(JobId(cursor.lastrowid), command, directory, now, tags, env or dict(os.environ))
+        job = Job(JobId(cursor.lastrowid), command, directory, now, tags, env or dict(os.environ), pty)
         self._jobs[job.job_id] = job
         for key, value in job.tags.items():
             await self.store.write(
@@ -296,6 +317,9 @@ class JobTable:
         output is complete before `done` is set, and a waiter never
         reads half of it.
         """
+        if job.pty:
+            await self._supervise_pty(job)
+            return
         try:
             process = await anyio.open_process(
                 job.command,
@@ -325,6 +349,75 @@ class JobTable:
         except BaseException as e:
             # The server is going down, or the pumps failed: no
             # orphan. A failed pump fails the job, never the server.
+            with suppress(Exception):
+                process.kill()
+            if isinstance(e, anyio.get_cancelled_exc_class()):
+                if job.returncode is None:
+                    job.error = "stopped with the server"
+                raise
+            logger.exception("Running a job failed.")
+            if job.returncode is None and job.error is None:
+                job.error = "%s: %s" % (job.command, e)
+        finally:
+            if job.status == "running":
+                await self._finish(job, job.returncode)
+
+    async def _supervise_pty(self, job: Job) -> None:
+        """
+        Run the job on a terminal: one pty for all three streams.
+
+        The child is its own session without a controlling terminal,
+        so the server's terminal signals never reach it, but `isatty`
+        answers yes on every stream. Everything the pty says lands in
+        the stdout tail with `\\r\\n` folded back to `\\n`, so the
+        viewer, `show-job` and the waiters read a pty job exactly the
+        way they read a piped one; the stderr tail stays empty.
+
+        The pump drains the primary in a thread and closes it when it
+        ends, so a cancelled supervise releases the reader rather
+        than leaving it on the fd. The exit is recorded only once the
+        drain and the wait both finish, the way the two pumps gate a
+        piped job.
+        """
+        try:
+            primary, replica = pty.openpty()
+        except OSError as e:
+            job.error = "%s: %s" % (job.command, e)
+            await self._finish(job, None)
+            return
+        with suppress(OSError):
+            fcntl.ioctl(primary, termios.TIOCSWINSZ, struct.pack("HHHH", PTY_ROWS, PTY_COLUMNS, 0, 0))
+        env = dict(job.env)
+        env.setdefault("TERM", PTY_TERM)
+        try:
+            process = await anyio.open_process(
+                job.command,
+                stdin=replica,
+                stdout=replica,
+                stderr=replica,
+                cwd=job.directory,
+                env={**env, "PYMUX_JOB": str(job.job_id)},
+                start_new_session=True,
+            )
+        except OSError as e:
+            job.error = "%s: %s" % (job.command, e)
+            await self._finish(job, None)
+            return
+        finally:
+            # The child holds its own end; the parent's copy would
+            # hold the primary open past every exit.
+            with suppress(OSError):
+                os.close(replica)
+
+        job.process = process
+        if job.kill_requested:
+            process.terminate()
+
+        try:
+            async with anyio.create_task_group() as pumps:
+                pumps.start_soon(_pump_pty, primary, job)
+                job.returncode = await process.wait()
+        except BaseException as e:
             with suppress(Exception):
                 process.kill()
             if isinstance(e, anyio.get_cancelled_exc_class()):
@@ -637,6 +730,8 @@ def describe(job: Job) -> str:
         state = "done " + state
     else:
         state = "running"
+    if job.pty:
+        state += " pty"
     line = "%d %s %.1fs %s" % (job.job_id, state, job.age(), job.command)
     if job.tags:
         tagged = ",".join(key if value is None else "%s=%s" % (key, value) for key, value in job.tags.items())
@@ -691,6 +786,50 @@ async def _pump(stream: anyio.abc.ByteStream, job: Job, name: str) -> None:
     finally:
         with suppress(Exception):
             await stream.aclose()
+
+
+async def _pump_pty(primary: int, job: Job) -> None:
+    """
+    Drain a pty job's primary into the stdout tail the job keeps.
+
+    The read runs in a thread: the fd blocks, and nothing else here
+    may wait on it. The terminal folds `\\n` to `\\r\\n` on the way
+    out, so the fold comes off before storing and the tails read the
+    way piped ones do; a `\\r` split across two reads rides along to
+    the next one rather than surviving as a stray. The primary closes
+    here at the end, which also releases a reader a cancelled
+    supervise left on the fd.
+    """
+    pending = b""
+    try:
+        while True:
+            try:
+                data = await anyio.to_thread.run_sync(os.read, primary, 65536)
+            except OSError:
+                # The last write end closed: on a pty that reads as
+                # EIO rather than EOF.
+                break
+            if not data:
+                break
+            data = pending + data
+            if data.endswith(b"\r"):
+                pending, data = b"\r", data[:-1]
+            else:
+                pending = b""
+            data = data.replace(b"\r\n", b"\n")
+            if data:
+                job.stdout_chunks.append((job.end("stdout"), data))
+                job.stdout_kept += len(data)
+                _trim(job, "stdout")
+                _poke(job)
+        if pending:
+            job.stdout_chunks.append((job.end("stdout"), pending))
+            job.stdout_kept += len(pending)
+            _trim(job, "stdout")
+            _poke(job)
+    finally:
+        with suppress(OSError):
+            os.close(primary)
 
 
 def _trim(job: Job, name: str) -> None:
