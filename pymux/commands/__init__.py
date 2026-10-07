@@ -148,6 +148,11 @@ MODULES = [
     "forward_port",
     "unforward_port",
     "list_forwards",
+    "run",
+    "wait_job",
+    "list_jobs",
+    "show_job",
+    "kill_job",
 ]
 
 

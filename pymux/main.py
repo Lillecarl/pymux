@@ -56,6 +56,7 @@ from .enums import CHOOSE, COMMAND, PROMPT, WindowSize, Woke
 from .forwarding import LOOPBACK_NAMES, loopback_port
 from .graphics import PaneView
 from .ids import PaneId, SessionId, WindowIndex
+from .jobs import JobTable
 from .key_bindings import PymuxKeyBindings
 from .key_spelling import why_pane_cannot_read
 from .layout import Justify, LayoutManager, change_pane_size
@@ -1126,6 +1127,11 @@ class Pymux:
         #: lock somebody holds, or somebody waiting.
         #: Lillecarl/pymux#302.
         self.wait_channels: dict = {}
+
+        #: The jobs of `run`, by id. A job is a command with pipes
+        #: instead of a terminal, owned by the server rather than by
+        #: any pane, so it outlives every view onto it.
+        self.jobs = JobTable()
 
         # The hooks of the session: a name for an event, and the
         # commands it runs. `set-hook` fills it, `invalidate` reads it.
