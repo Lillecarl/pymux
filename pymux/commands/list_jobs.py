@@ -16,12 +16,18 @@ def list_jobs(pymux: Pymux, args: argparse.Namespace):
     """
     List the jobs the server remembers.
 
-    One line each, oldest first: the id `run` answered with, whether
-    it still runs or what it exited with, how long it ran, and the
-    command. A person watches the table fill; an agent polls for the
-    line that says its job ended.
+    One line each: the caller's session first when a packet said who
+    called, oldest first within and otherwise. A person watches the
+    table fill; an agent polls for the line that says its job ended,
+    and its own jobs are the first lines it reads.
     """
-    lines = [describe(job) for job in pymux.jobs.listing()]
+    caller = pymux.caller_context
+    hint = caller.session_id if caller is not None else None
+    jobs = sorted(
+        pymux.jobs.listing(),
+        key=lambda job: (hint is not None and job.session != hint, job.job_id),
+    )
+    lines = [describe(job) for job in jobs]
     answer(pymux, "\n".join(lines) if lines else "(no jobs)")
 
 

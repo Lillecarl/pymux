@@ -24,6 +24,7 @@ from prompt_toolkit.application.current import set_app
 from session import create_session
 
 import pymux.jobs as jobs_module
+from pymux.agentic import CallerContext
 from pymux.commands import CommandException, handle_command
 from pymux.commands.kill_job import kill_job
 from pymux.commands.run import run_job
@@ -145,6 +146,26 @@ async def test_list_jobs_shows_every_job_in_one_line_each():
         assert any(line.startswith("2 running") and "sleep 30" in line for line in lines)
 
         pymux.jobs.kill(pymux.jobs.get(2))
+
+
+async def test_list_jobs_sorts_the_callers_session_first():
+    async with create_session() as (pymux, state):
+        await _run(pymux, state, "run --tag a --session s2 true")
+        await _run(pymux, state, "run --tag b --session s1 true")
+        await _run(pymux, state, "run --tag c true")
+
+        def ids(said) -> list:
+            return [line.split()[0] for line in "\n".join(said).splitlines()]
+
+        pymux.caller_context = CallerContext(session_id="s1", environment={}, cwd=None)
+        try:
+            said = await _run_answering(pymux, state, "list-jobs")
+        finally:
+            pymux.caller_context = None
+        assert ids(said) == ["2", "1", "3"]
+
+        said = await _run_answering(pymux, state, "list-jobs")
+        assert ids(said) == ["1", "2", "3"]
 
 
 async def test_show_job_reads_both_streams_of_a_running_job():
