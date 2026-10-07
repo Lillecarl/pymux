@@ -1,21 +1,23 @@
 """
 What a detached command says about who sent it.
 
-The client resolves the agent session id from its own environment --
-fresh on every invocation -- and sends it under `PYMUX_AGENTIC_ID`
-inside the `environment` field of the `run-command` packet
-(`client/agentic.py`). These tests read what such a packet carries,
-without a server: a stub socket replays the answer, and the captured
-send is what the wire would have held.
+The client sends its whole environment -- resolved to one id under
+`PYMUX_AGENTIC_ID` beside it -- and the directory it stands in, on
+every `run-command` packet (`client/agentic.py`). The server end
+reads the caller out of that, because its own environment names
+nothing about who called. These tests read what such a packet
+carries, without a server: a stub socket replays the answer, and the
+captured send is what the wire would have held.
 """
 
 from __future__ import annotations
 
 import json
+import os
 
 from libpymux.protocol import Field, Packet
 
-from pymux.client.agentic import AGENT_SESSION_VARS, PYMUX_AGENTIC_ID, caller_environment
+from pymux.client.agentic import AGENT_SESSION_VARS, PYMUX_AGENTIC_ID, caller_cwd, caller_environment
 from pymux.client.posix import PosixClient
 
 # ----------------------------------------------------------------------
@@ -98,9 +100,18 @@ def test_packet_carries_the_resolved_id(monkeypatch):
     packet = run_command_packet(monkeypatch, OPENCODE_SESSION_ID="opencode-1")
     assert packet[Field.CMD] == Packet.RUN_COMMAND
     assert packet[Field.DATA] == "show-job"
-    assert packet[Field.ENVIRONMENT] == {PYMUX_AGENTIC_ID: "opencode-1"}
+    # The whole environment, with the resolution asserted under its
+    # canonical name beside the harness variable it came from.
+    assert packet[Field.ENVIRONMENT]["OPENCODE_SESSION_ID"] == "opencode-1"
+    assert packet[Field.ENVIRONMENT][PYMUX_AGENTIC_ID] == "opencode-1"
+    assert packet[Field.CWD] == os.getcwd()
 
 
-def test_packet_carries_nothing_when_anonymous(monkeypatch):
+def test_packet_carries_nothing_resolved_when_anonymous(monkeypatch):
     packet = run_command_packet(monkeypatch)
-    assert packet[Field.ENVIRONMENT] == {}
+    assert PYMUX_AGENTIC_ID not in packet[Field.ENVIRONMENT]
+    assert packet[Field.CWD] == os.getcwd()
+
+
+def test_caller_cwd_is_the_directory_sent_from():
+    assert caller_cwd() == os.getcwd()

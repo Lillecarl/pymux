@@ -109,6 +109,9 @@ class Field(StrEnum):
     FORWARDS = "forwards"
     PINGS = "pings"
     ENVIRONMENT = "environment"
+    #: The directory a detached command is sent from. A job without
+    #: `-d` runs there, the way it would had the caller run it itself.
+    CWD = "cwd"
     TTYNAME = "ttyname"
     PID = "pid"
     CLIENT_OPTIONS = "client-options"

@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 import signal
 import sys
 import time
@@ -62,7 +63,7 @@ from pymux.forwarding import (
 )
 from pymux.utils import nonblocking
 
-from .agentic import caller_environment
+from .agentic import caller_cwd, caller_environment
 from .defaults import is_ssh_url as is_ssh_url
 from .forwards import Forwards
 from .reconnect import (
@@ -436,7 +437,8 @@ class SshClient(TerminalClient):
                     # Resolved on this machine, where the agent's
                     # environment is: the far side only forwards it.
                     # `client/agentic.py` holds the names.
-                    Field.ENVIRONMENT: caller_environment(),
+                    Field.ENVIRONMENT: {**dict(os.environ), **caller_environment()},
+                    Field.CWD: caller_cwd(),
                 }
             )
 

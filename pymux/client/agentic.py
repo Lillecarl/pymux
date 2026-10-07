@@ -18,12 +18,14 @@ caller, and the packet says so by saying nothing: an empty dict.
 
 from __future__ import annotations
 
+import contextlib
 import os
 from collections.abc import Mapping
 
 __all__ = [
     "AGENT_SESSION_VARS",
     "PYMUX_AGENTIC_ID",
+    "caller_cwd",
     "caller_environment",
 ]
 
@@ -60,3 +62,16 @@ def caller_environment(env: Mapping[str, str] | None = None) -> dict[str, str]:
         if value:
             return {PYMUX_AGENTIC_ID: value}
     return {}
+
+
+def caller_cwd() -> str | None:
+    """
+    The directory a command is sent from.
+
+    Answers `None` when even that question fails -- a directory that
+    was removed under the caller -- and then the server end falls back
+    to its own, the way it always has.
+    """
+    with contextlib.suppress(OSError):
+        return os.getcwd()
+    return None

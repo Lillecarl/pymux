@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 import signal
 import socket
 import sys
@@ -12,7 +13,7 @@ from libpymux.protocol import Field, Packet
 from libpymux.sockets import servers_newest_first
 from prompt_toolkit.input.vt100 import raw_mode
 
-from .agentic import caller_environment
+from .agentic import caller_cwd, caller_environment
 from .terminal import TerminalClient
 
 __all__ = [
@@ -57,11 +58,13 @@ class PosixClient(TerminalClient):
                 Field.CMD: Packet.RUN_COMMAND,
                 Field.DATA: command,
                 Field.PANE_ID: pane_id,
-                # The agent this command comes from, if any. The server
-                # cannot read the caller's environment itself, so the
-                # client resolves it fresh on every invocation and says
-                # it here. `client/agentic.py` holds the names.
-                Field.ENVIRONMENT: caller_environment(),
+                # Who and from where. The server cannot read the
+                # caller's context itself, so the client sends the
+                # whole environment -- resolved to one id under
+                # `PYMUX_AGENTIC_ID` beside it -- and the directory it
+                # stands in. `client/agentic.py` holds the names.
+                Field.ENVIRONMENT: {**dict(os.environ), **caller_environment()},
+                Field.CWD: caller_cwd(),
             }
         )
         if timeout is not None:
