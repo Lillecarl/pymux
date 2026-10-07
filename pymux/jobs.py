@@ -24,7 +24,7 @@ import re
 import subprocess
 import time
 from collections import deque
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from contextlib import suppress
 from typing import NewType
 
@@ -58,10 +58,20 @@ JobId = NewType("JobId", int)
 class Job:
     "One command the server ran, running or remembered."
 
-    def __init__(self, job_id: JobId, command: str, directory: str | None, started: float | None = None) -> None:
+    def __init__(
+        self,
+        job_id: JobId,
+        command: str,
+        directory: str | None,
+        started: float | None = None,
+        tags: Iterable[tuple[str, str | None]] = (),
+    ) -> None:
         self.job_id = job_id
         self.command = command
         self.directory = directory
+        #: What the job is called by, as key to value: a bare key
+        #: carries no value, and a repeated key keeps its last one.
+        self.tags: dict[str, str | None] = dict(tags)
         #: `running` until the process ends or fails to start.
         self.status = "running"
         #: What the process exited with, or the negative signal that
@@ -164,20 +174,31 @@ class JobTable:
         "Forget the database. In-memory, so this is also forgetting."
         await self.store.close()
 
-    async def submit(self, command: str, directory: str | None = None) -> Job:
+    async def submit(
+        self,
+        command: str,
+        directory: str | None = None,
+        tags: Iterable[tuple[str, str | None]] = (),
+    ) -> Job:
         """
         Record a job. Starting it is `supervise`, in the caller's task.
 
         The id comes from the database, so it is the row and the job
         or neither: nothing hands out an id the table cannot answer.
+        The tags go down with the row, in the same step.
         """
         now = time.time()
         cursor = await self.store.write(
             "INSERT INTO jobs(command, directory, status, started) VALUES (?, ?, 'running', ?)",
             (command, directory, now),
         )
-        job = Job(JobId(cursor.lastrowid), command, directory, now)
+        job = Job(JobId(cursor.lastrowid), command, directory, now, tags)
         self._jobs[job.job_id] = job
+        for key, value in job.tags.items():
+            await self.store.write(
+                "INSERT OR REPLACE INTO job_tags(job_id, key, value) VALUES (?, ?, ?)",
+                (job.job_id, key, value),
+            )
         return job
 
     def get(self, job_id: JobId) -> Job | None:
@@ -480,7 +501,7 @@ class JobFeed:
 
 
 def describe(job: Job) -> str:
-    "One line for `list-jobs`: id, state, age, command."
+    "One line for `list-jobs`: id, state, age, command, and what tags it."
     if job.is_done:
         if job.error is not None:
             state = "error: %s" % job.error
@@ -491,7 +512,11 @@ def describe(job: Job) -> str:
         state = "done " + state
     else:
         state = "running"
-    return "%d %s %.1fs %s" % (job.job_id, state, job.age(), job.command)
+    line = "%d %s %.1fs %s" % (job.job_id, state, job.age(), job.command)
+    if job.tags:
+        tagged = ",".join(key if value is None else "%s=%s" % (key, value) for key, value in job.tags.items())
+        line += " [%s]" % tagged
+    return line
 
 
 def outcome_text(job: Job) -> str:

@@ -41,7 +41,8 @@ def run_job(pymux: Pymux, args: argparse.Namespace):
 
 
 async def _submit(pymux: Pymux, args: argparse.Namespace, shell_command: str) -> None:
-    job = await pymux.jobs.submit(shell_command, args.directory)
+    tags = [_parse_tag(word) for word in args.tags]
+    job = await pymux.jobs.submit(shell_command, args.directory, tags)
 
     if args.w:
         refuse_without_a_waiter(pymux, "wait")
@@ -53,6 +54,20 @@ async def _submit(pymux: Pymux, args: argparse.Namespace, shell_command: str) ->
     # anywhere a waiter stands.
     pymux.spawn_command(pymux.jobs.supervise(job))
     answer(pymux, "%d" % job.job_id)
+
+
+def _parse_tag(word: str) -> tuple[str, str | None]:
+    """
+    One `--tag`: a bare key, or a key with a value.
+
+    A bare key carries no value -- NULL in the database, not an empty
+    string -- so `key` and `key=` stay two different tags. A repeated
+    key keeps its last value.
+    """
+    key, separator, value = word.partition("=")
+    if not key:
+        raise CommandException("a tag names a key: %r" % word)
+    return key, value if separator else None
 
 
 async def _run_and_report(pymux: Pymux, job: Job) -> None:
@@ -89,6 +104,15 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         metavar="<directory>",
         default=None,
         help="Run in this directory. The server's own otherwise.",
+    )
+    parser.add_argument(
+        "--tag",
+        "-T",
+        dest="tags",
+        action="append",
+        default=[],
+        metavar="<key[=value]>",
+        help="Tag the job: a bare key, or a key with a value. Repeat to tag it twice.",
     )
     parser.add_argument(
         "shell_command",

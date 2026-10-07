@@ -35,6 +35,7 @@ async def test_open_builds_a_versioned_schema():
             cursor = await conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
             assert {row[0] for row in await cursor.fetchall()} == {
                 "jobs",
+                "job_tags",
                 "saved_queries",
                 "sqlite_sequence",
             }

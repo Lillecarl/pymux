@@ -33,7 +33,7 @@ import anyio
 
 #: What this server built. Agents read it with `PRAGMA user_version`
 #: and re-read the schema when it differs from what they were told.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs(
@@ -51,6 +51,13 @@ CREATE TABLE IF NOT EXISTS saved_queries(
   sql TEXT NOT NULL,
   description TEXT
 );
+CREATE TABLE IF NOT EXISTS job_tags(
+  job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,
+  value TEXT,
+  PRIMARY KEY (job_id, key)
+);
+CREATE INDEX IF NOT EXISTS job_tags_key ON job_tags(key);
 """
 
 #: The queries every boot starts with. A name an agent saves later
@@ -74,6 +81,14 @@ SEEDS = [
         "recent",
         "SELECT id, command, status, returncode FROM jobs ORDER BY id DESC LIMIT :n",
         "Newest jobs first; :n caps them.",
+    ),
+    (
+        "by_tag",
+        (
+            "SELECT DISTINCT j.id, j.command FROM jobs j "
+            "JOIN job_tags t ON t.job_id = j.id WHERE t.key = :tag ORDER BY j.id"
+        ),
+        "Jobs carrying a tag key; :tag names it.",
     ),
 ]
 
