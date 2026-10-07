@@ -153,6 +153,7 @@ MODULES = [
     "list_jobs",
     "show_job",
     "kill_job",
+    "view_job",
 ]
 
 

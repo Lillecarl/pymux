@@ -67,7 +67,7 @@ def report_outcome(pymux: Pymux, job: Job) -> None:
     answer(pymux, outcome_text(job))
     if job.error is not None:
         raise CommandException("job %d never started: %s" % (job.job_id, job.error))
-    if job.returncode != 0:
+    if job.returncode:
         raise CommandException("job %d exited %d" % (job.job_id, job.returncode))
 
 

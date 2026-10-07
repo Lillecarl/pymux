@@ -56,7 +56,7 @@ from .enums import CHOOSE, COMMAND, PROMPT, WindowSize, Woke
 from .forwarding import LOOPBACK_NAMES, loopback_port
 from .graphics import PaneView
 from .ids import PaneId, SessionId, WindowIndex
-from .jobs import JobTable
+from .jobs import Job, JobFeed, JobTable
 from .key_bindings import PymuxKeyBindings
 from .key_spelling import why_pane_cannot_read
 from .layout import Justify, LayoutManager, change_pane_size
@@ -1941,6 +1941,7 @@ class Pymux:
         start_directory: str | None = None,
         on_done: Callable[[], None] | None = None,
         session: Session | None = None,
+        job: Job | None = None,
     ):
         """
         Create a new :class:`pymux.arrangement.Pane` instance. (Don't put it in
@@ -1953,6 +1954,9 @@ class Pymux:
         :param session: Where this pane is going, which says how big it
             is until a client renders it. The pane is not in a window
             yet, so it cannot be asked.
+        :param job: If given, show this job instead of running anything:
+            a viewer pane, read-only, that replays the tail and follows
+            the rest. Nothing forks and no program runs.
         """
 
         def done_callback():
@@ -2087,7 +2091,11 @@ class Pymux:
 
         # Create new pane and terminal.
         terminal = Terminal(
-            done_callback=done_callback,
+            # A viewer never ends on its own: the job ending feeds an
+            # exit line and the pane stays, so there is nothing to call
+            # back. `JobFeed.kill` stops the follow; whoever kills
+            # removes the pane.
+            done_callback=None if job is not None else done_callback,
             bell_func=bell,
             osc_func=forward_osc,
             # What copy mode copied. The pane does not build the
@@ -2141,6 +2149,26 @@ class Pymux:
         # for the reason `on_content_changed` gives above: a pane is
         # about the arrangement and knows nothing about a widget.
         terminal_control.on_mouse_focus = focus_pane_on_click
+
+        if job is not None:
+            # A viewer: the feed stands where the process would, so
+            # the eager start below and the first render both meet it,
+            # and nothing ever forks.
+            if self.tasks is None:
+                raise RuntimeError("A viewer was made outside `Pymux.running`, so nothing would follow the job.")
+            old_process = terminal_control.process
+            terminal_control.process = JobFeed(job, terminal_control.feed_output, self.tasks.start_soon)
+            # No fork, so the pty the construction opened is dead
+            # weight: give both ends back. The reader never connected,
+            # so `close` only drops the master; the slave would
+            # otherwise stay open until the server exits, which closes
+            # it only on a reap that never comes.
+            old_process.backend.close()
+            slave = getattr(old_process.backend, "slave", None)
+            if slave is not None:
+                os.close(slave)
+                old_process.backend.slave = None
+
         if not terminal_control._running:
             # The size of the session this pane is going into, until a
             # client attaches. `new-session -x -y` is what names it, and
@@ -2171,7 +2199,10 @@ class Pymux:
         self.tell_pane_about_colours(pane)
         self.tell_pane_about_cell_size(pane)
 
-        logger.info("Created process %r.", command_list)
+        if job is not None:
+            logger.info("Viewing job %d in a new pane.", job.job_id)
+        else:
+            logger.info("Created process %r.", command_list)
 
         return pane
 
