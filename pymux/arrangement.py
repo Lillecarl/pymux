@@ -1205,6 +1205,22 @@ class Arrangement:
         # Sort windows by index.
         self.windows = sorted(self.windows, key=lambda w: w.index)
 
+    def move_window_to(self, window: Window, dst: Arrangement, index: WindowIndex | None = None) -> None:
+        """
+        Move a window of this order into another arrangement's.
+
+        The window leaves this order the way `unlink_window` takes
+        one out -- the clients looking at it are focused away first
+        -- and lands in the other's the way `link_window` puts one
+        in, at the index or after the last window without one. The
+        pen in between never escapes this method: the window is out
+        of one order and in the other when it returns.
+        Lillecarl/pymux#533.
+        """
+        self.unlink_window(window)
+        self._unlinked_windows.remove(window)
+        dst.link_window(window, index)
+
     def replace_pane(self, old: Pane, new: Pane) -> None:
         """
         Put a new pane where an old one sat, in the tree and in the
@@ -1263,11 +1279,23 @@ class Arrangement:
     def link_window(self, window: Window, index: WindowIndex | None = None) -> None:
         """
         Put a window in the order at an index: one that unlink_window
-        took out, or one that is in the order already, which is a
-        move. Lillecarl/pymux#297.
+        took out, one that is in the order already, which is a move,
+        or one that belongs to no order, which `move_window_to`
+        unlinked from another arrangement. Lillecarl/pymux#297,
+        Lillecarl/pymux#533.
         """
         if window in self._unlinked_windows:
             self._unlinked_windows.remove(window)
+            take = True
+        elif window not in self.windows:
+            # A window that belongs to no order: `move_window_to`
+            # unlinked it from another arrangement, and it arrives to
+            # be put in this one.
+            take = True
+        else:
+            take = False
+
+        if take:
             if index is None:
                 index = max((w.index for w in self.windows), default=WindowIndex(self.base_index - 1)) + 1
             window.index = index

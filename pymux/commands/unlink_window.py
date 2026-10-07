@@ -15,11 +15,12 @@ def unlink_window(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Take a window out of the order, with its panes still running.
 
-    tmux keeps an unlinked window for another session to take; pymux
-    holds one session, so the window waits for link-window to put it
-    back in the order, and no client can see it while it waits. The
-    last window of the session refuses: there would be nothing left
-    to watch. Lillecarl/pymux#297.
+    tmux keeps an unlinked window for another session to take; here
+    the window waits in the pen of its own session for link-window
+    to put it back in an order -- its own or another session's --
+    and no client can see it while it waits. The last window of the
+    session refuses: there would be nothing left to watch.
+    Lillecarl/pymux#297.
     """
     window = the_window(pymux, args.target_window)
 

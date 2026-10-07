@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandException, CommandParser, add_command
-from pymux.commands.common import find_window
+from pymux.commands.common import find_window, session_part
 from pymux.ids import WindowId, WindowIndex
 
 
@@ -31,18 +31,50 @@ def link_window(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Put a window in the order at the index -t names.
 
-    The window is one unlink_window took out, or one that is in the
+    The window is one unlink_window took out, or one that is in an
     order already, which moves it: tmux's link-window and move-window
-    answer the same ask here, because pymux holds one session and a
-    window has nowhere else to come from. Without -t the window goes
-    after the last one. Lillecarl/pymux#297.
+    answer the same ask here, because a window belongs to one order
+    and linking it elsewhere takes it out of its own.
+    Lillecarl/pymux#297.
+
+    `-t` takes an optional session in front of the index, and the
+    window moves across when it names another one:
+    `link-window -s 2 -t work:` parks window 2 after the last window
+    of `work`. Without a session part the window lands in the
+    session of the client that asks. Lillecarl/pymux#533.
     """
     window = _find_anywhere(pymux, args.s)
     if window is None:
         raise CommandException("can't find window: %s" % (args.s,))
 
-    index = args.t
-    pymux.arrangement.link_window(window, index)
+    if args.t is None:
+        dst = pymux.current_session
+        index = None
+    else:
+        dst, rest = session_part(pymux, args.t)
+        if dst is None:
+            raise CommandException("can't find session: %s" % (args.t,))
+        if rest == "":
+            # A session and no index: after the last window, which is
+            # what no `-t` at all does.
+            index = None
+        else:
+            try:
+                index = WindowIndex(int(rest))
+            except ValueError:
+                raise CommandException("Can't link window: bad index.") from None
+
+    src = pymux.session_of_window(window)
+    if src is None:
+        # Parked in the pen of the session the caller is on:
+        # `_find_anywhere` reaches into no other one. Take it out of
+        # the pen, and the link below puts it in the order.
+        pymux.arrangement._unlinked_windows.remove(window)
+        dst.arrangement.link_window(window, index)
+    elif src is dst:
+        dst.arrangement.link_window(window, index)
+    else:
+        src.arrangement.move_window_to(window, dst.arrangement, index)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
@@ -50,4 +82,4 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser.add_argument(
         "-s", dest="s", metavar="<src-window>", help="The window to link; the active one is the default."
     )
-    parser.add_argument("-t", dest="t", metavar="<dst-index>", type=WindowIndex, help="The index to put it at.")
+    parser.add_argument("-t", dest="t", metavar="[<dst-session>:]<dst-index>", help="The index to put it at.")
