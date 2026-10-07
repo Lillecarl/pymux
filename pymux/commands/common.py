@@ -358,6 +358,18 @@ def refuse_without_a_waiter(pymux: Pymux, what: str) -> None:
         raise CommandException("not able to %s" % (what,))
 
 
+def is_agent(pymux: Pymux) -> bool:
+    """
+    Whether the caller is an agent session: one of the harness
+    variables named an id, and the client said so in the packet.
+
+    An agent that waits without bound hangs its turn, so the waits
+    refuse one: every wait an agent runs names its timeout.
+    """
+    caller = pymux.caller_context
+    return caller is not None and caller.session_id is not None
+
+
 def show_listing(pymux: Pymux, title: str, text: str) -> None:
     """
     A listing, to the person who asked for it.

@@ -100,7 +100,15 @@ async def test_run_tags_a_job_end_to_end():
 async def test_a_tag_without_a_key_refuses():
     async with create_session() as (pymux, state):
         args = argparse.Namespace(
-            shell_command=["true"], directory=None, tags=["=v"], w=False, session=None, env=[], pty=False
+            shell_command=["true"],
+            directory=None,
+            tags=["=v"],
+            w=False,
+            session=None,
+            env=[],
+            pty=False,
+            timeout=None,
+            tail=10,
         )
         pymux.command_output = []
         try:

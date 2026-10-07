@@ -869,6 +869,7 @@ class ServerConnection:
         pymux = self.pymux
         pymux.command_output = []
         pymux.command_error = []
+        pymux.command_exit_code = None
         # Who sent this, and from where: the client resolves both fresh
         # on every invocation and says them in the packet, because the
         # server's own environment names nothing about the caller.
@@ -896,8 +897,10 @@ class ServerConnection:
                 # close the connection.
                 output = pymux.command_output
                 errors = pymux.command_error
+                exit_code = pymux.command_exit_code
                 pymux.command_output = None
                 pymux.command_error = None
+                pymux.command_exit_code = None
                 pymux.caller_context = None
 
                 try:
@@ -905,7 +908,9 @@ class ServerConnection:
                         await self._write_packet({Field.CMD: Packet.OUT, Field.DATA: "\n".join(output) + "\n"})
                     if errors:
                         await self._write_packet({Field.CMD: Packet.ERR, Field.DATA: "\n".join(errors) + "\n"})
-                    await self._write_packet({Field.CMD: Packet.EXIT, Field.CODE: 1 if errors else 0})
+                    if exit_code is None:
+                        exit_code = 1 if errors else 0
+                    await self._write_packet({Field.CMD: Packet.EXIT, Field.CODE: exit_code})
                 except BrokenPipeError:
                     pass
                 self._close_connection()

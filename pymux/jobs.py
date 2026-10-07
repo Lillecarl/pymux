@@ -503,6 +503,73 @@ class JobTable:
             job.waiters -= 1
         return job
 
+    async def follow(self, job: Job, lines: int, timeout: float | None, emit) -> int:
+        """
+        Replay the tail and follow the job live, and answer its exit.
+
+        The replay is the last `lines` of stdout, nothing when zero;
+        the follow feeds both streams in the order they arrive. The
+        end answers the exit code: the job's own when it ends, 124
+        past the timeout with the job still running, 1 when it never
+        started. A follower watches, so the sweep and the cap leave
+        the job alone until this returns.
+        """
+        replay = decode(job.kept("stdout")).splitlines()
+        if lines and replay:
+            emit("\n".join(replay[-lines:]))
+        job.waiters += 1
+        send, recv = anyio.create_memory_object_stream(1)
+        job.followers.add(send)
+        try:
+            out_decode = codecs.getincrementaldecoder("utf-8")("replace")
+            err_decode = codecs.getincrementaldecoder("utf-8")("replace")
+            if timeout is None or timeout > 0:
+                if timeout is None:
+                    await self._drain(job, recv, out_decode, err_decode, emit)
+                else:
+                    with anyio.move_on_after(timeout) as scope:
+                        await self._drain(job, recv, out_decode, err_decode, emit)
+                    if scope.cancel_called:
+                        emit("[tail: job %d still running after %ss]" % (job.job_id, _seconds(timeout)))
+                        return 124
+            if job.error is not None:
+                emit("[job %d never started: %s]" % (job.job_id, job.error))
+            elif not job.is_done:
+                # No waiting asked: the replay above is the answer,
+                # and 124 says the job is still running.
+                return 124
+            return _exit_of(job)
+        finally:
+            job.followers.discard(send)
+            with suppress(Exception):
+                await send.aclose()
+                await recv.aclose()
+            job.waiters -= 1
+
+    async def _drain(self, job, recv, out_decode, err_decode, emit) -> None:
+        "Feed everything new until the job ends with nothing left."
+        out_offset, err_offset = job.end("stdout"), job.end("stderr")
+        while True:
+            fed = False
+            for stream, offset, decoder in (("stdout", out_offset, out_decode), ("stderr", err_offset, err_decode)):
+                end, data = job.read(stream, offset)
+                if data:
+                    text = decoder.decode(data)
+                    if text:
+                        emit(text)
+                    fed = True
+                if stream == "stdout":
+                    out_offset = end
+                else:
+                    err_offset = end
+            if not fed:
+                if job.is_done:
+                    for text in (out_decode.decode(b"", True), err_decode.decode(b"", True)):
+                        if text:
+                            emit(text)
+                    return
+                await recv.receive()
+
     def kill(self, job: Job) -> bool:
         """
         End a running job with SIGTERM. True when there was a job to
@@ -756,6 +823,25 @@ def find_job(pymux, job: int | None, words: list[str], session: str | None) -> J
     if found is None:
         raise CommandException("no job tagged %s" % ",".join(words))
     return found
+
+
+def _exit_of(job: Job) -> int:
+    """
+    The exit code a follower reports: the job's own when it ended.
+
+    A signal reads the way the shell reads it, 128 above the number;
+    a job that never started has no code, so it reads 1.
+    """
+    if job.error is not None or job.returncode is None:
+        return 1
+    if job.returncode < 0:
+        return 128 - job.returncode
+    return job.returncode
+
+
+def _seconds(timeout: float) -> str:
+    "A timeout the way it was said: `90`, not `90.0`."
+    return "%d" % timeout if timeout == int(timeout) else "%s" % timeout
 
 
 def describe(job: Job) -> str:

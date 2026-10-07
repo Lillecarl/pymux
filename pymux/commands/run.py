@@ -5,12 +5,14 @@ import os
 import shlex
 from typing import TYPE_CHECKING
 
+import anyio
+
 if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
 from pymux.commands import CommandException, CommandParser, add_command
-from pymux.commands.common import answer, refuse_without_a_waiter
+from pymux.commands.common import answer, is_agent, refuse_without_a_waiter
 from pymux.jobs import SESSION_TAG, Job, outcome_text, parse_env, parse_tag
 
 
@@ -25,7 +27,12 @@ def run_job(pymux: Pymux, args: argparse.Namespace):
     forgets it past its cap. The answer is the id: `run 'sleep 30'`
     says `1`, and `wait-job 1` holds until it ends. `-w` waits here
     instead and answers with the output, for the agent that submits
-    one command and reads the result. `--pty` runs the command on a
+    one command and reads the result. `--timeout` waits here too but
+    only this long, streaming what the job says as it arrives: the
+    command line then reads the job's exit, or 124 past the timeout
+    with the job still running under its tag. `--tail` replays that
+    many lines first. A zero timeout waits for nothing and answers
+    with the id, like a bare run. `--pty` runs the command on a
     terminal instead of pipes, for the command that needs one to
     behave; the waiting and the reading stay the same, with the whole
     terminal output in the stdout tail.
@@ -72,8 +79,20 @@ async def _submit(pymux: Pymux, args: argparse.Namespace, shell_command: str) ->
 
     if args.w:
         refuse_without_a_waiter(pymux, "wait")
+        if is_agent(pymux):
+            raise CommandException(
+                "run -w waits without bound, which an agent refuses: run --timeout 90 -- ... instead."
+            )
         await _run_and_report(pymux, job)
         return
+
+    if args.timeout is not None:
+        if args.timeout < 0:
+            raise CommandException("a timeout counts seconds, so it cannot be negative.")
+        if args.timeout > 0:
+            refuse_without_a_waiter(pymux, "wait")
+            await _run_and_follow(pymux, job, args.tail, args.timeout)
+            return
 
     # `spawn_command` refuses outside `running`, where nothing would
     # finish the supervise; `-w` awaits it here instead, so it runs
@@ -85,6 +104,29 @@ async def _submit(pymux: Pymux, args: argparse.Namespace, shell_command: str) ->
 async def _run_and_report(pymux: Pymux, job: Job) -> None:
     await pymux.jobs.supervise(job)
     report_outcome(pymux, job)
+
+
+async def _run_and_follow(pymux: Pymux, job: Job, lines: int, timeout: float) -> None:
+    """
+    Run the job under this wait, streaming what it says.
+
+    The supervise belongs to the server either way: the wait only
+    follows, so a timeout ends the follow with 124 and the job runs
+    on under its tag. Outside `running` there is nothing to hand it
+    to, so both run here -- and a timeout then ends both, since a job
+    with no server to live on is no job at all.
+    """
+    if pymux.tasks is not None:
+        pymux.spawn_command(pymux.jobs.supervise(job))
+        pymux.command_exit_code = await pymux.jobs.follow(job, lines, timeout, lambda text: answer(pymux, text))
+        return
+    async with anyio.create_task_group() as group:
+
+        async def _supervised() -> None:
+            await pymux.jobs.supervise(job)
+
+        group.start_soon(_supervised)
+        pymux.command_exit_code = await pymux.jobs.follow(job, lines, timeout, lambda text: answer(pymux, text))
 
 
 def report_outcome(pymux: Pymux, job: Job) -> None:
@@ -139,6 +181,22 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         metavar="<id>",
         default=None,
         help="Stamp this session onto the job instead of the caller's. Unstamped jobs belong to no session.",
+    )
+    parser.add_argument(
+        "--timeout",
+        dest="timeout",
+        metavar="<seconds>",
+        type=float,
+        default=None,
+        help="Wait this long, streaming the output, then stop with 124 and the job still running. Zero does not wait.",
+    )
+    parser.add_argument(
+        "--tail",
+        dest="tail",
+        metavar="<lines>",
+        type=int,
+        default=10,
+        help="Replay this many lines first when waiting with --timeout.",
     )
     parser.add_argument(
         "--pty",

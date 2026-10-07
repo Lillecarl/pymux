@@ -99,9 +99,9 @@ def cli(sock_path, *args, env=None, cwd=None):
 
 
 def test_a_cli_session_stamps_and_finds_its_job(server):
-    first = cli(server, "run", "--tag", "e2e", "-w", "echo one", env={"OPENCODE_SESSION_ID": "e2e-1"})
+    first = cli(server, "run", "--tag", "e2e", "--timeout", "20", "echo one", env={"OPENCODE_SESSION_ID": "e2e-1"})
     assert first.returncode == 0, first.stderr
-    second = cli(server, "run", "--tag", "e2e", "-w", "echo two", env={"OPENCODE_SESSION_ID": "e2e-2"})
+    second = cli(server, "run", "--tag", "e2e", "--timeout", "20", "echo two", env={"OPENCODE_SESSION_ID": "e2e-2"})
     assert second.returncode == 0, second.stderr
 
     # The caller's own job answers, though another session's job is
@@ -148,7 +148,7 @@ def test_a_job_inherits_the_callers_directory_and_environment(server, tmp_path):
 
 
 def test_saved_queries_answer_over_the_wire(server):
-    cli(server, "run", "--tag", "e2e", "-w", "echo one", env={"OPENCODE_SESSION_ID": "e2e-1"})
+    cli(server, "run", "--tag", "e2e", "--timeout", "20", "echo one", env={"OPENCODE_SESSION_ID": "e2e-1"})
     answered = cli(server, "sql", "--json", "--run", "by_tag", "--param", "tag=session")
     assert answered.returncode == 0, answered.stderr
     rows = json.loads(answered.stdout.decode())["rows"]

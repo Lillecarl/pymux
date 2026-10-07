@@ -888,6 +888,7 @@ def _hook_of(reason: str) -> str | None:
 #: Lillecarl/pymux#87.
 _command_output: contextvars.ContextVar[list | None] = contextvars.ContextVar("pymux-command-output", default=None)
 _command_error: contextvars.ContextVar[list | None] = contextvars.ContextVar("pymux-command-error", default=None)
+_command_exit_code: contextvars.ContextVar[int | None] = contextvars.ContextVar("pymux-command-exit-code", default=None)
 _caller_context: contextvars.ContextVar[CallerContext | None] = contextvars.ContextVar(
     "pymux-caller-context", default=None
 )
@@ -3718,6 +3719,22 @@ exec pymux notify -u "$urgency" -- "$@"
     @command_error.setter
     def command_error(self, lines: list | None) -> None:
         _command_error.set(lines)
+
+    @property
+    def command_exit_code(self) -> int | None:
+        """
+        The exit code the client reads, when a command names one.
+
+        Most commands answer boolean: errors or not, and the socket
+        route sends 1 or 0. A command that reports another program's
+        ending -- `tail` with the job's exit, 124 past its timeout --
+        sets this instead, and the route sends it as is.
+        """
+        return _command_exit_code.get()
+
+    @command_exit_code.setter
+    def command_exit_code(self, code: int | None) -> None:
+        _command_exit_code.set(code)
 
     @property
     def caller_context(self) -> CallerContext | None:

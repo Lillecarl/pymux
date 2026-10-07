@@ -44,6 +44,7 @@ every job until the cap forgets the finished ones.
 # JOB CONTROL
 
 *run* [_OPTION_]... _COMMAND_...++
+*tail* [_-n _LINES_] [_--timeout _SECONDS_] [_ID_|--tag _KEY_[=_VALUE_]...] [_--session ID_]++
 *wait-job* [_ID_|--tag _KEY_[=_VALUE_]...] [_--session ID_]++
 *show-job* [_ID_|--tag _KEY_[=_VALUE_]...] [_--session ID_]++
 *kill-job* [_ID_|--tag _KEY_[=_VALUE_]...] [_--session ID_]++
@@ -61,7 +62,15 @@ so does neither.
 	pymux wait-job --tag deploy; echo $?
 
 *-w* waits in *run* itself and answers with the output instead of the
-id. *show-job* reads a job that still runs; *-e* reads stderr.
+id. *--timeout* waits in *run* too but only that long, streaming what
+the job says as it arrives; past it the command line reads 124 with
+the job still running, and zero waits for nothing. *tail* replays the
+last lines of a job and follows it live the same way: the exit code
+is the job's own, 124 past *--timeout*, 4 when no job answers. Under
+an agent session the timeout has no default -- a *tail* without one
+refuses rather than waiting without bound, and *wait-job* and
+*run -w* refuse whole.
+*show-job* reads a job that still runs; *-e* reads stderr.
 *view-job* tails one live in a read-only pane: *-k* replaces a program
 that still runs, *-t* names the pane to replace. *choose-job* is the
 picker: the jobs newest first in a centered box, Enter shows one in

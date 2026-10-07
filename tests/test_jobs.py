@@ -112,6 +112,8 @@ async def test_run_wait_fails_on_a_nonzero_exit():
                         session=None,
                         env=[],
                         pty=False,
+                        timeout=None,
+                        tail=10,
                         shell_command=["sh", "-c", "exit 3"],
                     ),
                 )
@@ -248,6 +250,8 @@ async def test_a_job_that_never_starts_says_why():
                         session=None,
                         env=[],
                         pty=False,
+                        timeout=None,
+                        tail=10,
                         shell_command=["echo", "hi"],
                     ),
                 )

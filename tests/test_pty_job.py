@@ -58,7 +58,15 @@ async def test_a_piped_job_holds_no_terminal():
         try:
             with set_app(state.app):
                 args = argparse.Namespace(
-                    w=True, directory=None, env=[], tags=[], session=None, pty=False, shell_command=["test -t 1"]
+                    w=True,
+                    directory=None,
+                    env=[],
+                    tags=[],
+                    session=None,
+                    pty=False,
+                    timeout=None,
+                    tail=10,
+                    shell_command=["test -t 1"],
                 )
                 with pytest.raises(CommandException, match="exited 1"):
                     await run_job(pymux, args)

@@ -7,8 +7,8 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandParser, add_command
-from pymux.commands.common import refuse_without_a_waiter
+from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands.common import is_agent, refuse_without_a_waiter
 from pymux.commands.run import report_outcome
 from pymux.jobs import find_job
 
@@ -24,6 +24,8 @@ def wait_job(pymux: Pymux, args: argparse.Namespace):
     says so instead of waiting forever.
     """
     refuse_without_a_waiter(pymux, "wait")
+    if is_agent(pymux):
+        raise CommandException("wait-job waits without bound, which an agent refuses: tail --timeout 90 instead.")
     job = find_job(pymux, args.job, args.tags, args.session)
 
     async def until_it_ends() -> None:
