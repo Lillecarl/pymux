@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import answer
-from pymux.jobs import JobId
+from pymux.jobs import find_job
 
 
 def kill_job(pymux: Pymux, args: argparse.Namespace):
@@ -19,11 +19,10 @@ def kill_job(pymux: Pymux, args: argparse.Namespace):
     Sends SIGTERM; a program that ignores it keeps running, and that
     is what `show-job` then says. There is no escalation on purpose:
     ending is one signal, and `wait-job` after it reports the exit
-    the program chose. A job that already ended says so instead.
+    the program chose. `--tag` names the newest job carrying every
+    tag instead of an id. A job that already ended says so instead.
     """
-    job = pymux.jobs.get(JobId(args.job))
-    if job is None:
-        raise CommandException("no job %d" % args.job)
+    job = find_job(pymux, args.job, args.tags, args.session)
     if not pymux.jobs.kill(job):
         raise CommandException("job %d already done (exit %s)" % (job.job_id, job.returncode))
     answer(pymux, "job %d stopping" % job.job_id)
@@ -31,4 +30,19 @@ def kill_job(pymux: Pymux, args: argparse.Namespace):
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, kill_job, name="kill-job")
-    parser.add_argument("job", metavar="<job>", type=int, help="The id `run` answered with.")
+    parser.add_argument("job", metavar="<job>", type=int, nargs="?", help="The id `run` answered with.")
+    parser.add_argument(
+        "--tag",
+        "-T",
+        dest="tags",
+        action="append",
+        default=[],
+        metavar="<key[=value]>",
+        help="End the newest job carrying every tag, instead of an id.",
+    )
+    parser.add_argument(
+        "--session",
+        metavar="<id>",
+        default=None,
+        help="Whose tags to read. The server's agent session otherwise.",
+    )

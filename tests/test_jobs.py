@@ -92,7 +92,10 @@ async def test_run_wait_fails_on_a_nonzero_exit():
         try:
             with set_app(state.app):
                 answer = run_job(
-                    pymux, argparse.Namespace(w=True, directory=None, tags=[], shell_command=["sh", "-c", "exit 3"])
+                    pymux,
+                    argparse.Namespace(
+                        w=True, directory=None, tags=[], session=None, shell_command=["sh", "-c", "exit 3"]
+                    ),
                 )
                 assert answer is not None
                 with pytest.raises(CommandException, match="job 1 exited 3"):
@@ -107,7 +110,7 @@ async def test_wait_job_reports_the_same_way():
         pymux.command_output = []
         try:
             with set_app(state.app):
-                answer = wait_job(pymux, argparse.Namespace(job=1))
+                answer = wait_job(pymux, argparse.Namespace(job=1, tags=[], session=None))
                 assert answer is not None
                 with pytest.raises(CommandException, match="job 1 exited 3"):
                     await answer
@@ -118,7 +121,7 @@ async def test_wait_job_reports_the_same_way():
 async def test_wait_job_without_a_waiter_refuses():
     async with create_session() as (pymux, state):
         with pytest.raises(CommandException, match="not able to wait"):
-            wait_job(pymux, argparse.Namespace(job=1))
+            wait_job(pymux, argparse.Namespace(job=1, tags=[], session=None))
 
 
 async def test_wait_job_of_no_job_says_so():
@@ -126,7 +129,7 @@ async def test_wait_job_of_no_job_says_so():
         pymux.command_output = []
         try:
             with pytest.raises(CommandException, match="no job 12"):
-                wait_job(pymux, argparse.Namespace(job=12))
+                wait_job(pymux, argparse.Namespace(job=12, tags=[], session=None))
         finally:
             pymux.command_output = None
 
@@ -169,7 +172,7 @@ async def test_show_job_of_no_job_says_so():
         try:
             with set_app(state.app):
                 with pytest.raises(CommandException, match="no job 12"):
-                    show_job(pymux, argparse.Namespace(job=12, e=False))
+                    show_job(pymux, argparse.Namespace(job=12, e=False, tags=[], session=None))
         finally:
             pymux.command_output = None
 
@@ -188,7 +191,7 @@ async def test_kill_job_ends_a_running_job_and_refuses_a_done_one():
         try:
             with set_app(state.app):
                 with pytest.raises(CommandException, match="already done"):
-                    kill_job(pymux, argparse.Namespace(job=1))
+                    kill_job(pymux, argparse.Namespace(job=1, tags=[], session=None))
         finally:
             pymux.command_output = None
 
@@ -200,7 +203,9 @@ async def test_a_job_that_never_starts_says_why():
             with set_app(state.app):
                 answer = run_job(
                     pymux,
-                    argparse.Namespace(w=True, directory="/no-such-directory", tags=[], shell_command=["echo", "hi"]),
+                    argparse.Namespace(
+                        w=True, directory="/no-such-directory", tags=[], session=None, shell_command=["echo", "hi"]
+                    ),
                 )
                 assert answer is not None
                 with pytest.raises(CommandException, match="job 1 never started"):

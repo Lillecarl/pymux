@@ -33,7 +33,7 @@ import anyio
 
 #: What this server built. Agents read it with `PRAGMA user_version`
 #: and re-read the schema when it differs from what they were told.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs(
@@ -44,7 +44,8 @@ CREATE TABLE IF NOT EXISTS jobs(
   returncode INTEGER,
   error TEXT,
   started REAL NOT NULL,
-  finished REAL
+  finished REAL,
+  session TEXT
 );
 CREATE TABLE IF NOT EXISTS saved_queries(
   name TEXT PRIMARY KEY,

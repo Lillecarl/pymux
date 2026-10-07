@@ -7,9 +7,9 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandParser, add_command
 from pymux.commands.common import answer
-from pymux.jobs import Job, JobId, decode
+from pymux.jobs import Job, decode, find_job
 
 
 def show_job(pymux: Pymux, args: argparse.Namespace):
@@ -20,10 +20,9 @@ def show_job(pymux: Pymux, args: argparse.Namespace):
     off past the cap. It reads a job that still runs as well as one
     that ended: the pumps fill the tail from the start, so this is
     how an agent tails a long job between polls of `list-jobs`.
+    `--tag` names the newest job carrying every tag instead of an id.
     """
-    job = pymux.jobs.get(JobId(args.job))
-    if job is None:
-        raise CommandException("no job %d" % args.job)
+    job = find_job(pymux, args.job, args.tags, args.session)
     answer(pymux, _stream(job, "stderr" if args.e else "stdout"))
 
 
@@ -46,4 +45,19 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         action="store_true",
         help="Show stderr. Stdout otherwise.",
     )
-    parser.add_argument("job", metavar="<job>", type=int, help="The id `run` answered with.")
+    parser.add_argument("job", metavar="<job>", type=int, nargs="?", help="The id `run` answered with.")
+    parser.add_argument(
+        "--tag",
+        "-T",
+        dest="tags",
+        action="append",
+        default=[],
+        metavar="<key[=value]>",
+        help="Show the newest job carrying every tag, instead of an id.",
+    )
+    parser.add_argument(
+        "--session",
+        metavar="<id>",
+        default=None,
+        help="Whose tags to read. The server's agent session otherwise.",
+    )

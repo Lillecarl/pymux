@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import the_pane
 from pymux.enums import Woke
-from pymux.jobs import JobId
+from pymux.jobs import find_job
 
 
 def view_job(pymux: Pymux, args: argparse.Namespace) -> None:
@@ -23,11 +23,10 @@ def view_job(pymux: Pymux, args: argparse.Namespace) -> None:
     the job, which runs on until it ends on its own. -t targets;
     without it the active pane. -k kills a program that still runs;
     without it a pane whose program is alive refuses, the same rule
-    `respawn-pane` holds.
+    `respawn-pane` holds. `--tag` names the newest job carrying
+    every tag instead of an id.
     """
-    job = pymux.jobs.get(JobId(args.job))
-    if job is None:
-        raise CommandException("no job %d" % args.job)
+    job = find_job(pymux, args.job, args.tags, args.session)
 
     pane = the_pane(pymux, args.target_pane)
 
@@ -49,4 +48,19 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, view_job, name="view-job")
     parser.add_argument("-k", dest="k", action="store_true", help="Kill a program that still runs.")
     parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to replace.")
-    parser.add_argument("job", metavar="<job>", type=int, help="The id `run` answered with.")
+    parser.add_argument("job", metavar="<job>", type=int, nargs="?", help="The id `run` answered with.")
+    parser.add_argument(
+        "--tag",
+        "-T",
+        dest="tags",
+        action="append",
+        default=[],
+        metavar="<key[=value]>",
+        help="View the newest job carrying every tag, instead of an id.",
+    )
+    parser.add_argument(
+        "--session",
+        metavar="<id>",
+        default=None,
+        help="Whose tags to read. The server's agent session otherwise.",
+    )
