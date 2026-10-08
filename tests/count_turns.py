@@ -19,9 +19,10 @@ every callback that is ready. `CountingLoop` counts them, and each
 `Handle` says which callback it ran, so a total of seven comes with the
 seven names that made it. A total says a path grew; the names say where.
 
-**This is asyncio and not anyio, and it has to be.** The number being
-counted is a method of asyncio's own loop. The rest of pymux uses anyio;
-this measures the loop underneath it.
+**The loop is asyncio's, and it has to be.** The number being counted is
+a method of asyncio's own loop, so `CountingLoop`, the `Handle` hook and
+the task names read asyncio itself. Everything that waits is anyio, the
+way the rest of pymux is; anyio runs on the counting loop.
 
 ## Where the two cuts are
 
@@ -38,9 +39,9 @@ waited for it resumes: a resumption is a turn of its own and would be
 counted as the path's. So the second cut is read inside the reader that
 takes the packet off the queue.
 
-**Nothing here polls.** A wait built on `asyncio.sleep` costs a turn
-per loop, which is the thing being measured; the reader resolves a
-future instead.
+**Nothing here polls.** A wait built on `anyio.sleep` costs a turn per
+loop, which is the thing being measured; the reader sets an event
+instead.
 
 ## The workload
 
@@ -91,6 +92,8 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 
+import anyio
+
 sys.path.insert(0, str(Path(__file__).parent))
 # And pymux itself, which the sandbox copies beside `tests` rather than
 # installing. A script's own directory is what Python puts on the path,
@@ -102,6 +105,7 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from session import over_connection
 
+from pymux.introspect import own_coroutine
 from pymux.main import Pymux
 
 #: How many keystrokes to count. A turn count is nearly determined, so
@@ -212,8 +216,7 @@ def _what_it_is(callback) -> str:
     """
     holder = getattr(callback, "__self__", None)
     if isinstance(holder, asyncio.Task):
-        coroutine = holder.get_coro()
-        return getattr(coroutine, "__qualname__", None) or repr(coroutine)
+        return own_coroutine(holder)
     return getattr(callback, "__qualname__", None) or repr(callback)
 
 
@@ -231,14 +234,17 @@ class TheFrameComingBack:
         self.loop = loop
         self.marker = None
         self.arrived = None
+        #: The turn the frame was taken off the queue on.
+        self.landed = None
 
-    def waiting_for(self, marker: str) -> asyncio.Future:
+    def waiting_for(self, marker: str) -> anyio.Event:
         self.marker = marker
-        self.arrived = self.loop.create_future()
+        self.arrived = anyio.Event()
+        self.landed = None
         return self.arrived
 
     def __call__(self, packet) -> None:
-        if self.arrived is None or self.arrived.done():
+        if self.arrived is None or self.arrived.is_set():
             return
 
         if isinstance(packet, (bytes, bytearray)):
@@ -251,7 +257,8 @@ class TheFrameComingBack:
         if given.get("cmd") != "out" or self.marker not in given.get("data", ""):
             return
 
-        self.arrived.set_result(self.loop.turns)
+        self.landed = self.loop.turns
+        self.arrived.set()
 
 
 async def create_keystroke(loop, session, state, coming_back, marker) -> tuple:
@@ -269,23 +276,25 @@ async def create_keystroke(loop, session, state, coming_back, marker) -> tuple:
     session.typed(state, marker)
 
     try:
-        landed = await asyncio.wait_for(arrived, PATIENCE)
+        with anyio.fail_after(PATIENCE):
+            await arrived.wait()
     finally:
         loop.watching = False
 
     ran = loop.ran
     loop.ran = []
-    await asyncio.sleep(PACE)
-    return landed - started, ran
+    await anyio.sleep(PACE)
+    return coming_back.landed - started, ran
 
 
-async def measure(loop, samples: int) -> tuple:
+async def measure(samples: int) -> tuple:
     """
     That many keystrokes over a real connection, and what each cost.
 
     The pane runs the program `checks.pymux-latency` drives, so the two
     checks measure the same path: one byte in, one byte back.
     """
+    loop = asyncio.get_running_loop()
     with tempfile.TemporaryDirectory() as name:
         tmp = Path(name)
         child = tmp / "echo_child.py"
@@ -380,11 +389,8 @@ def report(counted: list, traced: list) -> int:
 def main() -> int:
     _naming_callbacks()
 
-    async def run():
-        return await measure(asyncio.get_running_loop(), SAMPLES)
-
     print("%d keystrokes, over the connection route." % (SAMPLES,))
-    counted, traced = asyncio.run(run(), loop_factory=CountingLoop)
+    counted, traced = anyio.run(measure, SAMPLES, backend_options={"loop_factory": CountingLoop})
     return report(counted, traced)
 
 
