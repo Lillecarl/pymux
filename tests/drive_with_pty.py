@@ -837,7 +837,10 @@ def check_hyperlink(terminal):
     after = terminal.seen[terminal.seen.index(opened) + len(opened) :]
     assert b"L" in after[:40], "no text after the link opened"
     assert b"\x1b]8;;\x1b\\" in after, "the hyperlink never closed"
-    assert terminal.seen.count(HYPERLINK_TARGET.encode()) == 1, "the target was written more than once"
+    # A repaint writes the cells again, so the target legitimately
+    # arrives more than once; what must never happen is the target
+    # outside the sequence that opens it. Lillecarl/pymux#346.
+    assert HYPERLINK_TARGET.encode() not in terminal.seen.replace(opened, b""), "the target travelled as text"
     print("hyperlink: ok")
 
 
@@ -865,21 +868,30 @@ def check_kitty_terminal(tmp):
 
         # Answer like a terminal that supports all of it. The keyboard
         # query asks for every flag, and a real kitty takes them all.
+        # Everything but the device attributes goes at once; that
+        # reply is the fence of the detection, and it waits below for
+        # the pane, so that the flags the client first hears already
+        # hold what the pane pushed. Answering it first and parsing
+        # second asks for `=3;1u` where step 3 waits for `>3u`,
+        # decided by whichever of the pump and the handshake wins a
+        # turn of the loop.
         terminal.write(b"\x1b[?31u")  # Keyboard flags.
         terminal.write(b"\x1b_Gi=31;OK\x1b\\")  # Kitty graphics.
         terminal.write(b"\x1b[6;20;10t")  # Cell size.
         terminal.write(b"\x1bP1$r38:2::1:2:3m\x1b\\")  # The colour survived.
+
+        # 2. The pane child runs and its output is rendered. Its first
+        #    write pushes the flags below, so waiting for it here is
+        #    what the fence above waits for.
+        terminal.wait_for(b"READY")
         terminal.write(b"\x1b[?62;1;6c")  # Device attributes: no sixel.
 
-        # 2. The pane pushed the disambiguate flag and the event types;
+        # 3. The pane pushed the disambiguate flag and the event types;
         #    the client pushes both on the outer terminal. The first
         #    enable is a push, the protocol's own way to hold the state
         #    that was there -- a shell's, or a nested pymux's.
         #    Lillecarl/pymux#403.
         terminal.wait_for(b"\x1b[>3u")
-
-        # 3. The pane child runs and its output is rendered.
-        terminal.wait_for(b"READY")
 
         #    Its environment describes the pane, not the terminal that
         #    the client attached from: a pane takes 24 bit colour, and
@@ -898,8 +910,11 @@ def check_kitty_terminal(tmp):
         assert IMAGE_PAYLOAD.encode() not in terminal.seen, "graphics payload leaked as text"
 
         # 4. The server re-transmits the image and puts it on screen.
-        terminal.wait_for(b"\x1b_Ga=t,i=")
-        terminal.wait_for(b"a=p,i=")
+        # From the mark and not from the step above: the transmission
+        # goes out on the first render that can carry it, which is
+        # before these waits when the detection answered early.
+        terminal.wait_for(b"\x1b_Ga=t,i=", since=mark)
+        terminal.wait_for(b"a=p,i=", since=mark)
         transmit = re.search(rb"\x1b_Ga=t,i=(\d+),t=d,q=2,f=24,s=2,v=2,o=z", terminal.seen)
         assert transmit, "no image transmission on the outer terminal"
         image_id = transmit.group(1)
