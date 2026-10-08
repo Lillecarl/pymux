@@ -351,7 +351,8 @@ class JobTable:
             process.terminate()
 
         stdout, stderr = process.stdout, process.stderr
-        assert stdout is not None and stderr is not None, "both were opened as pipes"
+        if stdout is None or stderr is None:
+            raise RuntimeError("A job opened with two pipes came back without one.")
         try:
             async with anyio.create_task_group() as pumps:
                 pumps.start_soon(_pump, stdout, job, "stdout")
