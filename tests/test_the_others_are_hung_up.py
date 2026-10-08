@@ -264,32 +264,35 @@ async def test_a_real_client_asks_for_it(monkeypatch, tmp_path):
     empty = tmp_path / "pymux.conf"
     empty.write_text("")
 
-    async with anyio.create_task_group() as tasks:
-        async with a_server() as pymux:
-            here = await _a_session_with_a_window(pymux, "here")
-            sitting, heard = await _attach(pymux, tasks)
-            pymux.attach_client_to(sitting.client_state, here)
+    terminal = Terminal()
+    monkeypatch.setattr(sys, "stdin", terminal.stdin)
+    monkeypatch.setattr(sys, "stdout", terminal.stdout)
 
-            terminal = Terminal()
-            monkeypatch.setattr(sys, "stdin", terminal.stdin)
-            monkeypatch.setattr(sys, "stdout", terminal.stdout)
+    # The terminal closes after the task group has ended, not before the
+    # cancel: a size tick that already fired runs once more after a
+    # cancel, and reads the size of a closed stdout.
+    try:
+        async with anyio.create_task_group() as tasks:
+            async with a_server() as pymux:
+                here = await _a_session_with_a_window(pymux, "here")
+                sitting, heard = await _attach(pymux, tasks)
+                pymux.attach_client_to(sitting.client_state, here)
 
-            server_end, client_end = connect_in_memory()
-            context = contextvars.copy_context()
-            connection = context.run(lambda: ServerConnection(pymux, server_end))
-            pymux.connections.append(connection)
+                server_end, client_end = connect_in_memory()
+                context = contextvars.copy_context()
+                connection = context.run(lambda: ServerConnection(pymux, server_end))
+                pymux.connections.append(connection)
 
-            client = MemoryClient(client_end)
-            client.config_file = str(empty)
-            client.hang_up_others = True
-            tasks.start_soon(client.attach, True)
+                client = MemoryClient(client_end)
+                client.config_file = str(empty)
+                client.hang_up_others = True
+                tasks.start_soon(client.attach, True)
 
-            try:
                 await _until(lambda: heard.exits, "the exit packet", 20.0)
                 assert heard.exits[-1]["hang-up"] is True
-            finally:
-                terminal.close()
-            tasks.cancel_scope.cancel()
+                tasks.cancel_scope.cancel()
+    finally:
+        terminal.close()
 
 
 # ----------------------------------------------------------------------
