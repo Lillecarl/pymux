@@ -41,8 +41,11 @@ import threading
 import time
 import traceback
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+import anyio
 
 from .log import level, logfile, logger
 
@@ -238,8 +241,9 @@ def start_watching(pymux: Pymux, seconds: float = HOW_LONG_TO_WATCH) -> Path:
 
     **It returns at once and the server keeps running.** A profile of a
     server has to be taken while the server serves; stopping it to look
-    at it would measure a different program. The loop is asked to stop
-    the profiler later, so this call costs the client nothing.
+    at it would measure a different program. The server's task group is
+    asked to stop the profiler later, so this call costs the client
+    nothing.
 
     **`async_mode="disabled"`, which is the one that sees everything.**
     pyinstrument's default attributes the time of an `await` to the
@@ -293,11 +297,17 @@ def start_watching(pymux: Pymux, seconds: float = HOW_LONG_TO_WATCH) -> Path:
 
         logger.info("Watched this server for %.1fs, and wrote %s", seconds, written)
 
-    loop = pymux.loop
-    if loop is None:
-        raise RuntimeError("This server has no event loop to watch on.")
-    loop.call_later(seconds, stop)
+    tasks = pymux.tasks
+    if tasks is None:
+        raise RuntimeError("This server has no task group to watch in.")
+    tasks.start_soon(_stop_after, seconds, stop)
     return written
+
+
+async def _stop_after(seconds: float, stop: Callable[[], None]) -> None:
+    "Stop the profiler after those seconds, in the server's task group."
+    await anyio.sleep(seconds)
+    stop()
 
 
 def _over_window(counters: Counters, before, seconds: float) -> str:
@@ -463,10 +473,28 @@ def _tasks(pymux: Pymux) -> str:
     for task in tasks:
         lines.append("")
         lines.append("task %s: %s" % (task.get_name(), _what_task_is_doing(task)))
-        for frame in task.get_stack(limit=20):
+        for frame in _awaiting(task.get_coro(), limit=20):
             lines.extend("  " + line for line in "".join(traceback.format_stack(frame, limit=1)).splitlines())
 
     return "\n".join(lines)
+
+
+def _awaiting(coroutine, limit: int):
+    """
+    The frames from a task's coroutine down to the await it sits in.
+
+    Not `task.get_stack`, which gives only the outermost frame: anyio
+    runs every task in a wrapper of its own, so that frame is anyio's
+    and never the one that names the hang.
+    """
+    frames = []
+    while coroutine is not None and len(frames) < limit:
+        frame = getattr(coroutine, "cr_frame", None) or getattr(coroutine, "gi_frame", None)
+        if frame is None:
+            break
+        frames.append(frame)
+        coroutine = getattr(coroutine, "cr_await", None) or getattr(coroutine, "gi_yieldfrom", None)
+    return frames
 
 
 def _what_task_is_doing(task) -> str:

@@ -11,7 +11,6 @@ Lillecarl/pymux#249.
 
 from __future__ import annotations
 
-import asyncio
 import faulthandler
 import inspect
 import io
@@ -19,6 +18,7 @@ import os
 import signal
 import sys
 
+import anyio
 import pytest
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
@@ -111,25 +111,19 @@ async def test_dump_says_what_task_waits_for(create_server):
     """
     pymux, _state = create_server
 
-    async def check():
-        async def waits_forever():
-            await asyncio.Event().wait()
+    async def waits_forever():
+        await anyio.Event().wait()
 
-        task = asyncio.create_task(waits_forever(), name="a-task-of-the-test")
-        await asyncio.sleep(0)
-
-        pymux.loop = asyncio.get_running_loop()
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(waits_forever, name="a-task-of-the-test")
+        await anyio.sleep(0)
         said = introspect.what_it_is_doing(pymux)
-
-        task.cancel()
-        return said
-
-    said = await check()
+        tasks.cancel_scope.cancel()
 
     assert "task a-task-of-the-test: pending in " in said
     assert "waits_forever" in said
     # And where it waits, which is the part that names the hang.
-    assert "await asyncio.Event().wait()" in said
+    assert "await anyio.Event().wait()" in said
 
 
 async def test_dump_of_create_server_that_never_ran_says_so():
@@ -247,13 +241,12 @@ async def test_profile_returns_at_once_and_writes_later(create_server, tmp_path)
     pymux, _state = create_server
 
     async def check():
-        pymux.loop = asyncio.get_running_loop()
         path = introspect.start_watching(pymux, seconds=0.05)
 
         assert path.parent == tmp_path
         assert not path.exists(), "it wrote before it had watched"
 
-        await asyncio.sleep(0.3)
+        await anyio.sleep(0.3)
         return path
 
     path = await check()
