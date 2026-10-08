@@ -30,7 +30,7 @@ import subprocess
 import termios
 import time
 from collections import deque
-from collections.abc import Awaitable, Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from contextlib import suppress
 from typing import NewType
 
@@ -624,18 +624,12 @@ class JobFeed:
     stops the follow, and the job runs on until it ends on its own.
 
     `feed_output` writes one piece to the screen and says it may have
-    changed; `start_soon` puts the follow in the server's task group.
+    changed.
     """
 
-    def __init__(
-        self,
-        job: Job,
-        feed_output: Callable[[str], None],
-        start_soon: Callable[[Awaitable[None]], None] | None,
-    ) -> None:
+    def __init__(self, job: Job, feed_output: Callable[[str], None]) -> None:
         self.job = job
         self._feed_output = feed_output
-        self._start_soon = start_soon
         #: The size the pane last had. No pty reads it; `info` and the
         #: resize math do.
         self.sx = 0
@@ -652,17 +646,15 @@ class JobFeed:
         #: twice and a condition cannot do at all.
         self._hint: MemoryObjectSendStream[None] | None = None
 
-    def start(self) -> None:
-        "Replay the tail and follow the rest, in the server's task group."
+    async def start(self, task_group: anyio.abc.TaskGroup) -> None:
+        "Replay the tail and follow the rest, watched by `task_group`."
         if self._started:
             return
         self._started = True
-        if self._start_soon is None:
-            raise RuntimeError("A viewer was made outside `Pymux.running`, so nothing would follow the job.")
         # A viewer is a waiter: reaping never takes a job somebody
         # still watches.
         self.job.waiters += 1
-        self._start_soon(self._follow)
+        task_group.start_soon(self._follow)
 
     def set_size(self, width: int, height: int) -> None:
         self.sx = width

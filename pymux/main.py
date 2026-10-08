@@ -2201,10 +2201,8 @@ class Pymux:
             # A viewer: the feed stands where the process would, so
             # the eager start below and the first render both meet it,
             # and nothing ever forks.
-            if self.tasks is None:
-                raise RuntimeError("A viewer was made outside `Pymux.running`, so nothing would follow the job.")
             old_process = terminal_control.process
-            terminal_control.process = JobFeed(job, terminal_control.feed_output, self.tasks.start_soon)
+            terminal_control.process = JobFeed(job, terminal_control.feed_output)
             # No fork, so the pty the construction opened is dead
             # weight: give both ends back. The reader never connected,
             # so `close` only drops the master; the slave would
@@ -2235,15 +2233,10 @@ class Pymux:
             # together. Lillecarl/pymux#321.
             size = self.size_with_no_client(session)
             terminal_control.set_size(size.columns, size.rows)
-            # A viewer has no program: the feed stands where the process
-            # would, and starting it is starting nothing. A program
-            # starts watched, so that panes in detached sessions also
-            # run and produce output. (Like tmux does.)
-            if job is None:
-                await terminal_control.start(task_group)
-            else:
-                terminal_control.process.start()
-                terminal_control._running = True
+            # A program starts watched, so that panes in detached
+            # sessions also run and produce output. (Like tmux does.) A
+            # viewer's feed starts the same way and follows the job.
+            await terminal_control.start(task_group)
 
         # Keep track of panes. This is a WeakKeyDictionary, we only add, but
         # don't remove.
