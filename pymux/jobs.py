@@ -36,6 +36,7 @@ from typing import NewType
 
 import anyio
 import anyio.abc
+from anyio.streams.memory import MemoryObjectSendStream
 
 from pymux.commands import CommandException
 from pymux.jobstore import JobStore
@@ -349,10 +350,12 @@ class JobTable:
         if job.kill_requested:
             process.terminate()
 
+        stdout, stderr = process.stdout, process.stderr
+        assert stdout is not None and stderr is not None, "both were opened as pipes"
         try:
             async with anyio.create_task_group() as pumps:
-                pumps.start_soon(_pump, process.stdout, job, "stdout")
-                pumps.start_soon(_pump, process.stderr, job, "stderr")
+                pumps.start_soon(_pump, stdout, job, "stdout")
+                pumps.start_soon(_pump, stderr, job, "stderr")
                 job.returncode = await process.wait()
         except BaseException as e:
             # The server is going down, or the pumps failed: no
@@ -605,7 +608,7 @@ def _poke(job: Job) -> None:
 class _NoBackend:
     "No pty behind a viewer: `#{pane_pid}` reads blank."
 
-    pid = None
+    pid: int | None = None
 
 
 class JobFeed:
@@ -647,7 +650,7 @@ class JobFeed:
         #: The send end of the hint queue this follow reads. `kill`
         #: pokes it from synchronous code, which an event cannot do
         #: twice and a condition cannot do at all.
-        self._hint = None
+        self._hint: MemoryObjectSendStream[None] | None = None
 
     def start(self) -> None:
         "Replay the tail and follow the rest, in the server's task group."
@@ -887,7 +890,7 @@ def decode(data: bytes) -> str:
     return data.decode("utf-8", "replace") if data else ""
 
 
-async def _pump(stream: anyio.abc.ByteStream, job: Job, name: str) -> None:
+async def _pump(stream: anyio.abc.ByteReceiveStream, job: Job, name: str) -> None:
     """
     Drain one stream into the tail the job keeps, counting the rest.
 

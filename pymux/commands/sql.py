@@ -182,7 +182,7 @@ async def _run(
     take = None if limit == 0 else limit + 1
     cursor = await conn.execute(query, params)
     columns = [part[0] for part in cursor.description or []]
-    rows = await cursor.fetchmany(take) if take is not None else await cursor.fetchall()
+    rows = [tuple(row) for row in (await cursor.fetchmany(take) if take is not None else await cursor.fetchall())]
     truncated = take is not None and len(rows) > limit
     return columns, rows[:limit] if truncated else rows, truncated
 

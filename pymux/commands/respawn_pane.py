@@ -4,6 +4,8 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
     from pymux.arrangement import Pane
     from pymux.main import Pymux
 
@@ -13,7 +15,7 @@ from pymux.commands.common import the_pane
 from pymux.enums import Woke
 
 
-def respawn_pane(pymux: Pymux, args: argparse.Namespace) -> None:
+def respawn_pane(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None]:
     """
     Kill the program of a pane and run a new one in its place.
 

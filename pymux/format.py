@@ -405,7 +405,7 @@ def _pane_current_command(context: FormatContext) -> str:
 def _pane_current_path(context: FormatContext) -> str:
     "Working directory of the process in the pane."
     try:
-        return context.pane.process.get_cwd()
+        return context.pane.process.get_cwd() or ""
     except Exception:
         return ""
 

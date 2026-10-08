@@ -4,6 +4,8 @@ import argparse
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
     from pymux.main import Pymux
 
 
@@ -12,7 +14,7 @@ from pymux.commands.common import the_window
 from pymux.commands.respawn_pane import replace_pane_program
 
 
-def respawn_window(pymux: Pymux, args: argparse.Namespace) -> None:
+def respawn_window(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None]:
     """
     Kill the program a window's active pane runs, and start a new one in its place.
 

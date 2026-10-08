@@ -43,6 +43,7 @@ from prompt_toolkit.styles import (
     SwapLightAndDarkStyleTransformation,
 )
 from ptterm import Terminal
+from ptyhost.backends.posix import PosixBackend
 from pyte.environment import terminal_name
 from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
 from pyte.keys import KeyboardFlag
@@ -2209,11 +2210,12 @@ class Pymux:
             # so `close` only drops the master; the slave would
             # otherwise stay open until the server exits, which closes
             # it only on a reap that never comes.
-            old_process.backend.close()
-            slave = getattr(old_process.backend, "slave", None)
-            if slave is not None:
-                os.close(slave)
-                old_process.backend.slave = None
+            backend = old_process.backend
+            if isinstance(backend, PosixBackend):
+                backend.close()
+                if backend.slave is not None:
+                    os.close(backend.slave)
+                    backend.slave = None
 
         if not terminal_control._running:
             # The size of the session this pane is going into, until a
