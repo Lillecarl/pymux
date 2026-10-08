@@ -19,6 +19,7 @@ from contextlib import asynccontextmanager, suppress
 from typing import TYPE_CHECKING, NamedTuple, override
 
 import anyio
+import anyio.abc
 from libpymux.protocol import Field, Packet
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app, set_app
@@ -1979,7 +1980,7 @@ class Pymux:
         on_done: Callable[[], None] | None = None,
         session: Session | None = None,
         job: Job | None = None,
-        task_group: anyio.TaskGroup | None = None,
+        task_group: anyio.abc.TaskGroup | None = None,
     ):
         """
         Create a new :class:`pymux.arrangement.Pane` instance. (Don't put it in
@@ -3546,7 +3547,7 @@ exec pymux notify -u "$urgency" -- "$@"
         name=None,
         index: WindowIndex | None = None,
         session: Session | None = None,
-        task_group: anyio.TaskGroup | None = None,
+        task_group: anyio.abc.TaskGroup | None = None,
     ):
         """
         Create a new :class:`pymux.arrangement.Window` in the arrangement.
@@ -3582,7 +3583,7 @@ exec pymux notify -u "$urgency" -- "$@"
         vsplit: bool = False,
         start_directory: str | None = None,
         window: Window | None = None,
-        task_group: anyio.TaskGroup | None = None,
+        task_group: anyio.abc.TaskGroup | None = None,
     ):
         """
         Add a new process to the given window (or the active window).
