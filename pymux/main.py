@@ -1115,9 +1115,9 @@ class Pymux:
         #: `None` before and after. Lillecarl/pymux#87.
         self.tasks: anyio.abc.TaskGroup | None = None
 
-        #: The loop under anyio, read and never written: `introspect`
-        #: dumps the tasks of a running server, and it asks the loop
-        #: for them. `running()` sets it.
+        #: The asyncio loop under anyio, for inspection only: `introspect`
+        #: lists the tasks of a running server, and only the loop can
+        #: list them. Nothing schedules work on it. `running()` sets it.
         self.loop: asyncio.AbstractEventLoop | None = None
 
         #: Set when this server is to stop. `run_server` waits for it.
