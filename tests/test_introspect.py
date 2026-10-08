@@ -120,8 +120,8 @@ async def test_dump_says_what_task_waits_for(create_server):
         said = introspect.what_it_is_doing(pymux)
         tasks.cancel_scope.cancel()
 
-    assert "task a-task-of-the-test: pending in " in said
-    assert "waits_forever" in said
+    # By its own coroutine, and not by the wrapper anyio runs it in.
+    assert "task a-task-of-the-test: pending in test_dump_says_what_task_waits_for.<locals>.waits_forever" in said
     # And where it waits, which is the part that names the hang.
     assert "await anyio.Event().wait()" in said
 

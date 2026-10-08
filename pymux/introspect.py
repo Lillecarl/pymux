@@ -504,5 +504,21 @@ def _what_task_is_doing(task) -> str:
         problem = task.exception()
         return "raised %r" % (problem,) if problem else "done"
 
+    return "pending in %s" % (own_coroutine(task),)
+
+
+def own_coroutine(task) -> str:
+    """
+    The name of the coroutine a task runs, past anyio's wrapper.
+
+    anyio starts every task in a coroutine of its own, so the outermost
+    name is the same for each one and says nothing. A task on its first
+    step awaits nothing yet, so the wrapper hides what it runs; anyio
+    names the task after that, so the name says it instead.
+    """
     coroutine = task.get_coro()
-    return "pending in %s" % (getattr(coroutine, "__qualname__", coroutine),)
+    while getattr(coroutine, "cr_frame", None) is not None:
+        if not coroutine.cr_frame.f_globals.get("__name__", "").startswith("anyio."):
+            return coroutine.__qualname__
+        coroutine = coroutine.cr_await
+    return task.get_name()
