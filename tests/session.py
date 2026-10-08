@@ -26,7 +26,6 @@ runs on anyio's pytest plugin, which `anyio_mode` turns on.
 
 from __future__ import annotations
 
-import asyncio
 import contextvars
 import io
 import json
@@ -37,6 +36,7 @@ from collections.abc import Callable
 from contextlib import asynccontextmanager
 from typing import Any, NamedTuple
 
+import anyio
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
@@ -225,7 +225,7 @@ async def once(question, seconds: float, complaint: str):
         answer = question()
         if answer:
             return answer
-        await asyncio.sleep(0.005)
+        await anyio.sleep(0.005)
     raise SystemExit(complaint)
 
 
@@ -400,14 +400,19 @@ async def over_connection(pymux=None, read_packet=None):
     # A terminal apiece, so two attached clients have two names.
     ttys = iter("/dev/pts/%d" % number for number in range(1, 1000))
 
-    async def drain(end) -> None:
-        while True:
-            try:
-                packet = await end.read()
-            except Exception:
-                return
-            if read_packet is not None:
-                read_packet(packet)
+    async def drain(end, scope) -> None:
+        # The scope dies with the drain, and the drain with the
+        # scope: detaching cancels it, and a cancelled scope ends the
+        # read it waits in. `CancelScope.cancel` is the sync call
+        # `Task.cancel` was.
+        with scope:
+            while True:
+                try:
+                    packet = await end.read()
+                except Exception:
+                    return
+                if read_packet is not None:
+                    read_packet(packet)
 
     async def attach(
         name,
@@ -445,7 +450,8 @@ async def over_connection(pymux=None, read_packet=None):
         watch("%s connection" % name, connection)
         watch("%s connection input" % name, connection._pipeinput)
 
-        draining = asyncio.create_task(drain(client_end))
+        draining = anyio.CancelScope()
+        pymux.tasks.start_soon(drain, client_end, draining)
 
         # What `client/terminal.py` sends when it attaches, in the
         # order it sends it.
@@ -543,15 +549,17 @@ async def over_connection(pymux=None, read_packet=None):
 
         got: list = []
 
-        async def drain_command() -> None:
-            while True:
-                try:
-                    packet = await client_end.read()
-                except Exception:
-                    return
-                got.append(packet)
+        async def drain_command(scope) -> None:
+            with scope:
+                while True:
+                    try:
+                        packet = await client_end.read()
+                    except Exception:
+                        return
+                    got.append(packet)
 
-        draining = asyncio.create_task(drain_command())
+        draining = anyio.CancelScope()
+        pymux.tasks.start_soon(drain_command, draining)
         command_ends.append((client_end, draining))
 
         client_end.write_nowait(json.dumps({"cmd": "run-command", "data": text, "pane_id": pane_id}))

@@ -12,7 +12,6 @@ that is the session a person attaching to a new server gets too.
 
 from __future__ import annotations
 
-import asyncio
 import contextvars
 import json
 import logging
@@ -20,6 +19,7 @@ import re
 import time
 from contextlib import asynccontextmanager
 
+import anyio
 import pytest
 from libpymux.protocol import Packet
 from session import once
@@ -80,8 +80,6 @@ async def attached(pymux, read_only: bool = False):
             if session.take_packet(json.loads(packet)):
                 return
 
-    feeding = asyncio.get_running_loop().create_task(feed())
-
     # What the server complained of, for a failure to print.
     logged: list = []
 
@@ -94,14 +92,16 @@ async def attached(pymux, read_only: bool = False):
     session.logged = logged
 
     session.start()
-    try:
-        await once(lambda: connection.client_state, 10.0, "no client was made")
-        yield session
-    finally:
-        logger.removeHandler(keep)
-        client_end.close()
-        feeding.cancel()
-        pymux.stop()
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(feed)
+        try:
+            await once(lambda: connection.client_state, 10.0, "no client was made")
+            yield session
+        finally:
+            logger.removeHandler(keep)
+            client_end.close()
+            tg.cancel_scope.cancel()
+            pymux.stop()
 
 
 def rows_of(session: SessionScreen) -> list:
@@ -129,7 +129,7 @@ async def shows(session: SessionScreen, wanted, seconds: float = 10.0) -> None:
     while time.monotonic() < deadline:
         if there():
             return
-        await asyncio.sleep(0.01)
+        await anyio.sleep(0.01)
     pytest.fail(
         "the session never showed %r\nthe server said: %s\nit showed:\n%s"
         % (wanted, "\n".join(session.logged) or "nothing", "\n".join(rows_of(session)))

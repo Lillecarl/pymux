@@ -14,7 +14,6 @@ suite around it.
 
 from __future__ import annotations
 
-import asyncio
 import faulthandler
 import os
 import sys
@@ -110,30 +109,7 @@ def anyio_backend():
 
 
 @pytest.fixture(autouse=True)
-def a_loop_for_this_test():
-    """
-    A current event loop for a test that runs none of its own.
-
-    A pane that is starting holds an `asyncio.Future`, and a bare
-    `Future()` asks this thread for its current loop. A coroutine test
-    has one because anyio runs it; a plain `def test` has none, and a
-    hundred and eighty of them make panes.
-
-    `Pymux.__init__` used to make a loop and set it as the current one.
-    That loop never ran, so anything armed on it happened never -- the
-    server's own clock among them. Lillecarl/pymux#87.
-    """
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        yield
-    finally:
-        asyncio.set_event_loop(None)
-        loop.close()
-
-
-@pytest.fixture(autouse=True)
-def every_pty_this_test_opened(a_loop_for_this_test, monkeypatch):
+def every_pty_this_test_opened(monkeypatch):
     """
     Close the pty of every pane a test made.
 
@@ -152,9 +128,7 @@ def every_pty_this_test_opened(a_loop_for_this_test, monkeypatch):
 
     **Here rather than in the thirty-three fixtures that kill a pane.**
     They each tear down what they know about; this closes what the test
-    really opened, including a pane a fixture forgot. It asks for the
-    loop so that it gives its descriptors back before the loop that
-    reads them goes.
+    really opened, including a pane a fixture forgot.
     """
     opened = []
     original = Process.__init__

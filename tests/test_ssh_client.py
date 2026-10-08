@@ -21,12 +21,13 @@ The tests are coroutines, which anyio's pytest plugin runs.
 
 from __future__ import annotations
 
-import asyncio
 import os
+import subprocess
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import anyio
 import pytest
 
 from pymux.client.ssh import SshClient, is_ssh_url, ssh_target
@@ -173,13 +174,14 @@ async def create_ssh_server(
     client_key, client_pub = create_key(where, "client")
 
     async def answer_sessions(process) -> None:
-        ran = await asyncio.create_subprocess_shell(
-            process.command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
+        ran = await anyio.open_process(
+            ["/bin/sh", "-c", process.command],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
             env=session_env,
         )
-        out, _ = await ran.communicate()
+        out = b"".join([chunk async for chunk in ran.stdout])
+        await ran.wait()
         process.stdout.write(out.decode("utf-8", "replace"))
         process.exit(0)
 
@@ -256,7 +258,7 @@ async def live_servers(socket_path: str, **server_options):
     # client at all. Lillecarl/pymux#87.
     async with pymux.running():
         await pymux.create_window(PANE_COMMAND)
-        await asyncio.sleep(0.5)
+        await anyio.sleep(0.5)
 
         server, port, client_key = await create_ssh_server(where, socket_path, **server_options)
         try:

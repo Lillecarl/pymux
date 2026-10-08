@@ -94,13 +94,14 @@ named phases, comma separated:
 
 from __future__ import annotations
 
-import asyncio
 import io
 import os
 import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+import anyio
 
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(1, str(Path(__file__).parent.parent))
@@ -641,7 +642,7 @@ async def _animated(command: str, seconds: float, out: Path) -> None:
 
         with set_app(state.app):
             await pymux.create_window(command)
-        await asyncio.sleep(1.5)
+        await anyio.sleep(1.5)
 
         # Every render, timed, whether or not it emitted a frame.
         renderer = state.app.renderer
@@ -663,7 +664,7 @@ async def _animated(command: str, seconds: float, out: Path) -> None:
             cpu_at_start = time.process_time()
 
             started = time.perf_counter()
-            await asyncio.sleep(seconds)
+            await anyio.sleep(seconds)
             took = time.perf_counter() - started
 
             cpu = time.process_time() - cpu_at_start
@@ -764,4 +765,4 @@ async def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(asyncio.run(main()))
+    sys.exit(anyio.run(main))

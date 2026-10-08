@@ -10,7 +10,6 @@ socket route's and no path on disk is needed.
 
 from __future__ import annotations
 
-import asyncio
 import contextvars
 import json
 import re
@@ -19,6 +18,7 @@ import time
 
 import anyio
 import pytest
+from anyio.abc import UNIXSocketStream
 
 from pymux.main import Pymux
 from pymux.pipes.posix import PosixSocketConnection
@@ -75,7 +75,7 @@ async def until(question, complaint, seconds: float = 10.0) -> None:
     while time.monotonic() < deadline:
         if question():
             return
-        await asyncio.sleep(0.01)
+        await anyio.sleep(0.01)
     pytest.fail(complaint())
 
 
@@ -88,10 +88,10 @@ async def test_a_session_travels_over_the_socket(pymux):
         connection = context.run(lambda: ServerConnection(pymux, PosixSocketConnection(theirs)))
         pymux.connections.append(connection)
 
-        reader, writer = await asyncio.open_unix_connection(sock=ours)
+        stream = await UNIXSocketStream.from_socket(ours)
 
         async with anyio.create_task_group() as tasks:
-            tasks.start_soon(run_session, reader, writer, viewer.take, viewer.messages(), 12, 60)
+            tasks.start_soon(run_session, stream, viewer.take, viewer.messages(), 12, 60)
 
             await until(
                 lambda: "$" in viewer.text(),
@@ -115,6 +115,6 @@ async def test_a_session_travels_over_the_socket(pymux):
             )
 
             viewer.done()
-            writer.close()
+            await stream.aclose()
 
         pymux.stop()

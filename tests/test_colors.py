@@ -8,9 +8,9 @@ otherwise.
 
 from __future__ import annotations
 
-import asyncio
 from types import SimpleNamespace
 
+import anyio
 import pytest
 from prompt_toolkit.output import ColorDepth
 from pyte import escape
@@ -390,7 +390,7 @@ def test_reply_lands_on_connection_that_carried_it():
         one._close_connection()
         other._close_connection()
 
-    asyncio.run(check())
+    anyio.run(check)
 
 
 def test_colour_arriving_after_detection_is_still_read():
@@ -405,7 +405,7 @@ def test_colour_arriving_after_detection_is_still_read():
         assert connection.default_colors.background == Color(0, 0, 0)
         connection._close_connection()
 
-    asyncio.run(check())
+    anyio.run(check)
 
 
 # ----------------------------------------------------------------------
@@ -425,7 +425,7 @@ def test_learned_colour_tells_panes_again():
         assert pymux.color_base_syncs == 2
         connection._close_connection()
 
-    asyncio.run(check())
+    anyio.run(check)
 
 
 def test_reply_that_learns_nothing_tells_panes_nothing():
@@ -443,4 +443,4 @@ def test_reply_that_learns_nothing_tells_panes_nothing():
         assert pymux.color_base_syncs == 0
         connection._close_connection()
 
-    asyncio.run(check())
+    anyio.run(check)

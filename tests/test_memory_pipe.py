@@ -9,15 +9,14 @@ other.
 
 from __future__ import annotations
 
-import asyncio
-
+import anyio
 import pytest
 
 from pymux.pipes import BrokenPipeError, connect_in_memory
 
 
-def run(coro):
-    return asyncio.run(coro)
+def run(func, *args):
+    return anyio.run(func, *args)
 
 
 def test_packet_arrives_as_bytes_that_were_written():
@@ -26,7 +25,7 @@ def test_packet_arrives_as_bytes_that_were_written():
         await server.write('{"cmd": "out", "data": "héllo"}')
         return await client.read()
 
-    assert run(go()) == b'{"cmd": "out", "data": "h\xc3\xa9llo"}'
+    assert run(go) == b'{"cmd": "out", "data": "h\xc3\xa9llo"}'
 
 
 def test_packets_arrive_in_order_they_were_written():
@@ -36,7 +35,7 @@ def test_packets_arrive_in_order_they_were_written():
             await server.write(str(i))
         return [await client.read() for _ in range(10)]
 
-    assert run(go()) == [str(i).encode() for i in range(10)]
+    assert run(go) == [str(i).encode() for i in range(10)]
 
 
 def test_both_ends_carry_their_own_way():
@@ -46,7 +45,7 @@ def test_both_ends_carry_their_own_way():
         await client.write("to the server")
         return await client.read(), await server.read()
 
-    assert run(go()) == (b"to the client", b"to the server")
+    assert run(go) == (b"to the client", b"to the server")
 
 
 def test_read_waits_for_write():
@@ -54,15 +53,15 @@ def test_read_waits_for_write():
         server, client = connect_in_memory()
 
         async def later():
-            await asyncio.sleep(0)
+            await anyio.sleep(0)
             await server.write("late")
 
-        task = asyncio.ensure_future(later())
-        packet = await client.read()
-        await task
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(later)
+            packet = await client.read()
         return packet
 
-    assert run(go()) == b"late"
+    assert run(go) == b"late"
 
 
 def test_closed_end_ends_read_of_peer():
@@ -72,7 +71,7 @@ def test_closed_end_ends_read_of_peer():
         with pytest.raises(BrokenPipeError):
             await client.read()
 
-    run(go())
+    run(go)
 
 
 def test_what_was_written_before_close_still_arrives():
@@ -85,7 +84,7 @@ def test_what_was_written_before_close_still_arrives():
             await client.read()
         return first
 
-    assert run(go()) == b"last word"
+    assert run(go) == b"last word"
 
 
 def test_write_to_closed_peer_is_broken_pipe():
@@ -95,7 +94,7 @@ def test_write_to_closed_peer_is_broken_pipe():
         with pytest.raises(BrokenPipeError):
             await server.write("nobody reads this")
 
-    run(go())
+    run(go)
 
 
 def test_write_after_this_end_closed_is_broken_pipe():
@@ -105,7 +104,7 @@ def test_write_after_this_end_closed_is_broken_pipe():
         with pytest.raises(BrokenPipeError):
             await server.write("nothing")
 
-    run(go())
+    run(go)
 
 
 def test_closing_twice_does_nothing_second_time():
@@ -116,4 +115,4 @@ def test_closing_twice_does_nothing_second_time():
         with pytest.raises(BrokenPipeError):
             await client.read()
 
-    run(go())
+    run(go)

@@ -19,7 +19,7 @@ Run with:
 
 from __future__ import annotations
 
-import asyncio
+import contextlib
 import json
 import statistics
 import sys
@@ -28,13 +28,13 @@ import time
 import zlib
 from pathlib import Path
 
+import anyio
+
 sys.path.insert(0, str(Path(__file__).parent))
 # And pymux itself, which the sandbox copies beside `tests` rather than
 # installing. A script's own directory is what Python puts on the path,
 # not the directory above it.
 sys.path.insert(1, str(Path(__file__).parent.parent))
-
-import contextlib
 
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
@@ -112,15 +112,14 @@ class Recorder:
     socket route would carry (plus its one zero byte).
     """
 
-    def __init__(self, loop):
-        self.loop = loop
+    def __init__(self):
         self.packets: list = []
         self.waiting: dict = {}
 
     def wait_for(self, marker: str):
-        future = self.loop.create_future()
-        self.waiting.setdefault(marker, []).append(future)
-        return future
+        event = anyio.Event()
+        self.waiting.setdefault(marker, []).append(event)
+        return event
 
     def __call__(self, packet) -> None:
         raw = bytes(packet) if isinstance(packet, (bytes, bytearray)) else str(packet).encode("utf-8")
@@ -133,16 +132,16 @@ class Recorder:
         if given.get("cmd") != "out":
             return
         data = given.get("data", "")
-        for marker, futures in list(self.waiting.items()):
+        for marker, events in list(self.waiting.items()):
             if marker in data:
-                for future in futures:
-                    if not future.done():
-                        future.set_result(True)
+                for event in events:
+                    event.set()
                 del self.waiting[marker]
 
 
 async def wait_for(recorder, marker):
-    await asyncio.wait_for(recorder.wait_for(marker), PATIENCE)
+    with anyio.fail_after(PATIENCE):
+        await recorder.wait_for(marker).wait()
 
 
 def wire_len(raw: bytes) -> int:
@@ -267,7 +266,7 @@ async def scenario_idle(tmp, recorder) -> list:
         state, _size = await session.attach("idle", SIZE)
         with set_app(state.app):
             await wait_for(recorder, "READY")
-            await asyncio.sleep(10)
+            await anyio.sleep(10)
             await session.detach(state)
     return recorder.packets[before:]
 
@@ -287,7 +286,7 @@ async def scenario_typing(tmp, recorder) -> list:
                 marker = MARKERS[number % len(MARKERS)]
                 session.typed(state, marker)
                 await wait_for(recorder, marker)
-                await asyncio.sleep(0.03)
+                await anyio.sleep(0.03)
             await session.detach(state)
     return recorder.packets[before:]
 
@@ -304,7 +303,7 @@ async def scenario_burst(tmp, recorder) -> list:
         with set_app(state.app):
             pymux.handle_command("set-option test-mode on")
             await wait_for(recorder, "DONE")
-            await asyncio.sleep(1.0)
+            await anyio.sleep(1.0)
             await session.detach(state)
     return recorder.packets[before:]
 
@@ -328,24 +327,23 @@ async def scenario_churn(tmp, recorder) -> list:
             # changed, never the whole marker. Eight repaints take two
             # seconds; four covers them with room.
             await wait_for(recorder, "MARK0")
-            await asyncio.sleep(4.0)
+            await anyio.sleep(4.0)
             await session.detach(state)
     return recorder.packets[before:]
 
 
 async def measure() -> None:
-    loop = asyncio.get_running_loop()
     started = time.monotonic()
     with tempfile.TemporaryDirectory() as name:
         tmp = Path(name)
 
-        recorder = Recorder(loop)
+        recorder = Recorder()
         idle = await scenario_idle(tmp, recorder)
-        recorder2 = Recorder(loop)
+        recorder2 = Recorder()
         typing = await scenario_typing(tmp, recorder2)
-        recorder3 = Recorder(loop)
+        recorder3 = Recorder()
         burst = await scenario_burst(tmp, recorder3)
-        recorder4 = Recorder(loop)
+        recorder4 = Recorder()
         churn = await scenario_churn(tmp, recorder4)
 
     print("wire sizes in %ds" % int(time.monotonic() - started))
@@ -358,7 +356,7 @@ async def measure() -> None:
 
 
 def main() -> int:
-    asyncio.run(measure())
+    anyio.run(measure)
     return 0
 
 

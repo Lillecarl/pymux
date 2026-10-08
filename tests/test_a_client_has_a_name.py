@@ -12,12 +12,12 @@ the shape here is pymux's own. Lillecarl/pymux#340.
 
 from __future__ import annotations
 
-import asyncio
 import contextvars
 import sys
 import time
 from contextlib import asynccontextmanager
 
+import anyio
 import pytest
 from prompt_toolkit.data_structures import Size
 from session import over_connection
@@ -138,25 +138,41 @@ async def a_real_client(monkeypatch, config_file, chosen_name):
         client.config_file = str(config_file)
         client.chosen_name = chosen_name
 
-        attach = asyncio.ensure_future(client.attach())
-        try:
-            ends_at = time.monotonic() + 20.0
-            while connection.client_state is None and time.monotonic() < ends_at:
-                if attach.done():
-                    attach.result()
-                    raise AssertionError("the attach ended before it attached")
-                await asyncio.sleep(0.02)
+        scope = anyio.CancelScope()
+        finished = False
+        error: Exception | None = None
 
-            assert connection.client_state is not None, "the client never attached"
-            yield pymux, connection.client_state
-        finally:
-            attach.cancel()
-            terminal.close()
-            pymux.stop()
-            for window in list(pymux.arrangement.windows):
-                for pane in list(window.panes):
-                    if not pane.process.is_terminated:
-                        pane.process.kill()
+        async def _attach() -> None:
+            nonlocal finished, error
+            with scope:
+                try:
+                    await client.attach()
+                except Exception as failed:
+                    error = failed
+                finally:
+                    finished = True
+
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(_attach)
+            try:
+                ends_at = time.monotonic() + 20.0
+                while connection.client_state is None and time.monotonic() < ends_at:
+                    if finished:
+                        if error is not None:
+                            raise error
+                        raise AssertionError("the attach ended before it attached")
+                    await anyio.sleep(0.02)
+
+                assert connection.client_state is not None, "the client never attached"
+                yield pymux, connection.client_state
+            finally:
+                scope.cancel()
+                terminal.close()
+                pymux.stop()
+                for window in list(pymux.arrangement.windows):
+                    for pane in list(window.panes):
+                        if not pane.process.is_terminated:
+                            pane.process.kill()
 
 
 async def test_the_flag_reaches_the_server(monkeypatch, tmp_path):

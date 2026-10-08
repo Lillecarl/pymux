@@ -36,12 +36,13 @@ Knobs:
 
 from __future__ import annotations
 
-import asyncio
 import os
 import shutil
 import sys
 import time
 from pathlib import Path
+
+import anyio
 
 sys.path.insert(0, str(Path(__file__).parent))
 # And pymux itself, which the sandbox copies beside `tests` rather than
@@ -125,24 +126,24 @@ async def what_it_costs(name: str) -> tuple:
 
         with set_app(state.app):
             await pymux.create_window(WATCHED_PROGRAM)
-        await asyncio.sleep(0.5)
+        await anyio.sleep(0.5)
         watched = looks_at(pymux, state)
 
         with set_app(state.app):
             await pymux.create_window(command)
-        await asyncio.sleep(1.0)
+        await anyio.sleep(1.0)
 
         # Back to the watched window, so nobody looks at the animation.
         with set_app(state.app):
             pymux.arrangement.set_active_window(watched)
-        await asyncio.sleep(1.0)
+        await anyio.sleep(1.0)
 
         if looks_at(pymux, state) is not watched:
             raise SystemExit("the client did not go back to the watched window")
 
         before = time.process_time()
         frames = pymux.counters.frames
-        await asyncio.sleep(HOW_LONG)
+        await anyio.sleep(HOW_LONG)
 
         cost = (time.process_time() - before) / HOW_LONG
         return cost, pymux.counters.frames - frames
@@ -168,11 +169,11 @@ async def what_it_costs_watched(name: str, rate: int) -> tuple:
             answer = handle_command(pymux, "set-window-option frame-rate %d" % rate)
             if answer is not None:
                 await answer
-        await asyncio.sleep(1.5)
+        await anyio.sleep(1.5)
 
         before = time.process_time()
         frames = pymux.counters.frames
-        await asyncio.sleep(HOW_LONG)
+        await anyio.sleep(HOW_LONG)
 
         cost = (time.process_time() - before) / HOW_LONG
         return cost, (pymux.counters.frames - frames) / HOW_LONG
@@ -223,4 +224,4 @@ async def main() -> None:
     await cap()
 
 
-asyncio.run(main())
+anyio.run(main)

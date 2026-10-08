@@ -26,9 +26,9 @@ if somebody takes the wake away rather than narrowing it.
 
 from __future__ import annotations
 
-import asyncio
 import sys
 
+import anyio
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from session import over_connection
@@ -59,8 +59,8 @@ def writes(pane, text: str) -> None:
 async def five_writes(pane, text: str) -> None:
     for _ in range(TIMES):
         writes(pane, text)
-        await asyncio.sleep(0.05)
-    await asyncio.sleep(LONG_ENOUGH)
+        await anyio.sleep(0.05)
+    await anyio.sleep(LONG_ENOUGH)
 
 
 def looks_at(pymux, state):
@@ -72,7 +72,7 @@ async def create_window_of_its_own(pymux, state):
     "A new window, made by this client, so this client looks at it."
     with set_app(state.app):
         await pymux.create_window(PANE_THAT_STAYS)
-    await asyncio.sleep(LONG_ENOUGH)
+    await anyio.sleep(LONG_ENOUGH)
 
 
 async def test_pane_in_window_nobody_looks_at_draws_nothing():
@@ -146,12 +146,12 @@ async def test_title_pane_writes_reaches_other_client():
 
         with set_app(b.app):
             pymux.handle_command("set-option window-status-format '#I:#W#F #T'")
-        await asyncio.sleep(LONG_ENOUGH)
+        await anyio.sleep(LONG_ENOUGH)
 
         window_of_a = looks_at(pymux, a)
         drawn_by_b = b.app.render_counter
 
         writes(window_of_a.panes[0], "\x1b]2;a name nobody had\x07")
-        await asyncio.sleep(LONG_ENOUGH)
+        await anyio.sleep(LONG_ENOUGH)
 
         assert b.app.render_counter > drawn_by_b

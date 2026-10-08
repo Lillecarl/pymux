@@ -92,7 +92,6 @@ the first kept too, and a healthy type is zero on both.
 
 from __future__ import annotations
 
-import asyncio
 import gc
 import os
 import sys
@@ -106,6 +105,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 # installing. A script's own directory is what Python puts on the path,
 # not the directory above it.
 sys.path.insert(1, str(Path(__file__).parent.parent))
+
+import anyio
 
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
@@ -255,7 +256,7 @@ def feed(pane, recordings) -> None:
             return
 
 
-async def settle(panes, seconds: float = 10.0) -> bool:
+async def settle(panes, watched, seconds: float = 10.0) -> bool:
     """
     Give the loop the turns a teardown needs.
 
@@ -279,7 +280,7 @@ async def settle(panes, seconds: float = 10.0) -> bool:
     the honest answer to "what holds this", and the honest reading of
     it is "the teardown has not finished", not "pymux leaks".
 
-    **And then the queue.** A callback that asyncio has queued holds
+    **And then the queue.** A callback the loop has queued holds
     everything it closes over until it runs, which is the next turn.
     `Process._read` puts the parsing of a pane nobody looks at there,
     so a round that stopped between the queueing and the running found
@@ -290,8 +291,13 @@ async def settle(panes, seconds: float = 10.0) -> bool:
         <- function Application.invalidate.<locals>.redraw
         <- Handle <- deque <- _UnixSelectorEventLoop
 
-    A `deque` in the loop is `_ready`. Waiting for it to empty is not
-    hiding anything: a queued callback is one that is about to run.
+    The wait is for the watched to die, which is what the queue was
+    keeping alive: every pane, screen, process, client and connection
+    this round watched. A queued callback is one that is about to run,
+    so the last of them runs before the last watched object goes, and
+    waiting for that is waiting for the queue without reading the
+    loop's own pockets. Collecting first, because a cycle nobody holds
+    dies here and not on a turn of the loop.
 
     False when a pane never reported itself terminated. That is worth
     saying rather than hiding: a check that timed out has measured
@@ -302,17 +308,17 @@ async def settle(panes, seconds: float = 10.0) -> bool:
     while time.monotonic() < deadline:
         if all(pane.process.is_terminated for pane in panes):
             break
-        await asyncio.sleep(0.01)
+        await anyio.sleep(0.01)
     else:
         return False
 
-    loop = asyncio.get_running_loop()
     while time.monotonic() < deadline:
-        # One turn of this loop is one turn of the event loop, so a
-        # callback that queues another one still finishes.
-        if not getattr(loop, "_ready", None):
+        # One turn of the loop is one turn of the event loop, so work
+        # the collecting queued still finishes.
+        gc.collect()
+        if all(ref() is None for ref in watched.values() if ref is not None):
             return True
-        await asyncio.sleep(0)
+        await anyio.sleep(0.01)
 
     return True
 
@@ -395,7 +401,7 @@ async def create_round(session: Session, recordings) -> bool:
     for state in (big, small):
         await session.detach(state)
 
-    return await settle(killed)
+    return await settle(killed, session.watched)
 
 
 def counted() -> Counter:
@@ -605,4 +611,4 @@ def report(alive: list[str], first: Counter, second: Counter, bytes_grown) -> in
 
 
 if __name__ == "__main__":
-    sys.exit(asyncio.run(main()))
+    sys.exit(anyio.run(main))

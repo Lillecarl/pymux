@@ -10,7 +10,6 @@ own at the bottom.
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import contextlib
 import json
@@ -18,6 +17,7 @@ import os
 import sys
 import webbrowser
 
+import anyio
 import pytest
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
@@ -382,7 +382,7 @@ async def test_another_subcommand_of_1337_opens_nothing():
         pane = await create_pane(pymux, state)
 
         pymux.forward_osc(pane, "1337", "File=name=t.png;inline=1:AAAA")
-        await asyncio.sleep(0.3)
+        await anyio.sleep(0.3)
 
         assert opens(packets) == []
 

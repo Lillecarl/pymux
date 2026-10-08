@@ -14,7 +14,6 @@ says why an asyncssh server stands in for sshd.
 from __future__ import annotations
 
 import array
-import asyncio
 import fcntl
 import os
 import sys
@@ -455,10 +454,11 @@ class Terminal:
 class Attached:
     "A server with one window, an SSH client on a pty, and the attach."
 
-    def __init__(self, pymux, terminal, attach, client) -> None:
+    def __init__(self, pymux, terminal, attach_finished, attach_error, client) -> None:
         self.pymux = pymux
         self.terminal = terminal
-        self.attach = attach
+        self.attach_finished = attach_finished
+        self.attach_error = attach_error
         self.client = client
 
     async def until(self, what, says: str, seconds: float = 20.0) -> None:
@@ -473,11 +473,19 @@ class Attached:
         while time.monotonic() < ends_at:
             if what():
                 return
-            if self.attach.done():
-                self.attach.result()
+            if self.attach_finished.is_set():
+                if self.attach_error["error"] is not None:
+                    raise self.attach_error["error"]
                 raise AssertionError("The attach ended, waiting for %s." % (says,))
-            await asyncio.sleep(0.05)
+            await anyio.sleep(0.05)
         raise AssertionError("Waited %ss for %s." % (seconds, says))
+
+    async def wait_for_attach(self, seconds: float = 10.0) -> None:
+        "Wait for the attach to end, raising what ended it."
+        with anyio.fail_after(seconds):
+            await self.attach_finished.wait()
+        if self.attach_error["error"] is not None:
+            raise self.attach_error["error"]
 
     def drop_the_link(self) -> None:
         "`abort` sends no disconnect message, the way a dead network does not."
@@ -501,7 +509,7 @@ async def attached(monkeypatch, **how):
 
     async with pymux.running():
         await pymux.create_window(PANE_COMMAND)
-        await asyncio.sleep(0.3)
+        await anyio.sleep(0.3)
 
         server, port, client_key = await create_ssh_server(where, socket_path)
 
@@ -512,18 +520,32 @@ async def attached(monkeypatch, **how):
             username="anybody",
         )
 
-        attach = asyncio.ensure_future(client._attach(**how))
-        try:
-            yield Attached(pymux, terminal, attach, client)
-        finally:
-            attach.cancel()
-            server.close()
-            terminal.close()
-            pymux.stop()
-            for window in list(pymux.arrangement.windows):
-                for pane in list(window.panes):
-                    if not pane.process.is_terminated:
-                        pane.process.kill()
+        scope = anyio.CancelScope()
+        attach_finished = anyio.Event()
+        attach_error: dict = {"error": None}
+
+        async def _attach() -> None:
+            with scope:
+                try:
+                    await client._attach(**how)
+                except Exception as failed:
+                    attach_error["error"] = failed
+                finally:
+                    attach_finished.set()
+
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(_attach)
+            try:
+                yield Attached(pymux, terminal, attach_finished, attach_error, client)
+            finally:
+                scope.cancel()
+                server.close()
+                terminal.close()
+                pymux.stop()
+                for window in list(pymux.arrangement.windows):
+                    for pane in list(window.panes):
+                        if not pane.process.is_terminated:
+                            pane.process.kill()
 
 
 async def test_a_dropped_link_shows_a_notice_and_comes_back(monkeypatch):
@@ -553,7 +575,7 @@ async def test_a_dropped_link_shows_a_notice_and_comes_back(monkeypatch):
         # And the server lets it go, the way a detach does.
         for connection in list(it.pymux.connections):
             connection.detach_and_close()
-        await asyncio.wait_for(it.attach, 10)
+        await it.wait_for_attach(10)
 
 
 async def test_a_machine_that_slept_comes_back_without_waiting(monkeypatch):
@@ -588,7 +610,7 @@ async def test_a_machine_that_slept_comes_back_without_waiting(monkeypatch):
 
         for connection in list(it.pymux.connections):
             connection.detach_and_close()
-        await asyncio.wait_for(it.attach, 10)
+        await it.wait_for_attach(10)
 
 
 async def test_q_leaves_the_disconnected_screen(monkeypatch):
@@ -599,7 +621,7 @@ async def test_q_leaves_the_disconnected_screen(monkeypatch):
         await it.until(lambda: "lost the server" in it.terminal.said, "the disconnected screen")
 
         it.terminal.type("q")
-        await asyncio.wait_for(it.attach, 10)
+        await it.wait_for_attach(10)
 
         assert not it.pymux.connections
 
@@ -614,7 +636,7 @@ async def test_the_screen_says_it_is_trying_while_the_attempt_runs(monkeypatch):
         await it.until(lambda: ALTERNATE_SCREEN in it.terminal.said, "the first frame")
 
         async def hangs():
-            await asyncio.sleep(30)
+            await anyio.sleep(30)
 
         it.client._connect = hangs
         it.drop_the_link()
@@ -622,7 +644,7 @@ async def test_the_screen_says_it_is_trying_while_the_attempt_runs(monkeypatch):
         await it.until(lambda: "Trying to reach" in it.terminal.said, "the trying screen")
 
         it.terminal.type("q")
-        await asyncio.wait_for(it.attach, 10)
+        await it.wait_for_attach(10)
 
 
 async def test_a_server_that_closes_the_connection_is_not_retried(monkeypatch):
@@ -637,7 +659,7 @@ async def test_a_server_that_closes_the_connection_is_not_retried(monkeypatch):
         for connection in list(it.pymux.connections):
             connection.detach_and_close()
 
-        await asyncio.wait_for(it.attach, 10)
+        await it.wait_for_attach(10)
         assert "lost the server" not in it.terminal.said
 
 
@@ -654,7 +676,7 @@ async def test_a_client_told_to_hang_up_does_not_come_back(monkeypatch):
         for connection in list(it.pymux.connections):
             connection.detach_and_close(hang_up=True)
 
-        await asyncio.wait_for(it.attach, 10)
+        await it.wait_for_attach(10)
 
         assert it.client.hang_up_asked, "the client never heard the hangup"
         assert "lost the server" not in it.terminal.said

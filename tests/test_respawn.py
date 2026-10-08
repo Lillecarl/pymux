@@ -13,8 +13,8 @@ respawns the active pane of the window it names.
 from __future__ import annotations
 
 import argparse
-import asyncio
 
+import anyio
 import pytest
 from prompt_toolkit.application.current import set_app
 from session import create_session
@@ -65,7 +65,7 @@ async def test_respawn_keeps_place_and_replaces_pane():
             for _ in range(50):
                 if old_pane.process.is_terminated:
                     break
-                await asyncio.sleep(0.1)
+                await anyio.sleep(0.1)
             assert old_pane.process.is_terminated
 
 
@@ -83,7 +83,7 @@ async def test_pane_whose_program_ended_is_gone_and_says_so():
             for _ in range(50):
                 if pane.process.is_terminated:
                     break
-                await asyncio.sleep(0.1)
+                await anyio.sleep(0.1)
 
             with pytest.raises(CommandException):
                 respawn_pane(
