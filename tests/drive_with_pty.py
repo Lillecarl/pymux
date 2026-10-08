@@ -1977,9 +1977,12 @@ def check_switch_window_under_flood(tmp):
         terminal.wait_for_queries()
         terminal.write(b"\x1b[?62;1;6c")
         terminal.wait_for(b"flood line 1")
-        opened = run_cli(terminal.sock_path, ["new-window", "-d", "-t", "test:", "-n", "idle", "python3 %s" % marker])
+        session = terminal.session_name
+        opened = run_cli(
+            terminal.sock_path, ["new-window", "-d", "-t", session + ":", "-n", "idle", "python3 %s" % marker]
+        )
         assert opened.returncode == 0, opened.stderr
-        listed = run_cli(terminal.sock_path, ["list-windows", "-t", "test", "-F", "#{window_id}:#{window_name}"])
+        listed = run_cli(terminal.sock_path, ["list-windows", "-t", session, "-F", "#{window_id}:#{window_name}"])
         idle = [line.split(":")[0] for line in listed.stdout.decode().splitlines() if line.endswith(":idle")]
         assert len(idle) == 1, listed.stdout
         bound = run_cli(terminal.sock_path, ["bind-key", "-n", "F12", "select-window", "-t", idle[0]])
