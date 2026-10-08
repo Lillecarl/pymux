@@ -223,7 +223,7 @@ async def _serve_a_session(socket_path: str, connection, query: str, writable: b
     draws. `rows` and `columns` in the query are the element's first size;
     a `size` message moves it after. Lillecarl/pymux#481.
     """
-    import asyncio
+    import anyio
 
     from pymux.web.session import LARGEST, run_session
 
@@ -236,7 +236,7 @@ async def _serve_a_session(socket_path: str, connection, query: str, writable: b
 
     logger.info("A viewer opened the session.")
     try:
-        reader, writer = await asyncio.open_unix_connection(socket_path)
+        stream = await anyio.connect_unix(socket_path)
     except OSError as refused:
         await connection.close(1008, str(refused)[:120])
         return
@@ -246,8 +246,7 @@ async def _serve_a_session(socket_path: str, connection, query: str, writable: b
 
     try:
         await run_session(
-            reader,
-            writer,
+            stream,
             to_viewer,
             connection,
             cells("rows", 24),
@@ -257,7 +256,7 @@ async def _serve_a_session(socket_path: str, connection, query: str, writable: b
     except Exception as ended:
         logger.info("A viewer of the session ended: %s", ended)
     finally:
-        writer.close()
+        await stream.aclose()
 
 
 def _one_of(query: str, name: str) -> str | None:

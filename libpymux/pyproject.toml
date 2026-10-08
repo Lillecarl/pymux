@@ -26,6 +26,9 @@ dependencies = [
     # that module -- the server to bind in the room, a caller to look
     # in it. Lillecarl/pymux#421.
     "platformdirs>=4.0.0",
+    # How `streams.py` waits on the socket: the same floor pymux
+    # holds, so the two never disagree about what anyio means.
+    "anyio>=4.7.0",
 ]
 
 [project.urls]

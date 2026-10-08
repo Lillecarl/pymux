@@ -11,17 +11,16 @@ the protocol; this carries them. So a relay opens a stream, sends each
 frame on as it arrives, and sends back what its viewer says, without
 knowing what a style table is.
 
-**asyncio, from the standard library.** A caller that relays to a browser
-is a web server and already runs a loop, and `libpymux` promises one
-dependency. So this is `asyncio.open_unix_connection` and nothing else --
-no anyio here, whatever the rest of pyterm uses, because a library that
-made its callers take a dependency to read a pane would be the wrong
-trade.
+**anyio, like the rest of pyterm.** A caller that relays to a browser
+is a web server and already runs a loop, so this is
+`anyio.connect_unix` and nothing else: one bidirectional stream,
+sent and received on.
 """
 
-import asyncio
 import json
 from typing import Any, AsyncIterator, Dict, Optional
+
+import anyio
 
 from .protocol import Field, Packet
 
@@ -29,10 +28,6 @@ __all__ = ["PaneStream", "StreamRefused"]
 
 #: The byte that ends one JSON message on the wire.
 _END = b"\0"
-
-#: How much to read at a time. A frame of a wide pane's first screen is
-#: tens of kilobytes; every frame after it is small.
-_CHUNK = 65536
 
 
 class StreamRefused(RuntimeError):
@@ -62,8 +57,7 @@ class PaneStream:
         self.socket_path = socket_path
         self.pane_id = pane_id
         self.writable = writable
-        self._reader: Optional[asyncio.StreamReader] = None
-        self._writer: Optional[asyncio.StreamWriter] = None
+        self._stream: Optional[anyio.abc.ByteStream] = None
         self._buffer = b""
 
     async def __aenter__(self) -> "PaneStream":
@@ -74,9 +68,7 @@ class PaneStream:
         await self.close()
 
     async def open(self) -> None:
-        self._reader, self._writer = await asyncio.open_unix_connection(
-            self.socket_path
-        )
+        self._stream = await anyio.connect_unix(self.socket_path)
         await self._packet(
             {
                 Field.CMD: Packet.STREAM_PANE,
@@ -86,15 +78,13 @@ class PaneStream:
         )
 
     async def close(self) -> None:
-        if self._writer is None:
+        if self._stream is None:
             return
-        self._writer.close()
         try:
-            await self._writer.wait_closed()
-        except (OSError, asyncio.CancelledError):
+            await self._stream.aclose()
+        except OSError:
             pass
-        self._writer = None
-        self._reader = None
+        self._stream = None
 
     # -- reading -------------------------------------------------------
 
@@ -123,11 +113,12 @@ class PaneStream:
             # "exit" and anything else: the server is finishing.
 
     async def _next_packet(self) -> Optional[Dict[str, Any]]:
-        assert self._reader is not None, "the stream is not open"
+        assert self._stream is not None, "the stream is not open"
 
         while _END not in self._buffer:
-            data = await self._reader.read(_CHUNK)
-            if not data:
+            try:
+                data = await self._stream.receive()
+            except anyio.EndOfStream, anyio.ClosedResourceError:
                 return None
             self._buffer += data
 
@@ -168,6 +159,5 @@ class PaneStream:
         await self._packet({Field.CMD: Packet.STREAM_IN, Field.DATA: json.dumps(message)})
 
     async def _packet(self, packet: Dict[str, Any]) -> None:
-        assert self._writer is not None, "the stream is not open"
-        self._writer.write(json.dumps(packet).encode("utf-8") + _END)
-        await self._writer.drain()
+        assert self._stream is not None, "the stream is not open"
+        await self._stream.send(json.dumps(packet).encode("utf-8") + _END)

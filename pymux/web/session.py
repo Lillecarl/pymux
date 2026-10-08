@@ -24,7 +24,6 @@ callers of one thing.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -56,9 +55,6 @@ SIZE = "size"
 #: by a thousand is a million cells, and a number past that is a mistake
 #: or somebody seeing what happens.
 LARGEST = 1000
-
-#: How much of the socket to read at once, as `libpymux` does.
-_CHUNK = 65536
 
 #: How long a sequence may stay open before the next bytes drop it, the
 #: same five seconds a pane uses. Lillecarl/pymux#485.
@@ -209,8 +205,7 @@ class SessionScreen:
 
 
 async def run_session(
-    reader: asyncio.StreamReader,
-    writer: asyncio.StreamWriter,
+    stream: anyio.abc.ByteStream,
     to_viewer: Callable[[dict[str, Any]], Awaitable[None]],
     from_viewer: AsyncIterator[str],
     rows: int,
@@ -218,20 +213,31 @@ async def run_session(
     read_only: bool = False,
 ) -> None:
     """
-    Be one client of the server at the other end of `reader` and `writer`,
-    for one viewer, until either of them stops.
+    Be one client of the server at the other end of `stream`, for one
+    viewer, until either of them stops.
 
     **A frame goes out per read of the socket, not per packet.** The
     server writes one frame as several packets, and a viewer sent one
     frame each would be shown most of them half drawn. A read takes what
     has arrived, which is usually the whole frame.
+
+    **The packets queue before they are sent.** `SessionScreen` takes a
+    synchronous `send`, the way a terminal answers a query while it is
+    parsed, so what it writes waits here and one flush sends it.
     """
 
+    outgoing: list[bytes] = []
+
     def send(packet: dict[str, Any]) -> None:
-        writer.write(json.dumps(packet).encode("utf-8") + b"\0")
+        outgoing.append(json.dumps(packet).encode("utf-8") + b"\0")
+
+    async def flush() -> None:
+        while outgoing:
+            await stream.send(outgoing.pop(0))
 
     session = SessionScreen(rows, columns, send, read_only=read_only)
     session.start()
+    await flush()
     await to_viewer(session.welcome())
 
     async with anyio.create_task_group() as both:
@@ -239,8 +245,9 @@ async def run_session(
         async def from_the_server() -> None:
             buffer = b""
             while True:
-                data = await reader.read(_CHUNK)
-                if not data:
+                try:
+                    data = await stream.receive()
+                except anyio.EndOfStream, anyio.ClosedResourceError:
                     break
                 buffer += data
                 ended = False
@@ -248,6 +255,7 @@ async def run_session(
                     raw, buffer = buffer.split(b"\0", 1)
                     if raw and session.take_packet(json.loads(raw.decode("utf-8"))):
                         ended = True
+                await flush()
                 frame = session.frame()
                 if frame is not None:
                     await to_viewer(frame)
@@ -260,7 +268,7 @@ async def run_session(
                 refused = session.take(message)
                 if refused is not None:
                     logger.info("A viewer's message was refused: %s", refused)
-                await writer.drain()
+                await flush()
             both.cancel_scope.cancel()
 
         both.start_soon(from_the_server)
