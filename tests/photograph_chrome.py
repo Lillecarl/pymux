@@ -708,35 +708,40 @@ def chrome_command(
     )
 
 
-#: The differences between the two renderings that stand, as
-#: {(terminal, fixture): pixels}. The file says why each one is not
-#: the optimized rendering drawing something else.
-RENDERINGS_RECORDED = Path(__file__).parent / "render-mode-differences.txt"
+#: The terminals whose glyphs ink past their cell, and the width of
+#: that cell in pixels.
+#:
+#: xterm's glyph can put a pixel of ink in the first pixel column of
+#: the cell after it. It keeps that ink when both cells come in one
+#: string, and the second cell's background covers it when that cell is
+#: written alone. The optimized writer joins cells and the reference
+#: writer writes each alone, so the two pictures differ there, by
+#: however the writes happened to group: 18 pixels of `pane-text` in
+#: one run and 14 in the next. Measured over three runs and five
+#: fixtures, every differing xterm pixel had x % 10 == 0. A cell drawn
+#: wrong or in the wrong place changes pixels inside cells, which still
+#: count. This is the seam of Lillecarl/pymux#371. kitty and foot show
+#: no such difference.
+INK_PAST_THE_CELL = {"xterm": 10}
 
 
-def read_renderings_recorded():
-    standing = {}
-    for line in RENDERINGS_RECORDED.read_text().splitlines():
-        line = line.split("#")[0].strip()
-        if line:
-            terminal, fixture, pixels = line.split()
-            standing[(terminal, fixture)] = int(pixels)
-    return standing
-
-
-def difference_of(one, other, marked):
+def difference_of(one, other, marked, cell_width=None):
     """
     How many pixels two pictures of one screen differ in, and where.
 
     Returns (0, None) when they are the same. When they differ, `marked`
     is the first picture with every differing pixel painted red, for a
-    person to read.
+    person to read. With `cell_width`, a pixel in the first pixel
+    column of a cell does not count: `INK_PAST_THE_CELL` says why.
     """
     first = Image.open(one).convert("RGB")
     second = Image.open(other).convert("RGB")
     if first.size != second.size:
         return -1, "size, %s against %s" % (first.size, second.size)
     mask = ImageChops.difference(first, second).convert("L").point(lambda value: 255 if value else 0)
+    if cell_width is not None:
+        for x in range(0, mask.width, cell_width):
+            mask.paste(0, (x, 0, x + 1, mask.height))
     box = mask.getbbox()
     if box is None:
         return 0, None
@@ -760,20 +765,22 @@ def picture_of(terminal, seat, name, work, out, fixtures=None, render_mode=None)
     reference rendering writes every cell where it belongs, so any
     difference is the optimized one drawing something else. The real
     terminal is the judge, which is what a check on cells cannot be.
-    A difference `render-mode-differences.txt` records, to the pixel,
-    stands.
     """
     if render_mode is None:
         render_mode = RENDER_MODE
     if render_mode == "both":
         optimized = picture_of(terminal, seat, name, work, out, fixtures, "optimized")
         reference = picture_of(terminal, seat, name, work, out, fixtures, "reference")
-        pixels, where = difference_of(optimized, reference, optimized.parent / "difference.png")
-        recorded = read_renderings_recorded().get((terminal.name, name), 0)
-        if pixels != recorded:
+        pixels, where = difference_of(
+            optimized,
+            reference,
+            optimized.parent / "difference.png",
+            INK_PAST_THE_CELL.get(terminal.name),
+        )
+        if pixels:
             raise RenderingsDiffer(
-                "%s in %s: the optimized and reference renderings differ in %s, and %d are recorded;"
-                " difference.png marks where" % (name, terminal.name, where or "no pixel", recorded)
+                "%s in %s: the optimized and reference renderings differ in %s; difference.png marks where"
+                % (name, terminal.name, where)
             )
         return optimized
 
