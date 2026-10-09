@@ -188,6 +188,12 @@ enter at the command line. There is an `example config
 <https://github.com/jonathanslenders/pymux/blob/master/examples/example-config.conf>`_
 in the examples directory.
 
+A Python file in ``$XDG_CONFIG_HOME/pymux/plugins`` (by default
+``~/.config/pymux/plugins``) adds commands. It has the shape of the example
+plugin, ``pymux/plugins/count_panes.py``: a function that takes the server and
+the parsed arguments, and a ``register(subparsers)`` that calls
+``add_command`` for it. A plugin that fails to load is logged and left out.
+
 
 What if it crashes?
 -------------------

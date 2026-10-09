@@ -20,6 +20,7 @@ __all__ = [
     "client_options_in",
     "config_paths",
     "find_config",
+    "plugin_dir",
 ]
 
 #: The command that names a client option. Everything else in the file
@@ -42,17 +43,25 @@ def config_paths(environ=None) -> list[str]:
 
     Lillecarl/pymux#196.
     """
+    return [
+        os.path.join(_config_home(environ), "pymux", "pymux.conf"),
+        os.path.expanduser("~/.pymux.conf"),
+    ]
+
+
+def plugin_dir(environ=None) -> str:
+    "Where a person's own plugins are: `$XDG_CONFIG_HOME/pymux/plugins`."
+    return os.path.join(_config_home(environ), "pymux", "plugins")
+
+
+def _config_home(environ=None) -> str:
     if environ is None:
         environ = os.environ
 
     config_home = environ.get("XDG_CONFIG_HOME") or ""
     if not os.path.isabs(config_home):
         config_home = os.path.expanduser("~/.config")
-
-    return [
-        os.path.join(config_home, "pymux", "pymux.conf"),
-        os.path.expanduser("~/.pymux.conf"),
-    ]
+    return config_home
 
 
 def find_config(environ=None) -> str | None:
