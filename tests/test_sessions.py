@@ -185,6 +185,24 @@ async def test_list_sessions_names_every_session():
         pymux.command_output = None
 
 
+async def test_a_question_leaves_the_keyboard_on_the_window_switched_to():
+    "A question takes no focus, so the window under it has its pane focused. Lillecarl/pymux#551."
+    async with in_this_process(_server()) as session:
+        pymux = session.pymux
+        here, _ = await session.attach("here", SIZE)
+        there, _ = await session.attach("there", SIZE)
+        there.name = "desk"
+
+        await _command(pymux, here, "new-window -d '%s'" % (WAITING,))
+        _, second = there.session.arrangement.windows
+        there.ask("Still asking?", "display-message yes")
+        await _command(pymux, here, "switch-client -c desk -t @%d" % second.window_id)
+
+        assert there.confirm_text == "Still asking?"
+        with set_app(there.app):
+            assert there.app.layout.has_focus(second.active_pane.terminal)
+
+
 async def test_list_windows_t_names_a_session():
     "tmux's target-session: a bare name is not a window of this session. Lillecarl/pymux#550."
     async with in_this_process(_server()) as session:

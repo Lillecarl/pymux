@@ -860,9 +860,10 @@ class ClientState:
                 self.app.layout.focus(dialog)
             return
 
-        # Confirm.
-        if self.confirm_text:
-            return
+        # A question takes no focus: its keys are global bindings, and
+        # they come after the pane's, so they win. The pane keeps the
+        # keyboard, and a window switched to under a question draws its
+        # active pane. Lillecarl/pymux#551.
 
         # Custom prompt.
         if self.prompt_command:
