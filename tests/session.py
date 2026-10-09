@@ -484,6 +484,14 @@ async def over_connection(pymux=None, read_packet=None):
             5.0,
             "the server never made a client for this connection",
         )
+        # The first window is made by the client's `startup`, on a later
+        # turn. Under load a command sent at once found no window and
+        # its format raised.
+        await once(
+            lambda: state.session.arrangement.get_active_window() is not None,
+            5.0,
+            "the server never made its first window",
+        )
         ends[id(state)] = (client_end, draining)
 
         watch("%s client" % name, state)
