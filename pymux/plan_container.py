@@ -255,6 +255,7 @@ class PlanContainer(Container):
             return
 
         style = (parent_style + " class:border").strip()
+        measure = screen.max_column_index
 
         for line in chrome(self.plan):
             if not line.rect.overlaps(view):
@@ -270,7 +271,14 @@ class PlanContainer(Container):
                 for x in range(left, right + 1):
                     row[x] = char
                 # The renderer reads a row only as far as its measure.
-                screen.reach(y, right)
+                # `Screen.reach` inline: this runs for every row of
+                # every line, and the row now holds `right`, so its
+                # first measure is its last cell.
+                reached = measure.get(y)
+                if reached is None:
+                    measure[y] = max(row)
+                elif reached < right:
+                    measure[y] = right
 
     def _glide(self) -> Point:
         """
