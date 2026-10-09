@@ -539,6 +539,8 @@ def test_a_snapshot_of_the_version_before_steps_up(pymux, tmp_path):
     db.execute("DROP TABLE wait_channels")
     db.execute("DROP TABLE copy_modes")
     db.execute("DROP TABLE saved_queries")
+    db.execute("ALTER TABLE pane_programs DROP COLUMN pane_revision")
+    db.execute("ALTER TABLE panes ADD COLUMN pane_revision INTEGER NOT NULL DEFAULT 0")
     db.execute("DELETE FROM counters WHERE name IN ('notification', 'notification_route')")
     db.execute("DELETE FROM server WHERE name IN ('clipboard', 'clipboard_type', 'bindings_recorded')")
     db.execute("PRAGMA user_version = 1")

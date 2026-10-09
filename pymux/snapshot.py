@@ -67,7 +67,7 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "adopting", "checking", "load", "save
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 10
+SNAPSHOT_VERSION = 11
 
 
 def _quoted(value: str | None) -> str:
@@ -164,6 +164,13 @@ CREATE TABLE copy_modes(
     + "".join(
         "INSERT INTO saved_queries VALUES (%s, %s, %s);" % tuple(_quoted(value) for value in seed) for seed in SEEDS
     ),
+    # A pane's revision moves with its output, so it goes beside the
+    # screen: the live store, which holds `panes`, holds no output.
+    10: """
+ALTER TABLE pane_programs ADD COLUMN pane_revision INTEGER NOT NULL DEFAULT 0;
+UPDATE pane_programs SET pane_revision = (SELECT pane_revision FROM panes WHERE panes.pane_id = pane_programs.pane_id);
+ALTER TABLE panes DROP COLUMN pane_revision;
+""",
 }
 
 #: The fields `ClientState.modes` holds, one JSON value in `clients`.
@@ -272,8 +279,7 @@ CREATE TABLE panes(
   pane_current_path TEXT,
   current_host TEXT,
   command_zone TEXT,
-  last_exit_status INTEGER,
-  pane_revision INTEGER NOT NULL
+  last_exit_status INTEGER
 );
 CREATE TABLE pane_marks(
   pane_id INTEGER NOT NULL REFERENCES panes(pane_id),
@@ -415,6 +421,7 @@ CREATE TABLE pane_programs(
   slave_fd INTEGER,
   pane_width INTEGER NOT NULL,
   pane_height INTEGER NOT NULL,
+  pane_revision INTEGER NOT NULL,
   screen TEXT NOT NULL,
   stream TEXT NOT NULL,
   process TEXT NOT NULL
@@ -704,7 +711,7 @@ class Snapshot:
         screen = freezer.freeze(control.screen)
         db = self.db
         db.execute(
-            "INSERT OR REPLACE INTO pane_programs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO pane_programs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 pane.pane_id,
                 backend.pid,
@@ -712,6 +719,8 @@ class Snapshot:
                 backend.slave,
                 process.sx,
                 process.sy,
+                # Output moves it, so it lives with the screen.
+                pane.revision,
                 json.dumps(screen.root),
                 json.dumps(freeze(control.stream).root),
                 json.dumps(freeze(process).root),
@@ -975,7 +984,7 @@ def _write_pane(
     db: sqlite3.Connection, pane: Pane, window: Window | None, parent: _Split | None, place: int | None
 ) -> None:
     db.execute(
-        "INSERT INTO panes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO panes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             pane.pane_id,
             window.window_id if window is not None else None,
@@ -987,7 +996,6 @@ def _write_pane(
             pane.current_host,
             pane.command_zone,
             pane.last_exit_status,
-            pane.revision,
         ),
     )
     db.executemany(
@@ -1315,7 +1323,7 @@ def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> int | No
         pane.current_host = row["current_host"]
         pane.command_zone = row["command_zone"]
         pane.last_exit_status = row["last_exit_status"]
-        pane.revision = row["pane_revision"]
+        ((pane.revision,),) = _rows(db, "SELECT pane_revision FROM pane_programs WHERE pane_id = ?", pane.pane_id)
         pane.marks = [
             mark["row"]
             for mark in _rows(db, "SELECT row FROM pane_marks WHERE pane_id = ? ORDER BY position", pane.pane_id)
