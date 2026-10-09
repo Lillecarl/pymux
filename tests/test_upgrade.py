@@ -100,6 +100,13 @@ def _inheritable(pid: int) -> list[str]:
     return found
 
 
+def _environment_of(pid: int) -> dict[str, str]:
+    "The environment a process started with, as the kernel keeps it."
+    with open("/proc/%d/environ" % pid, "rb") as f:
+        pairs = [entry.split(b"=", 1) for entry in f.read().split(b"\0") if b"=" in entry]
+    return {key.decode(): value.decode(errors="replace") for key, value in pairs}
+
+
 def _leftovers() -> list[str]:
     return glob.glob(os.path.join(socket_directory(), "pymux.upgrade.*"))
 
@@ -161,6 +168,14 @@ def test_an_upgrade_keeps_every_pane_and_its_program(server, tmp_path, new_build
         words = f.read().split(b"\0")
     assert b"resume-server" in words
     assert (b"--fall-back" in words) == (new_build == "same")
+    # The old build is a root for nix's collector while the new one
+    # runs, and only the server holds it: a pane started now does not.
+    # A server that went back to its old build has nothing older to keep.
+    upgraded_from = _environment_of(pid).get("PYMUX_UPGRADED_FROM", "")
+    assert upgraded_from.startswith(sys.executable) == (new_build == "same")
+    _answer(server, "split-window", "-d", "sleep 60")
+    newest = max(int(one) for one in _answer(server, "list-panes", "-F", "#{pane_pid}").split())
+    assert "PYMUX_UPGRADED_FROM" not in _environment_of(newest)
     assert _inheritable(pid) == []
     numbers = _counted(server)
     assert numbers == list(range(1, LINES + 1))

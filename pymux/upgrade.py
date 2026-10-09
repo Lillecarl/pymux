@@ -71,6 +71,25 @@ def this_build() -> list[str]:
     return [sys.executable, "-m", "pymux"]
 
 
+#: Where an upgraded server carries the build it came from. Nix's
+#: collector treats a store path in any process's environment as a
+#: root (`findRuntimeRoots` reads `/proc/<pid>/environ`, and not the
+#: command line `--fall-back` is on), so the build the fall back
+#: execs stays on disk while the new one runs. The kernel keeps the
+#: block for the life of the process; the next upgrade replaces it.
+#: Lillecarl/pymux#408.
+UPGRADED_FROM = "PYMUX_UPGRADED_FROM"
+
+
+def _rooted_environment() -> dict[str, str]:
+    "This environment, naming every path this build runs from."
+    # The interpreter alone is not the build: pymux and what it imports
+    # come from the other store paths on `sys.path`.
+    environment = dict(os.environ)
+    environment[UPGRADED_FROM] = os.pathsep.join([sys.executable, *sys.path])
+    return environment
+
+
 async def upgrade(pymux: Pymux, command: list[str]) -> None:
     "Replace this server's build with the one `command` starts."
     executable = shutil.which(command[0])
@@ -152,7 +171,7 @@ def _exec(argv: list[str], fds: list[int]) -> None:
     for fd in fds:
         os.set_inheritable(fd, True)
     try:
-        os.execv(argv[0], argv)
+        os.execve(argv[0], argv, _rooted_environment())
     except OSError:
         for fd in fds:
             os.set_inheritable(fd, False)
@@ -175,9 +194,10 @@ def resume(path: str, fall_back: list[str] | None) -> None:
     """
     Serve again, in the new build, from the snapshot the old one wrote.
 
-    The configuration file is read first, for what no snapshot holds
-    yet: key bindings and hooks. The snapshot then wins for everything
-    it does hold, the options included, because a person may have
+    The configuration file is read first, for what it says that the
+    snapshot does not: its errors, and anything an older snapshot did
+    not record. The snapshot then wins for everything it holds -- the
+    options, the bindings and the hooks -- because a person may have
     changed one since the file was read.
 
     Anything that goes wrong before the panes run execs `fall_back`
@@ -185,6 +205,10 @@ def resume(path: str, fall_back: list[str] | None) -> None:
     builds never hand the server back and forth.
     """
     from .main import Pymux
+
+    # This process's own environment block keeps it for the collector;
+    # a pane or a job started from here must not hold the old build too.
+    os.environ.pop(UPGRADED_FROM, None)
 
     def give_up() -> NoReturn:
         logger.exception("Resuming from %s failed.", path)
