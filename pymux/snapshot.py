@@ -53,6 +53,7 @@ from pyte.titles import Titles
 from .arrangement import HSplit, LayoutTypes, Pane, VSplit, Window, _Split, node_key
 from .ids import PaneId, SessionId, WindowId, WindowIndex
 from .jobs import Job, JobId
+from .notifications import Notification
 from .options import ALL_OPTIONS
 from .pipes.posix import PosixSocketListener
 from .session import Session
@@ -64,7 +65,7 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "adopting", "checking", "load", "save
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 5
+SNAPSHOT_VERSION = 6
 
 #: A client's own settings, each a column of `clients` and an attribute
 #: of `ClientState`, with the type sqlite gives back as.
@@ -112,6 +113,27 @@ CREATE TABLE key_bindings(
   command TEXT NOT NULL,
   arguments TEXT NOT NULL,
   PRIMARY KEY (key_table, written)
+);
+""",
+    # The notification hub and its routes back to panes; none is what a
+    # new server has.
+    5: """
+CREATE TABLE notifications(
+  notification_id INTEGER PRIMARY KEY,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  urgency INTEGER NOT NULL,
+  pane_id INTEGER,
+  at REAL NOT NULL,
+  position INTEGER UNIQUE,
+  identifier TEXT,
+  CHECK ((position IS NULL) != (identifier IS NULL))
+);
+CREATE TABLE notification_routes(
+  ours TEXT PRIMARY KEY,
+  pane_id INTEGER NOT NULL,
+  identifier TEXT NOT NULL,
+  position INTEGER NOT NULL UNIQUE
 );
 """,
 }
@@ -295,6 +317,23 @@ CREATE TABLE key_bindings(
   arguments TEXT NOT NULL,
   PRIMARY KEY (key_table, written)
 );
+CREATE TABLE notifications(
+  notification_id INTEGER PRIMARY KEY,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  urgency INTEGER NOT NULL,
+  pane_id INTEGER,
+  at REAL NOT NULL,
+  position INTEGER UNIQUE,
+  identifier TEXT,
+  CHECK ((position IS NULL) != (identifier IS NULL))
+);
+CREATE TABLE notification_routes(
+  ours TEXT PRIMARY KEY,
+  pane_id INTEGER NOT NULL,
+  identifier TEXT NOT NULL,
+  position INTEGER NOT NULL UNIQUE
+);
 CREATE TABLE jobs(
   job_id INTEGER PRIMARY KEY,
   command TEXT NOT NULL,
@@ -373,6 +412,8 @@ TABLES = (
     "server_lists",
     "hooks",
     "key_bindings",
+    "notifications",
+    "notification_routes",
     "jobs",
     "job_tags",
     "job_output",
@@ -457,6 +498,7 @@ WRITES: dict[str, frozenset[str]] = {
         {"sessions", "_session_counter", "_uses", "global_environment", "returning_clients", "jobs"}
         | {"created", "socket_name", "listener", "original_cwd", "source_file", "_startup_done"}
         | {"clipboard", "named_buffers", "prompt_history", "message_log", "hooks", "key_bindings_manager"}
+        | {"notifications", "notification_center"}
         | set(_server_options().values())
     ),
 }
@@ -473,8 +515,6 @@ LATER: dict[str, frozenset[str]] = {
             "_runs_standalone",
             "_serves_one_terminal",
             "wait_channels",
-            "notifications",
-            "notification_center",
         }
     ),
 }
@@ -747,6 +787,23 @@ def _write(pymux: Pymux, db: sqlite3.Connection) -> None:
             for (table, _keys), binding in pymux.key_bindings_manager.custom_bindings.items()
         ),
     )
+    # A finished record has its place in the hub; one still assembling
+    # has the identifier its chunks name instead.
+    center = pymux.notification_center
+    db.executemany(
+        "INSERT INTO notifications VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            *((*record, position, None) for position, record in enumerate(center._records)),
+            *((*record, None, identifier) for (_pane_id, identifier), record in center._pending.items()),
+        ],
+    )
+    db.executemany(
+        "INSERT INTO notification_routes VALUES (?, ?, ?, ?)",
+        [
+            (ours, pane_id, identifier, position)
+            for position, (ours, (pane_id, identifier)) in enumerate(pymux.notifications._incoming.items())
+        ],
+    )
     db.executemany(
         "INSERT INTO counters VALUES (?, ?)",
         [
@@ -756,6 +813,8 @@ def _write(pymux: Pymux, db: sqlite3.Connection) -> None:
             ("session", pymux._session_counter),
             ("uses", pymux._uses),
             ("job", pymux.jobs.last_id),
+            ("notification", pymux.notification_center._next),
+            ("notification_route", pymux.notifications._next),
         ],
     )
     db.executemany(
@@ -1107,6 +1166,25 @@ def _read_bindings(pymux: Pymux, db: sqlite3.Connection) -> None:
         )
 
 
+def _read_notifications(pymux: Pymux, db: sqlite3.Connection, counters: dict[str, int]) -> None:
+    "The hub and its routes. A stepped-up snapshot has neither counter, and starts both again."
+    center = pymux.notification_center
+    center._next = counters.get("notification", 1)
+    for row in _rows(db, "SELECT * FROM notifications ORDER BY position"):
+        pane_id = PaneId(row["pane_id"]) if row["pane_id"] is not None else None
+        record = Notification(row["notification_id"], row["title"], row["body"], row["urgency"], pane_id, row["at"])
+        if row["identifier"] is None:
+            center._records.append(record)
+        else:
+            center._pending[pane_id, row["identifier"]] = record
+    routes = pymux.notifications
+    routes._next = counters.get("notification_route", 1)
+    for row in _rows(db, "SELECT * FROM notification_routes ORDER BY position"):
+        key = (PaneId(row["pane_id"]), row["identifier"])
+        routes._outgoing[key] = row["ours"]
+        routes._incoming[row["ours"]] = key
+
+
 def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> int | None:
     server = {row["name"]: row["value"] for row in _rows(db, "SELECT * FROM server")}
     pymux.created = server["created"]
@@ -1265,6 +1343,7 @@ def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> int | No
     pymux._session_counter = counters["session"]
     pymux._uses = counters["uses"]
     pymux.jobs.last_id = counters["job"]
+    _read_notifications(pymux, db, counters)
     for job in _read_jobs(db):
         pymux.jobs._jobs[job.job_id] = job
     return server["listener_fd"]

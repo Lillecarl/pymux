@@ -25,6 +25,7 @@ from pymux import snapshot
 from pymux.arrangement import LayoutTypes
 from pymux.enums import WindowSize
 from pymux.main import Pymux
+from pymux.notifications import Urgency
 
 
 @pytest.fixture
@@ -192,6 +193,14 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     pymux.hooks = {"after-new-window": ["display-message new", "display-panes"], "pane-died": ["kill-pane"]}
     pymux.key_bindings_manager.add_custom_binding("F5", "display-message", ["it's F5"], table="root")
     pymux.key_bindings_manager.add_custom_binding("x", "kill-pane", [])
+
+    center = pymux.notification_center
+    center.add("built", "all green", Urgency.LOW, pane.pane_id)
+    center.add("deploy", "", Urgency.CRITICAL, None)
+    center.add_osc99(strip.panes[0].pane_id, "i=half:d=0:p=body;still coming")
+    center._records = [record._replace(at=1000.0 + n) for n, record in enumerate(center._records)]
+    pymux.notifications.outgoing(pane.pane_id, "i=one;first")
+    pymux.notifications.outgoing(strip.panes[0].pane_id, "i=two;second")
 
     client_state.name = "desk"
     client_state.full_screen = True
@@ -382,6 +391,11 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 assert fresh.prompt_history.get_strings()[-2:] == ["rename-window a", "rename-window b"]
                 assert list(fresh.message_log)[-2:] == ["said once", "said twice"]
                 assert fresh.hooks == pymux.hooks
+                assert fresh.notification_center.notifications() == pymux.notification_center.notifications()
+                assert fresh.notification_center._pending == pymux.notification_center._pending
+                assert fresh.notification_center._next == pymux.notification_center._next
+                assert fresh.notifications._incoming == pymux.notifications._incoming
+                assert fresh.notifications._outgoing == pymux.notifications._outgoing
                 assert _bindings_of(fresh) == _bindings_of(pymux)
                 assert (await fresh.jobs.submit("true")).job_id == pymux.jobs.last_id + 1
                 reloaded = fresh.panes_by_id[shell.pane_id]
@@ -464,6 +478,9 @@ def test_a_snapshot_of_the_version_before_steps_up(pymux, tmp_path):
     db.execute("DROP TABLE server_lists")
     db.execute("DROP TABLE hooks")
     db.execute("DROP TABLE key_bindings")
+    db.execute("DROP TABLE notifications")
+    db.execute("DROP TABLE notification_routes")
+    db.execute("DELETE FROM counters WHERE name IN ('notification', 'notification_route')")
     db.execute("DELETE FROM server WHERE name IN ('clipboard', 'clipboard_type', 'bindings_recorded')")
     db.execute("PRAGMA user_version = 1")
     db.commit()
