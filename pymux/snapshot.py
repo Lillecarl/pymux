@@ -818,6 +818,25 @@ async def start(pymux: Pymux) -> None:
             await control.start(pymux.tasks)
 
 
+def _open(path: str | os.PathLike[str]) -> sqlite3.Connection:
+    "The snapshot at `path`, read only, refused if another build wrote it."
+    db = sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True)
+    version = db.execute("PRAGMA user_version").fetchone()[0]
+    if version != SNAPSHOT_VERSION:
+        db.close()
+        raise SnapshotError("snapshot version %d, and this build reads %d" % (version, SNAPSHOT_VERSION))
+    return db
+
+
+def read_server(path: str | os.PathLike[str]) -> dict[str, Any]:
+    "The `server` table alone, for what has to be known before `load`."
+    db = _open(path)
+    try:
+        return {row["name"]: row["value"] for row in _rows(db, "SELECT * FROM server")}
+    finally:
+        db.close()
+
+
 def load(pymux: Pymux, path: str | os.PathLike[str], make_pane: MakePane | None = None) -> int | None:
     """
     Replace what a fresh `pymux` holds with a snapshot's.
@@ -829,11 +848,8 @@ def load(pymux: Pymux, path: str | os.PathLike[str], make_pane: MakePane | None 
     none. Only the process the old server exec'd into holds it, so
     adopting it is the caller's: `Pymux.adopt_listener`.
     """
-    db = sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True)
+    db = _open(path)
     try:
-        version = db.execute("PRAGMA user_version").fetchone()[0]
-        if version != SNAPSHOT_VERSION:
-            raise SnapshotError("snapshot version %d, and this build reads %d" % (version, SNAPSHOT_VERSION))
         return _read(pymux, db, make_pane or adopting(pymux))
     finally:
         db.close()

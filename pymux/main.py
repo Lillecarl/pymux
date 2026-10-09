@@ -16,7 +16,7 @@ import time
 import traceback
 import weakref
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager, suppress
 from typing import TYPE_CHECKING, ClassVar, NamedTuple, override
 
@@ -1828,7 +1828,7 @@ class Pymux:
             tasks.start_soon(self._auto_refresh)
             tasks.start_soon(self._sweep_jobs)
             if self.listener is not None:
-                tasks.start_soon(self.listener.serve)
+                self.serve_listener()
             try:
                 yield
             finally:
@@ -1840,6 +1840,12 @@ class Pymux:
                 # No task touches the jobs past here, so the database
                 # closes with nobody left to read it.
                 await self.jobs.close()
+
+    def serve_listener(self) -> None:
+        "Take clients on `listener`, in the server's task group."
+        if self.tasks is None or self.listener is None:
+            raise RuntimeError("A listener is served inside `Pymux.running`, once there is one.")
+        self.tasks.start_soon(self.listener.serve)
 
     def serve_connection(self, connection) -> None:
         """
@@ -1992,17 +1998,22 @@ class Pymux:
         # (Does initial key bindings.)
         if not self._startup_done:
             self._startup_done = True
-
-            # Execute default config.
-            for cmd in STARTUP_COMMANDS.splitlines():
-                self.handle_command(cmd)
-
-            # Source the given file.
-            if self.source_file:
-                self.spawn_command(call_command_handler("source-file", self, [self.source_file]))
+            self.spawn_command(self.configure())
 
             # Make sure that there is one window created.
             await self.create_window(command=self.startup_command)
+
+    def configure(self):
+        """
+        Run the default commands, and answer with the configuration file's
+        reading to await, or None when there is no file.
+        """
+        for cmd in STARTUP_COMMANDS.splitlines():
+            self.handle_command(cmd)
+
+        if self.source_file:
+            return call_command_handler("source-file", self, [self.source_file])
+        return None
 
     def get_title(self):
         """
@@ -4145,7 +4156,14 @@ exec pymux notify -u "$urgency" -- "$@"
 
         self.connections.append(connection)
 
-    def run_server(self):
+    def run_server(self, resumed: Callable[[], Awaitable[None]] | None = None):
+        """
+        Serve on the socket until the server stops.
+
+        `resumed` runs first inside `running()`: an upgrade's new build
+        loads its snapshot there (`pymux.upgrade.resume`).
+        """
+
         # Ignore keyboard. (When people run "pymux server" and press Ctrl-C.)
         # Pymux has to be terminated by termining all the processes running in
         # its panes.
@@ -4159,6 +4177,8 @@ exec pymux notify -u "$urgency" -- "$@"
         async def serve() -> None:
             try:
                 async with self.running():
+                    if resumed is not None:
+                        await resumed()
                     await self.done.wait()
             finally:
                 # `stop()` is what set `done`, so this is usually a

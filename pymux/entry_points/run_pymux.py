@@ -88,6 +88,9 @@ class Mode(StrEnum):
     FIND = "find"
     DIAGNOSE = "diagnose"
     WEB = "web"
+    #: An upgrade's dry run and its new server. `pymux/upgrade.py`.
+    CHECK_SNAPSHOT = "check-snapshot"
+    RESUME_SERVER = "resume-server"
 
 
 def _mode_of(word: str) -> Mode | None:
@@ -343,6 +346,11 @@ def parse_arguments(
             flag_args, rest = flag_parser.parse_known_args(rest)
             a.diagnose_json = flag_args.json
 
+        if mode in (Mode.CHECK_SNAPSHOT, Mode.RESUME_SERVER):
+            # What an upgrading server runs, never a person: the words
+            # are `pymux.upgrade`'s to read.
+            a.upgrade_words, rest = rest, []
+
     if mode in MODES_WITH_A_FIRST_PANE:
         # An optional command can be given for the first pane.
         command = " ".join(shlex.quote(x) for x in rest) if rest else None
@@ -475,7 +483,7 @@ def run() -> None:
     # that terminal. `pymux/log.py` says the rest.
     #
     # `start-server` sets this up for itself below, after it has forked.
-    if mode is not Mode.START_SERVER:
+    if mode not in (Mode.START_SERVER, Mode.RESUME_SERVER):
         log.configure(a.logfile, _how_much_to_log(a.log_level))
 
     if a.show_tmux_version:
@@ -587,6 +595,24 @@ def run() -> None:
                 mux.run_server()
             except KeyboardInterrupt:
                 sys.exit(1)
+
+        case Mode.CHECK_SNAPSHOT:
+            from pymux import upgrade
+
+            (path,) = a.upgrade_words
+            upgrade.check(path)
+
+        case Mode.RESUME_SERVER:
+            from pymux import upgrade
+
+            # Where the server before the exec logged, which it passed on.
+            # Its stdout is this process's, as `start-server` has it.
+            wanted = _how_much_to_log(a.log_level)
+            if a.logfile:
+                log.configure(a.logfile, wanted)
+            else:
+                logging.basicConfig(stream=sys.stdout, level=wanted)
+            upgrade.resume(*upgrade.resume_arguments(a.upgrade_words))
 
         case Mode.ATTACH:
             if socket_name_from_env:

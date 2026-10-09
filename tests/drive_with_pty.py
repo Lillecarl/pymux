@@ -2265,6 +2265,44 @@ def check_a_restarted_server_gets_the_same_client(tmp):
         terminal.close()
 
 
+def check_an_upgraded_server_keeps_the_client_and_the_pane(tmp):
+    """
+    `upgrade-server` execs a new build over the same panes. The client
+    is told to wait, attaches again with the same id, and draws the
+    pane the new build thawed: the old program's text, which no
+    program wrote again. Lillecarl/pymux#408.
+    """
+    if ROUTE == "integrated":
+        print("an upgraded server keeps the client and the pane: not on this route")
+        return
+
+    program = tmp / "upgrade_child.sh"
+    program.write_text("printf HOLDING\nsleep 60\n")
+    terminal = Terminal(tmp, "upgrade", command="sh %s" % program)
+    try:
+        terminal.wait_for_queries()
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"HOLDING")
+        before = _client_ids(terminal.sock_path)
+
+        # Its own connection goes with the exec, so its answer is no verdict.
+        run_cli(terminal.sock_path, ["upgrade-server", shlex.join([sys.executable, "-m", "pymux"])])
+        terminal.wait_for(b"pymux is restarting.")
+
+        terminal.wait_for_queries()
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"HOLDING")
+        assert terminal.client.poll() is None, "the client left after it attached to the new build"
+        assert _client_ids(terminal.sock_path) == before, "the client came back as somebody else"
+
+        print("an upgraded server keeps the client and the pane: ok")
+    except Exception:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+
+
 def check_a_server_that_ends_unannounced_ends_the_client(tmp):
     """
     Without `-r` nothing follows, so the client leaves at once, as it
@@ -2793,6 +2831,7 @@ CHECKS = (
     check_command_palette,
     check_detach_ends_client,
     check_a_restarted_server_gets_the_same_client,
+    check_an_upgraded_server_keeps_the_client_and_the_pane,
     check_q_leaves_a_client_waiting_for_a_restart,
     check_a_server_that_ends_unannounced_ends_the_client,
     check_a_stopped_client_does_not_stop_the_server,

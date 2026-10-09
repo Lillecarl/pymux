@@ -110,6 +110,7 @@ MODULES = [
     "new_session",
     "kill_session",
     "kill_server",
+    "upgrade_server",
     "dump_stacks",
     "counters",
     "profile",
