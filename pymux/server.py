@@ -790,6 +790,14 @@ class ServerConnection:
 
         self._spawn(send())
 
+    async def say_restarting(self, wait: float) -> None:
+        """
+        Tell this client that the next server comes on the same socket,
+        and how many seconds to wait for it. Awaited, so the packet is
+        written before the server stops. Lillecarl/pymux#409.
+        """
+        await self._write_packet({Field.CMD: Packet.RESTARTING, Field.WAIT: wait})
+
     async def _refuse_the_attach(self) -> None:
         """
         Tell this client that it cannot have the user interface, and

@@ -2199,6 +2199,114 @@ def check_detach_ends_client(tmp):
         terminal.close()
 
 
+def _restarting_terminal(tmp, name):
+    "A client on a pane that says HOLDING, and a server told to restart."
+    program = tmp / ("%s_child.sh" % name)
+    program.write_text("printf HOLDING\nsleep 60\n")
+    terminal = Terminal(tmp, name, command="sh %s" % program)
+    terminal.wait_for_queries()
+    terminal.write(b"\x1b[?62;1;6c")
+    terminal.wait_for(b"HOLDING")
+
+    told = run_cli(terminal.sock_path, ["kill-server", "-r"])
+    assert told.returncode == 0, told.stderr
+    terminal.wait_for(b"pymux is restarting.")
+    return terminal
+
+
+def check_a_restarted_server_gets_the_same_client(tmp):
+    """
+    `kill-server -r` says a new server follows on the socket, and the
+    attached client waits for it rather than leaving. When the new one
+    listens, the client attaches to it with the same terminal: it asks
+    the terminal's abilities again and draws the new server's pane.
+    Lillecarl/pymux#409.
+
+    On the integrated route the client and the server are one process,
+    so nothing outlives the server and there is nothing to check.
+    """
+    if ROUTE == "integrated":
+        print("a restarted server gets the same client: not on this route")
+        return
+
+    terminal = _restarting_terminal(tmp, "restart")
+    try:
+        assert terminal.client.poll() is None, "the client left when the server said it was restarting"
+
+        again = tmp / "restart_again.sh"
+        again.write_text("printf AGAIN\nsleep 60\n")
+        started = run_cli(terminal.sock_path, ["new-session", "-d", "-s", "test", "sh %s" % again])
+        assert started.returncode == 0, started.stderr
+
+        terminal.wait_for_queries()
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"AGAIN")
+        assert terminal.client.poll() is None, "the client left after it attached to the new server"
+
+        print("a restarted server gets the same client: ok")
+    except Exception:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+
+
+def check_a_server_that_ends_unannounced_ends_the_client(tmp):
+    """
+    Without `-r` nothing follows, so the client leaves at once, as it
+    always did. Waiting here would make a crash look like a restart.
+    Lillecarl/pymux#409.
+    """
+    if ROUTE == "integrated":
+        print("an unannounced end ends the client: not on this route")
+        return
+
+    program = tmp / "unannounced_child.sh"
+    program.write_text("printf HOLDING\nsleep 60\n")
+    terminal = Terminal(tmp, "unannounced", command="sh %s" % program)
+    try:
+        terminal.wait_for_queries()
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"HOLDING")
+
+        run_cli(terminal.sock_path, ["kill-server"])
+        try:
+            terminal.client.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            raise AssertionError("the client was still running 10 seconds after the server ended")
+        assert b"pymux is restarting." not in terminal.seen
+
+        print("an unannounced end ends the client: ok")
+    except Exception:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+
+
+def check_q_leaves_a_client_waiting_for_a_restart(tmp):
+    "The wait is the person's to end: q leaves at once. Lillecarl/pymux#409."
+    if ROUTE == "integrated":
+        print("q leaves a waiting client: not on this route")
+        return
+
+    terminal = _restarting_terminal(tmp, "restart-q")
+    try:
+        terminal.write(b"q")
+        try:
+            code = terminal.client.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            raise AssertionError("the client still waited 10 seconds after q")
+        assert code != 0, "a client that never got its server back left with 0"
+
+        print("q leaves a waiting client: ok")
+    except Exception:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+
+
 def check_a_stopped_client_does_not_stop_the_server(tmp):
     """
     A client that stopped reading must not stop the server.
@@ -2670,6 +2778,9 @@ CHECKS = (
     check_pane_that_changes_nothing,
     check_command_palette,
     check_detach_ends_client,
+    check_a_restarted_server_gets_the_same_client,
+    check_q_leaves_a_client_waiting_for_a_restart,
+    check_a_server_that_ends_unannounced_ends_the_client,
     check_a_stopped_client_does_not_stop_the_server,
     check_a_client_whose_stdin_ends_leaves,
     check_libpymux,

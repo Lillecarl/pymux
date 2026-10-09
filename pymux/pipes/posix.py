@@ -65,7 +65,10 @@ class PosixSocketListener:
     async def serve(self) -> None:
         "Take every client that connects, until this task is cancelled."
         while True:
-            await anyio.wait_readable(self.socket)
+            try:
+                await anyio.wait_readable(self.socket)
+            except anyio.ClosedResourceError:
+                return  # `close` stopped the listening.
 
             connection, _client_address = self.socket.accept()
             # The socket goes to `PosixSocketConnection` non blocking,
@@ -78,6 +81,16 @@ class PosixSocketListener:
             self._accept_callback(PosixSocketConnection(connection))
 
     def close(self) -> None:
+        """
+        Stop taking clients. A client that connects after this is
+        refused at once: a restart closes the listening first, so a
+        waiting client never reaches the server that is going.
+        Lillecarl/pymux#409.
+        """
+        with contextlib.suppress(OSError, RuntimeError):
+            # Wakes `serve` with `ClosedResourceError`. Outside the loop
+            # there is no waiter to wake.
+            anyio.notify_closing(self.socket)
         with contextlib.suppress(OSError):
             self.socket.close()
 

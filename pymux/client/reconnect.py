@@ -8,10 +8,12 @@ a pause here and not the whole client. This holds the three parts of
 that pause -- how long to wait, which failures are worth waiting for,
 and what the person looks at meanwhile. Lillecarl/pymux#256.
 
-**The unix socket does not use this.** There the server is on this
+**The unix socket does not retry.** There the server is on this
 machine and its socket is gone with it, so a link that ends is a server
 that ended. A client that waits for that one to come back waits for
-ever.
+ever. The one exception is a server that said it is restarting: the
+client then waits a bounded time for the next one, and `draw` shows
+it. Lillecarl/pymux#409.
 """
 
 from __future__ import annotations

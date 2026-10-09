@@ -121,6 +121,12 @@ class TerminalClient(Client):
         #: code to tell them apart. Lillecarl/pymux#332.
         self.exit_code = 0
 
+        #: How many seconds to wait for the next server when this one
+        #: goes, or `None`. Only a `restarting` packet sets it: a server
+        #: that ends without one is gone, and the client leaves.
+        #: Lillecarl/pymux#409.
+        self.restart_wait: float | None = None
+
     @property
     def _stdin_reader(self) -> PosixStdinReader:
         """
@@ -278,6 +284,9 @@ class TerminalClient(Client):
             # here and sent there. Lillecarl/pymux#347.
             if packet.get(Field.HANG_UP):
                 self.hang_up_asked = True
+
+        elif packet[Field.CMD] == Packet.RESTARTING:
+            self.restart_wait = float(packet[Field.WAIT])
 
         elif packet[Field.CMD] == Packet.PING:
             # The server is asking whether anybody is still here. An

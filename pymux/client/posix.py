@@ -6,16 +6,23 @@ import os
 import signal
 import socket
 import sys
+import time
 from select import select
 from typing import override
 
 from libpymux.protocol import Field, Packet
 from libpymux.sockets import servers_newest_first
 from prompt_toolkit.input.vt100 import raw_mode
+from prompt_toolkit.output.vt100 import Vt100_Output
 
 from pymux.agentic import caller_cwd, caller_environment
 
+from .reconnect import draw
 from .terminal import TerminalClient
+
+#: How often a client waiting for a restarted server tries the socket,
+#: in seconds.
+RETRY_EVERY = 0.1
 
 __all__ = [
     "PosixClient",
@@ -118,7 +125,6 @@ class PosixClient(TerminalClient):
             data_buffer = b""
 
             stdin_fd = sys.stdin.fileno()
-            socket_fd = self.socket.fileno()
 
             try:
 
@@ -127,6 +133,7 @@ class PosixClient(TerminalClient):
 
                 signal.signal(signal.SIGWINCH, winch_handler)
                 while True:
+                    socket_fd = self.socket.fileno()
                     r, _, _ = select([stdin_fd, socket_fd], [], [])
 
                     if socket_fd in r:
@@ -139,10 +146,15 @@ class PosixClient(TerminalClient):
                             data = b""
 
                         if data == b"":
-                            # End of file. The connection is gone, and
-                            # the way out through the `finally` puts
-                            # the terminal back -- once, whatever ended
-                            # the loop. Lillecarl/pymux#404.
+                            # End of file. A server that said it is
+                            # restarting is waited for; any other is
+                            # gone, and the way out through the
+                            # `finally` puts the terminal back -- once,
+                            # whatever ended the loop. Lillecarl/pymux#404.
+                            if self.restart_wait is not None and self._wait_for_the_next_server(stdin_fd):
+                                data_buffer = b""
+                                self._start_gui(detach_other_clients, color_depth)
+                                continue
                             return
                         data_buffer += data
 
@@ -179,6 +191,61 @@ class PosixClient(TerminalClient):
                 # Lillecarl/pymux#404.
                 with contextlib.suppress(Exception):
                     self._reset_terminal()
+
+    def _wait_for_the_next_server(self, stdin_fd) -> bool:
+        """
+        Connect to the server that follows a restart, on the same socket.
+
+        Waits `restart_wait` seconds at most, and says so on the screen
+        with a way out: q leaves. Returns whether a server answered.
+        The modes and keyboard flags the old server pushed come off
+        first; the new one pushes its own. Lillecarl/pymux#409.
+        """
+        wait = self.restart_wait
+        if wait is None:
+            return False
+        self.restart_wait = None
+        # The old socket stays open until a new one replaces it: a
+        # resize sends on it meanwhile, and a send to a closed peer is
+        # a broken pipe `_send_packet` ignores, where a closed socket
+        # raises.
+        self._restore_modes()
+        self._pop_kitty_flags()
+
+        output = Vt100_Output.from_pty(sys.stdout)
+        size = output.get_size()
+        draw(
+            output,
+            size.rows,
+            size.columns,
+            [
+                "pymux is restarting.",
+                "Waiting up to %d seconds for it on %s." % (wait, self.socket_name),
+                "",
+                "Press q to leave.",
+            ],
+        )
+
+        deadline = time.monotonic() + wait
+        while time.monotonic() < deadline:
+            attempt = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            try:
+                attempt.connect(self.socket_name)
+            except OSError:
+                attempt.close()
+            else:
+                attempt.setblocking(True)
+                self.socket.close()
+                self.socket = attempt
+                return True
+
+            if select([stdin_fd], [], [], RETRY_EVERY)[0]:
+                pressed = os.read(stdin_fd, 1024)
+                if not pressed or b"q" in pressed:
+                    break
+
+        self.exit_code = 1
+        return False
 
     @override
     def _send_packet(self, data):

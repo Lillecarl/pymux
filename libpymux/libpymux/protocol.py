@@ -70,6 +70,10 @@ class Packet(StrEnum):
     SUSPEND = "suspend"
     MODE = "mode"
     KITTY_KEYBOARD = "kitty-keyboard"
+    # "This server is going, and another will listen on the same
+    # socket": wait `wait` seconds for it instead of leaving.
+    # Lillecarl/pymux#409.
+    RESTARTING = "restarting"
     # One frame of a pane a client is streaming, under `data`. A relay
     # passes `data` on without reading it: the frames are the protocol
     # and this envelope is ours to change. Lillecarl/pymux#461.
@@ -123,6 +127,9 @@ class Field(StrEnum):
     REMOVE = "remove"
     MESSAGE = "message"
     FORWARD = "forward"
+    #: How many seconds a client waits for the next server after a
+    #: `restarting` packet.
+    WAIT = "wait"
 
 
 class Mode(StrEnum):
