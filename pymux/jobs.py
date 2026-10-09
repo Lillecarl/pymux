@@ -487,6 +487,9 @@ class JobTable:
                 start_new_session=True,
             )
         except OSError as e:
+            # No pump will ever close the primary.
+            with suppress(OSError):
+                os.close(primary)
             job.error = "%s: %s" % (job.command, e)
             await self._finish(job, None)
             return
