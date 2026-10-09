@@ -38,6 +38,7 @@ import shutil
 import socket
 import subprocess
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import anyio
@@ -60,6 +61,9 @@ pytestmark = pytest.mark.skipif(not SSHD, reason="PYMUX_SSHD names no sshd. chec
 
 #: How long to wait for sshd to answer on its port, in seconds.
 SSHD_STARTS_IN = 10.0
+
+#: How long one test may take, in seconds. Each takes well under one.
+A_TEST_TAKES = 30.0
 
 
 def _free_port() -> int:
@@ -235,6 +239,19 @@ async def _echoing(tasks) -> int:
     return listener.extra(SocketAttribute.local_address)[1]
 
 
+@asynccontextmanager
+async def _bounded():
+    """
+    A test's task group, which fails rather than waits past
+    `A_TEST_TAKES`. A hang under load showed only an idle event loop;
+    a timeout shows the await it was in, and the fixture's teardown
+    then prints what sshd said. Lillecarl/pymux#549.
+    """
+    with anyio.fail_after(A_TEST_TAKES):
+        async with anyio.create_task_group() as tasks:
+            yield tasks
+
+
 async def _spoken_through(port: int, said: bytes = b"hello") -> bytes:
     async with await anyio.connect_tcp("127.0.0.1", port) as stream:
         await stream.send(said)
@@ -246,7 +263,7 @@ async def test_openssh_takes_a_local_forward(sshd):
     `-L` through the real thing: a `direct-tcpip` channel that openssh
     opens, rather than the asyncssh server standing in for it.
     """
-    async with anyio.create_task_group() as tasks:
+    async with _bounded() as tasks:
         echo_port = await _echoing(tasks)
 
         async with _connect_to(sshd) as connection:
@@ -270,7 +287,7 @@ async def test_openssh_takes_a_remote_forward(sshd):
     `-R` through the real thing: a `tcpip-forward` global request that
     openssh answers, and the port it chose coming back in the reply.
     """
-    async with anyio.create_task_group() as tasks:
+    async with _bounded() as tasks:
         echo_port = await _echoing(tasks)
 
         async with _connect_to(sshd) as connection:
@@ -314,7 +331,7 @@ async def test_openssh_takes_the_unix_channel_the_client_lives_on(sshd):
     listener = await anyio.create_unix_listener(socket_path)
 
     try:
-        async with anyio.create_task_group() as tasks:
+        async with _bounded() as tasks:
             tasks.start_soon(listener.serve, handle)
 
             async with _connect_to(sshd) as connection:
@@ -335,7 +352,7 @@ async def test_a_forward_comes_back_on_a_new_openssh_connection(sshd):
     wanted set opens again on the next connection, and the port it had
     is free for it to take.
     """
-    async with anyio.create_task_group() as tasks:
+    async with _bounded() as tasks:
         echo_port = await _echoing(tasks)
         forwards = Forwards()
         wanted = Forward(Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port)
@@ -378,7 +395,7 @@ async def test_openssh_narrows_a_remote_forward_rather_than_refusing_it(sshd):
     `the_far_side_may_narrow` holds the rule.
     Lillecarl/pymux#440, Lillecarl/pymux#444.
     """
-    async with anyio.create_task_group() as tasks:
+    async with _bounded() as tasks:
         echo_port = await _echoing(tasks)
 
         async with _connect_to(sshd) as connection:

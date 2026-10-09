@@ -149,6 +149,13 @@ let
   # red by luck means running that one check many times.
   ptyChecks = builtins.getEnv "PYMUX_PTY_CHECKS";
 
+  # A pytest `-k` expression for the openssh suite, for instance
+  # `PYMUX_OPENSSH_TESTS=narrows nix build --file . checks.pymux-openssh`.
+  # Several builds at once with expressions that pick the same test,
+  # `narrows or a1` and `narrows or a2`, are how a race that needs load
+  # is run under it. Lillecarl/pymux#549.
+  openSshTests = builtins.getEnv "PYMUX_OPENSSH_TESTS";
+
   # Which conformance tests run. It is a regular expression that the suite
   # matches against "Class.method", for instance
   # `PYMUX_ESCTEST_INCLUDE=BSTests nix build --file . checks.pymux-esctest`.
@@ -888,10 +895,12 @@ in
           # front of it.
           PYMUX_NSS_WRAPPER = "${nss_wrapper}/lib/libnss_wrapper.so";
           PYMUX_LOGIN_SHELL = runtimeShell;
+          PYMUX_OPENSSH_TESTS = openSshTests;
         };
       }
       ''
-        python -m pytest tests/test_openssh_interop.py -q -p no:cacheprovider
+        python -m pytest tests/test_openssh_interop.py -q -p no:cacheprovider \
+          ''${PYMUX_OPENSSH_TESTS:+-k "$PYMUX_OPENSSH_TESTS"}
       '';
 
   # `<pymux-pane>`: that it runs, and that the declarations it publishes
