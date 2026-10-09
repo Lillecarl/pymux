@@ -185,6 +185,21 @@ async def test_list_sessions_names_every_session():
         pymux.command_output = None
 
 
+async def test_list_windows_t_names_a_session():
+    "tmux's target-session: a bare name is not a window of this session. Lillecarl/pymux#550."
+    async with in_this_process(_server()) as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", SIZE)
+        await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
+        (work,) = pymux.get_session("work").arrangement.windows
+
+        for target in ("work", "work:", "$1"):
+            pymux.command_output = []
+            await _command(pymux, state, "list-windows -t %s -F '#{window_id}'" % target)
+            assert pymux.command_output == ["@%d" % work.window_id], target
+        pymux.command_output = None
+
+
 async def test_has_session_answers_for_every_session():
     async with in_this_process(_server()) as session:
         pymux = session.pymux

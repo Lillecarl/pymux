@@ -23,16 +23,23 @@ def _sessions(pymux: Pymux, args: argparse.Namespace) -> list[Session]:
     """
     The sessions this listing covers.
 
-    `-a` is every session of the server. A `-t` with a session part
-    names one. Without either it is the session the client is on.
+    `-a` is every session of the server. A `-t` names one, as tmux's
+    target-session does: a bare name is a session and not a window of
+    this one, and a `session:window` target keeps its session part.
+    Without either it is the session the client is on.
+    Lillecarl/pymux#550.
     """
     if args.a:
         return list(pymux.sessions)
 
-    if args.target_window:
-        session, _ = session_part(pymux, args.target_window)
+    target = args.target_session
+    if target:
+        if ":" in target:
+            session, _ = session_part(pymux, target)
+        else:
+            session = pymux.get_session(target)
         if session is None:
-            raise CommandException("can't find session: %s" % (args.target_window,))
+            raise CommandException("can't find session: %s" % (target,))
         return [session]
 
     return [pymux.current_session]
@@ -88,6 +95,6 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, list_windows)
     parser.add_argument("-a", dest="a", action="store_true", help="Every window of every session.")
     parser.add_argument(
-        "-t", dest="target_window", metavar="<target-window>", help="The session whose windows to list."
+        "-t", dest="target_session", metavar="<target-session>", help="The session whose windows to list."
     )
     add_format_arguments(parser, "Print this format for every window.")
