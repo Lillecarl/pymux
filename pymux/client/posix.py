@@ -18,7 +18,7 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 from pymux.agentic import caller_cwd, caller_environment
 
 from .reconnect import draw
-from .terminal import TerminalClient
+from .terminal import DELETE_EVERY_IMAGE, TerminalClient
 
 #: How often a client waiting for a restarted server tries the socket,
 #: in seconds.
@@ -211,6 +211,11 @@ class PosixClient(TerminalClient):
         # raises.
         self._restore_modes()
         self._pop_kitty_flags()
+        # The old server's images, which the next server knows nothing
+        # of and would draw its own over. Lillecarl/pymux#399.
+        if self.placed_images:
+            os.write(sys.stdout.fileno(), DELETE_EVERY_IMAGE)
+            self.placed_images = False
 
         output = Vt100_Output.from_pty(sys.stdout)
         size = output.get_size()

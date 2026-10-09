@@ -94,12 +94,13 @@ class ServerConnection:
     #: What a hot upgrade does with each attribute; `pyte.keep` says.
     #: The socket ends with the old server and the client reconnects
     #: (Lillecarl/pymux#409), so the attach handshake rebuilds most of
-    #: this. Saved: the client's own record, when it came, and the
-    #: kitty image ids already placed on its terminal.
+    #: this. Saved: the client's own record and when it came.
     KEEP: ClassVar[dict[str, Keep]] = {
         "client_state": Keep.SAVED,
         "created": Keep.SAVED,
-        "graphics": Keep.SAVED,
+        # A restarting client takes the old server's images off its
+        # terminal, and the next frame places them again.
+        "graphics": Keep.DROPPED,
         "pymux": Keep.REBUILT,
         "size": Keep.REBUILT,
         "hostname": Keep.REBUILT,

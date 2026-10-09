@@ -58,6 +58,12 @@ __all__ = [
 #: not answers 0, or does not answer at all.
 SYNCHRONIZED_OUTPUT_QUERY = b"\x1b[?2026$p"
 
+#: What starts a kitty graphics command in a server's output.
+KITTY_GRAPHICS = "\x1b_G"
+
+#: Take every image placement off the screen, quietly.
+DELETE_EVERY_IMAGE = b"\x1b_Ga=d,d=A,q=2\x1b\\"
+
 DETECTION_QUERIES = (
     b"\x1b[>31u\x1b[?u\x1b[<u"
     + SYNCHRONIZED_OUTPUT_QUERY
@@ -127,6 +133,11 @@ class TerminalClient(Client):
         #: that ends without one is gone, and the client leaves.
         #: Lillecarl/pymux#409.
         self.restart_wait: float | None = None
+
+        #: Whether a server put a kitty image on this terminal. The
+        #: next server knows none of them, so a restart takes them off,
+        #: and a terminal that never had one is never sent the APC.
+        self.placed_images = False
 
         #: Who this client is, for as long as its process runs. It goes
         #: out with every attach, so a server that comes back after an
@@ -278,8 +289,11 @@ class TerminalClient(Client):
         packet = json.loads(data_buffer.decode("utf-8"))
 
         if packet[Field.CMD] == Packet.OUT:
+            data = packet[Field.DATA]
             # Call os.write manually. In Python2.6, sys.stdout.write doesn't use UTF-8.
-            os.write(sys.stdout.fileno(), packet[Field.DATA].encode("utf-8"))
+            os.write(sys.stdout.fileno(), data.encode("utf-8"))
+            if KITTY_GRAPHICS in data:
+                self.placed_images = True
 
         elif packet[Field.CMD] == Packet.EXIT:
             # The server is about to close this connection, and says
