@@ -284,6 +284,8 @@ def add_commands_to(subparsers: Any) -> None:
     for name in MODULES:
         import_module("." + name, __name__).register(subparsers)
 
+    import_module("pymux.plugins").register(subparsers)
+
 
 _parser_tree = None
 
