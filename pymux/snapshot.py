@@ -35,7 +35,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
 from weakref import ref
 
+from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.data_structures import Size
+from prompt_toolkit.selection import SelectionType
 from ptyhost.backends.posix import PosixBackend
 from ptyhost.backends.posix_utils import PtyReader
 from ptyhost.process import Process
@@ -62,7 +64,7 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "adopting", "checking", "load", "save
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 3
+SNAPSHOT_VERSION = 4
 
 #: A client's own settings, each a column of `clients` and an attribute
 #: of `ClientState`, with the type sqlite gives back as.
@@ -89,6 +91,17 @@ STEPS: dict[int, str] = {
     ),
     # What a client was in the middle of; NULL opens nothing.
     2: "ALTER TABLE clients ADD COLUMN modes TEXT;",
+    # The paste buffers, the prompt history and the message log. A
+    # snapshot without them leaves them empty, as a new server has them.
+    3: """
+CREATE TABLE named_buffers(name TEXT PRIMARY KEY, text TEXT NOT NULL);
+CREATE TABLE server_lists(
+  list TEXT NOT NULL CHECK (list IN ('prompt_history', 'message_log')),
+  position INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  PRIMARY KEY (list, position)
+);
+""",
 }
 
 #: The fields `ClientState.modes` holds, one JSON value in `clients`.
@@ -247,6 +260,16 @@ CREATE TABLE client_windows(
   previous_window_id INTEGER REFERENCES windows(window_id),
   PRIMARY KEY (client_id, session_id)
 );
+CREATE TABLE named_buffers(
+  name TEXT PRIMARY KEY,
+  text TEXT NOT NULL
+);
+CREATE TABLE server_lists(
+  list TEXT NOT NULL CHECK (list IN ('prompt_history', 'message_log')),
+  position INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  PRIMARY KEY (list, position)
+);
 CREATE TABLE jobs(
   job_id INTEGER PRIMARY KEY,
   command TEXT NOT NULL,
@@ -321,6 +344,8 @@ TABLES = (
     "column_widths",
     "clients",
     "client_windows",
+    "named_buffers",
+    "server_lists",
     "jobs",
     "job_tags",
     "job_output",
@@ -404,6 +429,7 @@ WRITES: dict[str, frozenset[str]] = {
     "pymux.main.Pymux": frozenset(
         {"sessions", "_session_counter", "_uses", "global_environment", "returning_clients", "jobs"}
         | {"created", "socket_name", "listener", "original_cwd", "source_file", "_startup_done"}
+        | {"clipboard", "named_buffers", "prompt_history", "message_log"}
         | set(_server_options().values())
     ),
 }
@@ -417,15 +443,10 @@ LATER: dict[str, frozenset[str]] = {
     "pymux.main.Pymux": frozenset(
         {
             "startup_command",
-            "startup_errors",
             "_runs_standalone",
             "_serves_one_terminal",
-            "clipboard",
-            "named_buffers",
-            "prompt_history",
             "hooks",
             "wait_channels",
-            "message_log",
             "notifications",
             "notification_center",
             "key_bindings_manager",
@@ -666,6 +687,7 @@ def _write(pymux: Pymux, db: sqlite3.Connection) -> None:
     listener = pymux.listener
     if listener is not None and not isinstance(listener, PosixSocketListener):
         raise SnapshotError("the server listens on a named pipe, which no `execve` carries")
+    clipboard = pymux.clipboard.get_data()
     db.executemany(
         "INSERT INTO server VALUES (?, ?)",
         [
@@ -676,6 +698,16 @@ def _write(pymux: Pymux, db: sqlite3.Connection) -> None:
             ("original_cwd", pymux.original_cwd),
             ("source_file", pymux.source_file),
             ("startup_done", pymux._startup_done),
+            ("clipboard", clipboard.text),
+            ("clipboard_type", clipboard.type.value),
+        ],
+    )
+    db.executemany("INSERT INTO named_buffers VALUES (?, ?)", sorted(pymux.named_buffers.items()))
+    db.executemany(
+        "INSERT INTO server_lists VALUES (?, ?, ?)",
+        [
+            *(("prompt_history", n, text) for n, text in enumerate(pymux.prompt_history.get_strings())),
+            *(("message_log", n, text) for n, text in enumerate(pymux.message_log)),
         ],
     )
     db.executemany(
@@ -1026,6 +1058,15 @@ def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> int | No
     pymux.original_cwd = server["original_cwd"]
     pymux.source_file = server["source_file"]
     pymux._startup_done = bool(server["startup_done"])
+    # A version 3 snapshot, stepped up, has no clipboard rows.
+    if "clipboard" in server:
+        pymux.clipboard.set_data(ClipboardData(server["clipboard"], SelectionType(server["clipboard_type"])))
+    pymux.named_buffers = {row["name"]: row["text"] for row in _rows(db, "SELECT * FROM named_buffers")}
+    for row in _rows(db, "SELECT text FROM server_lists WHERE list = 'prompt_history' ORDER BY position"):
+        pymux.prompt_history.append_string(row["text"])
+    pymux.message_log.extend(
+        row["text"] for row in _rows(db, "SELECT text FROM server_lists WHERE list = 'message_log' ORDER BY position")
+    )
 
     counters = {row["name"]: row["value"] for row in _rows(db, "SELECT * FROM counters")}
 

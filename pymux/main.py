@@ -1090,7 +1090,9 @@ class Pymux:
         "source_file": Keep.SAVED,
         "startup_command": Keep.SAVED,
         "_startup_done": Keep.SAVED,
-        "startup_errors": Keep.SAVED,
+        # `resume-server` reads the configuration again before the
+        # snapshot, and what it finds wrong now is what counts.
+        "startup_errors": Keep.REBUILT,
         "_runs_standalone": Keep.SAVED,
         "_serves_one_terminal": Keep.SAVED,
         "test_mode": Keep.SAVED,

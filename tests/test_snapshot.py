@@ -14,7 +14,9 @@ import sys
 import anyio
 import pytest
 from prompt_toolkit.application.current import set_app
+from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.data_structures import Size
+from prompt_toolkit.selection import SelectionType
 from pyte.keep import Keep
 from test_a_session_on_a_pyte_screen import attached, settled, shows
 from test_every_attribute_has_a_fate import declared, live_objects
@@ -182,6 +184,12 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     (elsewhere,) = second.arrangement.windows
     second.arrangement._active_window_for_cli[client_state.app] = elsewhere
     first.arrangement._prev_active_window_for_cli[client_state.app] = strip
+    pymux.named_buffers = {"one": "first text", "two": "second\ntext"}
+    pymux.clipboard.set_data(ClipboardData("copied", SelectionType.LINES))
+    pymux.prompt_history.append_string("rename-window a")
+    pymux.prompt_history.append_string("rename-window b")
+    pymux.message_log.extend(["said once", "said twice"])
+
     client_state.name = "desk"
     client_state.full_screen = True
     client_state.theme = "grey"
@@ -358,6 +366,11 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
             async with fresh.running():
                 await snapshot.start(fresh)
                 assert _jobs_of(fresh) == jobs
+                assert fresh.named_buffers == pymux.named_buffers
+                clipboard = fresh.clipboard.get_data()
+                assert (clipboard.text, clipboard.type) == ("copied", SelectionType.LINES)
+                assert fresh.prompt_history.get_strings()[-2:] == ["rename-window a", "rename-window b"]
+                assert list(fresh.message_log)[-2:] == ["said once", "said twice"]
                 assert (await fresh.jobs.submit("true")).job_id == pymux.jobs.last_id + 1
                 reloaded = fresh.panes_by_id[shell.pane_id]
                 assert _text(reloaded) == before
@@ -435,6 +448,9 @@ def test_a_snapshot_of_the_version_before_steps_up(pymux, tmp_path):
     db = sqlite3.connect(path)
     for name in (*snapshot.CLIENT_SETTINGS, "modes"):
         db.execute("ALTER TABLE clients DROP COLUMN %s" % name)
+    db.execute("DROP TABLE named_buffers")
+    db.execute("DROP TABLE server_lists")
+    db.execute("DELETE FROM server WHERE name IN ('clipboard', 'clipboard_type')")
     db.execute("PRAGMA user_version = 1")
     db.commit()
     db.close()
@@ -443,4 +459,5 @@ def test_a_snapshot_of_the_version_before_steps_up(pymux, tmp_path):
     snapshot.load(fresh, path)
     assert fresh.returning_clients["gone"]["settings"] == {}
     assert fresh.returning_clients["gone"]["modes"] is None
+    assert fresh.named_buffers == {}
     assert _rows(path, "PRAGMA user_version") == [(1,)]
