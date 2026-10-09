@@ -51,6 +51,7 @@ from pyte.streams import Stream
 from pyte.titles import Titles
 
 from .arrangement import HSplit, LayoutTypes, Pane, VSplit, Window, _Split, node_key
+from .commands.wait_for import WaitChannel
 from .ids import PaneId, SessionId, WindowId, WindowIndex
 from .jobs import Job, JobId
 from .notifications import Notification
@@ -65,7 +66,7 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "adopting", "checking", "load", "save
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 6
+SNAPSHOT_VERSION = 7
 
 #: A client's own settings, each a column of `clients` and an attribute
 #: of `ClientState`, with the type sqlite gives back as.
@@ -136,6 +137,8 @@ CREATE TABLE notification_routes(
   position INTEGER NOT NULL UNIQUE
 );
 """,
+    # A signal nobody took and a lock somebody holds.
+    6: "CREATE TABLE wait_channels(name TEXT PRIMARY KEY, woken INTEGER NOT NULL, locked INTEGER NOT NULL);",
 }
 
 #: The fields `ClientState.modes` holds, one JSON value in `clients`.
@@ -334,6 +337,11 @@ CREATE TABLE notification_routes(
   identifier TEXT NOT NULL,
   position INTEGER NOT NULL UNIQUE
 );
+CREATE TABLE wait_channels(
+  name TEXT PRIMARY KEY,
+  woken INTEGER NOT NULL,
+  locked INTEGER NOT NULL
+);
 CREATE TABLE jobs(
   job_id INTEGER PRIMARY KEY,
   command TEXT NOT NULL,
@@ -414,6 +422,7 @@ TABLES = (
     "key_bindings",
     "notifications",
     "notification_routes",
+    "wait_channels",
     "jobs",
     "job_tags",
     "job_output",
@@ -498,7 +507,8 @@ WRITES: dict[str, frozenset[str]] = {
         {"sessions", "_session_counter", "_uses", "global_environment", "returning_clients", "jobs"}
         | {"created", "socket_name", "listener", "original_cwd", "source_file", "_startup_done"}
         | {"clipboard", "named_buffers", "prompt_history", "message_log", "hooks", "key_bindings_manager"}
-        | {"notifications", "notification_center"}
+        | {"notifications", "notification_center", "wait_channels"}
+        | {"startup_command", "_runs_standalone", "_serves_one_terminal"}
         | set(_server_options().values())
     ),
 }
@@ -508,15 +518,6 @@ WRITES: dict[str, frozenset[str]] = {
 LATER: dict[str, frozenset[str]] = {
     # Copy mode. A snapshot is refused while a pane is in it.
     "ptterm.terminal.Terminal": frozenset({"is_copying", "copy_buffer", "copy_reverse_video"}),
-    # The server's own records, and what the next process is started with.
-    "pymux.main.Pymux": frozenset(
-        {
-            "startup_command",
-            "_runs_standalone",
-            "_serves_one_terminal",
-            "wait_channels",
-        }
-    ),
 }
 
 #: Classes with saved fields that no table holds any of yet.
@@ -752,6 +753,11 @@ def _write(pymux: Pymux, db: sqlite3.Connection) -> None:
     listener = pymux.listener
     if listener is not None and not isinstance(listener, PosixSocketListener):
         raise SnapshotError("the server listens on a named pipe, which no `execve` carries")
+    for name, channel in pymux.wait_channels.items():
+        # A waiter is a command connection held open in this process,
+        # and the exec closes it: the script that waits would fail.
+        if channel.waiters or channel.lockers:
+            raise SnapshotError("a command waits on channel %s; signal it first" % name)
     clipboard = pymux.clipboard.get_data()
     db.executemany(
         "INSERT INTO server VALUES (?, ?)",
@@ -766,6 +772,11 @@ def _write(pymux: Pymux, db: sqlite3.Connection) -> None:
             ("clipboard", clipboard.text),
             ("clipboard_type", clipboard.type.value),
             ("bindings_recorded", True),
+            ("startup_command", pymux.startup_command),
+            # `upgrade-server` refuses a server with either, so both say
+            # no; they are here so a load sets what a write saw.
+            ("runs_standalone", pymux._runs_standalone),
+            ("serves_one_terminal", pymux._serves_one_terminal),
         ],
     )
     db.executemany("INSERT INTO named_buffers VALUES (?, ?)", sorted(pymux.named_buffers.items()))
@@ -796,6 +807,10 @@ def _write(pymux: Pymux, db: sqlite3.Connection) -> None:
             *((*record, position, None) for position, record in enumerate(center._records)),
             *((*record, None, identifier) for (_pane_id, identifier), record in center._pending.items()),
         ],
+    )
+    db.executemany(
+        "INSERT INTO wait_channels VALUES (?, ?, ?)",
+        [(name, channel.woken, channel.locked) for name, channel in sorted(pymux.wait_channels.items())],
     )
     db.executemany(
         "INSERT INTO notification_routes VALUES (?, ?, ?, ?)",
@@ -1203,6 +1218,15 @@ def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> int | No
     )
     if "bindings_recorded" in server:
         _read_bindings(pymux, db)
+    pymux.startup_command = server.get("startup_command")
+    pymux._runs_standalone = bool(server.get("runs_standalone"))
+    pymux._serves_one_terminal = bool(server.get("serves_one_terminal"))
+    pymux.wait_channels = {}
+    for row in _rows(db, "SELECT * FROM wait_channels"):
+        channel = WaitChannel()
+        channel.woken = bool(row["woken"])
+        channel.locked = bool(row["locked"])
+        pymux.wait_channels[row["name"]] = channel
 
     counters = {row["name"]: row["value"] for row in _rows(db, "SELECT * FROM counters")}
 

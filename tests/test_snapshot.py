@@ -23,6 +23,7 @@ from test_every_attribute_has_a_fate import declared, live_objects
 
 from pymux import snapshot
 from pymux.arrangement import LayoutTypes
+from pymux.commands.wait_for import WaitChannel
 from pymux.enums import WindowSize
 from pymux.main import Pymux
 from pymux.notifications import Urgency
@@ -193,6 +194,12 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     pymux.hooks = {"after-new-window": ["display-message new", "display-panes"], "pane-died": ["kill-pane"]}
     pymux.key_bindings_manager.add_custom_binding("F5", "display-message", ["it's F5"], table="root")
     pymux.key_bindings_manager.add_custom_binding("x", "kill-pane", [])
+
+    signalled, held = WaitChannel(), WaitChannel()
+    signalled.woken = True
+    held.locked = True
+    pymux.wait_channels = {"done": signalled, "turn": held}
+    pymux.startup_command = "htop"
 
     center = pymux.notification_center
     center.add("built", "all green", Urgency.LOW, pane.pane_id)
@@ -396,6 +403,11 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 assert fresh.notification_center._next == pymux.notification_center._next
                 assert fresh.notifications._incoming == pymux.notifications._incoming
                 assert fresh.notifications._outgoing == pymux.notifications._outgoing
+                assert {name: (c.woken, c.locked) for name, c in fresh.wait_channels.items()} == {
+                    "done": (True, False),
+                    "turn": (False, True),
+                }
+                assert fresh.startup_command == "htop"
                 assert _bindings_of(fresh) == _bindings_of(pymux)
                 assert (await fresh.jobs.submit("true")).job_id == pymux.jobs.last_id + 1
                 reloaded = fresh.panes_by_id[shell.pane_id]
@@ -480,6 +492,7 @@ def test_a_snapshot_of_the_version_before_steps_up(pymux, tmp_path):
     db.execute("DROP TABLE key_bindings")
     db.execute("DROP TABLE notifications")
     db.execute("DROP TABLE notification_routes")
+    db.execute("DROP TABLE wait_channels")
     db.execute("DELETE FROM counters WHERE name IN ('notification', 'notification_route')")
     db.execute("DELETE FROM server WHERE name IN ('clipboard', 'clipboard_type', 'bindings_recorded')")
     db.execute("PRAGMA user_version = 1")
@@ -492,6 +505,15 @@ def test_a_snapshot_of_the_version_before_steps_up(pymux, tmp_path):
     assert fresh.returning_clients["gone"]["modes"] is None
     assert fresh.named_buffers == {}
     assert _rows(path, "PRAGMA user_version") == [(1,)]
+
+
+async def test_a_snapshot_is_refused_while_a_command_waits(pymux, tmp_path):
+    "The exec closes the waiting connection, and the script behind it would fail."
+    channel = WaitChannel()
+    channel.waiters.append(anyio.Event())
+    pymux.wait_channels["done"] = channel
+    with pytest.raises(snapshot.SnapshotError, match="channel done"):
+        snapshot.save(pymux, tmp_path / "waiting.sqlite")
 
 
 def test_a_snapshot_with_no_bindings_recorded_keeps_the_configured_ones(pymux, tmp_path):
