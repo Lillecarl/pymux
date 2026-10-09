@@ -80,7 +80,7 @@ def lay_out(item, rect: Rect, gaps: Gaps, into: list, lines: list | None = None)
     sideways = isinstance(item, arrangement.VSplit)
     gap = gaps.between_columns if sideways else gaps.between_panes
     room = (rect.width if sideways else rect.height) - gap * (len(item) - 1)
-    parts = shares(room, [item.weights[child] for child in item])
+    parts = shares(room, [item.weight_of(child) for child in item])
 
     at = rect.x if sideways else rect.y
     taken = [rect]

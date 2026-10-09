@@ -13,7 +13,6 @@ from __future__ import annotations
 import math
 import os
 from enum import Enum
-from typing import override
 from weakref import WeakKeyDictionary, ref
 
 from prompt_toolkit.application import Application, get_app, get_app_or_none, set_app
@@ -212,24 +211,18 @@ class Pane:
         get_app().layout.focus(self.terminal)
 
 
-class _WeightsDictionary(WeakKeyDictionary):
-    """
-    Dictionary for the weights: weak keys, but defaults to 1.
+#: What names one node of a window's layout tree: its kind and its id.
+#: A pane and a split count their ids apart, so the kind keeps them
+#: apart. Keys are values, not objects, so a snapshot can write them
+#: and a new process can read them back. Lillecarl/pymux#399.
+NodeKey = tuple[str, int]
 
-    (Weights are used to represent the proportion of pane sizes in
-    HSplit/VSplit lists.)
 
-    This dictionary maps the child (another HSplit/VSplit or Pane), to the
-    size. (Integer.)
-    """
-
-    @override
-    def __getitem__(self, key):
-        try:
-            # (Don't use 'super' here. This is a classobj in Python2.)
-            return WeakKeyDictionary.__getitem__(self, key)
-        except KeyError:
-            return 1
+def node_key(item) -> NodeKey:
+    "The key of a pane or a split."
+    if isinstance(item, Pane):
+        return ("pane", item.pane_id)
+    return ("split", item.split_id)
 
 
 class _Split(list):
@@ -238,15 +231,25 @@ class _Split(list):
     split than prompt_toolkit.layout.HSplit.)
     """
 
+    _split_counter = 0
+
     def __init__(self, *a, **kw):
         list.__init__(self, *a, **kw)
 
-        # Mapping children to its weight.
-        self.weights = _WeightsDictionary()
+        _Split._split_counter += 1
+        self.split_id = _Split._split_counter
 
-    def __hash__(self):
-        # Required in order to add HSplit/VSplit to the weights dict. "
-        return id(self)
+        #: Each child's share of this split, by `node_key`. A child with
+        #: no entry weighs 1. An entry outlives a child that leaves, so
+        #: a pane that comes back finds the weight it had.
+        self.weights: dict[NodeKey, int] = {}
+
+    def weight_of(self, child) -> int:
+        "This child's share of the split."
+        return self.weights.get(node_key(child), 1)
+
+    def set_weight(self, child, weight: int) -> None:
+        self.weights[node_key(child)] = weight
 
     def __repr__(self):
         return "%s(%s)" % (self.__class__.__name__, list.__repr__(self))
@@ -307,11 +310,11 @@ class Window:
         self._strip = False
 
         #: How wide each column of the strip is, as a fraction of the
-        #: window. A column with no entry takes
-        #: `DEFAULT_COLUMN_WIDTH`. The keys are the children of `root`,
-        #: weakly held, so a column that closes takes its width with
-        #: it.
-        self.column_widths: WeakKeyDictionary[object, float] = WeakKeyDictionary()
+        #: window, by the `node_key` of the column. A column with no
+        #: entry takes `DEFAULT_COLUMN_WIDTH`. Read it through
+        #: `column_width`: an entry outlives its column, so walking
+        #: this dictionary finds columns that are gone.
+        self.column_widths: dict[NodeKey, float] = {}
 
         #: Which client's terminal decides how big this window's plane
         #: is, when more than one watches it. `set-window-option
@@ -374,7 +377,10 @@ class Window:
 
     def column_width(self, column) -> float:
         "How wide one column of the strip is, as a fraction of the window."
-        return self.column_widths.get(column, DEFAULT_COLUMN_WIDTH)
+        return self.column_widths.get(node_key(column), DEFAULT_COLUMN_WIDTH)
+
+    def set_column_width(self, column, width: float) -> None:
+        self.column_widths[node_key(column)] = width
 
     def switch_column_width(self, pane: Pane, back: bool = False) -> None:
         """
@@ -401,7 +407,7 @@ class Window:
             # it, from the end a person asked for.
             where = len(widths) - 1 if back else -1
 
-        self.column_widths[column] = widths[(where - 1 if back else where + 1) % len(widths)]
+        self.set_column_width(column, widths[(where - 1 if back else where + 1) % len(widths)])
 
     def move_column(self, pane: Pane, step: int) -> bool:
         """
@@ -412,8 +418,8 @@ class Window:
         has nowhere to go, and that is not an error.
 
         **It is a list reorder and nothing more.** The columns are the
-        children of the root, `column_widths` is keyed by the column
-        object so each column keeps the width it was given, and
+        children of the root, `column_widths` is keyed by the column's
+        `node_key` so each column keeps the width it was given, and
         `invalidation_hash` names every pane in the order they sit in,
         so the layout is rebuilt. Lillecarl/pymux#202.
         """
@@ -482,8 +488,8 @@ class Window:
             # A column of one pane becomes a stack of two, and keeps
             # the width the column had.
             stack = HSplit([joined, pane])
-            self.root.weights[stack] = self.root.weights[joined]
-            self.column_widths[stack] = self.column_width(joined)
+            self.root.set_weight(stack, self.root.weight_of(joined))
+            self.set_column_width(stack, self.column_width(joined))
             self.root[_place_of(self.root, joined)] = stack
         else:
             joined.append(pane)
@@ -604,13 +610,13 @@ class Window:
 
                 # Give the newly created split the same weight as the original
                 # pane that was at this position.
-                parent.weights[new_split] = parent.weights[active]
+                parent.set_weight(new_split, parent.weight_of(active))
 
                 # And, in a strip, the width of the column it became.
                 # A pane that is stacked into a column should not make
                 # that column change width under a person.
                 if self._strip and parent is self.root:
-                    self.column_widths[new_split] = self.column_width(active)
+                    self.set_column_width(new_split, self.column_width(active))
 
         self.active_pane = pane
         self.zoom = False
@@ -656,10 +662,10 @@ class Window:
         while len(parent) == 1 and parent is not self.root:
             above = self._get_parent(parent)
             assert above is not None
-            above.weights[parent[0]] = above.weights[parent]
+            above.set_weight(parent[0], above.weight_of(parent))
 
-            if parent in self.column_widths:
-                self.column_widths[parent[0]] = self.column_widths[parent]
+            if node_key(parent) in self.column_widths:
+                self.set_column_width(parent[0], self.column_width(parent))
 
             above[_place_of(above, parent)] = parent[0]
             parent = above
@@ -775,7 +781,7 @@ class Window:
         for s in self.splits:
             for index, item in enumerate(s):
                 if isinstance(item, Pane):
-                    items.append((s, index, item, s.weights[item]))
+                    items.append((s, index, item, s.weight_of(item)))
                     if item == self.active_pane:
                         current_pane_index = len(items) - 1
 
@@ -794,7 +800,7 @@ class Window:
             new_item = items[(i + count) % len(items)][2]
 
             split[index] = new_item
-            split.weights[new_item] = weight
+            split.set_weight(new_item, weight)
 
     def select_layout(self, layout_type: LayoutTypes) -> None:
         """
@@ -927,13 +933,13 @@ class Window:
                     neighbour_child = split[neighbour_index]
 
                     # Increase/decrease weights.
-                    split.weights[child] += amount
-                    split.weights[neighbour_child] -= amount
+                    split.set_weight(child, split.weight_of(child) + amount)
+                    split.set_weight(neighbour_child, split.weight_of(neighbour_child) - amount)
 
                     # Ensure that all weights are at least one.
-                    for k, value in split.weights.items():
-                        if value < 1:
-                            split.weights[k] = 1
+                    for one in split:
+                        if split.weight_of(one) < 1:
+                            split.set_weight(one, 1)
 
                 else:
                     # When no split has been found where we can move in this
@@ -1232,12 +1238,12 @@ class Arrangement:
             for split in window.splits:
                 if old in split:
                     split[split.index(old)] = new
+                    if node_key(old) in split.weights:
+                        split.set_weight(new, split.weights.pop(node_key(old)))
                     break
 
-            for held, width in list(window.column_widths.items()):
-                if held is old:
-                    window.column_widths[new] = width
-                    del window.column_widths[held]
+            if node_key(old) in window.column_widths:
+                window.set_column_width(new, window.column_widths.pop(node_key(old)))
 
             if window._active_pane is old:
                 window._active_pane = new

@@ -140,8 +140,8 @@ def test_pane_beside_us_follows_edge_we_share():
     "The other half of the same rule, said with a stack that is uneven."
     top, bottom, alone = create_pane(), create_pane(), create_pane()
     window = create_window(VSplit([HSplit([top, bottom]), alone]))
-    window.root[0].weights[top] = 1
-    window.root[0].weights[bottom] = 10
+    window.root[0].set_weight(top, 1)
+    window.root[0].set_weight(bottom, 10)
 
     assert beside(window, alone, Side.LEFT) is bottom
 

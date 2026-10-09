@@ -135,7 +135,7 @@ def test_column_that_is_joined_keeps_its_width():
     """
     window, opened = create_strip(2)
     first, second = opened
-    window.column_widths[window.root[0]] = 1 / 3
+    window.set_column_width(window.root[0], 1 / 3)
 
     window.consume_or_expel(second, -1)
 

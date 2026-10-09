@@ -101,7 +101,7 @@ def test_column_keeps_its_width_when_another_opens():
     """
     window, _ = create_strip(1)
     first = window.root[0]
-    window.column_widths[first] = 2 / 3
+    window.set_column_width(first, 2 / 3)
 
     window.add_pane(create_pane(), vsplit=True)
 
@@ -145,7 +145,7 @@ def test_stacked_pane_keeps_width_of_column_it_joined():
     """
     window, _ = create_strip(2)
     column = window._column_of(window.active_pane)
-    window.column_widths[column] = 1 / 3
+    window.set_column_width(column, 1 / 3)
 
     window.add_pane(create_pane(), vsplit=False)
 

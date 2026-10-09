@@ -3004,7 +3004,7 @@ def write_sizes_into_weights(pymux: Pymux, window) -> None:
                 continue
 
             box = bounding_box(held)
-            split.weights[child] = box.width if sideways else box.height
+            split.set_weight(child, box.width if sideways else box.height)
 
 
 def change_pane_size(pymux: Pymux, window, pane: arrangement.Pane, up=0, right=0, down=0, left=0) -> None:

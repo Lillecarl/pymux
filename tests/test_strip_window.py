@@ -155,7 +155,7 @@ def test_column_can_be_given_width_of_its_own():
     window.strip = True
     column = window.root[0]
 
-    window.column_widths[column] = 1 / 3
+    window.set_column_width(column, 1 / 3)
 
     assert window.column_width(column) == 1 / 3
 

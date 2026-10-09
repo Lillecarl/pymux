@@ -52,7 +52,7 @@ def _pymux(allow=False):
 def _weights(window):
     "The weights of the split that holds the panes, in order."
     split = window.root
-    return [split.weights[child] for child in split]
+    return [split.weight_of(child) for child in split]
 
 
 def _rows(pymux, window):

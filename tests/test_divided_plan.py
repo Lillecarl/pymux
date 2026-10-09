@@ -110,8 +110,8 @@ def test_weights_say_who_gets_room():
     "A weight is a share of the whole, and `resize-pane` writes them."
     window, panes = create_window([True])
     row = window.root[0]
-    row.weights[panes[0]] = 3
-    row.weights[panes[1]] = 1
+    row.set_weight(panes[0], 3)
+    row.set_weight(panes[1], 1)
 
     left, right = (where(create_plan(window), pane) for pane in panes)
 

@@ -206,8 +206,8 @@ def test_pane_beside_stack_is_one_sharing_most_of_its_edge():
     # `resize-pane` writes real sizes into the weights, so this is what
     # a stack looks like after a person has dragged the border up.
     column = window.root[1]
-    column.weights[top] = 3
-    column.weights[bottom] = 20
+    column.set_weight(top, 3)
+    column.set_weight(bottom, 20)
 
     plan = create_plan(window)
     beside = plan.neighbour(plan.slot_of(alone), Side.RIGHT)
@@ -366,7 +366,7 @@ def test_column_wider_than_view_shows_its_left_edge():
     offset, so it can.
     """
     window, panes = create_strip((1, 1))
-    window.column_widths[window.root[1]] = 1.0
+    window.set_column_width(window.root[1], 1.0)
 
     # The second column is the whole window wide, at 40 to 119, and
     # the view is forty cells. Its left edge is at 40, so that is

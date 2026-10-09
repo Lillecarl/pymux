@@ -135,8 +135,8 @@ async def test_pane_in_stack_moves_whole_column():
 
 async def test_column_keeps_its_width_when_it_moves():
     """
-    `column_widths` is keyed by the column object, so nothing has to
-    carry the width across.
+    `column_widths` is keyed by the column's `node_key`, so nothing has
+    to carry the width across.
     """
     window, panes = create_strip(2)
     window.switch_column_width(panes[1])

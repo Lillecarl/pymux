@@ -112,7 +112,7 @@ def test_width_that_is_not_preset_steps_onto_list(back):
     give. It joins the cycle rather than being stuck outside it.
     """
     window = create_strip(2)
-    window.column_widths[window._column_of(window.active_pane)] = 0.42
+    window.set_column_width(window._column_of(window.active_pane), 0.42)
 
     window.switch_column_width(window.active_pane, back=back)
 

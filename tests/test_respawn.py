@@ -69,6 +69,21 @@ async def test_respawn_keeps_place_and_replaces_pane():
             assert old_pane.process.is_terminated
 
 
+async def test_respawn_keeps_the_share_of_the_split():
+    "A pane resized to take more of its split keeps that share. #306."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            await run(pymux, state, "split-window")
+            window = pymux.arrangement.get_active_window()
+            pane = pymux.arrangement.get_active_pane()
+            split = window._get_parent(pane)
+            split.set_weight(pane, 7)
+
+            await run(pymux, state, "respawn-pane -k 'sleep 30'")
+
+            assert split.weight_of(pymux.arrangement.get_active_pane()) == 7
+
+
 async def test_pane_whose_program_ended_is_gone_and_says_so():
     """
     A pane that ends leaves the tree, and the window goes with it --
