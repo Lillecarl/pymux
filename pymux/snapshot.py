@@ -66,7 +66,7 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "adopting", "checking", "load", "save
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 8
+SNAPSHOT_VERSION = 9
 
 #: A client's own settings, each a column of `clients` and an attribute
 #: of `ClientState`, with the type sqlite gives back as.
@@ -149,6 +149,8 @@ CREATE TABLE copy_modes(
   CHECK ((selection_start IS NULL) = (selection_type IS NULL))
 );
 """,
+    # When each client first came; NULL is "now", as for a new one.
+    8: "ALTER TABLE clients ADD COLUMN connected REAL;",
 }
 
 #: The fields `ClientState.modes` holds, one JSON value in `clients`.
@@ -298,7 +300,8 @@ CREATE TABLE clients(
   theme TEXT,
   swap_dark_and_light INTEGER,
   message TEXT,
-  modes TEXT
+  modes TEXT,
+  connected REAL
 );
 CREATE TABLE client_windows(
   client_id TEXT NOT NULL REFERENCES clients(client_id),
@@ -497,6 +500,8 @@ WRITES: dict[str, frozenset[str]] = {
     "pymux.arrangement._Split": frozenset(_Split.KEEP),
     "pymux.arrangement.Pane": frozenset(Pane.KEEP),
     "pymux.main.ClientState": frozenset({"session", "previous_session", *CLIENT_SETTINGS, *CLIENT_MODES}),
+    # The record goes by the client's id, in `clients`.
+    "pymux.server.ServerConnection": frozenset({"client_state", "created"}),
     "pymux.jobs.JobTable": frozenset({"_jobs", "last_id"}),
     # The kept counts are the lengths of the chunks `job_output` holds.
     "pymux.jobs.Job": frozenset(name for name, fate in Job.KEEP.items() if fate == Keep.SAVED),
@@ -537,12 +542,7 @@ WRITES: dict[str, frozenset[str]] = {
 LATER: dict[str, frozenset[str]] = {}
 
 #: Classes with saved fields that no table holds any of yet.
-LATER_CLASSES: frozenset[str] = frozenset(
-    {
-        # The client's connection: its record and the images on its terminal.
-        "pymux.server.ServerConnection",
-    }
-)
+LATER_CLASSES: frozenset[str] = frozenset()
 
 
 def _value(value: Any) -> Any:
@@ -1031,18 +1031,20 @@ def _write_clients(pymux: Pymux, db: sqlite3.Connection) -> None:
             "windows": windows,
             "settings": {name: getattr(state, name) for name in CLIENT_SETTINGS},
             "modes": state.modes(),
+            "connected": connection.created,
         }
     for client_id, client in sorted(clients.items()):
         settings = client["settings"]
         modes = client.get("modes")
         db.execute(
-            "INSERT INTO clients VALUES (%s)" % ", ".join("?" * (4 + len(CLIENT_SETTINGS))),
+            "INSERT INTO clients VALUES (%s)" % ", ".join("?" * (5 + len(CLIENT_SETTINGS))),
             (
                 client_id,
                 client["session_id"],
                 client["previous_session_id"],
                 *(settings.get(name) for name in CLIENT_SETTINGS),
                 json.dumps(modes) if modes is not None else None,
+                client.get("connected"),
             ),
         )
         db.executemany(
@@ -1402,6 +1404,7 @@ def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> int | No
                 name: _CLIENT_SETTING_TYPES[name](row[name]) for name in CLIENT_SETTINGS if row[name] is not None
             },
             "modes": json.loads(row["modes"]) if row["modes"] is not None else None,
+            "connected": row["connected"],
         }
 
     Pane._pane_counter = counters["pane"]

@@ -1624,6 +1624,8 @@ class Pymux:
         for name, value in record["settings"].items():
             setattr(client_state, name, value)
         self.sync_color_bases()
+        if record.get("connected") is not None:
+            client_state.connection.created = record["connected"]
 
         session = sessions.get(record["session_id"])
         if session is not None:

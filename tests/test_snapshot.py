@@ -225,6 +225,7 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
         "session_id": second.session_id,
         "previous_session_id": None,
         "windows": {second.session_id: (None, elsewhere.window_id)},
+        "connected": 1000.5,
         "settings": {
             "name": "phone",
             "last_used": client_state.last_used + 1,
@@ -255,6 +256,7 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
         "session_id": first.session_id,
         "previous_session_id": second.session_id,
         "windows": {},
+        "connected": None,
         "settings": {},
         "modes": {
             "has_prefix": False,
@@ -452,6 +454,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                     assert back.session.arrangement._prev_active_window_for_cli[back.app] is elsewhere
                     assert (back.name, back.read_only, back.message) == ("phone", True, "job 2 exited 4")
                     assert "gone" not in fresh.returning_clients
+                    assert back.connection.created == 1000.5
                     # What it was in the middle of, and the prompt holds the keyboard.
                     assert (back.has_prefix, back.key_tables, back.confirm_text) == (True, ["resize"], "Kill the pane?")
                     assert back.choose_window and back.choose_window_filter.text == "sl"
@@ -512,7 +515,7 @@ def test_a_snapshot_of_the_version_before_steps_up(pymux, tmp_path):
     }
     snapshot.save(pymux, path)
     db = sqlite3.connect(path)
-    for name in (*snapshot.CLIENT_SETTINGS, "modes"):
+    for name in (*snapshot.CLIENT_SETTINGS, "modes", "connected"):
         db.execute("ALTER TABLE clients DROP COLUMN %s" % name)
     db.execute("DROP TABLE named_buffers")
     db.execute("DROP TABLE server_lists")
