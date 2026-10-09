@@ -12,7 +12,7 @@ a machine you are not on names nothing. Lillecarl/pymux#330.
 from __future__ import annotations
 
 from prompt_toolkit.data_structures import Size
-from session import OTHER_MACHINE, over_connection
+from session import OTHER_MACHINE, create_session, over_connection
 
 SIZE = Size(rows=24, columns=80)
 
@@ -98,6 +98,22 @@ async def test_a_command_of_its_own_is_not_a_client():
         said = await _lines(session, "list-clients -F '#{client_hostname}'")
 
         assert len(said) == 1, said
+
+
+async def test_a_session_with_no_window_answers_with_an_error():
+    "Not with a ValueError out of the handler. Lillecarl/pymux#552."
+    async with create_session() as (pymux, state):
+        arrangement = pymux.arrangement
+        windows, arrangement.windows = arrangement.windows, []
+        pymux.command_error = []
+        try:
+            pymux.handle_command("list-clients -F '#{client_hostname}'")
+            said = list(pymux.command_error)
+        finally:
+            arrangement.windows = windows
+            pymux.command_error = None
+
+        assert said == ["pymux: No active window to format for."]
 
 
 async def test_a_listing_takes_a_template_too():

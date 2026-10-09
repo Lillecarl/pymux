@@ -22,6 +22,8 @@ from collections.abc import Callable
 from enum import Enum
 from typing import TYPE_CHECKING, NamedTuple
 
+from pymux.commands import CommandException
+
 if TYPE_CHECKING:
     from pymux.arrangement import Pane, Window
     from pymux.main import ClientState, Pymux
@@ -127,13 +129,15 @@ def format_pymux_string(
 
     if window is None:
         window = arrangement.get_active_window()
+    # A command error, so a command that formats on a session with no
+    # window yet answers with a message. Lillecarl/pymux#552.
     if window is None:
-        raise ValueError("No active window to format for.")
+        raise CommandException("No active window to format for.")
 
     if pane is None:
         pane = window.active_pane
     if pane is None:
-        raise ValueError("No active pane to format for.")
+        raise CommandException("No active pane to format for.")
 
     return format_in_context(FormatContext(pymux, session, window, pane, client), string, language)
 
