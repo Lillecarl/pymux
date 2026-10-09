@@ -43,6 +43,7 @@ from prompt_toolkit.styles import (
     SwapLightAndDarkStyleTransformation,
 )
 from ptterm import Terminal
+from ptyhost.backends import Backend
 from ptyhost.backends.posix import PosixBackend
 from pyte.environment import terminal_name
 from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
@@ -2173,6 +2174,148 @@ class Pymux:
                 "A pane was made outside `Pymux.running` with no task group, so nothing would watch its program."
             )
 
+        # Start directory.
+        path: str | None
+
+        path = start_directory or self._directory_to_start_in(window, session)
+
+        def before_exec():
+            "Called in the process fork (in the child process)."
+            # Go to this directory.
+            # No such file or directory.
+            with suppress(OSError):
+                os.chdir(path or self.original_cwd)
+
+            # A pane is not the terminal that the client attached
+            # from: it answers the protocol queries for itself. ptterm
+            # has already said so here, because it is the layer that
+            # owns both the screen and the process
+            # (Lillecarl/pymux#125). What is left is what only pymux
+            # knows.
+            #
+            # The name is one of those. `default-terminal` is an option
+            # a person can set, and this hook runs after ptterm's, so
+            # what they set wins.
+            os.environ["TERM"] = self.default_terminal
+
+            # Make sure to set the PYMUX environment variable.
+            if self.socket_name:
+                os.environ["PYMUX"] = "%s,%i" % (self.socket_name, pane.pane_id)
+
+            # The environment a `set-environment` filled. The global
+            # scope lands first and the session's over it; a name
+            # either unset takes itself out of the child's
+            # environment, which is the one thing the child would
+            # otherwise inherit from the server. Lillecarl/pymux#270.
+            merged = self.pane_environment()
+            for name, value in merged.items():
+                os.environ[name] = value
+            for name in {**self.global_environment, **self.session_environment}:
+                if name not in merged and name in os.environ:
+                    del os.environ[name]
+
+            # The shims, when they are on, reach the opener and the
+            # notifier of this session before anything else on the PATH
+            # of the pane, and name the opener for what reads $BROWSER.
+            self._shim_pane_environment()
+
+        # `shlex.split` and not `str.split`: a command reaches this as
+        # one string, and the quoting inside it is what says where one
+        # argument ends. A plain split on whitespace tears
+        # `sh -c 'echo one two'` into seven words, and `sh` then reads
+        # `'echo` as the whole of its script.
+        #
+        # `run_pymux.run` builds the string with `shlex.quote`, so this
+        # undoes exactly what that did.
+        command_list = shlex.split(command) if command else [self.default_shell]
+
+        # The shim directory has to exist in this process, before the
+        # fork: a directory made in the child is made once per pane,
+        # and two panes starting together would race for it.
+        if self.open_url_shim:
+            self._ensure_open_url_shim()
+        if self.notify_shim:
+            self._ensure_notify_shim()
+
+        pane = self._build_pane(
+            command=command_list,
+            before_exec_func=before_exec,
+            on_done=on_done,
+            # A viewer never ends on its own: the job ending feeds an
+            # exit line and the pane stays, so there is nothing to call
+            # back. `JobFeed.kill` stops the follow; whoever kills
+            # removes the pane.
+            watch_end=job is None,
+        )
+        terminal_control = pane.terminal.terminal_control
+
+        if job is not None:
+            # A viewer: the feed stands where the process would, so
+            # the eager start below and the first render both meet it,
+            # and nothing ever forks.
+            old_process = terminal_control.process
+            terminal_control.process = JobFeed(job, terminal_control.feed_output)
+            # No fork, so the pty the construction opened is dead
+            # weight: give both ends back. The reader never connected,
+            # so `close` only drops the master; the slave would
+            # otherwise stay open until the server exits, which closes
+            # it only on a reap that never comes.
+            backend = old_process.backend
+            if isinstance(backend, PosixBackend):
+                backend.close()
+                if backend.slave is not None:
+                    os.close(backend.slave)
+                    backend.slave = None
+
+        if not terminal_control._running:
+            # The size of the session this pane is going into, until a
+            # client attaches. `new-session -x -y` is what names it, and
+            # a pane no client ever renders keeps it for ever, which is
+            # what an automated caller works on. Lillecarl/pymux#459.
+            #
+            # **The control and not the process.** `Process.set_size` tells
+            # the pty and nothing else; `TerminalControl.set_size` tells the
+            # pty and the screen. A screen starts at nought by nought and is
+            # sized by the first render, which a detached pane never gets, so
+            # sizing only the pty left the screen at zero columns: every
+            # character a program wrote wrapped onto a row of its own.
+            #
+            # It showed as `capture-pane -p` printing one character per line,
+            # while `-J` read correctly because it joins wrapped rows back
+            # together. Lillecarl/pymux#321.
+            size = self.size_with_no_client(session)
+            terminal_control.set_size(size.columns, size.rows)
+            # A program starts watched, so that panes in detached
+            # sessions also run and produce output. (Like tmux does.) A
+            # viewer's feed starts the same way and follows the job.
+            await terminal_control.start(task_group)
+
+        self._register_pane(pane)
+
+        if job is not None:
+            logger.info("Viewing job %d in a new pane.", job.job_id)
+        else:
+            logger.info("Created process %r.", command_list)
+
+        return pane
+
+    def _build_pane(
+        self,
+        backend: Backend | None = None,
+        command: list[str] | None = None,
+        before_exec_func: Callable[[], None] | None = None,
+        on_done: Callable[[], None] | None = None,
+        watch_end: bool = True,
+    ) -> Pane:
+        """
+        A pane and its widget, wired to this server, with nothing started.
+
+        `backend` is the program's pty: a new one from `command` when
+        none is given, or one a snapshot's load adopted. Building is
+        synchronous, so a load builds every pane before anything runs.
+        Lillecarl/pymux#399.
+        """
+
         def done_callback():
             "When the process finishes."
             if on_done is not None:
@@ -2240,76 +2383,10 @@ class Pymux:
             except ValueError:
                 return True
 
-        # Start directory.
-        path: str | None
-
-        path = start_directory or self._directory_to_start_in(window, session)
-
-        def before_exec():
-            "Called in the process fork (in the child process)."
-            # Go to this directory.
-            # No such file or directory.
-            with suppress(OSError):
-                os.chdir(path or self.original_cwd)
-
-            # A pane is not the terminal that the client attached
-            # from: it answers the protocol queries for itself. ptterm
-            # has already said so here, because it is the layer that
-            # owns both the screen and the process
-            # (Lillecarl/pymux#125). What is left is what only pymux
-            # knows.
-            #
-            # The name is one of those. `default-terminal` is an option
-            # a person can set, and this hook runs after ptterm's, so
-            # what they set wins.
-            os.environ["TERM"] = self.default_terminal
-
-            # Make sure to set the PYMUX environment variable.
-            if self.socket_name:
-                os.environ["PYMUX"] = "%s,%i" % (self.socket_name, pane.pane_id)
-
-            # The environment a `set-environment` filled. The global
-            # scope lands first and the session's over it; a name
-            # either unset takes itself out of the child's
-            # environment, which is the one thing the child would
-            # otherwise inherit from the server. Lillecarl/pymux#270.
-            merged = self.pane_environment()
-            for name, value in merged.items():
-                os.environ[name] = value
-            for name in {**self.global_environment, **self.session_environment}:
-                if name not in merged and name in os.environ:
-                    del os.environ[name]
-
-            # The shims, when they are on, reach the opener and the
-            # notifier of this session before anything else on the PATH
-            # of the pane, and name the opener for what reads $BROWSER.
-            self._shim_pane_environment()
-
-        # `shlex.split` and not `str.split`: a command reaches this as
-        # one string, and the quoting inside it is what says where one
-        # argument ends. A plain split on whitespace tears
-        # `sh -c 'echo one two'` into seven words, and `sh` then reads
-        # `'echo` as the whole of its script.
-        #
-        # `run_pymux.run` builds the string with `shlex.quote`, so this
-        # undoes exactly what that did.
-        command_list = shlex.split(command) if command else [self.default_shell]
-
-        # The shim directory has to exist in this process, before the
-        # fork: a directory made in the child is made once per pane,
-        # and two panes starting together would race for it.
-        if self.open_url_shim:
-            self._ensure_open_url_shim()
-        if self.notify_shim:
-            self._ensure_notify_shim()
-
         # Create new pane and terminal.
         terminal = Terminal(
-            # A viewer never ends on its own: the job ending feeds an
-            # exit line and the pane stays, so there is nothing to call
-            # back. `JobFeed.kill` stops the follow; whoever kills
-            # removes the pane.
-            done_callback=None if job is not None else done_callback,
+            done_callback=done_callback if watch_end else None,
+            backend=backend,
             bell_func=bell,
             osc_func=forward_osc,
             # What copy mode copied. The pane does not build the
@@ -2320,8 +2397,8 @@ class Pymux:
             resize_func=resize,
             may_resize=may_resize,
             may_type=may_type,
-            before_exec_func=before_exec,
-            command=command_list,
+            before_exec_func=before_exec_func,
+            command=command,
             # The `history-limit` option, which said how far copy mode
             # could scroll and never reached the screen that holds the
             # rows. A pane kept two thousand whatever the option said.
@@ -2362,47 +2439,10 @@ class Pymux:
         # about the arrangement and knows nothing about a widget.
         terminal_control.on_mouse_focus = focus_pane_on_click
 
-        if job is not None:
-            # A viewer: the feed stands where the process would, so
-            # the eager start below and the first render both meet it,
-            # and nothing ever forks.
-            old_process = terminal_control.process
-            terminal_control.process = JobFeed(job, terminal_control.feed_output)
-            # No fork, so the pty the construction opened is dead
-            # weight: give both ends back. The reader never connected,
-            # so `close` only drops the master; the slave would
-            # otherwise stay open until the server exits, which closes
-            # it only on a reap that never comes.
-            backend = old_process.backend
-            if isinstance(backend, PosixBackend):
-                backend.close()
-                if backend.slave is not None:
-                    os.close(backend.slave)
-                    backend.slave = None
+        return pane
 
-        if not terminal_control._running:
-            # The size of the session this pane is going into, until a
-            # client attaches. `new-session -x -y` is what names it, and
-            # a pane no client ever renders keeps it for ever, which is
-            # what an automated caller works on. Lillecarl/pymux#459.
-            #
-            # **The control and not the process.** `Process.set_size` tells
-            # the pty and nothing else; `TerminalControl.set_size` tells the
-            # pty and the screen. A screen starts at nought by nought and is
-            # sized by the first render, which a detached pane never gets, so
-            # sizing only the pty left the screen at zero columns: every
-            # character a program wrote wrapped onto a row of its own.
-            #
-            # It showed as `capture-pane -p` printing one character per line,
-            # while `-J` read correctly because it joins wrapped rows back
-            # together. Lillecarl/pymux#321.
-            size = self.size_with_no_client(session)
-            terminal_control.set_size(size.columns, size.rows)
-            # A program starts watched, so that panes in detached
-            # sessions also run and produce output. (Like tmux does.) A
-            # viewer's feed starts the same way and follows the job.
-            await terminal_control.start(task_group)
-
+    def _register_pane(self, pane: Pane) -> None:
+        "Record a pane, and tell it what the clients' terminals are."
         # Keep track of panes. This is a WeakKeyDictionary, we only add, but
         # don't remove.
         self.panes_by_id[pane.pane_id] = pane
@@ -2411,13 +2451,6 @@ class Pymux:
         self.tell_pane_about_keyboard(pane)
         self.tell_pane_about_colours(pane)
         self.tell_pane_about_cell_size(pane)
-
-        if job is not None:
-            logger.info("Viewing job %d in a new pane.", job.job_id)
-        else:
-            logger.info("Created process %r.", command_list)
-
-        return pane
 
     async def display_overlay(
         self,
