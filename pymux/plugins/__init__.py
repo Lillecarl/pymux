@@ -42,7 +42,7 @@ def register(subparsers: argparse._SubParsersAction[CommandParser], environ=None
         try:
             _module(plugin).register(subparsers)
         except Exception:
-            logger.exception("pymux: the plugin %s in %s failed to load", plugin.name, plugin.module_finder.path)
+            logger.exception("pymux: the plugin %s failed to load", plugin.name)
 
 
 def _module(plugin: pkgutil.ModuleInfo) -> ModuleType:
@@ -51,6 +51,8 @@ def _module(plugin: pkgutil.ModuleInfo) -> ModuleType:
         return sys.modules[name]
 
     spec = plugin.module_finder.find_spec(name, None)
+    if spec is None or spec.loader is None:
+        raise ImportError("no loader for %s" % name, name=name)
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
     try:
