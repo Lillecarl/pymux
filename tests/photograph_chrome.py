@@ -68,6 +68,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from middleman import FORWARDER, run_cli
+from PIL import Image, ImageChops
 from pyterm_pytest.seats import (
     TheSeatIsGone,
     open_the_seats,
@@ -109,6 +110,12 @@ PICTURES = Path(os.environ.get("PYMUX_CHROME_OUT", "chrome-pictures"))
 
 #: Which fixtures and which terminals to run, as a piece of a name.
 ONLY = os.environ.get("PYMUX_CHROME", "")
+
+#: `render-mode` for every fixture: "" leaves pymux's default,
+#: "optimized" or "reference" sets it, and "both" photographs each
+#: fixture each way and fails it unless the two pictures are the same.
+#: `picture_of` says why that is a judge.
+RENDER_MODE = os.environ.get("PYMUX_CHROME_RENDER_MODE", "")
 ONLY_TERMINALS = os.environ.get("PYMUX_CHROME_TERMINALS", "")
 
 
@@ -348,6 +355,95 @@ FIXTURES = {
     # Two panes side by side, so a focused title bar and an unfocused
     # one are both in the picture, in their two colours.
     "two-panes": Fixture(CHROME, keys((0.0, PREFIX), (0.4, b"%")), (2,)),
+    # Two panes side by side after the focus went left and came back,
+    # in a theme that paints every cell, the configuration a person
+    # reported the border going missing in after a switch. The line
+    # between the two changes weight with the focus, so a switch
+    # redraws it, and each picture is one stage of that.
+    "switch-panes-none": Fixture(
+        CHROME + "set-client-option theme pygments:catppuccin-mocha\n",
+        keys((0.0, PREFIX), (0.4, b"%")),
+        (2,),
+    ),
+    "switch-panes-left": Fixture(
+        CHROME + "set-client-option theme pygments:catppuccin-mocha\n",
+        keys((0.0, PREFIX), (0.4, b"%"), *create_command("select-pane -L")),
+        (2,),
+    ),
+    # The same switch with text in both panes: the demo on the right,
+    # and the forwarder's own lines on the left.
+    "switch-panes-full": Fixture(
+        CHROME + "set-client-option theme pygments:catppuccin-mocha\n",
+        demo_keys()
+        + keys(
+            *create_command("select-pane -L"),
+            *create_command("select-pane -R"),
+            *create_command("select-pane -L"),
+        ),
+        DEMO_PANES,
+    ),
+    # A pane that has scrolled lines a coding agent writes, and the
+    # focus walked by the keys that walk it in order. Lillecarl's own
+    # configuration binds M-h and M-l to `select-pane -t :.-` and
+    # `:.+`, and that is the switch the report came from.
+    "switch-panes-agent": Fixture(
+        CHROME
+        + "set-client-option theme pygments:catppuccin-mocha\n"
+        + "bind-key -n M-h select-pane -t :.-\n"
+        + "bind-key -n M-l select-pane -t :.+\n",
+        keys(
+            (0.0, PREFIX),
+            (0.4, b"%"),
+            (
+                0.8,
+                b'python -c \'for i in range(120): print("\\u23fa line %d \\u2733 \\u25cf " % i + "x" * (i * 7 % 50))\'\n',
+            ),
+            (1.0, b"\x1bh"),
+            (0.6, b"\x1bl"),
+            (0.6, b"\x1bh"),
+            (0.6, b"\x1bl"),
+            (0.6, b"\x1bh"),
+        ),
+        (2,),
+    ),
+    # Lines that fill their pane exactly, on a background, each led by
+    # a symbol with the emoji variation selector: pymux counts that
+    # pair one column, and a terminal that draws it as an emoji draws
+    # two. The pane is the middle of three, so a line one column too
+    # long lands on the line between it and the next.
+    "switch-panes-emoji": Fixture(
+        CHROME
+        + "set-client-option theme pygments:catppuccin-mocha\n"
+        + "bind-key -n M-h select-pane -t :.-\n"
+        + "bind-key -n M-l select-pane -t :.+\n",
+        keys(
+            (0.0, PREFIX),
+            (0.4, b"%"),
+            (0.6, PREFIX),
+            (0.4, b"%"),
+            *create_command("select-pane -L"),
+            (
+                0.8,
+                (
+                    b"python -c 'import shutil; w = shutil.get_terminal_size().columns; "
+                    b'[print("\\x1b[42m\\u2733\\ufe0f " + ("line %d " % i).ljust(w - 2, "x") + "\\x1b[0m") for i in range(60)]\'\n'
+                ),
+            ),
+            (1.0, b"\x1bl"),
+            (0.6, b"\x1bh"),
+        ),
+        (3,),
+    ),
+    "switch-panes-back": Fixture(
+        CHROME + "set-client-option theme pygments:catppuccin-mocha\n",
+        keys(
+            (0.0, PREFIX),
+            (0.4, b"%"),
+            *create_command("select-pane -L"),
+            *create_command("select-pane -R"),
+        ),
+        (2,),
+    ),
     # A pane over a pane, which is the other border and the other
     # arrangement of the two title bars.
     "stacked-panes": Fixture(CHROME, keys((0.0, PREFIX), (0.4, b'"')), (2,)),
@@ -612,16 +708,63 @@ def chrome_command(
     )
 
 
-def picture_of(terminal, seat, name, work, out, fixtures=None):
-    "One fixture, in one terminal, left as a picture."
+def difference_of(one, other, marked):
+    """
+    Where two pictures of one screen differ, as a pixel box, or None.
+
+    When they differ, `marked` is the first picture with every
+    differing pixel painted red, for a person to read.
+    """
+    first = Image.open(one).convert("RGB")
+    second = Image.open(other).convert("RGB")
+    if first.size != second.size:
+        return "size, %s against %s" % (first.size, second.size)
+    box = ImageChops.difference(first, second).getbbox()
+    if box is None:
+        return None
+    mask = ImageChops.difference(first, second).convert("L").point(lambda value: 255 if value else 0)
+    first.paste((255, 0, 0), mask=mask)
+    first.save(marked)
+    return "the pixels %s" % (box,)
+
+
+class RenderingsDiffer(RuntimeError):
+    "The optimized and the reference rendering of one fixture are not the same picture."
+
+
+def picture_of(terminal, seat, name, work, out, fixtures=None, render_mode=None):
+    """
+    One fixture, in one terminal, left as a picture.
+
+    `render_mode` is `render-mode`'s value, or "" for pymux's default.
+    "both" takes the picture twice, once each way, and raises
+    `RenderingsDiffer` unless the two are the same pixels: the
+    reference rendering writes every cell where it belongs, so any
+    difference is the optimized one drawing something else. The real
+    terminal is the judge, which is what a check on cells cannot be.
+    """
+    if render_mode is None:
+        render_mode = RENDER_MODE
+    if render_mode == "both":
+        optimized = picture_of(terminal, seat, name, work, out, fixtures, "optimized")
+        reference = picture_of(terminal, seat, name, work, out, fixtures, "reference")
+        differs = difference_of(optimized, reference, optimized.parent / "difference.png")
+        if differs is not None:
+            raise RenderingsDiffer(
+                "%s in %s: the optimized and reference renderings differ in %s; difference.png marks where"
+                % (name, terminal.name, differs)
+            )
+        return optimized
+
     room = out / terminal.name / name
     room.mkdir(parents=True, exist_ok=True)
+    picture = room / ("reference.png" if render_mode == "reference" else "pymux.png")
 
     if fixtures is None:
         fixtures = FIXTURES
     fixture = fixtures[name]
-    config_path = work / ("%s.conf" % name)
-    config_path.write_text(fixture.config)
+    config_path = work / ("%s-%s.conf" % (name, render_mode or "default"))
+    config_path.write_text(fixture.config + ("set-option render-mode %s\n" % render_mode if render_mode else ""))
 
     keys_path = work / ("%s.keys" % name)
     keys_path.write_text(fixture.keys)
@@ -629,7 +772,10 @@ def picture_of(terminal, seat, name, work, out, fixtures=None):
     # The name of the terminal is in it: every terminal runs every
     # fixture, and a socket a run before left behind is a socket this
     # one cannot bind.
-    socket_path = work / ("%s-%s.sock" % (terminal.name, name))
+    # A fixture taken both ways runs twice, so the mode is in every
+    # name a run leaves behind as well.
+    run = "%s-%s-%s" % (terminal.name, name, render_mode or "default")
+    socket_path = work / ("%s.sock" % run)
 
     # The pane runs the forwarder, which copies the fifo to its own
     # output: the fence goes down the fifo behind the keys and comes
@@ -638,8 +784,9 @@ def picture_of(terminal, seat, name, work, out, fixtures=None):
     # the way the socket's does: a run before left its own behind.
     forwarder_path = work / "chrome-forwarder.py"
     forwarder_path.write_text(FORWARDER)
-    fifo_path = work / ("%s-%s.fifo" % (terminal.name, name))
-    size_path = work / ("%s-%s-pane-size.txt" % (terminal.name, name))
+    fifo_path = work / ("%s.fifo" % run)
+    size_path = work / ("%s-pane-size.txt" % run)
+    stem = picture.stem
 
     seat.picture_of(
         terminal,
@@ -647,27 +794,27 @@ def picture_of(terminal, seat, name, work, out, fixtures=None):
             keys_path,
             socket_path,
             config_path,
-            room / "pymux-server.log",
-            room / "pymux-stderr.log",
+            room / ("%s-server.log" % stem),
+            room / ("%s-stderr.log" % stem),
             fifo_path,
             size_path,
             forwarder_path,
             # The file the relay touches when the fence comes back.
-            room / "fence",
+            room / ("%s.fence" % stem),
         ),
         work,
-        room / "pymux.png",
-        room / "pymux.log",
+        picture,
+        room / ("%s.log" % stem),
         # The relay touches the fence when pymux has done with the
         # keys. A settle before that keeps the screen from before the
         # keys and calls it finished.
-        not_before=room / "fence",
+        not_before=room / ("%s.fence" % stem),
         # And the fence cannot say a key arrived, so the server is
         # asked what the keys built. Lillecarl/pymux#353.
         judge=partial(judge_the_fixture, socket_path, fixture),
     )
 
-    return room / "pymux.png"
+    return picture
 
 
 def main(

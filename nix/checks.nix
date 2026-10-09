@@ -326,6 +326,12 @@ let
   chromeList = builtins.getEnv "PYMUX_CHROME_LIST";
   chromeTerminalsList = builtins.getEnv "PYMUX_CHROME_TERMINALS_LIST";
 
+  # `render-mode` for every chrome fixture. "both" takes each fixture
+  # optimized and reference and fails it unless the two pictures are
+  # the same pixels, for instance
+  # `PYMUX_CHROME_RENDER_MODE=both nix build --file . checks.pymux-chrome-pictures`.
+  chromeRenderMode = builtins.getEnv "PYMUX_CHROME_RENDER_MODE";
+
   # The same for the pictures of every theme, which
   # `tests/photograph_themes.py` takes: one demo application in a
   # pane, under every theme the option takes.
@@ -1096,12 +1102,14 @@ in
             chromeTerminals
             chromeList
             chromeTerminalsList
+            chromeRenderMode
             ;
         };
       }
       (
         seatSetup
         + ''
+          export PYMUX_CHROME_RENDER_MODE="$chromeRenderMode"
           export PYMUX_CHROME="$chromeSelection"
           export PYMUX_CHROME_TERMINALS="$chromeTerminals"
           export PYMUX_CHROME_LIST="$chromeList"
