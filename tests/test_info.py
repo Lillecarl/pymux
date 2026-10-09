@@ -96,6 +96,14 @@ async def test_tree_lists_every_window_and_pane():
         assert all(pane["width"] > 0 and pane["height"] > 0 for pane in panes)
 
 
+async def test_the_tree_names_the_socket_it_came_from():
+    "Two servers' answers side by side still say which is which. Lillecarl/pymux#525."
+    async with create_session() as (pymux, state):
+        pymux.socket_name = "/run/user/1000/pymux.sock.default"
+        await run(pymux, state, "info")
+        assert json.loads(state.message)["socket"] == "/run/user/1000/pymux.sock.default"
+
+
 async def test_reported_state_travels_in_tree():
     async with reported_session() as (_pymux, _state, tree):
         window, reported = reported_pane(tree)

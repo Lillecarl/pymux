@@ -114,13 +114,16 @@ def info(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     The whole server as JSON, for an agent to orient itself.
 
-    `caller` is the window and pane the command arrived from;
-    `clients` is what every attached person looks at; `sessions`
-    holds every window and pane, with the directory each reported,
-    the variables each published and the command each runs. An agent
-    that wants to act aims `-t` at the ids it reads here.
+    `socket` is the server's socket, so an answer pasted, logged or set
+    beside another server's still says where it came from
+    (Lillecarl/pymux#525); `caller` is the window and pane the command
+    arrived from; `clients` is what every attached person looks at;
+    `sessions` holds every window and pane, with the directory each
+    reported, the variables each published and the command each runs.
+    An agent that wants to act aims `-t` at the ids it reads here.
     """
     tree = {
+        "socket": pymux.socket_name,
         "caller": _caller_tree(pymux),
         "clients": _clients_tree(pymux),
         "sessions": [
