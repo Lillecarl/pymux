@@ -454,6 +454,22 @@ class ForwardMode(StrEnum):
     OFF = "off"
 
 
+class RenderMode(StrEnum):
+    """
+    How a client's frames reach its terminal.
+
+    `OPTIMIZED` writes what changed since the frame before, scrolls
+    rows on the wire instead of repainting them, and builds a pane's
+    rows only when they changed. `REFERENCE` writes every cell of
+    every frame at its own position and keeps nothing between frames.
+    It is slow on purpose: it is the answer the optimized frames are
+    held against, and the way round a fault in them until it is fixed.
+    """
+
+    OPTIMIZED = "optimized"
+    REFERENCE = "reference"
+
+
 class EnumOption(Option):
     """
     One of the values of a `StrEnum`, held as the member itself.
@@ -496,6 +512,17 @@ class ExtendedKeysOption(EnumOption):
         # The server tells every client what its terminal should send
         # now, whoever holds the value.
         pymux.sync_keyboard()
+
+
+class RenderModeOption(EnumOption):
+    "How every client's frames reach its terminal."
+
+    def __init__(self, attribute_name: str) -> None:
+        super().__init__(RenderMode, attribute_name)
+
+    @override
+    def after(self, pymux: Pymux) -> None:
+        pymux.apply_render_mode()
 
 
 class WindowSizeOption(Option):
@@ -822,6 +849,9 @@ ALL_OPTIONS = {
     # from the chrome to the palette. Lillecarl/pymux#273,
     # Lillecarl/pymux#283.
     "paint-screen": OnOffOption("paint_screen"),
+    # "reference" draws every cell of every frame and keeps nothing,
+    # which is slow and right. `RenderMode` says why it exists.
+    "render-mode": RenderModeOption("render_mode"),
     # Show 13:37 on the 14th of March, of the year it really is,
     # everywhere pymux displays a clock: the status line's format
     # strings, a pane in clock-mode, and the frame token that says

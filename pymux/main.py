@@ -75,6 +75,7 @@ from .options import (
     ForwardMode,
     OpenUrlMode,
     OpenUrlTarget,
+    RenderMode,
     Scope,
 )
 from .osc import (
@@ -1043,6 +1044,7 @@ class Pymux:
         self.default_shell = get_default_shell()
         self.paint_screen = False
         self.test_mode = False
+        self.render_mode = RenderMode.OPTIMIZED
 
         self.options = ALL_OPTIONS
         self.window_options = ALL_WINDOW_OPTIONS
@@ -2167,6 +2169,7 @@ class Pymux:
         pane = Pane(terminal)
 
         terminal_control = terminal.terminal_control
+        terminal_control.keep_rows = self.render_mode is RenderMode.OPTIMIZED
 
         # What moves `#{pane_revision}`. It is wired here and not in
         # `Pane`, because a pane is about the arrangement and knows
@@ -2404,6 +2407,18 @@ class Pymux:
             except Exception:
                 # An application that never ran has no layout to focus.
                 logger.exception("Could not sync the focus of a client.")
+
+    def apply_render_mode(self) -> None:
+        """
+        Draw every client and every pane the way `render-mode` says, from
+        the next frame on, and draw that frame whole.
+        """
+        reference = self.render_mode is RenderMode.REFERENCE
+        for pane in self.panes_by_id.values():
+            pane.terminal.terminal_control.keep_rows = not reference
+        for client_state in self._client_states.values():
+            client_state.app.renderer.reference = reference
+            self.redraw(client_state)
 
     def redraw(self, client_state: ClientState) -> None:
         """
@@ -4124,6 +4139,7 @@ exec pymux notify -u "$urgency" -- "$@"
             session=session,
         )
         client_state.temporary = temporary
+        client_state.app.renderer.reference = self.render_mode is RenderMode.REFERENCE
 
         self._client_states[connection] = client_state
 
