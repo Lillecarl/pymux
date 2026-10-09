@@ -2405,6 +2405,20 @@ class Pymux:
                 # An application that never ran has no layout to focus.
                 logger.exception("Could not sync the focus of a client.")
 
+    def redraw(self, client_state: ClientState) -> None:
+        """
+        Draw this client's terminal again from nothing.
+
+        A frame normally writes what changed since the one before, so a
+        cell the terminal lost -- or one the diff got wrong -- stays lost
+        until something writes over it. This forgets the frame before:
+        the next frame homes the cursor, erases the screen and writes
+        every cell. Not `Renderer.clear`, which leaves the alternate
+        screen and asks the terminal where its cursor is.
+        """
+        client_state.app.renderer.reset(leave_alternate_screen=False)
+        client_state.app.invalidate()
+
     def invalidate(self, reason: str = Woke.APPLICATION):
         """
         Ask every client for a frame. `Woke` says why the reason is
