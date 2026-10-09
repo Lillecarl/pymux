@@ -37,7 +37,7 @@ from weakref import ref
 
 from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.data_structures import Size
-from prompt_toolkit.selection import SelectionType
+from prompt_toolkit.selection import SelectionState, SelectionType
 from ptyhost.backends.posix import PosixBackend
 from ptyhost.backends.posix_utils import PtyReader
 from ptyhost.process import Process
@@ -66,7 +66,7 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "adopting", "checking", "load", "save
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 7
+SNAPSHOT_VERSION = 8
 
 #: A client's own settings, each a column of `clients` and an attribute
 #: of `ClientState`, with the type sqlite gives back as.
@@ -139,6 +139,16 @@ CREATE TABLE notification_routes(
 """,
     # A signal nobody took and a lock somebody holds.
     6: "CREATE TABLE wait_channels(name TEXT PRIMARY KEY, woken INTEGER NOT NULL, locked INTEGER NOT NULL);",
+    # A version 7 server refused a pane in copy mode, so none is.
+    7: """
+CREATE TABLE copy_modes(
+  pane_id INTEGER PRIMARY KEY REFERENCES panes(pane_id),
+  cursor_position INTEGER NOT NULL,
+  selection_start INTEGER,
+  selection_type TEXT,
+  CHECK ((selection_start IS NULL) = (selection_type IS NULL))
+);
+""",
 }
 
 #: The fields `ClientState.modes` holds, one JSON value in `clients`.
@@ -297,6 +307,13 @@ CREATE TABLE client_windows(
   previous_window_id INTEGER REFERENCES windows(window_id),
   PRIMARY KEY (client_id, session_id)
 );
+CREATE TABLE copy_modes(
+  pane_id INTEGER PRIMARY KEY REFERENCES panes(pane_id),
+  cursor_position INTEGER NOT NULL,
+  selection_start INTEGER,
+  selection_type TEXT,
+  CHECK ((selection_start IS NULL) = (selection_type IS NULL))
+);
 CREATE TABLE named_buffers(
   name TEXT PRIMARY KEY,
   text TEXT NOT NULL
@@ -416,6 +433,7 @@ TABLES = (
     "column_widths",
     "clients",
     "client_windows",
+    "copy_modes",
     "named_buffers",
     "server_lists",
     "hooks",
@@ -482,7 +500,8 @@ WRITES: dict[str, frozenset[str]] = {
     "pymux.jobs.JobTable": frozenset({"_jobs", "last_id"}),
     # The kept counts are the lengths of the chunks `job_output` holds.
     "pymux.jobs.Job": frozenset(name for name, fate in Job.KEEP.items() if fate == Keep.SAVED),
-    "ptterm.terminal.Terminal": frozenset({"terminal_control"}),
+    # `copy_reverse_video` is read again from the saved screen.
+    "ptterm.terminal.Terminal": frozenset({"terminal_control", "is_copying", "copy_buffer", "copy_reverse_video"}),
     "ptterm.terminal._TerminalControl": frozenset({"screen", "stream", "process"}),
     # What `pyte.freeze` walks writes every saved field, by construction.
     **{
@@ -515,10 +534,7 @@ WRITES: dict[str, frozenset[str]] = {
 
 #: Saved fields no table holds yet. Each is one step of
 #: Lillecarl/pymux#399 still to come.
-LATER: dict[str, frozenset[str]] = {
-    # Copy mode. A snapshot is refused while a pane is in it.
-    "ptterm.terminal.Terminal": frozenset({"is_copying", "copy_buffer", "copy_reverse_video"}),
-}
+LATER: dict[str, frozenset[str]] = {}
 
 #: Classes with saved fields that no table holds any of yet.
 LATER_CLASSES: frozenset[str] = frozenset(
@@ -735,8 +751,6 @@ def _panes_of(pymux: Pymux) -> list[Pane]:
 
 def _refuse_what_cannot_be_saved(pane: Pane) -> None:
     terminal = pane.terminal
-    if terminal.is_copying:
-        raise SnapshotError("pane %%%d is in copy mode; leave it first" % pane.pane_id)
     if not isinstance(getattr(terminal.terminal_control.process, "backend", None), PosixBackend):
         raise SnapshotError("pane %%%d runs no program on a pty, such as a job viewer" % pane.pane_id)
 
@@ -961,6 +975,33 @@ def _write_pane(
         "INSERT INTO pane_user_vars VALUES (?, ?, ?)",
         [(pane.pane_id, name, value) for name, value in sorted(pane.user_vars.items())],
     )
+    terminal = pane.terminal
+    if terminal.is_copying:
+        # The copy document is read from the screen, which the snapshot
+        # holds and the suspended program cannot change; the caret and
+        # the selection are what a person moved.
+        buffer = terminal.copy_buffer
+        selection = buffer.selection_state
+        db.execute(
+            "INSERT INTO copy_modes VALUES (?, ?, ?, ?)",
+            (
+                pane.pane_id,
+                buffer.cursor_position,
+                selection.original_cursor_position if selection is not None else None,
+                selection.type.value if selection is not None else None,
+            ),
+        )
+
+
+def _reopen_copy_mode(pane: Pane, row: sqlite3.Row) -> None:
+    "Copy mode as `_write_pane` saw it, over the screen the pane was thawed with."
+    terminal = pane.terminal
+    terminal.read_the_screen_into_the_copy_buffer()
+    terminal.is_copying = True
+    buffer = terminal.copy_buffer
+    buffer.cursor_position = row["cursor_position"]
+    if row["selection_start"] is not None:
+        buffer.selection_state = SelectionState(row["selection_start"], SelectionType(row["selection_type"]))
 
 
 def _write_clients(pymux: Pymux, db: sqlite3.Connection) -> None:
@@ -1258,6 +1299,8 @@ def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> int | No
             var["name"]: var["value"]
             for var in _rows(db, "SELECT * FROM pane_user_vars WHERE pane_id = ?", pane.pane_id)
         }
+        for copying in _rows(db, "SELECT * FROM copy_modes WHERE pane_id = ?", pane.pane_id):
+            _reopen_copy_mode(pane, copying)
         panes[pane.pane_id] = pane
         pymux.panes_by_id[pane.pane_id] = pane
         return pane

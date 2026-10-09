@@ -16,7 +16,7 @@ import pytest
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.data_structures import Size
-from prompt_toolkit.selection import SelectionType
+from prompt_toolkit.selection import SelectionState, SelectionType
 from pyte.keep import Keep
 from test_a_session_on_a_pyte_screen import attached, settled, shows
 from test_every_attribute_has_a_fate import declared, live_objects
@@ -195,6 +195,15 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     pymux.key_bindings_manager.add_custom_binding("F5", "display-message", ["it's F5"], table="root")
     pymux.key_bindings_manager.add_custom_binding("x", "kill-pane", [])
 
+    # Copy mode as `enter_copy_mode` opens it, less the focus no client
+    # here has. Not the shell, which the round trip types into.
+    for place, copying in enumerate(strip.panes[:2]):
+        copying.process.suspend()
+        copying.terminal.read_the_screen_into_the_copy_buffer()
+        copying.terminal.is_copying = True
+        copying.terminal.copy_buffer.cursor_position = place
+    strip.panes[1].terminal.copy_buffer.selection_state = SelectionState(0, SelectionType.LINES)
+
     signalled, held = WaitChannel(), WaitChannel()
     signalled.woken = True
     held.locked = True
@@ -291,6 +300,23 @@ async def _run_jobs(pymux) -> None:
         job = await jobs.submit(command, directory, tags, {"WHO": command}, pty)
         await jobs.supervise(job)
     await jobs._forget(job)
+
+
+def _copy_modes_of(pymux) -> dict:
+    "Each pane in copy mode: its document, caret, selection, and whether its program is held."
+    found = {}
+    for pane_id, pane in pymux.panes_by_id.items():
+        terminal = pane.terminal
+        if terminal.is_copying:
+            buffer = terminal.copy_buffer
+            selection = buffer.selection_state
+            found[pane_id] = (
+                buffer.text,
+                buffer.cursor_position,
+                (selection.original_cursor_position, selection.type) if selection else None,
+                pane.process.suspended,
+            )
+    return found
 
 
 def _bindings_of(pymux) -> dict:
@@ -408,6 +434,8 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                     "turn": (False, True),
                 }
                 assert fresh.startup_command == "htop"
+                assert _copy_modes_of(fresh) == _copy_modes_of(pymux)
+                assert len(_copy_modes_of(fresh)) == 2
                 assert _bindings_of(fresh) == _bindings_of(pymux)
                 assert (await fresh.jobs.submit("true")).job_id == pymux.jobs.last_id + 1
                 reloaded = fresh.panes_by_id[shell.pane_id]
@@ -493,6 +521,7 @@ def test_a_snapshot_of_the_version_before_steps_up(pymux, tmp_path):
     db.execute("DROP TABLE notifications")
     db.execute("DROP TABLE notification_routes")
     db.execute("DROP TABLE wait_channels")
+    db.execute("DROP TABLE copy_modes")
     db.execute("DELETE FROM counters WHERE name IN ('notification', 'notification_route')")
     db.execute("DELETE FROM server WHERE name IN ('clipboard', 'clipboard_type', 'bindings_recorded')")
     db.execute("PRAGMA user_version = 1")

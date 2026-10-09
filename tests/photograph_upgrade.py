@@ -15,6 +15,7 @@ What it builds, under one attached client:
   with three columns, and a window with one of two panes zoomed;
 * session `other`: two windows, and a popup over them;
 * two finished jobs, one that failed;
+* a pane in copy mode;
 * a message on the client, and the view it is on at the exec, which
   the client has to come back to without being moved
   (Lillecarl/pymux#409).
@@ -244,6 +245,12 @@ def upgrade_in(terminal, seat, work, out):
         # view on both sides has them. Lillecarl/pymux#551.
         answer(socket_path, "display-message", "kept across the upgrade")
         answer(socket_path, "confirm-before", "-p", "Still asking? (y/n)", "display-message answered")
+        # The active pane of the window the client is on stops in copy
+        # mode, and stays stopped across the exec.
+        answer(socket_path, "copy-mode")
+        in_mode = answer(socket_path, "list-panes", "-a", "-F", "#{pane_id} #{pane_in_mode}")
+        if " 1" not in in_mode:
+            raise RuntimeError("no pane went into copy mode: %r" % in_mode)
         before = every_view(socket_path, client, take_one, room, "before")
         options_before = answer(socket_path, "show-client-options", "-t", client)
 
@@ -266,6 +273,8 @@ def upgrade_in(terminal, seat, work, out):
             raise RuntimeError("the server's pid changed, so this was no exec")
         if what_the_jobs_say(socket_path) != jobs:
             raise RuntimeError("the jobs answer differently after the upgrade")
+        if answer(socket_path, "list-panes", "-a", "-F", "#{pane_id} #{pane_in_mode}") != in_mode:
+            raise RuntimeError("copy mode did not come back on the same pane")
         landed = steady(take_one, room / LANDING / "after.png")
         # The pass starts where the first one did, so that each window
         # marks the same previous window on both sides.
