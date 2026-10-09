@@ -8,6 +8,7 @@ from contextlib import AbstractContextManager, suppress
 from typing import (
     TYPE_CHECKING,
     Any,
+    ClassVar,
     TextIO,
     cast,
 )
@@ -21,6 +22,7 @@ from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.input.vt100 import Vt100Input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
+from pyte.keep import Keep
 
 from pymux.commands.common import find_pane
 
@@ -88,6 +90,40 @@ class ServerConnection:
     """
     For each client that connects, we have one instance of this class.
     """
+
+    #: What a hot upgrade does with each attribute; `pyte.keep` says.
+    #: The socket ends with the old server and the client reconnects
+    #: (Lillecarl/pymux#409), so the attach handshake rebuilds most of
+    #: this. Saved: the client's own record, when it came, and the
+    #: kitty image ids already placed on its terminal.
+    KEEP: ClassVar[dict[str, Keep]] = {
+        "client_state": Keep.SAVED,
+        "created": Keep.SAVED,
+        "graphics": Keep.SAVED,
+        "pymux": Keep.REBUILT,
+        "size": Keep.REBUILT,
+        "hostname": Keep.REBUILT,
+        "ttyname": Keep.REBUILT,
+        "pid": Keep.REBUILT,
+        "environment": Keep.REBUILT,
+        "colors": Keep.REBUILT,
+        "default_colors": Keep.REBUILT,
+        "kitty_source_flags": Keep.REBUILT,
+        "_kitty_supported": Keep.REBUILT,
+        "_pointer_shape_sent": Keep.REBUILT,
+        "answers_ping": Keep.REBUILT,
+        "can_forward": Keep.REBUILT,
+        "may_attach": Keep.REBUILT,
+        "forwards": Keep.DROPPED,
+        "pipe_connection": Keep.DROPPED,
+        "_pipeinput": Keep.DROPPED,
+        "_recv_buffer": Keep.DROPPED,
+        "_stream": Keep.DROPPED,
+        "_tasks": Keep.DROPPED,
+        "_closed": Keep.DROPPED,
+        "_kitty_detection_pending": Keep.DROPPED,
+        "_unanswered": Keep.DROPPED,
+    }
 
     def __init__(self, pymux: Pymux, pipe_connection, may_attach: bool = True) -> None:
         self.pymux = pymux

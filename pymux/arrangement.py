@@ -13,11 +13,13 @@ from __future__ import annotations
 import math
 import os
 from enum import Enum
+from typing import ClassVar
 from weakref import WeakKeyDictionary, ref
 
 from prompt_toolkit.application import Application, get_app, get_app_or_none, set_app
 from prompt_toolkit.data_structures import Size
 from ptterm import Terminal
+from pyte.keep import Keep
 
 from .enums import WindowSize
 from .ids import PaneId, PaneIndex, WindowId, WindowIndex
@@ -84,6 +86,26 @@ class Pane:
     """
 
     _pane_counter = 1000  # Start at 1000, to be sure to not confuse this with pane indexes.
+
+    #: What a hot upgrade does with each attribute; `pyte.keep` says.
+    #: The counters of panes, windows and splits are class attributes,
+    #: so no instance walk sees them: a snapshot saves them too, or a
+    #: new id collides with one that survived. Lillecarl/pymux#399.
+    KEEP: ClassVar[dict[str, Keep]] = {
+        "pane_id": Keep.SAVED,
+        "terminal": Keep.SAVED,
+        "chosen_name": Keep.SAVED,
+        "clock_mode": Keep.SAVED,
+        "marks": Keep.SAVED,
+        "user_vars": Keep.SAVED,
+        "current_directory": Keep.SAVED,
+        "current_host": Keep.SAVED,
+        "command_zone": Keep.SAVED,
+        "last_exit_status": Keep.SAVED,
+        # `#{pane_revision}` only grows: an agent waiting on a change
+        # holds a number from before the upgrade.
+        "revision": Keep.SAVED,
+    }
 
     def __init__(self, terminal: Terminal) -> None:
         self.terminal = terminal
@@ -233,6 +255,11 @@ class _Split(list):
 
     _split_counter = 0
 
+    KEEP: ClassVar[dict[str, Keep]] = {
+        "split_id": Keep.SAVED,
+        "weights": Keep.SAVED,
+    }
+
     def __init__(self, *a, **kw):
         list.__init__(self, *a, **kw)
 
@@ -292,6 +319,24 @@ class Window:
     """
     Pymux window.
     """
+
+    #: What a hot upgrade does with each attribute; `pyte.keep` says.
+    KEEP: ClassVar[dict[str, Keep]] = {
+        "window_id": Keep.SAVED,
+        "index": Keep.SAVED,
+        "root": Keep.SAVED,
+        "_active_pane": Keep.SAVED,
+        "_prev_active_pane": Keep.SAVED,  # a weak reference, saved by pane id
+        "chosen_name": Keep.SAVED,
+        "previous_selected_layout": Keep.SAVED,
+        "_strip": Keep.SAVED,
+        "column_widths": Keep.SAVED,
+        "window_size": Keep.SAVED,
+        "manual_size": Keep.SAVED,
+        "zoom": Keep.SAVED,
+        "synchronize_panes": Keep.SAVED,
+        "frame_rate": Keep.SAVED,
+    }
 
     _window_counter = 1000  # Start here, to avoid confusion with window index.
 
@@ -968,6 +1013,21 @@ class Arrangement:
     window. All the clients share the same Arrangement instance, but they can
     have different windows active.
     """
+
+    #: What a hot upgrade does with each attribute; `pyte.keep` says.
+    #: The two per-client maps are keyed by `Application`, which no
+    #: snapshot can hold: they are saved by client and window id, and
+    #: a client that reattaches gets its windows back.
+    KEEP: ClassVar[dict[str, Keep]] = {
+        "windows": Keep.SAVED,
+        "_unlinked_windows": Keep.SAVED,
+        "base_index": Keep.SAVED,
+        "renumber_windows": Keep.SAVED,
+        "window_defaults": Keep.SAVED,
+        "_last_active_window": Keep.SAVED,
+        "_active_window_for_cli": Keep.SAVED,
+        "_prev_active_window_for_cli": Keep.SAVED,
+    }
 
     def __init__(self) -> None:
         self.windows: list[Window] = []

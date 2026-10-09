@@ -16,7 +16,7 @@ import weakref
 from collections import deque
 from collections.abc import Callable
 from contextlib import asynccontextmanager, suppress
-from typing import TYPE_CHECKING, NamedTuple, override
+from typing import TYPE_CHECKING, ClassVar, NamedTuple, override
 
 import anyio
 import anyio.abc
@@ -46,6 +46,7 @@ from ptterm import Terminal
 from ptyhost.backends.posix import PosixBackend
 from pyte.environment import terminal_name
 from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
+from pyte.keep import Keep
 from pyte.keys import KeyboardFlag
 from pyte.osc import Osc
 
@@ -242,6 +243,63 @@ class ClientState:
     """
     State information that is independent for each client.
     """
+
+    #: What a hot upgrade does with each attribute; `pyte.keep` says.
+    #: This is the record a reconnecting client gets back
+    #: (Lillecarl/pymux#409): what a person set and what they were in
+    #: the middle of. The application around it is built again. The
+    #: strip views live on `layout_manager`, keyed by window, and are
+    #: saved by window id.
+    KEEP: ClassVar[dict[str, Keep]] = {
+        "session": Keep.SAVED,
+        "previous_session": Keep.SAVED,
+        "name": Keep.SAVED,
+        "last_used": Keep.SAVED,
+        "read_only": Keep.SAVED,
+        "ignore_size": Keep.SAVED,
+        "full_screen": Keep.SAVED,
+        "theme": Keep.SAVED,
+        "swap_dark_and_light": Keep.SAVED,
+        "matched": Keep.REBUILT,  # the nearest theme to the colours the terminal answers
+        # Where the person was: a prefix held, a key table, a prompt,
+        # a question, a menu, a chooser.
+        "has_prefix": Keep.SAVED,
+        "key_tables": Keep.SAVED,
+        "message": Keep.SAVED,
+        "confirmations": Keep.SAVED,
+        "prompt_text": Keep.SAVED,
+        "prompt_command": Keep.SAVED,
+        "prompt_buffer": Keep.SAVED,
+        "command_buffer": Keep.SAVED,
+        "display_popup": Keep.SAVED,
+        "menu_entries": Keep.SAVED,
+        "menu_title": Keep.SAVED,
+        "chooser_return_to": Keep.SAVED,
+        "choose_window": Keep.SAVED,
+        "choose_window_index": Keep.SAVED,
+        "choose_window_filter": Keep.SAVED,
+        "choose_window_command": Keep.SAVED,
+        "choose_buffer": Keep.SAVED,
+        "choose_job": Keep.SAVED,
+        "choose_notifications": Keep.SAVED,
+        "choose_options": Keep.SAVED,
+        # The application and what it is made of.
+        "pymux": Keep.REBUILT,
+        "connection": Keep.REBUILT,
+        "app": Keep.REBUILT,
+        "input": Keep.REBUILT,
+        "output": Keep.REBUILT,
+        "color_depth": Keep.REBUILT,
+        "layout_manager": Keep.REBUILT,
+        "prompt_completer": Keep.REBUILT,
+        "last_time_text": Keep.REBUILT,
+        "input_tick": Keep.DROPPED,
+        "schedule_tick": Keep.DROPPED,
+        # A command's client lives for one command, and no command
+        # spans an upgrade.
+        "temporary": Keep.DROPPED,
+        "caller_pane_id": Keep.DROPPED,
+    }
 
     def __init__(self, pymux: Pymux, input, output, color_depth, connection, session: Session) -> None:
         self.pymux = pymux
@@ -920,6 +978,102 @@ class Pymux:
         p.run_standalone(color_depth)
     """
 
+    #: What a hot upgrade does with each attribute; `pyte.keep` says.
+    #: An option's value is saved, because a person may have set it
+    #: since the configuration file was read; the tables that describe
+    #: the options are rebuilt. The listening socket's fd is inherited
+    #: across `execve` (Lillecarl/pymux#408). Lillecarl/pymux#399.
+    KEEP: ClassVar[dict[str, Keep]] = {
+        # Sessions, and the counters that name them.
+        "sessions": Keep.SAVED,
+        "_session_counter": Keep.SAVED,
+        "_uses": Keep.SAVED,
+        "created": Keep.SAVED,
+        "socket_name": Keep.SAVED,
+        "listener": Keep.SAVED,
+        "original_cwd": Keep.SAVED,
+        "source_file": Keep.SAVED,
+        "startup_command": Keep.SAVED,
+        "_startup_done": Keep.SAVED,
+        "startup_errors": Keep.SAVED,
+        "_runs_standalone": Keep.SAVED,
+        "_serves_one_terminal": Keep.SAVED,
+        "test_mode": Keep.SAVED,
+        # What the server holds for every session.
+        "global_environment": Keep.SAVED,
+        "update_environment": Keep.SAVED,
+        "clipboard": Keep.SAVED,
+        "named_buffers": Keep.SAVED,
+        "prompt_history": Keep.SAVED,
+        "hooks": Keep.SAVED,
+        "wait_channels": Keep.SAVED,
+        "message_log": Keep.SAVED,
+        "notifications": Keep.SAVED,
+        "notification_center": Keep.SAVED,
+        "jobs": Keep.SAVED,
+        # Bindings a person may have changed with `bind-key`.
+        "key_bindings_manager": Keep.SAVED,
+        # Option values.
+        "allow_program_resize": Keep.SAVED,
+        "clipboard_mode": Keep.SAVED,
+        "command_palette": Keep.SAVED,
+        "default_shell": Keep.SAVED,
+        "default_terminal": Keep.SAVED,
+        "display_pane_numbers": Keep.SAVED,
+        "enable_bell": Keep.SAVED,
+        "enable_mouse_support": Keep.SAVED,
+        "enable_pane_status": Keep.SAVED,
+        "enable_status": Keep.SAVED,
+        "extended_keys": Keep.SAVED,
+        "forward_mode": Keep.SAVED,
+        "history_limit": Keep.SAVED,
+        "job_ttl": Keep.SAVED,
+        "lock_command": Keep.SAVED,
+        "mode_keys_vi_mode": Keep.SAVED,
+        "notify_shim": Keep.SAVED,
+        "open_url_forward": Keep.SAVED,
+        "open_url_forward_idle": Keep.SAVED,
+        "open_url_mode": Keep.SAVED,
+        "open_url_shim": Keep.SAVED,
+        "open_url_target": Keep.SAVED,
+        "paint_screen": Keep.SAVED,
+        "remain_on_exit": Keep.SAVED,
+        "render_mode": Keep.SAVED,
+        "status_interval": Keep.SAVED,
+        "status_justify": Keep.SAVED,
+        "status_keys_vi_mode": Keep.SAVED,
+        "status_left": Keep.SAVED,
+        "status_left_length": Keep.SAVED,
+        "status_right": Keep.SAVED,
+        "status_right_length": Keep.SAVED,
+        "strip_animation_time": Keep.SAVED,
+        "synthesize_key_events": Keep.SAVED,
+        "which_key": Keep.SAVED,
+        "window_status_current_format": Keep.SAVED,
+        "window_status_format": Keep.SAVED,
+        # Tables, indexes and what the server last pushed.
+        "options": Keep.REBUILT,
+        "window_options": Keep.REBUILT,
+        "client_options": Keep.REBUILT,
+        "option_tables": Keep.REBUILT,
+        "panes_by_id": Keep.REBUILT,
+        "_client_states": Keep.REBUILT,  # from the client records, as clients reconnect
+        "_notify_shim_dir": Keep.REBUILT,
+        "_open_url_shim_dir": Keep.REBUILT,
+        "_allow_remote_debugging": Keep.REBUILT,  # a kernel attribute, asked for again
+        "_kitty_flags_sent": Keep.REBUILT,
+        "_keyboard_state_sent": Keep.REBUILT,
+        "_cell_size_sent": Keep.REBUILT,
+        # The running server.
+        "connections": Keep.DROPPED,
+        "tasks": Keep.DROPPED,
+        "loop": Keep.DROPPED,
+        "done": Keep.DROPPED,
+        "counters": Keep.DROPPED,
+        "sourcing": Keep.DROPPED,
+        "_hooks_running": Keep.DROPPED,
+    }
+
     def __init__(
         self,
         source_file=None,
@@ -1183,7 +1337,6 @@ class Pymux:
         self.panes_by_id: weakref.WeakValueDictionary[PaneId, Pane] = weakref.WeakValueDictionary()
 
         # Socket information.
-        self.socket: None = None
         self.socket_name: str | None = None
         #: The bound socket that waits for clients, once
         #: `listen_on_socket` made one. `running()` serves it.

@@ -9,8 +9,10 @@ until Lillecarl/pymux#323.
 from __future__ import annotations
 
 import time
+from typing import ClassVar
 
 from prompt_toolkit.data_structures import Size
+from pyte.keep import Keep
 
 from .arrangement import Arrangement, Pane
 from .ids import SessionId
@@ -32,6 +34,21 @@ class Session:
     The windows are the session's. Which window a client looks at is the
     client's, and `Arrangement` keeps that per application.
     """
+
+    #: What a hot upgrade does with each attribute; `pyte.keep` says.
+    KEEP: ClassVar[dict[str, Keep]] = {
+        "session_id": Keep.SAVED,
+        "name": Keep.SAVED,
+        "arrangement": Keep.SAVED,
+        "environment": Keep.SAVED,
+        "default_size": Keep.SAVED,
+        "overlay_pane": Keep.SAVED,
+        "overlay_title": Keep.SAVED,
+        "overlay_width": Keep.SAVED,
+        "overlay_height": Keep.SAVED,
+        "created": Keep.SAVED,
+        "last_used": Keep.SAVED,
+    }
 
     def __init__(self, session_id: SessionId, name: str) -> None:
         #: The number in `$0`, the way tmux spells a session. It counts
