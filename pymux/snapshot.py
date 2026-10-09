@@ -313,6 +313,7 @@ LATER_CLASSES: frozenset[str] = frozenset(
         "pyte.images.GraphicsState",
         "ptyhost.process.Process",
         "ptyhost.backends.posix.PosixBackend",
+        "ptyhost.backends.posix_utils.PtyReader",
     }
 )
 

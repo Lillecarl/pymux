@@ -46,8 +46,15 @@ def declared(cls) -> dict:
 
 
 def attributes_of(one) -> set:
-    "Every attribute set on this instance, in its `__dict__` or its slots."
+    """
+    Every attribute set on this instance, in its `__dict__` or its slots,
+    and every property its class declares a fate for: a property carries
+    state the instance holds in another shape, such as a decoder's.
+    """
     have = set(getattr(one, "__dict__", ()))
+    for name in declared(type(one)):
+        if isinstance(getattr(type(one), name, None), property):
+            have.add(name)
     for cls in type(one).__mro__:
         slots = cls.__dict__.get("__slots__", ())
         for slot in (slots,) if isinstance(slots, str) else slots:
@@ -73,6 +80,7 @@ def live_objects(pymux):
                 yield terminal.terminal_control.stream
                 yield pane.process
                 yield pane.process.backend
+                yield pane.process.backend._reader
                 screen = pane.screen
                 yield screen
                 yield screen.page
