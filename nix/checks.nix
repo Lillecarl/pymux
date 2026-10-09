@@ -50,6 +50,9 @@
   makeFontsConf,
   runtimeShell,
   dejavu_fonts,
+  # The CJK glyphs DejaVu does not have, so a wide character draws as
+  # itself and not as a box. Lillecarl/pymux#548.
+  wqy_microhei,
   perl,
   # The programs that animate. A pane nobody looks at should cost the
   # parsing of its bytes and nothing else, and only a real terminal
@@ -365,7 +368,16 @@ let
   # build sandbox has no /etc/fonts at all. Without this every terminal dies
   # at startup, or draws with whatever it falls back to, which is not the
   # same twice.
-  fontsConf = makeFontsConf { fontDirectories = [ dejavu_fonts ]; };
+  #
+  # DejaVu first, so every glyph it has stays its own; the CJK font
+  # answers only for what DejaVu lacks. A box judged where a wide
+  # character lands and never which one it was.
+  fontsConf = makeFontsConf {
+    fontDirectories = [
+      dejavu_fonts
+      wqy_microhei
+    ];
+  };
 
   # What every seat needs: a display server, a terminal emulator and the
   # tools that find a window and photograph it. Two checks take pictures,
