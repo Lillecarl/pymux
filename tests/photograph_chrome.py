@@ -708,24 +708,42 @@ def chrome_command(
     )
 
 
+#: The differences between the two renderings that stand, as
+#: {(terminal, fixture): pixels}. The file says why each one is not
+#: the optimized rendering drawing something else.
+RENDERINGS_RECORDED = Path(__file__).parent / "render-mode-differences.txt"
+
+
+def read_renderings_recorded():
+    standing = {}
+    for line in RENDERINGS_RECORDED.read_text().splitlines():
+        line = line.split("#")[0].strip()
+        if line:
+            terminal, fixture, pixels = line.split()
+            standing[(terminal, fixture)] = int(pixels)
+    return standing
+
+
 def difference_of(one, other, marked):
     """
-    Where two pictures of one screen differ, as a pixel box, or None.
+    How many pixels two pictures of one screen differ in, and where.
 
-    When they differ, `marked` is the first picture with every
-    differing pixel painted red, for a person to read.
+    Returns (0, None) when they are the same. When they differ, `marked`
+    is the first picture with every differing pixel painted red, for a
+    person to read.
     """
     first = Image.open(one).convert("RGB")
     second = Image.open(other).convert("RGB")
     if first.size != second.size:
-        return "size, %s against %s" % (first.size, second.size)
-    box = ImageChops.difference(first, second).getbbox()
-    if box is None:
-        return None
+        return -1, "size, %s against %s" % (first.size, second.size)
     mask = ImageChops.difference(first, second).convert("L").point(lambda value: 255 if value else 0)
+    box = mask.getbbox()
+    if box is None:
+        return 0, None
+    pixels = mask.histogram()[255]
     first.paste((255, 0, 0), mask=mask)
     first.save(marked)
-    return "the pixels %s" % (box,)
+    return pixels, "%d pixels within %s" % (pixels, box)
 
 
 class RenderingsDiffer(RuntimeError):
@@ -742,17 +760,20 @@ def picture_of(terminal, seat, name, work, out, fixtures=None, render_mode=None)
     reference rendering writes every cell where it belongs, so any
     difference is the optimized one drawing something else. The real
     terminal is the judge, which is what a check on cells cannot be.
+    A difference `render-mode-differences.txt` records, to the pixel,
+    stands.
     """
     if render_mode is None:
         render_mode = RENDER_MODE
     if render_mode == "both":
         optimized = picture_of(terminal, seat, name, work, out, fixtures, "optimized")
         reference = picture_of(terminal, seat, name, work, out, fixtures, "reference")
-        differs = difference_of(optimized, reference, optimized.parent / "difference.png")
-        if differs is not None:
+        pixels, where = difference_of(optimized, reference, optimized.parent / "difference.png")
+        recorded = read_renderings_recorded().get((terminal.name, name), 0)
+        if pixels != recorded:
             raise RenderingsDiffer(
-                "%s in %s: the optimized and reference renderings differ in %s; difference.png marks where"
-                % (name, terminal.name, differs)
+                "%s in %s: the optimized and reference renderings differ in %s, and %d are recorded;"
+                " difference.png marks where" % (name, terminal.name, where or "no pixel", recorded)
             )
         return optimized
 
