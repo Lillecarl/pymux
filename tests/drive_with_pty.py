@@ -258,15 +258,22 @@ import os, signal, sys, time, tty
 tty.setraw(0)
 out = sys.stdout
 
+# SIGWINCH waits while one draw runs: a draw interrupted after it read
+# the size would finish the old corners over the new ones.
+# Lillecarl/pymux#545.
 def draw(*_):
-    size = os.get_terminal_size()
-    out.write("\\x1b#8")
-    out.write("\\x1b[1;1HTL")
-    out.write("\\x1b[1;%dHTR" % (size.columns - 1))
-    out.write("\\x1b[%d;1HBL" % size.lines)
-    out.write("\\x1b[%d;%dHBR" % (size.lines, size.columns - 1))
-    out.write("\\x1b[2;1HSIZE<%dx%d>" % (size.columns, size.lines))
-    out.flush()
+    signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGWINCH})
+    try:
+        size = os.get_terminal_size()
+        out.write("\\x1b#8")
+        out.write("\\x1b[1;1HTL")
+        out.write("\\x1b[1;%dHTR" % (size.columns - 1))
+        out.write("\\x1b[%d;1HBL" % size.lines)
+        out.write("\\x1b[%d;%dHBR" % (size.lines, size.columns - 1))
+        out.write("\\x1b[2;1HSIZE<%dx%d>" % (size.columns, size.lines))
+        out.flush()
+    finally:
+        signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGWINCH})
 
 # A pane is made before a client attaches, so its first size is not the
 # size of the terminal that ends up in front of it. A full screen
