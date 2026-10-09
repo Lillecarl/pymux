@@ -62,7 +62,7 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "adopting", "checking", "load", "save
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 2
+SNAPSHOT_VERSION = 3
 
 #: A client's own settings, each a column of `clients` and an attribute
 #: of `ClientState`, with the type sqlite gives back as.
@@ -87,7 +87,34 @@ STEPS: dict[int, str] = {
         "ALTER TABLE clients ADD COLUMN %s %s;" % (name, "TEXT" if kind is str else "INTEGER")
         for name, kind in _CLIENT_SETTING_TYPES.items()
     ),
+    # What a client was in the middle of; NULL opens nothing.
+    2: "ALTER TABLE clients ADD COLUMN modes TEXT;",
 }
+
+#: The fields `ClientState.modes` holds, one JSON value in `clients`.
+CLIENT_MODES = frozenset(
+    {
+        "has_prefix",
+        "key_tables",
+        "confirmations",
+        "prompt_text",
+        "prompt_command",
+        "prompt_buffer",
+        "command_buffer",
+        "display_popup",
+        "menu_entries",
+        "menu_title",
+        "chooser_return_to",
+        "choose_window",
+        "choose_window_index",
+        "choose_window_filter",
+        "choose_window_command",
+        "choose_buffer",
+        "choose_job",
+        "choose_notifications",
+        "choose_options",
+    }
+)
 
 SCHEMA = """
 CREATE TABLE server(
@@ -210,7 +237,8 @@ CREATE TABLE clients(
   full_screen INTEGER,
   theme TEXT,
   swap_dark_and_light INTEGER,
-  message TEXT
+  message TEXT,
+  modes TEXT
 );
 CREATE TABLE client_windows(
   client_id TEXT NOT NULL REFERENCES clients(client_id),
@@ -348,7 +376,7 @@ WRITES: dict[str, frozenset[str]] = {
     "pymux.arrangement.Window": frozenset(Window.KEEP),
     "pymux.arrangement._Split": frozenset(_Split.KEEP),
     "pymux.arrangement.Pane": frozenset(Pane.KEEP),
-    "pymux.main.ClientState": frozenset({"session", "previous_session", *CLIENT_SETTINGS}),
+    "pymux.main.ClientState": frozenset({"session", "previous_session", *CLIENT_SETTINGS, *CLIENT_MODES}),
     "pymux.jobs.JobTable": frozenset({"_jobs", "last_id"}),
     # The kept counts are the lengths of the chunks `job_output` holds.
     "pymux.jobs.Job": frozenset(name for name, fate in Job.KEEP.items() if fate == Keep.SAVED),
@@ -385,30 +413,6 @@ WRITES: dict[str, frozenset[str]] = {
 LATER: dict[str, frozenset[str]] = {
     # Copy mode. A snapshot is refused while a pane is in it.
     "ptterm.terminal.Terminal": frozenset({"is_copying", "copy_buffer", "copy_reverse_video"}),
-    # What a person was in the middle of, and how the client is set.
-    "pymux.main.ClientState": frozenset(
-        {
-            "has_prefix",
-            "key_tables",
-            "confirmations",
-            "prompt_text",
-            "prompt_command",
-            "prompt_buffer",
-            "command_buffer",
-            "display_popup",
-            "menu_entries",
-            "menu_title",
-            "chooser_return_to",
-            "choose_window",
-            "choose_window_index",
-            "choose_window_filter",
-            "choose_window_command",
-            "choose_buffer",
-            "choose_job",
-            "choose_notifications",
-            "choose_options",
-        }
-    ),
     # The server's own records, and what the next process is started with.
     "pymux.main.Pymux": frozenset(
         {
@@ -842,16 +846,19 @@ def _write_clients(pymux: Pymux, db: sqlite3.Connection) -> None:
             "previous_session_id": state.previous_session.session_id if state.previous_session is not None else None,
             "windows": windows,
             "settings": {name: getattr(state, name) for name in CLIENT_SETTINGS},
+            "modes": state.modes(),
         }
     for client_id, client in sorted(clients.items()):
         settings = client["settings"]
+        modes = client.get("modes")
         db.execute(
-            "INSERT INTO clients VALUES (%s)" % ", ".join("?" * (3 + len(CLIENT_SETTINGS))),
+            "INSERT INTO clients VALUES (%s)" % ", ".join("?" * (4 + len(CLIENT_SETTINGS))),
             (
                 client_id,
                 client["session_id"],
                 client["previous_session_id"],
                 *(settings.get(name) for name in CLIENT_SETTINGS),
+                json.dumps(modes) if modes is not None else None,
             ),
         )
         db.executemany(
@@ -1150,6 +1157,7 @@ def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> int | No
             "settings": {
                 name: _CLIENT_SETTING_TYPES[name](row[name]) for name in CLIENT_SETTINGS if row[name] is not None
             },
+            "modes": json.loads(row["modes"]) if row["modes"] is not None else None,
         }
 
     Pane._pane_counter = counters["pane"]

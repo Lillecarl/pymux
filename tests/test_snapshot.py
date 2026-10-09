@@ -199,6 +199,41 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
             "swap_dark_and_light": True,
             "message": "job 2 exited 4",
         },
+        "modes": {
+            "has_prefix": True,
+            "key_tables": ["resize"],
+            "confirmations": [["Kill the pane?", "kill-pane"]],
+            "prompt": ["(rename)", "rename-window '%%'", "half typ"],
+            "command": None,
+            "popup": None,
+            "menu": None,
+            "chooser": "choose_window",
+            "choose_window_index": 1,
+            "choose_window_command": "select-window -t '%%'",
+            "choose_window_filter": "sl",
+            "chooser_return_to": [second.session_id, elsewhere.window_id],
+        },
+    }
+    # Opening a chooser closes a menu, so the menu is another client's.
+    pymux.returning_clients["away"] = {
+        "session_id": first.session_id,
+        "previous_session_id": second.session_id,
+        "windows": {},
+        "settings": {},
+        "modes": {
+            "has_prefix": False,
+            "key_tables": [],
+            "confirmations": [],
+            "prompt": None,
+            "command": "kill-ses",
+            "popup": None,
+            "menu": ["Do", [["a", "again", "display-message again"]]],
+            "chooser": None,
+            "choose_window_index": 0,
+            "choose_window_command": "",
+            "choose_window_filter": "",
+            "chooser_return_to": None,
+        },
     }
 
 
@@ -338,6 +373,18 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                     assert back.session.arrangement._prev_active_window_for_cli[back.app] is elsewhere
                     assert (back.name, back.read_only, back.message) == ("phone", True, "job 2 exited 4")
                     assert "gone" not in fresh.returning_clients
+                    # What it was in the middle of, and the prompt holds the keyboard.
+                    assert (back.has_prefix, back.key_tables, back.confirm_text) == (True, ["resize"], "Kill the pane?")
+                    assert back.choose_window and back.choose_window_filter.text == "sl"
+                    assert back.chooser_return_to == (back.session, elsewhere)
+                    assert (back.prompt_command, back.prompt_buffer.text) == ("rename-window '%%'", "half typ")
+                    assert back.app.layout.has_focus(back.prompt_buffer)
+                async with attached(fresh):
+                    back = fresh.connections[-1].client_state
+                    fresh.welcome_back(back, "away")
+                    assert (back.menu_title, back.menu_entries) == ("Do", [("a", "again", "display-message again")])
+                    assert back.command_buffer.text == "kill-ses"
+                    assert back.app.layout.has_focus(back.command_buffer)
                 fresh.stop()
         finally:
             for pane in list(fresh.panes_by_id.values()):
@@ -353,7 +400,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
     assert _rows(
         first, "SELECT count(*) FROM split_weights WHERE kind = 'pane' AND id NOT IN (SELECT pane_id FROM panes)"
     ) == [(1,)]
-    assert _rows(first, "SELECT client_id FROM clients ORDER BY 1") == [("gone",), ("returning",)]
+    assert _rows(first, "SELECT client_id FROM clients ORDER BY 1") == [("away",), ("gone",), ("returning",)]
     assert _rows(first, "SELECT overlay_title FROM sessions WHERE overlay_pane_id IS NOT NULL") == [("pop",)]
     assert _rows(first, "SELECT count(*) FROM screen_rows WHERE text LIKE '%ALT'") == [(1,)]
     assert _rows(first, "SELECT returncode, stdout_dropped > 0, stderr_dropped > 0 FROM jobs WHERE job_id = 2") == [
@@ -386,7 +433,7 @@ def test_a_snapshot_of_the_version_before_steps_up(pymux, tmp_path):
     }
     snapshot.save(pymux, path)
     db = sqlite3.connect(path)
-    for name in snapshot.CLIENT_SETTINGS:
+    for name in (*snapshot.CLIENT_SETTINGS, "modes"):
         db.execute("ALTER TABLE clients DROP COLUMN %s" % name)
     db.execute("PRAGMA user_version = 1")
     db.commit()
@@ -395,4 +442,5 @@ def test_a_snapshot_of_the_version_before_steps_up(pymux, tmp_path):
     fresh = Pymux()
     snapshot.load(fresh, path)
     assert fresh.returning_clients["gone"]["settings"] == {}
+    assert fresh.returning_clients["gone"]["modes"] is None
     assert _rows(path, "PRAGMA user_version") == [(1,)]

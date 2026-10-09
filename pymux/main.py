@@ -31,6 +31,7 @@ from prompt_toolkit.clipboard import ClipboardData, InMemoryClipboard
 from prompt_toolkit.completion import Completer, DynamicCompleter
 from prompt_toolkit.cursor_shapes import CursorShape, CursorShapeConfig
 from prompt_toolkit.data_structures import Size
+from prompt_toolkit.document import Document
 from prompt_toolkit.enums import EditingMode
 from prompt_toolkit.filters import Condition
 from prompt_toolkit.history import InMemoryHistory
@@ -240,6 +241,17 @@ class Asker(NamedTuple):
 
     client_state: ClientState
     in_person: bool
+
+
+#: Each chooser's flag on `ClientState`, and the `LayoutManager` call
+#: that opens it.
+_CHOOSERS = {
+    "choose_window": "display_chooser",
+    "choose_buffer": "display_buffer_chooser",
+    "choose_options": "display_options_chooser",
+    "choose_notifications": "display_notifications_chooser",
+    "choose_job": "display_job_chooser",
+}
 
 
 class ClientState:
@@ -831,6 +843,84 @@ class ClientState:
         """
         with set_app(self.app):
             self._sync_focus()
+
+    def modes(self) -> dict:
+        """
+        What this client is in the middle of, as plain values: what a
+        snapshot holds and `take_modes` opens again.
+        Lillecarl/pymux#551.
+        """
+        layout = self.layout_manager
+        going_back = self.chooser_return_to
+        with set_app(self.app):
+            command_mode = self.command_mode
+        return {
+            "has_prefix": self.has_prefix,
+            "key_tables": list(self.key_tables),
+            "confirmations": [list(one) for one in self.confirmations],
+            "prompt": [self.prompt_text, self.prompt_command, self.prompt_buffer.text] if self.prompt_command else None,
+            "command": self.command_buffer.text if command_mode else None,
+            "popup": (
+                [layout.popup_dialog.title, layout._popup_textarea.text]
+                if self.display_popup and layout.popup_dialog is not None and layout._popup_textarea is not None
+                else None
+            ),
+            "menu": [self.menu_title, [list(entry) for entry in self.menu_entries]] if self.menu_entries else None,
+            "chooser": next((name for name in _CHOOSERS if getattr(self, name)), None),
+            "choose_window_index": self.choose_window_index,
+            "choose_window_command": self.choose_window_command,
+            "choose_window_filter": self.choose_window_filter.text,
+            "chooser_return_to": (
+                [going_back[0].session_id, going_back[1].window_id] if going_back is not None else None
+            ),
+        }
+
+    def take_modes(self, modes: dict) -> None:
+        """
+        Open again what `modes` says this client was in the middle of,
+        through the same calls a key opens each with, so each takes the
+        keyboard the way it does then. A prompt or a command line goes
+        last: it holds the keyboard over a chooser it was asked from.
+        """
+        layout = self.layout_manager
+        with set_app(self.app):
+            self.has_prefix = modes["has_prefix"]
+            self.key_tables = list(modes["key_tables"])
+            self.confirmations = [(text, command) for text, command in modes["confirmations"]]
+
+            if modes["popup"] is not None:
+                layout.display_popup(*modes["popup"])
+            if modes["menu"] is not None:
+                title, entries = modes["menu"]
+                layout.display_menu([tuple(entry) for entry in entries], title)
+
+            chooser = modes["chooser"]
+            if chooser is not None:
+                if chooser == "choose_window":
+                    layout.display_chooser(modes["choose_window_command"])
+                else:
+                    getattr(layout, _CHOOSERS[chooser])()
+                self.choose_window_filter.text = modes["choose_window_filter"]
+                self.choose_window_index = modes["choose_window_index"]
+                going_back = modes["chooser_return_to"]
+                if going_back is not None:
+                    session_id, window_id = going_back
+                    for session in self.pymux.sessions:
+                        for window in session.arrangement.windows:
+                            if session.session_id == session_id and window.window_id == window_id:
+                                self.chooser_return_to = (session, window)
+
+            if modes["prompt"] is not None:
+                self.prompt_text, self.prompt_command, text = modes["prompt"]
+                self.prompt_buffer.reset(Document(text))
+                self.app.layout.focus(self.prompt_buffer)
+                self.app.vi_state.input_mode = InputMode.INSERT
+            elif modes["command"] is not None:
+                self.prompt_text = ""
+                self.prompt_command = ""
+                self.command_buffer.reset(Document(modes["command"]))
+                self.app.layout.focus(self.command_buffer)
+                self.app.vi_state.input_mode = InputMode.INSERT
 
     @property
     def theme_in_use(self) -> str:
@@ -1538,6 +1628,13 @@ class Pymux:
             client_state.session = session
         client_state.previous_session = sessions.get(record["previous_session_id"])
         client_state.sync_focus()
+        if record.get("modes"):
+            # The view is back already; a mode that cannot open again
+            # must not cost the person the attach.
+            try:
+                client_state.take_modes(record["modes"])
+            except Exception:
+                logger.exception("Could not open again what a returning client was in the middle of.")
         self.invalidate(Woke.SESSION_CHANGED)
 
     def attach_client_to(self, client_state, session: Session) -> None:

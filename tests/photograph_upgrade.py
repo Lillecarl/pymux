@@ -240,8 +240,10 @@ def upgrade_in(terminal, seat, work, out):
         (client,) = until("one client", lambda: answer(socket_path, "list-clients", "-F", "#{client_name}").split())
         pid = answer(socket_path, "display-message", "-p", "#{pid}")
         jobs = what_the_jobs_say(socket_path)
-        # Only a key clears a message, so every view on both sides has it.
+        # Only a key clears a message or answers a question, so every
+        # view on both sides has them. Lillecarl/pymux#551.
         answer(socket_path, "display-message", "kept across the upgrade")
+        answer(socket_path, "confirm-before", "-p", "Still asking? (y/n)", "display-message answered")
         before = every_view(socket_path, client, take_one, room, "before")
         options_before = answer(socket_path, "show-client-options", "-t", client)
 
