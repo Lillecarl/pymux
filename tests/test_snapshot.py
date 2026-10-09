@@ -302,6 +302,16 @@ async def _run_jobs(pymux) -> None:
         job = await jobs.submit(command, directory, tags, {"WHO": command}, pty)
         await jobs.supervise(job)
     await jobs._forget(job)
+    # A question kept, and a seed taken away, which must stay away.
+    await jobs.save_query("mine", "SELECT id FROM jobs WHERE pty = 1", None)
+    assert await jobs.forget_query("running")
+
+
+async def _questions_of(pymux) -> list[tuple]:
+    "What the job store itself answers about the kept questions."
+    async with pymux.jobs.store.reader() as conn:
+        cursor = await conn.execute("SELECT name, sql, description FROM saved_queries ORDER BY name")
+        return list(await cursor.fetchall())
 
 
 def _copy_modes_of(pymux) -> dict:
@@ -400,6 +410,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
         _vary_what_no_command_reaches(pymux, connection.client_state)
         await _run_jobs(pymux)
         jobs = _jobs_of(pymux)
+        questions = await _questions_of(pymux)
 
         first = tmp_path / "first.sqlite"
         snapshot.save(pymux, first)
@@ -420,6 +431,8 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
             async with fresh.running():
                 await snapshot.start(fresh)
                 assert _jobs_of(fresh) == jobs
+                assert await _questions_of(fresh) == questions
+                assert "running" not in dict((name, sql) for name, sql, _ in questions)
                 assert fresh.named_buffers == pymux.named_buffers
                 clipboard = fresh.clipboard.get_data()
                 assert (clipboard.text, clipboard.type) == ("copied", SelectionType.LINES)
@@ -525,6 +538,7 @@ def test_a_snapshot_of_the_version_before_steps_up(pymux, tmp_path):
     db.execute("DROP TABLE notification_routes")
     db.execute("DROP TABLE wait_channels")
     db.execute("DROP TABLE copy_modes")
+    db.execute("DROP TABLE saved_queries")
     db.execute("DELETE FROM counters WHERE name IN ('notification', 'notification_route')")
     db.execute("DELETE FROM server WHERE name IN ('clipboard', 'clipboard_type', 'bindings_recorded')")
     db.execute("PRAGMA user_version = 1")
@@ -536,6 +550,7 @@ def test_a_snapshot_of_the_version_before_steps_up(pymux, tmp_path):
     assert fresh.returning_clients["gone"]["settings"] == {}
     assert fresh.returning_clients["gone"]["modes"] is None
     assert fresh.named_buffers == {}
+    assert fresh.jobs.saved_queries == Pymux().jobs.saved_queries
     assert _rows(path, "PRAGMA user_version") == [(1,)]
 
 

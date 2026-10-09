@@ -80,6 +80,7 @@ def _what_survives(sock) -> tuple[str, ...]:
         _once_it_answers(sock, "list-panes", "-a", "-F", "#{pane_id} #{pane_pid}"),
         _once_it_answers(sock, "show-buffer", "-b", "kept"),
         _once_it_answers(sock, "list-keys"),
+        _once_it_answers(sock, "sql", "--list"),
     )
 
 
@@ -116,6 +117,7 @@ def server(tmp_path):
         _answer(sock, "split-window", "-d", "sh")
         _answer(sock, "set-buffer", "-b", "kept", "pasted after the upgrade")
         _answer(sock, "bind-key", "-n", "F5", "display-message", "bound at run time")
+        _answer(sock, "sql", "--save", "kept", "SELECT id FROM jobs")
         yield sock
     finally:
         cli(sock, "kill-server")

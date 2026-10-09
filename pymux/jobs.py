@@ -40,7 +40,7 @@ from anyio.streams.memory import MemoryObjectSendStream
 from pyte.keep import Keep
 
 from pymux.commands import CommandException
-from pymux.jobstore import JobStore
+from pymux.jobstore import SEEDS, JobStore
 from pymux.log import logger
 
 #: A newline with no return before it. What the viewer turns into a
@@ -273,6 +273,7 @@ class JobTable:
     KEEP: ClassVar[dict[str, Keep]] = {
         "_jobs": Keep.SAVED,
         "last_id": Keep.SAVED,
+        "saved_queries": Keep.SAVED,
         "store": Keep.REBUILT,  # in memory: `restore` writes the rows again
     }
 
@@ -282,6 +283,26 @@ class JobTable:
         #: The newest id the database handed out. It outlives the jobs
         #: it named, so a restored server never hands one out again.
         self.last_id = 0
+        #: The kept questions by name: their SQL and description. The
+        #: store holds the same rows; this copy is what a snapshot, which
+        #: may not await, reads. Lillecarl/pymux#547.
+        self.saved_queries: dict[str, tuple[str, str | None]] = {
+            name: (sql, description) for name, sql, description in SEEDS
+        }
+
+    async def save_query(self, name: str, sql: str, description: str | None) -> None:
+        "Keep a question, or replace the one of that name."
+        await self.store.write(
+            "INSERT OR REPLACE INTO saved_queries(name, sql, description) VALUES (?, ?, ?)",
+            (name, sql, description),
+        )
+        self.saved_queries[name] = (sql, description)
+
+    async def forget_query(self, name: str) -> bool:
+        "Forget a kept question. False when none had that name."
+        cursor = await self.store.write("DELETE FROM saved_queries WHERE name = ?", (name,))
+        self.saved_queries.pop(name, None)
+        return bool(cursor.rowcount)
 
     async def open(self) -> None:
         "Build the database. The server calls this; the rest is lazy."
@@ -357,6 +378,13 @@ class JobTable:
         # would be added, not replaced.
         await self.store.write("DELETE FROM sqlite_sequence WHERE name = 'jobs'")
         await self.store.write("INSERT INTO sqlite_sequence(name, seq) VALUES ('jobs', ?)", (self.last_id,))
+        # The store seeded itself as it opened; a seed somebody deleted
+        # stays deleted.
+        await self.store.write("DELETE FROM saved_queries")
+        for name, (sql, description) in sorted(self.saved_queries.items()):
+            await self.store.write(
+                "INSERT INTO saved_queries(name, sql, description) VALUES (?, ?, ?)", (name, sql, description)
+            )
 
     def get(self, job_id: JobId) -> Job | None:
         return self._jobs.get(job_id)

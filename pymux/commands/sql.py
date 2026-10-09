@@ -88,16 +88,12 @@ async def _list(pymux: Pymux, args: argparse.Namespace) -> None:
 async def _save(pymux: Pymux, args: argparse.Namespace, name: str, query: str) -> None:
     if not is_read_only_query(query):
         raise CommandException("only questions that read can be kept")
-    await pymux.jobs.store.write(
-        "INSERT OR REPLACE INTO saved_queries(name, sql, description) VALUES (?, ?, ?)",
-        (name, query, args.description),
-    )
+    await pymux.jobs.save_query(name, query, args.description)
     answer(pymux, "saved %s" % name)
 
 
 async def _delete(pymux: Pymux, name: str) -> None:
-    cursor = await pymux.jobs.store.write("DELETE FROM saved_queries WHERE name = ?", (name,))
-    if not cursor.rowcount:
+    if not await pymux.jobs.forget_query(name):
         raise CommandException("no saved query %s; sql --list shows the kept ones" % name)
     answer(pymux, "deleted %s" % name)
 

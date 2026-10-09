@@ -54,6 +54,7 @@ from .arrangement import HSplit, LayoutTypes, Pane, VSplit, Window, _Split, node
 from .commands.wait_for import WaitChannel
 from .ids import PaneId, SessionId, WindowId, WindowIndex
 from .jobs import Job, JobId
+from .jobstore import SEEDS
 from .notifications import Notification
 from .options import ALL_OPTIONS
 from .pipes.posix import PosixSocketListener
@@ -66,7 +67,13 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "adopting", "checking", "load", "save
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 9
+SNAPSHOT_VERSION = 10
+
+
+def _quoted(value: str | None) -> str:
+    "A text value as an SQL literal, for a step that writes rows."
+    return "NULL" if value is None else "'%s'" % value.replace("'", "''")
+
 
 #: A client's own settings, each a column of `clients` and an attribute
 #: of `ClientState`, with the type sqlite gives back as.
@@ -151,6 +158,12 @@ CREATE TABLE copy_modes(
 """,
     # When each client first came; NULL is "now", as for a new one.
     8: "ALTER TABLE clients ADD COLUMN connected REAL;",
+    # The kept questions, as a version 9 server started with them: the
+    # questions it saved since are lost, as they were then.
+    9: "CREATE TABLE saved_queries(name TEXT PRIMARY KEY, sql TEXT NOT NULL, description TEXT);"
+    + "".join(
+        "INSERT INTO saved_queries VALUES (%s, %s, %s);" % tuple(_quoted(value) for value in seed) for seed in SEEDS
+    ),
 }
 
 #: The fields `ClientState.modes` holds, one JSON value in `clients`.
@@ -362,6 +375,11 @@ CREATE TABLE wait_channels(
   woken INTEGER NOT NULL,
   locked INTEGER NOT NULL
 );
+CREATE TABLE saved_queries(
+  name TEXT PRIMARY KEY,
+  sql TEXT NOT NULL,
+  description TEXT
+);
 CREATE TABLE jobs(
   job_id INTEGER PRIMARY KEY,
   command TEXT NOT NULL,
@@ -444,6 +462,7 @@ TABLES = (
     "notifications",
     "notification_routes",
     "wait_channels",
+    "saved_queries",
     "jobs",
     "job_tags",
     "job_output",
@@ -502,7 +521,7 @@ WRITES: dict[str, frozenset[str]] = {
     "pymux.main.ClientState": frozenset({"session", "previous_session", *CLIENT_SETTINGS, *CLIENT_MODES}),
     # The record goes by the client's id, in `clients`.
     "pymux.server.ServerConnection": frozenset({"client_state", "created"}),
-    "pymux.jobs.JobTable": frozenset({"_jobs", "last_id"}),
+    "pymux.jobs.JobTable": frozenset({"_jobs", "last_id", "saved_queries"}),
     # The kept counts are the lengths of the chunks `job_output` holds.
     "pymux.jobs.Job": frozenset(name for name, fate in Job.KEEP.items() if fate == Keep.SAVED),
     # `copy_reverse_video` is read again from the saved screen.
@@ -821,6 +840,10 @@ def _write(pymux: Pymux, db: sqlite3.Connection) -> None:
             *((*record, position, None) for position, record in enumerate(center._records)),
             *((*record, None, identifier) for (_pane_id, identifier), record in center._pending.items()),
         ],
+    )
+    db.executemany(
+        "INSERT INTO saved_queries VALUES (?, ?, ?)",
+        [(name, sql, description) for name, (sql, description) in sorted(pymux.jobs.saved_queries.items())],
     )
     db.executemany(
         "INSERT INTO wait_channels VALUES (?, ?, ?)",
@@ -1413,6 +1436,9 @@ def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> int | No
     pymux._session_counter = counters["session"]
     pymux._uses = counters["uses"]
     pymux.jobs.last_id = counters["job"]
+    pymux.jobs.saved_queries = {
+        row["name"]: (row["sql"], row["description"]) for row in _rows(db, "SELECT * FROM saved_queries")
+    }
     _read_notifications(pymux, db, counters)
     for job in _read_jobs(db):
         pymux.jobs._jobs[job.job_id] = job
