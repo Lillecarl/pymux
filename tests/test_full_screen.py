@@ -124,7 +124,7 @@ async def test_the_status_line_costs_a_row_and_full_screen_gives_it_back():
 
 async def _one_of_each(session):
     "A person working with chrome, and a person watching without it."
-    session.pymux.create_window(NOTHING)
+    await session.pymux.create_window(NOTHING)
     working, _ = await session.attach("working", BIG)
     watching, _ = await session.attach("watching", BIG)
     set_option(session.pymux, watching, "full-screen", "on")
@@ -163,7 +163,7 @@ async def test_the_plane_gives_the_row_back_when_the_last_one_goes():
 async def test_a_full_screen_client_still_sizes_the_plane():
     "It is watching, so its columns count. Only its chrome does not."
     async with in_this_process() as session:
-        session.pymux.create_window(NOTHING)
+        await session.pymux.create_window(NOTHING)
         await session.attach("working", BIG)
         watching, _ = await session.attach("watching", SMALL)
         set_option(session.pymux, watching, "full-screen", "on")
