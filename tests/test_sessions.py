@@ -146,6 +146,30 @@ async def test_two_clients_watch_two_sessions_at_once():
             assert here.layout_manager._get_status_left_tokens() == "[0] "
 
 
+async def test_switch_client_c_moves_another_client_to_a_window():
+    "tmux's `-c`: a script moves a person's view without typing at it."
+    async with in_this_process(_server()) as session:
+        pymux = session.pymux
+        here, _ = await session.attach("here", SIZE)
+        there, _ = await session.attach("there", SIZE)
+        there.name = "desk"
+
+        await _command(pymux, here, "new-session -d -s work '%s'" % (WAITING,))
+        await _command(pymux, here, "new-window -d -t work: '%s'" % (WAITING,))
+        first, second = pymux.get_session("work").arrangement.windows
+        await _command(pymux, here, "switch-client -c desk -t @%d" % second.window_id)
+
+        assert here.session.name == "0"
+        assert there.session.name == "work"
+        with set_app(there.app):
+            assert there.session.arrangement.get_active_window() is second
+        with set_app(here.app):
+            assert pymux.get_session("work").arrangement.get_active_window() is not second
+
+        await _command(pymux, here, "switch-client -c desk -t 0")
+        assert there.session.name == "0"
+
+
 async def test_list_sessions_names_every_session():
     async with in_this_process(_server()) as session:
         pymux = session.pymux
