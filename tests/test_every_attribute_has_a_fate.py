@@ -73,8 +73,13 @@ def live_objects(pymux):
                 yield terminal.terminal_control.stream
                 yield pane.process
                 yield pane.process.backend
-                yield pane.screen
-                yield pane.screen.page
+                screen = pane.screen
+                yield screen
+                yield screen.page
+                yield screen.titles
+                yield screen.colors
+                yield screen.pointer_shapes
+                yield screen.graphics
     for connection in pymux.connections:
         yield connection
         if connection.client_state is not None:

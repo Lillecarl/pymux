@@ -14,7 +14,7 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from pyte.keep import Keep
 from test_a_session_on_a_pyte_screen import attached, settled, shows
-from test_every_attribute_has_a_fate import declared
+from test_every_attribute_has_a_fate import declared, live_objects
 
 from pymux import snapshot
 from pymux.arrangement import LayoutTypes
@@ -50,6 +50,35 @@ def test_a_snapshot_writes_every_saved_field_or_says_it_does_not_yet(name):
         sorted(saved - writes - later),
         sorted((writes | later) - saved),
     )
+
+
+async def test_every_class_with_a_saved_field_is_written_or_left_for_later(pymux):
+    "A class the walk finds and nothing in `snapshot.py` names would be lost whole."
+    async with pymux.running(), attached(pymux) as session:
+        await shows(session, "$")
+        named = snapshot.WRITES.keys() | snapshot.LATER.keys() | snapshot.LATER_CLASSES
+        missing = set()
+        for one in live_objects(pymux):
+            cls = type(one)
+            names = {"%s.%s" % (base.__module__, base.__qualname__) for base in cls.__mro__}
+            if Keep.SAVED in declared(cls).values() and not names & named:
+                missing.add("%s.%s" % (cls.__module__, cls.__qualname__))
+        assert not missing, sorted(missing)
+
+
+def test_a_path_that_needs_quoting_saves_and_loads(pymux, tmp_path):
+    path = tmp_path / "a b?c#d%e.sqlite"
+    snapshot.save(pymux, path)
+    snapshot.load(Pymux(), path, make_terminal=lambda pane_id: object())
+
+
+def test_a_crashed_saves_journal_does_not_reach_the_next_save(pymux, tmp_path):
+    path = tmp_path / "snapshot.sqlite"
+    stale = tmp_path / "snapshot.sqlite.partial-journal"
+    stale.write_bytes(b"not a journal")
+    snapshot.save(pymux, path)
+    assert not stale.exists()
+    assert _rows(path, "SELECT count(*) FROM sessions") == [(1,)]
 
 
 def _dump(path) -> list[str]:

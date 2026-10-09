@@ -296,6 +296,26 @@ LATER: dict[str, frozenset[str]] = {
     ),
 }
 
+#: Classes with saved fields that no table holds any of yet.
+LATER_CLASSES: frozenset[str] = frozenset(
+    {
+        # The client's connection: its record and the images on its terminal.
+        "pymux.server.ServerConnection",
+        # The terminal of a pane, down to the pty.
+        "ptterm.terminal.Terminal",
+        "ptterm.terminal._TerminalControl",
+        "pyte.streams.Stream",
+        "pyte.screen.Screen",
+        "pyte.page.Page",
+        "pyte.titles.Titles",
+        "pyte.osc.ColorOverrides",
+        "pyte.osc.PointerShapes",
+        "pyte.images.GraphicsState",
+        "ptyhost.process.Process",
+        "ptyhost.backends.posix.PosixBackend",
+    }
+)
+
 
 def _value(value: Any) -> Any:
     "A value as sqlite holds it. An enum is its value; anything odd raises."
@@ -330,7 +350,10 @@ def save(pymux: Pymux, path: str | os.PathLike[str], pending: dict[str, dict] | 
     """
     path = Path(path)
     partial = path.with_name(path.name + ".partial")
-    partial.unlink(missing_ok=True)
+    # sqlite replays a journal it finds beside a new file into it, so a
+    # crashed save's journal goes with the crashed save.
+    for leftover in (partial, partial.with_name(partial.name + "-journal")):
+        leftover.unlink(missing_ok=True)
     db = sqlite3.connect(partial)
     try:
         with db:
@@ -539,7 +562,7 @@ def load(pymux: Pymux, path: str | os.PathLike[str], make_terminal: Callable[[Pa
     `make_terminal` gives each pane its terminal: the screen and the
     process are not in these tables.
     """
-    db = sqlite3.connect("file:%s?mode=ro" % Path(path), uri=True)
+    db = sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True)
     try:
         version = db.execute("PRAGMA user_version").fetchone()[0]
         if version != SNAPSHOT_VERSION:
