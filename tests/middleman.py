@@ -107,12 +107,22 @@ os.system("stty -opost -echo")
 # It changes at least once: a pane opens at the size pymux gives it and
 # is resized when the client says how big it is, which is after this
 # program has already started.
+#
+# **SIGWINCH waits while one report runs.** A signal in the middle of a
+# report ran a second one, which wrote the new size, and then the first
+# finished and wrote the old size over it; no later signal came, so the
+# file held the old size for good. Lillecarl/pymux#545. A signal held
+# here runs its report when the mask comes off, after this one.
 def report(*_):
-    rows, columns = struct.unpack(
-        "HHHH", fcntl.ioctl(1, termios.TIOCGWINSZ, b"\0" * 8)
-    )[:2]
-    with open(sys.argv[2], "w") as out:
-        out.write("%d %d\n" % (rows, columns))
+    signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGWINCH})
+    try:
+        rows, columns = struct.unpack(
+            "HHHH", fcntl.ioctl(1, termios.TIOCGWINSZ, b"\0" * 8)
+        )[:2]
+        with open(sys.argv[2], "w") as out:
+            out.write("%d %d\n" % (rows, columns))
+    finally:
+        signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGWINCH})
 
 signal.signal(signal.SIGWINCH, report)
 report()
