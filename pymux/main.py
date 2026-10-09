@@ -2481,10 +2481,7 @@ class Pymux:
         pane: Pane | None = None
 
         def done() -> None:
-            "The program of the overlay finished, so the overlay goes."
-            if session.overlay_pane is pane:
-                session.overlay_pane = None
-                self._sync_focus_everywhere()
+            self.overlay_ended(session, pane)
 
         try:
             window = session.arrangement.get_active_window()
@@ -2501,6 +2498,12 @@ class Pymux:
         self.invalidate(Woke.OVERLAY_OPENED)
 
         return pane
+
+    def overlay_ended(self, session: Session, pane: Pane | None) -> None:
+        "The program of an overlay finished, so the overlay goes."
+        if session.overlay_pane is pane:
+            session.overlay_pane = None
+            self._sync_focus_everywhere()
 
     def close_overlay(self, session: Session | None = None) -> None:
         """

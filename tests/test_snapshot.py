@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib
 import sqlite3
 
+import anyio
 import pytest
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
@@ -69,7 +70,7 @@ async def test_every_class_with_a_saved_field_is_written_or_left_for_later(pymux
 def test_a_path_that_needs_quoting_saves_and_loads(pymux, tmp_path):
     path = tmp_path / "a b?c#d%e.sqlite"
     snapshot.save(pymux, path)
-    snapshot.load(Pymux(), path, make_terminal=lambda pane_id: object())
+    snapshot.load(Pymux(), path)
 
 
 def test_a_crashed_saves_journal_does_not_reach_the_next_save(pymux, tmp_path):
@@ -172,7 +173,14 @@ def _constant_columns(path) -> list[tuple[str, str]]:
         db.close()
 
 
-async def test_a_snapshot_loads_back_to_the_same_tables(pymux, tmp_path):
+def _text(pane) -> str:
+    screen = pane.terminal.terminal_control.screen
+    return "\n".join(line.text for line in screen.page.text_lines(0, screen.max_y))
+
+
+async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_path):
+    alternate = tmp_path / "alternate.sh"
+    alternate.write_text("printf '%s\\r\\n\\033[?1049h\\033[31mALT\\033[0m\\033[3'\nsleep 60\n" % ("wrapped " * 20))
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
         connection = pymux.connections[-1]
@@ -188,6 +196,9 @@ async def test_a_snapshot_loads_back_to_the_same_tables(pymux, tmp_path):
                 "kill-pane",
                 "split-window -h",
                 "rename-window built",
+                # A program that wraps a row on the first page, then
+                # stops on the alternate one, in colour and mid-sequence.
+                "split-window -h 'sh %s'" % alternate,
                 "set-option status-left left",
                 "set-environment -g WHERE here",
                 "set-environment ONLY session",
@@ -208,8 +219,34 @@ async def test_a_snapshot_loads_back_to_the_same_tables(pymux, tmp_path):
 
         first = tmp_path / "first.sqlite"
         snapshot.save(pymux, first)
+        shell = pymux.sessions[0].arrangement.windows[0].panes[0]
+        before = _text(shell)
 
-    assert _rows(first, "SELECT count(*) FROM panes") == [(8,)]
+        # What `execve` does to the old server: its programs go on, and
+        # it no longer serves them.
+        for pane in snapshot._panes_of(pymux):
+            pane.process.backend.release()
+
+        fresh = Pymux()
+        fresh.test_mode = True
+        snapshot.load(fresh, first)
+        second = tmp_path / "second.sqlite"
+        snapshot.save(fresh, second)
+        try:
+            async with fresh.running():
+                await snapshot.start(fresh)
+                reloaded = fresh.panes_by_id[shell.pane_id]
+                assert _text(reloaded) == before
+                reloaded.process.write_input("echo mar''ker\r")
+                with anyio.fail_after(10):
+                    while "marker" not in _text(reloaded):
+                        await anyio.sleep(0.05)
+                fresh.stop()
+        finally:
+            for pane in list(fresh.panes_by_id.values()):
+                pane.process.kill()
+
+    assert _rows(first, "SELECT count(*) FROM panes") == [(9,)]
     # One under each root: the stack split beside, and the strip's
     # first column, which turning the strip on wraps the old root in.
     assert _rows(first, "SELECT count(*) FROM splits WHERE parent_split_id IS NOT NULL") == [(2,)]
@@ -221,13 +258,8 @@ async def test_a_snapshot_loads_back_to_the_same_tables(pymux, tmp_path):
     ) == [(1,)]
     assert _rows(first, "SELECT client_id FROM clients ORDER BY 1") == [("gone",), ("returning",)]
     assert _rows(first, "SELECT overlay_title FROM sessions WHERE overlay_pane_id IS NOT NULL") == [("pop",)]
+    assert _rows(first, "SELECT count(*) FROM screen_rows WHERE text LIKE '%ALT'") == [(1,)]
     assert _constant_columns(first) == []
-
-    fresh = Pymux()
-    snapshot.load(fresh, first, make_terminal=lambda pane_id: object())
-    second = tmp_path / "second.sqlite"
-    snapshot.save(fresh, second)
-
     assert _dump(second) == _dump(first)
 
 
@@ -240,4 +272,4 @@ def test_a_snapshot_of_another_version_is_refused(pymux, tmp_path):
     db.close()
 
     with pytest.raises(snapshot.SnapshotError):
-        snapshot.load(Pymux(), path, make_terminal=lambda pane_id: object())
+        snapshot.load(Pymux(), path)

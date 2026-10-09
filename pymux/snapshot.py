@@ -11,6 +11,13 @@ per session, window, split and pane, and a column named after the
 event loop standing still. A writer that awaited anything would let a
 pane read between two tables, and the file would describe two moments.
 
+**Screen state belongs to the transition, never to the live store.**
+`pane_programs`, `screen_rows` and `screen_appearances` exist only in
+this file, written once while handing over and read once by the new
+build. When the window-management tables become the live store
+(step 5 of Lillecarl/pymux#399), those three stay here: a store that
+held every pane's cells would serialize them on every write.
+
 What each class writes is declared in `WRITES`, and what it does not
 write yet in `LATER`. `tests/test_snapshot.py` holds the two against
 every `Keep.SAVED` in the classes' `KEEP`, so a saved field that no
@@ -19,15 +26,26 @@ table holds fails a test instead of vanishing in an upgrade.
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 from weakref import ref
 
 from prompt_toolkit.data_structures import Size
+from ptyhost.backends.posix import PosixBackend
+from ptyhost.backends.posix_utils import PtyReader
+from ptyhost.process import Process
+from pyte.freeze import Freezer, Frozen, freeze, saved_fields, thaw
+from pyte.images import GraphicsImage, GraphicsPlacement, GraphicsState
+from pyte.osc import ColorOverrides, PointerShapes
+from pyte.page import CursorPosition, Page
+from pyte.screen import Screen
+from pyte.streams import Stream
+from pyte.titles import Titles
 
 from .arrangement import HSplit, LayoutTypes, Pane, VSplit, Window, _Split, node_key
 from .ids import PaneId, SessionId, WindowId, WindowIndex
@@ -35,11 +53,9 @@ from .options import ALL_OPTIONS
 from .session import Session
 
 if TYPE_CHECKING:
-    from ptterm import Terminal
-
     from .main import ClientState, Pymux
 
-__all__ = ["SNAPSHOT_VERSION", "load", "save"]
+__all__ = ["SNAPSHOT_VERSION", "Snapshot", "adopting", "load", "save", "start"]
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: refuses any other. The first change of shape adds the one step up
@@ -164,6 +180,32 @@ CREATE TABLE client_windows(
   previous_window_id INTEGER REFERENCES windows(window_id),
   PRIMARY KEY (client_id, session_id)
 );
+CREATE TABLE pane_programs(
+  pane_id INTEGER PRIMARY KEY REFERENCES panes(pane_id),
+  pane_pid INTEGER NOT NULL,
+  master_fd INTEGER NOT NULL,
+  slave_fd INTEGER,
+  pane_width INTEGER NOT NULL,
+  pane_height INTEGER NOT NULL,
+  screen TEXT NOT NULL,
+  stream TEXT NOT NULL,
+  process TEXT NOT NULL
+);
+CREATE TABLE screen_appearances(
+  pane_id INTEGER NOT NULL REFERENCES panes(pane_id),
+  appearance INTEGER NOT NULL,
+  value TEXT NOT NULL,
+  PRIMARY KEY (pane_id, appearance)
+);
+CREATE TABLE screen_rows(
+  pane_id INTEGER NOT NULL REFERENCES panes(pane_id),
+  buffer TEXT NOT NULL,
+  number INTEGER NOT NULL,
+  wrapped INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  cells TEXT NOT NULL,
+  PRIMARY KEY (pane_id, buffer, number)
+);
 """
 
 #: The tables in the order a dump compares them.
@@ -183,7 +225,14 @@ TABLES = (
     "column_widths",
     "clients",
     "client_windows",
+    "pane_programs",
+    "screen_appearances",
+    "screen_rows",
 )
+
+#: The tables a later write replaces whole. The screens' tables take
+#: only what changed since the write before.
+WHOLE_TABLES = TABLES[: TABLES.index("pane_programs")]
 
 _SPLIT_KINDS: dict[type[_Split], str] = {HSplit: "hsplit", VSplit: "vsplit"}
 
@@ -224,8 +273,29 @@ WRITES: dict[str, frozenset[str]] = {
     ),
     "pymux.arrangement.Window": frozenset(Window.KEEP),
     "pymux.arrangement._Split": frozenset(_Split.KEEP),
-    "pymux.arrangement.Pane": frozenset(Pane.KEEP) - {"terminal"},
+    "pymux.arrangement.Pane": frozenset(Pane.KEEP),
     "pymux.main.ClientState": frozenset({"session", "previous_session"}),
+    "ptterm.terminal.Terminal": frozenset({"terminal_control"}),
+    "ptterm.terminal._TerminalControl": frozenset({"screen", "stream", "process"}),
+    # What `pyte.freeze` walks writes every saved field, by construction.
+    **{
+        "%s.%s" % (cls.__module__, cls.__qualname__): frozenset(saved_fields(cls))
+        for cls in (
+            Screen,
+            Page,
+            CursorPosition,
+            Titles,
+            ColorOverrides,
+            PointerShapes,
+            GraphicsState,
+            GraphicsImage,
+            GraphicsPlacement,
+            Stream,
+            Process,
+            PosixBackend,
+            PtyReader,
+        )
+    },
     "pymux.main.Pymux": frozenset(
         {"sessions", "_session_counter", "_uses", "global_environment", "returning_clients"}
         | set(_server_options().values())
@@ -235,8 +305,8 @@ WRITES: dict[str, frozenset[str]] = {
 #: Saved fields no table holds yet. Each is one step of
 #: Lillecarl/pymux#399 still to come.
 LATER: dict[str, frozenset[str]] = {
-    # The screen and the process: the next step.
-    "pymux.arrangement.Pane": frozenset({"terminal"}),
+    # Copy mode. A snapshot is refused while a pane is in it.
+    "ptterm.terminal.Terminal": frozenset({"is_copying", "copy_buffer", "copy_reverse_video"}),
     # What a person was in the middle of, and how the client is set.
     "pymux.main.ClientState": frozenset(
         {
@@ -301,19 +371,6 @@ LATER_CLASSES: frozenset[str] = frozenset(
     {
         # The client's connection: its record and the images on its terminal.
         "pymux.server.ServerConnection",
-        # The terminal of a pane, down to the pty.
-        "ptterm.terminal.Terminal",
-        "ptterm.terminal._TerminalControl",
-        "pyte.streams.Stream",
-        "pyte.screen.Screen",
-        "pyte.page.Page",
-        "pyte.titles.Titles",
-        "pyte.osc.ColorOverrides",
-        "pyte.osc.PointerShapes",
-        "pyte.images.GraphicsState",
-        "ptyhost.process.Process",
-        "ptyhost.backends.posix.PosixBackend",
-        "ptyhost.backends.posix_utils.PtyReader",
     }
 )
 
@@ -342,35 +399,148 @@ def _optional_id(item) -> int | None:
     return None if item is None else int(node_key(item)[1])
 
 
-def save(pymux: Pymux, path: str | os.PathLike[str], pending: dict[str, dict] | None = None) -> None:
-    """
-    Write the window management of `pymux` to `path`.
+def save(pymux: Pymux, path: str | os.PathLike[str]) -> None:
+    "Write `pymux` to `path` in one go. `Snapshot` says how."
+    snapshot = Snapshot(path)
+    try:
+        snapshot.write(pymux)
+        snapshot.finish()
+    except BaseException:
+        snapshot.abandon()
+        raise
 
-    The file appears whole or not at all: it is written beside `path`,
-    synced, and renamed over it.
+
+class Snapshot:
     """
-    path = Path(path)
-    partial = path.with_name(path.name + ".partial")
-    # sqlite replays a journal it finds beside a new file into it, so a
-    # crashed save's journal goes with the crashed save.
-    for leftover in (partial, partial.with_name(partial.name + "-journal")):
-        leftover.unlink(missing_ok=True)
-    db = sqlite3.connect(partial)
-    try:
-        with db:
-            db.executescript(SCHEMA)
-            _write(pymux, db)
-            db.execute("PRAGMA user_version = %d" % SNAPSHOT_VERSION)
-    finally:
-        db.close()
-    with open(partial, "rb") as written:
-        os.fsync(written.fileno())
-    os.replace(partial, path)
-    directory = os.open(path.parent, os.O_RDONLY)
-    try:
-        os.fsync(directory)
-    finally:
-        os.close(directory)
+    A snapshot being written: once whole, then again with what changed.
+
+    An upgrade writes the first while the server still serves, which
+    costs the depth of every history, and the second in the pause,
+    which costs what the programs wrote in between
+    (`pyte.freeze.Freezer`). `finish` then makes the file appear whole
+    or not at all: it is written beside `path`, synced, and renamed
+    over it.
+    """
+
+    def __init__(self, path: str | os.PathLike[str]) -> None:
+        self.path = Path(path)
+        self.partial = self.path.with_name(self.path.name + ".partial")
+        # sqlite replays a journal it finds beside a new file into it, so
+        # a crashed save's journal goes with the crashed save.
+        for leftover in (self.partial, self.partial.with_name(self.partial.name + "-journal")):
+            leftover.unlink(missing_ok=True)
+        self.db = sqlite3.connect(self.partial)
+        self.db.executescript(SCHEMA)
+        self.freezers: dict[int, Freezer] = {}
+
+    def write(self, pymux: Pymux) -> None:
+        "Write what `pymux` holds now over what the write before held."
+        panes = _panes_of(pymux)
+        for pane in panes:
+            _refuse_what_cannot_be_saved(pane)
+        with self.db:
+            for table in WHOLE_TABLES:
+                self.db.execute("DELETE FROM %s" % table)
+            _write(pymux, self.db)
+            alive = {pane.pane_id for pane in panes}
+            for gone in set(self.freezers) - alive:
+                del self.freezers[gone]
+                for table in ("pane_programs", "screen_appearances", "screen_rows"):
+                    self.db.execute("DELETE FROM %s WHERE pane_id = ?" % table, (gone,))
+            for pane in panes:
+                self._write_program(pane)
+
+    def _write_program(self, pane: Pane) -> None:
+        control = pane.terminal.terminal_control
+        process = control.process
+        backend = process.backend
+        assert isinstance(backend, PosixBackend)  # `write` refused anything else
+        freezer = self.freezers.get(pane.pane_id)
+        if freezer is None:
+            freezer = self.freezers[pane.pane_id] = Freezer()
+        screen = freezer.freeze(control.screen)
+        db = self.db
+        db.execute(
+            "INSERT OR REPLACE INTO pane_programs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                pane.pane_id,
+                backend.pid,
+                backend.master,
+                backend.slave,
+                process.sx,
+                process.sy,
+                json.dumps(screen.root),
+                json.dumps(freeze(control.stream).root),
+                json.dumps(freeze(process).root),
+            ),
+        )
+        first = len(freezer.appearance_index) - len(screen.appearances)
+        db.executemany(
+            "INSERT INTO screen_appearances VALUES (?, ?, ?)",
+            [(pane.pane_id, first + index, json.dumps(value)) for index, value in enumerate(screen.appearances)],
+        )
+        for buffer in screen.whole:
+            db.execute("DELETE FROM screen_rows WHERE pane_id = ? AND buffer = ?", (pane.pane_id, buffer))
+        for buffer, numbers in screen.removed.items():
+            db.executemany(
+                "DELETE FROM screen_rows WHERE pane_id = ? AND buffer = ? AND number = ?",
+                [(pane.pane_id, buffer, number) for number in numbers],
+            )
+        db.executemany(
+            "INSERT OR REPLACE INTO screen_rows VALUES (?, ?, ?, ?, ?, ?)",
+            [
+                (pane.pane_id, buffer, number, wrapped, _text_of(cells), json.dumps(cells))
+                for buffer, rows in screen.buffers.items()
+                for number, wrapped, cells in rows
+            ],
+        )
+
+    def finish(self) -> None:
+        "Make the file appear at `path`, whole."
+        with self.db:
+            self.db.execute("PRAGMA user_version = %d" % SNAPSHOT_VERSION)
+        self.db.close()
+        with open(self.partial, "rb") as written:
+            os.fsync(written.fileno())
+        os.replace(self.partial, self.path)
+        directory = os.open(self.path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+
+    def abandon(self) -> None:
+        "Throw the half-written file away."
+        self.db.close()
+        self.partial.unlink(missing_ok=True)
+
+
+def _panes_of(pymux: Pymux) -> list[Pane]:
+    "Every pane a snapshot holds, in the order the tables write them."
+    panes = []
+    for session in pymux.sessions:
+        arrangement = session.arrangement
+        for window in [*arrangement.windows, *arrangement._unlinked_windows]:
+            panes.extend(window.panes)
+        if session.overlay_pane is not None:
+            panes.append(session.overlay_pane)
+    return panes
+
+
+def _refuse_what_cannot_be_saved(pane: Pane) -> None:
+    terminal = pane.terminal
+    if terminal.is_copying:
+        raise SnapshotError("pane %%%d is in copy mode; leave it first" % pane.pane_id)
+    if not isinstance(getattr(terminal.terminal_control.process, "backend", None), PosixBackend):
+        raise SnapshotError("pane %%%d runs no program on a pty, such as a job viewer" % pane.pane_id)
+
+
+def _text_of(cells: list) -> str:
+    "A frozen row as text, for a question to search. A gap reads as a space."
+    chars = {column: char for column, char, _, _ in cells}
+    if not chars:
+        return ""
+    return "".join(chars.get(column, " ") for column in range(max(chars) + 1)).rstrip()
 
 
 def _write(pymux: Pymux, db: sqlite3.Connection) -> None:
@@ -556,21 +726,95 @@ class SnapshotError(Exception):
     "A snapshot this build cannot load."
 
 
-def load(pymux: Pymux, path: str | os.PathLike[str], make_terminal: Callable[[PaneId], Terminal]) -> None:
-    """
-    Replace the window management of a fresh `pymux` with a snapshot's.
+class Program(NamedTuple):
+    "What a snapshot holds of one pane's program, for `load` to adopt it."
 
-    `make_terminal` gives each pane its terminal: the screen and the
-    process are not in these tables.
+    pane_id: PaneId
+    pid: int
+    master: int
+    slave: int | None
+    screen: Frozen
+    stream: Frozen
+    process: Frozen
+
+
+#: Builds a loaded pane: from its program, with what runs when it ends.
+MakePane = Callable[[Program, Callable[[], None] | None], Pane]
+
+
+def adopting(pymux: Pymux) -> MakePane:
+    """
+    Panes built around the programs a snapshot names, which still run.
+
+    The pty and the pid survive `execve`, so the new build adopts them,
+    and the screen, the parser and the process thaw over what
+    `_build_pane` made. Nothing starts until `start`.
+    """
+
+    def make(program: Program, on_done: Callable[[], None] | None) -> Pane:
+        backend = PosixBackend.adopt(program.master, program.slave, program.pid)
+        pane = pymux._build_pane(backend=backend, on_done=on_done)
+        pane.pane_id = program.pane_id
+        control = pane.terminal.terminal_control
+        thaw(program.process, control.process)
+        thaw(program.screen, control.screen)
+        # After the screen: the replay of an open sequence reaches it.
+        thaw(program.stream, control.stream)
+        pymux._register_pane(pane)
+        return pane
+
+    return make
+
+
+async def start(pymux: Pymux) -> None:
+    "Start pumping and reaping every loaded program, in the server's scope."
+    if pymux.tasks is None:
+        raise RuntimeError("start the loaded programs inside `Pymux.running`")
+    for pane in _panes_of(pymux):
+        control = pane.terminal.terminal_control
+        if not control._running:
+            await control.start(pymux.tasks)
+
+
+def load(pymux: Pymux, path: str | os.PathLike[str], make_pane: MakePane | None = None) -> None:
+    """
+    Replace what a fresh `pymux` holds with a snapshot's.
+
+    `make_pane` builds each pane; `adopting` is the default, and a test
+    of the tables alone passes one that builds no program.
     """
     db = sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True)
     try:
         version = db.execute("PRAGMA user_version").fetchone()[0]
         if version != SNAPSHOT_VERSION:
             raise SnapshotError("snapshot version %d, and this build reads %d" % (version, SNAPSHOT_VERSION))
-        _read(pymux, db, make_terminal)
+        _read(pymux, db, make_pane or adopting(pymux))
     finally:
         db.close()
+
+
+def _program(db: sqlite3.Connection, pane_id: PaneId) -> Program:
+    (row,) = _rows(db, "SELECT * FROM pane_programs WHERE pane_id = ?", pane_id)
+    appearances = [
+        json.loads(entry["value"])
+        for entry in _rows(db, "SELECT value FROM screen_appearances WHERE pane_id = ? ORDER BY appearance", pane_id)
+    ]
+    buffers: dict[str, list] = {}
+    for entry in _rows(
+        db, "SELECT buffer, number, wrapped, cells FROM screen_rows WHERE pane_id = ? ORDER BY buffer, number", pane_id
+    ):
+        buffers.setdefault(entry["buffer"], []).append(
+            [entry["number"], bool(entry["wrapped"]), json.loads(entry["cells"])]
+        )
+    return Program(
+        pane_id=pane_id,
+        pid=row["pane_pid"],
+        master=row["master_fd"],
+        slave=row["slave_fd"],
+        screen=Frozen(json.loads(row["screen"]), buffers, appearances, sorted(buffers), {}),
+        stream=Frozen(json.loads(row["stream"]), {}, [], [], {}),
+        process=Frozen(json.loads(row["process"]), {}, [], [], {}),
+    )
 
 
 def _rows(db: sqlite3.Connection, sql: str, *params) -> list[sqlite3.Row]:
@@ -578,7 +822,7 @@ def _rows(db: sqlite3.Connection, sql: str, *params) -> list[sqlite3.Row]:
     return db.execute(sql, params).fetchall()
 
 
-def _read(pymux: Pymux, db: sqlite3.Connection, make_terminal: Callable[[PaneId], Terminal]) -> None:
+def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> None:
     counters = {row["name"]: row["value"] for row in _rows(db, "SELECT * FROM counters")}
 
     server_options = _server_options()
@@ -591,8 +835,8 @@ def _read(pymux: Pymux, db: sqlite3.Connection, make_terminal: Callable[[PaneId]
 
     panes: dict[int, Pane] = {}
 
-    def pane_of(row: sqlite3.Row) -> Pane:
-        pane = Pane(make_terminal(PaneId(row["pane_id"])))
+    def pane_of(row: sqlite3.Row, on_done: Callable[[], None] | None = None) -> Pane:
+        pane = make_pane(_program(db, PaneId(row["pane_id"])), on_done)
         pane.pane_id = PaneId(row["pane_id"])
         pane.chosen_name = row["pane_name"]
         pane.clock_mode = bool(row["clock_mode"])
@@ -687,7 +931,12 @@ def _read(pymux: Pymux, db: sqlite3.Connection, make_terminal: Callable[[PaneId]
         arrangement._last_active_window = windows.get(row["last_active_window_id"])
         if row["overlay_pane_id"] is not None:
             (overlay_row,) = _rows(db, "SELECT * FROM panes WHERE pane_id = ?", row["overlay_pane_id"])
-            session.overlay_pane = pane_of(overlay_row)
+            overlay: list[Pane] = []
+            session.overlay_pane = pane_of(
+                overlay_row,
+                lambda session=session: pymux.overlay_ended(session, overlay[0] if overlay else None),
+            )
+            overlay.append(session.overlay_pane)
         sessions.append(session)
 
     pymux.sessions = sessions
