@@ -58,7 +58,9 @@ def register(subparsers):
 
 #: Two plugins that must not take the others down with them.
 BROKEN = "raise RuntimeError('this plugin is broken')\n"
-CLASHING = GREET.replace("add_command(subparsers, greet_from_home)", 'add_command(subparsers, greet_from_home, name="kill-server")')
+CLASHING = GREET.replace(
+    "add_command(subparsers, greet_from_home)", 'add_command(subparsers, greet_from_home, name="kill-server")'
+)
 
 
 def _home(tmp_path, **plugins):
