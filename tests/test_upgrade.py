@@ -70,12 +70,16 @@ def _counted(sock) -> list[int]:
         time.sleep(0.1)
 
 
-def _what_survives(sock) -> tuple[str, str, str]:
-    "The server's pid, every pane with the pid of its program, and a paste buffer."
+def _what_survives(sock) -> tuple[str, ...]:
+    """
+    The server's pid, every pane with the pid of its program, a paste
+    buffer, and the key bindings with one bound since the start.
+    """
     return (
         _once_it_answers(sock, "display-message", "-p", "#{pid}"),
         _once_it_answers(sock, "list-panes", "-a", "-F", "#{pane_id} #{pane_pid}"),
         _once_it_answers(sock, "show-buffer", "-b", "kept"),
+        _once_it_answers(sock, "list-keys"),
     )
 
 
@@ -111,6 +115,7 @@ def server(tmp_path):
     try:
         _answer(sock, "split-window", "-d", "sh")
         _answer(sock, "set-buffer", "-b", "kept", "pasted after the upgrade")
+        _answer(sock, "bind-key", "-n", "F5", "display-message", "bound at run time")
         yield sock
     finally:
         cli(sock, "kill-server")

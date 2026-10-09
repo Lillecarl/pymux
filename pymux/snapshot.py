@@ -64,7 +64,7 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "adopting", "checking", "load", "save
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 4
+SNAPSHOT_VERSION = 5
 
 #: A client's own settings, each a column of `clients` and an attribute
 #: of `ClientState`, with the type sqlite gives back as.
@@ -100,6 +100,18 @@ CREATE TABLE server_lists(
   position INTEGER NOT NULL,
   text TEXT NOT NULL,
   PRIMARY KEY (list, position)
+);
+""",
+    # Hooks and bindings. A snapshot without them leaves what the
+    # configuration, read again, set.
+    4: """
+CREATE TABLE hooks(hook TEXT NOT NULL, position INTEGER NOT NULL, command TEXT NOT NULL, PRIMARY KEY (hook, position));
+CREATE TABLE key_bindings(
+  key_table TEXT NOT NULL,
+  written TEXT NOT NULL,
+  command TEXT NOT NULL,
+  arguments TEXT NOT NULL,
+  PRIMARY KEY (key_table, written)
 );
 """,
 }
@@ -270,6 +282,19 @@ CREATE TABLE server_lists(
   text TEXT NOT NULL,
   PRIMARY KEY (list, position)
 );
+CREATE TABLE hooks(
+  hook TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  command TEXT NOT NULL,
+  PRIMARY KEY (hook, position)
+);
+CREATE TABLE key_bindings(
+  key_table TEXT NOT NULL,
+  written TEXT NOT NULL,
+  command TEXT NOT NULL,
+  arguments TEXT NOT NULL,
+  PRIMARY KEY (key_table, written)
+);
 CREATE TABLE jobs(
   job_id INTEGER PRIMARY KEY,
   command TEXT NOT NULL,
@@ -346,6 +371,8 @@ TABLES = (
     "client_windows",
     "named_buffers",
     "server_lists",
+    "hooks",
+    "key_bindings",
     "jobs",
     "job_tags",
     "job_output",
@@ -429,7 +456,7 @@ WRITES: dict[str, frozenset[str]] = {
     "pymux.main.Pymux": frozenset(
         {"sessions", "_session_counter", "_uses", "global_environment", "returning_clients", "jobs"}
         | {"created", "socket_name", "listener", "original_cwd", "source_file", "_startup_done"}
-        | {"clipboard", "named_buffers", "prompt_history", "message_log"}
+        | {"clipboard", "named_buffers", "prompt_history", "message_log", "hooks", "key_bindings_manager"}
         | set(_server_options().values())
     ),
 }
@@ -445,11 +472,9 @@ LATER: dict[str, frozenset[str]] = {
             "startup_command",
             "_runs_standalone",
             "_serves_one_terminal",
-            "hooks",
             "wait_channels",
             "notifications",
             "notification_center",
-            "key_bindings_manager",
         }
     ),
 }
@@ -700,6 +725,7 @@ def _write(pymux: Pymux, db: sqlite3.Connection) -> None:
             ("startup_done", pymux._startup_done),
             ("clipboard", clipboard.text),
             ("clipboard_type", clipboard.type.value),
+            ("bindings_recorded", True),
         ],
     )
     db.executemany("INSERT INTO named_buffers VALUES (?, ?)", sorted(pymux.named_buffers.items()))
@@ -709,6 +735,17 @@ def _write(pymux: Pymux, db: sqlite3.Connection) -> None:
             *(("prompt_history", n, text) for n, text in enumerate(pymux.prompt_history.get_strings())),
             *(("message_log", n, text) for n, text in enumerate(pymux.message_log)),
         ],
+    )
+    db.executemany(
+        "INSERT INTO hooks VALUES (?, ?, ?)",
+        [(hook, n, command) for hook, commands in sorted(pymux.hooks.items()) for n, command in enumerate(commands)],
+    )
+    db.executemany(
+        "INSERT INTO key_bindings VALUES (?, ?, ?, ?)",
+        sorted(
+            (table, binding.written, binding.command, json.dumps(binding.arguments))
+            for (table, _keys), binding in pymux.key_bindings_manager.custom_bindings.items()
+        ),
     )
     db.executemany(
         "INSERT INTO counters VALUES (?, ?)",
@@ -1051,6 +1088,25 @@ def _rows(db: sqlite3.Connection, sql: str, *params) -> list[sqlite3.Row]:
     return db.execute(sql, params).fetchall()
 
 
+def _read_bindings(pymux: Pymux, db: sqlite3.Connection) -> None:
+    """
+    The hooks and key bindings, whole, over what the configuration set:
+    a person's `bind-key` and `set-hook` since the server started are in
+    these and not in it. Only a snapshot that recorded them is read; a
+    stepped-up one has empty tables, which would take every binding away.
+    """
+    pymux.hooks = {}
+    for row in _rows(db, "SELECT * FROM hooks ORDER BY hook, position"):
+        pymux.hooks.setdefault(row["hook"], []).append(row["command"])
+    bindings = pymux.key_bindings_manager
+    for table, keys in list(bindings.custom_bindings):
+        bindings.remove_custom_binding(bindings.custom_bindings[table, keys].written, table=table)
+    for row in _rows(db, "SELECT * FROM key_bindings"):
+        bindings.add_custom_binding(
+            row["written"], row["command"], json.loads(row["arguments"]), table=row["key_table"]
+        )
+
+
 def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> int | None:
     server = {row["name"]: row["value"] for row in _rows(db, "SELECT * FROM server")}
     pymux.created = server["created"]
@@ -1067,6 +1123,8 @@ def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> int | No
     pymux.message_log.extend(
         row["text"] for row in _rows(db, "SELECT text FROM server_lists WHERE list = 'message_log' ORDER BY position")
     )
+    if "bindings_recorded" in server:
+        _read_bindings(pymux, db)
 
     counters = {row["name"]: row["value"] for row in _rows(db, "SELECT * FROM counters")}
 

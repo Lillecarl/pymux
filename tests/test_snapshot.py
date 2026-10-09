@@ -189,6 +189,9 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     pymux.prompt_history.append_string("rename-window a")
     pymux.prompt_history.append_string("rename-window b")
     pymux.message_log.extend(["said once", "said twice"])
+    pymux.hooks = {"after-new-window": ["display-message new", "display-panes"], "pane-died": ["kill-pane"]}
+    pymux.key_bindings_manager.add_custom_binding("F5", "display-message", ["it's F5"], table="root")
+    pymux.key_bindings_manager.add_custom_binding("x", "kill-pane", [])
 
     client_state.name = "desk"
     client_state.full_screen = True
@@ -272,6 +275,13 @@ async def _run_jobs(pymux) -> None:
         job = await jobs.submit(command, directory, tags, {"WHO": command}, pty)
         await jobs.supervise(job)
     await jobs._forget(job)
+
+
+def _bindings_of(pymux) -> dict:
+    return {
+        key: (binding.written, binding.command, binding.arguments)
+        for key, binding in pymux.key_bindings_manager.custom_bindings.items()
+    }
 
 
 def _jobs_of(pymux) -> list[tuple]:
@@ -371,6 +381,8 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 assert (clipboard.text, clipboard.type) == ("copied", SelectionType.LINES)
                 assert fresh.prompt_history.get_strings()[-2:] == ["rename-window a", "rename-window b"]
                 assert list(fresh.message_log)[-2:] == ["said once", "said twice"]
+                assert fresh.hooks == pymux.hooks
+                assert _bindings_of(fresh) == _bindings_of(pymux)
                 assert (await fresh.jobs.submit("true")).job_id == pymux.jobs.last_id + 1
                 reloaded = fresh.panes_by_id[shell.pane_id]
                 assert _text(reloaded) == before
@@ -450,7 +462,9 @@ def test_a_snapshot_of_the_version_before_steps_up(pymux, tmp_path):
         db.execute("ALTER TABLE clients DROP COLUMN %s" % name)
     db.execute("DROP TABLE named_buffers")
     db.execute("DROP TABLE server_lists")
-    db.execute("DELETE FROM server WHERE name IN ('clipboard', 'clipboard_type')")
+    db.execute("DROP TABLE hooks")
+    db.execute("DROP TABLE key_bindings")
+    db.execute("DELETE FROM server WHERE name IN ('clipboard', 'clipboard_type', 'bindings_recorded')")
     db.execute("PRAGMA user_version = 1")
     db.commit()
     db.close()
@@ -461,3 +475,20 @@ def test_a_snapshot_of_the_version_before_steps_up(pymux, tmp_path):
     assert fresh.returning_clients["gone"]["modes"] is None
     assert fresh.named_buffers == {}
     assert _rows(path, "PRAGMA user_version") == [(1,)]
+
+
+def test_a_snapshot_with_no_bindings_recorded_keeps_the_configured_ones(pymux, tmp_path):
+    'No record is not "no bindings": what the configuration bound stays.'
+    path = tmp_path / "old.sqlite"
+    snapshot.save(pymux, path)
+    db = sqlite3.connect(path)
+    db.execute("DELETE FROM server WHERE name = 'bindings_recorded'")
+    db.commit()
+    db.close()
+
+    fresh = Pymux()
+    fresh.key_bindings_manager.add_custom_binding("F6", "display-message", ["configured"], table="root")
+    fresh.hooks = {"pane-died": ["kill-pane"]}
+    snapshot.load(fresh, path)
+    assert fresh.key_bindings_manager.binding_on("F6", table="root") is not None
+    assert fresh.hooks == {"pane-died": ["kill-pane"]}
