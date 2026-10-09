@@ -264,10 +264,13 @@ class PlanContainer(Container):
             top = write_position.ypos + line.rect.y - view.y
             left = write_position.xpos + line.rect.x - view.x
 
+            right = left + line.rect.width - 1
             for y in range(top, top + line.rect.height):
                 row = screen.data_buffer[y]
-                for x in range(left, left + line.rect.width):
+                for x in range(left, right + 1):
                     row[x] = char
+                # The renderer reads a row only as far as its measure.
+                screen.reach(y, right)
 
     def _glide(self) -> Point:
         """
