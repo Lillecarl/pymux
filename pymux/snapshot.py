@@ -483,6 +483,11 @@ TABLES = (
 #: write before.
 WHOLE_TABLES = TABLES[: TABLES.index("jobs")]
 
+#: The tables of `WHOLE_TABLES`, which are what the live store holds:
+#: no job, which the job store holds live, and no screen, which never
+#: goes in a live store (Lillecarl/pymux#399).
+LIVE_SCHEMA = SCHEMA[: SCHEMA.index("CREATE TABLE jobs(")]
+
 _JOB_TABLES = ("jobs", "job_tags", "job_output")
 
 _SPLIT_KINDS: dict[type[_Split], str] = {HSplit: "hsplit", VSplit: "vsplit"}
@@ -638,6 +643,7 @@ class Snapshot:
 
     def write(self, pymux: Pymux) -> None:
         "Write what `pymux` holds now over what the write before held."
+        _refuse_the_server(pymux)
         panes = _panes_of(pymux)
         for pane in panes:
             _refuse_what_cannot_be_saved(pane)
@@ -648,7 +654,7 @@ class Snapshot:
         with self.db:
             for table in WHOLE_TABLES:
                 self.db.execute("DELETE FROM %s" % table)
-            _write(pymux, self.db)
+            write_tables(pymux, self.db)
             self._write_jobs(jobs)
             alive = {pane.pane_id for pane in panes}
             for gone in set(self.freezers) - alive:
@@ -791,7 +797,8 @@ def _text_of(cells: list) -> str:
     return "".join(chars.get(column, " ") for column in range(max(chars) + 1)).rstrip()
 
 
-def _write(pymux: Pymux, db: sqlite3.Connection) -> None:
+def _refuse_the_server(pymux: Pymux) -> None:
+    "What no `execve` carries. The live store writes such a server all the same."
     listener = pymux.listener
     if listener is not None and not isinstance(listener, PosixSocketListener):
         raise SnapshotError("the server listens on a named pipe, which no `execve` carries")
@@ -800,6 +807,11 @@ def _write(pymux: Pymux, db: sqlite3.Connection) -> None:
         # and the exec closes it: the script that waits would fail.
         if channel.waiters or channel.lockers:
             raise SnapshotError("a command waits on channel %s; signal it first" % name)
+
+
+def write_tables(pymux: Pymux, db: sqlite3.Connection) -> None:
+    "Every table of `LIVE_SCHEMA`, from what `pymux` holds now, into empty ones."
+    listener = pymux.listener
     clipboard = pymux.clipboard.get_data()
     db.executemany(
         "INSERT INTO server VALUES (?, ?)",
@@ -807,7 +819,10 @@ def _write(pymux: Pymux, db: sqlite3.Connection) -> None:
             ("created", pymux.created),
             ("socket_name", pymux.socket_name),
             # Inherited across `execve`, so its number is the listener.
-            ("listener_fd", listener.socket.fileno() if listener is not None else None),
+            (
+                "listener_fd",
+                listener.socket.fileno() if isinstance(listener, PosixSocketListener) else None,
+            ),
             ("original_cwd", pymux.original_cwd),
             ("source_file", pymux.source_file),
             ("startup_done", pymux._startup_done),

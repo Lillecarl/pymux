@@ -68,6 +68,7 @@ from .jobs import JOB_SWEEP_EVERY, Job, JobFeed, JobTable, describe
 from .key_bindings import PymuxKeyBindings
 from .key_spelling import why_pane_cannot_read
 from .layout import Justify, LayoutManager, change_pane_size
+from .live import LiveStore
 from .log import logger
 from .nearest import NEAREST
 from .notifications import NotificationCenter, NotificationRoutes, Urgency
@@ -798,6 +799,8 @@ class ClientState:
             pymux.client_was_used(self)
 
         app.key_processor.before_key_press += key_pressed
+        # What a key changed of this client: a prefix, a table, a prompt.
+        app.key_processor.after_key_press += lambda _: pymux.live.mark()
 
         # A frame this client asked for is already stale when input
         # arrived after it was scheduled: the renderer skips it and
@@ -1108,6 +1111,7 @@ class Pymux:
         "notifications": Keep.SAVED,
         "notification_center": Keep.SAVED,
         "jobs": Keep.SAVED,
+        "live": Keep.REBUILT,  # written again from the loaded objects
         # Bindings a person may have changed with `bind-key`.
         "key_bindings_manager": Keep.SAVED,
         # Option values.
@@ -1405,6 +1409,11 @@ class Pymux:
         #: instead of a terminal, owned by the server rather than by
         #: any pane, so it outlives every view onto it.
         self.jobs = JobTable()
+
+        #: Windows, panes, sessions and clients as live SQL tables.
+        #: Whatever changes one of them calls `live.mark()`.
+        #: Lillecarl/pymux#399.
+        self.live = LiveStore()
 
         # The hooks of the session: a name for an event, and the
         # commands it runs. `set-hook` fills it, `invalidate` reads it.
@@ -1964,6 +1973,7 @@ class Pymux:
             await self.jobs.open()
             tasks.start_soon(self._auto_refresh)
             tasks.start_soon(self._sweep_jobs)
+            tasks.start_soon(self.live.keep, self)
             if self.listener is not None:
                 self.serve_listener()
             try:
@@ -2788,6 +2798,9 @@ class Pymux:
         here, and holds every reason but the one that carries a name.
         """
         self.counters.invalidated(reason)
+        # Every named change comes through here: a command, an attach,
+        # a window, a session. A pane that writes does not.
+        self.live.mark()
         self.fire_hook(_hook_of(reason))
         # DEBUG: a server draws eleven frames a second when a pane
         # animates, and a line each is what made one log 86 MB in four
@@ -4086,6 +4099,7 @@ exec pymux notify -u "$urgency" -- "$@"
         :param message: String.
         """
         self.message_log.append(message)
+        self.live.mark()
 
         # Not `get_client_state`. A command from a pane runs under a fake
         # CLI that draws nothing, and a message left there is a message
