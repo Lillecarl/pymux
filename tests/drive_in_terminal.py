@@ -210,6 +210,23 @@ def wait_for_program(master, stdin_fd, timeout) -> bool:
     return master in ready
 
 
+class Quiet(float):
+    """
+    A step's wait that ends when the program has written nothing for
+    this many seconds, rather than after them.
+
+    A key sent a fixed time after a program starts races it: the demo
+    redraws when the terminal's colour replies come in, so copy mode
+    opened over one line of history more or less depending on load.
+    Lillecarl/pymux#541. A quiet wait gives up after `QUIET_LIMIT`, so
+    a program that never stops writing cannot hold a run.
+    """
+
+
+#: The longest a quiet wait waits.
+QUIET_LIMIT = 10.0
+
+
 def read_keys(path):
     """
     The steps of a keys file, as (seconds to wait, bytes) pairs.
@@ -217,6 +234,9 @@ def read_keys(path):
     A line that does not parse is a fault and not something to skip
     over: a script whose keys silently did nothing would photograph the
     screen before them and look like a pass.
+
+    `quiet <seconds>` on a line of its own waits for the program to be
+    quiet that long, and presses nothing.
     """
     steps = []
 
@@ -227,6 +247,9 @@ def read_keys(path):
 
         try:
             delay, keys = line.split(None, 1)
+            if delay == "quiet":
+                steps.append((Quiet(keys), b""))
+                continue
             steps.append((float(delay), ast.literal_eval(keys)))
         except (ValueError, SyntaxError) as reason:
             raise SystemExit("%s line %d: %s" % (path, number, reason))
@@ -235,6 +258,13 @@ def read_keys(path):
             raise SystemExit("%s line %d: the keys are not bytes" % (path, number))
 
     return steps
+
+
+def due(delay, when, last_output):
+    "When a step waiting `delay` after the step at `when` is due."
+    if isinstance(delay, Quiet):
+        return min(max(when, last_output) + delay, when + QUIET_LIMIT)
+    return when + delay
 
 
 def take_fifo(fifo, started):
@@ -472,6 +502,7 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
     # The fence that proves the keys were consumed, and the file that
     # says it happened.
     fence_pending = fence_seen is not None
+    last_output = when
 
     selector = selectors.DefaultSelector()
     selector.register(master, selectors.EVENT_READ)
@@ -487,8 +518,12 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
             # frame -- so a script reads as a sequence of waits and not
             # as a list of absolute times.
             mark = None
-            while waiting and now >= when + waiting[0][0]:
+            while waiting and now >= due(waiting[0][0], when, last_output):
                 delay, keys = waiting.pop(0)
+                if isinstance(delay, Quiet):
+                    note(started, "quiet for %gs" % (delay,) if now < when + QUIET_LIMIT else "never quiet")
+                    when = now
+                    continue
                 when += delay
                 os.write(master, keys)
                 # How late says whether the schedule held. A step
@@ -509,7 +544,7 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
                 mark = len(seen) if keys else None
 
             if waiting:
-                until = when + waiting[0][0] - now
+                until = max(0.0, due(waiting[0][0], when, last_output) - now)
             elif fence_pending:
                 fence_pending = False
                 came, copied = frame_and_fence(
@@ -555,6 +590,7 @@ def relay(argv, steps, hold, fifo=None, fence_seen=None):
                 out.write(piece)
                 out.flush()
                 copied += len(piece)
+                last_output = time.monotonic()
     finally:
         selector.close()
         os.close(master)

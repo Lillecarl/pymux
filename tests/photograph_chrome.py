@@ -189,9 +189,10 @@ def keys(*steps):
 
     The first wait is counted from pymux's first frame, which the
     relay waits for. The rest are counted from the step before them.
-    `drive_in_terminal.py` says the format.
+    `("quiet", seconds)` waits until pymux has written nothing for that
+    long. `drive_in_terminal.py` says the format.
     """
-    return "".join("%s %r\n" % (delay, one) for delay, one in steps)
+    return "".join("quiet %s\n" % (one,) if delay == "quiet" else "%s %r\n" % (delay, one) for delay, one in steps)
 
 
 class Fixture(NamedTuple):
@@ -609,9 +610,11 @@ FIXTURES = {
     # same rows a person can read, and the difference between the two
     # pictures is what copy mode does.
     "pane-text": Fixture(CHROME, demo_keys(), (2,)),
+    # Copy mode opens once the demo has redrawn for the terminal's
+    # colour replies, so the history it reads is the same every run.
     "copy-mode": Fixture(
         CHROME,
-        demo_keys() + keys((1.2, PREFIX), (0.6, b"[")),
+        demo_keys() + keys(("quiet", 0.5), (0.0, PREFIX), (0.6, b"[")),
         (2,),
         mode="copy-mode",
     ),

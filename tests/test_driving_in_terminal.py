@@ -134,6 +134,35 @@ def test_steps_happen_in_order(tmp_path):
     assert b"one-two." in seen
 
 
+#: Writes for a second, saying "early" if a key comes meanwhile, then
+#: says "late" when one comes.
+TICKER = """
+import os, select, sys, time
+os.system("stty -echo -icanon")
+for _ in range(10):
+    sys.stdout.write("tick ")
+    sys.stdout.flush()
+    if select.select([sys.stdin], [], [], 0.1)[0]:
+        sys.stdout.write("early.")
+        sys.stdout.flush()
+        time.sleep(30)
+sys.stdin.read(1)
+sys.stdout.write("late.")
+sys.stdout.flush()
+time.sleep(30)
+"""
+
+
+def test_a_quiet_step_waits_for_the_program_to_stop_writing(tmp_path):
+    "A key after `quiet` lands once the writing is over, however long it ran."
+    keys = create_keys_file(tmp_path, 'quiet 0.4\n0 b"x"\n')
+
+    seen, error = run(keys, [sys.executable, "-c", TICKER], wanted=b".")
+
+    assert b"late." in seen, (seen, error)
+    assert b"early." not in seen
+
+
 def test_what_the_terminal_answers_reaches_the_program(tmp_path):
     """
     A program asks its terminal what it draws with, and the answer
