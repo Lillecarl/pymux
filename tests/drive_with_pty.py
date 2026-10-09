@@ -2270,7 +2270,8 @@ def check_an_upgraded_server_keeps_the_client_and_the_pane(tmp):
     `upgrade-server` execs a new build over the same panes. The client
     is told to wait, attaches again with the same id, and draws the
     pane the new build thawed: the old program's text, which no
-    program wrote again. Lillecarl/pymux#408.
+    program wrote again. Lillecarl/pymux#408. Its message comes back
+    with it. Lillecarl/pymux#409.
     """
     if ROUTE == "integrated":
         print("an upgraded server keeps the client and the pane: not on this route")
@@ -2284,14 +2285,19 @@ def check_an_upgraded_server_keeps_the_client_and_the_pane(tmp):
         terminal.write(b"\x1b[?62;1;6c")
         terminal.wait_for(b"HOLDING")
         before = _client_ids(terminal.sock_path)
+        # It stays until a key is pressed, so it has to come back.
+        run_cli(terminal.sock_path, ["display-message", "KEPT-MESSAGE"])
+        terminal.wait_for(b"KEPT-MESSAGE")
 
         # Its own connection goes with the exec, so its answer is no verdict.
         run_cli(terminal.sock_path, ["upgrade-server", shlex.join([sys.executable, "-m", "pymux"])])
         terminal.wait_for(b"pymux is restarting.")
+        back = terminal.passed
 
         terminal.wait_for_queries()
         terminal.write(b"\x1b[?62;1;6c")
         terminal.wait_for(b"HOLDING")
+        terminal.wait_for(b"KEPT-MESSAGE", since=back)
         assert terminal.client.poll() is None, "the client left after it attached to the new build"
         assert _client_ids(terminal.sock_path) == before, "the client came back as somebody else"
 

@@ -182,10 +182,23 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     (elsewhere,) = second.arrangement.windows
     second.arrangement._active_window_for_cli[client_state.app] = elsewhere
     first.arrangement._prev_active_window_for_cli[client_state.app] = strip
+    client_state.name = "desk"
+    client_state.full_screen = True
+    client_state.theme = "grey"
     pymux.returning_clients["gone"] = {
         "session_id": second.session_id,
         "previous_session_id": None,
         "windows": {second.session_id: (None, elsewhere.window_id)},
+        "settings": {
+            "name": "phone",
+            "last_used": client_state.last_used + 1,
+            "read_only": True,
+            "ignore_size": True,
+            "full_screen": False,
+            "theme": "nearest",
+            "swap_dark_and_light": True,
+            "message": "job 2 exited 4",
+        },
     }
 
 
@@ -317,6 +330,14 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 with anyio.fail_after(10):
                     while "marker" not in _text(reloaded):
                         await anyio.sleep(0.05)
+                async with attached(fresh):
+                    back = fresh.connections[-1].client_state
+                    fresh.welcome_back(back, "gone")
+                    (elsewhere,) = back.session.arrangement.windows
+                    assert back.session.name == "second"
+                    assert back.session.arrangement._prev_active_window_for_cli[back.app] is elsewhere
+                    assert (back.name, back.read_only, back.message) == ("phone", True, "job 2 exited 4")
+                    assert "gone" not in fresh.returning_clients
                 fresh.stop()
         finally:
             for pane in list(fresh.panes_by_id.values()):
@@ -352,3 +373,26 @@ def test_a_snapshot_of_another_version_is_refused(pymux, tmp_path):
 
     with pytest.raises(snapshot.SnapshotError):
         snapshot.load(Pymux(), path)
+
+
+def test_a_snapshot_of_the_version_before_steps_up(pymux, tmp_path):
+    "What the server being upgraded wrote, which is the older shape."
+    path = tmp_path / "old.sqlite"
+    pymux.returning_clients["gone"] = {
+        "session_id": None,
+        "previous_session_id": None,
+        "windows": {},
+        "settings": {"message": "lost"},
+    }
+    snapshot.save(pymux, path)
+    db = sqlite3.connect(path)
+    for name in snapshot.CLIENT_SETTINGS:
+        db.execute("ALTER TABLE clients DROP COLUMN %s" % name)
+    db.execute("PRAGMA user_version = 1")
+    db.commit()
+    db.close()
+
+    fresh = Pymux()
+    snapshot.load(fresh, path)
+    assert fresh.returning_clients["gone"]["settings"] == {}
+    assert _rows(path, "PRAGMA user_version") == [(1,)]

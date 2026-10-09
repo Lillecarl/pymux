@@ -697,6 +697,11 @@ class ServerConnection:
             # Lillecarl/pymux#223.
             self._take_client_options(packet.get(Field.CLIENT_OPTIONS) or [])
 
+            # After the options: what the client had set while it ran
+            # wins over what its file says. Lillecarl/pymux#409.
+            if self.client_state is not None:
+                self.pymux.welcome_back(self.client_state, self.client_id)
+
             # The session this client landed on takes the names that
             # follow a client: a display, an agent, a session bus.
             # `attach_client_to` does it for every later move between

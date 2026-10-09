@@ -61,9 +61,33 @@ if TYPE_CHECKING:
 __all__ = ["SNAPSHOT_VERSION", "Snapshot", "adopting", "checking", "load", "save", "start"]
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
-#: refuses any other. The first change of shape adds the one step up
-#: from the version before, and only that step.
-SNAPSHOT_VERSION = 1
+#: takes an older one up through `STEPS`, and refuses any other.
+SNAPSHOT_VERSION = 2
+
+#: A client's own settings, each a column of `clients` and an attribute
+#: of `ClientState`, with the type sqlite gives back as.
+_CLIENT_SETTING_TYPES: dict[str, type] = {
+    "name": str,
+    "last_used": int,
+    "read_only": bool,
+    "ignore_size": bool,
+    "full_screen": bool,
+    "theme": str,
+    "swap_dark_and_light": bool,
+    "message": str,
+}
+CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
+
+#: What takes a snapshot of each older version one version up. A
+#: change of shape adds the one step from the version before it: the
+#: server being upgraded wrote the old shape.
+STEPS: dict[int, str] = {
+    # NULL is "not recorded": a returning client keeps what it announced.
+    1: "".join(
+        "ALTER TABLE clients ADD COLUMN %s %s;" % (name, "TEXT" if kind is str else "INTEGER")
+        for name, kind in _CLIENT_SETTING_TYPES.items()
+    ),
+}
 
 SCHEMA = """
 CREATE TABLE server(
@@ -178,7 +202,15 @@ CREATE TABLE column_widths(
 CREATE TABLE clients(
   client_id TEXT PRIMARY KEY,
   session_id INTEGER REFERENCES sessions(session_id),
-  previous_session_id INTEGER REFERENCES sessions(session_id)
+  previous_session_id INTEGER REFERENCES sessions(session_id),
+  name TEXT,
+  last_used INTEGER,
+  read_only INTEGER,
+  ignore_size INTEGER,
+  full_screen INTEGER,
+  theme TEXT,
+  swap_dark_and_light INTEGER,
+  message TEXT
 );
 CREATE TABLE client_windows(
   client_id TEXT NOT NULL REFERENCES clients(client_id),
@@ -316,7 +348,7 @@ WRITES: dict[str, frozenset[str]] = {
     "pymux.arrangement.Window": frozenset(Window.KEEP),
     "pymux.arrangement._Split": frozenset(_Split.KEEP),
     "pymux.arrangement.Pane": frozenset(Pane.KEEP),
-    "pymux.main.ClientState": frozenset({"session", "previous_session"}),
+    "pymux.main.ClientState": frozenset({"session", "previous_session", *CLIENT_SETTINGS}),
     "pymux.jobs.JobTable": frozenset({"_jobs", "last_id"}),
     # The kept counts are the lengths of the chunks `job_output` holds.
     "pymux.jobs.Job": frozenset(name for name, fate in Job.KEEP.items() if fate == Keep.SAVED),
@@ -356,16 +388,8 @@ LATER: dict[str, frozenset[str]] = {
     # What a person was in the middle of, and how the client is set.
     "pymux.main.ClientState": frozenset(
         {
-            "name",
-            "last_used",
-            "read_only",
-            "ignore_size",
-            "full_screen",
-            "theme",
-            "swap_dark_and_light",
             "has_prefix",
             "key_tables",
-            "message",
             "confirmations",
             "prompt_text",
             "prompt_command",
@@ -817,11 +841,18 @@ def _write_clients(pymux: Pymux, db: sqlite3.Connection) -> None:
             "session_id": state.session.session_id if state.session is not None else None,
             "previous_session_id": state.previous_session.session_id if state.previous_session is not None else None,
             "windows": windows,
+            "settings": {name: getattr(state, name) for name in CLIENT_SETTINGS},
         }
     for client_id, client in sorted(clients.items()):
+        settings = client["settings"]
         db.execute(
-            "INSERT INTO clients VALUES (?, ?, ?)",
-            (client_id, client["session_id"], client["previous_session_id"]),
+            "INSERT INTO clients VALUES (%s)" % ", ".join("?" * (3 + len(CLIENT_SETTINGS))),
+            (
+                client_id,
+                client["session_id"],
+                client["previous_session_id"],
+                *(settings.get(name) for name in CLIENT_SETTINGS),
+            ),
         )
         db.executemany(
             "INSERT INTO client_windows VALUES (?, ?, ?, ?)",
@@ -910,10 +941,19 @@ def _open(path: str | os.PathLike[str]) -> sqlite3.Connection:
     "The snapshot at `path`, read only, refused if another build wrote it."
     db = sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True)
     version = db.execute("PRAGMA user_version").fetchone()[0]
-    if version != SNAPSHOT_VERSION:
+    if version == SNAPSHOT_VERSION:
+        return db
+    if version not in STEPS:
         db.close()
         raise SnapshotError("snapshot version %d, and this build reads %d" % (version, SNAPSHOT_VERSION))
-    return db
+    # The file stays as the old server wrote it: the fallback reads it.
+    stepped = sqlite3.connect(":memory:")
+    db.backup(stepped)
+    db.close()
+    while version < SNAPSHOT_VERSION:
+        stepped.executescript(STEPS[version])
+        version += 1
+    return stepped
 
 
 def read_server(path: str | os.PathLike[str]) -> dict[str, Any]:
@@ -1106,6 +1146,9 @@ def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> int | No
             "windows": {
                 window["session_id"]: (window["active_window_id"], window["previous_window_id"])
                 for window in _rows(db, "SELECT * FROM client_windows WHERE client_id = ?", row["client_id"])
+            },
+            "settings": {
+                name: _CLIENT_SETTING_TYPES[name](row[name]) for name in CLIENT_SETTINGS if row[name] is not None
             },
         }
 

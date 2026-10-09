@@ -14,7 +14,10 @@ What it builds, under one attached client:
 * session `test`: a window split three ways, a window in strip mode
   with three columns, and a window with one of two panes zoomed;
 * session `other`: two windows, and a popup over them;
-* two finished jobs, one that failed.
+* two finished jobs, one that failed;
+* a message on the client, and the view it is on at the exec, which
+  the client has to come back to without being moved
+  (Lillecarl/pymux#409).
 
 The setup is typed at the client's prompt, because most of those
 commands act on the window of the client that runs them. The views are
@@ -53,6 +56,13 @@ ONLY_TERMINALS = os.environ.get("PYMUX_UPGRADE_TERMINALS", "foot")
 
 #: How long the relay copies, in seconds: the whole check is one run.
 HOLD = 600
+
+#: The view the client is on at the exec, with a message on it, as the
+#: client comes back to it.
+LANDING = "landing"
+
+#: Where the setup leaves the client: the last window it made in `test`.
+START = "test:3"
 
 #: How long a view may take to stop changing, in seconds.
 SETTLE = 20.0
@@ -202,8 +212,7 @@ def upgrade_in(terminal, seat, work, out):
     if started.returncode != 0:
         raise RuntimeError("the server did not start: %s" % started.stderr.decode())
     # Before the client attaches: a finished job tells every client, and
-    # the message stays until a key is pressed. No snapshot holds a
-    # client's message yet.
+    # this check chooses the message the client has.
     for args in JOBS:
         run_cli(socket_path, args)
 
@@ -231,8 +240,18 @@ def upgrade_in(terminal, seat, work, out):
         (client,) = until("one client", lambda: answer(socket_path, "list-clients", "-F", "#{client_name}").split())
         pid = answer(socket_path, "display-message", "-p", "#{pid}")
         jobs = what_the_jobs_say(socket_path)
+        # Only a key clears a message, so every view on both sides has it.
+        answer(socket_path, "display-message", "kept across the upgrade")
         before = every_view(socket_path, client, take_one, room, "before")
         options_before = answer(socket_path, "show-client-options", "-t", client)
+
+        # Where the client is when the exec comes. Nothing moves it
+        # after, so the new build has to put it back.
+        listed = answer(socket_path, "list-windows", "-a", "-F", "#{session_name}:#{window_index} #{window_id}")
+        windows = dict(line.split() for line in listed.splitlines())
+        answer(socket_path, "switch-client", "-c", client, "-t", windows["test:2"])
+        (room / LANDING).mkdir(exist_ok=True)
+        before[LANDING] = steady(take_one, room / LANDING / "before.png")
 
         run_cli(socket_path, ["upgrade-server", shlex.join([sys.executable, "-m", "pymux"])])
         until(
@@ -245,7 +264,12 @@ def upgrade_in(terminal, seat, work, out):
             raise RuntimeError("the server's pid changed, so this was no exec")
         if what_the_jobs_say(socket_path) != jobs:
             raise RuntimeError("the jobs answer differently after the upgrade")
+        landed = steady(take_one, room / LANDING / "after.png")
+        # The pass starts where the first one did, so that each window
+        # marks the same previous window on both sides.
+        answer(socket_path, "switch-client", "-c", client, "-t", windows[START])
         after = every_view(socket_path, client, take_one, room, "after")
+        after[LANDING] = landed
         options_after = answer(socket_path, "show-client-options", "-t", client)
         (room / "client-options.txt").write_text("before:\n%s\nafter:\n%s\n" % (options_before, options_after))
 

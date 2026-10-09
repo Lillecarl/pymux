@@ -1504,6 +1504,41 @@ class Pymux:
             if not found:
                 environment.pop(pattern, None)
 
+    def welcome_back(self, client_state, client_id: str) -> None:
+        """
+        Give a client that attaches again after `upgrade-server` the
+        view and the settings it left with. A record names ids, and one
+        whose session or window has gone since is skipped.
+        Lillecarl/pymux#409.
+        """
+        record = self.returning_clients.pop(client_id, None) if client_id else None
+        if record is None:
+            return
+        sessions = {session.session_id: session for session in self.sessions}
+
+        app = client_state.app
+        for session_id, (active_id, previous_id) in record["windows"].items():
+            session = sessions.get(session_id)
+            if session is None:
+                continue
+            arrangement = session.arrangement
+            windows = {window.window_id: window for window in arrangement.windows}
+            if active_id in windows:
+                arrangement._active_window_for_cli[app] = windows[active_id]
+            if previous_id in windows:
+                arrangement._prev_active_window_for_cli[app] = windows[previous_id]
+
+        for name, value in record["settings"].items():
+            setattr(client_state, name, value)
+        self.sync_color_bases()
+
+        session = sessions.get(record["session_id"])
+        if session is not None:
+            client_state.session = session
+        client_state.previous_session = sessions.get(record["previous_session_id"])
+        client_state.sync_focus()
+        self.invalidate(Woke.SESSION_CHANGED)
+
     def attach_client_to(self, client_state, session: Session) -> None:
         "Put one client on a session, and draw what it shows."
         if client_state.session is session:
