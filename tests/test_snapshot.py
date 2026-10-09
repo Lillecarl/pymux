@@ -7,6 +7,7 @@ Lillecarl/pymux#399.
 from __future__ import annotations
 
 import importlib
+import os
 import sqlite3
 
 import anyio
@@ -80,6 +81,46 @@ def test_a_crashed_saves_journal_does_not_reach_the_next_save(pymux, tmp_path):
     snapshot.save(pymux, path)
     assert not stale.exists()
     assert _rows(path, "SELECT count(*) FROM sessions") == [(1,)]
+
+
+def test_a_snapshot_is_private_from_its_first_byte(pymux, tmp_path):
+    written = snapshot.Snapshot(tmp_path / "snapshot.sqlite")
+    try:
+        assert written.partial.stat().st_mode & 0o777 == 0o600
+        written.write(pymux)
+        written.finish()
+    except BaseException:
+        written.abandon()
+        raise
+    assert (tmp_path / "snapshot.sqlite").stat().st_mode & 0o777 == 0o600
+
+
+def test_a_loaded_server_adopts_the_listener_it_names(pymux, tmp_path):
+    pymux.listen_on_socket(str(tmp_path / "server.sock"))
+    path = tmp_path / "snapshot.sqlite"
+    snapshot.save(pymux, path)
+
+    fresh = Pymux()
+    fd = snapshot.load(fresh, path)
+    assert fd == pymux.listener.socket.fileno()
+    assert fresh.socket_name == pymux.socket_name
+    fresh.adopt_listener(fd)
+    # One fd, and the old server's object is the one that closes it.
+    fresh.listener.socket.detach()
+
+    other = Pymux()
+    other.listen_on_socket(str(tmp_path / "other.sock"))
+    read, write = os.pipe()
+    try:
+        for wrong in (other.listener.socket.fileno(), read):
+            with pytest.raises(OSError):
+                fresh.adopt_listener(wrong)
+            os.fstat(wrong)  # a refusal leaves the fd to its owner
+    finally:
+        other.listener.close()
+        os.close(read)
+        os.close(write)
+    pymux.listener.close()
 
 
 def _dump(path) -> list[str]:

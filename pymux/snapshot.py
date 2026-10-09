@@ -50,12 +50,13 @@ from pyte.titles import Titles
 from .arrangement import HSplit, LayoutTypes, Pane, VSplit, Window, _Split, node_key
 from .ids import PaneId, SessionId, WindowId, WindowIndex
 from .options import ALL_OPTIONS
+from .pipes.posix import PosixSocketListener
 from .session import Session
 
 if TYPE_CHECKING:
     from .main import ClientState, Pymux
 
-__all__ = ["SNAPSHOT_VERSION", "Snapshot", "adopting", "load", "save", "start"]
+__all__ = ["SNAPSHOT_VERSION", "Snapshot", "adopting", "checking", "load", "save", "start"]
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: refuses any other. The first change of shape adds the one step up
@@ -63,6 +64,10 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "adopting", "load", "save", "start"]
 SNAPSHOT_VERSION = 1
 
 SCHEMA = """
+CREATE TABLE server(
+  name TEXT PRIMARY KEY,
+  value
+);
 CREATE TABLE counters(
   name TEXT PRIMARY KEY,
   value INTEGER NOT NULL
@@ -210,6 +215,7 @@ CREATE TABLE screen_rows(
 
 #: The tables in the order a dump compares them.
 TABLES = (
+    "server",
     "counters",
     "options",
     "global_environment",
@@ -298,6 +304,7 @@ WRITES: dict[str, frozenset[str]] = {
     },
     "pymux.main.Pymux": frozenset(
         {"sessions", "_session_counter", "_uses", "global_environment", "returning_clients"}
+        | {"created", "socket_name", "listener", "original_cwd", "source_file", "_startup_done"}
         | set(_server_options().values())
     ),
 }
@@ -342,13 +349,7 @@ LATER: dict[str, frozenset[str]] = {
     # The server's own records, and what the next process is started with.
     "pymux.main.Pymux": frozenset(
         {
-            "created",
-            "socket_name",
-            "listener",
-            "original_cwd",
-            "source_file",
             "startup_command",
-            "_startup_done",
             "startup_errors",
             "_runs_standalone",
             "_serves_one_terminal",
@@ -429,8 +430,14 @@ class Snapshot:
         # a crashed save's journal goes with the crashed save.
         for leftover in (self.partial, self.partial.with_name(self.partial.name + "-journal")):
             leftover.unlink(missing_ok=True)
+        # Private before the first byte: the screens hold what was typed.
+        # sqlite gives its journal the file's mode.
+        os.close(os.open(self.partial, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600))
         self.db = sqlite3.connect(self.partial)
         self.db.executescript(SCHEMA)
+        # Here and not in `finish`: an upgrade's dry run loads the
+        # partial file between the two writes.
+        self.db.execute("PRAGMA user_version = %d" % SNAPSHOT_VERSION)
         self.freezers: dict[int, Freezer] = {}
 
     def write(self, pymux: Pymux) -> None:
@@ -497,8 +504,6 @@ class Snapshot:
 
     def finish(self) -> None:
         "Make the file appear at `path`, whole."
-        with self.db:
-            self.db.execute("PRAGMA user_version = %d" % SNAPSHOT_VERSION)
         self.db.close()
         with open(self.partial, "rb") as written:
             os.fsync(written.fileno())
@@ -544,6 +549,21 @@ def _text_of(cells: list) -> str:
 
 
 def _write(pymux: Pymux, db: sqlite3.Connection) -> None:
+    listener = pymux.listener
+    if listener is not None and not isinstance(listener, PosixSocketListener):
+        raise SnapshotError("the server listens on a named pipe, which no `execve` carries")
+    db.executemany(
+        "INSERT INTO server VALUES (?, ?)",
+        [
+            ("created", pymux.created),
+            ("socket_name", pymux.socket_name),
+            # Inherited across `execve`, so its number is the listener.
+            ("listener_fd", listener.socket.fileno() if listener is not None else None),
+            ("original_cwd", pymux.original_cwd),
+            ("source_file", pymux.source_file),
+            ("startup_done", pymux._startup_done),
+        ],
+    )
     db.executemany(
         "INSERT INTO counters VALUES (?, ?)",
         [
@@ -753,17 +773,39 @@ def adopting(pymux: Pymux) -> MakePane:
 
     def make(program: Program, on_done: Callable[[], None] | None) -> Pane:
         backend = PosixBackend.adopt(program.master, program.slave, program.pid)
-        pane = pymux._build_pane(backend=backend, on_done=on_done)
-        pane.pane_id = program.pane_id
-        control = pane.terminal.terminal_control
-        thaw(program.process, control.process)
-        thaw(program.screen, control.screen)
-        # After the screen: the replay of an open sequence reaches it.
-        thaw(program.stream, control.stream)
-        pymux._register_pane(pane)
-        return pane
+        return _thawed(pymux, program, pymux._build_pane(backend=backend, on_done=on_done))
 
     return make
+
+
+def checking(pymux: Pymux) -> MakePane:
+    """
+    Panes that thaw a snapshot's screens over a pty nobody runs on.
+
+    An upgrade's dry run loads the snapshot this way in a process of the
+    new build, which holds none of the fds. It proves the new build
+    reads every table and thaws every screen, and adopts nothing.
+
+    **Start nothing it built.** The thaw writes the old owner's fd
+    numbers over the pty `_build_pane` opened, and in this process
+    those numbers are other files.
+    """
+
+    def make(program: Program, on_done: Callable[[], None] | None) -> Pane:
+        return _thawed(pymux, program, pymux._build_pane(command=["true"], on_done=on_done))
+
+    return make
+
+
+def _thawed(pymux: Pymux, program: Program, pane: Pane) -> Pane:
+    pane.pane_id = program.pane_id
+    control = pane.terminal.terminal_control
+    thaw(program.process, control.process)
+    thaw(program.screen, control.screen)
+    # After the screen: the replay of an open sequence reaches it.
+    thaw(program.stream, control.stream)
+    pymux._register_pane(pane)
+    return pane
 
 
 async def start(pymux: Pymux) -> None:
@@ -776,19 +818,23 @@ async def start(pymux: Pymux) -> None:
             await control.start(pymux.tasks)
 
 
-def load(pymux: Pymux, path: str | os.PathLike[str], make_pane: MakePane | None = None) -> None:
+def load(pymux: Pymux, path: str | os.PathLike[str], make_pane: MakePane | None = None) -> int | None:
     """
     Replace what a fresh `pymux` holds with a snapshot's.
 
-    `make_pane` builds each pane; `adopting` is the default, and a test
-    of the tables alone passes one that builds no program.
+    `make_pane` builds each pane; `adopting` is the default, and
+    `checking` is the dry run's.
+
+    Returns the fd of the listening socket, or None when the server had
+    none. Only the process the old server exec'd into holds it, so
+    adopting it is the caller's: `Pymux.adopt_listener`.
     """
     db = sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True)
     try:
         version = db.execute("PRAGMA user_version").fetchone()[0]
         if version != SNAPSHOT_VERSION:
             raise SnapshotError("snapshot version %d, and this build reads %d" % (version, SNAPSHOT_VERSION))
-        _read(pymux, db, make_pane or adopting(pymux))
+        return _read(pymux, db, make_pane or adopting(pymux))
     finally:
         db.close()
 
@@ -822,7 +868,14 @@ def _rows(db: sqlite3.Connection, sql: str, *params) -> list[sqlite3.Row]:
     return db.execute(sql, params).fetchall()
 
 
-def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> None:
+def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> int | None:
+    server = {row["name"]: row["value"] for row in _rows(db, "SELECT * FROM server")}
+    pymux.created = server["created"]
+    pymux.socket_name = server["socket_name"]
+    pymux.original_cwd = server["original_cwd"]
+    pymux.source_file = server["source_file"]
+    pymux._startup_done = bool(server["startup_done"])
+
     counters = {row["name"]: row["value"] for row in _rows(db, "SELECT * FROM counters")}
 
     server_options = _server_options()
@@ -957,3 +1010,4 @@ def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> None:
     _Split._split_counter = counters["split"]
     pymux._session_counter = counters["session"]
     pymux._uses = counters["uses"]
+    return server["listener_fd"]

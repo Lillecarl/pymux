@@ -4,10 +4,12 @@ import asyncio
 import base64
 import contextvars
 import datetime
+import errno
 import fnmatch
 import os
 import shlex
 import signal
+import socket
 import sys
 import tempfile
 import time
@@ -4096,23 +4098,7 @@ exec pymux notify -u "$urgency" -- "$@"
         started this server connects to, and the accepting needs the
         loop that the child starts. `running()` runs the listener.
         """
-
-        def connection_cb(pipe_connection):
-            # We have to create a new `context`, because this will be the scope for
-            # a new prompt_toolkit.Application to become active.
-            #
-            # **A client that arrives here may not always attach.** An
-            # integrated server draws on the terminal it runs in, and
-            # this socket is for commands. The question is asked at the
-            # moment a client arrives, because the route is chosen after
-            # the bind. Lillecarl/pymux#159.
-            may_attach = not self._serves_one_terminal
-            context = contextvars.copy_context()
-            connection = context.run(lambda: ServerConnection(self, pipe_connection, may_attach=may_attach))
-
-            self.connections.append(connection)
-
-        self.listener = bind_and_listen_on_socket(socket_name, connection_cb)
+        self.listener = bind_and_listen_on_socket(socket_name, self._accept_connection)
         self.socket_name = self.listener.socket_name
 
         # Set session_name according to socket name.
@@ -4122,6 +4108,42 @@ exec pymux notify -u "$urgency" -- "$@"
         # `bind_and_listen_on_socket` already said it. Two lines were
         # half the log of a server that started well.
         return self.socket_name
+
+    def adopt_listener(self, fd: int) -> None:
+        """
+        Serve the listening socket the server before an upgrade bound.
+
+        `socket_name` is the snapshot's, and the fd has to be listening
+        on that name: a number is only what the old server wrote down.
+        Binding again is no answer, because this process still listens
+        there. Lillecarl/pymux#408.
+        """
+        from .pipes.posix import PosixSocketListener
+
+        sock = socket.socket(fileno=fd)
+        if sock.family != socket.AF_UNIX or not sock.getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN):
+            sock.detach()
+            raise OSError(errno.ENOTSOCK, "fd %d is not a listening unix socket" % fd)
+        socket_name = self.socket_name
+        if socket_name is None or sock.getsockname() != socket_name:
+            sock.detach()
+            raise OSError(errno.EADDRNOTAVAIL, "fd %d does not listen on %r" % (fd, socket_name))
+        self.listener = PosixSocketListener(socket_name, sock, self._accept_connection)
+
+    def _accept_connection(self, pipe_connection) -> None:
+        # We have to create a new `context`, because this will be the scope for
+        # a new prompt_toolkit.Application to become active.
+        #
+        # **A client that arrives here may not always attach.** An
+        # integrated server draws on the terminal it runs in, and
+        # this socket is for commands. The question is asked at the
+        # moment a client arrives, because the route is chosen after
+        # the bind. Lillecarl/pymux#159.
+        may_attach = not self._serves_one_terminal
+        context = contextvars.copy_context()
+        connection = context.run(lambda: ServerConnection(self, pipe_connection, may_attach=may_attach))
+
+        self.connections.append(connection)
 
     def run_server(self):
         # Ignore keyboard. (When people run "pymux server" and press Ctrl-C.)
