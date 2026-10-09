@@ -988,6 +988,7 @@ class Pymux:
         "sessions": Keep.SAVED,
         "_session_counter": Keep.SAVED,
         "_uses": Keep.SAVED,
+        "returning_clients": Keep.SAVED,
         "created": Keep.SAVED,
         "socket_name": Keep.SAVED,
         "listener": Keep.SAVED,
@@ -1019,7 +1020,6 @@ class Pymux:
         "command_palette": Keep.SAVED,
         "default_shell": Keep.SAVED,
         "default_terminal": Keep.SAVED,
-        "display_pane_numbers": Keep.SAVED,
         "enable_bell": Keep.SAVED,
         "enable_mouse_support": Keep.SAVED,
         "enable_pane_status": Keep.SAVED,
@@ -1072,6 +1072,9 @@ class Pymux:
         "counters": Keep.DROPPED,
         "sourcing": Keep.DROPPED,
         "_hooks_running": Keep.DROPPED,
+        # `display-panes` showing, which a timer ends; the timer does
+        # not survive, so neither does this.
+        "display_pane_numbers": Keep.DROPPED,
     }
 
     def __init__(
@@ -1351,6 +1354,11 @@ class Pymux:
         self.sessions: list[Session] = []
         self._session_counter = 0
         first = self.create_session(name=session_name)
+
+        #: What a loaded snapshot says about each client, by the id it
+        #: keeps across reattaches, until that client comes back.
+        #: `snapshot.py` fills it. Lillecarl/pymux#399.
+        self.returning_clients: dict[str, dict] = {}
 
         # `new-session -x -y` on the route that starts a server: the
         # session is made here and its first window comes later, in
