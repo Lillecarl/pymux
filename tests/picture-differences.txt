@@ -63,7 +63,16 @@ xterm underlines 208
 # glyph whose ink reaches the edge of its cell *and* runs to column 79.
 # A pane cannot give up the guard, so this is what a pane costs: eight
 # pixels. Lillecarl/pymux#371.
-xterm recorded-claude-code 8
+#
+# Three more, at the "●" before "high". U+25CF is a symbol some
+# terminals draw as an emoji, so the renderer no longer trusts the
+# column after it: the cell that follows goes out after a carriage
+# return and a move, as a new string, where the bare program wrote
+# both in one. xterm's "●" inks a pixel past its cell, and the cell
+# written after it on its own covers that ink. Same mechanism as the
+# seam above; the guard against a terminal counting the symbol two
+# columns wide is what it costs. Lillecarl/pymux#539.
+xterm recorded-claude-code 11
 
 # ----------------------------------------------------------------------
 # The image fixtures.
