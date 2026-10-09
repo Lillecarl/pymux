@@ -135,6 +135,13 @@ class JobStore:
         self._state = anyio.Lock()
         self._seats = anyio.Semaphore(max_readers)
         self._idle: list[tuple[aiosqlite.Connection, float]] = []
+        #: Other shared-cache databases every reader sees, by schema
+        #: name: the live window tables (Lillecarl/pymux#399).
+        self._attached: dict[str, str] = {}
+
+    def attach(self, schema: str, uri: str) -> None:
+        "Let every reader made from now on read the database at `uri` too."
+        self._attached[schema] = uri
 
     async def open(self) -> None:
         "Build the database. Idle when already open; safe to share."
@@ -215,6 +222,14 @@ class JobStore:
             self._seats.release()
             raise
         try:
+            for schema, uri in self._attached.items():
+                await connection.execute("ATTACH DATABASE ? AS %s" % schema, (uri,))
+            # The live store writes on the loop, where it cannot wait,
+            # and a reader's table lock in the shared cache stopped it:
+            # measured, a writer and four readers did not finish in ten
+            # minutes. A reader that reads uncommitted takes no table
+            # lock, and the live store commits each write whole.
+            await connection.execute("PRAGMA read_uncommitted = ON")
             await connection.execute("PRAGMA query_only = ON")
         except BaseException:
             await connection.close()

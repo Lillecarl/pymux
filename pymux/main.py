@@ -1414,6 +1414,8 @@ class Pymux:
         #: Whatever changes one of them calls `live.mark()`.
         #: Lillecarl/pymux#399.
         self.live = LiveStore()
+        # `sql` reads both through the job store's readers.
+        self.jobs.store.attach("live", self.live.uri)
 
         # The hooks of the session: a name for an event, and the
         # commands it runs. `set-hook` fills it, `invalidate` reads it.

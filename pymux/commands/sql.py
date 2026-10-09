@@ -27,10 +27,13 @@ DEFAULT_TIMEOUT = 10.0
 
 def sql(pymux: Pymux, args: argparse.Namespace):
     """
-    Ask the jobs database a question, in SQL.
+    Ask the server a question, in SQL.
 
-    Free-form: `sql SELECT id, command FROM jobs WHERE status =
-    'running'` answers with a table, `--json` with objects. `sql
+    The jobs are there, and so are the sessions, windows, panes and
+    clients: the live tables, by the snapshot's names, attached as
+    `live` (Lillecarl/pymux#399). Free-form: `sql SELECT id, command
+    FROM jobs WHERE status = 'running'` answers with a table, `--json`
+    with objects. `sql
     --save NAME` keeps the question on the server under a name, with
     `:named` parameters filled by `--param` when it or another caller
     runs it back with `sql --run NAME`. `sql --list` shows the kept
@@ -132,6 +135,9 @@ async def _ask(pymux: Pymux, args: argparse.Namespace, query: str, params: dict[
     limit = args.lines
     bound = args.timeout
     scope = anyio.fail_after(bound) if bound else nullcontext()
+    # A change made in this loop step, by the command before on the same
+    # line, is not written yet.
+    pymux.live.flush(pymux)
     try:
         async with pymux.jobs.store.reader() as conn:
             try:

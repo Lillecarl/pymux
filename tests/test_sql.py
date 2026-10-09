@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 
+import anyio
 import pytest
 from prompt_toolkit.application.current import set_app
 from session import create_session
@@ -89,6 +90,60 @@ async def test_free_form_select_answers_a_table():
         assert len(said) == 1
         assert "id" in said[0].splitlines()[0] and "command" in said[0].splitlines()[0]
         assert "echo one" in said[0] and "echo two" in said[0]
+
+
+async def test_the_windows_are_there_beside_the_jobs():
+    "The live tables answer in the same question as the jobs. Lillecarl/pymux#399."
+    async with create_session() as (pymux, state):
+        await pymux.jobs.submit("echo one", None)
+        # The rename and the question in one step: `sql` writes what the
+        # step changed before it asks.
+        with set_app(state.app):
+            handle_command(pymux, "rename-window built")
+        said = await _ask(
+            pymux,
+            state,
+            "sql --json SELECT w.window_name, j.command FROM live.windows w, jobs j",
+        )
+        assert json.loads(said[0])["rows"] == [{"window_name": "built", "command": "echo one"}]
+        said = await _ask(pymux, state, "sql --json SELECT count(*) AS n FROM panes")
+        held = sum(len(window.panes) for s in pymux.sessions for window in s.arrangement.windows)
+        assert json.loads(said[0])["rows"] == [{"n": held}]
+
+
+async def test_the_live_store_writes_while_questions_read():
+    """
+    A writer on the loop and readers on their threads share one cache,
+    which answers a lock with an error and not a wait. Readers take
+    none, so neither side ever sees one.
+    """
+    async with create_session() as (pymux, state):
+        failures: list[str] = []
+
+        async def ask() -> None:
+            for _ in range(20):
+                try:
+                    with set_app(state.app):
+                        await sql(pymux, _ns(query=["SELECT * FROM windows, panes, sessions"]))
+                except CommandException as e:
+                    failures.append(e.message)
+
+        async def write() -> None:
+            for _ in range(200):
+                pymux.live.mark()
+                pymux.live.flush(pymux)
+                await anyio.sleep(0)
+
+        # The answers themselves are not the question here.
+        pymux.command_output = []
+        try:
+            async with anyio.create_task_group() as tasks:
+                for _ in range(4):
+                    tasks.start_soon(ask)
+                tasks.start_soon(write)
+        finally:
+            pymux.command_output = None
+        assert failures == []
 
 
 async def test_json_answers_objects():
