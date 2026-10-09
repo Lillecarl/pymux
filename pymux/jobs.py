@@ -32,11 +32,12 @@ import time
 from collections import deque
 from collections.abc import Callable, Iterable, Mapping
 from contextlib import suppress
-from typing import NewType
+from typing import ClassVar, NewType
 
 import anyio
 import anyio.abc
 from anyio.streams.memory import MemoryObjectSendStream
+from pyte.keep import Keep
 
 from pymux.commands import CommandException
 from pymux.jobstore import JobStore
@@ -113,6 +114,35 @@ SESSION_TAG = "session"
 
 class Job:
     "One command the server ran, running or remembered."
+
+    #: What a hot upgrade does with each attribute; `pyte.keep` says.
+    #: A snapshot holds finished jobs only: a running one refuses it.
+    #: Lillecarl/pymux#399.
+    KEEP: ClassVar[dict[str, Keep]] = {
+        "job_id": Keep.SAVED,
+        "command": Keep.SAVED,
+        "directory": Keep.SAVED,
+        "pty": Keep.SAVED,
+        "tags": Keep.SAVED,
+        "env": Keep.SAVED,
+        "status": Keep.SAVED,
+        "returncode": Keep.SAVED,
+        "error": Keep.SAVED,
+        "started": Keep.SAVED,
+        "finished": Keep.SAVED,
+        "last_active": Keep.SAVED,
+        "stdout_chunks": Keep.SAVED,
+        "stderr_chunks": Keep.SAVED,
+        "stdout_kept": Keep.SAVED,
+        "stderr_kept": Keep.SAVED,
+        "stdout_dropped": Keep.SAVED,
+        "stderr_dropped": Keep.SAVED,
+        "done": Keep.REBUILT,  # set: the job is finished
+        "followers": Keep.DROPPED,  # the clients that followed went with the exec
+        "waiters": Keep.DROPPED,  # and so did the commands that waited
+        "process": Keep.DROPPED,
+        "kill_requested": Keep.DROPPED,
+    }
 
     def __init__(
         self,
@@ -239,9 +269,19 @@ class JobTable:
     change in the same step, so they cannot disagree.
     """
 
+    #: What a hot upgrade does with each attribute; `pyte.keep` says.
+    KEEP: ClassVar[dict[str, Keep]] = {
+        "_jobs": Keep.SAVED,
+        "last_id": Keep.SAVED,
+        "store": Keep.REBUILT,  # in memory: `restore` writes the rows again
+    }
+
     def __init__(self) -> None:
         self._jobs: dict[JobId, Job] = {}
         self.store = JobStore()
+        #: The newest id the database handed out. It outlives the jobs
+        #: it named, so a restored server never hands one out again.
+        self.last_id = 0
 
     async def open(self) -> None:
         "Build the database. The server calls this; the rest is lazy."
@@ -275,6 +315,7 @@ class JobTable:
             (command, directory, now, 1 if pty else 0),
         )
         job = Job(JobId(cursor.lastrowid), command, directory, now, tags, env or dict(os.environ), pty)
+        self.last_id = max(self.last_id, job.job_id)
         self._jobs[job.job_id] = job
         for key, value in job.tags.items():
             await self.store.write(
@@ -282,6 +323,40 @@ class JobTable:
                 (job.job_id, key, value),
             )
         return job
+
+    async def restore(self) -> None:
+        """
+        Write the rows of the finished jobs a snapshot's load put here.
+
+        The database is in memory and the exec emptied it. The sequence
+        goes back too, so the next id is past every id ever given.
+        """
+        for job in self.listing():
+            job.done.set()
+            await self.store.write(
+                "INSERT OR REPLACE INTO jobs(id, command, directory, status, returncode, error, started, finished, pty)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    job.job_id,
+                    job.command,
+                    job.directory,
+                    job.status,
+                    job.returncode,
+                    job.error,
+                    job.started,
+                    job.finished,
+                    1 if job.pty else 0,
+                ),
+            )
+            for key, value in job.tags.items():
+                await self.store.write(
+                    "INSERT OR REPLACE INTO job_tags(job_id, key, value) VALUES (?, ?, ?)",
+                    (job.job_id, key, value),
+                )
+        # `sqlite_sequence` has no key, so a second row for the table
+        # would be added, not replaced.
+        await self.store.write("DELETE FROM sqlite_sequence WHERE name = 'jobs'")
+        await self.store.write("INSERT INTO sqlite_sequence(name, seq) VALUES ('jobs', ?)", (self.last_id,))
 
     def get(self, job_id: JobId) -> Job | None:
         return self._jobs.get(job_id)

@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib
 import os
 import sqlite3
+import sys
 
 import anyio
 import pytest
@@ -191,7 +192,37 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
 #: Columns that hold one value in every row however the server is used.
 CONSTANT = {
     ("counters", "value"),  # five counters, and two of them may agree
+    ("jobs", "status"),  # a running job refuses a snapshot
 }
+
+
+async def _run_jobs(pymux) -> None:
+    "Finished jobs that differ in every column a snapshot writes."
+    jobs = pymux.jobs
+    for command, directory, tags, pty in (
+        ("printf out; printf err >&2", None, [("build", None), ("session", "agent")], False),
+        # The environment below is the whole of it, with no PATH.
+        (
+            '%s -c \'import sys; print("x" * 10**6); print("y" * 10**6, file=sys.stderr); sys.exit(3)\''
+            % sys.executable,
+            "/",
+            [("big", "yes")],
+            False,
+        ),
+        ("true", "/no/such/directory", [], True),
+        # Forgotten below: the next id is past it all the same.
+        ("true", None, [], False),
+    ):
+        job = await jobs.submit(command, directory, tags, {"WHO": command}, pty)
+        await jobs.supervise(job)
+    await jobs._forget(job)
+
+
+def _jobs_of(pymux) -> list[tuple]:
+    return [
+        (job.job_id, job.command, job.returncode, job.error, job.tags, job.kept("stdout"), job.kept("stderr"))
+        for job in pymux.jobs.listing()
+    ]
 
 
 def _constant_columns(path) -> list[tuple[str, str]]:
@@ -257,6 +288,8 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 await settled(session, 0.1)
         await settled(session)
         _vary_what_no_command_reaches(pymux, connection.client_state)
+        await _run_jobs(pymux)
+        jobs = _jobs_of(pymux)
 
         first = tmp_path / "first.sqlite"
         snapshot.save(pymux, first)
@@ -276,6 +309,8 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
         try:
             async with fresh.running():
                 await snapshot.start(fresh)
+                assert _jobs_of(fresh) == jobs
+                assert (await fresh.jobs.submit("true")).job_id == pymux.jobs.last_id + 1
                 reloaded = fresh.panes_by_id[shell.pane_id]
                 assert _text(reloaded) == before
                 reloaded.process.write_input("echo mar''ker\r")
@@ -300,6 +335,9 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
     assert _rows(first, "SELECT client_id FROM clients ORDER BY 1") == [("gone",), ("returning",)]
     assert _rows(first, "SELECT overlay_title FROM sessions WHERE overlay_pane_id IS NOT NULL") == [("pop",)]
     assert _rows(first, "SELECT count(*) FROM screen_rows WHERE text LIKE '%ALT'") == [(1,)]
+    assert _rows(first, "SELECT returncode, stdout_dropped > 0, stderr_dropped > 0 FROM jobs WHERE job_id = 2") == [
+        (3, 1, 1)
+    ]
     assert _constant_columns(first) == []
     assert _dump(second) == _dump(first)
 

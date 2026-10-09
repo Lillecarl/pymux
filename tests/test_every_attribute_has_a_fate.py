@@ -88,6 +88,8 @@ def live_objects(pymux):
                 yield screen.colors
                 yield screen.pointer_shapes
                 yield screen.graphics
+    yield pymux.jobs
+    yield from pymux.jobs.listing()
     for connection in pymux.connections:
         yield connection
         if connection.client_state is not None:
@@ -101,6 +103,7 @@ async def test_every_attribute_has_a_fate(pymux):
         with set_app(client_state.app):
             pymux.handle_command("split-window -h")
         await settled(session)
+        await pymux.jobs.supervise(await pymux.jobs.submit("true"))
 
         found = []
         seen_classes = set()

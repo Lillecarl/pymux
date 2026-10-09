@@ -41,6 +41,7 @@ from ptyhost.backends.posix_utils import PtyReader
 from ptyhost.process import Process
 from pyte.freeze import Freezer, Frozen, freeze, saved_fields, thaw
 from pyte.images import GraphicsImage, GraphicsPlacement, GraphicsState
+from pyte.keep import Keep
 from pyte.osc import ColorOverrides, PointerShapes
 from pyte.page import CursorPosition, Page
 from pyte.screen import Screen
@@ -49,6 +50,7 @@ from pyte.titles import Titles
 
 from .arrangement import HSplit, LayoutTypes, Pane, VSplit, Window, _Split, node_key
 from .ids import PaneId, SessionId, WindowId, WindowIndex
+from .jobs import Job, JobId
 from .options import ALL_OPTIONS
 from .pipes.posix import PosixSocketListener
 from .session import Session
@@ -185,6 +187,34 @@ CREATE TABLE client_windows(
   previous_window_id INTEGER REFERENCES windows(window_id),
   PRIMARY KEY (client_id, session_id)
 );
+CREATE TABLE jobs(
+  job_id INTEGER PRIMARY KEY,
+  command TEXT NOT NULL,
+  directory TEXT,
+  pty INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  returncode INTEGER,
+  error TEXT,
+  started REAL NOT NULL,
+  finished REAL,
+  last_active REAL NOT NULL,
+  env TEXT NOT NULL,
+  stdout_dropped INTEGER NOT NULL,
+  stderr_dropped INTEGER NOT NULL
+);
+CREATE TABLE job_tags(
+  job_id INTEGER NOT NULL REFERENCES jobs(job_id),
+  key TEXT NOT NULL,
+  value TEXT,
+  PRIMARY KEY (job_id, key)
+);
+CREATE TABLE job_output(
+  job_id INTEGER NOT NULL REFERENCES jobs(job_id),
+  stream TEXT NOT NULL CHECK (stream IN ('stdout', 'stderr')),
+  start INTEGER NOT NULL,
+  data BLOB NOT NULL,
+  PRIMARY KEY (job_id, stream, start)
+);
 CREATE TABLE pane_programs(
   pane_id INTEGER PRIMARY KEY REFERENCES panes(pane_id),
   pane_pid INTEGER NOT NULL,
@@ -231,14 +261,20 @@ TABLES = (
     "column_widths",
     "clients",
     "client_windows",
+    "jobs",
+    "job_tags",
+    "job_output",
     "pane_programs",
     "screen_appearances",
     "screen_rows",
 )
 
-#: The tables a later write replaces whole. The screens' tables take
-#: only what changed since the write before.
-WHOLE_TABLES = TABLES[: TABLES.index("pane_programs")]
+#: The tables a later write replaces whole. A finished job never
+#: changes, and the screens' tables take only what changed since the
+#: write before.
+WHOLE_TABLES = TABLES[: TABLES.index("jobs")]
+
+_JOB_TABLES = ("jobs", "job_tags", "job_output")
 
 _SPLIT_KINDS: dict[type[_Split], str] = {HSplit: "hsplit", VSplit: "vsplit"}
 
@@ -281,6 +317,9 @@ WRITES: dict[str, frozenset[str]] = {
     "pymux.arrangement._Split": frozenset(_Split.KEEP),
     "pymux.arrangement.Pane": frozenset(Pane.KEEP),
     "pymux.main.ClientState": frozenset({"session", "previous_session"}),
+    "pymux.jobs.JobTable": frozenset({"_jobs", "last_id"}),
+    # The kept counts are the lengths of the chunks `job_output` holds.
+    "pymux.jobs.Job": frozenset(name for name, fate in Job.KEEP.items() if fate == Keep.SAVED),
     "ptterm.terminal.Terminal": frozenset({"terminal_control"}),
     "ptterm.terminal._TerminalControl": frozenset({"screen", "stream", "process"}),
     # What `pyte.freeze` walks writes every saved field, by construction.
@@ -303,7 +342,7 @@ WRITES: dict[str, frozenset[str]] = {
         )
     },
     "pymux.main.Pymux": frozenset(
-        {"sessions", "_session_counter", "_uses", "global_environment", "returning_clients"}
+        {"sessions", "_session_counter", "_uses", "global_environment", "returning_clients", "jobs"}
         | {"created", "socket_name", "listener", "original_cwd", "source_file", "_startup_done"}
         | set(_server_options().values())
     ),
@@ -361,7 +400,6 @@ LATER: dict[str, frozenset[str]] = {
             "message_log",
             "notifications",
             "notification_center",
-            "jobs",
             "key_bindings_manager",
         }
     ),
@@ -439,16 +477,22 @@ class Snapshot:
         # partial file between the two writes.
         self.db.execute("PRAGMA user_version = %d" % SNAPSHOT_VERSION)
         self.freezers: dict[int, Freezer] = {}
+        self.jobs_written: set[int] = set()
 
     def write(self, pymux: Pymux) -> None:
         "Write what `pymux` holds now over what the write before held."
         panes = _panes_of(pymux)
         for pane in panes:
             _refuse_what_cannot_be_saved(pane)
+        jobs = pymux.jobs.listing()
+        for job in jobs:
+            if not job.is_done:
+                raise SnapshotError("job %d is still running" % job.job_id)
         with self.db:
             for table in WHOLE_TABLES:
                 self.db.execute("DELETE FROM %s" % table)
             _write(pymux, self.db)
+            self._write_jobs(jobs)
             alive = {pane.pane_id for pane in panes}
             for gone in set(self.freezers) - alive:
                 del self.freezers[gone]
@@ -456,6 +500,48 @@ class Snapshot:
                     self.db.execute("DELETE FROM %s WHERE pane_id = ?" % table, (gone,))
             for pane in panes:
                 self._write_program(pane)
+
+    def _write_jobs(self, jobs: list[Job]) -> None:
+        db = self.db
+        alive = {job.job_id for job in jobs}
+        for gone in self.jobs_written - alive:
+            for table in _JOB_TABLES:
+                db.execute("DELETE FROM %s WHERE job_id = ?" % table, (gone,))
+        self.jobs_written &= alive
+        for job in jobs:
+            if job.job_id in self.jobs_written:
+                continue
+            self.jobs_written.add(job.job_id)
+            db.execute(
+                "INSERT INTO jobs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    job.job_id,
+                    job.command,
+                    job.directory,
+                    job.pty,
+                    job.status,
+                    job.returncode,
+                    job.error,
+                    job.started,
+                    job.finished,
+                    job.last_active,
+                    json.dumps(job.env, sort_keys=True),
+                    job.stdout_dropped,
+                    job.stderr_dropped,
+                ),
+            )
+            db.executemany(
+                "INSERT INTO job_tags VALUES (?, ?, ?)",
+                [(job.job_id, key, value) for key, value in sorted(job.tags.items())],
+            )
+            db.executemany(
+                "INSERT INTO job_output VALUES (?, ?, ?, ?)",
+                [
+                    (job.job_id, stream, start, data)
+                    for stream, chunks in (("stdout", job.stdout_chunks), ("stderr", job.stderr_chunks))
+                    for start, data in chunks
+                ],
+            )
 
     def _write_program(self, pane: Pane) -> None:
         control = pane.terminal.terminal_control
@@ -572,6 +658,7 @@ def _write(pymux: Pymux, db: sqlite3.Connection) -> None:
             ("split", _Split._split_counter),
             ("session", pymux._session_counter),
             ("uses", pymux._uses),
+            ("job", pymux.jobs.last_id),
         ],
     )
     db.executemany(
@@ -812,6 +899,7 @@ async def start(pymux: Pymux) -> None:
     "Start pumping and reaping every loaded program, in the server's scope."
     if pymux.tasks is None:
         raise RuntimeError("start the loaded programs inside `Pymux.running`")
+    await pymux.jobs.restore()
     for pane in _panes_of(pymux):
         control = pane.terminal.terminal_control
         if not control._running:
@@ -1026,4 +1114,36 @@ def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> int | No
     _Split._split_counter = counters["split"]
     pymux._session_counter = counters["session"]
     pymux._uses = counters["uses"]
+    pymux.jobs.last_id = counters["job"]
+    for job in _read_jobs(db):
+        pymux.jobs._jobs[job.job_id] = job
     return server["listener_fd"]
+
+
+def _read_jobs(db: sqlite3.Connection) -> list[Job]:
+    "The finished jobs, for `start` to write into the jobs database."
+    jobs = []
+    for row in _rows(db, "SELECT * FROM jobs ORDER BY job_id"):
+        job = Job(
+            JobId(row["job_id"]),
+            row["command"],
+            row["directory"],
+            row["started"],
+            [(tag["key"], tag["value"]) for tag in _rows(db, "SELECT * FROM job_tags WHERE job_id = ?", row["job_id"])],
+            json.loads(row["env"]),
+            bool(row["pty"]),
+        )
+        job.status = row["status"]
+        job.returncode = row["returncode"]
+        job.error = row["error"]
+        job.finished = row["finished"]
+        job.last_active = row["last_active"]
+        job.stdout_dropped = row["stdout_dropped"]
+        job.stderr_dropped = row["stderr_dropped"]
+        for chunk in _rows(db, "SELECT * FROM job_output WHERE job_id = ? ORDER BY stream, start", job.job_id):
+            chunks = job.stdout_chunks if chunk["stream"] == "stdout" else job.stderr_chunks
+            chunks.append((chunk["start"], chunk["data"]))
+        job.stdout_kept = sum(len(data) for _, data in job.stdout_chunks)
+        job.stderr_kept = sum(len(data) for _, data in job.stderr_chunks)
+        jobs.append(job)
+    return jobs

@@ -114,9 +114,6 @@ def _refuse(pymux: Pymux) -> None:
         raise CommandException("this server draws on the terminal it runs in")
     if pymux.listener is None:
         raise CommandException("this server has no socket for its clients to come back to")
-    for job in pymux.jobs.listing():
-        if job.status == "running":
-            raise CommandException("job %d is still running" % job.job_id)
 
 
 async def _check(command: list[str], path: Path) -> None:
@@ -166,8 +163,12 @@ def check(path: str) -> None:
     "The dry run, in the new build: raises when it cannot load `path`."
     from .main import Pymux
 
-    pymux = Pymux()
-    snapshot.load(pymux, path, snapshot.checking(pymux))
+    async def load() -> None:
+        # In a loop, because a job's `done` is an event.
+        pymux = Pymux()
+        snapshot.load(pymux, path, snapshot.checking(pymux))
+
+    anyio.run(load)
 
 
 def resume(path: str, fall_back: list[str] | None) -> None:
