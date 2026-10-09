@@ -425,6 +425,18 @@ async def test_which_key_leaves_nothing_behind(pymux):
         assert not found, "\n".join(["after the popup went", *found, "", *rows_of(session)])
 
 
+async def test_a_key_the_prefix_does_not_bind_ends_the_prefix(pymux):
+    "C-g after the prefix binds nothing, so it lets go. Lillecarl/pymux#540."
+    async with pymux.running(), attached(pymux) as session:
+        await shows(session, "$")
+        client_state = pymux.connections[-1].client_state
+
+        said(session, type="input", keys="C-b")
+        await once(lambda: client_state.has_prefix, 10.0, "the prefix was never held")
+        said(session, type="input", keys="C-g")
+        await once(lambda: not client_state.has_prefix, 10.0, "C-g left the prefix held")
+
+
 #: Characters a busy program writes: plain, wide, ambiguous, combining.
 FUZZ_TEXT = ["a", "bc", "def ", "  ", "⏺", "✳", "●", "中", "\U0001f600", "é", "│"]
 

@@ -2545,6 +2545,13 @@ class Pymux:
             except ValueError:
                 return True
 
+        def takes_key_first() -> bool:
+            "A client that holds the prefix: the next key is pymux's."
+            try:
+                return self.get_client_state().has_prefix
+            except ValueError:
+                return False
+
         # Create new pane and terminal.
         terminal = Terminal(
             done_callback=done_callback if watch_end else None,
@@ -2559,6 +2566,7 @@ class Pymux:
             resize_func=resize,
             may_resize=may_resize,
             may_type=may_type,
+            takes_key_first=takes_key_first,
             before_exec_func=before_exec_func,
             command=command,
             # The `history-limit` option, which said how far copy mode
