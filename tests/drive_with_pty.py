@@ -2199,19 +2199,30 @@ def check_detach_ends_client(tmp):
         terminal.close()
 
 
+def _client_ids(sock_path):
+    listed = run_cli(sock_path, ["list-clients", "-F", "#{client_id}"])
+    assert listed.returncode == 0, listed.stderr
+    return listed.stdout.split()
+
+
 def _restarting_terminal(tmp, name):
-    "A client on a pane that says HOLDING, and a server told to restart."
+    """
+    A client on a pane that says HOLDING, and a server told to restart.
+    Returns the terminal and the id the client gave the first server.
+    """
     program = tmp / ("%s_child.sh" % name)
     program.write_text("printf HOLDING\nsleep 60\n")
     terminal = Terminal(tmp, name, command="sh %s" % program)
     terminal.wait_for_queries()
     terminal.write(b"\x1b[?62;1;6c")
     terminal.wait_for(b"HOLDING")
+    before = _client_ids(terminal.sock_path)
+    assert len(before) == 1 and before[0], before
 
     told = run_cli(terminal.sock_path, ["kill-server", "-r"])
     assert told.returncode == 0, told.stderr
     terminal.wait_for(b"pymux is restarting.")
-    return terminal
+    return terminal, before[0]
 
 
 def check_a_restarted_server_gets_the_same_client(tmp):
@@ -2229,7 +2240,7 @@ def check_a_restarted_server_gets_the_same_client(tmp):
         print("a restarted server gets the same client: not on this route")
         return
 
-    terminal = _restarting_terminal(tmp, "restart")
+    terminal, client_id = _restarting_terminal(tmp, "restart")
     try:
         assert terminal.client.poll() is None, "the client left when the server said it was restarting"
 
@@ -2242,6 +2253,9 @@ def check_a_restarted_server_gets_the_same_client(tmp):
         terminal.write(b"\x1b[?62;1;6c")
         terminal.wait_for(b"AGAIN")
         assert terminal.client.poll() is None, "the client left after it attached to the new server"
+        # The id is what lets a server that loads a snapshot give this
+        # client its windows back.
+        assert _client_ids(terminal.sock_path) == [client_id], "the client came back as somebody else"
 
         print("a restarted server gets the same client: ok")
     except Exception:
@@ -2290,7 +2304,7 @@ def check_q_leaves_a_client_waiting_for_a_restart(tmp):
         print("q leaves a waiting client: not on this route")
         return
 
-    terminal = _restarting_terminal(tmp, "restart-q")
+    terminal, _ = _restarting_terminal(tmp, "restart-q")
     try:
         terminal.write(b"q")
         try:

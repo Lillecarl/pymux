@@ -105,6 +105,7 @@ class ServerConnection:
         "hostname": Keep.REBUILT,
         "ttyname": Keep.REBUILT,
         "pid": Keep.REBUILT,
+        "client_id": Keep.REBUILT,
         "environment": Keep.REBUILT,
         "colors": Keep.REBUILT,
         "default_colors": Keep.REBUILT,
@@ -205,6 +206,12 @@ class ServerConnection:
         #: puts the hostname in front. Lillecarl/pymux#335.
         self.ttyname = ""
         self.pid = 0
+
+        #: Who the client says it is, the same on every attach of one
+        #: client process, or "" from a client that did not say. A
+        #: snapshot keys what belongs to a client by this, not by the
+        #: connection, which an upgrade replaces. Lillecarl/pymux#399.
+        self.client_id = ""
 
         #: Whether this client can forward a port, and what it is
         #: forwarding. Both come from the client: it holds the SSH
@@ -668,6 +675,7 @@ class ServerConnection:
             self.environment = packet.get(Field.ENVIRONMENT) or {}
             self.ttyname = packet.get(Field.TTYNAME, "")
             self.pid = packet.get(Field.PID) or 0
+            self.client_id = packet.get(Field.CLIENT_ID) or ""
 
             self._create_app(color_depth=self.colors.depth, term=term)
 

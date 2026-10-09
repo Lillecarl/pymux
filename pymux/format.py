@@ -708,6 +708,9 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "client_name": _client_name,
     "client_tty": _client_tty,
     "client_created": _client_created,
+    # Not tmux's: the token a client keeps across reattaches to a
+    # restarted server. Lillecarl/pymux#399.
+    "client_id": lambda c: getattr(_connection_of(c), "client_id", "") or "",
     "client_hostname": _client_hostname,
     "client_prefix": _client_prefix,
     "client_key_table": _client_key_table,

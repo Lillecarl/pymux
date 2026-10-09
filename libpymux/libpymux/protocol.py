@@ -118,6 +118,8 @@ class Field(StrEnum):
     CWD = "cwd"
     TTYNAME = "ttyname"
     PID = "pid"
+    #: Who a client is across reattaches to a restarted server.
+    CLIENT_ID = "client-id"
     CLIENT_OPTIONS = "client-options"
     DIRECTION = "direction"
     LISTEN_HOST = "listen_host"

@@ -16,6 +16,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import secrets
 import signal
 import socket
 import sys
@@ -127,6 +128,12 @@ class TerminalClient(Client):
         #: Lillecarl/pymux#409.
         self.restart_wait: float | None = None
 
+        #: Who this client is, for as long as its process runs. It goes
+        #: out with every attach, so a server that comes back after an
+        #: upgrade knows a client it served before and can give it its
+        #: windows back. Lillecarl/pymux#399.
+        self.client_id = secrets.token_hex(8)
+
     @property
     def _stdin_reader(self) -> PosixStdinReader:
         """
@@ -203,6 +210,7 @@ class TerminalClient(Client):
                 # Lillecarl/pymux#335.
                 Field.TTYNAME: _ttyname(),
                 Field.PID: os.getpid(),
+                Field.CLIENT_ID: self.client_id,
                 # What this client's own configuration file says about
                 # this client. A theme belongs to the terminal a
                 # person is sitting at, and only this side can read
