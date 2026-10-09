@@ -37,8 +37,8 @@ answer, which is the whole point of the work.
 
 from __future__ import annotations
 
-import time
 from collections.abc import Callable
+from time import monotonic
 from typing import override
 
 from prompt_toolkit.application import get_app
@@ -96,7 +96,7 @@ class PlanContainer(Container):
         view: View | None = None,
         room=None,
         glide_time: Callable[[], float] = lambda: 0.0,
-        clock: Callable[[], float] = time.monotonic,
+        clock: Callable[[], float] | None = None,
     ) -> None:
         #: How long the view takes to glide to a new place, in seconds,
         #: as a callable because an option sets it while this stands.
@@ -285,7 +285,9 @@ class PlanContainer(Container):
         view = self.view
         target = view.offset
         duration = self.glide_time()
-        now = self.clock()
+        # The module's `monotonic`, looked up now: a container is built
+        # again with every change of shape, so a test patches the name.
+        now = (self.clock or monotonic)()
 
         if view.shown is None or duration <= 0:
             view.glide = None

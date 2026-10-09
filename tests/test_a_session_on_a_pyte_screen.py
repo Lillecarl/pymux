@@ -27,6 +27,7 @@ from libpymux.protocol import Packet
 from prompt_toolkit.application.current import set_app
 from session import once
 
+from pymux import plan_container
 from pymux.log import logger
 from pymux.main import Pymux
 from pymux.pipes.memory import connect_in_memory
@@ -505,6 +506,73 @@ async def test_every_frame_beside_a_pane_is_on_the_terminal(pymux, seed, mode):
             found = line_breaks(session, client_state)
             assert not found, "\n".join(
                 ["seed %d, step %d, after %r" % (seed, step, chunk), *found, "", *rows_of(session)]
+            )
+
+
+@pytest.mark.parametrize("mode", ["optimized", "reference"])
+@pytest.mark.parametrize("glide", [0, 150])
+@pytest.mark.parametrize("seed", range(6))
+async def test_every_frame_of_a_strip_glide_is_on_the_terminal(pymux, seed, glide, mode, monkeypatch):
+    """
+    A strip's view glides across the panes, and every frame it stops
+    on is on the client's terminal, cell for cell.
+
+    A glide moves every pane sideways a few cells a frame, which the
+    renderer sees as every cell of the screen changing. The clock is
+    held still between steps, so the frame a step looks at is one in
+    the middle of a glide and not only the one it ends on.
+    """
+    rnd = random.Random(seed)
+    now = [0.0]
+    monkeypatch.setattr(plan_container, "monotonic", lambda: now[0])
+    async with pymux.running(), attached(pymux) as session:
+        await shows(session, "$")
+        client_state = pymux.connections[-1].client_state
+        with set_app(client_state.app):
+            pymux.handle_command("set-window-option strip on")
+            pymux.handle_command("set-option strip-animation-time %d" % glide)
+            pymux.handle_command("set-option render-mode %s" % mode)
+            for _ in range(3):
+                pymux.handle_command("split-window -h 'sleep 1000'")
+        await settled(session)
+        controls = [pane.terminal.terminal_control for pane in pymux.panes_by_id.values()]
+        output = client_state.app.output
+        frames = []
+        flush = output.flush
+
+        def keep_and_flush():
+            frames.append("".join(output._buffer))
+            flush()
+
+        output.flush = keep_and_flush
+
+        for step in range(40):
+            kind = rnd.randrange(4)
+            if kind == 0:
+                chunk = rnd.choice(["select-pane -L", "select-pane -R"])
+                with set_app(client_state.app):
+                    pymux.handle_command(chunk)
+                    client_state.sync_focus()
+            elif kind == 1:
+                chunk = "time"
+                now[0] += rnd.choice([0.01, 0.03, 0.06, 0.2])
+            else:
+                control = rnd.choice(controls)
+                chunk = fuzz_chunk(rnd, control.screen.lines, control.screen.columns)
+                control.feed_output(chunk)
+            client_state.app.invalidate()
+            await settled(session, 0.05)
+
+            found = wire_differs(session, client_state)
+            written = [frame for frame in frames if frame][-2:]
+            assert not found, "\n".join(
+                [
+                    "seed %d, step %d, after %r" % (seed, step, chunk),
+                    *found[:20],
+                    "",
+                    *rows_of(session),
+                    *map(repr, written),
+                ]
             )
 
 
