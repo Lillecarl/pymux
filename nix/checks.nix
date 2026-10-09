@@ -332,6 +332,14 @@ let
   # `PYMUX_CHROME_RENDER_MODE=both nix build --file . checks.pymux-chrome-pictures`.
   chromeRenderMode = builtins.getEnv "PYMUX_CHROME_RENDER_MODE";
 
+  # The terminals the upgrade pictures are taken in, as a piece of a
+  # name; foot when nothing is said.
+  upgradeTerminals =
+    let
+      value = builtins.getEnv "PYMUX_UPGRADE_TERMINALS";
+    in
+    if value == "" then "foot" else value;
+
   # The same for the pictures of every theme, which
   # `tests/photograph_themes.py` takes: one demo application in a
   # pane, under every theme the option takes.
@@ -1086,6 +1094,32 @@ in
   # `tests/photograph_chrome.py` is the harness around it.
   # Lillecarl/pymux#161.
   #
+  # Every view a server holds, photographed in a real terminal before
+  # and after `upgrade-server`, and judged: each pair has to be the same
+  # pixels. `tests/photograph_upgrade.py`. Lillecarl/pymux#408.
+  upgradePictures =
+    runInSandbox
+      {
+        name = "pymux-upgrade-pictures";
+        inputs = seatInputs;
+        env = {
+          inherit upgradeTerminals;
+        };
+      }
+      (
+        seatSetup
+        + ''
+          export PYMUX_UPGRADE_TERMINALS="$upgradeTerminals"
+          export PYMUX_UPGRADE_OUT="$out"
+          # The server starts from the source tree and the upgrade execs
+          # the installed package. Without one collection named for both,
+          # only the second has the base16 themes, and the client's
+          # nearest theme changes across the exec.
+          export PYMUX_BASE16_SCHEMES="${base16-schemes-json}/base16-schemes.json"
+          python tests/photograph_upgrade.py
+        ''
+      );
+
   # It is not a gate, and it judges nothing. A picture of chrome has no
   # bare side to subtract, because the chrome is the thing pymux adds.
   # Judging it needs a recorded image, and recording one before
