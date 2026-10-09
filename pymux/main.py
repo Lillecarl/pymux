@@ -1012,6 +1012,7 @@ class Pymux:
         # thousand, which is why `ptterm/tests/measure_instructions.py`
         # measures at all three. Lillecarl/pymux#8.
         self.history_limit = 2000
+        self.strip_animation_time = 150
 
         # How many seconds between two redraws of the status bar. Four
         # is tmux's `status-interval`, and this keeps the same. It is

@@ -37,10 +37,12 @@ answer, which is the whole point of the work.
 
 from __future__ import annotations
 
+import time
+from collections.abc import Callable
 from typing import override
 
 from prompt_toolkit.application import get_app
-from prompt_toolkit.data_structures import Size
+from prompt_toolkit.data_structures import Point, Size
 from prompt_toolkit.key_binding import KeyBindingsBase
 from prompt_toolkit.layout.containers import Container, to_container
 from prompt_toolkit.layout.dimension import Dimension as D
@@ -93,7 +95,13 @@ class PlanContainer(Container):
         tell_its_size=None,
         view: View | None = None,
         room=None,
+        glide_time: Callable[[], float] = lambda: 0.0,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
+        #: How long the view takes to glide to a new place, in seconds,
+        #: as a callable because an option sets it while this stands.
+        self.glide_time = glide_time
+        self.clock = clock
         self.layout = layout
         self.containers = {pane: to_container(container) for pane, container in containers.items()}
         self.tell_its_size = tell_its_size
@@ -158,7 +166,8 @@ class PlanContainer(Container):
 
         self.view.size = seen
         self.view.offset = self.layout.look_at(self.plan, self.view, self.focused_pane())
-        view = self.view.rect
+        shown = self._glide()
+        view = self.view.shown_rect
 
         self._draw_chrome(screen, write_position, parent_style, view)
 
@@ -210,8 +219,8 @@ class PlanContainer(Container):
                 screen,
                 mouse_handlers,
                 WritePosition(
-                    xpos=write_position.xpos + rect.x - self.view.offset.x,
-                    ypos=write_position.ypos + rect.y - self.view.offset.y,
+                    xpos=write_position.xpos + rect.x - shown.x,
+                    ypos=write_position.ypos + rect.y - shown.y,
                     width=rect.width,
                     height=rect.height,
                 ),
@@ -252,13 +261,50 @@ class PlanContainer(Container):
                 continue
 
             char = Char(line.char, style)
-            top = write_position.ypos + line.rect.y - self.view.offset.y
-            left = write_position.xpos + line.rect.x - self.view.offset.x
+            top = write_position.ypos + line.rect.y - view.y
+            left = write_position.xpos + line.rect.x - view.x
 
             for y in range(top, top + line.rect.height):
                 row = screen.data_buffer[y]
                 for x in range(left, left + line.rect.width):
                     row[x] = char
+
+    def _glide(self) -> Point:
+        """
+        Where this frame draws the view, on its way to `view.offset`.
+
+        A move eases out over `glide_time`: fast first, so the view
+        answers the key at once, and slow at the end, so the eye sees
+        where it stops. A new target mid-glide starts from where the
+        view is drawn, so the view never jumps. Every frame of a glide
+        but the last asks for the next one.
+        """
+        view = self.view
+        target = view.offset
+        duration = self.glide_time()
+        now = self.clock()
+
+        if view.shown is None or duration <= 0:
+            view.glide = None
+        elif view.glide is None or view.glide[1] != target:
+            view.glide = (view.shown, target, now) if view.shown != target else None
+
+        shown = target
+        if view.glide is not None:
+            start, _, started = view.glide
+            done = (now - started) / duration
+            if done >= 1:
+                view.glide = None
+            else:
+                eased = 1 - (1 - done) ** 3
+                shown = Point(
+                    x=round(start.x + (target.x - start.x) * eased),
+                    y=round(start.y + (target.y - start.y) * eased),
+                )
+                get_app().invalidate()
+
+        view.shown = shown
+        return shown
 
     def focused_pane(self) -> Pane | None:
         """

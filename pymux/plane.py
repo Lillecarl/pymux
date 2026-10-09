@@ -282,6 +282,23 @@ class View:
         #: takes, and a frame writes it before it reads it.
         self.size = size
 
+        #: The offset a frame drew at, which trails `offset` while the
+        #: view glides to it. `offset` is where the view is going, so
+        #: `moved_onto` judges a pane against where the view will be
+        #: and not against a point it is passing. `None` before the
+        #: first frame.
+        self.shown: Point | None = None
+
+        #: The glide under way: where it left from, where it goes, and
+        #: when it started, in the drawing container's clock.
+        self.glide: tuple[Point, Point, float] | None = None
+
+    @property
+    def shown_rect(self) -> Rect:
+        "What this frame shows of the plane, which a glide moves."
+        shown = self.offset if self.shown is None else self.shown
+        return Rect(x=shown.x, y=shown.y, width=self.size.columns, height=self.size.rows)
+
     def __repr__(self) -> str:
         return "View(%r, %r)" % (self.offset, self.size)
 

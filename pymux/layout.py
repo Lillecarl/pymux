@@ -2685,6 +2685,7 @@ def _create_panes(pymux: Pymux, window, view: View) -> PlanContainer:
         _tell_pane_its_size,
         view=view,
         room=partial(room_for_panes, pymux, window),
+        glide_time=lambda: pymux.strip_animation_time / 1000,
     )
 
 

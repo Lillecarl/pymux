@@ -781,6 +781,9 @@ ALL_OPTIONS = {
     # cases that ask whatever it says. `ForwardMode` says.
     "forward-mode": EnumOption(ForwardMode, "forward_mode"),
     "history-limit": PositiveIntOption("history_limit", [200, 500, 1000, 2000, 5000, 10000]),
+    # How long a strip's view takes to glide to the column a person
+    # moved to, in milliseconds. Zero jumps.
+    "strip-animation-time": PositiveIntOption("strip_animation_time", [0, 100, 150, 250]),
     # How long a job outlives its last activity, in seconds. Output
     # and completion both count, so a job that logs stays while a job
     # that hangs silent goes; a running one is ended first, a

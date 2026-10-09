@@ -303,6 +303,70 @@ async def test_moving_back_to_column_that_is_on_screen_does_not_move_view():
         assert view(state) == third, (third, view(state))
 
 
+def shown(state) -> int:
+    "How far along the row this frame drew the view."
+    return strip(state).view.shown.x
+
+
+async def test_the_view_glides_and_eases_out():
+    """
+    A move draws frames between the two places, quick at first and slow
+    at the end, and lands exactly where the jump would have.
+    """
+    async with create_client([*STRIP, "set-option strip-animation-time 100"]) as (pymux, state, draw):
+        await columns_of(pymux, 3)
+        now = [0.0]
+        draw()
+        strip(state).clock = lambda: now[0]
+        assert shown(state) == 40
+
+        move(pymux, state, "L")
+        move(pymux, state, "L")
+        frames = []
+        for at in (0.0, 0.025, 0.05, 0.075, 0.1, 0.2):
+            now[0] = at
+            draw()
+            frames.append(shown(state))
+
+        assert view(state) == 0
+        assert frames == [40, 17, 5, 1, 0, 0], frames
+
+
+async def test_a_move_during_a_glide_starts_where_the_view_is():
+    "The view never jumps: a new target leaves from the frame on screen."
+    async with create_client([*STRIP, "set-option strip-animation-time 100"]) as (pymux, state, draw):
+        await columns_of(pymux, 3)
+        now = [0.0]
+        draw()
+        strip(state).clock = lambda: now[0]
+
+        move(pymux, state, "L")
+        move(pymux, state, "L")
+        draw()
+        now[0] = 0.025
+        draw()
+        midway = shown(state)
+        assert 0 < midway < 40, midway
+
+        move(pymux, state, "R")
+        move(pymux, state, "R")
+        draw()
+        assert shown(state) == midway
+        now[0] = 0.2
+        draw()
+        assert shown(state) == view(state) == 40
+
+
+async def test_no_glide_when_the_time_is_zero():
+    async with create_client([*STRIP, "set-option strip-animation-time 0"]) as (pymux, state, draw):
+        await columns_of(pymux, 3)
+        draw()
+        move(pymux, state, "L")
+        move(pymux, state, "L")
+        draw()
+        assert shown(state) == view(state) == 0
+
+
 async def test_walking_right_and_back_returns_same_view():
     """
     The same property, said as a round trip.
