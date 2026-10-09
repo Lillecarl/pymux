@@ -232,14 +232,29 @@ time.sleep(1000)
 """
 
 
-def wire_differs(session: SessionScreen, client_state) -> list[str]:
+async def wire_differs(session: SessionScreen, client_state) -> list[str]:
     """
     Every cell where the client's terminal and the frame pymux committed
     disagree. The committed frame is what the renderer diffs the next
     frame against, so a cell that differs here stays wrong on the
     terminal until something redraws it.
+
+    **Once there is a committed frame.** A repaint drops the last one,
+    and the next can wait out prompt_toolkit's postponement while the
+    terminal holds still, which is all `settled` sees: under a loaded
+    gate the comparison met no frame at all. Not "and none waiting": a
+    glide with the clock held always has its next frame waiting.
     """
-    committed = client_state.app.renderer._last_screen
+    app = client_state.app
+    waited = False
+    with anyio.fail_after(10):
+        while app.renderer._last_screen is None:
+            waited = True
+            await anyio.sleep(0.01)
+    if waited:
+        # The frame just drawn is still on its way to the terminal.
+        await settled(session, 0.05)
+    committed = app.renderer._last_screen
     outer = session.screen
     found = []
     for y in range(ROWS):
@@ -286,7 +301,7 @@ async def test_the_terminal_holds_the_frame_beside_a_scrolling_pane(pymux, tmp_p
         await settled(session)
 
         client_state = pymux.connections[-1].client_state
-        found = wire_differs(session, client_state)
+        found = await wire_differs(session, client_state)
         assert not found, "\n".join([*found[:20], "", *rows_of(session)])
 
         # And the frame itself holds the line, on every row of the
@@ -363,7 +378,7 @@ async def test_switching_panes_keeps_the_line_between_them(pymux, painted, switc
             with set_app(client_state.app):
                 pymux.handle_command(command)
             await settled(session)
-            found = line_breaks(session, client_state) + wire_differs(session, client_state)
+            found = line_breaks(session, client_state) + await wire_differs(session, client_state)
             assert not found, "\n".join(["after %s, switch %d" % (command, step), *found, "", *rows_of(session)])
 
 
@@ -392,7 +407,7 @@ async def test_redraw_writes_what_the_terminal_lost(pymux):
             pymux.handle_command("redraw")
         await settled(session)
 
-        found = line_breaks(session, client_state) + wire_differs(session, client_state)
+        found = line_breaks(session, client_state) + await wire_differs(session, client_state)
         assert not found, "\n".join([*found, "", *rows_of(session)])
 
 
@@ -412,7 +427,7 @@ async def test_which_key_leaves_nothing_behind(pymux):
 
         said(session, type="input", keys="C-b")
         await settled(session, 1.0)
-        found = wire_differs(session, client_state)
+        found = await wire_differs(session, client_state)
         assert "break-pane" in "\n".join(rows_of(session)), rows_of(session)
         assert not found, "\n".join(["with the popup up", *found, "", *rows_of(session)])
 
@@ -421,7 +436,7 @@ async def test_which_key_leaves_nothing_behind(pymux):
         said(session, type="input", keys="C-b")
         await settled(session, 1.0)
         assert "break-pane" not in "\n".join(rows_of(session)), rows_of(session)
-        found = wire_differs(session, client_state)
+        found = await wire_differs(session, client_state)
         assert not found, "\n".join(["after the popup went", *found, "", *rows_of(session)])
 
 
@@ -511,7 +526,7 @@ async def test_every_frame_beside_a_pane_is_on_the_terminal(pymux, seed, mode):
                 control.feed_output(chunk)
             await settled(session, 0.05)
 
-            found = wire_differs(session, client_state)
+            found = await wire_differs(session, client_state)
             assert not found, "\n".join(
                 ["seed %d, step %d, after %r" % (seed, step, chunk), *found[:20], "", *rows_of(session)]
             )
@@ -575,7 +590,7 @@ async def test_every_frame_of_a_strip_glide_is_on_the_terminal(pymux, seed, glid
             client_state.app.invalidate()
             await settled(session, 0.05)
 
-            found = wire_differs(session, client_state)
+            found = await wire_differs(session, client_state)
             written = [frame for frame in frames if frame][-2:]
             assert not found, "\n".join(
                 [
