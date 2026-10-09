@@ -163,6 +163,8 @@ async def test_switch_client_c_moves_another_client_to_a_window():
         assert there.session.name == "work"
         with set_app(there.app):
             assert there.session.arrangement.get_active_window() is second
+            # The keyboard too: a strip scrolls to the focused pane.
+            assert there.app.layout.has_focus(second.active_pane.terminal)
         with set_app(here.app):
             assert pymux.get_session("work").arrangement.get_active_window() is not second
 

@@ -42,6 +42,9 @@ def switch_client(pymux: Pymux, args: argparse.Namespace) -> None:
             pymux.attach_client_to(client_state, session)
             with set_app(client_state.app):
                 session.arrangement.set_active_window(window)
+            # The keyboard goes with the view: an unfocused strip does
+            # not scroll to its active column.
+            client_state.sync_focus()
         else:
             pymux.attach_client_to(client_state, find_session(pymux, target))
         return
