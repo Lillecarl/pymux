@@ -89,8 +89,10 @@ sys.stdin.read()
 #: takes longer than eight repaints, and a marker that scrolled away
 #: before the wait started would never arrive.
 CHURN_CHILD = """
-import sys, time, tty
-tty.setraw(0)
+import sys, termios, time, tty
+# TCSANOW keeps a key typed before this line: the default flushes it,
+# and the scenario types as soon as the pane exists.
+tty.setraw(0, termios.TCSANOW)
 sys.stdin.read(1)
 for i in range(8):
     sys.stdout.write("\\x1b[2J\\x1b[H")
