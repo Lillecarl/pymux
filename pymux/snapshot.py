@@ -14,14 +14,14 @@ pane read between two tables, and the file would describe two moments.
 **Screen state belongs to the transition, never to the live store.**
 `pane_programs`, `screen_rows` and `screen_appearances` exist only in
 this file, written once while handing over and read once by the new
-build. When the window-management tables become the live store
-(step 5 of Lillecarl/pymux#399), those three stay here: a store that
-held every pane's cells would serialize them on every write.
+build. The live store holds the window-management tables and not
+these three: a store that held every pane's cells would serialize them
+on every write.
 
-What each class writes is declared in `WRITES`, and what it does not
-write yet in `LATER`. `tests/test_snapshot.py` holds the two against
-every `Keep.SAVED` in the classes' `KEEP`, so a saved field that no
-table holds fails a test instead of vanishing in an upgrade.
+What each class writes is declared in `WRITES`. `tests/test_snapshot.py`
+holds it against every `Keep.SAVED` in the classes' `KEEP`, so a saved
+field that no table holds fails a test instead of vanishing in an
+upgrade.
 """
 
 from __future__ import annotations
@@ -56,7 +56,6 @@ from .arrangement import HSplit, LayoutTypes, Pane, VSplit, Window, _Split, node
 from .commands.wait_for import WaitChannel
 from .ids import PaneId, SessionId, WindowId, WindowIndex
 from .jobs import Job, JobId
-from .jobstore import SEEDS
 from .notifications import Notification
 from .options import ALL_OPTIONS
 from .pipes.posix import PosixSocketListener
@@ -70,11 +69,6 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "adopting", "checking", "load", "save
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
 SNAPSHOT_VERSION = 12
-
-
-def _quoted(value: str | None) -> str:
-    "A text value as an SQL literal, for a step that writes rows."
-    return "NULL" if value is None else "'%s'" % value.replace("'", "''")
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -91,97 +85,11 @@ _CLIENT_SETTING_TYPES: dict[str, type] = {
 }
 CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
 
-#: What takes a snapshot of each older version one version up. A
-#: change of shape adds the one step from the version before it: the
-#: server being upgraded wrote the old shape.
-STEPS: dict[int, str] = {
-    # NULL is "not recorded": a returning client keeps what it announced.
-    1: "".join(
-        "ALTER TABLE clients ADD COLUMN %s %s;" % (name, "TEXT" if kind is str else "INTEGER")
-        for name, kind in _CLIENT_SETTING_TYPES.items()
-    ),
-    # What a client was in the middle of; NULL opens nothing.
-    2: "ALTER TABLE clients ADD COLUMN modes TEXT;",
-    # The paste buffers, the prompt history and the message log. A
-    # snapshot without them leaves them empty, as a new server has them.
-    3: """
-CREATE TABLE named_buffers(name TEXT PRIMARY KEY, text TEXT NOT NULL);
-CREATE TABLE server_lists(
-  list TEXT NOT NULL CHECK (list IN ('prompt_history', 'message_log')),
-  position INTEGER NOT NULL,
-  text TEXT NOT NULL,
-  PRIMARY KEY (list, position)
-);
-""",
-    # Hooks and bindings. A snapshot without them leaves what the
-    # configuration, read again, set.
-    4: """
-CREATE TABLE hooks(hook TEXT NOT NULL, position INTEGER NOT NULL, command TEXT NOT NULL, PRIMARY KEY (hook, position));
-CREATE TABLE key_bindings(
-  key_table TEXT NOT NULL,
-  written TEXT NOT NULL,
-  command TEXT NOT NULL,
-  arguments TEXT NOT NULL,
-  PRIMARY KEY (key_table, written)
-);
-""",
-    # The notification hub and its routes back to panes; none is what a
-    # new server has.
-    5: """
-CREATE TABLE notifications(
-  notification_id INTEGER PRIMARY KEY,
-  title TEXT NOT NULL,
-  body TEXT NOT NULL,
-  urgency INTEGER NOT NULL,
-  pane_id INTEGER,
-  at REAL NOT NULL,
-  position INTEGER UNIQUE,
-  identifier TEXT,
-  CHECK ((position IS NULL) != (identifier IS NULL))
-);
-CREATE TABLE notification_routes(
-  ours TEXT PRIMARY KEY,
-  pane_id INTEGER NOT NULL,
-  identifier TEXT NOT NULL,
-  position INTEGER NOT NULL UNIQUE
-);
-""",
-    # A signal nobody took and a lock somebody holds.
-    6: "CREATE TABLE wait_channels(name TEXT PRIMARY KEY, woken INTEGER NOT NULL, locked INTEGER NOT NULL);",
-    # A version 7 server refused a pane in copy mode, so none is.
-    7: """
-CREATE TABLE copy_modes(
-  pane_id INTEGER PRIMARY KEY REFERENCES panes(pane_id),
-  cursor_position INTEGER NOT NULL,
-  selection_start INTEGER,
-  selection_type TEXT,
-  CHECK ((selection_start IS NULL) = (selection_type IS NULL))
-);
-""",
-    # When each client first came; NULL is "now", as for a new one.
-    8: "ALTER TABLE clients ADD COLUMN connected REAL;",
-    # The kept questions, as a version 9 server started with them: the
-    # questions it saved since are lost, as they were then.
-    9: "CREATE TABLE saved_queries(name TEXT PRIMARY KEY, sql TEXT NOT NULL, description TEXT);"
-    + "".join(
-        "INSERT INTO saved_queries VALUES (%s, %s, %s);" % tuple(_quoted(value) for value in seed) for seed in SEEDS
-    ),
-    # A pane's revision moves with its output, so it goes beside the
-    # screen: the live store, which holds `panes`, holds no output.
-    10: """
-ALTER TABLE pane_programs ADD COLUMN pane_revision INTEGER NOT NULL DEFAULT 0;
-UPDATE pane_programs SET pane_revision = (SELECT pane_revision FROM panes WHERE panes.pane_id = pane_programs.pane_id);
-ALTER TABLE panes DROP COLUMN pane_revision;
-""",
-    # A version 11 server forked every pane itself and carried its fds
-    # across an exec; a holder hands each server its own. Its panes have
-    # no holder, so a load refuses them.
-    11: """
-ALTER TABLE pane_programs ADD COLUMN program_id INTEGER;
-ALTER TABLE pane_programs DROP COLUMN master_fd;
-ALTER TABLE pane_programs DROP COLUMN slave_fd;
-""",
-}
+#: What takes a snapshot of the version before this one up to it. A
+#: snapshot only ever goes from a running build to the next one, so a
+#: change of shape adds the one step from the version before it and
+#: deletes any older step. Version 12 is the first a holder hands over.
+STEPS: dict[int, str] = {}
 
 #: The fields `ClientState.modes` holds, one JSON value in `clients`.
 CLIENT_MODES = frozenset(
@@ -521,7 +429,7 @@ def _window_option_names() -> dict[str, str]:
 
 
 #: What each class writes into a table. `tests/test_snapshot.py` says
-#: this equals the class's `Keep.SAVED` fields, less `LATER`.
+#: this equals the class's `Keep.SAVED` fields.
 WRITES: dict[str, frozenset[str]] = {
     "pymux.session.Session": frozenset(Session.KEEP),
     "pymux.arrangement.Arrangement": frozenset(
@@ -573,17 +481,10 @@ WRITES: dict[str, frozenset[str]] = {
         | {"created", "socket_name", "listener", "original_cwd", "source_file", "_startup_done"}
         | {"clipboard", "named_buffers", "prompt_history", "message_log", "hooks", "key_bindings_manager"}
         | {"notifications", "notification_center", "wait_channels"}
-        | {"startup_command", "_runs_standalone", "_serves_one_terminal"}
+        | {"startup_command"}
         | set(_server_options().values())
     ),
 }
-
-#: Saved fields no table holds yet. Each is one step of
-#: Lillecarl/pymux#399 still to come.
-LATER: dict[str, frozenset[str]] = {}
-
-#: Classes with saved fields that no table holds any of yet.
-LATER_CLASSES: frozenset[str] = frozenset()
 
 
 def _value(value: Any) -> Any:
@@ -910,12 +811,7 @@ def write_tables(pymux: Pymux, db: sqlite3.Connection) -> None:
             ("startup_done", pymux._startup_done),
             ("clipboard", clipboard.text),
             ("clipboard_type", clipboard.type.value),
-            ("bindings_recorded", True),
             ("startup_command", pymux.startup_command),
-            # `upgrade-server` refuses a server with either, so both say
-            # no; they are here so a load sets what a write saw.
-            ("runs_standalone", pymux._runs_standalone),
-            ("serves_one_terminal", pymux._serves_one_terminal),
         ],
     )
     db.executemany("INSERT INTO named_buffers VALUES (?, ?)", sorted(pymux.named_buffers.items()))
@@ -1190,9 +1086,8 @@ class Program(NamedTuple):
 
     pane_id: PaneId
     pid: int
-    #: The holder's name for the program. None in a snapshot stepped up
-    #: from a server that forked its panes itself.
-    program_id: int | None
+    #: The holder's name for the program.
+    program_id: int
     screen: Frozen
     stream: Frozen
     process: Frozen
@@ -1217,7 +1112,6 @@ def adopting(pymux: Pymux, masters: dict[int, int]) -> MakePane:
             raise SnapshotError("this server has no holder to take pane %d from" % (program.pane_id,))
         if program.program_id not in masters:
             raise SnapshotError("the holder keeps no program for pane %d" % (program.pane_id,))
-        assert program.program_id is not None
         backend = HeldBackend.adopt_held(pymux.holding, program.program_id, program.pid, masters[program.program_id])
         return _thawed(pymux, program, pymux._build_pane(backend=backend, on_done=on_done))
 
@@ -1270,16 +1164,14 @@ def _open(path: str | os.PathLike[str]) -> sqlite3.Connection:
     version = db.execute("PRAGMA user_version").fetchone()[0]
     if version == SNAPSHOT_VERSION:
         return db
-    if version not in STEPS:
+    if version != SNAPSHOT_VERSION - 1 or version not in STEPS:
         db.close()
         raise SnapshotError("snapshot version %d, and this build reads %d" % (version, SNAPSHOT_VERSION))
-    # The file stays as the old server wrote it: the fallback reads it.
+    # The file stays as the old server wrote it: it serves on if this fails.
     stepped = sqlite3.connect(":memory:")
     db.backup(stepped)
     db.close()
-    while version < SNAPSHOT_VERSION:
-        stepped.executescript(STEPS[version])
-        version += 1
+    stepped.executescript(STEPS[version])
     return stepped
 
 
@@ -1343,8 +1235,7 @@ def _read_bindings(pymux: Pymux, db: sqlite3.Connection) -> None:
     """
     The hooks and key bindings, whole, over what the configuration set:
     a person's `bind-key` and `set-hook` since the server started are in
-    these and not in it. Only a snapshot that recorded them is read; a
-    stepped-up one has empty tables, which would take every binding away.
+    these and not in it.
     """
     pymux.hooks = {}
     for row in _rows(db, "SELECT * FROM hooks ORDER BY hook, position"):
@@ -1359,9 +1250,9 @@ def _read_bindings(pymux: Pymux, db: sqlite3.Connection) -> None:
 
 
 def _read_notifications(pymux: Pymux, db: sqlite3.Connection, counters: dict[str, int]) -> None:
-    "The hub and its routes. A stepped-up snapshot has neither counter, and starts both again."
+    "The hub and its routes."
     center = pymux.notification_center
-    center._next = counters.get("notification", 1)
+    center._next = counters["notification"]
     for row in _rows(db, "SELECT * FROM notifications ORDER BY position"):
         pane_id = PaneId(row["pane_id"]) if row["pane_id"] is not None else None
         record = Notification(row["notification_id"], row["title"], row["body"], row["urgency"], pane_id, row["at"])
@@ -1370,7 +1261,7 @@ def _read_notifications(pymux: Pymux, db: sqlite3.Connection, counters: dict[str
         else:
             center._pending[pane_id, row["identifier"]] = record
     routes = pymux.notifications
-    routes._next = counters.get("notification_route", 1)
+    routes._next = counters["notification_route"]
     for row in _rows(db, "SELECT * FROM notification_routes ORDER BY position"):
         key = (PaneId(row["pane_id"]), row["identifier"])
         routes._outgoing[key] = row["ours"]
@@ -1384,20 +1275,15 @@ def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> int | No
     pymux.original_cwd = server["original_cwd"]
     pymux.source_file = server["source_file"]
     pymux._startup_done = bool(server["startup_done"])
-    # A version 3 snapshot, stepped up, has no clipboard rows.
-    if "clipboard" in server:
-        pymux.clipboard.set_data(ClipboardData(server["clipboard"], SelectionType(server["clipboard_type"])))
+    pymux.clipboard.set_data(ClipboardData(server["clipboard"], SelectionType(server["clipboard_type"])))
     pymux.named_buffers = {row["name"]: row["text"] for row in _rows(db, "SELECT * FROM named_buffers")}
     for row in _rows(db, "SELECT text FROM server_lists WHERE list = 'prompt_history' ORDER BY position"):
         pymux.prompt_history.append_string(row["text"])
     pymux.message_log.extend(
         row["text"] for row in _rows(db, "SELECT text FROM server_lists WHERE list = 'message_log' ORDER BY position")
     )
-    if "bindings_recorded" in server:
-        _read_bindings(pymux, db)
-    pymux.startup_command = server.get("startup_command")
-    pymux._runs_standalone = bool(server.get("runs_standalone"))
-    pymux._serves_one_terminal = bool(server.get("serves_one_terminal"))
+    _read_bindings(pymux, db)
+    pymux.startup_command = server["startup_command"]
     pymux.wait_channels = {}
     for row in _rows(db, "SELECT * FROM wait_channels"):
         channel = WaitChannel()

@@ -47,16 +47,14 @@ def _class(name: str) -> type:
     return getattr(importlib.import_module(module), qualname)
 
 
-@pytest.mark.parametrize("name", sorted(snapshot.WRITES.keys() | snapshot.LATER.keys()))
-def test_a_snapshot_writes_every_saved_field_or_says_it_does_not_yet(name):
+@pytest.mark.parametrize("name", sorted(snapshot.WRITES))
+def test_a_snapshot_writes_every_saved_field(name):
     saved = {attribute for attribute, fate in declared(_class(name)).items() if fate == Keep.SAVED}
-    writes = snapshot.WRITES.get(name, frozenset())
-    later = snapshot.LATER.get(name, frozenset())
+    writes = snapshot.WRITES[name]
 
-    assert not writes & later, "both written and left for later: %s" % sorted(writes & later)
-    assert writes | later == saved, "saved and not written: %s; written and not saved: %s" % (
-        sorted(saved - writes - later),
-        sorted((writes | later) - saved),
+    assert writes == saved, "saved and not written: %s; written and not saved: %s" % (
+        sorted(saved - writes),
+        sorted(writes - saved),
     )
 
 
@@ -70,11 +68,11 @@ def test_a_row_names_the_columns_of_its_table(row):
     assert [field.name for field in dataclasses.fields(row)] == columns
 
 
-async def test_every_class_with_a_saved_field_is_written_or_left_for_later(pymux):
+async def test_every_class_with_a_saved_field_is_written(pymux):
     "A class the walk finds and nothing in `snapshot.py` names would be lost whole."
     async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
-        named = snapshot.WRITES.keys() | snapshot.LATER.keys() | snapshot.LATER_CLASSES
+        named = snapshot.WRITES.keys()
         missing = set()
         for one in live_objects(pymux):
             cls = type(one)
@@ -527,58 +525,17 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
     assert _dump(second) == _dump(first)
 
 
-def test_a_snapshot_of_another_version_is_refused(pymux, tmp_path):
+@pytest.mark.parametrize("off_by", [1, -1], ids=["newer", "older with no step"])
+def test_a_snapshot_of_another_version_is_refused(pymux, tmp_path, off_by):
     path = tmp_path / "old.sqlite"
     snapshot.save(pymux, path)
     db = sqlite3.connect(path)
-    db.execute("PRAGMA user_version = %d" % (snapshot.SNAPSHOT_VERSION + 1))
+    db.execute("PRAGMA user_version = %d" % (snapshot.SNAPSHOT_VERSION + off_by))
     db.commit()
     db.close()
 
-    with pytest.raises(snapshot.SnapshotError):
+    with pytest.raises(snapshot.SnapshotError, match="version"):
         snapshot.load(Pymux(), path)
-
-
-def test_a_snapshot_of_the_version_before_steps_up(pymux, tmp_path):
-    "What the server being upgraded wrote, which is the older shape."
-    path = tmp_path / "old.sqlite"
-    pymux.returning_clients["gone"] = {
-        "session_id": None,
-        "previous_session_id": None,
-        "windows": {},
-        "settings": {"message": "lost"},
-    }
-    snapshot.save(pymux, path)
-    db = sqlite3.connect(path)
-    for name in (*snapshot.CLIENT_SETTINGS, "modes", "connected"):
-        db.execute("ALTER TABLE clients DROP COLUMN %s" % name)
-    db.execute("DROP TABLE named_buffers")
-    db.execute("DROP TABLE server_lists")
-    db.execute("DROP TABLE hooks")
-    db.execute("DROP TABLE key_bindings")
-    db.execute("DROP TABLE notifications")
-    db.execute("DROP TABLE notification_routes")
-    db.execute("DROP TABLE wait_channels")
-    db.execute("DROP TABLE copy_modes")
-    db.execute("DROP TABLE saved_queries")
-    db.execute("ALTER TABLE pane_programs DROP COLUMN program_id")
-    db.execute("ALTER TABLE pane_programs ADD COLUMN master_fd INTEGER NOT NULL DEFAULT 0")
-    db.execute("ALTER TABLE pane_programs ADD COLUMN slave_fd INTEGER")
-    db.execute("ALTER TABLE pane_programs DROP COLUMN pane_revision")
-    db.execute("ALTER TABLE panes ADD COLUMN pane_revision INTEGER NOT NULL DEFAULT 0")
-    db.execute("DELETE FROM counters WHERE name IN ('notification', 'notification_route')")
-    db.execute("DELETE FROM server WHERE name IN ('clipboard', 'clipboard_type', 'bindings_recorded')")
-    db.execute("PRAGMA user_version = 1")
-    db.commit()
-    db.close()
-
-    fresh = Pymux()
-    snapshot.load(fresh, path)
-    assert fresh.returning_clients["gone"]["settings"] == {}
-    assert fresh.returning_clients["gone"]["modes"] is None
-    assert fresh.named_buffers == {}
-    assert fresh.jobs.saved_queries == Pymux().jobs.saved_queries
-    assert _rows(path, "PRAGMA user_version") == [(1,)]
 
 
 async def test_a_snapshot_is_refused_while_a_command_waits(pymux, tmp_path):
@@ -588,20 +545,3 @@ async def test_a_snapshot_is_refused_while_a_command_waits(pymux, tmp_path):
     pymux.wait_channels["done"] = channel
     with pytest.raises(snapshot.SnapshotError, match="channel done"):
         snapshot.save(pymux, tmp_path / "waiting.sqlite")
-
-
-def test_a_snapshot_with_no_bindings_recorded_keeps_the_configured_ones(pymux, tmp_path):
-    'No record is not "no bindings": what the configuration bound stays.'
-    path = tmp_path / "old.sqlite"
-    snapshot.save(pymux, path)
-    db = sqlite3.connect(path)
-    db.execute("DELETE FROM server WHERE name = 'bindings_recorded'")
-    db.commit()
-    db.close()
-
-    fresh = Pymux()
-    fresh.key_bindings_manager.add_custom_binding("F6", "display-message", ["configured"], table="root")
-    fresh.hooks = {"pane-died": ["kill-pane"]}
-    snapshot.load(fresh, path)
-    assert fresh.key_bindings_manager.binding_on("F6", table="root") is not None
-    assert fresh.hooks == {"pane-died": ["kill-pane"]}

@@ -1100,8 +1100,10 @@ class Pymux:
         # `resume-server` reads the configuration again before the
         # snapshot, and what it finds wrong now is what counts.
         "startup_errors": Keep.REBUILT,
-        "_runs_standalone": Keep.SAVED,
-        "_serves_one_terminal": Keep.SAVED,
+        # An upgrade refuses a server that draws on its own terminal, so
+        # the server that takes over is always on a socket.
+        "_runs_standalone": Keep.REBUILT,
+        "_serves_one_terminal": Keep.REBUILT,
         "test_mode": Keep.SAVED,
         # What the server holds for every session.
         "global_environment": Keep.SAVED,
