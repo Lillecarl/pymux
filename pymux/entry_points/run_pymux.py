@@ -56,8 +56,9 @@ import socket
 import sys
 import tempfile
 import time
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import assert_never
+from typing import NoReturn, assert_never
 
 from pymux import __version__, log
 from pymux.client import create_client, is_ssh_url, list_clients
@@ -472,6 +473,16 @@ def run() -> None:
     global _current_filename
     _current_filename = filename
 
+    attaching = Attaching(
+        config_file=filename,
+        chosen_name=a.client_name,
+        read_only=a.read_only,
+        hang_up_others=a.hang_up_others,
+        detach_others=a.detach_others,
+        ansi_colors_only=ansi_colors_only,
+        true_color=true_color,
+    )
+
     # Where the log goes. Never to the terminal: in `integrated` the
     # server shares one with the client that draws on it, and a logger
     # with no handler writes to `sys.stderr`, which is that terminal.
@@ -525,7 +536,7 @@ def run() -> None:
             if socket_name:
                 # With an explicit socket, ask the server. (The exit code tells
                 # whether there is a session. Like tmux.)
-                sys.exit(_send_command(socket_name, "list-sessions", pane_id))
+                sys.exit(_send_command(socket_name, "list-sessions", pane_id, attaching))
 
             clients = list(list_clients())
             for c in clients:
@@ -600,46 +611,18 @@ def run() -> None:
                 _socket_from_env_warning()
                 sys.exit(1)
 
-            # `-x` is `-d` with a harsher message, which is how tmux reads
-            # it: `if (dflag || xflag)` in `cmd-attach-session.c:123`.
-            # Lillecarl/pymux#347.
-            detach_other_clients = a.detach_others or a.hang_up_others
-
-            # The code the client leaves with is the server's to name. A
-            # server that will not serve this client says so in an `exit`
-            # packet, and a person who detached leaves with nothing to
-            # report. Lillecarl/pymux#332.
             if socket_name:
-                client = create_client(socket_name)
-                client.config_file = filename
-                client.chosen_name = a.client_name
-                client.hang_up_others = a.hang_up_others
-                client.read_only = a.read_only
-                client.attach(
-                    detach_other_clients=detach_other_clients,
-                    color_depth=_color_depth(ansi_colors_only, true_color),
-                )
-                _leave(client)
-            else:
-                # Connect to the first server.
-                for c in list_clients():
-                    c.config_file = filename
-                    c.chosen_name = a.client_name
-                    c.hang_up_others = a.hang_up_others
-                    c.read_only = a.read_only
-                    c.attach(
-                        detach_other_clients=detach_other_clients,
-                        color_depth=_color_depth(ansi_colors_only, true_color),
-                    )
-                    _leave(c)
-
-                print("No pymux instance found.")
-                sys.exit(1)
+                attaching.attach(create_client(socket_name))
+            # Connect to the first server.
+            for c in list_clients():
+                attaching.attach(c)
+            print("No pymux instance found.")
+            sys.exit(1)
 
         case None:
             if command and socket_name:
                 # Run command in the given session.
-                sys.exit(_send_command(socket_name, command, pane_id))
+                sys.exit(_send_command(socket_name, command, pane_id, attaching))
 
             elif command:
                 # A command was given, but no socket was given. Try to send it to the
@@ -662,11 +645,7 @@ def run() -> None:
                     # daemon. (Otherwise the `waitpid` call won't work.)
                     mux.run_server()
                 else:
-                    client = create_client(socket_name)
-                    client.config_file = filename
-                    client.chosen_name = a.client_name
-                    client.attach(color_depth=_color_depth(ansi_colors_only, true_color))
-                    _leave(client)
+                    attaching.attach(create_client(socket_name))
 
             else:
                 if socket_name_from_env:
@@ -831,7 +810,46 @@ def _color_depth(ansi_colors_only: bool, true_color: bool):
     return None
 
 
-def _leave(client) -> None:
+@dataclass(frozen=True)
+class Attaching:
+    """
+    What a person said about the client they attach: every route that
+    attaches one reads the same flags, `new-session` too.
+
+    The colour depth is worked out at the attach and not here, because
+    a detached command must not import the toolkit. Lillecarl/pymux#392.
+    """
+
+    config_file: str | None = None
+    chosen_name: str | None = None
+    read_only: bool = False
+    hang_up_others: bool = False
+    detach_others: bool = False
+    ansi_colors_only: bool = False
+    true_color: bool = False
+
+    def attach(self, client) -> NoReturn:
+        """
+        Attach `client` as asked, then end this process the way the
+        attachment ended. The code it leaves with is the server's to name:
+        a server that will not serve this client says so in an `exit`
+        packet. Lillecarl/pymux#332.
+        """
+        client.config_file = self.config_file
+        client.chosen_name = self.chosen_name
+        client.hang_up_others = self.hang_up_others
+        client.read_only = self.read_only
+        # `-x` is `-d` with a harsher message, which is how tmux reads
+        # it: `if (dflag || xflag)` in `cmd-attach-session.c:123`.
+        # Lillecarl/pymux#347.
+        client.attach(
+            detach_other_clients=self.detach_others or self.hang_up_others,
+            color_depth=_color_depth(self.ansi_colors_only, self.true_color),
+        )
+        _leave(client)
+
+
+def _leave(client) -> NoReturn:
     """
     End this process the way the attachment ended.
 
@@ -852,7 +870,7 @@ def _no_server_error(socket_name: str | None) -> None:
     )
 
 
-def _send_command(socket_name: str, command: str, pane_id=None) -> int:
+def _send_command(socket_name: str, command: str, pane_id=None, attaching: Attaching | None = None) -> int:
     """
     Send a command to the server, print the answer and return the exit code.
 
@@ -864,7 +882,7 @@ def _send_command(socket_name: str, command: str, pane_id=None) -> int:
     name = args[0] if args else ""
 
     if name == "new-session":
-        return _new_session(socket_name, command, args, pane_id)
+        return _new_session(socket_name, command, args, pane_id, attaching or Attaching())
     if name in ("kill-session", "kill-server"):
         return _kill(socket_name, command)
     try:
@@ -982,7 +1000,7 @@ def _wait_for_server(socket_name: str, timeout: float = 5.0) -> bool:
     return False
 
 
-def _new_session(socket_name: str, command: str, args: list[str], pane_id=None) -> int:
+def _new_session(socket_name: str, command: str, args: list[str], pane_id, attaching: Attaching) -> int:
     """
     Handle `new-session`. Start a new server when there is no server yet.
     Otherwise, pass the command to the running server. (Which will report
@@ -1071,16 +1089,7 @@ def _new_session(socket_name: str, command: str, args: list[str], pane_id=None) 
         return client.run_command(query)
 
     if attach:
-        from prompt_toolkit.output import ColorDepth
-
-        client = create_client(socket_name)
-        client.attach(color_depth=ColorDepth.DEPTH_8_BIT)
-        # Nobody else is on a server this command just started, so
-        # nothing hangs this client up at the attach. Something can
-        # later: `detach-client -P` names one client, and this is one.
-        # Lillecarl/pymux#347.
-        client.hang_up_the_parent()
-        return client.exit_code
+        attaching.attach(create_client(socket_name))
 
     return 0
 

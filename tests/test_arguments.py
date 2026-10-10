@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import pytest
 
-from pymux.entry_points.run_pymux import Mode, _flag_args, parse_arguments
+from pymux.entry_points.run_pymux import Attaching, Mode, _flag_args, parse_arguments
 
 
 def parse(*argv):
@@ -208,3 +208,31 @@ def test_a_flag_that_wants_a_value_and_has_none_is_refused():
 
 def test_everything_after_a_separator_is_the_command():
     assert flags_of("-d", "--", "-x", "--y") == ({"d"}, {}, ["-x", "--y"])
+
+
+def test_every_route_attaches_with_the_flags_a_person_gave():
+    """
+    One `Attaching` for every route that attaches a client. Bare `pymux -r`
+    dropped `-r` and `-x`, and `new-session` attached at 8 bit colour
+    whatever the flags said.
+    """
+    from prompt_toolkit.output import ColorDepth
+
+    class Client:
+        exit_code = 4
+
+        def attach(self, **kwargs):
+            self.attached = kwargs
+
+        def hang_up_the_parent(self):
+            pass
+
+    client = Client()
+    attaching = Attaching(config_file="rc", chosen_name="me", read_only=True, hang_up_others=True, true_color=True)
+
+    with pytest.raises(SystemExit) as left:
+        attaching.attach(client)
+
+    assert left.value.code == 4
+    assert (client.config_file, client.chosen_name, client.read_only, client.hang_up_others) == ("rc", "me", True, True)
+    assert client.attached == {"detach_other_clients": True, "color_depth": ColorDepth.DEPTH_24_BIT}
