@@ -625,13 +625,18 @@ def run() -> None:
                 sys.exit(_send_command(socket_name, command, pane_id, attaching))
 
             elif command:
-                # A command was given, but no socket was given. Try to send it to the
-                # first running server. (Like 'tmux split-window' without a target.)
-                for c in list_clients():
-                    sys.exit(c.run_command(command, pane_id))
-                else:
+                # No socket: the newest server that answers, like `tmux
+                # split-window` without a target. With none, only
+                # `new-session` has something to do -- it starts one.
+                newest = None
+                for answered in list_clients():
+                    newest = answered.socket_name
+                    answered.socket.close()
+                    break
+                if newest is None and shlex.split(command)[:1] != ["new-session"]:
                     print("No pymux instance found.")
                     sys.exit(1)
+                sys.exit(_send_command(newest, command, pane_id, attaching))
 
             elif not socket_name:
                 # Run client/server combination.
@@ -870,12 +875,13 @@ def _no_server_error(socket_name: str | None) -> None:
     )
 
 
-def _send_command(socket_name: str, command: str, pane_id=None, attaching: Attaching | None = None) -> int:
+def _send_command(socket_name: str | None, command: str, pane_id=None, attaching: Attaching | None = None) -> int:
     """
     Send a command to the server, print the answer and return the exit code.
 
     Some commands are handled by the client itself:
-    - `new-session`: starts a new server when there is none yet.
+    - `new-session`: starts a new server when there is none yet, on a
+      fresh socket when `socket_name` is None.
     - `kill-session` and `kill-server`: stop the server.
     """
     args = shlex.split(command)
@@ -883,6 +889,9 @@ def _send_command(socket_name: str, command: str, pane_id=None, attaching: Attac
 
     if name == "new-session":
         return _new_session(socket_name, command, args, pane_id, attaching or Attaching())
+    if socket_name is None:
+        _no_server_error(None)
+        return 1
     if name in ("kill-session", "kill-server"):
         return _kill(socket_name, command)
     try:
@@ -1000,7 +1009,7 @@ def _wait_for_server(socket_name: str, timeout: float = 5.0) -> bool:
     return False
 
 
-def _new_session(socket_name: str, command: str, args: list[str], pane_id, attaching: Attaching) -> int:
+def _new_session(socket_name: str | None, command: str, args: list[str], pane_id, attaching: Attaching) -> int:
     """
     Handle `new-session`. Start a new server when there is no server yet.
     Otherwise, pass the command to the running server. (Which will report
@@ -1046,7 +1055,7 @@ def _new_session(socket_name: str, command: str, args: list[str], pane_id, attac
         return 1
 
     # Is there a server running on this socket?
-    server_running = _wait_for_server(socket_name, timeout=0.1)
+    server_running = socket_name is not None and _wait_for_server(socket_name, timeout=0.1)
 
     if server_running:
         # Pass to the server. (Pymux has one session per server. This will

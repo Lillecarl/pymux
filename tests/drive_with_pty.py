@@ -2660,6 +2660,43 @@ def check_detached_pane_has_a_width(tmp):
     print("detached pane has a width: ok")
 
 
+def check_bare_new_session_starts_a_server(tmp):
+    """
+    `pymux new-session` with no `-S` and no server up starts one, the
+    way `tmux new-session` does. It said "No pymux instance found",
+    because a command with no socket only ever looked for a server to
+    send itself to.
+
+    The default socket lives under the temporary directory, so this one
+    gets a directory of its own and finds no other server there.
+    """
+    room = tmp / "bare"
+    room.mkdir()
+    env = {key: value for key, value in os.environ.items() if key != "PYMUX"}
+    env["TMPDIR"] = str(room)
+
+    def bare(*args):
+        return subprocess.run(
+            [sys.executable, "-m", "pymux", *args],
+            cwd=str(REPO_ROOT),
+            env=env,
+            capture_output=True,
+            timeout=20,
+            check=False,
+        )
+
+    try:
+        made = bare("new-session", "-d", "-s", "bare", "%s -c 'import time; time.sleep(30)'" % (sys.executable,))
+        assert made.returncode == 0, made.stdout + made.stderr
+
+        listed = bare("list-sessions")
+        assert listed.returncode == 0, listed.stdout + listed.stderr
+        assert b"bare" in listed.stdout, listed.stdout
+    finally:
+        bare("kill-server")
+    print("bare new-session starts a server: ok")
+
+
 def check_relative_socket_name_survives_the_daemon(tmp):
     """
     A socket named relatively still works after the fork.
@@ -2827,6 +2864,7 @@ def check_wheel_over_unfocused_pane_does_nothing(tmp):
 
 CHECKS = (
     check_detached_pane_has_a_width,
+    check_bare_new_session_starts_a_server,
     check_relative_socket_name_survives_the_daemon,
     check_kitty_terminal,
     check_sixel_terminal,
