@@ -328,6 +328,10 @@ async def in_this_process(pymux=None):
                 pymux.stop()
 
 
+def _window_count(pymux) -> int:
+    return sum(len(session.arrangement.windows) for session in pymux.sessions)
+
+
 @asynccontextmanager
 async def create_session(pymux=None, window=NOTHING):
     """
@@ -436,6 +440,10 @@ async def over_connection(pymux=None, read_packet=None):
         being dropped.
         """
         server_end, client_end = connect_in_memory()
+        # The first client's `startup` makes a window even when there is
+        # one, so an attach that runs it waits for that window too.
+        starts = not pymux._startup_done
+        windows_before = _window_count(pymux)
 
         # A context of its own, which is what both real routes do:
         # `connection_cb` for the socket and `run_integrated` for the
@@ -486,9 +494,13 @@ async def over_connection(pymux=None, read_packet=None):
         )
         # The first window is made by the client's `startup`, on a later
         # turn. Under load a command sent at once found no window and
-        # its format raised.
+        # its format raised, or renamed a window the test made before
+        # the attach instead of the startup's.
         await once(
-            lambda: state.session.arrangement.get_active_window() is not None,
+            lambda: (
+                state.session.arrangement.get_active_window() is not None
+                and (not starts or _window_count(pymux) > windows_before)
+            ),
             5.0,
             "the server never made its first window",
         )
