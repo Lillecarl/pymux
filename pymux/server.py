@@ -119,7 +119,6 @@ class ServerConnection:
         "forwards": Keep.DROPPED,
         "pipe_connection": Keep.DROPPED,
         "_pipeinput": Keep.DROPPED,
-        "_recv_buffer": Keep.DROPPED,
         "_stream": Keep.DROPPED,
         "_tasks": Keep.DROPPED,
         "_closed": Keep.DROPPED,
@@ -148,7 +147,6 @@ class ServerConnection:
         #: group is a child of `Pymux.running`'s. Lillecarl/pymux#87.
         self._tasks: anyio.abc.TaskGroup | None = None
 
-        self._recv_buffer = b""
         self.client_state: ClientState | None = None
 
         #: The pane this connection is streaming, when it asked for one.
@@ -827,16 +825,9 @@ class ServerConnection:
         """
         if self._closed:
             return
-
-        data = json.dumps(data)
-
-        async def send() -> None:
-            try:
-                await self.pipe_connection.write(data)
-            except BrokenPipeError:
-                self.detach_and_close()
-
-        self._spawn(send())
+        # Serialised now: the write runs later, and the packet is what
+        # was true when it was sent.
+        self._spawn(self._write(json.dumps(data)))
 
     async def say_restarting(self, wait: float) -> None:
         """
@@ -985,11 +976,12 @@ class ServerConnection:
         """
         if self._closed:
             return
+        await self._write(json.dumps(data_obj))
 
-        data = json.dumps(data_obj)
-
+    async def _write(self, text: str) -> None:
+        "Write one serialised packet; a client that is gone is let go."
         try:
-            await self.pipe_connection.write(data)
+            await self.pipe_connection.write(text)
         except BrokenPipeError:
             self.detach_and_close()
 

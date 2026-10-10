@@ -13,7 +13,7 @@ from pymux.commands.common import the_window
 
 def previous_layout(pymux: Pymux, args: argparse.Namespace) -> None:
     "Select previous layout."
-    the_window(pymux, None).select_previous_layout()
+    the_window(pymux, None).select_next_layout(count=-1)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

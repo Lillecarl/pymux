@@ -932,17 +932,6 @@ class Window:
         new_layout = all_layouts[(index + count) % len(all_layouts)]
         self.select_layout(new_layout)
 
-    def select_previous_layout(self) -> None:
-        self.select_next_layout(count=-1)
-
-    def change_size_for_active_pane(self, up: int = 0, right: int = 0, down: int = 0, left: int = 0) -> None:
-        """
-        Increase the size of the current pane in any of the four directions.
-        """
-        child = self.active_pane
-        if child is not None:
-            self.change_size_for_pane(child, up=up, right=right, down=down, left=left)
-
     def change_size_for_pane(self, pane: Pane, up=0, right=0, down=0, left=0):
         """
         Increase the size of the current pane in any of the four directions.
