@@ -347,6 +347,26 @@ def line_breaks(session: SessionScreen, client_state) -> list[str]:
     return found
 
 
+async def until_whole(session: SessionScreen, client_state, seconds: float = 10.0) -> list[str]:
+    """
+    Wait for the line between two panes to be whole, and say where it
+    is not if it never is.
+
+    A split starts a program before it draws, so a screen that is quiet
+    for a while can still be the one from before the split: under load
+    `settled` once returned with no second pane on the screen at all.
+    The whole line is the event to wait for, and a line that never comes
+    whole still fails, with the cells that were missing.
+    """
+    found = line_breaks(session, client_state)
+    with anyio.move_on_after(seconds):
+        while found:
+            await anyio.sleep(0.02)
+            found = line_breaks(session, client_state)
+    await settled(session)
+    return line_breaks(session, client_state)
+
+
 @pytest.mark.parametrize(
     "switches",
     [("select-pane -L", "select-pane -R"), ("select-pane -t :.-", "select-pane -t :.+")],
@@ -370,8 +390,8 @@ async def test_switching_panes_keeps_the_line_between_them(pymux, painted, switc
                 pymux.handle_command("set-option pane-border-status on")
                 pymux.handle_command("set-client-option theme pygments:catppuccin-mocha")
             pymux.handle_command("split-window -h 'sleep 1000'")
-        await settled(session)
-        assert not line_breaks(session, client_state), "\n".join(rows_of(session))
+        found = await until_whole(session, client_state)
+        assert not found, "\n".join([*found, "", *rows_of(session)])
 
         for step in range(6):
             command = switches[step % 2]
