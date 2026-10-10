@@ -736,15 +736,21 @@ async def main() -> int:
 
                 work = phase(pymux, state, frames)
 
+                wire = state.output.stdout
+                written = wire.tell()
                 profiler = Profiler(interval=INTERVAL)
                 profiler.start()
                 started = time.perf_counter()
                 work()
                 took = time.perf_counter() - started
                 profiler.stop()
+                written = wire.tell() - written
 
             print("=" * 70)
-            print("%s: %d frames in %.3fs, %.2f ms each" % (name, frames, took, 1000 * took / frames))
+            print(
+                "%s: %d frames in %.3fs, %.2f ms and %d characters to the terminal each"
+                % (name, frames, took, 1000 * took / frames, written // frames)
+            )
             print("=" * 70)
             # PYMUX_PROFILE_SHOW_ALL names the frames the default view
             # hides, which is where a hot path hides when it is made of
