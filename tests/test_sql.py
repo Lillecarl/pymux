@@ -93,8 +93,14 @@ async def test_free_form_select_answers_a_table():
 
 
 async def test_the_windows_are_there_beside_the_jobs():
-    "The live tables answer in the same question as the jobs. Lillecarl/pymux#399."
-    async with create_session() as (pymux, state):
+    """
+    The live tables answer in the same question as the jobs. Lillecarl/pymux#399.
+
+    One window, the one attaching makes. The plain session's window
+    runs a program that ends at once, and whether that window is still
+    there when the question runs depends on the load.
+    """
+    async with create_session(window=None) as (pymux, state):
         await pymux.jobs.submit("echo one", None)
         # The rename and the question in one step: `sql` writes what the
         # step changed before it asks.
