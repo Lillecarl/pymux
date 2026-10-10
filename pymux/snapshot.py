@@ -335,8 +335,6 @@ CREATE TABLE job_output(
 CREATE TABLE pane_programs(
   pane_id INTEGER PRIMARY KEY REFERENCES panes(pane_id),
   pane_pid INTEGER NOT NULL,
-  pane_width INTEGER NOT NULL,
-  pane_height INTEGER NOT NULL,
   pane_revision INTEGER NOT NULL,
   screen TEXT NOT NULL,
   stream TEXT NOT NULL,
@@ -695,12 +693,10 @@ class Snapshot:
         screen = freezer.freeze(control.screen)
         db = self.db
         db.execute(
-            "INSERT OR REPLACE INTO pane_programs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO pane_programs VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
                 pane.pane_id,
                 backend.pid,
-                process.sx,
-                process.sy,
                 # Output moves it, so it lives with the screen.
                 pane.revision,
                 json.dumps(screen.root),
