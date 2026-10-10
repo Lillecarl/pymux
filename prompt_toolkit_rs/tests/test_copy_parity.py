@@ -10,12 +10,11 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+import prompt_toolkit_rs
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from prompt_toolkit.layout import containers
 from prompt_toolkit.layout.screen import _CHAR_CACHE
-
-import prompt_toolkit_rs
 
 #: The reference, taken before any test could have installed the kernel.
 PURE = containers._copy_single_width
@@ -57,6 +56,7 @@ def a_fresh_install(monkeypatch):
 
     monkeypatch.setattr(containers, "_copy_single_width", PURE)
     monkeypatch.setattr(renderer, "_changed_spans", renderer._changed_spans)
+    monkeypatch.setattr(renderer, "_queue_same_style", renderer._queue_same_style)
     monkeypatch.setattr(prompt_toolkit_rs, "_replaced", {})
     return renderer
 
@@ -67,6 +67,7 @@ def test_install_puts_the_kernels_in_place(monkeypatch):
     assert prompt_toolkit_rs.install() is True
     assert containers._copy_single_width is prompt_toolkit_rs.copy_single_width
     assert renderer._changed_spans is prompt_toolkit_rs.changed_spans
+    assert renderer._queue_same_style is prompt_toolkit_rs.queue_same_style
 
 
 def test_pure_says_not_to(monkeypatch):
@@ -75,3 +76,4 @@ def test_pure_says_not_to(monkeypatch):
     assert prompt_toolkit_rs.install() is False
     assert containers._copy_single_width is PURE
     assert renderer._changed_spans is not prompt_toolkit_rs.changed_spans
+    assert renderer._queue_same_style is not prompt_toolkit_rs.queue_same_style

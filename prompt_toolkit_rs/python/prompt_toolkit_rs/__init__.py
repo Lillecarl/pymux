@@ -16,7 +16,7 @@ from prompt_toolkit.layout import containers
 
 from . import _native
 
-__all__ = ["changed_spans", "copy_single_width", "install", "installed"]
+__all__ = ["changed_spans", "copy_single_width", "install", "installed", "queue_same_style"]
 
 #: Set to anything but "" or "0", and `install()` installs nothing.
 PURE = "PYTERM_PURE"
@@ -30,6 +30,9 @@ copy_single_width = _native.copy_single_width
 #: `prompt_toolkit.renderer._changed_spans`, in Rust.
 changed_spans = _native.changed_spans
 
+#: `prompt_toolkit.renderer._queue_same_style`, in Rust.
+queue_same_style = _native.queue_same_style
+
 
 def install() -> bool:
     "Put every kernel in place, unless `PYTERM_PURE` says not to."
@@ -40,6 +43,8 @@ def install() -> bool:
         containers._copy_single_width = copy_single_width
         _replaced["prompt_toolkit.renderer._changed_spans"] = renderer._changed_spans
         renderer._changed_spans = changed_spans
+        _replaced["prompt_toolkit.renderer._queue_same_style"] = renderer._queue_same_style
+        renderer._queue_same_style = queue_same_style
     return True
 
 

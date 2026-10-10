@@ -26,3 +26,4 @@ def test_every_kernel_is_in_place():
     assert pyte.screen._draw_on_row is pyte_rs.draw_on_row
     assert prompt_toolkit.layout.containers._copy_single_width is prompt_toolkit_rs.copy_single_width
     assert prompt_toolkit.renderer._changed_spans is prompt_toolkit_rs.changed_spans
+    assert prompt_toolkit.renderer._queue_same_style is prompt_toolkit_rs.queue_same_style

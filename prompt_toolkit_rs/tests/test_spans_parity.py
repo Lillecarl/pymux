@@ -11,12 +11,11 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+import prompt_toolkit_rs
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from prompt_toolkit import renderer
 from prompt_toolkit.layout.screen import _CHAR_CACHE, Char
-
-import prompt_toolkit_rs
 
 #: The reference, taken before any test could have installed the kernel.
 PURE = renderer._changed_spans

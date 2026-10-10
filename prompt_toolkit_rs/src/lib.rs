@@ -125,8 +125,58 @@ fn changed_spans<'py>(
     Ok(spans)
 }
 
+/// `prompt_toolkit.renderer._moves_one_column_everywhere`: one code point
+/// that every terminal draws in one cell.
+fn moves_one_column_everywhere(text: &Bound<'_, PyString>) -> PyResult<bool> {
+    // SAFETY: `text` is borrowed for the whole call, and a str is
+    // immutable once made, so its storage stays where it is.
+    let data = unsafe { text.data()? };
+    let (Some(point), None) = (point_at(&data, 0), point_at(&data, 1)) else {
+        return Ok(false);
+    };
+    Ok((0x20..=0x7e).contains(&point)
+        || (0xa0..0x2300).contains(&point)
+        || (0x2500..0x25a0).contains(&point))
+}
+
+/// `prompt_toolkit.renderer._queue_same_style`: queue the common run of a
+/// changed span onto `pending`, and say where it stopped.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn queue_same_style<'py>(
+    py: Python<'py>,
+    row: &Bound<'py, PyDict>,
+    mut c: i64,
+    end: i64,
+    last_column: i64,
+    style: &Bound<'py, PyAny>,
+    escapes_row: &Bound<'py, PyDict>,
+    pending: &Bound<'py, PyList>,
+) -> PyResult<i64> {
+    let width_name = intern!(py, "width");
+    let char_name = intern!(py, "char");
+    let style_name = intern!(py, "style");
+    while c < end && c < last_column {
+        let cell = read(row, c)?;
+        if cell.getattr(width_name)?.extract::<i64>()? != 1
+            || cell.getattr(style_name)?.ne(style)?
+            || escapes_row.contains(c)?
+        {
+            break;
+        }
+        let character = cell.getattr(char_name)?;
+        if !moves_one_column_everywhere(character.cast::<PyString>()?)? {
+            break;
+        }
+        pending.append(character)?;
+        c += 1;
+    }
+    Ok(c)
+}
+
 #[pymodule]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_function(wrap_pyfunction!(queue_same_style, module)?)?;
     module.add_function(wrap_pyfunction!(copy_single_width, module)?)?;
     module.add_function(wrap_pyfunction!(changed_spans, module)?)?;
     Ok(())
