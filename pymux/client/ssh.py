@@ -43,7 +43,6 @@ from __future__ import annotations
 import contextlib
 import json
 import os
-import signal
 import sys
 import time
 from typing import TYPE_CHECKING, NamedTuple, override
@@ -86,10 +85,6 @@ __all__ = [
     "SshTarget",
     "ssh_target",
 ]
-
-#: How often to tell the server the terminal has a new size, in
-#: seconds. `client/memory.py` says why a poll and not only a signal.
-SIZE_INTERVAL = 0.5
 
 #: How often to ask the far machine whether it is still there, in
 #: seconds, and how many misses end the connection.
@@ -864,15 +859,6 @@ class SshClient(TerminalClient):
                 connection.abort()
                 return
 
-    async def _watch_signal(self) -> None:
-        "Report the size when the terminal says it changed."
-        try:
-            with anyio.open_signal_receiver(signal.SIGWINCH) as signals:
-                async for _signum in signals:
-                    self._send_size()
-        except NotImplementedError, ValueError, RuntimeError:
-            pass  # No signals here. The size stays as it was.
-
     # ------------------------------------------------------------------
     # The link, when it goes.
 
@@ -1036,21 +1022,3 @@ class SshClient(TerminalClient):
 
             for one in framer.feed(data):
                 yield json.loads(one.decode("utf-8"))
-
-    async def _watch_size(self) -> None:
-        """
-        Tell the server whenever the terminal has a new size.
-
-        The signal handler above does this at once. This is what covers
-        a terminal that sends no signal, and what `client/memory.py`
-        needs for a reason of its own.
-        """
-        last = self.size()
-
-        while True:
-            await anyio.sleep(SIZE_INTERVAL)
-
-            size = self.size()
-            if size != last:
-                last = size
-                self._send_size()

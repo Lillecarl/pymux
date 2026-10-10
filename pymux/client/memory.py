@@ -38,7 +38,6 @@ from __future__ import annotations
 
 import contextlib
 import json
-import signal
 import sys
 from typing import override
 
@@ -51,13 +50,6 @@ from .terminal import TerminalClient
 __all__ = [
     "MemoryClient",
 ]
-
-#: How often this client reads the size of its terminal, in seconds.
-#: `Application.terminal_size_polling_interval` is the same number, and
-#: for the same reason: it is short enough that a person who drags a
-#: window does not wait for it, and one `ioctl` twice a second costs
-#: nothing.
-SIZE_INTERVAL = 0.5
 
 
 class MemoryClient(TerminalClient):
@@ -133,40 +125,3 @@ class MemoryClient(TerminalClient):
             if not self._process_stdin():
                 self.connection.close()
                 return
-
-    async def _watch_signal(self) -> None:
-        """
-        Report the size when the terminal says it changed.
-
-        A signal that this platform does not have is one this client
-        does without: `_watch_size` below reads the size on a timer,
-        and that is what actually reports a resize here.
-        """
-        try:
-            with anyio.open_signal_receiver(signal.SIGWINCH) as signals:
-                async for _signum in signals:
-                    self._send_size()
-        except NotImplementedError, ValueError, RuntimeError:
-            pass  # No signals here. The size stays as it was.
-
-    async def _watch_size(self) -> None:
-        """
-        Tell the server whenever the terminal has a new size.
-
-        The signal handler above does this too, and in this process the
-        server's application takes that signal away. So this is what
-        actually reports a resize, and the handler is what reports it
-        at once when nothing has taken the signal yet.
-
-        Only a change is sent. A packet on every turn would ask the
-        server to lay every window out twice a second.
-        """
-        last = self.size()
-
-        while True:
-            await anyio.sleep(SIZE_INTERVAL)
-
-            size = self.size()
-            if size != last:
-                last = size
-                self._send_size()

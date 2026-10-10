@@ -22,6 +22,7 @@ import socket
 import sys
 import webbrowser
 
+import anyio
 from libpymux.protocol import Field, Mode, Packet
 from prompt_toolkit.input.posix_utils import PosixStdinReader
 from prompt_toolkit.input.vt100 import cooked_mode, raw_mode
@@ -57,6 +58,13 @@ __all__ = [
 #: "CSI ? 2026 ; <state> $ y" with a state of 1, 2 or 4; one that does
 #: not answers 0, or does not answer at all.
 SYNCHRONIZED_OUTPUT_QUERY = b"\x1b[?2026$p"
+
+#: How often a client reads the size of its terminal, in seconds.
+#: `Application.terminal_size_polling_interval` is the same number, and
+#: for the same reason: it is short enough that a person who drags a
+#: window does not wait for it, and one `ioctl` twice a second costs
+#: nothing.
+SIZE_INTERVAL = 0.5
 
 #: What starts a kitty graphics command in a server's output.
 KITTY_GRAPHICS = "\x1b_G"
@@ -469,3 +477,38 @@ class TerminalClient(Client):
         "Report terminal size to server."
         rows, cols = self.size()
         self._send_packet({Field.CMD: Packet.SIZE, Field.DATA: [rows, cols]})
+
+    async def _watch_signal(self) -> None:
+        """
+        Report the size when the terminal says it changed.
+
+        A signal that this platform does not have is one this client
+        does without: `_watch_size` reads the size on a timer as well.
+        """
+        try:
+            with anyio.open_signal_receiver(signal.SIGWINCH) as signals:
+                async for _signum in signals:
+                    self._send_size()
+        except NotImplementedError, ValueError, RuntimeError:
+            pass  # No signals here. The size stays as it was.
+
+    async def _watch_size(self) -> None:
+        """
+        Tell the server whenever the terminal has a new size.
+
+        The signal does this at once. The timer covers a terminal that
+        sends no signal, and the memory client, whose server's
+        application takes the signal away in the same process.
+
+        Only a change is sent. A packet on every turn would ask the
+        server to lay every window out twice a second.
+        """
+        last = self.size()
+
+        while True:
+            await anyio.sleep(SIZE_INTERVAL)
+
+            size = self.size()
+            if size != last:
+                last = size
+                self._send_size()
