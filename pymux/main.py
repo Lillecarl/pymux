@@ -229,6 +229,26 @@ def _any_of_them_wants_chrome(watchers) -> bool:
     return not watchers or any(not one.full_screen for one in watchers)
 
 
+def _listens(sock: socket.socket) -> bool:
+    """
+    Whether a stream socket listens.
+
+    Linux says so through `SO_ACCEPTCONN`; macOS has no such option for
+    a unix socket. There a `listen` answers instead: it changes nothing
+    on a socket that listens already, and fails on a connected one.
+    """
+    try:
+        return bool(sock.getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN))
+    except OSError as error:
+        if error.errno != errno.ENOPROTOOPT:
+            raise
+    try:
+        sock.listen()
+    except OSError:
+        return False
+    return True
+
+
 class Asker(NamedTuple):
     """
     The client a forward is asked of, and whether a person asked.
@@ -4281,7 +4301,7 @@ exec pymux notify -u "$urgency" -- "$@"
         from .pipes.posix import PosixSocketListener
 
         sock = socket.socket(fileno=fd)
-        if sock.family != socket.AF_UNIX or not sock.getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN):
+        if sock.family != socket.AF_UNIX or not _listens(sock):
             sock.detach()
             raise OSError(errno.ENOTSOCK, "fd %d is not a listening unix socket" % fd)
         socket_name = self.socket_name
