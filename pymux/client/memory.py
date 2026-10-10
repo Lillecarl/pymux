@@ -96,17 +96,12 @@ class MemoryClient(TerminalClient):
                         try:
                             packet = await self.connection.read()
                         except BrokenPipeError:
-                            # The server closed the connection. Put the
-                            # terminal of the user back as it was.
-                            self._reset_terminal()
-                            return
+                            return  # The server closed the connection.
                         self._process(packet)
                 finally:
                     # The three readers above end with this scope.
                     tasks.cancel_scope.cancel()
-                    # Restore the keyboard mode of the outer terminal,
-                    # also when the loop ends through an exception.
-                    self._set_kitty_flags(0)
+                    self._leave_the_terminal()
 
     async def _read_keyboard(self, stdin_fd: int) -> None:
         """

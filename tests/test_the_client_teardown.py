@@ -21,8 +21,10 @@ import sys
 
 import pytest
 
+from pymux.client.memory import MemoryClient
 from pymux.client.posix import PosixClient
 from pymux.client.terminal import TerminalClient
+from pymux.pipes import BrokenPipeError as ServerHungUp
 
 
 class FakeSocket:
@@ -136,3 +138,72 @@ def test_a_pushed_mode_comes_back_on_the_way_out(modes_client):
 
     assert modes_client.pushed == [True]
     assert modes_client._mode_context_managers == []
+
+
+# ----------------------------------------------------------------------
+# The integrated client, whose loop reads a queue and not a socket.
+
+
+class FakeConnection:
+    "A connection whose next packet is the error it was given."
+
+    def __init__(self, error):
+        self.error = error
+
+    async def read(self):
+        raise self.error
+
+    def write_nowait(self, data):
+        pass
+
+    def close(self):
+        pass
+
+
+class RecordingMemory(MemoryClient):
+    def __init__(self, error):
+        super().__init__(FakeConnection(error))
+        self.resets = 0
+
+    def _reset_terminal(self):
+        self.resets += 1
+
+    def size(self):
+        return 24, 80
+
+
+@pytest.fixture
+def memory_client(monkeypatch):
+    import contextlib
+
+    monkeypatch.setattr("pymux.client.memory.raw_mode", lambda fd: contextlib.nullcontext())
+    # A keyboard nobody types on. Not /dev/null: epoll refuses it.
+    read_end, write_end = os.pipe()
+    keyboard = open(read_end, "rb")
+    monkeypatch.setattr(sys, "stdin", keyboard)
+    monkeypatch.setattr(os, "write", lambda fd, data: None)
+    yield RecordingMemory
+    keyboard.close()
+    os.close(write_end)
+
+
+@pytest.mark.parametrize("error", [ServerHungUp(), RuntimeError("the loop's own way out")])
+async def test_integrated_client_resets_on_every_way_out(memory_client, error):
+    client = memory_client(error)
+    pushed = []
+
+    class Pushed:
+        def __exit__(self):
+            pushed.append(True)
+
+    client._mode_context_managers.append(Pushed())
+
+    raised = []
+    try:
+        await client.attach()
+    except* RuntimeError:
+        raised.append(True)
+
+    assert raised == ([] if isinstance(error, ServerHungUp) else [True])
+    assert client.resets == 1
+    assert pushed == [True]

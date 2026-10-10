@@ -168,21 +168,7 @@ class PosixClient(TerminalClient):
 
             finally:
                 signal.signal(signal.SIGWINCH, signal.SIG_IGN)
-                # Take our kitty push off the outer terminal, also when
-                # the loop ends through an exception.
-                self._pop_kitty_flags()
-                # Put back raw mode if the server pushed cooked over
-                # us; an attachment that ends in between must not leave
-                # the person's keys echoing. Lillecarl/pymux#411.
-                self._restore_modes()
-                # And put back what the server's bytes set: the
-                # alternate screen, the mouse, the cursor, the
-                # attributes. A crash used to leave all of those
-                # behind. stdout may be the thing that failed, so the
-                # original error outranks anything this raises.
-                # Lillecarl/pymux#404.
-                with contextlib.suppress(Exception):
-                    self._reset_terminal()
+                self._leave_the_terminal()
 
     def _wait_for_the_next_server(self, stdin_fd) -> bool:
         """

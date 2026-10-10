@@ -299,6 +299,21 @@ class TerminalClient(Client):
         output.reset_attributes()
         output.flush()
 
+    def _leave_the_terminal(self) -> None:
+        """
+        Put back everything an attachment changed, however it ended.
+
+        Raw or cooked mode the server pushed over ours
+        (Lillecarl/pymux#411), then what the server's bytes set: the
+        alternate screen, the mouse, the cursor, the attributes and
+        our kitty push. stdout may be the thing that failed, so the
+        error that ended the attachment outranks anything this raises.
+        Lillecarl/pymux#404.
+        """
+        self._restore_modes()
+        with contextlib.suppress(Exception):
+            self._reset_terminal()
+
     def _process(self, data_buffer):
         """
         Handle incoming packet from server.
