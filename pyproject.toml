@@ -22,6 +22,11 @@ dependencies = [
     # binds its socket in: the server and a caller have to agree about
     # that, so it is written once, in the library both import.
     "libpymux",
+    # pyte's per-cell loops in Rust, which `pymux/__init__.py` installs
+    # over the Python ones. Lillecarl/pymux#566.
+    "pyte_rs",
+    # And prompt_toolkit's, in `prompt_toolkit_rs/` beside this file.
+    "prompt_toolkit_rs",
     # The shell completes the command line through argcomplete: the
     # generated scripts of `share/bash-completion` and friends make the
     # shell ask `pymux`, and it answers from the parsers of the commands.
@@ -377,11 +382,12 @@ select = [
 [tool.ruff.lint.isort]
 # Mirror of the umbrella `ruff.toml` above: the build sandbox sees
 # only this tree, so discovery from a file under it must end here.
-# libpymux is a distribution of its own, installed like any other
-# dependency: third-party by installation, wherever it is developed.
-# pymux is the project under check: first-party, always. Without the
-# pins the grouping follows PYTHONPATH -- with the dev shell's set
-# `ruff check` merges `libpymux` with `pymux`, without it (and in the
-# sandbox, which sets none) it splits them.
+# libpymux and prompt_toolkit_rs are distributions of their own,
+# installed like any other dependency: third-party by installation,
+# wherever they are developed. pymux is the project under check:
+# first-party, always. Without the pins the grouping follows
+# PYTHONPATH -- with the dev shell's set `ruff check` merges
+# `libpymux` with `pymux`, without it (and in the sandbox, which sets
+# none) it splits them.
 known-first-party = ["pymux"]
-known-third-party = ["libpymux"]
+known-third-party = ["libpymux", "prompt_toolkit_rs"]

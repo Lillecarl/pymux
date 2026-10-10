@@ -54,7 +54,7 @@ from pyte.keep import Keep
 from pyte.keys import KeyboardFlag
 from pyte.osc import Osc
 
-from . import introspect, log
+from . import introspect, kernels, log
 from .agentic import CallerContext
 from .arrangement import Arrangement, Pane, Window
 from .client.memory import MemoryClient
@@ -109,6 +109,8 @@ if TYPE_CHECKING:
 __all__ = [
     "Pymux",
 ]
+
+kernels.install()
 
 
 #: The shapes of DECSCUSR, as prompt_toolkit names them. The odd numbers
