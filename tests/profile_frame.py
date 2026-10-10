@@ -84,8 +84,9 @@ program in the check's inputs.
 leaves an HTML flame graph beside it. `PYMUX_PROFILE_PANES` says how
 many panes to open and `PYMUX_PROFILE_FRAMES` how many frames to draw
 in each phase. `PYMUX_PROFILE_ROWS` and `PYMUX_PROFILE_COLUMNS` size
-the client's terminal, and `PYMUX_PROFILE_PHASES` narrows the run to
-named phases, comma separated:
+the client's terminal, `PYMUX_PROFILE_WIRE=1` leaves what each phase
+wrote to the terminal in `<phase>.wire`, and `PYMUX_PROFILE_PHASES`
+narrows the run to named phases, comma separated:
 
     PYMUX_PROFILE_PANES=1 PYMUX_PROFILE_ROWS=59 PYMUX_PROFILE_COLUMNS=187 \
       PYMUX_PROFILE_PHASES=sparse,output PYMUX_PROFILE_FRAMES=200 \
@@ -114,6 +115,7 @@ from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 from pyinstrument import Profiler
 from scroll_app import (
+    ALTERNATE_SCREEN,
     FOOTER_ROWS,
     HEADER_ROWS,
     LINES,
@@ -135,7 +137,7 @@ COLUMNS = int(os.environ.get("PYMUX_PROFILE_COLUMNS", "") or 80)
 
 #: A pane that stays up and draws nothing of its own, so the profile
 #: holds no work but pymux's own.
-QUIET = "%s -c 'import time; time.sleep(600)'" % (sys.executable,)
+QUIET = '%s -c "import time; time.sleep(600)"' % (sys.executable,)
 
 #: What the panes are laid out as. The pane status is on, because the
 #: title bars are what ask the layout where every pane is, and that is
@@ -209,6 +211,12 @@ async def server(panes: int):
                     answer = handle_command(pymux, "split-window %s '%s'" % ("-h" if number % 2 else "-v", QUIET))
                     if answer is not None:
                         await answer
+            # A command that fails says so in a message, and the message
+            # floats over the panes in every frame the profile draws.
+            # That broke every scroll the renderer could have sent, and
+            # nothing said so. Lillecarl/pymux#566.
+            if state.message is not None:
+                raise SystemExit("setting the profile up failed: %s" % (state.message,))
             try:
                 yield pymux, state
             finally:
@@ -418,7 +426,7 @@ def scroll(pymux, state, frames: int):
     def work() -> None:
         top = first
         direction = +1
-        control.stream.feed(paint(top, rows, columns, styled=styled).decode())
+        control.stream.feed(ALTERNATE_SCREEN + paint(top, rows, columns, styled=styled).decode())
         for _ in range(frames):
             coming = top + direction
             if coming < 1 or coming > last:
@@ -744,6 +752,8 @@ async def main() -> int:
                 work()
                 took = time.perf_counter() - started
                 profiler.stop()
+                if os.environ.get("PYMUX_PROFILE_WIRE"):
+                    (out / ("%s.wire" % name)).write_text(wire.getvalue()[written:])
                 written = wire.tell() - written
 
             print("=" * 70)

@@ -253,6 +253,10 @@ let
   # functions, for instance `PYMUX_PROFILE_SHOW_ALL=1
   # nix build --file . checks.pymux-profile.run`.
   profileShowAll = builtins.getEnv "PYMUX_PROFILE_SHOW_ALL";
+  # Whether each phase leaves what it wrote to the terminal beside its
+  # profile, as `<phase>.wire`, for instance `PYMUX_PROFILE_WIRE=1
+  # nix build --file . checks.pymux-profile.run`.
+  profileWire = builtins.getEnv "PYMUX_PROFILE_WIRE";
 
   # Which animating programs the busy check runs, for how long each,
   # and the most of one core a background pane may take. One of them
@@ -740,6 +744,7 @@ in
             profileEmitLines
             profileEmitStyled
             profileShowAll
+            profileWire
             ;
         };
         setup = ''
@@ -758,6 +763,7 @@ in
           export PYMUX_PROFILE_EMIT_LINES="$profileEmitLines"
           export PYMUX_PROFILE_EMIT_STYLED="$profileEmitStyled"
           export PYMUX_PROFILE_SHOW_ALL="$profileShowAll"
+          export PYMUX_PROFILE_WIRE="$profileWire"
           export PYMUX_PROFILE_OUT="$out"
         '';
       }

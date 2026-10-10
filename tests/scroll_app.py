@@ -92,6 +92,12 @@ def document_line(number: int) -> str:
     return text
 
 
+#: What the viewer writes first. Fed without it, the bytes run on the
+#: main screen, where a region from the first row slides over the
+#: history and no reader hears of a scroll. Lillecarl/pymux#566.
+ALTERNATE_SCREEN = "\x1b[?1049h"
+
+
 def viewport_bytes(top: int, rows: int, columns: int, *, styled: bool) -> bytes:
     """
     The whole viewport starting at line `top` (one based), as bytes.
@@ -403,7 +409,7 @@ def main(argv: list[str] | None = None) -> int:
 
     fd = sys.stdin.fileno()
     saved = termios.tcgetattr(fd)
-    sys.stdout.write("\x1b[?1049h\x1b[?1000h\x1b[?1006h")
+    sys.stdout.write(ALTERNATE_SCREEN + "\x1b[?1000h\x1b[?1006h")
     try:
         tty.setraw(fd)
         signal.signal(signal.SIGWINCH, on_resize)
