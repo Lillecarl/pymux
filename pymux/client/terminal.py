@@ -322,7 +322,6 @@ class TerminalClient(Client):
 
         if packet[Field.CMD] == Packet.OUT:
             data = packet[Field.DATA]
-            # Call os.write manually. In Python2.6, sys.stdout.write doesn't use UTF-8.
             os.write(sys.stdout.fileno(), data.encode("utf-8"))
             if KITTY_GRAPHICS in data:
                 self.placed_images = True
@@ -351,8 +350,7 @@ class TerminalClient(Client):
 
         elif packet[Field.CMD] == Packet.SUSPEND:
             # Suspend client process to background.
-            if hasattr(signal, "SIGTSTP"):
-                os.kill(os.getpid(), signal.SIGTSTP)
+            os.kill(os.getpid(), signal.SIGTSTP)
 
         elif packet[Field.CMD] == Packet.OPEN:
             # The server asks this machine, not the machine of the
@@ -429,7 +427,7 @@ class TerminalClient(Client):
         """
         Ask this platform to open the URL in a browser, the way
         `webbrowser` picks: "open" on macOS, "xdg-open" or what $BROWSER
-        names on Linux, "startfile" on Windows.
+        names on Linux.
 
         True is a best effort: an opener can still fail after it
         started. A Linux machine without a display says False without
@@ -439,11 +437,7 @@ class TerminalClient(Client):
         is worth more than the chance of a `BROWSER` that names a
         browser which runs without a display.
         """
-        if (
-            os.name == "posix"
-            and sys.platform != "darwin"
-            and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
-        ):
+        if sys.platform != "darwin" and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
             return False
         try:
             return bool(webbrowser.open(url))

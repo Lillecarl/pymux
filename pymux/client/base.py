@@ -81,11 +81,6 @@ class Client(ABC):
         if not self.hang_up_asked:
             return
 
-        # Windows has no SIGHUP and no process to send one to. The
-        # client leaves, which is the rest of what was asked.
-        if not hasattr(signal, "SIGHUP") or not hasattr(os, "getppid"):
-            return
-
         parent = os.getppid()
         if parent <= 1:
             return
