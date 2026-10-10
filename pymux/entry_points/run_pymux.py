@@ -98,11 +98,6 @@ def _mode_of(word: str) -> Mode | None:
         return None
 
 
-#: The modes that take the command of the first pane after the mode
-#: word, rather than a pymux command for a running server.
-MODES_WITH_A_FIRST_PANE = (Mode.INTEGRATED,)
-
-
 def _how_much_to_log(chosen: str | None) -> int:
     """
     What `--log-level` asked for, or INFO. `pymux/log.py` says why INFO.
@@ -114,18 +109,6 @@ def _how_much_to_log(chosen: str | None) -> int:
     if not chosen:
         return logging.INFO
     return log.LEVELS[log.LogLevel(chosen)]
-
-
-def filename_var() -> str | None:
-    """
-    Return the configuration file name for the current invocation. (This is
-    stored as a module global, because the daemonized server needs it after
-    the fork.)
-    """
-    return _current_filename
-
-
-_current_filename: str | None = None
 
 
 def _add_options(parser: argparse.ArgumentParser, suppress_defaults: bool) -> None:
@@ -290,9 +273,25 @@ def _build_parser(with_positionals: bool = True) -> argparse.ArgumentParser:
     return parser
 
 
-def _socket_from_env_warning() -> None:
-    print("Please be careful nesting pymux sessions.")
-    print("Unset PYMUX environment variable first.")
+def _refuse_nesting(socket_name_from_env: bool) -> None:
+    "Leave when the socket came from $PYMUX: this runs inside a pane."
+    if socket_name_from_env:
+        print("Please be careful nesting pymux sessions.")
+        print("Unset PYMUX environment variable first.")
+        sys.exit(1)
+
+
+def _log_like_a_daemon(a: argparse.Namespace) -> None:
+    """
+    A server's log: the file `--logfile` names, or stdout. A daemon has
+    no terminal to spoil, and `daemonize` sends its stdout to /dev/null;
+    a person who wants to read it runs the server in the foreground.
+    """
+    wanted = _how_much_to_log(a.log_level)
+    if a.logfile:
+        log.configure(a.logfile, wanted)
+    else:
+        logging.basicConfig(stream=sys.stdout, level=wanted)
 
 
 def parse_arguments(
@@ -348,8 +347,9 @@ def parse_arguments(
             # are `pymux.upgrade`'s to read.
             a.upgrade_words, rest = rest, []
 
-    if mode in MODES_WITH_A_FIRST_PANE:
-        # An optional command can be given for the first pane.
+    if mode is Mode.INTEGRATED:
+        # The command of the first pane, rather than a pymux command
+        # for a running server.
         command = " ".join(shlex.quote(x) for x in rest) if rest else None
     elif mode is not None and rest:
         # A mode with extra arguments: e.g. `pymux list-sessions -F ...`.
@@ -468,11 +468,6 @@ def run() -> None:
     if filename:
         filename = os.path.abspath(os.path.expanduser(filename))
 
-    # Store the configuration file name. (The daemonized server, started by
-    # `new-session`, needs it after the fork.)
-    global _current_filename
-    _current_filename = filename
-
     attaching = Attaching(
         config_file=filename,
         chosen_name=a.client_name,
@@ -501,9 +496,7 @@ def run() -> None:
 
     match mode:
         case Mode.INTEGRATED:
-            if socket_name_from_env:
-                _socket_from_env_warning()
-                sys.exit(1)
+            _refuse_nesting(socket_name_from_env)
 
             # A server and one client in this process. The client reads a
             # queue that this server writes, so it reaches this server and
@@ -570,18 +563,9 @@ def run() -> None:
             print(as_json(report) if a.diagnose_json else human(report))
 
         case Mode.START_SERVER:
-            if socket_name_from_env:
-                _socket_from_env_warning()
-                sys.exit(1)
+            _refuse_nesting(socket_name_from_env)
 
-            # A daemon has no terminal to spoil, so its log may go to
-            # stdout. `daemonize` sends that to /dev/null, and a person who
-            # wants to read it runs the server in the foreground.
-            wanted = _how_much_to_log(a.log_level)
-            if a.logfile:
-                log.configure(a.logfile, wanted)
-            else:
-                logging.basicConfig(stream=sys.stdout, level=wanted)
+            _log_like_a_daemon(a)
 
             # Create 'Pymux'. (Do this after the logging setup, so that crashes
             # in Pymux() can be logged.)
@@ -597,19 +581,13 @@ def run() -> None:
         case Mode.RESUME_SERVER:
             from pymux import upgrade
 
-            # Where the server before the exec logged, which it passed on.
-            # Its stdout is this process's, as `start-server` has it.
-            wanted = _how_much_to_log(a.log_level)
-            if a.logfile:
-                log.configure(a.logfile, wanted)
-            else:
-                logging.basicConfig(stream=sys.stdout, level=wanted)
+            # Where the server before this one logged, which it passed
+            # on. Its stdout is this process's, as `start-server` has it.
+            _log_like_a_daemon(a)
             upgrade.resume(*upgrade.resume_arguments(a.upgrade_words))
 
         case Mode.ATTACH:
-            if socket_name_from_env:
-                _socket_from_env_warning()
-                sys.exit(1)
+            _refuse_nesting(socket_name_from_env)
 
             if socket_name:
                 attaching.attach(create_client(socket_name))
@@ -653,12 +631,9 @@ def run() -> None:
                     attaching.attach(create_client(socket_name))
 
             else:
-                if socket_name_from_env:
-                    _socket_from_env_warning()
-                    sys.exit(1)
-                else:
-                    print("Invalid command.")
-                    sys.exit(1)
+                _refuse_nesting(socket_name_from_env)
+                print("Invalid command.")
+                sys.exit(1)
 
         case _:
             assert_never(mode)
@@ -875,7 +850,7 @@ def _no_server_error(socket_name: str | None) -> None:
     )
 
 
-def _send_command(socket_name: str | None, command: str, pane_id=None, attaching: Attaching | None = None) -> int:
+def _send_command(socket_name: str | None, command: str, pane_id, attaching: Attaching) -> int:
     """
     Send a command to the server, print the answer and return the exit code.
 
@@ -888,7 +863,7 @@ def _send_command(socket_name: str | None, command: str, pane_id=None, attaching
     name = args[0] if args else ""
 
     if name == "new-session":
-        return _new_session(socket_name, command, args, pane_id, attaching or Attaching())
+        return _new_session(socket_name, command, args, pane_id, attaching)
     if socket_name is None:
         _no_server_error(None)
         return 1
@@ -1073,7 +1048,7 @@ def _new_session(socket_name: str | None, command: str, args: list[str], pane_id
             os.chdir(os.path.abspath(os.path.expanduser(start_directory)))
 
     mux = _new_pymux(
-        source_file=filename_var(),
+        source_file=attaching.config_file,
         startup_command=startup_command,
         session_name=session_name,
         size_with_no_client=size_with_no_client,
