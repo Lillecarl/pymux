@@ -62,7 +62,7 @@ def create_strip(shape=(1, 1)):
 
 
 def create_plan(window, size=SIZE, gaps=Gaps()):
-    return Strip(window, gaps).measure(size)
+    return Strip(window, lambda: gaps).measure(size)
 
 
 def where(plan, pane):
@@ -89,7 +89,6 @@ def test_column_takes_its_share_of_window_less_its_border():
     """
     Half a window by default, which is niri's default and the reason
     two columns fit exactly and a third runs past the edge.
-    `layout._create_strip` measures a column the same way.
     """
     window, panes = create_strip((1,))
 
@@ -224,7 +223,7 @@ def test_pane_beside_stack_is_one_sharing_most_of_its_edge():
 
 
 def lines_of(window, size=SIZE, gaps=Gaps()):
-    return Strip(window, gaps).measure(size).lines
+    return Strip(window, lambda: gaps).measure(size).lines
 
 
 def test_every_column_has_line_down_its_right():

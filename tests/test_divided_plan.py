@@ -62,7 +62,7 @@ def create_window(splits=(), focus=None):
 
 
 def create_plan(window, size=SIZE, gaps=Gaps()):
-    return Divided(window, gaps).measure(size)
+    return Divided(window, lambda: gaps).measure(size)
 
 
 def where(plan, pane):
@@ -153,7 +153,7 @@ def test_same_window_measures_same_twice():
 
 
 def lines_of(window, size=SIZE, gaps=Gaps()):
-    return Divided(window, gaps).measure(size).lines
+    return Divided(window, lambda: gaps).measure(size).lines
 
 
 def test_border_fills_gap_between_two_panes():

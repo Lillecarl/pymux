@@ -26,6 +26,7 @@ by which rule.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass, field
 
 from prompt_toolkit.data_structures import Point, Size
 
@@ -36,6 +37,7 @@ from .tiling import Gaps, lay_out
 __all__ = ["Divided"]
 
 
+@dataclass(frozen=True, eq=False)
 class Divided:
     """
     An exact tiling of the view, and where every pane of it is.
@@ -55,25 +57,9 @@ class Divided:
     function.
     """
 
-    def __init__(self, window: arrangement.Window, gaps: Gaps | Callable[[], Gaps] = Gaps()) -> None:
-        self.window = window
-        self._gaps = gaps
-
-    @property
-    def gaps(self) -> Gaps:
-        """
-        The cells left between things, now.
-
-        It may be given as a callable, for the reason `Strip.gaps`
-        gives: the gap between two stacked panes is two rows when a bar
-        is drawn under a pane and one when it is not, and an option
-        turns that on while a layout that is already standing draws.
-        """
-        gaps = self._gaps
-        return gaps() if callable(gaps) else gaps
-
-    def __repr__(self) -> str:
-        return "Divided(%r)" % (self.window,)
+    window: arrangement.Window
+    #: Read on every measure, for the reason `layout.layout_of` gives.
+    gaps: Callable[[], Gaps] = field(default=Gaps, repr=False)
 
     def measure(self, available: Size) -> Plan:
         """
@@ -104,7 +90,7 @@ class Divided:
         lay_out(
             self.window.root,
             Rect(x=0, y=0, width=available.columns, height=available.rows),
-            self.gaps,
+            self.gaps(),
             rects,
             lines,
         )

@@ -52,6 +52,7 @@ instead. Lillecarl/pymux#207.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass, field
 
 from prompt_toolkit.data_structures import Point, Size
 
@@ -62,6 +63,7 @@ from .tiling import BORDER_VERTICAL, Gaps, lay_out
 __all__ = ["Strip"]
 
 
+@dataclass(frozen=True, eq=False)
 class Strip:
     """
     A row of columns, and where every pane of it is.
@@ -82,38 +84,21 @@ class Strip:
     against what was measured.
     """
 
-    def __init__(self, window: arrangement.Window, gaps: Gaps | Callable[[], Gaps] = Gaps()) -> None:
-        self.window = window
-        self._gaps = gaps
+    window: arrangement.Window
+    #: Read on every measure, for the reason `layout.layout_of` gives.
+    gaps: Callable[[], Gaps] = field(default=Gaps, repr=False)
 
-    @property
-    def gaps(self) -> Gaps:
-        """
-        The cells left between things, now.
-
-        It may be given as a callable, because the gap between two
-        stacked panes is two rows when a bar is drawn under a pane and
-        one when it is not, and an option turns that on while a layout
-        that was already built is still standing.
-        """
-        gaps = self._gaps
-        return gaps() if callable(gaps) else gaps
-
-    def __repr__(self) -> str:
-        return "Strip(%r)" % (self.window,)
-
-    def content_width(self, column, columns: int) -> int:
+    def content_width(self, column, columns: int, gap: int) -> int:
         """
         How many cells one column's content takes.
 
         The fraction is of the window, and the border the column owns
         comes out of that share, so a column takes the same room
-        whatever the other columns do. `layout._create_strip` measures
-        it the same way, and Lillecarl/pymux#206 says why the border is
-        inside the share.
+        whatever the other columns do. Lillecarl/pymux#206 says why the
+        border is inside the share.
         """
         share = round(self.window.column_width(column) * columns)
-        return max(1, share - self.gaps.between_columns)
+        return max(1, share - gap)
 
     def measure(self, available: Size) -> Plan:
         """
@@ -130,16 +115,17 @@ class Strip:
         """
         rects: list[tuple[Slot, Rect]] = []
         lines: list[Line] = []
-        gap = self.gaps.between_columns
+        gaps = self.gaps()
+        gap = gaps.between_columns
         rights = []
         x = 0
 
         for column in self.window.root:
-            width = self.content_width(column, available.columns)
+            width = self.content_width(column, available.columns, gap)
             lay_out(
                 column,
                 Rect(x=x, y=0, width=width, height=available.rows),
-                self.gaps,
+                gaps,
                 rects,
                 lines,
             )
@@ -175,7 +161,7 @@ class Strip:
         where applications write (Lillecarl/pymux#218); nothing on the
         screen says the column is cut, which is Lillecarl/pymux#222.
         """
-        gap = self.gaps.between_columns
+        gap = self.gaps().between_columns
         box = plan.bounds
         row = Rect(x=box.x, y=box.y, width=box.width + gap, height=box.height)
 
