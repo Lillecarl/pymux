@@ -22,8 +22,17 @@ ROWS = 30
 COLUMNS = 100
 
 
-@pytest.mark.parametrize("screen", ["alternate", "main"])
-async def test_a_one_line_scroll_goes_out_as_a_scroll(monkeypatch, screen):
+@pytest.mark.parametrize(
+    ("screen", "mode"),
+    [
+        ("alternate", "scroll"),
+        ("main", "scroll"),
+        # The whole viewport written again, one line further down: the
+        # pane finds the rows by their images. Lillecarl/pymux#570.
+        ("alternate", "redraw"),
+    ],
+)
+async def test_a_one_line_scroll_goes_out_as_a_scroll(monkeypatch, screen, mode):
     monkeypatch.setattr(profile_frame, "ROWS", ROWS)
     monkeypatch.setattr(profile_frame, "COLUMNS", COLUMNS)
     async with profile_frame.server(1) as (pymux, state):
@@ -39,7 +48,7 @@ async def test_a_one_line_scroll_goes_out_as_a_scroll(monkeypatch, screen):
 
             wire = state.output.stdout
             before = wire.tell()
-            control.stream.feed(scroll_step(1, +1, rows, columns, mode="scroll", styled=True).decode())
+            control.stream.feed(scroll_step(1, +1, rows, columns, mode=mode, styled=True).decode())
             draw()
             frame = wire.getvalue()[before:]
 
