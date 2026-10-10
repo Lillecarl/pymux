@@ -64,7 +64,7 @@ from .session import Session
 if TYPE_CHECKING:
     from .main import ClientState, Pymux
 
-__all__ = ["SNAPSHOT_VERSION", "Snapshot", "adopting", "checking", "load", "save", "start"]
+__all__ = ["SNAPSHOT_VERSION", "Snapshot", "load", "program_ids", "save", "start"]
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
@@ -615,8 +615,6 @@ class Snapshot:
         os.close(os.open(self.partial, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600))
         self.db = sqlite3.connect(self.partial)
         self.db.executescript(SCHEMA)
-        # Here and not in `finish`: an upgrade's dry run loads the
-        # partial file between the two writes.
         self.db.execute("PRAGMA user_version = %d" % SNAPSHOT_VERSION)
         self.freezers: dict[int, Freezer] = {}
         self.jobs_written: set[int] = set()
@@ -1093,47 +1091,21 @@ class Program(NamedTuple):
     process: Frozen
 
 
-#: Builds a loaded pane: from its program, with what runs when it ends.
-MakePane = Callable[[Program, Callable[[], None] | None], Pane]
-
-
-def adopting(pymux: Pymux, masters: dict[int, int]) -> MakePane:
+def _adopted(pymux: Pymux, masters: dict[int, int], program: Program, on_done: Callable[[], None] | None) -> Pane:
     """
-    Panes built around the programs a snapshot names, which still run.
+    A pane built around a program the snapshot names, which still runs.
 
-    The holder keeps each one and handed this server its master, which
+    The holder keeps it and handed this server its master, which
     `masters` holds by the holder's id. The screen, the parser and the
     process thaw over what `_build_pane` made. Nothing starts until
     `start`.
     """
-
-    def make(program: Program, on_done: Callable[[], None] | None) -> Pane:
-        if pymux.holding is None:
-            raise SnapshotError("this server has no holder to take pane %d from" % (program.pane_id,))
-        if program.program_id not in masters:
-            raise SnapshotError("the holder keeps no program for pane %d" % (program.pane_id,))
-        backend = HeldBackend.adopt_held(pymux.holding, program.program_id, program.pid, masters[program.program_id])
-        return _thawed(pymux, program, pymux._build_pane(backend=backend, on_done=on_done))
-
-    return make
-
-
-def checking(pymux: Pymux) -> MakePane:
-    """
-    Panes that thaw a snapshot's screens over a pty nobody runs on.
-
-    An upgrade's dry run loads the snapshot this way in a process of the
-    new build, which talks to no holder. It proves the new build reads
-    every table and thaws every screen, and adopts nothing. Start
-    nothing it built: the backends have no holder.
-    """
-
-    def make(program: Program, on_done: Callable[[], None] | None) -> Pane:
-        # The class has to be the one that thaws over it.
-        held = HeldBackend(None, None)  # type: ignore[arg-type]
-        return _thawed(pymux, program, pymux._build_pane(backend=held, on_done=on_done))
-
-    return make
+    if pymux.holding is None:
+        raise SnapshotError("this server has no holder to take pane %d from" % (program.pane_id,))
+    if program.program_id not in masters:
+        raise SnapshotError("the holder keeps no program for pane %d" % (program.pane_id,))
+    backend = HeldBackend.adopt_held(pymux.holding, program.program_id, program.pid, masters[program.program_id])
+    return _thawed(pymux, program, pymux._build_pane(backend=backend, on_done=on_done))
 
 
 def _thawed(pymux: Pymux, program: Program, pane: Pane) -> Pane:
@@ -1184,13 +1156,21 @@ def read_server(path: str | os.PathLike[str]) -> dict[str, Any]:
         db.close()
 
 
-def load(pymux: Pymux, path: str | os.PathLike[str], make_pane: MakePane | None = None) -> int | None:
+def program_ids(path: str | os.PathLike[str]) -> list[int]:
+    "The holder's id of every program the snapshot names: the masters `load` needs."
+    db = _open(path)
+    try:
+        return [row["program_id"] for row in _rows(db, "SELECT program_id FROM pane_programs")]
+    finally:
+        db.close()
+
+
+def load(pymux: Pymux, path: str | os.PathLike[str], masters: dict[int, int] | None = None) -> int | None:
     """
     Replace what a fresh `pymux` holds with a snapshot's.
 
-    `make_pane` builds each pane: `adopting` with the masters the holder
-    handed over, or `checking` for the dry run. The default adopts
-    nothing, so it loads a server with no pane.
+    `masters` are the ones the holder handed over, by the holder's id,
+    one for each of `program_ids`. None is a server with no pane.
 
     Returns the fd of the listening socket, or None when the server had
     none. The old server passed it to the new one under the same number,
@@ -1198,7 +1178,7 @@ def load(pymux: Pymux, path: str | os.PathLike[str], make_pane: MakePane | None 
     """
     db = _open(path)
     try:
-        return _read(pymux, db, make_pane or adopting(pymux, {}))
+        return _read(pymux, db, masters or {})
     finally:
         db.close()
 
@@ -1268,7 +1248,7 @@ def _read_notifications(pymux: Pymux, db: sqlite3.Connection, counters: dict[str
         routes._incoming[row["ours"]] = key
 
 
-def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> int | None:
+def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int]) -> int | None:
     server = {row["name"]: row["value"] for row in _rows(db, "SELECT * FROM server")}
     pymux.created = server["created"]
     pymux.socket_name = server["socket_name"]
@@ -1304,7 +1284,7 @@ def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> int | No
     panes: dict[int | None, Pane] = {}
 
     def pane_of(row: PaneRow, on_done: Callable[[], None] | None = None) -> Pane:
-        pane = make_pane(_program(db, PaneId(row.pane_id)), on_done)
+        pane = _adopted(pymux, masters, _program(db, PaneId(row.pane_id)), on_done)
         pane.pane_id = PaneId(row.pane_id)
         pane.chosen_name = row.pane_name
         pane.clock_mode = bool(row.clock_mode)

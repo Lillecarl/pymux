@@ -24,12 +24,9 @@ from test_jobs_over_the_socket import CLI_TIMEOUT, _wait_for_server, cli
 COUNT = 'i=0; while [ $i -lt %d ]; do i=$((i+1)); echo "line $i"; sleep 0.02; done; sleep 60'
 LINES = 300
 
-#: A new build that passes the dry run, then cannot read the snapshot
-#: it was handed: the version it reads is one more than the file's.
+#: A new build that starts, then cannot read the snapshot it was handed:
+#: the version it reads is one more than the file's.
 CANNOT_RESUME = """#!/bin/sh
-case " $* " in
-  *" check-snapshot "*) exec %(python)s -m pymux "$@" ;;
-esac
 exec %(python)s -c '
 import sys
 from pymux import snapshot
@@ -187,9 +184,12 @@ def test_an_upgrade_keeps_every_pane_and_its_program(server, tmp_path, new_build
         wrapper.chmod(wrapper.stat().st_mode | stat.S_IXUSR)
         command = [str(wrapper)]
 
-    # The command's own connection goes with the old server, so its
-    # answer is not the verdict; what the server answers afterwards is.
-    cli(server, "upgrade-server", shlex.join(command))
+    # The command's own connection goes with the old server when the
+    # upgrade works, so its answer is the verdict only when it does not.
+    said = cli(server, "upgrade-server", shlex.join(command))
+    if new_build == "cannot-resume":
+        assert said.returncode != 0
+        assert "snapshot version" in said.stderr.decode() + said.stdout.decode()
 
     assert _what_survives(server) == before
     pid = _server_pid(server)
@@ -216,11 +216,11 @@ def test_an_upgrade_keeps_every_pane_and_its_program(server, tmp_path, new_build
     assert _leftovers() == []
 
 
-def test_a_build_that_cannot_load_the_snapshot_is_refused(server):
+def test_a_build_that_ends_without_a_word_is_refused(server):
     before = _what_survives(server)
-    refused = cli(server, "upgrade-server", shlex.join(["sh", "-c", "echo cannot read it >&2; exit 3"]))
+    refused = cli(server, "upgrade-server", shlex.join(["sh", "-c", "exit 3"]))
     assert refused.returncode != 0
-    assert "cannot read it" in refused.stderr.decode() + refused.stdout.decode()
+    assert "ended with 3" in refused.stderr.decode() + refused.stdout.decode()
     assert _what_survives(server) == before
     _shell_answers(server)
     assert _leftovers() == []

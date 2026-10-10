@@ -88,8 +88,7 @@ class Mode(StrEnum):
     FIND = "find"
     DIAGNOSE = "diagnose"
     WEB = "web"
-    #: An upgrade's dry run and its new server. `pymux/upgrade.py`.
-    CHECK_SNAPSHOT = "check-snapshot"
+    #: An upgrade's new server. `pymux/upgrade.py`.
     RESUME_SERVER = "resume-server"
 
 
@@ -346,7 +345,7 @@ def parse_arguments(
             flag_args, rest = flag_parser.parse_known_args(rest)
             a.diagnose_json = flag_args.json
 
-        if mode in (Mode.CHECK_SNAPSHOT, Mode.RESUME_SERVER):
+        if mode == Mode.RESUME_SERVER:
             # What an upgrading server runs, never a person: the words
             # are `pymux.upgrade`'s to read.
             a.upgrade_words, rest = rest, []
@@ -595,12 +594,6 @@ def run() -> None:
                 mux.run_server()
             except KeyboardInterrupt:
                 sys.exit(1)
-
-        case Mode.CHECK_SNAPSHOT:
-            from pymux import upgrade
-
-            (path,) = a.upgrade_words
-            upgrade.check(path)
 
         case Mode.RESUME_SERVER:
             from pymux import upgrade

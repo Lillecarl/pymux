@@ -11,21 +11,20 @@ The order:
 
 1. Write the snapshot (`pymux/snapshot.py`) while the server serves.
    This costs the depth of every history.
-2. The dry run: the new build loads that file in a process of its own
-   (`check-snapshot`). A build that cannot read it is refused here,
-   while nothing is lost yet, and with the reason.
-3. Tell each client that a server follows on the same socket.
-4. The pause: take no client, read no pane, and write again, which
+2. Tell each client that a server follows on the same socket.
+3. The pause: take no client, read no pane, and write again, which
    costs only what the programs wrote since. **No `await` between the
    pause and the write**, so no pane is read after the write that
    describes it.
-5. Start the new build with the listening socket and a pipe. It loads
+4. Start the new build with the listening socket and a pipe. It loads
    the file, takes each pane's master from the holder, and says `ok`
    on the pipe before it reads a pane. Then this server ends.
 
-A new build that ends without `ok` leaves this server as it was: it
-takes clients and reads its panes again. Nothing went to the new build
-that this one did not keep.
+A new build that cannot take over says why on the pipe, or ends without
+a word, and this server serves on as it was: it takes clients and reads
+its panes again. Nothing went to the new build that this one did not
+keep, so there is no dry run before the pause: the new build's own load
+is the test, and the cost of a failed one is the length of the pause.
 
 The file holds every screen, so it is 0600 in the per-user socket
 directory, and it is deleted once the panes run.
@@ -55,19 +54,19 @@ from .pipes.posix import PosixSocketListener
 if TYPE_CHECKING:
     from .main import Pymux
 
-__all__ = ["CHECK", "RESUME", "check", "resume", "upgrade"]
+__all__ = ["RESUME", "resume", "upgrade"]
 
-#: The mode words of the new build: the dry run, and the start after it.
-CHECK = "check-snapshot"
+#: The mode word of the new build.
 RESUME = "resume-server"
 
-#: How long the dry run may take, and the new build's load with it, in
-#: seconds. Each reads every history, which took about 3 seconds for a
-#: pane of 50,000 rows.
-CHECK_TIMEOUT = 120.0
+#: How long the new build may take to load, in seconds. It reads every
+#: history, which took about 3 seconds for a pane of 50,000 rows.
+LOAD_TIMEOUT = 120.0
 
-#: What the new build writes on the pipe once it holds every pane.
+#: What the new build writes on the pipe once it holds every pane. A
+#: build that cannot take over writes `error: ` and the reason instead.
 READY = b"ok"
+FAILED = b"error: "
 
 
 def rooted_environment() -> dict[str, str]:
@@ -100,7 +99,6 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
     try:
         try:
             written.write(pymux)
-            await _check(command, written.partial)
             for connection in list(pymux.connections):
                 client_state = connection.client_state
                 if client_state is not None and not client_state.temporary:
@@ -127,25 +125,11 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
 
 
 def _refuse(pymux: Pymux) -> None:
-    "Refuse a server whose state no snapshot holds yet."
-    if pymux._runs_standalone or pymux._serves_one_terminal:
-        raise CommandException("this server draws on the terminal it runs in")
-    if not isinstance(pymux.listener, PosixSocketListener):
+    "What only an upgrade needs. The snapshot refuses the rest as it writes."
+    if not isinstance(pymux.listener, PosixSocketListener) or pymux._serves_one_terminal:
         raise CommandException("this server has no socket for its clients to come back to")
     if pymux.holding is None:
         raise CommandException("this server has no holder to keep its panes")
-    for pane in snapshot._panes_of(pymux):
-        if not isinstance(pane.process.backend, HeldBackend):
-            raise CommandException("pane %d was started before the holder" % (pane.pane_id,))
-
-
-async def _check(command: list[str], path: Path) -> None:
-    "The dry run: the new build loads the snapshot, in a process of its own."
-    with anyio.fail_after(CHECK_TIMEOUT):
-        result = await anyio.run_process([*command, CHECK, str(path)], check=False)
-    if result.returncode != 0:
-        said = result.stderr.decode(errors="replace").strip().splitlines()
-        raise CommandException("the new build cannot load this server: %s" % (said[-1] if said else result.returncode))
 
 
 def _pause(pymux: Pymux) -> None:
@@ -183,18 +167,27 @@ async def _hand_over(pymux: Pymux, argv: list[str]) -> None:
         )
     finally:
         os.close(told)
+    said = b""
     try:
-        with anyio.fail_after(CHECK_TIMEOUT):
-            await anyio.wait_readable(ready)
-            said = os.read(ready, len(READY))
+        with anyio.fail_after(LOAD_TIMEOUT):
+            # `ok` arrives alone; a reason arrives whole before the end of the file.
+            while said != READY and (chunk := await _read(ready)):
+                said += chunk
     except TimeoutError:
         process.kill()
-        said = b""
     finally:
         os.close(ready)
     if said != READY:
         await anyio.to_thread.run_sync(process.wait)
-        raise CommandException("the new build did not take the server over: its log says why")
+        reason = said.removeprefix(FAILED).decode(errors="replace").strip()
+        raise CommandException(
+            "the new build cannot take this server over: %s" % (reason or "it ended with %s" % process.returncode)
+        )
+
+
+async def _read(fd: int) -> bytes:
+    await anyio.wait_readable(fd)
+    return os.read(fd, 4096)
 
 
 def _leave() -> NoReturn:
@@ -203,28 +196,20 @@ def _leave() -> NoReturn:
     the new one. Not `stop`: that kills the programs, and the clean-up
     after it takes the socket file the new server listens on.
     """
+    _flush_logs()
+    os._exit(0)
+
+
+def _flush_logs() -> None:
     for one in log.LOGGERS:
         for handler in one.handlers:
             handler.flush()
-    os._exit(0)
 
 
 def _log_arguments() -> list[str]:
     "The log file this process writes, for the next one to write too."
     logfile = log._logfile
     return ["--log", str(logfile)] if logfile is not None else []
-
-
-def check(path: str) -> None:
-    "The dry run, in the new build: raises when it cannot load `path`."
-    from .main import Pymux
-
-    async def load() -> None:
-        # In a loop, because a job's `done` is an event.
-        pymux = Pymux()
-        snapshot.load(pymux, path, snapshot.checking(pymux))
-
-    anyio.run(load)
 
 
 def resume(path: str, ready: int) -> None:
@@ -237,17 +222,17 @@ def resume(path: str, ready: int) -> None:
     options, the bindings and the hooks -- because a person may have
     changed one since the file was read.
 
-    Anything that goes wrong before `ok` ends this process at once: the
-    old server serves on, and nothing of this one may touch its panes or
-    its socket file on the way out.
+    Anything that goes wrong before `ok` ends this process at once, with
+    the reason on the pipe: the old server serves on, and nothing of this
+    one may touch its panes or its socket file on the way out.
     """
     from .main import Pymux
 
-    def give_up() -> NoReturn:
+    def give_up(error: BaseException) -> NoReturn:
         logger.exception("Taking the server over from %s failed.", path)
-        for one in log.LOGGERS:
-            for handler in one.handlers:
-                handler.flush()
+        _flush_logs()
+        with open(ready, "wb", closefd=False) as pipe:
+            pipe.write(FAILED + ("%s: %s" % (type(error).__name__, error)).encode())
         os._exit(1)
 
     try:
@@ -257,8 +242,8 @@ def resume(path: str, ready: int) -> None:
         # Before the loop: the holder is beside the socket, and the server
         # connects to it before the snapshot loads.
         pymux.socket_name = server["socket_name"]
-    except Exception:
-        give_up()
+    except Exception as error:
+        give_up(error)
 
     async def resumed() -> None:
         try:
@@ -270,10 +255,12 @@ def resume(path: str, ready: int) -> None:
             # A configuration file may make a window, and the snapshot's
             # sessions replace whatever it made.
             strays = list(pymux.panes_by_id.values())
+            # Only the masters it names: a copy fetched and not adopted
+            # would stay open for the life of this server.
             masters = {}
-            for program in await pymux.holding.programs():
-                masters[program["id"]] = await pymux.holding.master(program["id"])
-            listener = snapshot.load(pymux, path, snapshot.adopting(pymux, masters))
+            for program_id in snapshot.program_ids(path):
+                masters[program_id] = await pymux.holding.master(program_id)
+            listener = snapshot.load(pymux, path, masters)
             if listener is None:
                 raise snapshot.SnapshotError("the snapshot names no listening socket")
             # `pass_fds` made it inheritable, and nothing this server forks may get it.
@@ -281,8 +268,8 @@ def resume(path: str, ready: int) -> None:
             pymux.adopt_listener(listener)
             os.write(ready, READY)
             os.close(ready)
-        except Exception:
-            give_up()
+        except Exception as error:
+            give_up(error)
         # The old server ends now, and nothing reads a pane until here.
         for pane in strays:
             pane.process.kill()

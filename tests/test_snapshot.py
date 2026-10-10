@@ -444,7 +444,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                     program["id"]: await fresh.holding.master(program["id"])
                     for program in await fresh.holding.programs()
                 }
-                snapshot.load(fresh, first, snapshot.adopting(fresh, masters))
+                snapshot.load(fresh, first, masters)
                 snapshot.save(fresh, second)
                 await snapshot.start(fresh)
                 assert _jobs_of(fresh) == jobs
