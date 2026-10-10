@@ -17,6 +17,7 @@ import pytest
 from libpymux import CommandError, Pane, Server, Window, quote
 from libpymux.connection import CommandResult
 from libpymux.objects import _PANE_FIELDS, _SEPARATOR, _format_string, _rows
+from libpymux.protocol import Framer
 
 # ----------------------------------------------------------------------
 # A server that says what a test tells it to say.
@@ -383,3 +384,13 @@ def test_finding_pane_by_id(fake):
 )
 def test_quote(argument, expected):
     assert quote(argument) == expected
+
+
+def test_a_message_cut_across_reads_comes_out_whole_and_once():
+    "Every side of the wire reads through one `Framer`."
+    framer = Framer()
+
+    assert framer.feed(b'{"a"') == []
+    assert framer.feed(b": 1}\0{") == [b'{"a": 1}']
+    assert framer.feed(b"}\0\0x") == [b"{}", b""]
+    assert framer.feed(b"\0") == [b"x"]

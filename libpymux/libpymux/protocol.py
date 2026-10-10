@@ -31,10 +31,27 @@ from __future__ import annotations
 from enum import StrEnum
 
 __all__ = [
+    "END",
     "Field",
+    "Framer",
     "Mode",
     "Packet",
 ]
+
+#: The byte that ends one JSON message on the wire.
+END = b"\0"
+
+
+class Framer:
+    "The messages in a byte stream that `END` cuts up, each one once it is whole."
+
+    def __init__(self) -> None:
+        self._held = b""
+
+    def feed(self, data: bytes) -> list[bytes]:
+        "What `data` completed. The part of a message it began waits for the next feed."
+        *whole, self._held = (self._held + data).split(END)
+        return whole
 
 
 class Packet(StrEnum):

@@ -10,7 +10,7 @@ import time
 from select import select
 from typing import override
 
-from libpymux.protocol import Field, Packet
+from libpymux.protocol import Field, Framer, Packet
 from libpymux.sockets import servers_newest_first
 from prompt_toolkit.input.vt100 import raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output
@@ -85,7 +85,7 @@ class PosixClient(TerminalClient):
         #   "err": errors. (stderr)
         #   "exit": exit code of the command.
         exit_code = 0
-        data_buffer = b""
+        framer = Framer()
 
         while True:
             try:
@@ -96,11 +96,7 @@ class PosixClient(TerminalClient):
             if not data:
                 break  # Connection closed.
 
-            data_buffer += data
-            while b"\0" in data_buffer:
-                pos = data_buffer.index(b"\0")
-                packet_data, data_buffer = data_buffer[:pos], data_buffer[pos + 1 :]
-
+            for packet_data in framer.feed(data):
                 packet = json.loads(packet_data.decode("utf-8"))
 
                 if packet[Field.CMD] == Packet.OUT:
@@ -122,7 +118,7 @@ class PosixClient(TerminalClient):
         self._start_gui(detach_other_clients, color_depth)
 
         with raw_mode(sys.stdin.fileno()):
-            data_buffer = b""
+            framer = Framer()
 
             stdin_fd = sys.stdin.fileno()
 
@@ -152,16 +148,12 @@ class PosixClient(TerminalClient):
                             # `finally` puts the terminal back -- once,
                             # whatever ended the loop. Lillecarl/pymux#404.
                             if self.restart_wait is not None and self._wait_for_the_next_server(stdin_fd):
-                                data_buffer = b""
+                                framer = Framer()
                                 self._start_gui(detach_other_clients, color_depth)
                                 continue
                             return
-                        data_buffer += data
-
-                        while b"\0" in data_buffer:
-                            pos = data_buffer.index(b"\0")
-                            self._process(data_buffer[:pos])
-                            data_buffer = data_buffer[pos + 1 :]
+                        for packet in framer.feed(data):
+                            self._process(packet)
 
                     elif stdin_fd in r:
                         # Got user input. An ended stdin is the

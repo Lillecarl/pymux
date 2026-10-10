@@ -15,7 +15,7 @@ import shlex
 import socket
 from typing import List, NamedTuple, Optional, Sequence, Union
 
-from .protocol import Field, Packet
+from .protocol import END, Field, Framer, Packet
 
 __all__ = [
     "CommandError",
@@ -24,9 +24,6 @@ __all__ = [
     "ServerNotRunning",
     "quote",
 ]
-
-#: The byte that ends one JSON message on the wire.
-_END = b"\0"
 
 #: How much to read from the socket at a time.
 _CHUNK = 4096
@@ -156,7 +153,7 @@ class Connection:
 
     @staticmethod
     def _send(sock: socket.socket, packet: object) -> None:
-        sock.sendall(json.dumps(packet).encode("utf-8") + _END)
+        sock.sendall(json.dumps(packet).encode("utf-8") + END)
 
     @staticmethod
     def _read(sock: socket.socket) -> CommandResult:
@@ -164,7 +161,7 @@ class Connection:
         out: List[str] = []
         err: List[str] = []
         exit_code = 0
-        buffer = b""
+        framer = Framer()
 
         while True:
             try:
@@ -174,9 +171,7 @@ class Connection:
             if not data:
                 break
 
-            buffer += data
-            while _END in buffer:
-                raw, buffer = buffer.split(_END, 1)
+            for raw in framer.feed(data):
                 if not raw:
                     continue
                 packet = json.loads(raw.decode("utf-8"))

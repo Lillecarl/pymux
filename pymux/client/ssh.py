@@ -50,7 +50,7 @@ from typing import TYPE_CHECKING, NamedTuple, override
 from urllib.parse import urlparse
 
 import anyio
-from libpymux.protocol import Field, Packet
+from libpymux.protocol import Field, Framer, Packet
 from prompt_toolkit.input.vt100 import raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output
 
@@ -1026,7 +1026,7 @@ class SshClient(TerminalClient):
         `close()` both give end of file, and an aborted connection
         gives `ConnectionLost`. Lillecarl/pymux#256.
         """
-        held = b""
+        framer = Framer()
 
         while True:
             data = await reader.read(4096)
@@ -1034,9 +1034,7 @@ class SshClient(TerminalClient):
             if not data:
                 return
 
-            held += data
-            while b"\0" in held:
-                one, held = held.split(b"\0", 1)
+            for one in framer.feed(data):
                 yield json.loads(one.decode("utf-8"))
 
     async def _watch_size(self) -> None:

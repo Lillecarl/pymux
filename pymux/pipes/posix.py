@@ -11,6 +11,7 @@ from collections.abc import Callable
 from typing import override
 
 import anyio
+from libpymux.protocol import Framer
 from libpymux.sockets import nobody_answers, socket_directory
 
 from ..log import logger
@@ -260,7 +261,8 @@ class PosixSocketConnection(PipeConnection):
         # connection's write and never the loop (`write`).
         # Lillecarl/pymux#418.
         self.socket.setblocking(False)
-        self._recv_buffer = b""
+        self._framer = Framer()
+        self._ready: list[bytes] = []
         self._closed = False
 
         #: Bytes given to `write` and not yet taken by the kernel.
@@ -276,17 +278,9 @@ class PosixSocketConnection(PipeConnection):
         if self._closed:
             raise BrokenPipeError
 
-        # Read until we have a \0 in our buffer.
-        while b"\0" not in self._recv_buffer:
-            self._recv_buffer += await self._read_chunk()
-
-        # Split on the first separator.
-        pos = self._recv_buffer.index(b"\0")
-
-        packet = self._recv_buffer[:pos]
-        self._recv_buffer = self._recv_buffer[pos + 1 :]
-
-        return packet
+        while not self._ready:
+            self._ready.extend(self._framer.feed(await self._read_chunk()))
+        return self._ready.pop(0)
 
     async def _read_chunk(self) -> bytes:
         "Wait for this socket to say something, and take what it said."
