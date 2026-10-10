@@ -35,10 +35,8 @@ from prompt_toolkit.document import Document
 from prompt_toolkit.enums import EditingMode
 from prompt_toolkit.filters import Condition
 from prompt_toolkit.history import InMemoryHistory
-from prompt_toolkit.input.defaults import create_input
 from prompt_toolkit.key_binding.vi_state import InputMode
 from prompt_toolkit.layout.layout import Layout
-from prompt_toolkit.output.defaults import create_output
 from prompt_toolkit.styles import (
     BaseStyle,
     ConditionalStyleTransformation,
@@ -1070,11 +1068,6 @@ class Pymux:
 
         p = Pymux()
         p.run_integrated(color_depth)
-
-    Or, no client and no protocol at all:
-
-        p = Pymux()
-        p.run_standalone(color_depth)
     """
 
     #: What a hot upgrade does with each attribute; `pyte.keep` says.
@@ -1102,7 +1095,6 @@ class Pymux:
         "startup_errors": Keep.REBUILT,
         # An upgrade refuses a server that draws on its own terminal, so
         # the server that takes over is always on a socket.
-        "_runs_standalone": Keep.REBUILT,
         "_serves_one_terminal": Keep.REBUILT,
         "test_mode": Keep.SAVED,
         # What the server holds for every session.
@@ -1336,9 +1328,6 @@ class Pymux:
         self.original_cwd = os.getcwd()
 
         self.display_pane_numbers = False
-
-        #: List of clients.
-        self._runs_standalone = False
 
         #: True when this server draws on the one terminal it runs in.
         #: `pymux integrated` is that: a socket may still be bound, for
@@ -1961,9 +1950,9 @@ class Pymux:
         """
         What every route does before its loop turns.
 
-        Three of them start a server -- the socket, `integrated` and
-        `standalone` -- and each one takes the signal here. The work
-        that needs a loop is in `running()`.
+        Both start a server -- the socket and `integrated` -- and each
+        one takes the signal here. The work that needs a loop is in
+        `running()`.
         """
         introspect.answer_signal()
 
@@ -2623,8 +2612,7 @@ class Pymux:
             `attach-session -r`. Lillecarl/pymux#467.
 
             **No client is yes.** A key with no client behind it comes
-            from a test or from the standalone route, neither of which
-            has anybody to refuse.
+            from a test, which has nobody to refuse.
             """
             try:
                 return not self.get_client_state().read_only
@@ -4315,30 +4303,12 @@ exec pymux notify -u "$urgency" -- "$@"
         """
         Detach the client that belongs to this CLI.
 
-        **Standalone quits instead.** It puts the user interface
-        straight on the terminal, with no client and no protocol, so
-        there is no connection to close and nothing for the session to
-        live on after the person leaves. Detaching there wrote no
-        teardown at all: the screen drew again and the panes kept
-        running, and a key that does nothing teaches a person that the
-        key does not exist.
-
-        `ctrl+b d` is the gesture for leaving and standalone has no
-        other one, so it means quit here. `run_integrated` already
-        reads it that way, for the same reason, and one key that says
-        one thing on all three routes is worth more than the
-        difference between them. Lillecarl/pymux#160.
-
         **The client of this application, and not the current one.**
         This took an app and then read `get_app()`, so
         `attach-session -d` detached the person who typed it, once for
         each client it meant to take the session from, and left every
         one of them attached. Lillecarl/pymux#347.
         """
-        if self._runs_standalone:
-            self.stop()
-            return
-
         connection = self.connection_of(app)
         if connection:
             connection.detach_and_close(hang_up=hang_up)
@@ -4477,10 +4447,6 @@ exec pymux notify -u "$urgency" -- "$@"
         started and nothing else. Both halves of the protocol run, so
         this route proves what the socket route proves.
 
-        This is not `run_standalone`. Standalone has no client and no
-        protocol at all: it puts the user interface straight on the
-        terminal. This runs the real client against the real server.
-
         A socket is bound as well when one was asked for. Nothing of
         the user interface reads it. It is there so that
         `pymux -S <socket> <command>` and libpymux reach this server.
@@ -4562,43 +4528,6 @@ exec pymux notify -u "$urgency" -- "$@"
             # process that started this one hears about it.
             for client in attached:
                 client.hang_up_the_parent()
-
-    def run_standalone(self, color_depth):
-        """
-        Run pymux standalone, rather than using a client/server architecture.
-        This is mainly useful for debugging.
-        """
-        self._runs_standalone = True
-        self.server_starts()
-
-        async def run() -> None:
-            try:
-                async with self.running():
-                    # Inside the loop: making a client starts the first
-                    # window, and a pane is a process that a loop runs.
-                    client_state = self.add_client(
-                        input=create_input(),
-                        output=create_output(stdout=sys.stdout),
-                        color_depth=color_depth,
-                        connection=None,
-                    )
-                    # Under this client's application: the new pane is
-                    # focused where it is looked at.
-                    with set_app(client_state.app):
-                        await self.startup()
-
-                    # The same as for a client over a socket: an
-                    # exception in the event loop is logged, not turned
-                    # into a prompt that nothing can answer.
-                    await client_state.app.run_async(set_exception_handler=False)
-            finally:
-                # Inside the loop, for the reason `run_integrated`
-                # gives: a pane that still runs holds a `waitpid` in
-                # the executor, and the loop waits for that thread when
-                # it closes.
-                self.stop()
-
-        anyio.run(run)
 
     def add_client(
         self,

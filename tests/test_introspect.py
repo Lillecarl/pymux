@@ -284,10 +284,10 @@ async def test_option_tells_kernel(create_server):
 
 async def test_every_route_that_starts_create_server_takes_signal():
     """
-    Three routes start a server, and a person sending a signal does not
+    Two routes start a server, and a person sending a signal does not
     know which one this is.
     """
     source = inspect.getsource(Pymux)
 
-    assert source.count("self.server_starts()") == 3
+    assert source.count("self.server_starts()") == 2
     assert "introspect.answer_signal()" in inspect.getsource(Pymux.server_starts)

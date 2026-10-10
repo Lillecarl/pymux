@@ -1,20 +1,12 @@
 """
-What "detach-client" does on a route that has nothing to detach.
-
-`pymux standalone` puts the user interface straight on the terminal:
-no client, no protocol, no connection. `ctrl+b d` reached
-`Pymux.detach_client`, found no connection and did nothing at all. The
-screen drew again and the panes kept running, so the only way out was
-to end every pane or kill the process.
-
-Lillecarl/pymux#160.
+What "detach-client" does: it closes the client's connection, and the
+session goes on. Lillecarl/pymux#160.
 """
 
 from __future__ import annotations
 
 import io
 import sys
-from contextlib import asynccontextmanager
 
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
@@ -28,99 +20,8 @@ from pymux.main import Pymux
 ROWS, COLUMNS = 24, 80
 
 
-@asynccontextmanager
-async def create_standalone_session():
-    """
-    A `Pymux` set up the way `run_standalone` sets one up.
-
-    `run_standalone` itself is not called, because it ends in
-    `app.run()`, which does not return until the thing under test has
-    happened. Everything before that line is here.
-    """
-    pymux = Pymux()
-    pymux._runs_standalone = True
-    async with pymux.running():
-        await pymux.create_window("%s -c pass" % (sys.executable,))
-        output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS))
-        with create_pipe_input() as pipe:
-            state = pymux.add_client(
-                output=output,
-                input=pipe,
-                color_depth=ColorDepth.DEPTH_8_BIT,
-                connection=None,
-            )
-            # What `run_standalone` does after: the bindings and the
-            # window that attaching brings.
-            with set_app(state.app):
-                await pymux.startup()
-            try:
-                yield pymux, state
-            finally:
-                for window in list(pymux.arrangement.windows):
-                    for pane in list(window.panes):
-                        process = getattr(pane, "process", None)
-                        if process is not None and not process.is_terminated:
-                            process.kill()
-
-
-async def test_detach_ends_create_standalone_session():
-    async with create_standalone_session() as (pymux, state):
-        assert not pymux.done.is_set()
-
-        with set_app(state.app):
-            pymux.handle_command("detach-client")
-
-        assert pymux.done.is_set()
-
-
-async def test_detach_asks_every_pane_to_stop():
-    """
-    The panes were running for the session, and the session has gone.
-
-    It is also what lets the process end: a pane that is still running
-    holds a `waitpid` in the executor of the loop, and the interpreter
-    waits for that thread. Lillecarl/pymux#109 is the same finding on
-    the integrated route.
-
-    The ask is what is read, and not `is_terminated`. That property is
-    the backend saying it saw the end of the pty, which happens when
-    the loop next runs, so reading it here would be a race and not a
-    test.
-
-    **The spy still kills.** A stub that only counts leaves the pane
-    running, its `waitpid` holds a thread in the executor of the loop,
-    and `asyncio.run` never returns: the test hangs rather than fails,
-    which is the same trap in the other direction.
-    """
-    killed = []
-
-    async with create_standalone_session() as (pymux, state):
-        panes = list(pymux.panes_by_id.values())
-        assert panes
-        for pane in panes:
-            pane.process.kill = _spy_that_still_kills(pane, pane.process.kill, killed)
-
-        with set_app(state.app):
-            pymux.handle_command("detach-client")
-
-        assert killed == panes
-
-
-def _spy_that_still_kills(pane, kill, killed):
-    "Write the pane down, then do what the caller asked for."
-
-    def spy():
-        killed.append(pane)
-        kill()
-
-    return spy
-
-
 async def test_client_over_connection_still_detaches():
-    """
-    The other routes are untouched: a client with a connection has one
-    to close, and closing it is not the same as ending the session.
-    """
+    "A client has a connection to close, and closing it is not ending the session."
     detached = []
 
     class _Connection(Connection):

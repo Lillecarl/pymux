@@ -51,7 +51,7 @@ async def _ask_the_shell(pymux: Pymux, args: argparse.Namespace) -> None:
     # Captured and dropped. Only the status is read, and the output
     # would otherwise go to whatever the server's stdout is: /dev/null
     # under a daemon, and the person's own terminal in the integrated
-    # and standalone routes, where it draws over the frame. tmux sends
+    # route, where it draws over the frame. tmux sends
     # it to /dev/null for the same reason. Lillecarl/pymux#312.
     done = await anyio.run_process(args.shell_command, check=False)
 

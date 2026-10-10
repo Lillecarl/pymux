@@ -20,7 +20,7 @@ pymux - pure Python terminal multiplexer, with server-owned background jobs
 
 *pymux* is a terminal multiplexer in the shape of *tmux*(1): a server
 holds sessions, windows and panes, and clients attach to them or send
-them commands. Any word that is not a mode (*standalone*, *integrated*,
+them commands. Any word that is not a mode (*integrated*,
 *start-server*, *attach*, *list-sessions*, *ls*, *find*, *diagnose*,
 *web*) is a command for a running server, answered on stdout; *--help*
 lists the rest.

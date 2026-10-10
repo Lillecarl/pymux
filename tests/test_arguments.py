@@ -33,7 +33,7 @@ def test_no_arguments_is_no_mode_and_no_command():
     assert parse() == (None, None)
 
 
-@pytest.mark.parametrize("mode", [Mode.STANDALONE, Mode.INTEGRATED, Mode.START_SERVER])
+@pytest.mark.parametrize("mode", [Mode.INTEGRATED, Mode.START_SERVER])
 def test_mode_word_is_read_as_mode(mode):
     assert parse(mode) == (mode, None)
 

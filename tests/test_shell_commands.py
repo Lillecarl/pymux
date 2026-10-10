@@ -158,8 +158,8 @@ async def test_if_shell_takes_format_for_question():
 async def test_if_shell_keeps_the_question_output_off_the_terminal(capfd):
     """
     Only the status is read. The output used to go to the server's own
-    stdout, which is the person's terminal in the integrated and standalone
-    routes, and drew over the frame. Lillecarl/pymux#312.
+    stdout, which is the person's terminal in the integrated route, and
+    drew over the frame. Lillecarl/pymux#312.
     """
     async with create_session() as (pymux, state):
         await _run(pymux, state, "if-shell 'echo scribble; echo noise >&2' 'display yes'")

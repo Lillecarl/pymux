@@ -6,7 +6,7 @@ A server logs an exception and keeps going: the read loop of
 not end a session. That makes logging a normal path and not a crash
 path, and it decides where the messages may go.
 
-They may not go to the terminal. In `integrated` and in `standalone` the
+They may not go to the terminal. In `integrated` the
 server shares one terminal with the client that draws on it, so a
 traceback on `sys.stderr` lands on top of the frame. The socket route
 does not have the problem, because `daemonize` sends the stderr of the

@@ -3,15 +3,13 @@
 pymux: Pure Python terminal multiplexer.
 
 Usage:
-    pymux [options] [standalone|integrated|start-server|attach|list-sessions] [<command> ...]
+    pymux [options] [integrated|start-server|attach|list-sessions] [<command> ...]
 
 Running pymux without arguments starts a server (daemonized) and attaches
 a client to it. Any other command (e.g. ``split-window``) is sent to a
 running server, like tmux does.
 
 Modes:
-    standalone     : Run as a standalone process. (for debugging, detaching
-                     is not possible.)
     integrated     : Run a server and one client in this process. They talk
                      through queues, not through a socket, so the client
                      reaches the server this command started and nothing
@@ -79,7 +77,6 @@ class Mode(StrEnum):
     silent fall through.
     """
 
-    STANDALONE = "standalone"
     INTEGRATED = "integrated"
     START_SERVER = "start-server"
     ATTACH = "attach"
@@ -102,7 +99,7 @@ def _mode_of(word: str) -> Mode | None:
 
 #: The modes that take the command of the first pane after the mode
 #: word, rather than a pymux command for a running server.
-MODES_WITH_A_FIRST_PANE = (Mode.STANDALONE, Mode.INTEGRATED)
+MODES_WITH_A_FIRST_PANE = (Mode.INTEGRATED,)
 
 
 def _how_much_to_log(chosen: str | None) -> int:
@@ -392,7 +389,6 @@ def _completion_parser() -> argparse.ArgumentParser:
     # the options the command takes; what is left here is the starts
     # that run a server or a client, and `find`, which takes nothing.
     for mode in (
-        Mode.STANDALONE,
         Mode.INTEGRATED,
         Mode.START_SERVER,
         Mode.ATTACH,
@@ -476,10 +472,10 @@ def run() -> None:
     global _current_filename
     _current_filename = filename
 
-    # Where the log goes. Never to the terminal: in `integrated` and in
-    # `standalone` the server shares one with the client that draws on
-    # it, and a logger with no handler writes to `sys.stderr`, which is
-    # that terminal. `pymux/log.py` says the rest.
+    # Where the log goes. Never to the terminal: in `integrated` the
+    # server shares one with the client that draws on it, and a logger
+    # with no handler writes to `sys.stderr`, which is that terminal.
+    # `pymux/log.py` says the rest.
     #
     # `start-server` sets this up for itself below, after it has forked.
     if mode not in (Mode.START_SERVER, Mode.RESUME_SERVER):
@@ -493,14 +489,6 @@ def run() -> None:
         sys.exit(0)
 
     match mode:
-        case Mode.STANDALONE:
-            # When a command was given (e.g. 'pymux standalone htop'), run it in
-            # the first pane.
-            from prompt_toolkit.output import ColorDepth
-
-            mux = _new_pymux(source_file=filename, startup_command=command)
-            mux.run_standalone(color_depth=_color_depth(ansi_colors_only, true_color) or ColorDepth.DEPTH_8_BIT)
-
         case Mode.INTEGRATED:
             if socket_name_from_env:
                 _socket_from_env_warning()

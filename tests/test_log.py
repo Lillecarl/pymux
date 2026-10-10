@@ -2,7 +2,7 @@
 Where the log of a server goes.
 
 A server logs an exception and keeps going, so logging is a normal path
-here. In `integrated` and in `standalone` that server shares one
+here. In `integrated` that server shares one
 terminal with the client drawing on it, and a logger with no handler
 writes to `sys.stderr`, which is that terminal. One exception in a
 background task then paints its traceback over the frame.
