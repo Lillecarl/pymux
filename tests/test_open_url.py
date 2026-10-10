@@ -11,7 +11,6 @@ own at the bottom.
 from __future__ import annotations
 
 import base64
-import contextlib
 import json
 import os
 import sys
@@ -38,31 +37,6 @@ SIZE = Size(rows=24, columns=80)
 def opens(packets):
     "The open packets among everything the server wrote."
     return [json.loads(packet) for packet in packets if json.loads(packet).get("cmd") == "open"]
-
-
-@contextlib.contextmanager
-def create_environment(**values):
-    """
-    The environment with what is given set, and what is None gone.
-
-    The async tests cannot take the `monkeypatch` fixture: the loop
-    they run in is not pytest's. So they say what the environment holds
-    by hand.
-    """
-    saved = {name: os.environ.get(name) for name in values}
-    for name, value in values.items():
-        if value is None:
-            os.environ.pop(name, None)
-        else:
-            os.environ[name] = value
-    try:
-        yield
-    finally:
-        for name, value in saved.items():
-            if value is None:
-                os.environ.pop(name, None)
-            else:
-                os.environ[name] = value
 
 
 async def create_pane(pymux, state):
@@ -511,11 +485,11 @@ async def test_shim_rides_path_of_new_pane():
         pymux.open_url_shim = True
         pymux._ensure_open_url_shim()
 
-        with create_environment(PATH="/usr/bin", BROWSER=None):
-            pymux._shim_pane_environment()
+        environment = {"PATH": "/usr/bin"}
+        pymux._shim_pane_environment(environment)
 
-            assert os.environ["PATH"].startswith(pymux._open_url_shim_dir + os.pathsep)
-            assert os.environ["BROWSER"] == os.path.join(pymux._open_url_shim_dir, "pymux-open-url")
+        assert environment["PATH"].startswith(pymux._open_url_shim_dir + os.pathsep)
+        assert environment["BROWSER"] == os.path.join(pymux._open_url_shim_dir, "pymux-open-url")
 
 
 async def test_pane_that_starts_with_shim_finds_opener():
@@ -559,11 +533,10 @@ async def test_shim_leaves_pane_alone_when_it_is_off():
     async with in_this_process() as session:
         pymux = session.pymux
 
-        with create_environment(PATH="/usr/bin", BROWSER=None):
-            pymux._shim_pane_environment()
+        environment = {"PATH": "/usr/bin"}
+        pymux._shim_pane_environment(environment)
 
-            assert os.environ["PATH"] == "/usr/bin"
-            assert "BROWSER" not in os.environ
+        assert environment == {"PATH": "/usr/bin"}
 
 
 # ----------------------------------------------------------------------

@@ -2341,13 +2341,7 @@ class Pymux:
 
         path = start_directory or self._directory_to_start_in(window, session)
 
-        def before_exec():
-            "Called in the process fork (in the child process)."
-            # Go to this directory.
-            # No such file or directory.
-            with suppress(OSError):
-                os.chdir(path or self.original_cwd)
-
+        def environment_of_the_pane(environment: dict[str, str]) -> None:
             # A pane is not the terminal that the client attached
             # from: it answers the protocol queries for itself. ptterm
             # has already said so here, because it is the layer that
@@ -2358,28 +2352,26 @@ class Pymux:
             # The name is one of those. `default-terminal` is an option
             # a person can set, and this hook runs after ptterm's, so
             # what they set wins.
-            os.environ["TERM"] = self.default_terminal
+            environment["TERM"] = self.default_terminal
 
-            # Make sure to set the PYMUX environment variable.
             if self.socket_name:
-                os.environ["PYMUX"] = "%s,%i" % (self.socket_name, pane.pane_id)
+                environment["PYMUX"] = "%s,%i" % (self.socket_name, pane.pane_id)
 
             # The environment a `set-environment` filled. The global
             # scope lands first and the session's over it; a name
             # either unset takes itself out of the child's
             # environment, which is the one thing the child would
             # otherwise inherit from the server. Lillecarl/pymux#270.
-            merged = self.pane_environment()
-            for name, value in merged.items():
-                os.environ[name] = value
-            for name in {**self.global_environment, **self.session_environment}:
-                if name not in merged and name in os.environ:
-                    del os.environ[name]
+            # Merged onto the copy and not onto os.environ, which still
+            # holds what ptterm's edit above took out of the pane.
+            merged = self.pane_environment(environment)
+            environment.clear()
+            environment.update(merged)
 
             # The shims, when they are on, reach the opener and the
             # notifier of this session before anything else on the PATH
             # of the pane, and name the opener for what reads $BROWSER.
-            self._shim_pane_environment()
+            self._shim_pane_environment(environment)
 
         # `shlex.split` and not `str.split`: a command reaches this as
         # one string, and the quoting inside it is what says where one
@@ -2401,7 +2393,8 @@ class Pymux:
 
         pane = self._build_pane(
             command=command_list,
-            before_exec_func=before_exec,
+            environment=environment_of_the_pane,
+            directory=path or self.original_cwd,
             on_done=on_done,
             # A viewer never ends on its own: the job ending feeds an
             # exit line and the pane stays, so there is nothing to call
@@ -2465,7 +2458,8 @@ class Pymux:
         self,
         backend: Backend | None = None,
         command: list[str] | None = None,
-        before_exec_func: Callable[[], None] | None = None,
+        environment: Callable[[dict[str, str]], None] | None = None,
+        directory: str | None = None,
         on_done: Callable[[], None] | None = None,
         watch_end: bool = True,
     ) -> Pane:
@@ -2567,7 +2561,8 @@ class Pymux:
             may_resize=may_resize,
             may_type=may_type,
             takes_key_first=takes_key_first,
-            before_exec_func=before_exec_func,
+            environment=environment,
+            directory=directory,
             command=command,
             # The `history-limit` option, which said how far copy mode
             # could scroll and never reached the screen that holds the
@@ -3261,16 +3256,16 @@ exec pymux notify -u "$urgency" -- "$@"
             f.write(self.NOTIFY_SHIM_SCRIPT)
         os.chmod(script, 0o755)
 
-    def pane_environment(self) -> dict[str, str]:
+    def pane_environment(self, base: dict[str, str] | None = None) -> dict[str, str]:
         """
-        The environment a new pane runs under, merged: the server's
-        own, with what `set-environment -g` set and then what a plain
-        `set-environment` set over it. An unset takes the name out of
+        The environment a new pane runs under, merged: `base`, or the
+        server's own, with what `set-environment -g` set and then what
+        a plain `set-environment` set over it. An unset takes the name out of
         its scope only: a session unset of a name the global set
         falls through to the global value, and a name no scope says
         anything about leaves entirely. Lillecarl/pymux#270.
         """
-        merged = dict(os.environ)
+        merged = dict(os.environ if base is None else base)
         for name, value in self.global_environment.items():
             if value is None:
                 merged.pop(name, None)
@@ -3287,16 +3282,13 @@ exec pymux notify -u "$urgency" -- "$@"
                 merged[name] = value
         return merged
 
-    def _shim_pane_environment(self) -> None:
-        """
-        Put the shims on the PATH of a pane, and name the opener in
-        $BROWSER. Runs in the fork, before the program of the pane.
-        """
+    def _shim_pane_environment(self, environment: dict[str, str]) -> None:
+        "Put the shims on the PATH of a pane, and name the opener in $BROWSER."
         if self.open_url_shim and self._open_url_shim_dir:
-            os.environ["PATH"] = self._open_url_shim_dir + os.pathsep + os.environ["PATH"]
-            os.environ["BROWSER"] = os.path.join(self._open_url_shim_dir, "pymux-open-url")
+            environment["PATH"] = self._open_url_shim_dir + os.pathsep + environment["PATH"]
+            environment["BROWSER"] = os.path.join(self._open_url_shim_dir, "pymux-open-url")
         if self.notify_shim and self._notify_shim_dir:
-            os.environ["PATH"] = self._notify_shim_dir + os.pathsep + os.environ["PATH"]
+            environment["PATH"] = self._notify_shim_dir + os.pathsep + environment["PATH"]
 
     def forward_osc(self, pane, code: str, param: str) -> None:
         """

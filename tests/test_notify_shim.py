@@ -10,7 +10,6 @@ the session first. Only a pane that starts afterwards sees it.
 
 from __future__ import annotations
 
-import contextlib
 import os
 import stat
 import subprocess
@@ -19,31 +18,6 @@ from prompt_toolkit.application.current import set_app
 from session import create_session
 
 from pymux.main import Pymux
-
-
-@contextlib.contextmanager
-def create_environment(**values):
-    """
-    The environment with what is given set, and what is None gone.
-
-    The async tests cannot take the `monkeypatch` fixture: the loop
-    they run in is not pytest's. So they say what the environment holds
-    by hand.
-    """
-    saved = {name: os.environ.get(name) for name in values}
-    for name, value in values.items():
-        if value is None:
-            os.environ.pop(name, None)
-        else:
-            os.environ[name] = value
-    try:
-        yield
-    finally:
-        for name, value in saved.items():
-            if value is None:
-                os.environ.pop(name, None)
-            else:
-                os.environ[name] = value
 
 
 def test_shim_holds_notify_send_script():
@@ -67,19 +41,19 @@ def test_shim_rides_path_of_new_pane():
     pymux.notify_shim = True
     pymux._ensure_notify_shim()
 
-    with create_environment(PATH="/usr/bin"):
-        pymux._shim_pane_environment()
+    environment = {"PATH": "/usr/bin"}
+    pymux._shim_pane_environment(environment)
 
-        assert os.environ["PATH"].startswith(pymux._notify_shim_dir + os.pathsep)
+    assert environment["PATH"].startswith(pymux._notify_shim_dir + os.pathsep)
 
 
 def test_shim_leaves_pane_alone_when_it_is_off():
     pymux = Pymux()
 
-    with create_environment(PATH="/usr/bin"):
-        pymux._shim_pane_environment()
+    environment = {"PATH": "/usr/bin"}
+    pymux._shim_pane_environment(environment)
 
-        assert os.environ["PATH"] == "/usr/bin"
+    assert environment == {"PATH": "/usr/bin"}
 
 
 async def test_option_turns_shim_on_and_off():

@@ -78,6 +78,28 @@ async def test_merged_environment_is_server_over_scopes():
         assert merged.get("PYMUX_TEST_SCOPE") == "more" or "PYMUX_TEST_SCOPE" not in os.environ
 
 
+async def test_a_pane_starts_with_the_scopes_over_what_ptterm_prepared(monkeypatch):
+    """
+    The scopes merge onto the pane's copy, which ptterm has already
+    told it runs on a pyte screen. Merged onto the server's own
+    environment instead, they brought back the outer terminal's names.
+    Lillecarl/pymux#553.
+    """
+    monkeypatch.setenv("KITTY_WINDOW_ID", "1")
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("set-environment FOO bar")
+        pane = pymux.arrangement.get_active_window().panes[0]
+
+        spawn = pane.terminal.terminal_control.process.backend.spawn()
+
+        assert "KITTY_WINDOW_ID" not in spawn.environment
+        assert spawn.environment["TERM"] == pymux.default_terminal
+        assert spawn.environment["COLORTERM"] == "truecolor"
+        assert spawn.environment["FOO"] == "bar"
+        assert os.environ["KITTY_WINDOW_ID"] == "1"
+
+
 async def test_s_escapes_values_for_shell():
     async with create_session() as (pymux, state):
         with set_app(state.app):
