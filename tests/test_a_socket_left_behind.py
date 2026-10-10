@@ -72,7 +72,7 @@ def test_a_server_that_answers_keeps_its_name(tmp_path):
         with pytest.raises(OSError) as refused:
             bind_and_listen_on_posix_socket(str(path), lambda _connection: None)
 
-        assert refused.value.errno == 98  # EADDRINUSE
+        assert refused.value.errno == errno.EADDRINUSE
 
         # **The inode, and not a connect.** The file the first server
         # bound is still the file on that name: an unlink and a bind

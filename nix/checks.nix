@@ -437,6 +437,15 @@ let
     # passing in a checkout. Lillecarl/pymux#87.
     cp ${testSources}/pyproject.toml .
     chmod -R +w .
+    # macOS takes 104 bytes for a socket's path, and its build sandbox
+    # puts TMPDIR far enough down that a test's socket passes it. /tmp is
+    # short and writable there. Linux takes 108, and its TMPDIR is /build.
+    if [ "$(uname)" = Darwin ]; then
+      TMPDIR="$(mktemp -d /tmp/pymux.XXXXXX)"
+      export TMPDIR
+      # And pytest's own `pytest-of-<user>/pytest-0` below it goes too.
+      export PYTEST_ADDOPTS="--basetemp=$TMPDIR/t"
+    fi
     export HOME="$TMPDIR"
     export LANG=C.UTF-8
     export PYTHONDONTWRITEBYTECODE=1

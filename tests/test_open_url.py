@@ -442,12 +442,13 @@ def test_client_reports_nothing_when_browser_opened(monkeypatch):
     assert sent == []
 
 
-def test_machine_without_display_tries_no_browser(monkeypatch):
+def test_linux_machine_without_display_tries_no_browser(monkeypatch):
     asked = []
     sent = []
     client = TerminalClient()
     monkeypatch.setattr(client, "_send_packet", sent.append)
     monkeypatch.setattr(webbrowser, "open", asked.append)
+    monkeypatch.setattr("pymux.client.terminal.sys.platform", "linux")
     monkeypatch.delenv("DISPLAY", raising=False)
     monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
 
@@ -455,6 +456,21 @@ def test_machine_without_display_tries_no_browser(monkeypatch):
 
     assert asked == []  # A text browser in $BROWSER cannot run either.
     assert sent == [{"cmd": "open-failed", "data": URL}]
+
+
+def test_mac_tries_its_opener_with_no_display(monkeypatch):
+    "macOS opens through `open`, which needs neither variable."
+    asked = []
+    client = TerminalClient()
+    monkeypatch.setattr(client, "_send_packet", lambda packet: None)
+    monkeypatch.setattr(webbrowser, "open", lambda url: asked.append(url) or True)
+    monkeypatch.setattr("pymux.client.terminal.sys.platform", "darwin")
+    monkeypatch.delenv("DISPLAY", raising=False)
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+
+    client._process(json.dumps({"cmd": "open", "data": URL}).encode("utf-8"))
+
+    assert asked == [URL]
 
 
 # ----------------------------------------------------------------------

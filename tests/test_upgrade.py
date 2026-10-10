@@ -84,6 +84,12 @@ def _what_survives(sock) -> tuple[str, ...]:
     )
 
 
+#: Whether a process's parent, environment, fds and state can be read
+#: from /proc. Linux keeps them there; macOS keeps them behind libproc,
+#: and its run holds what the panes and their programs do instead.
+READS_PROC = sys.platform.startswith("linux")
+
+
 def _inheritable(pid: int) -> list[str]:
     """
     Every fd above 2 of `pid` that an exec would carry. The resumed
@@ -114,6 +120,13 @@ def _parent_of(pid: int) -> int:
 
 def _gone(pid: int) -> bool:
     "Whether `pid` has ended. A zombie its new parent has yet to reap has."
+    if not READS_PROC:
+        # No /proc to say "zombie"; launchd reaps an orphan at once.
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        return False
     try:
         with open("/proc/%d/stat" % pid) as f:
             return f.read().rsplit(")", 1)[1].split()[0] == "Z"
@@ -195,21 +208,25 @@ def test_an_upgrade_keeps_every_pane_and_its_program(server, tmp_path, new_build
     pid = _server_pid(server)
     if new_build == "same":
         # Another process serves, the new build, and the old one is gone.
-        assert pid != old and _gone(old)
-        with open("/proc/%d/cmdline" % pid, "rb") as f:
-            assert b"resume-server" in f.read().split(b"\0")
+        assert pid != old
+        if READS_PROC:
+            assert _gone(old)
+            with open("/proc/%d/cmdline" % pid, "rb") as f:
+                assert b"resume-server" in f.read().split(b"\0")
     else:
         # A new build that cannot take over leaves the old one serving.
         assert pid == old
     _answer(server, "split-window", "-d", "sleep 60")
     newest = max(int(one) for one in _answer(server, "list-panes", "-F", "#{pane_pid}").split())
-    # The holder forked it, and keeps it for the next server. It outlives
-    # every build, so it holds the build it runs from for nix's collector.
-    holder = _parent_of(newest)
-    assert holder != pid
-    assert _environment_of(holder).get("PYMUX_BUILD", "").startswith(sys.executable)
-    assert "PYMUX_BUILD" not in _environment_of(newest)
-    assert _inheritable(pid) == []
+    if READS_PROC:
+        # The holder forked it, and keeps it for the next server. It
+        # outlives every build, so it holds the build it runs from for
+        # nix's collector.
+        holder = _parent_of(newest)
+        assert holder != pid
+        assert _environment_of(holder).get("PYMUX_BUILD", "").startswith(sys.executable)
+        assert "PYMUX_BUILD" not in _environment_of(newest)
+        assert _inheritable(pid) == []
     numbers = _counted(server)
     assert numbers == list(range(1, LINES + 1))
     _shell_answers(server)

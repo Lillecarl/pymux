@@ -26,16 +26,26 @@ import os
 
 
 def what_is_open() -> list:
-    "Every pty this process holds, as the device each one names."
+    """
+    Every pty this process holds, as the terminal each one names.
+
+    `/dev/fd` and not `/proc/self/fd`, which is Linux's: a master names
+    its slave through `os.ptsname`, and a slave names itself.
+    """
     held = []
-    for name in os.listdir("/proc/self/fd"):
+    for name in os.listdir("/dev/fd"):
+        fd = int(name)
         try:
-            where = os.readlink("/proc/self/fd/" + name)
+            held.append(os.ptsname(fd))
+            continue
+        except OSError:
+            pass
+        try:
+            if os.isatty(fd):
+                held.append(os.ttyname(fd))
         except OSError:
             # The descriptor of the listing itself, already gone.
             continue
-        if where == "/dev/ptmx" or where.startswith("/dev/pts/"):
-            held.append(where)
     return held
 
 

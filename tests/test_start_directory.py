@@ -10,6 +10,7 @@ of a session. An explicit `-c` already won before this was asked.
 
 from __future__ import annotations
 
+import os
 import sys
 from types import SimpleNamespace
 
@@ -85,7 +86,9 @@ async def test_new_window_starts_in_reported_directory():
             return pane.screen.page.text(0, 23)
 
         await once(lambda: "CWD=" in page_text(), 5.0, "the pane never printed its directory")
-        assert "CWD=/tmp" in page_text()
+        # Resolved: on macOS /tmp is a link to /private/tmp, and a
+        # program's getcwd says where it really is.
+        assert "CWD=" + os.path.realpath("/tmp") in page_text()
 
 
 async def test_explicit_directory_wins_over_report():

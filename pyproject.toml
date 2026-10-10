@@ -86,8 +86,9 @@ test = [
     # The shared rig: the seats, the drivers, the budgets.
     "pyterm-pytest",
     # The wayland seat's keyboard holder runs under the python of the
-    # suite that starts it.
-    "pywayland",
+    # suite that starts it. Linux's alone: wayland is, and macOS runs the
+    # suites that need no seat.
+    "pywayland; sys_platform == 'linux'",
     # TEMPORARY for the Lillecarl/pymux#258 scratch measurement. Remove
     # with `tests/measure_wire_sizes.py` and the `wire` check.
     "msgpack",

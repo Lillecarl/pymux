@@ -29,6 +29,11 @@ from struct import pack
 
 import pytest
 
+#: The relay is the picture checks' alone, and they take a wayland
+#: compositor, which macOS has none of. There its fifo is never taken
+#: (seen on an aarch64-darwin builder), and nothing on macOS runs it.
+pytestmark = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="the picture relay runs on Linux alone")
+
 RELAY = os.path.join(os.path.dirname(__file__), "drive_in_terminal.py")
 
 #: Long enough for a program to start and answer on a loaded machine,
