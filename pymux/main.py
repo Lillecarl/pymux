@@ -553,6 +553,12 @@ class ClientState:
         # Draw the images of the panes right after rendering. (The text
         # is on the screen by then; kitty draws images over it.)
         def after_render(_):
+            # What this frame drew of the text that time moves, so that
+            # the next refresh wakes this client for a change it has not
+            # drawn, and not again for one it drew on its own.
+            with set_app(self.app):
+                self.last_time_text = self.layout_manager.what_time_moves()
+
             # A client that runs in the process that started pymux has
             # no connection, and there is nothing to draw images on.
             if self.connection is None:
