@@ -698,10 +698,18 @@ class Plan:
 
     """
 
-    def __init__(self, layers: dict[int, dict[Slot, Rect] | Iterable[tuple[Slot, Rect]]]) -> None:
+    def __init__(
+        self,
+        layers: dict[int, dict[Slot, Rect] | Iterable[tuple[Slot, Rect]]],
+        lines: Iterable[Line] = (),
+    ) -> None:
         #: One `Layer` for each plane, lowest number first, which is
         #: the order they paint in.
         self.layers: dict[int, Layer] = {number: Layer(rects) for number, rects in sorted(layers.items())}
+
+        #: The borders in the gaps the layout left. The walk that
+        #: leaves a gap emits its line, so the two cannot drift apart.
+        self.lines: tuple[Line, ...] = tuple(lines)
 
         planes = list(self.layers.values())
 

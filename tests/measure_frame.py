@@ -19,11 +19,11 @@ that to a budget. Here each pane is an empty `Window`, so what is left
 in the count is the layout, the chrome and prompt_toolkit's frame
 around them.
 
-Four numbers per shape:
+Three numbers per shape:
 
 - **measure**, one plan of the whole window. This is the arithmetic:
-  the tree walk, the shares, one `Slot` and one `Rect` per pane.
-- **chrome**, the lines that fill the gaps the plan left.
+  the tree walk, the shares, one `Slot` and one `Rect` per pane, and
+  the lines that fill the gaps between them.
 - **frame**, one `PlanContainer.write_to_screen`: measure, look at,
   paint the chrome, and write every pane at its rectangle.
 - **neighbours**, the four questions each title bar asks -- what is to
@@ -329,14 +329,12 @@ def measurements(include: str):
             window, panes = create_window(count, strip)
             room = room_for_panes(pymux, window)
             layout = layout_of(pymux, window)
-            plan = layout.measure(room)
 
             container = create_container(pymux, window, panes)
             with create_application(container):
                 create_frame(container, room)()
 
             take("%s (measure)" % shape, lambda la=layout, r=room: la.measure(r))
-            take("%s (chrome)" % shape, lambda la=layout, p=plan: la.chrome(p))
             take("%s (frame)" % shape, create_frame(container, room))
             take(
                 "%s (neighbours)" % shape,

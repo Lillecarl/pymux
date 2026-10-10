@@ -402,7 +402,7 @@ Two smaller rules that follow:
    direction key works before the first frame, and the pane named
    beside a stack is the one sharing most of the edge.
 3. **`PlanContainer`, and `Strip` draws through it.** **Landed**:
-   `pymux/plan_container.py`, `Strip.chrome`, `Strip.look_at`.
+   `pymux/plan_container.py`, `Plan.lines`, `Strip.look_at`.
    `ScrollableStrip` is deleted and `strip.py` draws nothing.
    The layout draws the borders; a pane knows nothing about them.
 4. **`Divided` emits a plan**, and every window draws through

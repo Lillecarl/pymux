@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from prompt_toolkit.data_structures import Point, Size
 
-from .plane import GROUND, Line, Pane, Plan, Rect, Slot, View
+from .plane import GROUND, Pane, Plan, Rect, Slot, View
 
 __all__ = ["Zoomed"]
 
@@ -60,15 +60,6 @@ class Zoomed:
     def measure(self, available: Size) -> Plan:
         "One slot, the size of the plane."
         return Plan({GROUND: {Slot(self.pane): Rect(x=0, y=0, width=available.columns, height=available.rows)}})
-
-    def chrome(self, plan: Plan) -> list[Line]:
-        """
-        Nothing.
-
-        A border fills a gap between two panes, and a zoomed pane has
-        no neighbour to be divided from.
-        """
-        return []
 
     def look_at(self, plan: Plan, view: View, focus: Pane | None) -> Point:
         """

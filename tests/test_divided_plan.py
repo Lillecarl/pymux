@@ -153,8 +153,7 @@ def test_same_window_measures_same_twice():
 
 
 def lines_of(window, size=SIZE, gaps=Gaps()):
-    layout = Divided(window, gaps)
-    return layout.chrome(layout.measure(size))
+    return Divided(window, gaps).measure(size).lines
 
 
 def test_border_fills_gap_between_two_panes():

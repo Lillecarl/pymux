@@ -59,12 +59,6 @@ class Divided:
         self.window = window
         self._gaps = gaps
 
-        #: The lines of the last `measure`, which `chrome` hands back.
-        #: They come out of the same walk, because a gap and the line
-        #: in it are the same fact and working it out twice is how the
-        #: two drift apart.
-        self._lines: list[Line] = []
-
     @property
     def gaps(self) -> Gaps:
         """
@@ -97,6 +91,12 @@ class Divided:
         children in the order they sit in, so the panes come out the
         way `Window.panes` lists them and a person reads them.
         Lillecarl/pymux#210.
+
+        A border runs the whole way across the split that left its
+        gap, so a border between two columns stops where the split
+        holding them stops. A horizontal one is covered wherever the
+        bars above and below a gap are drawn, and seen when they are
+        off.
         """
         rects: list[tuple] = []
         lines: list[Line] = []
@@ -109,30 +109,7 @@ class Divided:
             lines,
         )
 
-        self._lines = lines
-        return Plan({GROUND: rects})
-
-    def chrome(self, plan: Plan) -> list[Line]:
-        """
-        The lines this layout draws, in the gaps it left.
-
-        **A pane knows nothing about borders**, so the layout that left
-        the gap is what fills it. Carl: "individual panes should not be
-        aware of borders ... the layout is responsible for drawing the
-        borders either way."
-
-        A line runs the whole way across the split that left the gap,
-        which is what the padding of a `VSplit` did when prompt_toolkit
-        divided the window. So a border between two columns stops where
-        the split holding them stops, and the border of the split
-        outside it carries on.
-
-        The horizontal ones are covered wherever a pane draws a bar
-        above it and the pane over it draws one below, which is what
-        the second row of that gap is for. They are drawn anyway, and
-        seen only when the bars are off.
-        """
-        return self._lines
+        return Plan({GROUND: rects}, lines)
 
     def look_at(self, plan: Plan, view: View, focus: Pane | None) -> Point:
         """

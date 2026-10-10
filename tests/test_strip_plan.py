@@ -224,8 +224,7 @@ def test_pane_beside_stack_is_one_sharing_most_of_its_edge():
 
 
 def lines_of(window, size=SIZE, gaps=Gaps()):
-    strip = Strip(window, gaps)
-    return strip.chrome(strip.measure(size))
+    return Strip(window, gaps).measure(size).lines
 
 
 def test_every_column_has_line_down_its_right():
@@ -266,6 +265,27 @@ def test_line_across_stack_grows_with_gap():
     across = [line for line in lines_of(window, gaps=Gaps(between_panes=2)) if line.char == BORDER_HORIZONTAL]
 
     assert across[0].rect.height == 2
+
+
+def test_column_split_sideways_has_line_between_its_panes():
+    """
+    A divided window that becomes a strip is its first column, so a
+    column can hold panes side by side. The line between them stops
+    where their split stops, and does not run on across the pane below.
+    """
+    window = Window()
+    top, bottom, beside = create_pane("top"), create_pane("bottom"), create_pane("beside")
+    window.add_pane(top)
+    window.add_pane(bottom)
+    window.active_pane = top
+    window.add_pane(beside, vsplit=True)
+    window.strip = True
+
+    plan = create_plan(window)
+    (between,) = [line.rect for line in plan.lines if line.rect.x == where(plan, top).right]
+
+    assert (between.y, between.height) == (where(plan, top).y, where(plan, top).height)
+    assert not between.overlaps(where(plan, bottom))
 
 
 def test_row_of_lone_panes_has_no_line_across_it():

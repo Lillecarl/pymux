@@ -191,19 +191,9 @@ def test_view_moves_down_as_well_as_sideways():
 # The lines the layout puts in its gaps.
 
 
-class _WithChrome(_Fixed):
-    "A layout that draws something in the gap it left."
-
-    def __init__(self, plan, lines, offset=Point(x=0, y=0)):
-        super().__init__(plan, offset)
-        self.lines = lines
-
-    def chrome(self, plan):
-        return self.lines
-
-
 def drawn_with_chrome(plan, containers, lines, visible, rows=HEIGHT, row=0):
-    container = PlanContainer(_WithChrome(plan, lines), containers)
+    lined = Plan({number: layer.rects for number, layer in plan.layers.items()}, lines)
+    container = PlanContainer(_Fixed(lined), containers)
 
     with create_pipe_input() as pipe:
         app = Application(layout=Layout(container), input=pipe, output=DummyOutput())
@@ -248,8 +238,7 @@ def test_line_outside_view_is_not_drawn_on_it():
     assert drawn_with_chrome(plan, containers, [line], visible=4) == "aaaa"
 
 
-def test_layout_with_no_chrome_draws_none():
-    "A layout need not have lines. `_Fixed` has no `chrome` at all."
+def test_plan_with_no_lines_draws_none():
     plan, containers = create_row([4, 4], gap=1)
 
     assert drawn(plan, containers, visible=9) == "aaaa bbbb"

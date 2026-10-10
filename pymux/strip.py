@@ -8,8 +8,8 @@ width, the row grows past the edge of the screen, and the view scrolls
 to the pane a person is on.
 
 **This file says where the panes are, and nothing draws here.**
-`Strip.measure` hands over a plan, `Strip.chrome` says what fills the
-gaps it left, and `Strip.look_at` says where the view goes.
+`Strip.measure` hands over a plan with the lines in its gaps, and
+`Strip.look_at` says where the view goes.
 `PlanContainer` draws all three. Lillecarl/pymux#217.
 
 **The row is drawn straight onto the real screen, at a negative
@@ -56,8 +56,8 @@ from collections.abc import Callable
 from prompt_toolkit.data_structures import Point, Size
 
 from . import arrangement
-from .plane import GROUND, Line, Pane, Plan, Rect, Side, Slot, View
-from .tiling import BORDER_HORIZONTAL, BORDER_VERTICAL, Gaps, lay_out
+from .plane import GROUND, Line, Pane, Plan, Rect, Slot, View
+from .tiling import BORDER_VERTICAL, Gaps, lay_out
 
 __all__ = ["Strip"]
 
@@ -123,8 +123,15 @@ class Strip:
         is: the plane is unbounded, so a strip wider than the view is
         not a special case here. A view is what is bounded, and that
         comes later.
+
+        Each column owns the line down its right, paid for out of its
+        own share (Lillecarl/pymux#206), and the walk inside a column
+        draws the lines across its gaps.
         """
         rects: list[tuple[Slot, Rect]] = []
+        lines: list[Line] = []
+        gap = self.gaps.between_columns
+        rights = []
         x = 0
 
         for column in self.window.root:
@@ -134,67 +141,21 @@ class Strip:
                 Rect(x=x, y=0, width=width, height=available.rows),
                 self.gaps,
                 rects,
+                lines,
             )
-            x += width + self.gaps.between_columns
+            rights.append(x + width)
+            x += width + gap
+
+        # Every line down a column runs the height of the tallest one,
+        # because a stack of more panes than rows runs past the bottom.
+        height = max((rect.bottom for _, rect in rects), default=0)
+        lines.extend(Line(Rect(x=right, y=0, width=gap, height=height), BORDER_VERTICAL) for right in rights)
 
         # Insertion order is reading order here, because the columns go
         # on left to right and a column's panes go on top to bottom.
         # Decision 9: a strip numbers its panes the way a person reads
         # them. Lillecarl/pymux#210.
-        return Plan({GROUND: rects})
-
-    def chrome(self, plan: Plan) -> list[Line]:
-        """
-        The lines this strip draws, in the gaps it left.
-
-        **A pane knows nothing about borders**, so the layout that left
-        the gap is what fills it. A vertical line runs down the right
-        of every column, the one the column owns and paid for out of
-        its own share (Lillecarl/pymux#206), and a horizontal one runs
-        across every gap inside a column.
-
-        The horizontal ones are covered wherever a pane draws a bar
-        above it and the pane over it draws one below, which is what
-        the second row of the gap is for. They are drawn anyway, and
-        seen only when the bars are off.
-        """
-        lines = []
-        box = plan.bounds
-
-        # One line down the right of each column, the whole height of
-        # the row. A column is a stack of slots that share an edge, so
-        # the columns are the edges the slots share.
-        for right in dict.fromkeys(rect.right for rect in plan.rects.values()):
-            lines.append(
-                Line(
-                    Rect(
-                        x=right,
-                        y=box.y,
-                        width=self.gaps.between_columns,
-                        height=box.height,
-                    ),
-                    BORDER_VERTICAL,
-                )
-            )
-
-        for slot, rect in plan.rects.items():
-            below = plan.neighbour(slot, Side.BELOW)
-            if below is None:
-                continue
-
-            lines.append(
-                Line(
-                    Rect(
-                        x=rect.x,
-                        y=rect.bottom,
-                        width=rect.width,
-                        height=plan.rects[below].y - rect.bottom,
-                    ),
-                    BORDER_HORIZONTAL,
-                )
-            )
-
-        return lines
+        return Plan({GROUND: rects}, lines)
 
     def look_at(self, plan: Plan, view: View, focus: Pane | None) -> Point:
         """

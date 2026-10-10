@@ -49,7 +49,7 @@ from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Char, Screen, WritePosition
 
-from .plane import Pane, Plan, Rect, View
+from .plane import Line, Pane, Plan, Rect, View
 
 __all__ = ["PlanContainer"]
 
@@ -169,7 +169,7 @@ class PlanContainer(Container):
         shown = self._glide()
         view = self.view.shown_rect
 
-        self._draw_chrome(screen, write_position, parent_style, view)
+        self._draw_lines(self.plan.lines, screen, write_position, parent_style, view)
 
         # **Told before culled, and over every slot.** A pane under a
         # higher plane still has a pty and a size it comes back to, so
@@ -229,15 +229,16 @@ class PlanContainer(Container):
                 z_index,
             )
 
-    def _draw_chrome(
+    def _draw_lines(
         self,
+        lines: tuple[Line, ...],
         screen: Screen,
         write_position: WritePosition,
         parent_style: str,
         view: Rect,
     ) -> None:
         """
-        Fill the gaps the layout left, with what it says goes there.
+        Fill the gaps the layout left, with the lines of its plan.
 
         **A pane knows nothing about borders**, so this is where they
         are drawn, before the panes: a pane draws over its own
@@ -250,14 +251,10 @@ class PlanContainer(Container):
         strip draws one down the right of every column, and the columns
         it has scrolled past are most of them. Lillecarl/pymux#224.
         """
-        chrome = getattr(self.layout, "chrome", None)
-        if chrome is None or self.plan is None:
-            return
-
         style = (parent_style + " class:border").strip()
         measure = screen.max_column_index
 
-        for line in chrome(self.plan):
+        for line in lines:
             if not line.rect.overlaps(view):
                 continue
 
