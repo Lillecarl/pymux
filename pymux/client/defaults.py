@@ -15,16 +15,6 @@ def is_ssh_url(name: str | None) -> bool:
     return bool(name) and str(name).startswith(SCHEME)
 
 
-def _windows() -> bool:
-    # The import is here and not at the top of the module, so that
-    # importing pymux.client costs nothing: every entry point imports
-    # this package, and the toolkit is the attach path's to carry.
-    # Lillecarl/pymux#392.
-    from prompt_toolkit.utils import is_windows
-
-    return is_windows()
-
-
 def create_client(socket_name):
     # A machine, and not a path on this one. The import is here so that
     # a server never loads asyncssh: only a client that was given an
@@ -34,20 +24,12 @@ def create_client(socket_name):
 
         return SshClient(socket_name)
 
-    if _windows():
-        from .windows import WindowsClient
-
-        return WindowsClient(socket_name)
     from .posix import PosixClient
 
     return PosixClient(socket_name)
 
 
 def list_clients():
-    if _windows():
-        from .windows import list_clients
-
-        return list_clients()
     from .posix import list_clients
 
     return list_clients()

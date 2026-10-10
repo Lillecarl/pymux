@@ -132,14 +132,6 @@ def get_default_shell():
     """
     return the path to the default shell for the current user.
     """
-    # The import is here and not at the top of the module, so that
-    # importing pymux.utils costs nothing: every entry point imports
-    # this module, and only a Windows machine needs the toolkit to
-    # say so. Lillecarl/pymux#392.
-    from prompt_toolkit.utils import is_windows
-
-    if is_windows():
-        return "cmd.exe"
     import getpass
     import pwd
 

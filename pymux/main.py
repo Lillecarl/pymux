@@ -104,7 +104,6 @@ from .utils import get_default_shell, keys_are_vi
 
 if TYPE_CHECKING:
     from .pipes.posix import PosixSocketListener
-    from .pipes.win32_server import Win32PipeListener
 
 __all__ = [
     "Pymux",
@@ -1451,7 +1450,7 @@ class Pymux:
         self.socket_name: str | None = None
         #: The bound socket that waits for clients, once
         #: `listen_on_socket` made one. `running()` serves it.
-        self.listener: PosixSocketListener | Win32PipeListener | None = None
+        self.listener: PosixSocketListener | None = None
 
         # Key bindings manager.
         self.key_bindings_manager = PymuxKeyBindings(self)

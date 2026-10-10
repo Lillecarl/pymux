@@ -549,6 +549,6 @@ async def test_client_that_could_not_open_says_so_in_its_status_line():
         state, _ = await session.attach("only", SIZE)
         connection = state.connection
 
-        connection._process(json.dumps({"cmd": "open-failed", "data": URL}))
+        connection._process(json.dumps({"cmd": "open-failed", "data": URL}).encode("utf-8"))
 
         assert state.message == "Could not open %s in a browser on this machine." % URL

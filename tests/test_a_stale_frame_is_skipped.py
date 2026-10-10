@@ -50,6 +50,6 @@ async def test_input_from_the_client_moves_the_tick() -> None:
         connection = ServerConnection.__new__(ServerConnection)
         connection._pipeinput = newcomer
         connection.client_state = state
-        connection._process(json.dumps({Field.CMD: Packet.IN, Field.DATA: "x"}))
+        connection._process(json.dumps({Field.CMD: Packet.IN, Field.DATA: "x"}).encode("utf-8"))
         assert newcomer.sent == ["x"]
         assert state.should_skip_render()

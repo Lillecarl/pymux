@@ -1,11 +1,9 @@
 """
-Platform specific (Windows+posix) implementations for inter process
-communication through pipes between the Pymux server and clients.
+Inter process communication through pipes between the Pymux server and
+clients: a unix socket, or a pair of queues in one process.
 """
 
 from __future__ import annotations
-
-from prompt_toolkit.utils import is_windows
 
 from .base import BrokenPipeError, PipeConnection
 from .memory import MemoryConnection, connect_in_memory
@@ -34,10 +32,6 @@ def bind_and_listen_on_socket(socket_name, accept_callback):
     :param accept_callback: Callback is called with a `PipeConnection` as
         argument.
     """
-    if is_windows():
-        from .win32_server import bind_and_listen_on_win32_socket
-
-        return bind_and_listen_on_win32_socket(socket_name, accept_callback)
     from .posix import bind_and_listen_on_posix_socket
 
     return bind_and_listen_on_posix_socket(socket_name, accept_callback)

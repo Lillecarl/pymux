@@ -593,13 +593,11 @@ class ServerConnection:
         """
         Process packet received from client.
         """
-        # Posix pipe returns bytes, win32 returns str. Normalize to str.
-        if isinstance(data, (bytes, bytearray)):
-            try:
-                data = data.decode("utf-8")
-            except Exception:
-                logger.warning("Received invalid UTF-8 from client. Ignoring.")
-                return
+        try:
+            data = data.decode("utf-8")
+        except UnicodeDecodeError:
+            logger.warning("Received invalid UTF-8 from client. Ignoring.")
+            return
         try:
             packet = json.loads(data)
         except ValueError:

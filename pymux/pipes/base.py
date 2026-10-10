@@ -9,20 +9,14 @@ __all__ = [
 
 
 class PipeConnection(ABC):
-    """
-    A single active Win32 pipe connection on the server side.
-
-    - Win32PipeConnection
-    """
+    "One connection between a server and a client: a unix socket, or queues in one process."
 
     @abstractmethod
-    async def read(self) -> bytes | str:
+    async def read(self) -> bytes:
         """
         Read a single message from the pipe.
 
-        A unix socket and an in-process pipe give bytes; a Win32 pipe
-        hands back the text its reader decoded. This can raise
-        BrokenPipeError.
+        This can raise BrokenPipeError.
         """
 
     @abstractmethod
