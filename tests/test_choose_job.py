@@ -17,6 +17,7 @@ from prompt_toolkit.application.current import set_app
 from session import create_session, once
 
 from pymux.commands import call_command_handler, handle_command
+from pymux.enums import Chooser
 from pymux.jobs import JobFeed
 from pymux.main import Pymux
 
@@ -55,7 +56,7 @@ async def test_the_picker_lists_newest_first(pymux_state):
     await _run_answering(pymux, state, "run -w echo second-job")
     await _run(pymux, state, "choose-job")
 
-    assert state.choose_job
+    assert state.chooser is Chooser.JOB
     matches = state.layout_manager.chooser_matches()
     assert [job.command for job in matches] == ["echo second-job", "echo first-job"]
 
@@ -88,7 +89,7 @@ async def test_enter_shows_the_job_in_the_overlay(pymux_state):
         5.0,
         "the overlay the key opened never arrived",
     )
-    assert not state.choose_job
+    assert state.chooser is not Chooser.JOB
     overlay = pymux.current_session.overlay_pane
     assert overlay is not None
     assert isinstance(overlay.process, JobFeed)
@@ -134,7 +135,7 @@ async def test_o_opens_the_job_as_a_pane(pymux_state):
         5.0,
         "the window the key opened never arrived",
     )
-    assert not state.choose_job
+    assert state.chooser is not Chooser.JOB
     opened = [window for window in _windows(pymux) if window not in before]
     assert len(opened) == 1
     viewer = opened[0].active_pane
@@ -157,7 +158,7 @@ async def test_t_runs_the_command_again(pymux_state):
         5.0,
         "the window the key opened never arrived",
     )
-    assert not state.choose_job
+    assert state.chooser is not Chooser.JOB
     opened = [window for window in _windows(pymux) if window not in before]
     assert len(opened) == 1
     taken = opened[0].active_pane

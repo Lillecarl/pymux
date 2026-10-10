@@ -12,13 +12,15 @@ from __future__ import annotations
 from prompt_toolkit.application.current import set_app
 from session import create_session
 
+from pymux.enums import Chooser
+
 
 async def test_options_list_with_their_values():
     async with create_session() as (pymux, state):
         with set_app(state.app):
             pymux.handle_command("customize-mode")
 
-            assert state.choose_options
+            assert state.chooser is Chooser.OPTIONS
             rows = state.layout_manager._choose_options_tokens()
             text = "".join(t for _s, t, *_ in rows)
             assert "status-interval" in text
@@ -45,7 +47,7 @@ async def test_taking_row_asks_for_value():
             state.choose_window_index = 0
             state.layout_manager.choose_pointed_option()
 
-        assert not state.choose_options
+        assert state.chooser is not Chooser.OPTIONS
         assert state.prompt_command.startswith("set-option ")
         assert state.prompt_command.endswith(" %")
 

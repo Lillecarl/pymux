@@ -15,6 +15,7 @@ from prompt_toolkit.application.current import set_app
 from session import create_session
 
 from pymux.commands import handle_command
+from pymux.enums import Chooser
 from pymux.main import Pymux
 from pymux.notifications import NotificationCenter
 
@@ -135,7 +136,7 @@ async def test_hub_lists_newest_first():
             pymux.handle_command("notify Second Two")
             pymux.handle_command("choose-notifications")
 
-        assert state.choose_notifications
+        assert state.chooser is Chooser.NOTIFICATIONS
         rows = state.layout_manager._choose_notification_tokens()
         assert len(rows) == 2
         assert "Second" in rows[0][1]
@@ -182,7 +183,7 @@ async def test_enter_from_hub_jumps_to_the_pane():
         assert pymux.current_session.arrangement.get_active_window() is first
         assert first.active_pane is not None
         assert first.active_pane.pane_id == pane_id
-        assert not state.choose_notifications
+        assert state.chooser is not Chooser.NOTIFICATIONS
 
 
 async def test_enter_on_a_gone_pane_says_so():
@@ -194,4 +195,4 @@ async def test_enter_on_a_gone_pane_says_so():
         state.layout_manager.choose_pointed_notification()
 
         assert state.message == "The pane the notification came from is gone."
-        assert not state.choose_notifications
+        assert state.chooser is not Chooser.NOTIFICATIONS

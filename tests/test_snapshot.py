@@ -25,7 +25,7 @@ from test_every_attribute_has_a_fate import declared, live_objects
 from pymux import snapshot
 from pymux.arrangement import LayoutTypes
 from pymux.commands.wait_for import WaitChannel
-from pymux.enums import WindowSize
+from pymux.enums import Chooser, WindowSize
 from pymux.main import Pymux
 from pymux.notifications import Urgency
 
@@ -487,7 +487,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                     assert back.connection.created == 1000.5
                     # What it was in the middle of, and the prompt holds the keyboard.
                     assert (back.has_prefix, back.key_tables, back.confirm_text) == (True, ["resize"], "Kill the pane?")
-                    assert back.choose_window and back.choose_window_filter.text == "sl"
+                    assert back.chooser is Chooser.WINDOW and back.choose_window_filter.text == "sl"
                     assert back.chooser_return_to == (back.session, elsewhere)
                     assert (back.prompt_command, back.prompt_buffer.text) == ("rename-window '%%'", "half typ")
                     assert back.app.layout.has_focus(back.prompt_buffer)

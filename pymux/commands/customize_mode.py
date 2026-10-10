@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandParser, add_command
+from pymux.enums import Chooser
 
 
 def customize_mode(pymux: Pymux, args: argparse.Namespace) -> None:
@@ -26,7 +27,7 @@ def customize_mode(pymux: Pymux, args: argparse.Namespace) -> None:
     except ValueError:
         return  # A command from the command line: nobody to show it to.
 
-    state.layout_manager.display_options_chooser()
+    state.layout_manager.display_box_chooser(Chooser.OPTIONS)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

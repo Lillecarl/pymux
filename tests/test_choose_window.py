@@ -35,6 +35,7 @@ from pyte.streams import Stream
 from session import create_session
 
 from pymux.commands import handle_command
+from pymux.enums import Chooser
 
 #: prompt_toolkit keeps the keys it can name as `Keys` members and
 #: the printable ones as themselves.
@@ -256,7 +257,7 @@ async def test_escape_goes_back_to_the_window_it_started_on():
 
         fire(state, "escape")
 
-        assert not state.choose_window
+        assert state.chooser is not Chooser.WINDOW
         assert here(pymux, state) is started_on
 
 
@@ -270,7 +271,7 @@ async def test_q_goes_back_as_well():
         fire(state, "h")
         fire(state, "q")
 
-        assert not state.choose_window
+        assert state.chooser is not Chooser.WINDOW
         assert here(pymux, state) is started_on
 
 
@@ -284,7 +285,7 @@ async def test_enter_keeps_the_window_the_point_is_on():
         chosen = here(pymux, state)
         fire(state, "enter")
 
-        assert not state.choose_window
+        assert state.chooser is not Chooser.WINDOW
         assert here(pymux, state) is chosen
 
 
@@ -335,7 +336,7 @@ async def test_enter_from_search_takes_the_first_match():
 
         fire(state, "enter")
 
-        assert not state.choose_window
+        assert state.chooser is not Chooser.WINDOW
         assert here(pymux, state).name == "needle"
 
 
@@ -362,7 +363,7 @@ async def test_escape_in_the_search_keeps_the_chooser():
 
         fire(state, "escape")
 
-        assert state.choose_window, "the search took the chooser with it"
+        assert state.chooser is Chooser.WINDOW, "the search took the chooser with it"
         assert state.choose_window_filter.text == ""
 
 
@@ -509,7 +510,7 @@ async def test_enter_from_a_key_press_keeps_the_window():
         type_bytes(state, "h")
         press(state, "enter")
 
-        assert not state.choose_window
+        assert state.chooser is not Chooser.WINDOW
         assert here(pymux, state) is first
 
 
@@ -531,7 +532,7 @@ async def test_escape_from_a_key_press_goes_back():
 
         press(state, "escape")
 
-        assert not state.choose_window
+        assert state.chooser is not Chooser.WINDOW
         assert here(pymux, state) is started_on
 
 
@@ -549,7 +550,7 @@ async def test_escape_in_the_search_from_a_key_press_keeps_the_chooser():
 
         press(state, "escape")
 
-        assert state.choose_window, "the search took the chooser with it"
+        assert state.chooser is Chooser.WINDOW, "the search took the chooser with it"
         assert state.choose_window_filter.text == ""
         with set_app(state.app):
             assert state.app.layout.has_focus(state.layout_manager.chooser_rows_control()), (
@@ -581,7 +582,7 @@ async def test_click_on_an_entry_takes_its_window():
         with set_app(state.app):
             assert handler(_Click()) is None
 
-        assert not state.choose_window
+        assert state.chooser is not Chooser.WINDOW
         assert here(pymux, state) is pymux.arrangement.windows[0]
 
 
@@ -596,7 +597,7 @@ async def test_template_runs_on_chosen_window_and_leaves_the_client():
         chosen = here(pymux, state)
         fire(state, "enter")
 
-        assert not state.choose_window
+        assert state.chooser is not Chooser.WINDOW
         assert chosen not in pymux.arrangement.windows
         # The command is what was asked for. Being moved was not.
         assert here(pymux, state) is started_on

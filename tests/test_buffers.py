@@ -14,12 +14,14 @@ import argparse
 
 import pytest
 from prompt_toolkit.application.current import set_app
+from prompt_toolkit.layout.containers import ConditionalContainer, DynamicContainer
 from session import create_session
 
 from pymux.commands import CommandException
 from pymux.commands.delete_buffer import delete_buffer
 from pymux.commands.save_buffer import save_buffer
 from pymux.commands.show_buffer import show_buffer
+from pymux.enums import Chooser
 
 
 async def test_set_buffer_without_name_fills_session_buffer():
@@ -120,7 +122,7 @@ async def test_buffer_chooser_opens_and_lists_buffers():
             pymux.handle_command("set-buffer -b b hey")
             pymux.handle_command("choose-buffer")
 
-        assert state.choose_buffer
+        assert state.chooser is Chooser.BUFFER
         rows = state.layout_manager._choose_buffer_tokens()
         assert len(rows) == 2
         assert "a" in rows[0][1] and "5" in rows[0][1]
@@ -156,7 +158,7 @@ async def test_enter_from_buffer_chooser_fills_session_buffer():
 
         state.layout_manager.choose_pointed_buffer()
 
-        assert not state.choose_buffer
+        assert state.chooser is not Chooser.BUFFER
         assert pymux.clipboard.get_data().text == "hello"
 
 
@@ -181,5 +183,35 @@ async def test_choosers_are_one_at_time():
             pymux.handle_command("choose-buffer")
             pymux.handle_command("choose-window")
 
-        assert state.choose_window
-        assert not state.choose_buffer
+        assert state.chooser is Chooser.WINDOW
+
+
+def _box_float(state):
+    "The container that shows a box chooser when its filter says so."
+    for container in state.app.layout.walk():
+        if (
+            isinstance(container, ConditionalContainer)
+            and isinstance(container.content, DynamicContainer)
+            and container.content.get_container == state.layout_manager._chooser_box
+        ):
+            return container
+    raise AssertionError("no float holds the box chooser")
+
+
+@pytest.mark.parametrize("command", ["choose-buffer", "customize-mode", "choose-notifications", "choose-job"])
+async def test_every_box_chooser_draws_and_keeps_its_search(command):
+    """
+    Every kind the box holds shows it, and keeps the focus on its search
+    line through the hook that runs after each key.
+    """
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command(command)
+            assert _box_float(state).filter()
+
+            search = state.layout_manager.chooser_search_control()
+            state.app.layout.focus(search)
+        state.sync_focus()
+
+        with set_app(state.app):
+            assert state.app.layout.has_focus(search)

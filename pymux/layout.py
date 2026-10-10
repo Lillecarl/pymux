@@ -56,7 +56,7 @@ from prompt_toolkit.widgets import Dialog, SearchToolbar, TextArea
 from pymux import arrangement
 
 from .divided import Divided
-from .enums import Woke
+from .enums import Chooser, Woke
 from .filters import WaitsForConfirmation
 from .format import format_pymux_string
 from .log import logger
@@ -125,6 +125,14 @@ BOX_BOTTOM = 5
 #: What the palette holds above its completions: a title and the line
 #: a person types on.
 PALETTE_HEADER = 2
+
+#: What the box of each kind of chooser says it is.
+_BOX_TITLES = {
+    Chooser.BUFFER: "Choose a buffer",
+    Chooser.OPTIONS: "Customize",
+    Chooser.NOTIFICATIONS: "Notifications",
+    Chooser.JOB: "Jobs",
+}
 
 #: The text on the titlebar of a pane. XXX: Make configurable.
 PANE_TITLE_FORMAT = " #T "
@@ -807,11 +815,7 @@ class LayoutManager:
 
         state.chooser_return_to = (state.session, active)
         state.display_popup = False
-        state.choose_window = True
-        state.choose_buffer = False
-        state.choose_options = False
-        state.choose_notifications = False
-        state.choose_job = False
+        state.chooser = Chooser.WINDOW
         state.menu_entries = []
         state.choose_window_command = template
         state.choose_window_filter.reset()
@@ -924,7 +928,7 @@ class LayoutManager:
 
         state.choose_window_index = index % len(matches)
 
-        if not state.choose_window:
+        if state.chooser is not Chooser.WINDOW:
             return
 
         self.show_window(matches[state.choose_window_index])
@@ -947,11 +951,7 @@ class LayoutManager:
         state = self.client_state
         going_back = state.chooser_return_to
 
-        state.choose_window = False
-        state.choose_buffer = False
-        state.choose_options = False
-        state.choose_notifications = False
-        state.choose_job = False
+        state.chooser = None
         state.chooser_return_to = None
 
         if restore and going_back is not None:
@@ -959,95 +959,41 @@ class LayoutManager:
             if window in session.arrangement.windows:
                 self.show_window(window)
 
-    def display_buffer_chooser(self) -> None:
+    def display_box_chooser(self, kind: Chooser) -> None:
         """
-        Show the named buffers, to choose from.
+        Show a box of rows to choose from, of one kind:
 
-        Enter makes the chosen buffer the session's one buffer, which
-        is what `paste-buffer` pastes -- the thing tmux's
-        choose-buffer marks current. Lillecarl/pymux#304.
-        """
-        self.client_state.display_popup = False
-        self.client_state.choose_buffer = True
-        self.client_state.choose_window = False
-        self.client_state.choose_options = False
-        self.client_state.choose_notifications = False
-        self.client_state.choose_job = False
-        self.client_state.menu_entries = []
-        self.client_state.choose_window_command = ""
-        self.client_state.choose_window_filter.reset()
-        self.client_state.choose_window_index = 0
-        self._chooser_box()
-        assert self._chooser_rows is not None
-        get_app().layout.focus(self._chooser_rows)
+        - `BUFFER`, the named buffers. Enter makes the chosen one the
+          session's one buffer, which is what `paste-buffer` pastes --
+          the thing tmux's choose-buffer marks current.
+          Lillecarl/pymux#304.
+        - `OPTIONS`, the options of every scope: what `customize-mode`
+          is here. Enter asks for a value on the prompt, with the
+          option named and what it holds as the default.
+          Lillecarl/pymux#297.
+        - `NOTIFICATIONS`, what the hub keeps, newest first. Enter
+          takes this client to the pane one came from.
+        - `JOB`, the jobs of this server, newest first. Enter shows the
+          pointed job in this session's overlay, read-only; `o` opens
+          it as a pane in a new window, and `t` runs its command again
+          in a new window. Lillecarl/pymux#528.
 
-    def display_options_chooser(self) -> None:
+        Escape closes, and there is nothing to put back: a box
+        previews nothing.
         """
-        The options of every scope, to choose from: what
-        `customize-mode` is here. Enter asks for a value on the
-        prompt, with the option named and what it holds as the
-        default, which is the editing half of what tmux's
-        customize-mode does. Lillecarl/pymux#297.
-        """
-        self.client_state.display_popup = False
-        self.client_state.choose_options = True
-        self.client_state.choose_window = False
-        self.client_state.choose_buffer = False
-        self.client_state.choose_notifications = False
-        self.client_state.choose_job = False
-        self.client_state.menu_entries = []
-        self.client_state.choose_window_command = ""
-        self.client_state.choose_window_filter.reset()
-        self.client_state.choose_window_index = 0
-        self._chooser_box()
-        assert self._chooser_rows is not None
-        get_app().layout.focus(self._chooser_rows)
+        assert kind is not Chooser.WINDOW
+        state = self.client_state
+        state.display_popup = False
+        state.chooser = kind
+        state.menu_entries = []
+        state.choose_window_command = ""
+        state.choose_window_filter.reset()
+        state.choose_window_index = 0
+        get_app().layout.focus(self.chooser_rows_control())
 
-    def display_notifications_chooser(self) -> None:
-        """
-        Show the notifications the hub keeps, newest first, to choose
-        from. Enter takes this client to the pane one came from; a
-        pane that is gone leaves a message saying so. Escape closes,
-        and there is nothing to put back: the hub previews nothing.
-        """
-        self.client_state.display_popup = False
-        self.client_state.choose_notifications = True
-        self.client_state.choose_window = False
-        self.client_state.choose_buffer = False
-        self.client_state.choose_options = False
-        self.client_state.choose_job = False
-        self.client_state.menu_entries = []
-        self.client_state.choose_window_command = ""
-        self.client_state.choose_window_filter.reset()
-        self.client_state.choose_window_index = 0
-        self._chooser_box()
-        assert self._chooser_rows is not None
-        get_app().layout.focus(self._chooser_rows)
-
-    def display_job_chooser(self) -> None:
-        """
-        Show the jobs of this server, newest first, to choose from.
-
-        Enter shows the pointed job in this session's overlay,
-        read-only; `o` opens it as a pane in a new window, and `t`
-        runs its command again, interactively, in a new window.
-        Escape closes, and there is nothing to put back: the hub
-        previews nothing, the way the notifications say.
-        Lillecarl/pymux#528.
-        """
-        self.client_state.display_popup = False
-        self.client_state.choose_job = True
-        self.client_state.choose_window = False
-        self.client_state.choose_buffer = False
-        self.client_state.choose_options = False
-        self.client_state.choose_notifications = False
-        self.client_state.menu_entries = []
-        self.client_state.choose_window_command = ""
-        self.client_state.choose_window_filter.reset()
-        self.client_state.choose_window_index = 0
-        self._chooser_box()
-        assert self._chooser_rows is not None
-        get_app().layout.focus(self._chooser_rows)
+    def box_chooser_shows(self) -> bool:
+        "Whether a chooser of the box kind shows, and not the bar."
+        return self.client_state.chooser not in (None, Chooser.WINDOW)
 
     def display_menu(self, entries: list, title: str = "") -> None:
         """
@@ -1057,9 +1003,7 @@ class LayoutManager:
         for it and change nothing. Lillecarl/pymux#297.
         """
         self.client_state.display_popup = False
-        self.client_state.choose_window = False
-        self.client_state.choose_buffer = False
-        self.client_state.choose_notifications = False
+        self.client_state.chooser = None
         self.client_state.menu_entries = entries
         self.client_state.menu_title = title
         self._menu_box()
@@ -1164,7 +1108,8 @@ class LayoutManager:
         without case. Lillecarl/pymux#295.
         """
         text = self.client_state.choose_window_filter.text.lower()
-        if self.client_state.choose_options:
+        kind = self.client_state.chooser
+        if kind is Chooser.OPTIONS:
             from pymux.options import (
                 ALL_CLIENT_OPTIONS,
                 ALL_OPTIONS,
@@ -1175,19 +1120,19 @@ class LayoutManager:
             if not text:
                 return names
             return [name for name in names if text in name.lower() or text in option_value_of(self.pymux, name).lower()]
-        if self.client_state.choose_notifications:
+        if kind is Chooser.NOTIFICATIONS:
             records = list(reversed(self.pymux.notification_center.notifications()))
             if not text:
                 return records
             return [record for record in records if text in record.title.lower() or text in record.body.lower()]
-        if self.client_state.choose_job:
+        if kind is Chooser.JOB:
             from pymux.jobs import describe
 
             jobs = list(reversed(self.pymux.jobs.listing()))
             if not text:
                 return jobs
             return [job for job in jobs if text in describe(job).lower()]
-        if self.client_state.choose_buffer:
+        if kind is Chooser.BUFFER:
             buffers = self.pymux.named_buffers
             if not text:
                 return sorted(buffers)
@@ -1201,6 +1146,29 @@ class LayoutManager:
             if text in w.name.lower() or text in str(w.index) or text in self._session_name_of(w).lower()
         ]
 
+    def _pointed_index(self, count: int) -> int:
+        "The row the point is on, among `count`, kept inside the list."
+        return min(self.client_state.choose_window_index, count - 1)
+
+    def pointed(self):
+        "The row the chooser points at, or None for an empty list."
+        matches = self.chooser_matches()
+        return matches[self._pointed_index(len(matches))] if matches else None
+
+    def choose_pointed(self) -> None:
+        "Take the row the chooser points at, by the kind that shows."
+        match self.client_state.chooser:
+            case Chooser.OPTIONS:
+                self.choose_pointed_option()
+            case Chooser.BUFFER:
+                self.choose_pointed_buffer()
+            case Chooser.NOTIFICATIONS:
+                self.choose_pointed_notification()
+            case Chooser.JOB:
+                self.choose_pointed_job()
+            case _:
+                self.choose_pointed_window()
+
     def _session_name_of(self, window) -> str:
         "The name of the session that holds a window, or nothing."
         session = self.pymux.session_of_window(window)
@@ -1212,14 +1180,11 @@ class LayoutManager:
         buffer, which is what `paste-buffer` pastes. The chooser
         closes. Lillecarl/pymux#304.
         """
-        matches = self.chooser_matches()
-        self.client_state.choose_buffer = False
-        self.client_state.choose_options = False
-        self.client_state.choose_notifications = False
-        if not matches:
+        name = self.pointed()
+        self.client_state.chooser = None
+        if name is None:
             return
-        index = min(self.client_state.choose_window_index, len(matches) - 1)
-        text = self.pymux.named_buffers[matches[index]]
+        text = self.pymux.named_buffers[name]
         self.pymux.clipboard.set_data(ClipboardData(text))
         self.pymux.invalidate(Woke.CLICK_CHOSE_A_BUFFER)
 
@@ -1233,13 +1198,11 @@ class LayoutManager:
         is what the person asked for, and being moved as well is not.
         Lillecarl/pymux#295. Lillecarl/pymux#327.
         """
-        matches = self.chooser_matches()
-        if not matches:
+        window = self.pointed()
+        if window is None:
             self.leave_chooser(restore=True)
             return
 
-        index = min(self.client_state.choose_window_index, len(matches) - 1)
-        window = matches[index]
         session = self.pymux.session_of_window(window)
         template = self.client_state.choose_window_command
 
@@ -1259,15 +1222,10 @@ class LayoutManager:
         a client option reaches the client this chooser is drawn on.
         The chooser closes. Lillecarl/pymux#297. Lillecarl/pymux#472.
         """
-        matches = self.chooser_matches()
-        self.client_state.choose_options = False
-        self.client_state.choose_window = False
-        self.client_state.choose_buffer = False
-        self.client_state.choose_notifications = False
-        if not matches:
+        name = self.pointed()
+        self.client_state.chooser = None
+        if name is None:
             return
-        index = min(self.client_state.choose_window_index, len(matches) - 1)
-        name = matches[index]
         command = option_command_of(name)
         self.pymux.handle_command(
             "command-prompt -p '%s %s' -I '%s' '%s %s %%'"
@@ -1281,12 +1239,10 @@ class LayoutManager:
         notification no pane sent, leaves a message saying so instead
         of moving.
         """
-        matches = self.chooser_matches()
-        self.client_state.choose_notifications = False
-        if not matches:
+        record = self.pointed()
+        self.client_state.chooser = None
+        if record is None:
             return
-        index = min(self.client_state.choose_window_index, len(matches) - 1)
-        record = matches[index]
         found = self.pymux.window_of_pane(record.pane_id)
         if found is None:
             self.client_state.message = "The pane the notification came from is gone."
@@ -1303,12 +1259,9 @@ class LayoutManager:
         The chooser lists newest first, so the point opens at the
         latest job without moving.
         """
-        if not self.client_state.choose_job:
+        if self.client_state.chooser is not Chooser.JOB:
             return None
-        matches = self.chooser_matches()
-        if not matches:
-            return None
-        return matches[min(self.client_state.choose_window_index, len(matches) - 1)]
+        return self.pointed()
 
     def choose_pointed_job(self) -> None:
         """
@@ -1317,7 +1270,7 @@ class LayoutManager:
         viewer, which never touches the job. Lillecarl/pymux#528.
         """
         job = self.pointed_job()
-        self.client_state.choose_job = False
+        self.client_state.chooser = None
         if job is None:
             return
         self.pymux.spawn_command(self.pymux.display_job_overlay(job, self.client_state.session))
@@ -1329,7 +1282,7 @@ class LayoutManager:
         touches the job. Lillecarl/pymux#528.
         """
         job = self.pointed_job()
-        self.client_state.choose_job = False
+        self.client_state.chooser = None
         if job is None:
             return
         self.pymux.spawn_command(self.pymux.open_job_in_pane(job, self.client_state.session))
@@ -1340,7 +1293,7 @@ class LayoutManager:
         window. The recorded job is untouched. Lillecarl/pymux#528.
         """
         job = self.pointed_job()
-        self.client_state.choose_job = False
+        self.client_state.chooser = None
         if job is None:
             return
         self.pymux.spawn_command(self.pymux.take_over_job(job, self.client_state.session))
@@ -1358,7 +1311,7 @@ class LayoutManager:
         if not matches:
             return [("class:chooser.hint", " No jobs. ")]
 
-        chosen = min(self.client_state.choose_window_index, len(matches) - 1)
+        chosen = self._pointed_index(len(matches))
         tokens: StyleAndTextTuples = []
         for i, job in enumerate(matches):
             style = "class:chooser.selected" if i == chosen else "class:commandpalette"
@@ -1873,7 +1826,7 @@ class LayoutManager:
 
     def chooser_rows_control(self) -> Window:
         "Where the keys of the chooser that shows belong."
-        if self.client_state.choose_window:
+        if self.client_state.chooser is Chooser.WINDOW:
             self._window_bar()
             rows = self._bar_rows
         else:
@@ -1884,7 +1837,7 @@ class LayoutManager:
 
     def chooser_search_control(self) -> Container:
         "The search line of the chooser that shows."
-        if self.client_state.choose_window:
+        if self.client_state.chooser is Chooser.WINDOW:
             self._window_bar()
             search = self._bar_search
         else:
@@ -1900,13 +1853,7 @@ class LayoutManager:
 
     def _chooser_title(self) -> str:
         "What the box of the chooser says it is."
-        if self.client_state.choose_options:
-            return "Customize"
-        if self.client_state.choose_notifications:
-            return "Notifications"
-        if self.client_state.choose_job:
-            return "Jobs"
-        return "Choose a buffer"
+        return _BOX_TITLES.get(self.client_state.chooser, "")
 
     def _chooser_tokens(self) -> StyleAndTextTuples:
         """
@@ -1915,13 +1862,15 @@ class LayoutManager:
         The windows are not here: they flow across a bar of their own.
         Lillecarl/pymux#327.
         """
-        if self.client_state.choose_options:
-            return self._choose_options_tokens()
-        if self.client_state.choose_notifications:
-            return self._choose_notification_tokens()
-        if self.client_state.choose_job:
-            return self._choose_job_tokens()
-        return self._choose_buffer_tokens()
+        match self.client_state.chooser:
+            case Chooser.OPTIONS:
+                return self._choose_options_tokens()
+            case Chooser.NOTIFICATIONS:
+                return self._choose_notification_tokens()
+            case Chooser.JOB:
+                return self._choose_job_tokens()
+            case _:
+                return self._choose_buffer_tokens()
 
     def _choose_options_tokens(self) -> StyleAndTextTuples:
         """
@@ -1936,7 +1885,7 @@ class LayoutManager:
         if not matches:
             return [("class:chooser.hint", " No option matches. ")]
 
-        chosen = min(self.client_state.choose_window_index, len(matches) - 1)
+        chosen = self._pointed_index(len(matches))
         tokens: StyleAndTextTuples = []
         for i, name in enumerate(matches):
             style = "class:chooser.selected" if i == chosen else "class:commandpalette"
@@ -1967,7 +1916,7 @@ class LayoutManager:
         if not matches:
             return [("class:chooser.hint", " No notifications. ")]
 
-        chosen = min(self.client_state.choose_window_index, len(matches) - 1)
+        chosen = self._pointed_index(len(matches))
         tokens: StyleAndTextTuples = []
         for i, record in enumerate(matches):
             style = "class:chooser.selected" if i == chosen else "class:commandpalette"
@@ -1996,7 +1945,7 @@ class LayoutManager:
         if not matches:
             return [("class:chooser.hint", " No buffer matches. ")]
 
-        chosen = min(self.client_state.choose_window_index, len(matches) - 1)
+        chosen = self._pointed_index(len(matches))
         tokens: StyleAndTextTuples = []
         for i, name in enumerate(matches):
             style = "class:chooser.selected" if i == chosen else "class:commandpalette"
@@ -2009,22 +1958,10 @@ class LayoutManager:
                         name,
                         len(self.pymux.named_buffers[name]),
                     ),
-                    self._create_buffer_click_handler(i),
+                    self._create_chooser_click_handler(i),
                 )
             )
         return tokens
-
-    def _create_buffer_click_handler(self, row: int) -> Callable[[MouseEvent], NotImplementedOrNone]:
-        "Return a mouse handler that chooses the buffer on this row."
-
-        def handler(mouse_event: MouseEvent) -> NotImplementedOrNone:
-            if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
-                self.client_state.choose_window_index = row
-                self.choose_pointed_buffer()
-                return None
-            return NotImplemented
-
-        return handler
 
     def _choose_window_tokens(self) -> StyleAndTextTuples:
         """
@@ -2043,7 +1980,7 @@ class LayoutManager:
         if not entries:
             return [("class:chooser.hint", " No window matches. ")]
 
-        chosen = min(self.client_state.choose_window_index, len(entries) - 1)
+        chosen = self._pointed_index(len(entries))
 
         tokens: StyleAndTextTuples = []
         for number, line in enumerate(self.chooser_lines(self._bar_width())):
@@ -2070,24 +2007,14 @@ class LayoutManager:
 
         def handler(mouse_event: MouseEvent) -> NotImplementedOrNone:
             if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
-                if self.client_state.choose_options:
-                    self.client_state.choose_window_index = row
-                    self.choose_pointed_option()
-                elif self.client_state.choose_notifications:
-                    self.client_state.choose_window_index = row
-                    self.choose_pointed_notification()
-                elif self.client_state.choose_buffer:
-                    self.client_state.choose_window_index = row
-                    self.choose_pointed_buffer()
-                elif self.client_state.choose_job:
-                    self.client_state.choose_window_index = row
-                    self.choose_pointed_job()
-                else:
+                if self.client_state.chooser is Chooser.WINDOW:
                     # Through `point_at`, so the click switches to the
                     # window before taking it -- the same path the keys
                     # take. Lillecarl/pymux#327.
                     self.point_at(row)
-                    self.choose_pointed_window()
+                else:
+                    self.client_state.choose_window_index = row
+                self.choose_pointed()
                 return None
             return NotImplemented
 
@@ -2338,13 +2265,7 @@ class LayoutManager:
                 Float(
                     content=ConditionalContainer(
                         content=DynamicContainer(self._chooser_box),
-                        filter=Condition(
-                            lambda: (
-                                self.client_state.choose_buffer
-                                or self.client_state.choose_options
-                                or self.client_state.choose_notifications
-                            )
-                        ),
+                        filter=Condition(self.box_chooser_shows),
                     ),
                     left=BOX_SIDE,
                     right=BOX_SIDE,
@@ -2359,7 +2280,7 @@ class LayoutManager:
                 Float(
                     content=ConditionalContainer(
                         content=DynamicContainer(self._window_bar),
-                        filter=Condition(lambda: self.client_state.choose_window),
+                        filter=Condition(lambda: self.client_state.chooser is Chooser.WINDOW),
                     ),
                     left=0,
                     right=0,

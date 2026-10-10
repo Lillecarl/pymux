@@ -61,7 +61,7 @@ from .client.memory import MemoryClient
 from .colors import DefaultColors, theme_color_base
 from .commands import CommandException, call_command_handler, handle_command
 from .commands.completer import create_command_completer
-from .enums import CHOOSE, COMMAND, PROMPT, WindowSize, Woke
+from .enums import CHOOSE, COMMAND, PROMPT, Chooser, WindowSize, Woke
 from .forwarding import LOOPBACK_NAMES, loopback_port
 from .graphics import PaneView
 from .ids import PaneId, SessionId, WindowIndex
@@ -244,17 +244,6 @@ class Asker(NamedTuple):
     in_person: bool
 
 
-#: Each chooser's flag on `ClientState`, and the `LayoutManager` call
-#: that opens it.
-_CHOOSERS = {
-    "choose_window": "display_chooser",
-    "choose_buffer": "display_buffer_chooser",
-    "choose_options": "display_options_chooser",
-    "choose_notifications": "display_notifications_chooser",
-    "choose_job": "display_job_chooser",
-}
-
-
 class ClientState:
     """
     State information that is independent for each client.
@@ -291,14 +280,10 @@ class ClientState:
         "menu_entries": Keep.SAVED,
         "menu_title": Keep.SAVED,
         "chooser_return_to": Keep.SAVED,
-        "choose_window": Keep.SAVED,
+        "chooser": Keep.SAVED,
         "choose_window_index": Keep.SAVED,
         "choose_window_filter": Keep.SAVED,
         "choose_window_command": Keep.SAVED,
-        "choose_buffer": Keep.SAVED,
-        "choose_job": Keep.SAVED,
-        "choose_notifications": Keep.SAVED,
-        "choose_options": Keep.SAVED,
         # The application and what it is made of.
         "pymux": Keep.REBUILT,
         "connection": Keep.REBUILT,
@@ -462,11 +447,7 @@ class ClientState:
         # are the chooser's, whichever kind shows -- a buffer chooser
         # runs the same keys over its own rows.
         # Lillecarl/pymux#295. Lillecarl/pymux#304.
-        self.choose_window = False
-        self.choose_buffer = False
-        self.choose_options = False
-        self.choose_notifications = False
-        self.choose_job = False
+        self.chooser: Chooser | None = None
         self.choose_window_index = 0
         self.choose_window_command = ""
 
@@ -708,17 +689,7 @@ class ClientState:
 
     def _accept_chooser(self, buffer) -> bool:
         "When the search of a chooser is accepted: it takes the row."
-        manager = self.layout_manager
-        if self.choose_options:
-            manager.choose_pointed_option()
-        elif self.choose_buffer:
-            manager.choose_pointed_buffer()
-        elif self.choose_notifications:
-            manager.choose_pointed_notification()
-        elif self.choose_job:
-            manager.choose_pointed_job()
-        else:
-            manager.choose_pointed_window()
+        self.layout_manager.choose_pointed()
         return False
 
     def _create_app(self):
@@ -857,7 +828,7 @@ class ClientState:
                 else None
             ),
             "menu": [self.menu_title, [list(entry) for entry in self.menu_entries]] if self.menu_entries else None,
-            "chooser": next((name for name in _CHOOSERS if getattr(self, name)), None),
+            "chooser": self.chooser,
             "choose_window_index": self.choose_window_index,
             "choose_window_command": self.choose_window_command,
             "choose_window_filter": self.choose_window_filter.text,
@@ -887,10 +858,10 @@ class ClientState:
 
             chooser = modes["chooser"]
             if chooser is not None:
-                if chooser == "choose_window":
+                if chooser == Chooser.WINDOW:
                     layout.display_chooser(modes["choose_window_command"])
                 else:
-                    getattr(layout, _CHOOSERS[chooser])()
+                    layout.display_box_chooser(Chooser(chooser))
                 self.choose_window_filter.text = modes["choose_window_filter"]
                 self.choose_window_index = modes["choose_window_index"]
                 going_back = modes["chooser_return_to"]
@@ -962,7 +933,7 @@ class ClientState:
         # chooser works, because its bindings ask what shows and not
         # what has the focus, which is why only the search broke.
         # Lillecarl/pymux#161, Lillecarl/pymux#337.
-        if self.choose_window or self.choose_buffer or self.choose_options or self.choose_notifications:
+        if self.chooser is not None:
             return
 
         # An overlay pane takes the keyboard while it is open.

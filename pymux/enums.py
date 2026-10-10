@@ -6,6 +6,7 @@ __all__ = [
     "CHOOSE",
     "COMMAND",
     "PROMPT",
+    "Chooser",
     "WindowSize",
     "Woke",
 ]
@@ -19,6 +20,21 @@ PROMPT = "PROMPT"
 
 #: Name of the buffer that narrows the window chooser's list.
 CHOOSE = "CHOOSE"
+
+
+class Chooser(StrEnum):
+    """
+    Which chooser a client shows. One value, because one shows at a
+    time. The values are the names a snapshot stores.
+
+    The windows flow across a bar; every other kind is a box.
+    """
+
+    WINDOW = "choose_window"
+    BUFFER = "choose_buffer"
+    OPTIONS = "choose_options"
+    NOTIFICATIONS = "choose_notifications"
+    JOB = "choose_job"
 
 
 class WindowSize(StrEnum):

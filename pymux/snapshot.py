@@ -105,14 +105,10 @@ CLIENT_MODES = frozenset(
         "menu_entries",
         "menu_title",
         "chooser_return_to",
-        "choose_window",
+        "chooser",
         "choose_window_index",
         "choose_window_filter",
         "choose_window_command",
-        "choose_buffer",
-        "choose_job",
-        "choose_notifications",
-        "choose_options",
     }
 )
 

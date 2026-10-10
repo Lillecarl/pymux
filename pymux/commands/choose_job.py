@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandParser, add_command
+from pymux.enums import Chooser
 
 
 def choose_job(pymux: Pymux, args: argparse.Namespace) -> None:
@@ -25,7 +26,7 @@ def choose_job(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     if pymux.command_output is not None:
         return
-    pymux.get_client_state().layout_manager.display_job_chooser()
+    pymux.get_client_state().layout_manager.display_box_chooser(Chooser.JOB)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

@@ -25,7 +25,7 @@ from prompt_toolkit.keys import Keys
 
 from .commands import call_command_handler
 from .commands.utils import wrap_argument
-from .enums import COMMAND, PROMPT
+from .enums import COMMAND, PROMPT, Chooser
 from .filters import HasPrefix, KeyTableIs, ModeActive, WaitsForConfirmation
 from .key_spelling import key_however_it_is_written
 
@@ -292,30 +292,17 @@ class PymuxKeyBindings:
         # back. Lillecarl/pymux#295. Lillecarl/pymux#327.
         @Condition
         def chooser_displayed() -> bool:
-            state = self.pymux.get_client_state()
-            return (
-                state.choose_window
-                or state.choose_buffer
-                or state.choose_options
-                or state.choose_notifications
-                or state.choose_job
-            )
+            return self.pymux.get_client_state().chooser is not None
 
         @Condition
         def chooser_search_focused() -> bool:
             state = self.pymux.get_client_state()
-            return (
-                state.choose_window
-                or state.choose_buffer
-                or state.choose_options
-                or state.choose_notifications
-                or state.choose_job
-            ) and has_focus(state.choose_window_filter)()
+            return state.chooser is not None and has_focus(state.choose_window_filter)()
 
         @Condition
         def window_bar() -> bool:
             "The chooser that flows across a bar, and not the box."
-            return self.pymux.get_client_state().choose_window
+            return self.pymux.get_client_state().chooser is Chooser.WINDOW
 
         @kb.add("/", filter=chooser_displayed & ~chooser_search_focused)
         def _chooser_search(event: E) -> None:
@@ -360,22 +347,12 @@ class PymuxKeyBindings:
         @kb.add("enter", filter=chooser_displayed & ~chooser_search_focused)
         def _chooser_choose(event: E) -> None:
             "Take the row the chooser points at."
-            state = self.pymux.get_client_state()
-            if state.choose_options:
-                state.layout_manager.choose_pointed_option()
-            elif state.choose_buffer:
-                state.layout_manager.choose_pointed_buffer()
-            elif state.choose_notifications:
-                state.layout_manager.choose_pointed_notification()
-            elif state.choose_job:
-                state.layout_manager.choose_pointed_job()
-            else:
-                state.layout_manager.choose_pointed_window()
+            self.pymux.get_client_state().layout_manager.choose_pointed()
 
         @Condition
         def job_chooser_displayed() -> bool:
             "The job picker, with its rows under the keys."
-            return self.pymux.get_client_state().choose_job
+            return self.pymux.get_client_state().chooser is Chooser.JOB
 
         @kb.add("o", filter=job_chooser_displayed & ~chooser_search_focused)
         def _chooser_open_job_in_pane(event: E) -> None:
