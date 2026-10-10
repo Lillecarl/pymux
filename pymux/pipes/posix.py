@@ -61,14 +61,28 @@ class PosixSocketListener:
         self.socket_name = socket_name
         self.socket = sock
         self._accept_callback = accept_callback
+        #: Set while clients are taken. `pause` leaves them waiting in the
+        #: backlog, for whoever takes clients on this socket next.
+        self._taking = anyio.Event()
+        self._taking.set()
+
+    def pause(self) -> None:
+        "Take no client until `resume`. An upgrade's new server takes them instead."
+        self._taking = anyio.Event()
+
+    def resume(self) -> None:
+        self._taking.set()
 
     async def serve(self) -> None:
         "Take every client that connects, until this task is cancelled."
         while True:
+            await self._taking.wait()
             try:
                 await anyio.wait_readable(self.socket)
             except anyio.ClosedResourceError:
                 return  # `close` stopped the listening.
+            if not self._taking.is_set():
+                continue  # paused while it waited: the client is not this server's
 
             connection, _client_address = self.socket.accept()
             # The socket goes to `PosixSocketConnection` non blocking,
