@@ -6,6 +6,7 @@ Lillecarl/pymux#399.
 
 from __future__ import annotations
 
+import dataclasses
 import importlib
 import os
 import sqlite3
@@ -57,6 +58,16 @@ def test_a_snapshot_writes_every_saved_field_or_says_it_does_not_yet(name):
         sorted(saved - writes - later),
         sorted((writes | later) - saved),
     )
+
+
+@pytest.mark.parametrize("row", snapshot.ROWS, ids=lambda row: row.TABLE)
+def test_a_row_names_the_columns_of_its_table(row):
+    db = sqlite3.connect(":memory:")
+    db.executescript(snapshot.SCHEMA)
+
+    columns = [column[1] for column in db.execute("PRAGMA table_info(%s)" % (row.TABLE,))]
+
+    assert [field.name for field in dataclasses.fields(row)] == columns
 
 
 async def test_every_class_with_a_saved_field_is_written_or_left_for_later(pymux):

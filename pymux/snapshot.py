@@ -30,9 +30,10 @@ import json
 import os
 import sqlite3
 from collections.abc import Callable
+from dataclasses import Field, dataclass, fields
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Protocol
 from weakref import ref
 
 from prompt_toolkit.clipboard import ClipboardData
@@ -600,6 +601,75 @@ def _optional_id(item) -> int | None:
     return None if item is None else int(node_key(item)[1])
 
 
+@dataclass(frozen=True, slots=True)
+class WindowRow:
+    TABLE: ClassVar[str] = "windows"
+    window_id: int
+    session_id: int
+    linked: int
+    position: int
+    window_index: int
+    window_name: str | None
+    root_split_id: int
+    active_pane_id: int | None
+    previous_active_pane_id: int | None
+    previous_layout: str | None
+    strip: int
+    window_size: str
+    manual_height: int | None
+    manual_width: int | None
+    zoom: int
+    synchronize_panes: int
+    frame_rate: int
+
+
+@dataclass(frozen=True, slots=True)
+class SplitRow:
+    TABLE: ClassVar[str] = "splits"
+    split_id: int
+    window_id: int
+    kind: str
+    parent_split_id: int | None
+    position: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class PaneRow:
+    TABLE: ClassVar[str] = "panes"
+    pane_id: int
+    window_id: int | None
+    parent_split_id: int | None
+    position: int | None
+    pane_name: str | None
+    clock_mode: int
+    pane_current_path: str | None
+    current_host: str | None
+    command_zone: str | None
+    last_exit_status: int | None
+
+
+#: Every table a dataclass names. A test holds each against the schema.
+ROWS = (WindowRow, SplitRow, PaneRow)
+
+
+class _Row(Protocol):
+    TABLE: ClassVar[str]
+    __dataclass_fields__: ClassVar[dict[str, Field[Any]]]
+
+
+def _insert(db: sqlite3.Connection, row: _Row) -> None:
+    names = [field.name for field in fields(row)]
+    db.execute(
+        "INSERT INTO %s (%s) VALUES (%s)" % (row.TABLE, ", ".join(names), ", ".join(":" + name for name in names)),
+        {name: getattr(row, name) for name in names},
+    )
+
+
+def _select[R: _Row](db: sqlite3.Connection, cls: type[R], where: str, *params) -> list[R]:
+    "`cls` for each row of its table that `where` picks. A column it does not name raises."
+    return [cls(**dict(row)) for row in _rows(db, "SELECT * FROM %s %s" % (cls.TABLE, where), *params)]
+
+
 def save(pymux: Pymux, path: str | os.PathLike[str]) -> None:
     "Write `pymux` to `path` in one go. `Snapshot` says how."
     snapshot = Snapshot(path)
@@ -944,26 +1014,26 @@ def write_tables(pymux: Pymux, db: sqlite3.Connection) -> None:
 def _write_window(db: sqlite3.Connection, session: Session, window: Window, linked: bool, place: int) -> None:
     previous = window._prev_active_pane() if window._prev_active_pane is not None else None
     manual = window.manual_size
-    db.execute(
-        "INSERT INTO windows VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (
-            window.window_id,
-            session.session_id,
-            linked,
-            place,
-            int(window.index),
-            window.chosen_name,
-            window.root.split_id,
-            _optional_id(window._active_pane),
-            _optional_id(previous),
-            _value(window.previous_selected_layout),
-            window._strip,
-            _value(window.window_size),
-            manual.rows if manual is not None else None,
-            manual.columns if manual is not None else None,
-            window.zoom,
-            window.synchronize_panes,
-            window.frame_rate,
+    _insert(
+        db,
+        WindowRow(
+            window_id=window.window_id,
+            session_id=session.session_id,
+            linked=linked,
+            position=place,
+            window_index=int(window.index),
+            window_name=window.chosen_name,
+            root_split_id=window.root.split_id,
+            active_pane_id=_optional_id(window._active_pane),
+            previous_active_pane_id=_optional_id(previous),
+            previous_layout=_value(window.previous_selected_layout),
+            strip=window._strip,
+            window_size=_value(window.window_size),
+            manual_height=manual.rows if manual is not None else None,
+            manual_width=manual.columns if manual is not None else None,
+            zoom=window.zoom,
+            synchronize_panes=window.synchronize_panes,
+            frame_rate=window.frame_rate,
         ),
     )
     db.executemany(
@@ -974,14 +1044,14 @@ def _write_window(db: sqlite3.Connection, session: Session, window: Window, link
 
 
 def _write_split(db: sqlite3.Connection, window: Window, split: _Split, parent: _Split | None, place: int | None):
-    db.execute(
-        "INSERT INTO splits VALUES (?, ?, ?, ?, ?)",
-        (
-            split.split_id,
-            window.window_id,
-            _SPLIT_KINDS[type(split)],
-            parent.split_id if parent is not None else None,
-            place,
+    _insert(
+        db,
+        SplitRow(
+            split_id=split.split_id,
+            window_id=window.window_id,
+            kind=_SPLIT_KINDS[type(split)],
+            parent_split_id=parent.split_id if parent is not None else None,
+            position=place,
         ),
     )
     db.executemany(
@@ -998,19 +1068,19 @@ def _write_split(db: sqlite3.Connection, window: Window, split: _Split, parent: 
 def _write_pane(
     db: sqlite3.Connection, pane: Pane, window: Window | None, parent: _Split | None, place: int | None
 ) -> None:
-    db.execute(
-        "INSERT INTO panes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (
-            pane.pane_id,
-            window.window_id if window is not None else None,
-            parent.split_id if parent is not None else None,
-            place,
-            pane.chosen_name,
-            pane.clock_mode,
-            pane.current_directory,
-            pane.current_host,
-            pane.command_zone,
-            pane.last_exit_status,
+    _insert(
+        db,
+        PaneRow(
+            pane_id=pane.pane_id,
+            window_id=window.window_id if window is not None else None,
+            parent_split_id=parent.split_id if parent is not None else None,
+            position=place,
+            pane_name=pane.chosen_name,
+            clock_mode=pane.clock_mode,
+            pane_current_path=pane.current_directory,
+            current_host=pane.current_host,
+            command_zone=pane.command_zone,
+            last_exit_status=pane.last_exit_status,
         ),
     )
     db.executemany(
@@ -1327,17 +1397,17 @@ def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> int | No
             setattr(pymux, attribute, _like(getattr(pymux, attribute), row["value"]))
     pymux.global_environment = {row["name"]: row["value"] for row in _rows(db, "SELECT * FROM global_environment")}
 
-    panes: dict[int, Pane] = {}
+    panes: dict[int | None, Pane] = {}
 
-    def pane_of(row: sqlite3.Row, on_done: Callable[[], None] | None = None) -> Pane:
-        pane = make_pane(_program(db, PaneId(row["pane_id"])), on_done)
-        pane.pane_id = PaneId(row["pane_id"])
-        pane.chosen_name = row["pane_name"]
-        pane.clock_mode = bool(row["clock_mode"])
-        pane.current_directory = row["pane_current_path"]
-        pane.current_host = row["current_host"]
-        pane.command_zone = row["command_zone"]
-        pane.last_exit_status = row["last_exit_status"]
+    def pane_of(row: PaneRow, on_done: Callable[[], None] | None = None) -> Pane:
+        pane = make_pane(_program(db, PaneId(row.pane_id)), on_done)
+        pane.pane_id = PaneId(row.pane_id)
+        pane.chosen_name = row.pane_name
+        pane.clock_mode = bool(row.clock_mode)
+        pane.current_directory = row.pane_current_path
+        pane.current_host = row.current_host
+        pane.command_zone = row.command_zone
+        pane.last_exit_status = row.last_exit_status
         ((pane.revision,),) = _rows(db, "SELECT pane_revision FROM pane_programs WHERE pane_id = ?", pane.pane_id)
         pane.marks = [
             mark["row"]
@@ -1353,22 +1423,16 @@ def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> int | No
         pymux.panes_by_id[pane.pane_id] = pane
         return pane
 
-    def split_of(row: sqlite3.Row) -> _Split:
-        split = (HSplit if row["kind"] == "hsplit" else VSplit)()
-        split.split_id = row["split_id"]
+    def split_of(row: SplitRow) -> _Split:
+        split = (HSplit if row.kind == "hsplit" else VSplit)()
+        split.split_id = row.split_id
         split.weights = {
             (weight["kind"], weight["id"]): weight["weight"]
             for weight in _rows(db, "SELECT * FROM split_weights WHERE split_id = ?", split.split_id)
         }
         children = [
-            *[
-                (r["position"], split_of(r))
-                for r in _rows(db, "SELECT * FROM splits WHERE parent_split_id = ?", split.split_id)
-            ],
-            *[
-                (r["position"], pane_of(r))
-                for r in _rows(db, "SELECT * FROM panes WHERE parent_split_id = ?", split.split_id)
-            ],
+            *[(r.position, split_of(r)) for r in _select(db, SplitRow, "WHERE parent_split_id = ?", split.split_id)],
+            *[(r.position, pane_of(r)) for r in _select(db, PaneRow, "WHERE parent_split_id = ?", split.split_id)],
         ]
         split.extend(child for _, child in sorted(children, key=lambda pair: pair[0]))
         return split
@@ -1397,36 +1461,36 @@ def _read(pymux: Pymux, db: sqlite3.Connection, make_pane: MakePane) -> int | No
             if hasattr(fresh, attribute):
                 arrangement.window_defaults[attribute] = _like(getattr(fresh, attribute), default["value"])
 
-        for window_row in _rows(
-            db, "SELECT * FROM windows WHERE session_id = ? ORDER BY linked DESC, position", session.session_id
+        for window_row in _select(
+            db, WindowRow, "WHERE session_id = ? ORDER BY linked DESC, position", session.session_id
         ):
-            window = Window(WindowIndex(window_row["window_index"]))
-            window.window_id = WindowId(window_row["window_id"])
-            window.chosen_name = window_row["window_name"]
-            (root_row,) = _rows(db, "SELECT * FROM splits WHERE split_id = ?", window_row["root_split_id"])
+            window = Window(WindowIndex(window_row.window_index))
+            window.window_id = WindowId(window_row.window_id)
+            window.chosen_name = window_row.window_name
+            (root_row,) = _select(db, SplitRow, "WHERE split_id = ?", window_row.root_split_id)
             window.root = split_of(root_row)  # type: ignore[assignment]
-            window._active_pane = panes.get(window_row["active_pane_id"])
-            previous = panes.get(window_row["previous_active_pane_id"])
+            window._active_pane = panes.get(window_row.active_pane_id)
+            previous = panes.get(window_row.previous_active_pane_id)
             window._prev_active_pane = ref(previous) if previous is not None else None
-            layout = window_row["previous_layout"]
+            layout = window_row.previous_layout
             window.previous_selected_layout = LayoutTypes(layout) if layout is not None else None
-            window._strip = bool(window_row["strip"])
-            window.window_size = type(window.window_size)(window_row["window_size"])
-            if window_row["manual_height"] is not None:
-                window.manual_size = Size(rows=window_row["manual_height"], columns=window_row["manual_width"])
-            window.zoom = bool(window_row["zoom"])
-            window.synchronize_panes = bool(window_row["synchronize_panes"])
-            window.frame_rate = window_row["frame_rate"]
+            window._strip = bool(window_row.strip)
+            window.window_size = type(window.window_size)(window_row.window_size)
+            if window_row.manual_height is not None and window_row.manual_width is not None:
+                window.manual_size = Size(rows=window_row.manual_height, columns=window_row.manual_width)
+            window.zoom = bool(window_row.zoom)
+            window.synchronize_panes = bool(window_row.synchronize_panes)
+            window.frame_rate = window_row.frame_rate
             window.column_widths = {
                 (width["kind"], width["id"]): width["width"]
                 for width in _rows(db, "SELECT * FROM column_widths WHERE window_id = ?", window.window_id)
             }
-            (arrangement.windows if window_row["linked"] else arrangement._unlinked_windows).append(window)
+            (arrangement.windows if window_row.linked else arrangement._unlinked_windows).append(window)
             windows[window.window_id] = window
 
         arrangement._last_active_window = windows.get(row["last_active_window_id"])
         if row["overlay_pane_id"] is not None:
-            (overlay_row,) = _rows(db, "SELECT * FROM panes WHERE pane_id = ?", row["overlay_pane_id"])
+            (overlay_row,) = _select(db, PaneRow, "WHERE pane_id = ?", row["overlay_pane_id"])
             overlay: list[Pane] = []
             session.overlay_pane = pane_of(
                 overlay_row,
