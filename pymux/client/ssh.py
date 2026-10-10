@@ -75,7 +75,7 @@ from .reconnect import (
     watch_internet,
     why,
 )
-from .terminal import TerminalClient
+from .terminal import DELETE_EVERY_IMAGE, TerminalClient
 
 if TYPE_CHECKING:
     from asyncssh import SSHWriter
@@ -484,6 +484,18 @@ class SshClient(TerminalClient):
                 # tell a link that held from one that dropped at once.
                 lived_from = anyio.current_time()
                 lost = await self._attached(connection, reader, stdin_fd, detach_other_clients, color_depth)
+
+                if lost is None and self.restart_wait is not None:
+                    # The server said it is restarting, then closed the
+                    # channel. The next one takes over the socket, so
+                    # this is a link to open again and not a detach.
+                    # The old server's images go: the next one knows
+                    # none of them. Lillecarl/pymux#409.
+                    self.restart_wait = None
+                    if self.placed_images:
+                        os.write(sys.stdout.fileno(), DELETE_EVERY_IMAGE)
+                        self.placed_images = False
+                    lost = ConnectionResetError("The server is restarting.")
 
                 if lost is None:
                     break  # The server closed the connection.

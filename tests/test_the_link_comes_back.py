@@ -648,6 +648,29 @@ async def test_the_screen_says_it_is_trying_while_the_attempt_runs(monkeypatch):
         await it.wait_for_attach(10)
 
 
+async def test_a_server_that_restarts_is_reached_again(monkeypatch):
+    """
+    An upgrade says `restarting` and then the old server's channel ends
+    cleanly. That is not a detach: the next server takes the socket
+    over, and the client goes back to it. Lillecarl/pymux#409.
+    """
+    async with attached(monkeypatch) as it:
+        await it.until(lambda: len(it.pymux.connections) == 1, "the first attach")
+        await it.until(lambda: ALTERNATE_SCREEN in it.terminal.said, "the first frame")
+
+        for connection in list(it.pymux.connections):
+            await connection.say_restarting(5.0)
+            connection._close_connection()
+
+        await it.until(lambda: "The server is restarting." in it.terminal.said, "the restarting screen")
+        it.terminal.type("\r")
+        await it.until(lambda: len(it.pymux.connections) == 1, "the attach after the restart")
+
+        for connection in list(it.pymux.connections):
+            connection.detach_and_close()
+        await it.wait_for_attach(10)
+
+
 async def test_a_server_that_closes_the_connection_is_not_retried(monkeypatch):
     """
     A detach is the server closing the connection, and it means the
