@@ -6,6 +6,9 @@ window proved shifted, instead of repainting them
 (Lillecarl/pymux#518). At 300x90 a repaint is the whole frame, so this
 is the difference between a few hundred cells and tens of thousands
 of them. Lillecarl/pymux#566.
+
+The main screen moves no rows: it slides over its history, and the
+window says so by how far its view moved. Lillecarl/pymux#569.
 """
 
 from __future__ import annotations
@@ -19,19 +22,7 @@ ROWS = 30
 COLUMNS = 100
 
 
-@pytest.mark.parametrize(
-    "screen",
-    [
-        "alternate",
-        pytest.param(
-            "main",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason="a slide over the history logs no scroll, Lillecarl/pymux#569",
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("screen", ["alternate", "main"])
 async def test_a_one_line_scroll_goes_out_as_a_scroll(monkeypatch, screen):
     monkeypatch.setattr(profile_frame, "ROWS", ROWS)
     monkeypatch.setattr(profile_frame, "COLUMNS", COLUMNS)
