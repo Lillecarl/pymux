@@ -1871,21 +1871,27 @@ class LayoutManager:
         self._bar_search = search
         return self._bar
 
-    def chooser_rows_control(self):
+    def chooser_rows_control(self) -> Window:
         "Where the keys of the chooser that shows belong."
         if self.client_state.choose_window:
             self._window_bar()
-            return self._bar_rows
-        self._chooser_box()
-        return self._chooser_rows
+            rows = self._bar_rows
+        else:
+            self._chooser_box()
+            rows = self._chooser_rows
+        assert rows is not None
+        return rows
 
-    def chooser_search_control(self):
+    def chooser_search_control(self) -> Container:
         "The search line of the chooser that shows."
         if self.client_state.choose_window:
             self._window_bar()
-            return self._bar_search
-        self._chooser_box()
-        return self._chooser_search
+            search = self._bar_search
+        else:
+            self._chooser_box()
+            search = self._chooser_search
+        assert search is not None
+        return search
 
     def _chooser_room(self) -> int:
         "The rows the box has for its list."
@@ -3176,10 +3182,7 @@ def _create_container_for_process(
             window.active_pane = arrangement_pane
         pymux.invalidate(Woke.CLICK_LEFT_THE_CLOCK)
 
-    return HighlightBordersIfActive(
-        window,
-        arrangement_pane,
-        get_terminal_style,
+    return _PaneMark(
         FloatContainer(
             HSplit(
                 [
@@ -3255,6 +3258,9 @@ def _create_container_for_process(
                 ),
             ],
         ),
+        window,
+        arrangement_pane,
+        get_terminal_style,
         # Whether the row below this pane is the bar that names a stack's
         # neighbours, which is the row the mark's foot is drawn on.
         # Lillecarl/pymux#401.
@@ -3309,34 +3315,6 @@ _border_left_top = "┌"
 _border_right_top = "┐"
 
 
-class HighlightBordersIfActive:
-    """
-    Put borders around this control if active.
-
-    **A corner needs a chrome row to sit on.** The row above a pane is
-    its title bar, and the row below is the bar that names a stack's
-    neighbours -- there is none for a pane in no stack, whose lower
-    edge is the window's, where a mark would land on the status line.
-    So the foot of the mark is drawn only where that bar is.
-    Lillecarl/pymux#401.
-
-    **Six cells are not six Floats.** The mark was one `Float` per
-    cell, and the two the foot added cost almost six thousand
-    instructions a frame in `checks.pymux-keystroke` -- enough to take
-    the whole render stage past its budget, for two corner glyphs. A
-    float draws through the whole container machinery to land one
-    character. The cells go straight into the screen now, at the
-    z-index a float would have inherited there, so the mark still wins
-    over the chrome it shares an edge with. Lillecarl/pymux#488.
-    """
-
-    def __init__(self, window, pane, style, content, has_bar_below):
-        self.container = _PaneMark(FloatContainer(content, [], style=style), window, pane, has_bar_below)
-
-    def __pt_container__(self) -> Container:
-        return self.container
-
-
 class _PaneMark(_ContainerProxy):
     """
     The mark of the focused pane, written beside its cells.
@@ -3346,15 +3324,31 @@ class _PaneMark(_ContainerProxy):
     a deferred draw at the z-index a `Float` there would have inherited,
     so a pane drawn later cannot cover it and it still lands over a bar
     it shares an edge with.
+
+    **A corner needs a chrome row to sit on.** The row above a pane is
+    its title bar, and the row below is the bar that names a stack's
+    neighbours -- there is none for a pane in no stack, whose lower
+    edge is the window's, where a mark would land on the status line.
+    So the foot of the mark is drawn only where that bar is.
+    Lillecarl/pymux#401.
+
+    **Six cells are not six Floats.** A `Float` per cell draws
+    through the whole container machinery to land one character, and
+    the two corners of the foot cost almost six thousand instructions
+    a frame in `checks.pymux-keystroke`. Lillecarl/pymux#488.
     """
 
     #: What a mark cell is styled as.
     STYLE = "class:border"
 
-    def __init__(self, content, window, pane, has_bar_below):
+    def __init__(self, content, window, pane, style: Callable[[], str], has_bar_below):
         super().__init__(content)
         self.window = window
         self.pane = pane
+        #: The pane's style, under everything it draws. Read once a
+        #: frame here: a `FloatContainer` reads its own style again
+        #: for each of its floats.
+        self.style = style
         self.has_bar_below = has_bar_below
         # The cells the mark is made of, built once. A frame draws
         # close to two hundred of them on a big screen, and a `Char`
@@ -3380,7 +3374,8 @@ class _PaneMark(_ContainerProxy):
         erase_bg: bool,
         z_index: int | None,
     ) -> None:
-        super().write_to_screen(screen, mouse_handlers, write_position, parent_style, erase_bg, z_index)
+        style = parent_style + " " + self.style()
+        super().write_to_screen(screen, mouse_handlers, write_position, style, erase_bg, z_index)
         # **The z is the parent's, plus the mark's**, as a `Float` in a
         # `FloatContainer` inherits it. A body drawn late -- one whose
         # own floats wait on a cursor -- runs its panes again, and a mark
@@ -3469,36 +3464,13 @@ class TracePaneWritePosition(_ContainerProxy):  # XXX: replace with SizedBox
         pane_write_positions(screen)[self.arrangement_pane] = write_position
 
 
-def focus_left(pymux: Pymux) -> None:
-    "Move focus to the left."
-    _move_focus(pymux, Side.LEFT)
-
-
-def focus_right(pymux: Pymux) -> None:
-    "Move focus to the right."
-    _move_focus(pymux, Side.RIGHT)
-
-
-def focus_down(pymux: Pymux) -> None:
-    "Move focus down."
-    _move_focus(pymux, Side.BELOW)
-
-
-def focus_up(pymux: Pymux) -> None:
-    "Move focus up."
-    _move_focus(pymux, Side.ABOVE)
-
-
-def _move_focus(pymux: Pymux, side: Side) -> None:
+def move_focus(pymux: Pymux, side: Side) -> None:
     """
     Move the focus one pane that way, and stay where it is at the edge.
 
-    **The plan says which pane that is, and the same words as the title
-    bar do.** This read the last frame instead: where each pane was
-    drawn, then two cells past its edge, then whichever pane held that
-    cell. A key and a bar that name different panes are two bugs
-    waiting, and before the first frame the key did nothing at all.
-    Lillecarl/pymux#217.
+    **The plan says which pane that is**, in the same words as the
+    title bar, so a key and a bar never name different panes, and the
+    key works before the first frame. Lillecarl/pymux#217.
     """
     window = pymux.arrangement.get_active_window()
     if window is None:

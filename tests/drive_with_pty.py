@@ -1602,7 +1602,7 @@ def check_full_screen_pane(tmp):
 
 
 #: The border between two columns. The plain one, and the one the
-#: focused pane draws over it: `HighlightBordersIfActive` puts its
+#: focused pane draws over it: `layout._PaneMark` puts its
 #: highlight one cell outside the pane, which is that same cell.
 BORDERS = "│┃"
 

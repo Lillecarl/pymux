@@ -1,7 +1,7 @@
 """
 The focused pane's border. Lillecarl/pymux#401.
 
-`HighlightBordersIfActive` draws the mark one cell outside the pane,
+`layout._PaneMark` draws the mark one cell outside the pane,
 so the cells it takes are shared: the row above, which is the pane's
 title bar; the row below, which is the bar naming a stack's neighbours;
 and the two columns beside it. The horizontals between the corners are

@@ -57,6 +57,7 @@ from pyte.osc import Osc
 from . import introspect, log
 from .agentic import CallerContext
 from .arrangement import Arrangement, Pane, Window
+from .client.memory import MemoryClient
 from .colors import DefaultColors, theme_color_base
 from .commands import CommandException, call_command_handler, handle_command
 from .commands.completer import create_command_completer
@@ -725,17 +726,6 @@ class ClientState:
         Create `Application` instance for this .
         """
         pymux = self.pymux
-
-        def on_focus_changed():
-            """When the focus changes to a read/write buffer, make sure to go
-            to insert mode. This happens when the ViState was set to NAVIGATION
-            in the copy buffer."""
-            vi_state = app.vi_state
-
-            if app.current_buffer.read_only():
-                vi_state.input_mode = InputMode.NAVIGATION
-            else:
-                vi_state.input_mode = InputMode.INSERT
 
         app = Application(
             output=self.output,
@@ -1705,12 +1695,17 @@ class Pymux:
         holding = [one for one in self.sessions if one.arrangement.windows]
         return max(holding or self.sessions, key=lambda session: session.last_used)
 
+    def client_of(self, app) -> ClientState | None:
+        "The client that this application draws for."
+        for client_state in self._client_states.values():
+            if client_state.app is app:
+                return client_state
+        return None
+
     def session_of(self, app) -> Session:
         "The session of the client that this application draws for."
-        for client_state in self._client_states.values():
-            if client_state.app == app:
-                return client_state.session
-        return self.last_used_session
+        client_state = self.client_of(app)
+        return self.last_used_session if client_state is None else client_state.session
 
     def get_session(self, name: str) -> Session | None:
         """
@@ -1964,7 +1959,7 @@ class Pymux:
         started it, and it cannot be collected while it runs.
         `_spawn` on a connection puts work here.
 
-        The three routes enter it, and so does the test harness. A
+        Both routes enter it, and so does the test harness. A
         route that built its own would be a route the harness could
         not be. Lillecarl/pymux#87.
 
@@ -1995,10 +1990,6 @@ class Pymux:
                 # closes with nobody left to read it.
                 await self.jobs.close()
 
-    def holder_path(self) -> str:
-        "Where this server's holder listens: beside the server's own socket."
-        return "%s.holder" % (self.socket_name,)
-
     async def hold(self, keep_orphans: bool = False) -> None:
         """
         Connect to this server's holder, and start one when none answers.
@@ -2012,7 +2003,7 @@ class Pymux:
         itself: what it loses is the upgrade.
         """
         assert self.tasks is not None
-        path = self.holder_path()
+        path = "%s.holder" % (self.socket_name,)
         try:
             holding = await self._holder_at(path)
         except OSError, HolderError:
@@ -2131,11 +2122,10 @@ class Pymux:
     def get_client_state(self):
         "Return the active ClientState instance."
         app = get_app()
-        for client_state in self._client_states.values():
-            if client_state.app == app:
-                return client_state
-
-        raise ValueError("Client state for app %r not found" % (app,))
+        client_state = self.client_of(app)
+        if client_state is None:
+            raise ValueError("Client state for app %r not found" % (app,))
+        return client_state
 
     def the_client_to_tell(self):
         """
@@ -2165,10 +2155,7 @@ class Pymux:
         if asking is not None and not asking.temporary:
             return asking
 
-        watching = [client for client in self._client_states.values() if not client.temporary]
-        if not watching:
-            return None
-        return max(watching, key=lambda client: client.last_used)
+        return self.latest_client()
 
     @property
     def clients(self) -> list[ClientState]:
@@ -2202,21 +2189,6 @@ class Pymux:
             for client_state in self.clients
             if client_state.session is session and client_state is not except_for
         ]
-
-    def connection_of(self, app):
-        "The connection whose client draws on this application, or None."
-        for connection, client_state in self._client_states.items():
-            if client_state.app is app:
-                return connection
-        return None
-
-    def get_connection(self):
-        "Return the active Connection instance."
-        app = get_app()
-        connection = self.connection_of(app)
-        if connection is None:
-            raise ValueError("Connection for app %r not found" % (app,))
-        return connection
 
     async def startup(self):
         # Handle start-up comands.
@@ -3002,13 +2974,18 @@ class Pymux:
         except Exception:
             logger.exception("Failed to resize a pane for the program in it.")
 
-    def _window_holding(self, pane):
-        "The window that holds this pane, or None when it is gone."
+    def _place_of(self, pane) -> tuple[Session, Window] | None:
+        "The session and window that hold this pane, or None when it is gone."
         for session in self.sessions:
             for window in session.arrangement.windows:
                 if pane in window.panes:
-                    return window
+                    return session, window
         return None
+
+    def _window_holding(self, pane):
+        "The window that holds this pane, or None when it is gone."
+        place = self._place_of(pane)
+        return None if place is None else place[1]
 
     def session_of_window(self, window) -> Session | None:
         "The session whose arrangement holds this window."
@@ -3025,11 +3002,8 @@ class Pymux:
         A pane belongs to one session, and the client whose turn it is
         when the program in it ends says nothing about which.
         """
-        for session in self.sessions:
-            for window in session.arrangement.windows:
-                if pane in window.panes:
-                    return session
-        return None
+        place = self._place_of(pane)
+        return None if place is None else place[0]
 
     def window_of_pane(self, pane_id: PaneId | None):
         """
@@ -3041,11 +3015,8 @@ class Pymux:
         pane = self.panes_by_id.get(pane_id)
         if pane is None:
             return None
-        for session in self.sessions:
-            for window in session.arrangement.windows:
-                if pane in window.panes:
-                    return (session, window, pane)
-        return None
+        place = self._place_of(pane)
+        return None if place is None else (*place, pane)
 
     def displayed_now(self) -> datetime.datetime:
         """
@@ -3071,10 +3042,10 @@ class Pymux:
         it is the connection that ran the command, and it closes while
         the answer is still being sent.
         """
-        clients = [client for client in self._client_states.values() if not client.temporary]
-        if self.open_url_target != OpenUrlTarget.BROADCAST and clients:
-            return [max(clients, key=lambda client: client.last_used)]
-        return clients
+        latest = self.latest_client()
+        if self.open_url_target != OpenUrlTarget.BROADCAST and latest is not None:
+            return [latest]
+        return self.clients
 
     def open_url(self, url: str, confirmed: bool = False) -> None:
         """
@@ -3197,7 +3168,7 @@ class Pymux:
         if self.a_person_asked():
             return self._can_it_forward(Asker(self.get_client_state(), in_person=True))
 
-        attached = [client for client in self._client_states.values() if not client.temporary]
+        attached = self.clients
         if not attached:
             raise CommandException("Nobody is attached, so there is nothing to forward through.")
         if len(attached) > 1:
@@ -3902,7 +3873,7 @@ exec pymux notify -u "$urgency" -- "$@"
         attached. The fake CLI of a socket command is never it, for the
         reason `clients_to_open_on` names.
         """
-        clients = [client for client in self._client_states.values() if not client.temporary]
+        clients = self.clients
         if not clients:
             return None
         return max(clients, key=lambda client: client.last_used)
@@ -4300,9 +4271,9 @@ exec pymux notify -u "$urgency" -- "$@"
         each client it meant to take the session from, and left every
         one of them attached. Lillecarl/pymux#347.
         """
-        connection = self.connection_of(app)
-        if connection:
-            connection.detach_and_close(hang_up=hang_up)
+        client_state = self.client_of(app)
+        if client_state is not None and client_state.connection is not None:
+            client_state.connection.detach_and_close(hang_up=hang_up)
 
         # Redraw all clients -> Maybe their size has to change.
         self.invalidate(Woke.CLIENT_DETACHED)
@@ -4454,10 +4425,6 @@ exec pymux notify -u "$urgency" -- "$@"
         detached. The process ends with it, because both halves are in
         it.
         """
-        # Here, not at the top of the file: the client reads a terminal
-        # through `termios`, which a server on Windows does not have.
-        from .client.memory import MemoryClient
-
         self._serves_one_terminal = True
         self.server_starts()
 

@@ -14,7 +14,7 @@ def suspend_client(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Suspend this client, the way ctrl+z suspends a program in a shell.
     """
-    connection = pymux.get_connection()
+    connection = pymux.get_client_state().connection
 
     if connection:
         connection.suspend_client_to_background()

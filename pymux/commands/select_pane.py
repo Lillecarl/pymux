@@ -9,7 +9,8 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import find_pane, the_window
-from pymux.layout import focus_down, focus_left, focus_right, focus_up
+from pymux.layout import move_focus
+from pymux.plane import Side
 
 
 def select_pane(pymux: Pymux, args: argparse.Namespace) -> None:
@@ -35,15 +36,15 @@ def select_pane(pymux: Pymux, args: argparse.Namespace) -> None:
 
     else:
         if args.L:
-            h = focus_left
+            side = Side.LEFT
         elif args.U:
-            h = focus_up
+            side = Side.ABOVE
         elif args.D:
-            h = focus_down
+            side = Side.BELOW
         else:
-            h = focus_right
+            side = Side.RIGHT
 
-        h(pymux)
+        move_focus(pymux, side)
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
