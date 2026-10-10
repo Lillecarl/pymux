@@ -427,7 +427,7 @@ class PymuxKeyBindings:
         @kb.add("c-c", filter=menu_displayed, eager=True)
         def _quit_menu(event: E) -> None:
             "Leave the menu without taking anything."
-            self.pymux.get_client_state().close_menu()
+            self.pymux.get_client_state().layout_manager.close_menu()
 
         @kb.add(Keys.Any, filter=menu_displayed, eager=True)
         def _menu_key(event: E) -> None:

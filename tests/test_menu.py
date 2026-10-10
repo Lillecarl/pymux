@@ -10,6 +10,7 @@ Lillecarl/pymux#297.
 from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app
+from prompt_toolkit.keys import Keys
 from session import create_session
 
 
@@ -49,6 +50,24 @@ async def test_nobody_s_key_stays_in_menu():
             state.layout_manager.menu_key_pressed("z", "z")
 
         assert state.menu_entries
+
+
+async def test_escape_leaves_menu():
+    "Through the binding a person reaches, not the method under it."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("display-menu 'Do this' o 'display did-this'")
+
+            (quit_menu,) = [
+                binding
+                for binding in state.app.key_bindings.get_bindings_for_keys((Keys.Escape,))
+                if binding.handler.__name__ == "_quit_menu"
+            ]
+            assert quit_menu.filter()
+            quit_menu.handler(None)
+
+        assert not state.menu_entries
+        assert state.message != "did-this"
 
 
 async def test_partial_triple_is_refused():
