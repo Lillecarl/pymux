@@ -250,18 +250,6 @@ def test_view_smaller_than_plane_follows_focus():
 # Numbering.
 
 
-def test_panes_are_numbered_way_person_reads_them():
-    """
-    The walk takes each split's children in order, so the plan numbers
-    the panes exactly as `Window.panes` lists them, which is what
-    `select-pane -t` and every title bar use. Lillecarl/pymux#210.
-    """
-    window, _ = create_window([True, False, True, False], focus=[0, 0, 1, 2])
-    plan = create_plan(window)
-
-    assert [pane.name for pane in plan.order] == [pane.name for pane in window.panes]
-
-
 # ----------------------------------------------------------------------
 # A window too small for what is in it.
 

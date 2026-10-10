@@ -185,13 +185,6 @@ something on that side. So it is held over `Divided` and `Strip` and
 not over `Plane`. `test_a_diagonal_pair_are_not_neighbours` is the
 counterexample, beside the symmetry one.
 
-**A third plausible promise is false as well**: "a slot to the left of
-another comes earlier in reading order". A full width pane between two
-rows breaks it, and the tree does the same thing today, so the
-numbering is right and the promise is wrong.
-`test_reading_order_follows_the_splits_and_not_the_rows` holds the
-shape.
-
 **The symmetry invariant is false and must not be written.** "If B is
 right of A then A is left of B" fails for any layout with variable-size
 panes, including the ones pymux has today:
@@ -217,7 +210,6 @@ Three data types and one base class.
              showing: int                -- which one a person sees
     Plan     rects:   dict[Slot, Rect]   -- a slot is what has a rectangle
              plane:   Rect               -- the bounding box
-             order:   list[Pane]         -- numbering, over panes
     View     offset:  Point              -- plane coordinate at the
                                             client's top left
              size:    Size               -- the client's terminal
@@ -225,14 +217,13 @@ Three data types and one base class.
 
 `Plan` carries the services, so every subclass gets them free and none
 of them reimplements one: `at(point)`, `slot_of(pane)`,
-`neighbour(slot, direction)`, `trace(origin, angle)`,
-`reading_order()`.
+`neighbour(slot, direction)`, `trace(origin, angle)`.
 
-**Numbering is over panes, not slots**, because a pane number is what
-`select-pane -t 1` takes and what a title bar draws. A slot contributes
-**the one pane it shows**, so a stack is one number and a hidden pane
-has none until it is shown. It keeps its rectangle either way, so its
-pty already has the size it will be shown at.
+**A plan does not number the panes.** A pane number is what
+`select-pane -t 1` takes and what a title bar draws, and it comes from
+`Window.panes`, the order of the tree (Lillecarl/pymux#210); the plan
+holds no numbering of its own. A hidden pane keeps its slot's
+rectangle, so its pty already has the size it will be shown at.
 
     class Plane:
         "An unbounded plane, and views onto it. Usable as it stands."

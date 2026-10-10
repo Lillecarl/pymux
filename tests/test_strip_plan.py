@@ -219,15 +219,6 @@ def test_pane_beside_stack_is_one_sharing_most_of_its_edge():
 # The numbering.
 
 
-def test_strip_numbers_its_panes_way_person_reads_them():
-    "Columns from the left, and a column's panes from the top."
-    window, panes = create_strip((2, 2))
-    plan = create_plan(window)
-
-    assert plan.order == panes
-    assert plan.reading_order() == panes
-
-
 # ----------------------------------------------------------------------
 # The lines the strip draws.
 

@@ -641,28 +641,6 @@ class Layer:
 
         return None if best is None else best[1]
 
-    def reading_order(self) -> list[Pane]:
-        """
-        The panes a person sees, in the order they read them.
-
-        One for each slot, because a stack is one thing on the screen.
-
-        Columns first, left to right, and top to bottom inside a
-        column. That is the order `Window.panes` already walks out of
-        the tree (Lillecarl/pymux#210), recovered from the rectangles
-        alone: a straight line that divides them all is a split, so
-        looking for the leftmost such line and then the topmost one
-        takes the tree apart again.
-
-        **Two trees can lay out the same rectangles.** An even grid of
-        four is columns of stacks or stacks of columns, and the
-        rectangles cannot say which. This answers columns first, which
-        is what a strip is and what the common splits are. A set that
-        no straight line divides -- a pinwheel, which no split makes
-        and only a bare plane can hold -- reads top left first.
-        """
-        return [slot.shown for slot in _read(list(self.rects.items()))]
-
     def __repr__(self) -> str:
         return "Layer(%r)" % (self.rects,)
 
@@ -718,23 +696,9 @@ class Plan:
     when `allow-program-resize` says so, because a pane sits in a
     layout and taking room takes it from somebody.
 
-    `order` is the numbering, and it is **over the panes a person can
-    see**: one for each slot, the one that slot shows. A pane number is
-    what `select-pane -t 1` takes and what a title bar draws, and Carl:
-    "in a stack the visible pane is the only thing to be concerned with
-    (at least for now)". So a hidden pane has no number, and a stack is
-    one thing on the screen and one thing in the numbering.
-
-    The default is insertion order, back to front, which is what a
-    bare plane promises. `Strip` and `Divided` both lean on it: each
-    lays its slots out in reading order already (Lillecarl/pymux#210).
     """
 
-    def __init__(
-        self,
-        layers: dict[int, dict[Slot, Rect] | Iterable[tuple[Slot, Rect]]],
-        order: Iterable[Pane] | None = None,
-    ) -> None:
+    def __init__(self, layers: dict[int, dict[Slot, Rect] | Iterable[tuple[Slot, Rect]]]) -> None:
         #: One `Layer` for each plane, lowest number first, which is
         #: the order they paint in.
         self.layers: dict[int, Layer] = {number: Layer(rects) for number, rects in sorted(layers.items())}
@@ -768,8 +732,6 @@ class Plan:
                     if id(pane) in self._slots:
                         raise ValueError("%r is in two slots of one plan" % (pane,))
                     self._slots[id(pane)] = slot
-
-        self.order: list[Pane] = list(order) if order is not None else list(self.shown)
 
     @property
     def ground(self) -> Layer:
@@ -864,19 +826,6 @@ class Plan:
         into. The ground plane, for the reason `at` gives.
         """
         return self.ground.trace(origin, angle)
-
-    # ------------------------------------------------------------------
-    # What order it reads in.
-
-    def reading_order(self) -> list[Pane]:
-        """
-        The panes a person sees, in the order they read them.
-
-        Each plane in turn, back to front, because reading order is a
-        question about one plane: a floating window is not in the row
-        it happens to sit over.
-        """
-        return [pane for layer in self.layers.values() for pane in layer.reading_order()]
 
     # ------------------------------------------------------------------
     # What reaches the screen.
@@ -996,37 +945,3 @@ def _enters(rect: Rect, start: tuple[float, float], step: tuple[float, float]) -
     if near <= 0.0 or near >= far:
         return None
     return near
-
-
-def _cut(items: list[tuple[Slot, Rect]], side: Side) -> int | None:
-    """
-    Where a straight line divides these rectangles, or `None`.
-
-    The nearest one, which for `RIGHT` is the leftmost vertical line
-    and for `BELOW` the topmost horizontal one. A line divides them
-    when no rectangle straddles it and both sides hold something.
-    """
-    edges = sorted({rect.edge(side.opposite) for _, rect in items})
-
-    for at in edges[1:]:
-        if all(rect.edge(side) <= at or rect.edge(side.opposite) >= at for _, rect in items):
-            return at
-
-    return None
-
-
-def _read(items: list[tuple[Slot, Rect]]) -> list[Slot]:
-    "The slots of these rectangles, in reading order."
-    if len(items) <= 1:
-        return [slot for slot, _ in items]
-
-    for side in (Side.RIGHT, Side.BELOW):
-        at = _cut(items, side)
-        if at is None:
-            continue
-
-        before = [it for it in items if it[1].edge(side) <= at]
-        after = [it for it in items if it[1].edge(side.opposite) >= at]
-        return _read(before) + _read(after)
-
-    return [slot for slot, rect in sorted(items, key=lambda it: (it[1].y, it[1].x))]

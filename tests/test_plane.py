@@ -20,11 +20,6 @@ plausible one that nobody checked is how a suite starts lying:
   false of the bare plane, where two rectangles set diagonally are
   neighbours of nothing.
   `test_diagonal_pair_are_not_neighbours` is that one.
-
-A third was expected and is missing on purpose. "A slot to the left of
-another comes earlier in reading order" is false, and
-`test_reading_order_follows_splits_and_not_rows` shows the
-shape that breaks it.
 """
 
 from __future__ import annotations
@@ -216,11 +211,6 @@ def walk(plan: Plan, slot: Slot, side: Side) -> list[Slot]:
         seen.append(slot)
 
 
-def _same_panes(one, other) -> bool:
-    "True when the two hold the same panes, in any order."
-    return sorted(id(pane) for pane in one) == sorted(id(pane) for pane in other)
-
-
 def every_promise_holds(plan: Plan) -> None:
     """
     What a plan promises, whatever laid it out.
@@ -285,9 +275,6 @@ def every_promise_holds(plan: Plan) -> None:
             assert overlap_of(mine.span(side), theirs.span(side)) > 0, "%r is not across from %r" % (other, slot)
 
             walk(plan, slot, side)
-
-    assert _same_panes(plan.order, plan.shown), "the numbering lost a pane"
-    assert _same_panes(plan.reading_order(), plan.shown), "reading lost a pane"
 
 
 @given(PLANS)
@@ -577,118 +564,17 @@ def test_ray_never_beats_neighbour(plan):
             assert mine.gap_to(plan.rects[beside], side) <= mine.gap_to(plan.rects[hit], side)
 
 
-# ----------------------------------------------------------------------
-# Reading order, which is the numbering a person sees.
-
-
-def test_row_reads_from_left():
-    plan = create_plan(A=Rect(0, 0, 4, 6), B=Rect(4, 0, 4, 6), C=Rect(8, 0, 4, 6))
-
-    assert names(plan.reading_order()) == ["A", "B", "C"]
-
-
-def test_stack_reads_from_top():
-    plan = create_plan(A=Rect(0, 0, 12, 2), B=Rect(0, 2, 12, 2), C=Rect(0, 4, 12, 2))
-
-    assert names(plan.reading_order()) == ["A", "B", "C"]
-
-
-def test_column_is_read_out_before_next_column():
+def test_a_hidden_pane_has_the_rectangle_of_its_slot():
     """
-    The shape of `test_deep_tree_reads_left_to_right_and_top_to_bottom`
-    in `test_order_of_panes.py`, as rectangles.
-    `VSplit([HSplit([A, B]), VSplit([C, D])])` draws this, and the
-    numbering it gives is the one to keep. Lillecarl/pymux#210.
-    """
-    plan = create_plan(
-        A=Rect(0, 0, 40, 12),
-        B=Rect(0, 12, 40, 12),
-        C=Rect(40, 0, 20, 24),
-        D=Rect(60, 0, 20, 24),
-    )
-
-    assert names(plan.reading_order()) == ["A", "B", "C", "D"]
-
-
-def test_reading_order_is_not_order_slots_went_on():
-    "Or it would say nothing that insertion order does not."
-    plan = create_plan(B=Rect(4, 0, 4, 6), A=Rect(0, 0, 4, 6))
-
-    assert names(plan.panes) == ["B", "A"]
-    assert names(plan.reading_order()) == ["A", "B"]
-
-
-def test_tabbed_slot_reads_out_pane_person_sees():
-    """
-    A stack is one thing on the screen, so it is one thing in the
-    numbering. Carl: "in a stack the visible pane is the only thing to
-    be concerned with (at least for now)."
-
-    The hidden pane is still on the plan, and still has the slot's
-    rectangle, so its pty has the size it will be shown at. It has no
-    number until it is the one being shown.
+    The pane behind in a stack is still on the plan, and has the slot's
+    rectangle, so its pty has the size it will be shown at.
     """
     left, behind, front = _Pane("left"), _Pane("behind"), _Pane("front")
     stack = Slot(behind, front)
     stack.show(front)
     plan = Plan({GROUND: {Slot(left): Rect(0, 0, 4, 6), stack: Rect(4, 0, 4, 6)}})
 
-    assert names(plan.reading_order()) == ["left", "front"]
-    assert names(plan.order) == ["left", "front"]
-
-    # And the one behind is still there, with a rectangle of its own.
     assert plan.rect_of(behind) == Rect(4, 0, 4, 6)
-
-
-def test_reading_order_follows_splits_and_not_rows():
-    """
-    Why "a slot to the left of another comes first" is not a promise.
-
-        +-----+-----+
-        |  A  |  Y  |
-        +-----+-----+
-        |     S     |
-        +-----+-----+
-        |  X  |  B  |
-        +-----+-----+
-
-    `S` runs the whole way across, so the first cut is horizontal and
-    the top row is read before the bottom one. `X` is to the left of
-    `Y` and comes after it, which is exactly what the tree does today:
-    `HSplit([VSplit([A, Y]), S, VSplit([X, B])])`.
-    """
-    plan = create_plan(
-        A=Rect(0, 0, 10, 5),
-        Y=Rect(10, 0, 10, 5),
-        S=Rect(0, 5, 20, 5),
-        X=Rect(0, 10, 10, 5),
-        B=Rect(10, 10, 10, 5),
-    )
-
-    assert names(plan.reading_order()) == ["A", "Y", "S", "X", "B"]
-
-
-def test_shape_no_split_makes_reads_from_top_left():
-    """
-    A pinwheel: no straight line divides it, so there is no tree to
-    recover and the answer is the plain one. Only a bare plane can
-    hold this shape.
-    """
-    plan = create_plan(
-        A=Rect(0, 0, 2, 1),
-        B=Rect(2, 0, 1, 2),
-        C=Rect(1, 2, 2, 1),
-        D=Rect(0, 1, 1, 2),
-        E=Rect(1, 1, 1, 1),
-    )
-
-    assert names(plan.reading_order()) == ["A", "B", "D", "E", "C"]
-
-
-@given(PLANS)
-def test_reading_plan_twice_reads_it_same_way(plan):
-    "A number that moves while nothing moves is a number nobody trusts."
-    assert plan.reading_order() == plan.reading_order()
 
 
 # ----------------------------------------------------------------------
@@ -858,7 +744,6 @@ def test_rects_run_back_to_front():
     )
 
     assert [slot.shown.name for slot in plan.rects] == ["bottom", "middle", "top"]
-    assert [pane.name for pane in plan.reading_order()] == ["bottom", "middle", "top"]
 
 
 def test_at_answers_the_topmost_slot():
@@ -1069,7 +954,6 @@ def test_covered_slot_is_still_on_the_plan():
     hidden = named(plan, "under")
 
     assert hidden in plan.rects
-    assert hidden.shown in plan.order
     assert plan.rect_of(hidden.shown) == Rect(0, 0, 4, 4)
 
 
