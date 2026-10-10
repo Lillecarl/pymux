@@ -173,8 +173,14 @@ ALTER TABLE pane_programs ADD COLUMN pane_revision INTEGER NOT NULL DEFAULT 0;
 UPDATE pane_programs SET pane_revision = (SELECT pane_revision FROM panes WHERE panes.pane_id = pane_programs.pane_id);
 ALTER TABLE panes DROP COLUMN pane_revision;
 """,
-    # A version 11 server forked every pane itself.
-    11: "ALTER TABLE pane_programs ADD COLUMN program_id INTEGER;",
+    # A version 11 server forked every pane itself and carried its fds
+    # across an exec; a holder hands each server its own. Its panes have
+    # no holder, so a load refuses them.
+    11: """
+ALTER TABLE pane_programs ADD COLUMN program_id INTEGER;
+ALTER TABLE pane_programs DROP COLUMN master_fd;
+ALTER TABLE pane_programs DROP COLUMN slave_fd;
+""",
 }
 
 #: The fields `ClientState.modes` holds, one JSON value in `clients`.
@@ -421,8 +427,6 @@ CREATE TABLE job_output(
 CREATE TABLE pane_programs(
   pane_id INTEGER PRIMARY KEY REFERENCES panes(pane_id),
   pane_pid INTEGER NOT NULL,
-  master_fd INTEGER NOT NULL,
-  slave_fd INTEGER,
   pane_width INTEGER NOT NULL,
   pane_height INTEGER NOT NULL,
   pane_revision INTEGER NOT NULL,
@@ -785,19 +789,17 @@ class Snapshot:
         control = pane.terminal.terminal_control
         process = control.process
         backend = process.backend
-        assert isinstance(backend, PosixBackend)  # `write` refused anything else
+        assert isinstance(backend, HeldBackend)  # `write` refused anything else
         freezer = self.freezers.get(pane.pane_id)
         if freezer is None:
             freezer = self.freezers[pane.pane_id] = Freezer()
         screen = freezer.freeze(control.screen)
         db = self.db
         db.execute(
-            "INSERT OR REPLACE INTO pane_programs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO pane_programs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 pane.pane_id,
                 backend.pid,
-                backend.master,
-                backend.slave,
                 process.sx,
                 process.sy,
                 # Output moves it, so it lives with the screen.
@@ -805,7 +807,7 @@ class Snapshot:
                 json.dumps(screen.root),
                 json.dumps(freeze(control.stream).root),
                 json.dumps(freeze(process).root),
-                backend.program_id if isinstance(backend, HeldBackend) else None,
+                backend.program_id,
             ),
         )
         first = len(freezer.appearance_index) - len(screen.appearances)
@@ -861,8 +863,12 @@ def _panes_of(pymux: Pymux) -> list[Pane]:
 
 def _refuse_what_cannot_be_saved(pane: Pane) -> None:
     terminal = pane.terminal
-    if not isinstance(getattr(terminal.terminal_control.process, "backend", None), PosixBackend):
+    backend = getattr(terminal.terminal_control.process, "backend", None)
+    if not isinstance(backend, PosixBackend):
         raise SnapshotError("pane %%%d runs no program on a pty, such as a job viewer" % pane.pane_id)
+    if not isinstance(backend, HeldBackend):
+        # Only the holder can hand a program to the next server.
+        raise SnapshotError("pane %%%d was forked by this server and not by its holder" % pane.pane_id)
 
 
 def _text_of(cells: list) -> str:
@@ -874,13 +880,13 @@ def _text_of(cells: list) -> str:
 
 
 def _refuse_the_server(pymux: Pymux) -> None:
-    "What no `execve` carries. The live store writes such a server all the same."
+    "What no handover carries. The live store writes such a server all the same."
     listener = pymux.listener
     if listener is not None and not isinstance(listener, PosixSocketListener):
-        raise SnapshotError("the server listens on a named pipe, which no `execve` carries")
+        raise SnapshotError("the server listens on a named pipe, which no handover carries")
     for name, channel in pymux.wait_channels.items():
         # A waiter is a command connection held open in this process,
-        # and the exec closes it: the script that waits would fail.
+        # and this process ends: the script that waits would fail.
         if channel.waiters or channel.lockers:
             raise SnapshotError("a command waits on channel %s; signal it first" % name)
 
@@ -894,7 +900,7 @@ def write_tables(pymux: Pymux, db: sqlite3.Connection) -> None:
         [
             ("created", pymux.created),
             ("socket_name", pymux.socket_name),
-            # Inherited across `execve`, so its number is the listener.
+            # The new server gets it under this number (`upgrade._hand_over`).
             (
                 "listener_fd",
                 listener.socket.fileno() if isinstance(listener, PosixSocketListener) else None,
@@ -1184,37 +1190,35 @@ class Program(NamedTuple):
 
     pane_id: PaneId
     pid: int
-    master: int
-    slave: int | None
+    #: The holder's name for the program. None in a snapshot stepped up
+    #: from a server that forked its panes itself.
+    program_id: int | None
     screen: Frozen
     stream: Frozen
     process: Frozen
-    #: The holder's name for the program, when the holder forked it.
-    program_id: int | None = None
 
 
 #: Builds a loaded pane: from its program, with what runs when it ends.
 MakePane = Callable[[Program, Callable[[], None] | None], Pane]
 
 
-def adopting(pymux: Pymux) -> MakePane:
+def adopting(pymux: Pymux, masters: dict[int, int]) -> MakePane:
     """
     Panes built around the programs a snapshot names, which still run.
 
-    The pty and the pid survive `execve`, so the new build adopts them,
-    and the screen, the parser and the process thaw over what
-    `_build_pane` made. Nothing starts until `start`.
+    The holder keeps each one and handed this server its master, which
+    `masters` holds by the holder's id. The screen, the parser and the
+    process thaw over what `_build_pane` made. Nothing starts until
+    `start`.
     """
 
     def make(program: Program, on_done: Callable[[], None] | None) -> Pane:
-        backend: PosixBackend
-        if program.program_id is None:
-            backend = PosixBackend.adopt(program.master, program.slave, program.pid)
-        elif pymux.holding is None:
-            raise SnapshotError("pane %d is held, and this server has no holder" % (program.pane_id,))
-        else:
-            # The holder reaps it: this process is not its parent.
-            backend = HeldBackend.adopt_held(pymux.holding, program.program_id, program.pid, program.master)
+        if pymux.holding is None:
+            raise SnapshotError("this server has no holder to take pane %d from" % (program.pane_id,))
+        if program.program_id not in masters:
+            raise SnapshotError("the holder keeps no program for pane %d" % (program.pane_id,))
+        assert program.program_id is not None
+        backend = HeldBackend.adopt_held(pymux.holding, program.program_id, program.pid, masters[program.program_id])
         return _thawed(pymux, program, pymux._build_pane(backend=backend, on_done=on_done))
 
     return make
@@ -1225,19 +1229,15 @@ def checking(pymux: Pymux) -> MakePane:
     Panes that thaw a snapshot's screens over a pty nobody runs on.
 
     An upgrade's dry run loads the snapshot this way in a process of the
-    new build, which holds none of the fds. It proves the new build
-    reads every table and thaws every screen, and adopts nothing.
-
-    **Start nothing it built.** The thaw writes the old owner's fd
-    numbers over the pty `_build_pane` opened, and in this process
-    those numbers are other files.
+    new build, which talks to no holder. It proves the new build reads
+    every table and thaws every screen, and adopts nothing. Start
+    nothing it built: the backends have no holder.
     """
 
     def make(program: Program, on_done: Callable[[], None] | None) -> Pane:
-        # The class has to be the one that thaws over it. A held one has
-        # no holder here, which is fine for a backend that never starts.
-        held = HeldBackend(None, None) if program.program_id is not None else None  # type: ignore[arg-type]
-        return _thawed(pymux, program, pymux._build_pane(backend=held, command=["true"], on_done=on_done))
+        # The class has to be the one that thaws over it.
+        held = HeldBackend(None, None)  # type: ignore[arg-type]
+        return _thawed(pymux, program, pymux._build_pane(backend=held, on_done=on_done))
 
     return make
 
@@ -1296,16 +1296,17 @@ def load(pymux: Pymux, path: str | os.PathLike[str], make_pane: MakePane | None 
     """
     Replace what a fresh `pymux` holds with a snapshot's.
 
-    `make_pane` builds each pane; `adopting` is the default, and
-    `checking` is the dry run's.
+    `make_pane` builds each pane: `adopting` with the masters the holder
+    handed over, or `checking` for the dry run. The default adopts
+    nothing, so it loads a server with no pane.
 
     Returns the fd of the listening socket, or None when the server had
-    none. Only the process the old server exec'd into holds it, so
-    adopting it is the caller's: `Pymux.adopt_listener`.
+    none. The old server passed it to the new one under the same number,
+    and adopting it is the caller's: `Pymux.adopt_listener`.
     """
     db = _open(path)
     try:
-        return _read(pymux, db, make_pane or adopting(pymux))
+        return _read(pymux, db, make_pane or adopting(pymux, {}))
     finally:
         db.close()
 
@@ -1326,12 +1327,10 @@ def _program(db: sqlite3.Connection, pane_id: PaneId) -> Program:
     return Program(
         pane_id=pane_id,
         pid=row["pane_pid"],
-        master=row["master_fd"],
-        slave=row["slave_fd"],
+        program_id=row["program_id"],
         screen=Frozen(json.loads(row["screen"]), buffers, appearances, sorted(buffers), {}),
         stream=Frozen(json.loads(row["stream"]), {}, [], [], {}),
         process=Frozen(json.loads(row["process"]), {}, [], [], {}),
-        program_id=row["program_id"],
     )
 
 

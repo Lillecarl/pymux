@@ -290,9 +290,6 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
 CONSTANT = {
     ("counters", "value"),  # five counters, and two of them may agree
     ("jobs", "status"),  # a running job refuses a snapshot
-    # Every pane here forks in this process, with no holder;
-    # `test_upgrade.py` runs servers that hold theirs.
-    ("pane_programs", "program_id"),
 }
 
 
@@ -387,7 +384,9 @@ def _text(pane) -> str:
 async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_path):
     alternate = tmp_path / "alternate.sh"
     alternate.write_text("printf '%s\\r\\n\\033[?1049h\\033[31mALT\\033[0m\\033[3'\nsleep 60\n" % ("wrapped " * 20))
-    async with pymux.running(), attached(pymux) as session:
+    # A holder beside this name forks every pane, as for a server on a socket.
+    pymux.socket_name = str(tmp_path / "server.sock")
+    async with pymux.running(hold=True), attached(pymux) as session:
         await shows(session, "$")
         connection = pymux.connections[-1]
         # The web viewer here sends no id; a terminal client does.
@@ -431,18 +430,24 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
         shell = pymux.sessions[0].arrangement.windows[0].panes[0]
         before = _text(shell)
 
-        # What `execve` does to the old server: its programs go on, and
-        # it no longer serves them.
+        # What an upgrade does to the old server: its programs go on, and
+        # it no longer reads them.
         for pane in snapshot._panes_of(pymux):
-            pane.process.backend.release()
+            pane.process.backend.pause_reading()
 
         fresh = Pymux()
         fresh.test_mode = True
-        snapshot.load(fresh, first)
+        fresh.socket_name = pymux.socket_name
         second = tmp_path / "second.sqlite"
-        snapshot.save(fresh, second)
         try:
-            async with fresh.running():
+            async with fresh.running(hold=True, keep_orphans=True):
+                assert fresh.holding is not None
+                masters = {
+                    program["id"]: await fresh.holding.master(program["id"])
+                    for program in await fresh.holding.programs()
+                }
+                snapshot.load(fresh, first, snapshot.adopting(fresh, masters))
+                snapshot.save(fresh, second)
                 await snapshot.start(fresh)
                 assert _jobs_of(fresh) == jobs
                 assert await _questions_of(fresh) == questions
@@ -495,9 +500,12 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                     assert back.command_buffer.text == "kill-ses"
                     assert back.app.layout.has_focus(back.command_buffer)
                 fresh.stop()
+                await fresh.unhold()
         finally:
             for pane in list(fresh.panes_by_id.values()):
                 pane.process.kill()
+            if pymux.holding is not None:
+                pymux.holding.close()
 
     assert _rows(first, "SELECT count(*) FROM panes") == [(9,)]
     # One under each root: the stack split beside, and the strip's
@@ -554,6 +562,8 @@ def test_a_snapshot_of_the_version_before_steps_up(pymux, tmp_path):
     db.execute("DROP TABLE copy_modes")
     db.execute("DROP TABLE saved_queries")
     db.execute("ALTER TABLE pane_programs DROP COLUMN program_id")
+    db.execute("ALTER TABLE pane_programs ADD COLUMN master_fd INTEGER NOT NULL DEFAULT 0")
+    db.execute("ALTER TABLE pane_programs ADD COLUMN slave_fd INTEGER")
     db.execute("ALTER TABLE pane_programs DROP COLUMN pane_revision")
     db.execute("ALTER TABLE panes ADD COLUMN pane_revision INTEGER NOT NULL DEFAULT 0")
     db.execute("DELETE FROM counters WHERE name IN ('notification', 'notification_route')")

@@ -1,9 +1,9 @@
 """
-A server upgraded in place keeps its pid, its panes and their programs.
+An upgraded server keeps its panes and their programs.
 
-A real daemon on a socket, upgraded to this same build by
-`upgrade-server`: the exec is the subject, and only a process of its own
-can exec. Lillecarl/pymux#408.
+A real daemon on a socket, handed over to this same build by
+`upgrade-server`: the new server takes every pane from the holder, which
+only works across processes. Lillecarl/pymux#408, Lillecarl/pymux#553.
 """
 
 from __future__ import annotations
@@ -70,13 +70,16 @@ def _counted(sock) -> list[int]:
         time.sleep(0.1)
 
 
+def _server_pid(sock) -> int:
+    return int(_once_it_answers(sock, "display-message", "-p", "#{pid}"))
+
+
 def _what_survives(sock) -> tuple[str, ...]:
     """
-    The server's pid, every pane with the pid of its program, a paste
-    buffer, and the key bindings with one bound since the start.
+    Every pane with the pid of its program, a paste buffer, and the key
+    bindings with one bound since the start.
     """
     return (
-        _once_it_answers(sock, "display-message", "-p", "#{pid}"),
         _once_it_answers(sock, "list-panes", "-a", "-F", "#{pane_id} #{pane_pid}"),
         _once_it_answers(sock, "show-buffer", "-b", "kept"),
         _once_it_answers(sock, "list-keys"),
@@ -176,6 +179,7 @@ def _shell_answers(sock) -> None:
 @pytest.mark.parametrize("new_build", ["same", "cannot-resume"])
 def test_an_upgrade_keeps_every_pane_and_its_program(server, tmp_path, new_build):
     before = _what_survives(server)
+    old = _server_pid(server)
     command = [sys.executable, "-m", "pymux"]
     if new_build == "cannot-resume":
         wrapper = tmp_path / "new-build"
@@ -183,29 +187,28 @@ def test_an_upgrade_keeps_every_pane_and_its_program(server, tmp_path, new_build
         wrapper.chmod(wrapper.stat().st_mode | stat.S_IXUSR)
         command = [str(wrapper)]
 
-    # The command's own connection goes with the exec, so its answer is
-    # not the verdict; what the server answers afterwards is.
+    # The command's own connection goes with the old server, so its
+    # answer is not the verdict; what the server answers afterwards is.
     cli(server, "upgrade-server", shlex.join(command))
 
     assert _what_survives(server) == before
-    # The same pid runs another command line: the exec happened. Only
-    # the first exec names a build to fall back to, so a server that
-    # names none is the old build, taken back.
-    pid = int(before[0])
-    with open("/proc/%d/cmdline" % pid, "rb") as f:
-        words = f.read().split(b"\0")
-    assert b"resume-server" in words
-    assert (b"--fall-back" in words) == (new_build == "same")
-    # The old build is a root for nix's collector while the new one
-    # runs, and only the server holds it: a pane started now does not.
-    # A server that went back to its old build has nothing older to keep.
-    upgraded_from = _environment_of(pid).get("PYMUX_UPGRADED_FROM", "")
-    assert upgraded_from.startswith(sys.executable) == (new_build == "same")
+    pid = _server_pid(server)
+    if new_build == "same":
+        # Another process serves, the new build, and the old one is gone.
+        assert pid != old and _gone(old)
+        with open("/proc/%d/cmdline" % pid, "rb") as f:
+            assert b"resume-server" in f.read().split(b"\0")
+    else:
+        # A new build that cannot take over leaves the old one serving.
+        assert pid == old
     _answer(server, "split-window", "-d", "sleep 60")
     newest = max(int(one) for one in _answer(server, "list-panes", "-F", "#{pane_pid}").split())
-    assert "PYMUX_UPGRADED_FROM" not in _environment_of(newest)
-    # The holder forked it, and keeps it for the next server.
-    assert _parent_of(newest) != pid
+    # The holder forked it, and keeps it for the next server. It outlives
+    # every build, so it holds the build it runs from for nix's collector.
+    holder = _parent_of(newest)
+    assert holder != pid
+    assert _environment_of(holder).get("PYMUX_BUILD", "").startswith(sys.executable)
+    assert "PYMUX_BUILD" not in _environment_of(newest)
     assert _inheritable(pid) == []
     numbers = _counted(server)
     assert numbers == list(range(1, LINES + 1))

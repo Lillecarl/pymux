@@ -6,7 +6,7 @@ at, and only a terminal can say what that is. A cell check reads one
 emulator's idea of the bytes; a terminal is stateful, and a redraw that
 leaves a stale cell, a lost colour or a cursor in the wrong place shows
 only in its pixels. So this runs one terminal for the whole check and
-takes a picture of each view on both sides of the exec, and fails
+takes a picture of each view on both sides of the upgrade, and fails
 unless every pair is the same pixels. Lillecarl/pymux#408.
 
 What it builds, under one attached client:
@@ -16,7 +16,7 @@ What it builds, under one attached client:
 * session `other`: two windows, and a popup over them;
 * two finished jobs, one that failed;
 * a pane in copy mode;
-* a message on the client, and the view it is on at the exec, which
+* a message on the client, and the view it is on at the upgrade, which
   the client has to come back to without being moved
   (Lillecarl/pymux#409).
 
@@ -58,7 +58,7 @@ ONLY_TERMINALS = os.environ.get("PYMUX_UPGRADE_TERMINALS", "foot")
 #: How long the relay copies, in seconds: the whole check is one run.
 HOLD = 600
 
-#: The view the client is on at the exec, with a message on it, as the
+#: The view the client is on at the upgrade, with a message on it, as the
 #: client comes back to it.
 LANDING = "landing"
 
@@ -246,7 +246,7 @@ def upgrade_in(terminal, seat, work, out):
         answer(socket_path, "display-message", "kept across the upgrade")
         answer(socket_path, "confirm-before", "-p", "Still asking? (y/n)", "display-message answered")
         # The active pane of the window the client is on stops in copy
-        # mode, and stays stopped across the exec.
+        # mode, and stays stopped across the upgrade.
         answer(socket_path, "copy-mode")
         in_mode = answer(socket_path, "list-panes", "-a", "-F", "#{pane_id} #{pane_in_mode}")
         if " 1" not in in_mode:
@@ -254,7 +254,7 @@ def upgrade_in(terminal, seat, work, out):
         before = every_view(socket_path, client, take_one, room, "before")
         options_before = answer(socket_path, "show-client-options", "-t", client)
 
-        # Where the client is when the exec comes. Nothing moves it
+        # Where the client is when the upgrade comes. Nothing moves it
         # after, so the new build has to put it back.
         listed = answer(socket_path, "list-windows", "-a", "-F", "#{session_name}:#{window_index} #{window_id}")
         windows = dict(line.split() for line in listed.splitlines())
@@ -269,8 +269,8 @@ def upgrade_in(terminal, seat, work, out):
         )
         if ended() is not None:
             raise RuntimeError("the terminal closed across the upgrade")
-        if answer(socket_path, "display-message", "-p", "#{pid}") != pid:
-            raise RuntimeError("the server's pid changed, so this was no exec")
+        if answer(socket_path, "display-message", "-p", "#{pid}") == pid:
+            raise RuntimeError("the old server still answers, so nothing was handed over")
         if what_the_jobs_say(socket_path) != jobs:
             raise RuntimeError("the jobs answer differently after the upgrade")
         if answer(socket_path, "list-panes", "-a", "-F", "#{pane_id} #{pane_in_mode}") != in_mode:

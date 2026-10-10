@@ -1080,8 +1080,9 @@ class Pymux:
     #: What a hot upgrade does with each attribute; `pyte.keep` says.
     #: An option's value is saved, because a person may have set it
     #: since the configuration file was read; the tables that describe
-    #: the options are rebuilt. The listening socket's fd is inherited
-    #: across `execve` (Lillecarl/pymux#408). Lillecarl/pymux#399.
+    #: the options are rebuilt. The listening socket's fd passes to the
+    #: new server under the same number (Lillecarl/pymux#553).
+    #: Lillecarl/pymux#399.
     KEEP: ClassVar[dict[str, Keep]] = {
         # Sessions, and the counters that name them.
         "sessions": Keep.SAVED,
