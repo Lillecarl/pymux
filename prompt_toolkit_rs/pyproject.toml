@@ -1,0 +1,16 @@
+[build-system]
+requires = ["maturin>=1.5,<2"]
+build-backend = "maturin"
+
+[project]
+name = "prompt_toolkit_rs"
+version = "0.1.0"
+description = "Rust kernels for prompt_toolkit's per-cell loops, patched in by install()"
+requires-python = ">=3.12"
+license = "BSD-3-Clause"
+dependencies = ["prompt-toolkit"]
+
+[tool.maturin]
+python-source = "python"
+module-name = "prompt_toolkit_rs._native"
+features = ["pyo3/extension-module"]
