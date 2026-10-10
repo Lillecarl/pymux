@@ -2770,6 +2770,24 @@ def _active_pane_index(sock_path):
     raise Failed("no active pane in:\n%s" % listed.stdout.decode())
 
 
+def _first_pane(sock_path, seconds=10.0):
+    """
+    Wait until the server has its first pane, and return its listing.
+
+    A client that answered its terminal's queries is attached, and the
+    server may still be making the window it opens on: a command in
+    between is answered "no current window". The gate met that twice.
+    """
+    deadline = time.monotonic() + seconds
+    while True:
+        listed = run_cli(sock_path, ["list-panes"])
+        if listed.returncode == 0 and listed.stdout.strip():
+            return listed
+        if time.monotonic() > deadline:
+            raise Failed("no pane after %.0fs: %r" % (seconds, listed.stderr))
+        time.sleep(0.02)
+
+
 def _two_cats_side_by_side(tmp, mode):
     """
     One client on two `cat` panes, the left one active, settled.
@@ -2785,6 +2803,7 @@ def _two_cats_side_by_side(tmp, mode):
     terminal = Terminal(tmp, mode, command="cat", config=config, rows=24, columns=80)
     terminal.wait_for_queries()
     terminal.write(b"\x1b[?62;1;6c")
+    _first_pane(terminal.sock_path)
     made = run_cli(terminal.sock_path, ["split-window", "-h", "cat"])
     assert made.returncode == 0, made.stderr
     ids = run_cli(terminal.sock_path, ["list-panes", "-F", "#{pane_id}"]).stdout.decode().split()
