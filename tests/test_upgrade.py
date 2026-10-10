@@ -107,6 +107,34 @@ def _environment_of(pid: int) -> dict[str, str]:
     return {key.decode(): value.decode(errors="replace") for key, value in pairs}
 
 
+def _parent_of(pid: int) -> int:
+    with open("/proc/%d/stat" % pid) as f:
+        return int(f.read().rsplit(")", 1)[1].split()[1])
+
+
+def _gone(pid: int) -> bool:
+    "Whether `pid` has ended. A zombie its new parent has yet to reap has."
+    try:
+        with open("/proc/%d/stat" % pid) as f:
+            return f.read().rsplit(")", 1)[1].split()[0] == "Z"
+    except FileNotFoundError:
+        return True
+
+
+def test_kill_server_ends_the_holder_and_its_programs(server):
+    "A server that ends on purpose takes its programs along. Lillecarl/pymux#553."
+    pids = [int(one) for one in _answer(server, "list-panes", "-F", "#{pane_pid}").split()]
+    holder = "%s.holder" % (server,)
+    assert os.path.exists(holder)
+
+    cli(server, "kill-server")
+
+    deadline = time.monotonic() + CLI_TIMEOUT
+    while os.path.exists(holder) or not all(_gone(pid) for pid in pids):
+        assert time.monotonic() < deadline, "the holder or a program outlived kill-server"
+        time.sleep(0.05)
+
+
 def _leftovers() -> list[str]:
     return glob.glob(os.path.join(socket_directory(), "pymux.upgrade.*"))
 
@@ -176,6 +204,8 @@ def test_an_upgrade_keeps_every_pane_and_its_program(server, tmp_path, new_build
     _answer(server, "split-window", "-d", "sleep 60")
     newest = max(int(one) for one in _answer(server, "list-panes", "-F", "#{pane_pid}").split())
     assert "PYMUX_UPGRADED_FROM" not in _environment_of(newest)
+    # The holder forked it, and keeps it for the next server.
+    assert _parent_of(newest) != pid
     assert _inheritable(pid) == []
     numbers = _counted(server)
     assert numbers == list(range(1, LINES + 1))

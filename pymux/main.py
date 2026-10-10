@@ -48,6 +48,8 @@ from prompt_toolkit.styles import (
 from ptterm import Terminal
 from ptyhost.backends import Backend
 from ptyhost.backends.posix import PosixBackend
+from ptyhost.held import HeldBackend, Holding
+from ptyhost.holder import HolderError
 from pyte.environment import terminal_name
 from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
 from pyte.keep import Keep
@@ -1089,6 +1091,7 @@ class Pymux:
         "created": Keep.SAVED,
         "socket_name": Keep.SAVED,
         "listener": Keep.SAVED,
+        "holding": Keep.REBUILT,  # the next server connects to the same holder
         "original_cwd": Keep.SAVED,
         "source_file": Keep.SAVED,
         "startup_command": Keep.SAVED,
@@ -1339,6 +1342,12 @@ class Pymux:
         #: commands, and a client that arrives over it cannot attach.
         #: Lillecarl/pymux#159.
         self._serves_one_terminal = False
+
+        #: The holder that forks this server's panes and keeps them for
+        #: the next one (`ptyhost.held`). Only a server on a socket has
+        #: one: the others end with the terminal they draw on.
+        #: Lillecarl/pymux#553.
+        self.holding: Holding | None = None
         self.connections = []
 
         #: Kitty keyboard protocol flags last sent to the clients. (The
@@ -1956,7 +1965,7 @@ class Pymux:
         introspect.answer_signal()
 
     @asynccontextmanager
-    async def running(self):
+    async def running(self, hold: bool = False, keep_orphans: bool = False):
         """
         The scope this server serves in.
 
@@ -1968,6 +1977,10 @@ class Pymux:
         The three routes enter it, and so does the test harness. A
         route that built its own would be a route the harness could
         not be. Lillecarl/pymux#87.
+
+        `hold` connects to the holder (`hold`) before the first client
+        is taken, so that no pane forks without it. `keep_orphans` is
+        for an upgrade, whose snapshot names the programs it takes.
         """
         async with anyio.create_task_group() as tasks:
             self.tasks = tasks
@@ -1976,6 +1989,8 @@ class Pymux:
             tasks.start_soon(self._auto_refresh)
             tasks.start_soon(self._sweep_jobs)
             tasks.start_soon(self.live.keep, self)
+            if hold:
+                await self.hold(keep_orphans)
             if self.listener is not None:
                 self.serve_listener()
             try:
@@ -1989,6 +2004,77 @@ class Pymux:
                 # No task touches the jobs past here, so the database
                 # closes with nobody left to read it.
                 await self.jobs.close()
+
+    def holder_path(self) -> str:
+        "Where this server's holder listens: beside the server's own socket."
+        return "%s.holder" % (self.socket_name,)
+
+    async def hold(self, keep_orphans: bool = False) -> None:
+        """
+        Connect to this server's holder, and start one when none answers.
+
+        A holder that answers may hold programs of a server that ended
+        without a word. A server that does not take them over lets them
+        go, because a server connected keeps a holder from hanging up
+        its orphans. Lillecarl/pymux#553.
+
+        A server with no holder still serves, and forks its panes
+        itself: what it loses is the upgrade.
+        """
+        assert self.tasks is not None
+        path = self.holder_path()
+        try:
+            holding = await self._holder_at(path)
+        except OSError, HolderError:
+            logger.exception("No holder at %s: this server forks its panes itself.", path)
+            return
+        self.holding = holding
+        self.tasks.start_soon(holding.run)
+        if not keep_orphans:
+            await self.release_orphans()
+
+    @staticmethod
+    async def _holder_at(path: str) -> Holding:
+        "The holder on `path`, started first when none answers there."
+        from .upgrade import rooted_environment
+
+        try:
+            return await Holding.connect(path)
+        except OSError, HolderError:
+            pass
+        # `-I`: the holder takes nothing from this environment's
+        # PYTHONPATH or working directory. The rooted environment keeps
+        # the build it runs from out of the collector's reach, because it
+        # outlives the server that starts it.
+        started = await anyio.run_process(
+            [sys.executable, "-I", "-m", "ptyhost.holder", "--socket", path, "--detach"],
+            env=rooted_environment(),
+            check=False,
+        )
+        if started.returncode != 0:
+            raise HolderError(started.stderr.decode(errors="replace").strip() or "the holder did not start")
+        return await Holding.connect(path)
+
+    async def release_orphans(self) -> None:
+        "Let go of every program the holder keeps that no pane of this server runs."
+        if self.holding is None:
+            return
+        mine = {
+            backend.program_id
+            for pane in self.panes_by_id.values()
+            if isinstance(backend := pane.process.backend, HeldBackend)
+        }
+        for program in await self.holding.programs():
+            if program["id"] not in mine:
+                await self.holding.release(program["id"])
+
+    async def unhold(self) -> None:
+        "End the holder with this server: `kill-server` ends its programs too."
+        holding, self.holding = self.holding, None
+        if holding is not None:
+            with suppress(HolderError, OSError):
+                await holding.quit()
+            holding.close()
 
     def serve_listener(self) -> None:
         "Take clients on `listener`, in the server's task group."
@@ -2395,6 +2481,8 @@ class Pymux:
             command=command_list,
             environment=environment_of_the_pane,
             directory=path or self.original_cwd,
+            # A viewer forks nothing, so the holder has nothing to keep.
+            holding=self.holding if job is None else None,
             on_done=on_done,
             # A viewer never ends on its own: the job ending feeds an
             # exit line and the pane stays, so there is nothing to call
@@ -2460,6 +2548,7 @@ class Pymux:
         command: list[str] | None = None,
         environment: Callable[[dict[str, str]], None] | None = None,
         directory: str | None = None,
+        holding: Holding | None = None,
         on_done: Callable[[], None] | None = None,
         watch_end: bool = True,
     ) -> Pane:
@@ -2563,6 +2652,7 @@ class Pymux:
             takes_key_first=takes_key_first,
             environment=environment,
             directory=directory,
+            holding=holding,
             command=command,
             # The `history-limit` option, which said how far copy mode
             # could scroll and never reached the screen that holds the
@@ -4329,10 +4419,11 @@ exec pymux notify -u "$urgency" -- "$@"
 
         async def serve() -> None:
             try:
-                async with self.running():
+                async with self.running(hold=True, keep_orphans=resumed is not None):
                     if resumed is not None:
                         await resumed()
                     await self.done.wait()
+                    await self.unhold()
             finally:
                 # `stop()` is what set `done`, so this is usually a
                 # second call that finds nothing. It is here for the

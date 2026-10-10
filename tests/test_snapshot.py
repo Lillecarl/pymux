@@ -290,6 +290,9 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
 CONSTANT = {
     ("counters", "value"),  # five counters, and two of them may agree
     ("jobs", "status"),  # a running job refuses a snapshot
+    # Every pane here forks in this process, with no holder;
+    # `test_upgrade.py` runs servers that hold theirs.
+    ("pane_programs", "program_id"),
 }
 
 
@@ -550,6 +553,7 @@ def test_a_snapshot_of_the_version_before_steps_up(pymux, tmp_path):
     db.execute("DROP TABLE wait_channels")
     db.execute("DROP TABLE copy_modes")
     db.execute("DROP TABLE saved_queries")
+    db.execute("ALTER TABLE pane_programs DROP COLUMN program_id")
     db.execute("ALTER TABLE pane_programs DROP COLUMN pane_revision")
     db.execute("ALTER TABLE panes ADD COLUMN pane_revision INTEGER NOT NULL DEFAULT 0")
     db.execute("DELETE FROM counters WHERE name IN ('notification', 'notification_route')")

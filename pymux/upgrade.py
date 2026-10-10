@@ -81,7 +81,7 @@ def this_build() -> list[str]:
 UPGRADED_FROM = "PYMUX_UPGRADED_FROM"
 
 
-def _rooted_environment() -> dict[str, str]:
+def rooted_environment() -> dict[str, str]:
     "This environment, naming every path this build runs from."
     # The interpreter alone is not the build: pymux and what it imports
     # come from the other store paths on `sys.path`.
@@ -171,7 +171,7 @@ def _exec(argv: list[str], fds: list[int]) -> None:
     for fd in fds:
         os.set_inheritable(fd, True)
     try:
-        os.execve(argv[0], argv, _rooted_environment())
+        os.execve(argv[0], argv, rooted_environment())
     except OSError:
         for fd in fds:
             os.set_inheritable(fd, False)
@@ -222,6 +222,9 @@ def resume(path: str, fall_back: list[str] | None) -> None:
         pymux = Pymux()
         server = snapshot.read_server(path)
         pymux.source_file = server["source_file"]
+        # Before the loop: the holder is beside the socket, and the server
+        # connects to it before the snapshot loads.
+        pymux.socket_name = server["socket_name"]
     except Exception:
         give_up()
 
@@ -240,6 +243,7 @@ def resume(path: str, fall_back: list[str] | None) -> None:
             for pane in strays:
                 pane.process.kill()
             await snapshot.start(pymux)
+            await pymux.release_orphans()
         except Exception:
             give_up()
         for fd in carried(pymux):

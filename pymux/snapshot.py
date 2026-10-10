@@ -41,6 +41,7 @@ from prompt_toolkit.data_structures import Size
 from prompt_toolkit.selection import SelectionState, SelectionType
 from ptyhost.backends.posix import PosixBackend
 from ptyhost.backends.posix_utils import PtyReader
+from ptyhost.held import HeldBackend
 from ptyhost.process import Process
 from pyte.freeze import Freezer, Frozen, freeze, saved_fields, thaw
 from pyte.images import GraphicsImage, GraphicsPlacement, GraphicsState
@@ -68,7 +69,7 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "adopting", "checking", "load", "save
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 11
+SNAPSHOT_VERSION = 12
 
 
 def _quoted(value: str | None) -> str:
@@ -172,6 +173,8 @@ ALTER TABLE pane_programs ADD COLUMN pane_revision INTEGER NOT NULL DEFAULT 0;
 UPDATE pane_programs SET pane_revision = (SELECT pane_revision FROM panes WHERE panes.pane_id = pane_programs.pane_id);
 ALTER TABLE panes DROP COLUMN pane_revision;
 """,
+    # A version 11 server forked every pane itself.
+    11: "ALTER TABLE pane_programs ADD COLUMN program_id INTEGER;",
 }
 
 #: The fields `ClientState.modes` holds, one JSON value in `clients`.
@@ -425,7 +428,8 @@ CREATE TABLE pane_programs(
   pane_revision INTEGER NOT NULL,
   screen TEXT NOT NULL,
   stream TEXT NOT NULL,
-  process TEXT NOT NULL
+  process TEXT NOT NULL,
+  program_id INTEGER
 );
 CREATE TABLE screen_appearances(
   pane_id INTEGER NOT NULL REFERENCES panes(pane_id),
@@ -556,6 +560,7 @@ WRITES: dict[str, frozenset[str]] = {
             Stream,
             Process,
             PosixBackend,
+            HeldBackend,
             PtyReader,
         )
     },
@@ -787,7 +792,7 @@ class Snapshot:
         screen = freezer.freeze(control.screen)
         db = self.db
         db.execute(
-            "INSERT OR REPLACE INTO pane_programs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO pane_programs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 pane.pane_id,
                 backend.pid,
@@ -800,6 +805,7 @@ class Snapshot:
                 json.dumps(screen.root),
                 json.dumps(freeze(control.stream).root),
                 json.dumps(freeze(process).root),
+                backend.program_id if isinstance(backend, HeldBackend) else None,
             ),
         )
         first = len(freezer.appearance_index) - len(screen.appearances)
@@ -1183,6 +1189,8 @@ class Program(NamedTuple):
     screen: Frozen
     stream: Frozen
     process: Frozen
+    #: The holder's name for the program, when the holder forked it.
+    program_id: int | None = None
 
 
 #: Builds a loaded pane: from its program, with what runs when it ends.
@@ -1199,7 +1207,14 @@ def adopting(pymux: Pymux) -> MakePane:
     """
 
     def make(program: Program, on_done: Callable[[], None] | None) -> Pane:
-        backend = PosixBackend.adopt(program.master, program.slave, program.pid)
+        backend: PosixBackend
+        if program.program_id is None:
+            backend = PosixBackend.adopt(program.master, program.slave, program.pid)
+        elif pymux.holding is None:
+            raise SnapshotError("pane %d is held, and this server has no holder" % (program.pane_id,))
+        else:
+            # The holder reaps it: this process is not its parent.
+            backend = HeldBackend.adopt_held(pymux.holding, program.program_id, program.pid, program.master)
         return _thawed(pymux, program, pymux._build_pane(backend=backend, on_done=on_done))
 
     return make
@@ -1219,7 +1234,10 @@ def checking(pymux: Pymux) -> MakePane:
     """
 
     def make(program: Program, on_done: Callable[[], None] | None) -> Pane:
-        return _thawed(pymux, program, pymux._build_pane(command=["true"], on_done=on_done))
+        # The class has to be the one that thaws over it. A held one has
+        # no holder here, which is fine for a backend that never starts.
+        held = HeldBackend(None, None) if program.program_id is not None else None  # type: ignore[arg-type]
+        return _thawed(pymux, program, pymux._build_pane(backend=held, command=["true"], on_done=on_done))
 
     return make
 
@@ -1313,6 +1331,7 @@ def _program(db: sqlite3.Connection, pane_id: PaneId) -> Program:
         screen=Frozen(json.loads(row["screen"]), buffers, appearances, sorted(buffers), {}),
         stream=Frozen(json.loads(row["stream"]), {}, [], [], {}),
         process=Frozen(json.loads(row["process"]), {}, [], [], {}),
+        program_id=row["program_id"],
     )
 
 

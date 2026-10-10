@@ -2697,6 +2697,13 @@ def check_relative_socket_name_survives_the_daemon(tmp):
         assert made.returncode == 0, made.stderr
         assert absolute.exists(), "the server bound somewhere else"
 
+        # The shell's prompt first: keys that arrive before it put the
+        # answer on the prompt's row.
+        deadline = time.monotonic() + 10
+        while "$" not in cli(["capture-pane", "-p"]).stdout.decode("utf-8", "replace"):
+            assert time.monotonic() < deadline, "the shell never prompted"
+            time.sleep(0.05)
+
         # What a program inside a pane is told to find the server with.
         cli(["send-keys", "echo MARK=$PYMUX", "Enter"])
         time.sleep(1.0)
