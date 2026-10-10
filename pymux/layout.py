@@ -1401,12 +1401,11 @@ class LayoutManager:
         An empty answer means this client shows nothing that time
         moves. `full-screen on` is that case.
 
-        **The panes are this client's window's, and no others.** It
-        used to read `#T` for every pane of every window. That was free
-        on the four second tick and is not: a pane's write asks the
-        other clients this question now (Lillecarl/pymux#224), so a
-        session of eight windows read eight windows of titles every
-        time any pane wrote.
+        **The panes are this client's window's, and no others.** A
+        pane's write asks the other clients this question
+        (Lillecarl/pymux#224), so reading `#T` for every pane of every
+        window reads eight windows of titles each time any pane of a
+        session of eight writes.
 
         Narrowing it loses nothing, because `_get_status_tokens` above
         already formats `window-status-format` for every window. So
@@ -2570,7 +2569,7 @@ def _tell_pane_its_size(pane: arrangement.Pane, rect) -> None:
     """
     Give a pane the size of its rectangle.
 
-    **The plan sizes a pane, and the drawing no longer has to.** A
+    **The plan sizes a pane, and the drawing does not have to.** A
     pane that is drawn hears the same numbers again from
     prompt_toolkit, which costs nothing because neither the pty nor
     the screen acts on a size it already has. A pane that is *not*
@@ -2596,9 +2595,10 @@ def layout_of(pymux: Pymux, window):
     and scrolls. Lillecarl/pymux#198.
 
     **Zoom wraps whichever of them the window is in**, and that is why
-    it is a wrapper. The branch here used to test `window.zoom` first,
-    so a zoomed strip was not a strip: the row stopped existing for
-    that frame instead of being covered. Lillecarl/pymux#215.
+    it is a wrapper. A branch that tests `window.zoom` before
+    `window.strip` makes a zoomed strip not a strip: the row stops
+    existing for that frame instead of being covered.
+    Lillecarl/pymux#215.
 
     The gaps are passed as a callable, because the gap between two
     stacked panes is two rows when a bar is drawn under a pane and one
@@ -2853,10 +2853,9 @@ def write_sizes_into_weights(pymux: Pymux, window) -> None:
     of one is one cell -- the weights add up to the room, so each
     child's share of it comes out as the number itself.
 
-    The render used to do this on every frame
-    (`report_write_position_callback`), which is how the arrangement
-    came to hold four kinds of geometry at once. The plan decides now,
-    and this is the one place that writes a weight back.
+    The plan decides the cells, and this is the one place that
+    writes a weight back. A render that writes them on every frame
+    leaves the arrangement holding four kinds of geometry at once.
 
     tmux does the opposite and pays for it: `layout_resize_adjust`
     keeps absolute cells and moves them by a delta, so its rounding
@@ -3004,9 +3003,8 @@ def _create_container_for_process(
 
         # **Padded on both sides, and not on one.** The bar centres
         # this, so a space that hangs off the end of it moves the title
-        # off the middle of the pane by half of that space. The title
-        # used to be drawn from the left, where a trailing space costs
-        # nothing. Lillecarl/pymux#207.
+        # off the middle of the pane by half of that space.
+        # Lillecarl/pymux#207.
         title = format_pymux_string(pymux, PANE_TITLE_FORMAT, pane=arrangement_pane).strip()
 
         if title:

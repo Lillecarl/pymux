@@ -408,11 +408,11 @@ class ClientState:
         #: The questions waiting for a yes or a no, oldest first, each
         #: one a (text, command) pair.
         #:
-        #: **A list and not one pair.** There used to be one, and a
-        #: second question silently replaced the first: a pane waiting
-        #: on `confirm-before kill-pane` had its question taken by an
-        #: `open-url` ask, and a `y` then opened the URL while the kill
-        #: was lost with nothing said about either. Ask mode exists so
+        #: **A list and not one pair.** With one pair a second question
+        #: silently replaces the first: a pane waiting on
+        #: `confirm-before kill-pane` has its question taken by an
+        #: `open-url` ask, and a `y` then opens the URL while the kill
+        #: is lost with nothing said about either. Ask mode exists so
         #: that nothing happens without a yes, and losing a yes is the
         #: same surprise the other way round. Lillecarl/pymux#266.
         self.confirmations: list[tuple[str, str]] = []
@@ -4518,13 +4518,13 @@ exec pymux notify -u "$urgency" -- "$@"
         """
         Forget a client that has gone, and everything of it.
 
-        **Both lists, not one.** `connections` used to keep every
-        connection the server had ever accepted, so a person who
-        attached and detached each morning left a `ServerConnection`
-        behind each time, with its pipe input and its parser. Nothing
-        drew for them -- `_send_packet` answers a closed connection
-        with nothing -- so the cost was memory and a longer walk for
-        every broadcast. Lillecarl/pymux#226.
+        **Both lists, not one.** A connection left in `connections`
+        stays for the life of the server, so a person who attaches and
+        detaches each morning leaves a `ServerConnection` behind each
+        time, with its pipe input and its parser. Nothing draws for
+        them -- `_send_packet` answers a closed connection with nothing
+        -- so the cost is memory and a longer walk for every broadcast.
+        Lillecarl/pymux#226.
         """
         if connection in self._client_states:
             del self._client_states[connection]
