@@ -666,12 +666,6 @@ class LayoutManager:
         # and a title bar drawn inside that frame asks for its plan.
         self._body = DynamicBody(self.pymux)
 
-        #: The plan of the frame being drawn: the window, the size it
-        #: was measured for, and the plan itself. Everything drawn in
-        #: one frame asks the same question, so it is worked out once.
-        #: `forget_plan` says when it goes. Lillecarl/pymux#217.
-        self._frame_plan: tuple[object, Size, Plan] | None = None
-
         self.layout = self._create_layout()
 
         # Keep track of render information.
@@ -735,50 +729,6 @@ class LayoutManager:
         bar reads instead of measuring the window again.
         """
         return self._body.panes()
-
-    def plan_of_this_frame(self, window, size: Size) -> Plan | None:
-        """
-        The plan already worked out for this window, this frame.
-
-        `None` when there is none, or when it was worked out for
-        another window or another size. A frame asks this question
-        four times for every pane it draws -- what is to my left, my
-        right, above and below -- and the answer is one plan.
-        """
-        if self._frame_plan is None:
-            return None
-
-        drawn_for, drawn_at, plan = self._frame_plan
-        if drawn_for is not window or drawn_at != size:
-            return None
-
-        return plan
-
-    def remember_plan(self, window, size: Size, plan: Plan) -> None:
-        "Keep this plan for the rest of the frame."
-        self._frame_plan = (window, size, plan)
-
-    def forget_plan(self) -> None:
-        """
-        Throw away the plan of the frame just drawn.
-
-        **Anything that changes a window calls this**, through
-        `Pymux.invalidate`, and so does the start of every frame. A
-        plan is only an answer while the window it measured is the
-        window that is there.
-        """
-        self._frame_plan = None
-
-    def before_frame(self) -> None:
-        """
-        Get ready to draw.
-
-        There are no write positions to clear: every render writes to a
-        new screen and the positions go with it. What does have to go
-        is the plan of the frame before this one, so that the first
-        question of this frame measures the window as it is now.
-        """
-        self.forget_plan()
 
     def _popup_box(self) -> AnyContainer:
         "The pop-up, or nothing while nobody has asked for one."
@@ -2842,16 +2792,8 @@ def plan_of(pymux: Pymux, window) -> Plan:
         # command from the command line runs on a client like that.
         return layout_of(pymux, window).measure(size)
 
-    known = manager.plan_of_this_frame(window, size)
-    if known is not None:
-        return known
-
     plan = _frame_plan(manager, window, size)
-    if plan is None:
-        plan = layout_of(pymux, window).measure(size)
-
-    manager.remember_plan(window, size, plan)
-    return plan
+    return layout_of(pymux, window).measure(size) if plan is None else plan
 
 
 def size_the_panes_of(pymux: Pymux, window) -> None:

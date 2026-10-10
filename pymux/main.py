@@ -550,13 +550,6 @@ class ClientState:
 
         self.app = self._create_app()
 
-        # Whatever the frame before this one left behind goes now: the
-        # plan it measured is an answer about the window as it was.
-        def before_render(_):
-            self.layout_manager.before_frame()
-
-        self.app.before_render += before_render
-
         # Draw the images of the panes right after rendering. (The text
         # is on the screen by then; kitty draws images over it.)
         def after_render(_):
@@ -2892,13 +2885,6 @@ class Pymux:
         # days. `pymux counters` holds the same reasons with nothing
         # written down. Lillecarl/pymux#248.
         logger.debug("Drawing %s of the clients: %s", len(self.apps), reason)
-
-        # Whatever changed may have changed where the panes are, so no
-        # client may answer that from the frame it drew before this.
-        # The plan is worked out again on the next frame, which is what
-        # this asks for. Lillecarl/pymux#217.
-        for client_state in self._client_states.values():
-            client_state.layout_manager.forget_plan()
 
         # **Before the invalidates, and here rather than on the path a
         # pane's write takes.** A window switch and a `set-option`

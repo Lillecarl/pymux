@@ -142,23 +142,9 @@ class _Manager:
 
     def __init__(self, container) -> None:
         self._container = container
-        self._frame_plan = None
 
     def pane_container(self):
         return self._container
-
-    def plan_of_this_frame(self, window, size):
-        if self._frame_plan is None:
-            return None
-
-        drawn_for, drawn_at, plan = self._frame_plan
-        if drawn_for is not window or drawn_at != size:
-            return None
-
-        return plan
-
-    def remember_plan(self, window, size, plan) -> None:
-        self._frame_plan = (window, size, plan)
 
 
 class _ClientState:
