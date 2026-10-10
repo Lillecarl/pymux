@@ -153,6 +153,13 @@ class TerminalClient(Client):
         #: windows back. Lillecarl/pymux#399.
         self.client_id = secrets.token_hex(8)
 
+        #: Whether this client has attached once already. **Only the
+        #: first attach detaches or hangs up the others.** `attach -d`
+        #: and `-x` name the clients that were there when the person
+        #: typed it; the ones that reattach beside this one after an
+        #: upgrade or a dropped link did not.
+        self._attached_before = False
+
     @property
     def _stdin_reader(self) -> PosixStdinReader:
         """
@@ -185,14 +192,16 @@ class TerminalClient(Client):
         Tell the server that this client wants the user interface, and
         ask the outer terminal what it supports.
         """
+        first = not self._attached_before
+        self._attached_before = True
         self._send_size()
         self._send_packet(
             {
                 Field.CMD: Packet.START_GUI,
-                Field.DETACH_OTHERS: detach_other_clients,
+                Field.DETACH_OTHERS: detach_other_clients and first,
                 # `-x`: the other clients of the session leave, and the
                 # terminals they were in close. Lillecarl/pymux#347.
-                Field.HANG_UP_OTHERS: self.hang_up_others,
+                Field.HANG_UP_OTHERS: self.hang_up_others and first,
                 # `-r`: this client only watches. Lillecarl/pymux#467.
                 Field.READ_ONLY: self.read_only,
                 Field.COLOR_DEPTH: color_depth,

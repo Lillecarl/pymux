@@ -477,18 +477,13 @@ class SshClient(TerminalClient):
         connection, reader = await self._connect()
         waits = Backoff()
         cannot = None
-        # **Only the first attach detaches the others.** `attach -d`
-        # names the clients that were there when the person typed it.
-        # Somebody who attached while this link was down did not.
-        detach_others = detach_other_clients
 
         with raw_mode(stdin_fd):
             while True:
                 # The moment this attachment began, so the backoff can
                 # tell a link that held from one that dropped at once.
                 lived_from = anyio.current_time()
-                lost = await self._attached(connection, reader, stdin_fd, detach_others, color_depth)
-                detach_others = False
+                lost = await self._attached(connection, reader, stdin_fd, detach_other_clients, color_depth)
 
                 if lost is None:
                     break  # The server closed the connection.

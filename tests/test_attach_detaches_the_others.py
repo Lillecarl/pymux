@@ -15,8 +15,10 @@ import sys
 from contextlib import asynccontextmanager
 
 import anyio
+from libpymux.protocol import Field, Packet
 from prompt_toolkit.application.current import set_app
 
+from pymux.client.terminal import TerminalClient
 from pymux.main import Pymux
 from pymux.pipes.memory import connect_in_memory
 from pymux.server import ServerConnection
@@ -238,3 +240,33 @@ async def test_a_command_that_is_running_is_not_a_client():
 
         assert not asking._closed, "attach -d closed a connection running a command"
         assert not taking_over._closed
+
+
+class _Recording(TerminalClient):
+    "A client that keeps the packets it sends, on a terminal of fixed size."
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.sent: list[dict] = []
+
+    def size(self):
+        return 24, 80
+
+    def _send_packet(self, data) -> None:
+        self.sent.append(data)
+
+
+def test_only_first_attach_detaches_or_hangs_up_others(capfd):
+    """
+    `attach -d -x` names the clients that were there when it was typed.
+    The attach after an upgrade or a dropped link sends neither, or it
+    takes the clients that reattach beside it.
+    """
+    client = _Recording()
+    client.hang_up_others = True
+
+    client._start_gui(True, None)
+    client._start_gui(True, None)
+
+    starts = [packet for packet in client.sent if packet[Field.CMD] == Packet.START_GUI]
+    assert [(p[Field.DETACH_OTHERS], p[Field.HANG_UP_OTHERS]) for p in starts] == [(True, True), (False, False)]

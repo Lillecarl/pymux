@@ -25,6 +25,7 @@ from pathlib import Path
 
 import anyio
 import pytest
+from libpymux.protocol import Field, Packet
 from test_ssh_client import create_key
 
 from pymux.client import reconnect as reconnect_module
@@ -689,13 +690,14 @@ async def test_only_the_first_attach_detaches_the_other_clients(monkeypatch):
     reconnect that repeated the flag would throw them off.
     """
     asked = []
-    original = SshClient._attached
+    original = SshClient._send_packet
 
-    async def _attached(self, connection, reader, stdin_fd, detach_others, color_depth):
-        asked.append(detach_others)
-        return await original(self, connection, reader, stdin_fd, detach_others, color_depth)
+    def _send_packet(self, data) -> None:
+        if data.get(Field.CMD) == Packet.START_GUI:
+            asked.append(data[Field.DETACH_OTHERS])
+        original(self, data)
 
-    monkeypatch.setattr(SshClient, "_attached", _attached)
+    monkeypatch.setattr(SshClient, "_send_packet", _send_packet)
 
     async with attached(monkeypatch, detach_other_clients=True) as it:
         await it.until(lambda: len(it.pymux.connections) == 1, "the first attach")
