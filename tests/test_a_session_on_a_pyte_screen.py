@@ -20,6 +20,7 @@ import re
 import sys
 import time
 from contextlib import asynccontextmanager
+from unittest.mock import patch
 
 import anyio
 import pytest
@@ -75,13 +76,28 @@ async def attached(pymux, read_only: bool = False):
         read_only=read_only,
     )
 
+    # Every packet the server sends is a call of `_write`, made when it
+    # is sent and awaited later. The calls against the packets taken is
+    # the fence `caught_up` waits on. Lillecarl/pymux#572.
+    # Patched on the class: an attribute on the connection is state the
+    # hot upgrade would have to give a fate.
+    session.written = session.taken = 0
+    write = ServerConnection._write
+
+    def counted(self, text):
+        if self is connection:
+            session.written += 1
+        return write(self, text)
+
     async def feed() -> None:
         while True:
             try:
                 packet = await client_end.read()
             except Exception:
                 return
-            if session.take_packet(json.loads(packet)):
+            done = session.take_packet(json.loads(packet))
+            session.taken += 1
+            if done:
                 return
 
     # What the server complained of, for a failure to print.
@@ -96,16 +112,17 @@ async def attached(pymux, read_only: bool = False):
     session.logged = logged
 
     session.start()
-    async with anyio.create_task_group() as tg:
-        tg.start_soon(feed)
-        try:
-            await once(lambda: connection.client_state, 10.0, "no client was made")
-            yield session
-        finally:
-            logger.removeHandler(keep)
-            client_end.close()
-            tg.cancel_scope.cancel()
-            pymux.stop()
+    with patch.object(ServerConnection, "_write", counted):
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(feed)
+            try:
+                await once(lambda: connection.client_state, 10.0, "no client was made")
+                yield session
+            finally:
+                logger.removeHandler(keep)
+                client_end.close()
+                tg.cancel_scope.cancel()
+                pymux.stop()
 
 
 def rows_of(session: SessionScreen) -> list:
@@ -244,16 +261,17 @@ async def wire_differs(session: SessionScreen, client_state) -> list[str]:
     terminal holds still, which is all `settled` sees: under a loaded
     gate the comparison met no frame at all. Not "and none waiting": a
     glide with the clock held always has its next frame waiting.
+
+    **And once the terminal has every byte sent for it.** A frame is
+    committed when it renders and its packet is written later, so a
+    quiet terminal is not a caught-up one: under load the comparison
+    met the title bar of the frame before. Lillecarl/pymux#572.
     """
     app = client_state.app
-    waited = False
     with anyio.fail_after(10):
-        while app.renderer._last_screen is None:
-            waited = True
+        while app.renderer._last_screen is None or session.taken != session.written:
             await anyio.sleep(0.01)
-    if waited:
-        # The frame just drawn is still on its way to the terminal.
-        await settled(session, 0.05)
+    # Nothing awaits from here on, so no frame comes between the two.
     committed = app.renderer._last_screen
     outer = session.screen
     found = []
@@ -264,6 +282,39 @@ async def wire_differs(session: SessionScreen, client_state) -> list[str]:
             if shown[x].char != meant[x].char:
                 found.append("row %d column %d: terminal %r, frame %r" % (y, x, shown[x].char, meant[x].char))
     return found
+
+
+async def test_the_comparison_waits_for_a_slow_wire(pymux):
+    """
+    A committed frame whose packet is still on its way is not a wrong
+    terminal. Every packet here is counted when it is sent and arrives
+    0.2 s later, which is the load that broke a quiet-time wait.
+    """
+    async with pymux.running(), attached(pymux) as session:
+        await shows(session, "$")
+        connection = pymux.connections[-1]
+        counted = connection._write
+
+        def late(text):
+            sent = counted(text)
+
+            async def deliver():
+                await anyio.sleep(0.2)
+                await sent
+
+            return deliver()
+
+        connection._write = late
+        said(session, type="text", text="echo slow-wire")
+
+        def committed_text() -> str:
+            screen = connection.client_state.app.renderer._last_screen
+            if screen is None:
+                return ""
+            return "".join(cell.char for row in screen.data_buffer.values() for cell in row.values())
+
+        await once(lambda: "slow-wire" in committed_text(), 10.0, "no frame drew the text")
+        assert await wire_differs(session, connection.client_state) == []
 
 
 async def settled(session: SessionScreen, seconds: float = 0.3) -> None:
