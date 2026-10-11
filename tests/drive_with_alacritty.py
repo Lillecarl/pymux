@@ -200,6 +200,7 @@ import re
 import subprocess
 import sys
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -442,14 +443,17 @@ def main() -> int:
     tmp.mkdir(parents=True, exist_ok=True)
 
     differed = []
-    ran = []
     pieces = []
+    ran = [name for name in names if not left_out(name) and re.search(include, name)]
 
-    for name in names:
-        if left_out(name) or not re.search(include, name):
-            continue
-        agreed, said = run_one(tmp, judge, name, directory / name)
-        ran.append(name)
+    # Each test is a pymux of its own on a pty of its own, and mostly
+    # waits on it, so they run at once. One at a time, forty take two
+    # minutes.
+    workers = int(os.environ.get("NIX_BUILD_CORES") or 0) or os.cpu_count()
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        answers = pool.map(lambda name: run_one(tmp, judge, name, directory / name), ran)
+
+    for name, (agreed, said) in zip(ran, answers, strict=True):
         if not agreed:
             differed.append(name)
             pieces.append("=== %s ===\n%s" % (name, said))

@@ -122,6 +122,7 @@ import re
 import subprocess
 import sys
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -354,15 +355,18 @@ def main() -> int:
         raise Failed("no test file in %s" % suite)
 
     failed: Counter = Counter()
-    ran = []
     pieces = []
     broken = []
 
-    for name in names:
-        if left_out(name) or not re.search(include, name):
-            continue
-        output, errors = run_one(suite, name)
-        ran.append(name)
+    ran = [name for name in names if not left_out(name) and re.search(include, name)]
+
+    # Each file is a pymux of its own, in a directory named for its
+    # process, and mostly waits on it, so the files run at once.
+    workers = int(os.environ.get("NIX_BUILD_CORES") or 0) or os.cpu_count()
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        answers = pool.map(lambda name: run_one(suite, name), ran)
+
+    for name, (output, errors) in zip(ran, answers, strict=True):
         failed += failures_in(name, output)
         pieces.append("=== %s ===\n%s" % (name, output))
         if errors.strip():
