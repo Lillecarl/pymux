@@ -23,6 +23,7 @@ from prompt_toolkit.filters import (
 )
 from prompt_toolkit.formatted_text import HTML, FormattedText, StyleAndTextTuples
 from prompt_toolkit.key_binding.vi_state import InputMode
+from prompt_toolkit.layout import screen as screen_module
 from prompt_toolkit.layout.containers import (
     AnyContainer,
     ConditionalContainer,
@@ -301,10 +302,17 @@ class Background(Container):
 
         # The pattern repeats every three rows. Build one row of each of
         # the three, and copy it. `dict.update` runs in C, which makes a
-        # render of a wide screen about a tenth cheaper.
-        rows = [{x: (dot if (x + phase) % 3 == 0 else default_char) for x in columns} for phase in range(3)]
-
+        # render of a wide screen about a tenth cheaper. The three are
+        # rows of the kind a screen makes: a Rust row copies another Rust
+        # row as pointers, and a dict about seven times slower. Not from
+        # `data_buffer.default_factory`, which a clipped screen answers
+        # with one shared row.
         data_buffer = screen.data_buffer
+        rows = []
+        for phase in range(3):
+            row = screen_module._new_row(default_char)
+            row.update({x: (dot if (x + phase) % 3 == 0 else default_char) for x in columns})
+            rows.append(row)
 
         for y in range(ypos, ypos + write_position.height):
             data_buffer[y].update(rows[y % 3])
