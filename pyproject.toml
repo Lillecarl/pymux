@@ -27,6 +27,8 @@ dependencies = [
     "pyte_rs",
     # And prompt_toolkit's, in `prompt_toolkit_rs/` beside this file.
     "prompt_toolkit_rs",
+    # And pymux's own image loops, in `pymux_rs/`. Lillecarl/pymux#574.
+    "pymux_rs",
     # The shell completes the command line through argcomplete: the
     # generated scripts of `share/bash-completion` and friends make the
     # shell ask `pymux`, and it answers from the parsers of the commands.
@@ -382,7 +384,7 @@ select = [
 [tool.ruff.lint.isort]
 # Mirror of the umbrella `ruff.toml` above: the build sandbox sees
 # only this tree, so discovery from a file under it must end here.
-# libpymux and prompt_toolkit_rs are distributions of their own,
+# libpymux, prompt_toolkit_rs and pymux_rs are distributions of their own,
 # installed like any other dependency: third-party by installation,
 # wherever they are developed. pymux is the project under check:
 # first-party, always. Without the pins the grouping follows
@@ -390,4 +392,4 @@ select = [
 # `libpymux` with `pymux`, without it (and in the sandbox, which sets
 # none) it splits them.
 known-first-party = ["pymux"]
-known-third-party = ["libpymux", "prompt_toolkit_rs"]
+known-third-party = ["libpymux", "prompt_toolkit_rs", "pymux_rs"]

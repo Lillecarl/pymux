@@ -13,7 +13,7 @@ from pyte.sequences import Csi, apc, csi
 from pyte.sixel import decode_sixel
 from test_graphics_output import IMAGE_DATA, make_state, placement, view
 
-from pymux import graphics as graphics_module
+from pymux import sixel as sixel_module
 from pymux.blocks import LOWER_HALF, UPPER_HALF
 from pymux.graphics import ClientGraphics
 
@@ -333,13 +333,14 @@ def test_reset_asks_for_repaint():
 def counted_encoder(monkeypatch):
     "Count the calls of the sixel encoder."
     calls = []
-    original = graphics_module.encode_sixel
+    original = sixel_module.encode_sixel
 
     def counting(*args, **kwargs):
         calls.append(1)
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(graphics_module, "encode_sixel", counting)
+    # Where `graphics` looks it up, at the call.
+    monkeypatch.setattr(sixel_module, "encode_sixel", counting)
     return calls
 
 

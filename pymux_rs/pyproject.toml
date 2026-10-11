@@ -1,0 +1,16 @@
+[build-system]
+requires = ["maturin>=1.5,<2"]
+build-backend = "maturin"
+
+[project]
+name = "pymux_rs"
+version = "0.1.0"
+description = "Rust kernels for pymux's image loops, which pymux installs over its Python"
+requires-python = ">=3.12"
+license = "BSD-3-Clause"
+dependencies = []
+
+[tool.maturin]
+python-source = "python"
+module-name = "pymux_rs._native"
+features = ["pyo3/extension-module"]

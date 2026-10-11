@@ -44,9 +44,11 @@ from pyte.images import PixelFormat
 from pyte.sequences import Csi, csi, esc
 from pyte.terminfo import DeviceExtension
 
+# Through the module, so the kernels `pymux.kernels.install()` puts there
+# are the ones that run.
+from . import sixel
 from .blocks import average_rgba, blocks_for, rows_for_cells
 from .log import logger
-from .sixel import encode_sixel, scale_rgba, to_rgba
 
 __all__ = [
     "CELL_SIZE_QUERY",
@@ -758,7 +760,7 @@ class ClientGraphics:
         if known is not None and known[0] is image:
             return known[1]
 
-        pixels = to_rgba(image.format, image.width, image.height, image.data)
+        pixels = sixel.to_rgba(image.format, image.width, image.height, image.data)
         if pixels is None:
             return []
 
@@ -782,7 +784,7 @@ class ClientGraphics:
         if known is not None and known[0] is image:
             return known[1]
 
-        pixels = to_rgba(image.format, image.width, image.height, image.data)
+        pixels = sixel.to_rgba(image.format, image.width, image.height, image.data)
         if pixels is None:
             return None
 
@@ -801,9 +803,9 @@ class ClientGraphics:
         else:
             target_width = max(1, columns * self.cell_width)
             target_height = max(1, rows * self.cell_height)
-            pixels = scale_rgba(pixels, width, height, target_width, target_height)
+            pixels = sixel.scale_rgba(pixels, width, height, target_width, target_height)
 
-        encoded = encode_sixel(target_width, target_height, pixels)
+        encoded = sixel.encode_sixel(target_width, target_height, pixels)
         if encoded is None:
             return None
 
