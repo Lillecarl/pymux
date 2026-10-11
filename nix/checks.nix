@@ -537,8 +537,10 @@ in
           PYMUX_BASE16_SCHEMES = "${base16-schemes-json}/base16-schemes.json";
         };
       }
+      # `--durations` names what the suite spends its time on.
+      # Lillecarl/pymux#579.
       ''
-        python -m pytest $selection -q -p no:cacheprovider
+        python -m pytest $selection -q -p no:cacheprovider --durations=60 --durations-min=0.5
       '';
 
   # The types of pymux, held by a static checker rather than by a run.
