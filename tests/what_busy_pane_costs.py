@@ -36,6 +36,7 @@ Knobs:
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import sys
@@ -194,7 +195,37 @@ async def cap() -> None:
             print("%-12s %8s %13.0f%% %12.1f" % (name, rate or "none", 100 * cost, fps))
 
 
+class _Errors(logging.Handler):
+    """
+    Every error the server logged. A run that logged one is red even
+    when every cost is under the ceiling: a redraw that raised in the
+    background passed this check for weeks. Lillecarl/pymux#580.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(logging.ERROR)
+        self.records: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(self.format(record))
+
+
 async def main() -> None:
+    errors = _Errors()
+    logging.getLogger().addHandler(errors)
+    try:
+        await measure()
+    finally:
+        logging.getLogger().removeHandler(errors)
+    if errors.records:
+        print()
+        print("The server logged %d errors:" % len(errors.records))
+        for record in errors.records[:5]:
+            print(record)
+        raise SystemExit(1)
+
+
+async def measure() -> None:
     print("--- what a pane nobody looks at costs ---")
     print()
     print("%-12s %14s %8s" % ("program", "of one core", "frames"))
