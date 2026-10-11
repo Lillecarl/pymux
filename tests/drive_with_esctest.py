@@ -54,6 +54,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -279,7 +280,15 @@ def run(tmp: Path, directory: Path) -> str:
 
         # The pane has to be the size the suite asks for, or every test
         # that counts columns means nothing.
-        listed = run_cli(terminal.sock_path, ["list-panes", "-F", "#{pane_height}x#{pane_width}"])
+        # The answers above finish the attach, and the session has no
+        # window until it does: asked at once, the gate once read "no
+        # current window".
+        deadline = time.monotonic() + 15
+        while True:
+            listed = run_cli(terminal.sock_path, ["list-panes", "-F", "#{pane_height}x#{pane_width}"])
+            if listed.returncode == 0 or time.monotonic() > deadline:
+                break
+            time.sleep(0.05)
         assert listed.returncode == 0, listed.stderr
         size = listed.stdout.decode().strip()
         if size != "25x80":
