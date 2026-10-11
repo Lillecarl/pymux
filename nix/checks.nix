@@ -145,6 +145,15 @@ let
     in
     if value == "" then "tests" else value;
 
+  # How many of the slowest test phases the unit suite names. `0` names
+  # every one, for instance
+  # `PYMUX_DURATIONS=0 nix build --file . checks.pymux-unit.run`.
+  durations =
+    let
+      value = builtins.getEnv "PYMUX_DURATIONS";
+    in
+    if value == "" then "60" else value;
+
   # Which of the end to end checks run, comma separated and without the
   # `check_` in front, for instance
   # `PYMUX_PTY_CHECKS=pane_that_changes_nothing nix build --file . checks.pymux-pty`.
@@ -565,7 +574,7 @@ in
       {
         name = "pymux-unit";
         env = {
-          inherit selection;
+          inherit selection durations;
           PYMUX_HANG_SECONDS = toString hangIsSeconds;
           PYMUX_BASE16_SCHEMES = "${base16-schemes-json}/base16-schemes.json";
         };
@@ -575,11 +584,18 @@ in
       # test is waiting on a server, so the cores are free for the
       # next one. Lillecarl/pymux#579.
       # A build given every core says 0, which to xdist means none.
+      #
+      # `worksteal`, because most tests here take milliseconds. Under
+      # the default `load` a worker waits on the controller for each
+      # next test, and the waits were most of the run: 121 s against
+      # 56 s, with 417 s of tests over sixteen workers.
       ''
         cores="''${NIX_BUILD_CORES:-0}"
         if [ "$cores" = 0 ]; then cores=auto; fi
-        python -m pytest $selection -q -p no:cacheprovider -n "$cores" \
-          --durations=60 --durations-min=0.5
+        least=0.5
+        if [ "$durations" = 0 ]; then least=0; fi
+        python -m pytest $selection -q -p no:cacheprovider -n "$cores" --dist worksteal \
+          --durations="$durations" --durations-min="$least"
       '';
 
   # The types of pymux, held by a static checker rather than by a run.
