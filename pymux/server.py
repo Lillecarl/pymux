@@ -11,6 +11,7 @@ from typing import (
     ClassVar,
     TextIO,
     cast,
+    override,
 )
 
 import anyio
@@ -341,14 +342,14 @@ class ServerConnection:
         pointer: pymux cannot serve those, the terminal of the user
         can.)
 
-        **It goes with the next frame, and not the moment it arrives.**
-        `write_raw` puts it in the output's buffer and the renderer's
-        flush is what sends one, so leaving the flush out is what
-        orders this behind the drawing. A flush here made the clipboard
+        **It goes after the next frame, and not the moment it
+        arrives.** `_FrameOutput` holds it until the renderer's flush
+        and puts it behind the frame. A flush here made the clipboard
         change before the screen that showed the copy, and anything
         that reads the clipboard as a marker for what is drawn saw the
         two the wrong way round -- which is how `checks.pymux-pictures`
-        photographed a pane that was still catching up.
+        photographed a pane that was still catching up. Behind the
+        frame, its arrival says the frame has arrived too.
 
         tmux orders it the same way and for the same reason: a pane's
         "OSC 52" goes through `screen_write_setselection`
@@ -370,7 +371,9 @@ class ServerConnection:
         """
         if self.client_state is None or self.client_state.temporary:
             return
-        self._write_output_raw(sequence)
+        output = self.client_state.output
+        assert isinstance(output, _FrameOutput)
+        output.write_after_frame(sequence)
 
     def set_pointer_shape(self, shape: str) -> None:
         """
@@ -1004,7 +1007,7 @@ class ServerConnection:
             the session a person looked at last.
         """
         stdout = _SocketStdout(self._send_packet, self.pymux.counters) if start else _NoStdout()
-        output = Vt100_Output(
+        output = _FrameOutput(
             cast(TextIO, stdout),
             lambda: self.size,
             term=term,
@@ -1222,6 +1225,33 @@ class _SocketStdout:
 
     def isatty(self) -> bool:
         return True
+
+
+class _FrameOutput(Vt100_Output):
+    """
+    A client's output that sends what a pane passed on after the frame.
+
+    `forward_osc` queues a sequence here and `flush` puts it at the end
+    of what goes out, behind the frame the renderer wrote. A sequence
+    written when it arrived stood in front of that frame, so a
+    clipboard changed before the screen showing the copy, and a harness
+    that waits for a pane's notification as a fence still had to wait
+    for silence after it. Lillecarl/pymux#579.
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._after_frame: list[str] = []
+
+    def write_after_frame(self, data: str) -> None:
+        self._after_frame.append(data)
+
+    @override
+    def flush(self) -> None:
+        if self._after_frame:
+            self.write_raw("".join(self._after_frame))
+            self._after_frame = []
+        super().flush()
 
 
 class _NoStdout:

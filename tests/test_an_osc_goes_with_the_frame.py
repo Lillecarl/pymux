@@ -1,12 +1,14 @@
 """
 When a pane's escape for the outer terminal reaches that terminal.
 
-With the frame, and not the moment it arrives. A pane's "OSC 52" is a
-clipboard write, and anything that reads the clipboard as a marker for
-what is on the screen needs the two in that order: a flush of its own
-put the clipboard ahead of the frame that showed the copy, and
-`checks.pymux-pictures` photographed a pane that was still catching up
-because of it.
+Behind the next frame, and not the moment it arrives. A pane's "OSC
+52" is a clipboard write, and anything that reads the clipboard as a
+marker for what is on the screen needs the two in that order: a flush
+of its own put the clipboard ahead of the frame that showed the copy,
+and `checks.pymux-pictures` photographed a pane that was still catching
+up because of it. The middleman's fence is the same marker, an OSC 99,
+so behind the frame its arrival is all a harness waits for.
+Lillecarl/pymux#579.
 
 tmux orders it the same way. A pane's clipboard goes through
 `screen_write_setselection` (`input.c:3414-3440`), so it is dispatched
@@ -21,11 +23,10 @@ import sys
 
 import pytest
 from libpymux.protocol import Packet
-from prompt_toolkit.output.vt100 import Vt100_Output
 
 from pymux.main import Pymux
 from pymux.options import Clipboard
-from pymux.server import ServerConnection, _SocketStdout
+from pymux.server import ServerConnection, _FrameOutput, _SocketStdout
 
 #: A clipboard write, as a pane writes one.
 COPIED = "\x1b]52;c;aGVsbG8=\x07"
@@ -45,13 +46,13 @@ def wire():
     """
     A connection whose output is the real one, and the packets it sends.
 
-    `_SocketStdout` is where a frame is counted, and `Vt100_Output` is
+    `_SocketStdout` is where a frame is counted, and `_FrameOutput` is
     what the renderer writes through, so the buffering under test is
     the buffering that ships.
     """
     sent = []
     stdout = _SocketStdout(sent.append)
-    output = Vt100_Output(stdout, lambda: None, term="xterm")
+    output = _FrameOutput(stdout, lambda: None, term="xterm")
 
     connection = ServerConnection.__new__(ServerConnection)
     connection.client_state = _ClientState(output)
@@ -82,11 +83,11 @@ def test_the_frame_carries_it(wire):
     assert COPIED in written(sent)
 
 
-def test_it_comes_before_what_the_frame_draws(wire):
+def test_it_comes_behind_what_the_frame_draws(wire):
     """
-    The pane drew the text before it copied it, so the screen already
-    holds what the copy is about: the escape belongs at the head of the
-    frame that carries it, never after a later one.
+    The pane drew the text before it copied it, and the frame that
+    carries the escape draws that text. Behind the frame, the terminal
+    shows the text before it hears of the copy.
     """
     connection, output, sent = wire
 
@@ -95,7 +96,17 @@ def test_it_comes_before_what_the_frame_draws(wire):
     output.flush()
 
     whole = written(sent)
-    assert whole.index(COPIED) < whole.index("the frame")
+    assert whole.index("the frame") < whole.index(COPIED)
+
+
+def test_a_frame_that_draws_nothing_still_carries_it(wire):
+    "A pane out of sight draws nothing, and its notification still goes."
+    connection, output, sent = wire
+
+    connection.forward_osc(COPIED)
+    output.flush()
+
+    assert written(sent) == COPIED
 
 
 def test_a_client_with_no_terminal_is_written_nothing(wire):

@@ -44,10 +44,11 @@ pymux ships changed, five checks waited their whole timeout for a fence
 pymux was holding back. A notification passes under no option at all.
 Lillecarl/pymux#380.
 
-It does not prove the frame arrived. prompt_toolkit may postpone a
-redraw, so the frame can follow the fence. A short settle after the
-fence covers that, and it is short because the fence has already done
-the waiting.
+**It proves the frame arrived too.** pymux sends what a pane passes on
+behind the next frame, and the frame that drew the payload is that one
+or one before it. A write waited for silence after the fence until
+pymux did: a tenth of a second and more, on each of the hundreds of
+writes a suite makes. Lillecarl/pymux#579.
 
 The fence is taken back out before anything sees the wire. A judge
 would only ignore it, but a stream that holds our own scaffolding is a
@@ -69,19 +70,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tests.drive_with_pty import Terminal, run_cli
 
-#: How long the wire has to stay quiet after the fence before a frame
-#: counts as finished, in seconds.
-#:
-#: The fence has already waited for the pane, so this only covers a
-#: redraw that prompt_toolkit postponed, and it waits for silence rather
-#: than for the clock. A suite holds hundreds of writes, and a fixed
-#: wait on each of them is the difference between a check that runs in a
-#: minute and one nobody runs.
+#: How long the wire has to stay quiet after a resize before its frame
+#: counts as finished, in seconds. A resize has no fence, so this waits
+#: for silence; a write has one and waits for nothing else.
 QUIET = 0.05
 
-#: How long to wait for the first byte of that frame. A write that
+#: How long to wait for the first byte of that frame. A resize that
 #: changes nothing on the screen makes no frame at all, so this has to
-#: give up, and it is the one wait that is paid every time.
+#: give up.
 FIRST_BYTE = 0.15
 
 #: How long to wait for the pane to reach the size the suite asks
@@ -270,7 +266,6 @@ class Pane:
         os.write(self.writer, data + fence_sequence(token))
 
         self.terminal.wait_for(token, timeout=timeout)
-        self.settle()
         return FENCE.sub(b"", self.terminal.since(mark))
 
     def resize(self, rows: int, columns: int) -> bytes:
