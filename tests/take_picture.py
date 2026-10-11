@@ -899,7 +899,7 @@ LIGHT_TERMINALS = [
 # The two runs.
 
 
-def write_program(path, fixture_path, fence_lines):
+def write_program(path, fixture_path, ready, done):
     """
     The program that both runs execute, as a shell script.
 
@@ -932,9 +932,15 @@ def write_program(path, fixture_path, fence_lines):
     bytes are written can settle on the screen from before them, both
     sides alike, agreeing on nothing. Lillecarl/pymux#281. `fence`
     says why it is written until it is taken.
+
+    `ready` is a fence too, before the drawing, so the terminal has its
+    final size when the fixture is drawn. `fence` says why. A pane needs
+    it as much: measured, a pane in foot or kitty was still 24x80 before
+    that fence in half the fixtures, and 40x102 after it in all of them,
+    because pymux sizes a pane once it knows the size of its client.
     """
     path.write_text(
-        "stty -echo\nprintf '\\033[2J\\033[H'\ncat %s\n%sexec sleep %d\n" % (fixture_path, fence_lines, HOLD)
+        "stty -echo\n%sprintf '\\033[2J\\033[H'\ncat %s\n%sexec sleep %d\n" % (ready, fixture_path, done, HOLD)
     )
 
 
@@ -997,10 +1003,10 @@ def compare_one(terminal, seat, name, work, out):
     # what the terminal decoded it to: readable bytes, this run's
     # alone, so a fence a run before left in the clipboard cannot
     # stand in for this one.
-    token = os.urandom(8).hex()
+    ready, done = os.urandom(8).hex(), os.urandom(8).hex()
 
     program_path = work / ("%s.sh" % name)
-    write_program(program_path, fixture_path, fence(work, token))
+    write_program(program_path, fixture_path, fence(work, ready), fence(work, done))
 
     config_path = work / "full-screen.conf"
     config_path.write_text(PICTURE_CONFIG)
@@ -1016,10 +1022,8 @@ def compare_one(terminal, seat, name, work, out):
             room / "bare.log",
             # The terminal has the bytes when its clipboard holds the
             # token; a settle before that can settle on the screen from
-            # before them, both sides alike, agreeing on nothing. Both
-            # seats read one now; the guard stays for a seat that
-            # cannot yet.
-            not_before=token if seat.reads_fence else 0.0,
+            # before them, both sides alike, agreeing on nothing.
+            not_before=(ready, done),
         )
         seat.picture_of(
             terminal,
@@ -1036,7 +1040,7 @@ def compare_one(terminal, seat, name, work, out):
             work,
             through,
             room / "pymux.log",
-            not_before=token if seat.reads_fence else 0.0,
+            not_before=(ready, done),
         )
     except RuntimeError as reason:
         raise RuntimeError("%s\n%s" % (reason, every_log(room, seat))) from None
