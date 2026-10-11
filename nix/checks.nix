@@ -45,6 +45,11 @@
   kitty,
   mesa,
   vttest,
+  # What the scenario check drives, and the model API claude-code talks to.
+  yazi,
+  file,
+  claude-code,
+  aimock,
   grim,
   imagemagick,
   makeFontsConf,
@@ -382,6 +387,11 @@ let
       value = builtins.getEnv "PYMUX_VTTEST_TERMINALS";
     in
     if value == "" then "xterm" else value;
+
+  # Which scenarios run, and in which terminals: a piece of a name, for
+  # instance `PYMUX_SCENARIOS=yazi nix build --file . checks.pymux-scenarios`.
+  scenarioSelection = builtins.getEnv "PYMUX_SCENARIOS";
+  scenarioTerminals = builtins.getEnv "PYMUX_SCENARIO_TERMINALS";
 
   # A terminal emulator draws with the fonts that fontconfig finds, and the
   # build sandbox has no /etc/fonts at all. Without this every terminal dies
@@ -1197,6 +1207,32 @@ in
           export PYMUX_VTTEST_TERMINALS="$vttestTerminals"
           export PYMUX_VTTEST_OUT="$out"
           python tests/photograph_vttest.py
+        ''
+      );
+
+  # Unmodified TUI applications, driven step by step and shown at once
+  # by a bare terminal and by pymux in one: yazi on a tree of its own,
+  # and claude-code against aimock. `tests/photograph_scenarios.py` is
+  # the harness. Not a gate. Lillecarl/pymux#593.
+  scenarios =
+    runInSandbox
+      {
+        name = "pymux-scenarios";
+        inputs = seatInputs ++ [
+          yazi
+          file
+          claude-code
+          aimock
+        ];
+        env = { inherit scenarioSelection scenarioTerminals; };
+      }
+      (
+        seatSetup
+        + ''
+          export PYMUX_SCENARIOS="$scenarioSelection"
+          export PYMUX_SCENARIO_TERMINALS="$scenarioTerminals"
+          export PYMUX_SCENARIOS_OUT="$out"
+          python tests/photograph_scenarios.py
         ''
       );
 

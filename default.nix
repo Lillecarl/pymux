@@ -47,6 +47,8 @@
   pyrefly,
   # The linter and formatter that the `ruff` check runs.
   ruff,
+  # The model API the scenario check aims claude-code at.
+  aimock,
 }:
 let
   # pymux's own version. The element is published as an npm package as
@@ -229,6 +231,7 @@ let
       xclip
       pyrefly
       ruff
+      aimock
       ;
     waylandProtocols = pyterm-pytest.waylandProtocols;
     # The base16 collection the package carries, for the gallery that
