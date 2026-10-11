@@ -483,7 +483,7 @@ def exercise(seat, terminal, work, out, scenario):
             command = bare_command(program)
         else:
             command = pymux_command(
-                program,
+                "sh %s" % program,
                 work / ("%s.sock" % scenario),
                 config_path,
                 room / "pymux-server.log",

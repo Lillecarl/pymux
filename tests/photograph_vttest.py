@@ -502,7 +502,7 @@ def compare_one(terminal, seat, work, out):
     # chain the same way.
     def in_pane(walker):
         return pymux_command(
-            walker,
+            "sh %s" % walker,
             work / ("%s-vttest.sock" % terminal.name),
             config_path,
             room / "pymux-server.log",

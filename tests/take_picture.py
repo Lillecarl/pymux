@@ -140,7 +140,6 @@ from pyterm_pytest.seats import (
     _tail,
     changed_region,
     differences,
-    fence,
     fully_overlaps,
     open_the_seats,
     the_same_drawing,
@@ -206,10 +205,8 @@ PICTURE_CONFIG = "set-client-option full-screen on\nset set-clipboard on\n"
 # ----------------------------------------------------------------------
 # The fixtures. Each one is the bytes that a program wrote.
 #
-# A fixture here writes no query. A query is answered into the tty, and
-# a tty that echoes puts the answer on the screen as text. The program
-# both sides run turns the echo off for that reason, so a recording,
-# which does hold queries, is safe as well.
+# A fixture here writes no query. A recording does, and the seat answers
+# nothing for it, so neither twin's answer reaches the tty to echo.
 
 
 def sgr(fixture):
@@ -899,49 +896,17 @@ LIGHT_TERMINALS = [
 # The two runs.
 
 
-def write_program(path, fixture_path, ready, done):
+def write_program(path, fixture_path):
     """
-    The program that both runs execute, as a shell script.
+    The program both twins show, as a shell script. It runs once, and
+    `Seat.twins` gives its bytes to the bare terminal and to the pane
+    alike. The seat answers its queries and drops the terminals'
+    answers, so nothing reaches the tty to echo.
 
-    It is a file and not a command line so that the two sides run the
-    same bytes. It also keeps the quoting out of the way: a pane takes
-    its command as text, and `Pymux._create_pane` splits that text on
-    whitespace (Lillecarl/pymux#39).
-
-    `stty -echo` because a tty that echoes puts the answer to a query
-    on the screen as text, and the two sides answer differently.
-    `sleep` because a terminal closes its window when the program ends,
-    and the picture is taken after the program ran. `HOLD` says how
-    long, and it is a bound: a run that goes wrong leaves nothing behind
-    for longer than that.
-
-    The clear is what makes the two sides start alike. A terminal may
-    write on its own screen before the program runs: foot says which of
-    its settings are deprecated, and another one will say something
-    else. pymux paints every cell, so that message is gone on one side
-    and stays on the other, and everything below it sits one row lower.
-    Every fixture written by hand clears the screen itself; a recording
-    of a program that does not is what found this.
-
-    The last thing it writes is the fence: an OSC 52, the clipboard
-    escape, carrying a payload that is this run's alone. The escape
-    draws nothing, and the clipboard holds what the terminal decoded
-    it to only when the outermost terminal has acted on the bytes --
-    the bare side straight, the pane side through pymux -- which is
-    the evidence the settle waits for. A settle that starts before the
-    bytes are written can settle on the screen from before them, both
-    sides alike, agreeing on nothing. Lillecarl/pymux#281. `fence`
-    says why it is written until it is taken.
-
-    `ready` is a fence too, before the drawing, so the terminal has its
-    final size when the fixture is drawn. `fence` says why. A pane needs
-    it as much: measured, a pane in foot or kitty was still 24x80 before
-    that fence in half the fixtures, and 40x102 after it in all of them,
-    because pymux sizes a pane once it knows the size of its client.
+    The clear makes a recording that does not clear start where every
+    fixture written by hand starts.
     """
-    path.write_text(
-        "stty -echo\n%sprintf '\\033[2J\\033[H'\ncat %s\n%sexec sleep %d\n" % (ready, fixture_path, done, HOLD)
-    )
+    path.write_text("printf '\\033[2J\\033[H'\ncat %s\n" % fixture_path)
 
 
 def bare_command(program_path):
@@ -949,9 +914,9 @@ def bare_command(program_path):
     return "exec sh %s" % program_path
 
 
-def pymux_command(program_path, socket_path, config_path, log_path, error_path):
+def pymux_command(pane, socket_path, config_path, log_path, error_path):
     """
-    The same program, in a pane that covers every cell.
+    The command line `pane`, in a pane that covers every cell.
 
     The integrated mode holds the server and the client in one process,
     so the picture is of the pymux that this check built, and not of a
@@ -964,11 +929,11 @@ def pymux_command(program_path, socket_path, config_path, log_path, error_path):
     # No "--" before the command: the mode word takes what follows it
     # as the program of the first pane, and a "--" reaches the pane as
     # the first word of that program (Lillecarl/pymux#41).
-    return "exec python3 -m pymux -S %s -f %s --log %s integrated sh %s 2>%s" % (
+    return "exec python3 -m pymux -S %s -f %s --log %s integrated %s 2>%s" % (
         socket_path,
         config_path,
         log_path,
-        program_path,
+        pane,
         error_path,
     )
 
@@ -999,48 +964,34 @@ def compare_one(terminal, seat, name, work, out):
     fixture_path = work / ("%s.bin" % name)
     fixture_path.write_bytes(fixture_bytes(name))
 
-    # The fence. The escape carries base64, and the clipboard holds
-    # what the terminal decoded it to: readable bytes, this run's
-    # alone, so a fence a run before left in the clipboard cannot
-    # stand in for this one.
-    ready, done = os.urandom(8).hex(), os.urandom(8).hex()
-
     program_path = work / ("%s.sh" % name)
-    write_program(program_path, fixture_path, fence(work, ready), fence(work, done))
+    write_program(program_path, fixture_path)
 
     config_path = work / "full-screen.conf"
     config_path.write_text(PICTURE_CONFIG)
 
+    def through_pymux(viewer):
+        return pymux_command(
+            viewer,
+            # The name of the terminal is in it: every terminal runs
+            # every fixture, and a socket that a run before left behind
+            # is a socket that this one cannot bind.
+            work / ("%s-%s.sock" % (terminal.name, name)),
+            config_path,
+            room / "pymux-server.log",
+            room / "pymux-stderr.log",
+        )
+
     bare = room / "bare.png"
     through = room / "pymux.png"
     try:
-        seat.picture_of(
+        seat.twins(
             terminal,
-            bare_command(program_path),
+            through_pymux,
+            "exec sh %s" % program_path,
             work,
-            bare,
-            room / "bare.log",
-            # The terminal has the bytes when its clipboard holds the
-            # token; a settle before that can settle on the screen from
-            # before them, both sides alike, agreeing on nothing.
-            not_before=(ready, done),
-        )
-        seat.picture_of(
-            terminal,
-            pymux_command(
-                program_path,
-                # The name of the terminal is in it: every terminal
-                # runs every fixture, and a socket that a run before
-                # left behind is a socket that this one cannot bind.
-                work / ("%s-%s.sock" % (terminal.name, name)),
-                config_path,
-                room / "pymux-server.log",
-                room / "pymux-stderr.log",
-            ),
-            work,
-            through,
-            room / "pymux.log",
-            not_before=(ready, done),
+            (bare, through),
+            (room / "bare.log", room / "pymux.log"),
         )
     except RuntimeError as reason:
         raise RuntimeError("%s\n%s" % (reason, every_log(room, seat))) from None
@@ -1167,7 +1118,7 @@ def blink_of(terminal, seat, name, work, out):
         (
             "pymux",
             pymux_command(
-                program_path,
+                "sh %s" % program_path,
                 work / ("%s-%s.sock" % (terminal.name, name)),
                 config_path,
                 room / "pymux-server.log",
