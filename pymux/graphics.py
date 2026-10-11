@@ -35,9 +35,10 @@ import base64
 import random
 import re
 import zlib
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Coroutine, Iterable
 from typing import Any, NamedTuple
 
+import anyio
 from prompt_toolkit.output import ColorDepth
 from pyte import escape
 from pyte.images import PixelFormat
@@ -164,6 +165,10 @@ class ClientGraphics:
     :param repaint: Ask the renderer to paint the whole screen again.
         The sixel output needs it: those pixels are the cells, so the
         text under a changed image has to be written once more.
+    :param spawn: Run a coroutine in the background of this client.
+        With it, sixel and half block encoding runs in a worker thread
+        and the frame goes on without the image. Without it, the frame
+        encodes.
     """
 
     def __init__(
@@ -172,10 +177,12 @@ class ClientGraphics:
         flush: Callable[[], None],
         repaint: Callable[[], None] | None = None,
         color_depth: Callable[[], ColorDepth] | None = None,
+        spawn: Callable[[Coroutine[Any, Any, None]], None] | None = None,
     ) -> None:
         self._write_raw = write_raw
         self._flush = flush
         self._repaint = repaint
+        self._spawn = spawn
         #: The colour depth of the outer terminal, read when it is
         #: needed. Only the half blocks ask: they are cells, so they
         #: take the colours that the terminal has.
@@ -223,6 +230,8 @@ class ClientGraphics:
         self._cell_placements: dict[tuple[int, int, int], str] = {}
         self._cell_cache: dict[tuple, tuple[Any, Any]] = {}
         self._cell_redraw = False
+        #: Cache keys a worker thread is encoding.
+        self._cell_pending: set[tuple] = set()
 
     # ------------------------------------------------------------------
     # Detection.
@@ -665,6 +674,7 @@ class ClientGraphics:
         for key in list(self._cell_cache):
             if key not in live:
                 del self._cell_cache[key]
+        self._cell_pending &= live
 
         changed = desired != self._cell_placements
         if not changed and not self._cell_redraw:
@@ -761,63 +771,54 @@ class ClientGraphics:
 
         return desired, live
 
-    def _blocks_for(self, key: tuple, image, source, columns: int, rows: int, depth) -> list[str]:
+    def _blocks_for(self, key: tuple, image, source, columns: int, rows: int, depth) -> list[str] | None:
         "The half block rows of one placement. (Cached by geometry.)"
-        known = self._cell_cache.get(key)
-        if known is not None and known[0] is image:
-            return known[1]
-
-        pixels = sixel.to_rgba(image.format, image.width, image.height, image.data)
-        if pixels is None:
-            return []
-
-        width, height = image.width, image.height
-        if source is not None:
-            pixels = _crop_rgba(pixels, width, height, source)
-            if pixels is None:
-                return []
-            width, height = source[2], source[3]
-
-        # Two pixels for every cell, one above the other.
-        pixels = blocks.average_rgba(pixels, width, height, columns, rows_for_cells(rows))
-        lines = blocks_for(pixels, columns, rows, depth)
-
-        self._cell_cache[key] = (image, lines)
-        return lines
+        return self._cell_entry(key, image, _encode_blocks, image, source, columns, rows, depth)
 
     def _sixel_for(self, key: tuple, image, source, columns: int, rows: int, own_size: bool = False) -> str | None:
         "The sixel sequence of one placement. (Cached by geometry.)"
+        target = None if own_size else (max(1, columns * self.cell_width), max(1, rows * self.cell_height))
+        return self._cell_entry(key, image, _encode_sixel, image, source, target)
+
+    def _cell_entry(self, key: tuple, image, work: Callable, *args):
+        """
+        What `work(*args)` gives for one placement, from the cache.
+
+        With `spawn` a miss answers None, and a worker thread does the
+        work: the cells of the placement stay blank until the next
+        frame after it is done. The kernels release the GIL, so the
+        event loop keeps running beside it. Lillecarl/pymux#575.
+        """
         known = self._cell_cache.get(key)
         if known is not None and known[0] is image:
             return known[1]
 
-        pixels = sixel.to_rgba(image.format, image.width, image.height, image.data)
-        if pixels is None:
-            return None
+        if self._spawn is None:
+            result = work(*args)
+            self._cell_cache[key] = (image, result)
+            return result
 
-        width, height = image.width, image.height
-        if source is not None:
-            pixels = _crop_rgba(pixels, width, height, source)
-            if pixels is None:
-                return None
-            width, height = source[2], source[3]
+        if key not in self._cell_pending:
+            self._cell_pending.add(key)
+            self._spawn(self._work_in_thread(key, image, work, args))
+        return None
 
-        if own_size:
-            # Its own pixels, straight out. `draws_at_its_own_size`
-            # says when, and `_put_command` says why the cells below
-            # the image are safe.
-            target_width, target_height = width, height
-        else:
-            target_width = max(1, columns * self.cell_width)
-            target_height = max(1, rows * self.cell_height)
-            pixels = sixel.scale_rgba(pixels, width, height, target_width, target_height)
+    async def _work_in_thread(self, key: tuple, image, work: Callable, args: tuple) -> None:
+        "Run one `_cell_entry` miss in a thread, and keep the answer."
+        try:
+            result = await anyio.to_thread.run_sync(work, *args)
+        except Exception:
+            logger.exception("Encoding a pane image failed.")
+            result = None
 
-        encoded = sixel.encode_sixel(target_width, target_height, pixels)
-        if encoded is None:
-            return None
-
-        self._cell_cache[key] = (image, encoded)
-        return encoded
+        # The placement went away while the thread worked, or the
+        # client reset: the answer is for nobody.
+        if key not in self._cell_pending:
+            return
+        self._cell_pending.discard(key)
+        self._cell_cache[key] = (image, result)
+        if self._repaint is not None:
+            self._repaint()
 
     # ------------------------------------------------------------------
 
@@ -826,6 +827,7 @@ class ClientGraphics:
         Remove everything that this client put on the outer terminal.
         (When the client detaches, or when a popup covers the panes.)
         """
+        self._cell_pending = set()
         if self._cell_placements:
             self._cell_placements = {}
             self._cell_cache = {}
@@ -841,6 +843,48 @@ class ClientGraphics:
         self._placements = {}
         self._transmitted_bytes = 0
         self._flush()
+
+
+def _source_rgba(image, source) -> tuple[bytes, int, int] | None:
+    "The RGBA pixels a placement shows, and their size."
+    pixels = sixel.to_rgba(image.format, image.width, image.height, image.data)
+    if pixels is None:
+        return None
+    if source is None:
+        return pixels, image.width, image.height
+    pixels = _crop_rgba(pixels, image.width, image.height, source)
+    if pixels is None:
+        return None
+    return pixels, source[2], source[3]
+
+
+def _encode_blocks(image, source, columns: int, rows: int, depth) -> list[str]:
+    "The half block rows of one placement. It runs in a worker thread."
+    found = _source_rgba(image, source)
+    if found is None:
+        return []
+    pixels, width, height = found
+    # Two pixels for every cell, one above the other.
+    pixels = blocks.average_rgba(pixels, width, height, columns, rows_for_cells(rows))
+    return blocks_for(pixels, columns, rows, depth)
+
+
+def _encode_sixel(image, source, target: tuple[int, int] | None) -> str | None:
+    """
+    The sixel sequence of one placement, scaled to `target` pixels, or
+    at its own size for None. It runs in a worker thread.
+
+    `draws_at_its_own_size` says when the own size is right, and
+    `_put_command` says why the cells below the image are safe then.
+    """
+    found = _source_rgba(image, source)
+    if found is None:
+        return None
+    pixels, width, height = found
+    if target is not None:
+        pixels = sixel.scale_rgba(pixels, width, height, *target)
+        width, height = target
+    return sixel.encode_sixel(width, height, pixels)
 
 
 def _drawn_size(image, source: tuple[int, int, int, int] | None) -> tuple[int, int]:

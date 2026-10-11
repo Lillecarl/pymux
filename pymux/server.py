@@ -179,6 +179,7 @@ class ServerConnection:
             # below has not run yet, and the half blocks only ask once
             # a frame carries an image.
             color_depth=lambda: self.colors.depth,
+            spawn=self._spawn,
         )
 
         # Colour depth of the outer terminal. The same handshake

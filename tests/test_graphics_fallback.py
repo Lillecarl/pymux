@@ -395,6 +395,72 @@ def test_new_crop_is_encoded_again(counted_encoder):
     assert len(counted_encoder) == 2
 
 
+# ----------------------------------------------------------------------
+# Encoding in a worker thread. Lillecarl/pymux#575.
+
+
+def make_spawning_client(blocks=False):
+    "A client whose encoding waits in `spawned` until a test runs it."
+    spawned = []
+    repaints = []
+    client, written = make_client(sixel=not blocks, repaint=lambda: repaints.append(1))
+    if blocks:
+        client.handle_reply(csi(escape.DA, 62, 1, 6, private="?"))
+    client._spawn = spawned.append
+    return client, written, spawned, repaints
+
+
+async def test_a_frame_goes_on_while_the_image_encodes(counted_encoder):
+    client, written, spawned, repaints = make_spawning_client()
+    state = make_state(placement())
+
+    client.render([view(state)])
+    client.render([view(state)])
+    assert sixels(written) == []
+    assert len(spawned) == 1  # One worker, however many frames wait.
+    assert counted_encoder == []
+
+    await spawned.pop()
+    assert len(counted_encoder) == 1
+    assert repaints  # The finished image asks for a frame.
+
+    client.render([view(state)])
+    assert len(sixels(written)) == 1
+
+
+async def test_half_blocks_encode_in_the_worker_too():
+    client, written, spawned, _repaints = make_spawning_client(blocks=True)
+    state = make_state(placement())
+    client.render([view(state)])
+    assert UPPER_HALF not in "".join(written) and LOWER_HALF not in "".join(written)
+
+    await spawned.pop()
+    client.render([view(state)])
+    assert UPPER_HALF in "".join(written) or LOWER_HALF in "".join(written)
+
+
+async def test_an_image_gone_before_its_encoding_ends_is_not_kept():
+    client, _written, spawned, repaints = make_spawning_client()
+    state = make_state(placement())
+    client.render([view(state)])
+    client.render([])
+
+    await spawned.pop()
+    assert client._cell_cache == {}
+    assert repaints == []
+
+
+async def test_a_reset_drops_the_encoding_in_flight():
+    client, _written, spawned, repaints = make_spawning_client()
+    client.render([view(make_state(placement()))])
+    client.reset()
+    repaints.clear()
+
+    await spawned.pop()
+    assert client._cell_cache == {}
+    assert repaints == []
+
+
 def test_cache_forgets_image_that_is_gone(counted_encoder):
     client, _written = make_client(sixel=True)
     state = make_state(placement())
