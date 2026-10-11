@@ -226,6 +226,9 @@ def run_one(terminal, seat, name, work, out):
             environment=environment,
             directory=str(directory),
             apart=getattr(scenario, "apart", False),
+            # pymux lies to some programs by name, and the program in
+            # its pane is the viewer.
+            named=scenario.command.split()[-1],
         )
     except RuntimeError as reason:
         raise RuntimeError("%s\n%s" % (reason, every_log(room, seat))) from None
