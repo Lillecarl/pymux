@@ -90,9 +90,11 @@ HOW_LONG = float(os.environ.get("PYMUX_BUSY_SECONDS") or 5.0)
 #: below the other, which is what a gate on a wall clock should be.
 CEILING = float(os.environ.get("PYMUX_BUSY_CEILING") or 0.5)
 
-#: The caps to compare, for a pane somebody is looking at. `0` is no
-#: cap, which is what pymux did before `frame-rate` existed.
-WHICH_CAPS = [int(one) for one in (os.environ.get("PYMUX_BUSY_CAPS") or "0 30").split()]
+#: The caps to compare, for a pane somebody is looking at, for instance
+#: `PYMUX_BUSY_CAPS="0 30"`. `0` is no cap. None by default: the table
+#: judges nothing, `tests/test_frame_rate.py` holds the cap, and the
+#: table costs the gate fifty seconds.
+WHICH_CAPS = [int(one) for one in (os.environ.get("PYMUX_BUSY_CAPS") or "").split()]
 
 
 def programs() -> list:
@@ -182,6 +184,8 @@ async def what_it_costs_watched(name: str, rate: int) -> tuple:
 
 async def cap() -> None:
     "What the cap buys for a pane somebody is looking at."
+    if not WHICH_CAPS:
+        return
     print()
     print("--- what a pane somebody looks at costs, by frame-rate ---")
     print()
