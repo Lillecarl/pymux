@@ -132,6 +132,40 @@ fn store_line(row: &Bound<'_, PyAny>, start: i64, chars: &Bound<'_, PyList>) -> 
     Ok(())
 }
 
+/// `prompt_toolkit.layout.screen._copy_columns`: put the cells `source`
+/// holds in columns `start` up to `stop` into `target`, each in its column.
+#[pyfunction]
+fn copy_columns(
+    target: &Bound<'_, PyAny>,
+    source: &Bound<'_, PyAny>,
+    start: i64,
+    stop: i64,
+) -> PyResult<()> {
+    if target.is(source) {
+        return Ok(());
+    }
+    let py = target.py();
+    match (Cells::of(target)?, Cells::of(source)?) {
+        (Cells::Rust(target), Cells::Rust(source)) => {
+            target
+                .borrow_mut()
+                .copy_columns(py, &source.borrow(), start, stop);
+        }
+        (target, source) => {
+            for column in start..stop {
+                let held = match &source {
+                    Cells::Rust(row) => row.borrow().cell(column).map(|cell| cell.bind(py).clone()),
+                    Cells::Dict(row) => row.get_item(column)?,
+                };
+                if let Some(cell) = held {
+                    target.write(column, &cell)?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// `prompt_toolkit.layout.screen._last_column`: the last column `row`
 /// holds, or -1. A Rust row knows it without a walk.
 #[pyfunction]
@@ -250,6 +284,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(changed_spans, module)?)?;
     module.add_function(wrap_pyfunction!(store_line, module)?)?;
     module.add_function(wrap_pyfunction!(last_column, module)?)?;
+    module.add_function(wrap_pyfunction!(copy_columns, module)?)?;
     module.add_class::<Row>()?;
     Ok(())
 }

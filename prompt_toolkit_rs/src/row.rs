@@ -114,6 +114,16 @@ impl Row {
         }
     }
 
+    /// The cells `source` holds in columns `start` up to `stop`, each in
+    /// its column. A column `source` does not hold stays as it is here.
+    pub(crate) fn copy_columns(&mut self, py: Python<'_>, source: &Row, start: i64, stop: i64) {
+        for column in start..stop {
+            if let Some(cell) = source.cell(column) {
+                self.store(column, cell.clone_ref(py));
+            }
+        }
+    }
+
     fn remove(&mut self, column: i64) -> Option<Py<PyAny>> {
         let removed = match usize::try_from(column) {
             Ok(index) => {

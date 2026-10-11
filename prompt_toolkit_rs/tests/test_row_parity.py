@@ -27,6 +27,7 @@ from prompt_toolkit.layout.screen import _CHAR_CACHE, Char
 PURE_ROW = screen._new_row
 PURE_STORE = containers._store_line
 PURE_LAST = screen._last_column
+PURE_COPY = screen._copy_columns
 
 DEFAULT = _CHAR_CACHE[" ", "[transparent]"]
 
@@ -144,6 +145,25 @@ def test_two_rows_are_equal_in_both_kinds_or_in_neither(one, other):
     assert (fast[0] == fast[1]) is equal
     assert (fast[0] != fast[1]) is not equal
     assert (fast[0] == pure[1]) is equal
+
+
+@given(operations, operations, COLUMNS, COLUMNS)
+@settings(max_examples=500, deadline=None, suppress_health_check=[HealthCheck.too_slow])
+def test_the_column_copy_copies_what_the_python_does(into, out_of, start, stop):
+    "Every pairing of the two kinds, against dicts and the Python copy."
+    pure_target, pure_source = PURE_ROW(DEFAULT), PURE_ROW(DEFAULT)
+    apply(pure_target, into, PURE_STORE)
+    apply(pure_source, out_of, PURE_STORE)
+    PURE_COPY(pure_target, pure_source, start, stop)
+    for target_kind in (PURE_ROW, prompt_toolkit_rs.Row):
+        for source_kind in (PURE_ROW, prompt_toolkit_rs.Row):
+            target, source = target_kind(DEFAULT), source_kind(DEFAULT)
+            apply(target, into, PURE_STORE)
+            apply(source, out_of, PURE_STORE)
+            before = held(source)
+            prompt_toolkit_rs.copy_columns(target, source, start, stop)
+            assert held(target) == held(pure_target)
+            assert held(source) == before
 
 
 def test_a_column_nobody_wrote_reads_the_default_and_keeps_it():

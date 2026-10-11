@@ -20,6 +20,7 @@ from . import _native
 __all__ = [
     "Row",
     "changed_spans",
+    "copy_columns",
     "copy_single_width",
     "install",
     "installed",
@@ -47,6 +48,9 @@ store_line = _native.store_line
 #: `prompt_toolkit.layout.screen._last_column`, in Rust.
 last_column = _native.last_column
 
+#: `prompt_toolkit.layout.screen._copy_columns`, in Rust.
+copy_columns = _native.copy_columns
+
 #: `prompt_toolkit.renderer._changed_spans`, in Rust.
 changed_spans = _native.changed_spans
 
@@ -57,6 +61,7 @@ queue_same_style = _native.queue_same_style
 _KERNELS = (
     (screen, "_new_row", Row),
     (screen, "_last_column", last_column),
+    (screen, "_copy_columns", copy_columns),
     (containers, "_copy_single_width", copy_single_width),
     (containers, "_store_line", store_line),
     (renderer, "_changed_spans", changed_spans),
