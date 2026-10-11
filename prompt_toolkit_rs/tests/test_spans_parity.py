@@ -9,16 +9,17 @@ the walk stored. Lillecarl/pymux#566.
 
 from __future__ import annotations
 
-from collections import defaultdict
-
 import prompt_toolkit_rs
+import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from prompt_toolkit import renderer
+from prompt_toolkit.layout import screen
 from prompt_toolkit.layout.screen import _CHAR_CACHE, Char
 
-#: The reference, taken before any test could have installed the kernel.
+#: The references, taken before any test could have installed a kernel.
 PURE = renderer._changed_spans
+PURE_ROW = screen._new_row
 
 DEFAULT = Char(" ", "")
 
@@ -38,15 +39,15 @@ CELLS = [
 a_row = st.dictionaries(st.integers(0, 20), st.sampled_from(range(len(CELLS))), max_size=20)
 
 
-def made(row):
-    built = defaultdict(lambda: DEFAULT)
+def made(row, new_row):
+    built = new_row(DEFAULT)
     for column, which in row.items():
         built[column] = CELLS[which]
     return built
 
 
-def walked(spans, new, old, last):
-    new_row, previous_row = made(new), made(old)
+def walked(spans, new, old, last, new_row=PURE_ROW):
+    new_row, previous_row = made(new, new_row), made(old, new_row)
     answer = spans(new_row, previous_row, last)
     return (
         answer,
@@ -55,7 +56,8 @@ def walked(spans, new, old, last):
     )
 
 
+@pytest.mark.parametrize("new_row", [PURE_ROW, prompt_toolkit_rs.Row], ids=["dict", "rust"])
 @given(a_row, a_row, st.integers(-1, 22))
 @settings(max_examples=1000, deadline=None, suppress_health_check=[HealthCheck.too_slow])
-def test_the_same_spans_are_found(new, old, last):
-    assert walked(PURE, new, old, last) == walked(prompt_toolkit_rs.changed_spans, new, old, last)
+def test_the_same_spans_are_found(new_row, new, old, last):
+    assert walked(PURE, new, old, last) == walked(prompt_toolkit_rs.changed_spans, new, old, last, new_row)

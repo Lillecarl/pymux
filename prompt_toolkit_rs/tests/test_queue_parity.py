@@ -16,10 +16,13 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from prompt_toolkit import renderer
+from prompt_toolkit.layout import screen
 from prompt_toolkit.layout.screen import _CHAR_CACHE, Char
 
-#: The reference, taken before any test could have installed the kernel.
+#: The references, taken before any test could have installed a kernel.
 PURE = renderer._queue_same_style
+PURE_ROW = screen._new_row
+ROWS = [PURE_ROW, prompt_toolkit_rs.Row]
 
 DEFAULT = Char(" ", "")
 STYLES = ["", "class:x", "class:y"]
@@ -54,8 +57,8 @@ a_row = st.dictionaries(
 )
 
 
-def queued(queue, row, c, end, last_column, style, escapes):
-    built = defaultdict(lambda: DEFAULT)
+def queued(queue, row, c, end, last_column, style, escapes, new_row=PURE_ROW):
+    built = new_row(DEFAULT)
     for column, (character, cell_style) in row.items():
         built[column] = _CHAR_CACHE[character, cell_style, False]
     escapes_row = defaultdict(str, {column: "\x1b]8;;\x1b\\" for column in escapes})
@@ -64,15 +67,17 @@ def queued(queue, row, c, end, last_column, style, escapes):
     return stopped, [id(text) for text in pending], {column: id(cell) for column, cell in built.items()}
 
 
+@pytest.mark.parametrize("new_row", ROWS, ids=["dict", "rust"])
 @pytest.mark.parametrize("character", CHARACTERS)
-def test_each_character_is_judged_the_same(character):
+def test_each_character_is_judged_the_same(character, new_row):
     "The edges of the ranges, which random rows reach too rarely."
     row = {0: (character, "class:x"), 1: ("a", "class:x")}
     assert queued(PURE, row, 0, 2, 10, "class:x", set()) == queued(
-        prompt_toolkit_rs.queue_same_style, row, 0, 2, 10, "class:x", set()
+        prompt_toolkit_rs.queue_same_style, row, 0, 2, 10, "class:x", set(), new_row
     )
 
 
+@pytest.mark.parametrize("new_row", ROWS, ids=["dict", "rust"])
 @given(
     a_row,
     st.integers(0, 16),
@@ -82,7 +87,7 @@ def test_each_character_is_judged_the_same(character):
     st.sets(st.integers(0, 15), max_size=3),
 )
 @settings(max_examples=1000, deadline=None, suppress_health_check=[HealthCheck.too_slow])
-def test_the_same_run_is_queued(row, c, end, last_column, style, escapes):
+def test_the_same_run_is_queued(new_row, row, c, end, last_column, style, escapes):
     assert queued(PURE, row, c, end, last_column, style, escapes) == queued(
-        prompt_toolkit_rs.queue_same_style, row, c, end, last_column, style, escapes
+        prompt_toolkit_rs.queue_same_style, row, c, end, last_column, style, escapes, new_row
     )

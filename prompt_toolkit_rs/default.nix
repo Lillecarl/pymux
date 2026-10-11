@@ -18,6 +18,7 @@
   maturin,
   clippy,
   rustfmt,
+  prompt-toolkit,
 }:
 let
   fs = lib.fileset;
@@ -84,6 +85,24 @@ let
     setup = ''
       cp -r ${./tests} tests
       chmod -R +w tests
+      export HOME="$TMPDIR"
+      export LANG=C.UTF-8
+      export PYTHONDONTWRITEBYTECODE=1
+    '';
+  } "python -m pytest tests -q -p no:cacheprovider";
+
+  # prompt-toolkit's whole suite, with the Rust row and kernels installed
+  # by `unit/conftest.py`, which goes in over the suite's own tests.
+  # Lillecarl/pymux#570.
+  #
+  #     nix build --file . checks.prompt-toolkit-rs-unit
+  checks.unit = suite {
+    name = "prompt-toolkit-rs-unit";
+    inputs = [ testEnv ];
+    setup = ''
+      cp -r ${prompt-toolkit.testSources}/tests tests
+      chmod -R +w tests
+      cp ${./unit}/*.py tests/
       export HOME="$TMPDIR"
       export LANG=C.UTF-8
       export PYTHONDONTWRITEBYTECODE=1
