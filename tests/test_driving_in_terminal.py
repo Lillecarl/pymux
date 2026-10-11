@@ -39,12 +39,6 @@ RELAY = os.path.join(os.path.dirname(__file__), "drive_in_terminal.py")
 #: Long enough for a program to start and answer on a loaded machine,
 #: short enough that a test that goes wrong does not hold the suite.
 HOLD = 5.0
-#: The hold of a fenced run. The fence's deadline counts from the
-#: relay's start, and a gate running this on sixteen workers once spent
-#: five seconds before the fence came. A fenced run that passes stops
-#: at the fence, so the longer hold costs it nothing.
-#: Lillecarl/pymux#579.
-FENCE_HOLD = 15.0
 PATIENCE = 20.0
 
 
@@ -333,7 +327,7 @@ def run_fenced(tmp_path, keys_text, pane, forwarder_text=None):
             sys.executable,
             RELAY,
             str(keys),
-            str(FENCE_HOLD),
+            str(HOLD),
             str(fifo),
             str(fence_seen),
             "--",
@@ -370,16 +364,24 @@ def run_fenced(tmp_path, keys_text, pane, forwarder_text=None):
     return seen, fence_seen, error
 
 
+#: A pane that draws "framed." in answer to the key, as a program does.
+#: The relay's fence waits for one byte after the key, and with no echo
+#: this is the only one. A pane that drew it on a timer raced the key:
+#: under load the drawing came first, and the fence waited out the hold.
+#: A shell gives a background job /dev/null for its input, so the
+#: reader takes the pty through fd 3.
+ANSWERS_THE_KEY = "stty -echo; printf 'up.'; exec 3<&0; (read line <&3; printf 'framed.') & exec python3 %s %s %s"
+
+
 def test_fence_comes_back_and_is_taken_out(tmp_path):
     """
     The fence proves the keys were consumed, and the terminal never
     sees it: what the relay copies is the frame, and not the
     scaffolding. Lillecarl/pymux#275.
     """
-    pane = "stty -echo; printf 'up.'; (sleep 0.3; printf 'framed.') & exec python3 %s %s %s"
     from drive_in_terminal import BOOT_TOKEN, KEYS_TOKEN
 
-    seen, fence_seen, error = run_fenced(tmp_path, '0.1 b"hello\\n"\n', pane)
+    seen, fence_seen, error = run_fenced(tmp_path, '0.1 b"hello\\n"\n', ANSWERS_THE_KEY)
 
     assert fence_seen.exists(), error.decode(errors="replace")
     assert b"up." in seen
@@ -481,8 +483,7 @@ def test_the_timeline_says_what_happened_and_when(tmp_path):
     key the program never acted on. It was empty before, and a lost
     key was a guess. Lillecarl/pymux#353.
     """
-    pane = "stty -echo; printf 'up.'; (sleep 0.3; printf 'framed.') & exec python3 %s %s %s"
-    _, fence_seen, error = run_fenced(tmp_path, '0.1 b"hello\\n"\n', pane)
+    _, fence_seen, error = run_fenced(tmp_path, '0.1 b"hello\\n"\n', ANSWERS_THE_KEY)
 
     assert fence_seen.exists()
     assert b"the first frame" in error, error
