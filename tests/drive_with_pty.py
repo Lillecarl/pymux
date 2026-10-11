@@ -41,6 +41,7 @@ Run with:
 
 from __future__ import annotations
 
+import contextlib
 import datetime
 import fcntl
 import os
@@ -1164,8 +1165,12 @@ def check_closing_split(tmp):
         # A second pane that ends on its own.
         split = run_cli(terminal.sock_path, ["split-window", "%s -c pass" % sys.executable])
         assert split.returncode == 0, split.stderr
-        terminal.drain(2.0)
+        _until(
+            lambda: run_cli(terminal.sock_path, ["list-panes"]).stdout.count(b"\n") == 1,
+            "the split never closed",
+        )
 
+        # A repaint without end is a negative over time: this watches.
         quiet = terminal.mark()
         terminal.drain(3.0)
         tail = terminal.since(quiet)
@@ -1686,10 +1691,21 @@ def check_strip_follows_resize(tmp):
 
         raise Failed("no border on row %d of %r" % (high // 2, middle))
 
+    def laid_out(mark, high, wide) -> bool:
+        "Whether the columns and the border drawn since `mark` are where they belong."
+        terminal.drain(0.05)
+        try:
+            return sizes() == every_column_at(wide, high) and border_column(mark, high, wide) == wide // 2 - 1
+        except Failed:
+            return False
+
     try:
         terminal.wait_for_queries()
         terminal.write(b"\x1b[?62;1;6c")
-        terminal.drain(2.0)
+        _until(
+            lambda: run_cli(terminal.sock_path, ["list-panes"]).returncode == 0,
+            "the session never had a window",
+        )
 
         # The other columns, so that there is a strip to lay out.
         for _ in range(HOW_MANY - 1):
@@ -1697,7 +1713,7 @@ def check_strip_follows_resize(tmp):
             assert opened.returncode == 0, opened.stderr
 
         mark = terminal.mark()
-        terminal.drain(2.0)
+        _until(lambda: laid_out(mark, rows, columns), "the strip was never laid out")
 
         assert sizes() == every_column_at(columns, rows), sizes()
         assert border_column(mark, rows, columns) == columns // 2 - 1, (
@@ -1708,7 +1724,9 @@ def check_strip_follows_resize(tmp):
         # The font size changed, which is all a resize is.
         mark = terminal.mark()
         terminal.resize(fewer, narrower)
-        terminal.drain(3.0)
+        # The asserts below say what is wrong if it never is.
+        with contextlib.suppress(AssertionError):
+            _until(lambda: laid_out(mark, fewer, narrower), "")
 
         assert sizes() == every_column_at(narrower, fewer), (
             "the server did not resize the columns",
@@ -1909,30 +1927,45 @@ def check_empty_rows_draw_the_pane(tmp):
 
     program = tmp / "few.sh"
     program.write_text(
-        "printf 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\\n'; sleep 2; printf '\\x1b[1A\\r\\x1b[Kshort\\n'; sleep 6\n"
+        # It shrinks the row on a key, sent once the long row is on the
+        # wire: a sleep in the program waited for that frame.
+        "stty -echo; printf 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\\n'; read go; printf '\\x1b[1A\\r\\x1b[Kshort\\n'; sleep 600\n"
     )
 
-    terminal = Terminal(tmp, "empty-rows", command="sh %s" % program, config=config, rows=30, columns=100)
-    try:
-        terminal.wait_for_queries()
-        terminal.write(b"\x1b[?62;1;6c")
-        terminal.wait_for(b"short")
-        terminal.drain(4.0)
-
+    def wrong_rows() -> str | None:
+        "What is wrong with the screen the wire built, or `None`."
         judge = Screen(30, 100, write_process_input=lambda answer: None)
-        feed = Stream(judge).feed
-        feed(terminal.seen.decode("utf-8", "replace"))
-
+        Stream(judge).feed(terminal.seen.decode("utf-8", "replace"))
         buffer = judge.page.data_buffer
         offset = judge.line_offset
         for y in range(offset, offset + 29):
             row = buffer[y] if y in buffer else {}
             cells = [row[x] for x in range(100) if x in row]
             if len(cells) < 100:
-                raise Failed("row %d drew %d of 100 cells" % (y - offset, len(cells)))
+                return "row %d drew %d of 100 cells" % (y - offset, len(cells))
             bgs = {cell.appearance.rendition.bgcolor for cell in cells}
             if len(bgs) != 1 or None in bgs:
-                raise Failed("row %d drew the backgrounds %r" % (y - offset, sorted(bgs, key=repr)))
+                return "row %d drew the backgrounds %r" % (y - offset, sorted(bgs, key=repr))
+        return None
+
+    terminal = Terminal(tmp, "empty-rows", command="sh %s" % program, config=config, rows=30, columns=100)
+    try:
+        terminal.wait_for_queries()
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"AAAAAAAAAA")
+        terminal.write(b"\r")
+        terminal.wait_for(b"short")
+        # And the end of the frame that drew it: a frame ends showing
+        # the cursor again.
+        terminal.wait_for(SHOW_CURSOR)
+
+        # Until the screen is right, and what is wrong with it if it
+        # never is: a fixed four seconds stood here.
+        deadline = time.monotonic() + 10
+        while (wrong := wrong_rows()) is not None:
+            if time.monotonic() > deadline:
+                raise Failed(wrong)
+            terminal.drain(0.1)
 
         print("empty rows draw the pane: ok")
     except Exception:
@@ -2028,7 +2061,8 @@ def check_pane_that_changes_nothing(tmp):
     the clock is not on the screen to move.
     """
     config = tmp / "quiet.conf"
-    config.write_text("set-client-option full-screen on\n")
+    # A one second refresh, so that a short window still holds one.
+    config.write_text("set-client-option full-screen on\nset-option status-interval 1\n")
 
     program = tmp / "still.sh"
     # The same character in the same cell, over and over.
@@ -2066,7 +2100,7 @@ def check_pane_that_changes_nothing(tmp):
         started = time.time()
         # Longer than `status-interval`, so the auto refresh asks at
         # least once inside the window.
-        terminal.drain(5.0)
+        terminal.drain(1.5)
         since = terminal.since(mark)
 
         if since != b"":
@@ -2417,7 +2451,27 @@ def check_a_stopped_client_does_not_stop_the_server(tmp):
         # the kernel, and past ~200 kB there is no room left: the next
         # send is the one that must not block the loop.
         terminal.client.send_signal(signal.SIGSTOP)
-        time.sleep(10.0)
+
+        def waiting() -> int:
+            "The bytes the server holds for its clients, from `counters`."
+            try:
+                answer = run_cli(terminal.sock_path, ["counters"])
+            except subprocess.TimeoutExpired:
+                raise AssertionError(
+                    "counters did not answer in 20s: the server is wedged on the client that stopped reading"
+                )
+            assert answer.returncode == 0, answer.stderr
+            found = re.search(rb"bytes waiting for a client\s+(\d+)", answer.stdout)
+            assert found, answer.stdout
+            return int(found.group(1))
+
+        # Until a send waits for room. A send gives the loop up only
+        # when the socket has none, so a command that runs on that loop
+        # sees bytes waiting only while one is parked: the buffer is
+        # full. A fixed ten seconds waited for the same thing, and a
+        # count of the characters sent cannot say it -- the frames that
+        # queue behind the parked one keep it creeping.
+        _until(lambda: waiting() > 0, "no send ever waited for the stopped client", timeout=30)
 
         try:
             answer = run_cli(terminal.sock_path, ["list-sessions"])
@@ -2804,15 +2858,47 @@ def _two_cats_side_by_side(tmp, mode):
     terminal.wait_for_queries()
     terminal.write(b"\x1b[?62;1;6c")
     _first_pane(terminal.sock_path)
+    mark = terminal.mark()
     made = run_cli(terminal.sock_path, ["split-window", "-h", "cat"])
     assert made.returncode == 0, made.stderr
     ids = run_cli(terminal.sock_path, ["list-panes", "-F", "#{pane_id}"]).stdout.decode().split()
     assert len(ids) == 2, ids
     selected = run_cli(terminal.sock_path, ["select-pane", "-t", ids[0]])
     assert selected.returncode == 0, selected.stderr
-    terminal.drain(3.0)
+
+    # A click lands by the layout the client drew last, so the split
+    # has to be on the wire: its border, on the row the clicks use.
+    def split_drawn() -> bool:
+        terminal.drain(0.05)
+        return any(char in BORDERS for char in read_screen(terminal.since(mark), 24, 80)[10])
+
+    _until(split_drawn, "the split was never drawn")
     assert _active_pane_index(terminal.sock_path) == 0
     return terminal, ids
+
+
+def _until(condition, what: str, timeout: float = 10.0) -> None:
+    "Poll `condition` until it holds; a fixed wait stood here. Lillecarl/pymux#579."
+    deadline = time.monotonic() + timeout
+    while not condition():
+        assert time.monotonic() < deadline, what
+        time.sleep(0.05)
+
+
+def _captured(sock_path, pane_id) -> bytes:
+    return run_cli(sock_path, ["capture-pane", "-t", pane_id, "-p"]).stdout
+
+
+def _marked(sock_path, pane_id, mark: str) -> bytes:
+    """
+    What a pane holds once `mark`, sent to it alone, is on it.
+
+    The second event that proves a negative: bytes that reached the
+    pane before the mark are on it before the mark is.
+    """
+    run_cli(sock_path, ["send-keys", "-t", pane_id, mark, "Enter"])
+    _until(lambda: mark.encode() in _captured(sock_path, pane_id), "%s never reached the pane" % mark)
+    return _captured(sock_path, pane_id)
 
 
 def check_click_in_unfocused_pane_selects_it(tmp):
@@ -2832,13 +2918,15 @@ def check_click_in_unfocused_pane_selects_it(tmp):
         terminal.write(b"\x1b[<0;60;10M")
         time.sleep(0.3)
         terminal.write(b"\x1b[<0;60;10m")
-        terminal.drain(2.0)
-        assert _active_pane_index(terminal.sock_path) == 1, "the click did not select the right pane"
+        _until(lambda: _active_pane_index(terminal.sock_path) == 1, "the click did not select the right pane")
 
         terminal.write(b"clickmark\n")
-        terminal.drain(2.0)
-        left, right = (run_cli(terminal.sock_path, ["capture-pane", "-t", pid, "-p"]).stdout for pid in ids)
-        assert b"clickmark" in right, "keys did not follow the click:\n%r" % (right[-200:],)
+        _until(
+            lambda: b"clickmark" in _captured(terminal.sock_path, ids[1]),
+            "keys did not follow the click:\n%r" % (_captured(terminal.sock_path, ids[1])[-200:],),
+        )
+        left = _marked(terminal.sock_path, ids[0], "leftmark")
+        right = _captured(terminal.sock_path, ids[1])
         assert b"clickmark" not in left, "keys reached both panes:\n%r" % (left[-200:],)
         assert b"\x1b" not in right, "the click leaked into the program:\n%r" % (right[-200:],)
 
@@ -2861,17 +2949,14 @@ def check_wheel_over_unfocused_pane_does_nothing(tmp):
     """
     terminal, ids = _two_cats_side_by_side(tmp, "wheel-unfocused")
     try:
-        before = run_cli(terminal.sock_path, ["capture-pane", "-t", ids[1], "-p"]).stdout
         terminal.write(b"\x1b[<64;60;10M")
-        terminal.drain(2.0)
-        assert _active_pane_index(terminal.sock_path) == 0, "the wheel selected the right pane"
-        after = run_cli(terminal.sock_path, ["capture-pane", "-t", ids[1], "-p"]).stdout
-        assert after == before, "the wheel reached the program:\n%r" % (after[-200:],)
-
+        # Typed after the wheel, so on the left once the wheel was taken.
         terminal.write(b"wheelmark\n")
-        terminal.drain(2.0)
-        left, right = (run_cli(terminal.sock_path, ["capture-pane", "-t", pid, "-p"]).stdout for pid in ids)
-        assert b"wheelmark" in left and b"wheelmark" not in right
+        _until(lambda: b"wheelmark" in _captured(terminal.sock_path, ids[0]), "the keys after the wheel never arrived")
+        assert _active_pane_index(terminal.sock_path) == 0, "the wheel selected the right pane"
+        right = _marked(terminal.sock_path, ids[1], "rightmark")
+        assert b"<64" not in right, "the wheel reached the program:\n%r" % (right[-200:],)
+        assert b"wheelmark" not in right, "keys reached both panes:\n%r" % (right[-200:],)
 
         print("wheel over unfocused pane does nothing: ok")
     except Exception:
@@ -2956,7 +3041,10 @@ def main() -> None:
     tmp = Path(tempfile.mkdtemp(prefix="pymux-pty-test-"))
     checks = chosen_checks()
     for check in checks:
+        started = time.monotonic()
         check(tmp)
+        # What each check costs, so a slow one has a name. Lillecarl/pymux#579.
+        print("    %s took %.1f s" % (check.__name__, time.monotonic() - started))
     print("%d of %d pty checks passed." % (len(checks), len(CHECKS)))
 
 
