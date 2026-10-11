@@ -1977,6 +1977,22 @@ def check_empty_rows_draw_the_pane(tmp):
         terminal.close()
 
 
+def _reading(terminal, args):
+    """
+    Run a command while the terminal goes on reading the client.
+
+    On the integrated route the server and the client are one process.
+    A terminal that stops reading a flood fills the pty, the client's
+    write blocks, and the server blocks with it: measured, no command
+    answered in twenty seconds, `kill-server` included.
+    """
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        answer = pool.submit(run_cli, terminal.sock_path, args)
+        while not answer.done():
+            terminal.drain(0.05)
+        return answer.result()
+
+
 def check_switch_window_under_flood(tmp):
     """
     A window switch lands while another window floods.
@@ -2020,14 +2036,12 @@ def check_switch_window_under_flood(tmp):
         terminal.write(b"\x1b[?62;1;6c")
         terminal.wait_for(b"flood line 1")
         session = terminal.session_name
-        opened = run_cli(
-            terminal.sock_path, ["new-window", "-d", "-t", session + ":", "-n", "idle", "python3 %s" % marker]
-        )
+        opened = _reading(terminal, ["new-window", "-d", "-t", session + ":", "-n", "idle", "python3 %s" % marker])
         assert opened.returncode == 0, opened.stderr
-        listed = run_cli(terminal.sock_path, ["list-windows", "-t", session, "-F", "#{window_id}:#{window_name}"])
+        listed = _reading(terminal, ["list-windows", "-t", session, "-F", "#{window_id}:#{window_name}"])
         idle = [line.split(":")[0] for line in listed.stdout.decode().splitlines() if line.endswith(":idle")]
         assert len(idle) == 1, listed.stdout
-        bound = run_cli(terminal.sock_path, ["bind-key", "-n", "F12", "select-window", "-t", idle[0]])
+        bound = _reading(terminal, ["bind-key", "-n", "F12", "select-window", "-t", idle[0]])
         assert bound.returncode == 0, bound.stderr
 
         before = time.time()
