@@ -287,6 +287,7 @@ let
   leaksBytes = builtins.getEnv "PYMUX_LEAKS_BYTES";
   leaksTrace = builtins.getEnv "PYMUX_LEAKS_TRACE";
   leaksRoute = builtins.getEnv "PYMUX_LEAKS_ROUTE";
+  leaksProfile = builtins.getEnv "PYMUX_LEAKS_PROFILE";
 
   # How many keystrokes the latency measurement takes, how far apart,
   # and over which route.
@@ -704,6 +705,7 @@ in
             leaksBytes
             leaksTrace
             leaksRoute
+            leaksProfile
             ;
         };
         setup = ''
@@ -715,6 +717,7 @@ in
           export PYMUX_LEAKS_BYTES="$leaksBytes"
           export PYMUX_LEAKS_TRACE="$leaksTrace"
           export PYMUX_LEAKS_ROUTE="$leaksRoute"
+          export PYMUX_LEAKS_PROFILE="$leaksProfile"
           export PYTHONHASHSEED=0
         '';
       }

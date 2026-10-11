@@ -88,15 +88,19 @@ the first kept too, and a healthy type is zero on both.
     PYMUX_LEAKS_TOLERANCE=0     # no noise allowed
     PYMUX_LEAKS_TRACE=1         # count bytes as well, with tracemalloc
     PYMUX_LEAKS_ROUTE=connection  # one route, not both
+    PYMUX_LEAKS_PROFILE=40      # where the time goes, 40 functions
 """
 
 from __future__ import annotations
 
+import cProfile
 import gc
 import os
+import pstats
 import sys
 import time
 import tracemalloc
+import weakref
 from collections import Counter
 from pathlib import Path
 
@@ -161,6 +165,10 @@ BYTES = int(os.environ.get("PYMUX_LEAKS_BYTES") or 128 * 1024)
 #: interpreter's own arenas, so nothing judges it. It is here for a
 #: person who wants to see it.
 TRACE = bool(os.environ.get("PYMUX_LEAKS_TRACE"))
+
+#: How many functions to print from a profile of the whole run, by
+#: cumulative time. Empty prints none, and does not profile.
+PROFILE = int(os.environ.get("PYMUX_LEAKS_PROFILE") or 0)
 
 #: Where the recordings are.
 RECORDINGS = os.environ.get("PYMUX_LEAKS_RECORDINGS", "")
@@ -255,7 +263,12 @@ def feed(pane, recordings) -> None:
             return
 
 
-async def settle(panes, watched, seconds: float = 10.0) -> bool:
+def _terminated(ref) -> bool:
+    process = ref()
+    return process is None or process.is_terminated
+
+
+async def settle(processes, watched, seconds: float = 10.0) -> bool:
     """
     Give the loop the turns a teardown needs.
 
@@ -298,6 +311,13 @@ async def settle(panes, watched, seconds: float = 10.0) -> bool:
     loop's own pockets. Collecting first, because a cycle nobody holds
     dies here and not on a turn of the loop.
 
+    **The caller must hold none of it**, so `processes` are weak
+    references and this runs after the round has returned. A round
+    that settled inside itself kept every pane in its own locals, so
+    nothing died before the deadline: each round waited all of
+    `seconds`, which was 100 of the check's 118 s, and the survivors
+    died only when the round returned.
+
     False when a pane never reported itself terminated. That is worth
     saying rather than hiding: a check that timed out has measured
     nothing.
@@ -305,7 +325,7 @@ async def settle(panes, watched, seconds: float = 10.0) -> bool:
     deadline = time.monotonic() + seconds
 
     while time.monotonic() < deadline:
-        if all(pane.process.is_terminated for pane in panes):
+        if all(_terminated(ref) for ref in processes):
             break
         await anyio.sleep(0.01)
     else:
@@ -322,9 +342,10 @@ async def settle(panes, watched, seconds: float = 10.0) -> bool:
     return True
 
 
-async def create_round(session: Session, recordings) -> bool:
+async def create_round(session: Session, recordings) -> list:
     """
     One round: open, feed, draw, resize, scroll, then tear it all down.
+    Answers a weak reference to each process it killed, for `settle`.
 
     Each part is a path that allocates, and the teardown is what the
     weak references are about.
@@ -400,7 +421,7 @@ async def create_round(session: Session, recordings) -> bool:
     for state in (big, small):
         await session.detach(state)
 
-    return await settle(killed, session.watched)
+    return [weakref.ref(pane.process) for pane in killed]
 
 
 def counted() -> Counter:
@@ -476,7 +497,8 @@ async def run(rounds: int, recordings) -> list[str]:
     for _round in range(rounds):
         for name, route in routes(ROUTE, "PYMUX_LEAKS_ROUTE"):
             async with route() as session:
-                if not await create_round(session, recordings):
+                processes = await create_round(session, recordings)
+                if not await settle(processes, session.watched):
                     alive.append("a pane never reported itself terminated, so this round measured nothing")
                 alive.extend("%s: %s" % (name, line) for line in survivors(session.watched))
 
@@ -618,5 +640,14 @@ async def judged() -> int:
     return status
 
 
+def profiled() -> int:
+    profile = cProfile.Profile()
+    status = profile.runcall(anyio.run, judged)
+    print()
+    pstats.Stats(profile).sort_stats("cumulative").print_stats(PROFILE)
+    pstats.Stats(profile).sort_stats("tottime").print_stats(PROFILE)
+    return status
+
+
 if __name__ == "__main__":
-    sys.exit(anyio.run(judged))
+    sys.exit(profiled() if PROFILE else anyio.run(judged))
