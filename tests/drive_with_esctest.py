@@ -163,10 +163,24 @@ escargs.args.include = os.environ["ESCTEST_INCLUDE"]
 
 
 def drain():
-    "Throw away every report that the test before this one left."
-    while select.select([0], [], [], 0.05)[0]:
-        if not os.read(0, 65536):
+    \"\"\"
+    Throw away every report that the test before this one left.
+
+    A status report is the fence: the terminal answers in order, so
+    whatever it sent before the answer is left over. Waiting for the
+    pipe to go quiet costs 50 ms a test, which is half the run. A test
+    may leave 8-bit controls on, and then the answer starts with CSI
+    as one byte.
+    \"\"\"
+    os.write(1, b"\\x1b[5n")
+    seen = b""
+    while not seen.endswith((b"\\x1b[0n", b"\\x9b0n")):
+        if not select.select([0], [], [], 10)[0]:
+            raise SystemExit("the terminal did not answer a status report")
+        piece = os.read(0, 65536)
+        if not piece:
             break
+        seen += piece
 
 
 excluded = os.environ["ESCTEST_EXCLUDE"]
