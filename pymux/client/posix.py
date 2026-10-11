@@ -18,7 +18,7 @@ from prompt_toolkit.output.vt100 import Vt100_Output
 from pymux.agentic import caller_cwd, caller_environment
 
 from .reconnect import draw
-from .terminal import DELETE_EVERY_IMAGE, TerminalClient
+from .terminal import DELETE_EVERY_IMAGE, NO_ANSWER, TerminalClient
 
 #: How often a client waiting for a restarted server tries the socket,
 #: in seconds.
@@ -84,7 +84,7 @@ class PosixClient(TerminalClient):
         #   "out": output of the command. (stdout)
         #   "err": errors. (stderr)
         #   "exit": exit code of the command.
-        exit_code = 0
+        exit_code = None
         framer = Framer()
 
         while True:
@@ -108,6 +108,9 @@ class PosixClient(TerminalClient):
                 elif packet[Field.CMD] == Packet.EXIT:
                     exit_code = packet[Field.CODE]
 
+        if exit_code is None:
+            sys.stderr.write(NO_ANSWER % (self.socket_name,))
+            return 1
         return exit_code
 
     @override

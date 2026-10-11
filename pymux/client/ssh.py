@@ -75,7 +75,7 @@ from .reconnect import (
     watch_internet,
     why,
 )
-from .terminal import DELETE_EVERY_IMAGE, TerminalClient
+from .terminal import DELETE_EVERY_IMAGE, NO_ANSWER, TerminalClient
 
 if TYPE_CHECKING:
     from asyncssh import SSHWriter
@@ -437,7 +437,7 @@ class SshClient(TerminalClient):
                 }
             )
 
-            exit_code = 0
+            exit_code = None
             try:
                 async for packet in self._packets(reader):
                     if packet[Field.CMD] == Packet.OUT:
@@ -453,6 +453,9 @@ class SshClient(TerminalClient):
                 # knows whether the command ran, so the code has to say
                 # that it does not.
                 sys.stderr.write("pymux lost the server on %s: %s\n" % (self.target.host, why(error)))
+                return 1
+            if exit_code is None:
+                sys.stderr.write(NO_ANSWER % ("%s:%s" % (self.target.host, self.target.path),))
                 return 1
             return exit_code
         finally:

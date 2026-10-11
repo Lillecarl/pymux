@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import socket
+import threading
 import time
 
 import pytest
@@ -166,6 +167,30 @@ def test_the_pty_holder_is_not_a_server(sockets):
     sockets(["pymux.sock.someone.0", "pymux.sock.someone.0.holder"])
 
     assert _names() == ["pymux.sock.someone.0"]
+
+
+def test_a_peer_that_closes_with_no_answer_is_an_error(tmp_path, capsys):
+    "A pty holder reads the command and closes. Lillecarl/pymux#606."
+    from pymux.client.posix import PosixClient
+
+    path = str(tmp_path / "pymux.sock.someone.0.holder")
+    listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    listener.bind(path)
+    listener.listen(1)
+
+    def close_at_once():
+        peer, _address = listener.accept()
+        peer.recv(4096)
+        peer.close()
+
+    peer_thread = threading.Thread(target=close_at_once)
+    peer_thread.start()
+    try:
+        assert PosixClient(path).run_command("list-sessions", timeout=5.0) == 1
+    finally:
+        peer_thread.join()
+        listener.close()
+    assert "closed the connection with no answer" in capsys.readouterr().err
 
 
 def test_the_library_answers_the_same_list(sockets, a_dead_socket):
