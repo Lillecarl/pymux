@@ -33,11 +33,13 @@ def test_daemonize_keeps_the_umask_of_its_caller(tmp_path):
 
         os.umask(0o077)
         if daemonize(stdout={str(mark)!r}):
-            # The daemon: stdout is the mark now. Report the umask it
-            # was left with, and leave a file behind as a pane would.
-            print(oct(os.umask(0o077)), flush=True)
+            # The daemon: stdout is the mark now. Leave a file behind as
+            # a pane would, then report the umask it was left with. The
+            # report last, because the test waits for it and then reads
+            # the file.
             with open({str(made)!r}, "w"):
                 pass
+            print(oct(os.umask(0o077)), flush=True)
         """
     )
 
