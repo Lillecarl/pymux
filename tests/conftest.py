@@ -14,8 +14,11 @@ suite around it.
 
 from __future__ import annotations
 
+import cProfile
 import faulthandler
 import os
+import pstats
+import resource
 import sys
 from pathlib import Path
 
@@ -64,6 +67,84 @@ def pytest_runtest_protocol(item):
     finally:
         if HANG_SECONDS:
             faulthandler.cancel_dump_traceback_later()
+
+
+#: Profile the collection of the first worker and print it, when set. Each
+#: xdist worker collects the whole suite again, so a second of collection
+#: costs a second per core.
+PROFILE_COLLECTION = bool(os.environ.get("PYMUX_PROFILE_COLLECTION"))
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_collection(session):
+    worker = getattr(session.config, "workerinput", {}).get("workerid", "gw0")
+    if not PROFILE_COLLECTION or worker != "gw0":
+        yield
+        return
+    profiler = cProfile.Profile()
+    profiler.enable()
+    try:
+        yield
+    finally:
+        profiler.disable()
+        with os.fdopen(os.dup(_stacks_go_to), "w") as stream:
+            stats = pstats.Stats(profiler, stream=stream)
+            stats.sort_stats("cumulative").print_stats(60)
+            stats.sort_stats("tottime").print_stats(30)
+
+
+#: How many of the costliest tests by CPU the run names. The check sets it.
+#: `--durations` is wall time, and under load wall time measures the load.
+CPU_NAMES = int(os.environ.get("PYMUX_CPU") or 0)
+
+_cpu_spent: list[tuple[float, str]] = []
+
+
+def _cpu_seconds():
+    mine = resource.getrusage(resource.RUSAGE_SELF)
+    children = resource.getrusage(resource.RUSAGE_CHILDREN)
+    return mine.ru_utime + mine.ru_stime + children.ru_utime + children.ru_stime
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_setup(item):
+    item.cpu_before = _cpu_seconds()
+    yield
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """
+    Put the CPU of a whole test on its teardown report, children counted
+    once reaped. A property rides the report to the xdist controller.
+    """
+    outcome = yield
+    if CPU_NAMES and call.when == "teardown" and hasattr(item, "cpu_before"):
+        spent = _cpu_seconds() - item.cpu_before
+        outcome.get_result().user_properties.append(("cpu", spent))
+
+
+def pytest_runtest_logreport(report):
+    for name, value in report.user_properties:
+        if name == "cpu":
+            _cpu_spent.append((value, report.nodeid))
+
+
+def pytest_terminal_summary(terminalreporter):
+    if not CPU_NAMES:
+        return
+    write = terminalreporter.write_line
+    total = sum(spent for spent, _ in _cpu_spent)
+    terminalreporter.section(f"costliest {CPU_NAMES} by CPU, of {total:.1f} s")
+    for spent, nodeid in sorted(_cpu_spent, reverse=True)[:CPU_NAMES]:
+        write(f"{spent:7.2f}s {nodeid}")
+    by_file: dict[str, float] = {}
+    for spent, nodeid in _cpu_spent:
+        path = nodeid.split("::")[0]
+        by_file[path] = by_file.get(path, 0.0) + spent
+    terminalreporter.section("CPU by file")
+    for path, spent in sorted(by_file.items(), key=lambda pair: -pair[1])[:CPU_NAMES]:
+        write(f"{spent:7.2f}s {path}")
 
 
 @pytest.fixture(autouse=True)

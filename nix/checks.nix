@@ -154,6 +154,11 @@ let
     in
     if value == "" then "60" else value;
 
+  # How many of the costliest unit tests by CPU the run names, and the
+  # files they are in. Empty names none, for instance
+  # `PYMUX_CPU=40 nix build --file . checks.pymux-unit.run`.
+  cpuNames = builtins.getEnv "PYMUX_CPU";
+
   # Which of the end to end checks run, comma separated and without the
   # `check_` in front, for instance
   # `PYMUX_PTY_CHECKS=pane_that_changes_nothing nix build --file . checks.pymux-pty`.
@@ -576,6 +581,8 @@ in
         name = "pymux-unit";
         env = {
           inherit selection durations;
+          PYMUX_CPU = cpuNames;
+          PYMUX_PROFILE_COLLECTION = builtins.getEnv "PYMUX_PROFILE_COLLECTION";
           PYMUX_HANG_SECONDS = toString hangIsSeconds;
           PYMUX_BASE16_SCHEMES = "${base16-schemes-json}/base16-schemes.json";
         };
