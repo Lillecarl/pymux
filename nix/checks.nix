@@ -596,9 +596,13 @@ in
       # the default `load` a worker waits on the controller for each
       # next test, and the waits were most of the run: 121 s against
       # 56 s, with 417 s of tests over sixteen workers.
+      #
+      # At most eight: each worker pays its own start and collection,
+      # and the gate runs every suite at once. Measured alone, wall and
+      # CPU seconds: eight workers 54 and 173, sixteen 46 and 219.
       ''
         cores="''${NIX_BUILD_CORES:-0}"
-        if [ "$cores" = 0 ]; then cores=auto; fi
+        if [ "$cores" = 0 ] || [ "$cores" -gt 8 ]; then cores=8; fi
         least=0.5
         if [ "$durations" = 0 ]; then least=0; fi
         # One collection first writes the rewritten test modules to
