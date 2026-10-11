@@ -86,7 +86,7 @@
   ruff,
 }:
 let
-  inherit (callPackage ./suite.nix { }) suite;
+  inherit (callPackage ./suite.nix { }) suite run;
 
   # The conformance suite belongs to ptterm: it judges an emulator, and the
   # pane is where pymux puts one. ptterm carries the package and runs the
@@ -518,6 +518,39 @@ let
         export PYMUX_MATRIX_OUT="$out"
         python tests/theme_batches.py
       '';
+
+  # The pictures of one terminal, judged by nothing: `pictures` judges
+  # them all at once. A run, not a check, because the judge reads
+  # `status` itself and names the run that failed.
+  pictureShots = builtins.listToAttrs (
+    map
+      (terminal: {
+        name = terminal;
+        value =
+          run
+            {
+              name = "pymux-pictures-${terminal}";
+              inputs = [ testEnv ] ++ seatInputs;
+              env = { inherit pictureSelection; };
+              setup = prepare;
+            }
+            (
+              seatSetup
+              + ''
+                export PYMUX_PICTURES="$pictureSelection"
+                export PYMUX_PICTURES_TERMINALS=${terminal}
+                export PYMUX_PICTURES_SHOOT_ONLY=1
+                export PYMUX_PICTURES_OUT="$out"
+                python tests/take_picture.py
+              ''
+            );
+      })
+      [
+        "xterm"
+        "foot"
+        "kitty"
+      ]
+  );
 in
 {
   # The unit tests of pymux.
@@ -1049,21 +1082,28 @@ in
   #
   # The result is a directory, so a run always leaves its pictures behind:
   # `result/<terminal>/<fixture>/{bare,pymux,difference}.png`.
+  #
+  # Each terminal shoots in a run of its own, so the three take their
+  # pictures at once, and this one judges what they found. The run of
+  # one terminal is `checks.pymux-pictures.shots.<terminal>`.
   pictures =
     runInSandbox
       {
         name = "pymux-pictures";
-        inputs = seatInputs;
-        env = { inherit pictureSelection; };
+        env = {
+          inherit pictureSelection;
+          shots = toString (builtins.attrValues pictureShots);
+        };
       }
-      (
-        seatSetup
-        + ''
-          export PYMUX_PICTURES="$pictureSelection"
-          export PYMUX_PICTURES_OUT="$out"
-          python tests/take_picture.py
-        ''
-      );
+      ''
+        export PYMUX_PICTURES="$pictureSelection"
+        export PYMUX_PICTURES_SHOTS="$shots"
+        export PYMUX_PICTURES_OUT="$out"
+        python tests/take_picture.py
+      ''
+    // {
+      shots = pictureShots;
+    };
 
   # An image through a move and two resizes, in kitty and through a
   # pane, photographed at each step.

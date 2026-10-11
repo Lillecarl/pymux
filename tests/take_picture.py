@@ -1237,26 +1237,36 @@ def write_recorded(path, found):
     path.write_text("\n".join(lines) + "\n")
 
 
-def main():
-    work = Path(os.environ.get("TMPDIR", "/tmp")) / "pymux-pictures"
-    work.mkdir(parents=True, exist_ok=True)
-    out = PICTURES
-    out.mkdir(parents=True, exist_ok=True)
+#: What a run that only shoots leaves for the judge, beside its pictures.
+SHOTS = "shots.json"
 
-    names = [name for name in every_fixture() if ONLY in name]
-    blink_names = [name for name in BLINK_FIXTURES if ONLY in name]
-    if not names and not blink_names:
-        raise SystemExit("no fixture holds %r" % ONLY)
 
+def chosen_terminals():
+    """
+    The terminals this run shoots: `PYMUX_PICTURES_TERMINALS` names
+    them, and nothing names every one.
+    """
+    wanted = os.environ.get("PYMUX_PICTURES_TERMINALS", "").split()
+    known = {terminal.name for terminal in TERMINALS}
+    unknown = [name for name in wanted if name not in known]
+    if unknown:
+        raise SystemExit("PYMUX_PICTURES_TERMINALS names %s, not %s" % (", ".join(sorted(known)), ", ".join(unknown)))
+    return [terminal for terminal in TERMINALS if not wanted or terminal.name in wanted]
+
+
+def shoot(terminals, names, blink_names, work, out):
+    """
+    Every fixture in every one of these terminals. Returns the pixels
+    each picture differs by and how each cursor blinked, or `None` when
+    the seat gave no answer.
+    """
     # A terminal that is not here is a hole in the check, not a
     # detail. The build brings every one of them in, so a missing one
     # says the inputs changed.
-    missing = [t.name for t in TERMINALS if not t.is_available()]
+    missing = [t.name for t in terminals if not t.is_available()]
     if missing:
         raise SystemExit("these terminals are not here: %s" % ", ".join(missing))
-    terminals = list(TERMINALS)
 
-    standing = read_recorded()
     seen = {}
     blinks = {}
 
@@ -1307,11 +1317,92 @@ def main():
         for seat in seats.values():
             seat.keep_the_log(out)
             seat.stop()
+    return seen, blinks
+
+
+def write_shots(out, ran, seen, blinks):
+    "What `shoot` found, for a judge in another derivation."
+    (out / SHOTS).write_text(
+        json.dumps(
+            {
+                "ran": sorted(ran),
+                "seen": [[*key, found] for key, found in sorted(seen.items())],
+                "blinks": [[*key, *pair] for key, pair in sorted(blinks.items())],
+            }
+        )
+    )
+
+
+def gather_shots(shots, out):
+    """
+    The runs that shot one terminal each, put together in `out` as one
+    run that shot them all.
+
+    `shots` is the directories of those runs. Each picture stays where
+    its run left it, and `out` links to it: a judge copies nothing.
+    """
+    ran, seen, blinks = set(), {}, {}
+    for shot in shots:
+        status = (shot / "status").read_text().strip()
+        if status != "0":
+            raise SystemExit(
+                "%s ended with %s, so there is nothing to judge. Its log:\n%s" % (shot, status, shot / "log")
+            )
+        found = json.loads((shot / SHOTS).read_text())
+        ran.update(found["ran"])
+        for terminal, fixture, pixels in found["seen"]:
+            seen[(terminal, fixture)] = pixels
+        for terminal, fixture, bare, through in found["blinks"]:
+            blinks[(terminal, fixture)] = (bare, through)
+        for child in shot.iterdir():
+            if child.name in ("status", SHOTS):
+                continue
+            name = "%s.log" % "-".join(found["ran"]) if child.name == "log" else child.name
+            (out / name).symlink_to(child)
+    return ran, seen, blinks
+
+
+def main():
+    work = Path(os.environ.get("TMPDIR", "/tmp")) / "pymux-pictures"
+    work.mkdir(parents=True, exist_ok=True)
+    out = PICTURES
+    out.mkdir(parents=True, exist_ok=True)
+
+    names = [name for name in every_fixture() if ONLY in name]
+    blink_names = [name for name in BLINK_FIXTURES if ONLY in name]
+    if not names and not blink_names:
+        raise SystemExit("no fixture holds %r" % ONLY)
+
+    # The check shoots each terminal in a derivation of its own, so nix
+    # runs them at once, and judges them together in one more.
+    # `PYMUX_PICTURES_SHOOT_ONLY` is a shot; `PYMUX_PICTURES_SHOTS`
+    # names the shots to judge; neither does both in this process.
+    shots = os.environ.get("PYMUX_PICTURES_SHOTS", "").split()
+    if shots:
+        ran, seen, blinks = gather_shots([Path(shot) for shot in shots], out)
+    else:
+        terminals = chosen_terminals()
+        ran = {terminal.name for terminal in terminals}
+        found = shoot(terminals, names, blink_names, work, out)
+        if not isinstance(found, tuple):
+            return found
+        seen, blinks = found
+        if os.environ.get("PYMUX_PICTURES_SHOOT_ONLY"):
+            write_shots(out, ran, seen, blinks)
+            return 0
+    return judge(names, ran, seen, blinks, out)
+
+
+def judge(names, ran, seen, blinks, out):
+    """
+    Hold what the pictures showed against the list of differences that
+    stand, and fail on any change either way.
+    """
+    standing = read_recorded()
 
     # One image, the two protocols pymux writes it in, and two real
     # terminals drawing them. `two_protocols_of` says why this one
     # comparison may cross two terminals when no other may.
-    ran = {terminal.name for terminal in terminals}
     both_ran = ran.issuperset(THE_TWO_PROTOCOLS)
     cannot = []
     for name in names:
@@ -1412,7 +1503,8 @@ def main():
         raise SystemExit(1)
 
     print("Every picture is what it was recorded to be.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
