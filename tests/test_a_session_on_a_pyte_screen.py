@@ -333,6 +333,22 @@ async def settled(session: SessionScreen, seconds: float = 0.3) -> None:
         await anyio.sleep(0.02)
 
 
+async def a_frame_after(session: SessionScreen, client_state, since: int) -> None:
+    """
+    Until a frame that began after `since`, a `render_counter`, is on
+    the client's terminal.
+
+    The test runs while no frame does, so a frame that begins later
+    draws what the test changed. That is the event a step waits for,
+    and not a quiet screen: a wait for quiet cost each step 50 ms and
+    more, about 260 s of pymux-unit. Lillecarl/pymux#579.
+    """
+    app = client_state.app
+    with anyio.fail_after(10):
+        while app.render_counter <= since or session.taken != session.written:
+            await anyio.sleep(0.005)
+
+
 async def test_the_terminal_holds_the_frame_beside_a_scrolling_pane(pymux, tmp_path):
     """
     The line between two panes stays whole while one of them scrolls.
@@ -586,6 +602,7 @@ async def test_every_frame_beside_a_pane_is_on_the_terminal(pymux, seed, mode):
         ]
 
         for step in range(60):
+            since = client_state.app.render_counter
             kind = rnd.randrange(10)
             if kind == 0:
                 chunk = rnd.choice(["select-pane -t :.-", "select-pane -t :.+"])
@@ -599,7 +616,9 @@ async def test_every_frame_beside_a_pane_is_on_the_terminal(pymux, seed, mode):
                 control = rnd.choice(controls)
                 chunk = fuzz_chunk(rnd, control.screen.lines, control.screen.columns)
                 control.feed_output(chunk)
-            await settled(session, 0.05)
+            # A piece that changes nothing asks for no frame.
+            client_state.app.invalidate()
+            await a_frame_after(session, client_state, since)
 
             found = await wire_differs(session, client_state)
             assert not found, "\n".join(
@@ -649,6 +668,7 @@ async def test_every_frame_of_a_strip_glide_is_on_the_terminal(pymux, seed, glid
         output.flush = keep_and_flush
 
         for step in range(40):
+            since = client_state.app.render_counter
             kind = rnd.randrange(4)
             if kind == 0:
                 chunk = rnd.choice(["select-pane -L", "select-pane -R"])
@@ -663,7 +683,7 @@ async def test_every_frame_of_a_strip_glide_is_on_the_terminal(pymux, seed, glid
                 chunk = fuzz_chunk(rnd, control.screen.lines, control.screen.columns)
                 control.feed_output(chunk)
             client_state.app.invalidate()
-            await settled(session, 0.05)
+            await a_frame_after(session, client_state, since)
 
             found = await wire_differs(session, client_state)
             written = [frame for frame in frames if frame][-2:]
@@ -789,13 +809,15 @@ async def test_every_colour_on_the_terminal_is_what_a_redraw_writes(pymux, seed,
         for step in range(40):
             # From the redraw before: the state this step starts from.
             sent_at = getattr(session, "redrawn_at", 0)
+            since = client_state.app.render_counter
             # One to three pieces to a frame, as a busy loop coalesces them.
             for _ in range(rnd.randrange(1, 4)):
                 control = rnd.choice(controls)
                 chunk = coloured_chunk(rnd, control.screen.lines, control.screen.columns)
                 control.feed_output(chunk)
                 fed.append((step, controls.index(control), chunk))
-            await settled(session, 0.05)
+            client_state.app.invalidate()
+            await a_frame_after(session, client_state, since)
             found = await redraw_differs(pymux, session, client_state)
             rows = sorted({int(line.split()[1]) for line in found})
             assert not found, "\n".join(
