@@ -158,6 +158,16 @@ def test_the_lock_a_bind_takes_is_not_a_server(sockets, tmp_path):
     assert _names() == ["pymux.sock.someone.0"]
 
 
+def test_the_pty_holder_is_not_a_server(sockets):
+    """
+    It answers a connect and is newer than its server, so it went in
+    front, and an attach sent to it got no reply. Lillecarl/pymux#605.
+    """
+    sockets(["pymux.sock.someone.0", "pymux.sock.someone.0.holder"])
+
+    assert _names() == ["pymux.sock.someone.0"]
+
+
 def test_the_library_answers_the_same_list(sockets, a_dead_socket):
     "`Server.list()` reads this one, and the two must agree."
     from libpymux.sockets import socket_paths

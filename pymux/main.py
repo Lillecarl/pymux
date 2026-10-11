@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, ClassVar, NamedTuple, override
 import anyio
 import anyio.abc
 from libpymux.protocol import Field, Packet
+from libpymux.sockets import HOLDER_SUFFIX
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app, set_app
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
@@ -1999,7 +2000,7 @@ class Pymux:
         itself: what it loses is the upgrade.
         """
         assert self.tasks is not None
-        path = "%s.holder" % (self.socket_name,)
+        path = "%s%s" % (self.socket_name, HOLDER_SUFFIX)
         try:
             holding = await self._holder_at(path)
         except OSError, HolderError:
