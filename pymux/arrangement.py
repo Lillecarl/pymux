@@ -290,6 +290,14 @@ class VSplit(_Split):
     """Panes side by side, so this is the split that has a left and a right."""
 
 
+def _shape_of(split: _Split) -> tuple:
+    "The kind of `split` and what it holds: pane ids, and the shape of each split inside."
+    return (
+        type(split) is HSplit,
+        tuple(_shape_of(item) if isinstance(item, _Split) else item.pane_id for item in split),
+    )
+
+
 def _place_of(split: _Split, item: object) -> int:
     """
     Where this child sits in the split, by identity.
@@ -541,36 +549,15 @@ class Window:
 
         return True
 
-    def invalidation_hash(self) -> str:
+    def invalidation_hash(self) -> tuple:
         """
-        Return a hash (string) that can be used to determine when the layout
-        has to be rebuild.
+        A value that changes when the layout has to be rebuilt.
         """
-        #        if not self.root:
-        #            return '<empty-window>'
-
-        def _hash_for_split(split: HSplit | VSplit) -> str:
-            result = []
-            for item in split:
-                if isinstance(item, (VSplit, HSplit)):
-                    result.append(_hash_for_split(item))
-                elif isinstance(item, Pane):
-                    result.append("p%s" % item.pane_id)
-
-            if isinstance(split, HSplit):
-                return "HSplit(%s)" % (",".join(result))
-            return "VSplit(%s)" % (",".join(result))
-
         # `strip` is in it because turning the mode on changes how the
         # same panes are laid out and nothing else, so without it the
         # layout would not be rebuilt and the mode would take hold at
         # the next unrelated change.
-        return "<window_id=%s,zoom=%s,strip=%s,children=%s>" % (
-            self.window_id,
-            self.zoom,
-            self.strip,
-            _hash_for_split(self.root),
-        )
+        return (self.window_id, self.zoom, self.strip, _shape_of(self.root))
 
     @property
     def active_pane(self) -> Pane | None:
@@ -1060,13 +1047,13 @@ class Arrangement:
         # is attached.
         self._last_active_window: Window | None = None
 
-    def invalidation_hash(self) -> str:
+    def invalidation_hash(self) -> tuple:
         """
         When this changes, the layout needs to be rebuild.
         """
         w = self.get_active_window()
         if w is None:
-            return "<no-windows>"
+            return ()
 
         return w.invalidation_hash()
 

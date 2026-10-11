@@ -684,7 +684,12 @@ class LayoutManager:
 
         self.layout = self._create_layout()
 
-        # Keep track of render information.
+    def frame_started(self, app: Application) -> None:
+        "A render of this client starts: the arrangement holds still until it ends."
+        self._body.frame_started(app)
+
+    def frame_ended(self, app: Application) -> None:
+        self._body.frame_ended(app)
 
     @property
     def pane_write_positions(self) -> dict[arrangement.Pane, WritePosition]:
@@ -2394,7 +2399,7 @@ class DynamicBody(Container):
 
     def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
-        self._bodies_for_app: weakref.WeakKeyDictionary[Application, tuple[str, Container]] = (
+        self._bodies_for_app: weakref.WeakKeyDictionary[Application, tuple[tuple, Container]] = (
             weakref.WeakKeyDictionary()
         )  # Maps Application to (hash, Container)
 
@@ -2417,13 +2422,31 @@ class DynamicBody(Container):
         #: window and switching back leaves the strip where it was.
         self._views: weakref.WeakKeyDictionary[object, View] = weakref.WeakKeyDictionary()
 
+        #: The arrangement's hash, per client, while that client renders.
+        #: Every title bar asks for the plan, and every ask hashed the
+        #: arrangement again: 0.8 ms a frame with eight panes. Nothing
+        #: changes the arrangement inside a render, and outside one a
+        #: handler may, so the hash is kept from `frame_started` to
+        #: `frame_ended` and never across them.
+        self._frame_hashes: weakref.WeakKeyDictionary[Application, tuple | None] = weakref.WeakKeyDictionary()
+
+    def frame_started(self, app: Application) -> None:
+        self._frame_hashes[app] = None
+
+    def frame_ended(self, app: Application) -> None:
+        self._frame_hashes.pop(app, None)
+
     def _get_body(self) -> Container:
         "Return the Container object for the current CLI."
-        new_hash = self.pymux.arrangement.invalidation_hash()
+        app = get_app()
+        if app in self._frame_hashes:
+            new_hash = self._frame_hashes[app]
+            if new_hash is None:
+                new_hash = self._frame_hashes[app] = self.pymux.arrangement.invalidation_hash()
+        else:
+            new_hash = self.pymux.arrangement.invalidation_hash()
 
         # Return existing layout if nothing has changed to the arrangement.
-        app = get_app()
-
         if app in self._bodies_for_app:
             existing_hash, container = self._bodies_for_app[app]
             if existing_hash == new_hash:

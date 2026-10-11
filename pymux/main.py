@@ -576,7 +576,10 @@ class ClientState:
             except Exception:
                 logger.exception("Drawing the pane images failed.")
 
+        self.app.before_render += self.layout_manager.frame_started
         self.app.after_render += after_render
+        # Last, so the images above still read the frame's arrangement.
+        self.app.after_render += self.layout_manager.frame_ended
 
     def should_skip_render(self) -> bool:
         """
