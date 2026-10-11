@@ -984,14 +984,19 @@ def compare_one(terminal, seat, name, work, out):
 
     bare = room / "bare.png"
     through = room / "pymux.png"
+
+    def director(twins):
+        twins.until_it_ends()
+        twins.photograph((bare, through))
+
     try:
         seat.twins(
             terminal,
             through_pymux,
             "exec sh %s" % program_path,
             work,
-            (bare, through),
             (room / "bare.log", room / "pymux.log"),
+            director,
         )
     except RuntimeError as reason:
         raise RuntimeError("%s\n%s" % (reason, every_log(room, seat))) from None
