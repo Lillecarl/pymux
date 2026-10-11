@@ -1,12 +1,9 @@
 """
-`Pane.settle` catches the frame that follows a fence.
+`Pane.settle` reads the wire until it goes quiet.
 
-`middleman.py` puts bytes on the screen of a pane and gives back what
-pymux wrote because of them. The fence proves the pane *consumed* the
-bytes; the frame that pymux draws because of them can follow it,
-because prompt_toolkit postpones a redraw. `settle` is what waits for
-that frame, and every suite that judges our wire reads what it caught:
-the Alacritty references, the libvterm files, the pictures.
+`middleman.py` drains the wire with it while it waits for a pane to
+take a new size. A fence says when a frame is finished; these say that
+the two waits of `settle` relate the way its docstring says.
 
 These need no pymux. `settle` reads one file descriptor and appends to
 `terminal.seen`, so a pipe and a stub say everything about it, in

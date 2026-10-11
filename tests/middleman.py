@@ -70,14 +70,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tests.drive_with_pty import Terminal, run_cli
 
-#: How long the wire has to stay quiet after a resize before its frame
-#: counts as finished, in seconds. A resize has no fence, so this waits
-#: for silence; a write has one and waits for nothing else.
+#: How long the wire has to stay quiet before `settle` stops reading,
+#: in seconds. `settle` reads the wire while `wait_for_size` waits, and
+#: proves nothing: a fence is what says a frame is finished.
 QUIET = 0.05
 
-#: How long to wait for the first byte of that frame. A resize that
-#: changes nothing on the screen makes no frame at all, so this has to
-#: give up.
+#: How long `settle` waits for a first byte. A wait in which pymux
+#: draws nothing has to give up.
 FIRST_BYTE = 0.15
 
 #: How long to wait for the pane to reach the size the suite asks
@@ -272,11 +271,15 @@ class Pane:
         """
         Give the terminal of the client a new size, and read the wire.
 
-        A resize has no fence of its own. The payload fence proves the
-        pane consumed bytes, and nothing was written here: the size
-        travels the other way, from the terminal of the client down to
-        the program in the pane. So the size the program reports is the
-        fence, and `wait_for_size` waits for it.
+        A resize has no fence of its own: the size travels the other
+        way, from the terminal of the client down to the program in the
+        pane. So `wait_for_size` waits for the program to report the
+        new size, and then a payload fence goes through the pane. The
+        pane has its new size by then, and pymux puts a pane's escape
+        behind the frame that drew it, so the fence comes back after a
+        frame of the new size. Waiting for the wire to go quiet instead
+        lost that frame under load: a loaded gate read an empty screen
+        after `69screen_reflow.test` grew the terminal.
 
         A judge on the other end has to be resized as well, and by the
         caller: this returns the frame, and what a judge does with a
@@ -288,7 +291,7 @@ class Pane:
         mark = self.terminal.mark()
         self.terminal.resize(rows, columns)
         self.wait_for_size()
-        self.settle()
+        self.write(b"")
         return FENCE.sub(b"", self.terminal.since(mark))
 
     def trace_pane(self) -> None:
@@ -314,10 +317,11 @@ class Pane:
         """
         Read until the wire has been quiet for a while.
 
-        The frame can follow the fence, because prompt_toolkit may
-        postpone a redraw. Waiting for silence rather than for a fixed
-        time costs nothing when there is no frame to wait for, and waits
-        as long as it has to when there is.
+        Silence is a guess about when a frame ended, and a loaded
+        machine breaks it, so nothing judges what this reads: a fence
+        does that. This keeps the wire drained while `wait_for_size`
+        polls, because an integrated pymux whose terminal is not read
+        stops serving (Lillecarl/pymux#585).
 
         **The two waits are different waits.** `FIRST_BYTE` is how long
         a frame may take to start, and it is paid in full only when no
