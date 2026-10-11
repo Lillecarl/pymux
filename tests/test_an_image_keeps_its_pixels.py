@@ -159,6 +159,16 @@ def test_the_sixel_path_fills_a_box_the_program_asked_for():
     assert sixel_size(written) == (8 * 10, 4 * 19)
 
 
+def test_a_piece_of_a_sixel_image_shows_its_part_of_the_pixels():
+    "Text cut the top row away; the piece left is the bottom half. Lillecarl/pymux#598."
+    pane = state(columns=4, rows=2)
+    pane.placements = [pane.placements[0].piece(0, 1, 4, 1)]
+    ((_placement, _image, columns, rows, x, y, source),) = ClientGraphics._visible_placements(view(pane))
+
+    assert (columns, rows, x, y) == (4, 1, 0, 1)
+    assert source == (0, IMAGE_HEIGHT // 2, IMAGE_WIDTH, IMAGE_HEIGHT // 2)
+
+
 def test_cells_too_small_for_the_pixels_are_still_a_box():
     """
     A client whose cell is smaller than the one the pane counted

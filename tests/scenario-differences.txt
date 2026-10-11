@@ -18,14 +18,12 @@ xterm claude-code start 17-35
 # ----------------------------------------------------------------------
 # yazi-images: each terminal runs and answers a yazi of its own.
 
-# foot. yazi sends sixel on both sides. Through pymux, the earlier
-# previews stay on the screen after yazi moves on; the first two
-# images are still alone. Lillecarl/pymux#598.
-foot yazi-images forest-portrait 24668
-foot yazi-images pug 154626
-foot yazi-images puppy-icon 217811
-foot yazi-images river-panorama 199401
-foot yazi-images walrus-grey 128725
+# foot. yazi sends sixel on both sides. Single pixels in smooth
+# gradients: pymux decodes yazi's sixel and encodes it again with a
+# palette of its own, where the bare foot draws yazi's palette.
+foot yazi-images forest-portrait 215
+foot yazi-images pug 47
+foot yazi-images river-panorama 6
 
 # kitty. pymux tells yazi it is kitty (`pymux/hacks_and_lies.py`), so
 # both sides get Unicode placeholders, in the same place. pymux
@@ -45,8 +43,8 @@ kitty yazi-images walrus-grey 3
 # in cells of colour: pymux shows more than the terminal it runs in.
 xterm yazi-images dog 58000
 xterm yazi-images dog-small 19200
-xterm yazi-images forest-portrait 98800
-xterm yazi-images pug 104200
-xterm yazi-images puppy-icon 104200
-xterm yazi-images river-panorama 104200
-xterm yazi-images walrus-grey 104200
+xterm yazi-images forest-portrait 74800
+xterm yazi-images pug 67600
+xterm yazi-images puppy-icon 3000
+xterm yazi-images river-panorama 17400
+xterm yazi-images walrus-grey 58000

@@ -533,14 +533,17 @@ class ClientGraphics:
             if columns <= 0 or rows <= 0:
                 continue  # Fully outside the pane.
 
-            if crop_left or crop_top or columns != placement.columns or rows != placement.rows:
+            piece = placement.crop
+            if piece is not None or crop_left or crop_top or columns != placement.columns or rows != placement.rows:
                 # Crop in pixels: the cell box of the placement maps
-                # onto the pixels of the image.
-                px_per_column = image.width / placement.columns
-                px_per_row = image.height / placement.rows
+                # onto the pixels of the image. A piece that text cut
+                # out of a sixel image maps through the whole box.
+                piece_column, piece_row, box_columns, box_rows = piece or (0, 0, placement.columns, placement.rows)
+                px_per_column = image.width / box_columns
+                px_per_row = image.height / box_rows
                 source = (
-                    int(crop_left * px_per_column),
-                    int(crop_top * px_per_row),
+                    int((piece_column + crop_left) * px_per_column),
+                    int((piece_row + crop_top) * px_per_row),
                     max(1, int(columns * px_per_column)),
                     max(1, int(rows * px_per_row)),
                 )
