@@ -128,6 +128,38 @@ async def test_plan_follows_resize():
         assert len(offsets(pymux, plan_of(pymux, pymux.arrangement.get_active_window()))) == 1
 
 
+async def test_a_render_measures_room_once_and_a_resize_after_it_is_seen(monkeypatch):
+    """
+    Every title bar asks the plan for three sides, so a render keeps
+    the answer. Between renders a command may move a border, and the
+    next ask has to see it.
+    """
+    from pymux import layout
+
+    async with create_client(STRIP, rows=ROWS, columns=COLUMNS) as (pymux, draw):
+        panes = await create_row_of_panes(pymux, count=2)
+        await run(pymux, "split-window -v")
+        draw()
+        window = pymux.arrangement.get_active_window()
+        state = pymux.get_client_state()
+        manager = state.layout_manager
+
+        measured = []
+        room = layout.room_for_panes
+        monkeypatch.setattr(layout, "room_for_panes", lambda *a: measured.append(1) or room(*a))
+
+        manager.frame_started(state.app)
+        was = plan_of(pymux, window).rect_of(panes[-1]).height
+        for _ in range(4):
+            plan_of(pymux, window)
+        manager.frame_ended(state.app)
+        assert len(measured) == 1
+
+        await run(pymux, "resize-pane -U 3")
+        draw()
+        assert plan_of(pymux, window).rect_of(panes[-1]).height == was - 3
+
+
 async def test_divided_window_is_drawn_where_its_plan_says_too():
     "The layout pymux uses unless a person asks for something else."
     async with create_client(CHROME, rows=ROWS, columns=COLUMNS) as (pymux, draw):

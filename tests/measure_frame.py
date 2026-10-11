@@ -138,7 +138,12 @@ class _Manager:
     what makes the neighbour measurement a frame rather than a
     question: the first question works the plan out and the rest read
     it, which is what a real title bar does.
+
+    No render runs here, so `frame_plans` is None: every question reads
+    the container, as one between two renders does.
     """
+
+    frame_plans = None
 
     def __init__(self, container) -> None:
         self._container = container

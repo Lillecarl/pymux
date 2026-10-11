@@ -682,14 +682,22 @@ class LayoutManager:
         # and a title bar drawn inside that frame asks for its plan.
         self._body = DynamicBody(self.pymux)
 
+        #: `plan_of`'s answer for each window, while this client renders.
+        #: Every title bar asks it for three sides, and the room for the
+        #: panes walks every client. None between renders, where a
+        #: handler may change what it measures.
+        self.frame_plans: dict[arrangement.Window, Plan] | None = None
+
         self.layout = self._create_layout()
 
     def frame_started(self, app: Application) -> None:
         "A render of this client starts: the arrangement holds still until it ends."
         self._body.frame_started(app)
+        self.frame_plans = {}
 
     def frame_ended(self, app: Application) -> None:
         self._body.frame_ended(app)
+        self.frame_plans = None
 
     @property
     def pane_write_positions(self) -> dict[arrangement.Pane, WritePosition]:
@@ -2741,17 +2749,24 @@ def plan_of(pymux: Pymux, window) -> Plan:
     property slice 2 of Lillecarl/pymux#217 added, and it is held by
     `test_key_moves_focus_before_anything_is_drawn`.
     """
-    size = room_for_panes(pymux, window)
-
     try:
         manager = pymux.get_client_state().layout_manager
     except ValueError:
         # No client, so no frame and nowhere to keep an answer. A
         # command from the command line runs on a client like that.
-        return layout_of(pymux, window).measure(size)
+        return layout_of(pymux, window).measure(room_for_panes(pymux, window))
 
+    plans = manager.frame_plans
+    if plans is not None and window in plans:
+        return plans[window]
+
+    size = room_for_panes(pymux, window)
     plan = _frame_plan(manager, window, size)
-    return layout_of(pymux, window).measure(size) if plan is None else plan
+    if plan is None:
+        plan = layout_of(pymux, window).measure(size)
+    if plans is not None:
+        plans[window] = plan
+    return plan
 
 
 def size_the_panes_of(pymux: Pymux, window) -> None:
