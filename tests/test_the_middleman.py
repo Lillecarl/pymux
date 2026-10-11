@@ -19,8 +19,23 @@ import os
 import threading
 import time
 
+import middleman
 import pytest
-from middleman import FIRST_BYTE, QUIET, Pane
+from middleman import Pane
+
+#: The waits these tests judge `settle` with: the real ones, ten times
+#: longer. The real ones leave a timer thread 25 ms to land a write,
+#: and a loaded aarch64-darwin builder missed that twice. The tests are
+#: about how the two waits relate, which scaling keeps.
+#: Lillecarl/pymux#573.
+QUIET = middleman.QUIET * 10
+FIRST_BYTE = middleman.FIRST_BYTE * 10
+
+
+@pytest.fixture(autouse=True)
+def longer_waits(monkeypatch):
+    monkeypatch.setattr(middleman, "QUIET", QUIET)
+    monkeypatch.setattr(middleman, "FIRST_BYTE", FIRST_BYTE)
 
 
 class _Terminal:
