@@ -85,6 +85,9 @@ async def create_client(commands=(), rows=ROWS, columns=COLUMNS):
                         -L` and `-R` ask for those. A draw that skips this
                         can never see them.
                         """
+                        # A new frame, as the renderer counts one: a
+                        # control caches its fragments per frame.
+                        state.app.render_counter += 1
                         screen = Screen()
                         state.app.layout.container.write_to_screen(
                             screen,

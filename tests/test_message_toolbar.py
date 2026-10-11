@@ -26,12 +26,8 @@ FIRST = "/home/someone/.config/pymux/pymux.conf line 1: first thing wrong"
 SECOND = "/home/someone/.config/pymux/pymux.conf line 2: second thing wrong"
 
 
-#: A status line with nothing in it that time moves.
-#:
-#: Three of these tests compare two screens, and each screen comes from
-#: a server of its own. The default `status-right` draws a clock, so two
-#: servers built either side of a second differ by a row that has
-#: nothing to do with a message. `test_auto_refresh.py` empties it for
+#: A status line with nothing in it that time moves. The default
+#: `status-right` draws a clock. `test_auto_refresh.py` empties it for
 #: the same reason.
 NO_CLOCK = ("set-option status-right ''",)
 
@@ -41,6 +37,23 @@ async def drawn_with_message(message, columns=40):
     async with create_client(commands=NO_CLOCK, columns=columns) as (pymux, draw):
         pymux.get_client_state().message = message
         return draw()
+
+
+async def drawn_with_and_without(message, columns=40):
+    """
+    The screen with `message` up, and the same screen without it.
+
+    One server, and no turn of the loop between the two draws. The pane
+    runs a shell, and its prompt and title arrive when they arrive: two
+    servers, or one with a wait between, differ by rows that have
+    nothing to do with a message.
+    """
+    async with create_client(commands=NO_CLOCK, columns=columns) as (pymux, draw):
+        state = pymux.get_client_state()
+        state.message = ""
+        without = draw()
+        state.message = message
+        return draw(), without
 
 
 def on_screen(rows):
@@ -79,8 +92,7 @@ async def test_short_message_still_takes_one_row():
     A message that fits may not push the panes up. `dont_extend_height`
     holds the toolbar to what it needs.
     """
-    short = await drawn_with_message("a short message")
-    none = await drawn_with_message("")
+    short, none = await drawn_with_and_without("a short message")
 
     used = [number for number in sorted(short) if short[number] != none[number]]
     assert len(used) == 1, (used, short, none)
@@ -92,8 +104,7 @@ async def test_message_may_not_take_whole_screen():
     than allowed to become a page. The end is the end a reader reaches
     last.
     """
-    rows = await drawn_with_message("word " * 400)
-    none = await drawn_with_message("")
+    rows, none = await drawn_with_and_without("word " * 400)
 
     used = [number for number in sorted(rows) if rows[number] != none[number]]
     assert len(used) <= 5, used
