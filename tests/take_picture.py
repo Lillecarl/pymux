@@ -121,6 +121,7 @@ import json
 import os
 import shutil
 import sys
+import time
 from functools import partial
 from itertools import pairwise
 from pathlib import Path
@@ -139,6 +140,7 @@ from pyterm_pytest.seats import (
     _tail,
     changed_region,
     differences,
+    fence,
     fully_overlaps,
     open_the_seats,
     the_same_drawing,
@@ -897,7 +899,7 @@ LIGHT_TERMINALS = [
 # The two runs.
 
 
-def write_program(path, fixture_path, payload):
+def write_program(path, fixture_path, fence_lines):
     """
     The program that both runs execute, as a shell script.
 
@@ -928,21 +930,11 @@ def write_program(path, fixture_path, payload):
     the bare side straight, the pane side through pymux -- which is
     the evidence the settle waits for. A settle that starts before the
     bytes are written can settle on the screen from before them, both
-    sides alike, agreeing on nothing. Lillecarl/pymux#281.
+    sides alike, agreeing on nothing. Lillecarl/pymux#281. `fence`
+    says why it is written until it is taken.
     """
     path.write_text(
-        "stty -echo\n"
-        "printf '\\033[2J\\033[H'\n"
-        "cat %s\n"
-        # The wait before the fence: foot's window is focused when the
-        # compositor sends the keyboard enter, which is after the
-        # surface maps, and this shell starts before any of that. The
-        # escape foot sees while it is unfocused is refused, and the
-        # clipboard holds nothing. Measured: a fence without the wait
-        # never comes, one after a second always has.
-        "sleep 1\n"
-        "printf '\\033]52;c;%s\\007'\n"
-        "exec sleep %d\n" % (fixture_path, payload, HOLD)
+        "stty -echo\nprintf '\\033[2J\\033[H'\ncat %s\n%sexec sleep %d\n" % (fixture_path, fence_lines, HOLD)
     )
 
 
@@ -1006,10 +998,9 @@ def compare_one(terminal, seat, name, work, out):
     # alone, so a fence a run before left in the clipboard cannot
     # stand in for this one.
     token = os.urandom(8).hex()
-    payload = base64.b64encode(token.encode()).decode()
 
     program_path = work / ("%s.sh" % name)
-    write_program(program_path, fixture_path, payload)
+    write_program(program_path, fixture_path, fence(work, token))
 
     config_path = work / "full-screen.conf"
     config_path.write_text(PICTURE_CONFIG)
@@ -1280,10 +1271,11 @@ def shoot(terminals, names, blink_names, work, out):
     try:
         for terminal in terminals:
             for name in names:
+                started = time.monotonic()
                 found = compare_one(terminal, seats[terminal.seat], name, work, out)
                 seen[(terminal.name, name)] = found
                 print(
-                    "%s %s: %d pixels differ" % (terminal.name, name, found),
+                    "%s %s: %d pixels differ, in %.1f s" % (terminal.name, name, found, time.monotonic() - started),
                     flush=True,
                 )
 

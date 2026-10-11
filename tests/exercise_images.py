@@ -99,6 +99,7 @@ from pyterm_pytest.seats import (
     TheSeatIsGone,
     _settle,
     differences,
+    fence,
     open_the_seats,
     with_no_answer,
 )
@@ -192,11 +193,6 @@ def _put(at_row=None, delete=False):
     return "".join(pieces)
 
 
-def _payload(token):
-    "This step's token, as the base64 an OSC 52 carries."
-    return base64.b64encode(token.encode()).decode()
-
-
 def _token():
     return os.urandom(8).hex()
 
@@ -217,11 +213,8 @@ def write_emitter(room, fifo, gated, sizedir):
     the fifo releases the draw, and then it fences and holds. No move,
     because the small window is the whole question.
 
-    The fence waits a second after the bytes, the way the fence of
-    `take_picture.py` does. The shell starts before the seat's keyboard
-    holder gives the window its focus, and a terminal that sees the
-    clipboard escape while it is unfocused refuses it: a fence
-    without the wait never comes.
+    Each fence is written until the seat has taken it, because the
+    window may not have its focus yet. `fence` says why.
 
     `room` holds the bytes and the script, which the sandbox throws
     away. `sizedir` holds the `stty size` answers, which the run
@@ -240,32 +233,29 @@ def write_emitter(room, fifo, gated, sizedir):
             "read go <&9\n"
             "cat %s\n"
             "stty size > %s\n"
-            "sleep 1\n"
-            "printf '\\033]52;c;%s\\007'\n"
-            "exec sleep %d\n" % (fifo, room / "draw.bin", sizedir / "draw.size", _payload(draw_token), HOLD)
+            "%s"
+            "exec sleep %d\n" % (fifo, room / "draw.bin", sizedir / "draw.size", fence(room, draw_token), HOLD)
         )
     else:
         program.write_text(
             "stty -echo\n"
             "cat %s\n"
             "stty size > %s\n"
-            "sleep 1\n"
-            "printf '\\033]52;c;%s\\007'\n"
+            "%s"
             "exec 9<%s\n"
             "read ignored <&9\n"
             "cat %s\n"
             "stty size > %s\n"
-            "sleep 1\n"
-            "printf '\\033]52;c;%s\\007'\n"
+            "%s"
             "exec sleep %d\n"
             % (
                 room / "draw.bin",
                 sizedir / "draw.size",
-                _payload(draw_token),
+                fence(room, draw_token),
                 fifo,
                 room / "move.bin",
                 sizedir / "move.size",
-                _payload(move_token),
+                fence(room, move_token),
                 HOLD,
             )
         )
