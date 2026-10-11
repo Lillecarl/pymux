@@ -55,6 +55,8 @@ import sys
 import tempfile
 import termios
 import time
+import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -3040,11 +3042,39 @@ def main() -> None:
 
     tmp = Path(tempfile.mkdtemp(prefix="pymux-pty-test-"))
     checks = chosen_checks()
-    for check in checks:
+
+    # Each check runs its own servers and mostly waits on them, so the
+    # checks run at once. Each gets a directory of its own, because two
+    # of them write a file of the same name. A short name, because a
+    # socket's path must fit in 104 bytes on macOS.
+    def run(number, check):
+        room = tmp / str(number)
+        room.mkdir()
         started = time.monotonic()
-        check(tmp)
-        # What each check costs, so a slow one has a name. Lillecarl/pymux#579.
-        print("    %s took %.1f s" % (check.__name__, time.monotonic() - started))
+        check(room)
+        return time.monotonic() - started
+
+    # A quarter of the cores. Nix runs a job per core and tells each
+    # one it has them all, and every check here is a server and a client
+    # at work: a pool of all sixteen made the gate slower, and starved
+    # `switch_window_under_flood` past its twenty seconds.
+    failed = []
+    workers = max(2, (int(os.environ.get("NIX_BUILD_CORES") or 0) or os.cpu_count()) // 4)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        running = {pool.submit(run, number, check): check for number, check in enumerate(checks)}
+        for done in as_completed(running):
+            name = running[done].__name__
+            try:
+                took = done.result()
+            except Exception:
+                failed.append(name)
+                print("%s FAILED:\n%s" % (name, traceback.format_exc()), flush=True)
+                continue
+            # What each check costs, so a slow one has a name. Lillecarl/pymux#579.
+            print("    %s took %.1f s" % (name, took), flush=True)
+
+    if failed:
+        raise SystemExit("%d of %d pty checks failed: %s" % (len(failed), len(checks), ", ".join(sorted(failed))))
     print("%d of %d pty checks passed." % (len(checks), len(CHECKS)))
 
 
