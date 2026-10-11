@@ -85,6 +85,8 @@ web = ["websockets>=13.0"]
 # builds the test environment from this list.
 test = [
     "pytest",
+    # `checks.pymux-unit` spreads its tests over the build's cores.
+    "pytest-xdist",
     # anyio is a dependency of pymux itself now, and it carries the
     # pytest plugin that runs a coroutine test. `anyio_mode` below is
     # what turns that plugin on.

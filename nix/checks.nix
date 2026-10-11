@@ -537,10 +537,16 @@ in
           PYMUX_BASE16_SCHEMES = "${base16-schemes-json}/base16-schemes.json";
         };
       }
-      # `--durations` names what the suite spends its time on.
-      # Lillecarl/pymux#579.
+      # `--durations` names what the suite spends its time on, and
+      # `-n` spreads it over the cores the build was given: most of a
+      # test is waiting on a server, so the cores are free for the
+      # next one. Lillecarl/pymux#579.
+      # A build given every core says 0, which to xdist means none.
       ''
-        python -m pytest $selection -q -p no:cacheprovider --durations=60 --durations-min=0.5
+        cores="''${NIX_BUILD_CORES:-0}"
+        if [ "$cores" = 0 ]; then cores=auto; fi
+        python -m pytest $selection -q -p no:cacheprovider -n "$cores" \
+          --durations=60 --durations-min=0.5
       '';
 
   # The types of pymux, held by a static checker rather than by a run.
