@@ -7,6 +7,13 @@ a picture of both terminals. The waits read the pyte screen the proxy
 feeds in this process, so they cost no picture; `Seat.twins` says how
 the two terminals see one run.
 
+A scenario runs on one shared stream unless it says `apart`: then each
+terminal runs a copy of its own and answers it, which is what an
+application that picks its drawing by the terminal's answers needs.
+Either way the run keeps each application's output and each terminal's
+replies beside the pictures, so how pymux and the terminal answer the
+same queries can be read side by side.
+
 Each picture pair is compared, and the run is judged against
 `scenario-differences.txt` the way the still pictures are judged
 against theirs: a difference either way fails.
@@ -238,14 +245,19 @@ def run_one(terminal, seat, name, work, out):
 
 
 def read_recorded():
-    "The differences that stand, as {(terminal, scenario, step): pixels}."
+    """
+    The differences that stand, as {(terminal, scenario, step): (least,
+    most)}. A count is one number, or a range `least-most` for a
+    difference measured to move from run to run; its comment says why.
+    """
     standing = {}
     if RECORDED.exists():
         for line in RECORDED.read_text().splitlines():
             line = line.split("#")[0].strip()
             if line:
                 terminal, scenario, step, pixels = line.split()
-                standing[(terminal, scenario, step)] = int(pixels)
+                least, _, most = pixels.partition("-")
+                standing[(terminal, scenario, step)] = (int(least), int(most or least))
     return standing
 
 
@@ -296,9 +308,10 @@ def main():
     write_recorded(OUT / "scenario-differences.txt", seen)
     standing = read_recorded()
     for key, found in sorted(seen.items()):
-        expected = standing.get(key, 0)
-        if found != expected:
-            wrong.append("%s %s %s: %d pixels differ, %d were recorded" % (*key, found, expected))
+        least, most = standing.get(key, (0, 0))
+        if not least <= found <= most:
+            recorded = "%d" % least if least == most else "%d to %d" % (least, most)
+            wrong.append("%s %s %s: %d pixels differ, %s were recorded" % (*key, found, recorded))
     if wrong:
         print("\n--- pymux draws something else ---", file=sys.stderr)
         for line in wrong:
