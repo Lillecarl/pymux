@@ -43,6 +43,15 @@ from pymux.plane import (
     overlap_of,
 )
 
+rects = st.builds(Rect, st.integers(-5, 5), st.integers(-5, 5), st.integers(0, 6), st.integers(0, 6))
+
+
+@given(rects, rects, st.sampled_from(list(Side)))
+def test_the_gap_and_the_band_are_the_edges_that_way(mine, theirs, side):
+    "`gap_to` and `span` are written out per side; this is what they spell."
+    assert mine.gap_to(theirs, side) == side.growth * (theirs.edge(side.opposite) - mine.edge(side))
+    assert mine.span(side) == ((mine.y, mine.bottom) if side.sideways else (mine.x, mine.right))
+
 
 class _Pane:
     """

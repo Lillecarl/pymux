@@ -188,9 +188,9 @@ class Rect(NamedTuple):
         Looking along a row, the band is the rows it covers. Two
         rectangles are neighbours only if their bands overlap.
         """
-        if side.sideways:
-            return (self.y, self.bottom)
-        return (self.x, self.right)
+        if side is Side.LEFT or side is Side.RIGHT:
+            return (self.y, self.y + self.height)
+        return (self.x, self.x + self.width)
 
     def gap_to(self, other: Rect, side: Side) -> int:
         """
@@ -200,8 +200,19 @@ class Rect(NamedTuple):
         Zero means they touch. A negative answer means `other` is not
         beyond this edge at all: it overlaps this rectangle, or it is
         behind it.
+
+        It is `side.growth * (other.edge(side.opposite) - self.edge(side))`
+        written out for each side: every title bar of every frame asks
+        it of every other pane, and the enum properties cost more than
+        the arithmetic.
         """
-        return side.growth * (other.edge(side.opposite) - self.edge(side))
+        if side is Side.LEFT:
+            return self.x - (other.x + other.width)
+        if side is Side.RIGHT:
+            return other.x - (self.x + self.width)
+        if side is Side.ABOVE:
+            return self.y - (other.y + other.height)
+        return other.y - (self.y + self.height)
 
     def holds(self, point: Point) -> bool:
         "True when that cell is one of this rectangle's."
