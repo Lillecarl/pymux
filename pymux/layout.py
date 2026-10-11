@@ -1391,17 +1391,23 @@ class LayoutManager:
         return result
 
     def _get_status_left_tokens(self) -> str:
-        return format_pymux_string(
-            self.pymux,
-            self.pymux.status_left,
-            session=self.client_state.session,
-            client=self.client_state,
-        )
+        return self._format_status(self.pymux.status_left)
 
     def _get_status_right_tokens(self) -> str:
+        return self._format_status(self.pymux.status_right)
+
+    def _format_status(self, string: str) -> str:
+        """
+        A status string, or nothing when the session holds no window to
+        format it for. A session is empty before its first window and
+        after its last, and a client draws through both.
+        Lillecarl/pymux#581.
+        """
+        if self.client_state.session.arrangement.get_active_window() is None:
+            return ""
         return format_pymux_string(
             self.pymux,
-            self.pymux.status_right,
+            string,
             session=self.client_state.session,
             client=self.client_state,
         )
@@ -1462,13 +1468,8 @@ class LayoutManager:
 
     def _panes_in_view(self) -> list:
         "The panes of the window this client looks at, or none."
-        try:
-            return list(self.client_state.session.arrangement.get_active_window().panes)
-        except IndexError:
-            # `get_active_window_for` ends at `windows[0]`, and there
-            # may be no window at all: the refresh ticks before the
-            # first one is made.
-            return []
+        window = self.client_state.session.arrangement.get_active_window()
+        return [] if window is None else list(window.panes)
 
     def _get_align(self) -> WindowAlign:
         if self.pymux.status_justify == Justify.RIGHT:
