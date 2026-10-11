@@ -60,14 +60,19 @@ class Heard:
     def __init__(self, end) -> None:
         self.end = end
         self.packets: list = []
+        #: Set once the client has read everything up to the close.
+        self.ended = anyio.Event()
 
     async def read_until_closed(self) -> None:
-        while True:
-            try:
-                packet = await self.end.read()
-            except Exception:
-                return
-            self.packets.append(json.loads(packet))
+        try:
+            while True:
+                try:
+                    packet = await self.end.read()
+                except Exception:
+                    return
+                self.packets.append(json.loads(packet))
+        finally:
+            self.ended.set()
 
     @property
     def exits(self) -> list:
@@ -159,6 +164,11 @@ async def test_the_packet_arrives_before_the_close():
     **The write has to be awaited.** `_send_packet` spawns it into the
     scope of the connection, and closing cancels that scope, so a send
     followed by a close is a race the client usually loses.
+
+    The wait is for the client to read the end of its stream, not for
+    the server to mark the connection closed: the client reads in a
+    task of its own, and may not have read the packet yet when the
+    server's flag turns.
     """
     async with anyio.create_task_group() as tasks:
         async with a_server() as pymux:
@@ -166,7 +176,8 @@ async def test_the_packet_arrives_before_the_close():
 
             first.detach_and_close(hang_up=True)
 
-            await _until(lambda: first._closed, "the connection to close")
+            with anyio.fail_after(5.0):
+                await heard.ended.wait()
             assert heard.exits, "the client heard nothing before the close"
         tasks.cancel_scope.cancel()
 
