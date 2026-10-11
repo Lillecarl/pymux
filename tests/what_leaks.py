@@ -107,6 +107,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
 import anyio
+from logged_errors import logged_errors
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers
@@ -608,5 +609,14 @@ def report(alive: list[str], first: Counter, second: Counter, bytes_grown) -> in
     return 0
 
 
+async def judged() -> int:
+    with logged_errors() as errors:
+        status = await main()
+    if errors.complaint():
+        print("\n" + errors.complaint())
+        return 1
+    return status
+
+
 if __name__ == "__main__":
-    sys.exit(anyio.run(main))
+    sys.exit(anyio.run(judged))

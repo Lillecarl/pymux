@@ -122,6 +122,9 @@ class Connection:
     def set_pointer_shape(self, shape):
         pass
 
+    def forward_osc(self, sequence):
+        pass
+
     def _send_packet(self, packet):
         pass
 
