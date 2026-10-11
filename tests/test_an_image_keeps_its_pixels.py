@@ -159,6 +159,42 @@ def test_the_sixel_path_fills_a_box_the_program_asked_for():
     assert sixel_size(written) == (8 * 10, 4 * 19)
 
 
+def sixel_state(payload, columns=4, rows=2):
+    "A pane holding a sixel image, as `add_sixel` stores it."
+    from pyte.images import PixelFormat
+    from pyte.sixel import sixel_size, store_payload
+
+    width, height = sixel_size(payload)
+    graphics = GraphicsState()
+    graphics.images_by_id[1] = GraphicsImage(PixelFormat.SIXEL, width, height, store_payload(payload))
+    graphics.placements = [GraphicsPlacement(1, 0, 0, 0, columns, rows, asked_for_the_box=False)]
+    return graphics
+
+
+#: A program's own sixel, with a palette pymux would not pick: two
+#: registers of nearly the same red. 40 by 36 pixels, six rows of sixels.
+PROGRAM_SIXEL = '0;1;0q"1;1;40;36#1;2;100;0;0#2;2;99;0;0' + ("#1!20~#2!20~-" * 6)
+
+
+def test_a_whole_sixel_at_its_own_size_goes_out_as_the_program_sent_it():
+    "Encoding it again picks another palette. Lillecarl/pymux#603."
+    graphics, written = client(sixel=True)
+    graphics.render([view(sixel_state(PROGRAM_SIXEL))])
+
+    assert "\x1bP%s\x1b\\" % PROGRAM_SIXEL in "".join(written)
+
+
+def test_a_sixel_that_holds_an_escape_is_encoded_again():
+    "The bytes go to the client's terminal, and must not end the sequence there."
+    payload = PROGRAM_SIXEL[:-1] + "\x1b]0;title\x07-"
+    graphics, written = client(sixel=True)
+    # The decoder reads the stray bytes as six more columns: 46 pixels.
+    graphics.render([view(sixel_state(payload, columns=5))])
+
+    assert "\x1b]0;" not in "".join(written)
+    assert sixel_size(written)[0] == 46
+
+
 def test_a_piece_of_a_sixel_image_shows_its_part_of_the_pixels():
     "Text cut the top row away; the piece left is the bottom half. Lillecarl/pymux#598."
     pane = state(columns=4, rows=2)

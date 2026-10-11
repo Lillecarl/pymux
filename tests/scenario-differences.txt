@@ -18,13 +18,6 @@ xterm claude-code start 17-35
 # ----------------------------------------------------------------------
 # yazi-images: each terminal runs and answers a yazi of its own.
 
-# foot. yazi sends sixel on both sides. Single pixels in smooth
-# gradients: pymux decodes yazi's sixel and encodes it again with a
-# palette of its own, where the bare foot draws yazi's palette.
-foot yazi-images forest-portrait 215
-foot yazi-images pug 47
-foot yazi-images river-panorama 6
-
 # xterm. This xterm offers yazi no image protocol, so the bare side
 # shows no preview. pymux offers one, takes yazi's image, and draws it
 # in cells of colour: pymux shows more than the terminal it runs in.

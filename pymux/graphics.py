@@ -43,6 +43,7 @@ from prompt_toolkit.output import ColorDepth
 from pyte import escape
 from pyte.images import PixelFormat
 from pyte.sequences import Csi, csi, esc
+from pyte.sixel import stored_payload
 from pyte.terminfo import DeviceExtension
 
 # Through the modules, so the kernels `pymux.kernels.install()` puts there
@@ -117,6 +118,10 @@ _CELL_SIZE_REPLY_RE = re.compile(r"^\x1b\[6;(\d+);(\d+)t$")
 # terminal saying it draws sixels.
 _DEVICE_ATTRIBUTES_RE = re.compile(r"^\x1b\[\?([\d;]*)c$")
 _SIXEL_ATTRIBUTE = str(int(DeviceExtension.SIXEL))
+
+# What a sixel payload is made of: printable ASCII, and the line breaks
+# programs wrap it with.
+_SIXEL_TEXT_RE = re.compile(r"[ -~\r\n]*")
 
 
 def is_query_reply(data: str) -> bool:
@@ -823,7 +828,7 @@ class ClientGraphics:
     def _collect_sixel(self, views: Iterable[PaneView]) -> tuple[dict[tuple[int, int, int], str], set]:
         "The sixel commands of one frame, and the cache keys they used."
         desired: dict[tuple[int, int, int], str] = {}
-        live = set()
+        live: set[tuple] = set()
 
         for view in views:
             slots: dict[int, int] = {}
@@ -840,6 +845,14 @@ class ClientGraphics:
                 slots[placement.image_id] = slot
 
                 own_size = self.draws_at_its_own_size(placement, image, source, columns, rows)
+                if own_size and source is None and image.format == PixelFormat.SIXEL:
+                    key = (id(image), "as sent")
+                    live.add(key)
+                    data = self._as_sent(key, image)
+                    if data is not None:
+                        desired[(view.pane_id, placement.image_id, slot)] = "\x1b[%i;%iH%s" % (y + 1, x + 1, data)
+                        continue
+
                 key = (
                     id(image),
                     source,
@@ -904,6 +917,23 @@ class ClientGraphics:
         "The sixel sequence of one placement. (Cached by geometry.)"
         target = None if own_size else (max(1, columns * self.cell_width), max(1, rows * self.cell_height))
         return self._cell_entry(key, image, _encode_sixel, image, source, target)
+
+    def _as_sent(self, key: tuple, image) -> str | None:
+        """
+        The program's own sixel sequence, for an image drawn whole at its
+        own size. Encoding it again changes the palette, so a gradient
+        gains pixels the program never drew. Lillecarl/pymux#603.
+
+        None when the payload holds anything but sixel characters: those
+        bytes go to the client's terminal, and must not end the sequence.
+        """
+        known = self._cell_cache.get(key)
+        if known is not None and known[0] is image:
+            return known[1]
+        payload = stored_payload(image.data)
+        sent = "\x1bP%s\x1b\\" % payload if _SIXEL_TEXT_RE.fullmatch(payload) else None
+        self._cell_cache[key] = (image, sent)
+        return sent
 
     def _cell_entry(self, key: tuple, image, work: Callable, *args):
         """
