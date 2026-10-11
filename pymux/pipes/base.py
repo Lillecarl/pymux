@@ -33,6 +33,11 @@ class PipeConnection(ABC):
         Close connection.
         """
 
+    @property
+    def outstanding(self) -> int:
+        "Bytes given to `write` that the other end has not taken yet."
+        return 0
+
 
 class BrokenPipeError(Exception):
     "Raised when trying to write to or read from a broken pipe."

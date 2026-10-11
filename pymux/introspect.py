@@ -369,6 +369,9 @@ def counters(pymux: Pymux) -> str:
         "%-46s %10s %9s" % ("", "total", "per second"),
         "%-46s %10d %9.2f" % ("frames out", counters.frames, counters.frames / seconds),
         "%-46s %10d %9.0f" % ("characters in them", counters.frame_bytes, counters.frame_bytes / seconds),
+        # Now, and not a total: a client that stopped reading holds
+        # these until it reads or is left behind.
+        "%-46s %10d" % ("bytes waiting for a client", _waiting(pymux)),
         "",
         "%-46s %10s %9s" % ("what asked for a frame", "total", "per second"),
     ]
@@ -380,6 +383,11 @@ def counters(pymux: Pymux) -> str:
         lines.append("nothing has.")
 
     return "\n".join(lines)
+
+
+def _waiting(pymux: Pymux) -> int:
+    "Bytes the kernel has not taken from the clients' sockets yet."
+    return sum(connection.pipe_connection.outstanding for connection in pymux.connections)
 
 
 def _now() -> str:

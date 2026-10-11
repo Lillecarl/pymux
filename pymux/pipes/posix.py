@@ -269,6 +269,11 @@ class PosixSocketConnection(PipeConnection):
         self._outstanding = 0
         self._write_lock: anyio.Lock | None = None
 
+    @property
+    @override
+    def outstanding(self) -> int:
+        return self._outstanding
+
     @override
     async def read(self) -> bytes:
         r"""
