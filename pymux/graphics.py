@@ -166,9 +166,9 @@ class ClientGraphics:
         The sixel output needs it: those pixels are the cells, so the
         text under a changed image has to be written once more.
     :param spawn: Run a coroutine in the background of this client.
-        With it, sixel and half block encoding runs in a worker thread
-        and the frame goes on without the image. Without it, the frame
-        encodes.
+        With it, a kitty transmission and the sixel and half block
+        encoding run in a worker thread, and the frame goes on without
+        the image. Without it, the frame does the work.
     """
 
     def __init__(
@@ -218,6 +218,9 @@ class ClientGraphics:
         # (pane id, pane image id) -> (pane image, outer image id)
         self._images: dict[tuple[int, int], tuple[Any, int]] = {}
         self._transmitted_bytes = 0
+        #: (pane id, pane image id) -> the pane image a worker thread
+        #: prepares the transmission of.
+        self._image_pending: dict[tuple[int, int], Any] = {}
 
         # (outer image id, slot) -> placement of the previous frame.
         self._placements: dict[tuple[int, int], _Placement] = {}
@@ -560,12 +563,19 @@ class ClientGraphics:
     def _outer_image_id(self, pane_id, placement, image) -> int | None:
         """
         The id of `image` on the outer terminal. Transmits the image the
-        first time it is needed. Returns None when it cannot be sent.
+        first time it is needed. Returns None when it cannot be sent,
+        and while a worker thread prepares it.
+
+        **A placement waits for its image.** A put command that reaches
+        the terminal before the transmission draws nothing, so the
+        placement stays out of the frame until the image is sent.
         """
         key = (pane_id, placement.image_id)
         known = self._images.get(key)
         if known is not None and known[0] is image:
             return known[1]
+        if self._image_pending.get(key) is image:
+            return None
 
         if len(image.data) > MAX_IMAGE_BYTES:
             return None
@@ -576,49 +586,54 @@ class ClientGraphics:
             # The pane replaced the image under the same id. Drop the
             # old one from the outer terminal.
             self._delete_image(known[1])
+            self._transmitted_bytes -= len(known[0].data)
+            del self._images[key]
 
         outer_id = self._next_image_id
         self._next_image_id += 1
 
+        if self._spawn is not None:
+            self._image_pending[key] = image
+            self._spawn(self._transmit_in_thread(key, image, outer_id))
+            return None
+
         try:
-            self._transmit(outer_id, image)
+            commands = _transmission(outer_id, image)
         except Exception:
             logger.exception("Transmitting an image to the client failed.")
             return None
-
-        self._transmitted_bytes += len(image.data)
-        self._images[key] = (image, outer_id)
+        self._send_image(key, image, outer_id, commands)
         return outer_id
 
-    def _transmit(self, outer_id: int, image) -> None:
-        "Send the pixel data of one image to the outer terminal."
-        if image.format == PixelFormat.PNG:
-            keys = "f=%i" % PixelFormat.PNG
-            payload = base64.b64encode(image.data).decode("ascii")
-        elif image.format == PixelFormat.SIXEL:
-            # Kitty takes no sixel: it gets the pixels.
-            pixels = sixel.to_rgba(image.format, image.width, image.height, image.data)
-            if pixels is None:
-                raise ValueError("the sixel image does not decode")
-            keys = "f=%i,s=%i,v=%i,o=z" % (PixelFormat.RGBA, image.width, image.height)
-            payload = base64.b64encode(zlib.compress(pixels, 1)).decode("ascii")
-        else:
-            # Compress: the data travels through the client socket.
-            keys = "f=%i,s=%i,v=%i,o=z" % (
-                image.format,
-                image.width,
-                image.height,
-            )
-            payload = base64.b64encode(zlib.compress(image.data, 1)).decode("ascii")
+    async def _transmit_in_thread(self, key: tuple[int, int], image, outer_id: int) -> None:
+        """
+        Prepare one transmission in a worker thread, and send it.
+        Lillecarl/pymux#576.
 
-        chunks = [payload[i : i + CHUNK_SIZE] for i in range(0, len(payload), CHUNK_SIZE)] or [""]
+        A transmission that fails keeps its pending entry, so the frames
+        after it do not try the same image again.
+        """
+        try:
+            commands = await anyio.to_thread.run_sync(_transmission, outer_id, image)
+        except Exception:
+            logger.exception("Transmitting an image to the client failed.")
+            return
 
-        for index, chunk in enumerate(chunks):
-            more = 1 if index < len(chunks) - 1 else 0
-            # The keys of the first chunk govern the transmission.
-            control = "a=t,i=%i,t=d,q=2,%s,m=%i" % (outer_id, keys, more) if index == 0 else "m=%i" % more
-            self._write_raw("\x1b_G%s;%s\x1b\\" % (control, chunk))
+        # The pane dropped or replaced the image while the thread
+        # worked, or the client reset.
+        if self._image_pending.get(key) is not image:
+            return
+        del self._image_pending[key]
+        self._send_image(key, image, outer_id, commands)
+        if self._repaint is not None:
+            self._repaint()
+
+    def _send_image(self, key: tuple[int, int], image, outer_id: int, commands: list[str]) -> None:
+        for command in commands:
+            self._write_raw(command)
             self._flush()
+        self._transmitted_bytes += len(image.data)
+        self._images[key] = (image, outer_id)
 
     def _forget_unused_images(self, live_keys) -> None:
         "Free the images that no pane holds anymore."
@@ -627,6 +642,9 @@ class ClientGraphics:
                 self._delete_image(outer_id)
                 self._transmitted_bytes -= len(image.data)
                 del self._images[key]
+        for key in list(self._image_pending):
+            if key not in live_keys:
+                del self._image_pending[key]
 
     def _delete_image(self, outer_id: int) -> None:
         self._write_raw("\x1b_Ga=d,d=I,i=%i,q=2\x1b\\" % outer_id)
@@ -828,6 +846,7 @@ class ClientGraphics:
         (When the client detaches, or when a popup covers the panes.)
         """
         self._cell_pending = set()
+        self._image_pending = {}
         if self._cell_placements:
             self._cell_placements = {}
             self._cell_cache = {}
@@ -843,6 +862,33 @@ class ClientGraphics:
         self._placements = {}
         self._transmitted_bytes = 0
         self._flush()
+
+
+def _transmission(outer_id: int, image) -> list[str]:
+    "The commands that send one image to the outer terminal. It runs in a worker thread."
+    if image.format == PixelFormat.PNG:
+        keys = "f=%i" % PixelFormat.PNG
+        payload = base64.b64encode(image.data).decode("ascii")
+    elif image.format == PixelFormat.SIXEL:
+        # Kitty takes no sixel: it gets the pixels.
+        pixels = sixel.to_rgba(image.format, image.width, image.height, image.data)
+        if pixels is None:
+            raise ValueError("the sixel image does not decode")
+        keys = "f=%i,s=%i,v=%i,o=z" % (PixelFormat.RGBA, image.width, image.height)
+        payload = base64.b64encode(zlib.compress(pixels, 1)).decode("ascii")
+    else:
+        # Compress: the data travels through the client socket.
+        keys = "f=%i,s=%i,v=%i,o=z" % (image.format, image.width, image.height)
+        payload = base64.b64encode(zlib.compress(image.data, 1)).decode("ascii")
+
+    chunks = [payload[i : i + CHUNK_SIZE] for i in range(0, len(payload), CHUNK_SIZE)] or [""]
+    commands = []
+    for index, chunk in enumerate(chunks):
+        more = 1 if index < len(chunks) - 1 else 0
+        # The keys of the first chunk govern the transmission.
+        control = "a=t,i=%i,t=d,q=2,%s,m=%i" % (outer_id, keys, more) if index == 0 else "m=%i" % more
+        commands.append("\x1b_G%s;%s\x1b\\" % (control, chunk))
+    return commands
 
 
 def _source_rgba(image, source) -> tuple[bytes, int, int] | None:

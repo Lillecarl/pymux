@@ -293,6 +293,74 @@ def test_reset_removes_images():
     assert len(transmissions(written)) == 1
 
 
+# ----------------------------------------------------------------------
+# Transmitting in a worker thread. Lillecarl/pymux#576.
+
+
+def make_spawning_client():
+    "A client whose transmissions wait in `spawned` until a test runs them."
+    spawned = []
+    repaints = []
+    written = []
+    client = ClientGraphics(written.append, lambda: None, lambda: repaints.append(1), spawn=spawned.append)
+    client.kitty_supported = True
+    return client, written, spawned, repaints
+
+
+async def test_a_placement_waits_for_its_transmission():
+    "A put before its image draws nothing, so the frame leaves it out."
+    client, written, spawned, repaints = make_spawning_client()
+    state = make_state(placement())
+    client.render([view(state)])
+    client.render([view(state)])
+    assert written == []
+    assert len(spawned) == 1  # One worker, however many frames wait.
+
+    await spawned.pop()
+    assert len(transmissions(written)) == 1
+    assert puts(written) == []
+    assert repaints
+
+    client.render([view(state)])
+    assert len(puts(written)) == 1
+    joined = "".join(written)
+    assert joined.index("a=t,") < joined.index("a=p,")
+
+
+async def test_an_image_gone_before_its_transmission_is_not_sent():
+    client, written, spawned, repaints = make_spawning_client()
+    client.render([view(make_state(placement()))])
+    client.render([])
+
+    await spawned.pop()
+    assert written == []
+    assert repaints == []
+
+
+async def test_an_image_replaced_before_its_transmission_sends_the_new_one():
+    client, written, spawned, _repaints = make_spawning_client()
+    state = make_state(placement())
+    client.render([view(state)])
+    state.images_by_id[1] = GraphicsImage(24, 2, 2, bytes(reversed(IMAGE_DATA)))
+    client.render([view(state)])
+    assert len(spawned) == 2
+
+    await spawned.pop(0)
+    assert written == []  # The old image is nobody's now.
+    await spawned.pop()
+    payload = re.search(r"o=z,m=0;([^\x1b]*)\x1b", "".join(written)).group(1)
+    assert zlib.decompress(base64.b64decode(payload)) == bytes(reversed(IMAGE_DATA))
+
+
+async def test_a_reset_drops_the_transmission_in_flight():
+    client, written, spawned, _repaints = make_spawning_client()
+    client.render([view(make_state(placement()))])
+    client.reset()
+
+    await spawned.pop()
+    assert transmissions(written) == []
+
+
 def test_unsupported_terminal_gets_nothing():
     written = []
     client = ClientGraphics(written.append, lambda: None)
