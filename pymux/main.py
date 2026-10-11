@@ -54,7 +54,7 @@ from pyte.keep import Keep
 from pyte.keys import KeyboardFlag
 from pyte.osc import Osc
 
-from . import introspect, kernels, log
+from . import hacks_and_lies, introspect, kernels, log
 from .agentic import CallerContext
 from .arrangement import Arrangement, Pane, Window
 from .client.memory import MemoryClient
@@ -2618,6 +2618,11 @@ class Pymux:
             unreadable_key_func=_say_key_did_not_fit(),
         )
         pane = Pane(terminal)
+        # The name the pane answers XTVERSION with, asked at each query:
+        # the program in front may be one `hacks_and_lies` lies to.
+        terminal.screen.version = lambda: hacks_and_lies.version(
+            pane.process.get_name(), hacks_and_lies.outer_term(self.latest_client())
+        )
 
         terminal_control = terminal.terminal_control
         terminal_control.keep_rows = self.render_mode is RenderMode.OPTIMIZED
