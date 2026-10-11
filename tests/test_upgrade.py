@@ -20,9 +20,12 @@ from libpymux.sockets import socket_directory
 from test_jobs_over_the_socket import CLI_TIMEOUT, _wait_for_server, cli
 
 #: What the counted pane prints: one numbered line every 20 ms, past the
-#: upgrade, then it waits.
-COUNT = 'i=0; while [ $i -lt %d ]; do i=$((i+1)); echo "line $i"; sleep 0.02; done; sleep 60'
+#: upgrade, then it touches a file and waits.
+COUNT = 'i=0; while [ $i -lt %d ]; do i=$((i+1)); echo "line $i"; sleep 0.02; done; touch %s; sleep 60'
 LINES = 300
+
+#: The file the counted pane touches once it printed every line.
+COUNTED = "counted"
 
 #: A new build that starts, then cannot read the snapshot it was handed:
 #: the version it reads is one more than the file's.
@@ -56,8 +59,15 @@ def _once_it_answers(sock, *args) -> str:
 
 
 def _counted(sock) -> list[int]:
-    "The numbers the counting pane printed, once it printed them all."
+    """
+    The numbers the counting pane printed, once it printed them all.
+
+    The file comes first: each capture is a CLI process, 0.17 CPU
+    seconds measured, and the count takes six seconds.
+    """
     deadline = time.monotonic() + CLI_TIMEOUT
+    while not (sock.parent / COUNTED).exists() and time.monotonic() < deadline:
+        time.sleep(0.05)
     counting = _pane(sock, 0)
     while True:
         text = _answer(sock, "capture-pane", "-p", "-S", "-", "-t", counting)
@@ -161,7 +171,7 @@ def server(tmp_path):
     "A daemon with a pane that counts, and a shell beside it."
     sock = tmp_path / "upgrade.sock"
     count = tmp_path / "count.sh"
-    count.write_text(COUNT % LINES)
+    count.write_text(COUNT % (LINES, shlex.quote(str(tmp_path / COUNTED))))
     started = cli(sock, "new-session", "-d", "-x", "80", "-y", "24", "sh %s" % count)
     assert started.returncode == 0, started.stderr.decode()
     _wait_for_server(sock)
