@@ -32,7 +32,7 @@ from .agentic import caller_context
 from .colors import ColorDetection, DefaultColors
 from .commands import handle_command
 from .enums import Woke
-from .graphics import ClientGraphics
+from .graphics import ClientGraphics, draws_placeholders
 from .ids import PaneId
 from .keys import KittyVt100Parser
 from .log import logger
@@ -183,9 +183,7 @@ class ServerConnection:
             color_depth=lambda: self.colors.depth,
             spawn=self._spawn,
             image_ids=pymux.outer_image_ids,
-            # Of the terminals that answer the graphics query, kitty is
-            # the one known to read the placeholders.
-            reads_placeholders=lambda: "kitty" in self.colors.term,
+            reads_placeholders=lambda: draws_placeholders(self.graphics.terminal_version, self.colors.term),
         )
 
         # Colour depth of the outer terminal. The same handshake

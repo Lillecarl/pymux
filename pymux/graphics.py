@@ -55,9 +55,11 @@ from .log import logger
 __all__ = [
     "CELL_SIZE_QUERY",
     "QUERY_SEQUENCE",
+    "VERSION_QUERY",
     "ClientGraphics",
     "OuterImageIds",
     "PaneView",
+    "draws_placeholders",
     "is_query_reply",
 ]
 
@@ -79,6 +81,11 @@ QUERY_SEQUENCE = "\x1b_Gi=%i,s=1,v=1,a=q,t=d,f=%i;AAAA\x1b\\" % (
 # calls REPORT_CELL_SIZE_PIXELS. Sixel needs it: the pixels of a sixel
 # image are the cells, so the image has to match the cell size.
 CELL_SIZE_QUERY = csi(Csi.XTWINOPS, 16)
+
+# Ask the outer terminal its name and version (XTVERSION). It answers
+# "DCS > | text ST" whatever TERM says, so ssh and a TERM a person set
+# do not hide it.
+VERSION_QUERY = csi(Csi.XTVERSION, 0, private=">")
 
 # The cell size to assume when the terminal does not report one. It
 # matches the size that `pyte.images` assumes, so an image then
@@ -119,6 +126,19 @@ _CELL_SIZE_REPLY_RE = re.compile(r"^\x1b\[6;(\d+);(\d+)t$")
 _DEVICE_ATTRIBUTES_RE = re.compile(r"^\x1b\[\?([\d;]*)c$")
 _SIXEL_ATTRIBUTE = str(int(DeviceExtension.SIXEL))
 
+_VERSION_REPLY_RE = re.compile(r"^\x1bP>\|(.*)\x1b\\$", re.DOTALL)
+
+#: The terminals that draw kitty's unicode placeholders, by what they
+#: answer XTVERSION with, and the first version that does. WezTerm and
+#: Konsole answer the graphics query and draw none.
+#:
+#: - kitty: "kitty(0.39.1)". Placeholders came in 0.28.0.
+#: - Ghostty: "ghostty 1.3.1". `src/terminal/kitty/graphics_unicode.zig`.
+_DRAWS_PLACEHOLDERS = (
+    (re.compile(r"kitty\((\d+(?:\.\d+)*)"), (0, 28, 0)),
+    (re.compile(r"ghostty (\d+(?:\.\d+)*)"), (1, 0, 0)),
+)
+
 # What a sixel payload is made of: printable ASCII, and the line breaks
 # programs wrap it with.
 _SIXEL_TEXT_RE = re.compile(r"[ -~\r\n]*")
@@ -127,6 +147,22 @@ _SIXEL_TEXT_RE = re.compile(r"[ -~\r\n]*")
 def is_query_reply(data: str) -> bool:
     "True when `data` is the reply of `QUERY_SEQUENCE`."
     return bool(_QUERY_REPLY_RE.match(data))
+
+
+def draws_placeholders(version: str, term: str) -> bool:
+    """
+    Whether the terminal that answered XTVERSION with `version` draws
+    kitty's unicode placeholders. No query says so, so this goes by
+    name. A terminal that did not answer is judged by `term`.
+    Lillecarl/pymux#607.
+    """
+    if not version:
+        return "kitty" in term
+    for name, first in _DRAWS_PLACEHOLDERS:
+        match = name.match(version)
+        if match is not None:
+            return tuple(int(part) for part in match.group(1).split(".")) >= first
+    return False
 
 
 class PaneView(NamedTuple):
@@ -260,6 +296,9 @@ class ClientGraphics:
         #: Lillecarl/pymux#369.
         self.cell_size_known = False
 
+        #: What the terminal answered XTVERSION with, or "".
+        self.terminal_version = ""
+
         self._image_ids = image_ids if image_ids is not None else OuterImageIds()
         self._reads_placeholders = reads_placeholders
 
@@ -339,6 +378,11 @@ class ClientGraphics:
         "Read what a terminal reply says about the outer terminal."
         if is_query_reply(data):
             self.kitty_supported = True
+            return
+
+        match = _VERSION_REPLY_RE.match(data)
+        if match is not None:
+            self.terminal_version = match.group(1)
             return
 
         match = _CELL_SIZE_REPLY_RE.match(data)

@@ -318,6 +318,61 @@ def test_a_frame_for_a_terminal_that_draws_no_placeholder_has_spaces():
         assert stdout.getvalue() == expected
 
 
+def test_two_clients_of_one_pane_each_get_their_own_way():
+    "kitty reads the placeholders, and foot gets the image as a sixel."
+    from pymux.graphics import OuterImageIds
+
+    ids = OuterImageIds()
+    kitty, kitty_wrote = make_kitty(ids)
+    foot_wrote = []
+    foot = ClientGraphics(foot_wrote.append, lambda: None, image_ids=ids, reads_placeholders=lambda: False)
+    foot.sixel_supported = True
+    screen, stream = make_screen()
+    transmit_virtual(stream)
+    stream.feed(cells(5, 0, 4))
+
+    for client in (kitty, foot):
+        client.render([view(screen)])
+
+    assert re.findall(r"\x1b_Ga=p,U=1,", "".join(kitty_wrote)) and not puts(kitty_wrote)
+    assert "\x1bP" in "".join(foot_wrote) and "\x1b_G" not in "".join(foot_wrote)
+
+
+# ----------------------------------------------------------------------
+# Which terminals read them. Lillecarl/pymux#607.
+
+
+def test_the_terminal_names_itself_in_the_detection():
+    from pymux.client.terminal import DETECTION_QUERIES
+    from pymux.graphics import VERSION_QUERY
+
+    queries = DETECTION_QUERIES.decode("ascii")
+    assert VERSION_QUERY == "\x1b[>0q"
+    # Before the device attributes, which end the detection.
+    assert queries.index(VERSION_QUERY) < queries.index("\x1b[c")
+
+
+def test_the_version_reply_is_kept():
+    client, _written = make_client()
+    client.handle_reply("\x1bP>|ghostty 1.3.1\x1b\\")
+    assert client.terminal_version == "ghostty 1.3.1"
+
+
+def test_the_terminals_that_draw_placeholders_are_known_by_name():
+    from pymux.graphics import draws_placeholders
+
+    assert draws_placeholders("kitty(0.39.1)", "xterm-256color")
+    assert draws_placeholders("kitty(0.28.0)", "")
+    assert not draws_placeholders("kitty(0.27.1)", "xterm-kitty")
+    assert draws_placeholders("ghostty 1.3.1", "xterm-ghostty")
+    assert draws_placeholders("ghostty 1.3.1-dev+abc", "")
+    # WezTerm answers the graphics query and draws no placeholder.
+    assert not draws_placeholders("WezTerm 20240203", "xterm-kitty")
+    # A terminal that said nothing is judged by TERM.
+    assert draws_placeholders("", "xterm-kitty")
+    assert not draws_placeholders("", "xterm-ghostty")
+
+
 def test_view_without_screen_still_renders_plain_placements():
     "An embedder that gives no screen loses nothing else."
     from pyte.images import GraphicsPlacement

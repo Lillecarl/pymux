@@ -30,7 +30,7 @@ from prompt_toolkit.output.vt100 import Vt100_Output, _get_size
 
 from pymux.colors import COLOR_QUERIES, TRUECOLOR_PROBE
 from pymux.config import client_options_in, find_config
-from pymux.graphics import CELL_SIZE_QUERY
+from pymux.graphics import CELL_SIZE_QUERY, VERSION_QUERY
 from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
 from pymux.utils import nonblocking
 
@@ -43,7 +43,8 @@ __all__ = [
 #: What the client asks the outer terminal at attach time.
 #:
 #: The replies arrive as input and the server reads them: keyboard
-#: flags, the kitty graphics protocol, the cell size, the colour depth,
+#: flags, the kitty graphics protocol, the cell size, the terminal's
+#: name and version, the colour depth,
 #: the two colours the terminal draws with, and last the device
 #: attributes, which also say whether sixel works. Every terminal
 #: answers the device attributes query, so a feature that did not
@@ -82,6 +83,7 @@ DETECTION_QUERIES = (
     + SYNCHRONIZED_OUTPUT_QUERY
     + GRAPHICS_QUERY.encode("ascii")
     + CELL_SIZE_QUERY.encode("ascii")
+    + VERSION_QUERY.encode("ascii")
     + TRUECOLOR_PROBE.encode("ascii")
     + COLOR_QUERIES.encode("ascii")
     + b"\x1b[c"
