@@ -148,8 +148,12 @@ def test_kill_server_ends_the_holder_and_its_programs(server):
         time.sleep(0.05)
 
 
-def _leftovers() -> list[str]:
-    return glob.glob(os.path.join(socket_directory(), "pymux.upgrade.*"))
+def _leftovers(*pids: int) -> list[str]:
+    """
+    What these servers' upgrades left. Only theirs: the directory is
+    shared, and a test on another worker can be mid-upgrade beside this one.
+    """
+    return [path for pid in pids for path in glob.glob(os.path.join(socket_directory(), "pymux.upgrade.%d.*" % pid))]
 
 
 @pytest.fixture
@@ -230,7 +234,7 @@ def test_an_upgrade_keeps_every_pane_and_its_program(server, tmp_path, new_build
     numbers = _counted(server)
     assert numbers == list(range(1, LINES + 1))
     _shell_answers(server)
-    assert _leftovers() == []
+    assert _leftovers(old, pid) == []
 
 
 def test_a_build_that_ends_without_a_word_is_refused(server):
@@ -240,4 +244,4 @@ def test_a_build_that_ends_without_a_word_is_refused(server):
     assert "ended with 3" in refused.stderr.decode() + refused.stdout.decode()
     assert _what_survives(server) == before
     _shell_answers(server)
-    assert _leftovers() == []
+    assert _leftovers(_server_pid(server)) == []
