@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from pyte import sixel as pyte_sixel
 from pyte.images import PixelFormat
 
 __all__ = [
@@ -45,8 +46,7 @@ def to_rgba(image_format: int, width: int, height: int, data: bytes) -> bytes | 
     The RGBA bytes of a pane image, or None when the format is one that
     this module cannot read.
 
-    PNG needs a decoder; it lives in ptterm, next to the graphics
-    state that holds the image.
+    PNG and sixel images arrive undecoded, and pyte holds both decoders.
     """
     expected = width * height
     if expected <= 0 or expected > MAX_PIXELS:
@@ -73,6 +73,12 @@ def to_rgba(image_format: int, width: int, height: int, data: bytes) -> bytes | 
             return None
         decoded = decode_png(data)
         if decoded is None:
+            return None
+        return decoded[2]
+
+    if image_format == PixelFormat.SIXEL:
+        decoded = pyte_sixel.decode_sixel(pyte_sixel.stored_payload(data))
+        if decoded is None or decoded[:2] != (width, height):
             return None
         return decoded[2]
 

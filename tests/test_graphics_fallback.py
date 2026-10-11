@@ -9,6 +9,7 @@ import re
 
 import pytest
 from pyte import escape
+from pyte.images import PixelFormat
 from pyte.sequences import Csi, apc, csi
 from pyte.sixel import decode_sixel
 from test_graphics_output import IMAGE_DATA, make_state, placement, view
@@ -229,6 +230,30 @@ def test_png_image_is_drawn():
     width, height, pixels = decode_sixel(sequence[2:-2])
     assert (width, height) == (2, 1)
     assert max(abs(pixels[i] - (10, 20, 30)[i]) for i in range(3)) <= 3
+
+
+def test_sixel_image_of_a_pane_is_drawn():
+    from test_graphics_output import SIXEL_DATA
+
+    client, written = make_client(sixel=True)
+    client.cell_width, client.cell_height = 1, 1
+    state = make_state(placement(columns=2, rows=2), data=SIXEL_DATA, format=PixelFormat.SIXEL)
+    client.render([view(state)])
+
+    _row, _column, sequence = sixels(written)[0]
+    width, height, pixels = decode_sixel(sequence[2:-2])
+    assert (width, height) == (2, 2)
+    assert tuple(pixels[:4]) == (255, 0, 0, 255)
+
+
+def test_sixel_image_of_a_pane_is_drawn_in_half_blocks():
+    from test_graphics_output import SIXEL_DATA
+
+    client, written = make_client()
+    client.handle_reply(csi(escape.DA, 62, 1, 6, private="?"))
+    state = make_state(placement(columns=2, rows=1), data=SIXEL_DATA, format=PixelFormat.SIXEL)
+    client.render([view(state)])
+    assert UPPER_HALF in "".join(written) or LOWER_HALF in "".join(written)
 
 
 def test_image_that_cannot_be_read_is_skipped():

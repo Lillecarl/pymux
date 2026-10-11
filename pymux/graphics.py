@@ -586,6 +586,13 @@ class ClientGraphics:
         if image.format == PixelFormat.PNG:
             keys = "f=%i" % PixelFormat.PNG
             payload = base64.b64encode(image.data).decode("ascii")
+        elif image.format == PixelFormat.SIXEL:
+            # Kitty takes no sixel: it gets the pixels.
+            pixels = sixel.to_rgba(image.format, image.width, image.height, image.data)
+            if pixels is None:
+                raise ValueError("the sixel image does not decode")
+            keys = "f=%i,s=%i,v=%i,o=z" % (PixelFormat.RGBA, image.width, image.height)
+            payload = base64.b64encode(zlib.compress(pixels, 1)).decode("ascii")
         else:
             # Compress: the data travels through the client socket.
             keys = "f=%i,s=%i,v=%i,o=z" % (

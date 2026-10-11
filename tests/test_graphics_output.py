@@ -12,8 +12,9 @@ import base64
 import re
 import zlib
 
-from pyte.images import GraphicsImage, GraphicsPlacement, GraphicsState
+from pyte.images import GraphicsImage, GraphicsPlacement, GraphicsState, PixelFormat
 from pyte.sequences import apc
+from pyte.sixel import store_payload
 
 from pymux.graphics import ClientGraphics, PaneView
 
@@ -100,6 +101,20 @@ def test_png_is_sent_as_is():
     client.render([view(make_state(placement(), data=data, format=100))])
 
     assert transmissions(written) == ["\x1b_Ga=t,i=%i,t=d,q=2,f=100,m=0;" % outer_id(written)]
+
+
+#: A 2x2 red sixel image, as a screen stores it.
+SIXEL_DATA = store_payload('0;1;0q"1;1;2;2#1;2;100;0;0#1~~')
+
+
+def test_sixel_is_sent_as_its_pixels():
+    "Kitty takes no sixel, so the client decodes it. Lillecarl/pymux#575."
+    client, written = make_client()
+    client.render([view(make_state(placement(), data=SIXEL_DATA, format=PixelFormat.SIXEL))])
+
+    assert transmissions(written) == ["\x1b_Ga=t,i=%i,t=d,q=2,f=32,s=2,v=2,o=z,m=0;" % outer_id(written)]
+    payload = re.search(r"o=z,m=0;([^\x1b]*)\x1b", "".join(written)).group(1)
+    assert zlib.decompress(base64.b64decode(payload)) == bytes([255, 0, 0, 255]) * 4
 
 
 def test_unchanged_frame_sends_nothing():
