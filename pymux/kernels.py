@@ -59,10 +59,11 @@ def _install_images(native) -> None:
     that does not change -- goes to the Python, so nothing answers
     differently.
     """
-    from . import sixel
+    from . import blocks, sixel
 
     if _replaced:
         return
+    pure_average = _replaced["pymux.blocks.average_rgba"] = blocks.average_rgba
     pure_encode = _replaced["pymux.sixel.encode_sixel"] = sixel.encode_sixel
     pure_scale = _replaced["pymux.sixel.scale_rgba"] = sixel.scale_rgba
     pure_to_rgba = _replaced["pymux.sixel.to_rgba"] = sixel.to_rgba
@@ -88,6 +89,17 @@ def _install_images(native) -> None:
             return native.rgb_to_rgba(data, pixels)
         return pure_to_rgba(image_format, width, height, data)
 
+    def average_rgba(rgba: bytes, width: int, height: int, new_width: int, new_height: int) -> bytes:
+        if (
+            (new_width, new_height) == (width, height)
+            or min(width, height, new_width, new_height) <= 0
+            or len(rgba) < width * height * 4
+            or new_width * new_height > sixel.MAX_PIXELS
+        ):
+            return pure_average(rgba, width, height, new_width, new_height)
+        return native.average_rgba(rgba, width, height, new_width, new_height)
+
+    blocks.average_rgba = average_rgba
     sixel.encode_sixel = encode_sixel
     sixel.scale_rgba = scale_rgba
     sixel.to_rgba = to_rgba

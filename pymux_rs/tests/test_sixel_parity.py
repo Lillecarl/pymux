@@ -16,9 +16,10 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from pyte.images import PixelFormat
 
-from pymux import kernels, sixel
+from pymux import blocks, kernels, sixel
 
 #: The references, taken before any test could have installed a kernel.
+PURE_AVERAGE = blocks.average_rgba
 PURE_ENCODE = sixel.encode_sixel
 PURE_SCALE = sixel.scale_rgba
 PURE_TO_RGBA = sixel.to_rgba
@@ -71,6 +72,17 @@ def test_the_same_pixels_are_scaled(image, new_width, new_height):
     )
 
 
+@given(images(), st.integers(1, 30), st.integers(1, 30))
+@settings(max_examples=500, deadline=None, suppress_health_check=[HealthCheck.too_slow])
+def test_the_same_pixels_are_averaged(image, new_width, new_height):
+    width, height, pixels = image
+    if (new_width, new_height) == (width, height):
+        new_width += 1
+    assert pymux_rs.average_rgba(pixels, width, height, new_width, new_height) == PURE_AVERAGE(
+        pixels, width, height, new_width, new_height
+    )
+
+
 @given(st.integers(1, 20), st.integers(1, 20), st.data())
 @settings(max_examples=300, deadline=None)
 def test_rgb_gains_the_same_alpha(width, height, data):
@@ -84,6 +96,7 @@ def installed(monkeypatch):
     monkeypatch.delenv(kernels.PURE, raising=False)
     for name in ("encode_sixel", "scale_rgba", "to_rgba"):
         monkeypatch.setattr(sixel, name, getattr(sixel, name))
+    monkeypatch.setattr(blocks, "average_rgba", blocks.average_rgba)
     monkeypatch.setattr(kernels, "_replaced", {})
     kernels._install_images(pymux_rs)
     assert sixel.encode_sixel is not PURE_ENCODE
@@ -98,6 +111,7 @@ def test_the_installed_functions_answer_as_the_python(installed, image):
     assert sixel.to_rgba(PixelFormat.RGBA, width, height, pixels) == PURE_TO_RGBA(
         PixelFormat.RGBA, width, height, pixels
     )
+    assert blocks.average_rgba(pixels, width, height, 2, 3) == PURE_AVERAGE(pixels, width, height, 2, 3)
 
 
 @pytest.mark.parametrize(
@@ -109,12 +123,21 @@ def test_the_installed_functions_answer_as_the_python(installed, image):
         lambda f: f.scale_rgba(b"\x01\x02", 1, 1, 2, 2),
         lambda f: f.to_rgba(PixelFormat.RGB, 2, 2, b"\x00" * 5),
         lambda f: f.to_rgba(99, 1, 1, b"\x00" * 4),
+        lambda f: f.average_rgba(b"\x01\x02\x03\x04", 1, 1, 1, 1),
+        lambda f: f.average_rgba(b"\x01\x02\x03\x04", 1, 1, 0, 2),
     ],
 )
 def test_an_edge_goes_to_the_python(installed, call):
+    class Installed:
+        encode_sixel = staticmethod(sixel.encode_sixel)
+        scale_rgba = staticmethod(sixel.scale_rgba)
+        to_rgba = staticmethod(sixel.to_rgba)
+        average_rgba = staticmethod(blocks.average_rgba)
+
     class Pure:
         encode_sixel = staticmethod(PURE_ENCODE)
         scale_rgba = staticmethod(PURE_SCALE)
         to_rgba = staticmethod(PURE_TO_RGBA)
+        average_rgba = staticmethod(PURE_AVERAGE)
 
-    assert call(sixel) == call(Pure)
+    assert call(Installed) == call(Pure)

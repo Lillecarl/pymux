@@ -1,6 +1,7 @@
 //! Rust kernels for pymux's image loops: the sixel encoder and the pixel
 //! conversions in front of it. Each gives the bytes its Python original in
-//! `pymux/sixel.py` gives, and runs with the GIL released, so a worker
+//! `pymux/sixel.py` or `pymux/blocks.py` gives, and runs with the GIL
+//! released, so a worker
 //! thread encodes beside the event loop. pymux's `kernels.install()` puts
 //! them in place; this package imports nothing of pymux, which depends on
 //! it. Lillecarl/pymux#574.
@@ -268,6 +269,58 @@ fn scale_rgba<'py>(
     PyBytes::new(py, &out)
 }
 
+/// `pymux.blocks.average_rgba` for a size that changes, on pixels that
+/// hold the whole image: each new pixel the average of the ones under it,
+/// weighted by their alpha.
+#[pyfunction]
+fn average_rgba<'py>(
+    py: Python<'py>,
+    rgba: PyBackedBytes,
+    width: usize,
+    height: usize,
+    new_width: usize,
+    new_height: usize,
+) -> Bound<'py, PyBytes> {
+    let out = py.detach(|| {
+        let mut out = vec![0u8; new_width * new_height * 4];
+        for y in 0..new_height {
+            let top = y * height / new_height;
+            let bottom = (top + 1).max((y + 1) * height / new_height);
+            for x in 0..new_width {
+                let left = x * width / new_width;
+                let right = (left + 1).max((x + 1) * width / new_width);
+                let (mut red, mut green, mut blue, mut weight, mut count) =
+                    (0u64, 0u64, 0u64, 0u64, 0u64);
+                for source_y in top..bottom {
+                    let row = &rgba[(source_y * width + left) * 4..(source_y * width + right) * 4];
+                    for pixel in row.chunks_exact(4) {
+                        let a = u64::from(pixel[3]);
+                        red += u64::from(pixel[0]) * a;
+                        green += u64::from(pixel[1]) * a;
+                        blue += u64::from(pixel[2]) * a;
+                        weight += a;
+                        count += 1;
+                    }
+                }
+                // A block that is all clear stays clear: the zeros are there.
+                let Some(red) = red.checked_div(weight) else {
+                    continue;
+                };
+                let at = (y * new_width + x) * 4;
+                // The alpha sum is the weight: each pixel adds its own.
+                out[at..at + 4].copy_from_slice(&[
+                    red as u8,
+                    (green / weight) as u8,
+                    (blue / weight) as u8,
+                    (weight / count) as u8,
+                ]);
+            }
+        }
+        out
+    });
+    PyBytes::new(py, &out)
+}
+
 /// The RGB branch of `pymux.sixel.to_rgba`, on data that holds every pixel.
 #[pyfunction]
 fn rgb_to_rgba<'py>(py: Python<'py>, data: PyBackedBytes, pixels: usize) -> Bound<'py, PyBytes> {
@@ -287,5 +340,6 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(encode_sixel, module)?)?;
     module.add_function(wrap_pyfunction!(scale_rgba, module)?)?;
     module.add_function(wrap_pyfunction!(rgb_to_rgba, module)?)?;
+    module.add_function(wrap_pyfunction!(average_rgba, module)?)?;
     Ok(())
 }

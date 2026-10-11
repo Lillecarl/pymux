@@ -44,10 +44,10 @@ from pyte.images import PixelFormat
 from pyte.sequences import Csi, csi, esc
 from pyte.terminfo import DeviceExtension
 
-# Through the module, so the kernels `pymux.kernels.install()` puts there
+# Through the modules, so the kernels `pymux.kernels.install()` puts there
 # are the ones that run.
-from . import sixel
-from .blocks import average_rgba, blocks_for, rows_for_cells
+from . import blocks, sixel
+from .blocks import blocks_for, rows_for_cells
 from .log import logger
 
 __all__ = [
@@ -772,7 +772,7 @@ class ClientGraphics:
             width, height = source[2], source[3]
 
         # Two pixels for every cell, one above the other.
-        pixels = average_rgba(pixels, width, height, columns, rows_for_cells(rows))
+        pixels = blocks.average_rgba(pixels, width, height, columns, rows_for_cells(rows))
         lines = blocks_for(pixels, columns, rows, depth)
 
         self._cell_cache[key] = (image, lines)
