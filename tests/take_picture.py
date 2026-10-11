@@ -1354,10 +1354,13 @@ def gather_shots(shots, out):
             seen[(terminal, fixture)] = pixels
         for terminal, fixture, bare, through in found["blinks"]:
             blinks[(terminal, fixture)] = (bare, through)
+        # A file beside the pictures, such as the run's own log, is in
+        # every shot, so it takes the terminal's name.
+        terminals = "-".join(found["ran"])
         for child in shot.iterdir():
-            if child.name in ("status", SHOTS):
+            if child.name in ("status", "seconds", SHOTS):
                 continue
-            name = "%s.log" % "-".join(found["ran"]) if child.name == "log" else child.name
+            name = child.name if child.is_dir() else "%s.%s" % (terminals, child.name)
             (out / name).symlink_to(child)
     return ran, seen, blinks
 
