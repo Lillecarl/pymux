@@ -89,12 +89,16 @@ async def attached(pymux, read_only: bool = False):
             session.written += 1
         return write(self, text)
 
+    # The packets, for a failure to show the bytes that drew it.
+    session.packets = []
+
     async def feed() -> None:
         while True:
             try:
                 packet = await client_end.read()
             except Exception:
                 return
+            session.packets.append(packet)
             done = session.take_packet(json.loads(packet))
             session.taken += 1
             if done:
@@ -670,6 +674,138 @@ async def test_every_frame_of_a_strip_glide_is_on_the_terminal(pymux, seed, glid
                     "",
                     *rows_of(session),
                     *map(repr, written),
+                ]
+            )
+
+
+def terminal_cells(session: SessionScreen) -> list[list]:
+    outer = session.screen
+    rows = []
+    for y in range(ROWS):
+        row = outer.data_buffer[outer.line_offset + y]
+        rows.append([(row[x].char, row[x].appearance) for x in range(COLUMNS)])
+    return rows
+
+
+async def redraw_differs(pymux, session: SessionScreen, client_state) -> list[str]:
+    """
+    Every cell, colours included, that a full redraw writes differently.
+
+    `wire_differs` reads characters, because a frame holds style names
+    and the terminal holds colours. A redraw writes every cell with its
+    colour from nothing, so what a run of frames left on the terminal
+    has to be what one redraw puts there.
+
+    **Once no frame is waiting**, on both sides. A clear turns blanks
+    into blanks, so the characters `wire_differs` waits on cannot tell
+    a frame the frame rate holds back from one that was drawn. `redraw`
+    drops the committed frame, so a committed frame after it is the
+    redraw's own.
+    """
+
+    async def drawn() -> None:
+        app = client_state.app
+        with anyio.fail_after(10):
+            while app.invalidated or app.renderer._last_screen is None or session.taken != session.written:
+                await anyio.sleep(0.01)
+
+    await drawn()
+    before = terminal_cells(session)
+    session.redrawn_at = len(session.packets)
+    with set_app(client_state.app):
+        pymux.handle_command("redraw")
+    await drawn()
+    after = terminal_cells(session)
+    return [
+        "row %d column %d: frames left %r, a redraw writes %r" % (y, x, before[y][x], after[y][x])
+        for y in range(ROWS)
+        for x in range(COLUMNS)
+        if before[y][x] != after[y][x]
+    ]
+
+
+#: Claude Code's `/clear`: the screen, then the history, then home.
+CLEAR = "\x1b[2J\x1b[3J\x1b[H"
+
+
+def ink_clear(rows: int) -> str:
+    "How Claude Code clears its viewport on the main screen: each row, top down."
+    return "\x1b[H" + "\x1b[2K\x1b[1B" * rows + "\x1b[H"
+
+
+@pytest.mark.parametrize("ink", [False, True], ids=["screen", "each-row"])
+@pytest.mark.parametrize("split", [False, True], ids=["alone", "beside"])
+async def test_a_clear_over_coloured_lines_leaves_the_colours_a_redraw_writes(pymux, split, ink):
+    async with pymux.running(), attached(pymux) as session:
+        await shows(session, "$")
+        client_state = pymux.connections[-1].client_state
+        if split:
+            with set_app(client_state.app):
+                pymux.handle_command("split-window -h 'sleep 1000'")
+            await settled(session)
+        first = min(pymux.panes_by_id.values(), key=lambda pane: pane.pane_id)
+        control = first.terminal.terminal_control
+        for n in range(30):
+            control.feed_output("\x1b[48;5;%dmline %d\x1b[K\x1b[0m\r\n" % (n + 1, n))
+            await settled(session, 0.02)
+        control.feed_output("\x1b[48;5;236m> prompt\x1b[K\x1b[0m")
+        await settled(session, 0.05)
+        clear = ink_clear(control.screen.lines) if ink else CLEAR
+        control.feed_output(clear + "\x1b[48;5;236m> after\x1b[K\x1b[0m\r\n")
+        await settled(session, 0.05)
+
+        found = await redraw_differs(pymux, session, client_state)
+        assert not found, "\n".join([*found[:20], "", *rows_of(session)])
+
+
+def coloured_chunk(rnd: random.Random, rows: int, columns: int) -> str:
+    "A piece of output with a background set before it, as a TUI paints."
+    background = rnd.choice(["", "\x1b[4%dm" % rnd.randrange(8), "\x1b[48;5;%dm" % rnd.randrange(256)])
+    piece = rnd.choice([CLEAR, ink_clear(rows), "\x1b[3J", fuzz_chunk(rnd, rows, columns)])
+    return background + piece + rnd.choice(["", "\x1b[m"])
+
+
+@pytest.mark.parametrize("rate", [0, 10], ids=["every-frame", "held-frames"])
+@pytest.mark.parametrize("seed", range(4))
+async def test_every_colour_on_the_terminal_is_what_a_redraw_writes(pymux, seed, rate):
+    """
+    Random coloured output in a pane beside another, then a redraw.
+
+    At ten frames a second a frame waits longer than `settled` does,
+    which is the gate under load made certain.
+    """
+    rnd = random.Random(seed)
+    async with pymux.running(), attached(pymux) as session:
+        await shows(session, "$")
+        client_state = pymux.connections[-1].client_state
+        with set_app(client_state.app):
+            pymux.handle_command("set-option frame-rate %d" % rate)
+            pymux.handle_command("split-window -h 'sleep 1000'")
+        await settled(session)
+        controls = [
+            pane.terminal.terminal_control for pane in sorted(pymux.panes_by_id.values(), key=lambda pane: pane.pane_id)
+        ]
+        fed = []
+        for step in range(40):
+            # From the redraw before: the state this step starts from.
+            sent_at = getattr(session, "redrawn_at", 0)
+            # One to three pieces to a frame, as a busy loop coalesces them.
+            for _ in range(rnd.randrange(1, 4)):
+                control = rnd.choice(controls)
+                chunk = coloured_chunk(rnd, control.screen.lines, control.screen.columns)
+                control.feed_output(chunk)
+                fed.append((step, controls.index(control), chunk))
+            await settled(session, 0.05)
+            found = await redraw_differs(pymux, session, client_state)
+            rows = sorted({int(line.split()[1]) for line in found})
+            assert not found, "\n".join(
+                [
+                    "seed %d, step %d: %d cells on rows %s" % (seed, step, len(found), rows),
+                    "fed: %r" % (fed,),
+                    "sent from the redraw before: %r" % (session.packets[sent_at : session.redrawn_at],),
+                    *found[:4],
+                    "",
+                    *rows_of(session),
                 ]
             )
 
