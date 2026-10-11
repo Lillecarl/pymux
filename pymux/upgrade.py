@@ -121,7 +121,23 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
         if paused:
             _resume(pymux)
         raise
+    await _answer_the_caller(pymux)
     _leave()
+
+
+async def _answer_the_caller(pymux: Pymux) -> None:
+    """
+    Tell the client that ran `upgrade-server` that it worked. This
+    process ends before the command returns, so the answer that every
+    command sends at its end never goes, and a client that reads no
+    answer says so and fails. Lillecarl/pymux#606.
+    """
+    try:
+        connection = pymux.get_client_state().connection
+    except ValueError:
+        return
+    if connection is not None:
+        await connection.answer(0)
 
 
 def _refuse(pymux: Pymux) -> None:

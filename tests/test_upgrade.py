@@ -211,12 +211,14 @@ def test_an_upgrade_keeps_every_pane_and_its_program(server, tmp_path, new_build
         wrapper.chmod(wrapper.stat().st_mode | stat.S_IXUSR)
         command = [str(wrapper)]
 
-    # The command's own connection goes with the old server when the
-    # upgrade works, so its answer is the verdict only when it does not.
     said = cli(server, "upgrade-server", shlex.join(command))
     if new_build == "cannot-resume":
         assert said.returncode != 0
         assert "snapshot version" in said.stderr.decode() + said.stdout.decode()
+    else:
+        # The old server answers before it ends. A client that reads no
+        # answer says so and fails. Lillecarl/pymux#606.
+        assert said.returncode == 0, said.stderr.decode()
 
     assert _what_survives(server) == before
     pid = _server_pid(server)

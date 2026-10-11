@@ -979,6 +979,11 @@ class ServerConnection:
                     pass
                 self._close_connection()
 
+    async def answer(self, exit_code: int) -> None:
+        "Send the exit code of a command, for one that ends the server before it returns."
+        with suppress(BrokenPipeError):
+            await self._write_packet({Field.CMD: Packet.EXIT, Field.CODE: exit_code})
+
     async def _write_packet(self, data_obj: object) -> None:
         """
         Write a packet to the client. (This waits for the write to complete.)
