@@ -26,6 +26,7 @@ from prompt_toolkit.layout.screen import _CHAR_CACHE, Char
 #: The references, taken before any test could have installed a kernel.
 PURE_ROW = screen._new_row
 PURE_STORE = containers._store_line
+PURE_LAST = screen._last_column
 
 DEFAULT = _CHAR_CACHE[" ", "[transparent]"]
 
@@ -55,12 +56,14 @@ operations = st.lists(
         st.tuples(st.just("itself")),
         st.tuples(st.just("store"), COLUMNS, st.lists(WHICH, max_size=6)),
         st.tuples(st.just("clear")),
+        st.tuples(st.just("last")),
     ),
     max_size=30,
 )
 
 
-def apply(row, steps, store):
+def apply(row, steps, store, last=None):
+    last = last or PURE_LAST
     answers = []
     for step in steps:
         kind = step[0]
@@ -94,6 +97,8 @@ def apply(row, steps, store):
             row.update(row)
         elif kind == "store":
             store(row, step[1], [CELLS[which] for which in step[2]])
+        elif kind == "last":
+            answers.append(last(row))
         else:
             row.clear()
         answers.append(len(row))
@@ -108,7 +113,8 @@ def held(row):
 @settings(max_examples=1000, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 def test_the_same_operations_give_the_same_answers(steps):
     pure, fast = PURE_ROW(DEFAULT), prompt_toolkit_rs.Row(DEFAULT)
-    assert apply(pure, steps, PURE_STORE) == apply(fast, steps, prompt_toolkit_rs.store_line)
+    found = apply(fast, steps, prompt_toolkit_rs.store_line, prompt_toolkit_rs.last_column)
+    assert apply(pure, steps, PURE_STORE) == found
     assert held(pure) == held(fast)
     assert sorted(pure) == sorted(fast) == sorted(fast.keys())
     assert [id(cell) for _, cell in sorted(pure.items())] == [id(cell) for _, cell in sorted(fast.items())]
@@ -121,7 +127,8 @@ def test_the_same_operations_give_the_same_answers(steps):
 @settings(max_examples=300, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 def test_the_store_kernel_fills_a_dict_as_the_python_does(steps):
     pure, fast = PURE_ROW(DEFAULT), PURE_ROW(DEFAULT)
-    assert apply(pure, steps, PURE_STORE) == apply(fast, steps, prompt_toolkit_rs.store_line)
+    found = apply(fast, steps, prompt_toolkit_rs.store_line, prompt_toolkit_rs.last_column)
+    assert apply(pure, steps, PURE_STORE) == found
     assert held(pure) == held(fast)
 
 

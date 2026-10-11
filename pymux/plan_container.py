@@ -44,6 +44,7 @@ from typing import override
 from prompt_toolkit.application import get_app
 from prompt_toolkit.data_structures import Point, Size
 from prompt_toolkit.key_binding import KeyBindingsBase
+from prompt_toolkit.layout import screen as screen_module
 from prompt_toolkit.layout.containers import Container, to_container
 from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers
@@ -273,7 +274,7 @@ class PlanContainer(Container):
                 # first measure is its last cell.
                 reached = measure.get(y)
                 if reached is None:
-                    measure[y] = max(row)
+                    measure[y] = screen_module._last_column(row)
                 elif reached < right:
                     measure[y] = right
 

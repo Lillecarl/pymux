@@ -47,6 +47,17 @@ impl Row {
         }
     }
 
+    /// The last column held, or -1. `cells` never ends in `None`.
+    pub(crate) fn last_column(&self) -> i64 {
+        match self.cells.len() {
+            0 => self
+                .outside
+                .last_key_value()
+                .map_or(-1, |(&column, _)| column),
+            length => length as i64 - 1,
+        }
+    }
+
     /// `row[column]`: a column nobody wrote takes the default first.
     pub(crate) fn read(&mut self, py: Python<'_>, column: i64) -> Py<PyAny> {
         if let Some(cell) = self.cell(column) {

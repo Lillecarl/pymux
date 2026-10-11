@@ -132,6 +132,23 @@ fn store_line(row: &Bound<'_, PyAny>, start: i64, chars: &Bound<'_, PyList>) -> 
     Ok(())
 }
 
+/// `prompt_toolkit.layout.screen._last_column`: the last column `row`
+/// holds, or -1. A Rust row knows it without a walk.
+#[pyfunction]
+fn last_column(row: &Bound<'_, PyAny>) -> PyResult<i64> {
+    match Cells::of(row)? {
+        Cells::Rust(row) => Ok(row.borrow().last_column()),
+        Cells::Dict(row) => {
+            let mut last: Option<i64> = None;
+            for column in row.keys() {
+                let column = column.extract::<i64>()?;
+                last = Some(last.map_or(column, |last| last.max(column)));
+            }
+            Ok(last.unwrap_or(-1))
+        }
+    }
+}
+
 /// `prompt_toolkit.renderer._changed_spans`: the maximal runs of changed
 /// columns of a row, up to `last`.
 #[pyfunction]
@@ -232,6 +249,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(copy_single_width, module)?)?;
     module.add_function(wrap_pyfunction!(changed_spans, module)?)?;
     module.add_function(wrap_pyfunction!(store_line, module)?)?;
+    module.add_function(wrap_pyfunction!(last_column, module)?)?;
     module.add_class::<Row>()?;
     Ok(())
 }

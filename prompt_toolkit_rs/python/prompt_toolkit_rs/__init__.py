@@ -23,6 +23,7 @@ __all__ = [
     "copy_single_width",
     "install",
     "installed",
+    "last_column",
     "queue_same_style",
     "store_line",
 ]
@@ -43,6 +44,9 @@ copy_single_width = _native.copy_single_width
 #: `prompt_toolkit.layout.containers._store_line`, in Rust.
 store_line = _native.store_line
 
+#: `prompt_toolkit.layout.screen._last_column`, in Rust.
+last_column = _native.last_column
+
 #: `prompt_toolkit.renderer._changed_spans`, in Rust.
 changed_spans = _native.changed_spans
 
@@ -52,6 +56,7 @@ queue_same_style = _native.queue_same_style
 #: What `install()` puts where: module, name, replacement.
 _KERNELS = (
     (screen, "_new_row", Row),
+    (screen, "_last_column", last_column),
     (containers, "_copy_single_width", copy_single_width),
     (containers, "_store_line", store_line),
     (renderer, "_changed_spans", changed_spans),
