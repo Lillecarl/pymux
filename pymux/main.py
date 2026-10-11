@@ -64,7 +64,7 @@ from .commands import CommandException, call_command_handler, handle_command
 from .commands.completer import create_command_completer
 from .enums import CHOOSE, COMMAND, PROMPT, Chooser, WindowSize, Woke
 from .forwarding import LOOPBACK_NAMES, loopback_port
-from .graphics import PaneView
+from .graphics import OuterImageIds, PaneView
 from .ids import PaneId, SessionId, WindowIndex
 from .jobs import JOB_SWEEP_EVERY, Job, JobFeed, JobTable, describe
 from .key_bindings import PymuxKeyBindings
@@ -1153,6 +1153,9 @@ class Pymux:
         "loop": Keep.DROPPED,
         "done": Keep.DROPPED,
         "counters": Keep.DROPPED,
+        # A client that reconnects deletes every image it had, so the
+        # next server may hand out other ids.
+        "outer_image_ids": Keep.DROPPED,
         "sourcing": Keep.DROPPED,
         "_hooks_running": Keep.DROPPED,
         # `display-panes` showing, which a timer ends; the timer does
@@ -1423,6 +1426,10 @@ class Pymux:
         #: reads it, and `pymux/introspect.py` says why the reasons
         #: matter more than the totals.
         self.counters = introspect.Counters()
+
+        #: The id each pane image has on the terminals of the clients,
+        #: one answer for all of them. Lillecarl/pymux#600.
+        self.outer_image_ids = OuterImageIds()
 
         #: Whether another process of this user may attach a debugger.
         #: Set through `set-option allow-remote-debugging`, and the
@@ -2656,6 +2663,7 @@ class Pymux:
         # for the reason `on_content_changed` gives above: a pane is
         # about the arrangement and knows nothing about a widget.
         terminal_control.on_mouse_focus = focus_pane_on_click
+        terminal_control.placeholder_ids = lambda image_id: self.outer_image_ids.id_of(pane.pane_id, image_id)
 
         return pane
 

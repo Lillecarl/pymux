@@ -214,6 +214,110 @@ def test_placeholders_do_not_reach_terminal_as_text():
     assert visible_char(line[0].char) == " "
 
 
+# ----------------------------------------------------------------------
+# A terminal that reads the placeholders itself. Lillecarl/pymux#600.
+
+
+def make_kitty(image_ids=None):
+    written = []
+    client = ClientGraphics(written.append, lambda: None, image_ids=image_ids, reads_placeholders=lambda: True)
+    client.kitty_supported = True
+    return client, written
+
+
+def test_a_terminal_that_reads_placeholders_gets_the_box_and_no_put():
+    "It fits the image to the cells the text carries, so pymux puts nothing."
+    client, written = make_kitty()
+    screen, stream = make_screen()
+    stream.feed("\x1b_Ga=T,U=1,f=24,s=40,v=40,i=5,c=7,r=3;%s\x1b\\" % base64.b64encode(rgb_image(40, 40)).decode())
+    stream.feed(cells(5, 0, 4) + "\r\n" + cells(5, 1, 4))
+
+    client.render([view(screen, x=10, y=5)])
+
+    assert puts(written) == []
+    virtual = re.findall(r"\x1b_Ga=p,U=1,([^\x1b]*)\x1b\\", "".join(written))
+    assert len(virtual) == 1
+    keys = dict(part.split("=", 1) for part in virtual[0].split(","))
+    assert (keys["c"], keys["r"]) == ("7", "3")
+    sent = re.search(r"\x1b_Ga=t,i=(\d+),", "".join(written))
+    assert sent is not None and keys["i"] == sent.group(1)
+
+
+def test_a_terminal_that_takes_fewer_colours_gets_the_puts():
+    "The id travels in the colour, and 256 colours would change it."
+    from prompt_toolkit.output import ColorDepth
+
+    written = []
+    client = ClientGraphics(
+        written.append,
+        lambda: None,
+        color_depth=lambda: ColorDepth.DEPTH_8_BIT,
+        reads_placeholders=lambda: True,
+    )
+    client.kitty_supported = True
+    screen, stream = make_screen()
+    transmit_virtual(stream)
+    stream.feed(cells(5, 0, 4))
+
+    client.render([view(screen)])
+
+    assert len(puts(written)) == 1
+
+
+def test_every_client_knows_an_image_by_one_id():
+    "A pane builds the text of its image cells once for all of them."
+    from pymux.graphics import OuterImageIds
+
+    ids = OuterImageIds()
+    sent = []
+    for _ in range(2):
+        client, written = make_kitty(ids)
+        screen, stream = make_screen()
+        transmit_virtual(stream)
+        stream.feed(cells(5, 0, 4))
+        client.render([view(screen)])
+        sent.append(re.search(r"\x1b_Ga=t,i=(\d+),", "".join(written)).group(1))
+
+    assert sent[0] == sent[1] == str(ids.id_of(1, 5))
+    assert ids.id_of(1, 5) < 1 << 24
+    assert ids.id_of(2, 5) != ids.id_of(1, 5)
+
+
+def test_a_replaced_image_is_put_again_under_its_id():
+    "The delete took its placements, and the id stays the same."
+    client, written = make_kitty()
+    screen, stream = make_screen()
+    transmit_virtual(stream)
+    stream.feed(cells(5, 0, 4))
+    client.render([view(screen)])
+    # New pixels, which take the placements with them, and the same box.
+    data = base64.b64encode(rgb_image(20, 20)).decode()
+    stream.feed("\x1b_Ga=t,f=24,s=20,v=20,i=5;%s\x1b\\" % data)
+    stream.feed("\x1b_Ga=p,U=1,i=5,c=4,r=2\x1b\\")
+    written.clear()
+
+    client.render([view(screen)])
+
+    assert len(re.findall(r"\x1b_Ga=p,U=1,", "".join(written))) == 1
+
+
+def test_a_frame_for_a_terminal_that_draws_no_placeholder_has_spaces():
+    import io
+
+    from prompt_toolkit.data_structures import Size
+
+    from pymux.server import _FrameOutput
+
+    for keeps in (False, True):
+        stdout = io.StringIO()
+        output = _FrameOutput(stdout, lambda: Size(24, 80), term="xterm")
+        output.keeps_placeholders = lambda keeps=keeps: keeps
+        output.write("a" + PLACEHOLDER + mark(0) + mark(3) + "b")
+        output.flush()
+        expected = "a" + PLACEHOLDER + mark(0) + mark(3) + "b" if keeps else "a b"
+        assert stdout.getvalue() == expected
+
+
 def test_view_without_screen_still_renders_plain_placements():
     "An embedder that gives no screen loses nothing else."
     from pyte.images import GraphicsPlacement

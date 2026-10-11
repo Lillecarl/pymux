@@ -25,19 +25,6 @@ foot yazi-images forest-portrait 215
 foot yazi-images pug 47
 foot yazi-images river-panorama 6
 
-# kitty. pymux tells yazi it is kitty (`pymux/hacks_and_lies.py`), so
-# both sides get Unicode placeholders, in the same place. pymux
-# resamples the picture to fill its cells, where kitty draws it at its
-# own pixel size: everywhere a little, unless yazi had already scaled
-# the image to the cells, as for dog and walrus. Lillecarl/pymux#600.
-kitty yazi-images dog 4
-kitty yazi-images dog-small 15655
-kitty yazi-images forest-portrait 140594
-kitty yazi-images pug 67556
-kitty yazi-images puppy-icon 2742
-kitty yazi-images river-panorama 16830
-kitty yazi-images walrus-grey 3
-
 # xterm. This xterm offers yazi no image protocol, so the bare side
 # shows no preview. pymux offers one, takes yazi's image, and draws it
 # in cells of colour: pymux shows more than the terminal it runs in.

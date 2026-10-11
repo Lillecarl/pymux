@@ -261,7 +261,10 @@ def test_replacing_image_of_pane_id_re_transmits():
 
     assert "\x1b_Ga=d,d=I,i=%i,q=2\x1b\\" % first_id in "".join(written)
     assert len(transmissions(written)) == 1
-    assert outer_id(written) != first_id
+    # The id stays, because a pane's text names it (Lillecarl/pymux#600),
+    # and the delete took the placement with it.
+    assert outer_id(written) == first_id
+    assert "\x1b_Ga=p,i=%i," % first_id in "".join(written)
 
 
 def test_no_views_removes_everything():

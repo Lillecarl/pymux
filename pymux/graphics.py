@@ -55,6 +55,7 @@ __all__ = [
     "CELL_SIZE_QUERY",
     "QUERY_SEQUENCE",
     "ClientGraphics",
+    "OuterImageIds",
     "PaneView",
     "is_query_reply",
 ]
@@ -145,6 +146,44 @@ class PaneView(NamedTuple):
     screen: Any = None
 
 
+#: The placement id of a virtual placement whose program gave none. A
+#: placeholder with no underline colour may show any virtual placement
+#: of its image, and the slots pymux numbers itself count up from one.
+VIRTUAL_SLOT = 0xFFFFFF
+
+#: The first id past what the 24 bits of a colour carry.
+_COLOUR_IDS = 1 << 24
+
+
+class OuterImageIds:
+    """
+    The id each pane image has on the terminals of the clients.
+
+    **Every client takes the same id.** A pane passes its image cells to
+    a kitty client as text with the id in the colour, and a pane builds
+    that text once for every client. So the id cannot be a client's own.
+
+    An image that the pane replaces keeps its id, and so does one that
+    the pane drops: a row built with the id can stand on the screen long
+    after. The ids start at a random offset, so that pymux does not
+    overwrite the images of another program that shares the terminal,
+    and stay under 24 bits, so no placeholder needs the third mark.
+    Lillecarl/pymux#600.
+    """
+
+    def __init__(self) -> None:
+        self._ids: dict[tuple[int, int], int] = {}
+        self._next = random.randrange(1 << 20, 1 << 23)
+
+    def id_of(self, pane_id: int, image_id: int) -> int:
+        key = (pane_id, image_id)
+        found = self._ids.get(key)
+        if found is None:
+            found = self._ids[key] = self._next
+            self._next = self._next + 1 if self._next + 1 < _COLOUR_IDS else 1
+        return found
+
+
 class _Placement:
     "One placement as it is emitted to the outer terminal."
 
@@ -169,6 +208,10 @@ class ClientGraphics:
         With it, a kitty transmission and the sixel and half block
         encoding run in a worker thread, and the frame goes on without
         the image. Without it, the frame does the work.
+    :param image_ids: The ids of the pane images on the outer terminal,
+        shared by every client of the server.
+    :param reads_placeholders: Whether the outer terminal draws kitty's
+        unicode placeholders. See `forwards_placeholders`.
     """
 
     def __init__(
@@ -178,6 +221,8 @@ class ClientGraphics:
         repaint: Callable[[], None] | None = None,
         color_depth: Callable[[], ColorDepth] | None = None,
         spawn: Callable[[Coroutine[Any, Any, None]], None] | None = None,
+        image_ids: OuterImageIds | None = None,
+        reads_placeholders: Callable[[], bool] | None = None,
     ) -> None:
         self._write_raw = write_raw
         self._flush = flush
@@ -210,10 +255,8 @@ class ClientGraphics:
         #: Lillecarl/pymux#369.
         self.cell_size_known = False
 
-        # Image ids of the outer terminal start at a random offset, so
-        # that pymux does not overwrite the images of another program
-        # that shares the terminal.
-        self._next_image_id = random.randrange(1 << 20, 1 << 28)
+        self._image_ids = image_ids if image_ids is not None else OuterImageIds()
+        self._reads_placeholders = reads_placeholders
 
         # (pane id, pane image id) -> (pane image, outer image id)
         self._images: dict[tuple[int, int], tuple[Any, int]] = {}
@@ -254,6 +297,28 @@ class ClientGraphics:
     def blocks_wanted(self) -> bool:
         "True when this client falls back to half blocks."
         return self.detected and not self.kitty_supported and not self.sixel_supported
+
+    @property
+    def forwards_placeholders(self) -> bool:
+        """
+        True when the image cells of a pane reach this terminal as kitty's
+        unicode placeholders, and the terminal fits each image itself.
+
+        The fit is the terminal's own, so the picture is the one it draws
+        without pymux. A placement that pymux fitted instead was off by
+        the rounding of each run. Lillecarl/pymux#600.
+
+        Answering the graphics query is not enough: WezTerm does and
+        draws no placeholder. The id travels in the foreground colour,
+        so a terminal that takes fewer than 24 bits would get the wrong
+        image.
+        """
+        return (
+            self.kitty_supported
+            and self._reads_placeholders is not None
+            and self._reads_placeholders()
+            and self.color_depth == ColorDepth.DEPTH_24_BIT
+        )
 
     @property
     def color_depth(self) -> ColorDepth:
@@ -389,6 +454,7 @@ class ClientGraphics:
         "The placements that this frame should show."
         desired: dict[tuple[int, int], _Placement] = {}
         live_keys = set()
+        forwards = self.forwards_placeholders
 
         for view in views:
             # An image stays on the outer terminal as long as the pane
@@ -399,7 +465,10 @@ class ClientGraphics:
 
             slots: dict[int, int] = {}
 
-            for placement in self._pane_placements(view):
+            if forwards:
+                self._collect_virtual(view, desired)
+            placements = self._visible_placements(view) if forwards else self._pane_placements(view)
+            for placement in placements:
                 (
                     pane_placement,
                     image,
@@ -435,6 +504,38 @@ class ClientGraphics:
 
         self._forget_unused_images(live_keys)
         return desired
+
+    def _collect_virtual(self, view: PaneView, desired: dict[tuple[int, int], _Placement]) -> None:
+        """
+        The virtual placements behind the placeholders that `view` shows,
+        for a terminal that reads the placeholders itself.
+
+        Each one carries the box the program asked for, so the terminal
+        fits the image to that box the way it does without pymux. It
+        has no position: the cells of the pane are where it draws.
+        """
+        screen = view.screen
+        if screen is None or not hasattr(screen, "placeholder_runs"):
+            return
+        first_row = view.vertical_scroll
+        shown = {run.image_id for run in screen.placeholder_runs(first_row, first_row + view.height - 1)}
+        for image_id in shown:
+            placement = view.graphics.virtual_placement(image_id)
+            image = view.graphics.images_by_id.get(image_id)
+            if placement is None or image is None or not placement.columns or not placement.rows:
+                continue
+            outer_id = self._outer_image_id(view.pane_id, placement, image)
+            if outer_id is None:
+                continue
+            # The program's own id, which an underlined placeholder names
+            # in its underline colour. A key below zero stays clear of the
+            # slots of the placements that pymux puts itself.
+            slot = placement.placement_id or VIRTUAL_SLOT
+            desired[(outer_id, -slot)] = _Placement(
+                outer_id,
+                slot,
+                "\x1b_Ga=p,U=1,i=%i,p=%i,c=%i,r=%i,q=2\x1b\\" % (outer_id, slot, placement.columns, placement.rows),
+            )
 
     def _pane_placements(self, view: PaneView):
         """
@@ -592,8 +693,11 @@ class ClientGraphics:
             self._transmitted_bytes -= len(known[0].data)
             del self._images[key]
 
-        outer_id = self._next_image_id
-        self._next_image_id += 1
+        outer_id = self._image_ids.id_of(pane_id, placement.image_id)
+        if known is not None:
+            # The replaced image went with its placements, under the id
+            # the new one takes, so each has to be put again.
+            self._placements = {key: put for key, put in self._placements.items() if put.image_id != outer_id}
 
         if self._spawn is not None:
             self._image_pending[key] = image

@@ -24,6 +24,7 @@ from prompt_toolkit.input.vt100 import Vt100Input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 from pyte.keep import Keep
+from pyte.placeholders import PLACEHOLDER, blanked
 
 from pymux.commands.common import find_pane
 
@@ -181,6 +182,10 @@ class ServerConnection:
             # a frame carries an image.
             color_depth=lambda: self.colors.depth,
             spawn=self._spawn,
+            image_ids=pymux.outer_image_ids,
+            # Of the terminals that answer the graphics query, kitty is
+            # the one known to read the placeholders.
+            reads_placeholders=lambda: "kitty" in self.colors.term,
         )
 
         # Colour depth of the outer terminal. The same handshake
@@ -1012,6 +1017,7 @@ class ServerConnection:
             lambda: self.size,
             term=term,
         )
+        output.keeps_placeholders = lambda: self.graphics.forwards_placeholders
 
         client_state = self.pymux.add_client(
             input=self._pipeinput,
@@ -1237,17 +1243,28 @@ class _FrameOutput(Vt100_Output):
     clipboard changed before the screen showing the copy, and a harness
     that waits for a pane's notification as a fence still had to wait
     for silence after it. Lillecarl/pymux#579.
+
+    A pane draws an image cell as kitty's unicode placeholder, and
+    `flush` turns each one into a space unless `keeps_placeholders`
+    says this terminal reads them. Once per frame and not once per
+    cell: the renderer writes cell by cell. Lillecarl/pymux#600.
     """
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._after_frame: list[str] = []
+        self.keeps_placeholders: Callable[[], bool] = lambda: False
 
     def write_after_frame(self, data: str) -> None:
         self._after_frame.append(data)
 
     @override
     def flush(self) -> None:
+        if self._buffer:
+            frame = "".join(self._buffer)
+            if PLACEHOLDER in frame and not self.keeps_placeholders():
+                frame = blanked(frame)
+            self._buffer = [frame]
         if self._after_frame:
             self.write_raw("".join(self._after_frame))
             self._after_frame = []
