@@ -3,6 +3,10 @@
     {
       "match": { "userMessage": "hello" },
       "response": { "content": "Hello from aimock. This reply came from a local fixture, not a provider." }
+    },
+    {
+      "match": { "userMessage": "count" },
+      "response": { "content": "Counting.\n\n1. one\n2. two\n3. three\n4. four\n5. five\n6. six\n7. seven\n8. eight\n9. nine\n10. ten\n11. eleven\n12. twelve\n13. thirteen\n14. fourteen\n15. fifteen\n16. sixteen\n17. seventeen\n18. eighteen\n19. nineteen\n20. twenty\n21. twenty-one\n22. twenty-two\n23. twenty-three\n24. twenty-four\n25. twenty-five\n26. twenty-six\n27. twenty-seven\n28. twenty-eight\n29. twenty-nine\n30. thirty\n31. thirty-one\n32. thirty-two\n33. thirty-three\n34. thirty-four\n35. thirty-five\n36. thirty-six\n37. thirty-seven\n38. thirty-eight\n39. thirty-nine\n40. forty\n\nCounted to forty." }
     }
   ]
 }

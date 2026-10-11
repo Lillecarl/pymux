@@ -10,10 +10,13 @@
 # "high", and at column 79 of the two rules. The last two are the
 # mechanism `picture-differences.txt` records for the recorded
 # claude-code fixture (#371, #539). The mascot seams are not traced, and
-# the count moves between runs with the same text on screen: 35, 17, 24
-# and 24 measured. Lillecarl/pymux#601.
-xterm claude-code answer 17-35
-xterm claude-code start 17-35
+# the count moves between runs with the same text on screen: 35, 17, 24,
+# 24, 13 and 11 measured. Lillecarl/pymux#601. "long" has scrolled the
+# mascot away, so only the "●" and the rules are left: 11.
+xterm claude-code answer 11-35
+xterm claude-code cleared 11-35
+xterm claude-code long 11
+xterm claude-code start 11-35
 
 # ----------------------------------------------------------------------
 # yazi-images: each terminal runs and answers a yazi of its own.

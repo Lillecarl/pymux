@@ -154,6 +154,19 @@ class ClaudeCode:
         twins.press("\r")
         twins.shows("Hello from aimock")
         photograph("answer")
+        # More than a screen, so the clear has a history to take as well.
+        twins.press("count")
+        twins.shows("count")
+        twins.press("\r")
+        twins.shows("Counted to forty")
+        photograph("long")
+        # The clear that left a row of the old background. Lillecarl/pymux#582.
+        twins.press("/clear")
+        twins.shows("/clear")
+        twins.press("\r")
+        twins.until(lambda rows: not any("Hello from aimock" in row for row in rows), "/clear never cleared")
+        twins.shows("for shortcuts")
+        photograph("cleared")
 
     def finish(self):
         if self._mock is not None:
