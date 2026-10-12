@@ -535,6 +535,19 @@ async def test_a_terminal_that_reports_pixels_puts_the_pointer_on_the_pixel(tmp_
         assert motion == "motion %d %d" % (3.75 * width, 0.675 * height)
 
 
+async def test_the_terminal_shows_the_pointer_the_window_asks_for(tmp_path):
+    "Lillecarl/pymux#650."
+    async with with_a_window(tmp_path) as (pymux, state, pane, recorder, log, _probe):
+        await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
+        pymux.enable_mouse_support = True
+        where = await once(
+            lambda: state.layout_manager.pane_write_positions.get(pane), 10.0, "the pane was never drawn"
+        )
+        state.connection._process({"cmd": "in", "data": "\x1b[<35;%d;%dM" % (where.xpos + 4, where.ypos + 2)})
+        await once(lambda: "\x1b]22;text\x1b\\" in recorder.out, 10.0, "the pointer never changed")
+        assert pane.screen.pointer_shapes.shape == "text"
+
+
 async def test_the_pane_goes_when_the_window_closes(tmp_path):
     async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")

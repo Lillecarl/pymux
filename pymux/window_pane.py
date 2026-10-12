@@ -134,9 +134,10 @@ class _Graphics:
 
 
 class _PointerShapes:
-    "No shape asked for: the terminal of the user picks the pointer."
+    "The pointer the window asked for, by CSS name; with none, the terminal of the user picks."
 
-    shape = ""
+    def __init__(self) -> None:
+        self.shape = ""
 
 
 class WindowScreen:

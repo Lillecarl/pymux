@@ -5,7 +5,8 @@ button it receives to the file named on its command line. With
 `--animate` it then draws a frame each time the last one was shown, and
 writes "frame" for each. With `--idle` it commits nothing but a frame
 callback instead, as Firefox does to wait for the next frame, and
-writes "idle" each time one is answered.
+writes "idle" each time one is answered. Each time the pointer enters,
+it asks for a text pointer.
 
 It stays up until it is asked to close, which is what a window pane
 does to a window when the pane is killed.
@@ -17,6 +18,7 @@ import mmap
 import sys
 
 from pywayland.client import Display
+from pywayland.protocol.cursor_shape_v1 import WpCursorShapeDeviceV1, WpCursorShapeManagerV1
 from pywayland.protocol.wayland import WlCompositor, WlSeat, WlShm
 from pywayland.protocol.xdg_shell import XdgWmBase
 from pywayland.utils import AnonymousFile
@@ -52,6 +54,10 @@ def main(log_path: str, animate: bool, idle: bool) -> None:
         "button %d %d\n" % (button, state)
     )
     pointer.dispatcher["axis"] = lambda _p, _time, axis, value: log.write("axis %d %d\n" % (axis, int(value)))
+    shapes = bind(WpCursorShapeManagerV1).get_pointer(pointer)
+    pointer.dispatcher["enter"] = lambda _p, serial, *_rest: shapes.set_shape(
+        serial, WpCursorShapeDeviceV1.shape.text.value
+    )
 
     surface = compositor.create_surface()
     xdg_surface = wm_base.get_xdg_surface(surface)

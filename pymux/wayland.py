@@ -261,6 +261,11 @@ class WaylandServer:
             case ("app_id", int(toplevel), str(app_id)) if toplevel in self.widgets:
                 self.widgets[toplevel].app_id = app_id
                 self.pymux.invalidate(Woke.WINDOW_PANE_CHANGED)
+            case ("pointer", int(toplevel), str(shape)) if toplevel in self.widgets:
+                self.widgets[toplevel].screen.pointer_shapes.shape = shape
+                self.pymux.sync_pointer_shape()
+                # The shape goes out behind a frame (`forward_osc`).
+                self.pymux.invalidate(Woke.WINDOW_PANE_CHANGED)
             case ("commit", int(toplevel), _damage) if toplevel in self.panes:
                 # Straight to the clients, with no frame of the cells:
                 # a redraw of every client for every window frame is
