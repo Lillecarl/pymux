@@ -248,7 +248,10 @@ class WaylandServer:
                 self.widgets[toplevel].app_id = app_id
                 self.pymux.invalidate(Woke.WINDOW_PANE_CHANGED)
             case ("commit", int(toplevel), _damage) if toplevel in self.panes:
-                self.pymux.invalidate(Woke.WINDOW_PANE_DREW)
+                # Straight to the clients, with no frame of the cells:
+                # a redraw of every client for every window frame is
+                # what a window drawing at the link's pace would cost.
+                self.pymux.window_pane_drew(self.panes[toplevel])
             case ("closed", int(toplevel)):
                 self._closed(toplevel)
 
@@ -369,10 +372,23 @@ class WaylandServer:
             launch.exited.set()
 
     def _rate_of(self, toplevel: int) -> int:
-        "The frame rate of the pymux window holding this window's pane; 0 sets no limit."
+        """
+        The most frames a second this window may draw; 0 sets no limit.
+
+        A pymux window's `frame-rate` caps it only where a person chose
+        one, on that window or with `-g`. Otherwise the window goes at
+        the pace its frames are taken, as a Wayland window on a real
+        screen goes at the screen's: the default thirty is for the cells.
+        Lillecarl/pymux#636.
+        """
         pane = self.panes.get(toplevel)
         found = None if pane is None else self.pymux.window_of_pane(pane.pane_id)
-        return 0 if found is None else found[1].frame_rate
+        if found is None:
+            return 0
+        session, window, _pane = found
+        if window.frame_rate_set or "frame_rate" in session.arrangement.window_defaults:
+            return window.frame_rate
+        return 0
 
     def _takes_keys(self) -> bool:
         "The person at the keyboard may drive it, and holds no prefix."

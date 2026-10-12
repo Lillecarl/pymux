@@ -362,6 +362,8 @@ class ClientGraphics:
         self._window_places: dict[int, str] = {}
         #: The window panes whose update is being encoded.
         self._window_pending: set[int] = set()
+        #: The ones that drew again meanwhile, and the view to send it by.
+        self._window_again: dict[int, WindowView] = {}
         #: Moves on `reset`, so an update encoded before it is dropped.
         self._window_generation = 0
 
@@ -499,10 +501,7 @@ class ClientGraphics:
             if known is not None and known.put != put:
                 commands.append(put)
                 self._windows[view.pane_id] = known._replace(put=put)
-            if view.pane_id not in self._window_pending:
-                self._window_pending.add(view.pane_id)
-                since = known.serial if known is not None else None
-                self._spawn(self._update_window(view, outer_id, since, self._window_generation))
+            self._start_window_update(view)
         self._window_places = places
         gone = set(self._windows) - set(places)
         for pane_id in gone:
@@ -512,15 +511,47 @@ class ClientGraphics:
         if commands or gone:
             self._flush()
 
+    def refresh_window(self, view: WindowView) -> None:
+        """
+        Send one window pane's new frame, with no frame of the cells
+        around it: the window drew, and nothing else moved.
+
+        Only for a window the last frame placed. A frame drawn while
+        an update is out goes with the next one, which starts as soon
+        as that one is written. Lillecarl/pymux#636.
+        """
+        if not self.kitty_supported or self._spawn is None or view.pane_id not in self._window_places:
+            return
+        if view.pane_id in self._window_pending:
+            self._window_again[view.pane_id] = view
+            return
+        self._start_window_update(view)
+
+    def _start_window_update(self, view: WindowView) -> None:
+        if self._spawn is None or view.pane_id in self._window_pending:
+            return
+        self._window_pending.add(view.pane_id)
+        outer_id = self._image_ids.id_of(view.pane_id, WINDOW_IMAGE)
+        known = self._windows.get(view.pane_id)
+        since = known.serial if known is not None else None
+        self._spawn(self._update_window(view, outer_id, since, self._window_generation))
+
     async def _update_window(self, view: WindowView, outer_id: int, since: int | None, generation: int) -> None:
         "Await one window's update, and write it if the window still shows here."
+        try:
+            await self._write_window_update(view, outer_id, since, generation)
+        finally:
+            self._window_pending.discard(view.pane_id)
+            again = self._window_again.pop(view.pane_id, None)
+            if again is not None and generation == self._window_generation:
+                self.refresh_window(again)
+
+    async def _write_window_update(self, view: WindowView, outer_id: int, since: int | None, generation: int) -> None:
         try:
             serial, update, whole = await view.update(outer_id, since)
         except Exception:
             logger.exception("Encoding a window pane's frame failed.")
             return
-        finally:
-            self._window_pending.discard(view.pane_id)
         put = self._window_places.get(view.pane_id)
         if update is None or put is None or generation != self._window_generation:
             return
@@ -1135,6 +1166,7 @@ class ClientGraphics:
         self._cell_pending = set()
         self._image_pending = {}
         self._window_places = {}
+        self._window_again = {}
         self._window_generation += 1
         if self._windows:
             for window in self._windows.values():

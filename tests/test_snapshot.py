@@ -23,7 +23,7 @@ from test_a_session_on_a_pyte_screen import attached, settled, shows
 from test_every_attribute_has_a_fate import declared, live_objects
 
 from pymux import snapshot
-from pymux.arrangement import LayoutTypes
+from pymux.arrangement import LayoutTypes, Window
 from pymux.commands.wait_for import WaitChannel
 from pymux.enums import Chooser, WindowSize
 from pymux.main import Pymux
@@ -178,6 +178,7 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     stacked.window_size = WindowSize.LARGEST
     stacked.previous_selected_layout = LayoutTypes.TILED
     stacked.frame_rate = 60
+    stacked.frame_rate_set = True
     strip.set_column_width(strip.root[0], 0.75)
     strip.set_column_width(strip.root[1], 0.5)
     strip.root.set_weight(strip.root[1], 2)
@@ -525,7 +526,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
     assert _dump(second) == _dump(first)
 
 
-@pytest.mark.parametrize("off_by", [1, -1], ids=["newer", "older with no step"])
+@pytest.mark.parametrize("off_by", [1, -2], ids=["newer", "older with no step"])
 def test_a_snapshot_of_another_version_is_refused(pymux, tmp_path, off_by):
     path = tmp_path / "old.sqlite"
     snapshot.save(pymux, path)
@@ -536,6 +537,24 @@ def test_a_snapshot_of_another_version_is_refused(pymux, tmp_path, off_by):
 
     with pytest.raises(snapshot.SnapshotError, match="version"):
         snapshot.load(Pymux(), path)
+
+
+@pytest.mark.parametrize(("rate", "chosen"), [(30, 0), (60, 1)])
+def test_a_version_12_snapshot_says_a_rate_was_chosen_where_it_is_not_the_default(pymux, tmp_path, rate, chosen):
+    "Version 13 adds `frame_rate_set`, and the step guesses it. Lillecarl/pymux#636."
+    pymux.arrangement.windows.append(Window())
+    for window in pymux.arrangement.windows:
+        window.frame_rate = rate
+    path = tmp_path / "v12.sqlite"
+    snapshot.save(pymux, path)
+    db = sqlite3.connect(path)
+    db.execute("ALTER TABLE windows DROP COLUMN frame_rate_set")
+    db.execute("PRAGMA user_version = 12")
+    db.commit()
+    db.close()
+
+    stepped = snapshot._open(path)
+    assert set(stepped.execute("SELECT frame_rate_set FROM windows").fetchall()) == {(chosen,)}
 
 
 async def test_a_snapshot_is_refused_while_a_command_waits(pymux, tmp_path):

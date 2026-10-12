@@ -104,9 +104,12 @@ async def test_a_client_without_kitty_is_sent_no_pixels(tmp_path):
         assert "\x1b_Ga=t," not in recorder.out
 
 
-async def test_a_window_draws_no_faster_than_the_pymux_window_holding_it(tmp_path):
+async def test_a_window_draws_no_faster_than_a_frame_rate_chosen_for_it(tmp_path):
     async with with_a_window(tmp_path, animate=True) as (pymux, state, _pane, _recorder, log, _probe):
-        state.session.arrangement.get_active_window().frame_rate = 10
+        window = state.session.arrangement.get_active_window()
+        # What `set-window-option frame-rate 10` does.
+        window.frame_rate = 10
+        window.frame_rate_set = True
         pymux.invalidate(Woke.WINDOW_PANE_CHANGED)
         await once(lambda: logged(log).count("frame") >= 3, 10.0, "the window never drew again")
         before = logged(log).count("frame")
@@ -114,6 +117,16 @@ async def test_a_window_draws_no_faster_than_the_pymux_window_holding_it(tmp_pat
         drawn = logged(log).count("frame") - before
         # Ten a second, and one for where the second started.
         assert 2 <= drawn <= 11
+
+
+async def test_a_window_with_no_frame_rate_chosen_goes_at_the_links_pace(tmp_path):
+    "The default thirty paces the cells, not a window. Lillecarl/pymux#636."
+    async with with_a_window(tmp_path, animate=True) as (pymux, state, _pane, _recorder, log, _probe):
+        assert not state.session.arrangement.get_active_window().frame_rate_set
+        await once(lambda: logged(log).count("frame") >= 3, 10.0, "the window never drew again")
+        before = logged(log).count("frame")
+        await anyio.sleep(1.0)
+        assert logged(log).count("frame") - before > 40
 
 
 @asynccontextmanager

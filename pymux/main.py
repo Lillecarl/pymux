@@ -685,6 +685,25 @@ class ClientState:
             )
         return result
 
+    def refresh_window_pane(self, pane) -> None:
+        """
+        Send this client the new frame of a window pane it shows, and
+        draw nothing else: the window drew, and the cells around it did
+        not move. Lillecarl/pymux#636.
+        """
+        if self.connection is None or self.display_popup:
+            return
+        if self.connection.pipe_connection.outstanding:
+            self._windows_after_drain()
+            return
+        write_position = self.layout_manager.pane_write_positions.get(pane)
+        if write_position is None:
+            return
+        drained = self.connection.pipe_connection.drained
+        self.connection.graphics.refresh_window(
+            self.pymux.wayland.view_of(pane.pane_id, pane.terminal, write_position, drained)
+        )
+
     def _windows_after_drain(self) -> None:
         """
         Draw the window panes again once this client's terminal has
@@ -2806,6 +2825,11 @@ class Pymux:
         for client_state in self._client_states.values():
             client_state.sync_focus()
         self.invalidate(Woke.WINDOW_PANE_OPENED)
+
+    def window_pane_drew(self, pane: Pane) -> None:
+        "A window pane's window drew a frame: send it to every client that shows it."
+        for client_state in self._client_states.values():
+            client_state.refresh_window_pane(pane)
 
     def window_pane_ended(self, pane: Pane) -> None:
         "The window of a window pane closed. A window leaves nothing to remain on exit."

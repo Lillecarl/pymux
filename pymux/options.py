@@ -10,6 +10,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, override
 
 from . import log
+from .arrangement import Window
 from .enums import WindowSize, Woke
 from .key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS
 from .key_spelling import key_however_it_is_written
@@ -19,7 +20,7 @@ from .style import THEMES
 from .utils import get_default_shell
 
 if TYPE_CHECKING:
-    from pymux.arrangement import Arrangement, Window
+    from pymux.arrangement import Arrangement
     from pymux.main import ClientState, Pymux
 
 __all__ = [
@@ -278,6 +279,20 @@ class PositiveIntOption(Option):
             return super().set_default(pymux, value)
 
         pymux.arrangement.window_defaults[self._attribute()] = self._read(value)
+
+
+class FrameRateOption(PositiveIntOption):
+    """
+    `frame-rate`, which also says the window has one a person chose: that
+    is what caps the Wayland windows in it. Lillecarl/pymux#636.
+    """
+
+    @override
+    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+        super().set_value(pymux, value, target)
+        window = self.held_by(pymux, target)
+        if isinstance(window, Window):
+            window.frame_rate_set = True
 
 
 class KeyPrefixOption(Option):
@@ -942,5 +957,5 @@ ALL_WINDOW_OPTIONS = {
     # window. Zero is as many as it can, which is what pymux did
     # before there was an option. `arrangement.DEFAULT_FRAME_RATE`
     # says why thirty. Lillecarl/pymux#254.
-    "frame-rate": PositiveIntOption("frame_rate", [0, 10, 30, 60, 120], scope=Scope.WINDOW),
+    "frame-rate": FrameRateOption("frame_rate", [0, 10, 30, 60, 120], scope=Scope.WINDOW),
 }

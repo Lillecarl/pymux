@@ -43,6 +43,9 @@ def window(pymux):
 async def test_window_starts_at_thirty(pymux):
     assert DEFAULT_FRAME_RATE == 30
     assert window(pymux).frame_rate == 30
+    # Thirty that nobody chose, which does not cap a Wayland window.
+    # Lillecarl/pymux#636.
+    assert not window(pymux).frame_rate_set
 
 
 async def test_option_writes_active_window(pymux):
@@ -55,6 +58,7 @@ async def test_command_writes_it(pymux):
     if answer is not None:
         await answer
     assert window(pymux).frame_rate == 12
+    assert window(pymux).frame_rate_set
 
 
 async def test_zero_means_as_fast_as_it_can(pymux):

@@ -353,6 +353,7 @@ class Window:
         "zoom": Keep.SAVED,
         "synchronize_panes": Keep.SAVED,
         "frame_rate": Keep.SAVED,
+        "frame_rate_set": Keep.SAVED,
     }
 
     _window_counter = 1000  # Start here, to avoid confusion with window index.
@@ -405,6 +406,11 @@ class Window:
         #: second while the one a person is reading stays sharp.
         #: Lillecarl/pymux#254.
         self.frame_rate = DEFAULT_FRAME_RATE
+        #: Whether a person set `frame-rate` on this window. Only then
+        #: does it cap the Wayland windows in it, which otherwise draw
+        #: as fast as the link to each client takes their frames.
+        #: Lillecarl/pymux#636.
+        self.frame_rate_set = False
 
         # Give unique ID.
         Window._window_counter += 1
