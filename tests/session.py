@@ -221,15 +221,20 @@ def _watcher(watched: dict) -> Callable:
     return watch
 
 
-async def once(question, seconds: float, complaint: str):
-    "Wait for something the loop has to do first, or say it never did."
+async def once(question, seconds: float, complaint: str | Callable[[], str]):
+    """
+    Wait for something the loop has to do first, or say it never did.
+
+    A callable `complaint` is asked at the deadline, so it can name
+    what the state was then.
+    """
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
         answer = question()
         if answer:
             return answer
         await anyio.sleep(0.005)
-    raise SystemExit(complaint)
+    raise SystemExit(complaint if isinstance(complaint, str) else complaint())
 
 
 @asynccontextmanager

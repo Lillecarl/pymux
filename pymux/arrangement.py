@@ -23,6 +23,7 @@ from pyte.keep import Keep
 
 from .enums import WindowSize
 from .ids import PaneId, PaneIndex, WindowId, WindowIndex
+from .wayland_scale import DEFAULT_WAYLAND_SCALE
 
 if TYPE_CHECKING:
     from .recording import Recording
@@ -354,6 +355,7 @@ class Window:
         "synchronize_panes": Keep.SAVED,
         "frame_rate": Keep.SAVED,
         "frame_rate_set": Keep.SAVED,
+        "wayland_scale": Keep.SAVED,
     }
 
     _window_counter = 1000  # Start here, to avoid confusion with window index.
@@ -411,6 +413,9 @@ class Window:
         #: as fast as the link to each client takes their frames.
         #: Lillecarl/pymux#636.
         self.frame_rate_set = False
+        #: How dense the Wayland windows in it draw, as `wayland-scale`
+        #: spells it. Lillecarl/pymux#637.
+        self.wayland_scale = DEFAULT_WAYLAND_SCALE
 
         # Give unique ID.
         Window._window_counter += 1

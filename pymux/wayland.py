@@ -44,6 +44,7 @@ from prompt_toolkit.clipboard import ClipboardData
 from pymux.enums import Woke
 from pymux.graphics import WindowView
 from pymux.options import Clipboard
+from pymux.wayland_scale import DEFAULT_WAYLAND_SCALE, resolve_scale
 from pymux.window_pane import WindowWidget, now
 
 if TYPE_CHECKING:
@@ -169,6 +170,8 @@ class WaylandServer:
         #: The same windows' widgets, which the events update.
         self.widgets: dict[int, WindowWidget] = {}
         self._pacers: dict[int, _Pacer] = {}
+        #: What each window was last configured with: width, height, scale.
+        self._configured: dict[int, tuple[int, int, float]] = {}
         #: The programs `pymux wl` started, by their connection's tag.
         self._launches: dict[int, Launch] = {}
         self._tasks: anyio.abc.TaskGroup | None = None
@@ -280,6 +283,7 @@ class WaylandServer:
         pane = self.panes.pop(toplevel, None)
         widget = self.widgets.pop(toplevel, None)
         pacer = self._pacers.pop(toplevel, None)
+        self._configured.pop(toplevel, None)
         if pacer is not None:
             pacer.shown.set()
         if pane is not None and widget is not None:
@@ -408,12 +412,35 @@ class WaylandServer:
         return bool(graphics is not None and graphics.kitty_supported)
 
     def configure(self, toplevel: int, columns: int, rows: int) -> None:
-        "Ask the window for the pixels of that many cells."
+        """
+        Ask the window for the pixels of that many cells, at its scale.
+
+        A pane asks on every draw, and only a change reaches the window:
+        so a cell size a client answers late, or a new `wayland-scale`,
+        resizes it at the next frame.
+        """
         if self.compositor is None:
             return
         width, height = self.pymux.cell_size()
+        wanted = (columns * width, rows * height, self._scale_of(toplevel, height))
+        if self._configured.get(toplevel) == wanted:
+            return
+        self._configured[toplevel] = wanted
         with contextlib.suppress(KeyError):
-            self.compositor.configure(toplevel, columns * width, rows * height)
+            self.compositor.configure(toplevel, *wanted)
+
+    def rescale(self) -> None:
+        "Configure every window again, after a `wayland-scale` changed."
+        for toplevel, widget in self.widgets.items():
+            if widget.columns and widget.rows:
+                self.configure(toplevel, widget.columns, widget.rows)
+
+    def _scale_of(self, toplevel: int, cell_height: int) -> float:
+        "The scale the `wayland-scale` of the window holding this one names."
+        pane = self.panes.get(toplevel)
+        found = None if pane is None else self.pymux.window_of_pane(pane.pane_id)
+        value = DEFAULT_WAYLAND_SCALE if found is None else found[1].wayland_scale
+        return resolve_scale(value, cell_height)
 
     def close(self, toplevel: int) -> None:
         if self.compositor is not None:

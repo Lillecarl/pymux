@@ -18,6 +18,7 @@ from .layout import Justify
 from .nearest import NEAREST
 from .style import THEMES
 from .utils import get_default_shell
+from .wayland_scale import parse_scale
 
 if TYPE_CHECKING:
     from pymux.arrangement import Arrangement
@@ -293,6 +294,33 @@ class FrameRateOption(PositiveIntOption):
         window = self.held_by(pymux, target)
         if isinstance(window, Window):
             window.frame_rate_set = True
+
+
+class WaylandScaleOption(Option):
+    "`wayland-scale`: `auto`, `auto+N`, `auto-N`, `auto*N` or a number."
+
+    scope = Scope.WINDOW
+    attribute_name = "wayland_scale"
+
+    @override
+    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
+        return ["auto", "auto+0.5", "auto*1.5", "1", "2"]
+
+    def _read(self, value: str) -> str:
+        try:
+            return parse_scale(value)
+        except ValueError as error:
+            raise SetOptionError(str(error)) from None
+
+    @override
+    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+        setattr(self.held_by(pymux, target), self._attribute(), self._read(value))
+        pymux.wayland.rescale()
+
+    @override
+    def set_default(self, pymux: Pymux, value: str) -> None:
+        "What every new window starts with. Changes no window that is open."
+        pymux.arrangement.window_defaults[self._attribute()] = self._read(value)
 
 
 class KeyPrefixOption(Option):
@@ -958,4 +986,7 @@ ALL_WINDOW_OPTIONS = {
     # before there was an option. `arrangement.DEFAULT_FRAME_RATE`
     # says why thirty. Lillecarl/pymux#254.
     "frame-rate": FrameRateOption("frame_rate", [0, 10, 30, 60, 120], scope=Scope.WINDOW),
+    # How dense the Wayland windows in this window draw: `auto` reads
+    # it off the client's cell. Lillecarl/pymux#637.
+    "wayland-scale": WaylandScaleOption(),
 }

@@ -265,7 +265,7 @@ class WindowWidget:
 
     def set_size(self, width: int, height: int) -> None:
         "The pane's size in cells: the window is asked for that many pixels."
-        if (width, height) == (self.columns, self.rows) or width <= 0 or height <= 0:
+        if width <= 0 or height <= 0:
             return
         self.columns, self.rows = width, height
         self.process.sx, self.process.sy = width, height

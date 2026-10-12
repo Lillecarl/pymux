@@ -69,7 +69,7 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "load", "program_ids", "save", "start
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 13
+SNAPSHOT_VERSION = 14
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -91,11 +91,9 @@ CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
 #: change of shape adds the one step from the version before it and
 #: deletes any older step. Version 12 is the first a holder hands over.
 STEPS: dict[int, str] = {
-    # 13 says whether a window's frame rate was chosen. A rate other
-    # than the default was; a default one is taken as not.
-    12: """
-ALTER TABLE windows ADD COLUMN frame_rate_set INTEGER NOT NULL DEFAULT 0;
-UPDATE windows SET frame_rate_set = frame_rate != 30;
+    # 14 holds each window's `wayland-scale`, which nobody set before.
+    13: """
+ALTER TABLE windows ADD COLUMN wayland_scale TEXT NOT NULL DEFAULT 'auto';
 """,
 }
 
@@ -183,7 +181,8 @@ CREATE TABLE windows(
   zoom INTEGER NOT NULL,
   synchronize_panes INTEGER NOT NULL,
   frame_rate INTEGER NOT NULL,
-  frame_rate_set INTEGER NOT NULL
+  frame_rate_set INTEGER NOT NULL,
+  wayland_scale TEXT NOT NULL
 );
 CREATE TABLE splits(
   split_id INTEGER PRIMARY KEY,
@@ -535,6 +534,7 @@ class WindowRow:
     synchronize_panes: int
     frame_rate: int
     frame_rate_set: int
+    wayland_scale: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -955,6 +955,7 @@ def _write_window(db: sqlite3.Connection, session: Session, window: Window, link
             synchronize_panes=window.synchronize_panes,
             frame_rate=window.frame_rate,
             frame_rate_set=window.frame_rate_set,
+            wayland_scale=window.wayland_scale,
         ),
     )
     db.executemany(
@@ -1382,6 +1383,7 @@ def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int]) -> int 
             window.synchronize_panes = bool(window_row.synchronize_panes)
             window.frame_rate = window_row.frame_rate
             window.frame_rate_set = bool(window_row.frame_rate_set)
+            window.wayland_scale = window_row.wayland_scale
             window.column_widths = {
                 (width["kind"], width["id"]): width["width"]
                 for width in _rows(db, "SELECT * FROM column_widths WHERE window_id = ?", window.window_id)

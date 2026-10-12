@@ -41,8 +41,16 @@ class Recorder:
 
 
 @asynccontextmanager
-async def with_a_window(tmp_path, kitty: bool = True, animate: bool = False):
-    "A server, a client at a kitty terminal, and the probe window open in a pane."
+async def with_a_window(
+    tmp_path, kitty: bool = True, animate: bool = False, scale: str = "1", cell: tuple[int, int] | None = None
+):
+    """
+    A server, a client at a kitty terminal, and the probe window open in a pane.
+
+    The window draws at `scale`: at 1 the probe's buffer pixels are the
+    canvas's. `cell` is the client's cell, width and height, when it
+    answered one.
+    """
     pymux = Pymux()
     pymux.socket_name = str(tmp_path / "pymux.sock.test")
     recorder = Recorder()
@@ -50,8 +58,13 @@ async def with_a_window(tmp_path, kitty: bool = True, animate: bool = False):
     log.touch()
     async with over_connection(pymux=pymux, read_packet=recorder) as session:
         state, _size = await session.attach("one", SIZE)
-        state.connection.graphics.kitty_supported = kitty
-        state.connection.graphics.detected = True
+        graphics = state.connection.graphics
+        graphics.kitty_supported = kitty
+        graphics.detected = True
+        if cell is not None:
+            graphics.cell_width, graphics.cell_height = cell
+            graphics.cell_size_known = True
+        state.session.arrangement.get_active_window().wayland_scale = scale
         await once(lambda: pymux.wayland.display, 10.0, "the compositor never started")
         # pywayland makes its shm pools in XDG_RUNTIME_DIR, which a build
         # sandbox does not set.
@@ -127,6 +140,32 @@ async def test_a_window_with_no_frame_rate_chosen_goes_at_the_links_pace(tmp_pat
         before = logged(log).count("frame")
         await anyio.sleep(1.0)
         assert logged(log).count("frame") - before > 40
+
+
+def last_size(log: Path) -> tuple[int, int] | None:
+    "The window size the probe was last configured with, in its own pixels."
+    sizes = [line.split()[1:] for line in logged(log) if line.startswith("size ")]
+    return (int(sizes[-1][0]), int(sizes[-1][1])) if sizes else None
+
+
+async def test_auto_scale_reads_the_clients_cell(tmp_path):
+    "A cell twice the nominal height is scale 2: the window lays out in half the pixels."
+    async with with_a_window(tmp_path, scale="auto", cell=(16, 32)) as (_pymux, _state, pane, _recorder, log, _probe):
+        widget = pane.terminal
+        await once(lambda: widget.columns, 10.0, "the pane was never sized")
+        expected = (widget.columns * 16 // 2, widget.rows * 32 // 2)
+        await once(lambda: last_size(log) == expected, 10.0, lambda: "sized %s" % (last_size(log),))
+
+
+async def test_wayland_scale_overrides_auto_at_once(tmp_path):
+    async with with_a_window(tmp_path, scale="auto", cell=(16, 32)) as (pymux, _state, pane, _recorder, log, _probe):
+        widget = pane.terminal
+        await once(lambda: widget.columns, 10.0, "the pane was never sized")
+        answer = pymux.handle_command("set-window-option wayland-scale auto-1")
+        if answer is not None:
+            await answer
+        expected = (widget.columns * 16, widget.rows * 32)
+        await once(lambda: last_size(log) == expected, 10.0, lambda: "sized %s" % (last_size(log),))
 
 
 @asynccontextmanager
