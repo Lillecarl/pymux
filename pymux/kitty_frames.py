@@ -83,7 +83,9 @@ class ShmCarrier:
         name = self._name()
         memory = shared_memory.SharedMemory(name, create=True, size=max(1, len(pixels)), track=False)
         try:
-            memory.buf[: len(pixels)] = pixels
+            buffer = memory.buf
+            assert buffer is not None, "a SharedMemory that is open has a buffer"
+            buffer[: len(pixels)] = pixels
         finally:
             memory.close()
         self._made.append(name)

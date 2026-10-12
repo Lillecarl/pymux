@@ -219,6 +219,10 @@ class ServerConnection:
             image_ids=pymux.outer_image_ids,
             reads_placeholders=lambda: draws_placeholders(self.graphics.terminal_version, self.colors.term),
         )
+        # The client sent the shared memory probe with its detection,
+        # and only the server reads the terminal's replies.
+        # Lillecarl/pymux#634.
+        self.graphics.on_shm = self._terminal_reads_shm
 
         # Colour depth of the outer terminal. The same handshake
         # answers it: the probe reply arrives before the device
@@ -782,6 +786,12 @@ class ServerConnection:
                 )
                 self._encode = encode_msgpack
 
+            # Window frames as raw pixels, which the client encodes for
+            # its own terminal. Only in msgpack, which carries bytes.
+            # Lillecarl/pymux#634.
+            if packet.get(Field.FRAMES) and self._encode is encode_msgpack:
+                self.graphics.send_frame = self._send_frame
+
             detach_other_clients = bool(packet[Field.DETACH_OTHERS])
             # `attach -x`: the others leave, and the terminals they were
             # in close. Lillecarl/pymux#347.
@@ -1118,6 +1128,25 @@ class ServerConnection:
         if self._closed:
             return
         await self._write(self._encode(data_obj))
+
+    def _terminal_reads_shm(self) -> None:
+        logger.info("The terminal of client %s reads window frames from shared memory.", self.client_id or "?")
+        self._send_packet({Field.CMD: Packet.SHM})
+
+    async def _send_frame(self, parts: list[dict]) -> None:
+        """
+        Write a window pane's frame, one part at a time.
+
+        **Each part is awaited before the next is encoded**, so a packet
+        sent meanwhile -- a key's echo, a line of text -- takes the write
+        lock between two parts, and never waits behind the whole frame.
+        What the terminal was sent before goes first. Lillecarl/pymux#634.
+        """
+        self._flush_output()
+        for part in parts:
+            if self._closed:
+                return
+            await self._write(self._encode(part))
 
     async def _write(self, frame: bytes, compress_after: bool = False) -> None:
         "Write one encoded packet; a client that is gone is let go."

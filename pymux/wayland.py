@@ -42,7 +42,7 @@ import anyio.abc
 from prompt_toolkit.clipboard import ClipboardData
 
 from pymux.enums import Woke
-from pymux.graphics import WindowView
+from pymux.graphics import FrameRects, WindowView
 from pymux.options import Clipboard
 from pymux.wayland_scale import DEFAULT_WAYLAND_SCALE, resolve_scale
 from pymux.window_pane import WindowWidget, now
@@ -517,6 +517,15 @@ class WaylandServer:
                 return 0, None, False
             return await encoded
 
+        async def rects(since: int | None) -> FrameRects | None:
+            if self.compositor is None:
+                return None
+            try:
+                read = self.compositor.frame_rects(toplevel, since)
+            except KeyError:
+                return None
+            return await read
+
         def shown(sent: bool) -> None:
             pacer = self._pacers.get(toplevel)
             if pacer is not None:
@@ -530,6 +539,7 @@ class WaylandServer:
             height=write_position.height,
             update=update,
             shown=shown,
+            rects=rects,
         )
 
     async def _take_selection(self, compositor: Compositor, target: str, mime_types: list[str]) -> None:

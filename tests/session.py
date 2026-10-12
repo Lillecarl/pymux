@@ -435,11 +435,16 @@ async def over_connection(pymux=None, read_packet=None):
         client_options=None,
         pings=False,
         read_only=False,
+        frames=False,
     ):
         """
         `read_only` is `pymux attach -r`: the flag rides on the
         `start-gui` packet, so this is the only route that can ask for
         it the way a person does. Lillecarl/pymux#467.
+
+        `frames` offers msgpack and window frames as raw pixels, as a
+        real client does; the packets this client reads stay dicts.
+        Lillecarl/pymux#634.
 
         `pings` says this client answers the server's ping, which is
         what lets the server drop it for not answering
@@ -491,6 +496,7 @@ async def over_connection(pymux=None, read_packet=None):
                     "client-options": client_options or [],
                     "pings": pings,
                     "data": "",
+                    **({"wire": ["msgpack"], "frames": True} if frames else {}),
                 }
             )
         )

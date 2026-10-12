@@ -16,6 +16,7 @@ from __future__ import annotations
 import contextlib
 import os
 import secrets
+import select
 import signal
 import socket
 import sys
@@ -30,8 +31,9 @@ from prompt_toolkit.output.vt100 import Vt100_Output, _get_size
 
 from pymux.colors import COLOR_QUERIES, TRUECOLOR_PROBE
 from pymux.config import client_options_in, find_config
-from pymux.graphics import CELL_SIZE_QUERY, VERSION_QUERY
+from pymux.graphics import CELL_SIZE_QUERY, RESTORE_CURSOR, SAVE_CURSOR, VERSION_QUERY
 from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
+from pymux.kitty_frames import Base64Carrier, ShmCarrier, frame_commands, shm_probe
 from pymux.utils import nonblocking
 
 from .base import Client
@@ -78,6 +80,10 @@ DELETE_EVERY_IMAGE = b"\x1b_Ga=d,d=A,q=2\x1b\\"
 #: answers a connect and speaks another protocol. Lillecarl/pymux#606.
 NO_ANSWER = "pymux: %s closed the connection with no answer. Is a pymux server listening there?\n"
 
+#: The device attributes query, which closes the detection. The shared
+#: memory probe goes in front of it, so its answer comes first.
+DEVICE_ATTRIBUTES_QUERY = b"\x1b[c"
+
 DETECTION_QUERIES = (
     b"\x1b[>31u\x1b[?u\x1b[<u"
     + SYNCHRONIZED_OUTPUT_QUERY
@@ -86,8 +92,27 @@ DETECTION_QUERIES = (
     + VERSION_QUERY.encode("ascii")
     + TRUECOLOR_PROBE.encode("ascii")
     + COLOR_QUERIES.encode("ascii")
-    + b"\x1b[c"
+    + DEVICE_ATTRIBUTES_QUERY
 )
+
+
+def detection_queries(probe: str) -> bytes:
+    "`DETECTION_QUERIES` with `probe` asked before the device attributes."
+    return DETECTION_QUERIES[: -len(DEVICE_ATTRIBUTES_QUERY)] + probe.encode("ascii") + DEVICE_ATTRIBUTES_QUERY
+
+
+def _write_all(fd: int, data: bytes) -> None:
+    """
+    Write every byte: a frame is megabytes, and a write may take part of
+    it. stdin is non-blocking while attached, and on a terminal stdout
+    is the same open file, so a full one waits here for room.
+    """
+    view = memoryview(data)
+    while view:
+        try:
+            view = view[os.write(fd, view) :]
+        except BlockingIOError:
+            select.select([], [fd], [])
 
 
 def _ttyname() -> str:
@@ -175,6 +200,15 @@ class TerminalClient(Client):
         #: typed it; the ones that reattach beside this one after an
         #: upgrade or a dropped link did not.
         self._attached_before = False
+
+        #: How a window pane's frame reaches the terminal: base64 until
+        #: the terminal answers the shared memory probe, which `_shm`
+        #: makes. Lillecarl/pymux#634.
+        self._carrier: Base64Carrier | ShmCarrier = Base64Carrier()
+        self._shm: ShmCarrier | None = None
+        #: The bands of the frames that have not had their last part, by
+        #: outer image id.
+        self._frame_parts: dict[int, list] = {}
 
     @property
     def _stdin_reader(self) -> PosixStdinReader:
@@ -269,12 +303,29 @@ class TerminalClient(Client):
                 # takes one says which with a `wire` packet.
                 # Lillecarl/pymux#633.
                 Field.WIRE: list(self.wire_formats),
+                # This client encodes a window pane's frames for its
+                # own terminal: the server sends the raw pixels.
+                # Lillecarl/pymux#634.
+                Field.FRAMES: True,
                 Field.DATA: "",
             }
         )
 
-        os.write(sys.stdout.fileno(), DETECTION_QUERIES)
+        # Frames go in base64 until this terminal reads the probe; a new
+        # connection asks again, and drops the parts of a frame it had.
+        self._carrier = Base64Carrier()
+        self._frame_parts.clear()
+        os.write(sys.stdout.fileno(), detection_queries(self._shm_probe()))
         self._send_packet({Field.CMD: Packet.KITTY_DETECT})
+
+    def _shm_probe(self) -> str:
+        "The shared memory probe, or nothing where no shared memory can be made."
+        if self._shm is None:
+            self._shm = ShmCarrier()
+        try:
+            return shm_probe(self._shm)
+        except OSError:
+            return ""
 
     def _restore_modes(self) -> None:
         """
@@ -336,6 +387,40 @@ class TerminalClient(Client):
         self._restore_modes()
         with contextlib.suppress(Exception):
             self._reset_terminal()
+        # The objects of frames the terminal never got to read.
+        if self._shm is not None:
+            with contextlib.suppress(Exception):
+                self._shm.close()
+
+    def _window_frame(self, packet: dict) -> None:
+        """
+        Gather a window pane's frame, and at its last part write it to
+        the terminal, encoded the way the terminal reads it.
+
+        A whole frame goes as one image, so its bands are put back
+        together; the bands of an edit are edits each. Lillecarl/pymux#634.
+        """
+        image = packet[Field.IMAGE]
+        bands = self._frame_parts.setdefault(image, [])
+        bands.extend(packet.get(Field.RECTS) or [])
+        if not packet.get(Field.LAST):
+            return
+        del self._frame_parts[image]
+        whole, width, height = packet[Field.WHOLE], packet[Field.WIDTH], packet[Field.HEIGHT]
+        if whole and bands:
+            rects = [(0, 0, width, height, b"".join(band[4] for band in bands))]
+        else:
+            rects = [tuple(band) for band in bands]
+        try:
+            commands = frame_commands(image, whole, width, height, rects, self._carrier)
+        except OSError:
+            # Shared memory ran out, or went: base64 from here on.
+            self._carrier = Base64Carrier()
+            commands = frame_commands(image, whole, width, height, rects, self._carrier)
+        text = commands + packet.get(Field.AFTER, "")
+        if text:
+            _write_all(sys.stdout.fileno(), (SAVE_CURSOR + text + RESTORE_CURSOR).encode("ascii"))
+            self.placed_images = True
 
     def _process(self, packet: dict):
         """
@@ -353,6 +438,12 @@ class TerminalClient(Client):
             os.write(sys.stdout.fileno(), data.encode("utf-8"))
             if KITTY_GRAPHICS in data:
                 self.placed_images = True
+
+        elif packet[Field.CMD] == Packet.WINDOW_FRAME:
+            self._window_frame(packet)
+
+        elif packet[Field.CMD] == Packet.SHM and self._shm is not None:
+            self._carrier = self._shm
 
         elif packet[Field.CMD] == Packet.EXIT:
             # The server is about to close this connection, and says

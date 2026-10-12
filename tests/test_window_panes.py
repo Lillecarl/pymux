@@ -33,11 +33,15 @@ class Recorder:
 
     def __init__(self) -> None:
         self.out = ""
+        #: The `window-frame` packets, for a client that takes them.
+        self.frames: list[dict] = []
 
     def __call__(self, packet) -> None:
         message = packet
         if message.get("cmd") == "out":
             self.out += message.get("data", "")
+        elif message.get("cmd") == "window-frame":
+            self.frames.append(message)
 
 
 @asynccontextmanager
@@ -48,6 +52,7 @@ async def with_a_window(
     scale: str = "1",
     cell: tuple[int, int] | None = None,
     idle: bool = False,
+    frames: bool = False,
 ):
     """
     A server, a client at a kitty terminal, and the probe window open in a pane.
@@ -62,7 +67,7 @@ async def with_a_window(
     log = tmp_path / "probe.log"
     log.touch()
     async with over_connection(pymux=pymux, read_packet=recorder) as session:
-        state, _size = await session.attach("one", SIZE)
+        state, _size = await session.attach("one", SIZE, frames=frames)
         graphics = state.connection.graphics
         graphics.kitty_supported = kitty
         graphics.detected = True
@@ -114,6 +119,38 @@ async def test_a_kitty_client_gets_the_frame_then_only_the_damage(tmp_path):
         assert recorder.out.startswith("\x1b_Ga=f,", command)
         # Placed at the pane's cells.
         assert "\x1b_Ga=p," in recorder.out
+
+
+def frames_of(recorder: Recorder) -> list[list[dict]]:
+    "The `window-frame` packets, gathered into frames at each last part."
+    frames: list[list[dict]] = [[]]
+    for part in recorder.frames:
+        frames[-1].append(part)
+        if part.get("last"):
+            frames.append([])
+    return frames[:-1]
+
+
+async def test_a_client_that_encodes_frames_gets_raw_pixels(tmp_path):
+    "The whole frame, then the square alone, as RGB bands. Lillecarl/pymux#634."
+    async with with_a_window(tmp_path, frames=True) as (_pymux, _state, _pane, recorder, log, _probe):
+        await once(lambda: "drew" in logged(log), 10.0, "the window never drew its second frame")
+        square = [[10, 5, 4, 4, bytes([0xFF, 0, 0]) * 16]]
+        await once(
+            lambda: any(frame[-1]["rects"] == square for frame in frames_of(recorder)),
+            10.0,
+            lambda: (
+                "frames %s" % [[part["rects"][:1] and part["rects"][0][:4] for part in f] for f in frames_of(recorder)]
+            ),
+        )
+        assert "\x1b_Ga=t," not in recorder.out, "the frame went as kitty commands too"
+        first = frames_of(recorder)[0]
+        assert first[0]["whole"]
+        width, height = first[0]["width"], first[0]["height"]
+        assert sum(len(band[4]) for part in first for band in part["rects"]) == width * height * 3
+        # Placed at the pane's cells, after the pixels.
+        assert "\x1b_Ga=p," in first[-1]["after"]
+        assert all(len(band[4]) <= 64 * 1024 for part in first for band in part["rects"])
 
 
 async def test_a_client_without_kitty_is_sent_no_pixels(tmp_path):

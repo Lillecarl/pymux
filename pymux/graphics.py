@@ -39,6 +39,7 @@ from collections.abc import Awaitable, Callable, Coroutine, Iterable
 from typing import Any, NamedTuple
 
 import anyio
+from libpymux.protocol import Field, Packet
 from prompt_toolkit.output import ColorDepth
 from pyte import escape
 from pyte.images import PixelFormat
@@ -50,6 +51,7 @@ from pyte.terminfo import DeviceExtension
 # are the ones that run.
 from . import blocks, sixel
 from .blocks import blocks_for, rows_for_cells
+from .kitty_frames import SHM_PROBE_ID
 from .log import logger
 
 __all__ = [
@@ -114,6 +116,10 @@ RESTORE_CURSOR = esc(escape.DECRC)
 # The reply of the query: "ESC _ G i=31;OK ESC \". (Terminals add other
 # keys before the semicolon, so the image id is matched on its own.)
 _QUERY_REPLY_RE = re.compile(r"^\x1b_G(?:[^;]*,)?i=%i(?:,[^;]*)?;OK" % QUERY_IMAGE_ID)
+
+# The reply of the shared memory probe, when kitty read the object.
+# Lillecarl/pymux#634.
+_SHM_REPLY_RE = re.compile(r"^\x1b_G(?:[^;]*,)?i=%i(?:,[^;]*)?;OK" % SHM_PROBE_ID)
 
 
 # Reply of the cell size query: "CSI 6 ; height ; width t". The 6 is
@@ -194,8 +200,11 @@ class WindowView(NamedTuple):
     `await update(outer_id, since)` brings the terminal up to date: it
     answers `(serial, commands, whole)`, as `pysmithay.Compositor.kitty_update`
     does, so the pixels and the damage never pass through here.
-    `shown(sent)` says this client is up to date, which lets the window
-    draw its next frame; `sent` says pixels went out to get it there.
+    `await rects(since)` answers the same as raw pixels, as
+    `pysmithay.Compositor.frame_rects` does, for a client that encodes
+    them itself. `shown(sent)` says this client is up to date, which lets
+    the window draw its next frame; `sent` says pixels went out to get it
+    there.
     """
 
     pane_id: int
@@ -205,6 +214,47 @@ class WindowView(NamedTuple):
     height: int
     update: Callable[[int, int | None], Awaitable[tuple[int, str | None, bool]]]
     shown: Callable[[bool], None]
+    rects: Callable[[int | None], Awaitable[FrameRects | None]]
+
+
+#: What `WindowView.rects` answers: serial, whole, width, height, and
+#: the rectangles as `(x, y, w, h, rgb)`.
+FrameRects = tuple[int, bool, int, int, list[tuple[int, int, int, int, bytes]]]
+
+#: The most pixel bytes one `window-frame` packet carries. A key queued
+#: behind a part waits for at most this much on the link.
+FRAME_PART_BYTES = 64 * 1024
+
+
+def frame_parts(image_id: int, frame: FrameRects, after: str) -> list[dict]:
+    """
+    A frame as `window-frame` packets of at most `FRAME_PART_BYTES` of
+    pixels each: every rectangle cut into bands of whole rows, which the
+    client puts back together. Lillecarl/pymux#634.
+    """
+    _serial, whole, width, height, rects = frame
+    head = {
+        Field.CMD: Packet.WINDOW_FRAME,
+        Field.IMAGE: image_id,
+        Field.WHOLE: whole,
+        Field.WIDTH: width,
+        Field.HEIGHT: height,
+    }
+    parts: list[dict] = []
+    bands: list[list] = []
+    size = 0
+    for x, y, w, h, pixels in rects:
+        row = w * 3
+        rows = max(1, FRAME_PART_BYTES // max(1, row))
+        for top in range(0, h, rows):
+            count = min(rows, h - top)
+            if bands and size + count * row > FRAME_PART_BYTES:
+                parts.append({**head, Field.RECTS: bands})
+                bands, size = [], 0
+            bands.append([x, y + top, w, count, pixels[top * row : (top + count) * row]])
+            size += count * row
+    parts.append({**head, Field.RECTS: bands, Field.LAST: True, Field.AFTER: after})
+    return parts
 
 
 #: The pane image id a window pane's picture takes in `OuterImageIds`.
@@ -309,6 +359,15 @@ class ClientGraphics:
 
         #: True once the outer terminal answered the graphics query.
         self.kitty_supported = False
+
+        #: Writes a window pane's frame as `window-frame` packets, for a
+        #: client that encodes the pixels for its terminal itself; None
+        #: when the frame goes as kitty commands. Lillecarl/pymux#634.
+        self.send_frame: Callable[[list[dict]], Awaitable[None]] | None = None
+
+        #: Called when the terminal answered the shared memory probe
+        #: (`kitty_frames.shm_probe`) with OK.
+        self.on_shm: Callable[[], None] | None = None
 
         #: True when the device attributes name sixel.
         self.sixel_supported = False
@@ -422,6 +481,11 @@ class ClientGraphics:
         "Read what a terminal reply says about the outer terminal."
         if is_query_reply(data):
             self.kitty_supported = True
+            return
+
+        if _SHM_REPLY_RE.match(data):
+            if self.on_shm is not None:
+                self.on_shm()
             return
 
         match = _VERSION_REPLY_RE.match(data)
@@ -547,6 +611,9 @@ class ClientGraphics:
                 self.refresh_window(again)
 
     async def _write_window_update(self, view: WindowView, outer_id: int, since: int | None, generation: int) -> None:
+        if self.send_frame is not None:
+            await self._send_window_frame(self.send_frame, view, outer_id, since, generation)
+            return
         try:
             serial, update, whole = await view.update(outer_id, since)
         except Exception:
@@ -569,6 +636,31 @@ class ClientGraphics:
         # and Firefox paints nothing until it is answered.
         # Lillecarl/pymux#638.
         view.shown(bool(update))
+
+    async def _send_window_frame(
+        self,
+        send_frame: Callable[[list[dict]], Awaitable[None]],
+        view: WindowView,
+        outer_id: int,
+        since: int | None,
+        generation: int,
+    ) -> None:
+        "The same as raw pixels, for a client that encodes them for its terminal. Lillecarl/pymux#634."
+        try:
+            frame = await view.rects(since)
+        except Exception:
+            logger.exception("Reading a window pane's frame failed.")
+            return
+        put = self._window_places.get(view.pane_id)
+        if frame is None or put is None or generation != self._window_generation:
+            return
+        serial, whole, _width, _height, rects = frame
+        known = self._windows.get(view.pane_id)
+        after = put if whole or known is None or known.put != put else ""
+        self._windows[view.pane_id] = _ShownWindow(outer_id, serial, put)
+        if rects or after:
+            await send_frame(frame_parts(outer_id, frame, after))
+        view.shown(bool(rects))
 
     def _render_kitty(self, views: Iterable[PaneView]) -> None:
         try:

@@ -114,6 +114,15 @@ class Packet(StrEnum):
     # passes `data` on without reading it: the frames are the protocol
     # and this envelope is ours to change. Lillecarl/pymux#461.
     STREAM_OUT = "stream-out"
+    # Part of a window pane's frame as raw pixels, which the client
+    # encodes for its terminal itself (`pymux/kitty_frames.py`). A frame
+    # goes in parts, so a key or a line of text is never queued behind
+    # all of it; the part with `last` carries the placement, `after`.
+    # Lillecarl/pymux#634.
+    WINDOW_FRAME = "window-frame"
+    # "Your terminal read the shared memory probe": carry frames in POSIX
+    # shared memory from here on. Lillecarl/pymux#634.
+    SHM = "shm"
 
     # The server asks, and the machine the person sits at acts.
     OPEN = "open"
@@ -175,6 +184,19 @@ class Field(StrEnum):
     #: How many seconds a client waits for the next server after a
     #: `restarting` packet.
     WAIT = "wait"
+    #: In `start-gui`: this client takes `window-frame` packets.
+    FRAMES = "frames"
+    #: In `window-frame`: the outer image id, whether the parts make the
+    #: whole frame, its size, the bands of this part as `[x, y, w, h,
+    #: pixels]` with RGB pixels, whether it is the last part, and what
+    #: goes to the terminal after the frame.
+    IMAGE = "image"
+    WHOLE = "whole"
+    WIDTH = "width"
+    HEIGHT = "height"
+    RECTS = "rects"
+    LAST = "last"
+    AFTER = "after"
 
 
 class Mode(StrEnum):
