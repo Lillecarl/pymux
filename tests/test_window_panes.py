@@ -87,11 +87,12 @@ async def test_a_window_opens_a_pane_beside_the_active_one(tmp_path):
 async def test_a_kitty_client_gets_the_frame_then_only_the_damage(tmp_path):
     async with with_a_window(tmp_path) as (_pymux, _state, _pane, recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew its second frame")
-        await once(lambda: "\x1b_Ga=f," in recorder.out, 10.0, "no edit reached the client")
-        transmit = recorder.out.index("\x1b_Ga=t,")
-        edit = recorder.out.index("\x1b_Ga=f,")
-        assert transmit < edit
-        assert "x=10,y=5,s=4,v=4" in recorder.out[edit:]
+        # The square, and nothing around it, as an edit of the frame the
+        # client holds: the command that carries it is a frame edit.
+        await once(lambda: "x=10,y=5,s=4,v=4" in recorder.out, 10.0, "the square's edit never reached the client")
+        square = recorder.out.index("x=10,y=5,s=4,v=4")
+        command = recorder.out.rindex("\x1b_G", 0, square)
+        assert recorder.out.startswith("\x1b_Ga=f,", command)
         # Placed at the pane's cells.
         assert "\x1b_Ga=p," in recorder.out
 

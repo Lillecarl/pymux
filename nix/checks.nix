@@ -49,6 +49,10 @@
   vttest,
   # What the scenario check drives, and the model API claude-code talks to.
   yazi,
+  # The Wayland programs the window pane pictures show.
+  weston,
+  mpv,
+  wev,
   file,
   claude-code,
   aimock,
@@ -367,6 +371,14 @@ let
   # the same pixels, for instance
   # `PYMUX_CHROME_RENDER_MODE=both nix build --file . checks.pymux-chrome-pictures`.
   chromeRenderMode = builtins.getEnv "PYMUX_CHROME_RENDER_MODE";
+
+  # The window pane pictures to take, by fixture name. Every one when
+  # nothing is said.
+  windowPanes =
+    let
+      value = builtins.getEnv "PYMUX_WINDOW_PANES";
+    in
+    if value == "" then "window-pane,window-pane-flower,window-pane-mpv,window-pane-wev" else value;
 
   # The terminals the upgrade pictures are taken in, as a piece of a
   # name; foot when nothing is said.
@@ -1329,18 +1341,25 @@ in
   # Not a gate. Lillecarl/pymux#620.
   #
   #     nix build --file . checks.pymux-window-pane-pictures.run
+  #
+  # `PYMUX_WINDOW_PANES` names the fixtures, comma separated: the
+  # programs `tests/photograph_chrome.py` shows in a window pane.
   windowPanePictures =
     runInSandbox
       {
         name = "pymux-window-pane-pictures";
-        inputs = seatInputs;
-        env = { inherit chromeTerminals; };
+        inputs = seatInputs ++ [
+          weston
+          mpv
+          wev
+        ];
+        env = { inherit chromeTerminals windowPanes; };
       }
       (
         seatSetup
         + ''
           export PATH=${waylandTestEnv}/bin:$PATH
-          export PYMUX_CHROME_LIST=window-pane
+          export PYMUX_CHROME_LIST="$windowPanes"
           export PYMUX_CHROME_TERMINALS="$chromeTerminals"
           export PYMUX_CHROME_OUT="$out"
           python tests/photograph_chrome.py

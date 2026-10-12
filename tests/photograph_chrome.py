@@ -654,6 +654,7 @@ FIXTURES = {
     ),
 }
 
+
 # foot as a Wayland window in a pane: split, start it on the server's
 # compositor from the new pane, and its window opens a third pane and
 # takes the keyboard. What is typed then goes through the compositor
@@ -661,19 +662,37 @@ FIXTURES = {
 # window's pixels, every other terminal a notice. Only where pysmithay
 # loads, which `checks.pymux-window-pane-pictures` sees to.
 # Lillecarl/pymux#620.
+def window_keys(program="", typed=b""):
+    """
+    Split, run `program` on the server's compositor from the new pane,
+    and type `typed` at the window it opens. The window takes the
+    keyboard as it opens a pane of its own.
+    """
+    command = "sh %s %s" % (shlex.quote(str(OPEN_A_WINDOW)), program)
+    steps = [
+        (0.0, PREFIX),
+        (0.4, b"%"),
+        (0.8, (command.rstrip() + "\n").encode("ascii")),
+        ("quiet", 2.0),
+    ]
+    if typed:
+        steps += [(0.2, typed), ("quiet", 1.0)]
+    return keys(*steps)
+
+
 if wayland.available():
-    FIXTURES["window-pane"] = Fixture(
+    # The programs worth showing a window pane with, each a picture.
+    # What every one needs today: software drawing (wl_shm), and nothing
+    # that only a GPU draws. mpv is paused on its first frame, because a
+    # picture settles only on a still screen.
+    FIXTURES["window-pane"] = Fixture(CHROME, window_keys(typed=b"typed at the window\r"), (3,))
+    FIXTURES["window-pane-flower"] = Fixture(CHROME, window_keys("weston-flower"), (3,))
+    FIXTURES["window-pane-mpv"] = Fixture(
         CHROME,
-        keys(
-            (0.0, PREFIX),
-            (0.4, b"%"),
-            (0.8, ("sh %s\n" % (shlex.quote(str(OPEN_A_WINDOW)),)).encode("ascii")),
-            ("quiet", 2.0),
-            (0.2, b"typed at the window\r"),
-            ("quiet", 1.0),
-        ),
+        window_keys("mpv --vo=wlshm --pause --no-terminal av://lavfi:testsrc=size=320x240"),
         (3,),
     )
+    FIXTURES["window-pane-wev"] = Fixture(CHROME, window_keys("wev", typed=b"wev"), (3,))
 
 
 def every_fixture():
