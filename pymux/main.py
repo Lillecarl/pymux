@@ -254,20 +254,6 @@ def _listens(sock: socket.socket) -> bool:
     return True
 
 
-class SessionClipboard(InMemoryClipboard):
-    "The paste buffer, which tells each of `watchers` what is written to it."
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.watchers: list[Callable[[ClipboardData], None]] = []
-
-    @override
-    def set_data(self, data: ClipboardData) -> None:
-        super().set_data(data)
-        for watcher in list(self.watchers):
-            watcher(data)
-
-
 class Asker(NamedTuple):
     """
     The client a forward is asked of, and whether a person asked.
@@ -1260,7 +1246,7 @@ class Pymux:
         # The paste buffer of the session. Copy mode writes it, a pane
         # that writes the clipboard of the user writes it too, and
         # "paste-buffer" reads it. Every client shares this one.
-        self.clipboard = SessionClipboard()
+        self.clipboard = InMemoryClipboard()
 
         # A Wayland compositor for the panes that have no display, when
         # pysmithay is installed and this is on. `wayland.py` says why.
@@ -3627,11 +3613,13 @@ exec pymux notify -u "$urgency" -- "$@"
 
         return False
 
-    def write_user_clipboard(self, text: str) -> None:
+    def write_user_clipboard(self, text: str, selection: str = "c") -> None:
         """
-        Put what a person copied on the clipboard of their terminal.
+        Put what a person copied on the clipboard of their terminal, or
+        on the selection OSC 52's letter names: "p" is the primary.
 
-        Copy mode calls this. **It is not `forward_osc`**, although the
+        Copy mode calls this, and so does a pane's wl-copy, which
+        `wayland.py` lets through only under "on". **It is not `forward_osc`**, although the
         sequence is the same one: the two have different answers under
         `set-clipboard`, because a person asking for their own
         clipboard is not a program in a pane asking for it. tmux keeps
@@ -3648,7 +3636,7 @@ exec pymux notify -u "$urgency" -- "$@"
             return
         try:
             payload = base64.b64encode(text.encode("utf-8")).decode("ascii")
-            sequence = build_osc(Osc.CLIPBOARD, "c;" + payload)
+            sequence = build_osc(Osc.CLIPBOARD, selection + ";" + payload)
             if sequence is None:
                 # The payload is base64 and the length is the only
                 # thing that can fail it. A person who copies half a
@@ -3661,6 +3649,11 @@ exec pymux notify -u "$urgency" -- "$@"
                 if connection is None:
                     continue
                 connection.forward_osc(sequence)
+            # The copy travels with the next frame, so there has to be
+            # one. Copy mode's key press draws anyway; a pane's wl-copy
+            # draws nothing, and its copy would wait for some other
+            # frame.
+            self.invalidate(Woke.CLIPBOARD_WRITTEN)
         except Exception:
             logger.exception("Writing the clipboard of the user failed.")
 

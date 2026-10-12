@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import re
 import time
@@ -57,6 +58,18 @@ _SYNCHRONIZED_REPLY_RE = re.compile(r"^\x1b\[\?2026;(\d+)\$y$")
 
 _OSC_REPLY_RE = re.compile(r"^(?:\x1b\]|\x9d)(\d+);(.*?)(?:\x1b\\|\x9c|\x07)$", re.DOTALL)
 
+#: The start of a terminal's answer to a clipboard query.
+_CLIPBOARD_REPLY = "\x1b]52;"
+
+#: How long a terminal has to answer a clipboard query, in seconds. A
+#: paste waits this long once; a terminal that lets it pass is not asked
+#: again on this connection. Most refuse reads by default, silently.
+CLIPBOARD_READ_SECONDS = 1.0
+
+#: The longest clipboard answer taken, in characters of base64. Past it
+#: the answer is dropped, and nothing of it reaches a pane as keys.
+CLIPBOARD_REPLY_LIMIT = 24 << 20
+
 #: How many reads in a row may fail before a connection is closed.
 #: A packet that cannot be read is answered and the next one is taken,
 #: which is what makes one bad packet harmless; a read that fails again
@@ -113,6 +126,11 @@ class ServerConnection:
         "environment": Keep.REBUILT,
         "colors": Keep.REBUILT,
         "default_colors": Keep.REBUILT,
+        # Asked again of the terminal the client reattaches from.
+        "clipboard_answers": Keep.REBUILT,
+        "_clipboard_waiters": Keep.REBUILT,
+        "_clipboard_asked": Keep.REBUILT,
+        "_clipboard_partial": Keep.REBUILT,
         "kitty_source_flags": Keep.REBUILT,
         "_kitty_supported": Keep.REBUILT,
         "_pointer_shape_sent": Keep.REBUILT,
@@ -251,6 +269,18 @@ class ServerConnection:
         #: session. Lillecarl/pymux#223.
         self.default_colors = DefaultColors()
 
+        #: Whether this terminal answers a clipboard query: None until
+        #: one is asked, False after one went unanswered, True once an
+        #: answer came, even a late one. Lillecarl/pymux#383.
+        self.clipboard_answers: bool | None = None
+        #: The pastes waiting for an answer, oldest first: each one's
+        #: event, and the list its text goes into.
+        self._clipboard_waiters: list[tuple[anyio.Event, list[str]]] = []
+        #: Set once a query went out, so a late answer is still caught.
+        self._clipboard_asked = False
+        #: The start of an answer whose end has not arrived yet.
+        self._clipboard_partial = ""
+
         # The client input is parsed by the application that reads from
         # the pipe input (see `_ClientInput`). Give that input a parser
         # that also understands the kitty keyboard protocol, and route
@@ -385,6 +415,76 @@ class ServerConnection:
         output = self.client_state.output
         assert isinstance(output, _FrameOutput)
         output.write_after_frame(sequence)
+
+    async def read_clipboard(self, selection: str = "c") -> str | None:
+        """
+        Ask this client's terminal for its clipboard, or None.
+
+        `selection` is OSC 52's letter: "c" for the clipboard, "p" for
+        the primary selection. The query goes behind the next frame, like
+        a copy, so it is answered after any copy queued before it.
+
+        None when the terminal does not answer in time, has been seen not
+        to, or answered with nothing. Lillecarl/pymux#383.
+        """
+        if self.clipboard_answers is False or self.client_state is None or self.client_state.temporary:
+            return None
+        done = anyio.Event()
+        answer: list[str] = []
+        self._clipboard_waiters.append((done, answer))
+        self._clipboard_asked = True
+        self.forward_osc("\x1b]52;%s;?\x1b\\" % (selection,))
+        self.pymux.invalidate(Woke.CLIPBOARD_ASKED)
+        with anyio.move_on_after(CLIPBOARD_READ_SECONDS):
+            await done.wait()
+        if not done.is_set():
+            with suppress(ValueError):
+                self._clipboard_waiters.remove((done, answer))
+            if self.clipboard_answers is None:
+                self.clipboard_answers = False
+            return None
+        return answer[0] or None
+
+    def _take_clipboard_answer(self, data: str) -> str:
+        """
+        Cut a clipboard answer out of the terminal's input, and return
+        the rest for the key parser.
+
+        **Not the key parser's job.** It caps a string reply at
+        `MAX_STRING_LENGTH` and reads the whole prefix again on every
+        character, so a clipboard of a few kilobytes would reach the pane
+        as keys, after quadratic work. This sees the bytes first, and
+        only once a query went out: nothing typed begins "ESC ] 52 ;".
+        """
+        if not self._clipboard_asked and not self._clipboard_partial:
+            return data
+        data = self._clipboard_partial + data
+        self._clipboard_partial = ""
+        start = data.find(_CLIPBOARD_REPLY)
+        if start < 0:
+            return data
+        body = start + len(_CLIPBOARD_REPLY)
+        ends = [(at, len(end)) for end in ("\x07", "\x1b\\") if (at := data.find(end, body)) >= 0]
+        if not ends:
+            if len(data) - start <= CLIPBOARD_REPLY_LIMIT:
+                self._clipboard_partial = data[start:]
+            return data[:start]
+        end, length = min(ends)
+        self._clipboard_answered(data[body:end])
+        return data[:start] + self._take_clipboard_answer(data[end + length :])
+
+    def _clipboard_answered(self, payload: str) -> None:
+        "One answer: 'c;<base64>'. It goes to the oldest waiting paste."
+        self.clipboard_answers = True
+        _selection, _semicolon, encoded = payload.partition(";")
+        try:
+            text = base64.b64decode(encoded, validate=True).decode("utf-8", "replace")
+        except ValueError:
+            text = ""
+        if self._clipboard_waiters:
+            done, answer = self._clipboard_waiters.pop(0)
+            answer.append(text)
+            done.set()
 
     def set_pointer_shape(self, shape: str) -> None:
         """
@@ -644,7 +744,7 @@ class ServerConnection:
         elif packet[Field.CMD] == Packet.IN:
             if self.recording is not None:
                 self.recording.hear("in", packet[Field.DATA])
-            self._pipeinput.send_text(packet[Field.DATA])
+            self._pipeinput.send_text(self._take_clipboard_answer(packet[Field.DATA]))
             # Input newer than a scheduled redraw makes that frame
             # stale: the renderer skips it and asks for another one
             # instead, so this is handled first. Lillecarl/pymux#524.

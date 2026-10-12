@@ -636,6 +636,7 @@ in
       }
       ''
         ${waylandTestEnv}/bin/python -m pytest -q -p no:cacheprovider \
+          -o faulthandler_timeout=60 \
           tests/test_wayland_server.py tests/test_wayland_absent.py
       '';
 

@@ -124,3 +124,9 @@ class Woke(StrEnum):
     #: own, and its notification has to go out anyway, so this asks for
     #: one. Lillecarl/pymux#478.
     PANE_WROTE_AN_OSC = "a pane wrote an escape for the terminal of a client"
+    #: A clipboard query goes behind a frame, after any copy queued
+    #: before it, so a paste reads what was just copied.
+    #: Lillecarl/pymux#383.
+    CLIPBOARD_ASKED = "a pane pasted, so a client's terminal is asked for its clipboard"
+    #: A copy for the person's clipboard goes behind a frame too.
+    CLIPBOARD_WRITTEN = "a copy goes to the clipboard of the clients"
