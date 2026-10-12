@@ -100,6 +100,25 @@ async def test_a_session_with_a_display_keeps_it(mux, tmp_path):
     assert await environment_of_a_pane(mux, tmp_path) == "wayland-desktop"
 
 
+async def test_a_new_server_waits_for_the_old_one_to_let_go(mux, tmp_path):
+    """
+    `upgrade-server` starts the new build while the old one still holds
+    the socket, and the old one lets go only when it exits.
+    """
+    path = mux.wayland.display
+    successor = Pymux()
+    successor.socket_name = mux.socket_name
+    async with successor.running():
+        await anyio.sleep(1.0)
+        assert successor.wayland.display is None
+
+        mux.handle_command("set-option wayland-server off")
+        with anyio.fail_after(10):
+            while successor.wayland.display != path:
+                await anyio.sleep(0.05)
+        successor.stop()
+
+
 async def test_the_option_stops_and_starts_it(mux):
     path = mux.wayland.display
     mux.handle_command("set-option wayland-server off")

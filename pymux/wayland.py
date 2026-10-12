@@ -70,6 +70,12 @@ READ_LIMIT = 16 << 20
 #: How long a pasting client may take to read what it asked for.
 WRITE_SECONDS = 30.0
 
+#: How long to wait for a socket path another process holds, and how
+#: often to try it. An upgrade's old server holds it for as long as the
+#: new one takes to load, which `upgrade.LOAD_TIMEOUT` bounds.
+BIND_SECONDS = 120.0
+BIND_RETRY_SECONDS = 0.25
+
 
 def available() -> bool:
     "Whether a compositor can run here at all."
@@ -125,12 +131,8 @@ class WaylandServer:
         if pysmithay is None:
             return
         path = socket_path_of(self.pymux.socket_name)
-        try:
-            compositor = pysmithay.Compositor(path)
-        except OSError as error:
-            # No XDG_RUNTIME_DIR, or a path taken: the panes simply get
-            # no display, as without pysmithay.
-            logger.warning("No Wayland compositor: %s", error)
+        compositor = await _bind(path)
+        if compositor is None:
             return
 
         self.compositor = compositor
@@ -207,6 +209,30 @@ class WaylandServer:
         if target == "clipboard":
             return self.pymux.clipboard.get_data().text
         return self.copied.get(target, "")
+
+
+async def _bind(path: str | None) -> Compositor | None:
+    """
+    A compositor on `path`, or None when there cannot be one.
+
+    **A path in use is waited for.** `upgrade-server` starts the new
+    build while the old one still holds the lock, and the old one lets
+    go only when it exits, after the new one says it is ready. Giving up
+    here left an upgraded server with no compositor, and every pane with
+    a `WAYLAND_DISPLAY` that led nowhere.
+    """
+    assert pysmithay is not None
+    deadline = anyio.current_time() + BIND_SECONDS
+    while True:
+        try:
+            return pysmithay.Compositor(path)
+        except OSError as error:
+            if "in use" not in str(error) or anyio.current_time() > deadline:
+                # No XDG_RUNTIME_DIR, or a path another server keeps:
+                # the panes get no display, as without pysmithay.
+                logger.warning("No Wayland compositor: %s", error)
+                return None
+        await anyio.sleep(BIND_RETRY_SECONDS)
 
 
 def _hold(compositor: Compositor, target: str) -> None:
