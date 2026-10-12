@@ -24,6 +24,7 @@ from pymux.kitty_frames import (
     Pictures,
     ShmCarrier,
     frame_commands,
+    rgba,
     shm_probe,
 )
 
@@ -31,6 +32,8 @@ from pymux.kitty_frames import (
 COMMAND = re.compile(r"\x1b_G([^;]*);([^\x1b]*)\x1b\\")
 
 RED = bytes([0xFF, 0, 0])
+#: `RED` as the terminal gets it.
+OPAQUE_RED = bytes([0xFF, 0, 0, 0xFF])
 
 
 def parsed(text: str) -> list[tuple[dict[str, str], str]]:
@@ -67,8 +70,13 @@ def test_a_whole_frame_in_base64_is_the_pixels_compressed():
     pixels = RED * (40 * 30)
     text = frame_commands(7, True, 40, 30, [(0, 0, 40, 30, pixels)], Base64Carrier())
     ((keys, payload),) = parsed(text)
-    assert keys == {"a": "t", "i": "7", "s": "40", "v": "30", "q": "2", "f": "24", "o": "z", "m": "0"}
-    assert zlib.decompress(base64.b64decode(payload)) == pixels
+    assert keys == {"a": "t", "i": "7", "s": "40", "v": "30", "q": "2", "f": "32", "o": "z", "m": "0"}
+    assert zlib.decompress(base64.b64decode(payload)) == OPAQUE_RED * (40 * 30)
+
+
+def test_rgb_becomes_opaque_rgba():
+    assert rgba(bytes([1, 2, 3, 4, 5, 6])) == bytes([1, 2, 3, 255, 4, 5, 6, 255])
+    assert rgba(b"") == b""
 
 
 def test_a_large_frame_goes_in_chunks_kitty_takes():
@@ -80,7 +88,7 @@ def test_a_large_frame_goes_in_chunks_kitty_takes():
     assert [keys.endswith("m=1") or keys == "m=1" for keys, _ in chunks[:-1]] == [True] * (len(chunks) - 1)
     assert chunks[-1][0].endswith("m=0")
     ((_keys, payload),) = parsed(text)
-    assert zlib.decompress(base64.b64decode(payload)) == pixels
+    assert zlib.decompress(base64.b64decode(payload)) == rgba(pixels)
 
 
 def test_damage_goes_as_edits_of_the_root_frame():
@@ -98,8 +106,9 @@ def test_damage_goes_as_edits_of_the_root_frame():
             "s": "4",
             "v": "4",
             "X": "1",
+            "C": "1",
             "q": "2",
-            "f": "24",
+            "f": "32",
             "o": "z",
             "m": "0",
         },
@@ -112,8 +121,9 @@ def test_damage_goes_as_edits_of_the_root_frame():
             "s": "1",
             "v": "1",
             "X": "1",
+            "C": "1",
             "q": "2",
-            "f": "24",
+            "f": "32",
             "o": "z",
             "m": "0",
         },
@@ -152,8 +162,8 @@ def test_shared_memory_holds_the_pixels_and_says_how_many(shm):
     pixels = RED * (40 * 30)
     text = frame_commands(7, True, 40, 30, [(0, 0, 40, 30, pixels)], shm)
     ((keys, payload),) = parsed(text)
-    assert keys == {"a": "t", "i": "7", "s": "40", "v": "30", "q": "2", "f": "24", "t": "s", "S": str(len(pixels))}
-    assert read_shm(payload, len(pixels)) == pixels
+    assert keys == {"a": "t", "i": "7", "s": "40", "v": "30", "q": "2", "f": "32", "t": "s", "S": str(40 * 30 * 4)}
+    assert read_shm(payload, 40 * 30 * 4) == OPAQUE_RED * (40 * 30)
 
 
 def test_every_command_gets_an_object_of_its_own(shm):
@@ -239,7 +249,7 @@ def test_the_client_writes_a_frame_at_its_last_part(terminal):
     assert written.startswith("\x1b7") and written.endswith("\x1b_Ga=p,i=9\x1b\\\x1b8")
     ((keys, payload),) = parsed(written)
     assert (keys["a"], keys["i"], keys["s"], keys["v"]) == ("t", "9", "20", "10")
-    assert zlib.decompress(base64.b64decode(payload)) == pixels
+    assert zlib.decompress(base64.b64decode(payload)) == rgba(pixels)
     assert client.placed_images
 
 
@@ -317,7 +327,7 @@ def test_the_client_decodes_a_frame_and_writes_what_changed(terminal):
         client._process(part)
     ((keys, payload),) = parsed(read())
     assert (keys["a"], keys["x"], keys["y"], keys["s"], keys["v"]) == ("f", "2", "3", "4", "5")
-    assert zlib.decompress(base64.b64decode(payload)) == RED * 20
+    assert zlib.decompress(base64.b64decode(payload)) == OPAQUE_RED * 20
     ((decoder,),) = [decoders]
     assert decoder.data == [data]
 
@@ -350,7 +360,7 @@ def test_the_client_takes_shared_memory_once_the_terminal_read_it(terminal):
     client._process(frame_parts(9, (1, False, 20, 10, [(2, 3, 1, 1, RED)]), "")[0])
     ((keys, payload),) = parsed(read())
     assert keys["t"] == "s"
-    assert read_shm(payload, 3) == RED
+    assert read_shm(payload, 4) == OPAQUE_RED
     client._shm.close()
 
 
@@ -367,5 +377,5 @@ async def test_the_server_says_when_the_terminal_read_the_probe():
 
 def test_the_probe_is_a_query_for_one_pixel(shm):
     ((keys, payload),) = parsed(shm_probe(shm))
-    assert keys == {"a": "q", "i": str(SHM_PROBE_ID), "s": "1", "v": "1", "f": "24", "t": "s", "S": "3"}
-    assert read_shm(payload, 3) == bytes(3)
+    assert keys == {"a": "q", "i": str(SHM_PROBE_ID), "s": "1", "v": "1", "f": "32", "t": "s", "S": "4"}
+    assert read_shm(payload, 4) == bytes(4)

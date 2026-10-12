@@ -16,6 +16,11 @@ with `SHM_PROBE`.
 
 A window pane in a codec (`window-codec`) comes as encoded frames, which
 `decoders` turns back into RGB rectangles here. Lillecarl/pymux#639.
+
+**The terminal gets RGBA**, though everything before it is RGB. kitty
+uploads an RGB image as `GL_RGB`, which Apple's GL converts on the CPU
+for every upload: a quarter of kitty's busy time on Carl's Mac. RGBA
+rows are also four-byte aligned, which kitty's other path needs.
 """
 
 from __future__ import annotations
@@ -33,6 +38,10 @@ from libpymux.protocol import Codec
 
 __all__ = ["SHM_PROBE_ID", "Base64Carrier", "Pictures", "ShmCarrier", "decoders", "frame_commands", "shm_probe"]
 
+#: kitty's key for 8-bit RGBA, and its bytes a pixel.
+FORMAT = 32
+BYTES_PER_PIXEL = 4
+
 #: kitty takes at most this many bytes of base64 in one command.
 CHUNK = 4096
 
@@ -46,17 +55,26 @@ SHM_NAME_MAX = 30
 Rect = tuple[int, int, int, int, bytes]
 
 
+def rgba(rgb: bytes) -> bytearray:
+    "RGB pixels as opaque RGBA."
+    count = len(rgb) // 3
+    out = bytearray(b"\xff") * (count * BYTES_PER_PIXEL)
+    for channel in range(3):
+        out[channel::BYTES_PER_PIXEL] = rgb[channel : count * 3 : 3]
+    return out
+
+
 class Base64Carrier:
     "Pixels inside the command: zlib, then base64, in chunks kitty takes."
 
-    def command(self, keys: str, pixels: bytes) -> str:
+    def command(self, keys: str, pixels: bytes | bytearray) -> str:
         payload = base64.b64encode(zlib.compress(pixels, 1)).decode("ascii")
         chunks = [payload[start : start + CHUNK] for start in range(0, len(payload), CHUNK)] or [""]
         out = []
         for index, chunk in enumerate(chunks):
             more = int(index + 1 < len(chunks))
             if index == 0:
-                out.append("\x1b_G%s,f=24,o=z,m=%d;%s\x1b\\" % (keys, more, chunk))
+                out.append("\x1b_G%s,f=%d,o=z,m=%d;%s\x1b\\" % (keys, FORMAT, more, chunk))
             else:
                 out.append("\x1b_Gm=%d;%s\x1b\\" % (more, chunk))
         return "".join(out)
@@ -84,7 +102,7 @@ class ShmCarrier:
         assert len(name) + 1 <= SHM_NAME_MAX
         return name
 
-    def write(self, pixels: bytes) -> str:
+    def write(self, pixels: bytes | bytearray) -> str:
         "Put `pixels` in a new object, and answer the name kitty opens."
         name = self._name()
         memory = shared_memory.SharedMemory(name, create=True, size=max(1, len(pixels)), track=False)
@@ -100,11 +118,11 @@ class ShmCarrier:
             del self._made[:128]
         return "/" + name
 
-    def command(self, keys: str, pixels: bytes) -> str:
+    def command(self, keys: str, pixels: bytes | bytearray) -> str:
         # `S=` always: kitty maps the size of the object when none is
         # given, and macOS rounds an object up to a page.
-        name = self.write(pixels)
-        return "\x1b_G%s,f=24,t=s,S=%d;%s\x1b\\" % (keys, len(pixels), base64.b64encode(name.encode()).decode("ascii"))
+        name = base64.b64encode(self.write(pixels).encode()).decode("ascii")
+        return "\x1b_G%s,f=%d,t=s,S=%d;%s\x1b\\" % (keys, FORMAT, len(pixels), name)
 
     def close(self) -> None:
         for name in self._made:
@@ -123,9 +141,12 @@ def frame_commands(
     answer: bool = False,
 ) -> str:
     """
-    The commands that bring image `image_id` up to date with these
+    The commands that bring image `image_id` up to date with these RGB
     rectangles. With `answer`, the terminal answers the last one once it
     processed it; every other command is quiet.
+
+    An edit says `C=1`: without it kitty blends every RGBA pixel over
+    the old one on the CPU, where it copies RGB rows.
     """
     rects = list(rects)
     out = []
@@ -134,8 +155,8 @@ def frame_commands(
         if whole:
             keys = "a=t,i=%d,s=%d,v=%d%s" % (image_id, width, height, quiet)
         else:
-            keys = "a=f,i=%d,r=1,x=%d,y=%d,s=%d,v=%d,X=1%s" % (image_id, x, y, w, h, quiet)
-        out.append(carrier.command(keys, pixels))
+            keys = "a=f,i=%d,r=1,x=%d,y=%d,s=%d,v=%d,X=1,C=1%s" % (image_id, x, y, w, h, quiet)
+        out.append(carrier.command(keys, rgba(pixels)))
     return "".join(out)
 
 
@@ -200,8 +221,8 @@ def decoders() -> dict[str, Callable[[], Any]]:
 def shm_probe(carrier: ShmCarrier) -> str:
     """
     The query that asks a terminal whether it reads shared memory: one
-    black pixel under `SHM_PROBE_ID`. kitty answers `OK`, or an error
+    clear pixel under `SHM_PROBE_ID`. kitty answers `OK`, or an error
     when it cannot open the object; a terminal without the protocol says
     nothing.
     """
-    return carrier.command("a=q,i=%d,s=1,v=1" % SHM_PROBE_ID, bytes(3))
+    return carrier.command("a=q,i=%d,s=1,v=1" % SHM_PROBE_ID, bytes(BYTES_PER_PIXEL))
