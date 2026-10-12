@@ -299,6 +299,13 @@ def video_parts(image_id: int, codec: Codec, frame: VideoFrame, after: str) -> l
 #: A program's own images count up from one.
 WINDOW_IMAGE = -1
 
+#: The z-index a window pane's picture is placed at: under every cell
+#: with a background colour of its own, kitty's line being -2**30. The
+#: pane's cells take the default background, so the picture shows there,
+#: and a prompt, a menu or a message drawn over the pane covers it. Zero
+#: or above would draw it over them all. Lillecarl/pymux#647.
+WINDOW_Z = -(1 << 30) - 1
+
 
 class _ShownWindow(NamedTuple):
     "What one client holds of a window pane: its image, frame and placement."
@@ -618,7 +625,7 @@ class ClientGraphics:
         places: dict[int, str] = {}
         for view in views:
             outer_id = self._image_ids.id_of(view.pane_id, WINDOW_IMAGE)
-            put = _put_command(outer_id, 1, view.x, view.y, view.width, view.height, 0, None)
+            put = _put_command(outer_id, 1, view.x, view.y, view.width, view.height, WINDOW_Z, None)
             places[view.pane_id] = put
             known = self._windows.get(view.pane_id)
             if known is not None and known.put != put:

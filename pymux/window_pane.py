@@ -298,7 +298,9 @@ class WindowWidget:
         self.process = WindowProcess(self)
         self.terminal_control = _NoControl()
         self.control = WindowControl(self)
-        self.window = _PaneWindow(self.control, always_hide_cursor=True)
+        # The default background, over `paint-screen`'s: kitty draws the
+        # picture under every cell with a colour of its own (`WINDOW_Z`).
+        self.window = _PaneWindow(self.control, always_hide_cursor=True, style="bg:default")
         #: The pane's size in cells, last told.
         self.columns = 0
         self.rows = 0

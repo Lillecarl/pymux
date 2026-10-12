@@ -22,6 +22,7 @@ pytest.importorskip("pysmithay")
 
 from pymux.arrangement import DEFAULT_FRAME_RATE
 from pymux.enums import WindowCodec, Woke
+from pymux.graphics import WINDOW_Z
 from pymux.main import Pymux
 from pymux.window_pane import is_window_pane
 
@@ -126,6 +127,17 @@ async def test_a_kitty_client_gets_the_frame_then_only_the_damage(tmp_path):
         assert recorder.out.startswith("\x1b_Ga=f,", command)
         # Placed at the pane's cells.
         assert "\x1b_Ga=p," in recorder.out
+
+
+async def test_the_picture_goes_under_what_pymux_draws_over_the_pane(tmp_path):
+    "Under every cell with a colour, so a prompt or a message covers it. Lillecarl/pymux#647."
+    async with with_a_window(tmp_path) as (_pymux, _state, pane, recorder, _log, _probe):
+        await once(lambda: "\x1b_Ga=p," in recorder.out, 10.0, "the window was never placed")
+        put = recorder.out[recorder.out.index("\x1b_Ga=p,") :].split("\x1b\\", 1)[0]
+        assert ",z=%d" % WINDOW_Z in put
+        # And the pane's own cells keep the default background, which
+        # the picture shows through.
+        assert pane.terminal.window.style == "bg:default"
 
 
 def frames_of(recorder: Recorder) -> list[list[dict]]:
