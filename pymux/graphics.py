@@ -479,6 +479,7 @@ class ClientGraphics:
             return
         commands: list[str] = []
         seen: set[int] = set()
+        shown: list[WindowView] = []
         for view in views:
             outer_id = self._image_ids.id_of(view.pane_id, WINDOW_IMAGE)
             known = self._windows.get(view.pane_id)
@@ -493,7 +494,7 @@ class ClientGraphics:
                 commands.append(put)
             self._windows[view.pane_id] = _ShownWindow(outer_id, serial, put)
             if update:
-                view.shown()
+                shown.append(view)
         gone = set(self._windows) - seen
         for pane_id in gone:
             self._delete_image(self._windows.pop(pane_id).outer_id)
@@ -501,6 +502,10 @@ class ClientGraphics:
             self._write_raw(SAVE_CURSOR + "".join(commands) + RESTORE_CURSOR)
         if commands or gone:
             self._flush()
+        # After the flush, so a wait for the terminal to take the frame
+        # counts the frame.
+        for view in shown:
+            view.shown()
 
     def _render_kitty(self, views: Iterable[PaneView]) -> None:
         try:

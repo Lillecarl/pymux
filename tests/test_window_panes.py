@@ -20,6 +20,7 @@ from session import once, over_connection
 
 pytest.importorskip("pysmithay")
 
+from pymux.enums import Woke
 from pymux.main import Pymux
 from pymux.window_pane import is_window_pane
 
@@ -40,7 +41,7 @@ class Recorder:
 
 
 @asynccontextmanager
-async def with_a_window(tmp_path, kitty: bool = True):
+async def with_a_window(tmp_path, kitty: bool = True, animate: bool = False):
     "A server, a client at a kitty terminal, and the probe window open in a pane."
     pymux = Pymux()
     pymux.socket_name = str(tmp_path / "pymux.sock.test")
@@ -57,7 +58,7 @@ async def with_a_window(tmp_path, kitty: bool = True):
         runtime = tmp_path / "run"
         runtime.mkdir(mode=0o700)
         async with await anyio.open_process(
-            [sys.executable, str(PROBE), str(log)],
+            [sys.executable, str(PROBE), str(log), *(["--animate"] if animate else [])],
             env=dict(os.environ, WAYLAND_DISPLAY=pymux.wayland.display, XDG_RUNTIME_DIR=str(runtime)),
         ) as probe:
             try:
@@ -103,6 +104,18 @@ async def test_a_client_without_kitty_is_sent_no_pixels(tmp_path):
         assert "\x1b_Ga=t," not in recorder.out
 
 
+async def test_a_window_draws_no_faster_than_the_pymux_window_holding_it(tmp_path):
+    async with with_a_window(tmp_path, animate=True) as (pymux, state, _pane, _recorder, log, _probe):
+        state.session.arrangement.get_active_window().frame_rate = 10
+        pymux.invalidate(Woke.WINDOW_PANE_CHANGED)
+        await once(lambda: logged(log).count("frame") >= 3, 10.0, "the window never drew again")
+        before = logged(log).count("frame")
+        await anyio.sleep(1.0)
+        drawn = logged(log).count("frame") - before
+        # Ten a second, and one for where the second started.
+        assert 2 <= drawn <= 11
+
+
 async def test_keys_reach_the_window(tmp_path):
     async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, _probe):
         # The window's seat is set up before it draws.
@@ -127,3 +140,4 @@ async def test_the_pane_goes_when_the_window_closes(tmp_path):
         await once(lambda: not pymux.wayland.panes, 10.0, "the compositor still holds the window")
         window = state.session.arrangement.get_active_window()
         assert pane not in window.panes
+        assert window.active_pane in window.panes

@@ -30,8 +30,10 @@ from __future__ import annotations
 import contextlib
 import errno
 import logging
+import math
 import os
 import sys
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 import anyio
@@ -81,6 +83,33 @@ BIND_SECONDS = 120.0
 BIND_RETRY_SECONDS = 0.25
 
 
+class _Pacer:
+    "The frames of one window that clients showed and the window was not yet told of."
+
+    def __init__(self) -> None:
+        self.shown = anyio.Event()
+        #: Per client that showed one, a wait for its terminal to take it.
+        self.drained: list[Callable[[], Awaitable[None]]] = []
+
+    def shown_by(self, drained: Callable[[], Awaitable[None]]) -> None:
+        self.drained.append(drained)
+        self.shown.set()
+
+
+async def _first(waits: list[Callable[[], Awaitable[None]]]) -> None:
+    "Wait for the first of these to finish; none waits for nothing."
+    if not waits:
+        return
+    async with anyio.create_task_group() as group:
+
+        async def one(wait: Callable[[], Awaitable[None]]) -> None:
+            await wait()
+            group.cancel_scope.cancel()
+
+        for wait in list(waits):
+            group.start_soon(one, wait)
+
+
 def available() -> bool:
     "Whether a compositor can run here at all."
     return pysmithay is not None and sys.platform == "linux"
@@ -116,6 +145,7 @@ class WaylandServer:
         self.panes: dict[int, Pane] = {}
         #: The same windows' widgets, which the events update.
         self.widgets: dict[int, WindowWidget] = {}
+        self._pacers: dict[int, _Pacer] = {}
         self._changed = anyio.Event()
         self._scope: anyio.CancelScope | None = None
 
@@ -182,7 +212,7 @@ class WaylandServer:
             case ("send", str(target), str(_mime_type), int(pipe)):
                 tasks.start_soon(self._answer_paste, target, pipe)
             case ("toplevel", int(toplevel)):
-                self._opened(toplevel)
+                self._opened(compositor, toplevel, tasks)
             case ("title", int(toplevel), str(title)) if toplevel in self.widgets:
                 self.widgets[toplevel].screen.titles.window = title
                 self.pymux.invalidate(Woke.WINDOW_PANE_CHANGED)
@@ -197,7 +227,7 @@ class WaylandServer:
     # ------------------------------------------------------------------
     # Windows in panes. Lillecarl/pymux#620.
 
-    def _opened(self, toplevel: int) -> None:
+    def _opened(self, compositor: Compositor, toplevel: int, tasks: anyio.abc.TaskGroup) -> None:
         widget = WindowWidget(self, toplevel, self._takes_keys)
         pane = self.pymux.open_window_pane(widget)
         if pane is None:
@@ -206,13 +236,49 @@ class WaylandServer:
             return
         self.panes[toplevel] = pane
         self.widgets[toplevel] = widget
+        self._pacers[toplevel] = pacer = _Pacer()
+        tasks.start_soon(self._pace, compositor, toplevel, pacer)
 
     def _closed(self, toplevel: int) -> None:
         pane = self.panes.pop(toplevel, None)
         widget = self.widgets.pop(toplevel, None)
+        pacer = self._pacers.pop(toplevel, None)
+        if pacer is not None:
+            pacer.shown.set()
         if pane is not None and widget is not None:
             widget.process.is_terminated = True
             self.pymux.window_pane_ended(pane)
+
+    async def _pace(self, compositor: Compositor, toplevel: int, pacer: _Pacer) -> None:
+        """
+        Let one window draw its next frame once a client has shown the
+        last, no sooner than the frame rate of the pymux window holding
+        it, and once that client's terminal has taken the bytes.
+
+        A window no client shows -- in another pymux window, under a
+        popup, or on terminals without kitty graphics -- is never let go,
+        and waits as a hidden Wayland window does. Lillecarl/pymux#629.
+        """
+        released = -math.inf
+        while True:
+            await pacer.shown.wait()
+            if self._pacers.get(toplevel) is not pacer:
+                return
+            rate = self._rate_of(toplevel)
+            if rate:
+                await anyio.sleep_until(released + 1 / rate)
+            await _first(pacer.drained)
+            pacer.drained.clear()
+            pacer.shown = anyio.Event()
+            released = anyio.current_time()
+            with contextlib.suppress(KeyError):
+                compositor.frame_done(toplevel, now())
+
+    def _rate_of(self, toplevel: int) -> int:
+        "The frame rate of the pymux window holding this window's pane; 0 sets no limit."
+        pane = self.panes.get(toplevel)
+        found = None if pane is None else self.pymux.window_of_pane(pane.pane_id)
+        return 0 if found is None else found[1].frame_rate
 
     def _takes_keys(self) -> bool:
         "The person at the keyboard may drive it, and holds no prefix."
@@ -284,8 +350,13 @@ class WaylandServer:
             compositor.pointer_motion(toplevel, x, y, time)
             compositor.pointer_scroll(steps, time)
 
-    def view_of(self, pane_id: int, widget: WindowWidget, write_position) -> WindowView:
-        "How one client brings this window pane up to date."
+    def view_of(
+        self, pane_id: int, widget: WindowWidget, write_position, drained: Callable[[], Awaitable[None]]
+    ) -> WindowView:
+        """
+        How one client brings this window pane up to date. `drained`
+        waits until that client's terminal has taken what it was sent.
+        """
         toplevel = widget.toplevel
 
         def update(outer_id: int, since: int | None) -> tuple[int, str | None, bool]:
@@ -297,9 +368,9 @@ class WaylandServer:
                 return 0, None, False
 
         def shown() -> None:
-            # The window may draw again: a frame a client has taken.
-            if self.compositor is not None:
-                self.compositor.frame_done(now())
+            pacer = self._pacers.get(toplevel)
+            if pacer is not None:
+                pacer.shown_by(drained)
 
         return WindowView(
             pane_id=pane_id,

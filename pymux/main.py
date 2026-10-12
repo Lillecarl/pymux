@@ -327,6 +327,7 @@ class ClientState:
         "last_time_text": Keep.REBUILT,
         "input_tick": Keep.DROPPED,
         "schedule_tick": Keep.DROPPED,
+        "_waiting_for_drain": Keep.DROPPED,
         # A command's client lives for one command, and no command
         # spans an upgrade.
         "temporary": Keep.DROPPED,
@@ -427,6 +428,10 @@ class ClientState:
         #: Lillecarl/pymux#524.
         self.input_tick = 0
         self.schedule_tick = 0
+
+        #: A wait for this client's terminal to take its bytes is out,
+        #: and redraws the window panes after. Lillecarl/pymux#629.
+        self._waiting_for_drain = False
 
         #: The mode tables this client sits in, the innermost last.
         #: Empty when every key is read from root or prefix. A mode is
@@ -587,6 +592,9 @@ class ClientState:
                 graphics.render(self._graphics_views())
             except Exception:
                 logger.exception("Drawing the pane images failed.")
+            if self.connection.pipe_connection.outstanding:
+                self._windows_after_drain()
+                return
             try:
                 graphics.render_windows(self._window_views())
             except Exception:
@@ -677,12 +685,33 @@ class ClientState:
             )
         return result
 
+    def _windows_after_drain(self) -> None:
+        """
+        Draw the window panes again once this client's terminal has
+        taken what it holds. A window frame can be megabytes, and frames
+        that queue behind each other only arrive late. Lillecarl/pymux#629.
+        """
+        if self._waiting_for_drain or self.connection is None:
+            return
+        self._waiting_for_drain = True
+        connection = self.connection
+
+        async def wait() -> None:
+            try:
+                await connection.pipe_connection.drained()
+            finally:
+                self._waiting_for_drain = False
+            self.app.invalidate()
+
+        connection._spawn(wait())
+
     def _window_views(self):
         "One `WindowView` per window pane this client can see. A popup covers them all."
-        if self.display_popup:
+        if self.display_popup or self.connection is None:
             return []
+        drained = self.connection.pipe_connection.drained
         return [
-            self.pymux.wayland.view_of(pane.pane_id, pane.terminal, write_position)
+            self.pymux.wayland.view_of(pane.pane_id, pane.terminal, write_position, drained)
             for pane, write_position in self.layout_manager.pane_write_positions.items()
             if isinstance(pane.terminal, WindowWidget) and not pane.clock_mode
         ]
