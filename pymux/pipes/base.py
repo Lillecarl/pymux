@@ -20,11 +20,16 @@ class PipeConnection(ABC):
         This can raise BrokenPipeError.
         """
 
+    #: Whether `write` can turn its stream to zstd (`compress_after`).
+    can_compress = False
+
     @abstractmethod
-    async def write(self, frame: bytes) -> None:
+    async def write(self, frame: bytes, compress_after: bool = False) -> None:
         """
         Write one encoded packet, its framing included
-        (`libpymux.wire.encode_json` or `encode_msgpack`).
+        (`libpymux.wire.encode_json` or `encode_msgpack`). With
+        `compress_after`, every write after this one goes into one zstd
+        stream, in the order the writes go out.
 
         This can raise BrokenPipeError.
         """

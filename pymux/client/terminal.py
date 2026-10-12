@@ -124,6 +124,10 @@ class TerminalClient(Client):
     #: turns it to msgpack. Lillecarl/pymux#633.
     _encode = staticmethod(encode_json)
 
+    #: The formats this client reads, best first. Compression pays only
+    #: on a link that crosses a network, so only `SshClient` asks for it.
+    wire_formats: tuple[str, ...] = (MSGPACK,)
+
     #: Every real client answers the server's ping. The server drops a
     #: client that stops answering, and only one that said it answers,
     #: so this is what makes that safe. Lillecarl/pymux#446.
@@ -261,9 +265,10 @@ class TerminalClient(Client):
                 # configuration is another machine's.
                 # Lillecarl/pymux#223.
                 Field.CLIENT_OPTIONS: self._client_options(),
-                # This client reads msgpack. A server that takes it
-                # says so with a `wire` packet. Lillecarl/pymux#633.
-                Field.WIRE: [MSGPACK],
+                # What this client reads besides JSON. A server that
+                # takes one says which with a `wire` packet.
+                # Lillecarl/pymux#633.
+                Field.WIRE: list(self.wire_formats),
                 Field.DATA: "",
             }
         )
@@ -338,7 +343,8 @@ class TerminalClient(Client):
         """
         if packet[Field.CMD] == Packet.WIRE:
             # The server writes msgpack from here on, and the reader has
-            # turned already. This side turns too, saying so first.
+            # turned already. This side turns too, saying so first. Its
+            # packets are keystrokes, too small for zstd to win on.
             self._send_packet({Field.CMD: Packet.WIRE, Field.WIRE: MSGPACK})
             self._encode = encode_msgpack
 

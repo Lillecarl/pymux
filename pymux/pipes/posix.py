@@ -13,7 +13,7 @@ from typing import override
 import anyio
 from libpymux.protocol import READ_SIZE
 from libpymux.sockets import nobody_answers, socket_directory
-from libpymux.wire import PacketReader
+from libpymux.wire import Compressor, PacketReader
 
 from ..log import logger
 from .base import BrokenPipeError, PipeConnection
@@ -256,6 +256,9 @@ class PosixSocketConnection(PipeConnection):
     A single active posix pipe connection on the server side.
     """
 
+    #: The socket can be the far end of an ssh channel.
+    can_compress = True
+
     def __init__(self, socket) -> None:
         self.socket = socket
         # Non blocking. A send that finds no room parks this
@@ -271,6 +274,8 @@ class PosixSocketConnection(PipeConnection):
         self._write_lock: anyio.Lock | None = None
         #: Set while `_outstanding` is zero; waited on by `drained`.
         self._empty: anyio.Event | None = None
+        #: The zstd stream every write goes into, once one turned it.
+        self._compressor: Compressor | None = None
 
     @property
     @override
@@ -322,7 +327,7 @@ class PosixSocketConnection(PipeConnection):
         return data
 
     @override
-    async def write(self, frame: bytes) -> None:
+    async def write(self, frame: bytes, compress_after: bool = False) -> None:
         """
         Write the next encoded packet.
 
@@ -331,6 +336,10 @@ class PosixSocketConnection(PipeConnection):
         list-sessions, a later attach and every other client of the
         server keep working while this one holds a full buffer. Past
         `TOO_SLOW_BYTES` the client is left behind. Lillecarl/pymux#418.
+
+        **Compressed under the lock**, so the zstd stream holds the
+        frames in the order they go out, which is the order the client
+        decompresses them in. Lillecarl/pymux#633.
         """
         if self._closed:
             raise BrokenPipeError
@@ -351,7 +360,9 @@ class PosixSocketConnection(PipeConnection):
             if self._write_lock is None:
                 self._write_lock = anyio.Lock()
             async with self._write_lock:
-                await self._send_all(data)
+                await self._send_all(self._compressor.compress(data) if self._compressor is not None else data)
+                if compress_after:
+                    self._compressor = Compressor()
         finally:
             self._outstanding -= len(data)
             if not self._outstanding and self._empty is not None:

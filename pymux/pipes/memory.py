@@ -90,9 +90,10 @@ class MemoryConnection(PipeConnection):
             raise BrokenPipeError
 
     @override
-    async def write(self, frame: bytes) -> None:
+    async def write(self, frame: bytes, compress_after: bool = False) -> None:
         """
-        Give the next encoded packet to the peer.
+        Give the next encoded packet to the peer. Nothing here crosses a
+        network, so nothing is compressed (`can_compress`).
         """
         self.write_nowait(frame)
 

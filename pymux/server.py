@@ -17,7 +17,7 @@ from typing import (
 
 import anyio
 from libpymux.protocol import Field, Mode, Packet
-from libpymux.wire import MSGPACK, encode_json, encode_msgpack
+from libpymux.wire import MSGPACK_ZSTD, choose, encode_json, encode_msgpack
 from prompt_toolkit.application.current import create_app_session, set_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import PipeInput
@@ -771,10 +771,15 @@ class ServerConnection:
                 self._spawn(self._refuse_the_attach())
                 return
 
-            # The client reads msgpack: say so in JSON, and write
-            # msgpack from the next packet on. `libpymux.wire`.
-            if MSGPACK in (packet.get(Field.WIRE) or ()) and self._encode is encode_json:
-                self._send_packet({Field.CMD: Packet.WIRE, Field.WIRE: MSGPACK})
+            # The client reads msgpack, perhaps inside zstd: say which
+            # in JSON, and write it from the next packet on.
+            # `libpymux.wire`.
+            wire = choose(packet.get(Field.WIRE), self.pipe_connection.can_compress)
+            if wire is not None and self._encode is encode_json:
+                self._send_packet(
+                    {Field.CMD: Packet.WIRE, Field.WIRE: wire},
+                    compress_after=wire == MSGPACK_ZSTD,
+                )
                 self._encode = encode_msgpack
 
             detach_other_clients = bool(packet[Field.DETACH_OTHERS])
@@ -945,9 +950,10 @@ class ServerConnection:
 
         self.pymux.sync_color_bases()
 
-    def _send_packet(self, data: object) -> None:
+    def _send_packet(self, data: object, compress_after: bool = False) -> None:
         """
-        Send packet to client.
+        Send packet to client. `compress_after` turns the stream to zstd
+        after this one (`PipeConnection.write`).
         """
         if self._closed:
             return
@@ -957,7 +963,7 @@ class ServerConnection:
             self.recording.hear("out", data[Field.DATA])
         # Serialised now: the write runs later, and the packet is what
         # was true when it was sent, in the format of the moment.
-        self._spawn(self._write(self._encode(data)))
+        self._spawn(self._write(self._encode(data), compress_after))
 
     async def say_restarting(self, wait: float) -> None:
         """
@@ -1113,10 +1119,10 @@ class ServerConnection:
             return
         await self._write(self._encode(data_obj))
 
-    async def _write(self, frame: bytes) -> None:
+    async def _write(self, frame: bytes, compress_after: bool = False) -> None:
         "Write one encoded packet; a client that is gone is let go."
         try:
-            await self.pipe_connection.write(frame)
+            await self.pipe_connection.write(frame, compress_after)
         except BrokenPipeError:
             self.detach_and_close()
 

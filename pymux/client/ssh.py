@@ -49,7 +49,7 @@ from urllib.parse import urlparse
 
 import anyio
 from libpymux.protocol import READ_SIZE, Field, Packet
-from libpymux.wire import PacketReader
+from libpymux.wire import MSGPACK, MSGPACK_ZSTD, PacketReader
 from prompt_toolkit.input.vt100 import raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output
 
@@ -262,6 +262,10 @@ class SshClient(TerminalClient):
     #: `start-gui` packet, so that `forward-port` on a session nobody
     #: reaches over SSH says so rather than sending into the void.
     can_forward = True
+
+    #: This link crosses a network, so the frames come compressed:
+    #: zstd makes text 6.5x smaller. Lillecarl/pymux#633.
+    wire_formats = (MSGPACK_ZSTD, MSGPACK)
 
     def __init__(self, socket_name: str, **connect_with) -> None:
         super().__init__()
