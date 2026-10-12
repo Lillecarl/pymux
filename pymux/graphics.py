@@ -39,7 +39,7 @@ from collections.abc import Awaitable, Callable, Coroutine, Iterable
 from typing import Any, NamedTuple
 
 import anyio
-from libpymux.protocol import Field, Packet
+from libpymux.protocol import Codec, Field, Packet
 from prompt_toolkit.output import ColorDepth
 from pyte import escape
 from pyte.images import PixelFormat
@@ -205,6 +205,11 @@ class WindowView(NamedTuple):
     them itself. `shown(sent)` says this client is up to date, which lets
     the window draw its next frame; `sent` says pixels went out to get it
     there.
+
+    `codec` is the window's `window-codec`. `await video(encoder)` answers
+    the next frame in `encoder`'s VP9 stream, as
+    `pysmithay.Compositor.vp9_frame` does, and `encoder()` makes one: a
+    client holds one stream per window pane. Lillecarl/pymux#639.
     """
 
     pane_id: int
@@ -215,11 +220,18 @@ class WindowView(NamedTuple):
     update: Callable[[int, int | None], Awaitable[tuple[int, str | None, bool]]]
     shown: Callable[[bool], None]
     rects: Callable[[int | None], Awaitable[FrameRects | None]]
+    codec: str = ""
+    video: Callable[[Any], Awaitable[VideoFrame | None]] | None = None
+    encoder: Callable[[], Any] | None = None
 
 
 #: What `WindowView.rects` answers: serial, whole, width, height, and
 #: the rectangles as `(x, y, w, h, rgb)`.
 FrameRects = tuple[int, bool, int, int, list[tuple[int, int, int, int, bytes]]]
+
+#: What `WindowView.video` answers: serial, keyframe, width, height, the
+#: encoded frame, and the rectangles that changed as `(x, y, w, h)`.
+VideoFrame = tuple[int, bool, int, int, bytes, list[tuple[int, int, int, int]]]
 
 #: The most pixel bytes one `window-frame` packet carries. A key queued
 #: behind a part waits for at most this much on the link.
@@ -257,6 +269,27 @@ def frame_parts(image_id: int, frame: FrameRects, after: str) -> list[dict]:
     return parts
 
 
+def video_parts(image_id: int, codec: Codec, frame: VideoFrame, after: str) -> list[dict]:
+    """
+    An encoded frame as `window-frame` packets of at most
+    `FRAME_PART_BYTES` each. The last part says what changed, which the
+    client takes from the frame it decodes. Lillecarl/pymux#639.
+    """
+    _serial, keyframe, width, height, data, rects = frame
+    head: dict = {
+        Field.CMD: Packet.WINDOW_FRAME,
+        Field.IMAGE: image_id,
+        Field.CODEC: codec,
+        Field.WHOLE: keyframe,
+        Field.WIDTH: width,
+        Field.HEIGHT: height,
+    }
+    pieces = [data[at : at + FRAME_PART_BYTES] for at in range(0, len(data), FRAME_PART_BYTES)] or [b""]
+    parts = [{**head, Field.VIDEO: piece} for piece in pieces]
+    parts[-1].update({Field.RECTS: [list(rect) for rect in rects], Field.LAST: True, Field.AFTER: after})
+    return parts
+
+
 #: The pane image id a window pane's picture takes in `OuterImageIds`.
 #: A program's own images count up from one.
 WINDOW_IMAGE = -1
@@ -268,6 +301,8 @@ class _ShownWindow(NamedTuple):
     outer_id: int
     serial: int
     put: str
+    #: The codec of the frames sent, or "" for raw pixels.
+    codec: str = ""
 
 
 #: The placement id of a virtual placement whose program gave none. A
@@ -365,6 +400,10 @@ class ClientGraphics:
         #: when the frame goes as kitty commands. Lillecarl/pymux#634.
         self.send_frame: Callable[[list[dict]], Awaitable[None]] | None = None
 
+        #: The codecs this client decodes, as its `start-gui` says.
+        #: Lillecarl/pymux#639.
+        self.codecs: frozenset[str] = frozenset()
+
         #: Called when the terminal answered the shared memory probe
         #: (`kitty_frames.shm_probe`) with OK.
         self.on_shm: Callable[[], None] | None = None
@@ -425,6 +464,8 @@ class ClientGraphics:
         self._window_again: dict[int, WindowView] = {}
         #: Moves on `reset`, so an update encoded before it is dropped.
         self._window_generation = 0
+        #: Pane id -> this client's VP9 stream of that window pane.
+        self._encoders: dict[int, Any] = {}
 
     # ------------------------------------------------------------------
     # Detection.
@@ -570,6 +611,7 @@ class ClientGraphics:
         gone = set(self._windows) - set(places)
         for pane_id in gone:
             self._delete_image(self._windows.pop(pane_id).outer_id)
+            self._encoders.pop(pane_id, None)
         if commands:
             self._write_raw(SAVE_CURSOR + "".join(commands) + RESTORE_CURSOR)
         if commands or gone:
@@ -597,7 +639,9 @@ class ClientGraphics:
         self._window_pending.add(view.pane_id)
         outer_id = self._image_ids.id_of(view.pane_id, WINDOW_IMAGE)
         known = self._windows.get(view.pane_id)
-        since = known.serial if known is not None else None
+        # Raw edits go on top of raw frames only: what a decoder made is
+        # near the pixels, not them.
+        since = known.serial if known is not None and not known.codec else None
         self._spawn(self._update_window(view, outer_id, since, self._window_generation))
 
     async def _update_window(self, view: WindowView, outer_id: int, since: int | None, generation: int) -> None:
@@ -612,7 +656,11 @@ class ClientGraphics:
 
     async def _write_window_update(self, view: WindowView, outer_id: int, since: int | None, generation: int) -> None:
         if self.send_frame is not None:
-            await self._send_window_frame(self.send_frame, view, outer_id, since, generation)
+            if self._codec_of(view) is Codec.VP9:
+                await self._send_video_frame(self.send_frame, view, outer_id, generation)
+            else:
+                self._encoders.pop(view.pane_id, None)
+                await self._send_window_frame(self.send_frame, view, outer_id, since, generation)
             return
         try:
             serial, update, whole = await view.update(outer_id, since)
@@ -661,6 +709,40 @@ class ClientGraphics:
         if rects or after:
             await send_frame(frame_parts(outer_id, frame, after))
         view.shown(bool(rects))
+
+    def _codec_of(self, view: WindowView) -> Codec | None:
+        "The codec this client gets the window pane in, or None for raw pixels."
+        if view.video is None or view.encoder is None or view.codec not in self.codecs:
+            return None
+        return Codec(view.codec) if view.codec in Codec else None
+
+    async def _send_video_frame(
+        self,
+        send_frame: Callable[[list[dict]], Awaitable[None]],
+        view: WindowView,
+        outer_id: int,
+        generation: int,
+    ) -> None:
+        "The window pane's next frame in this client's VP9 stream. Lillecarl/pymux#639."
+        assert view.video is not None and view.encoder is not None
+        encoder = self._encoders.get(view.pane_id)
+        if encoder is None:
+            encoder = self._encoders[view.pane_id] = view.encoder()
+        try:
+            frame = await view.video(encoder)
+        except Exception:
+            logger.exception("Encoding a window pane's frame failed.")
+            return
+        put = self._window_places.get(view.pane_id)
+        if frame is None or put is None or generation != self._window_generation:
+            return
+        serial, keyframe, _width, _height, data, _rects = frame
+        known = self._windows.get(view.pane_id)
+        after = put if keyframe or known is None or known.put != put else ""
+        self._windows[view.pane_id] = _ShownWindow(outer_id, serial, put, Codec.VP9)
+        if data or after:
+            await send_frame(video_parts(outer_id, Codec.VP9, frame, after))
+        view.shown(bool(data))
 
     def _render_kitty(self, views: Iterable[PaneView]) -> None:
         try:
@@ -1262,6 +1344,7 @@ class ClientGraphics:
         self._window_places = {}
         self._window_again = {}
         self._window_generation += 1
+        self._encoders = {}
         if self._windows:
             for window in self._windows.values():
                 self._delete_image(window.outer_id)

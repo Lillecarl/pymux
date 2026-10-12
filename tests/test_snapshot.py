@@ -25,7 +25,7 @@ from test_every_attribute_has_a_fate import declared, live_objects
 from pymux import snapshot
 from pymux.arrangement import LayoutTypes, Window
 from pymux.commands.wait_for import WaitChannel
-from pymux.enums import Chooser, WindowSize
+from pymux.enums import Chooser, WindowCodec, WindowSize
 from pymux.main import Pymux
 from pymux.notifications import Urgency
 
@@ -180,6 +180,7 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     stacked.frame_rate = 60
     stacked.frame_rate_set = True
     stacked.wayland_scale = "auto*1.5"
+    stacked.window_codec = WindowCodec.VP9
     strip.set_column_width(strip.root[0], 0.75)
     strip.set_column_width(strip.root[1], 0.5)
     strip.root.set_weight(strip.root[1], 2)
@@ -540,19 +541,19 @@ def test_a_snapshot_of_another_version_is_refused(pymux, tmp_path, off_by):
         snapshot.load(Pymux(), path)
 
 
-def test_a_version_13_snapshot_gives_every_window_the_auto_scale(pymux, tmp_path):
-    "Version 14 adds `wayland_scale`. Lillecarl/pymux#637."
+def test_a_version_14_snapshot_gives_every_window_lossless_frames(pymux, tmp_path):
+    "Version 15 adds `window_codec`. Lillecarl/pymux#639."
     pymux.arrangement.windows.append(Window())
-    path = tmp_path / "v13.sqlite"
+    path = tmp_path / "v14.sqlite"
     snapshot.save(pymux, path)
     db = sqlite3.connect(path)
-    db.execute("ALTER TABLE windows DROP COLUMN wayland_scale")
-    db.execute("PRAGMA user_version = 13")
+    db.execute("ALTER TABLE windows DROP COLUMN window_codec")
+    db.execute("PRAGMA user_version = 14")
     db.commit()
     db.close()
 
     stepped = snapshot._open(path)
-    assert set(stepped.execute("SELECT wayland_scale FROM windows").fetchall()) == {("auto",)}
+    assert set(stepped.execute("SELECT window_codec FROM windows").fetchall()) == {("lossless",)}
 
 
 async def test_a_snapshot_is_refused_while_a_command_waits(pymux, tmp_path):

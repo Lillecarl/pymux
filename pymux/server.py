@@ -791,6 +791,9 @@ class ServerConnection:
             # Lillecarl/pymux#634.
             if packet.get(Field.FRAMES) and self._encode is encode_msgpack:
                 self.graphics.send_frame = self._send_frame
+                # And the codecs it decodes, for `window-codec`.
+                # Lillecarl/pymux#639.
+                self.graphics.codecs = frozenset(packet.get(Field.CODECS) or ())
 
             detach_other_clients = bool(packet[Field.DETACH_OTHERS])
             # `attach -x`: the others leave, and the terminals they were

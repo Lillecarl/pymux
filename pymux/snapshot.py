@@ -69,7 +69,7 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "load", "program_ids", "save", "start
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 14
+SNAPSHOT_VERSION = 15
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -91,9 +91,9 @@ CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
 #: change of shape adds the one step from the version before it and
 #: deletes any older step. Version 12 is the first a holder hands over.
 STEPS: dict[int, str] = {
-    # 14 holds each window's `wayland-scale`, which nobody set before.
-    13: """
-ALTER TABLE windows ADD COLUMN wayland_scale TEXT NOT NULL DEFAULT 'auto';
+    # 15 holds each window's `window-codec`, which nobody set before.
+    14: """
+ALTER TABLE windows ADD COLUMN window_codec TEXT NOT NULL DEFAULT 'lossless';
 """,
 }
 
@@ -182,7 +182,8 @@ CREATE TABLE windows(
   synchronize_panes INTEGER NOT NULL,
   frame_rate INTEGER NOT NULL,
   frame_rate_set INTEGER NOT NULL,
-  wayland_scale TEXT NOT NULL
+  wayland_scale TEXT NOT NULL,
+  window_codec TEXT NOT NULL
 );
 CREATE TABLE splits(
   split_id INTEGER PRIMARY KEY,
@@ -535,6 +536,7 @@ class WindowRow:
     frame_rate: int
     frame_rate_set: int
     wayland_scale: str
+    window_codec: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -956,6 +958,7 @@ def _write_window(db: sqlite3.Connection, session: Session, window: Window, link
             frame_rate=window.frame_rate,
             frame_rate_set=window.frame_rate_set,
             wayland_scale=window.wayland_scale,
+            window_codec=_value(window.window_codec),
         ),
     )
     db.executemany(
@@ -1384,6 +1387,7 @@ def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int]) -> int 
             window.frame_rate = window_row.frame_rate
             window.frame_rate_set = bool(window_row.frame_rate_set)
             window.wayland_scale = window_row.wayland_scale
+            window.window_codec = type(window.window_codec)(window_row.window_codec)
             window.column_widths = {
                 (width["kind"], width["id"]): width["width"]
                 for width in _rows(db, "SELECT * FROM column_widths WHERE window_id = ?", window.window_id)

@@ -197,6 +197,19 @@ class Field(StrEnum):
     RECTS = "rects"
     LAST = "last"
     AFTER = "after"
+    #: In `start-gui`, the `Codec`s a client decodes. In `window-frame`,
+    #: the one the frame is in, its encoded bytes in parts under `video`,
+    #: and `rects` as `[x, y, w, h]` with no pixels: what changed, which
+    #: the client takes from the decoded frame. Lillecarl/pymux#639.
+    CODECS = "codecs"
+    CODEC = "codec"
+    VIDEO = "video"
+
+
+class Codec(StrEnum):
+    "How a window pane's frame is encoded, when it is not raw pixels."
+
+    VP9 = "vp9"
 
 
 class Mode(StrEnum):

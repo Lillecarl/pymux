@@ -7,6 +7,7 @@ __all__ = [
     "COMMAND",
     "PROMPT",
     "Chooser",
+    "WindowCodec",
     "WindowSize",
     "Woke",
 ]
@@ -35,6 +36,19 @@ class Chooser(StrEnum):
     OPTIONS = "choose_options"
     NOTIFICATIONS = "choose_notifications"
     JOB = "choose_job"
+
+
+class WindowCodec(StrEnum):
+    """
+    How the Wayland windows in a window reach a client: as the pixels
+    that changed, or as a VP9 stream, which costs some sharpness and a
+    few milliseconds of encoding for far fewer bytes on a slow link. A
+    client that cannot decode the codec gets the pixels.
+    Lillecarl/pymux#639.
+    """
+
+    LOSSLESS = "lossless"
+    VP9 = "vp9"
 
 
 class WindowSize(StrEnum):

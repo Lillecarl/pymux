@@ -42,7 +42,8 @@ import anyio.abc
 from prompt_toolkit.clipboard import ClipboardData
 
 from pymux.enums import Woke
-from pymux.graphics import FrameRects, WindowView
+from pymux.graphics import FrameRects, VideoFrame, WindowView
+from pymux.ids import PaneId
 from pymux.options import Clipboard
 from pymux.wayland_scale import DEFAULT_WAYLAND_SCALE, resolve_scale
 from pymux.window_pane import WindowWidget, now
@@ -526,10 +527,21 @@ class WaylandServer:
                 return None
             return await read
 
+        async def video(encoder) -> VideoFrame | None:
+            if self.compositor is None:
+                return None
+            try:
+                read = self.compositor.vp9_frame(toplevel, encoder)
+            except KeyError:
+                return None
+            return await read
+
         def shown(sent: bool) -> None:
             pacer = self._pacers.get(toplevel)
             if pacer is not None:
                 pacer.shown_by(drained, sent)
+
+        found = self.pymux.window_of_pane(PaneId(pane_id))
 
         return WindowView(
             pane_id=pane_id,
@@ -540,6 +552,9 @@ class WaylandServer:
             update=update,
             shown=shown,
             rects=rects,
+            codec=str(found[1].window_codec) if found is not None else "",
+            video=video,
+            encoder=None if pysmithay is None else pysmithay.Vp9Encoder,
         )
 
     async def _take_selection(self, compositor: Compositor, target: str, mime_types: list[str]) -> None:

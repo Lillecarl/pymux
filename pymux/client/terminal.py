@@ -21,6 +21,7 @@ import signal
 import socket
 import sys
 import webbrowser
+from typing import Any
 
 import anyio
 from libpymux.protocol import Field, Mode, Packet
@@ -33,7 +34,7 @@ from pymux.colors import COLOR_QUERIES, TRUECOLOR_PROBE
 from pymux.config import client_options_in, find_config
 from pymux.graphics import CELL_SIZE_QUERY, RESTORE_CURSOR, SAVE_CURSOR, VERSION_QUERY
 from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
-from pymux.kitty_frames import Base64Carrier, ShmCarrier, frame_commands, shm_probe
+from pymux.kitty_frames import Base64Carrier, ShmCarrier, decoders, frame_commands, shm_probe
 from pymux.utils import nonblocking
 
 from .base import Client
@@ -209,6 +210,11 @@ class TerminalClient(Client):
         #: The bands of the frames that have not had their last part, by
         #: outer image id.
         self._frame_parts: dict[int, list] = {}
+        #: What makes a decoder of each codec this client decodes, and
+        #: the decoder of each window pane's stream, by outer image id.
+        #: Lillecarl/pymux#639.
+        self._decoder_kinds = decoders()
+        self._decoders: dict[int, Any] = {}
 
     @property
     def _stdin_reader(self) -> PosixStdinReader:
@@ -307,6 +313,8 @@ class TerminalClient(Client):
                 # own terminal: the server sends the raw pixels.
                 # Lillecarl/pymux#634.
                 Field.FRAMES: True,
+                # And can take them in these codecs. Lillecarl/pymux#639.
+                Field.CODECS: [str(codec) for codec in self._decoder_kinds],
                 Field.DATA: "",
             }
         )
@@ -315,6 +323,7 @@ class TerminalClient(Client):
         # connection asks again, and drops the parts of a frame it had.
         self._carrier = Base64Carrier()
         self._frame_parts.clear()
+        self._decoders.clear()
         os.write(sys.stdout.fileno(), detection_queries(self._shm_probe()))
         self._send_packet({Field.CMD: Packet.KITTY_DETECT})
 
@@ -399,18 +408,28 @@ class TerminalClient(Client):
 
         A whole frame goes as one image, so its bands are put back
         together; the bands of an edit are edits each. Lillecarl/pymux#634.
+        A frame in a codec is decoded first, and what changed is taken
+        from it. Lillecarl/pymux#639.
         """
         image = packet[Field.IMAGE]
-        bands = self._frame_parts.setdefault(image, [])
-        bands.extend(packet.get(Field.RECTS) or [])
+        codec = packet.get(Field.CODEC)
+        parts = self._frame_parts.setdefault(image, [])
+        if codec:
+            parts.append(packet.get(Field.VIDEO) or b"")
+        else:
+            parts.extend(packet.get(Field.RECTS) or [])
         if not packet.get(Field.LAST):
             return
         del self._frame_parts[image]
         whole, width, height = packet[Field.WHOLE], packet[Field.WIDTH], packet[Field.HEIGHT]
-        if whole and bands:
-            rects = [(0, 0, width, height, b"".join(band[4] for band in bands))]
+        if codec:
+            rects = self._decoded(image, codec, b"".join(parts), packet.get(Field.RECTS) or [])
+            if rects is None:
+                return
+        elif whole and parts:
+            rects = [(0, 0, width, height, b"".join(band[4] for band in parts))]
         else:
-            rects = [tuple(band) for band in bands]
+            rects = [tuple(band) for band in parts]
         try:
             commands = frame_commands(image, whole, width, height, rects, self._carrier)
         except OSError:
@@ -421,6 +440,26 @@ class TerminalClient(Client):
         if text:
             _write_all(sys.stdout.fileno(), (SAVE_CURSOR + text + RESTORE_CURSOR).encode("ascii"))
             self.placed_images = True
+
+    def _decoded(self, image: int, codec: str, data: bytes, rects: list) -> list | None:
+        "What changed in a window pane's encoded frame, as RGB rectangles; None when it would not decode."
+        if not data:
+            return []
+        decoder = self._decoders.get(image)
+        if decoder is None:
+            make = self._decoder_kinds.get(codec)
+            if make is None:
+                return None
+            decoder = self._decoders[image] = make()
+        try:
+            _width, _height, decoded = decoder.decode(data, [tuple(rect) for rect in rects])
+        except ValueError:
+            # A stream this decoder cannot follow. Each connection and
+            # each switch to the codec starts with a keyframe, which a
+            # new decoder takes.
+            del self._decoders[image]
+            return None
+        return decoded
 
     def _process(self, packet: dict):
         """

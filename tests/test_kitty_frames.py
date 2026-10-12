@@ -16,7 +16,7 @@ from prompt_toolkit.data_structures import Size
 from session import once, over_connection
 
 from pymux.client.terminal import TerminalClient
-from pymux.graphics import FRAME_PART_BYTES, frame_parts
+from pymux.graphics import FRAME_PART_BYTES, frame_parts, video_parts
 from pymux.kitty_frames import SHM_NAME_MAX, SHM_PROBE_ID, Base64Carrier, ShmCarrier, frame_commands, shm_probe
 
 #: One graphics command: its keys and its payload.
@@ -153,6 +153,29 @@ def test_a_frame_goes_in_parts_of_whole_rows():
     assert all(band[0] == 0 and band[2] == width and len(band[4]) == band[2] * band[3] * 3 for band in bands)
 
 
+def test_an_encoded_frame_goes_in_parts_with_what_changed_at_the_end():
+    "Lillecarl/pymux#639."
+    data = bytes(range(256)) * (FRAME_PART_BYTES // 100)
+    parts = video_parts(9, "vp9", (4, False, 64, 32, data, [(0, 0, 16, 16)]), "PUT")
+    assert len(parts) > 1
+    assert all(len(part[Field.VIDEO]) <= FRAME_PART_BYTES for part in parts)
+    assert b"".join(part[Field.VIDEO] for part in parts) == data
+    assert all(part[Field.CODEC] == "vp9" and not part[Field.WHOLE] for part in parts)
+    assert [Field.RECTS in part for part in parts] == [False] * (len(parts) - 1) + [True]
+    assert parts[-1][Field.RECTS] == [[0, 0, 16, 16]] and parts[-1][Field.AFTER] == "PUT"
+
+
+class _Decoder:
+    "What a decoder answers: the rectangles asked for, red, after `decoded` frames."
+
+    def __init__(self) -> None:
+        self.data: list[bytes] = []
+
+    def decode(self, data, rects):
+        self.data.append(data)
+        return 64, 32, [(x, y, w, h, RED * (w * h)) for x, y, w, h in rects]
+
+
 class _Client(TerminalClient):
     def __init__(self) -> None:
         super().__init__()
@@ -182,6 +205,42 @@ def test_the_client_writes_a_frame_at_its_last_part(terminal):
     assert (keys["a"], keys["i"], keys["s"], keys["v"]) == ("t", "9", "20", "10")
     assert zlib.decompress(base64.b64decode(payload)) == pixels
     assert client.placed_images
+
+
+def test_the_client_decodes_a_frame_and_writes_what_changed(terminal):
+    "Lillecarl/pymux#639."
+    client, read = terminal
+    decoders: list[_Decoder] = []
+    client._decoder_kinds = {"vp9": lambda: decoders.append(_Decoder()) or decoders[-1]}
+    data = b"x" * (FRAME_PART_BYTES + 10)
+    for part in video_parts(9, "vp9", (1, False, 64, 32, data, [(2, 3, 4, 5)]), ""):
+        client._process(part)
+    ((keys, payload),) = parsed(read())
+    assert (keys["a"], keys["x"], keys["y"], keys["s"], keys["v"]) == ("f", "2", "3", "4", "5")
+    assert zlib.decompress(base64.b64decode(payload)) == RED * 20
+    ((decoder,),) = [decoders]
+    assert decoder.data == [data]
+
+
+def test_a_keyframe_is_the_whole_image_again(terminal):
+    client, read = terminal
+    client._decoder_kinds = {"vp9": _Decoder}
+    client._process(video_parts(9, "vp9", (1, True, 64, 32, b"k", [(0, 0, 64, 32)]), "\x1b_Ga=p,i=9\x1b\\")[0])
+    ((keys, _payload),) = parsed(read())
+    assert (keys["a"], keys["s"], keys["v"]) == ("t", "64", "32")
+
+
+def test_a_frame_that_will_not_decode_writes_nothing(terminal):
+    client, read = terminal
+
+    class Broken:
+        def decode(self, data, rects):
+            raise ValueError("lost")
+
+    client._decoder_kinds = {"vp9": Broken}
+    client._process(video_parts(9, "vp9", (1, False, 64, 32, b"x", [(0, 0, 16, 16)]), "")[0])
+    assert read() == ""
+    assert not client._decoders
 
 
 def test_the_client_takes_shared_memory_once_the_terminal_read_it(terminal):

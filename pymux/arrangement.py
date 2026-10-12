@@ -21,7 +21,7 @@ from prompt_toolkit.data_structures import Size
 from ptterm import Terminal
 from pyte.keep import Keep
 
-from .enums import WindowSize
+from .enums import WindowCodec, WindowSize
 from .ids import PaneId, PaneIndex, WindowId, WindowIndex
 from .wayland_scale import DEFAULT_WAYLAND_SCALE
 
@@ -356,6 +356,7 @@ class Window:
         "frame_rate": Keep.SAVED,
         "frame_rate_set": Keep.SAVED,
         "wayland_scale": Keep.SAVED,
+        "window_codec": Keep.SAVED,
     }
 
     _window_counter = 1000  # Start here, to avoid confusion with window index.
@@ -416,6 +417,9 @@ class Window:
         #: How dense the Wayland windows in it draw, as `wayland-scale`
         #: spells it. Lillecarl/pymux#637.
         self.wayland_scale = DEFAULT_WAYLAND_SCALE
+        #: How the Wayland windows in it reach a client, as
+        #: `window-codec` says. Lillecarl/pymux#639.
+        self.window_codec = WindowCodec.LOSSLESS
 
         # Give unique ID.
         Window._window_counter += 1

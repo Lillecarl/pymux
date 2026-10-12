@@ -20,7 +20,7 @@ from session import once, over_connection
 
 pytest.importorskip("pysmithay")
 
-from pymux.enums import Woke
+from pymux.enums import WindowCodec, Woke
 from pymux.main import Pymux
 from pymux.window_pane import is_window_pane
 
@@ -53,13 +53,16 @@ async def with_a_window(
     cell: tuple[int, int] | None = None,
     idle: bool = False,
     frames: bool = False,
+    codecs: tuple[str, ...] = (),
+    codec: WindowCodec = WindowCodec.LOSSLESS,
 ):
     """
     A server, a client at a kitty terminal, and the probe window open in a pane.
 
     The window draws at `scale`: at 1 the probe's buffer pixels are the
     canvas's. `cell` is the client's cell, width and height, when it
-    answered one.
+    answered one. `codecs` are the ones the client decodes, and `codec`
+    the window's `window-codec`.
     """
     pymux = Pymux()
     pymux.socket_name = str(tmp_path / "pymux.sock.test")
@@ -67,7 +70,7 @@ async def with_a_window(
     log = tmp_path / "probe.log"
     log.touch()
     async with over_connection(pymux=pymux, read_packet=recorder) as session:
-        state, _size = await session.attach("one", SIZE, frames=frames)
+        state, _size = await session.attach("one", SIZE, frames=frames, codecs=codecs)
         graphics = state.connection.graphics
         graphics.kitty_supported = kitty
         graphics.detected = True
@@ -75,6 +78,7 @@ async def with_a_window(
             graphics.cell_width, graphics.cell_height = cell
             graphics.cell_size_known = True
         state.session.arrangement.get_active_window().wayland_scale = scale
+        state.session.arrangement.get_active_window().window_codec = codec
         await once(lambda: pymux.wayland.display, 10.0, "the compositor never started")
         # pywayland makes its shm pools in XDG_RUNTIME_DIR, which a build
         # sandbox does not set.
@@ -151,6 +155,54 @@ async def test_a_client_that_encodes_frames_gets_raw_pixels(tmp_path):
         # Placed at the pane's cells, after the pixels.
         assert "\x1b_Ga=p," in first[-1]["after"]
         assert all(len(band[4]) <= 64 * 1024 for part in first for band in part["rects"])
+
+
+async def test_a_client_that_decodes_vp9_gets_the_window_in_it(tmp_path):
+    "A keyframe, then the block around the square. Lillecarl/pymux#639."
+    pymux_rs = pytest.importorskip("pymux_rs")
+    async with with_a_window(tmp_path, frames=True, codecs=("vp9",), codec=WindowCodec.VP9) as (
+        _pymux,
+        _state,
+        _pane,
+        recorder,
+        log,
+        _probe,
+    ):
+        await once(lambda: "drew" in logged(log), 10.0, "the window never drew its second frame")
+        block = [[0, 0, 16, 16]]
+        await once(
+            lambda: any(frame[-1]["rects"] == block for frame in frames_of(recorder)),
+            10.0,
+            lambda: "frames %s" % [frame[-1]["rects"] for frame in frames_of(recorder)],
+        )
+        frames = frames_of(recorder)
+        assert all(part["codec"] == "vp9" and "video" in part for frame in frames for part in frame)
+        assert frames[0][0]["whole"]
+        assert "\x1b_Ga=p," in frames[0][-1]["after"]
+        decoder = pymux_rs.Vp9Decoder()
+        for frame in frames:
+            _width, _height, rects = decoder.decode(
+                b"".join(part["video"] for part in frame), [tuple(rect) for rect in frame[-1]["rects"]]
+            )
+        ((x, y, w, h, rgb),) = rects
+        assert (x, y, w, h) == (0, 0, 16, 16)
+        at = (5 * 16 + 10) * 3
+        red = bytes([0xFF, 0, 0])
+        # Lossy: a saturated red in a small square came back 11 off.
+        assert max(abs(a - b) for a, b in zip(rgb[at : at + 3], red, strict=True)) <= 16
+
+
+async def test_a_client_that_decodes_no_vp9_gets_raw_pixels_all_the_same(tmp_path):
+    async with with_a_window(tmp_path, frames=True, codec=WindowCodec.VP9) as (
+        _pymux,
+        _state,
+        _pane,
+        recorder,
+        _log,
+        _probe,
+    ):
+        await once(lambda: frames_of(recorder), 10.0, "no frame came")
+        assert "codec" not in frames_of(recorder)[0][0]
 
 
 async def test_a_client_without_kitty_is_sent_no_pixels(tmp_path):

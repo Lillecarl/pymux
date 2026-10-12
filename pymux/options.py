@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, override
 
 from . import log
 from .arrangement import Window
-from .enums import WindowSize, Woke
+from .enums import WindowCodec, WindowSize, Woke
 from .key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS
 from .key_spelling import key_however_it_is_written
 from .layout import Justify
@@ -577,6 +577,26 @@ class RenderModeOption(EnumOption):
         pymux.apply_render_mode()
 
 
+class WindowCodecOption(EnumOption):
+    "`window-codec`: how the Wayland windows in a window reach a client."
+
+    def __init__(self) -> None:
+        super().__init__(WindowCodec, "window_codec", scope=Scope.WINDOW)
+
+    @override
+    def set_default(self, pymux: Pymux, value: str) -> None:
+        "What every new window starts with. Changes no window that is open."
+        try:
+            pymux.arrangement.window_defaults[self._attribute()] = WindowCodec(value)
+        except ValueError:
+            raise SetOptionError("Expecting one of: %s." % ", ".join('"%s"' % one for one in WindowCodec))
+
+    @override
+    def after(self, pymux: Pymux) -> None:
+        # The next frame of each client goes the new way.
+        pymux.invalidate()
+
+
 class WindowSizeOption(Option):
     """
     Which client's terminal decides how big a window's plane is.
@@ -989,4 +1009,7 @@ ALL_WINDOW_OPTIONS = {
     # How dense the Wayland windows in this window draw: `auto` reads
     # it off the client's cell. Lillecarl/pymux#637.
     "wayland-scale": WaylandScaleOption(),
+    # Whether the Wayland windows in this window reach a client as the
+    # pixels that changed or as a VP9 stream. Lillecarl/pymux#639.
+    "window-codec": WindowCodecOption(),
 }

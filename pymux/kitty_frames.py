@@ -13,6 +13,9 @@ compression and base64 that cost 12 ms a frame at 1600x900. Any other
 terminal gets them zlib compressed and base64 encoded in the command
 itself (`t=d`, `o=z`). Which one a terminal takes is asked once,
 with `SHM_PROBE`.
+
+A window pane in a codec (`window-codec`) comes as encoded frames, which
+`decoders` turns back into RGB rectangles here. Lillecarl/pymux#639.
 """
 
 from __future__ import annotations
@@ -22,10 +25,13 @@ import contextlib
 import itertools
 import os
 import zlib
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from multiprocessing import shared_memory
+from typing import Any
 
-__all__ = ["SHM_PROBE_ID", "Base64Carrier", "ShmCarrier", "frame_commands", "shm_probe"]
+from libpymux.protocol import Codec
+
+__all__ = ["SHM_PROBE_ID", "Base64Carrier", "ShmCarrier", "decoders", "frame_commands", "shm_probe"]
 
 #: kitty takes at most this many bytes of base64 in one command.
 CHUNK = 4096
@@ -119,6 +125,19 @@ def frame_commands(
             keys = "a=f,i=%d,r=1,x=%d,y=%d,s=%d,v=%d,X=1,q=2" % (image_id, x, y, w, h)
         out.append(carrier.command(keys, pixels))
     return "".join(out)
+
+
+def decoders() -> dict[str, Callable[[], Any]]:
+    """
+    The codecs this machine decodes, and what makes a decoder of each:
+    `decoder.decode(data, rects)` answers `(width, height, [(x, y, w, h,
+    rgb)])`. None without pymux_rs, which builds them.
+    """
+    try:
+        from pymux_rs import Vp9Decoder
+    except ImportError:
+        return {}
+    return {Codec.VP9: Vp9Decoder}
 
 
 def shm_probe(carrier: ShmCarrier) -> str:
