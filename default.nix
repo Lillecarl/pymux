@@ -72,6 +72,9 @@ let
     "keys.js"
     "keys.d.ts"
     "page.js"
+    "replay.js"
+    "replay.d.ts"
+    "replay-page.js"
   ];
 
   installElement =

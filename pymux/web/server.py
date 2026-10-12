@@ -66,6 +66,11 @@ SERVED = {
     # element never loads at all.
     "/keys.js": ("keys.js", "text/javascript; charset=utf-8"),
     "/keys.d.ts": ("keys.d.ts", "text/plain; charset=utf-8"),
+    # The player of `record-export -F web`. Lillecarl/pymux#610.
+    "/replay.html": ("replay.html", "text/html; charset=utf-8"),
+    "/replay.js": ("replay.js", "text/javascript; charset=utf-8"),
+    "/replay.d.ts": ("replay.d.ts", "text/plain; charset=utf-8"),
+    "/replay-page.js": ("replay-page.js", "text/javascript; charset=utf-8"),
 }
 
 

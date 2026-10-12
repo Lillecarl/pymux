@@ -50,10 +50,17 @@ let
           types = "./pymux-pane.d.ts";
           default = "./pymux-pane.js";
         };
+        # The player of `record-export -F web`. Lillecarl/pymux#610.
+        "./replay" = {
+          types = "./replay.d.ts";
+          default = "./replay.js";
+        };
       };
       files = [
         "pymux-pane.js"
         "pymux-pane.d.ts"
+        "replay.js"
+        "replay.d.ts"
         # Imported by the element rather than by a consumer, and a file
         # the package does not carry is a package that does not load.
         "keys.js"
@@ -83,6 +90,7 @@ runCommand "pymux-element-${npmVersion}"
     # `page.js` rides along and the manifest does not export it: the
     # demo page is served beside the element, not imported through it.
     install -m644 dist/pymux-pane.js dist/pymux-pane.d.ts \
-      dist/keys.js dist/keys.d.ts dist/page.js "$out"/
+      dist/keys.js dist/keys.d.ts dist/page.js \
+      dist/replay.js dist/replay.d.ts dist/replay-page.js "$out"/
     install -m644 ${manifest} "$out"/package.json
   ''

@@ -493,7 +493,17 @@ export class PymuxPane extends HTMLElement {
       this.dispatchEvent(new CustomEvent("error", { detail: "bad frame" }));
       return;
     }
+    this.receive(frame);
+  }
 
+  /**
+   * Draw one message, as if a socket had brought it.
+   *
+   * A replay has no socket: its messages come out of a file at the times
+   * they were recorded, and this is where a player hands each one over.
+   * Lillecarl/pymux#610.
+   */
+  receive(frame: Welcome | Frame): void {
     if (frame.type === "welcome") {
       this.#writable = Boolean(frame.writable);
       this.#adopt(this.#themeSheet, frame.css || "");

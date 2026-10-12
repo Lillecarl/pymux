@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>pymux replay</title>
+    <link rel="stylesheet" href="/page.css" />
+  </head>
+  <body>
+    <!--
+      Plays what `record-export -F web` writes: pick the .web.json, or
+      name one this server serves with ?src=.
+    -->
+    <h1>pymux replay</h1>
+    <p id="about">Pick a recording exported with record-export -F web.</p>
+    <p class="controls">
+      <input id="file" type="file" accept=".json,application/json" />
+      <button id="toggle" type="button" disabled>Play</button>
+      <button id="restart" type="button" disabled>Restart</button>
+      <label
+        >Speed
+        <select id="speed">
+          <option value="0.5">0.5x</option>
+          <option value="1" selected>1x</option>
+          <option value="2">2x</option>
+          <option value="4">4x</option>
+        </select>
+      </label>
+    </p>
+    <pymux-pane id="pane"></pymux-pane>
+    <script type="module" src="/replay-page.js"></script>
+  </body>
+</html>
