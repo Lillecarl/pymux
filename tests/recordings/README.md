@@ -19,11 +19,12 @@ program made, and the picture says whether pymux changed it.
 
 ## Making one
 
-    ptterm-record --into . --lines 24 --columns 80 claude -- claude
+    ptyhost-record --into . --lines 24 --columns 80 claude -- claude
 
-`ptterm-record` comes with ptterm, so it runs wherever the program
-that has the fault runs. `nix shell --file . ptterm` puts it on the
-path, and `python -m ptterm.record` works from a checkout.
+`ptyhost-record` comes with ptyhost, so it runs wherever the program
+that has the fault runs. An installed pymux puts it on the path,
+`nix shell --file . pymux` does too, and `python -m ptyhost.record`
+works from a checkout.
 
 The program runs normally: keys go to it and what it draws reaches the
 screen. Use it, reproduce whatever is wrong, and quit. Three files land
