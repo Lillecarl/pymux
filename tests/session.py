@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import contextvars
 import io
-import json
 import sys
 import time
 import weakref
@@ -37,6 +36,7 @@ from contextlib import asynccontextmanager
 from typing import Any, NamedTuple
 
 import anyio
+from libpymux.wire import encode_json
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
@@ -466,9 +466,9 @@ async def over_connection(pymux=None, read_packet=None):
 
         # What `client/terminal.py` sends when it attaches, in the
         # order it sends it.
-        client_end.write_nowait(json.dumps({"cmd": "size", "data": [size.rows, size.columns]}))
+        client_end.write_nowait(encode_json({"cmd": "size", "data": [size.rows, size.columns]}))
         client_end.write_nowait(
-            json.dumps(
+            encode_json(
                 {
                     "cmd": "start-gui",
                     "detach-others": False,
@@ -553,7 +553,7 @@ async def over_connection(pymux=None, read_packet=None):
 
     def typed(state, text):
         client_end, _draining = ends[id(state)]
-        client_end.write_nowait(json.dumps({"cmd": "in", "data": text}))
+        client_end.write_nowait(encode_json({"cmd": "in", "data": text}))
 
     async def create_command(text, pane_id=None, environment=None):
         """
@@ -588,7 +588,7 @@ async def over_connection(pymux=None, read_packet=None):
         packet = {"cmd": "run-command", "data": text, "pane_id": pane_id}
         if environment is not None:
             packet["environment"] = environment
-        client_end.write_nowait(json.dumps(packet))
+        client_end.write_nowait(encode_json(packet))
         return got
 
     async with pymux.running():

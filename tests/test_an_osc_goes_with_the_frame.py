@@ -183,10 +183,10 @@ async def test_a_real_client_holds_it_through_a_flush_between_frames():
             fence = "\x1b]99;;fence-611\x1b\\"
             pane.terminal.terminal_control.feed_output("drawn-before-the-fence" + fence)
             connection._flush_output()
-            await once(lambda: any(b"fence-611" in packet for packet in session.packets), 10.0, "no fence")
+            await once(lambda: "fence-611" in written(session.packets), 10.0, "no fence")
 
-            wire = b"".join(session.packets)
-            assert wire.index(b"drawn-before-the-fence") < wire.index(b"fence-611")
+            wire = written(session.packets)
+            assert wire.index("drawn-before-the-fence") < wire.index("fence-611")
     finally:
         for pane in list(mux.panes_by_id.values()):
             if not pane.process.is_terminated:

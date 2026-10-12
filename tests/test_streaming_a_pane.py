@@ -23,6 +23,7 @@ import sys
 
 import anyio
 import pytest
+from libpymux.wire import encode_json
 
 from pymux.main import Pymux
 from pymux.pipes.memory import connect_in_memory
@@ -72,7 +73,7 @@ async def frames_of(client_end, how_many: int, seconds: float = 2.0) -> list:
     found = []
     with anyio.move_on_after(seconds):
         while len(found) < how_many:
-            packet = json.loads(await client_end.read())
+            packet = await client_end.read()
             if packet["cmd"] == "stream-out":
                 found.append(json.loads(packet["data"]))
             elif packet["cmd"] in ("err", "exit"):
@@ -82,7 +83,7 @@ async def frames_of(client_end, how_many: int, seconds: float = 2.0) -> list:
 
 def ask(client_end, pane, writable: bool = False) -> None:
     client_end.write_nowait(
-        json.dumps(
+        encode_json(
             {
                 "cmd": "stream-pane",
                 "pane": "%%%i" % pane.pane_id,
@@ -154,7 +155,7 @@ async def test_a_pane_nobody_can_find_is_refused(pymux):
     async with pymux.running():
         server_end, client_end = connect_in_memory()
         ServerConnection(pymux, server_end)
-        client_end.write_nowait(json.dumps({"cmd": "stream-pane", "pane": "%9999"}))
+        client_end.write_nowait(encode_json({"cmd": "stream-pane", "pane": "%9999"}))
 
         said = await frames_of(client_end, 2)
 
@@ -256,7 +257,7 @@ async def test_a_writable_stream_sends_keys_to_the_program(pymux):
         await frames_of(client_end, 2)
 
         client_end.write_nowait(
-            json.dumps(
+            encode_json(
                 {
                     "cmd": "stream-in",
                     "data": json.dumps({"type": "input", "keys": "C-c"}),
@@ -288,7 +289,7 @@ async def test_composed_text_reaches_the_program_as_it_stands(pymux):
         await frames_of(client_end, 2)
 
         client_end.write_nowait(
-            json.dumps(
+            encode_json(
                 {
                     "cmd": "stream-in",
                     "data": json.dumps({"type": "text", "text": "é"}),
@@ -316,7 +317,7 @@ async def test_a_paste_goes_as_it_stands(pymux):
         await frames_of(client_end, 2)
 
         client_end.write_nowait(
-            json.dumps(
+            encode_json(
                 {
                     "cmd": "stream-in",
                     "data": json.dumps({"type": "paste", "text": "C-c is text"}),
@@ -347,7 +348,7 @@ async def test_a_paste_is_bracketed_when_the_program_asked(pymux):
         await frames_of(client_end, 2)
 
         client_end.write_nowait(
-            json.dumps(
+            encode_json(
                 {
                     "cmd": "stream-in",
                     "data": json.dumps({"type": "paste", "text": "ls\n"}),
@@ -378,7 +379,7 @@ async def test_a_read_only_stream_refuses_input(pymux):
         await frames_of(client_end, 2)
 
         client_end.write_nowait(
-            json.dumps(
+            encode_json(
                 {
                     "cmd": "stream-in",
                     "data": json.dumps({"type": "input", "keys": "C-c"}),
@@ -400,7 +401,7 @@ async def test_input_for_no_stream_is_ignored_and_not_a_crash(pymux):
         server_end, client_end = connect_in_memory()
         connection = ServerConnection(pymux, server_end)
 
-        client_end.write_nowait(json.dumps({"cmd": "stream-in", "data": "{}"}))
+        client_end.write_nowait(encode_json({"cmd": "stream-in", "data": "{}"}))
         await anyio.sleep(0.05)
 
         assert not connection._closed

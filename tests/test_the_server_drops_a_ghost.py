@@ -19,8 +19,6 @@ about the client it was left with.
 
 from __future__ import annotations
 
-import json
-
 from prompt_toolkit.data_structures import Size
 from session import once, over_connection
 
@@ -36,16 +34,7 @@ QUICKLY = 0.05
 
 def _pings(seen: list) -> list:
     "The pings among the packets a client received."
-    asked = []
-
-    for packet in seen:
-        if isinstance(packet, (bytes, bytearray)):
-            packet = packet.decode("utf-8")
-        for one in packet.split("\0"):
-            if one.strip() and json.loads(one).get("cmd") == "ping":
-                asked.append(one)
-
-    return asked
+    return [packet for packet in seen if packet.get("cmd") == "ping"]
 
 
 async def test_a_client_that_answers_is_asked_and_kept(monkeypatch):
@@ -117,6 +106,6 @@ async def test_a_client_answers_a_ping():
     client = SshClient("ssh://127.0.0.1/tmp/nowhere.sock")
     client._send_packet = sent.append
 
-    client._process(json.dumps({"cmd": "ping"}).encode("utf-8"))
+    client._process({"cmd": "ping"})
 
     assert sent == [{"cmd": "pong"}]

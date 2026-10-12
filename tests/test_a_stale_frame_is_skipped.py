@@ -11,8 +11,6 @@ Lillecarl/pymux#524.
 
 from __future__ import annotations
 
-import json
-
 from libpymux.protocol import Field, Packet
 from profile_frame import server
 
@@ -53,6 +51,6 @@ async def test_input_from_the_client_moves_the_tick() -> None:
         connection.recording = None
         connection._clipboard_asked = False
         connection._clipboard_partial = ""
-        connection._process(json.dumps({Field.CMD: Packet.IN, Field.DATA: "x"}).encode("utf-8"))
+        connection._process({Field.CMD: Packet.IN, Field.DATA: "x"})
         assert newcomer.sent == ["x"]
         assert state.should_skip_render()

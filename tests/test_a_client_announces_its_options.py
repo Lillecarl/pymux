@@ -11,10 +11,10 @@ configuration is another machine's. So the client takes the
 from __future__ import annotations
 
 import contextvars
-import json
 from contextlib import asynccontextmanager
 
 import anyio
+from libpymux.wire import encode_json
 
 from pymux.config import client_options_in
 from pymux.main import Pymux
@@ -119,8 +119,8 @@ def test_a_line_that_does_not_parse_is_left_to_the_server(tmp_path):
 # What the server does with them.
 
 
-def _start_gui(announced) -> str:
-    return json.dumps(
+def _start_gui(announced) -> bytes:
+    return encode_json(
         {
             "cmd": "start-gui",
             "detach-others": False,

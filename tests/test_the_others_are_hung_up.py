@@ -14,13 +14,13 @@ in `test_attach_detaches_the_others.py`. This file judges the message.
 from __future__ import annotations
 
 import contextvars
-import json
 import os
 import signal
 import sys
 from contextlib import asynccontextmanager
 
 import anyio
+from libpymux.wire import encode_json
 from prompt_toolkit.application.current import set_app
 from test_the_link_comes_back import Terminal
 
@@ -70,7 +70,7 @@ class Heard:
                     packet = await self.end.read()
                 except Exception:
                     return
-                self.packets.append(json.loads(packet))
+                self.packets.append(packet)
         finally:
             self.ended.set()
 
@@ -92,7 +92,7 @@ async def _attach(pymux: Pymux, tasks, hang_up_others: bool = False):
     tasks.start_soon(heard.read_until_closed)
 
     client_end.write_nowait(
-        json.dumps(
+        encode_json(
             {
                 "cmd": "start-gui",
                 "detach-others": hang_up_others,
@@ -313,7 +313,7 @@ async def test_a_real_client_asks_for_it(monkeypatch, tmp_path):
 def test_a_client_reads_the_flag_off_the_exit_packet():
     client = TerminalClient()
 
-    client._process(json.dumps({"cmd": "exit", "code": 0, "hang-up": True}).encode())
+    client._process({"cmd": "exit", "code": 0, "hang-up": True})
 
     assert client.hang_up_asked is True
     assert client.exit_code == 0
@@ -322,7 +322,7 @@ def test_a_client_reads_the_flag_off_the_exit_packet():
 def test_a_plain_exit_asks_for_no_hangup():
     client = TerminalClient()
 
-    client._process(json.dumps({"cmd": "exit", "code": 1}).encode())
+    client._process({"cmd": "exit", "code": 1})
 
     assert client.hang_up_asked is False
     assert client.exit_code == 1

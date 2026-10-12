@@ -84,7 +84,6 @@ loaded machine misses the poll, which is a property of the machine.
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import statistics
 import sys
@@ -247,13 +246,7 @@ class TheFrameComingBack:
         if self.arrived is None or self.arrived.is_set():
             return
 
-        if isinstance(packet, (bytes, bytearray)):
-            packet = packet.decode("utf-8", "replace")
-        try:
-            given = json.loads(packet)
-        except ValueError:
-            return
-
+        given = packet
         if given.get("cmd") != "out" or self.marker not in given.get("data", ""):
             return
 

@@ -2,8 +2,8 @@
 A pipe connection that carries packets in memory.
 
 The server and a client exchange packets over a unix socket. Nothing in
-that exchange needs an operating system: the packets are JSON, and one
-end writes what the other end reads. This module gives the same pair of
+that exchange needs an operating system: the packets are encoded frames
+(`libpymux.wire`), and one end writes what the other end reads. This module gives the same pair of
 ends, joined by two queues instead of a socket.
 
 With it, a server and a client run in one process. That is what
@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import override
 
 import anyio
+from libpymux.wire import PacketReader
 
 from .base import BrokenPipeError, PipeConnection
 
@@ -46,50 +47,54 @@ class MemoryConnection(PipeConnection):
         self._send, self._incoming = anyio.create_memory_object_stream(max_buffer_size=float("inf"))
         self._peer: MemoryConnection | None = None
         self._closed = False
+        self._reader = PacketReader()
+        self._ready: list[dict] = []
 
     def _join(self, peer: MemoryConnection) -> None:
         self._peer = peer
         peer._peer = self
 
     @override
-    async def read(self) -> bytes:
+    async def read(self) -> dict:
         """
         Take the next packet. Raise `BrokenPipeError` at the end.
         """
-        if self._closed:
-            raise BrokenPipeError
+        while not self._ready:
+            if self._closed:
+                raise BrokenPipeError
+            try:
+                frame = await self._incoming.receive()
+            except anyio.EndOfStream, anyio.ClosedResourceError:
+                self._closed = True
+                raise BrokenPipeError
+            self._ready.extend(self._reader.feed(frame))
+        return self._ready.pop(0)
 
-        try:
-            return await self._incoming.receive()
-        except anyio.EndOfStream, anyio.ClosedResourceError:
-            self._closed = True
-            raise BrokenPipeError
-
-    def write_nowait(self, message: str) -> None:
+    def write_nowait(self, frame: bytes) -> None:
         """
-        Give the next packet to the peer, without waiting.
+        Give the next encoded packet to the peer, without waiting.
 
         The queue of the peer has no limit, so a write never waits.
         The client side uses this: it writes from the keyboard reader
         and from the signal handler, which are not coroutines.
 
-        The packet is encoded the way the socket route encodes it, so
-        that the other end reads the same bytes on both routes.
+        The frame is the one the socket route sends, so that the other
+        end reads the same bytes on both routes.
         """
         if self._closed or self._peer is None or self._peer._closed:
             raise BrokenPipeError
 
         try:
-            self._peer._send.send_nowait(message.encode("utf-8"))
+            self._peer._send.send_nowait(frame)
         except anyio.BrokenResourceError, anyio.ClosedResourceError:
             raise BrokenPipeError
 
     @override
-    async def write(self, message: str) -> None:
+    async def write(self, frame: bytes) -> None:
         """
-        Give the next packet to the peer.
+        Give the next encoded packet to the peer.
         """
-        self.write_nowait(message)
+        self.write_nowait(frame)
 
     @override
     def close(self) -> None:

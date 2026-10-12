@@ -67,9 +67,8 @@ class StubSocket:
     def setblocking(self, _flag):
         pass
 
-    def send(self, data):
+    def sendall(self, data):
         self.sent += data
-        return len(data)
 
     def recv(self, _size):
         if self.answers:

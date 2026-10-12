@@ -6,7 +6,6 @@ suites that read one through `ServerConnection.read_clipboard`.
 from __future__ import annotations
 
 import base64
-import json
 import re
 
 #: A query or a write of OSC 52, as the server writes it.
@@ -32,7 +31,7 @@ class ClipboardTerminal:
         self.state = None
 
     def __call__(self, packet) -> None:
-        message = json.loads(packet)
+        message = packet
         if message.get("cmd") != "out":
             return
         for letter, payload in _OSC52.findall(message.get("data", "")):

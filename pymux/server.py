@@ -17,6 +17,7 @@ from typing import (
 
 import anyio
 from libpymux.protocol import Field, Mode, Packet
+from libpymux.wire import MSGPACK, encode_json, encode_msgpack
 from prompt_toolkit.application.current import create_app_session, set_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import PipeInput
@@ -140,6 +141,9 @@ class ServerConnection:
         "may_attach": Keep.REBUILT,
         "forwards": Keep.DROPPED,
         "pipe_connection": Keep.DROPPED,
+        # The client offers msgpack again on the connection it opens to
+        # the next server.
+        "_encode": Keep.DROPPED,
         "_pipeinput": Keep.DROPPED,
         "_stream": Keep.DROPPED,
         "_tasks": Keep.DROPPED,
@@ -155,6 +159,9 @@ class ServerConnection:
         self.pymux = pymux
 
         self.pipe_connection = pipe_connection
+        #: How a packet to this client is encoded: JSON until the client
+        #: offers msgpack in `start-gui`. Lillecarl/pymux#633.
+        self._encode = encode_json
 
         #: Whether a client on this connection may ask for the user
         #: interface. False for a connection that arrived over the
@@ -704,21 +711,13 @@ class ServerConnection:
             else:
                 failures = 0
 
-    def _process(self, data) -> None:
+    def _process(self, packet: dict) -> None:
         """
         Process packet received from client.
         """
-        try:
-            data = data.decode("utf-8")
-        except UnicodeDecodeError:
-            logger.warning("Received invalid UTF-8 from client. Ignoring.")
-            return
-        try:
-            packet = json.loads(data)
-        except ValueError:
-            # So far, this never happened. But it would be good to have some
-            # protection.
-            logger.warning("Received invalid JSON from client. Ignoring.")
+        # The client's writer turned to msgpack. The pipe's reader has
+        # turned with it already; there is nothing else to do.
+        if packet.get(Field.CMD) == Packet.WIRE:
             return
 
         # Handle commands.
@@ -771,6 +770,12 @@ class ServerConnection:
             if not self.may_attach:
                 self._spawn(self._refuse_the_attach())
                 return
+
+            # The client reads msgpack: say so in JSON, and write
+            # msgpack from the next packet on. `libpymux.wire`.
+            if MSGPACK in (packet.get(Field.WIRE) or ()) and self._encode is encode_json:
+                self._send_packet({Field.CMD: Packet.WIRE, Field.WIRE: MSGPACK})
+                self._encode = encode_msgpack
 
             detach_other_clients = bool(packet[Field.DETACH_OTHERS])
             # `attach -x`: the others leave, and the terminals they were
@@ -951,8 +956,8 @@ class ServerConnection:
         if self.recording is not None and isinstance(data, dict) and data.get(Field.CMD) == Packet.OUT:
             self.recording.hear("out", data[Field.DATA])
         # Serialised now: the write runs later, and the packet is what
-        # was true when it was sent.
-        self._spawn(self._write(json.dumps(data)))
+        # was true when it was sent, in the format of the moment.
+        self._spawn(self._write(self._encode(data)))
 
     async def say_restarting(self, wait: float) -> None:
         """
@@ -1106,12 +1111,12 @@ class ServerConnection:
         """
         if self._closed:
             return
-        await self._write(json.dumps(data_obj))
+        await self._write(self._encode(data_obj))
 
-    async def _write(self, text: str) -> None:
-        "Write one serialised packet; a client that is gone is let go."
+    async def _write(self, frame: bytes) -> None:
+        "Write one encoded packet; a client that is gone is let go."
         try:
-            await self.pipe_connection.write(text)
+            await self.pipe_connection.write(frame)
         except BrokenPipeError:
             self.detach_and_close()
 

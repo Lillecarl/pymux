@@ -70,7 +70,7 @@ async def test_a_listing_from_a_pane_still_answers_on_stdout():
         got = await session.command("list-panes")
 
         await once(
-            lambda: any(b'"out"' in packet for packet in got),
+            lambda: any(packet.get("cmd") == "out" for packet in got),
             5.0,
             "the listing never came back on the connection",
         )

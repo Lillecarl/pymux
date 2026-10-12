@@ -14,7 +14,6 @@ difference of the transport and nothing else.
 from __future__ import annotations
 
 import contextlib
-import json
 import os
 import secrets
 import signal
@@ -24,6 +23,7 @@ import webbrowser
 
 import anyio
 from libpymux.protocol import Field, Mode, Packet
+from libpymux.wire import MSGPACK, encode_json, encode_msgpack
 from prompt_toolkit.input.posix_utils import PosixStdinReader
 from prompt_toolkit.input.vt100 import cooked_mode, raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output, _get_size
@@ -119,6 +119,11 @@ class TerminalClient(Client):
     #: Lillecarl/pymux#436.
     can_forward = False
 
+    #: How a packet to the server is encoded. `_start_gui` sets it back
+    #: to JSON for each connection, and a `wire` packet from the server
+    #: turns it to msgpack. Lillecarl/pymux#633.
+    _encode = staticmethod(encode_json)
+
     #: Every real client answers the server's ping. The server drops a
     #: client that stops answering, and only one that said it answers,
     #: so this is what makes that safe. Lillecarl/pymux#446.
@@ -201,6 +206,9 @@ class TerminalClient(Client):
         """
         first = not self._attached_before
         self._attached_before = True
+        # A new connection, to this server or the next: JSON until it
+        # answers the offer below.
+        self._encode = encode_json
         self._send_size()
         self._send_packet(
             {
@@ -253,6 +261,9 @@ class TerminalClient(Client):
                 # configuration is another machine's.
                 # Lillecarl/pymux#223.
                 Field.CLIENT_OPTIONS: self._client_options(),
+                # This client reads msgpack. A server that takes it
+                # says so with a `wire` packet. Lillecarl/pymux#633.
+                Field.WIRE: [MSGPACK],
                 Field.DATA: "",
             }
         )
@@ -321,13 +332,17 @@ class TerminalClient(Client):
         with contextlib.suppress(Exception):
             self._reset_terminal()
 
-    def _process(self, data_buffer):
+    def _process(self, packet: dict):
         """
         Handle incoming packet from server.
         """
-        packet = json.loads(data_buffer.decode("utf-8"))
+        if packet[Field.CMD] == Packet.WIRE:
+            # The server writes msgpack from here on, and the reader has
+            # turned already. This side turns too, saying so first.
+            self._send_packet({Field.CMD: Packet.WIRE, Field.WIRE: MSGPACK})
+            self._encode = encode_msgpack
 
-        if packet[Field.CMD] == Packet.OUT:
+        elif packet[Field.CMD] == Packet.OUT:
             data = packet[Field.DATA]
             os.write(sys.stdout.fileno(), data.encode("utf-8"))
             if KITTY_GRAPHICS in data:

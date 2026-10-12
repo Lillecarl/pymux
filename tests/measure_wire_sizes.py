@@ -36,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 # not the directory above it.
 sys.path.insert(1, str(Path(__file__).parent.parent))
 
+from libpymux.wire import encode_json
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from session import over_connection
@@ -124,13 +125,12 @@ class Recorder:
         return event
 
     def __call__(self, packet) -> None:
-        raw = bytes(packet) if isinstance(packet, (bytes, bytearray)) else str(packet).encode("utf-8")
+        # The pipe hands over the decoded packet. The connection here
+        # never offers msgpack, so JSON is what crossed the wire.
+        raw = encode_json(packet)[:-1]
         self.packets.append(raw)
 
-        try:
-            given = json.loads(raw.decode("utf-8"))
-        except ValueError:
-            return
+        given = packet
         if given.get("cmd") != "out":
             return
         data = given.get("data", "")

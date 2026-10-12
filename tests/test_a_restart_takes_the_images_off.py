@@ -9,7 +9,6 @@ no kitty graphics may print it. Lillecarl/pymux#399.
 
 from __future__ import annotations
 
-import json
 import os
 
 import pytest
@@ -31,7 +30,7 @@ class Waiting(PosixClient):
 def test_a_restart_takes_the_images_off_only_where_there_were_some(capfdbinary, tmp_path, placed):
     client = Waiting(str(tmp_path / "gone.sock"))
     data = "frame\x1b_Ga=p,i=3,q=2\x1b\\" if placed else "frame only"
-    client._process(json.dumps({Field.CMD: Packet.OUT, Field.DATA: data}).encode())
+    client._process({Field.CMD: Packet.OUT, Field.DATA: data})
 
     keys, _ = os.pipe()
     client.restart_wait = 0.05

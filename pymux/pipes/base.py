@@ -12,17 +12,19 @@ class PipeConnection(ABC):
     "One connection between a server and a client: a unix socket, or queues in one process."
 
     @abstractmethod
-    async def read(self) -> bytes:
+    async def read(self) -> dict:
         """
-        Read a single message from the pipe.
+        Read the next packet, decoded: JSON or msgpack, as the peer turned
+        to (`libpymux.wire`).
 
         This can raise BrokenPipeError.
         """
 
     @abstractmethod
-    async def write(self, message: str) -> None:
+    async def write(self, frame: bytes) -> None:
         """
-        Write a single message into the pipe.
+        Write one encoded packet, its framing included
+        (`libpymux.wire.encode_json` or `encode_msgpack`).
 
         This can raise BrokenPipeError.
         """

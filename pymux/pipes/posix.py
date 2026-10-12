@@ -11,8 +11,9 @@ from collections.abc import Callable
 from typing import override
 
 import anyio
-from libpymux.protocol import READ_SIZE, Framer
+from libpymux.protocol import READ_SIZE
 from libpymux.sockets import nobody_answers, socket_directory
+from libpymux.wire import PacketReader
 
 from ..log import logger
 from .base import BrokenPipeError, PipeConnection
@@ -261,8 +262,8 @@ class PosixSocketConnection(PipeConnection):
         # connection's write and never the loop (`write`).
         # Lillecarl/pymux#418.
         self.socket.setblocking(False)
-        self._framer = Framer()
-        self._ready: list[bytes] = []
+        self._reader = PacketReader()
+        self._ready: list[dict] = []
         self._closed = False
 
         #: Bytes given to `write` and not yet taken by the kernel.
@@ -284,16 +285,13 @@ class PosixSocketConnection(PipeConnection):
             await self._empty.wait()
 
     @override
-    async def read(self) -> bytes:
-        r"""
-        Coroutine that reads the next packet.
-        (Packets are \0 separated.)
-        """
+    async def read(self) -> dict:
+        "The next packet, decoded."
         if self._closed:
             raise BrokenPipeError
 
         while not self._ready:
-            self._ready.extend(self._framer.feed(await self._read_chunk()))
+            self._ready.extend(self._reader.feed(await self._read_chunk()))
         return self._ready.pop(0)
 
     async def _read_chunk(self) -> bytes:
@@ -324,9 +322,9 @@ class PosixSocketConnection(PipeConnection):
         return data
 
     @override
-    async def write(self, message: str) -> None:
+    async def write(self, frame: bytes) -> None:
         """
-        Write the next packet. (Packets are \\0 separated.)
+        Write the next encoded packet.
 
         **A client that stopped reading stops only itself.** The send
         waits for room on its own connection and the loop goes on:
@@ -337,7 +335,7 @@ class PosixSocketConnection(PipeConnection):
         if self._closed:
             raise BrokenPipeError
 
-        data = message.encode("utf-8") + b"\0"
+        data = frame
 
         # Counted before the lock, so that a write waiting for its
         # turn is counted while it waits: the lock serialises the

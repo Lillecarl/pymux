@@ -37,7 +37,6 @@ that is read on a timer costs nothing and covers what a signal misses.
 from __future__ import annotations
 
 import contextlib
-import json
 import sys
 from typing import override
 
@@ -70,7 +69,7 @@ class MemoryClient(TerminalClient):
         "Send to the server. (The queue has no limit, so this waits for nothing.)"
         # The server is gone. The read loop ends on its own.
         with contextlib.suppress(BrokenPipeError):
-            self.connection.write_nowait(json.dumps(data))
+            self.connection.write_nowait(self._encode(data))
 
     @override
     async def attach(self, detach_other_clients: bool = False, color_depth=None) -> None:

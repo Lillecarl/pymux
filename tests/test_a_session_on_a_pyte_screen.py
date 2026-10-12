@@ -25,6 +25,7 @@ from unittest.mock import patch
 import anyio
 import pytest
 from libpymux.protocol import Packet
+from libpymux.wire import encode_json
 from prompt_toolkit.application.current import set_app
 from session import once
 
@@ -72,7 +73,7 @@ async def attached(pymux, read_only: bool = False):
     session = SessionScreen(
         ROWS,
         COLUMNS,
-        lambda packet: client_end.write_nowait(json.dumps(packet)),
+        lambda packet: client_end.write_nowait(encode_json(packet)),
         read_only=read_only,
     )
 
@@ -99,7 +100,7 @@ async def attached(pymux, read_only: bool = False):
             except Exception:
                 return
             session.packets.append(packet)
-            done = session.take_packet(json.loads(packet))
+            done = session.take_packet(packet)
             session.taken += 1
             if done:
                 return

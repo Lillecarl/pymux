@@ -10,12 +10,12 @@ Lillecarl/pymux#344, Lillecarl/pymux#345.
 from __future__ import annotations
 
 import contextvars
-import json
 import sys
 from contextlib import asynccontextmanager
 
 import anyio
 from libpymux.protocol import Field, Packet
+from libpymux.wire import encode_json
 from prompt_toolkit.application.current import set_app
 
 from pymux.client.terminal import TerminalClient
@@ -55,8 +55,8 @@ async def a_server():
                         pane.process.kill()
 
 
-def _start_gui(detach_others: bool) -> str:
-    return json.dumps(
+def _start_gui(detach_others: bool) -> bytes:
+    return encode_json(
         {
             "cmd": "start-gui",
             "detach-others": detach_others,

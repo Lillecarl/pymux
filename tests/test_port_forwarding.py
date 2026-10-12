@@ -13,7 +13,6 @@ only checked "something came back" would pass on it.
 
 from __future__ import annotations
 
-import json
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 
@@ -1373,25 +1372,10 @@ async def _errors_of(session, command) -> list:
 
 def _forward_requests(seen: list) -> list:
     """
-    The forward requests among the packets a client received.
-
-    The memory pipe carries what the socket carries, which is JSON
-    ending at a zero byte, so this reads it the way a real client
-    does rather than expecting objects.
+    The forward requests among the packets a client received, which
+    the pipe decoded the way it does for a real client.
     """
-    asked = []
-
-    for packet in seen:
-        if isinstance(packet, (bytes, bytearray)):
-            packet = packet.decode("utf-8")
-        for one in packet.split("\0"):
-            if not one.strip():
-                continue
-            read = json.loads(one)
-            if read.get("cmd") == "forward":
-                asked.append(read)
-
-    return asked
+    return [packet for packet in seen if packet.get("cmd") == "forward"]
 
 
 async def _listed(session, command) -> list:
@@ -1577,19 +1561,7 @@ LOOPBACK_URL = "http://localhost:3000/"
 
 def _open_requests(seen: list) -> list:
     "The open requests among the packets a client received."
-    asked = []
-
-    for packet in seen:
-        if isinstance(packet, (bytes, bytearray)):
-            packet = packet.decode("utf-8")
-        for one in packet.split("\0"):
-            if not one.strip():
-                continue
-            read = json.loads(one)
-            if read.get("cmd") == "open":
-                asked.append(read)
-
-    return asked
+    return [packet for packet in seen if packet.get("cmd") == "open"]
 
 
 async def _opened(session, seen, url=LOOPBACK_URL, can_forward=True) -> dict:

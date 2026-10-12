@@ -253,15 +253,4 @@ async def _until(question, seconds: float = 5.0) -> None:
 
 def _exit_of(packets) -> list:
     "The exit packets among what a command's connection sent back."
-    import json
-
-    found = []
-    for packet in packets:
-        text = packet.decode("utf-8") if isinstance(packet, bytes) else packet
-        try:
-            read = json.loads(text)
-        except ValueError:
-            continue
-        if read.get("cmd") == "exit":
-            found.append(read)
-    return found
+    return [packet for packet in packets if packet.get("cmd") == "exit"]

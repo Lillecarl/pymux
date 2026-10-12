@@ -36,32 +36,32 @@ async def read_all(client: socket.socket, length: int) -> int:
 async def test_one_packet_larger_than_the_bound_goes_through(pair):
     # A window frame is megabytes.
     connection, client = pair
-    packet = "x" * (TOO_SLOW_BYTES * 3)
+    frame = b"x" * (TOO_SLOW_BYTES * 3)
     with anyio.fail_after(10):
         async with anyio.create_task_group() as tasks:
-            tasks.start_soon(connection.write, packet)
-            assert await read_all(client, len(packet) + 1) == len(packet) + 1
+            tasks.start_soon(connection.write, frame)
+            assert await read_all(client, len(frame)) == len(frame)
 
 
 async def test_a_client_that_stops_reading_is_let_go(pair):
     connection, _client = pair
     with anyio.fail_after(10):
         async with anyio.create_task_group() as tasks:
-            tasks.start_soon(connection.write, "x" * (TOO_SLOW_BYTES * 2))
+            tasks.start_soon(connection.write, b"x" * (TOO_SLOW_BYTES * 2))
             await anyio.wait_all_tasks_blocked()
             with pytest.raises(BrokenPipeError):
-                await connection.write("one more")
+                await connection.write(b"one more")
             tasks.cancel_scope.cancel()
 
 
 async def test_drained_waits_for_the_terminal_to_take_it(pair):
     connection, client = pair
-    packet = "x" * (TOO_SLOW_BYTES * 2)
+    frame = b"x" * (TOO_SLOW_BYTES * 2)
     with anyio.fail_after(10):
         async with anyio.create_task_group() as tasks:
-            tasks.start_soon(connection.write, packet)
+            tasks.start_soon(connection.write, frame)
             await anyio.wait_all_tasks_blocked()
             assert connection.outstanding
-            tasks.start_soon(read_all, client, len(packet) + 1)
+            tasks.start_soon(read_all, client, len(frame))
             await connection.drained()
             assert not connection.outstanding

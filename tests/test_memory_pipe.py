@@ -3,14 +3,15 @@ The in-memory pipe carries what the socket carries.
 
 `pymux integrated` puts a server and a client in one process, and this
 pair of ends joins them. It has to behave like the socket: packets
-arrive whole and in order, and the end of one side is the end of the
-other.
+arrive whole and in order, decoded the same way, and the end of one
+side is the end of the other.
 """
 
 from __future__ import annotations
 
 import anyio
 import pytest
+from libpymux.wire import MSGPACK, encode_json, encode_msgpack
 
 from pymux.pipes import BrokenPipeError, connect_in_memory
 
@@ -19,33 +20,43 @@ def run(func, *args):
     return anyio.run(func, *args)
 
 
-def test_packet_arrives_as_bytes_that_were_written():
+def test_packet_arrives_as_it_was_written():
     async def go():
         server, client = connect_in_memory()
-        await server.write('{"cmd": "out", "data": "héllo"}')
+        await server.write(encode_json({"cmd": "out", "data": "héllo"}))
         return await client.read()
 
-    assert run(go) == b'{"cmd": "out", "data": "h\xc3\xa9llo"}'
+    assert run(go) == {"cmd": "out", "data": "héllo"}
 
 
 def test_packets_arrive_in_order_they_were_written():
     async def go():
         server, client = connect_in_memory()
         for i in range(10):
-            await server.write(str(i))
+            await server.write(encode_json({"n": i}))
         return [await client.read() for _ in range(10)]
 
-    assert run(go) == [str(i).encode() for i in range(10)]
+    assert run(go) == [{"n": i} for i in range(10)]
+
+
+def test_a_wire_packet_turns_the_reader_to_msgpack():
+    async def go():
+        server, client = connect_in_memory()
+        await server.write(encode_json({"cmd": "wire", "wire": MSGPACK}))
+        await server.write(encode_msgpack({"cmd": "out", "data": "\x1b[1mbold\0"}))
+        return [await client.read() for _ in range(2)]
+
+    assert run(go) == [{"cmd": "wire", "wire": MSGPACK}, {"cmd": "out", "data": "\x1b[1mbold\0"}]
 
 
 def test_both_ends_carry_their_own_way():
     async def go():
         server, client = connect_in_memory()
-        await server.write("to the client")
-        await client.write("to the server")
+        await server.write(encode_json({"to": "client"}))
+        await client.write(encode_json({"to": "server"}))
         return await client.read(), await server.read()
 
-    assert run(go) == (b"to the client", b"to the server")
+    assert run(go) == ({"to": "client"}, {"to": "server"})
 
 
 def test_read_waits_for_write():
@@ -54,14 +65,14 @@ def test_read_waits_for_write():
 
         async def later():
             await anyio.sleep(0)
-            await server.write("late")
+            await server.write(encode_json({"late": True}))
 
         async with anyio.create_task_group() as tg:
             tg.start_soon(later)
             packet = await client.read()
         return packet
 
-    assert run(go) == b"late"
+    assert run(go) == {"late": True}
 
 
 def test_closed_end_ends_read_of_peer():
@@ -77,14 +88,14 @@ def test_closed_end_ends_read_of_peer():
 def test_what_was_written_before_close_still_arrives():
     async def go():
         server, client = connect_in_memory()
-        await server.write("last word")
+        await server.write(encode_json({"last": "word"}))
         server.close()
         first = await client.read()
         with pytest.raises(BrokenPipeError):
             await client.read()
         return first
 
-    assert run(go) == b"last word"
+    assert run(go) == {"last": "word"}
 
 
 def test_write_to_closed_peer_is_broken_pipe():
@@ -92,7 +103,7 @@ def test_write_to_closed_peer_is_broken_pipe():
         server, client = connect_in_memory()
         client.close()
         with pytest.raises(BrokenPipeError):
-            await server.write("nobody reads this")
+            await server.write(encode_json({}))
 
     run(go)
 
@@ -102,7 +113,7 @@ def test_write_after_this_end_closed_is_broken_pipe():
         server, client = connect_in_memory()
         server.close()
         with pytest.raises(BrokenPipeError):
-            await server.write("nothing")
+            await server.write(encode_json({}))
 
     run(go)
 

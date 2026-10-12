@@ -7,7 +7,6 @@ Needs the `wayland` extra. Lillecarl/pymux#620.
 
 from __future__ import annotations
 
-import json
 import os
 import shlex
 import sys
@@ -36,7 +35,7 @@ class Recorder:
         self.out = ""
 
     def __call__(self, packet) -> None:
-        message = json.loads(packet)
+        message = packet
         if message.get("cmd") == "out":
             self.out += message.get("data", "")
 
@@ -141,7 +140,7 @@ def answered(got: list) -> dict:
     "What a command connection was told: its output, its errors and its exit code."
     told = {"out": "", "err": "", "exit": None}
     for packet in got:
-        message = json.loads(packet)
+        message = packet
         if message.get("cmd") in ("out", "err"):
             told[message["cmd"]] += message.get("data", "")
         elif message.get("cmd") == "exit":

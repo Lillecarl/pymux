@@ -11,7 +11,6 @@ own at the bottom.
 from __future__ import annotations
 
 import base64
-import json
 import os
 import sys
 import webbrowser
@@ -36,7 +35,7 @@ SIZE = Size(rows=24, columns=80)
 
 def opens(packets):
     "The open packets among everything the server wrote."
-    return [json.loads(packet) for packet in packets if json.loads(packet).get("cmd") == "open"]
+    return [packet for packet in packets if packet.get("cmd") == "open"]
 
 
 async def create_pane(pymux, state):
@@ -126,7 +125,7 @@ async def test_command_from_pane_opens_in_browser_of_client():
         # What the connection of the command received back: the answer
         # of the command, and nothing a browser was meant to read.
         await once(
-            lambda: any(json.loads(packet).get("cmd") == "exit" for packet in got),
+            lambda: any(packet.get("cmd") == "exit" for packet in got),
             5.0,
             "the command never answered",
         )
@@ -396,7 +395,7 @@ def test_client_asks_its_platform_to_open(monkeypatch):
     monkeypatch.setenv("DISPLAY", ":0")
     monkeypatch.setattr(webbrowser, "open", lambda url: opened.append(url) or True)
 
-    TerminalClient()._process(json.dumps({"cmd": "open", "data": URL}).encode("utf-8"))
+    TerminalClient()._process({"cmd": "open", "data": URL})
 
     assert opened == [URL]
 
@@ -409,7 +408,7 @@ def test_client_reports_browser_it_could_not_open(monkeypatch):
     monkeypatch.delenv("DISPLAY", raising=False)
     monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
 
-    client._process(json.dumps({"cmd": "open", "data": URL}).encode("utf-8"))
+    client._process({"cmd": "open", "data": URL})
 
     assert sent == [{"cmd": "open-failed", "data": URL}]
 
@@ -425,7 +424,7 @@ def test_client_reports_browser_that_raised(monkeypatch):
     monkeypatch.setattr(webbrowser, "open", broken)
     monkeypatch.setenv("DISPLAY", ":0")
 
-    client._process(json.dumps({"cmd": "open", "data": URL}).encode("utf-8"))
+    client._process({"cmd": "open", "data": URL})
 
     assert sent == [{"cmd": "open-failed", "data": URL}]
 
@@ -437,7 +436,7 @@ def test_client_reports_nothing_when_browser_opened(monkeypatch):
     monkeypatch.setattr(webbrowser, "open", lambda url: True)
     monkeypatch.setenv("DISPLAY", ":0")
 
-    client._process(json.dumps({"cmd": "open", "data": URL}).encode("utf-8"))
+    client._process({"cmd": "open", "data": URL})
 
     assert sent == []
 
@@ -452,7 +451,7 @@ def test_linux_machine_without_display_tries_no_browser(monkeypatch):
     monkeypatch.delenv("DISPLAY", raising=False)
     monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
 
-    client._process(json.dumps({"cmd": "open", "data": URL}).encode("utf-8"))
+    client._process({"cmd": "open", "data": URL})
 
     assert asked == []  # A text browser in $BROWSER cannot run either.
     assert sent == [{"cmd": "open-failed", "data": URL}]
@@ -468,7 +467,7 @@ def test_mac_tries_its_opener_with_no_display(monkeypatch):
     monkeypatch.delenv("DISPLAY", raising=False)
     monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
 
-    client._process(json.dumps({"cmd": "open", "data": URL}).encode("utf-8"))
+    client._process({"cmd": "open", "data": URL})
 
     assert asked == [URL]
 
@@ -565,6 +564,6 @@ async def test_client_that_could_not_open_says_so_in_its_status_line():
         state, _ = await session.attach("only", SIZE)
         connection = state.connection
 
-        connection._process(json.dumps({"cmd": "open-failed", "data": URL}).encode("utf-8"))
+        connection._process({"cmd": "open-failed", "data": URL})
 
         assert state.message == "Could not open %s in a browser on this machine." % URL

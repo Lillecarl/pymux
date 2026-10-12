@@ -41,7 +41,6 @@ other machine, so this client shows a notice and opens the link again.
 from __future__ import annotations
 
 import contextlib
-import json
 import os
 import sys
 import time
@@ -49,7 +48,8 @@ from typing import TYPE_CHECKING, NamedTuple, override
 from urllib.parse import urlparse
 
 import anyio
-from libpymux.protocol import READ_SIZE, Field, Framer, Packet
+from libpymux.protocol import READ_SIZE, Field, Packet
+from libpymux.wire import PacketReader
 from prompt_toolkit.input.vt100 import raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output
 
@@ -297,7 +297,7 @@ class SshClient(TerminalClient):
         if self._writer is None:
             raise BrokenPipeError("This client is not connected.")
         try:
-            self._writer.write(json.dumps(data).encode("utf-8") + b"\0")
+            self._writer.write(self._encode(data))
         except OSError as error:
             # asyncssh says `OSError` for a channel that is not open
             # for sending. The link went: the same thing a pipe that
@@ -623,7 +623,7 @@ class SshClient(TerminalClient):
                         )
                         continue
 
-                    self._process(json.dumps(packet).encode("utf-8"))
+                    self._process(packet)
             except Exception as error:
                 lost = error
             finally:
@@ -1022,7 +1022,7 @@ class SshClient(TerminalClient):
         `close()` both give end of file, and an aborted connection
         gives `ConnectionLost`. Lillecarl/pymux#256.
         """
-        framer = Framer()
+        packets = PacketReader()
 
         while True:
             data = await reader.read(READ_SIZE)
@@ -1030,5 +1030,5 @@ class SshClient(TerminalClient):
             if not data:
                 return
 
-            for one in framer.feed(data):
-                yield json.loads(one.decode("utf-8"))
+            for packet in packets.feed(data):
+                yield packet

@@ -1,0 +1,99 @@
+"""
+The wire turns from JSON to msgpack where both ends agree, one direction
+at a time, at a `wire` packet. Lillecarl/pymux#633.
+"""
+
+from __future__ import annotations
+
+import anyio
+from libpymux.wire import MSGPACK, PacketReader, encode_json, encode_msgpack
+
+from pymux.client.terminal import TerminalClient
+from pymux.main import Pymux
+from pymux.pipes.memory import connect_in_memory
+from pymux.server import ServerConnection
+
+TURN = {"cmd": "wire", "wire": MSGPACK}
+
+
+def test_a_reader_turns_at_the_wire_packet_inside_one_read():
+    reader = PacketReader()
+    stream = (
+        encode_json({"cmd": "out", "data": "json"}) + encode_json(TURN) + encode_msgpack({"cmd": "out", "data": "\0"})
+    )
+    assert reader.feed(stream) == [{"cmd": "out", "data": "json"}, TURN, {"cmd": "out", "data": "\0"}]
+
+
+def test_a_msgpack_frame_cut_across_reads_comes_out_whole_and_once():
+    reader = PacketReader()
+    reader.feed(encode_json(TURN))
+    frame = encode_msgpack({"cmd": "out", "data": "x" * 100_000})
+    got = []
+    for at in range(0, len(frame), 1000):
+        got += reader.feed(frame[at : at + 1000])
+    assert got == [{"cmd": "out", "data": "x" * 100_000}]
+
+
+def test_a_packet_that_does_not_decode_is_dropped_and_the_rest_read():
+    reader = PacketReader()
+    assert reader.feed(b"not json\0" + encode_json({"cmd": "in"})) == [{"cmd": "in"}]
+    assert reader.dropped == 1
+
+
+START_GUI = {
+    "cmd": "start-gui",
+    "detach-others": False,
+    "color-depth": None,
+    "term": "xterm-256color",
+    "data": "",
+}
+
+
+async def frames_until_out(client_end) -> list:
+    said = []
+    with anyio.fail_after(10):
+        while not any(packet.get("cmd") == "out" for packet in said):
+            said.append(await client_end.read())
+    return said
+
+
+async def test_a_server_writes_msgpack_to_a_client_that_offers_it():
+    pymux = Pymux()
+    async with pymux.running():
+        server_end, client_end = connect_in_memory()
+        ServerConnection(pymux, server_end)
+        client_end.write_nowait(encode_json({**START_GUI, "wire": [MSGPACK]}))
+
+        said = await frames_until_out(client_end)
+
+        assert said[0] == TURN
+        assert client_end._reader.msgpack
+        pymux.stop()
+
+
+async def test_a_server_keeps_json_for_a_client_that_does_not():
+    pymux = Pymux()
+    async with pymux.running():
+        server_end, client_end = connect_in_memory()
+        ServerConnection(pymux, server_end)
+        client_end.write_nowait(encode_json(START_GUI))
+
+        said = await frames_until_out(client_end)
+
+        assert TURN not in said
+        assert not client_end._reader.msgpack
+        pymux.stop()
+
+
+def test_a_client_answers_the_turn_in_json_and_writes_msgpack_after():
+    sent = []
+
+    class Recording(TerminalClient):
+        def _send_packet(self, data):
+            sent.append(self._encode(data))
+
+    client = Recording()
+    client._process(TURN)
+    client._send_packet({"cmd": "in", "data": "x"})
+
+    assert sent == [encode_json(TURN), encode_msgpack({"cmd": "in", "data": "x"})]

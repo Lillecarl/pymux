@@ -20,6 +20,7 @@ import json
 import socket
 
 import anyio
+from libpymux.wire import encode_json
 
 from pymux.main import Pymux
 from pymux.pipes.memory import connect_in_memory
@@ -49,7 +50,7 @@ async def _packets(client_end, seconds: float = 2.0) -> list:
     with anyio.move_on_after(seconds):
         while True:
             try:
-                said.append(json.loads(await client_end.read()))
+                said.append(await client_end.read())
             except Exception:
                 return said
     return said
@@ -62,7 +63,7 @@ async def test_a_client_may_not_attach_when_the_server_serves_one_terminal():
         server_end, client_end = connect_in_memory()
         connection = ServerConnection(pymux, server_end, may_attach=False)
 
-        client_end.write_nowait(json.dumps(START_GUI))
+        client_end.write_nowait(encode_json(START_GUI))
         said = await _packets(client_end)
 
         assert connection.client_state is None, "the client attached anyway"
@@ -84,7 +85,7 @@ async def test_a_refused_client_is_told_what_to_leave_with():
         server_end, client_end = connect_in_memory()
         ServerConnection(pymux, server_end, may_attach=False)
 
-        client_end.write_nowait(json.dumps(START_GUI))
+        client_end.write_nowait(encode_json(START_GUI))
         said = await _packets(client_end)
 
         assert [p["code"] for p in said if p["cmd"] == "exit"] == [1], said
@@ -103,7 +104,7 @@ def test_a_client_leaves_with_what_the_server_named():
     client = TerminalClient()
     assert client.exit_code == 0
 
-    client._process(json.dumps({"cmd": "exit", "code": 1}).encode("utf-8"))
+    client._process({"cmd": "exit", "code": 1})
 
     assert client.exit_code == 1
 
@@ -122,11 +123,11 @@ async def test_the_reason_reaches_the_client_before_the_close():
         server_end, client_end = connect_in_memory()
         ServerConnection(pymux, server_end, may_attach=False)
 
-        client_end.write_nowait(json.dumps(START_GUI))
+        client_end.write_nowait(encode_json(START_GUI))
 
         with anyio.fail_after(5.0):
             while True:
-                packet = json.loads(await client_end.read())
+                packet = await client_end.read()
                 if packet["cmd"] == "out":
                     break
 
@@ -143,7 +144,7 @@ async def test_a_refused_connection_still_runs_a_command():
         server_end, client_end = connect_in_memory()
         ServerConnection(pymux, server_end, may_attach=False)
 
-        client_end.write_nowait(json.dumps({"cmd": "run-command", "data": "has-session", "pane_id": None}))
+        client_end.write_nowait(encode_json({"cmd": "run-command", "data": "has-session", "pane_id": None}))
         said = await _packets(client_end, seconds=5.0)
 
         # A command answers with its output and an exit code, and the
@@ -162,7 +163,7 @@ async def test_an_ordinary_server_lets_a_client_attach():
         server_end, client_end = connect_in_memory()
         connection = ServerConnection(pymux, server_end)
 
-        client_end.write_nowait(json.dumps(START_GUI))
+        client_end.write_nowait(encode_json(START_GUI))
 
         with anyio.fail_after(5.0):
             while connection.client_state is None:

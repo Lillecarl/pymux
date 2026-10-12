@@ -12,6 +12,7 @@ from typing import override
 
 from libpymux.protocol import READ_SIZE, Field, Framer, Packet
 from libpymux.sockets import servers_newest_first
+from libpymux.wire import PacketReader
 from prompt_toolkit.input.vt100 import raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output
 
@@ -121,7 +122,7 @@ class PosixClient(TerminalClient):
         self._start_gui(detach_other_clients, color_depth)
 
         with raw_mode(sys.stdin.fileno()):
-            framer = Framer()
+            reader = PacketReader()
 
             stdin_fd = sys.stdin.fileno()
 
@@ -151,11 +152,11 @@ class PosixClient(TerminalClient):
                             # `finally` puts the terminal back -- once,
                             # whatever ended the loop. Lillecarl/pymux#404.
                             if self.restart_wait is not None and self._wait_for_the_next_server(stdin_fd):
-                                framer = Framer()
+                                reader = PacketReader()
                                 self._start_gui(detach_other_clients, color_depth)
                                 continue
                             return
-                        for packet in framer.feed(data):
+                        for packet in reader.feed(data):
                             self._process(packet)
 
                     elif stdin_fd in r:
@@ -252,14 +253,16 @@ class PosixClient(TerminalClient):
         socket as the end of the attachment; what the server sent before
         it closed is in the buffer on this side, waiting to be read.
         """
-        data = json.dumps(data).encode("utf-8")
+        frame = self._encode(data)
 
         # Be sure that our socket is blocking, otherwise, the send() call could
         # raise `BlockingIOError` if the buffer is full.
         self.socket.setblocking(True)
 
+        # All of it: half a msgpack frame is not a packet the server can
+        # skip, the way a cut JSON one was.
         with contextlib.suppress(BrokenPipeError, ConnectionResetError):
-            self.socket.send(data + b"\0")
+            self.socket.sendall(frame)
 
 
 def list_clients():

@@ -11,7 +11,6 @@ Lillecarl/pymux#403.
 
 from __future__ import annotations
 
-import json
 import os
 
 from pymux.client.terminal import TerminalClient
@@ -37,7 +36,7 @@ def _writes(monkeypatch):
 
 def _process(client, **data):
     "One packet from the server, the way the read loop unpacks it."
-    client._process(json.dumps({"cmd": "kitty-keyboard", "data": data}).encode())
+    client._process({"cmd": "kitty-keyboard", "data": data})
 
 
 def test_the_first_enable_is_a_push(monkeypatch):

@@ -33,7 +33,7 @@ class FakeSocket:
     def setblocking(self, on):
         pass
 
-    def send(self, data):
+    def sendall(self, data):
         pass
 
     def recv(self, amount):
