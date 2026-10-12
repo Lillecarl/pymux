@@ -10,7 +10,7 @@ import time
 from select import select
 from typing import override
 
-from libpymux.protocol import Field, Framer, Packet
+from libpymux.protocol import READ_SIZE, Field, Framer, Packet
 from libpymux.sockets import servers_newest_first
 from prompt_toolkit.input.vt100 import raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output
@@ -89,7 +89,7 @@ class PosixClient(TerminalClient):
 
         while True:
             try:
-                data = self.socket.recv(4096)
+                data = self.socket.recv(READ_SIZE)
             except OSError:
                 break
 
@@ -138,7 +138,7 @@ class PosixClient(TerminalClient):
                     if socket_fd in r:
                         # Received packet from server.
                         try:
-                            data = self.socket.recv(1024)
+                            data = self.socket.recv(READ_SIZE)
                         except OSError:
                             # Connection lost. (E.g. the server process
                             # died.) Same as end of file.

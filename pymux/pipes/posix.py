@@ -11,7 +11,7 @@ from collections.abc import Callable
 from typing import override
 
 import anyio
-from libpymux.protocol import Framer
+from libpymux.protocol import READ_SIZE, Framer
 from libpymux.sockets import nobody_answers, socket_directory
 
 from ..log import logger
@@ -309,7 +309,7 @@ class PosixSocketConnection(PipeConnection):
             raise BrokenPipeError
 
         try:
-            data = self.socket.recv(1024)
+            data = self.socket.recv(READ_SIZE)
         except OSError as e:
             # On OSX, when we try to create a new window by typing "pymux
             # new-window" in a centain pane, very often we get the following

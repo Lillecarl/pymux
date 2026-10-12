@@ -15,7 +15,7 @@ import shlex
 import socket
 from typing import List, NamedTuple, Optional, Sequence, Union
 
-from .protocol import END, Field, Framer, Packet
+from .protocol import END, READ_SIZE, Field, Framer, Packet
 
 __all__ = [
     "CommandError",
@@ -24,9 +24,6 @@ __all__ = [
     "ServerNotRunning",
     "quote",
 ]
-
-#: How much to read from the socket at a time.
-_CHUNK = 4096
 
 
 class ServerNotRunning(OSError):
@@ -165,7 +162,7 @@ class Connection:
 
         while True:
             try:
-                data = sock.recv(_CHUNK)
+                data = sock.recv(READ_SIZE)
             except OSError:
                 break
             if not data:

@@ -394,3 +394,14 @@ def test_a_message_cut_across_reads_comes_out_whole_and_once():
     assert framer.feed(b": 1}\0{") == [b'{"a": 1}']
     assert framer.feed(b"}\0\0x") == [b"{}", b""]
     assert framer.feed(b"\0") == [b"x"]
+
+
+def test_a_message_of_megabytes_read_a_kilobyte_at_a_time_comes_out_whole():
+    "A window pane's frame, the way the client reads it."
+    framer = Framer()
+    message = bytes(range(1, 256)) * 8000
+    stream = message + b"\0" + b"after\0"
+    got = []
+    for at in range(0, len(stream), 1024):
+        got += framer.feed(stream[at : at + 1024])
+    assert got == [message, b"after"]

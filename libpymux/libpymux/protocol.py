@@ -36,22 +36,41 @@ __all__ = [
     "Framer",
     "Mode",
     "Packet",
+    "READ_SIZE",
 ]
 
 #: The byte that ends one JSON message on the wire.
 END = b"\0"
+
+#: The most one read of a pymux connection takes: more than a unix
+#: socket holds (208 KB here), so a read takes whatever is there. Measured:
+#: a 1 MB frame takes 977 reads at 1 KiB and 18 at this size, and only
+#: past 4 MiB does the allocation slow a small read. Lillecarl/pymux#633.
+READ_SIZE = 1 << 20
 
 
 class Framer:
     "The messages in a byte stream that `END` cuts up, each one once it is whole."
 
     def __init__(self) -> None:
-        self._held = b""
+        self._held = bytearray()
 
     def feed(self, data: bytes) -> list[bytes]:
-        "What `data` completed. The part of a message it began waits for the next feed."
-        *whole, self._held = (self._held + data).split(END)
-        return whole
+        """
+        What `data` completed. The part of a message it began waits for
+        the next feed.
+
+        **Appended, and split only when `data` ends a message.** Joining
+        what is held with each read copied the whole held part every
+        time: a 1 MB window pane frame read 1 KB at a time cost 1.3 s of
+        copying for 5 s of video. Lillecarl/pymux#633.
+        """
+        self._held += data
+        if END not in data:
+            return []
+        *whole, rest = self._held.split(END)
+        self._held = rest
+        return [bytes(message) for message in whole]
 
 
 class Packet(StrEnum):

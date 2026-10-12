@@ -49,7 +49,7 @@ from typing import TYPE_CHECKING, NamedTuple, override
 from urllib.parse import urlparse
 
 import anyio
-from libpymux.protocol import Field, Framer, Packet
+from libpymux.protocol import READ_SIZE, Field, Framer, Packet
 from prompt_toolkit.input.vt100 import raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output
 
@@ -1025,7 +1025,7 @@ class SshClient(TerminalClient):
         framer = Framer()
 
         while True:
-            data = await reader.read(4096)
+            data = await reader.read(READ_SIZE)
 
             if not data:
                 return
