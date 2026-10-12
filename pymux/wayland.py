@@ -97,7 +97,10 @@ class _Pacer:
         self.sent = False
 
     def shown_by(self, drained: Callable[[], Awaitable[None]], sent: bool) -> None:
-        self.drained.append(drained)
+        # Once per client: a client shows a window on every frame of its
+        # own, and `_first` starts a task for each wait.
+        if drained not in self.drained:
+            self.drained.append(drained)
         self.sent = self.sent or sent
         self.shown.set()
 
