@@ -224,6 +224,8 @@ class WaylandServer:
                 for fd in compositor.fds():
                     tasks.start_soon(self._dispatch_on, compositor, fd, tasks)
         finally:
+            # Here, on the loop thread: the last reference may go on any.
+            compositor.shutdown()
             self._tasks = None
             self.compositor = None
             self.display = None
