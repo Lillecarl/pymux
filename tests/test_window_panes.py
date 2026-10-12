@@ -42,7 +42,12 @@ class Recorder:
 
 @asynccontextmanager
 async def with_a_window(
-    tmp_path, kitty: bool = True, animate: bool = False, scale: str = "1", cell: tuple[int, int] | None = None
+    tmp_path,
+    kitty: bool = True,
+    animate: bool = False,
+    scale: str = "1",
+    cell: tuple[int, int] | None = None,
+    idle: bool = False,
 ):
     """
     A server, a client at a kitty terminal, and the probe window open in a pane.
@@ -71,7 +76,7 @@ async def with_a_window(
         runtime = tmp_path / "run"
         runtime.mkdir(mode=0o700)
         async with await anyio.open_process(
-            [sys.executable, str(PROBE), str(log), *(["--animate"] if animate else [])],
+            [sys.executable, str(PROBE), str(log), *(["--animate"] if animate else []), *(["--idle"] if idle else [])],
             env=dict(os.environ, WAYLAND_DISPLAY=pymux.wayland.display, XDG_RUNTIME_DIR=str(runtime)),
         ) as probe:
             try:
@@ -140,6 +145,20 @@ async def test_a_window_with_no_frame_rate_chosen_goes_at_the_links_pace(tmp_pat
         before = logged(log).count("frame")
         await anyio.sleep(1.0)
         assert logged(log).count("frame") - before > 40
+
+
+async def test_a_commit_that_draws_nothing_is_answered_at_the_outputs_refresh(tmp_path):
+    """
+    Firefox commits a frame callback with no buffer and paints nothing
+    until it is answered: the window stood still, and so did every
+    click. With nothing sent, no link paces it, so the 60 Hz the output
+    says it has does. Lillecarl/pymux#638.
+    """
+    async with with_a_window(tmp_path, idle=True) as (_pymux, _state, _pane, _recorder, log, _probe):
+        await once(lambda: logged(log).count("idle") >= 3, 10.0, lambda: "answered %d" % logged(log).count("idle"))
+        before = logged(log).count("idle")
+        await anyio.sleep(1.0)
+        assert logged(log).count("idle") - before <= 62
 
 
 def last_size(log: Path) -> tuple[int, int] | None:

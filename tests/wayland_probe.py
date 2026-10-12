@@ -3,7 +3,9 @@ A Wayland window for the window pane suite: it draws one colour, then a
 red square once its first frame was shown, and writes every key and
 button it receives to the file named on its command line. With
 `--animate` it then draws a frame each time the last one was shown, and
-writes "frame" for each.
+writes "frame" for each. With `--idle` it commits nothing but a frame
+callback instead, as Firefox does to wait for the next frame, and
+writes "idle" each time one is answered.
 
 It stays up until it is asked to close, which is what a window pane
 does to a window when the pane is killed.
@@ -24,7 +26,7 @@ FILL = bytes([0x99, 0x66, 0x33, 0xFF])
 RED = bytes([0x00, 0x00, 0xFF, 0xFF])
 
 
-def main(log_path: str, animate: bool) -> None:
+def main(log_path: str, animate: bool, idle: bool) -> None:
     log = open(log_path, "a", buffering=1)
     display = Display()
     display.connect()
@@ -130,6 +132,11 @@ def main(log_path: str, animate: bool) -> None:
             surface.damage_buffer(0, 0, 1, 1)
             surface.frame().dispatcher["done"] = lambda _callback, _time: shown.append(True)
             surface.commit()
+        elif idle and shown:
+            shown.clear()
+            log.write("idle\n")
+            surface.frame().dispatcher["done"] = lambda _callback, _time: shown.append(True)
+            surface.commit()
     log.write("closed\n")
     toplevel.destroy()
     xdg_surface.destroy()
@@ -138,4 +145,4 @@ def main(log_path: str, animate: bool) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], "--animate" in sys.argv[2:])
+    main(sys.argv[1], "--animate" in sys.argv[2:], "--idle" in sys.argv[2:])

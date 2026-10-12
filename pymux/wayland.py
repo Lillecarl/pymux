@@ -92,15 +92,21 @@ class _Pacer:
         self.shown = anyio.Event()
         #: Per client that showed one, a wait for its terminal to take it.
         self.drained: list[Callable[[], Awaitable[None]]] = []
+        #: Whether pixels went to any client for the frames shown.
+        self.sent = False
 
-    def shown_by(self, drained: Callable[[], Awaitable[None]]) -> None:
+    def shown_by(self, drained: Callable[[], Awaitable[None]], sent: bool) -> None:
         self.drained.append(drained)
+        self.sent = self.sent or sent
         self.shown.set()
 
 
 #: How much of what a `pymux wl` program writes is kept, from the end.
 #: It is shown when the program ends before it opens a window.
 LAUNCH_TAIL = 8192
+
+#: The refresh rate pysmithay's output advertises, in frames a second.
+OUTPUT_REFRESH = 60
 
 
 class Launch:
@@ -306,10 +312,16 @@ class WaylandServer:
             if self._pacers.get(toplevel) is not pacer:
                 return
             rate = self._rate_of(toplevel)
+            if not pacer.sent:
+                # No link paces a frame that sent nothing: the refresh
+                # the output says it has does, or a window that commits
+                # nothing in a loop spins the server.
+                rate = min(rate, OUTPUT_REFRESH) if rate else OUTPUT_REFRESH
             if rate:
                 await anyio.sleep_until(released + 1 / rate)
             await _first(pacer.drained)
             pacer.drained.clear()
+            pacer.sent = False
             pacer.shown = anyio.Event()
             released = anyio.current_time()
             with contextlib.suppress(KeyError):
@@ -505,10 +517,10 @@ class WaylandServer:
                 return 0, None, False
             return await encoded
 
-        def shown() -> None:
+        def shown(sent: bool) -> None:
             pacer = self._pacers.get(toplevel)
             if pacer is not None:
-                pacer.shown_by(drained)
+                pacer.shown_by(drained, sent)
 
         return WindowView(
             pane_id=pane_id,

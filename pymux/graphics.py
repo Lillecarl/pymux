@@ -194,8 +194,8 @@ class WindowView(NamedTuple):
     `await update(outer_id, since)` brings the terminal up to date: it
     answers `(serial, commands, whole)`, as `pysmithay.Compositor.kitty_update`
     does, so the pixels and the damage never pass through here.
-    `shown()` says this client took the frame, which lets the window
-    draw its next one.
+    `shown(sent)` says this client is up to date, which lets the window
+    draw its next frame; `sent` says pixels went out to get it there.
     """
 
     pane_id: int
@@ -204,7 +204,7 @@ class WindowView(NamedTuple):
     width: int
     height: int
     update: Callable[[int, int | None], Awaitable[tuple[int, str | None, bool]]]
-    shown: Callable[[], None]
+    shown: Callable[[bool], None]
 
 
 #: The pane image id a window pane's picture takes in `OuterImageIds`.
@@ -564,9 +564,11 @@ class ClientGraphics:
             self._write_raw(SAVE_CURSOR + "".join(commands) + RESTORE_CURSOR)
             self._flush()
         # After the flush, so a wait for the terminal to take the frame
-        # counts the frame.
-        if update:
-            view.shown()
+        # counts the frame. A client already up to date shows the frame
+        # too: a commit that drew nothing waits on its callback as well,
+        # and Firefox paints nothing until it is answered.
+        # Lillecarl/pymux#638.
+        view.shown(bool(update))
 
     def _render_kitty(self, views: Iterable[PaneView]) -> None:
         try:
