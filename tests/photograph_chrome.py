@@ -913,6 +913,35 @@ def picture_of(terminal, seat, name, work, out, fixtures=None, render_mode=None)
     return picture
 
 
+#: What the server log says when a terminal has a window pane feature,
+#: by the feature's name. Lillecarl/pymux#651.
+SUPPORT = {
+    "kitty graphics": "kitty graphics yes",
+    "shared memory": "reads window frames from shared memory",
+    "pixel mouse": "reports the mouse in pixels",
+}
+
+
+def support_of(out, terminals) -> str:
+    """
+    Which window pane features each terminal turned on, as a table read
+    from the server logs of its window pane pictures. "" when no window
+    pane was photographed.
+    """
+    rows = []
+    for terminal in terminals:
+        logs = [path.read_text(errors="replace") for path in (out / terminal.name).glob("window-pane*/*server.log")]
+        if logs:
+            said = "\n".join(logs)
+            rows.append([terminal.name, *("yes" if marker in said else "no" for marker in SUPPORT.values())])
+    if not rows:
+        return ""
+    header = ["terminal", *SUPPORT]
+    widths = [max(len(row[column]) for row in [header, *rows]) for column in range(len(header))]
+    lines = ("  ".join(cell.ljust(width) for cell, width in zip(row, widths)).rstrip() for row in [header, *rows])
+    return "\n".join(lines) + "\n"
+
+
 def main(
     fixtures=None,
     only=None,
@@ -1028,6 +1057,11 @@ def main(
     # Only the arrangement is judged, and a picture of the wrong one is
     # not kept. What the chrome looks like is still for a person.
     print("What these draw is not judged. Reading them is the work.")
+    support = support_of(out, terminals)
+    if support:
+        (out / "support.txt").write_text(support)
+        print()
+        print(support, end="")
     if lost:
         print()
         print("%d took no picture:" % len(lost))

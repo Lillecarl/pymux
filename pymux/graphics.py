@@ -578,6 +578,15 @@ class ClientGraphics:
             # stand.
             was_detected = self.detected
             self.detected = True
+            if not was_detected:
+                # What the window pane features rest on, per terminal.
+                # Lillecarl/pymux#651.
+                logger.info(
+                    "The terminal %s: kitty graphics %s, sixel %s.",
+                    self.terminal_version or "with no version",
+                    "yes" if self.kitty_supported else "no",
+                    "yes" if self.sixel_supported else "no",
+                )
             if not was_detected and self._repaint is not None:
                 # The frames drawn so far carried no image, because
                 # nothing knew yet whether this terminal takes one. Ask
