@@ -120,6 +120,10 @@ class Packet(StrEnum):
     FORWARD = "forward"
     PING = "ping"
 
+    # Either side: "every packet I write after this one is in `wire`".
+    # `wire.py` holds the format. Lillecarl/pymux#633.
+    WIRE = "wire"
+
 
 class Field(StrEnum):
     """
@@ -134,6 +138,9 @@ class Field(StrEnum):
 
     CMD = "cmd"
     DATA = "data"
+    #: In `start-gui`, the formats a client reads; in a `wire` packet,
+    #: the one its writer turns to.
+    WIRE = "wire"
     CODE = "code"
     PANE = "pane"
     PANE_ID = "pane_id"

@@ -29,6 +29,10 @@ dependencies = [
     # How `streams.py` waits on the socket: the same floor pymux
     # holds, so the two never disagree about what anyio means.
     "anyio>=4.7.0",
+    # The packets of an attached client, once both ends agree to it:
+    # 26x faster than json across encode and decode, and no escapes.
+    # `wire.py`, Lillecarl/pymux#633.
+    "ormsgpack>=1.12.0",
 ]
 
 [project.urls]
