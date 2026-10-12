@@ -595,7 +595,10 @@ class ServerConnection:
         # it is asked, with the rest of the mouse. Lillecarl/pymux#648.
         pixel_mouse = _PIXEL_MOUSE_REPLY_RE.match(data)
         if pixel_mouse is not None:
-            if pixel_mouse.group(1) in ("1", "2", "4"):
+            # Only with a cell to divide by. xterm reports pixels and, by
+            # default, keeps its cell size to itself; its answer to that
+            # query came before this one, or never. Lillecarl/pymux#651.
+            if pixel_mouse.group(1) in ("1", "2", "4") and self.graphics.cell_size_known:
                 self._turn_on_pixel_mouse()
             return
 
@@ -1211,11 +1214,12 @@ class ServerConnection:
                 return
             await self._write(self._encode(part))
 
-    def _pixel_cell(self) -> tuple[int, int] | None:
-        "The cell size mouse reports are divided by, while they come in pixels."
+    def _pixel_cell(self) -> tuple[int, int, int] | None:
+        "The cell size mouse reports are divided by, while they come in pixels, and their first pixel's number."
         if not self.pixel_mouse or not self.graphics.cell_size_known:
             return None
-        return self.graphics.cell_width, self.graphics.cell_height
+        origin = 0 if (self.graphics.terminal_version or "").startswith("kitty") else 1
+        return self.graphics.cell_width, self.graphics.cell_height, origin
 
     def _turn_on_pixel_mouse(self) -> None:
         if self.pixel_mouse:

@@ -381,14 +381,16 @@ _SGR_MOUSE_RE = re.compile(r"^\x1b\[<(\d+);(\d+);(\d+)([Mm])$")
 _LEAVE_BIT = 1 << 8
 
 
-def pixels_to_cells(report: str, width: int, height: int) -> tuple[str, float, float] | None:
+def pixels_to_cells(report: str, width: int, height: int, origin: int) -> tuple[str, float, float] | None:
     """
     An SGR pixel mouse report (mode 1016) as the cell report the rest of
     pymux reads, and where in that cell the pointer is, as fractions.
     None for a report to drop: one that is not SGR, or a leave.
 
-    kitty counts the pixels from 0 where its cells start, so the cell is
-    a plain division. Lillecarl/pymux#648.
+    `origin` is the number the terminal gives the first pixel of its
+    cells. xterm, which defines the mode, and foot say 1; kitty alone
+    says 0 (`mouse.c`, `round(global_x)`). Lillecarl/pymux#648,
+    Lillecarl/pymux#651.
     """
     match = _SGR_MOUSE_RE.match(report)
     if match is None:
@@ -396,8 +398,8 @@ def pixels_to_cells(report: str, width: int, height: int) -> tuple[str, float, f
     button, x, y = int(match.group(1)), int(match.group(2)), int(match.group(3))
     if button & _LEAVE_BIT:
         return None
-    column, across = divmod(x, width)
-    row, down = divmod(y, height)
+    column, across = divmod(max(x - origin, 0), width)
+    row, down = divmod(max(y - origin, 0), height)
     cells = "\x1b[<%d;%d;%d%s" % (button, column + 1, row + 1, match.group(4))
     return cells, (across + 0.5) / width, (down + 0.5) / height
 

@@ -694,17 +694,24 @@ def test_two_keys_with_no_name_each_write_line(caplog):
 
 
 def test_a_pixel_report_becomes_its_cell_and_where_in_it():
-    cells, across, down = pixels_to_cells("\x1b[<0;37;33M", 10, 20)
+    cells, across, down = pixels_to_cells("\x1b[<0;37;33M", 10, 20, 0)
     assert cells == "\x1b[<0;4;2M"
     assert (across, down) == (0.75, 0.675)
 
 
+def test_a_terminal_that_counts_from_1_gets_the_same_cell():
+    "xterm and foot number the first pixel 1, kitty 0. Lillecarl/pymux#651."
+    assert pixels_to_cells("\x1b[<0;41;21M", 10, 20, 1)[0] == "\x1b[<0;5;2M"
+    assert pixels_to_cells("\x1b[<0;40;20M", 10, 20, 1)[0] == "\x1b[<0;4;1M"
+    assert pixels_to_cells("\x1b[<0;40;20M", 10, 20, 0)[0] == "\x1b[<0;5;2M"
+
+
 def test_a_release_stays_a_release():
-    assert pixels_to_cells("\x1b[<0;0;0m", 10, 20)[0] == "\x1b[<0;1;1m"
+    assert pixels_to_cells("\x1b[<0;0;0m", 10, 20, 0)[0] == "\x1b[<0;1;1m"
 
 
 def test_a_leave_is_dropped():
-    assert pixels_to_cells("\x1b[<%d;5;5M" % (256 | 32 | 3), 10, 20) is None
+    assert pixels_to_cells("\x1b[<%d;5;5M" % (256 | 32 | 3), 10, 20, 0) is None
 
 
 def test_the_parser_reads_pixels_only_while_told_the_cell():
@@ -712,7 +719,7 @@ def test_the_parser_reads_pixels_only_while_told_the_cell():
     cell = [None]
     parser = KittyVt100Parser(lambda key_press: pressed.append(key_press), pixel_cell=lambda: cell[0])
     parser.feed_and_flush("\x1b[<0;3;2M")
-    cell[0] = (10, 20)
+    cell[0] = (10, 20, 0)
     parser.feed_and_flush("\x1b[<0;37;33M")
     mice = [key_press.data for key_press in pressed if key_press.key == Keys.Vt100MouseEvent]
     assert mice == ["\x1b[<0;3;2M", "\x1b[<0;4;2M"]

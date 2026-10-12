@@ -523,6 +523,8 @@ async def test_a_terminal_that_reports_pixels_puts_the_pointer_on_the_pixel(tmp_
     "SGR pixel mouse: the cell, and where in it. Lillecarl/pymux#648."
     async with with_a_window(tmp_path, cell=(10, 20)) as (pymux, state, pane, recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
+        # kitty, which numbers its first pixel 0.
+        state.connection.graphics.terminal_version = "kitty(0.49.2)"
         # What a client sends after it queried its terminal.
         state.connection._process({"cmd": "kitty-detect"})
         await once(lambda: "\x1b[?1016$p" in recorder.out, 10.0, "the terminal was never asked")
@@ -540,6 +542,28 @@ async def test_a_terminal_that_reports_pixels_puts_the_pointer_on_the_pixel(tmp_
         motion = [line for line in logged(log) if line.startswith("motion")][-1]
         width, height = pymux.cell_size()
         assert motion == "motion %d %d" % (3.75 * width, 0.675 * height)
+
+
+async def test_a_terminal_that_keeps_its_cell_size_keeps_the_mouse_in_cells(tmp_path):
+    "xterm answers 1016 and not the cell size query: a pixel would be read as a cell. Lillecarl/pymux#651."
+    async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, _probe):
+        await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
+        pymux.enable_mouse_support = True
+        state.connection._process({"cmd": "kitty-detect"})
+        state.connection._process({"cmd": "in", "data": "\x1b[?1016;2$y"})
+        where = await once(
+            lambda: state.layout_manager.pane_write_positions.get(pane), 10.0, "the pane was never drawn"
+        )
+        # A cell report: read as cells, the click lands on cell (3, 1)
+        # of the pane. Read as pixels, it would land on the pane's first.
+        x, y = where.xpos + 3, where.ypos + 1
+        for end in ("M", "m"):
+            state.connection._process({"cmd": "in", "data": "\x1b[<0;%d;%d%s" % (x + 1, y + 1, end)})
+        await once(lambda: "button 272 0" in logged(log), 10.0, lambda: "no click: %s" % logged(log)[-6:])
+        assert not state.connection.pixel_mouse
+        width, height = pymux.cell_size()
+        motion = [line for line in logged(log) if line.startswith("motion")][-1]
+        assert motion == "motion %d %d" % (3.5 * width, 1.5 * height)
 
 
 async def test_the_terminal_shows_the_pointer_the_window_asks_for(tmp_path):
