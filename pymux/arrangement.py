@@ -577,8 +577,9 @@ class Window:
 
     @active_pane.setter
     def active_pane(self, value: Pane | None) -> None:
-        # Remember previous active pane.
-        if self._active_pane:
+        # Remember previous active pane. Never the pane itself: removing
+        # it would then make the removed pane active again.
+        if self._active_pane and self._active_pane is not value:
             self._prev_active_pane = ref(self._active_pane)
 
         self.zoom = False
