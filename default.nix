@@ -219,6 +219,19 @@ let
     ];
   };
 
+  # The same with the compositor. `testEnv` leaves the `wayland` extra out
+  # on purpose: every other suite then runs pymux the way somebody runs it
+  # without pysmithay, which is what keeps that pymux working. The type
+  # check reads this one, so it sees every optional import.
+  waylandTestEnv = mkVirtualEnv "pymux-wayland-test-env" {
+    pymux = [
+      "test"
+      "catppuccin"
+      "web"
+      "wayland"
+    ];
+  };
+
   # ptterm goes in for its passthru: the conformance suites that pymux runs
   # in a pane are built once, in ptterm, and a tool is not a suite.
   #
@@ -227,6 +240,7 @@ let
   checks = callPackage ./nix/checks.nix {
     inherit
       testEnv
+      waylandTestEnv
       testSources
       ptterm
       mesa

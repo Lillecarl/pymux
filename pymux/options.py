@@ -203,6 +203,15 @@ class OnOffOption(Option):
         pymux.arrangement.window_defaults[self._attribute()] = self._read(value)
 
 
+class WaylandServerOption(OnOffOption):
+    "`wayland-server`, which starts or stops the compositor as it is set."
+
+    @override
+    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+        super().set_value(pymux, value, target)
+        pymux.wayland.option_changed()
+
+
 class StringOption(Option):
     """
     String option, written on whatever the scope says holds it.
@@ -767,6 +776,12 @@ ALL_OPTIONS = {
     # runs already keeps the PATH it was born with; only new panes
     # see it.
     "notify-shim": OnOffOption("notify_shim"),
+    # Hold a Wayland compositor for the panes whose session has no
+    # display, so wl-copy and wl-paste work there. Needs the `wayland`
+    # extra (pysmithay, Linux); without it this does nothing. A pane
+    # that runs already keeps the environment it was born with.
+    # Lillecarl/pymux#383.
+    "wayland-server": WaylandServerOption("wayland_server"),
     # Bring the port with the URL. A "localhost" address opened on the
     # browser of the machine at the keyboard means a service on that
     # machine, which is the wrong one, so the client forwards the port

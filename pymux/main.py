@@ -103,6 +103,7 @@ from .server import ServerConnection
 from .session import DEFAULT_SIZE, Session
 from .style import DEFAULT_THEME, theme
 from .utils import get_default_shell, keys_are_vi
+from .wayland import WaylandServer
 
 if TYPE_CHECKING:
     from .pipes.posix import PosixSocketListener
@@ -251,6 +252,20 @@ def _listens(sock: socket.socket) -> bool:
     except OSError:
         return False
     return True
+
+
+class SessionClipboard(InMemoryClipboard):
+    "The paste buffer, which tells each of `watchers` what is written to it."
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.watchers: list[Callable[[ClipboardData], None]] = []
+
+    @override
+    def set_data(self, data: ClipboardData) -> None:
+        super().set_data(data)
+        for watcher in list(self.watchers):
+            watcher(data)
 
 
 class Asker(NamedTuple):
@@ -1119,6 +1134,9 @@ class Pymux:
         "lock_command": Keep.SAVED,
         "mode_keys_vi_mode": Keep.SAVED,
         "notify_shim": Keep.SAVED,
+        "wayland_server": Keep.SAVED,
+        # The compositor's task starts again in `running`.
+        "wayland": Keep.REBUILT,
         "open_url_forward": Keep.SAVED,
         "open_url_forward_idle": Keep.SAVED,
         "open_url_mode": Keep.SAVED,
@@ -1242,7 +1260,12 @@ class Pymux:
         # The paste buffer of the session. Copy mode writes it, a pane
         # that writes the clipboard of the user writes it too, and
         # "paste-buffer" reads it. Every client shares this one.
-        self.clipboard = InMemoryClipboard()
+        self.clipboard = SessionClipboard()
+
+        # A Wayland compositor for the panes that have no display, when
+        # pysmithay is installed and this is on. `wayland.py` says why.
+        self.wayland_server = True
+        self.wayland = WaylandServer(self)
         self.remain_on_exit = False
 
         # Which keys the status line and copy mode take. tmux reads the
@@ -1990,6 +2013,7 @@ class Pymux:
             tasks.start_soon(self._auto_refresh)
             tasks.start_soon(self._sweep_jobs)
             tasks.start_soon(self.live.keep, self)
+            tasks.start_soon(self.wayland.keep)
             if hold:
                 await self.hold(keep_orphans)
             if self.listener is not None:
@@ -2436,6 +2460,11 @@ class Pymux:
             # notifier of this session before anything else on the PATH
             # of the pane, and name the opener for what reads $BROWSER.
             self._shim_pane_environment(environment)
+
+            # Our compositor only where the session names no display:
+            # a program started beside a desktop belongs on it.
+            if self.wayland.display and not environment.get("WAYLAND_DISPLAY"):
+                environment["WAYLAND_DISPLAY"] = self.wayland.display
 
         # `shlex.split` and not `str.split`: a command reaches this as
         # one string, and the quoting inside it is what says where one

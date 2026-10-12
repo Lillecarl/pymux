@@ -80,6 +80,11 @@ catppuccin = ["catppuccin>=2.0.0"]
 # `stream-pane` over the socket and needs nothing here.
 # Lillecarl/pymux#461.
 web = ["websockets>=13.0"]
+# A Wayland compositor for panes with no display, so wl-copy and wl-paste
+# work there (`wayland-server`). Rust and Linux only, and pymux runs the
+# same without it: `pymux/wayland.py` imports it or does nothing.
+# Lillecarl/pymux#383.
+wayland = ["pysmithay; sys_platform == 'linux'"]
 # What the suites need on top of what pymux needs. It is an extra and not a
 # `[dependency-groups]` entry because only an extra reaches a resolver: Nix
 # builds the test environment from this list.

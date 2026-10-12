@@ -19,6 +19,8 @@
   # declares, and there is no second dependency list here to fall out of
   # step with the first. Lillecarl/pymux#319.
   testEnv,
+  # testEnv with the `wayland` extra, for the one suite that needs it.
+  waylandTestEnv,
   # ptterm as nixpkgs built it, and not the copy inside `testEnv`. The
   # suites borrow tools from its passthru, and a package lifted into the
   # builders set keeps its files and not its passthru.
@@ -623,6 +625,20 @@ in
           --durations="$durations" --durations-min="$least"
       '';
 
+  # The compositor a server holds for panes with no display, against real
+  # wl-copy and wl-paste. The one suite with the `wayland` extra, so its
+  # python is named: `testEnv` is first on the PATH. Lillecarl/pymux#383.
+  wayland =
+    runInSandbox
+      {
+        name = "pymux-wayland";
+        inputs = [ wl-clipboard ];
+      }
+      ''
+        ${waylandTestEnv}/bin/python -m pytest -q -p no:cacheprovider \
+          tests/test_wayland_server.py tests/test_wayland_absent.py
+      '';
+
   # The types of pymux, held by a static checker rather than by a run.
   #
   # `entry_points/run_pymux.py` matches on `Mode` and ends every arm with
@@ -641,7 +657,7 @@ in
       }
       ''
         pyrefly check --preset default \
-          --python-interpreter-path "${testEnv}/bin/python" \
+          --python-interpreter-path "${waylandTestEnv}/bin/python" \
           pymux
       '';
 
