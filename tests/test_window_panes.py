@@ -471,6 +471,32 @@ async def test_keys_reach_the_window(tmp_path):
         assert "key 42 0" in lines
 
 
+async def test_a_click_from_the_terminal_reaches_the_window(tmp_path):
+    "A mouse report the client's terminal sends, on the window pane's cells."
+    async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, _probe):
+        await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
+        pymux.enable_mouse_support = True
+        where = await once(
+            lambda: state.layout_manager.pane_write_positions.get(pane), 10.0, "the pane was never drawn"
+        )
+        # Not the pane's first cell, where every click once landed, and
+        # inside the probe's 64x32 buffer, which is all the window
+        # takes pointer events on. Lillecarl/pymux#645.
+        column, row = 3, 1
+        x, y = where.xpos + column, where.ypos + row
+        for end in ("M", "m"):
+            state.connection._process({"cmd": "in", "data": "\x1b[<0;%d;%d%s" % (x + 1, y + 1, end)})
+        await once(
+            lambda: "button 272 0" in logged(log),
+            10.0,
+            lambda: "no click arrived at %s in %s: %s" % ((x, y), where, logged(log)[-8:]),
+        )
+        assert "button 272 1" in logged(log)
+        width, height = pymux.cell_size()
+        motion = [line for line in logged(log) if line.startswith("motion")][-1]
+        assert motion == "motion %d %d" % ((column + 0.5) * width, (row + 0.5) * height)
+
+
 async def test_the_pane_goes_when_the_window_closes(tmp_path):
     async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")

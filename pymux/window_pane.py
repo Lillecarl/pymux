@@ -26,12 +26,14 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.layout.containers import Window
 from prompt_toolkit.layout.controls import UIContent, UIControl
-from prompt_toolkit.mouse_events import MouseButton, MouseEventType
+from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
 
 if TYPE_CHECKING:
     from prompt_toolkit.formatted_text import StyleAndTextTuples
     from prompt_toolkit.key_binding import KeyPressEvent
-    from prompt_toolkit.mouse_events import MouseEvent
+    from prompt_toolkit.layout.containers import WritePosition
+    from prompt_toolkit.layout.mouse_handlers import MouseHandlers
+    from prompt_toolkit.layout.screen import Screen
 
     from pymux.wayland import WaylandServer
 
@@ -236,6 +238,49 @@ class WindowControl(UIControl):
         self.widget.mouse(mouse_event)
 
 
+class _PaneWindow(Window):
+    """
+    The window pane's container: a click goes to the control at its cell
+    in the pane, read from the screen and not from the content.
+
+    prompt_toolkit's `Window` maps a click through the rows and columns
+    its content drew, and this content draws nothing where the picture
+    is: every click came to the first cell. Lillecarl/pymux#645.
+    """
+
+    @override
+    def _write_to_screen_at_index(
+        self,
+        screen: Screen,
+        mouse_handlers: MouseHandlers,
+        write_position: WritePosition,
+        parent_style: str,
+        erase_bg: bool,
+    ) -> None:
+        super()._write_to_screen_at_index(screen, mouse_handlers, write_position, parent_style, erase_bg)
+        control = self.content
+        left, top = write_position.xpos, write_position.ypos
+
+        def handler(mouse_event: MouseEvent) -> None:
+            position = Point(x=mouse_event.position.x - left, y=mouse_event.position.y - top)
+            control.mouse_handler(
+                MouseEvent(
+                    position=position,
+                    event_type=mouse_event.event_type,
+                    button=mouse_event.button,
+                    modifiers=mouse_event.modifiers,
+                )
+            )
+
+        mouse_handlers.set_mouse_handler_for_range(
+            x_min=left,
+            x_max=left + write_position.width,
+            y_min=top,
+            y_max=top + write_position.height,
+            handler=handler,
+        )
+
+
 class WindowWidget:
     """
     What a window pane stores as `pane.terminal`: the container the
@@ -253,7 +298,7 @@ class WindowWidget:
         self.process = WindowProcess(self)
         self.terminal_control = _NoControl()
         self.control = WindowControl(self)
-        self.window = Window(self.control, always_hide_cursor=True)
+        self.window = _PaneWindow(self.control, always_hide_cursor=True)
         #: The pane's size in cells, last told.
         self.columns = 0
         self.rows = 0

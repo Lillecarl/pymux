@@ -47,6 +47,7 @@ def main(log_path: str, animate: bool, idle: bool) -> None:
     keyboard = seat.get_keyboard()
     keyboard.dispatcher["key"] = lambda _k, _serial, _time, key, state: log.write("key %d %d\n" % (key, state))
     pointer = seat.get_pointer()
+    pointer.dispatcher["motion"] = lambda _p, _time, x, y: log.write("motion %d %d\n" % (x, y))
     pointer.dispatcher["button"] = lambda _p, _serial, _time, button, state: log.write(
         "button %d %d\n" % (button, state)
     )
