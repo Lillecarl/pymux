@@ -17,7 +17,15 @@ from session import once, over_connection
 
 from pymux.client.terminal import TerminalClient
 from pymux.graphics import FRAME_PART_BYTES, frame_parts, video_parts
-from pymux.kitty_frames import SHM_NAME_MAX, SHM_PROBE_ID, Base64Carrier, ShmCarrier, frame_commands, shm_probe
+from pymux.kitty_frames import (
+    SHM_NAME_MAX,
+    SHM_PROBE_ID,
+    Base64Carrier,
+    Pictures,
+    ShmCarrier,
+    frame_commands,
+    shm_probe,
+)
 
 #: One graphics command: its keys and its payload.
 COMMAND = re.compile(r"\x1b_G([^;]*);([^\x1b]*)\x1b\\")
@@ -110,6 +118,34 @@ def test_damage_goes_as_edits_of_the_root_frame():
             "m": "0",
         },
     ]
+
+
+BLUE = bytes([0, 0, 0xFF])
+
+
+def test_a_frame_of_many_rectangles_becomes_their_bounding_box():
+    "kitty uploads the whole image per edit. Lillecarl/pymux#644."
+    pictures = Pictures()
+    assert pictures.merged(7, True, 4, 3, [(0, 0, 4, 3, BLUE * 12)]) == [(0, 0, 4, 3, BLUE * 12)]
+    merged = pictures.merged(7, False, 4, 3, [(0, 0, 1, 1, RED), (2, 1, 2, 1, RED * 2)])
+    assert merged == [(0, 0, 4, 2, RED + BLUE * 3 + BLUE * 2 + RED * 2)]
+
+
+def test_one_rectangle_goes_as_it_is_and_still_lands_in_the_copy():
+    pictures = Pictures()
+    pictures.merged(7, True, 2, 1, [(0, 0, 2, 1, BLUE * 2)])
+    assert pictures.merged(7, False, 2, 1, [(1, 0, 1, 1, RED)]) == [(1, 0, 1, 1, RED)]
+    assert pictures.merged(7, False, 2, 1, [(0, 0, 1, 1, RED), (0, 0, 1, 1, RED)]) == [(0, 0, 1, 1, RED)]
+    assert pictures.merged(7, False, 2, 1, [(0, 0, 1, 1, BLUE), (1, 0, 1, 1, BLUE)]) == [(0, 0, 2, 1, BLUE * 2)]
+
+
+def test_without_a_copy_the_rectangles_go_one_by_one():
+    "No whole frame came yet, or the size changed since."
+    pictures = Pictures()
+    rects = [(0, 0, 1, 1, RED), (1, 0, 1, 1, RED)]
+    assert pictures.merged(7, False, 2, 1, rects) == rects
+    pictures.merged(7, True, 2, 1, [(0, 0, 2, 1, BLUE * 2)])
+    assert pictures.merged(7, False, 3, 1, rects) == rects
 
 
 def test_shared_memory_holds_the_pixels_and_says_how_many(shm):
@@ -232,6 +268,16 @@ def test_a_frame_with_nothing_to_write_is_answered_by_the_client(terminal):
     client._process({**part, Field.ANSWER: True})
     assert read() == ""
     assert client.sent == [{Field.CMD: Packet.FRAME_SHOWN}]
+
+
+def test_the_client_sends_a_frame_of_two_edits_as_one(terminal):
+    "Lillecarl/pymux#644."
+    client, read = terminal
+    client._process(frame_parts(9, (1, True, 20, 10, [(0, 0, 20, 10, RED * 200)]), "")[0])
+    read()
+    client._process(frame_parts(9, (2, False, 20, 10, [(1, 1, 1, 1, RED), (5, 6, 2, 2, RED * 4)]), "")[0])
+    ((keys, _payload),) = parsed(read())
+    assert (keys["x"], keys["y"], keys["s"], keys["v"]) == ("1", "1", "6", "7")
 
 
 def test_the_client_answers_each_frame_at_its_last_part(terminal):

@@ -34,7 +34,7 @@ from pymux.colors import COLOR_QUERIES, TRUECOLOR_PROBE
 from pymux.config import client_options_in, find_config
 from pymux.graphics import CELL_SIZE_QUERY, RESTORE_CURSOR, SAVE_CURSOR, VERSION_QUERY
 from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
-from pymux.kitty_frames import Base64Carrier, ShmCarrier, decoders, frame_commands, shm_probe
+from pymux.kitty_frames import Base64Carrier, Pictures, ShmCarrier, decoders, frame_commands, shm_probe
 from pymux.utils import nonblocking
 
 from .base import Client
@@ -215,6 +215,9 @@ class TerminalClient(Client):
         #: Lillecarl/pymux#639.
         self._decoder_kinds = decoders()
         self._decoders: dict[int, Any] = {}
+        #: Each window pane's picture, so a frame goes as one edit.
+        #: Lillecarl/pymux#644.
+        self._pictures = Pictures()
 
     @property
     def _stdin_reader(self) -> PosixStdinReader:
@@ -326,6 +329,7 @@ class TerminalClient(Client):
         self._carrier = Base64Carrier()
         self._frame_parts.clear()
         self._decoders.clear()
+        self._pictures.clear()
         os.write(sys.stdout.fileno(), detection_queries(self._shm_probe()))
         self._send_packet({Field.CMD: Packet.KITTY_DETECT})
 
@@ -435,6 +439,7 @@ class TerminalClient(Client):
             rects = [(0, 0, width, height, b"".join(band[4] for band in parts))]
         else:
             rects = [tuple(band) for band in parts]
+        rects = self._pictures.merged(image, whole, width, height, rects)
         answer = bool(packet.get(Field.ANSWER)) and bool(rects)
         try:
             commands = frame_commands(image, whole, width, height, rects, self._carrier, answer)

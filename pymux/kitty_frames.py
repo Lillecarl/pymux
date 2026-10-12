@@ -31,7 +31,7 @@ from typing import Any
 
 from libpymux.protocol import Codec
 
-__all__ = ["SHM_PROBE_ID", "Base64Carrier", "ShmCarrier", "decoders", "frame_commands", "shm_probe"]
+__all__ = ["SHM_PROBE_ID", "Base64Carrier", "Pictures", "ShmCarrier", "decoders", "frame_commands", "shm_probe"]
 
 #: kitty takes at most this many bytes of base64 in one command.
 CHUNK = 4096
@@ -137,6 +137,51 @@ def frame_commands(
             keys = "a=f,i=%d,r=1,x=%d,y=%d,s=%d,v=%d,X=1%s" % (image_id, x, y, w, h, quiet)
         out.append(carrier.command(keys, pixels))
     return "".join(out)
+
+
+class Pictures:
+    """
+    The client's copy of each window pane's picture, so a frame of many
+    rectangles goes to the terminal as one edit: their bounding box.
+
+    kitty uploads the whole image to the GPU again for every edit
+    command (`graphics.c`, `update_current_frame`). A Firefox frame is a
+    strip per line of text, and on Carl's Mac about 250 strips a second
+    were 250 uploads of a Retina-sized image: macOS converts each on the
+    CPU, and the GPU starved the whole desktop. Lillecarl/pymux#644.
+    """
+
+    def __init__(self) -> None:
+        self._held: dict[int, tuple[int, int, bytearray]] = {}
+
+    def clear(self) -> None:
+        self._held.clear()
+
+    def merged(self, image: int, whole: bool, width: int, height: int, rects: list) -> list:
+        "Take the frame into the copy, and answer the rectangles to send: one, when the copy allows."
+        if whole:
+            if len(rects) == 1 and len(rects[0][4]) == width * height * 3:
+                self._held[image] = (width, height, bytearray(rects[0][4]))
+            else:
+                self._held.pop(image, None)
+            return rects
+        held = self._held.get(image)
+        if held is None or held[:2] != (width, height):
+            return rects
+        picture = held[2]
+        row = width * 3
+        for x, y, w, h, pixels in rects:
+            for line in range(h):
+                at = (y + line) * row + x * 3
+                picture[at : at + w * 3] = pixels[line * w * 3 : (line + 1) * w * 3]
+        if len(rects) <= 1:
+            return rects
+        left = min(rect[0] for rect in rects)
+        top = min(rect[1] for rect in rects)
+        right = max(rect[0] + rect[2] for rect in rects)
+        bottom = max(rect[1] + rect[3] for rect in rects)
+        box = b"".join(picture[line * row + left * 3 : line * row + right * 3] for line in range(top, bottom))
+        return [(left, top, right - left, bottom - top, box)]
 
 
 def decoders() -> dict[str, Callable[[], Any]]:
