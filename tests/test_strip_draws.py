@@ -243,9 +243,10 @@ async def test_strip_records_where_it_drew_columns_it_drew():
         for left, right in pairwise(where):
             assert right.xpos == left.xpos + left.width + 1, xs
 
-        # The leftmost one drawn starts at the left of the screen, and
-        # the focused one ends on it.
-        assert xs[0] == 0, xs
+        # The leftmost one drawn starts one cell in, past the border of
+        # the column before it, and the focused one ends on the screen.
+        # The last column's own border is past the edge (#617).
+        assert xs[0] == 1, xs
         assert xs[-1] + where[-1].width <= COLUMNS, xs
 
 

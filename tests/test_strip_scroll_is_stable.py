@@ -135,9 +135,9 @@ def where(pymux, pane):
 async def test_whole_walk_left_and_right_and_back():
     """
     Three columns of half an 80 column window: 120 cells of strip seen
-    through 80, so the view is either at 0 or at 40 and nowhere else.
+    through 80, so the view is either at 0 or at 39 and nowhere else.
 
-    **The repeated numbers are the property.** Two 40s in a row say
+    **The repeated numbers are the property.** Two 39s in a row say
     that landing on the middle column from the right moved nothing, and
     two 0s say the same coming from the left. Before, the view went
     40, 38, 0, 1, 40 -- two cells of peek measured against a pane one
@@ -153,7 +153,9 @@ async def test_whole_walk_left_and_right_and_back():
             draw()
             walk.append(view(state))
 
-        assert walk == [40, 40, 0, 0, 40, 40, 0], walk
+        # 39 and not 40: the last column's border is not worth a scroll
+        # (#617).
+        assert walk == [39, 39, 0, 0, 39, 39, 0], walk
         # And the focus really did travel, or the test says nothing.
         assert panes.index(window.active_pane) == 0
 
@@ -224,16 +226,24 @@ async def test_column_wider_than_view_still_starts_on_screen():
 async def test_focused_column_is_wholly_on_screen():
     """
     Its border is its right edge, and the column is not on screen
-    until that is.
+    until that is -- unless it is the last column, whose border has
+    nothing past it to hint at (#617).
     """
     async with create_client(STRIP) as (pymux, state, draw):
         _window, panes = await columns_of(pymux, 3)
         draw()
 
-        # The focus is on the third column, the one that was just made.
+        # The focus is on the third column, the one that was just made,
+        # and the last: its pane is on screen, and its border need not be.
         drawn = where(pymux, panes[2])
         assert drawn.xpos >= 0, drawn
-        # The pane, and then the border it owns.
+        assert drawn.xpos + drawn.width <= COLUMNS, drawn
+
+        # The middle one has a column past it, so its border shows too.
+        move(pymux, state, "L")
+        draw()
+        drawn = where(pymux, panes[1])
+        assert drawn.xpos >= 0, drawn
         assert drawn.xpos + drawn.width + 1 <= COLUMNS, drawn
 
 
@@ -271,13 +281,13 @@ async def test_opening_pane_leaves_row_where_person_scrolled_it():
         _window, _panes = await columns_of(pymux, 3)
         draw()
 
-        # Three half-width columns: at 40 the second and third show, at
+        # Three half-width columns: at 39 the second and third show, at
         # 0 the first and second do. So the second is on screen either
         # way, and moving to it moves nothing.
         move(pymux, state, "L")
         draw()
         scrolled = view(state)
-        assert scrolled == 40, scrolled
+        assert scrolled == 39, scrolled
 
         await run(pymux, "split-window -v")
         state.sync_focus()
@@ -318,7 +328,7 @@ async def test_the_view_glides_and_eases_out():
         now = [0.0]
         draw()
         strip(state).clock = lambda: now[0]
-        assert shown(state) == 40
+        assert shown(state) == 39
 
         move(pymux, state, "L")
         move(pymux, state, "L")
@@ -329,7 +339,7 @@ async def test_the_view_glides_and_eases_out():
             frames.append(shown(state))
 
         assert view(state) == 0
-        assert frames == [40, 17, 5, 1, 0, 0], frames
+        assert frames == [39, 16, 5, 1, 0, 0], frames
 
 
 async def test_a_move_during_a_glide_starts_where_the_view_is():
@@ -346,7 +356,7 @@ async def test_a_move_during_a_glide_starts_where_the_view_is():
         now[0] = 0.025
         draw()
         midway = shown(state)
-        assert 0 < midway < 40, midway
+        assert 0 < midway < 39, midway
 
         move(pymux, state, "R")
         move(pymux, state, "R")
@@ -354,7 +364,7 @@ async def test_a_move_during_a_glide_starts_where_the_view_is():
         assert shown(state) == midway
         now[0] = 0.2
         draw()
-        assert shown(state) == view(state) == 40
+        assert shown(state) == view(state) == 39
 
 
 async def test_no_glide_when_the_time_is_zero():

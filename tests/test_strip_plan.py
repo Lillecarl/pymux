@@ -317,15 +317,16 @@ def test_column_already_on_screen_moves_nothing():
     """
     window, panes = create_strip((1, 1, 1))
 
-    assert looking_at(window, panes[1], offset=40) == 40
+    assert looking_at(window, panes[1], offset=39) == 39
 
 
 def test_view_follows_focus_to_right():
     window, panes = create_strip((1, 1, 1))
 
     # Three columns of forty cells, and a window eighty wide. The
-    # third ends at 120, so the view stops at 40.
-    assert looking_at(window, panes[2], offset=0) == 40
+    # third's panes end at 119, and its border past them is worth no
+    # scroll (#617), so the view stops at 39.
+    assert looking_at(window, panes[2], offset=0) == 39
 
 
 def test_view_follows_focus_back_to_left():
@@ -337,15 +338,29 @@ def test_view_follows_focus_back_to_left():
 def test_column_owns_border_view_has_to_show():
     """
     A column is its panes and the border on its right, so the view
-    goes one cell further than the pane needs. Without that the border
-    of the focused column sits just off the screen.
+    goes one cell further than the pane needs when a column lies past
+    it. Without that the border, which is the hint that there is more,
+    sits just off the screen.
+    """
+    window, panes = create_strip((1, 1, 1))
+
+    # The second column and its border end at 80, and a third follows.
+    assert looking_at(window, panes[1], offset=0, columns=79) == 1
+
+
+def test_last_column_border_is_not_worth_a_scroll():
+    """
+    Past the last column there is nothing for its border to hint at,
+    and the scroll that showed it cut the column on the other side.
+    Carl, on a recording: "we don't want to move and show the extra
+    border unless there's another column to the left/right as a hint".
+    Lillecarl/pymux#617.
     """
     window, panes = create_strip((1, 1))
 
-    # Two columns fit exactly at eighty. At seventy nine the second
-    # column's border is the cell that does not, so the view moves by
-    # one and not by none.
-    assert looking_at(window, panes[1], offset=0, columns=79) == 1
+    # Two columns fit exactly at eighty; at seventy nine the only cell
+    # that does not is the last border.
+    assert looking_at(window, panes[1], offset=0, columns=79) == 0
 
 
 def test_a_column_that_sticks_out_keeps_its_neighbour_on_screen():
@@ -422,8 +437,9 @@ def test_column_that_fits_is_still_shown_whole():
     assert looking_at(window, panes[1], offset=0, columns=80) == 0
 
     # And in a view of sixty cells it does not fit at the origin, so
-    # the view moves far enough to show its end and no further.
-    assert looking_at(window, panes[1], offset=0, columns=60) == 20
+    # the view moves far enough to show its end and no further: the
+    # last cell of its panes, 78, and not the border past them (#617).
+    assert looking_at(window, panes[1], offset=0, columns=60) == 19
 
 
 def test_nothing_focused_leaves_view_where_it_is():

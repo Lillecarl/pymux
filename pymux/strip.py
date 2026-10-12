@@ -161,8 +161,9 @@ class Strip:
         left of the view, and never past the end of the row.
 
         **A column is its panes and the border it owns**, so the column
-        ends one cell past the pane's rectangle and the row ends one
-        cell past the last of them. That widening is all this adds:
+        ends one cell past the pane's rectangle -- except the last one,
+        whose border has nothing past it to point at, and the row ends
+        where the last pane does. That widening is all this adds:
         `View.moved_onto` holds the three rules, and every layout
         answers by the same ones.
 
@@ -175,11 +176,18 @@ class Strip:
         """
         gap = self.gaps().between_columns
         box = plan.bounds
-        row = Rect(x=box.x, y=box.y, width=box.width + gap, height=box.height)
 
         column = None
         if focus is not None:
             rect = plan.rect_of(focus)
-            column = Rect(x=rect.x, y=rect.y, width=rect.width + gap, height=rect.height)
+            # **The last column's border is not worth a scroll.** A
+            # border with a column past it is the hint that there is
+            # more; past the last column there is nothing, and moving
+            # the view a cell to show that line only cut the column on
+            # the other side. Carl: "we don't want to move and show the
+            # extra border unless there's another column to the
+            # left/right as a hint". Lillecarl/pymux#617.
+            beyond = gap if rect.right < box.right else 0
+            column = Rect(x=rect.x, y=rect.y, width=rect.width + beyond, height=rect.height)
 
-        return view.moved_onto(column, row)
+        return view.moved_onto(column, box)
