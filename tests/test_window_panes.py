@@ -20,6 +20,7 @@ from session import once, over_connection
 
 pytest.importorskip("pysmithay")
 
+from pymux.arrangement import DEFAULT_FRAME_RATE
 from pymux.enums import WindowCodec, Woke
 from pymux.main import Pymux
 from pymux.window_pane import is_window_pane
@@ -337,7 +338,9 @@ async def test_a_window_with_no_frame_rate_chosen_goes_at_the_links_pace(tmp_pat
         await once(lambda: logged(log).count("frame") >= 3, 10.0, "the window never drew again")
         before = logged(log).count("frame")
         await anyio.sleep(1.0)
-        assert logged(log).count("frame") - before > 40
+        # More than the thirty that caps the cells. The link's pace is 37
+        # to 39 a second on a machine at load 10 to 16, where 40 failed.
+        assert logged(log).count("frame") - before > DEFAULT_FRAME_RATE + 3
 
 
 async def test_a_commit_that_draws_nothing_is_answered_at_the_outputs_refresh(tmp_path):
