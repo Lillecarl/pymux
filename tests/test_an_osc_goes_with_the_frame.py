@@ -23,6 +23,8 @@ import sys
 
 import pytest
 from libpymux.protocol import Packet
+from session import once
+from test_a_session_on_a_pyte_screen import attached, shows
 
 from pymux.main import Pymux
 from pymux.options import Clipboard
@@ -64,6 +66,14 @@ def written(sent) -> str:
     return "".join(packet["data"] for packet in sent if packet["cmd"] == Packet.OUT)
 
 
+def a_frame(output, drawn: str = "") -> None:
+    "What the renderer does: the frame begins, it is written and flushed, and it ends."
+    output.frame_begins()
+    output.write_raw(drawn)
+    output.flush()
+    output.frame_ends()
+
+
 def test_nothing_goes_out_before_the_frame(wire):
     "A flush of its own is what put the clipboard ahead of the screen."
     connection, _output, sent = wire
@@ -73,12 +83,48 @@ def test_nothing_goes_out_before_the_frame(wire):
     assert sent == []
 
 
+def test_a_flush_that_is_not_a_frame_carries_nothing(wire):
+    """
+    Graphics and terminal modes flush on their own, between frames. One
+    of those flushes sent the vterm middleman's fence ahead of the frame
+    that drew the payload, and libvterm read an empty screen.
+    Lillecarl/pymux#611.
+    """
+    connection, output, sent = wire
+
+    connection.forward_osc(COPIED)
+    output.write_raw("a terminal mode")
+    output.flush()
+    assert COPIED not in written(sent)
+
+    a_frame(output, "the frame")
+    whole = written(sent)
+    assert whole.index("the frame") < whole.index(COPIED)
+
+
+def test_a_skipped_frame_leaves_it_for_the_next(wire):
+    """
+    The stale-frame check returns before the renderer writes or
+    flushes, between `before_render` and `after_render`. A flush after
+    it is not a frame either.
+    """
+    connection, output, sent = wire
+
+    connection.forward_osc(COPIED)
+    output.frame_begins()
+    output.frame_ends()
+    output.flush()
+    assert COPIED not in written(sent)
+
+    a_frame(output, "the frame")
+    assert COPIED in written(sent)
+
+
 def test_the_frame_carries_it(wire):
     connection, output, sent = wire
 
     connection.forward_osc(COPIED)
-    output.write_raw("the frame")
-    output.flush()
+    a_frame(output, "the frame")
 
     assert COPIED in written(sent)
 
@@ -92,8 +138,7 @@ def test_it_comes_behind_what_the_frame_draws(wire):
     connection, output, sent = wire
 
     connection.forward_osc(COPIED)
-    output.write_raw("the frame")
-    output.flush()
+    a_frame(output, "the frame")
 
     whole = written(sent)
     assert whole.index("the frame") < whole.index(COPIED)
@@ -104,7 +149,7 @@ def test_a_frame_that_draws_nothing_still_carries_it(wire):
     connection, output, sent = wire
 
     connection.forward_osc(COPIED)
-    output.flush()
+    a_frame(output)
 
     assert written(sent) == COPIED
 
@@ -115,9 +160,37 @@ def test_a_client_with_no_terminal_is_written_nothing(wire):
     connection.client_state.temporary = True
 
     connection.forward_osc(COPIED)
-    connection.client_state.output.flush()
+    a_frame(connection.client_state.output)
 
     assert written(sent) == ""
+
+
+async def test_a_real_client_holds_it_through_a_flush_between_frames():
+    """
+    The same, end to end: a pane draws and sends its fence, and before
+    the frame comes the client's terminal is flushed for something
+    else, as graphics do. The fence still comes behind the drawing.
+    Lillecarl/pymux#611.
+    """
+    mux = Pymux()
+    mux.test_mode = True
+    try:
+        async with mux.running(), attached(mux) as session:
+            await shows(session, "$")
+            connection = mux.connections[-1]
+            (pane,) = mux.panes_by_id.values()
+
+            fence = "\x1b]99;;fence-611\x1b\\"
+            pane.terminal.terminal_control.feed_output("drawn-before-the-fence" + fence)
+            connection._flush_output()
+            await once(lambda: any(b"fence-611" in packet for packet in session.packets), 10.0, "no fence")
+
+            wire = b"".join(session.packets)
+            assert wire.index(b"drawn-before-the-fence") < wire.index(b"fence-611")
+    finally:
+        for pane in list(mux.panes_by_id.values()):
+            if not pane.process.is_terminated:
+                pane.process.kill()
 
 
 # ----------------------------------------------------------------------

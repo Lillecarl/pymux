@@ -1050,6 +1050,8 @@ class ServerConnection:
             session=session,
         )
         self.client_state = client_state
+        client_state.app.before_render += lambda _: output.frame_begins()
+        client_state.app.after_render += lambda _: output.frame_ends()
 
         if start:
 
@@ -1265,6 +1267,15 @@ class _FrameOutput(Vt100_Output):
     that waits for a pane's notification as a fence still had to wait
     for silence after it. Lillecarl/pymux#579.
 
+    **Only a frame's own flush carries it**: one made between the
+    application's `before_render` and `after_render`, which
+    `frame_begins` and `frame_ends` mark. Not every flush ends a frame:
+    a bell, a reset of the renderer and graphics flush on their own, and
+    a frame that the stale-frame check skips flushes nothing at all.
+    Carried by any flush, the vterm middleman's fence went out ahead of
+    the frame that drew the payload, and libvterm read an empty screen.
+    Lillecarl/pymux#611.
+
     A pane draws an image cell as kitty's unicode placeholder, and
     `flush` turns each one into a space unless `keeps_placeholders`
     says this terminal reads them. Once per frame and not once per
@@ -1274,10 +1285,17 @@ class _FrameOutput(Vt100_Output):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._after_frame: list[str] = []
+        self._in_frame = False
         self.keeps_placeholders: Callable[[], bool] = lambda: False
 
     def write_after_frame(self, data: str) -> None:
         self._after_frame.append(data)
+
+    def frame_begins(self) -> None:
+        self._in_frame = True
+
+    def frame_ends(self) -> None:
+        self._in_frame = False
 
     @override
     def flush(self) -> None:
@@ -1286,7 +1304,7 @@ class _FrameOutput(Vt100_Output):
             if PLACEHOLDER in frame and not self.keeps_placeholders():
                 frame = blanked(frame)
             self._buffer = [frame]
-        if self._after_frame:
+        if self._in_frame and self._after_frame:
             self.write_raw("".join(self._after_frame))
             self._after_frame = []
         super().flush()
