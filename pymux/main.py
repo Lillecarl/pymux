@@ -16,7 +16,7 @@ import time
 import traceback
 import weakref
 from collections import deque
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from contextlib import asynccontextmanager, suppress
 from typing import TYPE_CHECKING, ClassVar, NamedTuple, override
 
@@ -2532,6 +2532,8 @@ class Pymux:
             if on_done is not None:
                 on_done()
 
+            self.finish_recordings([pane])
+
             if not self.remain_on_exit:
                 # The session the pane was in, and not the session of
                 # whoever happens to be the current client when a
@@ -3962,7 +3964,19 @@ exec pymux notify -u "$urgency" -- "$@"
         except Exception:
             logger.exception("Sending kitty keyboard flags failed.")
 
+    def finish_recordings(self, panes: Iterable[Pane]) -> None:
+        "Write out what `record-pane` was recording of `panes`."
+        for pane in panes:
+            recording, pane.recording = pane.recording, None
+            if recording is None:
+                continue
+            try:
+                logger.info("Recorded %s.", recording.finish())
+            except OSError:
+                logger.exception("Writing the recording %s failed.", recording.name)
+
     def stop(self):
+        self.finish_recordings(self.panes_by_id.values())
         # Kill all pane processes first. (The pending `waitpid` calls in
         # the event loop executor keep the server process alive as long
         # as the children run. Also, `kill-server` should not leave the

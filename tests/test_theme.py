@@ -251,6 +251,7 @@ RULES = {
     "panenumber": "bg:#888888",
     "terminal.focused panenumber": "bg:#aa8800",
     "terminated": "bg:#aa0000 #ffffff",
+    "recording": "bg:#aa0000 #ffffff",
     "confirmationtoolbar": "bg:#880000 #ffffff",
     "confirmationtoolbar question": "",
     "confirmationtoolbar yesno": "bg:#440000",

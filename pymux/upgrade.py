@@ -92,6 +92,8 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
         raise CommandException("%s: not found" % command[0])
     command = [executable, *command[1:]]
     _refuse(pymux)
+    # A recording holds Python objects of this build, so it ends here.
+    pymux.finish_recordings(pymux.panes_by_id.values())
 
     path = Path(socket_directory()) / ("pymux.upgrade.%d.sqlite" % os.getpid())
     written = snapshot.Snapshot(path)

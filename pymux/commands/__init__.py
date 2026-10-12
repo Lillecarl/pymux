@@ -63,6 +63,7 @@ MODULES = [
     "consume_or_expel",
     "rename_window",
     "rename_pane",
+    "record_pane",
     "rename_session",
     "resize_pane",
     "resize_window",

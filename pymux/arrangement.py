@@ -13,7 +13,7 @@ from __future__ import annotations
 import math
 import os
 from enum import Enum
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 from weakref import WeakKeyDictionary, ref
 
 from prompt_toolkit.application import Application, get_app, get_app_or_none, set_app
@@ -23,6 +23,9 @@ from pyte.keep import Keep
 
 from .enums import WindowSize
 from .ids import PaneId, PaneIndex, WindowId, WindowIndex
+
+if TYPE_CHECKING:
+    from .recording import Recording
 
 __all__ = [
     "Arrangement",
@@ -105,6 +108,8 @@ class Pane:
         # `#{pane_revision}` only grows: an agent waiting on a change
         # holds a number from before the upgrade.
         "revision": Keep.SAVED,
+        # An upgrade writes it out first: `upgrade.upgrade`.
+        "recording": Keep.DROPPED,
     }
 
     def __init__(self, terminal: Terminal) -> None:
@@ -174,6 +179,9 @@ class Pane:
         #: "OSC 133 ; D ; status". `None` is no finished command yet,
         #: or one that was aborted.
         self.last_exit_status: int | None = None
+
+        #: What `record-pane` is recording of this pane, or None.
+        self.recording: Recording | None = None
 
     def content_changed(self) -> None:
         "Say that what this pane shows may have changed."

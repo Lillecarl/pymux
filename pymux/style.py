@@ -189,6 +189,7 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         "panenumber": "bg:%s" % (r["border"],),
         "terminal.focused panenumber": "bg:%s" % (r["warn"],),
         "terminated": "bg:%s %s" % (r["danger"], r["text-bright"]),
+        "recording": "bg:%s %s" % (r["danger"], r["text-bright"]),
         "confirmationtoolbar": "bg:%s %s" % (r["danger-strong"], r["text-bright"]),
         "confirmationtoolbar question": "",
         "confirmationtoolbar yesno": "bg:%s" % (r["danger-deep"],),

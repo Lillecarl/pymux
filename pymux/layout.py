@@ -3045,6 +3045,9 @@ def _create_container_for_process(
         if arrangement_pane.is_copying:
             result.append(("class:copymode", " Copy "))
 
+        if arrangement_pane.recording is not None:
+            result.append(("class:recording", " ● REC %s " % arrangement_pane.recording.name))
+
         if arrangement_pane.name:
             result.append(("class:name", " %s " % arrangement_pane.name))
 
