@@ -693,6 +693,26 @@ if wayland.available():
         (3,),
     )
     FIXTURES["window-pane-wev"] = Fixture(CHROME, window_keys("wev", typed=b"wev"), (3,))
+    # `pymux wl` in the new pane: foot takes that pane's place, so the
+    # window holds two panes and not three. Lillecarl/pymux#630.
+    FIXTURES["window-pane-wl"] = Fixture(
+        CHROME,
+        keys(
+            (0.0, PREFIX),
+            (0.4, b"%"),
+            (
+                0.8,
+                (
+                    b"pymux wl -- foot --override=main.font='DejaVu Sans Mono:size=11'"
+                    b" sh -c 'printf \"foot took the pane wl ran in\\n\"; exec cat'\n"
+                ),
+            ),
+            ("quiet", 2.0),
+            (0.2, b"typed at the window\r"),
+            ("quiet", 1.0),
+        ),
+        (2,),
+    )
 
 
 def every_fixture():

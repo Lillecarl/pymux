@@ -378,7 +378,10 @@ let
     let
       value = builtins.getEnv "PYMUX_WINDOW_PANES";
     in
-    if value == "" then "window-pane,window-pane-flower,window-pane-mpv,window-pane-wev" else value;
+    if value == "" then
+      "window-pane,window-pane-flower,window-pane-mpv,window-pane-wev,window-pane-wl"
+    else
+      value;
 
   # The terminals the upgrade pictures are taken in, as a piece of a
   # name; foot when nothing is said.
