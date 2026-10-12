@@ -460,6 +460,44 @@ class PymuxKeyBindings:
             pymux.display_pane_numbers = False
 
         @Condition
+        def url_mode_shown() -> bool:
+            try:
+                return pymux.get_client_state().url_mode is not None
+            except ValueError:
+                return False
+
+        @kb.add(Keys.Any, eager=True, filter=url_mode_shown)
+        def _url_mode_key(event: E) -> None:
+            """
+            A key while URL labels are up. Every key stops here, so a
+            letter that no label goes on with reaches neither the pane
+            nor copy mode. Lillecarl/pymux#608.
+            """
+            client_state = pymux.get_client_state()
+            mode = client_state.url_mode
+            assert mode is not None
+            key = event.key_sequence[0].key
+            letter = event.data
+            if key in (Keys.Escape, Keys.ControlC, Keys.ControlG, Keys.ControlD):
+                client_state.url_mode = None
+            elif key in (Keys.Backspace, Keys.ControlH):
+                mode.back()
+            elif len(letter) == 1 and letter.isalpha():
+                target = mode.press(letter)
+                if target is not None:
+                    client_state.url_mode = None
+                    url = target.link.url
+                    if letter.isupper():
+                        event.app.clipboard.set_text(url)
+                        pymux.write_user_clipboard(url)
+                        pymux.show_message("Copied %s" % url)
+                    else:
+                        # The person picked it, which is the question
+                        # `open-url-mode ask` would put.
+                        pymux.open_url(url, confirmed=True)
+            pymux.invalidate()
+
+        @Condition
         def clock_displayed() -> bool:
             " "
             pane = pymux.arrangement.get_active_pane()

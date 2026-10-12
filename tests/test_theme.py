@@ -256,6 +256,7 @@ RULES = {
     "confirmationtoolbar question": "",
     "confirmationtoolbar yesno": "bg:#440000",
     "copy-mode-cursor-position": "bg:ansiyellow ansiblack",
+    "url-label": "bg:ansiyellow ansiblack bold",
     "search-toolbar.prompt": "bg:#88ff44 #444444",
     "search-toolbar.text": "bg:#88ff44 #000000",
     "search-match": "#000000 bg:#88aa88",

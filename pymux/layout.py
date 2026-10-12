@@ -209,6 +209,9 @@ class Z_INDEX:
     #: list, because no case has been seen where the two meet.
     CLOCK = 100
     PANE_NUMBER = 100
+    #: Over the pane and over the clock and the numbers: a label is
+    #: what the person is reading while the mode is up.
+    URL_LABEL = 101
 
 
 #: Where the panes of one render were drawn. It hangs on the screen of
@@ -545,6 +548,62 @@ class PaneNumber(Container):  # XXX: make FormattedTextControl
                 )
 
         screen.draw_with_z_index(z_index=Z_INDEX.PANE_NUMBER, draw_func=draw_func)
+
+    @override
+    def get_children(self) -> list[Container]:
+        return []
+
+
+class UrlLabels(Container):
+    """
+    The labels of URL mode, over the first cells of each link. They are
+    placed after the panes drew, from where each pane says it drew the
+    link this frame, so a label follows its link as the pane scrolls.
+    Lillecarl/pymux#608.
+    """
+
+    def __init__(self, client_state) -> None:
+        self.client_state = client_state
+
+    @override
+    def reset(self) -> None:
+        pass
+
+    @override
+    def preferred_width(self, max_available_width: int) -> D:
+        return D.exact(1)
+
+    @override
+    def preferred_height(self, width: int, max_available_height: int) -> D:
+        return D.exact(1)
+
+    @override
+    def write_to_screen(
+        self,
+        screen: Screen,
+        mouse_handlers: MouseHandlers,
+        write_position: WritePosition,
+        parent_style: str,
+        erase_bg: bool,
+        z_index: int | None,
+    ) -> None:
+        mode = self.client_state.url_mode
+        if mode is None:
+            return
+
+        def draw_func() -> None:
+            for target in mode.waiting():
+                place = mode.pane.terminal.where_shown(target.link.row, target.link.column)
+                if place is None:
+                    continue
+                y, x = place
+                # Past the edge is drawn too: the renderer leaves out the
+                # columns the terminal does not have, and the screen's
+                # width is not known while the floats draw.
+                for offset, letter in enumerate(target.label[len(mode.typed) :]):
+                    screen.data_buffer[y][x + offset] = Char(letter, "class:url-label")
+
+        screen.draw_with_z_index(z_index=Z_INDEX.URL_LABEL, draw_func=draw_func)
 
     @override
     def get_children(self) -> list[Container]:
@@ -2178,6 +2237,8 @@ class LayoutManager:
                     z_index=Z_INDEX.MESSAGE_TOOLBAR,
                     content=MessageToolbar(self.client_state),
                 ),
+                # It draws where each link is, and not in its own box.
+                Float(top=0, left=0, transparent=True, content=UrlLabels(self.client_state)),
                 # A question waiting for an answer sits above the status
                 # line, where a message sits, and not over it. The
                 # status line is where a person reads which window they

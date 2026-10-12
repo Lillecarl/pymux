@@ -64,6 +64,7 @@ MODULES = [
     "rename_window",
     "rename_pane",
     "record_pane",
+    "show_urls",
     "rename_session",
     "resize_pane",
     "resize_window",

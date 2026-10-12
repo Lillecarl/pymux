@@ -197,6 +197,8 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         # theme. It is the one thing a person hunts for on a busy
         # screen, and a theme that could quiet it would.
         "copy-mode-cursor-position": "bg:ansiyellow ansiblack",
+        # A URL label keeps its ANSI colours too, for the same reason.
+        "url-label": "bg:ansiyellow ansiblack bold",
         "search-toolbar.prompt": "bg:%s %s" % (r["search"], r["search-prompt-text"]),
         "search-toolbar.text": "bg:%s %s" % (r["search"], r["text-dark"]),
         "search-match": "%s bg:%s" % (r["text-dark"], r["search-match"]),

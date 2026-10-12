@@ -106,6 +106,7 @@ from .utils import get_default_shell, keys_are_vi
 
 if TYPE_CHECKING:
     from .pipes.posix import PosixSocketListener
+    from .url_mode import UrlMode
 
 __all__ = [
     "Pymux",
@@ -292,6 +293,7 @@ class ClientState:
         # Where the person was: a prefix held, a key table, a prompt,
         # a question, a menu, a chooser.
         "has_prefix": Keep.SAVED,
+        "url_mode": Keep.DROPPED,
         "key_tables": Keep.SAVED,
         "message": Keep.SAVED,
         "confirmations": Keep.SAVED,
@@ -405,6 +407,9 @@ class ClientState:
 
         #: True when the prefix key (Ctrl-B) has been pressed.
         self.has_prefix = False
+
+        #: The labels `show-urls` put over a pane, while they are up.
+        self.url_mode: UrlMode | None = None
 
         #: Ticks of the input this client sent against ticks of the
         #: frames it asked for. A redraw is scheduled, and input
