@@ -2789,16 +2789,44 @@ def check_relative_socket_name_survives_the_daemon(tmp):
     """
     sock_name = "relative.sock"
     absolute = tmp / sock_name
+    #: How long each command took. Every one is a fresh interpreter
+    #: importing pymux, which is most of the wait under a loaded gate.
+    took: list[float] = []
 
     def cli(args):
-        return subprocess.run(
-            [sys.executable, "-m", "pymux", "-S", sock_name, *args],
-            cwd=str(tmp),
-            capture_output=True,
-            timeout=20,
-            check=False,
-            env=dict(os.environ, PYTHONPATH=str(REPO_ROOT)),
-        )
+        started = time.monotonic()
+        try:
+            return subprocess.run(
+                [sys.executable, "-m", "pymux", "-S", sock_name, *args],
+                cwd=str(tmp),
+                capture_output=True,
+                timeout=20,
+                check=False,
+                env=dict(os.environ, PYTHONPATH=str(REPO_ROOT)),
+            )
+        finally:
+            took.append(time.monotonic() - started)
+
+    def timings() -> str:
+        return "%d commands, %.1fs each on average, %.1fs at most" % (len(took), sum(took) / len(took), max(took))
+
+    def until(answer, what):
+        """
+        Poll `answer` until it gives something. Each poll is a command,
+        so the deadline counts commands as well as seconds: a gate that
+        starves the interpreter gets its polls, and a server that never
+        answers still fails.
+        """
+        deadline = time.monotonic() + 10
+        polls = 0
+        while True:
+            got = answer()
+            polls += 1
+            if got:
+                return got
+            complaint = what() if callable(what) else what
+            assert time.monotonic() < deadline or polls < 10, "%s (%s)" % (complaint, timings())
+            time.sleep(0.05)
 
     try:
         made = cli(["new-session", "-d", "sh"])
@@ -2807,28 +2835,33 @@ def check_relative_socket_name_survives_the_daemon(tmp):
 
         # The shell's prompt first: keys that arrive before it put the
         # answer on the prompt's row.
-        deadline = time.monotonic() + 10
-        while "$" not in cli(["capture-pane", "-p"]).stdout.decode("utf-8", "replace"):
-            assert time.monotonic() < deadline, "the shell never prompted"
-            time.sleep(0.05)
+        captured = [b"", b""]
+
+        def prompted():
+            capture = cli(["capture-pane", "-p"])
+            captured[:] = [capture.stdout, capture.stderr]
+            return "$" in capture.stdout.decode("utf-8", "replace")
+
+        until(prompted, lambda: "the shell never prompted; the pane held %r, and the command said %r" % tuple(captured))
 
         # What a program inside a pane is told to find the server with.
         cli(["send-keys", "echo MARK=$PYMUX", "Enter"])
-        time.sleep(1.0)
-        seen = cli(["capture-pane", "-p"]).stdout.decode("utf-8", "replace")
-        told = [row for row in seen.splitlines() if row.startswith("MARK=")]
-        assert told, "the pane never answered: %r" % (seen,)
-        assert told[0].startswith("MARK=%s," % absolute), "a pane was given a socket path it cannot follow: %r" % (
-            told[0],
+
+        def told():
+            seen = cli(["capture-pane", "-p"]).stdout.decode("utf-8", "replace")
+            return [row for row in seen.splitlines() if row.startswith("MARK=")]
+
+        answer = until(told, "the pane never answered")[0]
+        assert answer.startswith("MARK=%s," % absolute), "a pane was given a socket path it cannot follow: %r" % (
+            answer,
         )
 
         stopped = cli(["kill-server"])
         assert stopped.returncode == 0, stopped.stderr
-        time.sleep(1.0)
-        assert not absolute.exists(), "the server left its socket file behind at %s" % absolute
+        until(lambda: not absolute.exists(), "the server left its socket file behind at %s" % absolute)
     finally:
         cli(["kill-server"])
-    print("relative socket name survives the daemon: ok")
+    print("relative socket name survives the daemon: ok (%s)" % timings())
 
 
 def _active_pane_index(sock_path):
