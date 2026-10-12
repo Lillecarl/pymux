@@ -39,6 +39,11 @@ async def test_a_recording_holds_both_directions_and_the_pane_it_ran_in(pymux, t
             10.0,
             "the pane's answer was never recorded",
         )
+        session.resize(16, 70)
+        await once(
+            lambda: any(event[1] == "size" for event in pane.recording.events), 10.0, "the resize was never recorded"
+        )
+        resized_to = "%dx%d" % (pane.screen.columns, pane.screen.lines)
 
         with set_app(client_state.app):
             pymux.handle_command("record-pane")
@@ -54,6 +59,9 @@ async def test_a_recording_holds_both_directions_and_the_pane_it_ran_in(pymux, t
     assert recorded["term"] == pymux.default_terminal
     sent = "".join(base64.b64decode(event[2]).decode() for event in recorded["events"] if event[1] == "in")
     assert "printf" in sent and DEVICE_ATTRIBUTES_ANSWER in sent
+    resized = [event[2] for event in recorded["events"] if event[1] == "size"]
+    assert resized and resized[-1] == resized_to
+    assert isinstance(recorded["timestamp"], int)
 
 
 async def test_a_pane_whose_program_ends_writes_its_recording(pymux, tmp_path, monkeypatch):

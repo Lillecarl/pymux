@@ -1420,6 +1420,11 @@ class LayoutManager:
         "The tokens for the status bar."
         result: StyleAndTextTuples = []
 
+        recording = getattr(self.client_state.connection, "recording", None)
+        if recording is not None:
+            result.append(("class:recording", " ● REC %s " % recording.name))
+            result.append(("", " "))
+
         # Display panes.
         for i, w in enumerate(self.client_state.session.arrangement.windows):
             if i > 0:

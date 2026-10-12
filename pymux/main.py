@@ -3969,10 +3969,15 @@ exec pymux notify -u "$urgency" -- "$@"
         except Exception:
             logger.exception("Sending kitty keyboard flags failed.")
 
-    def finish_recordings(self, panes: Iterable[Pane]) -> None:
-        "Write out what `record-pane` was recording of `panes`."
-        for pane in panes:
-            recording, pane.recording = pane.recording, None
+    def finish_recordings(self, holders: Iterable[Pane | ServerConnection] | None = None) -> None:
+        """
+        Write out what `record-pane` and `record-client` were recording
+        of `holders`: panes and client connections, every one by default.
+        """
+        if holders is None:
+            holders = [*self.panes_by_id.values(), *self.connections]
+        for holder in holders:
+            recording, holder.recording = holder.recording, None
             if recording is None:
                 continue
             try:
@@ -3981,7 +3986,7 @@ exec pymux notify -u "$urgency" -- "$@"
                 logger.exception("Writing the recording %s failed.", recording.name)
 
     def stop(self):
-        self.finish_recordings(self.panes_by_id.values())
+        self.finish_recordings()
         # Kill all pane processes first. (The pending `waitpid` calls in
         # the event loop executor keep the server process alive as long
         # as the children run. Also, `kill-server` should not leave the

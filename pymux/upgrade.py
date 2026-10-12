@@ -93,7 +93,7 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
     command = [executable, *command[1:]]
     _refuse(pymux)
     # A recording holds Python objects of this build, so it ends here.
-    pymux.finish_recordings(pymux.panes_by_id.values())
+    pymux.finish_recordings()
 
     path = Path(socket_directory()) / ("pymux.upgrade.%d.sqlite" % os.getpid())
     written = snapshot.Snapshot(path)

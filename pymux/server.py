@@ -42,6 +42,7 @@ from .pipes import BrokenPipeError
 
 if TYPE_CHECKING:
     from pymux.main import ClientState, Pymux
+    from pymux.recording import Recording
     from pymux.web.stream import PaneStream
 
 __all__ = ["ServerConnection"]
@@ -126,6 +127,9 @@ class ServerConnection:
         "_closed": Keep.DROPPED,
         "_kitty_detection_pending": Keep.DROPPED,
         "_unanswered": Keep.DROPPED,
+        # A recording holds Python objects of this build, so it ends
+        # with it. `upgrade.py` writes it out first.
+        "recording": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux, pipe_connection, may_attach: bool = True) -> None:
@@ -142,6 +146,10 @@ class ServerConnection:
 
         self.size = Size(rows=20, columns=80)
         self._closed = False
+
+        #: What `record-client` is recording of this client, or None.
+        #: Lillecarl/pymux#612.
+        self.recording: Recording | None = None
 
         #: The scope the background work of this connection runs in.
         #: `serve()` opens it, so every task of a client ends when that
@@ -634,6 +642,8 @@ class ServerConnection:
 
         # Handle stdin.
         elif packet[Field.CMD] == Packet.IN:
+            if self.recording is not None:
+                self.recording.hear("in", packet[Field.DATA])
             self._pipeinput.send_text(packet[Field.DATA])
             # Input newer than a scheduled redraw makes that frame
             # stale: the renderer skips it and asks for another one
@@ -649,6 +659,8 @@ class ServerConnection:
         # Set size. (The client reports the size.)
         elif packet[Field.CMD] == Packet.SIZE:
             rows, columns = packet[Field.DATA]
+            if self.recording is not None and (rows, columns) != tuple(self.size):
+                self.recording.hear("size", "%dx%d" % (columns, rows))
             self.size = Size(rows=rows, columns=columns)
             self.pymux.invalidate(Woke.CLIENT_RESIZED)
 
@@ -832,6 +844,10 @@ class ServerConnection:
         """
         if self._closed:
             return
+        # Every byte for the client's terminal passes here, the frames
+        # and what follows them alike.
+        if self.recording is not None and isinstance(data, dict) and data.get(Field.CMD) == Packet.OUT:
+            self.recording.hear("out", data[Field.DATA])
         # Serialised now: the write runs later, and the packet is what
         # was true when it was sent.
         self._spawn(self._write(json.dumps(data)))
@@ -1076,6 +1092,8 @@ class ServerConnection:
         # render CLI output for clients that aren't connected anymore.
         if self._closed:
             return
+        if self.recording is not None:
+            self.pymux.finish_recordings([self])
         # Remove the images that this client put on its terminal.
         try:
             self.graphics.reset()
