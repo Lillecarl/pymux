@@ -6,8 +6,8 @@ runs this and `checks.pymux-unit` skips it. Lillecarl/pymux#383.
 
 from __future__ import annotations
 
+import contextlib
 import os
-import subprocess
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -65,8 +65,17 @@ async def paste(mux, *flags):
     return result.returncode, result.stdout.decode()
 
 
-def copy(mux, text, *flags):
-    return subprocess.Popen(["wl-copy", "--foreground", *flags, text], env=environment(mux))
+@asynccontextmanager
+async def copying(mux, text, *flags):
+    "wl-copy, in the foreground so it holds the selection until the block ends."
+    async with await anyio.open_process(["wl-copy", "--foreground", *flags, text], env=environment(mux)) as holder:
+        try:
+            yield holder
+        finally:
+            # Under "on" the compositor takes the selection back, and
+            # wl-copy leaves on its own.
+            with contextlib.suppress(ProcessLookupError):
+                holder.kill()
 
 
 def _quoted(text: str) -> str:
@@ -135,14 +144,10 @@ async def test_the_option_stops_and_starts_it(mux):
 
 async def test_panes_share_a_copy_under_external(mux):
     mux.clipboard_mode = Clipboard.EXTERNAL
-    holder = copy(mux, "between panes")
-    try:
+    async with copying(mux, "between panes"):
         await once(lambda: mux.wayland.copied.get("clipboard"), 10.0, "the copy never arrived")
         assert await paste(mux) == (0, "between panes")
         assert mux.clipboard.get_data().text != "between panes"
-    finally:
-        holder.kill()
-        holder.wait()
 
 
 async def test_a_paste_reads_nothing_of_the_person_under_external(mux):
@@ -174,17 +179,13 @@ async def test_a_paste_of_the_primary_reads_the_desktop_primary(tmp_path):
 async def test_a_pane_copy_goes_to_the_desktop_and_comes_back(tmp_path):
     terminal = ClipboardTerminal()
     async with attached(tmp_path, terminal, Clipboard.ON) as mux:
-        holder = copy(mux, "copied in a pane")
-        try:
+        async with copying(mux, "copied in a pane"):
             await once(lambda: terminal.selections.get("c") == "copied in a pane", 10.0, "never written")
             assert mux.clipboard.get_data().text == "copied in a pane"
             # The compositor took the selection back, so this asks the
             # terminal rather than the pane.
             assert await paste(mux) == (0, "copied in a pane")
             assert terminal.queries == 1
-        finally:
-            holder.kill()
-            holder.wait()
 
 
 async def test_an_empty_desktop_clipboard_leaves_the_paste_buffer(tmp_path):

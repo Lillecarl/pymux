@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, NamedTuple
 
+from ptterm import Terminal
 from pyte.links import Link, links_in
 
 if TYPE_CHECKING:
@@ -66,10 +67,13 @@ class UrlMode:
 
     @classmethod
     def over(cls, pane: Pane) -> UrlMode:
-        "The links `pane` shows now, labelled."
-        shown = pane.terminal.shown_rows()
-        page = pane.screen.page
-        links = links_in(page, *shown) if shown is not None and page is not None else []
+        "The links `pane` shows now, labelled. A window pane shows none that pymux can read."
+        terminal = pane.terminal
+        links = []
+        if isinstance(terminal, Terminal):
+            shown = terminal.shown_rows()
+            page = terminal.screen.page
+            links = links_in(page, *shown) if shown is not None and page is not None else []
         given: dict[str, str] = {}
         names = iter(labels(len({link.url for link in links})))
         targets = []

@@ -26,6 +26,7 @@ from .ids import PaneId, PaneIndex, WindowId, WindowIndex
 
 if TYPE_CHECKING:
     from .recording import Recording
+    from .window_pane import WindowWidget
 
 __all__ = [
     "Arrangement",
@@ -112,7 +113,7 @@ class Pane:
         "recording": Keep.DROPPED,
     }
 
-    def __init__(self, terminal: Terminal) -> None:
+    def __init__(self, terminal: Terminal | WindowWidget) -> None:
         self.terminal = terminal
         self.chosen_name: str | None = None
 

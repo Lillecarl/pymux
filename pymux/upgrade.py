@@ -94,6 +94,10 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
     _refuse(pymux)
     # A recording holds Python objects of this build, so it ends here.
     pymux.finish_recordings()
+    # A Wayland window lives on this server's compositor, which ends with
+    # it, so its pane goes now and not into the snapshot.
+    # Lillecarl/pymux#620.
+    pymux.close_window_panes()
 
     path = Path(socket_directory()) / ("pymux.upgrade.%d.sqlite" % os.getpid())
     written = snapshot.Snapshot(path)

@@ -11,7 +11,7 @@ from pyte.html import CSS, theme_css
 from pyte.osc import ColorOverrides
 
 from pymux.commands import CommandParser, add_command
-from pymux.commands.common import show_listing, the_pane
+from pymux.commands.common import show_listing, terminal_of, the_pane
 
 
 def show_html_stylesheet(pymux: Pymux, args: argparse.Namespace) -> None:
@@ -40,7 +40,7 @@ def show_html_stylesheet(pymux: Pymux, args: argparse.Namespace) -> None:
     # The screen belongs to the installed pyte that ptterm was built
     # against, and `theme_css` to the one this package imports; pyrefly
     # sees two classes with the same name where there is one class.
-    colors = cast(ColorOverrides, pane.screen.colors)
+    colors = cast(ColorOverrides, terminal_of(pane).screen.colors)
     show_listing(pymux, "show-html-stylesheet", CSS + "\n" + theme_css(colors))
 
 

@@ -22,6 +22,7 @@ from prompt_toolkit.key_binding.bindings.auto_suggest import (
 )
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent as E
 from prompt_toolkit.keys import Keys
+from ptterm import Terminal
 
 from .commands import call_command_handler
 from .commands.utils import wrap_argument
@@ -435,13 +436,15 @@ class PymuxKeyBindings:
             that has nothing in it. Lillecarl/pymux#246.
             """
             pane = pymux.get_focused_pane()
-            if pane is None or not event.data:
+            # A window pane presses and lets go of each key at once.
+            if pane is None or not event.data or not isinstance(pane.terminal, Terminal):
                 return NotImplemented
+            terminal = pane.terminal
             try:
-                if not get_app().layout.has_focus(pane.terminal):
+                if not get_app().layout.has_focus(terminal):
                     # The keyboard is on the command line or a prompt.
                     return NotImplemented
-                pane.process.write_input(pane.screen.encode_key(event.data))
+                terminal.process.write_input(terminal.screen.encode_key(event.data))
             except Exception:
                 logger.exception("Forwarding a key release failed.")
             return NotImplemented

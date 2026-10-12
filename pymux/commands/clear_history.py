@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands.common import terminal_of
 
 
 def clear_history(pymux: Pymux, args: argparse.Namespace) -> None:
@@ -18,7 +19,7 @@ def clear_history(pymux: Pymux, args: argparse.Namespace) -> None:
 
     if pane.is_copying:
         raise CommandException("Not available in copy mode")
-    pane.screen.clear_history()
+    terminal_of(pane).screen.clear_history()
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

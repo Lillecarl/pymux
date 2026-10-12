@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from ptyhost.process import Process
 
 from pymux.commands import CommandException, CommandParser, add_command
-from pymux.commands.common import the_pane
+from pymux.commands.common import terminal_of, the_pane
 from pymux.recording import recording_of_process, recordings_directory
 
 if TYPE_CHECKING:
@@ -40,11 +40,17 @@ def record_pane(pymux: Pymux, args: argparse.Namespace) -> None:
             raise CommandException("record-pane: %s" % e)
         pymux.show_message("Recorded %s" % written)
     else:
-        if not isinstance(pane.process, Process):
+        terminal = terminal_of(pane)
+        if not isinstance(terminal.process, Process):
             raise CommandException("record-pane: this pane runs no program on a pty")
-        screen = pane.screen
+        screen = terminal.screen
         pane.recording = recording_of_process(
-            pane.process, args.name or "", screen.lines, screen.columns, pymux.default_terminal, args.idle_time_limit
+            terminal.process,
+            args.name or "",
+            screen.lines,
+            screen.columns,
+            pymux.default_terminal,
+            args.idle_time_limit,
         )
         pymux.show_message("Recording %s to %s" % (pane.recording.name, recordings_directory()))
     pymux.invalidate()

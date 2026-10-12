@@ -130,3 +130,7 @@ class Woke(StrEnum):
     CLIPBOARD_ASKED = "a pane pasted, so a client's terminal is asked for its clipboard"
     #: A copy for the person's clipboard goes behind a frame too.
     CLIPBOARD_WRITTEN = "a copy goes to the clipboard of the clients"
+    #: Window panes. Lillecarl/pymux#620.
+    WINDOW_PANE_OPENED = "a Wayland window opened in a pane"
+    WINDOW_PANE_DREW = "a Wayland window drew a frame"
+    WINDOW_PANE_CHANGED = "a Wayland window took a title or an app id"

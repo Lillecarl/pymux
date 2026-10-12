@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 import anyio
 
 from pymux.commands import CommandException, CommandParser, add_command
-from pymux.commands.common import refuse_without_a_waiter, the_pane
+from pymux.commands.common import refuse_without_a_waiter, terminal_of, the_pane
 
 #: How long a wait runs when nobody says. Short enough that a caller
 #: behind a proxy with its own idea of an idle connection gets an answer
@@ -73,7 +73,7 @@ def wait_pane_change(pymux: Pymux, args: argparse.Namespace):
     # `add_handler` and `remove_handler` rather than "+=" and "-=". The
     # second of those assigns to the name, which would make `changed` a
     # local of the coroutine and raise before it unhooked anything.
-    changed = pane.terminal.terminal_control.on_content_changed
+    changed = terminal_of(pane).terminal_control.on_content_changed
 
     async def until_it_changes() -> None:
         # **Hooked inside the coroutine, not before it.** A handler put

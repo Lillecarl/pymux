@@ -24,6 +24,7 @@ from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.input.vt100 import Vt100Input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
+from ptterm import Terminal
 from pyte.keep import Keep
 from pyte.placeholders import PLACEHOLDER, blanked
 
@@ -657,11 +658,12 @@ class ServerConnection:
 
         pane_id, param = routed
         pane = self.pymux.panes_by_id.get(pane_id)
-        if pane is None:
-            return  # The pane is gone.
+        # Gone, or a window pane, which sends no notification to answer.
+        if pane is None or not isinstance(pane.terminal, Terminal):
+            return
 
         try:
-            pane.process.write_input("\x1b]99;%s\x1b\\" % param)
+            pane.terminal.process.write_input("\x1b]99;%s\x1b\\" % param)
         except Exception:
             logger.exception("Giving a notification answer to a pane failed.")
 

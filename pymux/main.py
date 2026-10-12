@@ -104,6 +104,7 @@ from .session import DEFAULT_SIZE, Session
 from .style import DEFAULT_THEME, theme
 from .utils import get_default_shell, keys_are_vi
 from .wayland import WaylandServer
+from .window_pane import WindowWidget, is_window_pane
 
 if TYPE_CHECKING:
     from .pipes.posix import PosixSocketListener
@@ -164,7 +165,11 @@ class PaneCursor(CursorShapeConfig):
         # `DEFAULT` and not `_NEVER_CHANGE`, because the pane before
         # this one may have asked. Then the shape it set is on the
         # terminal now, and saying nothing would leave it there.
-        screen = pane.screen
+        # A window pane shows the person's own cursor nowhere: the
+        # window draws its own.
+        if not isinstance(pane.terminal, Terminal):
+            return CursorShape.DEFAULT
+        screen = pane.terminal.screen
         if not screen.cursor_style_asked:
             return CursorShape.DEFAULT
 
@@ -582,6 +587,10 @@ class ClientState:
                 graphics.render(self._graphics_views())
             except Exception:
                 logger.exception("Drawing the pane images failed.")
+            try:
+                graphics.render_windows(self._window_views())
+            except Exception:
+                logger.exception("Drawing the window panes failed.")
 
         self.app.before_render += self.layout_manager.frame_started
         self.app.after_render += after_render
@@ -648,9 +657,11 @@ class ClientState:
 
         result = []
         for pane, write_position in self.layout_manager.pane_write_positions.items():
-            if pane.clock_mode or pane.terminal.is_copying:
+            terminal = pane.terminal
+            # A window pane's picture goes through `_window_views`.
+            if pane.clock_mode or not isinstance(terminal, Terminal) or terminal.is_copying:
                 continue
-            window = pane.terminal.terminal_window
+            window = terminal.terminal_window
             result.append(
                 PaneView(
                     pane_id=pane.pane_id,
@@ -660,11 +671,21 @@ class ClientState:
                     height=write_position.height,
                     vertical_scroll=window.vertical_scroll,
                     horizontal_scroll=window.horizontal_scroll,
-                    graphics=pane.screen.graphics,
-                    screen=pane.screen,
+                    graphics=terminal.screen.graphics,
+                    screen=terminal.screen,
                 )
             )
         return result
+
+    def _window_views(self):
+        "One `WindowView` per window pane this client can see. A popup covers them all."
+        if self.display_popup:
+            return []
+        return [
+            self.pymux.wayland.view_of(pane.pane_id, pane.terminal, write_position)
+            for pane, write_position in self.layout_manager.pane_write_positions.items()
+            if isinstance(pane.terminal, WindowWidget) and not pane.clock_mode
+        ]
 
     @property
     def command_mode(self):
@@ -2483,6 +2504,7 @@ class Pymux:
             # removes the pane.
             watch_end=job is None,
         )
+        assert isinstance(pane.terminal, Terminal), "`_build_pane` builds a terminal pane"
         terminal_control = pane.terminal.terminal_control
 
         if job is not None:
@@ -2562,21 +2584,7 @@ class Pymux:
             self.finish_recordings([pane])
 
             if not self.remain_on_exit:
-                # The session the pane was in, and not the session of
-                # whoever happens to be the current client when a
-                # program ends.
-                session = self.session_holding(pane)
-                if session is not None:
-                    session.arrangement.remove_pane(pane)
-
-                    # A session with no panes left is over. The last
-                    # one to go stops the server.
-                    if not session.arrangement.has_panes:
-                        self.remove_session(session)
-
-                # Make sure the right pane is focused for each client.
-                for client_state in self._client_states.values():
-                    client_state.sync_focus()
+                self._take_ended_pane(pane)
 
             self.invalidate(Woke.PANE_ENDED)
 
@@ -2695,6 +2703,64 @@ class Pymux:
         terminal_control.placeholder_ids = lambda image_id: self.outer_image_ids.id_of(pane.pane_id, image_id)
 
         return pane
+
+    def _take_ended_pane(self, pane: Pane) -> None:
+        "Take a pane whose program ended out of its session, and the session if it empties."
+        # The session the pane was in, and not the session of whoever
+        # happens to be the current client when a program ends.
+        session = self.session_holding(pane)
+        if session is not None:
+            session.arrangement.remove_pane(pane)
+
+            # A session with no panes left is over. The last one to go
+            # stops the server.
+            if not session.arrangement.has_panes:
+                self.remove_session(session)
+
+        # Make sure the right pane is focused for each client.
+        for client_state in self._client_states.values():
+            client_state.sync_focus()
+
+    def open_window_pane(self, widget: WindowWidget) -> Pane | None:
+        """
+        A pane for a Wayland window that just opened, split off beside the
+        active pane of the session a person used last, or None when no
+        session has a window to put it in. Lillecarl/pymux#620.
+        """
+        if not self.sessions:
+            return None
+        window = self.last_used_session.arrangement.get_active_window()
+        if window is None:
+            return None
+
+        pane = Pane(widget)
+
+        def focus_pane_on_click() -> None:
+            "Select this pane: the mouse went to it, as `_build_pane` does for a terminal."
+            found = self.window_of_pane(pane.pane_id)
+            if found is not None:
+                found[1].active_pane = pane
+
+        widget.on_mouse_focus = focus_pane_on_click
+        self._register_pane(pane)
+        window.add_pane(pane, vsplit=True)
+        window.active_pane = pane
+        for client_state in self._client_states.values():
+            client_state.sync_focus()
+        self.invalidate(Woke.WINDOW_PANE_OPENED)
+        return pane
+
+    def window_pane_ended(self, pane: Pane) -> None:
+        "The window of a window pane closed. A window leaves nothing to remain on exit."
+        self._take_ended_pane(pane)
+        self.invalidate(Woke.PANE_ENDED)
+
+    def close_window_panes(self) -> None:
+        "Take every window pane away, as an upgrade does: no window survives its compositor."
+        for pane in list(self.panes_by_id.values()):
+            if is_window_pane(pane):
+                pane.process.kill()
+                self._take_ended_pane(pane)
 
     def _register_pane(self, pane: Pane) -> None:
         "Record a pane, and tell it what the clients' terminals are."

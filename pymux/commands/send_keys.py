@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandException, CommandParser, add_command
-from pymux.commands.common import send_key, the_pane
+from pymux.commands.common import send_key, terminal_of, the_pane
 from pymux.key_spelling import event_however_it_is_written
 
 
@@ -23,6 +23,7 @@ def send_keys(pymux: Pymux, args: argparse.Namespace) -> None:
     Lillecarl/pymux#118.
     """
     pane = the_pane(pymux, args.target_pane)
+    terminal = terminal_of(pane)
 
     if pane.is_copying:
         raise CommandException("Cannot send keys. Pane is in copy mode.")
@@ -35,13 +36,13 @@ def send_keys(pymux: Pymux, args: argparse.Namespace) -> None:
         # prompt_toolkit's `Screen` has no such method, so `send-keys
         # -R` raised `AttributeError` and reset nothing.
         # Lillecarl/pymux#118.
-        pane.screen.reset()
+        terminal.screen.reset()
 
     keys = args.keys
 
     if args.l:
         # Send keys literally. (Don't interpret key names like 'Enter'.)
-        pane.process.write_input(" ".join(keys))
+        terminal.process.write_input(" ".join(keys))
         return
 
     for key in keys:
@@ -51,7 +52,7 @@ def send_keys(pymux: Pymux, args: argparse.Namespace) -> None:
         except ValueError:
             # Not a known key name. Like tmux, send this argument as
             # literal text.
-            pane.process.write_input(key)
+            terminal.process.write_input(key)
             continue
 
         send_key(pane, event, key)

@@ -11,7 +11,7 @@ from pyte.html import SCREEN_CLASS, html_of_page
 from pyte.screen import Page, Screen
 
 from pymux.commands import CommandException, CommandParser, add_command
-from pymux.commands.common import show_listing, the_pane
+from pymux.commands.common import show_listing, terminal_of, the_pane
 
 
 def _row_of(given: str | None, name: str, here: int, far_end: int, line_offset: int) -> int:
@@ -109,10 +109,10 @@ def capture_pane(pymux: Pymux, args: argparse.Namespace) -> None:
     caller that asks for a pane means the screenful it draws, not the
     ten thousand rows behind it. Lillecarl/pymux#457.
     """
-    pane = the_pane(pymux, args.target_pane)
+    terminal = terminal_of(the_pane(pymux, args.target_pane))
 
-    process = pane.process
-    screen = pane.screen
+    process = terminal.process
+    screen = terminal.screen
     page = screen.page
 
     if page is None:

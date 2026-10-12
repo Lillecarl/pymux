@@ -39,6 +39,7 @@ from weakref import ref
 from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.selection import SelectionState, SelectionType
+from ptterm import Terminal
 from ptyhost.backends.posix import PosixBackend
 from ptyhost.backends.posix_utils import PtyReader
 from ptyhost.held import HeldBackend
@@ -679,7 +680,7 @@ class Snapshot:
             )
 
     def _write_program(self, pane: Pane) -> None:
-        control = pane.terminal.terminal_control
+        control = _terminal(pane).terminal_control
         process = control.process
         backend = process.backend
         assert isinstance(backend, HeldBackend)  # `write` refused anything else
@@ -752,8 +753,20 @@ def _panes_of(pymux: Pymux) -> list[Pane]:
     return panes
 
 
-def _refuse_what_cannot_be_saved(pane: Pane) -> None:
+def _terminal(pane: Pane) -> Terminal:
+    """
+    The terminal of a pane the snapshot holds. A Wayland window lives on
+    the server's compositor, which no handover carries, and the upgrade
+    closes it before it writes. Lillecarl/pymux#620.
+    """
     terminal = pane.terminal
+    if not isinstance(terminal, Terminal):
+        raise SnapshotError("pane %%%d shows a Wayland window, which no handover carries" % pane.pane_id)
+    return terminal
+
+
+def _refuse_what_cannot_be_saved(pane: Pane) -> None:
+    terminal = _terminal(pane)
     backend = getattr(terminal.terminal_control.process, "backend", None)
     if not isinstance(backend, PosixBackend):
         raise SnapshotError("pane %%%d runs no program on a pty, such as a job viewer" % pane.pane_id)
@@ -990,7 +1003,8 @@ def _write_pane(
         [(pane.pane_id, name, value) for name, value in sorted(pane.user_vars.items())],
     )
     terminal = pane.terminal
-    if terminal.is_copying:
+    # The live store writes window panes too; they copy nothing.
+    if isinstance(terminal, Terminal) and terminal.is_copying:
         # The copy document is read from the screen, which the snapshot
         # holds and the suspended program cannot change; the caret and
         # the selection are what a person moved.
@@ -1009,7 +1023,7 @@ def _write_pane(
 
 def _reopen_copy_mode(pane: Pane, row: sqlite3.Row) -> None:
     "Copy mode as `_write_pane` saw it, over the screen the pane was thawed with."
-    terminal = pane.terminal
+    terminal = _terminal(pane)
     terminal.read_the_screen_into_the_copy_buffer()
     terminal.is_copying = True
     buffer = terminal.copy_buffer
@@ -1102,7 +1116,7 @@ def _adopted(pymux: Pymux, masters: dict[int, int], program: Program, on_done: C
 
 def _thawed(pymux: Pymux, program: Program, pane: Pane) -> Pane:
     pane.pane_id = program.pane_id
-    control = pane.terminal.terminal_control
+    control = _terminal(pane).terminal_control
     thaw(program.process, control.process)
     thaw(program.screen, control.screen)
     # After the screen: the replay of an open sequence reaches it.
@@ -1117,7 +1131,7 @@ async def start(pymux: Pymux) -> None:
         raise RuntimeError("start the loaded programs inside `Pymux.running`")
     await pymux.jobs.restore()
     for pane in _panes_of(pymux):
-        control = pane.terminal.terminal_control
+        control = _terminal(pane).terminal_control
         if not control._running:
             await control.start(pymux.tasks)
 

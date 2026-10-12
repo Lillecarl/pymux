@@ -38,11 +38,15 @@ import anyio
 import anyio.abc
 from prompt_toolkit.clipboard import ClipboardData
 
+from pymux.enums import Woke
+from pymux.graphics import WindowView
 from pymux.options import Clipboard
+from pymux.window_pane import WindowWidget, now
 
 if TYPE_CHECKING:
     from pysmithay import Compositor
 
+    from pymux.arrangement import Pane
     from pymux.main import Pymux
 
 try:
@@ -108,6 +112,10 @@ class WaylandServer:
         self.display: str | None = None
         #: The text a pane last copied, per selection.
         self.copied: dict[str, str] = {}
+        #: Each open window, by the compositor's id, and the pane showing it.
+        self.panes: dict[int, Pane] = {}
+        #: The same windows' widgets, which the events update.
+        self.widgets: dict[int, WindowWidget] = {}
         self._changed = anyio.Event()
         self._scope: anyio.CancelScope | None = None
 
@@ -147,6 +155,9 @@ class WaylandServer:
         finally:
             self.compositor = None
             self.display = None
+            # A window does not outlive its compositor.
+            for toplevel in list(self.panes):
+                self._closed(toplevel)
             if path:
                 for leftover in (path, os.path.splitext(path)[0] + ".lock"):
                     with contextlib.suppress(FileNotFoundError):
@@ -156,13 +167,149 @@ class WaylandServer:
         while True:
             await anyio.wait_readable(fd)
             for event in compositor.dispatch():
-                match event:
-                    case ("selection", str(target), list(mime_types)) if mime_types:
-                        tasks.start_soon(self._take_selection, compositor, target, mime_types)
-                    case ("send", str(target), str(_mime_type), int(pipe)):
-                        # `pipe`, not `fd`: a capture binds in this scope,
-                        # and the loop above waits on `fd`.
-                        tasks.start_soon(self._answer_paste, target, pipe)
+                # One event that fails to land must not end the
+                # compositor, and every window with it.
+                try:
+                    self._handle(compositor, event, tasks)
+                except Exception:
+                    logger.exception("Handling the Wayland event %r failed.", event[:2])
+
+    def _handle(self, compositor: Compositor, event: tuple, tasks: anyio.abc.TaskGroup) -> None:
+        "One event of `dispatch`."
+        match event:
+            case ("selection", str(target), list(mime_types)) if mime_types:
+                tasks.start_soon(self._take_selection, compositor, target, mime_types)
+            case ("send", str(target), str(_mime_type), int(pipe)):
+                tasks.start_soon(self._answer_paste, target, pipe)
+            case ("toplevel", int(toplevel)):
+                self._opened(toplevel)
+            case ("title", int(toplevel), str(title)) if toplevel in self.widgets:
+                self.widgets[toplevel].screen.titles.window = title
+                self.pymux.invalidate(Woke.WINDOW_PANE_CHANGED)
+            case ("app_id", int(toplevel), str(app_id)) if toplevel in self.widgets:
+                self.widgets[toplevel].app_id = app_id
+                self.pymux.invalidate(Woke.WINDOW_PANE_CHANGED)
+            case ("commit", int(toplevel), _damage) if toplevel in self.panes:
+                self.pymux.invalidate(Woke.WINDOW_PANE_DREW)
+            case ("closed", int(toplevel)):
+                self._closed(toplevel)
+
+    # ------------------------------------------------------------------
+    # Windows in panes. Lillecarl/pymux#620.
+
+    def _opened(self, toplevel: int) -> None:
+        widget = WindowWidget(self, toplevel, self._takes_keys)
+        pane = self.pymux.open_window_pane(widget)
+        if pane is None:
+            # Nowhere to show it: no session has a window.
+            self.close(toplevel)
+            return
+        self.panes[toplevel] = pane
+        self.widgets[toplevel] = widget
+
+    def _closed(self, toplevel: int) -> None:
+        pane = self.panes.pop(toplevel, None)
+        widget = self.widgets.pop(toplevel, None)
+        if pane is not None and widget is not None:
+            widget.process.is_terminated = True
+            self.pymux.window_pane_ended(pane)
+
+    def _takes_keys(self) -> bool:
+        "The person at the keyboard may drive it, and holds no prefix."
+        try:
+            state = self.pymux.get_client_state()
+        except ValueError:
+            return True
+        return not state.read_only and not state.has_prefix
+
+    def client_shows_windows(self) -> bool:
+        "Whether the client drawing now can show a window: it speaks kitty."
+        try:
+            state = self.pymux.get_client_state()
+        except ValueError:
+            return False
+        graphics = getattr(state.connection, "graphics", None)
+        return bool(graphics is not None and graphics.kitty_supported)
+
+    def configure(self, toplevel: int, columns: int, rows: int) -> None:
+        "Ask the window for the pixels of that many cells."
+        if self.compositor is None:
+            return
+        width, height = self.pymux.cell_size()
+        with contextlib.suppress(KeyError):
+            self.compositor.configure(toplevel, columns * width, rows * height)
+
+    def close(self, toplevel: int) -> None:
+        if self.compositor is not None:
+            with contextlib.suppress(KeyError):
+                self.compositor.close(toplevel)
+
+    def press(self, toplevel: int, modifiers: tuple[int, ...], code: int, time: int) -> None:
+        "One key, pressed and let go, inside its modifiers."
+        compositor = self.compositor
+        if compositor is None:
+            return
+        with contextlib.suppress(KeyError):
+            compositor.focus(toplevel)
+            for modifier in modifiers:
+                compositor.key(modifier, True, time)
+            compositor.key(code, True, time)
+            compositor.key(code, False, time)
+            for modifier in reversed(modifiers):
+                compositor.key(modifier, False, time)
+
+    def _pixel_of(self, position) -> tuple[float, float]:
+        "The middle of a cell, in the window's pixels."
+        width, height = self.pymux.cell_size()
+        return (position.x + 0.5) * width, (position.y + 0.5) * height
+
+    def pointer(self, toplevel: int, position, button: int | None, pressed: bool, time: int) -> None:
+        compositor = self.compositor
+        if compositor is None:
+            return
+        x, y = self._pixel_of(position)
+        with contextlib.suppress(KeyError):
+            compositor.pointer_motion(toplevel, x, y, time)
+            if button is not None:
+                if pressed:
+                    compositor.focus(toplevel)
+                compositor.pointer_button(button, pressed, time)
+
+    def scroll(self, toplevel: int, position, steps: int, time: int) -> None:
+        compositor = self.compositor
+        if compositor is None:
+            return
+        x, y = self._pixel_of(position)
+        with contextlib.suppress(KeyError):
+            compositor.pointer_motion(toplevel, x, y, time)
+            compositor.pointer_scroll(steps, time)
+
+    def view_of(self, pane_id: int, widget: WindowWidget, write_position) -> WindowView:
+        "How one client brings this window pane up to date."
+        toplevel = widget.toplevel
+
+        def update(outer_id: int, since: int | None) -> tuple[int, str | None, bool]:
+            if self.compositor is None:
+                return 0, None, False
+            try:
+                return self.compositor.kitty_update(toplevel, outer_id, since)
+            except KeyError:
+                return 0, None, False
+
+        def shown() -> None:
+            # The window may draw again: a frame a client has taken.
+            if self.compositor is not None:
+                self.compositor.frame_done(now())
+
+        return WindowView(
+            pane_id=pane_id,
+            x=write_position.xpos,
+            y=write_position.ypos,
+            width=write_position.width,
+            height=write_position.height,
+            update=update,
+            shown=shown,
+        )
 
     async def _take_selection(self, compositor: Compositor, target: str, mime_types: list[str]) -> None:
         "A pane copied: read it, and pass it on as `set-clipboard` allows."

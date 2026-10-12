@@ -637,7 +637,7 @@ in
       ''
         ${waylandTestEnv}/bin/python -m pytest -q -p no:cacheprovider \
           -o faulthandler_timeout=60 \
-          tests/test_wayland_server.py tests/test_wayland_absent.py
+          tests/test_wayland_server.py tests/test_wayland_absent.py tests/test_window_panes.py
       '';
 
   # The types of pymux, held by a static checker rather than by a run.
@@ -1318,6 +1318,30 @@ in
           export PYMUX_CHROME_TERMINALS="$chromeTerminals"
           export PYMUX_CHROME_LIST="$chromeList"
           export PYMUX_CHROME_TERMINALS_LIST="$chromeTerminalsList"
+          export PYMUX_CHROME_OUT="$out"
+          python tests/photograph_chrome.py
+        ''
+      );
+
+  # A Wayland window in a pane, photographed in every terminal: kitty
+  # shows the window's pixels, the rest a notice. The one picture that
+  # needs the `wayland` extra, so its python goes first on the PATH.
+  # Not a gate. Lillecarl/pymux#620.
+  #
+  #     nix build --file . checks.pymux-window-pane-pictures.run
+  windowPanePictures =
+    runInSandbox
+      {
+        name = "pymux-window-pane-pictures";
+        inputs = seatInputs;
+        env = { inherit chromeTerminals; };
+      }
+      (
+        seatSetup
+        + ''
+          export PATH=${waylandTestEnv}/bin:$PATH
+          export PYMUX_CHROME_LIST=window-pane
+          export PYMUX_CHROME_TERMINALS="$chromeTerminals"
           export PYMUX_CHROME_OUT="$out"
           python tests/photograph_chrome.py
         ''

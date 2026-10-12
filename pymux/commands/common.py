@@ -15,6 +15,7 @@ from prompt_toolkit.application.current import get_app
 from prompt_toolkit.completion import Completer
 from prompt_toolkit.document import Document
 from prompt_toolkit.key_binding.vi_state import InputMode
+from ptterm import Terminal
 from pyte.keys import KeyEvent, Unhearable
 
 from pymux.commands import CommandException
@@ -243,10 +244,23 @@ def send_key(pane: Pane, event: KeyEvent, written: str) -> None:
     and used to be sent those in silence. Nobody typing `send-keys
     super+a` means "type an a". Lillecarl/pymux#237.
     """
+    terminal = terminal_of(pane)
     try:
-        pane.process.write_input(pane.screen.encode_key_event(event, exactly=True))
+        terminal.process.write_input(terminal.screen.encode_key_event(event, exactly=True))
     except Unhearable as cannot:
         raise CommandException(why_not(written, cannot))
+
+
+def terminal_of(pane) -> Terminal:
+    """
+    The terminal of a pane, for a command that needs one: a pane that
+    shows a Wayland window has no screen, no history and no pty.
+    Lillecarl/pymux#620.
+    """
+    terminal = pane.terminal
+    if not isinstance(terminal, Terminal):
+        raise CommandException("pane %%%d shows a Wayland window, not a terminal" % pane.pane_id)
+    return terminal
 
 
 def why_not(written: str, cannot: Unhearable) -> str:

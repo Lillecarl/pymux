@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands.common import terminal_of
 
 
 def paste_buffer(pymux: Pymux, args: argparse.Namespace) -> None:
@@ -21,7 +22,8 @@ def paste_buffer(pymux: Pymux, args: argparse.Namespace) -> None:
     pane = pymux.arrangement.get_active_pane()
     if pane is None:
         raise CommandException("no current pane")
-    pane.process.write_input(pane.screen.wrap_paste(pymux.clipboard.get_data().text))
+    terminal = terminal_of(pane)
+    terminal.process.write_input(terminal.screen.wrap_paste(pymux.clipboard.get_data().text))
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

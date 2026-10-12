@@ -187,6 +187,39 @@ class PaneView(NamedTuple):
     screen: Any = None
 
 
+class WindowView(NamedTuple):
+    """
+    A pane that shows a Wayland window, as one client sees it.
+
+    `update(outer_id, since)` brings the terminal up to date: it answers
+    `(serial, commands, whole)`, as `pysmithay.Compositor.kitty_update`
+    does, so the pixels and the damage never pass through here.
+    `shown()` says this client took the frame, which lets the window
+    draw its next one.
+    """
+
+    pane_id: int
+    x: int
+    y: int
+    width: int
+    height: int
+    update: Callable[[int, int | None], tuple[int, str | None, bool]]
+    shown: Callable[[], None]
+
+
+#: The pane image id a window pane's picture takes in `OuterImageIds`.
+#: A program's own images count up from one.
+WINDOW_IMAGE = -1
+
+
+class _ShownWindow(NamedTuple):
+    "What one client holds of a window pane: its image, frame and placement."
+
+    outer_id: int
+    serial: int
+    put: str
+
+
 #: The placement id of a virtual placement whose program gave none. A
 #: placeholder with no underline colour may show any virtual placement
 #: of its image, and the slots pymux numbers itself count up from one.
@@ -323,6 +356,9 @@ class ClientGraphics:
         #: Cache keys a worker thread is encoding.
         self._cell_pending: set[tuple] = set()
 
+        #: Pane id -> what this client holds of that window pane.
+        self._windows: dict[int, _ShownWindow] = {}
+
     # ------------------------------------------------------------------
     # Detection.
 
@@ -430,6 +466,41 @@ class ClientGraphics:
             self._render_sixel(views)
         elif self.detected:
             self._render_blocks(views)
+
+    def render_windows(self, views: Iterable[WindowView]) -> None:
+        """
+        Bring the window panes this client can see up to date, and take
+        down the ones it no longer can.
+
+        Only a kitty terminal shows them: the edits are frames of a kitty
+        image. A window that has not drawn yet sends nothing.
+        """
+        if not self.kitty_supported:
+            return
+        commands: list[str] = []
+        seen: set[int] = set()
+        for view in views:
+            outer_id = self._image_ids.id_of(view.pane_id, WINDOW_IMAGE)
+            known = self._windows.get(view.pane_id)
+            serial, update, whole = view.update(outer_id, known.serial if known is not None else None)
+            if update is None:
+                continue
+            seen.add(view.pane_id)
+            put = _put_command(outer_id, 1, view.x, view.y, view.width, view.height, 0, None)
+            if update:
+                commands.append(update)
+            if whole or known is None or known.put != put:
+                commands.append(put)
+            self._windows[view.pane_id] = _ShownWindow(outer_id, serial, put)
+            if update:
+                view.shown()
+        gone = set(self._windows) - seen
+        for pane_id in gone:
+            self._delete_image(self._windows.pop(pane_id).outer_id)
+        if commands:
+            self._write_raw(SAVE_CURSOR + "".join(commands) + RESTORE_CURSOR)
+        if commands or gone:
+            self._flush()
 
     def _render_kitty(self, views: Iterable[PaneView]) -> None:
         try:
@@ -1028,6 +1099,11 @@ class ClientGraphics:
         """
         self._cell_pending = set()
         self._image_pending = {}
+        if self._windows:
+            for window in self._windows.values():
+                self._delete_image(window.outer_id)
+            self._windows = {}
+            self._flush()
         if self._cell_placements:
             self._cell_placements = {}
             self._cell_cache = {}

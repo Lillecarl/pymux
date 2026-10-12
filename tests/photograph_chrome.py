@@ -80,6 +80,8 @@ from take_picture import (
     every_log,
 )
 
+from pymux import wayland
+
 #: The terminals whose cursor blinks for ever, and the argv that asks
 #: each one to hold still.
 #:
@@ -343,6 +345,9 @@ def demo_keys():
         (0.8, ("python %s\n" % (shlex.quote(str(DEMO)),)).encode("ascii")),
     )
 
+
+#: Opens foot on the pymux server's own compositor.
+OPEN_A_WINDOW = Path(__file__).parent / "open_a_window.sh"
 
 #: What `demo_keys` builds, for a fixture's `panes`. It lives beside
 #: the keys so the two stay in step.
@@ -648,6 +653,27 @@ FIXTURES = {
         CHROME + "not-a-command-alpha\nnot-a-command-beta\n",
     ),
 }
+
+# foot as a Wayland window in a pane: split, start it on the server's
+# compositor from the new pane, and its window opens a third pane and
+# takes the keyboard. What is typed then goes through the compositor
+# to foot, whose `cat` writes it back. A kitty client shows the
+# window's pixels, every other terminal a notice. Only where pysmithay
+# loads, which `checks.pymux-window-pane-pictures` sees to.
+# Lillecarl/pymux#620.
+if wayland.available():
+    FIXTURES["window-pane"] = Fixture(
+        CHROME,
+        keys(
+            (0.0, PREFIX),
+            (0.4, b"%"),
+            (0.8, ("sh %s\n" % (shlex.quote(str(OPEN_A_WINDOW)),)).encode("ascii")),
+            ("quiet", 2.0),
+            (0.2, b"typed at the window\r"),
+            ("quiet", 1.0),
+        ),
+        (3,),
+    )
 
 
 def every_fixture():

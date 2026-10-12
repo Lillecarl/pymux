@@ -1,0 +1,128 @@
+"""
+A Wayland window in a pane, end to end: the window opens a pane, a kitty
+client is sent the whole frame and then only the damage, the keyboard
+and the mouse reach the window, and the pane goes when the window does.
+Needs the `wayland` extra. Lillecarl/pymux#620.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+import anyio
+import pytest
+from prompt_toolkit.data_structures import Size
+from session import once, over_connection
+
+pytest.importorskip("pysmithay")
+
+from pymux.main import Pymux
+from pymux.window_pane import is_window_pane
+
+PROBE = Path(__file__).with_name("wayland_probe.py")
+SIZE = Size(rows=24, columns=80)
+
+
+class Recorder:
+    "Everything a client's terminal is sent."
+
+    def __init__(self) -> None:
+        self.out = ""
+
+    def __call__(self, packet) -> None:
+        message = json.loads(packet)
+        if message.get("cmd") == "out":
+            self.out += message.get("data", "")
+
+
+@asynccontextmanager
+async def with_a_window(tmp_path, kitty: bool = True):
+    "A server, a client at a kitty terminal, and the probe window open in a pane."
+    pymux = Pymux()
+    pymux.socket_name = str(tmp_path / "pymux.sock.test")
+    recorder = Recorder()
+    log = tmp_path / "probe.log"
+    log.touch()
+    async with over_connection(pymux=pymux, read_packet=recorder) as session:
+        state, _size = await session.attach("one", SIZE)
+        state.connection.graphics.kitty_supported = kitty
+        state.connection.graphics.detected = True
+        await once(lambda: pymux.wayland.display, 10.0, "the compositor never started")
+        # pywayland makes its shm pools in XDG_RUNTIME_DIR, which a build
+        # sandbox does not set.
+        runtime = tmp_path / "run"
+        runtime.mkdir(mode=0o700)
+        async with await anyio.open_process(
+            [sys.executable, str(PROBE), str(log)],
+            env=dict(os.environ, WAYLAND_DISPLAY=pymux.wayland.display, XDG_RUNTIME_DIR=str(runtime)),
+        ) as probe:
+            try:
+                await once(lambda: pymux.wayland.panes, 10.0, "the window never opened a pane")
+                (pane,) = pymux.wayland.panes.values()
+                yield pymux, state, pane, recorder, log, probe
+            finally:
+                if probe.returncode is None:
+                    probe.kill()
+
+
+def logged(log: Path) -> list[str]:
+    return log.read_text().splitlines()
+
+
+async def test_a_window_opens_a_pane_beside_the_active_one(tmp_path):
+    async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, _log, _probe):
+        window = state.session.arrangement.get_active_window()
+        assert pane in window.panes
+        assert len(window.panes) == 2
+        assert window.active_pane is pane
+        assert is_window_pane(pane)
+        await once(lambda: pane.screen.titles.window == "probe", 10.0, "no title")
+        assert pane.name == "pymux.probe"
+
+
+async def test_a_kitty_client_gets_the_frame_then_only_the_damage(tmp_path):
+    async with with_a_window(tmp_path) as (_pymux, _state, _pane, recorder, log, _probe):
+        await once(lambda: "drew" in logged(log), 10.0, "the window never drew its second frame")
+        await once(lambda: "\x1b_Ga=f," in recorder.out, 10.0, "no edit reached the client")
+        transmit = recorder.out.index("\x1b_Ga=t,")
+        edit = recorder.out.index("\x1b_Ga=f,")
+        assert transmit < edit
+        assert "x=10,y=5,s=4,v=4" in recorder.out[edit:]
+        # Placed at the pane's cells.
+        assert "\x1b_Ga=p," in recorder.out
+
+
+async def test_a_client_without_kitty_is_sent_no_pixels(tmp_path):
+    async with with_a_window(tmp_path, kitty=False) as (_pymux, _state, _pane, recorder, _log, _probe):
+        await anyio.sleep(0.5)
+        assert "\x1b_Ga=t," not in recorder.out
+
+
+async def test_keys_reach_the_window(tmp_path):
+    async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, _probe):
+        # The window's seat is set up before it draws.
+        await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
+        widget = pane.terminal
+        widget.press("a")
+        widget.press("A")
+        await once(lambda: logged(log).count("key 30 0") >= 2, 10.0, "keys never arrived: %s" % logged(log))
+        lines = logged(log)
+        # "A" is shift (42) around a.
+        assert "key 42 1" in lines
+        assert "key 42 0" in lines
+
+
+async def test_the_pane_goes_when_the_window_closes(tmp_path):
+    async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, probe):
+        await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
+        pymux.kill_pane(pane)
+        await once(lambda: "closed" in logged(log), 10.0, "the window was never asked to close")
+        with anyio.fail_after(10):
+            await probe.wait()
+        await once(lambda: not pymux.wayland.panes, 10.0, "the compositor still holds the window")
+        window = state.session.arrangement.get_active_window()
+        assert pane not in window.panes
