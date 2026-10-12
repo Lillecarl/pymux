@@ -21,7 +21,7 @@ from session import once, over_connection
 pytest.importorskip("pysmithay")
 
 from pymux.arrangement import DEFAULT_FRAME_RATE
-from pymux.enums import WindowCodec, Woke
+from pymux.enums import WindowCodec, WindowScroll, Woke
 from pymux.graphics import WINDOW_Z
 from pymux.main import Pymux
 from pymux.window_pane import is_window_pane
@@ -546,6 +546,25 @@ async def test_the_terminal_shows_the_pointer_the_window_asks_for(tmp_path):
         state.connection._process({"cmd": "in", "data": "\x1b[<35;%d;%dM" % (where.xpos + 4, where.ypos + 2)})
         await once(lambda: "\x1b]22;text\x1b\\" in recorder.out, 10.0, "the pointer never changed")
         assert pane.screen.pointer_shapes.shape == "text"
+
+
+@pytest.mark.parametrize("scroll", list(WindowScroll))
+async def test_a_scroll_reaches_the_window_as_the_client_says(tmp_path, scroll):
+    "One cell of pixels for `smooth`, one wheel notch for `notch`. Lillecarl/pymux#652."
+    async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, _probe):
+        await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
+        pymux.enable_mouse_support = True
+        state.window_scroll = scroll
+        where = await once(
+            lambda: state.layout_manager.pane_write_positions.get(pane), 10.0, "the pane was never drawn"
+        )
+        state.connection._process({"cmd": "in", "data": "\x1b[<65;%d;%dM" % (where.xpos + 4, where.ypos + 2)})
+        line = await once(
+            lambda: next((one for one in logged(log) if one.startswith("axis")), None), 10.0, "no scroll arrived"
+        )
+        _width, height = pymux.cell_size()
+        # 0 is `wl_pointer.axis.vertical_scroll`; a notch is 15 units.
+        assert line == "axis 0 %d" % (height if scroll == WindowScroll.SMOOTH else 15)
 
 
 async def test_the_pane_goes_when_the_window_closes(tmp_path):

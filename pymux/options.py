@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, override
 
 from . import log
 from .arrangement import Window
-from .enums import WindowCodec, WindowSize, Woke
+from .enums import WindowCodec, WindowScroll, WindowSize, Woke
 from .key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS
 from .key_spelling import key_however_it_is_written
 from .layout import Justify
@@ -981,6 +981,10 @@ ALL_CLIENT_OPTIONS = {
     # shared, so it keeps the rows the chrome of any watcher needs and
     # this client draws background in them. Lillecarl/pymux#471.
     "full-screen": OnOffOption("full_screen", scope=Scope.CLIENT),
+    # What a scroll does to a Wayland window: "smooth" for a trackpad,
+    # "notch" for a mouse wheel. The terminal does not say which it has.
+    # Lillecarl/pymux#652.
+    "window-scroll": EnumOption(WindowScroll, "window_scroll", scope=Scope.CLIENT),
 }
 
 

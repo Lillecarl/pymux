@@ -42,7 +42,7 @@ import anyio.abc
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.clipboard import ClipboardData
 
-from pymux.enums import Woke
+from pymux.enums import WindowScroll, Woke
 from pymux.graphics import FrameRects, VideoFrame, WindowView
 from pymux.ids import PaneId
 from pymux.options import Clipboard
@@ -501,6 +501,11 @@ class WaylandServer:
         connection = getattr(client, "connection", None)
         return getattr(connection, "pointer_fraction", (0.5, 0.5))
 
+    def _scrolls_smooth(self) -> bool:
+        "Whether the client the scroll came from says `window-scroll smooth`."
+        client = self.pymux.client_of(get_app())
+        return getattr(client, "window_scroll", WindowScroll.SMOOTH) == WindowScroll.SMOOTH
+
     def pointer(self, toplevel: int, position, button: int | None, pressed: bool, time: int) -> None:
         compositor = self.compositor
         if compositor is None:
@@ -520,7 +525,10 @@ class WaylandServer:
         x, y = self._pixel_of(position)
         with contextlib.suppress(KeyError):
             compositor.pointer_motion(toplevel, x, y, time)
-            compositor.pointer_scroll(steps, time)
+            if self._scrolls_smooth():
+                compositor.pointer_scroll_smooth(toplevel, steps * self.pymux.cell_size()[1], time)
+            else:
+                compositor.pointer_scroll(steps, time)
 
     def view_of(
         self, pane_id: int, widget: WindowWidget, write_position, drained: Callable[[], Awaitable[None]]

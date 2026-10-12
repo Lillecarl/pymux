@@ -8,6 +8,7 @@ __all__ = [
     "PROMPT",
     "Chooser",
     "WindowCodec",
+    "WindowScroll",
     "WindowSize",
     "Woke",
 ]
@@ -49,6 +50,21 @@ class WindowCodec(StrEnum):
 
     LOSSLESS = "lossless"
     VP9 = "vp9"
+
+
+class WindowScroll(StrEnum):
+    """
+    What one scroll event from a client's terminal does to a Wayland
+    window. kitty sends a trackpad as one event per cell of finger
+    travel, and a mouse wheel as one per notch: the terminal says which
+    it was nowhere, so the person at the client does.
+    Lillecarl/pymux#652.
+    """
+
+    #: One cell of pixels, which the program scrolls exactly: a trackpad.
+    SMOOTH = "smooth"
+    #: One wheel notch, which the program scrolls by its own step: a wheel.
+    NOTCH = "notch"
 
 
 class WindowSize(StrEnum):

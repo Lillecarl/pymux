@@ -62,7 +62,7 @@ from .client.memory import MemoryClient
 from .colors import DefaultColors, theme_color_base
 from .commands import CommandException, call_command_handler, handle_command
 from .commands.completer import create_command_completer
-from .enums import CHOOSE, COMMAND, PROMPT, Chooser, WindowSize, Woke
+from .enums import CHOOSE, COMMAND, PROMPT, Chooser, WindowScroll, WindowSize, Woke
 from .forwarding import LOOPBACK_NAMES, loopback_port
 from .graphics import OuterImageIds, PaneView
 from .ids import PaneId, SessionId, WindowIndex
@@ -295,6 +295,7 @@ class ClientState:
         "full_screen": Keep.SAVED,
         "theme": Keep.SAVED,
         "swap_dark_and_light": Keep.SAVED,
+        "window_scroll": Keep.SAVED,
         "matched": Keep.REBUILT,  # the nearest theme to the colours the terminal answers
         # Where the person was: a prefix held, a key table, a prompt,
         # a question, a menu, a chooser.
@@ -394,6 +395,10 @@ class ClientState:
         #: the chrome of any watcher needs and this client draws
         #: background in them. Lillecarl/pymux#471.
         self.full_screen = False
+
+        #: What a scroll from this terminal does to a Wayland window: a
+        #: fact of the person's pointing device. Lillecarl/pymux#652.
+        self.window_scroll = WindowScroll.SMOOTH
 
         #: Whether this client only watches. `attach-session -r` sets
         #: it, and nothing clears it: tmux's `-r` only sets as well

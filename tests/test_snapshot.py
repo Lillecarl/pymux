@@ -23,7 +23,7 @@ from test_a_session_on_a_pyte_screen import attached, settled, shows
 from test_every_attribute_has_a_fate import declared, live_objects
 
 from pymux import snapshot
-from pymux.arrangement import LayoutTypes, Window
+from pymux.arrangement import LayoutTypes
 from pymux.commands.wait_for import WaitChannel
 from pymux.enums import Chooser, WindowCodec, WindowSize
 from pymux.main import Pymux
@@ -541,19 +541,18 @@ def test_a_snapshot_of_another_version_is_refused(pymux, tmp_path, off_by):
         snapshot.load(Pymux(), path)
 
 
-def test_a_version_14_snapshot_gives_every_window_lossless_frames(pymux, tmp_path):
-    "Version 15 adds `window_codec`. Lillecarl/pymux#639."
-    pymux.arrangement.windows.append(Window())
-    path = tmp_path / "v14.sqlite"
+def test_a_version_15_snapshot_gains_a_window_scroll_per_client(pymux, tmp_path):
+    "Version 16 adds `window_scroll`, empty, so each client keeps its default. Lillecarl/pymux#652."
+    path = tmp_path / "v15.sqlite"
     snapshot.save(pymux, path)
     db = sqlite3.connect(path)
-    db.execute("ALTER TABLE windows DROP COLUMN window_codec")
-    db.execute("PRAGMA user_version = 14")
+    db.execute("ALTER TABLE clients DROP COLUMN window_scroll")
+    db.execute("PRAGMA user_version = 15")
     db.commit()
     db.close()
 
     stepped = snapshot._open(path)
-    assert set(stepped.execute("SELECT window_codec FROM windows").fetchall()) == {("lossless",)}
+    assert "window_scroll" in {row[1] for row in stepped.execute("PRAGMA table_info(clients)")}
 
 
 async def test_a_snapshot_is_refused_while_a_command_waits(pymux, tmp_path):

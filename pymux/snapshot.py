@@ -55,6 +55,7 @@ from pyte.titles import Titles
 
 from .arrangement import HSplit, LayoutTypes, Pane, VSplit, Window, _Split, node_key
 from .commands.wait_for import WaitChannel
+from .enums import WindowScroll
 from .ids import PaneId, SessionId, WindowId, WindowIndex
 from .jobs import Job, JobId
 from .notifications import Notification
@@ -69,7 +70,7 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "load", "program_ids", "save", "start
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 15
+SNAPSHOT_VERSION = 16
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -83,17 +84,19 @@ _CLIENT_SETTING_TYPES: dict[str, type] = {
     "theme": str,
     "swap_dark_and_light": bool,
     "message": str,
+    "window_scroll": WindowScroll,
 }
 CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
+CLIENT_COLUMNS = ("client_id", "session_id", "previous_session_id", *CLIENT_SETTINGS, "modes", "connected")
 
 #: What takes a snapshot of the version before this one up to it. A
 #: snapshot only ever goes from a running build to the next one, so a
 #: change of shape adds the one step from the version before it and
 #: deletes any older step. Version 12 is the first a holder hands over.
 STEPS: dict[int, str] = {
-    # 15 holds each window's `window-codec`, which nobody set before.
-    14: """
-ALTER TABLE windows ADD COLUMN window_codec TEXT NOT NULL DEFAULT 'lossless';
+    # 16 holds each client's `window-scroll`, which nobody set before.
+    15: """
+ALTER TABLE clients ADD COLUMN window_scroll TEXT;
 """,
 }
 
@@ -243,7 +246,8 @@ CREATE TABLE clients(
   swap_dark_and_light INTEGER,
   message TEXT,
   modes TEXT,
-  connected REAL
+  connected REAL,
+  window_scroll TEXT
 );
 CREATE TABLE client_windows(
   client_id TEXT NOT NULL REFERENCES clients(client_id),
@@ -1071,7 +1075,7 @@ def _write_clients(pymux: Pymux, db: sqlite3.Connection) -> None:
             "session_id": state.session.session_id if state.session is not None else None,
             "previous_session_id": state.previous_session.session_id if state.previous_session is not None else None,
             "windows": windows,
-            "settings": {name: getattr(state, name) for name in CLIENT_SETTINGS},
+            "settings": {name: _value(getattr(state, name)) for name in CLIENT_SETTINGS},
             "modes": state.modes(),
             "connected": connection.created,
         }
@@ -1079,7 +1083,8 @@ def _write_clients(pymux: Pymux, db: sqlite3.Connection) -> None:
         settings = client["settings"]
         modes = client.get("modes")
         db.execute(
-            "INSERT INTO clients VALUES (%s)" % ", ".join("?" * (5 + len(CLIENT_SETTINGS))),
+            # By name: `ALTER TABLE` puts a new setting after `connected`.
+            "INSERT INTO clients (%s) VALUES (%s)" % (", ".join(CLIENT_COLUMNS), ", ".join("?" * len(CLIENT_COLUMNS))),
             (
                 client_id,
                 client["session_id"],
