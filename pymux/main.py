@@ -2750,18 +2750,46 @@ class Pymux:
         for client_state in self._client_states.values():
             client_state.sync_focus()
 
-    def open_window_pane(self, widget: WindowWidget) -> Pane | None:
+    def open_window_pane(self, widget: WindowWidget, beside: Pane | None = None) -> Pane | None:
         """
-        A pane for a Wayland window that just opened, split off beside the
-        active pane of the session a person used last, or None when no
-        session has a window to put it in. Lillecarl/pymux#620.
+        A pane for a Wayland window that just opened, split off in the
+        window that holds `beside`, or else beside the active pane of the
+        session a person used last. None when there is no window to put
+        it in. Lillecarl/pymux#620.
         """
-        if not self.sessions:
+        found = None if beside is None else self.window_of_pane(beside.pane_id)
+        if found is not None:
+            window = found[1]
+        elif self.sessions:
+            window = self.last_used_session.arrangement.get_active_window()
+        else:
             return None
-        window = self.last_used_session.arrangement.get_active_window()
         if window is None:
             return None
 
+        pane = self._window_pane_of(widget)
+        window.add_pane(pane, vsplit=True)
+        self._window_pane_shown()
+        return pane
+
+    def adopt_window_pane(self, old: Pane, widget: WindowWidget) -> Pane | None:
+        """
+        A pane for a Wayland window, in the place of `old`, whose program
+        is killed: `pymux wl` turns the pane it ran in into the window.
+        None when `old` is gone. Lillecarl/pymux#630.
+        """
+        session = self.session_holding(old)
+        if session is None:
+            return None
+        pane = self._window_pane_of(widget)
+        # The swap first: an ended program takes its pane out of the
+        # session, and a session left with none stops the server.
+        session.arrangement.replace_pane(old, pane)
+        old.process.kill()
+        self._window_pane_shown()
+        return pane
+
+    def _window_pane_of(self, widget: WindowWidget) -> Pane:
         pane = Pane(widget)
 
         def focus_pane_on_click() -> None:
@@ -2772,12 +2800,12 @@ class Pymux:
 
         widget.on_mouse_focus = focus_pane_on_click
         self._register_pane(pane)
-        window.add_pane(pane, vsplit=True)
-        window.active_pane = pane
+        return pane
+
+    def _window_pane_shown(self) -> None:
         for client_state in self._client_states.values():
             client_state.sync_focus()
         self.invalidate(Woke.WINDOW_PANE_OPENED)
-        return pane
 
     def window_pane_ended(self, pane: Pane) -> None:
         "The window of a window pane closed. A window leaves nothing to remain on exit."

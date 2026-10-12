@@ -34,6 +34,7 @@ import math
 import os
 import sys
 from collections.abc import Awaitable, Callable
+from subprocess import DEVNULL, PIPE, STDOUT
 from typing import TYPE_CHECKING
 
 import anyio
@@ -96,6 +97,28 @@ class _Pacer:
         self.shown.set()
 
 
+#: How much of what a `pymux wl` program writes is kept, from the end.
+#: It is shown when the program ends before it opens a window.
+LAUNCH_TAIL = 8192
+
+
+class Launch:
+    "A program `pymux wl` started, and the pane its first window takes."
+
+    def __init__(self, pane: Pane) -> None:
+        self.pane = pane
+        #: The window pane that took `pane`'s place, once it did.
+        self.adopted: Pane | None = None
+        self.opened = anyio.Event()
+        self.exited = anyio.Event()
+        self.returncode: int | None = None
+        self.tail = bytearray()
+
+    def heard(self, data: bytes) -> None:
+        self.tail += data
+        del self.tail[:-LAUNCH_TAIL]
+
+
 async def _first(waits: list[Callable[[], Awaitable[None]]]) -> None:
     "Wait for the first of these to finish; none waits for nothing."
     if not waits:
@@ -146,6 +169,9 @@ class WaylandServer:
         #: The same windows' widgets, which the events update.
         self.widgets: dict[int, WindowWidget] = {}
         self._pacers: dict[int, _Pacer] = {}
+        #: The programs `pymux wl` started, by their connection's tag.
+        self._launches: dict[int, Launch] = {}
+        self._tasks: anyio.abc.TaskGroup | None = None
         self._changed = anyio.Event()
         self._scope: anyio.CancelScope | None = None
 
@@ -180,9 +206,11 @@ class WaylandServer:
             for target in OSC52_LETTER:
                 _hold(compositor, target)
             async with anyio.create_task_group() as tasks:
+                self._tasks = tasks
                 for fd in compositor.fds():
                     tasks.start_soon(self._dispatch_on, compositor, fd, tasks)
         finally:
+            self._tasks = None
             self.compositor = None
             self.display = None
             # A window does not outlive its compositor.
@@ -211,8 +239,8 @@ class WaylandServer:
                 tasks.start_soon(self._take_selection, compositor, target, mime_types)
             case ("send", str(target), str(_mime_type), int(pipe)):
                 tasks.start_soon(self._answer_paste, target, pipe)
-            case ("toplevel", int(toplevel)):
-                self._opened(compositor, toplevel, tasks)
+            case ("toplevel", int(toplevel), int(tag)):
+                self._opened(compositor, toplevel, self._launches.get(tag), tasks)
             case ("title", int(toplevel), str(title)) if toplevel in self.widgets:
                 self.widgets[toplevel].screen.titles.window = title
                 self.pymux.invalidate(Woke.WINDOW_PANE_CHANGED)
@@ -227,9 +255,15 @@ class WaylandServer:
     # ------------------------------------------------------------------
     # Windows in panes. Lillecarl/pymux#620.
 
-    def _opened(self, compositor: Compositor, toplevel: int, tasks: anyio.abc.TaskGroup) -> None:
+    def _opened(self, compositor: Compositor, toplevel: int, launch: Launch | None, tasks: anyio.abc.TaskGroup) -> None:
         widget = WindowWidget(self, toplevel, self._takes_keys)
-        pane = self.pymux.open_window_pane(widget)
+        pane = None
+        if launch is not None and launch.adopted is None:
+            pane = launch.adopted = self.pymux.adopt_window_pane(launch.pane, widget)
+            launch.opened.set()
+        if pane is None:
+            # A later window of a `pymux wl` program goes beside its first.
+            pane = self.pymux.open_window_pane(widget, beside=launch.adopted if launch is not None else None)
         if pane is None:
             # Nowhere to show it: no session has a window.
             self.close(toplevel)
@@ -273,6 +307,66 @@ class WaylandServer:
             released = anyio.current_time()
             with contextlib.suppress(KeyError):
                 compositor.frame_done(toplevel, now())
+
+    async def launch(self, pane: Pane, argv: list[str], cwd: str | None, env: dict[str, str]) -> Launch:
+        """
+        Start a program whose first window takes `pane`'s place.
+
+        It runs under the compositor and not under the caller: taking
+        the pane kills the shell `pymux wl` ran in, and the command with
+        it. Its first connection is handed over as `WAYLAND_SOCKET`, a
+        socket pair with no path, so the window says which pane it is
+        for and nothing is left behind. `WAYLAND_DISPLAY` names the
+        shared socket for any later connection, whose windows go beside.
+        `DISPLAY` is dropped, so a program that would open on an X
+        server fails here, where `pymux wl` shows why.
+        Raises OSError when the program cannot start. Lillecarl/pymux#630.
+        """
+        compositor, tasks = self.compositor, self._tasks
+        if compositor is None or tasks is None or self.display is None:
+            raise OSError("no Wayland compositor runs")
+        tag, fd = compositor.connect()
+        env = {key: value for key, value in env.items() if key not in ("DISPLAY", "WAYLAND_SOCKET")}
+        env.update(WAYLAND_SOCKET=str(fd), WAYLAND_DISPLAY=self.display)
+        launch = Launch(pane)
+        self._launches[tag] = launch
+        try:
+            await tasks.start(self._run, launch, tag, argv, cwd, env, fd)
+        finally:
+            os.close(fd)
+        return launch
+
+    async def _run(
+        self,
+        launch: Launch,
+        tag: int,
+        argv: list[str],
+        cwd: str | None,
+        env: dict[str, str],
+        fd: int,
+        *,
+        task_status: anyio.abc.TaskStatus[None] = anyio.TASK_STATUS_IGNORED,
+    ) -> None:
+        try:
+            async with await anyio.open_process(
+                argv,
+                cwd=cwd,
+                env=env,
+                pass_fds=(fd,),
+                stdin=DEVNULL,
+                stdout=PIPE,
+                stderr=STDOUT,
+                start_new_session=True,
+            ) as process:
+                task_status.started()
+                assert process.stdout is not None
+                # Read to the end, or a program that writes a lot blocks.
+                async for data in process.stdout:
+                    launch.heard(data)
+                launch.returncode = await process.wait()
+        finally:
+            self._launches.pop(tag, None)
+            launch.exited.set()
 
     def _rate_of(self, toplevel: int) -> int:
         "The frame rate of the pymux window holding this window's pane; 0 sets no limit."

@@ -162,6 +162,7 @@ MODULES = [
     "view_job",
     "tail_job",
     "sql",
+    "wl",
 ]
 
 

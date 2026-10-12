@@ -555,12 +555,12 @@ async def over_connection(pymux=None, read_packet=None):
         client_end, _draining = ends[id(state)]
         client_end.write_nowait(json.dumps({"cmd": "in", "data": text}))
 
-    async def create_command(text, pane_id=None):
+    async def create_command(text, pane_id=None, environment=None):
         """
         A command over a connection of its own, the way a pane's CLI
         sends one. The packets that connection's client end received
         come back, so a test can say that nothing meant for a browser
-        went there.
+        went there. `environment` is what the CLI says it runs with.
         """
         server_end, client_end = connect_in_memory()
 
@@ -585,7 +585,10 @@ async def over_connection(pymux=None, read_packet=None):
         pymux.tasks.start_soon(drain_command, draining)
         command_ends.append((client_end, draining))
 
-        client_end.write_nowait(json.dumps({"cmd": "run-command", "data": text, "pane_id": pane_id}))
+        packet = {"cmd": "run-command", "data": text, "pane_id": pane_id}
+        if environment is not None:
+            packet["environment"] = environment
+        client_end.write_nowait(json.dumps(packet))
         return got
 
     async with pymux.running():
