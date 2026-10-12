@@ -207,6 +207,32 @@ def test_the_client_writes_a_frame_at_its_last_part(terminal):
     assert client.placed_images
 
 
+def test_the_client_answers_each_frame_at_its_last_part(terminal):
+    "Lillecarl/pymux#641."
+    client, read = terminal
+    pixels = bytes(range(256)) * 3000
+    parts = frame_parts(9, (1, True, 1000, 256, [(0, 0, 1000, 256, pixels[: 1000 * 256 * 3])]), "")
+    assert len(parts) > 1
+    for part in parts[:-1]:
+        client._process(part)
+    assert client.sent == []
+    client._process(parts[-1])
+    assert client.sent == [{Field.CMD: Packet.FRAME_SHOWN}]
+    read()
+
+
+def test_a_frame_that_will_not_decode_is_answered_all_the_same(terminal):
+    client, _read = terminal
+
+    class Broken:
+        def decode(self, data, rects):
+            raise ValueError("lost")
+
+    client._decoder_kinds = {"vp9": Broken}
+    client._process(video_parts(9, "vp9", (1, False, 64, 32, b"x", [(0, 0, 16, 16)]), "")[0])
+    assert client.sent == [{Field.CMD: Packet.FRAME_SHOWN}]
+
+
 def test_the_client_decodes_a_frame_and_writes_what_changed(terminal):
     "Lillecarl/pymux#639."
     client, read = terminal

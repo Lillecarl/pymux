@@ -96,6 +96,10 @@ class Packet(StrEnum):
 
     # The client answers.
     PONG = "pong"
+    # "I wrote the last `window-frame` to my terminal." The server sends
+    # the next frame of any window pane only after this, so frames never
+    # pile up in the buffers of an SSH link between. Lillecarl/pymux#641.
+    FRAME_SHOWN = "frame-shown"
     OPEN_FAILED = "open-failed"
     FORWARDS = "forwards"
 
@@ -186,6 +190,8 @@ class Field(StrEnum):
     WAIT = "wait"
     #: In `start-gui`: this client takes `window-frame` packets.
     FRAMES = "frames"
+    #: In `start-gui`: this client answers each frame with `frame-shown`.
+    SHOWS = "shows"
     #: In `window-frame`: the outer image id, whether the parts make the
     #: whole frame, its size, the bands of this part as `[x, y, w, h,
     #: pixels]` with RGB pixels, whether it is the last part, and what

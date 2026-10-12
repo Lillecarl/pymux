@@ -55,6 +55,7 @@ async def with_a_window(
     frames: bool = False,
     codecs: tuple[str, ...] = (),
     codec: WindowCodec = WindowCodec.LOSSLESS,
+    shows: bool = False,
 ):
     """
     A server, a client at a kitty terminal, and the probe window open in a pane.
@@ -62,7 +63,8 @@ async def with_a_window(
     The window draws at `scale`: at 1 the probe's buffer pixels are the
     canvas's. `cell` is the client's cell, width and height, when it
     answered one. `codecs` are the ones the client decodes, and `codec`
-    the window's `window-codec`.
+    the window's `window-codec`. `shows` says the client answers each
+    frame, which a test then does itself.
     """
     pymux = Pymux()
     pymux.socket_name = str(tmp_path / "pymux.sock.test")
@@ -70,7 +72,7 @@ async def with_a_window(
     log = tmp_path / "probe.log"
     log.touch()
     async with over_connection(pymux=pymux, read_packet=recorder) as session:
-        state, _size = await session.attach("one", SIZE, frames=frames, codecs=codecs)
+        state, _size = await session.attach("one", SIZE, frames=frames, codecs=codecs, shows=shows)
         graphics = state.connection.graphics
         graphics.kitty_supported = kitty
         graphics.detected = True
@@ -169,27 +171,29 @@ async def test_a_client_that_decodes_vp9_gets_the_window_in_it(tmp_path):
         _probe,
     ):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew its second frame")
-        block = [[0, 0, 16, 16]]
-        await once(
-            lambda: any(frame[-1]["rects"] == block for frame in frames_of(recorder)),
-            10.0,
-            lambda: "frames %s" % [frame[-1]["rects"] for frame in frames_of(recorder)],
-        )
+        decoder = pymux_rs.Vp9Decoder()
+        decoded: list = []
+        red = bytes([0xFF, 0, 0])
+        at = (5 * 16 + 10) * 3
+
+        def square_is_red() -> bool:
+            "Decode what came since the last look; whether the square's pixel is red."
+            for frame in frames_of(recorder)[len(decoded) :]:
+                rects = [tuple(rect) for rect in frame[-1]["rects"]]
+                decoded.append(decoder.decode(b"".join(part["video"] for part in frame), rects))
+            last = decoded[-1][2] if decoded else []
+            if [rect[:4] for rect in last] != [(0, 0, 16, 16)]:
+                return False
+            # Lossy: a saturated red in a small square came back 11 off.
+            return max(abs(a - b) for a, b in zip(last[0][4][at : at + 3], red, strict=True)) <= 16
+
+        # The one pixel frame before the square damages the same block:
+        # only the decoded pixels tell the two apart.
+        await once(square_is_red, 10.0, lambda: "rects %s" % [frame[-1]["rects"] for frame in frames_of(recorder)])
         frames = frames_of(recorder)
         assert all(part["codec"] == "vp9" and "video" in part for frame in frames for part in frame)
         assert frames[0][0]["whole"]
         assert "\x1b_Ga=p," in frames[0][-1]["after"]
-        decoder = pymux_rs.Vp9Decoder()
-        for frame in frames:
-            _width, _height, rects = decoder.decode(
-                b"".join(part["video"] for part in frame), [tuple(rect) for rect in frame[-1]["rects"]]
-            )
-        ((x, y, w, h, rgb),) = rects
-        assert (x, y, w, h) == (0, 0, 16, 16)
-        at = (5 * 16 + 10) * 3
-        red = bytes([0xFF, 0, 0])
-        # Lossy: a saturated red in a small square came back 11 off.
-        assert max(abs(a - b) for a, b in zip(rgb[at : at + 3], red, strict=True)) <= 16
 
 
 async def test_a_client_that_decodes_no_vp9_gets_raw_pixels_all_the_same(tmp_path):
@@ -203,6 +207,37 @@ async def test_a_client_that_decodes_no_vp9_gets_raw_pixels_all_the_same(tmp_pat
     ):
         await once(lambda: frames_of(recorder), 10.0, "no frame came")
         assert "codec" not in frames_of(recorder)[0][0]
+
+
+async def test_a_client_that_answers_frames_has_one_unanswered_at_most(tmp_path):
+    """
+    The next frame waits for the client to say it wrote the last one: a
+    socket that drained says only that the kernel took it, and over SSH
+    the frames piled up past it. Lillecarl/pymux#641.
+    """
+    async with with_a_window(tmp_path, animate=True, frames=True, shows=True) as (
+        _pymux,
+        state,
+        _pane,
+        recorder,
+        log,
+        _probe,
+    ):
+        await once(lambda: frames_of(recorder), 10.0, "no frame came")
+        drawn = logged(log).count("frame")
+        await anyio.sleep(0.5)
+        assert len(frames_of(recorder)) == 1, "a second frame went before the first was answered"
+        # The window is held too: it was not told to draw on.
+        assert logged(log).count("frame") <= drawn + 1
+        for answered in range(1, 4):
+            state.connection._process({"cmd": "frame-shown"})
+            await once(
+                lambda answered=answered: len(frames_of(recorder)) > answered,
+                10.0,
+                "no frame after the answer",
+            )
+            await anyio.sleep(0.2)
+            assert len(frames_of(recorder)) == answered + 1
 
 
 async def test_the_codec_switches_while_the_window_shows(tmp_path):

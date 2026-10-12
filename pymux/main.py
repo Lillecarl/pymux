@@ -699,7 +699,7 @@ class ClientState:
         write_position = self.layout_manager.pane_write_positions.get(pane)
         if write_position is None:
             return
-        drained = self.connection.pipe_connection.drained
+        drained = self.connection.frame_drained
         self.connection.graphics.refresh_window(
             self.pymux.wayland.view_of(pane.pane_id, pane.terminal, write_position, drained)
         )
@@ -728,7 +728,7 @@ class ClientState:
         "One `WindowView` per window pane this client can see. A popup covers them all."
         if self.display_popup or self.connection is None:
             return []
-        drained = self.connection.pipe_connection.drained
+        drained = self.connection.frame_drained
         return [
             self.pymux.wayland.view_of(pane.pane_id, pane.terminal, write_position, drained)
             for pane, write_position in self.layout_manager.pane_write_positions.items()

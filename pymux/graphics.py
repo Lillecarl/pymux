@@ -400,6 +400,11 @@ class ClientGraphics:
         #: when the frame goes as kitty commands. Lillecarl/pymux#634.
         self.send_frame: Callable[[list[dict]], Awaitable[None]] | None = None
 
+        #: Waits until the client answered the window frames it was
+        #: sent, for a client that answers; a window pane's next frame
+        #: is read only after it. Lillecarl/pymux#641.
+        self.frame_room: Callable[[], Awaitable[None]] | None = None
+
         #: The codecs this client decodes, as its `start-gui` says.
         #: Lillecarl/pymux#639.
         self.codecs: frozenset[str] = frozenset()
@@ -656,6 +661,8 @@ class ClientGraphics:
 
     async def _write_window_update(self, view: WindowView, outer_id: int, since: int | None, generation: int) -> None:
         if self.send_frame is not None:
+            if self.frame_room is not None:
+                await self.frame_room()
             if self._codec_of(view) is Codec.VP9:
                 await self._send_video_frame(self.send_frame, view, outer_id, generation)
             else:

@@ -150,6 +150,9 @@ class ServerConnection:
         "_closed": Keep.DROPPED,
         "_kitty_detection_pending": Keep.DROPPED,
         "_unanswered": Keep.DROPPED,
+        # A frame in flight belongs to the connection it went out on.
+        "_frames_out": Keep.DROPPED,
+        "_frames_shown": Keep.DROPPED,
         # A recording holds Python objects of this build, so it ends
         # with it. `upgrade.py` writes it out first.
         "recording": Keep.DROPPED,
@@ -172,6 +175,13 @@ class ServerConnection:
 
         self.size = Size(rows=20, columns=80)
         self._closed = False
+
+        #: Window frames sent and not yet answered with `frame-shown`,
+        #: for a client that answers; set while there are none.
+        #: Lillecarl/pymux#641.
+        self._frames_out = 0
+        self._frames_shown = anyio.Event()
+        self._frames_shown.set()
 
         #: What `record-client` is recording of this client, or None.
         #: Lillecarl/pymux#612.
@@ -794,6 +804,13 @@ class ServerConnection:
                 # And the codecs it decodes, for `window-codec`.
                 # Lillecarl/pymux#639.
                 self.graphics.codecs = frozenset(packet.get(Field.CODECS) or ())
+                # A client that says when it wrote a frame gets the next
+                # one after that: the socket draining says only that the
+                # kernel took it, and over SSH megabytes of frames wait
+                # in the buffers past it, with every key's echo behind
+                # them. Lillecarl/pymux#641.
+                if packet.get(Field.SHOWS):
+                    self.graphics.frame_room = self._frames_all_shown
 
             detach_other_clients = bool(packet[Field.DETACH_OTHERS])
             # `attach -x`: the others leave, and the terminals they were
@@ -869,6 +886,11 @@ class ServerConnection:
         # client that is merely slow keeps its place.
         elif packet[Field.CMD] == Packet.PONG:
             self._unanswered = 0
+
+        elif packet[Field.CMD] == Packet.FRAME_SHOWN:
+            self._frames_out = max(0, self._frames_out - 1)
+            if not self._frames_out:
+                self._frames_shown.set()
 
         elif packet[Field.CMD] == Packet.FORWARDS:
             reported = packet.get(Field.DATA) or []
@@ -1146,10 +1168,29 @@ class ServerConnection:
         What the terminal was sent before goes first. Lillecarl/pymux#634.
         """
         self._flush_output()
+        if self.graphics.frame_room is not None:
+            self._frames_out += 1
+            if self._frames_shown.is_set():
+                self._frames_shown = anyio.Event()
         for part in parts:
             if self._closed:
                 return
             await self._write(self._encode(part))
+
+    async def _frames_all_shown(self) -> None:
+        "Wait until the client answered every window frame it was sent, or went."
+        while self._frames_out and not self._closed:
+            await self._frames_shown.wait()
+
+    async def frame_drained(self) -> None:
+        """
+        Wait until this client's terminal took what it was sent: every
+        window frame answered, for a client that answers, and the
+        socket empty. Lillecarl/pymux#641.
+        """
+        await self.pipe_connection.drained()
+        if self.graphics.frame_room is not None:
+            await self._frames_all_shown()
 
     async def _write(self, frame: bytes, compress_after: bool = False) -> None:
         "Write one encoded packet; a client that is gone is let go."
@@ -1257,6 +1298,7 @@ class ServerConnection:
         self.pymux.remove_client(self)
         self.client_state = None
         self._closed = True
+        self._frames_shown.set()
 
         # The background work of this connection ends with the read
         # loop that `serve` runs: leaving that scope cancels the group.

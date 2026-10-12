@@ -315,6 +315,8 @@ class TerminalClient(Client):
                 Field.FRAMES: True,
                 # And can take them in these codecs. Lillecarl/pymux#639.
                 Field.CODECS: [str(codec) for codec in self._decoder_kinds],
+                # And says when it wrote each. Lillecarl/pymux#641.
+                Field.SHOWS: True,
                 Field.DATA: "",
             }
         )
@@ -479,7 +481,12 @@ class TerminalClient(Client):
                 self.placed_images = True
 
         elif packet[Field.CMD] == Packet.WINDOW_FRAME:
-            self._window_frame(packet)
+            try:
+                self._window_frame(packet)
+            finally:
+                # Whatever came of it: the server waits for this.
+                if packet.get(Field.LAST):
+                    self._send_packet({Field.CMD: Packet.FRAME_SHOWN})
 
         elif packet[Field.CMD] == Packet.SHM and self._shm is not None:
             self._carrier = self._shm
