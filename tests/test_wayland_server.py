@@ -85,7 +85,12 @@ def _quoted(text: str) -> str:
 async def environment_of_a_pane(mux, tmp_path) -> str:
     "What a new pane's program sees in WAYLAND_DISPLAY, or '' for nothing."
     out = tmp_path / "display"
-    script = "import os, pathlib; pathlib.Path(%r).write_text(os.environ.get('WAYLAND_DISPLAY', ''))" % (str(out),)
+    # Renamed into place: `write_text` makes the file before it fills it,
+    # and a read in between saw an empty display.
+    script = (
+        "import os, pathlib; pathlib.Path(%r).write_text(os.environ.get('WAYLAND_DISPLAY', '')); os.replace(%r, %r)"
+        % (str(out) + ".part", str(out) + ".part", str(out))
+    )
     await mux.create_window("%s -c %s" % (sys.executable, _quoted(script)))
     await once(out.exists, 10.0, "the pane never wrote its environment")
     return out.read_text()
