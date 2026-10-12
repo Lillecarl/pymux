@@ -205,6 +205,34 @@ async def test_a_client_that_decodes_no_vp9_gets_raw_pixels_all_the_same(tmp_pat
         assert "codec" not in frames_of(recorder)[0][0]
 
 
+async def test_the_codec_switches_while_the_window_shows(tmp_path):
+    "The next frame goes the new way, whole, though the window draws nothing new."
+    async with with_a_window(tmp_path, frames=True, codecs=("vp9",)) as (
+        pymux,
+        _state,
+        _pane,
+        recorder,
+        log,
+        _probe,
+    ):
+        await once(lambda: "drew" in logged(log), 10.0, "the window never drew its second frame")
+        await once(lambda: len(frames_of(recorder)) >= 2, 10.0, "no raw frames came")
+        assert "codec" not in frames_of(recorder)[-1][0]
+
+        for value, codec in (("vp9", "vp9"), ("lossless", None)):
+            before = len(frames_of(recorder))
+            answer = pymux.handle_command("set-window-option window-codec %s" % value)
+            if answer is not None:
+                await answer
+            await once(
+                lambda: len(frames_of(recorder)) > before,
+                10.0,
+                lambda value=value: "no frame after switching to %s" % value,
+            )
+            first = frames_of(recorder)[before][0]
+            assert (first.get("codec"), first["whole"]) == (codec, True)
+
+
 async def test_a_client_without_kitty_is_sent_no_pixels(tmp_path):
     async with with_a_window(tmp_path, kitty=False) as (_pymux, _state, _pane, recorder, _log, _probe):
         await anyio.sleep(0.5)
