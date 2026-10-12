@@ -38,6 +38,9 @@ class PipeConnection(ABC):
         "Bytes given to `write` that the other end has not taken yet."
         return 0
 
+    async def drained(self) -> None:
+        "Wait until `outstanding` is zero."
+
 
 class BrokenPipeError(Exception):
     "Raised when trying to write to or read from a broken pipe."

@@ -268,11 +268,20 @@ class PosixSocketConnection(PipeConnection):
         #: Bytes given to `write` and not yet taken by the kernel.
         self._outstanding = 0
         self._write_lock: anyio.Lock | None = None
+        #: Set while `_outstanding` is zero; waited on by `drained`.
+        self._empty: anyio.Event | None = None
 
     @property
     @override
     def outstanding(self) -> int:
         return self._outstanding
+
+    @override
+    async def drained(self) -> None:
+        while self._outstanding and not self._closed:
+            if self._empty is None or self._empty.is_set():
+                self._empty = anyio.Event()
+            await self._empty.wait()
 
     @override
     async def read(self) -> bytes:
@@ -334,7 +343,9 @@ class PosixSocketConnection(PipeConnection):
         # turn is counted while it waits: the lock serialises the
         # packets (one send, then the next, never interleaved), and
         # this count is what bounds how much they may hold together.
-        if self._outstanding + len(data) > TOO_SLOW_BYTES:
+        # Judged on what already waits and not on this packet: a window
+        # pane's frame alone can be megabytes. Lillecarl/pymux#629.
+        if self._outstanding > TOO_SLOW_BYTES:
             raise BrokenPipeError
         self._outstanding += len(data)
 
@@ -345,6 +356,8 @@ class PosixSocketConnection(PipeConnection):
                 await self._send_all(data)
         finally:
             self._outstanding -= len(data)
+            if not self._outstanding and self._empty is not None:
+                self._empty.set()
 
     async def _send_all(self, data: bytes) -> None:
         "Send every byte, waiting for room rather than blocking the loop."
@@ -373,6 +386,8 @@ class PosixSocketConnection(PipeConnection):
         if self._closed:
             return
         self._closed = True
+        if self._empty is not None:
+            self._empty.set()
         # Wake whatever is parked on this descriptor **before** the
         # descriptor goes. A reader that learns about the close
         # afterwards waits on a number the kernel has already given
