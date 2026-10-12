@@ -362,6 +362,21 @@ def test_a_column_that_sticks_out_keeps_its_neighbour_on_screen():
     assert looking_at(window, panes[1], offset=0, columns=79) == 1
 
 
+def test_two_halves_fill_an_odd_width_exactly():
+    """
+    Carl's 187 columns: each half rounded alone was 94, the row ran a
+    cell past the screen, and the cut column was tinted. Rounded from
+    the running total they are 93 and 94, and nothing scrolls.
+    Lillecarl/pymux#615.
+    """
+    window, panes = create_strip((1, 1, 1))
+    size = Size(rows=24, columns=187)
+    plan = Strip(window).measure(size)
+
+    assert plan.rect_of(panes[1]).right + 1 == 187
+    assert looking_at(window, panes[1], offset=0, columns=187, size=size) == 0
+
+
 def test_view_never_passes_end_of_row():
     window, panes = create_strip((1, 1))
 

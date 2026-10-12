@@ -88,17 +88,27 @@ class Strip:
     #: Read on every measure, for the reason `layout.layout_of` gives.
     gaps: Callable[[], Gaps] = field(default=Gaps, repr=False)
 
-    def content_width(self, column, columns: int, gap: int) -> int:
+    def edges(self, columns: int) -> list[int]:
         """
-        How many cells one column's content takes.
+        Where each column's share of the row ends, in cells.
 
         The fraction is of the window, and the border the column owns
-        comes out of that share, so a column takes the same room
-        whatever the other columns do. Lillecarl/pymux#206 says why the
+        comes out of that share. Lillecarl/pymux#206 says why the
         border is inside the share.
+
+        **Each edge is rounded from the running total**, so shares that
+        add up to the window fill it exactly. Rounding each share alone
+        made two halves of 187 cells 94 each: 188, one cell past the
+        screen, so the view scrolled a cell and tinted the column it cut.
+        A column may then differ from its twin by one cell, and that is
+        the price. Lillecarl/pymux#615.
         """
-        share = round(self.window.column_width(column) * columns)
-        return max(1, share - gap)
+        total = 0.0
+        answer = []
+        for column in self.window.root:
+            total += self.window.column_width(column)
+            answer.append(round(total * columns))
+        return answer
 
     def measure(self, available: Size) -> Plan:
         """
@@ -119,9 +129,11 @@ class Strip:
         gap = gaps.between_columns
         rights = []
         x = 0
+        start = 0
 
-        for column in self.window.root:
-            width = self.content_width(column, available.columns, gap)
+        for column, end in zip(self.window.root, self.edges(available.columns), strict=True):
+            width = max(1, end - start - gap)
+            start = end
             lay_out(
                 column,
                 Rect(x=x, y=0, width=width, height=available.rows),
