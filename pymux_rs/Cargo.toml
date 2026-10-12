@@ -12,6 +12,10 @@ crate-type = ["cdylib"]
 [dependencies]
 pyo3 = { version = "0.29", features = ["extension-module"] }
 
+[build-dependencies]
+bindgen = "0.72"
+pkg-config = "0.3.34"
+
 [profile.release]
 lto = true
 codegen-units = 1

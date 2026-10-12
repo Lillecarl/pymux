@@ -18,6 +18,9 @@
   maturin,
   clippy,
   rustfmt,
+  pkg-config,
+  libvpx,
+  ffmpeg-headless,
 }:
 let
   fs = lib.fileset;
@@ -29,6 +32,7 @@ let
     fileset = fs.unions [
       ./Cargo.toml
       ./Cargo.lock
+      ./build.rs
       ./pyproject.toml
       ./src
       (fs.fileFilter (file: file.hasExt "py") ./python)
@@ -51,6 +55,8 @@ let
       clippy
       rustfmt
       stdenv.cc
+      pkg-config
+      rustPlatform.bindgenHook
     ];
     setup = ''
       cp -r ${src}/. crate
@@ -59,6 +65,7 @@ let
       export HOME="$TMPDIR"
       export PYO3_PYTHON=${python.interpreter}
       export CARGO_TARGET_DIR="$TMPDIR/target"
+      export PKG_CONFIG_PATH=${lib.getDev libvpx}/lib/pkgconfig
       # What `cargoSetupHook` writes, which a `runCommand` never runs.
       mkdir -p .cargo
       printf '[source.crates-io]\nreplace-with = "vendored"\n[source.vendored]\ndirectory = "%s"\n' ${cargoDeps} > .cargo/config.toml
@@ -75,12 +82,16 @@ let
     pytest = [ ];
   };
 
-  # The kernels against the Python they replace.
+  # The kernels against the Python they replace, and the VP9 decoder
+  # against streams ffmpeg makes.
   #
   #     nix build --file . checks.pymux-rs-parity
   checks.parity = suite {
     name = "pymux-rs-parity";
-    inputs = [ testEnv ];
+    inputs = [
+      testEnv
+      ffmpeg-headless
+    ];
     setup = ''
       cp -r ${./tests} tests
       chmod -R +w tests
@@ -102,11 +113,18 @@ stdenv.mkDerivation {
     cargo
     rustc
     maturin
+    pkg-config
+    rustPlatform.bindgenHook
   ];
 
+  # The VP9 decoder of window panes. Lillecarl/pymux#639.
+  buildInputs = [ libvpx ];
+
+  # `--auditwheel skip`: a repair copies libvpx into the wheel without
+  # the path to the libstdc++ it needs, and the module does not load.
   buildPhase = ''
     runHook preBuild
-    maturin build --release --offline --frozen --interpreter ${python.interpreter} --out dist
+    maturin build --release --offline --frozen --auditwheel skip --interpreter ${python.interpreter} --out dist
     runHook postBuild
   '';
 

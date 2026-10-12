@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from . import _native
 
-__all__ = ["average_rgba", "encode_sixel", "rgb_to_rgba", "scale_rgba"]
+__all__ = ["Vp9Decoder", "average_rgba", "encode_sixel", "rgb_to_rgba", "scale_rgba"]
 
 #: `pymux.sixel.encode_sixel`.
 encode_sixel = _native.encode_sixel
@@ -27,3 +27,8 @@ rgb_to_rgba = _native.rgb_to_rgba
 #: `pymux.blocks.average_rgba`, for a size that changes and pixels that
 #: hold the whole image.
 average_rgba = _native.average_rgba
+
+#: A window pane's VP9 stream, decoded on the client:
+#: `Vp9Decoder().decode(data, rects=None)` answers `(width, height,
+#: [(x, y, w, h, rgb)])`. Lillecarl/pymux#639.
+Vp9Decoder = _native.Vp9Decoder
