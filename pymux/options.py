@@ -784,6 +784,11 @@ ALL_OPTIONS = {
     # How long a strip's view takes to glide to the column a person
     # moved to, in milliseconds. Zero jumps.
     "strip-animation-time": PositiveIntOption("strip_animation_time", [0, 100, 150, 250]),
+    # The shade at the edge where the view cuts a pane: how many cells
+    # it fades over, zero for none, and how far the cell at the edge
+    # moves towards black or white, in percent. Lillecarl/pymux#616.
+    "cut-shade-width": PositiveIntOption("cut_shade_width", [0, 2, 4, 6, 8]),
+    "cut-shade-strength": PositiveIntOption("cut_shade_strength", [8, 12, 16, 24]),
     # How long a job outlives its last activity, in seconds. Output
     # and completion both count, so a job that logs stays while a job
     # that hangs silent goes; a running one is ended first, a

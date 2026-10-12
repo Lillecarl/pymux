@@ -1135,6 +1135,8 @@ class Pymux:
         "status_right": Keep.SAVED,
         "status_right_length": Keep.SAVED,
         "strip_animation_time": Keep.SAVED,
+        "cut_shade_width": Keep.SAVED,
+        "cut_shade_strength": Keep.SAVED,
         "synthesize_key_events": Keep.SAVED,
         "which_key": Keep.SAVED,
         "window_status_current_format": Keep.SAVED,
@@ -1261,6 +1263,11 @@ class Pymux:
         # measures at all three. Lillecarl/pymux#8.
         self.history_limit = 2000
         self.strip_animation_time = 150
+        # The shade where the view cuts a pane: four cells, and the one
+        # at the edge moved 14% towards black or white. Carl found 8% a
+        # bit faint. Lillecarl/pymux#616.
+        self.cut_shade_width = 4
+        self.cut_shade_strength = 14
 
         # How many seconds between two redraws of the status bar. Four
         # is tmux's `status-interval`, and this keeps the same. It is

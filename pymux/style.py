@@ -79,13 +79,7 @@ def _other_of(a: str) -> str:
     return "#ffffff" if _readable(a) == "#000000" else "#000000"
 
 
-#: How far the column a strip cut off moves from the background behind
-#: it. One number, because a tint that is a hint on one scheme and a
-#: slab on the next is not a mark a person learns to read.
-CUT_LIFT = 0.08
-
-
-def tinted(background: str, lift: float = CUT_LIFT) -> str:
+def tinted(background: str, lift: float) -> str:
     """
     The background of a column that runs off the edge of the view.
 
@@ -96,13 +90,12 @@ def tinted(background: str, lift: float = CUT_LIFT) -> str:
     light one. Lillecarl/pymux#222, Lillecarl/pymux#352.
 
     It moves towards black or white and not towards the scheme's text,
-    which is what the derived sources used to do. A scheme whose text
-    sits close to its background would give a tint nobody can see, and
-    a mark that says "there is more of this pane" has to be visible in
-    every scheme or it says nothing.
+    because a scheme whose text sits close to its background would give
+    a tint nobody can see, and a mark that says "there is more of this
+    pane" has to be visible in every scheme or it says nothing.
 
-    `lift` is how far, and the cells nearest a cut edge take all of it:
-    the shade fades over a few cells inward. Lillecarl/pymux#616.
+    `lift` is how far, from 0 to 1: `cut-shade-strength` at the cut
+    edge, less inward. Lillecarl/pymux#616.
     """
     return _blend(background, _readable(background), lift)
 

@@ -56,7 +56,7 @@ from prompt_toolkit.widgets import Dialog, SearchToolbar, TextArea
 
 from pymux import arrangement
 
-from .cut_shade import Hidden, hex_of, hidden_of, shade
+from .cut_shade import Hidden, hex_of, hidden_of, lifts, shade
 from .divided import Divided
 from .enums import Chooser, Woke
 from .filters import WaitsForConfirmation
@@ -3271,6 +3271,7 @@ def _create_container_for_process(
         has_bar_below=lambda: bool(get_bar_below()),
         hidden=lambda: hidden_of_pane(pymux, arrangement_pane),
         backdrop=lambda: cut_backdrop(pymux),
+        fade=lambda: lifts(pymux.cut_shade_width, pymux.cut_shade_strength / 100),
     )
 
 
@@ -3356,6 +3357,7 @@ class _PaneMark(_ContainerProxy):
         has_bar_below,
         hidden: Callable[[], Hidden | None] = lambda: None,
         backdrop: Callable[[], str | None] = lambda: None,
+        fade: Callable[[], list[float]] = list,
     ):
         super().__init__(content)
         self.window = window
@@ -3370,6 +3372,7 @@ class _PaneMark(_ContainerProxy):
         #: Lillecarl/pymux#616.
         self.hidden = hidden
         self.backdrop = backdrop
+        self.fade = fade
         # The cells the mark is made of, built once. A frame draws
         # close to two hundred of them on a big screen, and a `Char`
         # built per cell per frame was most of a millisecond of it.
@@ -3405,6 +3408,7 @@ class _PaneMark(_ContainerProxy):
                     screen,
                     write_position,
                     hidden,
+                    self.fade(),
                     get_app().renderer.style.get_attrs_for_style_str,
                     self.backdrop(),
                 ),

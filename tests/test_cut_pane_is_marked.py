@@ -15,7 +15,7 @@ application of it" -- it reached only the cells a program left at the
 default background, and only the pane, never the side.
 
 So the cells nearest the cut edge are shaded, strongest at the edge and
-fading inward over `cut_shade.CELLS`, on whichever side is cut, and
+fading inward over `cut-shade-width` cells, on whichever side is cut, and
 each cell's own background is what moves.
 
 This judges the frame a real session draws, because the question is
@@ -38,10 +38,10 @@ from pyte.colors import parse_color
 from session import Connection
 
 from pymux.commands import handle_command
-from pymux.cut_shade import CELLS, hex_of
+from pymux.cut_shade import hex_of
 from pymux.main import Pymux
 from pymux.plan_container import PlanContainer
-from pymux.style import CUT_LIFT, tinted
+from pymux.style import tinted
 
 ROWS = 12
 COLUMNS = 80
@@ -145,9 +145,14 @@ async def create_wide_column(pymux, state, focus_left=True):
     state.sync_focus()
 
 
-def a_fade(plain: str) -> list[str]:
+def a_fade(pymux, plain: str) -> list[str]:
     "What a band of the shade over `plain` should be, from the cut edge inward."
-    return [tinted(plain, CUT_LIFT * (CELLS - inward) / CELLS) for inward in range(CELLS)]
+    width, strength = pymux.cut_shade_width, pymux.cut_shade_strength / 100
+    return [tinted(plain, strength * (width - inward) / width) for inward in range(width)]
+
+
+def at_the_edge(pymux, plain: str) -> str:
+    return tinted(plain, pymux.cut_shade_strength / 100)
 
 
 async def test_nothing_is_shaded_when_every_column_fits():
@@ -170,9 +175,10 @@ async def test_a_column_cut_on_the_right_fades_in_at_the_right_edge():
 
         shown = backgrounds(state, screen)
         plain = shown[cut.x]
+        width = pymux.cut_shade_width
         # Only the last few cells, strongest at the edge.
-        assert shown[cut.x : COLUMNS - CELLS] == [plain] * (COLUMNS - CELLS - cut.x)
-        assert shown[COLUMNS - CELLS :][::-1] == a_fade(plain)
+        assert shown[cut.x : COLUMNS - width] == [plain] * (COLUMNS - width - cut.x)
+        assert shown[COLUMNS - width :][::-1] == a_fade(pymux, plain)
 
 
 async def test_a_column_cut_on_the_left_fades_in_at_the_left_edge():
@@ -185,8 +191,8 @@ async def test_a_column_cut_on_the_left_fades_in_at_the_left_edge():
         assert left.x < panes.view.shown_rect.x
 
         shown = backgrounds(state, screen)
-        plain = shown[CELLS]
-        assert shown[:CELLS] == a_fade(plain)
+        width = pymux.cut_shade_width
+        assert shown[:width] == a_fade(pymux, shown[width])
 
 
 async def test_a_cell_the_program_coloured_fades_too():
@@ -201,7 +207,7 @@ async def test_a_cell_the_program_coloured_fades_too():
         right.terminal.terminal_control.feed_output("\x1b[2J\x1b[H" + red)
         screen = draw()
 
-        assert backgrounds(state, screen)[COLUMNS - 1] == tinted("#aa0000", CUT_LIFT)
+        assert backgrounds(state, screen)[COLUMNS - 1] == at_the_edge(pymux, "#aa0000")
 
 
 async def test_the_shade_moves_the_terminals_own_background():
@@ -214,7 +220,26 @@ async def test_the_shade_moves_the_terminals_own_background():
         state.connection.default_colors.background = parse_color("#404040")
         await create_wide_column(pymux, state)
 
-        assert backgrounds(state, draw())[COLUMNS - 1] == tinted("#404040", CUT_LIFT)
+        assert backgrounds(state, draw())[COLUMNS - 1] == at_the_edge(pymux, "#404040")
+
+
+async def test_the_width_and_the_strength_are_options():
+    "Carl: a bit stronger, and both configurable."
+    commands = [*STRIP, "set-option cut-shade-width 2", "set-option cut-shade-strength 30"]
+    async with create_client(commands) as (pymux, state, draw):
+        await create_wide_column(pymux, state)
+        shown = backgrounds(state, draw())
+        plain = shown[COLUMNS - 3]
+
+        assert shown[COLUMNS - 2 :] == [tinted(plain, 0.15), tinted(plain, 0.30)]
+
+
+async def test_a_width_of_nothing_turns_the_shade_off():
+    async with create_client([*STRIP, "set-option cut-shade-width 0"]) as (pymux, state, draw):
+        await create_wide_column(pymux, state)
+        shown = backgrounds(state, draw())
+
+        assert shown[COLUMNS - 1] == shown[COLUMNS - 5]
 
 
 def _lightness(colour: str) -> int:
@@ -222,9 +247,9 @@ def _lightness(colour: str) -> int:
 
 
 async def test_a_dark_terminal_is_lifted():
-    assert _lightness(tinted("#000000")) > _lightness("#000000")
+    assert _lightness(tinted("#000000", 0.1)) > _lightness("#000000")
 
 
 async def test_a_light_terminal_is_darkened():
     "The same step, the other way. A fixed colour can only do one of these."
-    assert _lightness(tinted("#ffffff")) < _lightness("#ffffff")
+    assert _lightness(tinted("#ffffff", 0.1)) < _lightness("#ffffff")
