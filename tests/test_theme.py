@@ -244,9 +244,6 @@ RULES = {
     "reversed-pane incsearch.current": "noreverse",
     "background": "#888888",
     "painted": "bg:#000000",
-    # The pane's background moved one step, which is what `tinted`
-    # does for every scheme now. Lillecarl/pymux#352.
-    "cut": "bg:#141414",
     "clock": "bg:#88aa00",
     "panenumber": "bg:#888888",
     "terminal.focused panenumber": "bg:#aa8800",

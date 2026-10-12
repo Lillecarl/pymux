@@ -85,7 +85,7 @@ def _other_of(a: str) -> str:
 CUT_LIFT = 0.08
 
 
-def tinted(background: str) -> str:
+def tinted(background: str, lift: float = CUT_LIFT) -> str:
     """
     The background of a column that runs off the edge of the view.
 
@@ -100,8 +100,11 @@ def tinted(background: str) -> str:
     sits close to its background would give a tint nobody can see, and
     a mark that says "there is more of this pane" has to be visible in
     every scheme or it says nothing.
+
+    `lift` is how far, and the cells nearest a cut edge take all of it:
+    the shade fades over a few cells inward. Lillecarl/pymux#616.
     """
-    return _blend(background, _readable(background), CUT_LIFT)
+    return _blend(background, _readable(background), lift)
 
 
 def derive(r: dict[str, str]) -> dict[str, str]:
@@ -162,21 +165,6 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         # output, wanted this time. A program that names its own
         # colours everywhere never sees it. Lillecarl/pymux#273.
         "painted": "bg:%s" % (r["pane"],),
-        # The part of a pane that runs off the edge of the view. A strip
-        # is a row that may be wider than the screen, so a column can be
-        # cut, and nothing else on the screen says so. Carl: "the
-        # rightmost visible column [should have] some slightly tinted
-        # background to indicate that it's cut-off."
-        # Lillecarl/pymux#222.
-        #
-        # **This rule is the fallback, not the usual answer.** The
-        # cells under the tint show the terminal's own background
-        # whenever `paint-screen` is off, which is a background the
-        # theme did not choose, so `cut_tint` derives the colour from
-        # what the client really draws on and names it inline. This
-        # rule draws when the theme does own the background, and when
-        # the terminal answered nothing. Lillecarl/pymux#352.
-        "cut": "bg:%s" % (r["cut"],),
         "clock": "bg:%s" % (r["warn-bright"],),
         # The number a display-panes puts in the middle of each pane.
         # The active pane's is the loud one: the class it resolves
@@ -303,9 +291,8 @@ ROLES = {
     # The message bar, which says what a command did.
     "notice": "#bbee88",
     "notice-text": "#222222",
-    # The column a strip cuts off, and the clock and pane number, which
-    # are yellow here and quiet in a quiet theme.
-    "cut": tinted(PANE),
+    # The clock and pane number, which are yellow here and quiet in a
+    # quiet theme.
     "warn": "#aa8800",
     "warn-bright": "#88aa00",
     # A pane that has ended, and the confirmation that asks about it.
@@ -492,7 +479,6 @@ def roles_of_palette(sixteen: list[str]) -> dict[str, str]:
         "suggestion-text": _blend(white, black, 0.25),
         "notice": bright_green,
         "notice-text": _readable(bright_green),
-        "cut": tinted(black),
         "warn": yellow,
         "warn-bright": bright_yellow,
         # A pane that has ended, and the confirmation that asks.

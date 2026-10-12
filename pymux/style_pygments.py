@@ -21,10 +21,7 @@ So the rest is derived, by three rules:
   black or white behind a background, whichever reads; this is what
   keeps a light scheme's bars dark-texted and a dark scheme's light.
 - **A shade is a blend.** The raised surface and the quiet border are
-  the scheme's own two greys mixed a step apart. The cut-column tint
-  is not one of them: `tinted` moves the background towards black or
-  white, so that a scheme whose text sits close to its background
-  still gets a mark a person can see.
+  the scheme's own two greys mixed a step apart.
 - **What a style left out is not invented.** An error that equals the
   plain text falls back through the deleted-diff token to a loud red,
   because "a pane ended" must never be quiet.
@@ -45,7 +42,6 @@ from pymux.style import (
     _readable,
     create_theme,
     derive,
-    tinted,
 )
 
 __all__ = ["names", "pygments_roles", "pygments_theme"]
@@ -234,7 +230,6 @@ def _roles(style_cls) -> dict[str, str]:
         "suggestion-text": _blend(text, surface, 0.25),
         "notice": focus_strong,
         "notice-text": on(focus_strong),
-        "cut": tinted(surface),
         "warn": _blend(focus, text, 0.35),
         "warn-bright": _blend(focus, text, 0.5),
         "danger": error,

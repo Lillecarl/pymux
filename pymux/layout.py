@@ -56,6 +56,7 @@ from prompt_toolkit.widgets import Dialog, SearchToolbar, TextArea
 
 from pymux import arrangement
 
+from .cut_shade import Hidden, hex_of, hidden_of, shade
 from .divided import Divided
 from .enums import Chooser, Woke
 from .filters import WaitsForConfirmation
@@ -64,7 +65,6 @@ from .log import logger
 from .plan_container import PlanContainer
 from .plane import Plan, Side, View, bounding_box
 from .strip import Strip
-from .style import tinted
 from .tiling import BORDER_WIDTH, Gaps
 from .titlebar import PaneTitleBar
 from .zoomed import Zoomed
@@ -155,22 +155,6 @@ RIGHT_MARK = "▸"
 ABOVE_MARK = "▴"
 BELOW_MARK = "▾"
 
-#: What marks a pane that runs off the edge of the view. It goes into
-#: the style of the pane itself, so every cell the program left at the
-#: default background takes the tint the theme names (`style.py`) and
-#: every cell it coloured itself keeps that colour: a parent's class is
-#: less precise than a cell's own `bg:`.
-#:
-#: **That is the cheap half of a choice, and it is deliberate.** The
-#: other reading is to blend the tint into whatever each cell holds,
-#: which costs arithmetic on every cell of the column on every frame:
-#: marking them by hand came to 14,620 bytecode instructions a frame,
-#: 43% on top of the frame it marked. Lillecarl/pymux#222.
-#:
-#: `cut_tint` is what a pane really wears. This rule is what it falls
-#: back to.
-CUT_IS_TINTED = "class:cut"
-
 #: What `clock-mode` draws inside a pane, as text. `BigClock` paints the
 #: hour and the minute in big numbers, and nothing else of it moves.
 CLOCK_FORMAT = "%H:%M"
@@ -187,6 +171,10 @@ class Justify:
 
 
 class Z_INDEX:
+    #: The shade at a cut edge: after the pane's cells, which it reads,
+    #: and under the bars and popups, which it must not shade.
+    #: Lillecarl/pymux#616.
+    CUT_SHADE = 1
     HIGHLIGHTED_BORDER = 2
     STATUS_BAR = 5
     COMMAND_LINE = 6
@@ -2858,71 +2846,57 @@ def size_the_panes_of(pymux: Pymux, window) -> None:
             _tell_pane_its_size(cast(arrangement.Pane, pane), rect)
 
 
-def pane_is_cut(pymux: Pymux, pane: arrangement.Pane) -> bool:
+def hidden_of_pane(pymux: Pymux, pane: arrangement.Pane) -> Hidden | None:
     """
-    Whether this pane runs off the edge of the view this client has.
+    How much of this pane the view this client has hides, on each side.
 
     **A cut pane is the one case where what a person sees is not what
     the program wrote**, and the cells give nothing away: a pane whose
     program wrote nothing past the cut looks exactly like a pane that
-    ends there. So the pane is tinted, and this is the question.
-    Lillecarl/pymux#222.
+    ends there. So the cut edge is shaded, and this is the question.
+    Lillecarl/pymux#222, Lillecarl/pymux#616.
 
-    It reads the frame that is being drawn, because that is the only
-    frame whose answer is worth anything: the view has a size then,
-    and a plan to hold it against. Before the first frame, and for a
-    pane of another window, the answer is no -- nothing is drawn, so
-    nothing is cut.
+    It reads the frame that is being drawn, where the view is, glide
+    and all. Before the first frame, and for a pane of another window,
+    the answer is None: nothing is drawn, so nothing is cut.
     """
     try:
         manager = pymux.get_client_state().layout_manager
     except ValueError:
-        return False
+        return None
 
     container = manager.pane_container()
     if container is None or container.plan is None:
-        return False
+        return None
 
     try:
         rect = container.plan.rect_of(pane)
     except KeyError:
-        return False
+        return None
 
-    return container.view.cuts(rect)
+    return hidden_of(container.view.shown_rect, rect)
 
 
-def cut_tint(pymux: Pymux) -> str:
+def cut_backdrop(pymux: Pymux) -> str | None:
     """
-    The tint a cut pane wears, for the client drawing this frame.
+    What a cell the program left at the default background really shows.
 
-    **The tint is painted over a background the theme did not
-    choose.** A cell the program left alone shows the terminal's own
-    background, so a colour picked against the theme's is a guess: it
-    lifts one terminal and darkens the next by the same amount. The
-    client asked its terminal what it draws on (`OSC 11`,
-    Lillecarl/pymux#223), so the tint is derived from the answer.
-    Lillecarl/pymux#352.
-
-    Two cases keep the theme's own rule. `paint-screen` on means the
-    theme *does* own the background, so its `cut` role is already the
-    right colour; and a terminal that answered nothing leaves nothing
-    to derive from.
+    **Not always the theme's colour.** With `paint-screen` off the cell
+    shows the terminal's own background, which the client asked its
+    terminal for (`OSC 11`, Lillecarl/pymux#223), so a shade picked
+    against the theme's would lift one terminal and darken the next.
+    Lillecarl/pymux#352. With `paint-screen` on, the cell's own style
+    already names the theme's, and a terminal that answered nothing
+    leaves the theme's as the best guess.
     """
-    if pymux.paint_screen:
-        return CUT_IS_TINTED
-
-    try:
-        background = pymux.get_client_state().default_colors.background
-    except ValueError, AttributeError:
-        # No client is drawing, or its connection never asked its
-        # terminal -- which is what `latest_client_color_base` allows
-        # for as well.
-        return CUT_IS_TINTED
-
-    if background is None:
-        return CUT_IS_TINTED
-
-    return "bg:%s" % (tinted(background.hex),)
+    if not pymux.paint_screen:
+        try:
+            background = pymux.get_client_state().default_colors.background
+        except ValueError, AttributeError:
+            background = None
+        if background is not None:
+            return background.hex
+    return hex_of(get_app().renderer.style.get_attrs_for_style_str("class:painted").bgcolor or "")
 
 
 def _frame_plan(manager, window, size: Size) -> Plan | None:
@@ -3088,11 +3062,6 @@ def _create_container_for_process(
             # at a default one, so the terminal's own colours are never
             # seen. Lillecarl/pymux#273.
             result += " class:painted"
-
-        if pane_is_cut(pymux, arrangement_pane):
-            # A pane that runs off the edge of the view is tinted, so
-            # that a person can see it is cut. Lillecarl/pymux#222.
-            result += " " + cut_tint(pymux)
 
         return result
 
@@ -3300,6 +3269,8 @@ def _create_container_for_process(
         # neighbours, which is the row the mark's foot is drawn on.
         # Lillecarl/pymux#401.
         has_bar_below=lambda: bool(get_bar_below()),
+        hidden=lambda: hidden_of_pane(pymux, arrangement_pane),
+        backdrop=lambda: cut_backdrop(pymux),
     )
 
 
@@ -3376,7 +3347,16 @@ class _PaneMark(_ContainerProxy):
     #: What a mark cell is styled as.
     STYLE = "class:border"
 
-    def __init__(self, content, window, pane, style: Callable[[], str], has_bar_below):
+    def __init__(
+        self,
+        content,
+        window,
+        pane,
+        style: Callable[[], str],
+        has_bar_below,
+        hidden: Callable[[], Hidden | None] = lambda: None,
+        backdrop: Callable[[], str | None] = lambda: None,
+    ):
         super().__init__(content)
         self.window = window
         self.pane = pane
@@ -3385,6 +3365,11 @@ class _PaneMark(_ContainerProxy):
         #: for each of its floats.
         self.style = style
         self.has_bar_below = has_bar_below
+        #: What the view hides of this pane, and what a default cell
+        #: shows: the two things the shade at a cut edge needs.
+        #: Lillecarl/pymux#616.
+        self.hidden = hidden
+        self.backdrop = backdrop
         # The cells the mark is made of, built once. A frame draws
         # close to two hundred of them on a big screen, and a `Char`
         # built per cell per frame was most of a millisecond of it.
@@ -3411,6 +3396,19 @@ class _PaneMark(_ContainerProxy):
     ) -> None:
         style = parent_style + " " + self.style()
         super().write_to_screen(screen, mouse_handlers, write_position, style, erase_bg, z_index)
+        hidden = self.hidden()
+        if hidden is not None:
+            screen.draw_with_z_index(
+                (z_index or 0) + Z_INDEX.CUT_SHADE,
+                partial(
+                    shade,
+                    screen,
+                    write_position,
+                    hidden,
+                    get_app().renderer.style.get_attrs_for_style_str,
+                    self.backdrop(),
+                ),
+            )
         # **The z is the parent's, plus the mark's**, as a `Float` in a
         # `FloatContainer` inherits it. A body drawn late -- one whose
         # own floats wait on a cursor -- runs its panes again, and a mark

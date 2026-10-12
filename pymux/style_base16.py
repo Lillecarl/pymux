@@ -26,7 +26,7 @@ import os
 from functools import cache
 from pathlib import Path
 
-from pymux.style import _blend, _other_of, _readable, create_theme, derive, tinted
+from pymux.style import _blend, _other_of, _readable, create_theme, derive
 
 __all__ = ["base16_roles", "base16_theme", "names"]
 
@@ -80,7 +80,7 @@ def base16_roles(name: str) -> dict[str, str]:
     the border takes -- rather than blending those steps back out of
     two colours, which is what a terminal palette can do and a scheme
     is richer than. The blend remains for the roles finer than any
-    letter: the cut column, the suggestion, the bright of a signal.
+    letter: the suggestion, the bright of a signal.
     The palette a pane answers a program with is the sixteen in the
     order the spec's own terminal template numbers them.
     Lillecarl/pymux#285.
@@ -120,8 +120,6 @@ def base16_roles(name: str) -> dict[str, str]:
         "suggestion-text": p["base04"],
         "notice": blend("base0B", "base05", 0.35),
         "notice-text": _readable(blend("base0B", "base05", 0.35)),
-        # Finer than any letter: a column that only just separates.
-        "cut": tinted(p["base00"]),
         "warn": p["base0A"],
         "warn-bright": p["base09"],
         # A pane that has ended, and the confirmation that asks.

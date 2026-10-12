@@ -1,39 +1,22 @@
 """
-The tint that says a pane runs off the edge. Lillecarl/pymux#222.
+The shade that says a pane runs off the edge. Lillecarl/pymux#222,
+Lillecarl/pymux#616.
 
 A strip is a row that may be wider than the view, so a column can be
-cut, and Lillecarl/pymux#218 settled which end is shown: the left one,
-because that is where applications write. **That leaves the other half
-of the question.** The cells a person sees are the ordinary cells of
-that pane, so a pane whose program wrote nothing past the cut looks
-exactly like a pane that ends there.
+cut, and Lillecarl/pymux#218 settled which end is shown. **That leaves
+the other half of the question.** The cells a person sees are the
+ordinary cells of that pane, so a pane whose program wrote nothing past
+the cut looks exactly like a pane that ends there.
 
-Carl: "what would be nice would be if the rightmost visible column had
-some slightly tinted background to indicate that it's cut-off."
+Carl: "the tint i asked for was not full-screen, just the column near
+the edge. If it's not too compute heavy we could do a 'few' column
+gradient even." And of the whole-pane tint before it: "the inconsistent
+application of it" -- it reached only the cells a program left at the
+default background, and only the pane, never the side.
 
-**The tint goes into the style of the pane**, not onto the cells after
-they are written. Two reasons, and the first one is not a choice:
-
-- **The cells are written later than any place that could mark them.**
-  `PlanContainer` asks each pane's container to draw, and those defer
-  through `Screen.draw_all_floats`, one function at a time, each free
-  to add more. So a pass that appends a class to the cells the panes
-  drew runs *before* they are there. This was measured, not guessed.
-- A class in a pane's own style is one string per pane per frame.
-  Marking the cells by hand came to 14,620 bytecode instructions a
-  frame, 43% on top of the frame it marked.
-
-The cost is that a cell the program coloured itself keeps its colour:
-a parent's class is less precise than a cell's own `bg:`. So the tint
-shows wherever the program left the background alone, which in a shell
-is all of it.
-
-**The colour is the terminal's, not the theme's.** A cell the program
-left alone shows the background of the terminal the client runs in, so
-a tint picked against the theme's background is a guess: it lifts one
-terminal and darkens the next by the same amount. `cut_tint` derives
-it from what the client's terminal answered, and the theme's own rule
-draws only where the theme owns the background. Lillecarl/pymux#352.
+So the cells nearest the cut edge are shaded, strongest at the edge and
+fading inward over `cut_shade.CELLS`, on whichever side is cut, and
+each cell's own background is what moves.
 
 This judges the frame a real session draws, because the question is
 what a person sees.
@@ -44,7 +27,6 @@ from __future__ import annotations
 import io
 from contextlib import asynccontextmanager
 
-import pytest
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
@@ -56,15 +38,20 @@ from pyte.colors import parse_color
 from session import Connection
 
 from pymux.commands import handle_command
-from pymux.layout import CUT_IS_TINTED, cut_tint
+from pymux.cut_shade import CELLS, hex_of
 from pymux.main import Pymux
 from pymux.plan_container import PlanContainer
-from pymux.style import roles_of, roles_of_palette, tinted
+from pymux.style import CUT_LIFT, tinted
 
 ROWS = 12
 COLUMNS = 80
+ROW = ROWS // 2
 
 STRIP = ["set-option pane-border-status on", "set-window-option strip on"]
+
+#: `conftest.py` paints the screen for every server this suite builds.
+#: With it off a default cell shows the terminal's own background.
+PAINT_SCREEN_OFF = "set-option paint-screen off"
 
 
 @asynccontextmanager
@@ -136,99 +123,98 @@ def panes_of(state) -> PlanContainer:
     return found[0]
 
 
-def marked(screen, row: int) -> str:
-    """
-    One row of the screen, as the cells that carry the tint.
-
-    A hash for a cell that is marked cut and a space for one that is
-    not, so a row reads as a picture.
-    """
-    return "".join("#" if CUT_IS_TINTED in screen.data_buffer[row][x].style else " " for x in range(COLUMNS))
+def backgrounds(state, screen, row: int = ROW) -> list[str | None]:
+    "The background each cell of a row really shows, as `#rrggbb`."
+    resolve = state.app.renderer.style.get_attrs_for_style_str
+    return [hex_of(resolve(screen.data_buffer[row][x].style).bgcolor or "") for x in range(COLUMNS)]
 
 
-async def create_wide_column(pymux, state):
+async def create_wide_column(pymux, state, focus_left=True):
     """
-    Two columns, the second one two thirds of the window, with the
-    focus back on the first.
+    Two columns, the second one two thirds of the window.
 
     Two halves fit exactly, which is why a half is the default, so a
-    column has to be widened for anything to be cut at all. The focus
-    goes back to the first column because the view follows the focus:
-    on the second one the view scrolls and the first is what is cut.
+    column has to be widened for anything to be cut at all. With the
+    focus on the first column the second runs off the right; with it on
+    the second, the view scrolls and the first is cut on the left.
     """
     await run(pymux, "split-window -h")
     await run(pymux, "switch-column-width")
-    await run(pymux, "select-pane -L")
+    if focus_left:
+        await run(pymux, "select-pane -L")
     state.sync_focus()
 
 
-async def test_nothing_is_marked_when_every_column_fits():
+def a_fade(plain: str) -> list[str]:
+    "What a band of the shade over `plain` should be, from the cut edge inward."
+    return [tinted(plain, CUT_LIFT * (CELLS - inward) / CELLS) for inward in range(CELLS)]
+
+
+async def test_nothing_is_shaded_when_every_column_fits():
     "Two columns of half a window each, which is the default."
     async with create_client(STRIP) as (pymux, state, draw):
         await run(pymux, "split-window -h")
         state.sync_focus()
-        screen = draw()
+        shown = backgrounds(state, draw())
 
-        assert marked(screen, ROWS // 2).strip() == ""
+        assert len({colour for colour in shown if colour is not None}) == 1, shown
 
 
-async def test_column_that_runs_off_edge_is_marked():
+async def test_a_column_cut_on_the_right_fades_in_at_the_right_edge():
     async with create_client(STRIP) as (pymux, state, draw):
         await create_wide_column(pymux, state)
         screen = draw()
-
         panes = panes_of(state)
-        left, right = pymux.arrangement.get_active_window().panes
-        cut = panes.plan.rect_of(right)
+        cut = panes.plan.rect_of(pymux.arrangement.get_active_window().panes[1])
+        assert cut.right > COLUMNS
 
-        # The plan says the second column runs past the view.
-        assert cut.right > panes.view.size.columns
-        assert panes.view.cuts(cut)
-
-        # And every cell of it that is shown carries the tint, while
-        # the column a person is working in carries none.
-        row = marked(screen, ROWS // 2)
-        assert row[: cut.x] == " " * cut.x, row
-        assert row[cut.x :] == "#" * (COLUMNS - cut.x), row
-        assert panes.plan.rect_of(left).right <= cut.x
+        shown = backgrounds(state, screen)
+        plain = shown[cut.x]
+        # Only the last few cells, strongest at the edge.
+        assert shown[cut.x : COLUMNS - CELLS] == [plain] * (COLUMNS - CELLS - cut.x)
+        assert shown[COLUMNS - CELLS :][::-1] == a_fade(plain)
 
 
-async def test_tint_sits_before_what_pane_wrote():
+async def test_a_column_cut_on_the_left_fades_in_at_the_left_edge():
+    "The same mark on the other side: the one place the whole-pane tint never was."
+    async with create_client(STRIP) as (pymux, state, draw):
+        await create_wide_column(pymux, state, focus_left=False)
+        screen = draw()
+        panes = panes_of(state)
+        left = panes.plan.rect_of(pymux.arrangement.get_active_window().panes[0])
+        assert left.x < panes.view.shown_rect.x
+
+        shown = backgrounds(state, screen)
+        plain = shown[CELLS]
+        assert shown[:CELLS] == a_fade(plain)
+
+
+async def test_a_cell_the_program_coloured_fades_too():
     """
-    Which is what makes a program's own colours survive it.
-
-    The class comes from the pane's style, so it is in the string
-    before anything the cell itself carries, and a style further to
-    the right wins. A cell the program coloured keeps its colour; one
-    it left alone takes the tint.
+    The inconsistency Carl saw: a class in the pane's style reached only
+    the cells a program left alone. The shade moves each cell's own.
     """
     async with create_client(STRIP) as (pymux, state, draw):
         await create_wide_column(pymux, state)
+        right = pymux.arrangement.get_active_window().panes[1]
+        red = ("\x1b[48;2;170;0;0m" + " " * 200 + "\r\n") * ROWS
+        right.terminal.terminal_control.feed_output("\x1b[2J\x1b[H" + red)
         screen = draw()
 
-        cut = panes_of(state).plan.rect_of(pymux.arrangement.get_active_window().panes[1])
-        style = screen.data_buffer[ROWS // 2][cut.x].style
-
-        assert CUT_IS_TINTED in style
-        # The pane's own class is still there, and the tint is beside
-        # it rather than on top of it.
-        assert "class:terminal" in style
-        assert style.index("class:terminal") < style.index(CUT_IS_TINTED)
+        assert backgrounds(state, screen)[COLUMNS - 1] == tinted("#aa0000", CUT_LIFT)
 
 
-# ----------------------------------------------------------------------
-# The colour of it. Lillecarl/pymux#352.
+async def test_the_shade_moves_the_terminals_own_background():
+    """
+    With `paint-screen` off, a default cell shows the terminal's own
+    background, so the shade starts from what the terminal answered.
+    Lillecarl/pymux#352.
+    """
+    async with create_client([*STRIP, PAINT_SCREEN_OFF]) as (pymux, state, draw):
+        state.connection.default_colors.background = parse_color("#404040")
+        await create_wide_column(pymux, state)
 
-
-#: `conftest.py` paints the screen for every server this suite builds,
-#: and the derived tint is for the case where the theme does *not* own
-#: the background -- which is what pymux starts on.
-PAINT_SCREEN_OFF = "set-option paint-screen off"
-
-
-def _says(state, background: str) -> None:
-    "A client whose terminal answered `OSC 11` with this colour."
-    state.connection.default_colors.background = parse_color(background)
+        assert backgrounds(state, draw())[COLUMNS - 1] == tinted("#404040", CUT_LIFT)
 
 
 def _lightness(colour: str) -> int:
@@ -242,75 +228,3 @@ async def test_a_dark_terminal_is_lifted():
 async def test_a_light_terminal_is_darkened():
     "The same step, the other way. A fixed colour can only do one of these."
     assert _lightness(tinted("#ffffff")) < _lightness("#ffffff")
-
-
-@pytest.mark.parametrize("name", ["default", "grey", "base16:gruvbox-dark-hard", "pygments:monokai"])
-async def test_every_source_moves_its_own_background(name):
-    """
-    One number, so a tint is the same mark in every scheme.
-
-    Each source used to pick its own step, and two of the five picked
-    a different one. A source that drifts back to a blend of its own
-    is what this catches. Lillecarl/pymux#352.
-    """
-    roles = roles_of(name)
-
-    assert roles["cut"] == tinted(roles["pane"])
-
-
-async def test_a_palette_moves_its_own_background_too():
-    "The fifth source: a theme built from sixteen colours a terminal named."
-    roles = roles_of_palette(["#101018"] + ["#808080"] * 15)
-
-    assert roles["cut"] == tinted(roles["pane"])
-
-
-async def test_a_mid_grey_terminal_is_lifted_and_not_holed():
-    """
-    The case that says a fixed colour is wrong, and it needs no light
-    terminal: a screen on `#404040` under the `default` theme, whose
-    `cut` role is darker than that. The theme's colour is a hole in
-    the screen; the derived one is a lift.
-    """
-    assert _lightness(roles_of("default")["cut"]) < _lightness("#404040")
-    assert _lightness(tinted("#404040")) > _lightness("#404040")
-
-
-async def test_the_column_wears_the_colour_of_the_terminal():
-    async with create_client([*STRIP, PAINT_SCREEN_OFF]) as (pymux, state, draw):
-        _says(state, "#404040")
-        await create_wide_column(pymux, state)
-        screen = draw()
-
-        cut = panes_of(state).plan.rect_of(pymux.arrangement.get_active_window().panes[1])
-        style = screen.data_buffer[ROWS // 2][cut.x].style
-
-        assert "bg:%s" % (tinted("#404040"),) in style
-        # And the theme's own rule is not also there: two rules for one
-        # background is one of them winning by accident.
-        assert CUT_IS_TINTED not in style
-
-
-async def test_a_terminal_that_answered_nothing_keeps_the_theme_rule():
-    "Which is every client with no connection, and every dumb terminal."
-    async with create_client([*STRIP, PAINT_SCREEN_OFF]) as (pymux, state, draw):
-        await create_wide_column(pymux, state)
-
-        assert state.connection.default_colors.background is None
-        assert cut_tint(pymux) == CUT_IS_TINTED
-
-
-async def test_the_theme_owns_the_background_when_it_paints_the_screen():
-    """
-    `paint-screen` puts the theme's own colour behind every cell, so
-    the theme's `cut` role is picked against the background it is
-    really drawn over. Lillecarl/pymux#273.
-    """
-    async with create_client([*STRIP, PAINT_SCREEN_OFF]) as (pymux, state, draw):
-        _says(state, "#404040")
-        await create_wide_column(pymux, state)
-        assert cut_tint(pymux) != CUT_IS_TINTED
-
-        await run(pymux, "set-option paint-screen on")
-
-        assert cut_tint(pymux) == CUT_IS_TINTED
