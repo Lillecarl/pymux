@@ -114,15 +114,27 @@ class ShmCarrier:
 
 
 def frame_commands(
-    image_id: int, whole: bool, width: int, height: int, rects: Iterable[Rect], carrier: Base64Carrier | ShmCarrier
+    image_id: int,
+    whole: bool,
+    width: int,
+    height: int,
+    rects: Iterable[Rect],
+    carrier: Base64Carrier | ShmCarrier,
+    answer: bool = False,
 ) -> str:
-    "The commands that bring image `image_id` up to date with these rectangles."
+    """
+    The commands that bring image `image_id` up to date with these
+    rectangles. With `answer`, the terminal answers the last one once it
+    processed it; every other command is quiet.
+    """
+    rects = list(rects)
     out = []
-    for x, y, w, h, pixels in rects:
+    for index, (x, y, w, h, pixels) in enumerate(rects):
+        quiet = "" if answer and index == len(rects) - 1 else ",q=2"
         if whole:
-            keys = "a=t,i=%d,s=%d,v=%d,q=2" % (image_id, width, height)
+            keys = "a=t,i=%d,s=%d,v=%d%s" % (image_id, width, height, quiet)
         else:
-            keys = "a=f,i=%d,r=1,x=%d,y=%d,s=%d,v=%d,X=1,q=2" % (image_id, x, y, w, h)
+            keys = "a=f,i=%d,r=1,x=%d,y=%d,s=%d,v=%d,X=1%s" % (image_id, x, y, w, h, quiet)
         out.append(carrier.command(keys, pixels))
     return "".join(out)
 

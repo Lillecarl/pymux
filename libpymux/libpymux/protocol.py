@@ -192,6 +192,11 @@ class Field(StrEnum):
     FRAMES = "frames"
     #: In `start-gui`: this client answers each frame with `frame-shown`.
     SHOWS = "shows"
+    #: In the last part of a `window-frame`: let the terminal answer the
+    #: frame's last command, which the server counts as `frame-shown`.
+    #: kitty answers once it processed the command, and the client's
+    #: write says only that kitty read it. Lillecarl/pymux#643.
+    ANSWER = "answer"
     #: In `window-frame`: the outer image id, whether the parts make the
     #: whole frame, its size, the bands of this part as `[x, y, w, h,
     #: pixels]` with RGB pixels, whether it is the last part, and what

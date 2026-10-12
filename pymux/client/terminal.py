@@ -403,7 +403,7 @@ class TerminalClient(Client):
             with contextlib.suppress(Exception):
                 self._shm.close()
 
-    def _window_frame(self, packet: dict) -> None:
+    def _window_frame(self, packet: dict) -> bool:
         """
         Gather a window pane's frame, and at its last part write it to
         the terminal, encoded the way the terminal reads it.
@@ -412,6 +412,9 @@ class TerminalClient(Client):
         together; the bands of an edit are edits each. Lillecarl/pymux#634.
         A frame in a codec is decoded first, and what changed is taken
         from it. Lillecarl/pymux#639.
+
+        True when the terminal was asked to answer the frame, which then
+        stands for `frame-shown`. Lillecarl/pymux#643.
         """
         image = packet[Field.IMAGE]
         codec = packet.get(Field.CODEC)
@@ -421,27 +424,29 @@ class TerminalClient(Client):
         else:
             parts.extend(packet.get(Field.RECTS) or [])
         if not packet.get(Field.LAST):
-            return
+            return False
         del self._frame_parts[image]
         whole, width, height = packet[Field.WHOLE], packet[Field.WIDTH], packet[Field.HEIGHT]
         if codec:
             rects = self._decoded(image, codec, b"".join(parts), packet.get(Field.RECTS) or [])
             if rects is None:
-                return
+                return False
         elif whole and parts:
             rects = [(0, 0, width, height, b"".join(band[4] for band in parts))]
         else:
             rects = [tuple(band) for band in parts]
+        answer = bool(packet.get(Field.ANSWER)) and bool(rects)
         try:
-            commands = frame_commands(image, whole, width, height, rects, self._carrier)
+            commands = frame_commands(image, whole, width, height, rects, self._carrier, answer)
         except OSError:
             # Shared memory ran out, or went: base64 from here on.
             self._carrier = Base64Carrier()
-            commands = frame_commands(image, whole, width, height, rects, self._carrier)
+            commands = frame_commands(image, whole, width, height, rects, self._carrier, answer)
         text = commands + packet.get(Field.AFTER, "")
         if text:
             _write_all(sys.stdout.fileno(), (SAVE_CURSOR + text + RESTORE_CURSOR).encode("ascii"))
             self.placed_images = True
+        return answer
 
     def _decoded(self, image: int, codec: str, data: bytes, rects: list) -> list | None:
         "What changed in a window pane's encoded frame, as RGB rectangles; None when it would not decode."
@@ -481,11 +486,13 @@ class TerminalClient(Client):
                 self.placed_images = True
 
         elif packet[Field.CMD] == Packet.WINDOW_FRAME:
+            answered = False
             try:
-                self._window_frame(packet)
+                answered = self._window_frame(packet)
             finally:
-                # Whatever came of it: the server waits for this.
-                if packet.get(Field.LAST):
+                # Whatever came of it, the server waits for an answer:
+                # the terminal's, or this one.
+                if packet.get(Field.LAST) and not answered:
                     self._send_packet({Field.CMD: Packet.FRAME_SHOWN})
 
         elif packet[Field.CMD] == Packet.SHM and self._shm is not None:

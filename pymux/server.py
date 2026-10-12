@@ -104,6 +104,11 @@ CANNOT_ATTACH = (
 )
 
 
+#: How long a window pane's frame may go unanswered before the next one
+#: goes all the same. Lillecarl/pymux#643.
+FRAME_ANSWER_SECONDS = 2.0
+
+
 class ServerConnection:
     """
     For each client that connects, we have one instance of this class.
@@ -572,6 +577,11 @@ class ServerConnection:
         arrive at any time, long after the detection, and it belongs to
         one pane.
         """
+        # The terminal processed a window pane's frame. Lillecarl/pymux#643.
+        if self.graphics.frame_room is not None and self.graphics.is_frame_answer(data):
+            self._frame_answered()
+            return
+
         osc = _OSC_REPLY_RE.match(data)
         if osc is not None:
             if osc.group(1) == "99":
@@ -888,9 +898,7 @@ class ServerConnection:
             self._unanswered = 0
 
         elif packet[Field.CMD] == Packet.FRAME_SHOWN:
-            self._frames_out = max(0, self._frames_out - 1)
-            if not self._frames_out:
-                self._frames_shown.set()
+            self._frame_answered()
 
         elif packet[Field.CMD] == Packet.FORWARDS:
             reported = packet.get(Field.DATA) or []
@@ -1177,10 +1185,24 @@ class ServerConnection:
                 return
             await self._write(self._encode(part))
 
+    def _frame_answered(self) -> None:
+        self._frames_out = max(0, self._frames_out - 1)
+        if not self._frames_out:
+            self._frames_shown.set()
+
     async def _frames_all_shown(self) -> None:
-        "Wait until the client answered every window frame it was sent, or went."
-        while self._frames_out and not self._closed:
-            await self._frames_shown.wait()
+        """
+        Wait until the client answered every window frame it was sent, or
+        went. A terminal that never answers is let go after
+        `FRAME_ANSWER_SECONDS`, so it costs frames and never the window.
+        """
+        with anyio.move_on_after(FRAME_ANSWER_SECONDS) as waited:
+            while self._frames_out and not self._closed:
+                await self._frames_shown.wait()
+        if waited.cancelled_caught:
+            logger.warning("Client %s did not answer %d window frames.", self.client_id or "?", self._frames_out)
+            self._frames_out = 0
+            self._frames_shown.set()
 
     async def frame_drained(self) -> None:
         """

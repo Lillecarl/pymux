@@ -207,6 +207,33 @@ def test_the_client_writes_a_frame_at_its_last_part(terminal):
     assert client.placed_images
 
 
+def test_an_answered_frame_asks_the_terminal_on_its_last_command_only():
+    "Lillecarl/pymux#643."
+    rects = [(0, 0, 1, 1, RED), (1, 0, 1, 1, RED)]
+    keys = [keys for keys, _ in parsed(frame_commands(7, False, 64, 32, rects, Base64Carrier(), answer=True))]
+    assert [one.get("q") for one in keys] == ["2", None]
+    whole = parsed(frame_commands(7, True, 1, 1, [(0, 0, 1, 1, RED)], Base64Carrier(), answer=True))
+    assert "q" not in whole[0][0]
+
+
+def test_a_frame_the_terminal_answers_is_not_answered_by_the_client(terminal):
+    "Lillecarl/pymux#643."
+    client, read = terminal
+    part = frame_parts(9, (1, False, 20, 10, [(2, 3, 1, 1, RED)]), "")[0]
+    client._process({**part, Field.ANSWER: True})
+    ((keys, _payload),) = parsed(read())
+    assert "q" not in keys
+    assert client.sent == []
+
+
+def test_a_frame_with_nothing_to_write_is_answered_by_the_client(terminal):
+    client, read = terminal
+    part = frame_parts(9, (1, False, 20, 10, []), "")[0]
+    client._process({**part, Field.ANSWER: True})
+    assert read() == ""
+    assert client.sent == [{Field.CMD: Packet.FRAME_SHOWN}]
+
+
 def test_the_client_answers_each_frame_at_its_last_part(terminal):
     "Lillecarl/pymux#641."
     client, read = terminal
@@ -229,7 +256,8 @@ def test_a_frame_that_will_not_decode_is_answered_all_the_same(terminal):
             raise ValueError("lost")
 
     client._decoder_kinds = {"vp9": Broken}
-    client._process(video_parts(9, "vp9", (1, False, 64, 32, b"x", [(0, 0, 16, 16)]), "")[0])
+    part = video_parts(9, "vp9", (1, False, 64, 32, b"x", [(0, 0, 16, 16)]), "")[0]
+    client._process({**part, Field.ANSWER: True})
     assert client.sent == [{Field.CMD: Packet.FRAME_SHOWN}]
 
 

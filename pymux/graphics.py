@@ -150,6 +150,11 @@ _DRAWS_PLACEHOLDERS = (
 _SIXEL_TEXT_RE = re.compile(r"[ -~\r\n]*")
 
 
+#: A kitty graphics reply naming an image: OK or an error, both say the
+#: terminal processed the command.
+_IMAGE_REPLY_RE = re.compile(r"^\x1b_G(?:[^;]*,)?i=(\d+)(?:,[^;]*)?;")
+
+
 def is_query_reply(data: str) -> bool:
     "True when `data` is the reply of `QUERY_SEQUENCE`."
     return bool(_QUERY_REPLY_RE.match(data))
@@ -523,6 +528,14 @@ class ClientGraphics:
         except Exception:
             return ColorDepth.DEPTH_24_BIT
 
+    def is_frame_answer(self, data: str) -> bool:
+        "Whether `data` is the terminal's answer to a window pane's frame. Lillecarl/pymux#643."
+        match = _IMAGE_REPLY_RE.match(data)
+        if match is None:
+            return False
+        outer_id = int(match.group(1))
+        return any(window.outer_id == outer_id for window in self._windows.values())
+
     def handle_reply(self, data: str) -> None:
         "Read what a terminal reply says about the outer terminal."
         if is_query_reply(data):
@@ -714,7 +727,7 @@ class ClientGraphics:
         after = put if whole or known is None or known.put != put else ""
         self._windows[view.pane_id] = _ShownWindow(outer_id, serial, put)
         if rects or after:
-            await send_frame(frame_parts(outer_id, frame, after))
+            await send_frame(self._answered(frame_parts(outer_id, frame, after)))
         view.shown(bool(rects))
 
     def _codec_of(self, view: WindowView) -> Codec | None:
@@ -748,8 +761,14 @@ class ClientGraphics:
         after = put if keyframe or known is None or known.put != put else ""
         self._windows[view.pane_id] = _ShownWindow(outer_id, serial, put, Codec.VP9)
         if data or after:
-            await send_frame(video_parts(outer_id, Codec.VP9, frame, after))
+            await send_frame(self._answered(video_parts(outer_id, Codec.VP9, frame, after)))
         view.shown(bool(data))
+
+    def _answered(self, parts: list[dict]) -> list[dict]:
+        "Ask a client that answers frames to let its terminal answer this one. Lillecarl/pymux#643."
+        if self.frame_room is not None:
+            parts[-1][Field.ANSWER] = True
+        return parts
 
     def _render_kitty(self, views: Iterable[PaneView]) -> None:
         try:

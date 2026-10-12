@@ -240,6 +240,47 @@ async def test_a_client_that_answers_frames_has_one_unanswered_at_most(tmp_path)
             assert len(frames_of(recorder)) == answered + 1
 
 
+async def test_the_terminals_answer_lets_the_next_frame_go(tmp_path):
+    """
+    The last part asks the client to let its terminal answer, and that
+    answer, arriving as terminal input, counts as the frame shown.
+    Lillecarl/pymux#643.
+    """
+    async with with_a_window(tmp_path, animate=True, frames=True, shows=True) as (
+        _pymux,
+        state,
+        _pane,
+        recorder,
+        _log,
+        _probe,
+    ):
+        await once(lambda: frames_of(recorder), 10.0, "no frame came")
+        first = frames_of(recorder)[0]
+        assert first[-1]["answer"]
+        image = first[-1]["image"]
+        for answered in range(1, 3):
+            state.connection._process({"cmd": "in", "data": "\x1b_Gi=%d;OK\x1b\\" % image})
+            await once(
+                lambda answered=answered: len(frames_of(recorder)) > answered,
+                10.0,
+                "no frame after the terminal answered",
+            )
+
+
+async def test_a_terminal_that_never_answers_costs_frames_not_the_window(tmp_path, monkeypatch):
+    "Lillecarl/pymux#643."
+    monkeypatch.setattr("pymux.server.FRAME_ANSWER_SECONDS", 0.3)
+    async with with_a_window(tmp_path, animate=True, frames=True, shows=True) as (
+        _pymux,
+        _state,
+        _pane,
+        recorder,
+        _log,
+        _probe,
+    ):
+        await once(lambda: len(frames_of(recorder)) >= 3, 10.0, "the window stopped at an unanswered frame")
+
+
 async def test_the_codec_switches_while_the_window_shows(tmp_path):
     "The next frame goes the new way, whole, though the window draws nothing new."
     async with with_a_window(tmp_path, frames=True, codecs=("vp9",)) as (
