@@ -57,10 +57,12 @@ def main(log_path: str) -> None:
     size = [64, 32]
     configured = []
     closing = []
+    #: The pane's size arrived, which resizes the canvas pymux draws on.
+    sized = []
 
     def on_toplevel_configure(_toplevel, width, height, _states):
         if width and height:
-            size[:] = [width, height]
+            sized.append((width, height))
             log.write("size %d %d\n" % (width, height))
 
     def on_configure(xdg, serial):
@@ -86,6 +88,18 @@ def main(log_path: str) -> None:
     surface.attach(buffer, 0, 0)
     surface.damage_buffer(0, 0, width, height)
     shown = []
+    surface.frame().dispatcher["done"] = lambda _callback, _time: shown.append(True)
+    surface.commit()
+    # The buffer keeps its first size, and the square comes after the
+    # pane's size did: a canvas that changes size is sent whole, so an
+    # edit before it would never be one.
+    while not (shown and sized):
+        display.dispatch(block=True)
+    # One frame at the new size, taken by the client, before the square:
+    # the resize and the square in one frame would go whole.
+    shown.clear()
+    surface.attach(buffer, 0, 0)
+    surface.damage_buffer(0, 0, 1, 1)
     surface.frame().dispatcher["done"] = lambda _callback, _time: shown.append(True)
     surface.commit()
     while not shown:
