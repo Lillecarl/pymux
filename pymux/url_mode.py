@@ -38,13 +38,17 @@ def labels(count: int, letters: str = LABEL_LETTERS) -> list[str]:
     foot's `generate_key_combos`: a label taken as a prefix makes one
     longer label for each letter, and stops being a label itself.
     """
+    if count == 0:
+        return []
     hints = [""]
     taken = 0
-    while len(hints) - taken < count:
+    # At least once, as foot's do-while: the empty hint is never a label.
+    while True:
         prefix = hints[taken]
         taken += 1
         hints.extend(letter + prefix for letter in letters)
-    return [hint[::-1] for hint in hints[taken : taken + count]]
+        if len(hints) - taken >= count:
+            return [hint[::-1] for hint in hints[taken : taken + count]]
 
 
 class Target(NamedTuple):

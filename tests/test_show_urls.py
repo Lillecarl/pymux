@@ -6,6 +6,7 @@ Lillecarl/pymux#608.
 
 from __future__ import annotations
 
+from prompt_toolkit.application.current import set_app
 from session import once
 from test_a_session_on_a_pyte_screen import COPY_POSITION, attached, pymux, rows_of, said, shows  # noqa: F401
 
@@ -16,6 +17,9 @@ LINKS = "\r\nhttps://a.io/first\r\nhttps://b.io/second\r\n"
 
 def test_the_labels_are_foots():
     "One letter while one is enough, then two, and none starts another."
+    assert labels(0) == []
+    # One link: an empty label drew nothing and took every key.
+    assert labels(1) == ["s"]
     assert labels(3) == ["s", "a", "d"]
     many = labels(20)
     assert many[:13] == list("adfjklewcmpgh")
@@ -24,7 +28,8 @@ def test_the_labels_are_foots():
 
 
 async def labelled(pymux, session, copying=False):
-    (pane,) = pymux.panes_by_id.values()
+    with set_app(pymux.connections[-1].client_state.app):
+        pane = pymux.arrangement.get_active_pane()
     pane.terminal.terminal_control.feed_output(LINKS)
     await shows(session, "b.io/second")
     if copying:
@@ -47,6 +52,23 @@ async def test_a_lower_case_label_opens_its_link(pymux, monkeypatch):
         await once(lambda: opened, 10.0, "nothing was opened")
         assert opened == [("https://a.io/first", True)]
         await shows(session, "https://b.io/second")
+
+
+async def test_the_labels_show_over_a_pane_beside_another(pymux):
+    """
+    The panes draw in a chain of deferred draws, and a float of the
+    whole layout drew before them: the panes painted over every label.
+    One pane alone hid it. Carl's configuration, on his split windows.
+    """
+    async with pymux.running(), attached(pymux) as session:
+        await shows(session, "$")
+        client_state = pymux.connections[-1].client_state
+        with set_app(client_state.app):
+            pymux.handle_command("set-option pane-border-status on")
+            pymux.handle_command("set-option paint-screen on")
+            pymux.handle_command("split-window -h 'sleep 1000'")
+        await shows(session, "1:sleep*")
+        await labelled(pymux, session)
 
 
 async def test_an_upper_case_label_copies_in_copy_mode(pymux, monkeypatch):
