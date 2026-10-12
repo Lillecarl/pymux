@@ -512,6 +512,29 @@ async def test_a_click_from_the_terminal_reaches_the_window(tmp_path):
         assert motion == "motion %d %d" % ((column + 0.5) * width, (row + 0.5) * height)
 
 
+async def test_a_terminal_that_reports_pixels_puts_the_pointer_on_the_pixel(tmp_path):
+    "SGR pixel mouse: the cell, and where in it. Lillecarl/pymux#648."
+    async with with_a_window(tmp_path, cell=(10, 20)) as (pymux, state, pane, recorder, log, _probe):
+        await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
+        # What a client sends after it queried its terminal.
+        state.connection._process({"cmd": "kitty-detect"})
+        await once(lambda: "\x1b[?1016$p" in recorder.out, 10.0, "the terminal was never asked")
+        state.connection._process({"cmd": "in", "data": "\x1b[?1016;2$y"})
+        await once(lambda: "\x1b[?1016h" in recorder.out, 10.0, "pixel mode was never turned on")
+        where = await once(
+            lambda: state.layout_manager.pane_write_positions.get(pane), 10.0, "the pane was never drawn"
+        )
+        # Cell (3, 0) of the pane, 7 and 13 pixels into it: inside the
+        # probe's 64x32 buffer, which is all the window takes events on.
+        x, y = (where.xpos + 3) * 10 + 7, where.ypos * 20 + 13
+        for end in ("M", "m"):
+            state.connection._process({"cmd": "in", "data": "\x1b[<0;%d;%d%s" % (x, y, end)})
+        await once(lambda: "button 272 0" in logged(log), 10.0, lambda: "no click: %s" % logged(log)[-6:])
+        motion = [line for line in logged(log) if line.startswith("motion")][-1]
+        width, height = pymux.cell_size()
+        assert motion == "motion %d %d" % (3.75 * width, 0.675 * height)
+
+
 async def test_the_pane_goes_when_the_window_closes(tmp_path):
     async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")

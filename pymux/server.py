@@ -58,6 +58,13 @@ __all__ = ["ServerConnection"]
 #: three say the terminal understands it.
 _SYNCHRONIZED_REPLY_RE = re.compile(r"^\x1b\[\?2026;(\d+)\$y$")
 
+#: Whether the terminal reports the mouse in pixels (SGR pixel mode,
+#: 1016): asked with DECRQM, answered like 2026. Lillecarl/pymux#648.
+PIXEL_MOUSE_QUERY = "\x1b[?1016$p"
+PIXEL_MOUSE_ON = "\x1b[?1016h"
+PIXEL_MOUSE_OFF = "\x1b[?1016l"
+_PIXEL_MOUSE_REPLY_RE = re.compile(r"^\x1b\[\?1016;(\d+)\$y$")
+
 _OSC_REPLY_RE = re.compile(r"^(?:\x1b\]|\x9d)(\d+);(.*?)(?:\x1b\\|\x9c|\x07)$", re.DOTALL)
 
 #: The start of a terminal's answer to a clipboard query.
@@ -157,6 +164,8 @@ class ServerConnection:
         "_unanswered": Keep.DROPPED,
         # A frame in flight belongs to the connection it went out on.
         "_frames_out": Keep.DROPPED,
+        # The next server asks the terminal again.
+        "pixel_mouse": Keep.DROPPED,
         "_frames_shown": Keep.DROPPED,
         # A recording holds Python objects of this build, so it ends
         # with it. `upgrade.py` writes it out first.
@@ -180,6 +189,10 @@ class ServerConnection:
 
         self.size = Size(rows=20, columns=80)
         self._closed = False
+
+        #: Whether this client's terminal reports the mouse in pixels.
+        #: Lillecarl/pymux#648.
+        self.pixel_mouse = False
 
         #: Window frames sent and not yet answered with `frame-shown`,
         #: for a client that answers; set while there are none.
@@ -320,6 +333,7 @@ class ServerConnection:
             # not now, because the detection has not answered yet.
             # Lillecarl/pymux#182.
             speaks_protocol=self.keyboard_is_supported,
+            pixel_cell=self._pixel_cell,
         )
 
         # The shape of the pointer that this client was told about. A
@@ -577,6 +591,14 @@ class ServerConnection:
         arrive at any time, long after the detection, and it belongs to
         one pane.
         """
+        # The terminal reports the mouse in pixels if asked: from here on
+        # it is asked, with the rest of the mouse. Lillecarl/pymux#648.
+        pixel_mouse = _PIXEL_MOUSE_REPLY_RE.match(data)
+        if pixel_mouse is not None:
+            if pixel_mouse.group(1) in ("1", "2", "4"):
+                self._turn_on_pixel_mouse()
+            return
+
         # The terminal processed a window pane's frame. Lillecarl/pymux#643.
         if self.graphics.frame_room is not None and self.graphics.is_frame_answer(data):
             self._frame_answered()
@@ -780,6 +802,10 @@ class ServerConnection:
         # support. (The replies come back as input on this connection.)
         elif packet[Field.CMD] == Packet.KITTY_DETECT:
             self._kitty_detection_pending = True
+            # The server asks this one itself, so a client of any age
+            # gets a pointer to the pixel. Lillecarl/pymux#648.
+            self._write_output_raw(PIXEL_MOUSE_QUERY)
+            self._flush_output()
 
         # Set size. (The client reports the size.)
         elif packet[Field.CMD] == Packet.SIZE:
@@ -1185,6 +1211,27 @@ class ServerConnection:
                 return
             await self._write(self._encode(part))
 
+    def _pixel_cell(self) -> tuple[int, int] | None:
+        "The cell size mouse reports are divided by, while they come in pixels."
+        if not self.pixel_mouse or not self.graphics.cell_size_known:
+            return None
+        return self.graphics.cell_width, self.graphics.cell_height
+
+    def _turn_on_pixel_mouse(self) -> None:
+        if self.pixel_mouse:
+            return
+        self.pixel_mouse = True
+        logger.info("The terminal of client %s reports the mouse in pixels.", self.client_id or "?")
+        app = self.client_state.app if self.client_state is not None else None
+        if app is not None and app.renderer._mouse_support_enabled:
+            self._write_output_raw(PIXEL_MOUSE_ON)
+            self._flush_output()
+
+    @property
+    def pointer_fraction(self) -> tuple[float, float]:
+        "Where in its cell the client's last mouse report was. Lillecarl/pymux#648."
+        return self._pipeinput.pointer_fraction
+
     def _frame_answered(self) -> None:
         self._frames_out = max(0, self._frames_out - 1)
         if not self._frames_out:
@@ -1245,6 +1292,7 @@ class ServerConnection:
             term=term,
         )
         output.keeps_placeholders = lambda: self.graphics.forwards_placeholders
+        output.pixel_mouse = lambda: self.pixel_mouse
 
         client_state = self.pymux.add_client(
             input=self._pipeinput,
@@ -1496,6 +1544,22 @@ class _FrameOutput(Vt100_Output):
         self._after_frame: list[str] = []
         self._in_frame = False
         self.keeps_placeholders: Callable[[], bool] = lambda: False
+        #: Whether the terminal reports the mouse in pixels when the mouse
+        #: is on. Lillecarl/pymux#648.
+        self.pixel_mouse: Callable[[], bool] = lambda: False
+
+    @override
+    def enable_mouse_support(self) -> None:
+        super().enable_mouse_support()
+        if self.pixel_mouse():
+            self.write_raw(PIXEL_MOUSE_ON)
+
+    @override
+    def disable_mouse_support(self) -> None:
+        super().disable_mouse_support()
+        # Always: a terminal left in pixel mode gives the next program
+        # pixels where it expects cells.
+        self.write_raw(PIXEL_MOUSE_OFF)
 
     def write_after_frame(self, data: str) -> None:
         self._after_frame.append(data)
@@ -1554,6 +1618,7 @@ class _ClientInput:
         send_packet: Callable,
         kitty_reply_callback=None,
         speaks_protocol=None,
+        pixel_cell=None,
     ) -> None:
         self.send_packet = send_packet
         # Keep a reference to the context manager for the whole lifetime of
@@ -1567,16 +1632,23 @@ class _ClientInput:
         # and routes terminal replies (keyboard flags query, device
         # attributes) to the given callback.
         vt100_input = cast(Vt100Input, self._input)
-        vt100_input.vt100_parser = KittyVt100Parser(
+        self._parser = KittyVt100Parser(
             lambda key_press: vt100_input._buffer.append(key_press),
             reply_callback=kitty_reply_callback,
             speaks_protocol=speaks_protocol,
+            pixel_cell=pixel_cell,
         )
+        vt100_input.vt100_parser = self._parser
 
     def send_text(self, data: str) -> None:
         "Feed a text string to the input pipe."
         if self._input is not None:
             self._input.send_text(data)
+
+    @property
+    def pointer_fraction(self) -> tuple[float, float]:
+        "Where in its cell the last mouse report was."
+        return self._parser.pointer_fraction
 
     def close(self) -> None:
         "Close the input pipe. (Idempotent.)"

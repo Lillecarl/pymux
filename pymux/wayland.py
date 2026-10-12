@@ -39,6 +39,7 @@ from typing import TYPE_CHECKING
 
 import anyio
 import anyio.abc
+from prompt_toolkit.application.current import get_app
 from prompt_toolkit.clipboard import ClipboardData
 
 from pymux.enums import Woke
@@ -478,9 +479,20 @@ class WaylandServer:
                 compositor.key(modifier, False, time)
 
     def _pixel_of(self, position) -> tuple[float, float]:
-        "The middle of a cell, in the window's pixels."
+        """
+        Where in the window's pixels the pointer is: the cell, and where in
+        it the terminal said, for one that reports pixels; else the middle.
+        Lillecarl/pymux#648.
+        """
         width, height = self.pymux.cell_size()
-        return (position.x + 0.5) * width, (position.y + 0.5) * height
+        across, down = self._pointer_fraction()
+        return (position.x + across) * width, (position.y + down) * height
+
+    def _pointer_fraction(self) -> tuple[float, float]:
+        "Where in its cell the mouse report being handled was, from the client it came from."
+        client = self.pymux.client_of(get_app())
+        connection = getattr(client, "connection", None)
+        return getattr(connection, "pointer_fraction", (0.5, 0.5))
 
     def pointer(self, toplevel: int, position, button: int | None, pressed: bool, time: int) -> None:
         compositor = self.compositor

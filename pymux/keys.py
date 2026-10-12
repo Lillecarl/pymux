@@ -373,6 +373,35 @@ _CELL_SIZE_REPLY = object()
 # is painted ("CSI ? 2026 $ p").
 _MODE_REPLY = object()
 
+#: An SGR mouse report: button, x, y, and press or release.
+_SGR_MOUSE_RE = re.compile(r"^\x1b\[<(\d+);(\d+);(\d+)([Mm])$")
+
+#: The button bit of a report SGR pixel mode adds: the pointer left the
+#: window. kitty's `mouse.c`, `LEAVE_INDICATOR`.
+_LEAVE_BIT = 1 << 8
+
+
+def pixels_to_cells(report: str, width: int, height: int) -> tuple[str, float, float] | None:
+    """
+    An SGR pixel mouse report (mode 1016) as the cell report the rest of
+    pymux reads, and where in that cell the pointer is, as fractions.
+    None for a report to drop: one that is not SGR, or a leave.
+
+    kitty counts the pixels from 0 where its cells start, so the cell is
+    a plain division. Lillecarl/pymux#648.
+    """
+    match = _SGR_MOUSE_RE.match(report)
+    if match is None:
+        return None
+    button, x, y = int(match.group(1)), int(match.group(2)), int(match.group(3))
+    if button & _LEAVE_BIT:
+        return None
+    column, across = divmod(x, width)
+    row, down = divmod(y, height)
+    cells = "\x1b[<%d;%d;%d%s" % (button, column + 1, row + 1, match.group(4))
+    return cells, (across + 0.5) / width, (down + 0.5) / height
+
+
 # Sentinel for a key that came back up. The outer terminal sends one
 # only when a pane asked for the event types of a key.
 #
@@ -832,8 +861,16 @@ class KittyVt100Parser(Vt100Parser):
         feed_key_callback,
         reply_callback=None,
         speaks_protocol=None,
+        pixel_cell=None,
     ) -> None:
         self.reply_callback = reply_callback
+        # The cell size of a terminal that reports the mouse in pixels
+        # (mode 1016), or None while it reports cells. Asked at each
+        # report, because the mode turns on after the detection.
+        # Lillecarl/pymux#648.
+        self.pixel_cell = pixel_cell
+        #: Where in its cell the last mouse report was, as fractions.
+        self.pointer_fraction = (0.5, 0.5)
         # Whether the terminal counts the modifiers the way the
         # protocol does. Asked when a key arrives and not once at the
         # start, because the detection answers after this is built.
@@ -931,6 +968,14 @@ class KittyVt100Parser(Vt100Parser):
             if self.reply_callback is not None:
                 self.reply_callback(insert_text)
             return
+        if key is Keys.Vt100MouseEvent and self.pixel_cell is not None:
+            cell = self.pixel_cell()
+            if cell is not None:
+                converted = pixels_to_cells(insert_text, *cell)
+                if converted is None:
+                    return
+                insert_text, *fraction = converted
+                self.pointer_fraction = (fraction[0], fraction[1])
         if key is _KEY_RELEASE:
             # A release keeps the sequence that the terminal sent, and
             # takes the name of a release. A pane that asked for the

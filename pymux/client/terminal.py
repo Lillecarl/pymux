@@ -384,6 +384,9 @@ class TerminalClient(Client):
         output.show_cursor()
         output.quit_alternate_screen()
         output.disable_mouse_support()
+        # SGR pixel mouse, which the server may have turned on: the next
+        # program would read pixels as cells. Lillecarl/pymux#648.
+        output.write_raw("\x1b[?1016l")
         output.disable_bracketed_paste()
         output.reset_attributes()
         output.flush()
