@@ -892,30 +892,26 @@ class SshClient(TerminalClient):
         """
         output = Vt100_Output.from_pty(sys.stdout)
         internet = Internet()
+        outcome = None
 
         try:
             async with anyio.create_task_group() as watching:
                 watching.start_soon(watch_internet, internet, WAN_INTERVAL)
-
-                while True:
-                    if not link_may_come_back(lost):
-                        watching.cancel_scope.cancel()
-                        raise lost
-
+                while link_may_come_back(lost):
                     outcome = await self._one_try(output, stdin_fd, waits.next(), lost, internet)
-
-                    if isinstance(outcome, _Left):
-                        watching.cancel_scope.cancel()
-                        return None
-                    if isinstance(outcome, Exception):
-                        lost = outcome
-                        continue
-
-                    watching.cancel_scope.cancel()
-                    return outcome
+                    if not isinstance(outcome, Exception):
+                        break
+                    lost = outcome
+                watching.cancel_scope.cancel()
         finally:
             output.show_cursor()
             output.flush()
+
+        # Raised out here: inside the task group the person reads
+        # "unhandled errors in a TaskGroup" and not the reason.
+        if outcome is None or isinstance(outcome, Exception):
+            raise lost
+        return None if isinstance(outcome, _Left) else outcome
 
     async def _one_try(self, output, stdin_fd: int, wait: float, lost, internet):
         """

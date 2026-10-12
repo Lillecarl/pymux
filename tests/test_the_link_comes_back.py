@@ -636,7 +636,7 @@ async def test_the_screen_says_it_is_trying_while_the_attempt_runs(monkeypatch):
         await it.until(lambda: len(it.pymux.connections) == 1, "the attach")
         await it.until(lambda: ALTERNATE_SCREEN in it.terminal.said, "the first frame")
 
-        async def hangs():
+        async def hangs(*_arguments):
             await anyio.sleep(30)
 
         it.client._connect = hangs
@@ -646,6 +646,24 @@ async def test_the_screen_says_it_is_trying_while_the_attempt_runs(monkeypatch):
 
         it.terminal.type("q")
         await it.wait_for_attach(10)
+
+
+async def test_a_failure_that_does_not_come_back_is_told_as_itself(monkeypatch, capsys):
+    "Not as the task group it ended. Lillecarl/pymux#646."
+    import asyncssh
+
+    async with attached(monkeypatch) as it:
+        await it.until(lambda: len(it.pymux.connections) == 1, "the attach")
+        await it.until(lambda: ALTERNATE_SCREEN in it.terminal.said, "the first frame")
+
+        async def refused(*_arguments):
+            raise asyncssh.PermissionDenied("Permission denied")
+
+        it.client._connect = refused
+        it.drop_the_link()
+        it.terminal.type("\r")
+        await it.wait_for_attach(10)
+    assert "cannot reach the server on 127.0.0.1: Permission denied" in capsys.readouterr().err
 
 
 async def test_a_server_that_restarts_is_reached_again(monkeypatch):
