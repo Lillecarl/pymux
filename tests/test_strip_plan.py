@@ -348,6 +348,20 @@ def test_column_owns_border_view_has_to_show():
     assert looking_at(window, panes[1], offset=0, columns=79) == 1
 
 
+def test_a_column_that_sticks_out_keeps_its_neighbour_on_screen():
+    """
+    Carl's strip: half-width columns and one more to the right, on a
+    screen a cell short of two of them. Moving onto the second column
+    moves the view by what sticks out, and the first stays in view. It
+    snapped the second to the left edge and threw the first away.
+    Lillecarl/pymux#614.
+    """
+    window, panes = create_strip((1, 1, 1))
+
+    # The second column and its border end at 80.
+    assert looking_at(window, panes[1], offset=0, columns=79) == 1
+
+
 def test_view_never_passes_end_of_row():
     window, panes = create_strip((1, 1))
 

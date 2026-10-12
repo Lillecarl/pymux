@@ -380,9 +380,18 @@ class View:
 
 
 def _towards(at: int, size: int, start: int, end: int) -> int:
-    "Where one edge of a view goes, to show that band of the plane."
-    if start < at or end > at + size:
+    """
+    Where one edge of a view goes, to show that band of the plane.
+
+    As little as it takes: a band past the far edge lines its end up
+    with the view's, so what the view showed beside it stays. Snapping
+    its start to the near edge threw away a whole neighbour to bring in
+    one cell of border. Lillecarl/pymux#614.
+    """
+    if start < at or end - start > size:
         return start
+    if end > at + size:
+        return end - size
     return at
 
 

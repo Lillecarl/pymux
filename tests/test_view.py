@@ -70,9 +70,16 @@ def test_rectangle_already_in_view_moves_nothing():
     assert view.moved_onto(Rect(x=12, y=1, width=4, height=2), PLANE) == Point(x=10, y=0)
 
 
-def test_rectangle_off_right_brings_its_left_edge_in():
+def test_rectangle_off_right_brings_its_right_edge_in():
+    """
+    Only as far as it has to, so the column beside it stays. Carl's
+    strip of two half-width columns sticks out by one cell, and moving
+    onto the second one threw the first off the screen.
+    Lillecarl/pymux#614.
+    """
     view = create_view(x=0)
-    assert view.moved_onto(Rect(x=25, y=0, width=8, height=5), PLANE) == Point(x=25, y=0)
+    assert view.moved_onto(Rect(x=25, y=0, width=8, height=5), PLANE) == Point(x=13, y=0)
+    assert view.moved_onto(Rect(x=10, y=0, width=11, height=5), PLANE) == Point(x=1, y=0)
 
 
 def test_rectangle_off_left_brings_its_left_edge_in():
