@@ -35,7 +35,7 @@ import base64
 import random
 import re
 import zlib
-from collections.abc import Callable, Coroutine, Iterable
+from collections.abc import Awaitable, Callable, Coroutine, Iterable
 from typing import Any, NamedTuple
 
 import anyio
@@ -191,8 +191,8 @@ class WindowView(NamedTuple):
     """
     A pane that shows a Wayland window, as one client sees it.
 
-    `update(outer_id, since)` brings the terminal up to date: it answers
-    `(serial, commands, whole)`, as `pysmithay.Compositor.kitty_update`
+    `await update(outer_id, since)` brings the terminal up to date: it
+    answers `(serial, commands, whole)`, as `pysmithay.Compositor.kitty_update`
     does, so the pixels and the damage never pass through here.
     `shown()` says this client took the frame, which lets the window
     draw its next one.
@@ -203,7 +203,7 @@ class WindowView(NamedTuple):
     y: int
     width: int
     height: int
-    update: Callable[[int, int | None], tuple[int, str | None, bool]]
+    update: Callable[[int, int | None], Awaitable[tuple[int, str | None, bool]]]
     shown: Callable[[], None]
 
 
@@ -358,6 +358,12 @@ class ClientGraphics:
 
         #: Pane id -> what this client holds of that window pane.
         self._windows: dict[int, _ShownWindow] = {}
+        #: Pane id -> where each window pane shows now: its put command.
+        self._window_places: dict[int, str] = {}
+        #: The window panes whose update is being encoded.
+        self._window_pending: set[int] = set()
+        #: Moves on `reset`, so an update encoded before it is dropped.
+        self._window_generation = 0
 
     # ------------------------------------------------------------------
     # Detection.
@@ -474,37 +480,61 @@ class ClientGraphics:
 
         Only a kitty terminal shows them: the edits are frames of a kitty
         image. A window that has not drawn yet sends nothing.
+
+        **The frame is encoded off this thread**, and written when it is
+        ready, by `_update_window`. One update per window is out at a
+        time; a frame drawn meanwhile goes with the next one, as damage
+        the two share. A window that moved is put again at once, without
+        waiting for its pixels. Lillecarl/pymux#631.
         """
-        if not self.kitty_supported:
+        if not self.kitty_supported or self._spawn is None:
             return
         commands: list[str] = []
-        seen: set[int] = set()
-        shown: list[WindowView] = []
+        places: dict[int, str] = {}
         for view in views:
             outer_id = self._image_ids.id_of(view.pane_id, WINDOW_IMAGE)
-            known = self._windows.get(view.pane_id)
-            serial, update, whole = view.update(outer_id, known.serial if known is not None else None)
-            if update is None:
-                continue
-            seen.add(view.pane_id)
             put = _put_command(outer_id, 1, view.x, view.y, view.width, view.height, 0, None)
-            if update:
-                commands.append(update)
-            if whole or known is None or known.put != put:
+            places[view.pane_id] = put
+            known = self._windows.get(view.pane_id)
+            if known is not None and known.put != put:
                 commands.append(put)
-            self._windows[view.pane_id] = _ShownWindow(outer_id, serial, put)
-            if update:
-                shown.append(view)
-        gone = set(self._windows) - seen
+                self._windows[view.pane_id] = known._replace(put=put)
+            if view.pane_id not in self._window_pending:
+                self._window_pending.add(view.pane_id)
+                since = known.serial if known is not None else None
+                self._spawn(self._update_window(view, outer_id, since, self._window_generation))
+        self._window_places = places
+        gone = set(self._windows) - set(places)
         for pane_id in gone:
             self._delete_image(self._windows.pop(pane_id).outer_id)
         if commands:
             self._write_raw(SAVE_CURSOR + "".join(commands) + RESTORE_CURSOR)
         if commands or gone:
             self._flush()
+
+    async def _update_window(self, view: WindowView, outer_id: int, since: int | None, generation: int) -> None:
+        "Await one window's update, and write it if the window still shows here."
+        try:
+            serial, update, whole = await view.update(outer_id, since)
+        except Exception:
+            logger.exception("Encoding a window pane's frame failed.")
+            return
+        finally:
+            self._window_pending.discard(view.pane_id)
+        put = self._window_places.get(view.pane_id)
+        if update is None or put is None or generation != self._window_generation:
+            return
+        known = self._windows.get(view.pane_id)
+        commands = [update] if update else []
+        if whole or known is None or known.put != put:
+            commands.append(put)
+        self._windows[view.pane_id] = _ShownWindow(outer_id, serial, put)
+        if commands:
+            self._write_raw(SAVE_CURSOR + "".join(commands) + RESTORE_CURSOR)
+            self._flush()
         # After the flush, so a wait for the terminal to take the frame
         # counts the frame.
-        for view in shown:
+        if update:
             view.shown()
 
     def _render_kitty(self, views: Iterable[PaneView]) -> None:
@@ -1104,6 +1134,8 @@ class ClientGraphics:
         """
         self._cell_pending = set()
         self._image_pending = {}
+        self._window_places = {}
+        self._window_generation += 1
         if self._windows:
             for window in self._windows.values():
                 self._delete_image(window.outer_id)

@@ -453,13 +453,14 @@ class WaylandServer:
         """
         toplevel = widget.toplevel
 
-        def update(outer_id: int, since: int | None) -> tuple[int, str | None, bool]:
+        async def update(outer_id: int, since: int | None) -> tuple[int, str | None, bool]:
             if self.compositor is None:
                 return 0, None, False
             try:
-                return self.compositor.kitty_update(toplevel, outer_id, since)
+                encoded = self.compositor.kitty_update(toplevel, outer_id, since)
             except KeyError:
                 return 0, None, False
+            return await encoded
 
         def shown() -> None:
             pacer = self._pacers.get(toplevel)
