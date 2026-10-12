@@ -313,13 +313,20 @@ async def test_the_codec_switches_while_the_window_shows(tmp_path):
             answer = pymux.handle_command("set-window-option window-codec %s" % value)
             if answer is not None:
                 await answer
-            await once(
-                lambda: len(frames_of(recorder)) > before,
+            # A frame sent before the switch may still arrive after it.
+            switched = await once(
+                lambda codec=codec: next(
+                    (
+                        index
+                        for index, frame in enumerate(frames_of(recorder)[before:], before)
+                        if frame[0].get("codec") == codec and frame[0]["whole"]
+                    ),
+                    None,
+                ),
                 10.0,
-                lambda value=value: "no frame after switching to %s" % value,
+                lambda value=value: "no whole frame after switching to %s" % value,
             )
-            first = frames_of(recorder)[before][0]
-            assert (first.get("codec"), first["whole"]) == (codec, True)
+            assert all(frame[0].get("codec") == codec for frame in frames_of(recorder)[switched:])
 
 
 async def test_a_client_without_kitty_is_sent_no_pixels(tmp_path):
