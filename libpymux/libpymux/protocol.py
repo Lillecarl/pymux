@@ -95,9 +95,11 @@ class Packet(StrEnum):
     STREAM_IN = "stream-in"
     # "This connection carries sound for `client-id`." It is a connection
     # of its own, so over SSH a channel of its own, and sound never waits
-    # behind a window pane's frame. The server answers with the same
-    # name when the link opens and when the client's options change:
-    # its `audio` under `data`, and `rtt-multiplier`. Lillecarl/pymux#657.
+    # behind a window pane's frame. The server says the same name first,
+    # on the attached connection: "this server has sound". On the audio
+    # connection it answers with it when the link opens and when the
+    # client's options change: its `audio` under `data`, and
+    # `rtt-multiplier`. Lillecarl/pymux#657.
     AUDIO = "audio"
     # "Send this back", with `time`: how the client measures the round
     # trip that sizes its buffers. Lillecarl/pymux#657.

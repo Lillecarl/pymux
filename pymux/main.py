@@ -59,6 +59,7 @@ from pyte.osc import Osc
 from . import hacks_and_lies, introspect, kernels, log
 from .agentic import CallerContext
 from .arrangement import Arrangement, Pane, Window
+from .audio import AudioServer
 from .browsers import Browsers
 from .client.memory import MemoryClient
 from .colors import DefaultColors, theme_color_base
@@ -116,7 +117,6 @@ from .server import ServerConnection
 from .session import DEFAULT_SIZE, Session
 from .style import DEFAULT_THEME, theme
 from .utils import get_default_shell, keys_are_vi
-from .audio import AudioServer
 from .wayland import WaylandServer
 from .window_pane import WindowWidget, is_window_pane
 

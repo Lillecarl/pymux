@@ -103,6 +103,9 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
     written = snapshot.Snapshot(path)
     paused = False
     try:
+        # Sound stops too: the PipeWire is this server's child, and
+        # `_leave` would orphan it. Lillecarl/pymux#657.
+        pymux.audio.pause()
         try:
             written.write(pymux)
             for connection in list(pymux.connections):
@@ -126,6 +129,7 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
         path.unlink(missing_ok=True)
         if paused:
             _resume(pymux)
+        pymux.audio.resume()
         raise
     await _answer_the_caller(pymux)
     _leave()

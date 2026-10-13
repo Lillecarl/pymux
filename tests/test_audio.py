@@ -11,6 +11,7 @@ callback does.
 
 from __future__ import annotations
 
+import itertools
 import math
 import os
 import shutil
@@ -23,11 +24,14 @@ from contextlib import asynccontextmanager
 
 import anyio
 import pytest
-from session import once
+from prompt_toolkit.data_structures import Size
+from session import once, over_connection
 
 if not (shutil.which("pipewire") and shutil.which("wireplumber") and shutil.which("pw-play")):
     pytest.skip("PipeWire is not on the PATH", allow_module_level=True)
 pytest.importorskip("opuslib")
+
+from libpymux.protocol import Field, Packet
 
 from pymux.audio import programs
 from pymux.client.audio import AudioClient, PipeWireDevices, SocketLink
@@ -61,7 +65,7 @@ def frequency(pcm: bytes, channels: int) -> float:
         if max(map(abs, every[at : at + FRAME]), default=0) >= 100
         for sample in every[at : at + FRAME]
     ]
-    rising = sum(1 for a, b in zip(samples, samples[1:], strict=False) if a < 0 <= b)
+    rising = sum(1 for a, b in itertools.pairwise(samples) if a < 0 <= b)
     return rising * RATE / len(samples) if samples else 0.0
 
 
@@ -201,7 +205,9 @@ async def test_a_pane_plays_on_the_client(tmp_path):
         write_wav(song, tone(440, 3.0, 2), 2)
         async with running(["pw-play", str(song)], pane_environment(pymux)):
             await once(
-                lambda: len(devices.played) >= 2.5 * STEREO_SECOND, 15.0, lambda: "played %d bytes" % len(devices.played)
+                lambda: len(devices.played) >= 2.5 * STEREO_SECOND,
+                15.0,
+                lambda: "played %d bytes" % len(devices.played),
             )
 
     assert devices.speaker_channels == 2
@@ -225,8 +231,10 @@ async def test_the_microphone_opens_only_while_a_program_records(tmp_path):
             await once(
                 lambda: devices.microphone_open,
                 10.0,
-                lambda: "the microphone never opened: recording=%s, links=%s, udp:\n%s"
-                % (pymux.audio.recording, list(pymux.audio.links), open("/proc/net/udp").read()),
+                lambda: (
+                    "the microphone never opened: recording=%s, links=%s, udp:\n%s"
+                    % (pymux.audio.recording, list(pymux.audio.links), open("/proc/net/udp").read())
+                ),
             )
             await anyio.sleep(2.0)
             link = next(iter(pymux.audio.links.values()))
@@ -303,7 +311,9 @@ async def test_a_linux_client_plays_and_records_through_its_own_pipewire(tmp_pat
         song = tmp_path / "a440.wav"
         write_wav(song, tone(440, 4.0, 2), 2)
         async with running(["pw-play", str(song)], pane_environment(remote)):
-            await once(lambda: len(ears.played) >= 2.5 * STEREO_SECOND, 20.0, lambda: "heard %d bytes" % len(ears.played))
+            await once(
+                lambda: len(ears.played) >= 2.5 * STEREO_SECOND, 20.0, lambda: "heard %d bytes" % len(ears.played)
+            )
         if os.environ.get("PYMUX_AUDIO_OUT"):
             write_wav(os.path.join(os.environ["PYMUX_AUDIO_OUT"], "chain-played.wav"), bytes(ears.played), 2)
         middle = bytes(ears.played[STEREO_SECOND : 2 * STEREO_SECOND])
@@ -325,3 +335,18 @@ async def test_a_linux_client_plays_and_records_through_its_own_pipewire(tmp_pat
     last = pcm[-RATE * 2 :]
     assert abs(frequency(last, 1) - 880) < 5
     assert silent_frames(last) <= 3, "%d of %d frames silent" % (silent_frames(last), len(last) // (FRAME * 2))
+
+
+async def test_an_attached_client_is_told_the_server_has_sound(tmp_path):
+    "Only then does a client open its audio connection: never to a server with nothing to play."
+    heard: list[dict] = []
+    pymux = Pymux()
+    pymux.audio_server = AudioServerMode.PRIVATE
+    pymux.socket_name = str(tmp_path / "pymux.sock")
+    async with over_connection(pymux=pymux, read_packet=heard.append) as session:
+        await session.attach("one", Size(rows=24, columns=80))
+        await once(
+            lambda: any(packet.get(Field.CMD) == Packet.AUDIO for packet in heard),
+            20.0,
+            lambda: "no offer; sound %s" % ("on" if pymux.audio.running.is_set() else "off",),
+        )

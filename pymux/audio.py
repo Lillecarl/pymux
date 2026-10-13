@@ -30,6 +30,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import math
 import os
 import shutil
 import socket
@@ -51,6 +52,8 @@ from pymux.enums import AudioServerMode, ClientAudio
 from pymux.jitter import FRAME_MS, JitterBuffer
 
 if TYPE_CHECKING:
+    from opuslib import Encoder
+
     from pymux.main import Pymux
     from pymux.server import ServerConnection
 
@@ -77,6 +80,14 @@ SOURCE_LATENCY_MS = 2 * FRAME_MS
 #: The `sound` packets a slow link may hold before the oldest go.
 #: Sound that comes too late is worth less than the next sound.
 SEND_QUEUE = 25
+
+#: What a person reads when a program on the server starts or stops
+#: hearing their microphone.
+MICROPHONE_ON = "Microphone on: a program on the server records. (set-client-option audio playback keeps it off)"
+MICROPHONE_OFF = "Microphone off."
+
+#: How long a server waits to start PipeWire again after it ended.
+RETRY_SECONDS = 5.0
 
 #: How often the server looks whether a program records, in seconds.
 WATCH_EVERY = 0.25
@@ -250,7 +261,10 @@ def host_config(rtp: list[dict[str, Any]]) -> dict[str, Any]:
     "A process that only holds the RTP modules, in a PipeWire somebody else runs."
     return {
         "context.properties": {"core.daemon": False, "core.name": "pymux-audio", "support.dbus": False},
-        "context.spa-libs": {"audio.convert.*": "audioconvert/libspa-audioconvert", "support.*": "support/libspa-support"},
+        "context.spa-libs": {
+            "audio.convert.*": "audioconvert/libspa-audioconvert",
+            "support.*": "support/libspa-support",
+        },
         "context.modules": [
             {"name": "libpipewire-module-protocol-native"},
             {"name": "libpipewire-module-client-node"},
@@ -351,7 +365,7 @@ class AudioLink:
             buffer = packet.get(Field.BUFFER)
             if isinstance(buffer, (int, float)) and buffer > 0:
                 self.microphone.retarget(buffer)
-        elif kind == Packet.SOUND and self._decoder is not None:
+        elif kind == Packet.SOUND and opuslib is not None and self._decoder is not None:
             data = packet.get(Field.DATA)
             if isinstance(data, bytes):
                 try:
@@ -359,13 +373,15 @@ class AudioLink:
                 except opuslib.OpusError:
                     logger.warning("A microphone frame from client %s did not decode.", self.client_id or "?")
 
-    def open_microphone(self, wanted: bool) -> None:
+    def open_microphone(self, wanted: bool) -> bool:
+        "Open or close the client's microphone. Whether that changed it."
         if wanted == self.microphone_open:
-            return
+            return False
         self.microphone_open = wanted
         if not wanted:
             self.microphone.clear()
         self.send({Field.CMD: Packet.MICROPHONE, Field.DATA: wanted})
+        return True
 
 
 class AudioServer:
@@ -383,11 +399,13 @@ class AudioServer:
         self.runtime: str | None = None
         #: Whether a program records from the microphone. `_watch` keeps it.
         self.recording = False
-        self._encoder = None
         self._changed = anyio.Event()
         self._scope: anyio.CancelScope | None = None
         #: Set once PipeWire listens, for whoever waits on it. A test does.
         self.running = anyio.Event()
+        #: While an upgrade hands over, nothing starts.
+        self.paused = False
+        self._processes: list[anyio.abc.Process] = []
 
     # ------------------------------------------------------------------
     # What panes and clients see.
@@ -400,6 +418,16 @@ class AudioServer:
         elif self.mode == AudioServerMode.SHARED:
             environment["PULSE_SINK"] = self.speaker_node
             environment["PULSE_SOURCE"] = self.microphone_node
+
+    def offer(self, connection: ServerConnection) -> None:
+        """
+        Tell an attached client that this server has sound, while it
+        does. Only then does it open the audio connection: a client
+        never holds one to a server with nothing to play.
+        """
+        client_state = connection.client_state
+        if self.running.is_set() and client_state is not None and not client_state.temporary:
+            connection._send_packet({Field.CMD: Packet.AUDIO})
 
     def link_opened(self, link: AudioLink) -> None:
         old = self.links.get(link.client_id)
@@ -460,7 +488,12 @@ class AudioServer:
         current = self.current()
         for link in self.links.values():
             lends = self._audio_of(link) == ClientAudio.ON
-            link.open_microphone(self.recording and lends and link is current)
+            wanted = self.recording and lends and link is current
+            client_state = self._client_of(link)
+            if link.open_microphone(wanted) and client_state is not None:
+                # A microphone is never opened unannounced.
+                client_state.message = MICROPHONE_ON if wanted else MICROPHONE_OFF
+                self.pymux.invalidate()
 
     # ------------------------------------------------------------------
     # Running.
@@ -471,23 +504,46 @@ class AudioServer:
         if self._scope is not None:
             self._scope.cancel()
 
+    def pause(self) -> None:
+        """
+        Stop PipeWire now, for `upgrade-server`. The old server leaves
+        with `os._exit`, which would orphan both programs, and the new
+        one starts its own in the same directory.
+        """
+        self.paused = True
+        for process in list(self._processes):
+            with contextlib.suppress(ProcessLookupError):
+                process.terminate()
+        self.option_changed()
+
+    def resume(self) -> None:
+        "An upgrade that failed: sound again."
+        self.paused = False
+        self._changed.set()
+
     async def keep(self) -> None:
         "Run PipeWire whenever the option allows. Never returns."
         while True:
             have = programs()
             self.mode = resolve(self.pymux.audio_server, have)
-            if self.mode != AudioServerMode.OFF:
+            failed = False
+            if self.mode != AudioServerMode.OFF and not self.paused:
                 with anyio.CancelScope() as self._scope:
                     try:
                         await self._serve(have)
                     except Exception:
                         logger.exception("Sound stopped.")
+                        failed = True
                 self._scope = None
                 self.mode = AudioServerMode.OFF
-            await self._changed.wait()
+            # A PipeWire that crashed comes back on its own.
+            with anyio.move_on_after(RETRY_SECONDS if failed and not self.paused else math.inf):
+                await self._changed.wait()
             self._changed = anyio.Event()
 
     async def _serve(self, have: dict[str, str]) -> None:
+        if opuslib is None:
+            return
         speaker = await anyio.create_udp_socket(local_host="127.0.0.1", local_port=0)
         microphone = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         microphone.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -505,8 +561,8 @@ class AudioServer:
 
         runtime = runtime_dir_of(self.pymux.socket_name) if self.mode == AudioServerMode.PRIVATE else None
         work = tempfile.mkdtemp(prefix="pymux-audio-conf-")
-        self._encoder = opuslib.Encoder(RATE, SPEAKER_CHANNELS, opuslib.APPLICATION_AUDIO)
-        self._encoder.bitrate = SPEAKER_BITRATE
+        encoder = opuslib.Encoder(RATE, SPEAKER_CHANNELS, opuslib.APPLICATION_AUDIO)
+        encoder.bitrate = SPEAKER_BITRATE
         try:
             async with speaker, sender, anyio.create_task_group() as tasks:
                 if runtime is not None:
@@ -515,11 +571,13 @@ class AudioServer:
                     self.runtime = runtime
                 else:
                     await self._start_host(tasks, have, work, rtp)
-                tasks.start_soon(self._speak, speaker)
+                tasks.start_soon(self._speak, speaker, encoder)
                 tasks.start_soon(self._listen, sender, microphone_port)
                 tasks.start_soon(self._watch, microphone_port)
                 logger.info("Sound on (%s PipeWire): %s and %s.", self.mode, self.speaker_node, self.microphone_node)
                 self.running.set()
+                for connection in list(self.pymux.connections):
+                    self.offer(connection)
         finally:
             self.running = anyio.Event()
             self.runtime = None
@@ -549,7 +607,13 @@ class AudioServer:
             "PIPEWIRE_REMOTE": os.path.join(runtime, "pipewire-0"),
             "DBUS_SESSION_BUS_ADDRESS": "disabled:",
         }
-        for leftover in ("pipewire-0", "pipewire-0.lock", "pipewire-0-manager", "pipewire-0-manager.lock", "pulse-native"):
+        for leftover in (
+            "pipewire-0",
+            "pipewire-0.lock",
+            "pipewire-0-manager",
+            "pipewire-0-manager.lock",
+            "pulse-native",
+        ):
             with contextlib.suppress(FileNotFoundError):
                 os.unlink(os.path.join(runtime, leftover))
         tasks.start_soon(self._run, [have["pipewire"], "-c", conf], environment, "pipewire")
@@ -567,9 +631,11 @@ class AudioServer:
     async def _run(self, argv: list[str], environment: dict[str, str], name: str) -> None:
         "Run one program for as long as sound is on. One that ends ends sound."
         process = await anyio.open_process(argv, env=environment, stdin=DEVNULL, stdout=DEVNULL, stderr=None)
+        self._processes.append(process)
         try:
             code = await process.wait()
         finally:
+            self._processes.remove(process)
             if process.returncode is None:
                 process.terminate()
                 with anyio.move_on_after(2, shield=True):
@@ -578,7 +644,7 @@ class AudioServer:
                     process.kill()
         raise RuntimeError("%s ended with %s" % (name, code))
 
-    async def _speak(self, speaker: anyio.abc.UDPSocket) -> None:
+    async def _speak(self, speaker: anyio.abc.UDPSocket, encoder: Encoder) -> None:
         "What panes play, from PipeWire's RTP to the current client as Opus."
         held = bytearray()
         whole = FRAME * SPEAKER_CHANNELS * 2
@@ -595,7 +661,7 @@ class AudioServer:
                 link.send(
                     {
                         Field.CMD: Packet.SOUND,
-                        Field.DATA: self._encoder.encode(pcm, FRAME),
+                        Field.DATA: encoder.encode(pcm, FRAME),
                         Field.CHANNELS: SPEAKER_CHANNELS,
                     }
                 )

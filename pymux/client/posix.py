@@ -7,12 +7,13 @@ import signal
 import socket
 import sys
 import time
+from concurrent.futures import Future
+from contextlib import AbstractContextManager
 from select import select
 from typing import override
 
 import anyio
-from anyio.from_thread import start_blocking_portal
-
+from anyio.from_thread import BlockingPortal, start_blocking_portal
 from libpymux.protocol import READ_SIZE, Field, Framer, Packet
 from libpymux.sockets import servers_newest_first
 from libpymux.wire import PacketReader
@@ -48,6 +49,10 @@ class PosixClient(TerminalClient):
     `pymux.client.memory` for the other route, where they are one.
     """
 
+    #: The thread that carries sound, while it does. Lillecarl/pymux#657.
+    _audio_portal: AbstractContextManager[BlockingPortal] | None = None
+    _audio_task: Future[None] | None = None
+
     def __init__(self, socket_name):
         super().__init__()
         self.socket_name = socket_name
@@ -62,8 +67,6 @@ class PosixClient(TerminalClient):
         #: Lillecarl/pymux#657.
         devices = sound_devices()
         self.audio = AudioClient(self.client_id, devices) if devices is not None else None
-        self._audio_portal = None
-        self._audio_task = None
 
     @override
     def run_command(self, command, pane_id=None, timeout=None) -> int:
@@ -137,7 +140,6 @@ class PosixClient(TerminalClient):
         Attach client user interface.
         """
         self._start_gui(detach_other_clients, color_depth)
-        self._start_audio()
 
         with raw_mode(sys.stdin.fileno()):
             reader = PacketReader()
@@ -176,7 +178,6 @@ class PosixClient(TerminalClient):
                                 reader = PacketReader()
                                 self._start_gui(detach_other_clients, color_depth)
                                 self._stop_audio()
-                                self._start_audio()
                                 continue
                             return
                         for packet in reader.feed(data):
@@ -199,9 +200,16 @@ class PosixClient(TerminalClient):
                 self.stop_browsers()
                 self._leave_the_terminal()
 
+    @override
+    def _sound_offered(self) -> None:
+        self._start_audio()
+
     def _start_audio(self) -> None:
-        if self.audio is None or self._audio_portal is not None:
+        if self.audio is None:
             return
+        if self._audio_task is not None and not self._audio_task.done():
+            return
+        self._stop_audio()
         self._audio_portal = start_blocking_portal()
         portal = self._audio_portal.__enter__()
         self._audio_task = portal.start_task_soon(self._carry_audio)
@@ -212,8 +220,6 @@ class PosixClient(TerminalClient):
         if self._audio_task is not None:
             self._audio_task.cancel()
         self._audio_portal.__exit__(None, None, None)
-        self._audio_portal = None
-        self._audio_task = None
 
     async def _carry_audio(self) -> None:
         "Sound until the attachment ends. A failure ends the sound, never the attachment."

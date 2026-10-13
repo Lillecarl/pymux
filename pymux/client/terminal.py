@@ -21,7 +21,7 @@ import signal
 import socket
 import sys
 import webbrowser
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import anyio
 from libpymux.protocol import Field, Mode, Packet
@@ -39,6 +39,9 @@ from pymux.utils import nonblocking
 
 from . import browser
 from .base import Client
+
+if TYPE_CHECKING:
+    from .audio import AudioClient
 
 __all__ = [
     "TerminalClient",
@@ -154,6 +157,10 @@ class TerminalClient(Client):
     #: The formats this client reads, best first. Compression pays only
     #: on a link that crosses a network, so only `SshClient` asks for it.
     wire_formats: tuple[str, ...] = (MSGPACK,)
+
+    #: The sound of the server, where this machine can play it. A
+    #: subclass that carries it sets it. Lillecarl/pymux#657.
+    audio: AudioClient | None = None
 
     #: Every real client answers the server's ping. The server drops a
     #: client that stops answering, and only one that said it answers,
@@ -526,6 +533,10 @@ class TerminalClient(Client):
         elif packet[Field.CMD] == Packet.RESTARTING:
             self.restart_wait = float(packet[Field.WAIT])
 
+        elif packet[Field.CMD] == Packet.AUDIO:
+            # The server has sound. Lillecarl/pymux#657.
+            self._sound_offered()
+
         elif packet[Field.CMD] == Packet.PING:
             # The server is asking whether anybody is still here. An
             # answer costs one packet and keeps this client's place;
@@ -613,6 +624,9 @@ class TerminalClient(Client):
             return  # Never enabled anything.
         os.write(sys.stdout.fileno(), b"\x1b[<1u")
         self._kitty_flags = None
+
+    def _sound_offered(self) -> None:
+        "Open the audio connection. A client that carries sound says how."
 
     def _start_browser(self, packet: dict) -> None:
         """

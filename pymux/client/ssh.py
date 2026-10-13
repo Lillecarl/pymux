@@ -604,9 +604,17 @@ class SshClient(TerminalClient):
                 # both silent. Lillecarl/pymux#442.
                 self._report_forwards(self._forwards_moved)
                 self._forwards_moved = ""
-                tasks.start_soon(self._carry_audio, connection)
+                carrying = False
 
                 async for packet in self._packets(reader):
+                    if packet[Field.CMD] == Packet.AUDIO:
+                        # The server has sound: a channel of its own for
+                        # it, once per attachment.
+                        if not carrying:
+                            carrying = True
+                            tasks.start_soon(self._carry_audio, connection)
+                        continue
+
                     if packet[Field.CMD] == Packet.FORWARD:
                         # Opening one is a coroutine and `_process` is
                         # not, so it goes to the scope that owns this

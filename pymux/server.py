@@ -927,8 +927,10 @@ class ServerConnection:
             if self.client_state is not None:
                 self.pymux.take_environment_from(self.client_state)
 
-            # This client's audio connection can have come first, and
-            # heard nothing of its options then. Lillecarl/pymux#657.
+            # Sound, when this server has it. A link that is already
+            # open heard nothing of this client's options before now.
+            # Lillecarl/pymux#657.
+            self.pymux.audio.offer(self)
             self.pymux.audio.client_options_changed()
 
             if self.answers_ping:

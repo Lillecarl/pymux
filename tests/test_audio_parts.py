@@ -12,7 +12,7 @@ import json
 import pytest
 
 from pymux import audio
-from pymux.audio import AudioServer, daemon_config, resolve, rtp_sink, rtp_source
+from pymux.audio import MICROPHONE_OFF, MICROPHONE_ON, AudioServer, daemon_config, resolve, rtp_sink, rtp_source
 from pymux.client.audio import CEILING_MS, FLOOR_MS, RoundTrip
 from pymux.enums import AudioServerMode, ClientAudio
 from pymux.jitter import FRAME_MS, SLACK, JitterBuffer
@@ -153,6 +153,7 @@ class _Client:
         self.last_used = last_used
         self.audio = mode
         self.audio_rtt_multiplier = 2.0
+        self.message = ""
 
 
 class _Link:
@@ -164,8 +165,10 @@ class _Link:
     def send(self, packet) -> None:
         self.sent.append(packet)
 
-    def open_microphone(self, wanted: bool) -> None:
+    def open_microphone(self, wanted: bool) -> bool:
+        changed = wanted != self.microphone_open
         self.microphone_open = wanted
+        return changed
 
 
 @pytest.fixture
@@ -200,6 +203,17 @@ def test_the_microphone_opens_only_for_a_client_that_lends_it(routed):
     clients[1].audio = ClientAudio.PLAYBACK
     server._steer_microphone()
     assert not links["b"].microphone_open
+
+
+def test_the_person_is_told_when_their_microphone_opens(routed):
+    server, clients, links = routed
+    server.recording = True
+    server._steer_microphone()
+    assert clients[1].message == MICROPHONE_ON
+    assert clients[0].message == ""
+    server.recording = False
+    server._steer_microphone()
+    assert clients[1].message == MICROPHONE_OFF
 
 
 def test_a_client_hears_its_options(routed):
