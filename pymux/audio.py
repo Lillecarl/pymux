@@ -49,7 +49,7 @@ import anyio.to_thread
 from libpymux.protocol import Field, Packet
 
 from pymux.enums import AudioServerMode, ClientAudio
-from pymux.jitter import FRAME_MS, JitterBuffer
+from pymux.jitter import ECHO_EVERY, FIRST_ECHO_EVERY, FIRST_ECHOES, FRAME_MS, JitterBuffer, RoundTrip
 
 if TYPE_CHECKING:
     from opuslib import Encoder
@@ -127,9 +127,15 @@ def carried() -> bool:
     return resources.files("pymux").joinpath(PROGRAMS_FILE).is_file()
 
 
-def resolve(mode: AudioServerMode, have: dict[str, str]) -> AudioServerMode:
-    "What `mode` comes to here: never auto, and off when it cannot run."
-    if opuslib is None or sys.platform != "linux" or "pipewire" not in have:
+def resolve(mode: AudioServerMode, have: dict[str, str], serves_one_terminal: bool = False) -> AudioServerMode:
+    """
+    What `mode` comes to here: never auto, and off when it cannot run.
+
+    **Off for `pymux integrated`.** Its panes and its terminal are on one
+    machine, so a pane plays on that machine's own sound already, with
+    no server's PipeWire and nothing to carry.
+    """
+    if opuslib is None or sys.platform != "linux" or "pipewire" not in have or serves_one_terminal:
         return AudioServerMode.OFF
     if mode == AudioServerMode.AUTO:
         mode = AudioServerMode.PRIVATE if carried() and "wireplumber" in have else AudioServerMode.SHARED
@@ -334,14 +340,29 @@ native_to_l16 = l16_to_native
 
 
 class AudioLink:
-    "One client's audio connection, as the server holds it."
+    """
+    One attached client's sound, on the connection it attached on.
 
-    def __init__(self, connection: ServerConnection, client_id: str) -> None:
+    **One connection, and an urgent lane on it.** Sound and echoes are
+    written ahead of anything that waits for the connection, a window
+    pane's frame parts included, so they wait only for the part already
+    going out. The client asked for no second connection.
+
+    **The server measures the round trip.** It sends an echo, the client
+    answers the moment it reads it, and the server sizes both buffers
+    from what came back: its own for the microphone, and the client's
+    speaker, which it is told.
+    """
+
+    def __init__(self, connection: ServerConnection) -> None:
         self.connection = connection
-        self.client_id = client_id
+        self.client_id = connection.client_id
         self._queue: deque[dict] = deque(maxlen=SEND_QUEUE)
         self._ready = anyio.Event()
         self.microphone = JitterBuffer()
+        self.round_trip = RoundTrip()
+        self._multiplier = 2.0
+        self._told_ms: int | None = None
         self._decoder = opuslib.Decoder(RATE, MICROPHONE_CHANNELS) if opuslib is not None else None
         self.microphone_open = False
         #: Whether the client's microphone gave only zeros.
@@ -353,24 +374,45 @@ class AudioLink:
         self._ready.set()
 
     async def run(self) -> None:
-        "Write what is queued, until the connection goes."
+        "Write what is queued, and measure the round trip, until the connection goes."
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(self._echo)
+            while True:
+                await self._ready.wait()
+                self._ready = anyio.Event()
+                while self._queue:
+                    await self.connection._write_urgent(self._queue.popleft())
+
+    async def _echo(self) -> None:
+        for _ in range(FIRST_ECHOES):
+            self._ask()
+            await anyio.sleep(FIRST_ECHO_EVERY)
         while True:
-            await self._ready.wait()
-            self._ready = anyio.Event()
-            while self._queue:
-                await self.connection._write_packet(self._queue.popleft())
+            self._ask()
+            await anyio.sleep(ECHO_EVERY)
+
+    def _ask(self) -> None:
+        # Ahead of queued sound: it measures the link, and the queue is ours.
+        self._queue.appendleft({Field.CMD: Packet.ECHO, Field.TIME: anyio.current_time()})
+        self._ready.set()
+
+    def retarget(self, multiplier: float | None = None) -> None:
+        "Size both buffers from the round trips, and tell the client its own."
+        if multiplier is not None:
+            self._multiplier = multiplier
+        self.microphone.retarget(self.round_trip.buffer_ms(self._multiplier))
+        told = self.microphone.target_ms
+        if told != self._told_ms:
+            self._told_ms = told
+            self.send({Field.CMD: Packet.LATENCY, Field.BUFFER: told})
 
     def heard(self, packet: dict) -> None:
         kind = packet.get(Field.CMD)
         if kind == Packet.ECHO:
-            # Ahead of queued sound: the round trip measures the link,
-            # and this queue is ours.
-            self._queue.appendleft({Field.CMD: Packet.ECHO, Field.TIME: packet.get(Field.TIME)})
-            self._ready.set()
-        elif kind == Packet.LATENCY:
-            buffer = packet.get(Field.BUFFER)
-            if isinstance(buffer, (int, float)) and buffer > 0:
-                self.microphone.retarget(buffer)
+            sent = packet.get(Field.TIME)
+            if isinstance(sent, (int, float)):
+                self.round_trip.heard(anyio.current_time() - sent)
+                self.retarget()
         elif kind == Packet.SOUND and opuslib is not None and self._decoder is not None:
             data = packet.get(Field.DATA)
             if isinstance(data, bytes):
@@ -428,22 +470,9 @@ class AudioServer:
             environment["PULSE_SINK"] = self.speaker_node
             environment["PULSE_SOURCE"] = self.microphone_node
 
-    def offer(self, connection: ServerConnection) -> None:
-        """
-        Tell an attached client that this server has sound, while it
-        does. Only then does it open the audio connection: a client
-        never holds one to a server with nothing to play.
-        """
-        client_state = connection.client_state
-        if self.running.is_set() and client_state is not None and not client_state.temporary:
-            connection._send_packet({Field.CMD: Packet.AUDIO})
-
     def link_opened(self, link: AudioLink) -> None:
-        old = self.links.get(link.client_id)
         self.links[link.client_id] = link
-        logger.info("Client %s carries sound.", link.client_id or "?")
-        if old is not None and old is not link:
-            old.connection.detach_and_close()
+        logger.info("Client %s plays sound.", link.client_id or "?")
         self._tell(link)
         self._steer_microphone()
 
@@ -480,13 +509,8 @@ class AudioServer:
         client_state = self._client_of(link)
         if client_state is None:
             return
-        link.send(
-            {
-                Field.CMD: Packet.AUDIO,
-                Field.DATA: str(client_state.audio),
-                Field.RTT_MULTIPLIER: client_state.audio_rtt_multiplier,
-            }
-        )
+        link.send({Field.CMD: Packet.AUDIO, Field.DATA: str(client_state.audio)})
+        link.retarget(client_state.audio_rtt_multiplier)
 
     def current(self) -> AudioLink | None:
         """
@@ -542,7 +566,7 @@ class AudioServer:
         "Run PipeWire whenever the option allows. Never returns."
         while True:
             have = programs()
-            self.mode = resolve(self.pymux.audio_server, have)
+            self.mode = resolve(self.pymux.audio_server, have, self.pymux._serves_one_terminal)
             failed = False
             if self.mode != AudioServerMode.OFF and not self.paused:
                 with anyio.CancelScope() as self._scope:
@@ -593,8 +617,6 @@ class AudioServer:
                 tasks.start_soon(self._watch, microphone_port)
                 logger.info("Sound on (%s PipeWire): %s and %s.", self.mode, self.speaker_node, self.microphone_node)
                 self.running.set()
-                for connection in list(self.pymux.connections):
-                    self.offer(connection)
         finally:
             self.running = anyio.Event()
             self.runtime = None

@@ -324,6 +324,9 @@ class TerminalClient(Client):
                 # takes one says which with a `wire` packet.
                 # Lillecarl/pymux#633.
                 Field.WIRE: list(self.wire_formats),
+                # This client plays the server's sound, on this
+                # connection. Lillecarl/pymux#657.
+                Field.AUDIO: self.audio is not None,
                 # This client encodes a window pane's frames for its
                 # own terminal: the server sends the raw pixels.
                 # Lillecarl/pymux#634.
@@ -533,9 +536,15 @@ class TerminalClient(Client):
         elif packet[Field.CMD] == Packet.RESTARTING:
             self.restart_wait = float(packet[Field.WAIT])
 
-        elif packet[Field.CMD] == Packet.AUDIO:
-            # The server has sound. Lillecarl/pymux#657.
-            self._sound_offered()
+        elif packet[Field.CMD] == Packet.ECHO:
+            # The server measures the round trip that sizes the sound
+            # buffers: the answer goes at once, before anything else.
+            # Lillecarl/pymux#657.
+            self._send_packet({Field.CMD: Packet.ECHO, Field.TIME: packet.get(Field.TIME)})
+
+        elif packet[Field.CMD] in (Packet.SOUND, Packet.AUDIO, Packet.LATENCY, Packet.MICROPHONE):
+            if self.audio is not None:
+                self.audio.heard(packet)
 
         elif packet[Field.CMD] == Packet.PING:
             # The server is asking whether anybody is still here. An
@@ -624,9 +633,6 @@ class TerminalClient(Client):
             return  # Never enabled anything.
         os.write(sys.stdout.fileno(), b"\x1b[<1u")
         self._kitty_flags = None
-
-    def _sound_offered(self) -> None:
-        "Open the audio connection. A client that carries sound says how."
 
     def _start_browser(self, packet: dict) -> None:
         """

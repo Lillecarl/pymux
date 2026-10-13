@@ -11,9 +11,11 @@ callback does.
 
 from __future__ import annotations
 
+import contextlib
 import math
 import os
 import shutil
+import socket
 import struct
 import sys
 import threading
@@ -31,9 +33,11 @@ if not (shutil.which("pipewire") and shutil.which("wireplumber") and shutil.whic
 pytest.importorskip("opuslib")
 
 from libpymux.protocol import Field, Packet
+from libpymux.wire import PacketReader, encode_json, encode_msgpack
+from prompt_toolkit.output import ColorDepth
 
 from pymux.audio import programs
-from pymux.client.audio import AudioClient, MemoryLink, PipeWireDevices, SocketLink
+from pymux.client.audio import AudioClient, PipeWireDevices
 from pymux.enums import AudioServerMode
 from pymux.main import Pymux
 
@@ -176,21 +180,80 @@ async def serving(tmp_path, mode=AudioServerMode.PRIVATE, name="pymux.sock"):
             pymux.stop()
 
 
+class Attached:
+    """
+    A client attached over the server's socket that plays sound, and
+    nothing else a terminal does: what `client/terminal.py` sends and
+    answers about sound, with its writes locked as a real client's are.
+    """
+
+    def __init__(self, path: str, devices, client_id: str) -> None:
+        self.client_id = client_id
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.sock.connect(path)
+        self._lock = threading.Lock()
+        self._encode = encode_json
+        self.audio = AudioClient(devices, self.send)
+
+    def send(self, packet: dict) -> None:
+        with self._lock:
+            with contextlib.suppress(OSError):
+                self.sock.sendall(self._encode(packet))
+
+    def attach(self) -> None:
+        self.send({"cmd": "size", "data": [24, 80]})
+        self.send(
+            {
+                "cmd": "start-gui",
+                "detach-others": False,
+                "color-depth": ColorDepth.DEPTH_8_BIT,
+                "term": "xterm-256color",
+                "client-id": self.client_id,
+                "wire": ["msgpack"],
+                "audio": True,
+                "data": "",
+            }
+        )
+
+    async def read(self) -> None:
+        reader = PacketReader()
+        while True:
+            await anyio.wait_readable(self.sock)
+            data = self.sock.recv(1 << 20)
+            if not data:
+                return
+            for packet in reader.feed(data):
+                kind = packet.get(Field.CMD)
+                if kind == Packet.WIRE:
+                    with self._lock:
+                        self.sock.sendall(self._encode({"cmd": "wire", "wire": "msgpack"}))
+                        self._encode = encode_msgpack
+                elif kind == Packet.ECHO:
+                    self.send({"cmd": "echo", "time": packet.get(Field.TIME)})
+                else:
+                    self.audio.heard(packet)
+
+    def close(self) -> None:
+        self.audio.close()
+        self.sock.close()
+
+
 @asynccontextmanager
 async def carrying(pymux, devices, client_id="the-client"):
-    "A client's audio connection to `pymux`, until the block ends."
-    client = AudioClient(client_id, devices)
-
-    async def open_link():
-        return SocketLink(await anyio.connect_unix(pymux.socket_name))
-
-    async with anyio.create_task_group() as tasks:
-        tasks.start_soon(client.run, open_link)
-        await once(lambda: client_id in pymux.audio.links, 10.0, "the audio connection never arrived")
-        try:
-            yield client
-        finally:
-            tasks.cancel_scope.cancel()
+    "A client attached to `pymux` that plays sound, until the block ends."
+    client = Attached(pymux.socket_name, devices, client_id)
+    client.attach()
+    try:
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(client.read)
+            await once(lambda: client_id in pymux.audio.links, 10.0, "the client never played sound")
+            try:
+                yield client
+            finally:
+                tasks.cancel_scope.cancel()
+    finally:
+        # After the reader: a socket closed under its wait reads EBADF.
+        client.close()
 
 
 @asynccontextmanager
@@ -292,15 +355,24 @@ async def test_the_microphone_opens_only_while_a_program_records(tmp_path):
     )
 
 
-async def test_the_buffers_follow_the_round_trip(tmp_path):
-    "The client measures the round trip and tells the server what it buffers."
+async def test_the_server_sizes_both_buffers_from_the_round_trip(tmp_path):
+    """
+    The server measures the round trip with echoes the client answers,
+    and tells the client what its speaker holds. A multiplier this large
+    pins both at the 1000 ms ceiling, so only a `latency` packet makes
+    the client's match the server's.
+    """
     async with serving(tmp_path) as pymux, carrying(pymux, FakeDevices()) as client:
-        await once(lambda: len(client.round_trip) >= 3, 10.0, "no echo came back")
         link = next(iter(pymux.audio.links.values()))
+        await once(lambda: len(link.round_trip) >= 3, 10.0, "no echo came back")
+        for client_state in pymux.clients:
+            client_state.audio_rtt_multiplier = 1e6
+        pymux.audio.client_options_changed()
+        speaker = client.audio.speaker_buffer
         await once(
-            lambda: link.microphone.target_ms == client.speaker_buffer.target_ms,
+            lambda: link.microphone.target_ms == speaker.target_ms == 1000,
             10.0,
-            lambda: "server %d ms, client %d ms" % (link.microphone.target_ms, client.speaker_buffer.target_ms),
+            lambda: "server %d ms, client %d ms" % (link.microphone.target_ms, speaker.target_ms),
         )
 
 
@@ -369,8 +441,8 @@ async def test_a_linux_client_plays_and_records_through_its_own_pipewire(tmp_pat
     assert sidebands(last, 1, 880) < 0.25
 
 
-async def test_an_attached_client_is_told_the_server_has_sound(tmp_path):
-    "Only then does a client open its audio connection: never to a server with nothing to play."
+async def test_a_client_that_plays_no_sound_is_sent_none(tmp_path):
+    "One that did not say `audio` in `start-gui`, an older one included: no link, and no sound packet."
     heard: list[dict] = []
     pymux = Pymux()
     pymux.audio_server = AudioServerMode.PRIVATE
@@ -380,12 +452,15 @@ async def test_an_attached_client_is_told_the_server_has_sound(tmp_path):
         # longer than the attach may.
         with anyio.fail_after(20):
             await pymux.audio.running.wait()
-        await session.attach("one", Size(rows=24, columns=80))
-        await once(
-            lambda: any(packet.get(Field.CMD) == Packet.AUDIO for packet in heard),
-            20.0,
-            lambda: "no offer; sound %s" % ("on" if pymux.audio.running.is_set() else "off",),
-        )
+        await session.attach("one", Size(rows=24, columns=80), frames=True)
+        song = tmp_path / "a440.wav"
+        write_wav(song, tone(440, 1.0, 2), 2)
+        async with running(["pw-play", str(song)], pane_environment(pymux)) as player:
+            with anyio.fail_after(10):
+                await player.wait()
+        assert not pymux.audio.links
+        sound = {Packet.SOUND, Packet.AUDIO, Packet.ECHO, Packet.LATENCY, Packet.MICROPHONE}
+        assert not [packet for packet in heard if packet.get(Field.CMD) in sound]
 
 
 @pytest.mark.skipif(not shutil.which("paplay"), reason="no Pulse client on the PATH")
@@ -421,11 +496,10 @@ async def test_a_pulse_program_plays_and_records(tmp_path):
 
 async def test_sound_reaches_a_client_over_ssh_and_after_the_link_comes_back(monkeypatch):
     """
-    The route a person on another machine takes: an SSH client, offered
-    sound on its attached channel, opens a channel of its own for it.
-    After the link drops and comes back, the new link hears the buffer
-    size again: a client that kept what it told the last server told
-    the new one nothing.
+    The route a person on another machine takes: an SSH client plays
+    sound on the one channel it attached on. After the link drops and
+    comes back, the new connection's buffers are sized again, on both
+    ends.
     """
     from test_the_link_comes_back import attached
 
@@ -435,14 +509,13 @@ async def test_sound_reaches_a_client_over_ssh_and_after_the_link_comes_back(mon
     pymux.audio_server = AudioServerMode.PRIVATE
 
     def with_sound(client) -> None:
-        client.audio = AudioClient(client.client_id, devices)
+        client.audio = AudioClient(devices, client._send_from_a_thread)
         # As a person's configuration file would, on every attach: the
-        # buffer pins at the 1000 ms ceiling, the same on both links, so
-        # only a `latency` packet on the new one tells the new server.
+        # buffers pin at the 1000 ms ceiling, the same on both links.
         client._client_options = lambda: [("audio-rtt-multiplier", "1000000")]
 
     async with attached(monkeypatch, pymux=pymux, client_setup=with_sound) as it:
-        await it.until(lambda: pymux.audio.links, "the audio channel", seconds=30.0)
+        await it.until(lambda: pymux.audio.links, "the client to play sound", seconds=30.0)
         tone_file = os.path.join(os.path.dirname(pymux.socket_name), "a440.wav")
         write_wav(tone_file, tone(440, 3.0, 2), 2)
         async with running(["pw-play", tone_file], pane_environment(pymux)):
@@ -452,9 +525,9 @@ async def test_sound_reaches_a_client_over_ssh_and_after_the_link_comes_back(mon
         await it.until(lambda: it.client.audio.speaker_buffer.target_ms == 1000, "the pinned buffer")
         first = next(iter(pymux.audio.links.values()))
         it.drop_the_link()
-        await it.until(lambda: first not in pymux.audio.links.values(), "the old audio channel to go")
+        await it.until(lambda: first not in pymux.audio.links.values(), "the old link to go")
         it.terminal.type("\r")
-        await it.until(lambda: pymux.audio.links and pymux.clients, "the audio channel again", seconds=30.0)
+        await it.until(lambda: pymux.audio.links and pymux.clients, "the client to play sound again", seconds=30.0)
         link = next(iter(pymux.audio.links.values()))
         audio = it.client.audio
         await it.until(
@@ -472,27 +545,3 @@ async def test_a_microphone_that_gives_only_zeros_is_reported(tmp_path):
             await once(lambda: devices.microphone_open, 10.0, "the microphone never opened")
             link = next(iter(pymux.audio.links.values()))
             await once(lambda: link.silent, 10.0, "the silence was never reported")
-
-
-async def test_an_integrated_client_hears_its_own_server(tmp_path):
-    "`pymux integrated` has one process and maybe no socket: the sound goes on a connection in memory."
-    devices = FakeDevices()
-    async with serving(tmp_path) as pymux:
-        client = AudioClient("integrated", devices)
-
-        async def open_link():
-            return MemoryLink(pymux.connect_in_memory())
-
-        async with anyio.create_task_group() as tasks:
-            tasks.start_soon(client.run, open_link)
-            await once(lambda: "integrated" in pymux.audio.links, 10.0, "the audio connection never arrived")
-            song = tmp_path / "a440.wav"
-            write_wav(song, tone(440, 3.0, 2), 2)
-            async with running(["pw-play", str(song)], pane_environment(pymux)):
-                await once(
-                    lambda: len(devices.played) >= 2.5 * STEREO_SECOND,
-                    15.0,
-                    lambda: "played %d bytes" % len(devices.played),
-                )
-            tasks.cancel_scope.cancel()
-    assert loudest(bytes(devices.played[STEREO_SECOND : 2 * STEREO_SECOND]), 2) == 440

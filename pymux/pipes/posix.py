@@ -16,7 +16,7 @@ from libpymux.sockets import nobody_answers, socket_directory
 from libpymux.wire import Compressor, PacketReader
 
 from ..log import logger
-from .base import BrokenPipeError, PipeConnection
+from .base import BrokenPipeError, PipeConnection, Turns
 
 __all__ = [
     "PosixSocketConnection",
@@ -271,7 +271,8 @@ class PosixSocketConnection(PipeConnection):
 
         #: Bytes given to `write` and not yet taken by the kernel.
         self._outstanding = 0
-        self._write_lock: anyio.Lock | None = None
+        #: One write at a time, sound first. Lillecarl/pymux#657.
+        self._turns = Turns()
         #: Set while `_outstanding` is zero; waited on by `drained`.
         self._empty: anyio.Event | None = None
         #: The zstd stream every write goes into, once one turned it.
@@ -327,7 +328,7 @@ class PosixSocketConnection(PipeConnection):
         return data
 
     @override
-    async def write(self, frame: bytes, compress_after: bool = False) -> None:
+    async def write(self, frame: bytes, compress_after: bool = False, urgent: bool = False) -> None:
         """
         Write the next encoded packet.
 
@@ -357,9 +358,7 @@ class PosixSocketConnection(PipeConnection):
         self._outstanding += len(data)
 
         try:
-            if self._write_lock is None:
-                self._write_lock = anyio.Lock()
-            async with self._write_lock:
+            async with self._turns.turn(urgent):
                 await self._send_all(self._compressor.compress(data) if self._compressor is not None else data)
                 if compress_after:
                     self._compressor = Compressor()

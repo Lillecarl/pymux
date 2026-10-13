@@ -38,16 +38,13 @@ from __future__ import annotations
 
 import contextlib
 import sys
-from collections.abc import Callable
 from typing import override
 
 import anyio
 from libpymux.protocol import Field, Packet
 from prompt_toolkit.input.vt100 import raw_mode
 
-from ..log import logger
 from ..pipes import BrokenPipeError, MemoryConnection
-from .audio import AudioClient, MemoryLink, sound_devices
 from .terminal import TerminalClient
 
 __all__ = [
@@ -64,13 +61,9 @@ class MemoryClient(TerminalClient):
     the packets of the server the same way.
     """
 
-    def __init__(self, connection: MemoryConnection, connect: Callable[[], MemoryConnection] | None = None) -> None:
+    def __init__(self, connection: MemoryConnection) -> None:
         super().__init__()
         self.connection = connection
-        #: Opens another connection to the same server, for sound.
-        self.connect = connect
-        devices = sound_devices() if connect is not None else None
-        self.audio = AudioClient(self.client_id, devices) if devices is not None else None
 
     @override
     def _send_packet(self, data) -> None:
@@ -98,20 +91,12 @@ class MemoryClient(TerminalClient):
                 tasks.start_soon(self._watch_signal)
                 tasks.start_soon(self._watch_size)
 
-                carrying = False
                 try:
                     while True:
                         try:
                             packet = await self.connection.read()
                         except BrokenPipeError:
                             return  # The server closed the connection.
-                        if packet[Field.CMD] == Packet.AUDIO:
-                            # The server has sound: a connection of its
-                            # own for it, as over a socket. Once.
-                            if not carrying:
-                                carrying = True
-                                tasks.start_soon(self._carry_audio)
-                            continue
                         if packet[Field.CMD] == Packet.BROWSER:
                             # Not `_start_browser`, which would hold the
                             # loop the server runs on while it starts.
@@ -123,20 +108,6 @@ class MemoryClient(TerminalClient):
                     tasks.cancel_scope.cancel()
                     self.stop_browsers()
                     self._leave_the_terminal()
-
-    async def _carry_audio(self) -> None:
-        "Sound until the attachment ends. A failure ends the sound, never the attachment."
-        connect, audio = self.connect, self.audio
-        if connect is None or audio is None:
-            return
-
-        async def open_link() -> MemoryLink:
-            return MemoryLink(connect())
-
-        try:
-            await audio.run(open_link)
-        except Exception as error:
-            logger.warning("Sound ended: %s", error)
 
     async def _read_keyboard(self, stdin_fd: int) -> None:
         """

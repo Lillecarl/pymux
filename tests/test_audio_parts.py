@@ -22,9 +22,8 @@ from pymux.audio import (
     rtp_sink,
     rtp_source,
 )
-from pymux.client.audio import CEILING_MS, FLOOR_MS, RoundTrip
 from pymux.enums import AudioServerMode, ClientAudio
-from pymux.jitter import FRAME_MS, SLACK, JitterBuffer
+from pymux.jitter import CEILING_MS, FLOOR_MS, FRAME_MS, SLACK, JitterBuffer, RoundTrip
 from pymux.main import Pymux
 
 PIPEWIRE = {"pipewire": "/bin/pipewire", "wireplumber": "/bin/wireplumber"}
@@ -109,6 +108,14 @@ def test_no_pipewire_is_no_sound(carried, monkeypatch):
     assert resolve(AudioServerMode.SHARED, {"pipewire": "/bin/pipewire"}) == AudioServerMode.SHARED
 
 
+def test_an_integrated_server_has_no_sound_of_its_own(carried, monkeypatch):
+    "Its panes are on the person's machine already, and play on its sound."
+    monkeypatch.setattr(audio.sys, "platform", "linux")
+    carried(True)
+    for mode in AudioServerMode:
+        assert resolve(mode, PIPEWIRE, serves_one_terminal=True) == AudioServerMode.OFF
+
+
 def test_macos_has_no_server_sound(carried, monkeypatch):
     monkeypatch.setattr(audio.sys, "platform", "darwin")
     carried(True)
@@ -170,6 +177,10 @@ class _Link:
         self.client_id = client_id
         self.sent: list = []
         self.microphone_open = False
+        self.multiplier: float | None = None
+
+    def retarget(self, multiplier: float | None = None) -> None:
+        self.multiplier = multiplier
 
     def send(self, packet) -> None:
         self.sent.append(packet)
@@ -235,7 +246,8 @@ def test_a_client_hears_its_options(routed):
     server, clients, links = routed
     clients[0].audio_rtt_multiplier = 3.5
     server.client_options_changed()
-    assert links["a"].sent[-1] == {"cmd": "audio", "data": "on", "rtt-multiplier": 3.5}
+    assert links["a"].sent[-1] == {"cmd": "audio", "data": "on"}
+    assert links["a"].multiplier == 3.5
 
 
 def test_the_options_are_there():

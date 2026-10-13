@@ -160,7 +160,7 @@ class ServerConnection:
         "_encode": Keep.DROPPED,
         "_pipeinput": Keep.DROPPED,
         "_stream": Keep.DROPPED,
-        # A client opens its audio connection again to the next server.
+        # The next server measures the client's round trip again.
         "_audio": Keep.DROPPED,
         "_tasks": Keep.DROPPED,
         "_closed": Keep.DROPPED,
@@ -295,8 +295,7 @@ class ServerConnection:
         self.forwards: list[dict] = []
         #: Whether this client starts browsers. Lillecarl/pymux#653.
         self.starts_browsers = False
-        #: The sound this connection carries, when it is a client's
-        #: audio connection. Lillecarl/pymux#657.
+        #: This client's sound, when it plays it. Lillecarl/pymux#657.
         self._audio: AudioLink | None = None
 
         #: Whether this client answers a ping, and how many have gone
@@ -791,12 +790,8 @@ class ServerConnection:
             self._spawn(self._stream_pane(packet))
             return
 
-        # "This connection carries sound." It holds the connection, as
-        # a stream does, and what comes on it after is the link's.
-        if packet[Field.CMD] == Packet.AUDIO:
-            self._spawn(self._carry_audio(packet))
-            return
-        if packet[Field.CMD] in (Packet.SOUND, Packet.ECHO, Packet.LATENCY, Packet.MICROPHONE):
+        # Sound from a client that plays it. Lillecarl/pymux#657.
+        if packet[Field.CMD] in (Packet.SOUND, Packet.ECHO, Packet.MICROPHONE):
             if self._audio is not None:
                 self._audio.heard(packet)
             return
@@ -927,11 +922,10 @@ class ServerConnection:
             if self.client_state is not None:
                 self.pymux.take_environment_from(self.client_state)
 
-            # Sound, when this server has it. A link that is already
-            # open heard nothing of this client's options before now.
+            # Sound, on this connection, for a client that plays it.
             # Lillecarl/pymux#657.
-            self.pymux.audio.offer(self)
-            self.pymux.audio.client_options_changed()
+            if packet.get(Field.AUDIO) and self._encode is encode_msgpack and self._audio is None:
+                self._spawn(self._carry_audio())
 
             if self.answers_ping:
                 self._spawn(self._watch_the_client())
@@ -1126,25 +1120,13 @@ class ServerConnection:
             self._stream = None
             self._close_connection()
 
-    async def _carry_audio(self, packet: dict[str, Any]) -> None:
+    async def _carry_audio(self) -> None:
         """
-        Carry one client's sound on this connection, until it goes.
-        Lillecarl/pymux#657.
-
-        **A connection of its own**, so over SSH a channel of its own:
-        a window pane's frame holds the write lock of the attached
-        connection while it goes out, and sound waits behind nothing.
+        Carry this client's sound, until the connection goes. Only in
+        msgpack, which carries bytes. `AudioLink` says why on this
+        connection and not one of its own. Lillecarl/pymux#657.
         """
-        wire = choose(packet.get(Field.WIRE), False)
-        if wire is not None and self._encode is encode_json:
-            await self._write_packet({Field.CMD: Packet.WIRE, Field.WIRE: wire})
-            self._encode = encode_msgpack
-        if self._encode is not encode_msgpack:
-            # Opus is bytes, and JSON carries none.
-            self._close_connection()
-            return
-
-        link = AudioLink(self, packet.get(Field.CLIENT_ID) or "")
+        link = AudioLink(self)
         self._audio = link
         self.pymux.audio.link_opened(link)
         try:
@@ -1154,7 +1136,6 @@ class ServerConnection:
         finally:
             self._audio = None
             self.pymux.audio.link_closed(link)
-            self._close_connection()
 
     async def _run_command(self, packet: dict[str, Any]) -> None:
         """
@@ -1244,6 +1225,15 @@ class ServerConnection:
         "Send the exit code of a command, for one that ends the server before it returns."
         with suppress(BrokenPipeError):
             await self._write_packet({Field.CMD: Packet.EXIT, Field.CODE: exit_code})
+
+    async def _write_urgent(self, data_obj: object) -> None:
+        "Write a packet ahead of every write that waits for the connection: sound."
+        if self._closed:
+            return
+        try:
+            await self.pipe_connection.write(self._encode(data_obj), urgent=True)
+        except BrokenPipeError:
+            self.detach_and_close()
 
     async def _write_packet(self, data_obj: object) -> None:
         """

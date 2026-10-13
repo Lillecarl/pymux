@@ -70,20 +70,6 @@ class MemoryConnection(PipeConnection):
             self._ready.extend(self._reader.feed(frame))
         return self._ready.pop(0)
 
-    async def read_frame(self) -> bytes:
-        """
-        The next encoded frame as the peer wrote it, for a reader that
-        decodes it itself: the client's sound (`client/audio.py`). Raise
-        `BrokenPipeError` at the end.
-        """
-        if self._closed:
-            raise BrokenPipeError
-        try:
-            return await self._incoming.receive()
-        except anyio.EndOfStream, anyio.ClosedResourceError:
-            self._closed = True
-            raise BrokenPipeError
-
     def write_nowait(self, frame: bytes) -> None:
         """
         Give the next encoded packet to the peer, without waiting.
@@ -104,7 +90,7 @@ class MemoryConnection(PipeConnection):
             raise BrokenPipeError
 
     @override
-    async def write(self, frame: bytes, compress_after: bool = False) -> None:
+    async def write(self, frame: bytes, compress_after: bool = False, urgent: bool = False) -> None:
         """
         Give the next encoded packet to the peer. Nothing here crosses a
         network, so nothing is compressed (`can_compress`).

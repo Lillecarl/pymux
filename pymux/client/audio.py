@@ -2,14 +2,13 @@
 The client's half of sound: play what the panes play, and lend the
 microphone while a program on the server records. Lillecarl/pymux#657.
 
-The sound goes on a connection of its own to the server's socket, which
-over SSH is a channel of its own. The round trip is measured on that
-connection, so it holds what queues behind other traffic in the same
-TCP stream, and the speaker's buffer is that round trip times
-`audio-rtt-multiplier`.
+It rides the connection the client attached on: the server writes sound
+in an urgent lane there (`pymux/audio.py` says why), measures the round
+trip, and tells this side how much its speaker holds.
 
-The sound card is behind `Devices`, so a test can stand in for it.
-`sounddevice` (PortAudio) is the real one, on macOS and Linux alike.
+The sound card is behind `Devices`, so a test can stand in for it. On
+Linux `pw-cat` drives the person's PipeWire; elsewhere `sounddevice`
+(PortAudio, CoreAudio on macOS) does.
 """
 
 from __future__ import annotations
@@ -18,22 +17,19 @@ import contextlib
 import fcntl
 import logging
 import os
+import queue
 import subprocess
 import sys
 import threading
-from collections import deque
-from collections.abc import Awaitable, Callable, Mapping
+import time
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Protocol
 
-import anyio
-import anyio.abc
-from libpymux.protocol import READ_SIZE, Field, Packet
-from libpymux.wire import MSGPACK, PacketReader, encode_json, encode_msgpack
+from libpymux.protocol import Field, Packet
 
 from pymux.audio import programs
 from pymux.enums import ClientAudio
-from pymux.jitter import FRAME_MS, JitterBuffer
-from pymux.pipes import BrokenPipeError
+from pymux.jitter import FLOOR_MS, FRAME_MS, JitterBuffer
 
 try:
     import opuslib
@@ -41,15 +37,11 @@ except ImportError:
     opuslib = None
 
 if TYPE_CHECKING:
-    from opuslib import Decoder, Encoder
-
-    from pymux.pipes.memory import MemoryConnection
+    from opuslib import Decoder
 
 __all__ = [
     "AudioClient",
     "Devices",
-    "Link",
-    "RoundTrip",
     "sound_devices",
 ]
 
@@ -59,21 +51,6 @@ RATE = 48000
 FRAME = RATE * FRAME_MS // 1000
 MICROPHONE_CHANNELS = 1
 MICROPHONE_BITRATE = 64000
-
-#: The least a speaker buffers, however short the round trip: two
-#: frames, so one late packet on a local link is not a gap.
-FLOOR_MS = 2 * FRAME_MS
-#: And the most, so a link that stalled once does not keep a second of
-#: delay for ever.
-CEILING_MS = 1000
-
-#: How often the round trip is measured, and how many measurements the
-#: buffer follows. The largest of them sizes it: a buffer has to hold
-#: the slow round trips, not the typical one.
-ECHO_EVERY = 1.0
-FIRST_ECHOES = 5
-FIRST_ECHO_EVERY = 0.2
-ROUND_TRIPS = 10
 
 #: `fcntl`'s name for a pipe's size, which Python names from 3.10 on
 #: Linux only.
@@ -86,27 +63,6 @@ SILENT_FRAMES = 1000 // FRAME_MS
 #: How long the speaker stays open with nothing to play. Closing it
 #: lets the machine sleep and other programs take the device.
 SPEAKER_IDLE = 2.0
-
-
-class RoundTrip:
-    "The recent round trips of an audio connection, in seconds."
-
-    def __init__(self) -> None:
-        self._recent: deque[float] = deque(maxlen=ROUND_TRIPS)
-
-    def heard(self, seconds: float) -> None:
-        if seconds >= 0:
-            self._recent.append(seconds)
-
-    def __len__(self) -> int:
-        return len(self._recent)
-
-    def buffer_ms(self, multiplier: float) -> float:
-        "What a speaker should hold for these round trips."
-        if not self._recent:
-            return FLOOR_MS
-        wanted = max(self._recent) * 1000 * multiplier
-        return min(CEILING_MS, max(FLOOR_MS, wanted))
 
 
 class Stream(Protocol):
@@ -124,133 +80,53 @@ class Devices(Protocol):
     def microphone(self, channels: int, push: Callable[[bytes], None]) -> Stream: ...
 
 
-class Link(Protocol):
-    "One byte stream to the server's socket."
-
-    async def receive(self) -> bytes: ...
-
-    async def send(self, data: bytes) -> None: ...
-
-    async def aclose(self) -> None: ...
-
-
 class AudioClient:
-    def __init__(self, client_id: str, devices: Devices) -> None:
-        self.client_id = client_id
+    """
+    The sound of one attached client.
+
+    Packets come in through `heard`, on whatever reads the connection.
+    The speaker pulls on the device's thread, and the microphone is
+    encoded and sent on a thread of its own, so `send` has to be safe to
+    call from any thread.
+    """
+
+    def __init__(self, devices: Devices, send: Callable[[dict], None]) -> None:
         self.devices = devices
+        self._send = send
         self.mode = ClientAudio.ON
-        self.multiplier = 2.0
-        self.round_trip = RoundTrip()
         self.speaker_buffer = JitterBuffer(FLOOR_MS)
-        self._told_ms: int | None = None
+        self._lock = threading.Lock()
         self._speaker: Stream | None = None
         self._speaker_channels = 0
         self._decoder: Decoder | None = None
         self._last_sound = 0.0
-        self._microphone: Stream | None = None
-        self._heard: deque[bytes] = deque(maxlen=50)
-        self._heard_lock = threading.Lock()
-        self._link: Link | None = None
-        self._encode = encode_json
-        #: One send at a time: the echoes, the microphone and the
-        #: answers to the server all write on one stream.
-        self._sending = anyio.Lock()
+        self._microphone: _Microphone | None = None
 
-    async def run(self, open_link: Callable[[], Awaitable[Link]]) -> None:
-        "Carry sound on one connection, until it ends."
-        link = await open_link()
-        self._link = link
-        self._encode = encode_json
-        # A new connection, perhaps to a new server: what the last one
-        # measured and was told is not this one's.
-        self.round_trip = RoundTrip()
-        self._told_ms = None
-        try:
-            await self._send(
-                {
-                    Field.CMD: Packet.AUDIO,
-                    Field.CLIENT_ID: self.client_id,
-                    Field.WIRE: [MSGPACK],
-                }
-            )
-            async with anyio.create_task_group() as tasks:
-                tasks.start_soon(self._read, link, tasks)
-                tasks.start_soon(self._echo)
-                tasks.start_soon(self._idle)
-        finally:
-            self._close_speaker()
-            self._close_microphone()
-            self._link = None
-            with anyio.CancelScope(shield=True):
-                await link.aclose()
-
-    async def _send(self, packet: dict) -> None:
-        async with self._sending:
-            if self._link is not None:
-                await self._link.send(self._encode(packet))
-
-    async def _read(self, link: Link, tasks: anyio.abc.TaskGroup) -> None:
-        reader = PacketReader()
-        while True:
-            try:
-                data = await link.receive()
-            except anyio.EndOfStream, anyio.ClosedResourceError, anyio.BrokenResourceError:
-                data = b""
-            if not data:
-                tasks.cancel_scope.cancel()
-                return
-            for packet in reader.feed(data):
-                await self._process(packet, tasks)
-
-    async def _process(self, packet: dict, tasks: anyio.abc.TaskGroup) -> None:
+    def heard(self, packet: dict) -> None:
         kind = packet.get(Field.CMD)
-        if kind == Packet.WIRE:
-            # The server writes msgpack from here on. This side turns
-            # too, saying so in the last JSON packet it writes.
-            async with self._sending:
-                if self._link is not None:
-                    await self._link.send(self._encode({Field.CMD: Packet.WIRE, Field.WIRE: MSGPACK}))
-                self._encode = encode_msgpack
-        elif kind == Packet.SOUND:
+        if kind == Packet.SOUND:
             self._play(packet)
-        elif kind == Packet.ECHO:
-            sent = packet.get(Field.TIME)
-            if isinstance(sent, (int, float)):
-                self.round_trip.heard(anyio.current_time() - sent)
-                await self._retarget()
+        elif kind == Packet.LATENCY:
+            buffer = packet.get(Field.BUFFER)
+            if isinstance(buffer, (int, float)) and buffer > 0:
+                self.speaker_buffer.retarget(buffer)
         elif kind == Packet.AUDIO:
             with contextlib.suppress(ValueError):
                 self.mode = ClientAudio(packet.get(Field.DATA))
-            multiplier = packet.get(Field.RTT_MULTIPLIER)
-            if isinstance(multiplier, (int, float)) and multiplier > 0:
-                self.multiplier = float(multiplier)
             if self.mode == ClientAudio.OFF:
                 self._close_speaker()
             if self.mode != ClientAudio.ON:
                 self._close_microphone()
-            await self._retarget()
         elif kind == Packet.MICROPHONE:
             if packet.get(Field.DATA) and self.mode == ClientAudio.ON:
-                self._open_microphone(tasks)
+                self._open_microphone()
             else:
                 self._close_microphone()
 
-    async def _retarget(self) -> None:
-        "Size the speaker's buffer, and tell the server, which sizes the microphone's."
-        wanted = self.round_trip.buffer_ms(self.multiplier)
-        self.speaker_buffer.retarget(wanted)
-        told = self.speaker_buffer.target_ms
-        if told != self._told_ms:
-            self._told_ms = told
-            await self._send({Field.CMD: Packet.LATENCY, Field.BUFFER: told})
-
-    async def _echo(self) -> None:
-        for _ in range(FIRST_ECHOES):
-            await self._send({Field.CMD: Packet.ECHO, Field.TIME: anyio.current_time()})
-            await anyio.sleep(FIRST_ECHO_EVERY)
-        while True:
-            await self._send({Field.CMD: Packet.ECHO, Field.TIME: anyio.current_time()})
-            await anyio.sleep(ECHO_EVERY)
+    def close(self) -> None:
+        "The attachment ended: let both devices go."
+        self._close_speaker()
+        self._close_microphone()
 
     # ------------------------------------------------------------------
     # The speaker.
@@ -272,131 +148,103 @@ class AudioClient:
         except opuslib.OpusError:
             return
         self.speaker_buffer.put(frame)
-        self._last_sound = anyio.current_time()
-        if self._speaker is None:
+        self._last_sound = time.monotonic()
+        with self._lock:
+            if self._speaker is not None:
+                return
             try:
                 self._speaker = self.devices.speaker(channels, self.speaker_buffer.take)
             except Exception as error:
                 logger.warning("The speaker did not open: %s", error)
                 self.mode = ClientAudio.OFF
+                return
+            speaker = self._speaker
+        threading.Thread(target=self._close_when_idle, args=(speaker,), name="pymux-speaker", daemon=True).start()
 
-    async def _idle(self) -> None:
+    def _close_when_idle(self, speaker: Stream) -> None:
         while True:
-            await anyio.sleep(SPEAKER_IDLE / 2)
-            if self._speaker is not None and anyio.current_time() - self._last_sound > SPEAKER_IDLE:
-                self._close_speaker()
+            time.sleep(SPEAKER_IDLE / 2)
+            if self._speaker is not speaker:
+                return
+            if time.monotonic() - self._last_sound > SPEAKER_IDLE:
+                with self._lock:
+                    if self._speaker is speaker:
+                        self._shut_speaker()
+                return
 
     def _close_speaker(self) -> None:
+        with self._lock:
+            self._shut_speaker()
+
+    def _shut_speaker(self) -> None:
         if self._speaker is not None:
             self._speaker.close()
             self._speaker = None
         self._speaker_channels = 0
+        self._decoder = None
         self.speaker_buffer.clear()
 
     # ------------------------------------------------------------------
     # The microphone.
 
-    def _open_microphone(self, tasks: anyio.abc.TaskGroup) -> None:
-        if self._microphone is not None or opuslib is None:
-            return
-        encoder = opuslib.Encoder(RATE, MICROPHONE_CHANNELS, opuslib.APPLICATION_VOIP)
-        encoder.bitrate = MICROPHONE_BITRATE
-        try:
-            self._microphone = self.devices.microphone(MICROPHONE_CHANNELS, self._hear)
-        except Exception as error:
-            logger.warning("The microphone did not open: %s", error)
-            return
-        tasks.start_soon(self._send_microphone, self._microphone, encoder)
-
-    def _hear(self, frame: bytes) -> None:
-        with self._heard_lock:
-            self._heard.append(frame)
-
-    async def _send_microphone(self, microphone: Stream, encoder: Encoder) -> None:
-        """
-        What the microphone heard, every 20 ms, while it stays open.
-
-        **A second of exact zeros is not a quiet room.** A real
-        microphone always hears some noise. Exact zeros come from an
-        input volume at zero, or from macOS refusing the terminal, which
-        it does with zeros and no error. The server is told once, and
-        says so to the person.
-        """
-        silent = 0
-        while self._microphone is microphone:
-            with self._heard_lock:
-                frames = list(self._heard)
-                self._heard.clear()
-            for frame in frames:
-                silent = silent + 1 if frame.count(0) == len(frame) else 0
-                if silent == SILENT_FRAMES:
-                    await self._send({Field.CMD: Packet.MICROPHONE, Field.ERROR: "silent"})
-                await self._send({Field.CMD: Packet.SOUND, Field.DATA: encoder.encode(frame, FRAME)})
-            await anyio.sleep(FRAME_MS / 1000)
+    def _open_microphone(self) -> None:
+        if self._microphone is None and opuslib is not None:
+            self._microphone = _Microphone(self.devices, self._send)
 
     def _close_microphone(self) -> None:
-        if self._microphone is not None:
-            self._microphone.close()
-            self._microphone = None
-        with self._heard_lock:
-            self._heard.clear()
+        microphone, self._microphone = self._microphone, None
+        if microphone is not None:
+            microphone.close()
 
 
-# ----------------------------------------------------------------------
-# Transports.
+class _Microphone:
+    """
+    The open microphone: the device hands frames over on its thread,
+    and a thread of this one encodes and sends them.
 
+    **A second of exact zeros is not a quiet room.** A real microphone
+    always hears some noise. Exact zeros come from an input volume at
+    zero, or from macOS refusing the terminal, which it does with zeros
+    and no error. The server is told once, and says so to the person.
+    """
 
-class SocketLink:
-    "A link over anyio's socket stream: the unix socket of a local server."
-
-    def __init__(self, stream: anyio.abc.ByteStream) -> None:
-        self.stream = stream
-
-    async def receive(self) -> bytes:
-        return await self.stream.receive(READ_SIZE)
-
-    async def send(self, data: bytes) -> None:
-        await self.stream.send(data)
-
-    async def aclose(self) -> None:
-        await self.stream.aclose()
-
-
-class MemoryLink:
-    "A link over an in-memory connection: the client of `pymux integrated`."
-
-    def __init__(self, end: MemoryConnection) -> None:
-        self.end = end
-
-    async def receive(self) -> bytes:
+    def __init__(self, devices: Devices, send: Callable[[dict], None]) -> None:
+        assert opuslib is not None
+        self._send = send
+        self._frames: queue.Queue[bytes] = queue.Queue(maxsize=50)
+        self._stop = threading.Event()
+        self._encoder = opuslib.Encoder(RATE, MICROPHONE_CHANNELS, opuslib.APPLICATION_VOIP)
+        self._encoder.bitrate = MICROPHONE_BITRATE
+        self._thread = threading.Thread(target=self._run, name="pymux-microphone", daemon=True)
+        self._thread.start()
         try:
-            return await self.end.read_frame()
-        except BrokenPipeError:
-            return b""
+            self._stream: Stream | None = devices.microphone(MICROPHONE_CHANNELS, self._hear)
+        except Exception as error:
+            logger.warning("The microphone did not open: %s", error)
+            self._stream = None
+            self._stop.set()
 
-    async def send(self, data: bytes) -> None:
-        self.end.write_nowait(data)
+    def _hear(self, frame: bytes) -> None:
+        with contextlib.suppress(queue.Full):
+            self._frames.put_nowait(frame)
 
-    async def aclose(self) -> None:
-        self.end.close()
+    def _run(self) -> None:
+        silent = 0
+        while not self._stop.is_set():
+            try:
+                frame = self._frames.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            silent = silent + 1 if frame.count(0) == len(frame) else 0
+            if silent == SILENT_FRAMES:
+                self._send({Field.CMD: Packet.MICROPHONE, Field.ERROR: "silent"})
+            self._send({Field.CMD: Packet.SOUND, Field.DATA: self._encoder.encode(frame, FRAME)})
 
-
-class SshLink:
-    "A link over an asyncssh channel to the socket on the far side."
-
-    def __init__(self, reader, writer) -> None:
-        self.reader = reader
-        self.writer = writer
-
-    async def receive(self) -> bytes:
-        return await self.reader.read(READ_SIZE)
-
-    async def send(self, data: bytes) -> None:
-        self.writer.write(data)
-        await self.writer.drain()
-
-    async def aclose(self) -> None:
-        self.writer.close()
+    def close(self) -> None:
+        self._stop.set()
+        if self._stream is not None:
+            self._stream.close()
+        self._thread.join(timeout=2)
 
 
 # ----------------------------------------------------------------------

@@ -93,20 +93,10 @@ class Packet(StrEnum):
     # writes many packets. Lillecarl/pymux#461.
     STREAM_PANE = "stream-pane"
     STREAM_IN = "stream-in"
-    # "This connection carries sound for `client-id`." It is a connection
-    # of its own, so over SSH a channel of its own, and sound never waits
-    # behind a window pane's frame. The server says the same name first,
-    # on the attached connection: "this server has sound". On the audio
-    # connection it answers with it when the link opens and when the
-    # client's options change: its `audio` under `data`, and
-    # `rtt-multiplier`. Lillecarl/pymux#657.
-    AUDIO = "audio"
-    # "Send this back", with `time`: how the client measures the round
-    # trip that sizes its buffers. Lillecarl/pymux#657.
+    # The client answers the server's `echo` with it, unchanged and at
+    # once: the server measures the round trip that sizes the sound
+    # buffers. Lillecarl/pymux#657.
     ECHO = "echo"
-    # "My buffers hold `buffer` milliseconds": the server paces the
-    # microphone by it. Lillecarl/pymux#657.
-    LATENCY = "latency"
 
     # The client answers.
     PONG = "pong"
@@ -156,10 +146,17 @@ class Packet(StrEnum):
     BROWSER = "browser"
     BROWSER_STOP = "browser-stop"
 
-    # Either side, on an `audio` connection: 20 ms of Opus under `data`.
-    # The server sends what panes play; the client sends what its
-    # microphone hears. Lillecarl/pymux#657.
+    # Sound, on the attached connection of a client that said `audio` in
+    # `start-gui`. Lillecarl/pymux#657.
+    #
+    # Either side: 20 ms of Opus under `data`. The server sends what
+    # panes play; the client sends what its microphone hears.
     SOUND = "sound"
+    # The server tells: what this client's `audio` option is, under
+    # `data`, when sound starts and when the option changes.
+    AUDIO = "audio"
+    # The server tells: hold `buffer` milliseconds in the speaker.
+    LATENCY = "latency"
     # The server tells: open the microphone, or close it, under `data`.
     # The client answers with `error` "silent" when it hears only zeros,
     # which is how macOS refuses a terminal the microphone.
@@ -262,15 +259,14 @@ class Field(StrEnum):
     CODECS = "codecs"
     CODEC = "codec"
     VIDEO = "video"
-    #: In `echo`, the sender's clock when it sent it, which comes back
-    #: unchanged. In `latency`, milliseconds of buffer. In `sound`, the
-    #: channels of the frame. Lillecarl/pymux#657.
+    #: In `start-gui`: this client plays sound. In `echo`, the server's
+    #: clock when it sent it, which comes back unchanged. In `latency`,
+    #: milliseconds of buffer. In `sound`, the channels of the frame.
+    #: Lillecarl/pymux#657.
+    AUDIO = "audio"
     TIME = "time"
     BUFFER = "buffer"
     CHANNELS = "channels"
-    #: In the server's `audio`: the client's `audio-rtt-multiplier`,
-    #: beside its `audio` under `data`.
-    RTT_MULTIPLIER = "rtt-multiplier"
 
 
 class Codec(StrEnum):

@@ -40,6 +40,7 @@ other machine, so this client shows a notice and opens the link again.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import os
 import sys
@@ -61,10 +62,9 @@ from pymux.forwarding import (
     the_far_side_may_narrow,
     with_port,
 )
-from pymux.log import logger
 from pymux.utils import nonblocking
 
-from .audio import AudioClient, SshLink, sound_devices
+from .audio import AudioClient, sound_devices
 from .defaults import is_ssh_url as is_ssh_url
 from .forwards import Forwards
 from .reconnect import (
@@ -293,9 +293,11 @@ class SshClient(TerminalClient):
         #: on the new one, so a link that dropped gives the tunnels
         #: back with the panes. Lillecarl/pymux#436.
         self.forwards = Forwards()
+        #: The loop that writes to the server, for sound from a thread.
+        self._loop: asyncio.AbstractEventLoop | None = None
         #: Sound, where this machine can play it. Lillecarl/pymux#657.
         devices = sound_devices()
-        self.audio = AudioClient(self.client_id, devices) if devices is not None else None
+        self.audio = AudioClient(devices, self._send_from_a_thread) if devices is not None else None
 
     # ------------------------------------------------------------------
     # The transport.
@@ -486,6 +488,7 @@ class SshClient(TerminalClient):
         is what makes it worth waiting for.
         """
         stdin_fd = sys.stdin.fileno()
+        self._loop = asyncio.get_running_loop()
         connection, reader = await self._connect()
         waits = Backoff()
         cannot = None
@@ -604,17 +607,8 @@ class SshClient(TerminalClient):
                 # both silent. Lillecarl/pymux#442.
                 self._report_forwards(self._forwards_moved)
                 self._forwards_moved = ""
-                carrying = False
 
                 async for packet in self._packets(reader):
-                    if packet[Field.CMD] == Packet.AUDIO:
-                        # The server has sound: a channel of its own for
-                        # it, once per attachment.
-                        if not carrying:
-                            carrying = True
-                            tasks.start_soon(self._carry_audio, connection)
-                        continue
-
                     if packet[Field.CMD] == Packet.FORWARD:
                         # Opening one is a coroutine and `_process` is
                         # not, so it goes to the scope that owns this
@@ -665,6 +659,8 @@ class SshClient(TerminalClient):
                 # The program that drove them is on the other side of
                 # the link that went.
                 self.stop_browsers()
+                if self.audio is not None:
+                    self.audio.close()
                 connection.close()
 
         if lost is None and self._slept_through is not None:
@@ -838,21 +834,18 @@ class SshClient(TerminalClient):
             }
         )
 
-    async def _carry_audio(self, connection) -> None:
+    def _send_from_a_thread(self, packet: dict) -> None:
         """
-        Sound on a channel of its own, to the same socket. A failure
-        here ends the sound and never the attachment. Lillecarl/pymux#657.
+        Send from the microphone's thread. asyncssh's writer belongs to
+        the loop, so the write goes there; a link that went drops it.
         """
-        if self.audio is None:
-            return
+        loop = self._loop
+        if loop is not None and not loop.is_closed():
+            loop.call_soon_threadsafe(self._send_quietly, packet)
 
-        async def open_link() -> SshLink:
-            return SshLink(*await connection.open_unix_connection(self.path))
-
-        try:
-            await self.audio.run(open_link)
-        except Exception as error:
-            logger.warning("Sound ended: %s", why(error))
+    def _send_quietly(self, packet: dict) -> None:
+        with contextlib.suppress(BrokenPipeError):
+            self._send_packet(packet)
 
     async def _while_the_link_holds(self, work, *arguments) -> None:
         """

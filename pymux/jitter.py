@@ -23,6 +23,7 @@ from collections import deque
 __all__ = [
     "FRAME_MS",
     "JitterBuffer",
+    "RoundTrip",
     "frames_for",
 ]
 
@@ -33,6 +34,44 @@ FRAME_MS = 20
 #: after a stall would otherwise keep its delay for ever, because the
 #: speaker drains only at its own pace.
 SLACK = 3
+
+
+#: The least a buffer holds, however short the round trip: two frames,
+#: so one late packet on a local link is not a gap, and short enough to
+#: talk over. Fixed, not an option: Lillecarl/pymux#661.
+FLOOR_MS = 2 * FRAME_MS
+#: And the most, so a link that stalled once does not keep a second of
+#: delay for ever.
+CEILING_MS = 1000
+
+#: How often the server measures the round trip, and how many
+#: measurements the buffers follow. The largest of them sizes them: a
+#: buffer has to hold the slow round trips, not the typical one.
+ECHO_EVERY = 1.0
+FIRST_ECHOES = 5
+FIRST_ECHO_EVERY = 0.2
+ROUND_TRIPS = 10
+
+
+class RoundTrip:
+    "The recent round trips of a connection, in seconds."
+
+    def __init__(self) -> None:
+        self._recent: deque[float] = deque(maxlen=ROUND_TRIPS)
+
+    def heard(self, seconds: float) -> None:
+        if seconds >= 0:
+            self._recent.append(seconds)
+
+    def __len__(self) -> int:
+        return len(self._recent)
+
+    def buffer_ms(self, multiplier: float) -> float:
+        "What a buffer should hold for these round trips."
+        if not self._recent:
+            return FLOOR_MS
+        wanted = max(self._recent) * 1000 * multiplier
+        return min(CEILING_MS, max(FLOOR_MS, wanted))
 
 
 def frames_for(milliseconds: float) -> int:
