@@ -23,14 +23,15 @@ from pymux.audio import (
     rtp_source,
 )
 from pymux.enums import AudioServerMode, ClientAudio
-from pymux.jitter import CEILING_MS, FLOOR_MS, FRAME_MS, SLACK, JitterBuffer, RoundTrip
+from pymux.jitter import CEILING_MS, FLOOR_MS, FRAME_MS, SAMPLES_PER_FRAME, SLACK, JitterBuffer, RoundTrip
 from pymux.main import Pymux
 
 PIPEWIRE = {"pipewire": "/bin/pipewire", "wireplumber": "/bin/wireplumber"}
 
 
 def frame(n: int) -> bytes:
-    return bytes([n]) * 4
+    "20 ms of mono sound, every byte `n`."
+    return bytes([n]) * (SAMPLES_PER_FRAME * 2)
 
 
 def test_the_buffer_plays_only_once_it_holds_its_target():
@@ -39,7 +40,53 @@ def test_the_buffer_plays_only_once_it_holds_its_target():
     buffer.put(frame(2))
     assert buffer.take() is None
     buffer.put(frame(3))
-    assert [buffer.take(), buffer.take(), buffer.take()] == [frame(1), frame(2), frame(3)]
+    assert buffer.take() == frame(1)
+
+
+def test_a_frame_taken_is_always_one_frame_long():
+    "A speaker's callback takes 960 samples, whatever the buffer does to follow the clock."
+    buffer = JitterBuffer(2 * FRAME_MS)
+    for n in range(5):
+        buffer.put(frame(n))
+    sizes = set()
+    while (taken := buffer.take()) is not None:
+        sizes.add(len(taken))
+    assert sizes == {len(frame(0))}
+
+
+def follow(buffer: JitterBuffer, ticks: int, extra_every: int = 0, missing_every: int = 0) -> None:
+    "A far clock against the speaker's: one frame made and one taken a tick, and one more or one fewer now and then."
+    for _ in range(buffer._target):
+        buffer.put(frame(1))
+    for tick in range(1, ticks + 1):
+        buffer.take()
+        if not (missing_every and tick % missing_every == 0):
+            buffer.put(frame(1))
+        if extra_every and tick % extra_every == 0:
+            buffer.put(frame(1))
+
+
+def test_a_far_clock_that_runs_fast_is_followed_by_dropping_samples():
+    "500 ppm fast: what it gains is dropped a sample at a time, never a frame."
+    buffer = JitterBuffer(3 * FRAME_MS)
+    follow(buffer, 20000, extra_every=2000)
+    assert buffer.squeezed > 0
+    assert (buffer.dropped, buffer.underruns) == (0, 0)
+    assert len(buffer) <= 3 + 2
+
+
+def test_a_far_clock_that_runs_slow_is_followed_by_repeating_samples():
+    "500 ppm slow: the speaker never runs dry."
+    buffer = JitterBuffer(3 * FRAME_MS)
+    follow(buffer, 20000, missing_every=2000)
+    assert buffer.stretched > 0
+    assert (buffer.dropped, buffer.underruns) == (0, 0)
+
+
+def test_clocks_that_agree_are_left_alone():
+    buffer = JitterBuffer(3 * FRAME_MS)
+    follow(buffer, 5000)
+    assert (buffer.squeezed, buffer.stretched, buffer.dropped, buffer.underruns) == (0, 0, 0, 0)
 
 
 def test_an_empty_buffer_fills_again_before_it_plays():
@@ -49,6 +96,8 @@ def test_an_empty_buffer_fills_again_before_it_plays():
         buffer.put(frame(n))
     buffer.take()
     buffer.take()
+    # A sample or two short is still a frame, by repeating one; a frame
+    # short is a gap.
     assert buffer.take() is None
     assert buffer.underruns == 1
     buffer.put(frame(9))
@@ -60,7 +109,7 @@ def test_a_burst_past_the_target_drops_the_oldest():
     for n in range(10):
         buffer.put(frame(n))
     assert len(buffer) == 2 + SLACK
-    assert buffer.take() == frame(10 - 2 - SLACK)
+    assert buffer.take()[:2] == frame(10 - 2 - SLACK)[:2]
 
 
 def test_a_smaller_target_trims_at_once():

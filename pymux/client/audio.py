@@ -143,6 +143,7 @@ class AudioClient:
             self._close_speaker()
             decoder = self._decoder = opuslib.Decoder(RATE, channels)
             self._speaker_channels = channels
+            self.speaker_buffer.channels = channels
         try:
             frame = decoder.decode(data, FRAME)
         except opuslib.OpusError:
