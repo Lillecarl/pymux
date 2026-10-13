@@ -33,6 +33,7 @@ from libpymux.wire import MSGPACK, PacketReader, encode_json, encode_msgpack
 from pymux.audio import programs
 from pymux.enums import ClientAudio
 from pymux.jitter import FRAME_MS, JitterBuffer
+from pymux.pipes import BrokenPipeError
 
 try:
     import opuslib
@@ -41,6 +42,8 @@ except ImportError:
 
 if TYPE_CHECKING:
     from opuslib import Decoder, Encoder
+
+    from pymux.pipes.memory import MemoryConnection
 
 __all__ = [
     "AudioClient",
@@ -357,6 +360,25 @@ class SocketLink:
 
     async def aclose(self) -> None:
         await self.stream.aclose()
+
+
+class MemoryLink:
+    "A link over an in-memory connection: the client of `pymux integrated`."
+
+    def __init__(self, end: MemoryConnection) -> None:
+        self.end = end
+
+    async def receive(self) -> bytes:
+        try:
+            return await self.end.read_frame()
+        except BrokenPipeError:
+            return b""
+
+    async def send(self, data: bytes) -> None:
+        self.end.write_nowait(data)
+
+    async def aclose(self) -> None:
+        self.end.close()
 
 
 class SshLink:

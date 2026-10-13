@@ -111,7 +111,7 @@ from .osc import (
     request_attention_of,
     set_user_var_of,
 )
-from .pipes import bind_and_listen_on_socket, connect_in_memory
+from .pipes import MemoryConnection, bind_and_listen_on_socket, connect_in_memory
 from .rc import STARTUP_COMMANDS
 from .server import ServerConnection
 from .session import DEFAULT_SIZE, Session
@@ -4593,6 +4593,21 @@ exec pymux notify -u "$urgency" -- "$@"
             raise OSError(errno.EADDRNOTAVAIL, "fd %d does not listen on %r" % (fd, socket_name))
         self.listener = PosixSocketListener(socket_name, sock, self._accept_connection)
 
+    def connect_in_memory(self) -> MemoryConnection:
+        """
+        A connection to this server from this process, and its client's
+        end: the one `pymux integrated` attaches over, and the one its
+        sound goes on. Lillecarl/pymux#659.
+        """
+        server_end, client_end = connect_in_memory()
+        # A context of its own, the same as for a client that arrives
+        # over the socket. A `prompt_toolkit.Application` becomes active
+        # in it.
+        context = contextvars.copy_context()
+        connection = context.run(lambda: ServerConnection(self, server_end))
+        self.connections.append(connection)
+        return client_end
+
     def _accept_connection(self, pipe_connection) -> None:
         # We have to create a new `context`, because this will be the scope for
         # a new prompt_toolkit.Application to become active.
@@ -4709,16 +4724,7 @@ exec pymux notify -u "$urgency" -- "$@"
         async def run() -> None:
             try:
                 async with self.running():
-                    server_end, client_end = connect_in_memory()
-
-                    # A context of its own, the same as for a client
-                    # that arrives over the socket. A
-                    # `prompt_toolkit.Application` becomes active in it.
-                    context = contextvars.copy_context()
-                    connection = context.run(lambda: ServerConnection(self, server_end))
-                    self.connections.append(connection)
-
-                    client = MemoryClient(client_end)
+                    client = MemoryClient(self.connect_in_memory(), self.connect_in_memory)
                     # One process reads the file twice: as the server,
                     # for everything, and as the client, for the lines
                     # that are about this terminal. Lillecarl/pymux#223.

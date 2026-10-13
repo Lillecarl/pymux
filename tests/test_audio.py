@@ -33,7 +33,7 @@ pytest.importorskip("opuslib")
 from libpymux.protocol import Field, Packet
 
 from pymux.audio import programs
-from pymux.client.audio import AudioClient, PipeWireDevices, SocketLink
+from pymux.client.audio import AudioClient, MemoryLink, PipeWireDevices, SocketLink
 from pymux.enums import AudioServerMode
 from pymux.main import Pymux
 
@@ -472,3 +472,27 @@ async def test_a_microphone_that_gives_only_zeros_is_reported(tmp_path):
             await once(lambda: devices.microphone_open, 10.0, "the microphone never opened")
             link = next(iter(pymux.audio.links.values()))
             await once(lambda: link.silent, 10.0, "the silence was never reported")
+
+
+async def test_an_integrated_client_hears_its_own_server(tmp_path):
+    "`pymux integrated` has one process and maybe no socket: the sound goes on a connection in memory."
+    devices = FakeDevices()
+    async with serving(tmp_path) as pymux:
+        client = AudioClient("integrated", devices)
+
+        async def open_link():
+            return MemoryLink(pymux.connect_in_memory())
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(client.run, open_link)
+            await once(lambda: "integrated" in pymux.audio.links, 10.0, "the audio connection never arrived")
+            song = tmp_path / "a440.wav"
+            write_wav(song, tone(440, 3.0, 2), 2)
+            async with running(["pw-play", str(song)], pane_environment(pymux)):
+                await once(
+                    lambda: len(devices.played) >= 2.5 * STEREO_SECOND,
+                    15.0,
+                    lambda: "played %d bytes" % len(devices.played),
+                )
+            tasks.cancel_scope.cancel()
+    assert loudest(bytes(devices.played[STEREO_SECOND : 2 * STEREO_SECOND]), 2) == 440
