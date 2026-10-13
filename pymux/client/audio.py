@@ -29,7 +29,7 @@ from libpymux.protocol import Field, Packet
 
 from pymux.audio import programs
 from pymux.enums import ClientAudio
-from pymux.jitter import FLOOR_MS, FRAME_MS, JitterBuffer, stats_every
+from pymux.jitter import DEFAULT_FRAME_MS, JitterBuffer, samples_per_frame, stats_every
 
 try:
     import opuslib
@@ -48,7 +48,8 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 RATE = 48000
-FRAME = RATE * FRAME_MS // 1000
+#: The most a frame of Opus holds, 60 ms: what a decoder is offered.
+MAX_FRAME = samples_per_frame(60)
 MICROPHONE_CHANNELS = 1
 MICROPHONE_BITRATE = 64000
 
@@ -56,9 +57,8 @@ MICROPHONE_BITRATE = 64000
 #: Linux only.
 F_SETPIPE_SZ = getattr(fcntl, "F_SETPIPE_SZ", 1031)
 
-#: Frames of exact zeros, a second, after which the microphone is
-#: taken for refused.
-SILENT_FRAMES = 1000 // FRAME_MS
+#: Exact zeros for this long, and the microphone is taken for refused.
+SILENT_SECONDS = 1.0
 
 #: How long the speaker stays open with nothing to play. Closing it
 #: lets the machine sleep and other programs take the device.
@@ -72,12 +72,12 @@ class Stream(Protocol):
 class Devices(Protocol):
     """
     The machine's sound card. Each callback runs on a thread the device
-    owns, once per 20 ms frame of 16-bit native samples at 48 kHz.
+    owns, once per frame of `samples` 16-bit native samples at 48 kHz.
     """
 
-    def speaker(self, channels: int, pull: Callable[[], bytes | None]) -> Stream: ...
+    def speaker(self, channels: int, samples: int, pull: Callable[[], bytes | None]) -> Stream: ...
 
-    def microphone(self, channels: int, push: Callable[[bytes], None]) -> Stream: ...
+    def microphone(self, channels: int, samples: int, push: Callable[[bytes], None]) -> Stream: ...
 
 
 class AudioClient:
@@ -94,7 +94,10 @@ class AudioClient:
         self.devices = devices
         self._send = send
         self.mode = ClientAudio.ON
-        self.speaker_buffer = JitterBuffer(FLOOR_MS)
+        #: How long each frame is, both ways: the server says, from this
+        #: client's `audio-frame`.
+        self.frame_ms: float = DEFAULT_FRAME_MS
+        self.speaker_buffer = JitterBuffer(frame_ms=self.frame_ms)
         self._lock = threading.Lock()
         self._speaker: Stream | None = None
         self._speaker_channels = 0
@@ -131,6 +134,9 @@ class AudioClient:
         elif kind == Packet.AUDIO:
             with contextlib.suppress(ValueError):
                 self.mode = ClientAudio(packet.get(Field.DATA))
+            frame_ms = packet.get(Field.FRAME)
+            if isinstance(frame_ms, (int, float)) and frame_ms > 0 and frame_ms != self.frame_ms:
+                self._reframe(float(frame_ms))
             if self.mode == ClientAudio.OFF:
                 self._close_speaker()
             if self.mode != ClientAudio.ON:
@@ -140,6 +146,16 @@ class AudioClient:
                 self._open_microphone()
             else:
                 self._close_microphone()
+
+    def _reframe(self, frame_ms: float) -> None:
+        "Frames of this length from now on: both devices open again at it."
+        recording = self._microphone is not None
+        self._close_speaker()
+        self._close_microphone()
+        self.frame_ms = frame_ms
+        self.speaker_buffer.reframe(frame_ms)
+        if recording:
+            self._open_microphone()
 
     def close(self) -> None:
         "The attachment ended: let both devices go."
@@ -163,7 +179,7 @@ class AudioClient:
             self._speaker_channels = channels
             self.speaker_buffer.channels = channels
         try:
-            frame = decoder.decode(data, FRAME)
+            frame = decoder.decode(data, MAX_FRAME)
         except opuslib.OpusError:
             return
         self.speaker_buffer.put(frame)
@@ -176,7 +192,9 @@ class AudioClient:
             if self._speaker is not None:
                 return
             try:
-                self._speaker = self.devices.speaker(channels, self.speaker_buffer.take)
+                self._speaker = self.devices.speaker(
+                    channels, samples_per_frame(self.frame_ms), self.speaker_buffer.take
+                )
             except Exception as error:
                 logger.warning("The speaker did not open: %s", error)
                 self.mode = ClientAudio.OFF
@@ -212,7 +230,7 @@ class AudioClient:
 
     def _open_microphone(self) -> None:
         if self._microphone is None and opuslib is not None:
-            self._microphone = _Microphone(self.devices, self._send)
+            self._microphone = _Microphone(self.devices, self._send, self.frame_ms)
 
     def _close_microphone(self) -> None:
         microphone, self._microphone = self._microphone, None
@@ -231,9 +249,11 @@ class _Microphone:
     and no error. The server is told once, and says so to the person.
     """
 
-    def __init__(self, devices: Devices, send: Callable[[dict], None]) -> None:
+    def __init__(self, devices: Devices, send: Callable[[dict], None], frame_ms: float) -> None:
         assert opuslib is not None
         self._send = send
+        self._samples = samples_per_frame(frame_ms)
+        self._silent_frames = round(SILENT_SECONDS * 1000 / frame_ms)
         self._frames: queue.Queue[bytes] = queue.Queue(maxsize=50)
         self._stop = threading.Event()
         self._encoder = opuslib.Encoder(RATE, MICROPHONE_CHANNELS, opuslib.APPLICATION_VOIP)
@@ -241,7 +261,7 @@ class _Microphone:
         self._thread = threading.Thread(target=self._run, name="pymux-microphone", daemon=True)
         self._thread.start()
         try:
-            self._stream: Stream | None = devices.microphone(MICROPHONE_CHANNELS, self._hear)
+            self._stream: Stream | None = devices.microphone(MICROPHONE_CHANNELS, self._samples, self._hear)
         except Exception as error:
             logger.warning("The microphone did not open: %s", error)
             self._stream = None
@@ -259,9 +279,9 @@ class _Microphone:
             except queue.Empty:
                 continue
             silent = silent + 1 if frame.count(0) == len(frame) else 0
-            if silent == SILENT_FRAMES:
+            if silent == self._silent_frames:
                 self._send({Field.CMD: Packet.MICROPHONE, Field.ERROR: "silent"})
-            self._send({Field.CMD: Packet.SOUND, Field.DATA: self._encoder.encode(frame, FRAME)})
+            self._send({Field.CMD: Packet.SOUND, Field.DATA: self._encoder.encode(frame, self._samples)})
 
     def close(self) -> None:
         self._stop.set()
@@ -290,27 +310,27 @@ class SoundDevices:
     def __init__(self, sounddevice) -> None:
         self.sd = sounddevice
 
-    def speaker(self, channels: int, pull: Callable[[], bytes | None]) -> Stream:
-        silence = bytes(FRAME * channels * 2)
+    def speaker(self, channels: int, samples: int, pull: Callable[[], bytes | None]) -> Stream:
+        silence = bytes(samples * channels * 2)
 
         def callback(outdata, frames, _time, _status) -> None:
-            frame = pull() if frames == FRAME else None
+            frame = pull() if frames == samples else None
             outdata[:] = frame if frame is not None else silence[: len(outdata)]
 
         return _SoundDeviceStream(
             self.sd.RawOutputStream(
-                samplerate=RATE, channels=channels, dtype="int16", blocksize=FRAME, callback=callback
+                samplerate=RATE, channels=channels, dtype="int16", blocksize=samples, callback=callback
             )
         )
 
-    def microphone(self, channels: int, push: Callable[[bytes], None]) -> Stream:
+    def microphone(self, channels: int, samples: int, push: Callable[[bytes], None]) -> Stream:
         def callback(indata, frames, _time, _status) -> None:
-            if frames == FRAME:
+            if frames == samples:
                 push(bytes(indata))
 
         return _SoundDeviceStream(
             self.sd.RawInputStream(
-                samplerate=RATE, channels=channels, dtype="int16", blocksize=FRAME, callback=callback
+                samplerate=RATE, channels=channels, dtype="int16", blocksize=samples, callback=callback
             )
         )
 
@@ -395,8 +415,9 @@ class PipeWireDevices:
         self.pw_cat = pw_cat
         self.environment = environment
 
-    def _argv(self, mode: str, channels: int) -> list[str]:
-        # One frame of latency: pw-cat asks for 100 ms by default.
+    def _argv(self, mode: str, channels: int, samples: int) -> list[str]:
+        # One frame of latency: pw-cat asks for 100 ms by default. As a
+        # fraction, which takes a frame of 2.5 ms where "ms" does not.
         return [
             self.pw_cat,
             mode,
@@ -408,11 +429,11 @@ class PipeWireDevices:
             "--format",
             "s16",
             "--latency",
-            "%dms" % (FRAME_MS,),
+            "%d/%d" % (samples, RATE),
         ]
 
-    def speaker(self, channels: int, pull: Callable[[], bytes | None]) -> Stream:
-        silence = bytes(FRAME * channels * 2)
+    def speaker(self, channels: int, samples: int, pull: Callable[[], bytes | None]) -> Stream:
+        silence = bytes(samples * channels * 2)
 
         def feed(pipe, stop: threading.Event) -> None:
             while not stop.is_set():
@@ -420,10 +441,10 @@ class PipeWireDevices:
                 pipe.write(frame if frame is not None else silence)
                 pipe.flush()
 
-        return _PwCatStream([*self._argv("--playback", channels), "-"], self.environment, feed)
+        return _PwCatStream([*self._argv("--playback", channels, samples), "-"], self.environment, feed)
 
-    def microphone(self, channels: int, push: Callable[[bytes], None]) -> Stream:
-        size = FRAME * channels * 2
+    def microphone(self, channels: int, samples: int, push: Callable[[bytes], None]) -> Stream:
+        size = samples * channels * 2
 
         def feed(pipe, stop: threading.Event) -> None:
             while not stop.is_set():
@@ -432,7 +453,7 @@ class PipeWireDevices:
                     return
                 push(frame)
 
-        return _PwCatStream([*self._argv("--record", channels), "-"], self.environment, feed)
+        return _PwCatStream([*self._argv("--record", channels, samples), "-"], self.environment, feed)
 
 
 def pipewire_answers(environment: Mapping[str, str]) -> bool:

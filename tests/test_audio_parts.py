@@ -8,6 +8,7 @@ Lillecarl/pymux#657.
 from __future__ import annotations
 
 import json
+import math
 
 import pytest
 
@@ -21,29 +22,36 @@ from pymux.audio import (
     pw_cat,
     resolve,
 )
-from pymux.enums import AudioServerMode, ClientAudio
+from pymux.enums import AudioFrame, AudioServerMode, ClientAudio
 from pymux.jitter import (
     CEILING_MS,
-    FLOOR_MS,
-    FRAME_MS,
-    SAMPLES_PER_FRAME,
-    SLACK,
+    DEFAULT_FRAME_MS,
+    FRAME_SIZES,
+    SLACK_FRAMES,
+    SLACK_MS,
     JitterBuffer,
     RoundTrip,
+    floor_ms,
+    samples_per_frame,
     stats_every,
 )
 from pymux.main import Pymux
 
 PIPEWIRE = {"pipewire": "/bin/pipewire", "wireplumber": "/bin/wireplumber"}
 
+#: The frame the buffer tests take, and the frames its cap holds past the target.
+F = DEFAULT_FRAME_MS
+SLACK = max(SLACK_FRAMES, math.ceil(SLACK_MS / F))
+FLOOR = floor_ms(F)
 
-def frame(n: int) -> bytes:
-    "20 ms of mono sound, every byte `n`."
-    return bytes([n]) * (SAMPLES_PER_FRAME * 2)
+
+def frame(n: int, frame_ms: float = F) -> bytes:
+    "A frame of mono sound, every byte `n`."
+    return bytes([n]) * (samples_per_frame(frame_ms) * 2)
 
 
 def test_the_buffer_plays_only_once_it_holds_its_target():
-    buffer = JitterBuffer(3 * FRAME_MS)
+    buffer = JitterBuffer(3 * F)
     buffer.put(frame(1))
     buffer.put(frame(2))
     assert buffer.take() is None
@@ -51,9 +59,38 @@ def test_the_buffer_plays_only_once_it_holds_its_target():
     assert buffer.take() == frame(1)
 
 
+@pytest.mark.parametrize("frame_ms", FRAME_SIZES)
+def test_every_opus_frame_size_follows_a_fast_clock(frame_ms):
+    """
+    200 ppm fast, at every frame size Opus has: absorbed a sample at a
+    time, with no frame lost. One sample a frame follows 350 ppm at
+    60 ms frames; real clocks drift under a hundred.
+    """
+    buffer = JitterBuffer(3 * frame_ms, frame_ms=frame_ms)
+    for _ in range(3):
+        buffer.put(frame(1, frame_ms))
+    ticks = round(1_000_000 / frame_ms)
+    for tick in range(1, ticks + 1):
+        assert len(buffer.take() or b"") in (0, len(frame(1, frame_ms)))
+        buffer.put(frame(1, frame_ms))
+        if tick % 5000 == 0:
+            buffer.put(frame(1, frame_ms))
+    assert buffer.squeezed > 0
+    assert (buffer.dropped, buffer.underruns) == (0, 0)
+
+
+def test_a_new_frame_size_keeps_the_buffer_it_was_asked_for():
+    buffer = JitterBuffer(60, frame_ms=20)
+    buffer.reframe(2.5)
+    assert (buffer.frame_ms, buffer.target_ms) == (2.5, 60)
+    # Two frames are the floor: two of 60 ms are 120.
+    buffer.reframe(60)
+    assert buffer.target_ms == 120
+
+
 def test_a_frame_taken_is_always_one_frame_long():
     "A speaker's callback takes 960 samples, whatever the buffer does to follow the clock."
-    buffer = JitterBuffer(2 * FRAME_MS)
+    buffer = JitterBuffer(2 * F)
     for n in range(5):
         buffer.put(frame(n))
     sizes = set()
@@ -76,7 +113,7 @@ def follow(buffer: JitterBuffer, ticks: int, extra_every: int = 0, missing_every
 
 def test_a_far_clock_that_runs_fast_is_followed_by_dropping_samples():
     "500 ppm fast: what it gains is dropped a sample at a time, never a frame."
-    buffer = JitterBuffer(3 * FRAME_MS)
+    buffer = JitterBuffer(3 * F)
     follow(buffer, 20000, extra_every=2000)
     assert buffer.squeezed > 0
     assert (buffer.dropped, buffer.underruns) == (0, 0)
@@ -85,7 +122,7 @@ def test_a_far_clock_that_runs_fast_is_followed_by_dropping_samples():
 
 def test_a_far_clock_that_runs_slow_is_followed_by_repeating_samples():
     "500 ppm slow: the speaker never runs dry."
-    buffer = JitterBuffer(3 * FRAME_MS)
+    buffer = JitterBuffer(3 * F)
     follow(buffer, 20000, missing_every=2000)
     assert buffer.stretched > 0
     assert (buffer.dropped, buffer.underruns) == (0, 0)
@@ -97,7 +134,7 @@ def test_a_fill_that_sits_a_little_high_is_not_corrected():
     frame or so over its target. From the MacBook it sat a frame and a
     quarter over, and the buffer squeezed every frame chasing it.
     """
-    buffer = JitterBuffer(2 * FRAME_MS)
+    buffer = JitterBuffer(2 * F)
     for _ in range(3):
         buffer.put(frame(1))
     for _ in range(5000):
@@ -107,14 +144,14 @@ def test_a_fill_that_sits_a_little_high_is_not_corrected():
 
 
 def test_clocks_that_agree_are_left_alone():
-    buffer = JitterBuffer(3 * FRAME_MS)
+    buffer = JitterBuffer(3 * F)
     follow(buffer, 5000)
     assert (buffer.squeezed, buffer.stretched, buffer.dropped, buffer.underruns) == (0, 0, 0, 0)
 
 
 def test_an_empty_buffer_fills_again_before_it_plays():
     "One frame at a time after a gap would stutter."
-    buffer = JitterBuffer(2 * FRAME_MS)
+    buffer = JitterBuffer(2 * F)
     for n in range(2):
         buffer.put(frame(n))
     buffer.take()
@@ -128,20 +165,20 @@ def test_an_empty_buffer_fills_again_before_it_plays():
 
 
 def test_a_burst_past_the_target_drops_the_oldest():
-    buffer = JitterBuffer(2 * FRAME_MS)
-    for n in range(10):
+    buffer = JitterBuffer(2 * F)
+    for n in range(30):
         buffer.put(frame(n))
     assert len(buffer) == 2 + SLACK
-    assert buffer.take()[:2] == frame(10 - 2 - SLACK)[:2]
+    assert buffer.take()[:2] == frame(30 - 2 - SLACK)[:2]
 
 
 def test_a_smaller_target_trims_at_once():
-    buffer = JitterBuffer(10 * FRAME_MS)
-    for n in range(10):
+    buffer = JitterBuffer(10 * F)
+    for n in range(20):
         buffer.put(frame(n))
-    buffer.retarget(FRAME_MS)
+    buffer.retarget(F)
     assert len(buffer) == 1 + SLACK
-    assert buffer.target_ms == FRAME_MS
+    assert buffer.target_ms == F
 
 
 def test_stats_are_off_unless_asked_for(monkeypatch):
@@ -155,9 +192,9 @@ def test_stats_are_off_unless_asked_for(monkeypatch):
 
 
 def test_a_buffer_describes_itself_for_a_stats_line():
-    buffer = JitterBuffer(3 * FRAME_MS)
+    buffer = JitterBuffer(3 * F)
     buffer.put(frame(1))
-    assert buffer.describe() == "holds 20/60 ms, underruns 0, dropped 0, squeezed 0, stretched 0"
+    assert buffer.describe() == "frames of 10 ms, holds 10/30 ms, underruns 0, dropped 0, squeezed 0, stretched 0"
 
 
 def test_the_round_trip_reads_as_fastest_median_slowest():
@@ -170,16 +207,16 @@ def test_the_round_trip_reads_as_fastest_median_slowest():
 
 def test_the_round_trip_sizes_the_buffer_by_its_slowest():
     trips = RoundTrip()
-    assert trips.buffer_ms(2.0) == FLOOR_MS
+    assert trips.buffer_ms(2.0, FLOOR) == FLOOR
     for seconds in (0.030, 0.050, 0.040):
         trips.heard(seconds)
-    assert trips.buffer_ms(2.0) == pytest.approx(80)
-    assert trips.buffer_ms(0.1) == FLOOR_MS
+    assert trips.buffer_ms(2.0, FLOOR) == pytest.approx(80)
+    assert trips.buffer_ms(0.1, FLOOR) == FLOOR
     # One slow echo alone moves nothing; a second does.
     trips.heard(5.0)
-    assert trips.buffer_ms(2.0) == pytest.approx(100)
+    assert trips.buffer_ms(2.0, FLOOR) == pytest.approx(100)
     trips.heard(5.0)
-    assert trips.buffer_ms(2.0) == CEILING_MS
+    assert trips.buffer_ms(2.0, FLOOR) == CEILING_MS
 
 
 @pytest.fixture
@@ -281,6 +318,7 @@ class _Client:
         self.last_used = last_used
         self.audio = mode
         self.audio_rtt_multiplier = 2.0
+        self.audio_frame = AudioFrame.MS_10
         self.message = ""
 
 
@@ -293,6 +331,9 @@ class _Link:
 
     def retarget(self, multiplier: float | None = None) -> None:
         self.multiplier = multiplier
+
+    def reframe(self, frame_ms: float) -> None:
+        self.frame_ms = frame_ms
 
     def send(self, packet) -> None:
         self.sent.append(packet)
@@ -358,7 +399,7 @@ def test_a_client_hears_its_options(routed):
     server, clients, links = routed
     clients[0].audio_rtt_multiplier = 3.5
     server.client_options_changed()
-    assert links["a"].sent[-1] == {"cmd": "audio", "data": "on"}
+    assert links["a"].sent[-1] == {"cmd": "audio", "data": "on", "frame": 10.0}
     assert links["a"].multiplier == 3.5
 
 

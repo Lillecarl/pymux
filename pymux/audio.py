@@ -45,8 +45,18 @@ import anyio
 import anyio.abc
 from libpymux.protocol import Field, Packet
 
-from pymux.enums import AudioServerMode, ClientAudio
-from pymux.jitter import ECHO_EVERY, FIRST_ECHO_EVERY, FIRST_ECHOES, FRAME_MS, JitterBuffer, RoundTrip, stats_every
+from pymux.enums import AudioFrame, AudioServerMode, ClientAudio
+from pymux.jitter import (
+    DEFAULT_FRAME_MS,
+    ECHO_EVERY,
+    FIRST_ECHO_EVERY,
+    FIRST_ECHOES,
+    JitterBuffer,
+    RoundTrip,
+    floor_ms,
+    samples_per_frame,
+    stats_every,
+)
 
 if TYPE_CHECKING:
     from opuslib import Encoder
@@ -62,7 +72,15 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 RATE = 48000
-FRAME = RATE * FRAME_MS // 1000
+#: How much sound the server's PipeWire moves at once, whatever frame a
+#: client takes: a client's `audio-frame` below it shortens the buffers
+#: and the client's device, not this. Following the smallest client
+#: would restart both devices on every change, and a 2.5 ms quantum
+#: wakes the graph 400 times a second for good.
+QUANTUM_MS = 10
+QUANTUM = samples_per_frame(QUANTUM_MS)
+#: The most a frame of Opus holds, 60 ms: what a decoder is offered.
+MAX_FRAME = samples_per_frame(60)
 SPEAKER_CHANNELS = 2
 MICROPHONE_CHANNELS = 1
 #: Enough for music. Opus spends less on silence by itself.
@@ -94,7 +112,7 @@ MICROPHONE_PIPE = 4096
 #: than its pipe holds within this many seconds. A pipe that only filled
 #: once does not count.
 RECORDING_WINDOW = 0.25
-RECORDING_BYTES = MICROPHONE_PIPE + FRAME * 2
+RECORDING_BYTES = MICROPHONE_PIPE + QUANTUM * 2
 
 #: A unix socket path holds 108 bytes, and macOS's 104.
 SOCKET_PATH_MAX = 104
@@ -170,8 +188,8 @@ def daemon_config(runtime: str) -> dict[str, Any]:
             "core.daemon": True,
             "core.name": "pipewire-0",
             "default.clock.rate": RATE,
-            "default.clock.quantum": FRAME,
-            "default.clock.min-quantum": FRAME // 2,
+            "default.clock.quantum": QUANTUM,
+            "default.clock.min-quantum": QUANTUM // 2,
             "mem.allow-mlock": False,
             "support.dbus": False,
         },
@@ -257,7 +275,7 @@ def pw_cat(
         "--format",
         "s16",
         "--latency",
-        "%dms" % (FRAME_MS,),
+        "%dms" % (QUANTUM_MS,),
         "-P",
         json.dumps(properties),
         "-",
@@ -284,10 +302,12 @@ class AudioLink:
         self.client_id = connection.client_id
         self._queue: deque[dict] = deque(maxlen=SEND_QUEUE)
         self._ready = anyio.Event()
-        self.microphone = JitterBuffer()
+        #: The client's `audio-frame`: the frames both ways are this long.
+        self.frame_ms: float = DEFAULT_FRAME_MS
+        self.microphone = JitterBuffer(frame_ms=self.frame_ms)
         self.round_trip = RoundTrip()
         self._multiplier = 2.0
-        self._told_ms: int | None = None
+        self._told_ms: float | None = None
         #: Sound frames queued for the client, and those a slow link let go.
         self.sent = 0
         self.late = 0
@@ -347,7 +367,7 @@ class AudioLink:
         "Size both buffers from the round trips, and tell the client its own."
         if multiplier is not None:
             self._multiplier = multiplier
-        self.microphone.retarget(self.round_trip.buffer_ms(self._multiplier))
+        self.microphone.retarget(self.round_trip.buffer_ms(self._multiplier, floor_ms(self.frame_ms)))
         told = self.microphone.target_ms
         if told != self._told_ms:
             self._told_ms = told
@@ -358,6 +378,12 @@ class AudioLink:
                 self.round_trip.describe(),
                 told,
             )
+
+    def reframe(self, frame_ms: float) -> None:
+        "The client's frames are this long from now on."
+        if frame_ms != self.frame_ms:
+            self.frame_ms = frame_ms
+            self.microphone.reframe(frame_ms)
 
     def heard(self, packet: dict) -> None:
         kind = packet.get(Field.CMD)
@@ -370,7 +396,7 @@ class AudioLink:
             data = packet.get(Field.DATA)
             if isinstance(data, bytes):
                 try:
-                    self.microphone.put(self._decoder.decode(data, FRAME))
+                    self.microphone.put(self._decoder.decode(data, MAX_FRAME))
                 except opuslib.OpusError:
                     logger.warning("A microphone frame from client %s did not decode.", self.client_id or "?")
         elif kind == Packet.MICROPHONE and packet.get(Field.ERROR) == "silent":
@@ -403,8 +429,8 @@ class AudioServer:
         self.runtime: str | None = None
         #: Whether a program records from the microphone. `_watch` keeps it.
         self.recording = False
-        #: Frames of a client's microphone given to PipeWire, ever.
-        self.microphone_frames = 0
+        #: Milliseconds of a client's microphone given to PipeWire, ever.
+        self.microphone_ms = 0.0
         self._changed = anyio.Event()
         self._scope: anyio.CancelScope | None = None
         #: Set once PipeWire listens, for whoever waits on it. A test does.
@@ -464,7 +490,9 @@ class AudioServer:
         client_state = self._client_of(link)
         if client_state is None:
             return
-        link.send({Field.CMD: Packet.AUDIO, Field.DATA: str(client_state.audio)})
+        frame_ms = AudioFrame(client_state.audio_frame).ms
+        link.reframe(frame_ms)
+        link.send({Field.CMD: Packet.AUDIO, Field.DATA: str(client_state.audio), Field.FRAME: frame_ms})
         link.retarget(client_state.audio_rtt_multiplier)
 
     def current(self) -> AudioLink | None:
@@ -643,22 +671,28 @@ class AudioServer:
                     process.kill()
 
     async def _speak(self, argv: list[str], environment: dict[str, str], encoder: Encoder) -> None:
-        "What panes play, from the speaker's `pw-cat` to the current client as Opus."
-        whole = FRAME * SPEAKER_CHANNELS * 2
+        """
+        What panes play, from the speaker's `pw-cat` to the current
+        client as Opus, in frames as long as that client takes.
+        """
         held = bytearray()
         async with self._program(argv, environment, stdout=PIPE) as process:
             assert process.stdout is not None
             async for chunk in process.stdout:
                 held += chunk
-                while len(held) >= whole:
+                while True:
+                    link = self.current()
+                    samples = samples_per_frame(link.frame_ms if link is not None else DEFAULT_FRAME_MS)
+                    whole = samples * SPEAKER_CHANNELS * 2
+                    if len(held) < whole:
+                        break
                     pcm = bytes(held[:whole])
                     del held[:whole]
-                    link = self.current()
                     if link is not None:
                         link.send(
                             {
                                 Field.CMD: Packet.SOUND,
-                                Field.DATA: encoder.encode(pcm, FRAME),
+                                Field.DATA: encoder.encode(pcm, samples),
                                 Field.CHANNELS: SPEAKER_CHANNELS,
                             }
                         )
@@ -677,7 +711,7 @@ class AudioServer:
         with contextlib.suppress(OSError):
             fcntl.fcntl(write_end, F_SETPIPE_SZ, MICROPHONE_PIPE)
         os.set_blocking(write_end, False)
-        silence = bytes(FRAME * MICROPHONE_CHANNELS * 2)
+        silence = bytes(QUANTUM * MICROPHONE_CHANNELS * 2)
         taken: deque[tuple[float, int]] = deque()
         try:
             async with self._program(argv, environment, stdin=read_end) as process, anyio.create_task_group() as tasks:
@@ -690,8 +724,8 @@ class AudioServer:
                         self._steer_microphone()
                         link = self.current()
                         frame = link.microphone.take() if link is not None and link.microphone_open else None
-                        if frame is not None:
-                            self.microphone_frames += 1
+                        if frame is not None and link is not None:
+                            self.microphone_ms += link.frame_ms
                         pending = frame if frame is not None else silence
                     await anyio.wait_writable(write_end)
                     try:
@@ -710,7 +744,7 @@ class AudioServer:
     async def _watch(self, taken: deque[tuple[float, int]]) -> None:
         "Whether a program records: whether the microphone's pipe drains."
         while True:
-            await anyio.sleep(FRAME_MS / 1000)
+            await anyio.sleep(QUANTUM_MS / 1000)
             now = anyio.current_time()
             while taken and taken[0][0] < now - RECORDING_WINDOW:
                 taken.popleft()

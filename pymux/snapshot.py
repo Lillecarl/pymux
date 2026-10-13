@@ -55,7 +55,7 @@ from pyte.titles import Titles
 
 from .arrangement import HSplit, LayoutTypes, Pane, VSplit, Window, _Split, node_key
 from .commands.wait_for import WaitChannel
-from .enums import ClientAudio, WindowScroll
+from .enums import AudioFrame, ClientAudio, WindowScroll
 from .ids import PaneId, SessionId, WindowId, WindowIndex
 from .jobs import Job, JobId
 from .notifications import Notification
@@ -70,7 +70,7 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "load", "program_ids", "save", "start
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 18
+SNAPSHOT_VERSION = 19
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -89,6 +89,7 @@ _CLIENT_SETTING_TYPES: dict[str, type] = {
     "browser_profile": str,
     "audio": ClientAudio,
     "audio_rtt_multiplier": float,
+    "audio_frame": AudioFrame,
 }
 CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
 CLIENT_COLUMNS = ("client_id", "session_id", "previous_session_id", *CLIENT_SETTINGS, "modes", "connected")
@@ -98,10 +99,9 @@ CLIENT_COLUMNS = ("client_id", "session_id", "previous_session_id", *CLIENT_SETT
 #: change of shape adds the one step from the version before it and
 #: deletes any older step. Version 12 is the first a holder hands over.
 STEPS: dict[int, str] = {
-    # 18 holds each client's `audio` and `audio-rtt-multiplier`.
-    17: """
-ALTER TABLE clients ADD COLUMN audio TEXT;
-ALTER TABLE clients ADD COLUMN audio_rtt_multiplier REAL;
+    # 19 holds each client's `audio-frame`.
+    18: """
+ALTER TABLE clients ADD COLUMN audio_frame TEXT;
 """,
 }
 
@@ -256,7 +256,8 @@ CREATE TABLE clients(
   browser_program TEXT,
   browser_profile TEXT,
   audio TEXT,
-  audio_rtt_multiplier REAL
+  audio_rtt_multiplier REAL,
+  audio_frame TEXT
 );
 CREATE TABLE client_windows(
   client_id TEXT NOT NULL REFERENCES clients(client_id),

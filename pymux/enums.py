@@ -97,6 +97,25 @@ class ClientAudio(StrEnum):
     OFF = "off"
 
 
+class AudioFrame(StrEnum):
+    """
+    How much sound one packet carries, in milliseconds: every size Opus
+    encodes. Shorter is less delay, because each end buffers two frames
+    and its device one; longer is fewer packets. Lillecarl/pymux#657.
+    """
+
+    MS_2_5 = "2.5"
+    MS_5 = "5"
+    MS_10 = "10"
+    MS_20 = "20"
+    MS_40 = "40"
+    MS_60 = "60"
+
+    @property
+    def ms(self) -> float:
+        return float(self.value)
+
+
 class WindowScroll(StrEnum):
     """
     What one scroll event from a client's terminal does to a Wayland

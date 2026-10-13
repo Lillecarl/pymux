@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, override
 
 from . import log
 from .arrangement import Window
-from .enums import AudioServerMode, ClientAudio, PaneBrowser, WindowCodec, WindowScroll, WindowSize, Woke
+from .enums import AudioFrame, AudioServerMode, ClientAudio, PaneBrowser, WindowCodec, WindowScroll, WindowSize, Woke
 from .key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS
 from .key_spelling import key_however_it_is_written
 from .layout import Justify
@@ -601,6 +601,17 @@ class AudioServerOption(EnumOption):
         pymux.audio.option_changed()
 
 
+class AudioFrameOption(EnumOption):
+    "`audio-frame`, which both ends of the client's sound hear at once."
+
+    def __init__(self, attribute_name: str) -> None:
+        super().__init__(AudioFrame, attribute_name, scope=Scope.CLIENT)
+
+    @override
+    def after(self, pymux: Pymux) -> None:
+        pymux.audio.client_options_changed()
+
+
 class ClientAudioOption(EnumOption):
     "`audio`, one client's: play, play and record, or neither."
 
@@ -1064,6 +1075,8 @@ ALL_CLIENT_OPTIONS = {
     # Lillecarl/pymux#657.
     "audio": ClientAudioOption("audio"),
     "audio-rtt-multiplier": AudioRttOption("audio_rtt_multiplier", scope=Scope.CLIENT),
+    # How much sound a packet carries, in ms: any size Opus encodes.
+    "audio-frame": AudioFrameOption("audio_frame"),
 }
 
 

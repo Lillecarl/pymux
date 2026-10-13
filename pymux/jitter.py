@@ -4,8 +4,12 @@ The buffer in front of a speaker that sound reaches over a network.
 Sound arrives in bursts and leaves at the speaker's clock. The buffer
 holds `target` frames before it plays, so a late burst does not stop
 the sound. Its size is the round trip times a multiplier, which the
-client measures on the audio connection itself (`client/audio.py`).
+server measures on the client's connection (`audio.py`).
 Lillecarl/pymux#657.
+
+A frame is any size Opus encodes, which each client chooses
+(`audio-frame`). So every tuning here is in milliseconds, and turns into
+frames of the size at hand.
 
 The link is TCP, so nothing is lost or reordered: a frame is late or on
 time. That keeps this a queue and not a reorder buffer.
@@ -22,51 +26,65 @@ import threading
 from collections import deque
 
 __all__ = [
-    "FRAME_MS",
+    "DEFAULT_FRAME_MS",
+    "FRAME_SIZES",
     "JitterBuffer",
     "RoundTrip",
-    "frames_for",
+    "floor_ms",
+    "samples_per_frame",
 ]
 
-#: One Opus frame, and one packet of PipeWire's RTP on loopback.
-FRAME_MS = 20
-#: Its samples, per channel, at the 48 kHz everything here runs at.
-SAMPLES_PER_FRAME = 48000 * FRAME_MS // 1000
+RATE = 48000
 
-#: The takes the average fill is taken over: a second of frames.
-AVERAGE_OVER = 1000 // FRAME_MS
+#: The frame sizes Opus encodes, in milliseconds, and the one a client
+#: plays unless it chooses: short enough that two of them make a 20 ms
+#: buffer, long enough for 100 packets a second each way.
+FRAME_SIZES = (2.5, 5, 10, 20, 40, 60)
+DEFAULT_FRAME_MS = 10
 
-#: Frames held past the target before the oldest are dropped. A burst
-#: after a stall would otherwise keep its delay for ever, because the
-#: speaker drains only at its own pace. Past the dead band and the ramp
-#: below, so drift that is being followed never reaches it.
-SLACK = 5
+#: How long the average fill is taken over.
+AVERAGE_MS = 1000
 
-#: How far off its steady fill the buffer may sit, in frames, before
-#: the drift is followed, and over how many more frames the share of
-#: frames corrected grows to all of them. Tighter below: a buffer that
-#: runs low is a gap away, and one that runs high only waits longer.
-DEAD_BAND = 1.5
-RAMP = 1.0
-DEAD_BAND_LOW = 0.5
-RAMP_LOW = 0.5
+#: Sound held past the target before the oldest frames are dropped. A
+#: burst after a stall would otherwise keep its delay for ever, because
+#: the speaker drains only at its own pace. Past the dead band and the
+#: ramp below, so drift that is being followed never reaches it.
+SLACK_MS = 100
+#: And never fewer frames than this: at 60 ms frames 100 ms is two, and
+#: one burst past the steady fill reached it.
+SLACK_FRAMES = 3
 
+#: How far off its steady fill the buffer may sit before the drift is
+#: followed, and over how much more the share of frames corrected grows
+#: to all of them. Tighter below: a buffer that runs low is a gap away,
+#: and one that runs high only waits longer.
+DEAD_BAND_MS = 30
+RAMP_MS = 20
+DEAD_BAND_LOW_MS = 10
+RAMP_LOW_MS = 10
 
 #: The least a buffer holds, however short the round trip: two frames,
-#: so one late packet on a local link is not a gap, and short enough to
-#: talk over. Fixed, not an option: Lillecarl/pymux#661.
-FLOOR_MS = 2 * FRAME_MS
+#: so one late packet on a local link is not a gap. Lillecarl/pymux#661.
+FLOOR_FRAMES = 2
 #: And the most, so a link that stalled once does not keep a second of
 #: delay for ever.
 CEILING_MS = 1000
 
 #: How often the server measures the round trip, and how many
-#: measurements the buffers follow. The largest of them sizes them: a
-#: buffer has to hold the slow round trips, not the typical one.
+#: measurements the buffers follow.
 ECHO_EVERY = 1.0
 FIRST_ECHOES = 5
 FIRST_ECHO_EVERY = 0.2
 ROUND_TRIPS = 10
+
+
+def samples_per_frame(frame_ms: float) -> int:
+    "A frame's samples, per channel, at the 48 kHz everything here runs at."
+    return round(RATE * frame_ms / 1000)
+
+
+def floor_ms(frame_ms: float) -> float:
+    return FLOOR_FRAMES * frame_ms
 
 
 class RoundTrip:
@@ -89,15 +107,15 @@ class RoundTrip:
         ordered = sorted(self._recent)
         return "%.1f/%.1f/%.1f" % (ordered[0] * 1000, ordered[len(ordered) // 2] * 1000, ordered[-1] * 1000)
 
-    def buffer_ms(self, multiplier: float) -> float:
+    def buffer_ms(self, multiplier: float, floor: float) -> float:
         "What a buffer should hold for these round trips: the slow ones, but not one alone."
         if not self._recent:
-            return FLOOR_MS
+            return floor
         # The second slowest: one slow echo, a client busy drawing for a
         # moment, made a buffer six times its size for ten seconds.
         ordered = sorted(self._recent)
         wanted = ordered[-2 if len(ordered) > 2 else -1] * 1000 * multiplier
-        return min(CEILING_MS, max(FLOOR_MS, wanted))
+        return min(CEILING_MS, max(floor, wanted))
 
 
 def stats_every() -> float | None:
@@ -112,11 +130,6 @@ def stats_every() -> float | None:
     return seconds if seconds > 0 else None
 
 
-def frames_for(milliseconds: float) -> int:
-    "The frames that hold this much sound, at least one."
-    return max(1, math.ceil(milliseconds / FRAME_MS))
-
-
 class JitterBuffer:
     """
     Sound held between the network and a speaker, as 16-bit samples.
@@ -126,20 +139,22 @@ class JitterBuffer:
     agree: by a hundred parts per million a buffer of any size fills or
     empties in minutes. So a frame taken while the buffer runs full is
     made of one sample more than it plays, with one dropped, and one
-    taken while it runs empty repeats one. That is up to a thousand
-    parts per million either way, ten times the usual drift, and a
-    single sample in 960 is not heard. It is how other players keep two
-    clocks together without a resampler. Lillecarl/pymux#660.
+    taken while it runs empty repeats one. That is one sample a frame:
+    from 350 parts per million at 60 ms frames to 8000 at 2.5 ms, past
+    the usual drift of under a hundred, and not heard. It is how other
+    players keep two clocks together without a resampler.
+    Lillecarl/pymux#660.
 
     It judges the fill on an average of about a second, so a burst off
     the network moves nothing: only a fill that stays off its target is
     drift.
     """
 
-    def __init__(self, target_ms: float = FLOOR_MS, channels: int = 1) -> None:
+    def __init__(self, target_ms: float | None = None, channels: int = 1, frame_ms: float = DEFAULT_FRAME_MS) -> None:
         self._lock = threading.Lock()
         self._held = bytearray()
-        self._target = frames_for(target_ms)
+        self.frame_ms = frame_ms
+        self._target = self._frames_for(floor_ms(frame_ms) if target_ms is None else target_ms)
         self.channels = channels
         #: Whether it plays, or fills up to the target first.
         self._playing = False
@@ -154,8 +169,22 @@ class JitterBuffer:
         self.stretched = 0
 
     @property
-    def target_ms(self) -> int:
-        return self._target * FRAME_MS
+    def target_ms(self) -> float:
+        return self._target * self.frame_ms
+
+    def _frames_for(self, milliseconds: float) -> int:
+        "The frames that hold this much sound, at least one."
+        return max(1, math.ceil(milliseconds / self.frame_ms - 1e-9))
+
+    def reframe(self, frame_ms: float) -> None:
+        "Hold frames of this size from now on. What it held goes: it was cut to the old size."
+        with self._lock:
+            target_ms = self.target_ms
+            self.frame_ms = frame_ms
+            self._target = self._frames_for(max(target_ms, floor_ms(frame_ms)))
+            self._held.clear()
+            self._playing = False
+            self._average = None
 
     @property
     def _stride(self) -> int:
@@ -163,12 +192,12 @@ class JitterBuffer:
 
     @property
     def _frame(self) -> int:
-        return SAMPLES_PER_FRAME * self._stride
+        return samples_per_frame(self.frame_ms) * self._stride
 
     def retarget(self, target_ms: float) -> None:
         "Hold this much from the next fill on. A smaller target drops what is over it."
         with self._lock:
-            self._target = frames_for(target_ms)
+            self._target = self._frames_for(target_ms)
             self._trim()
 
     def put(self, frame: bytes) -> None:
@@ -186,7 +215,8 @@ class JitterBuffer:
                 return None
             frame, stride = self._frame, self._stride
             fill = len(self._held) / frame
-            self._average = fill if self._average is None else self._average + (fill - self._average) / AVERAGE_OVER
+            over = AVERAGE_MS / self.frame_ms
+            self._average = fill if self._average is None else self._average + (fill - self._average) / over
             if len(self._held) < frame - stride:
                 # Out of sound: fill to the target again before playing,
                 # rather than stutter one frame at a time.
@@ -199,8 +229,8 @@ class JitterBuffer:
             # a real network arrive unevenly, and a run from the MacBook
             # sat a frame and a quarter over, squeezing every frame.
             # Past it, a share of frames that grows with the error.
-            error = self._average - (self._target + 0.5)
-            band, ramp = (DEAD_BAND, RAMP) if error > 0 else (DEAD_BAND_LOW, RAMP_LOW)
+            error = (self._average - (self._target + 0.5)) * self.frame_ms
+            band, ramp = (DEAD_BAND_MS, RAMP_MS) if error > 0 else (DEAD_BAND_LOW_MS, RAMP_LOW_MS)
             self._owed += max(0.0, min(1.0, (abs(error) - band) / ramp))
             correct = 0
             if self._owed >= 1:
@@ -222,8 +252,9 @@ class JitterBuffer:
     def describe(self) -> str:
         "Its state, for a stats line."
         with self._lock:
-            return "holds %d/%d ms, underruns %d, dropped %d, squeezed %d, stretched %d" % (
-                len(self._held) // self._stride * 1000 // 48000,
+            return "frames of %g ms, holds %d/%g ms, underruns %d, dropped %d, squeezed %d, stretched %d" % (
+                self.frame_ms,
+                len(self._held) // self._stride * 1000 // RATE,
                 self.target_ms,
                 self.underruns,
                 self.dropped,
@@ -246,6 +277,7 @@ class JitterBuffer:
         # A burst after a stall would otherwise keep its delay for ever:
         # the drift correction moves a sample a frame, a stall seconds.
         frame = self._frame
-        while len(self._held) > (self._target + SLACK) * frame:
+        slack = max(SLACK_FRAMES, math.ceil(SLACK_MS / self.frame_ms))
+        while len(self._held) > (self._target + slack) * frame:
             del self._held[:frame]
             self.dropped += 1

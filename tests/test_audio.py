@@ -38,7 +38,7 @@ from prompt_toolkit.output import ColorDepth
 
 from pymux.audio import programs
 from pymux.client.audio import AudioClient, PipeWireDevices
-from pymux.enums import AudioServerMode
+from pymux.enums import AudioFrame, AudioServerMode
 from pymux.main import Pymux
 
 RATE = 48000
@@ -106,15 +106,16 @@ def silent_frames(pcm: bytes, channels: int = 1) -> int:
 
 
 class _Ticking:
-    def __init__(self, every_frame) -> None:
+    def __init__(self, every_frame, samples: int) -> None:
         self._stop = threading.Event()
+        self._samples = samples
         self._thread = threading.Thread(target=self._run, args=(every_frame,), daemon=True)
         self._thread.start()
 
     def _run(self, every_frame) -> None:
         deadline = time.monotonic()
         while not self._stop.is_set():
-            deadline += FRAME / RATE
+            deadline += self._samples / RATE
             every_frame()
             time.sleep(max(0.0, deadline - time.monotonic()))
 
@@ -134,27 +135,28 @@ class FakeDevices:
         self.microphone_open = False
         self.microphones_opened = 0
 
-    def speaker(self, channels, pull):
+    def speaker(self, channels, samples, pull):
         self.speaker_channels = channels
         self.speakers_opened += 1
+        self.frame_samples = samples
 
         def every_frame() -> None:
             frame = pull()
             if frame is not None:
                 self.played += frame
 
-        return _Ticking(every_frame)
+        return _Ticking(every_frame, samples)
 
-    def microphone(self, channels, push):
+    def microphone(self, channels, samples, push):
         self.microphone_open = True
         self.microphones_opened += 1
         position = [0]
 
         def every_frame() -> None:
-            push(tone(self.microphone_hz, FRAME / RATE, channels, position[0]))
-            position[0] += FRAME
+            push(tone(self.microphone_hz, samples / RATE, channels, position[0]))
+            position[0] += samples
 
-        ticking = _Ticking(every_frame)
+        ticking = _Ticking(every_frame, samples)
         devices = self
 
         class Microphone:
@@ -279,11 +281,11 @@ async def heard_for(pymux, seconds: float) -> None:
     a second before the first frame, and a recording that stopped on the
     clock held only silence.
     """
-    start = pymux.audio.microphone_frames
+    start = pymux.audio.microphone_ms
     await once(
-        lambda: pymux.audio.microphone_frames - start >= seconds * 1000 / 20,
+        lambda: pymux.audio.microphone_ms - start >= seconds * 1000,
         30.0,
-        lambda: "PipeWire had %d frames of the microphone" % (pymux.audio.microphone_frames - start,),
+        lambda: "PipeWire had %d ms of the microphone" % (pymux.audio.microphone_ms - start,),
     )
 
 
@@ -321,6 +323,29 @@ async def test_a_pane_plays_on_the_client(tmp_path):
     assert loudest(middle, 2) == 440
     assert sidebands(middle, 2, 440) < 0.25
     assert silent_frames(middle, 2) <= 3
+
+
+@pytest.mark.parametrize("frame", [AudioFrame.MS_2_5, AudioFrame.MS_60])
+async def test_a_pane_plays_at_the_frame_size_the_client_chose(tmp_path, frame):
+    "The shortest and the longest frame Opus has: the client's devices and both ends' buffers follow it."
+    devices = FakeDevices()
+    async with serving(tmp_path) as pymux, carrying(pymux, devices) as client:
+        for client_state in pymux.clients:
+            client_state.audio_frame = frame
+        pymux.audio.client_options_changed()
+        await once(lambda: client.audio.frame_ms == frame.ms, 10.0, "the client never heard its frame size")
+        song = tmp_path / "a440.wav"
+        write_wav(song, tone(440, 3.0, 2), 2)
+        async with running(["pw-play", str(song)], pane_environment(pymux)):
+            await once(
+                lambda: len(devices.played) >= 2.5 * STEREO_SECOND,
+                15.0,
+                lambda: "played %d bytes" % len(devices.played),
+            )
+    assert devices.frame_samples == round(48 * frame.ms)
+    middle = bytes(devices.played[STEREO_SECOND : 2 * STEREO_SECOND])
+    assert loudest(middle, 2) == 440
+    assert sidebands(middle, 2, 440) < 0.25
 
 
 async def test_the_microphone_opens_only_while_a_program_records(tmp_path):

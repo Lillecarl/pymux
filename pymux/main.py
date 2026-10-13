@@ -69,6 +69,7 @@ from .enums import (
     CHOOSE,
     COMMAND,
     PROMPT,
+    AudioFrame,
     AudioServerMode,
     Chooser,
     ClientAudio,
@@ -314,6 +315,7 @@ class ClientState:
         "browser_profile": Keep.SAVED,
         "audio": Keep.SAVED,
         "audio_rtt_multiplier": Keep.SAVED,
+        "audio_frame": Keep.SAVED,
         "matched": Keep.REBUILT,  # the nearest theme to the colours the terminal answers
         # Where the person was: a prefix held, a key table, a prompt,
         # a question, a menu, a chooser.
@@ -429,6 +431,7 @@ class ClientState:
         #: two cover a round trip that doubles. Lillecarl/pymux#657.
         self.audio = ClientAudio.ON
         self.audio_rtt_multiplier = 2.0
+        self.audio_frame = AudioFrame.MS_10
 
         #: Whether this client only watches. `attach-session -r` sets
         #: it, and nothing clears it: tmux's `-r` only sets as well

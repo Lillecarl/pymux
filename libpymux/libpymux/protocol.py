@@ -153,7 +153,8 @@ class Packet(StrEnum):
     # panes play; the client sends what its microphone hears.
     SOUND = "sound"
     # The server tells: what this client's `audio` option is, under
-    # `data`, when sound starts and when the option changes.
+    # `data`, and its `audio-frame` under `frame`, in milliseconds, when
+    # sound starts and when either changes.
     AUDIO = "audio"
     # The server tells: hold `buffer` milliseconds in the speaker.
     LATENCY = "latency"
@@ -267,6 +268,7 @@ class Field(StrEnum):
     TIME = "time"
     BUFFER = "buffer"
     CHANNELS = "channels"
+    FRAME = "frame"
 
 
 class Codec(StrEnum):
