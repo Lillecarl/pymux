@@ -494,8 +494,12 @@ class Attached:
 
 
 @asynccontextmanager
-async def attached(monkeypatch, **how):
-    "Everything the round trip needs, torn down afterwards."
+async def attached(monkeypatch, pymux=None, client_setup=None, **how):
+    """
+    Everything the round trip needs, torn down afterwards. `pymux` is a
+    server to use instead of a plain one, and `client_setup` sees the
+    client before it attaches.
+    """
     import tempfile
 
     where = Path(tempfile.mkdtemp())
@@ -505,7 +509,7 @@ async def attached(monkeypatch, **how):
     monkeypatch.setattr(sys, "stdin", terminal.stdin)
     monkeypatch.setattr(sys, "stdout", terminal.stdout)
 
-    pymux = Pymux()
+    pymux = pymux if pymux is not None else Pymux()
     pymux.listen_on_socket(socket_path)
 
     async with pymux.running():
@@ -520,6 +524,8 @@ async def attached(monkeypatch, **how):
             client_keys=[client_key],
             username="anybody",
         )
+        if client_setup is not None:
+            client_setup(client)
 
         scope = anyio.CancelScope()
         attach_finished = anyio.Event()

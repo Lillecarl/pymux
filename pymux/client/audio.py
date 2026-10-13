@@ -154,6 +154,10 @@ class AudioClient:
         link = await open_link()
         self._link = link
         self._encode = encode_json
+        # A new connection, perhaps to a new server: what the last one
+        # measured and was told is not this one's.
+        self.round_trip = RoundTrip()
+        self._told_ms = None
         try:
             await self._send(
                 {

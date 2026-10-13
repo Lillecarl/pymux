@@ -417,3 +417,47 @@ async def test_a_pulse_program_plays_and_records(tmp_path):
         pcm = heard.readframes(heard.getnframes())
     last = pcm[-RATE * 2 :]
     assert loudest(last, 1) == 880
+
+
+async def test_sound_reaches_a_client_over_ssh_and_after_the_link_comes_back(monkeypatch):
+    """
+    The route a person on another machine takes: an SSH client, offered
+    sound on its attached channel, opens a channel of its own for it.
+    After the link drops and comes back, the new link hears the buffer
+    size again: a client that kept what it told the last server told
+    the new one nothing.
+    """
+    from test_the_link_comes_back import attached
+
+    devices = FakeDevices()
+    pymux = Pymux()
+    pymux.test_mode = True
+    pymux.audio_server = AudioServerMode.PRIVATE
+
+    def with_sound(client) -> None:
+        client.audio = AudioClient(client.client_id, devices)
+        # As a person's configuration file would, on every attach: the
+        # buffer pins at the 1000 ms ceiling, the same on both links, so
+        # only a `latency` packet on the new one tells the new server.
+        client._client_options = lambda: [("audio-rtt-multiplier", "1000000")]
+
+    async with attached(monkeypatch, pymux=pymux, client_setup=with_sound) as it:
+        await it.until(lambda: pymux.audio.links, "the audio channel", seconds=30.0)
+        tone_file = os.path.join(os.path.dirname(pymux.socket_name), "a440.wav")
+        write_wav(tone_file, tone(440, 3.0, 2), 2)
+        async with running(["pw-play", tone_file], pane_environment(pymux)):
+            await it.until(lambda: len(devices.played) >= 2.5 * STEREO_SECOND, "the sound over SSH")
+        assert loudest(bytes(devices.played[STEREO_SECOND : 2 * STEREO_SECOND]), 2) == 440
+
+        await it.until(lambda: it.client.audio.speaker_buffer.target_ms == 1000, "the pinned buffer")
+        first = next(iter(pymux.audio.links.values()))
+        it.drop_the_link()
+        await it.until(lambda: first not in pymux.audio.links.values(), "the old audio channel to go")
+        it.terminal.type("\r")
+        await it.until(lambda: pymux.audio.links and pymux.clients, "the audio channel again", seconds=30.0)
+        link = next(iter(pymux.audio.links.values()))
+        audio = it.client.audio
+        await it.until(
+            lambda: audio.speaker_buffer.target_ms == 1000 and link.microphone.target_ms == 1000,
+            "the new link to hear the buffer",
+        )
