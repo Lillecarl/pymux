@@ -465,3 +465,47 @@ def test_short_frames_hold_a_quantum_of_the_server_at_least():
     link.reframe(2.5)
     link.retarget(2.0)
     assert link.microphone.target_ms >= 12.5
+
+
+class _Quiet:
+    "A sound card that plays nothing by itself: the test pulls."
+
+    def speaker(self, channels, samples, pull):
+        return self
+
+    def microphone(self, channels, samples, push):
+        return self
+
+    def close(self) -> None:
+        pass
+
+
+def _sound(encoder, samples: int) -> dict:
+    return {"cmd": "sound", "data": encoder.encode(bytes(samples * 4), samples), "channels": 2}
+
+
+@pytest.mark.parametrize(("comes_back_after", "reported"), [(0.1, True), (2.0, False)])
+def test_a_speaker_that_ran_dry_reports_only_a_gap(monkeypatch, comes_back_after, reported):
+    """
+    Sound that comes again at once after the speaker ran dry made a gap,
+    which the server hears of; sound that comes much later is a new
+    sound after the last one ended, which is no trouble.
+    """
+    opuslib = pytest.importorskip("opuslib")
+    from pymux.client import audio as client_audio
+
+    now = [100.0]
+    monkeypatch.setattr(client_audio.time, "monotonic", lambda: now[0])
+    sent: list[dict] = []
+    client = client_audio.AudioClient(_Quiet(), sent.append)
+    client.heard({"cmd": "audio", "data": "on", "frame": 10.0})
+    encoder = opuslib.Encoder(48000, 2, opuslib.APPLICATION_AUDIO)
+    for _ in range(4):
+        client.heard(_sound(encoder, 480))
+    while client._pull() is not None:
+        pass
+    client._pull()
+    assert client.speaker_buffer.underruns == 1
+    now[0] += comes_back_after
+    client.heard(_sound(encoder, 480))
+    assert ({"cmd": "behind"} in sent) is reported

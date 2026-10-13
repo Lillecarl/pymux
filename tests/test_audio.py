@@ -344,37 +344,24 @@ async def test_a_pane_plays_on_the_client(tmp_path):
 async def test_a_pane_plays_at_the_frame_size_the_client_chose(tmp_path, frame):
     "The shortest and the longest frame Opus has: the client's devices and both ends' buffers follow it."
     devices = FakeDevices()
-    async with serving(tmp_path) as pymux, carrying(pymux, devices) as client:
-        for client_state in pymux.clients:
-            client_state.audio_frame = frame
-        pymux.audio.client_options_changed()
-        await once(lambda: client.audio.frame_ms == frame.ms, 10.0, "the client never heard its frame size")
+    async with serving(tmp_path) as pymux, carrying(pymux, devices, frame=frame) as client:
         song = tmp_path / "a440.wav"
-        write_wav(song, tone(440, 3.0, 2), 2)
+        # Longer than the others: a loaded build measures a long round
+        # trip, and 60 ms frames then buffer up to a second first.
+        write_wav(song, tone(440, 6.0, 2), 2)
         async with running(["pw-play", str(song)], pane_environment(pymux)):
             await once(
                 lambda: len(devices.played) >= 2.5 * STEREO_SECOND,
-                15.0,
-                lambda: "played %d bytes" % len(devices.played),
+                20.0,
+                lambda: (
+                    "played %d bytes; speaker %s; received %d frames"
+                    % (len(devices.played), client.audio.speaker_buffer.describe(), client.audio.received)
+                ),
             )
     assert devices.frame_samples == round(48 * frame.ms)
     middle = bytes(devices.played[STEREO_SECOND : 2 * STEREO_SECOND])
     assert loudest(middle, 2) == 440, client.audio.speaker_buffer.describe()
     assert sidebands(middle, 2, 440) < 0.25
-
-
-async def test_an_auto_frame_stays_short_while_the_link_keeps_up(tmp_path):
-    "Not raised by a tone that plays through, nor by its end, which runs the speaker dry for good."
-    devices = FakeDevices()
-    async with serving(tmp_path) as pymux, carrying(pymux, devices, frame=AudioFrame.AUTO) as client:
-        song = tmp_path / "a440.wav"
-        write_wav(song, tone(440, 2.0, 2), 2)
-        async with running(["pw-play", str(song)], pane_environment(pymux)) as player:
-            with anyio.fail_after(10):
-                await player.wait()
-        await anyio.sleep(3.0)
-        link = next(iter(pymux.audio.links.values()))
-        assert (link.frame_ms, client.audio.frame_ms) == (2.5, 2.5)
 
 
 @pytest.mark.parametrize("speed", [1.5, 0.7], ids=["runs-dry", "falls-behind"])
