@@ -272,6 +272,21 @@ async def running(command: list[str], environment: dict[str, str]):
             await process.wait()
 
 
+async def heard_for(pymux, seconds: float) -> None:
+    """
+    Wait until PipeWire has had this much of the microphone. Not a sleep:
+    under load the server measures a long round trip and buffers up to
+    a second before the first frame, and a recording that stopped on the
+    clock held only silence.
+    """
+    start = pymux.audio.microphone_frames
+    await once(
+        lambda: pymux.audio.microphone_frames - start >= seconds * 1000 / 20,
+        30.0,
+        lambda: "PipeWire had %d frames of the microphone" % (pymux.audio.microphone_frames - start,),
+    )
+
+
 def pane_environment(pymux) -> dict[str, str]:
     environment = dict(os.environ)
     pymux.audio.pane_environment(environment)
@@ -326,7 +341,7 @@ async def test_the_microphone_opens_only_while_a_program_records(tmp_path):
                     % (pymux.audio.recording, list(pymux.audio.links), open("/proc/net/udp").read())
                 ),
             )
-            await anyio.sleep(2.0)
+            await heard_for(pymux, 1.5)
             link = next(iter(pymux.audio.links.values()))
             stats = "target %d ms, underruns %d, dropped %d" % (
                 link.microphone.target_ms,
@@ -428,7 +443,7 @@ async def test_a_linux_client_plays_and_records_through_its_own_pipewire(tmp_pat
         command = ["pw-record", "--rate", "48000", "--channels", "1", "--format", "s16", str(recorded)]
         async with running(command, pane_environment(remote)) as recorder:
             await once(lambda: ears.microphone_open, 15.0, "the person's microphone never opened")
-            await anyio.sleep(2.5)
+            await heard_for(remote, 1.5)
             recorder.terminate()
             with anyio.fail_after(10):
                 await recorder.wait()
@@ -480,10 +495,20 @@ async def test_a_pulse_program_plays_and_records(tmp_path):
         assert loudest(middle, 2) == 440
 
         recorded = tmp_path / "heard.wav"
-        command = ["parecord", "--rate=48000", "--channels=1", "--format=s16le", "--file-format=wav", str(recorded)]
+        # A short fragment: by default Pulse hands a recorder two
+        # seconds at a time, and one stopped sooner wrote nothing.
+        command = [
+            "parecord",
+            "--rate=48000",
+            "--channels=1",
+            "--format=s16le",
+            "--file-format=wav",
+            "--latency-msec=40",
+            str(recorded),
+        ]
         async with running(command, pane_environment(pymux)) as recorder:
             await once(lambda: devices.microphone_open, 10.0, "the microphone never opened for Pulse")
-            await anyio.sleep(2.0)
+            await heard_for(pymux, 1.5)
             recorder.terminate()
             with anyio.fail_after(10):
                 await recorder.wait()

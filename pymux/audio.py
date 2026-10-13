@@ -450,6 +450,8 @@ class AudioServer:
         self.runtime: str | None = None
         #: Whether a program records from the microphone. `_watch` keeps it.
         self.recording = False
+        #: Frames of a client's microphone given to PipeWire, ever.
+        self.microphone_frames = 0
         self._changed = anyio.Event()
         self._scope: anyio.CancelScope | None = None
         #: Set once PipeWire listens, for whoever waits on it. A test does.
@@ -724,6 +726,7 @@ class AudioServer:
             header = _RTP.pack(0x80, L16_PAYLOAD, sequence, timestamp, ssrc)
             sequence = (sequence + 1) & 0xFFFF
             await sender.sendto(header + native_to_l16(frame), "127.0.0.1", port)
+            self.microphone_frames += 1
 
     async def _watch(self, port: int) -> None:
         """
