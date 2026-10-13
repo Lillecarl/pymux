@@ -121,6 +121,14 @@ def test_a_smaller_target_trims_at_once():
     assert buffer.target_ms == FRAME_MS
 
 
+def test_the_round_trip_reads_as_fastest_median_slowest():
+    trips = RoundTrip()
+    assert trips.describe() == "unmeasured"
+    for seconds in (0.030, 0.010, 0.020):
+        trips.heard(seconds)
+    assert trips.describe() == "10.0/20.0/30.0"
+
+
 def test_the_round_trip_sizes_the_buffer_by_its_slowest():
     trips = RoundTrip()
     assert trips.buffer_ms(2.0) == FLOOR_MS

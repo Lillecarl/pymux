@@ -405,6 +405,12 @@ class AudioLink:
         if told != self._told_ms:
             self._told_ms = told
             self.send({Field.CMD: Packet.LATENCY, Field.BUFFER: told})
+            logger.info(
+                "Client %s: round trip %s ms, buffers %d ms.",
+                self.client_id or "?",
+                self.round_trip.describe(),
+                told,
+            )
 
     def heard(self, packet: dict) -> None:
         kind = packet.get(Field.CMD)

@@ -71,6 +71,13 @@ class RoundTrip:
     def __len__(self) -> int:
         return len(self._recent)
 
+    def describe(self) -> str:
+        "The recent round trips for a log line: fastest, median and slowest, in ms."
+        if not self._recent:
+            return "unmeasured"
+        ordered = sorted(self._recent)
+        return "%.1f/%.1f/%.1f" % (ordered[0] * 1000, ordered[len(ordered) // 2] * 1000, ordered[-1] * 1000)
+
     def buffer_ms(self, multiplier: float) -> float:
         "What a buffer should hold for these round trips."
         if not self._recent:
