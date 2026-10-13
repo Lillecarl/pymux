@@ -609,8 +609,9 @@ async def test_sound_reaches_a_client_over_ssh_and_after_the_link_comes_back(mon
     def with_sound(client) -> None:
         client.audio = AudioClient(devices, client._send_from_a_thread)
         # As a person's configuration file would, on every attach: the
-        # buffers pin at the 1000 ms ceiling, the same on both links.
-        client._client_options = lambda: [("audio-rtt-multiplier", "1000000")]
+        # buffers pin at the 1000 ms ceiling, the same on both links, at
+        # the 10 ms frames `carrying` gives the other tests.
+        client._client_options = lambda: [("audio-rtt-multiplier", "1000000"), ("audio-frame", "10")]
 
     async with attached(monkeypatch, pymux=pymux, client_setup=with_sound) as it:
         await it.until(lambda: pymux.audio.links, "the client to play sound", seconds=30.0)
