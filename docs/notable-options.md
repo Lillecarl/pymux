@@ -28,7 +28,7 @@ client reads where the person sits.
 | --- | --- | --- | --- |
 | `audio-server` | session | `auto` | Panes play into a speaker and record from a microphone that pymux carries to the client used last. `auto` is `private` when the build carries PipeWire (the Linux package does), else `shared`. `private` starts a PipeWire and a WirePlumber of the server's own, so a host with no sound works and two servers never fight over a default sink. `shared` adds them to the PipeWire the server finds, named to panes in `PULSE_SINK` and `PULSE_SOURCE`; any program on that PipeWire, a pane's or not, can then play to the person and record their microphone. Lillecarl/pymux#657. |
 | `audio` | client | `on` | This machine plays the panes' sound. The microphone opens only while a program on the server records, never before. `playback` never lends the microphone; `off` plays nothing. |
-| `audio-rtt-multiplier` | client | `2` | The speaker buffers the slowest recent round trip times this, at least 40 ms and at most a second. Two round trips cover a link whose delay doubles for a moment. Lower is less delay and more gaps. |
+| `audio-rtt-multiplier` | client | `2` | The speaker buffers the slowest recent round trip times this, at least 40 ms and at most a second. Two round trips cover a link whose delay doubles for a moment. Lower is less delay and more gaps. The 40 ms floor is fixed and not an option: it is two 20 ms packets, so one late packet on a local link is not a gap, and it is short enough to talk over. Lillecarl/pymux#661. |
 
 The build switch: the root `default.nix` passes `pipewire` and `wireplumber` to the pymux package on Linux. Pass `null` for either to leave them out of the closure; `private` then needs both on the PATH.
 
