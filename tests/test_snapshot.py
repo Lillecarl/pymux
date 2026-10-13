@@ -19,6 +19,7 @@ from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.selection import SelectionState, SelectionType
 from pyte.keep import Keep
+from session import once
 from test_a_session_on_a_pyte_screen import attached, settled, shows
 from test_every_attribute_has_a_fate import declared, live_objects
 
@@ -382,6 +383,10 @@ def _text(pane) -> str:
     return "\n".join(line.text for line in screen.page.text_lines(0, screen.max_y))
 
 
+def _window_count(pymux) -> int:
+    return sum(len(session.arrangement.windows) for session in pymux.sessions)
+
+
 async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_path):
     alternate = tmp_path / "alternate.sh"
     alternate.write_text("printf '%s\\r\\n\\033[?1049h\\033[31mALT\\033[0m\\033[3'\nsleep 60\n" % ("wrapped " * 20))
@@ -418,7 +423,14 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 "display-popup -w 40 -h 10 -T pop 'sleep 60'",
                 "new-session -d -s second",
             ):
+                windows = _window_count(pymux)
                 pymux.handle_command(command)
+                if command == "new-window":
+                    # A window is made on a later turn, and a screen that
+                    # sat still for `settled` under load did not wait for
+                    # it: `unlink-window` then took the strip instead.
+                    # Lillecarl/pymux#664.
+                    await once(lambda: _window_count(pymux) > windows, 10.0, "the new window never came")
                 await settled(session, 0.1)
         await settled(session)
         _vary_what_no_command_reaches(pymux, connection.client_state)
