@@ -431,7 +431,7 @@ class ClientState:
         #: two cover a round trip that doubles. Lillecarl/pymux#657.
         self.audio = ClientAudio.ON
         self.audio_rtt_multiplier = 2.0
-        self.audio_frame = AudioFrame.MS_10
+        self.audio_frame = AudioFrame.AUTO
 
         #: Whether this client only watches. `attach-session -r` sets
         #: it, and nothing clears it: tmux's `-r` only sets as well

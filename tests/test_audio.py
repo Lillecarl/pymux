@@ -106,7 +106,7 @@ def silent_frames(pcm: bytes, channels: int = 1) -> int:
 
 
 class _Ticking:
-    def __init__(self, every_frame, samples: int) -> None:
+    def __init__(self, every_frame, samples: float) -> None:
         self._stop = threading.Event()
         self._samples = samples
         self._thread = threading.Thread(target=self._run, args=(every_frame,), daemon=True)
@@ -127,7 +127,10 @@ class _Ticking:
 class FakeDevices:
     "A speaker that keeps what it plays, and a microphone that hears a tone."
 
-    def __init__(self, microphone_hz: float = 880.0) -> None:
+    def __init__(self, microphone_hz: float = 880.0, speed: float = 1.0) -> None:
+        #: How much faster than real time the speaker drains: above 1 it
+        #: runs dry again and again, as a link that cannot keep up does.
+        self.speed = speed
         self.played = bytearray()
         self.speaker_channels = 0
         self.speakers_opened = 0
@@ -145,7 +148,7 @@ class FakeDevices:
             if frame is not None:
                 self.played += frame
 
-        return _Ticking(every_frame, samples)
+        return _Ticking(every_frame, samples / self.speed)
 
     def microphone(self, channels, samples, push):
         self.microphone_open = True
@@ -241,14 +244,25 @@ class Attached:
 
 
 @asynccontextmanager
-async def carrying(pymux, devices, client_id="the-client"):
-    "A client attached to `pymux` that plays sound, until the block ends."
+async def carrying(pymux, devices, client_id="the-client", frame=AudioFrame.MS_10):
+    """
+    A client attached to `pymux` that plays sound, until the block ends.
+
+    **At 10 ms frames unless a test says otherwise**: `auto` starts at
+    2.5, and a Python fake device 400 times a second under the gate's
+    load measures the load, not the sound.
+    """
     client = Attached(pymux.socket_name, devices, client_id)
     client.attach()
     try:
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(client.read)
             await once(lambda: client_id in pymux.audio.links, 10.0, "the client never played sound")
+            for client_state in pymux.clients:
+                if getattr(client_state.connection, "client_id", None) == client_id:
+                    client_state.audio_frame = frame
+            pymux.audio.client_options_changed()
+            await once(lambda: client.audio.frame_ms == frame.ms, 10.0, "the client never heard its frame")
             try:
                 yield client
             finally:
@@ -306,7 +320,7 @@ def write_wav(path, pcm: bytes, channels: int) -> None:
 async def test_a_pane_plays_on_the_client(tmp_path):
     "A tone played on the server comes out of the client's speaker, as the same tone."
     devices = FakeDevices()
-    async with serving(tmp_path) as pymux, carrying(pymux, devices):
+    async with serving(tmp_path) as pymux, carrying(pymux, devices) as client:
         song = tmp_path / "a440.wav"
         write_wav(song, tone(440, 3.0, 2), 2)
         async with running(["pw-play", str(song)], pane_environment(pymux)):
@@ -315,12 +329,13 @@ async def test_a_pane_plays_on_the_client(tmp_path):
                 15.0,
                 lambda: "played %d bytes" % len(devices.played),
             )
+        state = "%s; frame %g ms" % (client.audio.speaker_buffer.describe(), client.audio.frame_ms)
 
     assert devices.speaker_channels == 2
     # The middle second: the start and the end are a fade.
     # The second second: the first holds the buffers filling.
     middle = bytes(devices.played[STEREO_SECOND : 2 * STEREO_SECOND])
-    assert loudest(middle, 2) == 440
+    assert loudest(middle, 2) == 440, state
     assert sidebands(middle, 2, 440) < 0.25
     assert silent_frames(middle, 2) <= 3
 
@@ -344,8 +359,39 @@ async def test_a_pane_plays_at_the_frame_size_the_client_chose(tmp_path, frame):
             )
     assert devices.frame_samples == round(48 * frame.ms)
     middle = bytes(devices.played[STEREO_SECOND : 2 * STEREO_SECOND])
-    assert loudest(middle, 2) == 440
+    assert loudest(middle, 2) == 440, client.audio.speaker_buffer.describe()
     assert sidebands(middle, 2, 440) < 0.25
+
+
+async def test_an_auto_frame_stays_short_while_the_link_keeps_up(tmp_path):
+    "Not raised by a tone that plays through, nor by its end, which runs the speaker dry for good."
+    devices = FakeDevices()
+    async with serving(tmp_path) as pymux, carrying(pymux, devices, frame=AudioFrame.AUTO) as client:
+        song = tmp_path / "a440.wav"
+        write_wav(song, tone(440, 2.0, 2), 2)
+        async with running(["pw-play", str(song)], pane_environment(pymux)) as player:
+            with anyio.fail_after(10):
+                await player.wait()
+        await anyio.sleep(3.0)
+        link = next(iter(pymux.audio.links.values()))
+        assert (link.frame_ms, client.audio.frame_ms) == (2.5, 2.5)
+
+
+@pytest.mark.parametrize("speed", [1.5, 0.7], ids=["runs-dry", "falls-behind"])
+async def test_an_auto_frame_rises_while_the_link_cannot_keep_up(tmp_path, speed):
+    """
+    A speaker that runs dry again and again, and one called too late to
+    take frames as fast as they come: the frame goes up, and the person
+    is told.
+    """
+    devices = FakeDevices(speed=speed)
+    async with serving(tmp_path) as pymux, carrying(pymux, devices, frame=AudioFrame.AUTO) as client:
+        song = tmp_path / "a440.wav"
+        write_wav(song, tone(440, 30.0, 2), 2)
+        async with running(["pw-play", str(song)], pane_environment(pymux)):
+            await once(lambda: client.audio.frame_ms > 2.5, 25.0, "the frame never rose")
+        messages = [state.message for state in pymux.clients]
+        assert any("could not keep up" in message for message in messages), messages
 
 
 async def test_the_microphone_opens_only_while_a_program_records(tmp_path):

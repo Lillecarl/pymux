@@ -51,6 +51,7 @@ from pymux.jitter import (
     ECHO_EVERY,
     FIRST_ECHO_EVERY,
     FIRST_ECHOES,
+    FRAME_SIZES,
     JitterBuffer,
     RoundTrip,
     floor_ms,
@@ -99,6 +100,15 @@ MICROPHONE_SILENT = (
     "The microphone gives only silence: its input volume is at zero, or the system refused it"
     " (macOS: Privacy & Security > Microphone, then reopen the terminal)."
 )
+
+FRAME_RAISED = "Sound: frames of %g ms now, the link could not keep up. (set-client-option audio-frame sets one)"
+
+#: An `auto` frame goes up a size after this much trouble -- gaps the
+#: client heard, sound let go as late -- within this many seconds. The
+#: gap a change itself makes is not counted for a while after it.
+TROUBLE_TO_RAISE = 2
+TROUBLE_WINDOW = 10.0
+SETTLE_SECONDS = 3.0
 
 #: How long a server waits to start PipeWire again after it ended.
 RETRY_SECONDS = 5.0
@@ -304,6 +314,13 @@ class AudioLink:
         self._ready = anyio.Event()
         #: The client's `audio-frame`: the frames both ways are this long.
         self.frame_ms: float = DEFAULT_FRAME_MS
+        #: Whether the frame is the client's `auto`, which this link raises
+        #: when it cannot keep up, and when it last did, and the trouble it
+        #: counted since: the times of gaps the client heard, and of sound
+        #: let go as late here.
+        self.adaptive = False
+        self._raised = -math.inf
+        self._trouble: deque[float] = deque()
         self.microphone = JitterBuffer(frame_ms=self.frame_ms)
         self.round_trip = RoundTrip()
         self._multiplier = 2.0
@@ -320,6 +337,7 @@ class AudioLink:
         "Queue a packet. A full queue lets the oldest go."
         if len(self._queue) == self._queue.maxlen:
             self.late += 1
+            self._trouble.append(anyio.current_time())
         self._queue.append(packet)
         self._ready.set()
         if packet.get(Field.CMD) == Packet.SOUND:
@@ -329,6 +347,7 @@ class AudioLink:
         "Write what is queued, and measure the round trip, until the connection goes."
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(self._echo)
+            tasks.start_soon(self._adapt)
             every = stats_every()
             if every is not None:
                 tasks.start_soon(self._stats, every)
@@ -350,6 +369,14 @@ class AudioLink:
                 self.microphone.describe(),
             )
 
+    async def _adapt(self) -> None:
+        "Raise an `auto` frame while the link cannot keep up."
+        while True:
+            await anyio.sleep(1.0)
+            now = anyio.current_time()
+            if self.adaptive and self.struggles(now):
+                self.connection.pymux.audio.raise_frame(self, now)
+
     async def _echo(self) -> None:
         for _ in range(FIRST_ECHOES):
             self._ask()
@@ -367,7 +394,10 @@ class AudioLink:
         "Size both buffers from the round trips, and tell the client its own."
         if multiplier is not None:
             self._multiplier = multiplier
-        self.microphone.retarget(self.round_trip.buffer_ms(self._multiplier, floor_ms(self.frame_ms)))
+        # The server's PipeWire hands sound over a quantum at a time, so
+        # frames shorter than it come in bursts: the floor holds one.
+        floor = max(floor_ms(self.frame_ms), QUANTUM_MS + self.frame_ms)
+        self.microphone.retarget(self.round_trip.buffer_ms(self._multiplier, floor))
         told = self.microphone.target_ms
         if told != self._told_ms:
             self._told_ms = told
@@ -385,9 +415,34 @@ class AudioLink:
             self.frame_ms = frame_ms
             self.microphone.reframe(frame_ms)
 
+    def struggles(self, now: float) -> bool:
+        """
+        Whether the link cannot keep up: trouble enough in the last
+        `TROUBLE_WINDOW` seconds, and none of it from the gap the last
+        change of frame made.
+        """
+        while self._trouble and self._trouble[0] < now - TROUBLE_WINDOW:
+            self._trouble.popleft()
+        recent = [at for at in self._trouble if at > self._raised + SETTLE_SECONDS]
+        return len(recent) >= TROUBLE_TO_RAISE
+
+    def raise_frame(self, now: float) -> float | None:
+        "Go up one frame size, when `auto` and not at the longest. The new size, or None."
+        if not self.adaptive:
+            return None
+        longer = [size for size in FRAME_SIZES if size > self.frame_ms]
+        if not longer:
+            return None
+        self._raised = now
+        self._trouble.clear()
+        self.reframe(longer[0])
+        return longer[0]
+
     def heard(self, packet: dict) -> None:
         kind = packet.get(Field.CMD)
-        if kind == Packet.ECHO:
+        if kind == Packet.BEHIND:
+            self._trouble.append(anyio.current_time())
+        elif kind == Packet.ECHO:
             sent = packet.get(Field.TIME)
             if isinstance(sent, (int, float)):
                 self.round_trip.heard(anyio.current_time() - sent)
@@ -490,10 +545,29 @@ class AudioServer:
         client_state = self._client_of(link)
         if client_state is None:
             return
-        frame_ms = AudioFrame(client_state.audio_frame).ms
+        frame = AudioFrame(client_state.audio_frame)
+        if frame is AudioFrame.AUTO:
+            # A link that already raised its frame keeps it.
+            frame_ms = link.frame_ms if link.adaptive else frame.ms
+            link.adaptive = True
+        else:
+            frame_ms = frame.ms
+            link.adaptive = False
         link.reframe(frame_ms)
         link.send({Field.CMD: Packet.AUDIO, Field.DATA: str(client_state.audio), Field.FRAME: frame_ms})
         link.retarget(client_state.audio_rtt_multiplier)
+
+    def raise_frame(self, link: AudioLink, now: float) -> None:
+        "An `auto` link cannot keep up: frames one size longer, and the person told."
+        frame_ms = link.raise_frame(now)
+        if frame_ms is None:
+            return
+        logger.info("Client %s cannot keep up: frames of %g ms now.", link.client_id or "?", frame_ms)
+        self._tell(link)
+        client_state = self._client_of(link)
+        if client_state is not None:
+            client_state.message = FRAME_RAISED % (frame_ms,)
+            self.pymux.invalidate()
 
     def current(self) -> AudioLink | None:
         """

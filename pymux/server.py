@@ -791,7 +791,7 @@ class ServerConnection:
             return
 
         # Sound from a client that plays it. Lillecarl/pymux#657.
-        if packet[Field.CMD] in (Packet.SOUND, Packet.ECHO, Packet.MICROPHONE):
+        if packet[Field.CMD] in (Packet.SOUND, Packet.ECHO, Packet.MICROPHONE, Packet.BEHIND):
             if self._audio is not None:
                 self._audio.heard(packet)
             return

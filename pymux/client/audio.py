@@ -16,6 +16,7 @@ from __future__ import annotations
 import contextlib
 import fcntl
 import logging
+import math
 import os
 import queue
 import subprocess
@@ -59,6 +60,10 @@ F_SETPIPE_SZ = getattr(fcntl, "F_SETPIPE_SZ", 1031)
 
 #: Exact zeros for this long, and the microphone is taken for refused.
 SILENT_SECONDS = 1.0
+
+#: Sound that comes again this soon after the speaker ran dry made a
+#: gap, which the server hears of; later, the sound had ended.
+RESUMED_WITHIN = 0.5
 
 #: How long the speaker stays open with nothing to play. Closing it
 #: lets the machine sleep and other programs take the device.
@@ -108,6 +113,10 @@ class AudioClient:
         #: since the last stats line.
         self.received = 0
         self._longest_gap = 0.0
+        #: When the speaker last ran dry, until sound comes again, and
+        #: when the server was last told it fell behind.
+        self._ran_dry: float | None = None
+        self._told_behind = -math.inf
         every = stats_every()
         if every is not None:
             threading.Thread(target=self._stats, args=(every,), name="pymux-sound-stats", daemon=True).start()
@@ -184,6 +193,11 @@ class AudioClient:
             return
         self.speaker_buffer.put(frame)
         now = time.monotonic()
+        # A speaker that ran dry and hears more at once had a gap; one
+        # that ran dry at the end of the sound had none.
+        if self._ran_dry is not None and now - self._ran_dry < RESUMED_WITHIN:
+            self._behind(now)
+        self._ran_dry = None
         if self.received:
             self._longest_gap = max(self._longest_gap, now - self._last_sound)
         self.received += 1
@@ -192,15 +206,32 @@ class AudioClient:
             if self._speaker is not None:
                 return
             try:
-                self._speaker = self.devices.speaker(
-                    channels, samples_per_frame(self.frame_ms), self.speaker_buffer.take
-                )
+                self._speaker = self.devices.speaker(channels, samples_per_frame(self.frame_ms), self._pull)
             except Exception as error:
                 logger.warning("The speaker did not open: %s", error)
                 self.mode = ClientAudio.OFF
                 return
             speaker = self._speaker
         threading.Thread(target=self._close_when_idle, args=(speaker,), name="pymux-speaker", daemon=True).start()
+
+    def _pull(self) -> bytes | None:
+        "The speaker's next frame, noting when it runs dry or cannot keep up."
+        buffer = self.speaker_buffer
+        underruns, saturated = buffer.underruns, buffer.saturated
+        frame = buffer.take()
+        if buffer.underruns != underruns:
+            self._ran_dry = time.monotonic()
+        if buffer.saturated != saturated:
+            # A speaker called late takes frames slower than they come:
+            # a Python callback 400 times a second, beside the drawing.
+            self._behind(time.monotonic())
+        return frame
+
+    def _behind(self, now: float) -> None:
+        "Tell the server this speaker fell behind, once a second at most."
+        if now - self._told_behind >= 1.0:
+            self._told_behind = now
+            self._send({Field.CMD: Packet.BEHIND})
 
     def _close_when_idle(self, speaker: Stream) -> None:
         while True:

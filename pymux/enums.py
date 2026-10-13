@@ -102,8 +102,12 @@ class AudioFrame(StrEnum):
     How much sound one packet carries, in milliseconds: every size Opus
     encodes. Shorter is less delay, because each end buffers two frames
     and its device one; longer is fewer packets. Lillecarl/pymux#657.
+
+    `auto` starts at the shortest and goes up a size each time the link
+    cannot keep up (`AudioLink` in `pymux/audio.py`).
     """
 
+    AUTO = "auto"
     MS_2_5 = "2.5"
     MS_5 = "5"
     MS_10 = "10"
@@ -113,7 +117,8 @@ class AudioFrame(StrEnum):
 
     @property
     def ms(self) -> float:
-        return float(self.value)
+        "Its length, and for `auto` the length it starts at."
+        return 2.5 if self is AudioFrame.AUTO else float(self.value)
 
 
 class WindowScroll(StrEnum):

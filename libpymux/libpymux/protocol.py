@@ -158,6 +158,10 @@ class Packet(StrEnum):
     AUDIO = "audio"
     # The server tells: hold `buffer` milliseconds in the speaker.
     LATENCY = "latency"
+    # The client tells: its speaker fell behind -- ran out of sound in
+    # the middle of it, or could not take frames as fast as they came.
+    # The server raises an `auto` frame on these.
+    BEHIND = "behind"
     # The server tells: open the microphone, or close it, under `data`.
     # The client answers with `error` "silent" when it hears only zeros,
     # which is how macOS refuses a terminal the microphone.

@@ -167,6 +167,8 @@ class JitterBuffer:
         #: Samples dropped and repeated to follow the other clock.
         self.squeezed = 0
         self.stretched = 0
+        #: Takes made while it ran so full that it squeezed every frame.
+        self.saturated = 0
 
     @property
     def target_ms(self) -> float:
@@ -231,7 +233,12 @@ class JitterBuffer:
             # Past it, a share of frames that grows with the error.
             error = (self._average - (self._target + 0.5)) * self.frame_ms
             band, ramp = (DEAD_BAND_MS, RAMP_MS) if error > 0 else (DEAD_BAND_LOW_MS, RAMP_LOW_MS)
-            self._owed += max(0.0, min(1.0, (abs(error) - band) / ramp))
+            share = max(0.0, min(1.0, (abs(error) - band) / ramp))
+            self._owed += share
+            if share == 1.0 and error > 0:
+                # Past what drift ever needs: the speaker is not taking
+                # frames as fast as they come.
+                self.saturated += 1
             correct = 0
             if self._owed >= 1:
                 self._owed -= 1

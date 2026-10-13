@@ -17,6 +17,7 @@ from pymux.audio import (
     MICROPHONE_OFF,
     MICROPHONE_ON,
     MICROPHONE_SILENT,
+    AudioLink,
     AudioServer,
     daemon_config,
     pw_cat,
@@ -143,10 +144,22 @@ def test_a_fill_that_sits_a_little_high_is_not_corrected():
     assert (buffer.squeezed, buffer.stretched) == (0, 0)
 
 
+def test_a_speaker_that_cannot_keep_up_saturates_the_buffer():
+    "Called at two thirds of the pace frames come: past any drift, which the client reports."
+    buffer = JitterBuffer(2 * F)
+    for _ in range(2):
+        buffer.put(frame(1))
+    for tick in range(3000):
+        buffer.put(frame(1))
+        if tick % 3:
+            buffer.take()
+    assert buffer.saturated > 0
+
+
 def test_clocks_that_agree_are_left_alone():
     buffer = JitterBuffer(3 * F)
     follow(buffer, 5000)
-    assert (buffer.squeezed, buffer.stretched, buffer.dropped, buffer.underruns) == (0, 0, 0, 0)
+    assert (buffer.squeezed, buffer.stretched, buffer.dropped, buffer.underruns, buffer.saturated) == (0, 0, 0, 0, 0)
 
 
 def test_an_empty_buffer_fills_again_before_it_plays():
@@ -408,3 +421,47 @@ def test_the_options_are_there():
     assert pymux.audio_server == AudioServerMode.AUTO
     pymux.handle_command("set-option audio-server off")
     assert pymux.audio_server == AudioServerMode.OFF
+
+
+class _Connection2:
+    client_id = "c"
+
+
+def test_an_auto_frame_rises_on_trouble_and_not_on_its_own_gap():
+    link = AudioLink(_Connection2())
+    link.adaptive = True
+    link.reframe(2.5)
+    link._trouble.extend([100.0])
+    assert not link.struggles(101.0)
+    link._trouble.append(101.0)
+    assert link.struggles(101.5)
+    assert link.raise_frame(101.5) == 5
+    # The gap the change itself made is no trouble.
+    link._trouble.extend([102.0, 103.0])
+    assert not link.struggles(104.0)
+    link._trouble.extend([105.0, 106.0])
+    assert link.struggles(106.0)
+
+
+def test_an_auto_frame_stops_at_the_longest_and_a_fixed_one_never_moves():
+    link = AudioLink(_Connection2())
+    link.adaptive = True
+    sizes = [link.raise_frame(float(n * 10)) for n in range(7)]
+    assert sizes == [20, 40, 60, None, None, None, None]
+    link.adaptive = False
+    link.reframe(2.5)
+    assert link.raise_frame(1000.0) is None
+
+
+def test_trouble_older_than_its_window_is_forgotten():
+    link = AudioLink(_Connection2())
+    link._trouble.extend([0.0, 1.0])
+    assert not link.struggles(20.0)
+
+
+def test_short_frames_hold_a_quantum_of_the_server_at_least():
+    "The server's PipeWire hands sound over 10 ms at a time: 2.5 ms frames come four together."
+    link = AudioLink(_Connection2())
+    link.reframe(2.5)
+    link.retarget(2.0)
+    assert link.microphone.target_ms >= 12.5
