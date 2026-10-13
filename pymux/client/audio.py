@@ -29,7 +29,7 @@ from libpymux.protocol import Field, Packet
 
 from pymux.audio import programs
 from pymux.enums import ClientAudio
-from pymux.jitter import FLOOR_MS, FRAME_MS, JitterBuffer
+from pymux.jitter import FLOOR_MS, FRAME_MS, JitterBuffer, stats_every
 
 try:
     import opuslib
@@ -101,6 +101,24 @@ class AudioClient:
         self._decoder: Decoder | None = None
         self._last_sound = 0.0
         self._microphone: _Microphone | None = None
+        #: Sound frames that arrived, and the longest wait between two,
+        #: since the last stats line.
+        self.received = 0
+        self._longest_gap = 0.0
+        every = stats_every()
+        if every is not None:
+            threading.Thread(target=self._stats, args=(every,), name="pymux-sound-stats", daemon=True).start()
+
+    def _stats(self, every: float) -> None:
+        while True:
+            time.sleep(every)
+            gap, self._longest_gap = self._longest_gap, 0.0
+            logger.info(
+                "Sound stats: received %d frames, longest gap %.0f ms; speaker %s.",
+                self.received,
+                gap * 1000,
+                self.speaker_buffer.describe(),
+            )
 
     def heard(self, packet: dict) -> None:
         kind = packet.get(Field.CMD)
@@ -149,7 +167,11 @@ class AudioClient:
         except opuslib.OpusError:
             return
         self.speaker_buffer.put(frame)
-        self._last_sound = time.monotonic()
+        now = time.monotonic()
+        if self.received:
+            self._longest_gap = max(self._longest_gap, now - self._last_sound)
+        self.received += 1
+        self._last_sound = now
         with self._lock:
             if self._speaker is not None:
                 return

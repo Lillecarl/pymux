@@ -17,6 +17,7 @@ sound library, and frames arrive on the event loop.
 from __future__ import annotations
 
 import math
+import os
 import threading
 from collections import deque
 
@@ -84,6 +85,18 @@ class RoundTrip:
             return FLOOR_MS
         wanted = max(self._recent) * 1000 * multiplier
         return min(CEILING_MS, max(FLOOR_MS, wanted))
+
+
+def stats_every() -> float | None:
+    """
+    How often both ends log the state of their sound, in seconds:
+    `PYMUX_AUDIO_STATS`, for measuring a real link. Unset, never.
+    """
+    try:
+        seconds = float(os.environ.get("PYMUX_AUDIO_STATS", ""))
+    except ValueError:
+        return None
+    return seconds if seconds > 0 else None
 
 
 def frames_for(milliseconds: float) -> int:
@@ -178,6 +191,18 @@ class JitterBuffer:
                 taken = out = bytes(self._held[:frame])
             del self._held[: len(taken)]
             return out
+
+    def describe(self) -> str:
+        "Its state, for a stats line."
+        with self._lock:
+            return "holds %d/%d ms, underruns %d, dropped %d, squeezed %d, stretched %d" % (
+                len(self._held) // self._stride * 1000 // 48000,
+                self.target_ms,
+                self.underruns,
+                self.dropped,
+                self.squeezed,
+                self.stretched,
+            )
 
     def clear(self) -> None:
         with self._lock:

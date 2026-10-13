@@ -22,7 +22,16 @@ from pymux.audio import (
     resolve,
 )
 from pymux.enums import AudioServerMode, ClientAudio
-from pymux.jitter import CEILING_MS, FLOOR_MS, FRAME_MS, SAMPLES_PER_FRAME, SLACK, JitterBuffer, RoundTrip
+from pymux.jitter import (
+    CEILING_MS,
+    FLOOR_MS,
+    FRAME_MS,
+    SAMPLES_PER_FRAME,
+    SLACK,
+    JitterBuffer,
+    RoundTrip,
+    stats_every,
+)
 from pymux.main import Pymux
 
 PIPEWIRE = {"pipewire": "/bin/pipewire", "wireplumber": "/bin/wireplumber"}
@@ -118,6 +127,22 @@ def test_a_smaller_target_trims_at_once():
     buffer.retarget(FRAME_MS)
     assert len(buffer) == 1 + SLACK
     assert buffer.target_ms == FRAME_MS
+
+
+def test_stats_are_off_unless_asked_for(monkeypatch):
+    monkeypatch.delenv("PYMUX_AUDIO_STATS", raising=False)
+    assert stats_every() is None
+    monkeypatch.setenv("PYMUX_AUDIO_STATS", "5")
+    assert stats_every() == 5.0
+    for wrong in ("0", "-1", "often"):
+        monkeypatch.setenv("PYMUX_AUDIO_STATS", wrong)
+        assert stats_every() is None
+
+
+def test_a_buffer_describes_itself_for_a_stats_line():
+    buffer = JitterBuffer(3 * FRAME_MS)
+    buffer.put(frame(1))
+    assert buffer.describe() == "holds 20/60 ms, underruns 0, dropped 0, squeezed 0, stretched 0"
 
 
 def test_the_round_trip_reads_as_fastest_median_slowest():

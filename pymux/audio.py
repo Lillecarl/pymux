@@ -46,7 +46,7 @@ import anyio.abc
 from libpymux.protocol import Field, Packet
 
 from pymux.enums import AudioServerMode, ClientAudio
-from pymux.jitter import ECHO_EVERY, FIRST_ECHO_EVERY, FIRST_ECHOES, FRAME_MS, JitterBuffer, RoundTrip
+from pymux.jitter import ECHO_EVERY, FIRST_ECHO_EVERY, FIRST_ECHOES, FRAME_MS, JitterBuffer, RoundTrip, stats_every
 
 if TYPE_CHECKING:
     from opuslib import Encoder
@@ -288,6 +288,9 @@ class AudioLink:
         self.round_trip = RoundTrip()
         self._multiplier = 2.0
         self._told_ms: int | None = None
+        #: Sound frames queued for the client, and those a slow link let go.
+        self.sent = 0
+        self.late = 0
         self._decoder = opuslib.Decoder(RATE, MICROPHONE_CHANNELS) if opuslib is not None else None
         self.microphone_open = False
         #: Whether the client's microphone gave only zeros.
@@ -295,18 +298,37 @@ class AudioLink:
 
     def send(self, packet: dict) -> None:
         "Queue a packet. A full queue lets the oldest go."
+        if len(self._queue) == self._queue.maxlen:
+            self.late += 1
         self._queue.append(packet)
         self._ready.set()
+        if packet.get(Field.CMD) == Packet.SOUND:
+            self.sent += 1
 
     async def run(self) -> None:
         "Write what is queued, and measure the round trip, until the connection goes."
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(self._echo)
+            every = stats_every()
+            if every is not None:
+                tasks.start_soon(self._stats, every)
             while True:
                 await self._ready.wait()
                 self._ready = anyio.Event()
                 while self._queue:
                     await self.connection._write_urgent(self._queue.popleft())
+
+    async def _stats(self, every: float) -> None:
+        while True:
+            await anyio.sleep(every)
+            logger.info(
+                "Sound stats, client %s: round trip %s ms; sent %d frames, %d dropped as late; microphone %s.",
+                self.client_id or "?",
+                self.round_trip.describe(),
+                self.sent,
+                self.late,
+                self.microphone.describe(),
+            )
 
     async def _echo(self) -> None:
         for _ in range(FIRST_ECHOES):
