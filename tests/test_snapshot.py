@@ -541,18 +541,20 @@ def test_a_snapshot_of_another_version_is_refused(pymux, tmp_path, off_by):
         snapshot.load(Pymux(), path)
 
 
-def test_a_version_15_snapshot_gains_a_window_scroll_per_client(pymux, tmp_path):
-    "Version 16 adds `window_scroll`, empty, so each client keeps its default. Lillecarl/pymux#652."
-    path = tmp_path / "v15.sqlite"
+def test_a_version_16_snapshot_gains_a_browser_per_client(pymux, tmp_path):
+    "Version 17 adds `browser_program` and `browser_profile`, empty. Lillecarl/pymux#653."
+    path = tmp_path / "v16.sqlite"
     snapshot.save(pymux, path)
     db = sqlite3.connect(path)
-    db.execute("ALTER TABLE clients DROP COLUMN window_scroll")
-    db.execute("PRAGMA user_version = 15")
+    db.execute("ALTER TABLE clients DROP COLUMN browser_program")
+    db.execute("ALTER TABLE clients DROP COLUMN browser_profile")
+    db.execute("PRAGMA user_version = 16")
     db.commit()
     db.close()
 
     stepped = snapshot._open(path)
-    assert "window_scroll" in {row[1] for row in stepped.execute("PRAGMA table_info(clients)")}
+    columns = {row[1] for row in stepped.execute("PRAGMA table_info(clients)")}
+    assert {"browser_program", "browser_profile"} <= columns
 
 
 async def test_a_snapshot_is_refused_while_a_command_waits(pymux, tmp_path):

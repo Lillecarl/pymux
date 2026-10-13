@@ -985,6 +985,11 @@ ALL_CLIENT_OPTIONS = {
     # "notch" for a mouse wheel. The terminal does not say which it has.
     # Lillecarl/pymux#652.
     "window-scroll": EnumOption(WindowScroll, "window_scroll", scope=Scope.CLIENT),
+    # The browser a program on the server drives on this machine, and
+    # the profile it runs with: empty for the first Chromium found and a
+    # profile pymux keeps. Lillecarl/pymux#653.
+    "browser-program": StringOption("browser_program", scope=Scope.CLIENT),
+    "browser-profile": StringOption("browser_profile", scope=Scope.CLIENT),
 }
 
 

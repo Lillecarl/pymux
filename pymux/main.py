@@ -58,6 +58,7 @@ from pyte.osc import Osc
 from . import hacks_and_lies, introspect, kernels, log
 from .agentic import CallerContext
 from .arrangement import Arrangement, Pane, Window
+from .browsers import Browsers
 from .client.memory import MemoryClient
 from .colors import DefaultColors, theme_color_base
 from .commands import CommandException, call_command_handler, handle_command
@@ -296,6 +297,8 @@ class ClientState:
         "theme": Keep.SAVED,
         "swap_dark_and_light": Keep.SAVED,
         "window_scroll": Keep.SAVED,
+        "browser_program": Keep.SAVED,
+        "browser_profile": Keep.SAVED,
         "matched": Keep.REBUILT,  # the nearest theme to the colours the terminal answers
         # Where the person was: a prefix held, a key table, a prompt,
         # a question, a menu, a chooser.
@@ -399,6 +402,12 @@ class ClientState:
         #: What a scroll from this terminal does to a Wayland window: a
         #: fact of the person's pointing device. Lillecarl/pymux#652.
         self.window_scroll = WindowScroll.SMOOTH
+
+        #: The browser a program on the server drives on this machine,
+        #: and the profile it runs with: "" for the first one found and
+        #: a profile pymux keeps. Lillecarl/pymux#653.
+        self.browser_program = ""
+        self.browser_profile = ""
 
         #: Whether this client only watches. `attach-session -r` sets
         #: it, and nothing clears it: tmux's `-r` only sets as well
@@ -1197,6 +1206,7 @@ class Pymux:
         "wayland_server": Keep.SAVED,
         # The compositor's task starts again in `running`.
         "wayland": Keep.REBUILT,
+        "browsers": Keep.DROPPED,  # each one goes with its program, which the upgrade ends
         "open_url_forward": Keep.SAVED,
         "open_url_forward_idle": Keep.SAVED,
         "open_url_mode": Keep.SAVED,
@@ -1326,6 +1336,9 @@ class Pymux:
         # pysmithay is installed and this is on. `wayland.py` says why.
         self.wayland_server = True
         self.wayland = WaylandServer(self)
+        #: Browsers programs here drive on a client's machine.
+        #: Lillecarl/pymux#653.
+        self.browsers = Browsers(self)
         self.remain_on_exit = False
 
         # Which keys the status line and copy mode take. tmux reads the
@@ -4770,10 +4783,11 @@ exec pymux notify -u "$urgency" -- "$@"
         -- so the cost is memory and a longer walk for every broadcast.
         Lillecarl/pymux#226.
         """
-        if connection in self._client_states:
-            del self._client_states[connection]
+        gone = self._client_states.pop(connection, None)
         if connection in self.connections:
             self.connections.remove(connection)
+        if gone is not None:
+            self.browsers.client_gone(gone)
         # One client fewer can mean that the rest speak more.
         self.sync_keyboard_source_flags()
         # And the client that spoke for the panes may be the one gone.

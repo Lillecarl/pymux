@@ -150,6 +150,7 @@ class ServerConnection:
         "_pointer_shape_sent": Keep.REBUILT,
         "answers_ping": Keep.REBUILT,
         "can_forward": Keep.REBUILT,
+        "starts_browsers": Keep.REBUILT,
         "may_attach": Keep.REBUILT,
         "forwards": Keep.DROPPED,
         "pipe_connection": Keep.DROPPED,
@@ -289,6 +290,8 @@ class ServerConnection:
         #: truth. Lillecarl/pymux#436.
         self.can_forward = False
         self.forwards: list[dict] = []
+        #: Whether this client starts browsers. Lillecarl/pymux#653.
+        self.starts_browsers = False
 
         #: Whether this client answers a ping, and how many have gone
         #: unanswered. Only a client that said it answers is ever
@@ -868,6 +871,7 @@ class ServerConnection:
             # Whether `forward-port` can reach this client at all. Only
             # the SSH client says yes. Lillecarl/pymux#436.
             self.can_forward = bool(packet.get(Field.FORWARDS))
+            self.starts_browsers = bool(packet.get(Field.BROWSERS))
             self.answers_ping = bool(packet.get(Field.PINGS))
             self.environment = packet.get(Field.ENVIRONMENT) or {}
             self.ttyname = packet.get(Field.TTYNAME, "")
@@ -913,6 +917,12 @@ class ServerConnection:
         # A URL that the client of this connection could not open. The
         # request went out as a status line here, so the answer goes
         # there too, and it names the URL to copy.
+        elif packet[Field.CMD] == Packet.BROWSER_STARTED:
+            self.pymux.browsers.started(packet)
+
+        elif packet[Field.CMD] == Packet.BROWSER_ENDED:
+            self.pymux.browsers.ended(packet[Field.BROWSER])
+
         elif packet[Field.CMD] == Packet.OPEN_FAILED:
             if self.client_state is not None:
                 self.client_state.message = "Could not open %s in a browser on this machine." % (packet[Field.DATA],)

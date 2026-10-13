@@ -122,6 +122,7 @@ Homepage = "https://github.com/prompt-toolkit/pymux"
 
 [project.scripts]
 pymux = "pymux.entry_points.run_pymux:run"
+pymux-browser = "pymux.browser_shim:main"
 
 [build-system]
 requires = ["hatchling"]

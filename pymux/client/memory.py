@@ -41,6 +41,7 @@ import sys
 from typing import override
 
 import anyio
+from libpymux.protocol import Field, Packet
 from prompt_toolkit.input.vt100 import raw_mode
 
 from ..pipes import BrokenPipeError, MemoryConnection
@@ -96,10 +97,16 @@ class MemoryClient(TerminalClient):
                             packet = await self.connection.read()
                         except BrokenPipeError:
                             return  # The server closed the connection.
+                        if packet[Field.CMD] == Packet.BROWSER:
+                            # Not `_start_browser`, which would hold the
+                            # loop the server runs on while it starts.
+                            tasks.start_soon(self.run_browser, packet, None)
+                            continue
                         self._process(packet)
                 finally:
                     # The three readers above end with this scope.
                     tasks.cancel_scope.cancel()
+                    self.stop_browsers()
                     self._leave_the_terminal()
 
     async def _read_keyboard(self, stdin_fd: int) -> None:

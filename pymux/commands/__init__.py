@@ -163,6 +163,7 @@ MODULES = [
     "tail_job",
     "sql",
     "wl",
+    "launch_browser",
 ]
 
 

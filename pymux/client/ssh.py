@@ -627,6 +627,10 @@ class SshClient(TerminalClient):
                         )
                         continue
 
+                    if packet[Field.CMD] == Packet.BROWSER:
+                        tasks.start_soon(self._while_the_link_holds, self._browser_asked, connection, packet)
+                        continue
+
                     self._process(packet)
             except Exception as error:
                 lost = error
@@ -644,6 +648,9 @@ class SshClient(TerminalClient):
                 # a refused connection while the link is down. The
                 # wanted set stays, and `_connect` opens it again.
                 self.forwards.close()
+                # The program that drove them is on the other side of
+                # the link that went.
+                self.stop_browsers()
                 connection.close()
 
         if lost is None and self._slept_through is not None:
@@ -767,6 +774,28 @@ class SshClient(TerminalClient):
 
         if not reached:
             self._send_packet({Field.CMD: Packet.OPEN_FAILED, Field.DATA: url})
+
+    async def _browser_asked(self, connection, packet) -> None:
+        """
+        Start the browser a program on the server asked for, forward its
+        port from the server's machine to this one, and say where it
+        listens, or why it does not. The forward goes with the browser.
+        Lillecarl/pymux#653.
+        """
+        port = packet[Field.PORT]
+
+        async def forward(port: int) -> str | None:
+            opened = await self.forwards.add(
+                connection, Forward(Direction.REMOTE, "127.0.0.1", port, "127.0.0.1", port)
+            )
+            if opened.error:
+                return "cannot forward port %d from the server: %s" % (port, opened.error)
+            return None
+
+        try:
+            await self.run_browser(packet, forward)
+        finally:
+            self.forwards.remove((Direction.REMOTE, "127.0.0.1", port))
 
     async def _reap_forwards(self) -> None:
         "Give back the port of a URL that nobody is using any more."

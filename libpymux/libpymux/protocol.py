@@ -102,6 +102,11 @@ class Packet(StrEnum):
     FRAME_SHOWN = "frame-shown"
     OPEN_FAILED = "open-failed"
     FORWARDS = "forwards"
+    # "The browser of `browser` listens", with the path of its endpoint,
+    # or `error` when it did not start; and later "it ended".
+    # Lillecarl/pymux#653.
+    BROWSER_STARTED = "browser-started"
+    BROWSER_ENDED = "browser-ended"
 
     # The server tells.
     OUT = "out"
@@ -132,6 +137,10 @@ class Packet(StrEnum):
     OPEN = "open"
     FORWARD = "forward"
     PING = "ping"
+    # Start a browser a program on the server drives, or stop it.
+    # Lillecarl/pymux#653.
+    BROWSER = "browser"
+    BROWSER_STOP = "browser-stop"
 
     # Either side: "every packet I write after this one is in `wire`".
     # `wire.py` holds the format. Lillecarl/pymux#633.
@@ -208,6 +217,21 @@ class Field(StrEnum):
     RECTS = "rects"
     LAST = "last"
     AFTER = "after"
+    #: In the browser packets: which launch, the port its browser
+    #: listens on, on both machines, the program and profile the person
+    #: chose ("" for the default), the arguments the program on the
+    #: server passed, the endpoint's path and the protocol it speaks
+    #: ("cdp" or "bidi"), and why it did not start. Lillecarl/pymux#653.
+    BROWSER = "browser"
+    #: In `start-gui`: this client starts browsers.
+    BROWSERS = "browsers"
+    PORT = "port"
+    PROGRAM = "program"
+    PROFILE = "profile"
+    ARGUMENTS = "arguments"
+    PATH = "path"
+    REMOTE = "remote"
+    ERROR = "error"
     #: In `start-gui`, the `Codec`s a client decodes. In `window-frame`,
     #: the one the frame is in, its encoded bytes in parts under `video`,
     #: and `rects` as `[x, y, w, h]` with no pixels: what changed, which

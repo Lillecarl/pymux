@@ -37,6 +37,7 @@ from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
 from pymux.kitty_frames import Base64Carrier, Pictures, ShmCarrier, decoders, frame_commands, shm_probe
 from pymux.utils import nonblocking
 
+from . import browser
 from .base import Client
 
 __all__ = [
@@ -218,6 +219,9 @@ class TerminalClient(Client):
         #: Each window pane's picture, so a frame goes as one edit.
         #: Lillecarl/pymux#644.
         self._pictures = Pictures()
+        #: The browsers a program on the server drives, by launch.
+        #: Lillecarl/pymux#653.
+        self._browsers: dict[str, Any] = {}
 
     @property
     def _stdin_reader(self) -> PosixStdinReader:
@@ -279,6 +283,7 @@ class TerminalClient(Client):
                 # end: a unix socket is a unix socket either way.
                 # Lillecarl/pymux#436.
                 Field.FORWARDS: self.can_forward,
+                Field.BROWSERS: True,
                 # Whether this client answers a ping. A server drops a
                 # client that stops answering, and never one that did
                 # not say it would. Lillecarl/pymux#446.
@@ -540,6 +545,12 @@ class TerminalClient(Client):
             if not self._open_url(url):
                 self._send_packet({Field.CMD: Packet.OPEN_FAILED, Field.DATA: url})
 
+        elif packet[Field.CMD] == Packet.BROWSER:
+            self._start_browser(packet)
+
+        elif packet[Field.CMD] == Packet.BROWSER_STOP:
+            self.stop_browser(packet[Field.BROWSER])
+
         elif packet[Field.CMD] == Packet.KITTY_KEYBOARD:
             # Kitty keyboard protocol instructions for the outer
             # terminal.
@@ -602,6 +613,85 @@ class TerminalClient(Client):
             return  # Never enabled anything.
         os.write(sys.stdout.fileno(), b"\x1b[<1u")
         self._kitty_flags = None
+
+    def _start_browser(self, packet: dict) -> None:
+        """
+        Start the browser a program on the server asked for, and say
+        where it listens, or why it does not. This machine is the
+        server's too, so the port needs no forward. Lillecarl/pymux#653.
+        """
+        launch = packet[Field.BROWSER]
+        try:
+            process, path, kind = browser.start(
+                packet.get(Field.PROGRAM) or "",
+                packet.get(Field.PROFILE) or "",
+                packet[Field.PORT],
+                packet.get(Field.ARGUMENTS) or [],
+            )
+        except (browser.BrowserError, OSError) as error:
+            self._send_packet({Field.CMD: Packet.BROWSER_STARTED, Field.BROWSER: launch, Field.ERROR: str(error)})
+            return
+        self._browsers[launch] = process
+        self._send_packet(
+            {Field.CMD: Packet.BROWSER_STARTED, Field.BROWSER: launch, Field.PATH: path, Field.REMOTE: kind}
+        )
+
+    async def run_browser(self, packet: dict, forward=None) -> None:
+        """
+        `_start_browser` for a client with an event loop, which holds
+        the browser until it ends and then says so. `forward(port)`,
+        when given, opens the way to it from the server's machine and
+        answers why not, or None. Lillecarl/pymux#653.
+        """
+        launch, port = packet[Field.BROWSER], packet[Field.PORT]
+
+        def failed(why: str) -> None:
+            self._send_packet({Field.CMD: Packet.BROWSER_STARTED, Field.BROWSER: launch, Field.ERROR: why})
+
+        try:
+            process, path, kind = await browser.start_async(
+                packet.get(Field.PROGRAM) or "",
+                packet.get(Field.PROFILE) or "",
+                port,
+                packet.get(Field.ARGUMENTS) or [],
+            )
+        except (browser.BrowserError, OSError) as error:
+            failed(str(error))
+            return
+        if forward is not None:
+            error = await forward(port)
+            if error is not None:
+                process.kill()
+                failed(error)
+                return
+        self._browsers[launch] = process
+        self._send_packet(
+            {Field.CMD: Packet.BROWSER_STARTED, Field.BROWSER: launch, Field.PATH: path, Field.REMOTE: kind}
+        )
+        try:
+            await process.wait()
+        finally:
+            if self._browsers.pop(launch, None) is not None:
+                self._send_packet({Field.CMD: Packet.BROWSER_ENDED, Field.BROWSER: launch})
+
+    def stop_browser(self, launch: str) -> None:
+        "End a browser this client started, if it still runs."
+        process = self._browsers.pop(launch, None)
+        if process is not None:
+            with contextlib.suppress(ProcessLookupError):
+                process.terminate()
+
+    def stop_browsers(self) -> None:
+        "End every browser this client started: the program that drove it cannot reach it any more."
+        for launch in list(self._browsers):
+            self.stop_browser(launch)
+
+    def _reap_browsers(self) -> None:
+        "Tell the server about each browser that ended by itself."
+        for launch, process in list(self._browsers.items()):
+            if process.poll() is not None:
+                del self._browsers[launch]
+                self._send_packet({Field.CMD: Packet.BROWSER_ENDED, Field.BROWSER: launch})
 
     def _open_url(self, url: str) -> bool:
         """

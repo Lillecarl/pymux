@@ -70,7 +70,7 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "load", "program_ids", "save", "start
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 16
+SNAPSHOT_VERSION = 17
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -85,6 +85,8 @@ _CLIENT_SETTING_TYPES: dict[str, type] = {
     "swap_dark_and_light": bool,
     "message": str,
     "window_scroll": WindowScroll,
+    "browser_program": str,
+    "browser_profile": str,
 }
 CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
 CLIENT_COLUMNS = ("client_id", "session_id", "previous_session_id", *CLIENT_SETTINGS, "modes", "connected")
@@ -94,9 +96,10 @@ CLIENT_COLUMNS = ("client_id", "session_id", "previous_session_id", *CLIENT_SETT
 #: change of shape adds the one step from the version before it and
 #: deletes any older step. Version 12 is the first a holder hands over.
 STEPS: dict[int, str] = {
-    # 16 holds each client's `window-scroll`, which nobody set before.
-    15: """
-ALTER TABLE clients ADD COLUMN window_scroll TEXT;
+    # 17 holds each client's `browser-program` and `browser-profile`.
+    16: """
+ALTER TABLE clients ADD COLUMN browser_program TEXT;
+ALTER TABLE clients ADD COLUMN browser_profile TEXT;
 """,
 }
 
@@ -247,7 +250,9 @@ CREATE TABLE clients(
   message TEXT,
   modes TEXT,
   connected REAL,
-  window_scroll TEXT
+  window_scroll TEXT,
+  browser_program TEXT,
+  browser_profile TEXT
 );
 CREATE TABLE client_windows(
   client_id TEXT NOT NULL REFERENCES clients(client_id),

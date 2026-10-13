@@ -25,6 +25,10 @@ from .terminal import DELETE_EVERY_IMAGE, NO_ANSWER, TerminalClient
 #: in seconds.
 RETRY_EVERY = 0.1
 
+#: How often the client looks whether a browser it started ended, in
+#: seconds. Lillecarl/pymux#653.
+BROWSER_POLL = 1.0
+
 __all__ = [
     "PosixClient",
     "list_clients",
@@ -134,7 +138,10 @@ class PosixClient(TerminalClient):
                 signal.signal(signal.SIGWINCH, winch_handler)
                 while True:
                     socket_fd = self.socket.fileno()
-                    r, _, _ = select([stdin_fd, socket_fd], [], [])
+                    # A browser that ends says nothing on either fd, so
+                    # the loop looks once a second while one runs.
+                    r, _, _ = select([stdin_fd, socket_fd], [], [], BROWSER_POLL if self._browsers else None)
+                    self._reap_browsers()
 
                     if socket_fd in r:
                         # Received packet from server.
@@ -172,6 +179,7 @@ class PosixClient(TerminalClient):
 
             finally:
                 signal.signal(signal.SIGWINCH, signal.SIG_IGN)
+                self.stop_browsers()
                 self._leave_the_terminal()
 
     def _wait_for_the_next_server(self, stdin_fd) -> bool:
