@@ -7,6 +7,7 @@ __all__ = [
     "COMMAND",
     "PROMPT",
     "Chooser",
+    "PaneBrowser",
     "WindowCodec",
     "WindowScroll",
     "WindowSize",
@@ -50,6 +51,24 @@ class WindowCodec(StrEnum):
 
     LOSSLESS = "lossless"
     VP9 = "vp9"
+
+
+class PaneBrowser(StrEnum):
+    """
+    Which programs in a pane find `pymux-browser` as their browser, and
+    so drive the browser on the machine of the person instead of one on
+    the server. Each launch is still asked. Lillecarl/pymux#653.
+    """
+
+    #: None of them.
+    OFF = "off"
+    #: Playwright MCP and `playwright-cli`, through
+    #: `PLAYWRIGHT_MCP_EXECUTABLE_PATH`: an agent's browser, which a
+    #: person wants to see.
+    AGENTS = "agents"
+    #: Puppeteer too, through `PUPPETEER_EXECUTABLE_PATH`, which a test
+    #: suite reads as well: every one of its launches would ask.
+    ALL = "all"
 
 
 class WindowScroll(StrEnum):

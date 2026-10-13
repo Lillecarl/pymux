@@ -8,6 +8,7 @@ import errno
 import fnmatch
 import os
 import shlex
+import shutil
 import signal
 import socket
 import sys
@@ -63,7 +64,7 @@ from .client.memory import MemoryClient
 from .colors import DefaultColors, theme_color_base
 from .commands import CommandException, call_command_handler, handle_command
 from .commands.completer import create_command_completer
-from .enums import CHOOSE, COMMAND, PROMPT, Chooser, WindowScroll, WindowSize, Woke
+from .enums import CHOOSE, COMMAND, PROMPT, Chooser, PaneBrowser, WindowScroll, WindowSize, Woke
 from .forwarding import LOOPBACK_NAMES, loopback_port
 from .graphics import OuterImageIds, PaneView
 from .ids import PaneId, SessionId, WindowIndex
@@ -1120,6 +1121,12 @@ def _hook_of(reason: str) -> str | None:
 #: A task copies the context that started it, so the two lists a
 #: `run-command` packet makes belong to that packet alone.
 #: Lillecarl/pymux#87.
+def _browser_shim() -> str | None:
+    "`pymux-browser` of this build, beside its Python; None where it is not."
+    found = os.path.join(os.path.dirname(sys.executable), "pymux-browser")
+    return found if os.access(found, os.X_OK) else shutil.which("pymux-browser")
+
+
 _command_output: contextvars.ContextVar[list | None] = contextvars.ContextVar("pymux-command-output", default=None)
 _command_error: contextvars.ContextVar[list | None] = contextvars.ContextVar("pymux-command-error", default=None)
 _command_exit_code: contextvars.ContextVar[int | None] = contextvars.ContextVar("pymux-command-exit-code", default=None)
@@ -1211,6 +1218,7 @@ class Pymux:
         "open_url_forward_idle": Keep.SAVED,
         "open_url_mode": Keep.SAVED,
         "open_url_shim": Keep.SAVED,
+        "pane_browser": Keep.SAVED,
         "open_url_target": Keep.SAVED,
         "paint_screen": Keep.SAVED,
         "remain_on_exit": Keep.SAVED,
@@ -1322,6 +1330,9 @@ class Pymux:
         self.open_url_forward_idle = 600
 
         self.open_url_shim = False
+        #: Which programs in a pane drive the browser of the person.
+        #: Lillecarl/pymux#653.
+        self.pane_browser = PaneBrowser.AGENTS
         self._open_url_shim_dir: str | None = None
 
         self.notify_shim = False
@@ -3536,6 +3547,11 @@ exec pymux notify -u "$urgency" -- "$@"
             environment["BROWSER"] = os.path.join(self._open_url_shim_dir, "pymux-open-url")
         if self.notify_shim and self._notify_shim_dir:
             environment["PATH"] = self._notify_shim_dir + os.pathsep + environment["PATH"]
+        shim = _browser_shim()
+        if shim is not None and self.pane_browser != PaneBrowser.OFF:
+            environment["PLAYWRIGHT_MCP_EXECUTABLE_PATH"] = shim
+            if self.pane_browser == PaneBrowser.ALL:
+                environment["PUPPETEER_EXECUTABLE_PATH"] = shim
 
     def forward_osc(self, pane, code: str, param: str) -> None:
         """

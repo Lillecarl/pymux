@@ -547,6 +547,8 @@ async def test_pane_that_starts_with_shim_finds_opener():
 async def test_shim_leaves_pane_alone_when_it_is_off():
     async with in_this_process() as session:
         pymux = session.pymux
+        # The browser of the person is another shim's, with its own option.
+        pymux.handle_command("set-option pane-browser off")
 
         environment = {"PATH": "/usr/bin"}
         pymux._shim_pane_environment(environment)

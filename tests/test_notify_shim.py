@@ -49,6 +49,8 @@ def test_shim_rides_path_of_new_pane():
 
 def test_shim_leaves_pane_alone_when_it_is_off():
     pymux = Pymux()
+    # The browser of the person is another shim's, with its own option.
+    pymux.handle_command("set-option pane-browser off")
 
     environment = {"PATH": "/usr/bin"}
     pymux._shim_pane_environment(environment)

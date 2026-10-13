@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, override
 
 from . import log
 from .arrangement import Window
-from .enums import WindowCodec, WindowScroll, WindowSize, Woke
+from .enums import PaneBrowser, WindowCodec, WindowScroll, WindowSize, Woke
 from .key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS
 from .key_spelling import key_however_it_is_written
 from .layout import Justify
@@ -831,6 +831,11 @@ ALL_OPTIONS = {
     # opens a browser here without knowing pymux. A pane that runs
     # already keeps the PATH it was born with; only new panes see it.
     "open-url-shim": OnOffOption("open_url_shim"),
+    # Which programs in a pane find `pymux-browser` as their browser:
+    # "agents" (Playwright MCP and playwright-cli), "all" (Puppeteer
+    # too), or "off". `PaneBrowser` says why the default is "agents".
+    # A pane that runs already keeps the environment it was born with.
+    "pane-browser": EnumOption(PaneBrowser, "pane_browser"),
     # Put the notifier of this session on the PATH of a pane, as
     # "notify-send", so that a program in a pane notifies the hub
     # without knowing pymux. It shadows the notifier of the desktop:
