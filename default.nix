@@ -158,6 +158,7 @@ let
                 builtins.toJSON {
                   pipewire = lib.getExe' pipewire "pipewire";
                   wireplumber = lib.getExe' wireplumber "wireplumber";
+                  pw-cat = lib.getExe' pipewire "pw-cat";
                 }
               )
             } > "$out/${python.sitePackages}/pymux/audio-programs.json"

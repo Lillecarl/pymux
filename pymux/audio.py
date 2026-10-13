@@ -99,7 +99,7 @@ def programs() -> dict[str, str]:
     found: dict[str, str] = {}
     with contextlib.suppress(FileNotFoundError, ValueError):
         found.update(json.loads(resources.files("pymux").joinpath(PROGRAMS_FILE).read_text()))
-    for name in ("pipewire", "wireplumber"):
+    for name in ("pipewire", "wireplumber", "pw-cat"):
         if name not in found:
             path = shutil.which(name)
             if path:

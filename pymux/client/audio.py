@@ -14,10 +14,15 @@ The sound card is behind `Devices`, so a test can stand in for it.
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import logging
+import os
+import subprocess
+import sys
 import threading
 from collections import deque
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from typing import Protocol
 
 import anyio
@@ -25,6 +30,7 @@ import anyio.abc
 from libpymux.protocol import READ_SIZE, Field, Packet
 from libpymux.wire import MSGPACK, PacketReader, encode_json, encode_msgpack
 
+from pymux.audio import programs
 from pymux.enums import ClientAudio
 from pymux.jitter import FRAME_MS, JitterBuffer
 
@@ -62,6 +68,10 @@ ECHO_EVERY = 1.0
 FIRST_ECHOES = 5
 FIRST_ECHO_EVERY = 0.2
 ROUND_TRIPS = 10
+
+#: `fcntl`'s name for a pipe's size, which Python names from 3.10 on
+#: Linux only.
+F_SETPIPE_SZ = getattr(fcntl, "F_SETPIPE_SZ", 1031)
 
 #: How long the speaker stays open with nothing to play. Closing it
 #: lets the machine sleep and other programs take the device.
@@ -389,10 +399,143 @@ class SoundDevices:
         )
 
 
+class _PwCatStream:
+    """
+    One `pw-cat`, fed or read 20 ms at a time on a thread of its own,
+    which starts the program too: nothing here blocks the event loop.
+    """
+
+    def __init__(self, argv: list[str], environment: dict[str, str] | None, feed) -> None:
+        self._argv = argv
+        self._environment = environment
+        self._feed = feed
+        self._stop = threading.Event()
+        self._process: subprocess.Popen | None = None
+        self._lock = threading.Lock()
+        self._thread = threading.Thread(target=self._run, name="pymux-pw-cat", daemon=True)
+        self._thread.start()
+
+    def _run(self) -> None:
+        playback = "--playback" in self._argv
+        with self._lock:
+            if self._stop.is_set():
+                return
+            try:
+                self._process = subprocess.Popen(
+                    self._argv,
+                    env=self._environment,
+                    stdin=subprocess.PIPE if playback else subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL if playback else subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                )
+            except OSError as error:
+                logger.warning("pw-cat did not start: %s", error)
+                return
+        pipe = self._process.stdin if playback else self._process.stdout
+        if playback:
+            # The pipe is the buffer between the jitter buffer and
+            # PipeWire, so it is kept to one page: 21 ms of stereo. A
+            # write then waits for PipeWire to take the frame before, and
+            # PipeWire's clock paces the speaker.
+            with contextlib.suppress(OSError):
+                fcntl.fcntl(pipe.fileno(), F_SETPIPE_SZ, 4096)
+        with contextlib.suppress(OSError, ValueError):
+            self._feed(pipe, self._stop)
+
+    def close(self) -> None:
+        self._stop.set()
+        with self._lock:
+            process = self._process
+        if process is not None:
+            process.terminate()
+            try:
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                process.kill()
+        self._thread.join(timeout=2)
+        if process is not None:
+            # Closed here, after the program: left to the collector, the
+            # flush of a playback pipe raised into nothing.
+            for pipe in (process.stdin, process.stdout):
+                if pipe is not None:
+                    with contextlib.suppress(OSError, ValueError):
+                        pipe.close()
+
+
+class PipeWireDevices:
+    """
+    The person's PipeWire through `pw-cat`, on Linux.
+
+    **Not PortAudio there.** nixpkgs' PortAudio speaks ALSA and OSS only,
+    so it reaches PipeWire through ALSA's PipeWire plugin, and a nix-built
+    alsa-lib looks for that plugin in its own store path: on a desktop
+    that is not NixOS it finds no device. `pw-cat` speaks PipeWire's own
+    protocol, and the Linux package carries it.
+    """
+
+    def __init__(self, pw_cat: str, environment: dict[str, str] | None = None) -> None:
+        self.pw_cat = pw_cat
+        self.environment = environment
+
+    def _argv(self, mode: str, channels: int) -> list[str]:
+        # One frame of latency: pw-cat asks for 100 ms by default.
+        return [
+            self.pw_cat,
+            mode,
+            "--raw",
+            "--rate",
+            str(RATE),
+            "--channels",
+            str(channels),
+            "--format",
+            "s16",
+            "--latency",
+            "%dms" % (FRAME_MS,),
+        ]
+
+    def speaker(self, channels: int, pull: Callable[[], bytes | None]) -> Stream:
+        silence = bytes(FRAME * channels * 2)
+
+        def feed(pipe, stop: threading.Event) -> None:
+            while not stop.is_set():
+                frame = pull()
+                pipe.write(frame if frame is not None else silence)
+                pipe.flush()
+
+        return _PwCatStream([*self._argv("--playback", channels), "-"], self.environment, feed)
+
+    def microphone(self, channels: int, push: Callable[[bytes], None]) -> Stream:
+        size = FRAME * channels * 2
+
+        def feed(pipe, stop: threading.Event) -> None:
+            while not stop.is_set():
+                frame = pipe.read(size)
+                if len(frame) < size:
+                    return
+                push(frame)
+
+        return _PwCatStream([*self._argv("--record", channels), "-"], self.environment, feed)
+
+
+def pipewire_answers(environment: Mapping[str, str]) -> bool:
+    "Whether a PipeWire listens where a client in this environment looks first."
+    remote = environment.get("PIPEWIRE_REMOTE") or "pipewire-0"
+    if os.path.isabs(remote):
+        return os.path.exists(remote)
+    for directory in (environment.get("PIPEWIRE_RUNTIME_DIR"), environment.get("XDG_RUNTIME_DIR")):
+        if directory and os.path.exists(os.path.join(directory, remote)):
+            return True
+    return False
+
+
 def sound_devices() -> Devices | None:
     "This machine's sound card, or None where sound cannot run."
     if opuslib is None:
         return None
+    if sys.platform == "linux":
+        pw_cat = programs().get("pw-cat")
+        if pw_cat and pipewire_answers(os.environ):
+            return PipeWireDevices(pw_cat)
     try:
         import sounddevice
     except (ImportError, OSError):
