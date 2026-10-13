@@ -42,6 +42,10 @@ dependencies = [
     # `direct-streamlocal@openssh.com` channel to its unix socket.
     # Lillecarl/pymux#90.
     "asyncssh>=2.14.0",
+    # `pymux-browser` carries Playwright's `--remote-debugging-pipe` to
+    # the browser's WebSocket on the client's machine. Only it imports
+    # this. Lillecarl/pymux#655.
+    "websockets>=13.0",
     # `set-option theme pygments:<name>` takes one of the forty-nine styles
     # pygments carries, and anything a package installs beside them.
     # Lillecarl/pymux#194.

@@ -19,8 +19,10 @@ browser, and it is the same number at both ends. Then it holds the
 browser with `hold-browser` until one of them ends. Killing it closes
 the browser, because the server stops a browser whose hold went.
 
-`--remote-debugging-pipe`, which Playwright's `launch()` uses, is not
-served yet: Lillecarl/pymux#655.
+**Playwright's `launch()` talks over a pipe** (`--remote-debugging-pipe`):
+NUL-terminated CDP messages on fd 3 in, fd 4 out. Then this carries each
+message to the browser's WebSocket and back, for as long as both stay.
+A Firefox has no CDP, so that needs a Chromium. Lillecarl/pymux#655.
 """
 
 from __future__ import annotations
@@ -30,9 +32,18 @@ import io
 import os
 import shlex
 import sys
+import threading
 from pathlib import Path
 
-__all__ = ["main"]
+import anyio
+
+__all__ = ["bridge", "main"]
+
+#: Playwright's pipe: what it writes to, what it reads from, and what
+#: ends a message on both.
+PIPE_IN = 3
+PIPE_OUT = 4
+END = b"\0"
 
 
 def _value_of(argument: str, name: str) -> str | None:
@@ -52,14 +63,52 @@ def _run(socket_name: str, command: str, pane_id: str | None) -> tuple[int, str]
     return code, printed.getvalue()
 
 
+async def _write_all(fd: int, data: bytes) -> None:
+    while data:
+        await anyio.wait_writable(fd)
+        try:
+            data = data[os.write(fd, data) :]
+        except BlockingIOError:
+            continue
+
+
+async def bridge(url: str, read_fd: int = PIPE_IN, write_fd: int = PIPE_OUT) -> None:
+    "Carry CDP messages between a pipe and the browser's WebSocket until either side ends."
+    from websockets.asyncio.client import connect
+
+    os.set_blocking(read_fd, False)
+    os.set_blocking(write_fd, False)
+    # No limit: a screenshot is one message of megabytes.
+    async with connect(url, max_size=None) as socket, anyio.create_task_group() as tasks:
+
+        async def to_browser() -> None:
+            pending = b""
+            while True:
+                await anyio.wait_readable(read_fd)
+                try:
+                    data = os.read(read_fd, 1 << 16)
+                except BlockingIOError:
+                    continue
+                if not data:
+                    break
+                *messages, pending = (pending + data).split(END)
+                for message in messages:
+                    await socket.send(message.decode("utf-8"))
+            tasks.cancel_scope.cancel()
+
+        async def to_program() -> None:
+            async for message in socket:
+                await _write_all(write_fd, (message.encode("utf-8") if isinstance(message, str) else message) + END)
+            tasks.cancel_scope.cancel()
+
+        tasks.start_soon(to_browser)
+        tasks.start_soon(to_program)
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
-    if "--remote-debugging-pipe" in arguments:
-        sys.stderr.write(
-            "pymux-browser: --remote-debugging-pipe is not served yet (Lillecarl/pymux#655);"
-            " use --remote-debugging-port or connectOverCDP\n"
-        )
-        return 2
+    piped = "--remote-debugging-pipe" in arguments
+    arguments = [one for one in arguments if one != "--remote-debugging-pipe"]
     profile = None
     for argument in arguments:
         found = _value_of(argument, "--user-data-dir")
@@ -79,6 +128,18 @@ def main(argv: list[str] | None = None) -> int:
     port, path, launch, remote = printed.split()
 
     endpoint = "ws://127.0.0.1:%s%s" % (port, path)
+    if piped:
+        if remote != "cdp":
+            sys.stderr.write("pymux-browser: --remote-debugging-pipe needs a Chromium; set browser-program to one\n")
+            _run(socket_name, "hold-browser -s %s" % (launch,), pane_id or None)
+            return 1
+        # The hold ends the browser when this process goes, so it only
+        # has to stay open beside the bridge.
+        threading.Thread(
+            target=_run, args=(socket_name, "hold-browser %s" % (launch,), pane_id or None), daemon=True
+        ).start()
+        anyio.run(bridge, endpoint, PIPE_IN, PIPE_OUT)
+        return 0
     if remote == "bidi":
         # Firefox names its port alone, and Puppeteer adds the path.
         sys.stderr.write("\nWebDriver BiDi listening on ws://127.0.0.1:%s\n" % (port,))

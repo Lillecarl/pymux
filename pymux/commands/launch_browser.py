@@ -59,6 +59,9 @@ def hold_browser(pymux: Pymux, args: argparse.Namespace):
     launch = pymux.browsers.launches.get(args.launch)
     if launch is None:
         raise CommandException("no browser %s" % (args.launch,))
+    if args.stop:
+        pymux.browsers.stop(args.launch)
+        return None
     return _hold(pymux, args.launch, launch.ended)
 
 
@@ -75,4 +78,5 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser.add_argument("arguments", nargs=argparse.REMAINDER, metavar="<argument>", help="What to pass the browser.")
 
     parser = add_command(subparsers, hold_browser)
+    parser.add_argument("-s", dest="stop", action="store_true", help="Stop the browser now instead.")
     parser.add_argument("launch", metavar="<launch>")
