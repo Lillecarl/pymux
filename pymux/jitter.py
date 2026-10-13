@@ -38,8 +38,18 @@ AVERAGE_OVER = 1000 // FRAME_MS
 
 #: Frames held past the target before the oldest are dropped. A burst
 #: after a stall would otherwise keep its delay for ever, because the
-#: speaker drains only at its own pace.
-SLACK = 3
+#: speaker drains only at its own pace. Past the dead band and the ramp
+#: below, so drift that is being followed never reaches it.
+SLACK = 5
+
+#: How far off its steady fill the buffer may sit, in frames, before
+#: the drift is followed, and over how many more frames the share of
+#: frames corrected grows to all of them. Tighter below: a buffer that
+#: runs low is a gap away, and one that runs high only waits longer.
+DEAD_BAND = 1.5
+RAMP = 1.0
+DEAD_BAND_LOW = 0.5
+RAMP_LOW = 0.5
 
 
 #: The least a buffer holds, however short the round trip: two frames,
@@ -80,10 +90,13 @@ class RoundTrip:
         return "%.1f/%.1f/%.1f" % (ordered[0] * 1000, ordered[len(ordered) // 2] * 1000, ordered[-1] * 1000)
 
     def buffer_ms(self, multiplier: float) -> float:
-        "What a buffer should hold for these round trips."
+        "What a buffer should hold for these round trips: the slow ones, but not one alone."
         if not self._recent:
             return FLOOR_MS
-        wanted = max(self._recent) * 1000 * multiplier
+        # The second slowest: one slow echo, a client busy drawing for a
+        # moment, made a buffer six times its size for ten seconds.
+        ordered = sorted(self._recent)
+        wanted = ordered[-2 if len(ordered) > 2 else -1] * 1000 * multiplier
         return min(CEILING_MS, max(FLOOR_MS, wanted))
 
 
@@ -132,6 +145,8 @@ class JitterBuffer:
         self._playing = False
         #: The fill an average of the last second of takes saw, in frames.
         self._average: float | None = None
+        #: Corrections owed, in frames: a share of one is added per take.
+        self._owed = 0.0
         self.underruns = 0
         self.dropped = 0
         #: Samples dropped and repeated to follow the other clock.
@@ -179,11 +194,23 @@ class JitterBuffer:
                 self.underruns += 1
                 return None
             middle = (frame // 2) // stride * stride
-            if self._average > self._target + 1 and len(self._held) >= frame + stride:
+            # A steady buffer sits half a frame over its target before a
+            # take. Inside the dead band nothing is corrected: frames off
+            # a real network arrive unevenly, and a run from the MacBook
+            # sat a frame and a quarter over, squeezing every frame.
+            # Past it, a share of frames that grows with the error.
+            error = self._average - (self._target + 0.5)
+            band, ramp = (DEAD_BAND, RAMP) if error > 0 else (DEAD_BAND_LOW, RAMP_LOW)
+            self._owed += max(0.0, min(1.0, (abs(error) - band) / ramp))
+            correct = 0
+            if self._owed >= 1:
+                self._owed -= 1
+                correct = 1 if error > 0 else -1
+            if correct > 0 and len(self._held) >= frame + stride:
                 taken = bytes(self._held[: frame + stride])
                 out = taken[:middle] + taken[middle + stride :]
                 self.squeezed += 1
-            elif self._average < self._target or len(self._held) < frame:
+            elif correct < 0 or len(self._held) < frame:
                 taken = bytes(self._held[: frame - stride])
                 out = taken[: middle + stride] + taken[middle:]
                 self.stretched += 1

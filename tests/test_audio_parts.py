@@ -80,7 +80,7 @@ def test_a_far_clock_that_runs_fast_is_followed_by_dropping_samples():
     follow(buffer, 20000, extra_every=2000)
     assert buffer.squeezed > 0
     assert (buffer.dropped, buffer.underruns) == (0, 0)
-    assert len(buffer) <= 3 + 2
+    assert len(buffer) <= 3 + SLACK
 
 
 def test_a_far_clock_that_runs_slow_is_followed_by_repeating_samples():
@@ -89,6 +89,21 @@ def test_a_far_clock_that_runs_slow_is_followed_by_repeating_samples():
     follow(buffer, 20000, missing_every=2000)
     assert buffer.stretched > 0
     assert (buffer.dropped, buffer.underruns) == (0, 0)
+
+
+def test_a_fill_that_sits_a_little_high_is_not_corrected():
+    """
+    Off a real network frames arrive unevenly, and a steady buffer sits a
+    frame or so over its target. From the MacBook it sat a frame and a
+    quarter over, and the buffer squeezed every frame chasing it.
+    """
+    buffer = JitterBuffer(2 * FRAME_MS)
+    for _ in range(3):
+        buffer.put(frame(1))
+    for _ in range(5000):
+        buffer.take()
+        buffer.put(frame(1))
+    assert (buffer.squeezed, buffer.stretched) == (0, 0)
 
 
 def test_clocks_that_agree_are_left_alone():
@@ -158,8 +173,11 @@ def test_the_round_trip_sizes_the_buffer_by_its_slowest():
     assert trips.buffer_ms(2.0) == FLOOR_MS
     for seconds in (0.030, 0.050, 0.040):
         trips.heard(seconds)
-    assert trips.buffer_ms(2.0) == pytest.approx(100)
+    assert trips.buffer_ms(2.0) == pytest.approx(80)
     assert trips.buffer_ms(0.1) == FLOOR_MS
+    # One slow echo alone moves nothing; a second does.
+    trips.heard(5.0)
+    assert trips.buffer_ms(2.0) == pytest.approx(100)
     trips.heard(5.0)
     assert trips.buffer_ms(2.0) == CEILING_MS
 
