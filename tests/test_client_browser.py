@@ -40,7 +40,9 @@ def fake(tmp_path):
 
 def test_the_browser_says_where_it_listens_and_keeps_our_profile(fake, tmp_path):
     profile = tmp_path / "profile"
-    process, path, kind = browser.start(fake, str(profile), 9333, ["--user-data-dir=/elsewhere", "--headless=new"])
+    process, path, kind, _where = browser.start(
+        fake, str(profile), 9333, ["--user-data-dir=/elsewhere", "--headless=new"]
+    )
     try:
         assert (path, kind) == ("/devtools/browser/fake", browser.Remote.CDP)
         argv = (profile / "argv").read_text().splitlines()
@@ -92,12 +94,33 @@ def test_a_port_another_browser_wrote_is_not_this_one(tmp_path):
 
 
 async def test_the_client_with_a_loop_starts_one_too(fake, tmp_path):
-    process, path, _kind = await browser.start_async(fake, str(tmp_path / "profile"), 9336, [])
+    process, path, _kind, _where = await browser.start_async(fake, str(tmp_path / "profile"), 9336, [])
     try:
         assert path == "/devtools/browser/fake"
     finally:
         process.kill()
         await process.wait()
+
+
+def test_a_mac_app_starts_through_open_as_its_own_app(tmp_path, monkeypatch):
+    "Firefox started as a child of the client could not find its profile. Lillecarl/pymux#653."
+    monkeypatch.setattr(sys, "platform", "darwin")
+    program = "/Applications/Firefox.app/Contents/MacOS/firefox"
+    monkeypatch.setattr(browser, "program_of", lambda _asked: program)
+    argv, where, kind = browser._prepared("", str(tmp_path), 9337, ["--headless"])
+    assert kind == browser.Remote.BIDI
+    assert argv[:8] == [
+        "open",
+        "-n",
+        "-W",
+        "-a",
+        "/Applications/Firefox.app",
+        "--stderr",
+        str(where / browser.LOG),
+        "--args",
+    ]
+    assert argv[8:12] == ["--remote-debugging-port", "9337", "--profile", str(tmp_path)]
+    assert browser.bundle_of("/usr/bin/chromium") is None
 
 
 def test_the_default_profile_is_ours(tmp_path, monkeypatch):

@@ -622,7 +622,7 @@ class TerminalClient(Client):
         """
         launch = packet[Field.BROWSER]
         try:
-            process, path, kind = browser.start(
+            process, path, kind, profile = browser.start(
                 packet.get(Field.PROGRAM) or "",
                 packet.get(Field.PROFILE) or "",
                 packet[Field.PORT],
@@ -631,7 +631,7 @@ class TerminalClient(Client):
         except (browser.BrowserError, OSError) as error:
             self._send_packet({Field.CMD: Packet.BROWSER_STARTED, Field.BROWSER: launch, Field.ERROR: str(error)})
             return
-        self._browsers[launch] = process
+        self._browsers[launch] = (process, profile)
         self._send_packet(
             {Field.CMD: Packet.BROWSER_STARTED, Field.BROWSER: launch, Field.PATH: path, Field.REMOTE: kind}
         )
@@ -649,7 +649,7 @@ class TerminalClient(Client):
             self._send_packet({Field.CMD: Packet.BROWSER_STARTED, Field.BROWSER: launch, Field.ERROR: why})
 
         try:
-            process, path, kind = await browser.start_async(
+            process, path, kind, profile = await browser.start_async(
                 packet.get(Field.PROGRAM) or "",
                 packet.get(Field.PROFILE) or "",
                 port,
@@ -661,10 +661,10 @@ class TerminalClient(Client):
         if forward is not None:
             error = await forward(port)
             if error is not None:
-                process.kill()
+                browser.end(process, profile)
                 failed(error)
                 return
-        self._browsers[launch] = process
+        self._browsers[launch] = (process, profile)
         self._send_packet(
             {Field.CMD: Packet.BROWSER_STARTED, Field.BROWSER: launch, Field.PATH: path, Field.REMOTE: kind}
         )
@@ -676,10 +676,9 @@ class TerminalClient(Client):
 
     def stop_browser(self, launch: str) -> None:
         "End a browser this client started, if it still runs."
-        process = self._browsers.pop(launch, None)
-        if process is not None:
-            with contextlib.suppress(ProcessLookupError):
-                process.terminate()
+        held = self._browsers.pop(launch, None)
+        if held is not None:
+            browser.end(*held)
 
     def stop_browsers(self) -> None:
         "End every browser this client started: the program that drove it cannot reach it any more."
@@ -688,7 +687,7 @@ class TerminalClient(Client):
 
     def _reap_browsers(self) -> None:
         "Tell the server about each browser that ended by itself."
-        for launch, process in list(self._browsers.items()):
+        for launch, (process, _profile) in list(self._browsers.items()):
             if process.poll() is not None:
                 del self._browsers[launch]
                 self._send_packet({Field.CMD: Packet.BROWSER_ENDED, Field.BROWSER: launch})

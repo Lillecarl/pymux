@@ -22,6 +22,13 @@ pipe: a browser writes a lot there, and a pipe nobody drains stops it.
 Chromium's `DevToolsActivePort` says the same, but Chromium 153 writes
 it only for `--remote-debugging-port=0`, measured.
 
+**On macOS an app starts through `open`**, as its own app. Started as a
+child of a client that Nix built, macOS counts it as that client and
+keeps it out of `~/Library/Application Support`, and Firefox ends with
+"Could not find profile folder", measured. `open -W` lasts as long as
+the app; the app itself is found by its profile, which is this launch's
+alone, when it has to stop.
+
 **The profile is never the person's own.** Chrome 136 and later refuse
 remote debugging on the default profile, and a program that drives a
 browser should not hold the person's logins anyway. `browser-profile`
@@ -33,8 +40,10 @@ from __future__ import annotations
 import contextlib
 import os
 import shutil
+import signal
 import subprocess
 import sys
+import threading
 import time
 from enum import StrEnum
 from pathlib import Path
@@ -46,6 +55,7 @@ __all__ = [
     "BrowserError",
     "Remote",
     "argv_of",
+    "end",
     "endpoint_in",
     "kind_of",
     "profile_of",
@@ -186,6 +196,13 @@ def endpoint_in(profile: Path, port: int, kind: Remote) -> str | None:
     return None
 
 
+def bundle_of(program: str) -> str | None:
+    "The macOS app a program is the binary of, or None."
+    if sys.platform != "darwin" or ".app/Contents/MacOS/" not in program:
+        return None
+    return program.split(".app/Contents/MacOS/", 1)[0] + ".app"
+
+
 def _prepared(program: str, profile: str, port: int, arguments: list[str]) -> tuple[list[str], Path, Remote]:
     found = program_of(program)
     kind = kind_of(found)
@@ -194,7 +211,33 @@ def _prepared(program: str, profile: str, port: int, arguments: list[str]) -> tu
     # browser that crashed on this one would read as listening.
     (where / "DevToolsActivePort").unlink(missing_ok=True)
     (where / LOG).unlink(missing_ok=True)
-    return argv_of(found, kind, port, where, arguments), where, kind
+    argv = argv_of(found, kind, port, where, arguments)
+    bundle = bundle_of(found)
+    if bundle is not None:
+        argv = ["open", "-n", "-W", "-a", bundle, "--stderr", str(where / LOG), "--args", *argv[1:]]
+    return argv, where, kind
+
+
+def _end_app(profile: Path) -> None:
+    listed = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True).stdout
+    for row in listed.splitlines():
+        pid, _, command = row.strip().partition(" ")
+        if pid.isdigit() and str(profile) in command and not command.startswith("open "):
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(int(pid), signal.SIGTERM)
+
+
+def end(process, profile: Path) -> None:
+    """
+    Stop a browser. On macOS that is the app `open` started, found by its
+    profile on a thread of its own, so no loop waits on `ps`; `open`
+    ends with it.
+    """
+    if sys.platform == "darwin":
+        threading.Thread(target=_end_app, args=(profile,), daemon=True).start()
+    else:
+        with contextlib.suppress(ProcessLookupError):
+            process.terminate()
 
 
 def _did_not_listen(argv: list[str], code: int | None) -> BrowserError:
@@ -208,10 +251,10 @@ def _did_not_listen(argv: list[str], code: int | None) -> BrowserError:
     return BrowserError("%s did not listen within %d seconds" % (os.path.basename(argv[0]), START_SECONDS))
 
 
-def start(program: str, profile: str, port: int, arguments: list[str]) -> tuple[subprocess.Popen, str, Remote]:
+def start(program: str, profile: str, port: int, arguments: list[str]) -> tuple[subprocess.Popen, str, Remote, Path]:
     """
     Start the browser and wait until it listens: the process, the
-    endpoint's path and the protocol. For the client that has no event
+    endpoint's path, the protocol and the profile. For the client that has no event
     loop (`client/posix.py`); it stops drawing for the second this takes.
     """
     argv, where, kind = _prepared(program, profile, port, arguments)
@@ -223,17 +266,17 @@ def start(program: str, profile: str, port: int, arguments: list[str]) -> tuple[
     while time.monotonic() < deadline:
         path = endpoint_in(where, port, kind)
         if path is not None:
-            return process, path, kind
+            return process, path, kind, where
         if process.poll() is not None:
             raise _did_not_listen(argv, process.returncode)
         time.sleep(POLL_SECONDS)
-    process.kill()
+    end(process, where)
     raise _did_not_listen(argv, None)
 
 
 async def start_async(
     program: str, profile: str, port: int, arguments: list[str]
-) -> tuple[anyio.abc.Process, str, Remote]:
+) -> tuple[anyio.abc.Process, str, Remote, Path]:
     "`start`, for a client with an event loop."
     argv, where, kind = _prepared(program, profile, port, arguments)
     with open(where / LOG, "wb") as log:
@@ -244,9 +287,9 @@ async def start_async(
         while True:
             path = endpoint_in(where, port, kind)
             if path is not None:
-                return process, path, kind
+                return process, path, kind, where
             if process.returncode is not None:
                 raise _did_not_listen(argv, process.returncode)
             await anyio.sleep(POLL_SECONDS)
-    process.kill()
+    end(process, where)
     raise _did_not_listen(argv, None)
