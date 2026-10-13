@@ -22,6 +22,16 @@ client reads where the person sits.
 | `forward-mode` | session | `on` | A loopback URL a pane opens is forwarded to the client's machine. |
 | `set-clipboard` | session | `external` | A pane's copy reaches the person's clipboard. |
 
+## Sound
+
+| option | scope | default | why |
+| --- | --- | --- | --- |
+| `audio-server` | session | `auto` | Panes play into a speaker and record from a microphone that pymux carries to the client used last. `auto` is `private` when the build carries PipeWire (the Linux package does), else `shared`. `private` starts a PipeWire and a WirePlumber of the server's own, so a host with no sound works and two servers never fight over a default sink. `shared` adds them to the PipeWire the server finds, named to panes in `PULSE_SINK` and `PULSE_SOURCE`. Lillecarl/pymux#657. |
+| `audio` | client | `on` | This machine plays the panes' sound. The microphone opens only while a program on the server records, never before. `playback` never lends the microphone; `off` plays nothing. |
+| `audio-rtt-multiplier` | client | `2` | The speaker buffers the slowest recent round trip times this, at least 40 ms and at most a second. Two round trips cover a link whose delay doubles for a moment. Lower is less delay and more gaps. |
+
+The build switch: the root `default.nix` passes `pipewire` and `wireplumber` to the pymux package on Linux. Pass `null` for either to leave them out of the closure; `private` then needs both on the PATH.
+
 ## Wayland windows in panes
 
 | option | scope | default | why |

@@ -71,6 +71,32 @@ class PaneBrowser(StrEnum):
     ALL = "all"
 
 
+class AudioServerMode(StrEnum):
+    """
+    Whose PipeWire holds the speaker and the microphone that panes play
+    into and record from, which pymux carries to the client used last.
+    `pymux/audio.py` says what each costs. Lillecarl/pymux#657.
+    """
+
+    #: Private when the build carries PipeWire, shared otherwise.
+    AUTO = "auto"
+    #: A PipeWire and a WirePlumber of this server's own.
+    PRIVATE = "private"
+    #: The PipeWire the server finds, with the speaker named to panes.
+    SHARED = "shared"
+    OFF = "off"
+
+
+class ClientAudio(StrEnum):
+    "What a client does with the sound of the server. Lillecarl/pymux#657."
+
+    #: Play it, and lend the microphone while a program records.
+    ON = "on"
+    #: Play it, and never open the microphone.
+    PLAYBACK = "playback"
+    OFF = "off"
+
+
 class WindowScroll(StrEnum):
     """
     What one scroll event from a client's terminal does to a Wayland

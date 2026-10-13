@@ -49,6 +49,11 @@
   ruff,
   # The model API the scenario check aims claude-code at.
   aimock,
+  # The PipeWire a server starts for `audio-server private`. Null leaves
+  # them out of the closure, and the server finds them on the PATH or
+  # shares the PipeWire it finds. Lillecarl/pymux#657.
+  pipewire ? null,
+  wireplumber ? null,
 }:
 let
   # pymux's own version. The element is published as an npm package as
@@ -145,6 +150,19 @@ let
             installManPage pymux.1
             install -Dm644 ${base16-schemes-json}/base16-schemes.json \
               "$out/${python.sitePackages}/pymux/base16-schemes.json"
+          ''
+          + lib.optionalString (pipewire != null && wireplumber != null) ''
+            # `pymux/audio.py` reads these before the PATH.
+            echo ${
+              lib.escapeShellArg (
+                builtins.toJSON {
+                  pipewire = lib.getExe' pipewire "pipewire";
+                  wireplumber = lib.getExe' wireplumber "wireplumber";
+                }
+              )
+            } > "$out/${python.sitePackages}/pymux/audio-programs.json"
+          ''
+          + ''
             ${installElement "$out/${python.sitePackages}/pymux/web/static"}
           '';
 
@@ -249,6 +267,8 @@ let
       pyrefly
       ruff
       aimock
+      pipewire
+      wireplumber
       ;
     waylandProtocols = pyterm-pytest.waylandProtocols;
     # The base16 collection the package carries, for the gallery that

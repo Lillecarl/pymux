@@ -541,20 +541,20 @@ def test_a_snapshot_of_another_version_is_refused(pymux, tmp_path, off_by):
         snapshot.load(Pymux(), path)
 
 
-def test_a_version_16_snapshot_gains_a_browser_per_client(pymux, tmp_path):
-    "Version 17 adds `browser_program` and `browser_profile`, empty. Lillecarl/pymux#653."
-    path = tmp_path / "v16.sqlite"
+def test_a_version_17_snapshot_gains_sound_per_client(pymux, tmp_path):
+    "Version 18 adds `audio` and `audio_rtt_multiplier`, empty. Lillecarl/pymux#657."
+    path = tmp_path / "v17.sqlite"
     snapshot.save(pymux, path)
     db = sqlite3.connect(path)
-    db.execute("ALTER TABLE clients DROP COLUMN browser_program")
-    db.execute("ALTER TABLE clients DROP COLUMN browser_profile")
-    db.execute("PRAGMA user_version = 16")
+    db.execute("ALTER TABLE clients DROP COLUMN audio")
+    db.execute("ALTER TABLE clients DROP COLUMN audio_rtt_multiplier")
+    db.execute("PRAGMA user_version = 17")
     db.commit()
     db.close()
 
     stepped = snapshot._open(path)
     columns = {row[1] for row in stepped.execute("PRAGMA table_info(clients)")}
-    assert {"browser_program", "browser_profile"} <= columns
+    assert {"audio", "audio_rtt_multiplier"} <= columns
 
 
 async def test_a_snapshot_is_refused_while_a_command_waits(pymux, tmp_path):

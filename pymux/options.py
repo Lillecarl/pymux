@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, override
 
 from . import log
 from .arrangement import Window
-from .enums import PaneBrowser, WindowCodec, WindowScroll, WindowSize, Woke
+from .enums import AudioServerMode, ClientAudio, PaneBrowser, WindowCodec, WindowScroll, WindowSize, Woke
 from .key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS
 from .key_spelling import key_however_it_is_written
 from .layout import Justify
@@ -280,6 +280,43 @@ class PositiveIntOption(Option):
             return super().set_default(pymux, value)
 
         pymux.arrangement.window_defaults[self._attribute()] = self._read(value)
+
+
+class PositiveFloatOption(Option):
+    "A number above zero, which may have a fraction."
+
+    def __init__(self, attribute_name: str, scope: Scope = Scope.SESSION) -> None:
+        self.attribute_name = attribute_name
+        self.scope = scope
+
+    @override
+    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
+        try:
+            return ["%g" % getattr(self.held_by(pymux), self._attribute())]
+        except SetOptionError:
+            return []
+
+    @override
+    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+        try:
+            number = float(value)
+        except ValueError:
+            number = 0.0
+        if not number > 0 or number == float("inf"):
+            raise SetOptionError("Expecting a number above zero.")
+        setattr(self.held_by(pymux, target), self._attribute(), number)
+        self.after(pymux)
+
+    def after(self, pymux: Pymux) -> None:
+        "What the server does once the value has changed."
+
+
+class AudioRttOption(PositiveFloatOption):
+    "`audio-rtt-multiplier`, which the client's audio link hears at once."
+
+    @override
+    def after(self, pymux: Pymux) -> None:
+        pymux.audio.client_options_changed()
 
 
 class FrameRateOption(PositiveIntOption):
@@ -551,6 +588,28 @@ class EnumOption(Option):
 
     def after(self, pymux: Pymux) -> None:
         "What the server does once the value has changed."
+
+
+class AudioServerOption(EnumOption):
+    "`audio-server`, which stops PipeWire and starts it again as it says."
+
+    def __init__(self, attribute_name: str) -> None:
+        super().__init__(AudioServerMode, attribute_name)
+
+    @override
+    def after(self, pymux: Pymux) -> None:
+        pymux.audio.option_changed()
+
+
+class ClientAudioOption(EnumOption):
+    "`audio`, one client's: play, play and record, or neither."
+
+    def __init__(self, attribute_name: str) -> None:
+        super().__init__(ClientAudio, attribute_name, scope=Scope.CLIENT)
+
+    @override
+    def after(self, pymux: Pymux) -> None:
+        pymux.audio.client_options_changed()
 
 
 class ExtendedKeysOption(EnumOption):
@@ -850,6 +909,11 @@ ALL_OPTIONS = {
     # that runs already keeps the environment it was born with.
     # Lillecarl/pymux#383.
     "wayland-server": WaylandServerOption("wayland_server"),
+    # Whose PipeWire holds the speaker and microphone that panes play
+    # into and record from: "private", "shared", "auto" or "off".
+    # `AudioServerMode` says what each means. Only new panes see it.
+    # Lillecarl/pymux#657.
+    "audio-server": AudioServerOption("audio_server"),
     # Bring the port with the URL. A "localhost" address opened on the
     # browser of the machine at the keyboard means a service on that
     # machine, which is the wrong one, so the client forwards the port
@@ -995,6 +1059,11 @@ ALL_CLIENT_OPTIONS = {
     # profile pymux keeps. Lillecarl/pymux#653.
     "browser-program": StringOption("browser_program", scope=Scope.CLIENT),
     "browser-profile": StringOption("browser_profile", scope=Scope.CLIENT),
+    # Whether this machine plays the panes' sound and lends its
+    # microphone, and how many round trips of sound it buffers.
+    # Lillecarl/pymux#657.
+    "audio": ClientAudioOption("audio"),
+    "audio-rtt-multiplier": AudioRttOption("audio_rtt_multiplier", scope=Scope.CLIENT),
 }
 
 

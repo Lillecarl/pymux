@@ -93,6 +93,18 @@ class Packet(StrEnum):
     # writes many packets. Lillecarl/pymux#461.
     STREAM_PANE = "stream-pane"
     STREAM_IN = "stream-in"
+    # "This connection carries sound for `client-id`." It is a connection
+    # of its own, so over SSH a channel of its own, and sound never waits
+    # behind a window pane's frame. The server answers with the same
+    # name when the link opens and when the client's options change:
+    # its `audio` under `data`, and `rtt-multiplier`. Lillecarl/pymux#657.
+    AUDIO = "audio"
+    # "Send this back", with `time`: how the client measures the round
+    # trip that sizes its buffers. Lillecarl/pymux#657.
+    ECHO = "echo"
+    # "My buffers hold `buffer` milliseconds": the server paces the
+    # microphone by it. Lillecarl/pymux#657.
+    LATENCY = "latency"
 
     # The client answers.
     PONG = "pong"
@@ -141,6 +153,13 @@ class Packet(StrEnum):
     # Lillecarl/pymux#653.
     BROWSER = "browser"
     BROWSER_STOP = "browser-stop"
+
+    # Either side, on an `audio` connection: 20 ms of Opus under `data`.
+    # The server sends what panes play; the client sends what its
+    # microphone hears. Lillecarl/pymux#657.
+    SOUND = "sound"
+    # The server tells: open the microphone, or close it, under `data`.
+    MICROPHONE = "microphone"
 
     # Either side: "every packet I write after this one is in `wire`".
     # `wire.py` holds the format. Lillecarl/pymux#633.
@@ -239,6 +258,15 @@ class Field(StrEnum):
     CODECS = "codecs"
     CODEC = "codec"
     VIDEO = "video"
+    #: In `echo`, the sender's clock when it sent it, which comes back
+    #: unchanged. In `latency`, milliseconds of buffer. In `sound`, the
+    #: channels of the frame. Lillecarl/pymux#657.
+    TIME = "time"
+    BUFFER = "buffer"
+    CHANNELS = "channels"
+    #: In the server's `audio`: the client's `audio-rtt-multiplier`,
+    #: beside its `audio` under `data`.
+    RTT_MULTIPLIER = "rtt-multiplier"
 
 
 class Codec(StrEnum):

@@ -55,7 +55,7 @@ from pyte.titles import Titles
 
 from .arrangement import HSplit, LayoutTypes, Pane, VSplit, Window, _Split, node_key
 from .commands.wait_for import WaitChannel
-from .enums import WindowScroll
+from .enums import ClientAudio, WindowScroll
 from .ids import PaneId, SessionId, WindowId, WindowIndex
 from .jobs import Job, JobId
 from .notifications import Notification
@@ -70,7 +70,7 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "load", "program_ids", "save", "start
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 17
+SNAPSHOT_VERSION = 18
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -87,6 +87,8 @@ _CLIENT_SETTING_TYPES: dict[str, type] = {
     "window_scroll": WindowScroll,
     "browser_program": str,
     "browser_profile": str,
+    "audio": ClientAudio,
+    "audio_rtt_multiplier": float,
 }
 CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
 CLIENT_COLUMNS = ("client_id", "session_id", "previous_session_id", *CLIENT_SETTINGS, "modes", "connected")
@@ -96,10 +98,10 @@ CLIENT_COLUMNS = ("client_id", "session_id", "previous_session_id", *CLIENT_SETT
 #: change of shape adds the one step from the version before it and
 #: deletes any older step. Version 12 is the first a holder hands over.
 STEPS: dict[int, str] = {
-    # 17 holds each client's `browser-program` and `browser-profile`.
-    16: """
-ALTER TABLE clients ADD COLUMN browser_program TEXT;
-ALTER TABLE clients ADD COLUMN browser_profile TEXT;
+    # 18 holds each client's `audio` and `audio-rtt-multiplier`.
+    17: """
+ALTER TABLE clients ADD COLUMN audio TEXT;
+ALTER TABLE clients ADD COLUMN audio_rtt_multiplier REAL;
 """,
 }
 
@@ -252,7 +254,9 @@ CREATE TABLE clients(
   connected REAL,
   window_scroll TEXT,
   browser_program TEXT,
-  browser_profile TEXT
+  browser_profile TEXT,
+  audio TEXT,
+  audio_rtt_multiplier REAL
 );
 CREATE TABLE client_windows(
   client_id TEXT NOT NULL REFERENCES clients(client_id),

@@ -10,6 +10,9 @@ import time
 from select import select
 from typing import override
 
+import anyio
+from anyio.from_thread import start_blocking_portal
+
 from libpymux.protocol import READ_SIZE, Field, Framer, Packet
 from libpymux.sockets import servers_newest_first
 from libpymux.wire import PacketReader
@@ -17,7 +20,9 @@ from prompt_toolkit.input.vt100 import raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output
 
 from pymux.agentic import caller_cwd, caller_environment
+from pymux.log import logger
 
+from .audio import AudioClient, SocketLink, sound_devices
 from .reconnect import draw
 from .terminal import DELETE_EVERY_IMAGE, NO_ANSWER, TerminalClient
 
@@ -51,6 +56,14 @@ class PosixClient(TerminalClient):
         self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.socket.connect(socket_name)
         self.socket.setblocking(True)
+
+        #: Sound, on a thread of its own: this client's loop is a
+        #: `select`, and sound is a connection of its own besides.
+        #: Lillecarl/pymux#657.
+        devices = sound_devices()
+        self.audio = AudioClient(self.client_id, devices) if devices is not None else None
+        self._audio_portal = None
+        self._audio_task = None
 
     @override
     def run_command(self, command, pane_id=None, timeout=None) -> int:
@@ -124,6 +137,7 @@ class PosixClient(TerminalClient):
         Attach client user interface.
         """
         self._start_gui(detach_other_clients, color_depth)
+        self._start_audio()
 
         with raw_mode(sys.stdin.fileno()):
             reader = PacketReader()
@@ -161,6 +175,8 @@ class PosixClient(TerminalClient):
                             if self.restart_wait is not None and self._wait_for_the_next_server(stdin_fd):
                                 reader = PacketReader()
                                 self._start_gui(detach_other_clients, color_depth)
+                                self._stop_audio()
+                                self._start_audio()
                                 continue
                             return
                         for packet in reader.feed(data):
@@ -179,8 +195,38 @@ class PosixClient(TerminalClient):
 
             finally:
                 signal.signal(signal.SIGWINCH, signal.SIG_IGN)
+                self._stop_audio()
                 self.stop_browsers()
                 self._leave_the_terminal()
+
+    def _start_audio(self) -> None:
+        if self.audio is None or self._audio_portal is not None:
+            return
+        self._audio_portal = start_blocking_portal()
+        portal = self._audio_portal.__enter__()
+        self._audio_task = portal.start_task_soon(self._carry_audio)
+
+    def _stop_audio(self) -> None:
+        if self._audio_portal is None:
+            return
+        if self._audio_task is not None:
+            self._audio_task.cancel()
+        self._audio_portal.__exit__(None, None, None)
+        self._audio_portal = None
+        self._audio_task = None
+
+    async def _carry_audio(self) -> None:
+        "Sound until the attachment ends. A failure ends the sound, never the attachment."
+        if self.audio is None:
+            return
+
+        async def open_link() -> SocketLink:
+            return SocketLink(await anyio.connect_unix(self.socket_name))
+
+        try:
+            await self.audio.run(open_link)
+        except Exception as error:
+            logger.warning("Sound ended: %s", error)
 
     def _wait_for_the_next_server(self, stdin_fd) -> bool:
         """

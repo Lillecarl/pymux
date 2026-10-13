@@ -46,6 +46,12 @@ dependencies = [
     # the browser's WebSocket on the client's machine. Only it imports
     # this. Lillecarl/pymux#655.
     "websockets>=13.0",
+    # Sound between the panes and the person's machine: Opus on the
+    # wire, encoded and decoded on both ends, and the client's speaker
+    # and microphone through PortAudio, on macOS and Linux alike.
+    # Lillecarl/pymux#657.
+    "opuslib>=3.0.0",
+    "sounddevice>=0.4.0",
     # `set-option theme pygments:<name>` takes one of the forty-nine styles
     # pygments carries, and anything a package installs beside them.
     # Lillecarl/pymux#194.

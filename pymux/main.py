@@ -64,7 +64,18 @@ from .client.memory import MemoryClient
 from .colors import DefaultColors, theme_color_base
 from .commands import CommandException, call_command_handler, handle_command
 from .commands.completer import create_command_completer
-from .enums import CHOOSE, COMMAND, PROMPT, Chooser, PaneBrowser, WindowScroll, WindowSize, Woke
+from .enums import (
+    CHOOSE,
+    COMMAND,
+    PROMPT,
+    AudioServerMode,
+    Chooser,
+    ClientAudio,
+    PaneBrowser,
+    WindowScroll,
+    WindowSize,
+    Woke,
+)
 from .forwarding import LOOPBACK_NAMES, loopback_port
 from .graphics import OuterImageIds, PaneView
 from .ids import PaneId, SessionId, WindowIndex
@@ -105,6 +116,7 @@ from .server import ServerConnection
 from .session import DEFAULT_SIZE, Session
 from .style import DEFAULT_THEME, theme
 from .utils import get_default_shell, keys_are_vi
+from .audio import AudioServer
 from .wayland import WaylandServer
 from .window_pane import WindowWidget, is_window_pane
 
@@ -300,6 +312,8 @@ class ClientState:
         "window_scroll": Keep.SAVED,
         "browser_program": Keep.SAVED,
         "browser_profile": Keep.SAVED,
+        "audio": Keep.SAVED,
+        "audio_rtt_multiplier": Keep.SAVED,
         "matched": Keep.REBUILT,  # the nearest theme to the colours the terminal answers
         # Where the person was: a prefix held, a key table, a prompt,
         # a question, a menu, a chooser.
@@ -409,6 +423,12 @@ class ClientState:
         #: a profile pymux keeps. Lillecarl/pymux#653.
         self.browser_program = ""
         self.browser_profile = ""
+
+        #: Whether this machine plays the panes' sound and lends its
+        #: microphone, and how many round trips of sound it buffers:
+        #: two cover a round trip that doubles. Lillecarl/pymux#657.
+        self.audio = ClientAudio.ON
+        self.audio_rtt_multiplier = 2.0
 
         #: Whether this client only watches. `attach-session -r` sets
         #: it, and nothing clears it: tmux's `-r` only sets as well
@@ -1213,6 +1233,8 @@ class Pymux:
         "wayland_server": Keep.SAVED,
         # The compositor's task starts again in `running`.
         "wayland": Keep.REBUILT,
+        "audio_server": Keep.SAVED,
+        "audio": Keep.REBUILT,
         "browsers": Keep.DROPPED,  # each one goes with its program, which the upgrade ends
         "open_url_forward": Keep.SAVED,
         "open_url_forward_idle": Keep.SAVED,
@@ -1347,6 +1369,10 @@ class Pymux:
         # pysmithay is installed and this is on. `wayland.py` says why.
         self.wayland_server = True
         self.wayland = WaylandServer(self)
+        # Sound to and from the client used last. `audio.py` says what
+        # each mode costs. Lillecarl/pymux#657.
+        self.audio_server = AudioServerMode.AUTO
+        self.audio = AudioServer(self)
         #: Browsers programs here drive on a client's machine.
         #: Lillecarl/pymux#653.
         self.browsers = Browsers(self)
@@ -2098,6 +2124,7 @@ class Pymux:
             tasks.start_soon(self._sweep_jobs)
             tasks.start_soon(self.live.keep, self)
             tasks.start_soon(self.wayland.keep)
+            tasks.start_soon(self.audio.keep)
             if hold:
                 await self.hold(keep_orphans)
             if self.listener is not None:
@@ -2536,6 +2563,9 @@ class Pymux:
             # otherwise inherit from the server. Lillecarl/pymux#270.
             # Merged onto the copy and not onto os.environ, which still
             # holds what ptterm's edit above took out of the pane.
+            # The sound names go first, so a `set-environment` of the
+            # same name wins. Lillecarl/pymux#657.
+            self.audio.pane_environment(environment)
             merged = self.pane_environment(environment)
             environment.clear()
             environment.update(merged)

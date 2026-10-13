@@ -32,6 +32,7 @@ from pyte.placeholders import PLACEHOLDER, blanked
 from pymux.commands.common import find_pane
 
 from .agentic import caller_context
+from .audio import AudioLink
 from .colors import ColorDetection, DefaultColors
 from .commands import handle_command
 from .enums import Woke
@@ -159,6 +160,8 @@ class ServerConnection:
         "_encode": Keep.DROPPED,
         "_pipeinput": Keep.DROPPED,
         "_stream": Keep.DROPPED,
+        # A client opens its audio connection again to the next server.
+        "_audio": Keep.DROPPED,
         "_tasks": Keep.DROPPED,
         "_closed": Keep.DROPPED,
         "_kitty_detection_pending": Keep.DROPPED,
@@ -292,6 +295,9 @@ class ServerConnection:
         self.forwards: list[dict] = []
         #: Whether this client starts browsers. Lillecarl/pymux#653.
         self.starts_browsers = False
+        #: The sound this connection carries, when it is a client's
+        #: audio connection. Lillecarl/pymux#657.
+        self._audio: AudioLink | None = None
 
         #: Whether this client answers a ping, and how many have gone
         #: unanswered. Only a client that said it answers is ever
@@ -785,6 +791,16 @@ class ServerConnection:
             self._spawn(self._stream_pane(packet))
             return
 
+        # "This connection carries sound." It holds the connection, as
+        # a stream does, and what comes on it after is the link's.
+        if packet[Field.CMD] == Packet.AUDIO:
+            self._spawn(self._carry_audio(packet))
+            return
+        if packet[Field.CMD] in (Packet.SOUND, Packet.ECHO, Packet.LATENCY):
+            if self._audio is not None:
+                self._audio.heard(packet)
+            return
+
         # One input message of a stream, which the stream itself reads:
         # a packet that arrives with no stream running has nowhere to go.
         if packet[Field.CMD] == Packet.STREAM_IN:
@@ -910,6 +926,10 @@ class ServerConnection:
             # through it. Lillecarl/pymux#271.
             if self.client_state is not None:
                 self.pymux.take_environment_from(self.client_state)
+
+            # This client's audio connection can have come first, and
+            # heard nothing of its options then. Lillecarl/pymux#657.
+            self.pymux.audio.client_options_changed()
 
             if self.answers_ping:
                 self._spawn(self._watch_the_client())
@@ -1102,6 +1122,36 @@ class ServerConnection:
             pass  # The viewer went away, which is how a stream usually ends.
         finally:
             self._stream = None
+            self._close_connection()
+
+    async def _carry_audio(self, packet: dict[str, Any]) -> None:
+        """
+        Carry one client's sound on this connection, until it goes.
+        Lillecarl/pymux#657.
+
+        **A connection of its own**, so over SSH a channel of its own:
+        a window pane's frame holds the write lock of the attached
+        connection while it goes out, and sound waits behind nothing.
+        """
+        wire = choose(packet.get(Field.WIRE), False)
+        if wire is not None and self._encode is encode_json:
+            await self._write_packet({Field.CMD: Packet.WIRE, Field.WIRE: wire})
+            self._encode = encode_msgpack
+        if self._encode is not encode_msgpack:
+            # Opus is bytes, and JSON carries none.
+            self._close_connection()
+            return
+
+        link = AudioLink(self, packet.get(Field.CLIENT_ID) or "")
+        self._audio = link
+        self.pymux.audio.link_opened(link)
+        try:
+            await link.run()
+        except BrokenPipeError:
+            pass
+        finally:
+            self._audio = None
+            self.pymux.audio.link_closed(link)
             self._close_connection()
 
     async def _run_command(self, packet: dict[str, Any]) -> None:

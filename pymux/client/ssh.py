@@ -61,8 +61,10 @@ from pymux.forwarding import (
     the_far_side_may_narrow,
     with_port,
 )
+from pymux.log import logger
 from pymux.utils import nonblocking
 
+from .audio import AudioClient, SshLink, sound_devices
 from .defaults import is_ssh_url as is_ssh_url
 from .forwards import Forwards
 from .reconnect import (
@@ -291,6 +293,9 @@ class SshClient(TerminalClient):
         #: on the new one, so a link that dropped gives the tunnels
         #: back with the panes. Lillecarl/pymux#436.
         self.forwards = Forwards()
+        #: Sound, where this machine can play it. Lillecarl/pymux#657.
+        devices = sound_devices()
+        self.audio = AudioClient(self.client_id, devices) if devices is not None else None
 
     # ------------------------------------------------------------------
     # The transport.
@@ -599,6 +604,7 @@ class SshClient(TerminalClient):
                 # both silent. Lillecarl/pymux#442.
                 self._report_forwards(self._forwards_moved)
                 self._forwards_moved = ""
+                tasks.start_soon(self._carry_audio, connection)
 
                 async for packet in self._packets(reader):
                     if packet[Field.CMD] == Packet.FORWARD:
@@ -823,6 +829,22 @@ class SshClient(TerminalClient):
                 Field.MESSAGE: message,
             }
         )
+
+    async def _carry_audio(self, connection) -> None:
+        """
+        Sound on a channel of its own, to the same socket. A failure
+        here ends the sound and never the attachment. Lillecarl/pymux#657.
+        """
+        if self.audio is None:
+            return
+
+        async def open_link() -> SshLink:
+            return SshLink(*await connection.open_unix_connection(self.path))
+
+        try:
+            await self.audio.run(open_link)
+        except Exception as error:
+            logger.warning("Sound ended: %s", why(error))
 
     async def _while_the_link_holds(self, work, *arguments) -> None:
         """

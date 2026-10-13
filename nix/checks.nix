@@ -65,6 +65,10 @@
   # itself and not as a box. Lillecarl/pymux#548.
   wqy_microhei,
   perl,
+  # The PipeWire that `checks.pymux-audio` plays through and records
+  # from. Null on a system without it. Lillecarl/pymux#657.
+  pipewire ? null,
+  wireplumber ? null,
   # The programs that animate. A pane nobody looks at should cost the
   # parsing of its bytes and nothing else, and only a real terminal
   # program writes the way that measures it: a screenful at a steady
@@ -653,6 +657,25 @@ in
         ${waylandTestEnv}/bin/python -m pytest -q -p no:cacheprovider \
           -o faulthandler_timeout=60 \
           tests/test_wayland_server.py tests/test_wayland_absent.py tests/test_window_panes.py
+      '';
+
+  # Sound between panes and a client, through a real PipeWire and a
+  # WirePlumber the server starts. A suite of its own because it needs
+  # both on the PATH, and `unit` skips it without them.
+  # Lillecarl/pymux#657.
+  audio =
+    runInSandbox
+      {
+        name = "pymux-audio";
+        inputs = [
+          pipewire
+          wireplumber
+        ];
+      }
+      ''
+        # What the microphone test recorded lands beside the log.
+        export PYMUX_AUDIO_OUT="$out"
+        python -m pytest -q -p no:cacheprovider -o faulthandler_timeout=60 tests/test_audio.py
       '';
 
   # The types of pymux, held by a static checker rather than by a run.
