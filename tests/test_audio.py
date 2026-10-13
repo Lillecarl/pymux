@@ -386,3 +386,34 @@ async def test_an_attached_client_is_told_the_server_has_sound(tmp_path):
             20.0,
             lambda: "no offer; sound %s" % ("on" if pymux.audio.running.is_set() else "off",),
         )
+
+
+@pytest.mark.skipif(not shutil.which("paplay"), reason="no Pulse client on the PATH")
+async def test_a_pulse_program_plays_and_records(tmp_path):
+    "Most programs reach a speaker through Pulse, which a pane finds in PULSE_SERVER."
+    devices = FakeDevices(microphone_hz=880)
+    async with serving(tmp_path) as pymux, carrying(pymux, devices):
+        song = tmp_path / "a440.wav"
+        write_wav(song, tone(440, 3.0, 2), 2)
+        async with running(["paplay", str(song)], pane_environment(pymux)):
+            await once(
+                lambda: len(devices.played) >= 2.5 * STEREO_SECOND,
+                15.0,
+                lambda: "played %d bytes" % len(devices.played),
+            )
+        middle = bytes(devices.played[STEREO_SECOND : 2 * STEREO_SECOND])
+        assert loudest(middle, 2) == 440
+
+        recorded = tmp_path / "heard.wav"
+        command = ["parecord", "--rate=48000", "--channels=1", "--format=s16le", "--file-format=wav", str(recorded)]
+        async with running(command, pane_environment(pymux)) as recorder:
+            await once(lambda: devices.microphone_open, 10.0, "the microphone never opened for Pulse")
+            await anyio.sleep(2.0)
+            recorder.terminate()
+            with anyio.fail_after(10):
+                await recorder.wait()
+
+    with wave.open(str(recorded)) as heard:
+        pcm = heard.readframes(heard.getnframes())
+    last = pcm[-RATE * 2 :]
+    assert loudest(last, 1) == 880

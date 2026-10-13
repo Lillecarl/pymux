@@ -69,6 +69,8 @@
   # from. Null on a system without it. Lillecarl/pymux#657.
   pipewire ? null,
   wireplumber ? null,
+  # paplay and parecord: most programs reach a speaker through Pulse.
+  pulseaudio,
   # The programs that animate. A pane nobody looks at should cost the
   # parsing of its bytes and nothing else, and only a real terminal
   # program writes the way that measures it: a screenful at a steady
@@ -670,6 +672,7 @@ in
         inputs = [
           pipewire
           wireplumber
+          pulseaudio
         ];
       }
       ''
