@@ -137,7 +137,9 @@ class Browsers:
             raise
 
     def _question(self, launch: Launch) -> str:
-        shown = " ".join(shlex.quote(one) for one in launch.arguments)
+        # What it opens, and none of the flags: Playwright passes forty,
+        # and a question of one screen line showed nothing else.
+        shown = " ".join(shlex.quote(one) for one in launch.arguments if not one.startswith("-"))
         return "%s wants to drive a browser on this machine%s. Open it? (y/n)" % (
             launch.pane_label,
             " (%s)" % shown if shown else "",
