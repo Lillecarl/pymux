@@ -2,14 +2,14 @@
 Sound between the panes and the machine a person sits at.
 
 The server holds a speaker and a microphone in PipeWire, and carries
-their sound to the client used last, as Opus, on a connection of its
-own. Lillecarl/pymux#657.
+their sound to the client used last, as Opus, on the connection that
+client attached on. Lillecarl/pymux#657.
 
-PipeWire speaks raw L16 RTP on loopback, and pymux encodes Opus itself.
-PipeWire's own Opus is multistream with every channel uncoupled, which
-a plain Opus decoder reads as noise, and its packet time ignores
-`rtp.ptime`. So the wire carries `sound` packets of 20 ms of Opus, and
-only this module knows RTP.
+**The server is a sound client too, and pymux only the transport.** The
+speaker is a `pw-cat --record` that says it is an `Audio/Sink`, and the
+microphone a `pw-cat --playback` that says it is an `Audio/Source`.
+WirePlumber links programs to them as to any device, and PipeWire's own
+clock paces both. Lillecarl/pymux#662.
 
 `audio-server` says whose PipeWire holds the speaker:
 
@@ -21,31 +21,28 @@ only this module knows RTP.
 - "auto" is private when pymux was built with PipeWire beside it, and
   shared otherwise.
 
-The RTP modules run in a process of pymux's own in both cases, so
-nothing is loaded into a daemon somebody else owns.
+Both `pw-cat`s are pymux's own processes in either case, so nothing is
+loaded into a daemon somebody else owns.
 """
 
 from __future__ import annotations
 
 import contextlib
+import fcntl
 import json
 import logging
 import math
 import os
 import shutil
-import socket
-import struct
 import sys
 import tempfile
-from array import array
 from collections import deque
 from importlib import resources
-from subprocess import DEVNULL
+from subprocess import DEVNULL, PIPE
 from typing import TYPE_CHECKING, Any
 
 import anyio
 import anyio.abc
-import anyio.to_thread
 from libpymux.protocol import Field, Packet
 
 from pymux.enums import AudioServerMode, ClientAudio
@@ -72,11 +69,6 @@ MICROPHONE_CHANNELS = 1
 SPEAKER_BITRATE = 128000
 MICROPHONE_BITRATE = 64000
 
-#: The microphone's buffer in PipeWire, which stays fixed: the buffer
-#: that follows the round trip is pymux's own (`JitterBuffer`), because
-#: `module-rtp-source` reads `sess.latency.msec` only when it loads.
-SOURCE_LATENCY_MS = 2 * FRAME_MS
-
 #: The `sound` packets a slow link may hold before the oldest go.
 #: Sound that comes too late is worth less than the next sound.
 SEND_QUEUE = 25
@@ -93,8 +85,16 @@ MICROPHONE_SILENT = (
 #: How long a server waits to start PipeWire again after it ended.
 RETRY_SECONDS = 5.0
 
-#: How often the server looks whether a program records, in seconds.
-WATCH_EVERY = 0.25
+#: The pipe to the microphone's `pw-cat` holds one page, 43 ms of mono:
+#: what waits in it waits before the person's voice, and a recorder that
+#: starts hears it first.
+MICROPHONE_PIPE = 4096
+
+#: A program records while the microphone's `pw-cat` takes sound: more
+#: than its pipe holds within this many seconds. A pipe that only filled
+#: once does not count.
+RECORDING_WINDOW = 0.25
+RECORDING_BYTES = MICROPHONE_PIPE + FRAME * 2
 
 #: A unix socket path holds 108 bytes, and macOS's 104.
 SOCKET_PATH_MAX = 104
@@ -102,8 +102,8 @@ SOCKET_PATH_MAX = 104
 #: Where the build writes the paths of the PipeWire it was given.
 PROGRAMS_FILE = "audio-programs.json"
 
-L16_PAYLOAD = 127
-_RTP = struct.Struct("!BBHII")
+#: `fcntl`'s name for a pipe's size, which Python names on Linux only.
+F_SETPIPE_SZ = getattr(fcntl, "F_SETPIPE_SZ", 1031)
 
 
 def programs() -> dict[str, str]:
@@ -158,65 +158,7 @@ def runtime_dir_of(server_socket: str | None) -> str:
     return tempfile.mkdtemp(prefix="pymux-audio-")
 
 
-def rtp_sink(port: int, node: str) -> dict[str, Any]:
-    "The speaker: what plays into it goes to `port` as L16 RTP, 20 ms a packet."
-    return {
-        "name": "libpipewire-module-rtp-sink",
-        "args": {
-            "destination.ip": "127.0.0.1",
-            "destination.port": port,
-            "source.ip": "127.0.0.1",
-            "net.mtu": 8192,
-            "sess.min-ptime": FRAME_MS,
-            "sess.max-ptime": FRAME_MS,
-            "sess.name": node,
-            "audio.format": "S16BE",
-            "audio.rate": RATE,
-            "audio.channels": SPEAKER_CHANNELS,
-            "audio.position": ["FL", "FR"],
-            "stream.props": {
-                "node.name": node,
-                "node.description": "pymux: the client's speaker",
-                "media.class": "Audio/Sink",
-            },
-        },
-    }
-
-
-def rtp_source(port: int, node: str) -> dict[str, Any]:
-    """
-    The microphone: L16 RTP sent from `127.0.0.1:port` to the same port.
-
-    **From that port and no other.** With a unicast `source.ip` the module
-    `connect()`s its socket to `source.ip:source.port`, so it takes
-    packets only from there; the sender binds it too, with `SO_REUSEADDR`
-    as the module does.
-    """
-    return {
-        "name": "libpipewire-module-rtp-source",
-        "args": {
-            "source.ip": "127.0.0.1",
-            "source.port": port,
-            # Its receive buffer is one MTU. At the default 1280 bytes it
-            # cut every 20 ms packet (1932 bytes) short, and a tone came
-            # out with sidebands every 50 Hz.
-            "net.mtu": 8192,
-            "sess.latency.msec": SOURCE_LATENCY_MS,
-            "sess.ignore-ssrc": True,
-            "audio.format": "S16BE",
-            "audio.rate": RATE,
-            "audio.channels": MICROPHONE_CHANNELS,
-            "audio.position": ["MONO"],
-            "stream.props": {
-                "node.name": node,
-                "node.description": "pymux: the client's microphone",
-                "media.class": "Audio/Source",
-            },
-        },
-    }
-
-
-def daemon_config(runtime: str, rtp: list[dict[str, Any]]) -> dict[str, Any]:
+def daemon_config(runtime: str) -> dict[str, Any]:
     """
     A PipeWire of its own, with the Pulse protocol in the same process.
 
@@ -251,7 +193,6 @@ def daemon_config(runtime: str, rtp: list[dict[str, Any]]) -> dict[str, Any]:
                 "name": "libpipewire-module-protocol-pulse",
                 "args": {"server.address": ["unix:" + os.path.join(runtime, "pulse-native")]},
             },
-            *rtp,
         ],
         # Nothing else drives the graph on a machine with no sound card.
         "context.objects": [
@@ -263,23 +204,6 @@ def daemon_config(runtime: str, rtp: list[dict[str, Any]]) -> dict[str, Any]:
                     "priority.driver": 1,
                 },
             }
-        ],
-    }
-
-
-def host_config(rtp: list[dict[str, Any]]) -> dict[str, Any]:
-    "A process that only holds the RTP modules, in a PipeWire somebody else runs."
-    return {
-        "context.properties": {"core.daemon": False, "core.name": "pymux-audio", "support.dbus": False},
-        "context.spa-libs": {
-            "audio.convert.*": "audioconvert/libspa-audioconvert",
-            "support.*": "support/libspa-support",
-        },
-        "context.modules": [
-            {"name": "libpipewire-module-protocol-native"},
-            {"name": "libpipewire-module-client-node"},
-            {"name": "libpipewire-module-adapter"},
-            *rtp,
         ],
     }
 
@@ -306,37 +230,38 @@ def write_config(config: dict[str, Any], out) -> None:
     json.dump(config, out, indent=2)
 
 
-def _listens_for(port: int) -> bool:
+def pw_cat(
+    program: str, mode: str, channels: int, node: str, description: str, media_class: str, priority: int
+) -> list[str]:
     """
-    Whether a UDP socket on this machine is connected to 127.0.0.1:port
-    from that same port: `module-rtp-source`'s, while it listens.
-
-    Its socket is bound to 0.0.0.0, and the table shows 127.0.0.1 all the
-    same: `connect()` gives a socket bound to any address the source
-    address of its route. The sender's own socket has no peer.
+    A `pw-cat` that is a device: raw 16-bit sound at 48 kHz on its pipe,
+    one 20 ms quantum of latency, and a node programs see as a sink or
+    a source. `priority.session` decides whether WirePlumber makes it
+    the default: in a PipeWire of pymux's own it should, and in a shared
+    one it should not take the person's default away.
     """
-    loopback = "0100007F:%04X" % (port,)
-    try:
-        with open("/proc/net/udp") as table:
-            next(table, None)
-            for line in table:
-                fields = line.split()
-                if len(fields) > 2 and fields[1] == loopback and fields[2] == loopback:
-                    return True
-    except OSError:
-        pass
-    return False
-
-
-def l16_to_native(payload: bytes) -> bytes:
-    samples = array("h")
-    samples.frombytes(payload[: len(payload) // 2 * 2])
-    if sys.byteorder == "little":
-        samples.byteswap()
-    return samples.tobytes()
-
-
-native_to_l16 = l16_to_native
+    properties = {
+        "media.class": media_class,
+        "node.name": node,
+        "node.description": description,
+        "priority.session": priority,
+    }
+    return [
+        program,
+        mode,
+        "--raw",
+        "--rate",
+        str(RATE),
+        "--channels",
+        str(channels),
+        "--format",
+        "s16",
+        "--latency",
+        "%dms" % (FRAME_MS,),
+        "-P",
+        json.dumps(properties),
+        "-",
+    ]
 
 
 class AudioLink:
@@ -591,38 +516,44 @@ class AudioServer:
             self._changed = anyio.Event()
 
     async def _serve(self, have: dict[str, str]) -> None:
-        if opuslib is None:
+        if opuslib is None or "pw-cat" not in have:
             return
-        speaker = await anyio.create_udp_socket(local_host="127.0.0.1", local_port=0)
-        microphone = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        microphone.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        microphone.bind(("127.0.0.1", 0))
-        microphone_port = microphone.getsockname()[1]
-        sender = await anyio.abc.UDPSocket.from_socket(microphone)
-
-        if self.mode == AudioServerMode.SHARED:
-            suffix = "-%d" % (os.getpid(),)
-            self.speaker_node, self.microphone_node = "pymux-speaker" + suffix, "pymux-microphone" + suffix
-        else:
-            self.speaker_node, self.microphone_node = "pymux-speaker", "pymux-microphone"
-        rtp = [rtp_sink(speaker.extra(anyio.abc.SocketAttribute.local_port), self.speaker_node)]
-        rtp.append(rtp_source(microphone_port, self.microphone_node))
-
-        runtime = runtime_dir_of(self.pymux.socket_name) if self.mode == AudioServerMode.PRIVATE else None
+        shared = self.mode == AudioServerMode.SHARED
+        suffix = "-%d" % (os.getpid(),) if shared else ""
+        self.speaker_node, self.microphone_node = "pymux-speaker" + suffix, "pymux-microphone" + suffix
+        runtime = None if shared else runtime_dir_of(self.pymux.socket_name)
         work = tempfile.mkdtemp(prefix="pymux-audio-conf-")
         encoder = opuslib.Encoder(RATE, SPEAKER_CHANNELS, opuslib.APPLICATION_AUDIO)
         encoder.bitrate = SPEAKER_BITRATE
         try:
-            async with speaker, sender, anyio.create_task_group() as tasks:
+            async with anyio.create_task_group() as tasks:
+                environment = dict(os.environ)
                 if runtime is not None:
                     os.makedirs(runtime, mode=0o700, exist_ok=True)
-                    await self._start_private(tasks, have, runtime, work, rtp)
+                    await self._start_private(tasks, have, runtime, work)
                     self.runtime = runtime
-                else:
-                    await self._start_host(tasks, have, work, rtp)
-                tasks.start_soon(self._speak, speaker, encoder)
-                tasks.start_soon(self._listen, sender, microphone_port)
-                tasks.start_soon(self._watch, microphone_port)
+                    environment["PIPEWIRE_REMOTE"] = os.path.join(runtime, "pipewire-0")
+                priority = 1 if shared else 2000
+                speaker = pw_cat(
+                    have["pw-cat"],
+                    "--record",
+                    SPEAKER_CHANNELS,
+                    self.speaker_node,
+                    "pymux: the client's speaker",
+                    "Audio/Sink",
+                    priority,
+                )
+                microphone = pw_cat(
+                    have["pw-cat"],
+                    "--playback",
+                    MICROPHONE_CHANNELS,
+                    self.microphone_node,
+                    "pymux: the client's microphone",
+                    "Audio/Source",
+                    priority,
+                )
+                tasks.start_soon(self._speak, speaker, environment, encoder)
+                tasks.start_soon(self._listen, microphone, environment)
                 logger.info("Sound on (%s PipeWire): %s and %s.", self.mode, self.speaker_node, self.microphone_node)
                 self.running.set()
         finally:
@@ -632,12 +563,10 @@ class AudioServer:
             self._steer_microphone()
             shutil.rmtree(work, ignore_errors=True)
 
-    async def _start_private(
-        self, tasks: anyio.abc.TaskGroup, have: dict[str, str], runtime: str, work: str, rtp: list
-    ) -> None:
+    async def _start_private(self, tasks: anyio.abc.TaskGroup, have: dict[str, str], runtime: str, work: str) -> None:
         conf = os.path.join(work, "pipewire.conf")
         with open(conf, "w") as out:
-            write_config(daemon_config(runtime, rtp), out)
+            write_config(daemon_config(runtime), out)
         config_home = os.path.join(work, "config")
         os.makedirs(os.path.join(config_home, "wireplumber", "wireplumber.conf.d"))
         with open(os.path.join(config_home, "wireplumber", "wireplumber.conf.d", "pymux.conf"), "w") as out:
@@ -669,18 +598,19 @@ class AudioServer:
                 await anyio.sleep(0.05)
         tasks.start_soon(self._run, [have["wireplumber"], "-p", "pymux"], environment, "wireplumber")
 
-    async def _start_host(self, tasks: anyio.abc.TaskGroup, have: dict[str, str], work: str, rtp: list) -> None:
-        conf = os.path.join(work, "pymux-audio.conf")
-        with open(conf, "w") as out:
-            write_config(host_config(rtp), out)
-        tasks.start_soon(self._run, [have["pipewire"], "-c", conf], dict(os.environ), "pipewire")
-
     async def _run(self, argv: list[str], environment: dict[str, str], name: str) -> None:
         "Run one program for as long as sound is on. One that ends ends sound."
-        process = await anyio.open_process(argv, env=environment, stdin=DEVNULL, stdout=DEVNULL, stderr=None)
+        async with self._program(argv, environment) as process:
+            code = await process.wait()
+        raise RuntimeError("%s ended with %s" % (name, code))
+
+    @contextlib.asynccontextmanager
+    async def _program(self, argv: list[str], environment: dict[str, str], stdin=DEVNULL, stdout=DEVNULL):
+        "A program of sound's, ended with the block. `pause` can end it sooner."
+        process = await anyio.open_process(argv, env=environment, stdin=stdin, stdout=stdout, stderr=None)
         self._processes.append(process)
         try:
-            code = await process.wait()
+            yield process
         finally:
             self._processes.remove(process)
             if process.returncode is None:
@@ -689,65 +619,81 @@ class AudioServer:
                     await process.wait()
                 if process.returncode is None:
                     process.kill()
-        raise RuntimeError("%s ended with %s" % (name, code))
 
-    async def _speak(self, speaker: anyio.abc.UDPSocket, encoder: Encoder) -> None:
-        "What panes play, from PipeWire's RTP to the current client as Opus."
-        held = bytearray()
+    async def _speak(self, argv: list[str], environment: dict[str, str], encoder: Encoder) -> None:
+        "What panes play, from the speaker's `pw-cat` to the current client as Opus."
         whole = FRAME * SPEAKER_CHANNELS * 2
-        while True:
-            datagram, _address = await speaker.receive()
-            link = self.current()
-            if link is None or len(datagram) < _RTP.size:
-                held.clear()
-                continue
-            held += datagram[_RTP.size + 4 * (datagram[0] & 0x0F) :]
-            while len(held) >= whole:
-                pcm = l16_to_native(bytes(held[:whole]))
-                del held[:whole]
-                link.send(
-                    {
-                        Field.CMD: Packet.SOUND,
-                        Field.DATA: encoder.encode(pcm, FRAME),
-                        Field.CHANNELS: SPEAKER_CHANNELS,
-                    }
-                )
+        held = bytearray()
+        async with self._program(argv, environment, stdout=PIPE) as process:
+            assert process.stdout is not None
+            async for chunk in process.stdout:
+                held += chunk
+                while len(held) >= whole:
+                    pcm = bytes(held[:whole])
+                    del held[:whole]
+                    link = self.current()
+                    if link is not None:
+                        link.send(
+                            {
+                                Field.CMD: Packet.SOUND,
+                                Field.DATA: encoder.encode(pcm, FRAME),
+                                Field.CHANNELS: SPEAKER_CHANNELS,
+                            }
+                        )
+        raise RuntimeError("the speaker's pw-cat ended")
 
-    async def _listen(self, sender: anyio.abc.UDPSocket, port: int) -> None:
-        "The current client's microphone, paced into PipeWire every 20 ms."
-        ssrc = int.from_bytes(os.urandom(4), "big")
-        sequence = 0
-        timestamp = 0
-        deadline = anyio.current_time()
-        while True:
-            deadline += FRAME_MS / 1000
-            await anyio.sleep_until(deadline)
-            timestamp = (timestamp + FRAME) & 0xFFFFFFFF
-            # The client used last can change between any two frames.
-            self._steer_microphone()
-            link = self.current()
-            frame = link.microphone.take() if link is not None and link.microphone_open else None
-            if frame is None:
-                continue
-            header = _RTP.pack(0x80, L16_PAYLOAD, sequence, timestamp, ssrc)
-            sequence = (sequence + 1) & 0xFFFF
-            await sender.sendto(header + native_to_l16(frame), "127.0.0.1", port)
-            self.microphone_frames += 1
-
-    async def _watch(self, port: int) -> None:
+    async def _listen(self, argv: list[str], environment: dict[str, str]) -> None:
         """
-        Whether a program records from the microphone.
+        The current client's microphone, into the microphone's `pw-cat`
+        as fast as it takes it, and silence when there is none.
 
-        `module-rtp-source` opens its socket when a program starts to
-        read from it and closes it when the last one stops. So the
-        socket table says it, passively, in either mode.
-        `pw-dump --monitor` would say it too, and hangs on a system-wide
-        PipeWire whose manager socket the user cannot open.
+        **Its pipe says whether a program records.** PipeWire runs the
+        microphone's node only while something reads from it, so `pw-cat`
+        takes sound then and none otherwise.
         """
+        read_end, write_end = os.pipe()
+        with contextlib.suppress(OSError):
+            fcntl.fcntl(write_end, F_SETPIPE_SZ, MICROPHONE_PIPE)
+        os.set_blocking(write_end, False)
+        silence = bytes(FRAME * MICROPHONE_CHANNELS * 2)
+        taken: deque[tuple[float, int]] = deque()
+        try:
+            async with self._program(argv, environment, stdin=read_end) as process, anyio.create_task_group() as tasks:
+                os.close(read_end)
+                read_end = -1
+                tasks.start_soon(self._watch, taken)
+                pending = b""
+                while process.returncode is None:
+                    if not pending:
+                        self._steer_microphone()
+                        link = self.current()
+                        frame = link.microphone.take() if link is not None and link.microphone_open else None
+                        if frame is not None:
+                            self.microphone_frames += 1
+                        pending = frame if frame is not None else silence
+                    await anyio.wait_writable(write_end)
+                    try:
+                        written = os.write(write_end, pending)
+                    except BlockingIOError:
+                        continue
+                    pending = pending[written:]
+                    taken.append((anyio.current_time(), written))
+        finally:
+            for fd in (read_end, write_end):
+                if fd >= 0:
+                    with contextlib.suppress(OSError):
+                        os.close(fd)
+        raise RuntimeError("the microphone's pw-cat ended")
+
+    async def _watch(self, taken: deque[tuple[float, int]]) -> None:
+        "Whether a program records: whether the microphone's pipe drains."
         while True:
-            recording = await anyio.to_thread.run_sync(_listens_for, port)
+            await anyio.sleep(FRAME_MS / 1000)
+            now = anyio.current_time()
+            while taken and taken[0][0] < now - RECORDING_WINDOW:
+                taken.popleft()
+            recording = sum(written for _at, written in taken) > RECORDING_BYTES
             if recording != self.recording:
                 self.recording = recording
                 logger.info("A program %s the microphone.", "records from" if recording else "stopped recording from")
                 self._steer_microphone()
-            await anyio.sleep(WATCH_EVERY)

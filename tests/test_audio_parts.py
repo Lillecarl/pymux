@@ -18,9 +18,8 @@ from pymux.audio import (
     MICROPHONE_SILENT,
     AudioServer,
     daemon_config,
+    pw_cat,
     resolve,
-    rtp_sink,
-    rtp_source,
 )
 from pymux.enums import AudioServerMode, ClientAudio
 from pymux.jitter import CEILING_MS, FLOOR_MS, FRAME_MS, SAMPLES_PER_FRAME, SLACK, JitterBuffer, RoundTrip
@@ -181,10 +180,23 @@ def test_macos_has_no_server_sound(carried, monkeypatch):
 
 def test_the_config_is_json_pipewire_reads():
     "SPA-JSON reads JSON, so the config is written with `json` and nothing is quoted by hand."
-    config = daemon_config("/run/x", [rtp_sink(4000, "s"), rtp_source(4001, "m")])
+    config = daemon_config("/run/x")
     names = [module["name"] for module in json.loads(json.dumps(config))["context.modules"]]
     assert "libpipewire-module-access" in names
-    assert names[-2:] == ["libpipewire-module-rtp-sink", "libpipewire-module-rtp-source"]
+    assert "libpipewire-module-protocol-pulse" in names
+
+
+def test_a_device_is_a_pw_cat_that_names_its_node():
+    argv = pw_cat("/bin/pw-cat", "--record", 2, "pymux-speaker", "the speaker", "Audio/Sink", 2000)
+    assert argv[:2] == ["/bin/pw-cat", "--record"]
+    properties = json.loads(argv[argv.index("-P") + 1])
+    assert properties == {
+        "media.class": "Audio/Sink",
+        "node.name": "pymux-speaker",
+        "node.description": "the speaker",
+        "priority.session": 2000,
+    }
+    assert argv[-1] == "-"
 
 
 def test_panes_find_the_private_pipewire():
