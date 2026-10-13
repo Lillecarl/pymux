@@ -461,3 +461,14 @@ async def test_sound_reaches_a_client_over_ssh_and_after_the_link_comes_back(mon
             lambda: audio.speaker_buffer.target_ms == 1000 and link.microphone.target_ms == 1000,
             "the new link to hear the buffer",
         )
+
+
+async def test_a_microphone_that_gives_only_zeros_is_reported(tmp_path):
+    "macOS refuses a terminal the microphone with zeros and no error."
+    devices = FakeDevices(microphone_hz=0)
+    async with serving(tmp_path) as pymux, carrying(pymux, devices):
+        command = ["pw-record", "--rate", "48000", "--channels", "1", "--format", "s16", str(tmp_path / "x.wav")]
+        async with running(command, pane_environment(pymux)):
+            await once(lambda: devices.microphone_open, 10.0, "the microphone never opened")
+            link = next(iter(pymux.audio.links.values()))
+            await once(lambda: link.silent, 10.0, "the silence was never reported")

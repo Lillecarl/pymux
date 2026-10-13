@@ -161,6 +161,8 @@ class Packet(StrEnum):
     # microphone hears. Lillecarl/pymux#657.
     SOUND = "sound"
     # The server tells: open the microphone, or close it, under `data`.
+    # The client answers with `error` "silent" when it hears only zeros,
+    # which is how macOS refuses a terminal the microphone.
     MICROPHONE = "microphone"
 
     # Either side: "every packet I write after this one is in `wire`".

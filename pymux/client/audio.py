@@ -76,6 +76,10 @@ ROUND_TRIPS = 10
 #: Linux only.
 F_SETPIPE_SZ = getattr(fcntl, "F_SETPIPE_SZ", 1031)
 
+#: Frames of exact zeros, a second, after which the microphone is
+#: taken for refused.
+SILENT_FRAMES = 1000 // FRAME_MS
+
 #: How long the speaker stays open with nothing to play. Closing it
 #: lets the machine sleep and other programs take the device.
 SPEAKER_IDLE = 2.0
@@ -306,12 +310,24 @@ class AudioClient:
             self._heard.append(frame)
 
     async def _send_microphone(self, microphone: Stream, encoder: Encoder) -> None:
-        "What the microphone heard, every 20 ms, while it stays open."
+        """
+        What the microphone heard, every 20 ms, while it stays open.
+
+        **A second of exact zeros is not a quiet room.** A real
+        microphone always hears some noise. Exact zeros come from an
+        input volume at zero, or from macOS refusing the terminal, which
+        it does with zeros and no error. The server is told once, and
+        says so to the person.
+        """
+        silent = 0
         while self._microphone is microphone:
             with self._heard_lock:
                 frames = list(self._heard)
                 self._heard.clear()
             for frame in frames:
+                silent = silent + 1 if frame.count(0) == len(frame) else 0
+                if silent == SILENT_FRAMES:
+                    await self._send({Field.CMD: Packet.MICROPHONE, Field.ERROR: "silent"})
                 await self._send({Field.CMD: Packet.SOUND, Field.DATA: encoder.encode(frame, FRAME)})
             await anyio.sleep(FRAME_MS / 1000)
 

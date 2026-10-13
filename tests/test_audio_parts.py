@@ -12,7 +12,16 @@ import json
 import pytest
 
 from pymux import audio
-from pymux.audio import MICROPHONE_OFF, MICROPHONE_ON, AudioServer, daemon_config, resolve, rtp_sink, rtp_source
+from pymux.audio import (
+    MICROPHONE_OFF,
+    MICROPHONE_ON,
+    MICROPHONE_SILENT,
+    AudioServer,
+    daemon_config,
+    resolve,
+    rtp_sink,
+    rtp_source,
+)
 from pymux.client.audio import CEILING_MS, FLOOR_MS, RoundTrip
 from pymux.enums import AudioServerMode, ClientAudio
 from pymux.jitter import FRAME_MS, SLACK, JitterBuffer
@@ -214,6 +223,12 @@ def test_the_person_is_told_when_their_microphone_opens(routed):
     server.recording = False
     server._steer_microphone()
     assert clients[1].message == MICROPHONE_OFF
+
+
+def test_the_person_is_told_when_their_microphone_is_refused(routed):
+    server, clients, links = routed
+    server.microphone_silent(links["b"])
+    assert clients[1].message == MICROPHONE_SILENT
 
 
 def test_a_client_hears_its_options(routed):

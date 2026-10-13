@@ -85,6 +85,10 @@ SEND_QUEUE = 25
 #: hearing their microphone.
 MICROPHONE_ON = "Microphone on: a program on the server records. (set-client-option audio playback keeps it off)"
 MICROPHONE_OFF = "Microphone off."
+MICROPHONE_SILENT = (
+    "The microphone gives only silence: its input volume is at zero, or the system refused it"
+    " (macOS: Privacy & Security > Microphone, then reopen the terminal)."
+)
 
 #: How long a server waits to start PipeWire again after it ended.
 RETRY_SECONDS = 5.0
@@ -340,6 +344,8 @@ class AudioLink:
         self.microphone = JitterBuffer()
         self._decoder = opuslib.Decoder(RATE, MICROPHONE_CHANNELS) if opuslib is not None else None
         self.microphone_open = False
+        #: Whether the client's microphone gave only zeros.
+        self.silent = False
 
     def send(self, packet: dict) -> None:
         "Queue a packet. A full queue lets the oldest go."
@@ -372,6 +378,9 @@ class AudioLink:
                     self.microphone.put(self._decoder.decode(data, FRAME))
                 except opuslib.OpusError:
                     logger.warning("A microphone frame from client %s did not decode.", self.client_id or "?")
+        elif kind == Packet.MICROPHONE and packet.get(Field.ERROR) == "silent":
+            self.silent = True
+            self.connection.pymux.audio.microphone_silent(self)
 
     def open_microphone(self, wanted: bool) -> bool:
         "Open or close the client's microphone. Whether that changed it."
@@ -448,6 +457,14 @@ class AudioServer:
         for link in self.links.values():
             self._tell(link)
         self._steer_microphone()
+
+    def microphone_silent(self, link: AudioLink) -> None:
+        "The client's microphone hands over only zeros: its system refused it."
+        logger.warning("Client %s hears only silence from its microphone.", link.client_id or "?")
+        client_state = self._client_of(link)
+        if client_state is not None:
+            client_state.message = MICROPHONE_SILENT
+            self.pymux.invalidate()
 
     def _client_of(self, link: AudioLink):
         for client_state in self.pymux.clients:

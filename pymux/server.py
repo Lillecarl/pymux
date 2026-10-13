@@ -796,7 +796,7 @@ class ServerConnection:
         if packet[Field.CMD] == Packet.AUDIO:
             self._spawn(self._carry_audio(packet))
             return
-        if packet[Field.CMD] in (Packet.SOUND, Packet.ECHO, Packet.LATENCY):
+        if packet[Field.CMD] in (Packet.SOUND, Packet.ECHO, Packet.LATENCY, Packet.MICROPHONE):
             if self._audio is not None:
                 self._audio.heard(packet)
             return
