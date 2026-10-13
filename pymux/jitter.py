@@ -63,6 +63,11 @@ RAMP_MS = 20
 DEAD_BAND_LOW_MS = 10
 RAMP_LOW_MS = 10
 
+#: The most a buffer squeezes or stretches its sound: 1000 parts per
+#: million, a shift of pitch nobody hears, and ten times the drift of a
+#: real clock.
+MAX_CORRECTION = 1000e-6
+
 #: The least a buffer holds, however short the round trip: two frames,
 #: so one late packet on a local link is not a gap. Lillecarl/pymux#661.
 FLOOR_FRAMES = 2
@@ -139,11 +144,11 @@ class JitterBuffer:
     agree: by a hundred parts per million a buffer of any size fills or
     empties in minutes. So a frame taken while the buffer runs full is
     made of one sample more than it plays, with one dropped, and one
-    taken while it runs empty repeats one. That is one sample a frame:
-    from 350 parts per million at 60 ms frames to 8000 at 2.5 ms, past
-    the usual drift of under a hundred, and not heard. It is how other
-    players keep two clocks together without a resampler.
-    Lillecarl/pymux#660.
+    taken while it runs empty repeats one: at most 1000 parts per
+    million, and 350 at 60 ms frames, where that is one sample a frame.
+    Real clocks drift under a hundred, and a sample a thousand is not
+    heard. It is how other players keep two clocks together without a
+    resampler. Lillecarl/pymux#660.
 
     It judges the fill on an average of about a second, so a burst off
     the network moves nothing: only a fill that stays off its target is
@@ -233,9 +238,13 @@ class JitterBuffer:
             # Past it, a share of frames that grows with the error.
             error = (self._average - (self._target + 0.5)) * self.frame_ms
             band, ramp = (DEAD_BAND_MS, RAMP_MS) if error > 0 else (DEAD_BAND_LOW_MS, RAMP_LOW_MS)
-            share = max(0.0, min(1.0, (abs(error) - band) / ramp))
+            # One sample a frame is 8000 parts per million at 2.5 ms:
+            # past the cap a shift of pitch is heard, and drift never
+            # needs it.
+            most = min(1.0, MAX_CORRECTION * samples_per_frame(self.frame_ms))
+            share = max(0.0, min(most, most * (abs(error) - band) / ramp))
             self._owed += share
-            if share == 1.0 and error > 0:
+            if share == most and error > 0:
                 # Past what drift ever needs: the speaker is not taking
                 # frames as fast as they come.
                 self.saturated += 1
