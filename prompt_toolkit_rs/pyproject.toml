@@ -6,7 +6,7 @@ build-backend = "maturin"
 name = "prompt_toolkit_rs"
 version = "0.1.0"
 description = "Rust kernels for prompt_toolkit's per-cell loops, patched in by install()"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 license = "BSD-3-Clause"
 dependencies = ["prompt-toolkit"]
 
