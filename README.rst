@@ -1,6 +1,14 @@
 Pymux
 =====
 
+.. note::
+
+   This repository is a copy. Work on pymux happens in
+   `pyterm <https://github.com/Lillecarl/pyterm>`_, which exports its
+   ``pymux/`` directory here on every push. Send changes there, and issues to
+   `Lillecarl/pymux <https://github.com/Lillecarl/pymux/issues>`_.
+   ``nix run github:Lillecarl/pymux`` builds it from this repository alone.
+
 *A terminal multiplexer (like tmux) in Python*
 
 Pymux is written on top of `prompt_toolkit 3.0
