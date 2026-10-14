@@ -25,4 +25,5 @@ in
   inherit (pyterm) pymux shell;
   default = pyterm.pymux;
   checks = pyterm.pymux.checks;
+  pages = pyterm.pages.pymux;
 }

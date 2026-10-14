@@ -80,6 +80,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# What the docs site builds with: Sphinx, MyST for the markdown, and
+# the theme. pyterm's `nix/docs/` reads it.
+docs = ["sphinx", "myst-parser", "furo"]
 # The four flavours of the pastel, found by pygments through the entry
 # points the package carries. Optional: pymux runs without it, and the
 # environment that installs pymux asks for it. Lillecarl/pymux#195.
