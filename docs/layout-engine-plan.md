@@ -501,9 +501,9 @@ plan is only the third:
 
 1. Chrome floats: the status bar, the message toolbar, the title bars
    and the `list-keys` dialog. `Float`s over the whole layout,
-   `Z_INDEX` 5 to 9 (`layout.py:113`).
+   `Z_INDEX` 5 to 9 (see `tiling.py`).
 2. The overlay pane: `display-popup -E`, a real pane with a pty.
-   `Pymux.overlay_pane` (`main.py:557`) hangs off the session and is
+   `Pymux.overlay_pane` (see `main.py`) hangs off the session and is
    **not in the window tree**, so no plan has ever held it.
 3. The tiled panes, which is what a plan holds.
 

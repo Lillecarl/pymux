@@ -151,12 +151,13 @@ line.
 
 # FILES
 
-*~/.pymux.conf*, *$XDG_CONFIG_HOME/pymux/pymux.conf*
+*$XDG_CONFIG_HOME/pymux/pymux.conf*, *~/.pymux.conf*
 
 	The configuration file, the first one found. *pymux -f* names one
 	instead.
 
-*share/skills/pymux/pymux/SKILL.md*
+*share/skills/pymux/pymux/SKILL.md*, *share/skills/pymux/pymux-jobs/SKILL.md*
 
-	The agent skill under the *pymux* package: the job workflow above,
-	written for the caller rather than the reference.
+	The agent skills under the *pymux* package: driving terminals and
+	the job workflow above, written for the caller rather than the
+	reference.

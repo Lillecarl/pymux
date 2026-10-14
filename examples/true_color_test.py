@@ -14,6 +14,7 @@ for r in range(0, 80):
     for g in range(0, 80):
         b = 1
         print("\x1b[0;48;2;%s;%s;%sm " % (r, g, b), end="")
+        i += 1
         if i == 1000:
             break
 

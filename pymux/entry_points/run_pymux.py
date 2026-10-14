@@ -3,7 +3,7 @@
 pymux: terminal multiplexer.
 
 Usage:
-    pymux [options] [integrated|start-server|attach|list-sessions] [<command> ...]
+    pymux [options] [integrated|start-server|attach|list-sessions|ls|find|diagnose|renice|web] [<command> ...]
 
 Running pymux without arguments starts a server (daemonized) and attaches
 a client to it. Any other command (e.g. ``split-window``) is sent to a

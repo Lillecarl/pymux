@@ -24,11 +24,11 @@ wire of pymux is JSON on a unix socket, so there is no subprocess and no
 shell quoting between the caller and the server.
 
 **It carries nothing of the terminal.** This is a distribution of its
-own, and what it asks for is platformdirs -- the one thing that says
-where a server binds its socket room on each platform. No
-prompt_toolkit, no ptterm, no parser: a program that drives a server
-does not install one. pymux depends on this package, never the other
-way round.
+own, and what it asks for is platformdirs, anyio and ormsgpack -- the
+room a server binds its socket in, the async it speaks, and the packets
+it answers. No prompt_toolkit, no ptterm, no parser: a program that
+drives a server does not install one. pymux depends on this package,
+never the other way round.
 
 **This is the way to drive pymux.** libtmux can drive it too, through a
 `tmux` shim, and `tests/drive_with_libtmux.py` does that. But libtmux
@@ -90,9 +90,9 @@ result, unless `check=False`.
   string on an unquoted semicolon, and quoting does not hide it. Send
   such text with `send_keys(..., literal=True)`, which does not go
   through that path.
-- **One session for each server.** That is pymux, not this library.
-  `Server.sessions` holds one entry, and `Server.session` is the one
-  that matters.
+- **As many sessions as a person makes.** A server holds every session
+  it started, so `Server.sessions` is the list and `Server.session`
+  is the first of them.
 
 ## Tests
 
