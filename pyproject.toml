@@ -6,7 +6,7 @@
 name = "pymux"
 version = "0.15"
 description = "Pure Python terminal multiplexer."
-readme = "README.rst"
+readme = "README.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
 # asyncio context variables and the modern event loop.
