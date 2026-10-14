@@ -33,7 +33,7 @@ from collections.abc import Callable
 from dataclasses import Field, dataclass, fields
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Protocol
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Protocol, cast
 from weakref import ref
 
 from prompt_toolkit.clipboard import ClipboardData
@@ -1353,7 +1353,10 @@ def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int]) -> int 
             *[(r.position, split_of(r)) for r in _select(db, SplitRow, "WHERE parent_split_id = ?", split.split_id)],
             *[(r.position, pane_of(r)) for r in _select(db, PaneRow, "WHERE parent_split_id = ?", split.split_id)],
         ]
-        split.extend(child for _, child in sorted(children, key=lambda pair: pair[0]))
+        # Rows with a parent always carry a position: the writer
+        # numbers every child and leaves None only for parentless
+        # rows, which this query excludes.
+        split.extend(child for _, child in sorted(children, key=lambda pair: cast(int, pair[0])))
         return split
 
     windows: dict[int, Window] = {}

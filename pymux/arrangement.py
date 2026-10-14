@@ -956,6 +956,9 @@ class Window:
             split = self._get_parent(child)
 
             def found():
+                # None past the root never matches.
+                if split is None:
+                    return False
                 return (
                     isinstance(split, split_cls)
                     and (not is_before or split.index(child) > 0)
