@@ -34,14 +34,23 @@ Options:
     -d             : Detach all other clients, when attaching.
     -x             : Detach them, and hang up the process each one was
                      started by, so the terminal it was in closes.
+    -r             : Only watch, and change nothing.
     -n NAME        : What to call this terminal: 'desk', 'phone'. The
                      commands that take '-t <client>' take it, and it
                      lasts as long as this attachment.
+    --port PORT    : `pymux web`: the port to serve on. 8080 by default.
+    --bind ADDRESS : `pymux web`: what to listen on. 127.0.0.1 by
+                     default, which is this machine only.
+    --allow-input  : `pymux web`: let a viewer type into the pane. Off
+                     by default.
     --log FILE     : Logfile.
+    --log-level LEVEL : How much to log.
     --truecolor    : Render true color (24 bit) instead of 256 colors.
-                     (Each client can set this separately.)
+                      (Each client can set this separately.)
     --ansicolor    : Use only the 16 ANSI colors.
     --version      : Print version and exit.
+    -V             : Print the version of the tmux interface that pymux
+                     emulates.
 """
 
 from __future__ import annotations
@@ -403,8 +412,8 @@ def _completion_parser() -> argparse.ArgumentParser:
     _add_options(parser, suppress_defaults=False)
     modes = parser.add_subparsers(metavar="COMMAND")
     # `list-sessions` and `ls` come from the command tree below, with
-    # the options the command takes; what is left here is the starts
-    # that run a server or a client, and `find`, which takes nothing.
+    # the options the command takes; what is left here is the modes
+    # the tree does not name: the starts, `find`, and `web`.
     for mode in (
         Mode.INTEGRATED,
         Mode.START_SERVER,
@@ -412,6 +421,7 @@ def _completion_parser() -> argparse.ArgumentParser:
         Mode.FIND,
         Mode.DIAGNOSE,
         Mode.RENICE,
+        Mode.WEB,
     ):
         mode_parser = modes.add_parser(
             str(mode),

@@ -94,7 +94,7 @@ its id. *run --session ID* stamps that session instead of the caller's.
 
 # QUERYING
 
-*sql* [_QUERY_] [_--save NAME_] [_--run NAME_] [_--list_] [_--delete NAME_] [_--param KEY_=_VALUE_]... [_-n _ROWS_] [_--timeout _SECONDS_] [_--json_]
+*sql* [_QUERY_] [_--save NAME_] [_--run NAME_] [_--list_] [_--delete NAME_] [_--description _TEXT_] [_--param KEY_=_VALUE_]... [_-n _ROWS_] [_--timeout _SECONDS_] [_--json_]
 
 *sql* asks the job database directly. A free-form query reads only:
 *SELECT*, *WITH*, *EXPLAIN*, *PRAGMA* and *VALUES*, and anything else
