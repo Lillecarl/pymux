@@ -22,7 +22,7 @@
   extra = rendered: {
     meta = rendered.meta // {
       description = "Drive a pymux server from python";
-      homepage = "https://github.com/prompt-toolkit/pymux";
+      homepage = "https://github.com/Lillecarl/pymux";
       license = lib.licenses.bsd3;
       platforms = lib.platforms.unix;
     };

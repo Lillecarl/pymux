@@ -170,8 +170,8 @@ let
         passthru = rendered.passthru // { inherit checks element; };
 
         meta = rendered.meta // {
-          description = "Pure Python terminal multiplexer (tmux alternative)";
-          homepage = "https://github.com/prompt-toolkit/pymux";
+          description = "Terminal multiplexer (tmux alternative)";
+          homepage = "https://github.com/Lillecarl/pymux";
           license = lib.licenses.bsd3;
           mainProgram = "pymux";
           platforms = lib.platforms.unix;

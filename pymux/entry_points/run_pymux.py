@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-pymux: Pure Python terminal multiplexer.
+pymux: terminal multiplexer.
 
 Usage:
     pymux [options] [integrated|start-server|attach|list-sessions] [<command> ...]
@@ -263,7 +263,7 @@ def _add_options(parser: argparse.ArgumentParser, suppress_defaults: bool) -> No
 def _build_parser(with_positionals: bool = True) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pymux",
-        description="pymux: Pure Python terminal multiplexer.",
+        description="pymux: terminal multiplexer.",
         epilog="Any other arguments are sent to the running server as a pymux command. Example: pymux split-window",
     )
     _add_options(parser, suppress_defaults=False)
@@ -327,7 +327,7 @@ def parse_arguments(
     if mode is not None:
         # A mode word was given. The options after the mode word are parsed
         # as well. (argparse.REMAINDER above collected them verbatim.)
-        mode_parser = argparse.ArgumentParser(prog="pymux", description="pymux: Pure Python terminal multiplexer.")
+        mode_parser = argparse.ArgumentParser(prog="pymux", description="pymux: terminal multiplexer.")
         _add_options(mode_parser, suppress_defaults=True)
         mode_args, extra = mode_parser.parse_known_args(rest[1:])
         for key, value in vars(mode_args).items():
@@ -397,7 +397,7 @@ def _completion_parser() -> argparse.ArgumentParser:
     # is one of them.
     parser = argparse.ArgumentParser(
         prog="pymux",
-        description="pymux: Pure Python terminal multiplexer.",
+        description="pymux: terminal multiplexer.",
         allow_abbrev=False,
     )
     _add_options(parser, suppress_defaults=False)

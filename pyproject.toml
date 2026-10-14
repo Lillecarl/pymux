@@ -5,7 +5,7 @@
 [project]
 name = "pymux"
 version = "0.15"
-description = "Pure Python terminal multiplexer."
+description = "Terminal multiplexer."
 readme = "README.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
