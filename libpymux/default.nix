@@ -1,7 +1,7 @@
 # The client library of pymux, as a package of its own.
 #
-# It is a project inside this repository and not a source of the
-# umbrella, and `pyproject.toml` beside this says why.
+# It is a project inside pymux and not a source of pyterm of its own,
+# and `pyproject.toml` beside this says why.
 #
 # There are no checks here. The suites that judge this library are
 # pymux's -- `tests/test_libpymux.py` against a socket that answers

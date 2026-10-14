@@ -188,7 +188,7 @@ missing-attribute = "error"
 implicit-any-attribute = "error"
 
 [tool.ruff]
-# Mirror of the `ruff.toml` beside the umbrella: the build sandbox
+# Mirror of the `ruff.toml` in the pyterm root: the build sandbox
 # sees only this tree, so discovery from a file under it must end
 # here. Keep the two in step; the why lives up there.
 target-version = "py314"
@@ -196,7 +196,7 @@ target-version = "py314"
 line-length = 120
 
 [tool.ruff.lint]
-# Mirror of the umbrella `ruff.toml`, rule for rule and comment for
+# Mirror of the pyterm root's `ruff.toml`, rule for rule and comment for
 # comment: the build sandbox sees only this tree, so discovery from
 # a file under it must end here. Change the rules in both places.
 # Every rule here autofixes cleanly through the editor pipeline, and
@@ -400,7 +400,7 @@ select = [
 ]
 
 [tool.ruff.lint.isort]
-# Mirror of the umbrella `ruff.toml` above: the build sandbox sees
+# Mirror of the pyterm root's `ruff.toml` above: the build sandbox sees
 # only this tree, so discovery from a file under it must end here.
 # libpymux, prompt_toolkit_rs and pymux_rs are distributions of their own,
 # installed like any other dependency: third-party by installation,

@@ -712,7 +712,7 @@ in
   # rest on -- the presence of `from __future__ import annotations`
   # in every file -- so a grep holds that: UP037 unquotes only where
   # the import made the annotation lazy, and stays silent without it.
-  # `ruff.toml` beside the umbrella says what each rule is for.
+  # `ruff.toml` in the pyterm root says what each rule is for.
   ruff =
     runInSandbox
       {
