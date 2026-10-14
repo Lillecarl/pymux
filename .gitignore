@@ -1,57 +1,20 @@
-# Nix
-result*
+# What a build, a test run or an editor leaves in the tree. Every source
+# holds this same file: pyterm's `sync-sources` copies it from
+# `nix/shared/gitignore` there.
 
-# Byte-compiled / optimized / DLL files
+# The links `nix build` leaves, a check's kept run among them.
+result*
+*-run
+
 __pycache__/
 *.py[cod]
-
-# C extensions
 *.so
-
-# Distribution / packaging
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
 *.egg-info/
-.installed.cfg
-*.egg
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.coverage
-.cache
-nosetests.xml
-coverage.xml
-
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
-*.log
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
+# Cargo's, in a source with Rust in it.
 target/
