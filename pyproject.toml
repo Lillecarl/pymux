@@ -131,7 +131,11 @@ test = [
 dev = ["libtmux"]
 
 [project.urls]
-Homepage = "https://github.com/prompt-toolkit/pymux"
+Homepage = "https://github.com/Lillecarl/pymux"
+Documentation = "https://lillecarl.github.io/pymux/"
+# Work happens in the monorepo this repository is exported from.
+Source = "https://github.com/Lillecarl/pyterm"
+Issues = "https://github.com/Lillecarl/pymux/issues"
 
 [project.scripts]
 pymux = "pymux.entry_points.run_pymux:run"
