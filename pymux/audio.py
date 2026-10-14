@@ -602,6 +602,10 @@ class AudioServer:
         if self._scope is not None:
             self._scope.cancel()
 
+    def pids(self) -> list[int]:
+        "The programs sound runs now. `list-processes` names them."
+        return [process.pid for process in self._processes]
+
     def pause(self) -> None:
         """
         Stop PipeWire now, for `upgrade-server`. The old server leaves

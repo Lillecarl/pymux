@@ -42,6 +42,7 @@ from pyte.keep import Keep
 from pymux.commands import CommandException
 from pymux.jobstore import SEEDS, JobStore
 from pymux.log import logger
+from pymux.niceness import as_a_person_runs
 
 #: A newline with no return before it. What the viewer turns into a
 #: full return, the way ONLCR would have on a pty.
@@ -434,7 +435,7 @@ class JobTable:
             return
         try:
             process = await anyio.open_process(
-                job.command,
+                as_a_person_runs(job.command),
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -506,7 +507,7 @@ class JobTable:
         env.setdefault("TERM", PTY_TERM)
         try:
             process = await anyio.open_process(
-                job.command,
+                as_a_person_runs(job.command),
                 stdin=replica,
                 stdout=replica,
                 stderr=replica,

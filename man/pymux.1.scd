@@ -16,13 +16,15 @@ pymux - pure Python terminal multiplexer, with server-owned background jobs
 
 *pymux sql* [_OPTION_]... [_QUERY_]
 
+*pymux renice* [_NICENESS_]
+
 # DESCRIPTION
 
 *pymux* is a terminal multiplexer in the shape of *tmux*(1): a server
 holds sessions, windows and panes, and clients attach to them or send
 them commands. Any word that is not a mode (*integrated*,
 *start-server*, *attach*, *list-sessions*, *ls*, *find*, *diagnose*,
-*web*) is a command for a running server, answered on stdout; *--help*
+*renice*, *web*) is a command for a running server, answered on stdout; *--help*
 lists the rest.
 
 *run* starts a command as a server-owned job: pipes instead of a
@@ -107,6 +109,25 @@ the rest of the boot.
 
 	pymux sql --json --run by_tag --param tag=deploy++
 	pymux sql "SELECT id, command FROM jobs WHERE status = 'done'"
+
+# PRIORITY
+
+*renice* [_NICENESS_]
+
+*renice* sets the niceness of every pymux process of this user: each
+server, the programs that carry its sound, and each client on this
+machine, with every thread of each. *-S* names one server instead.
+The niceness is from -20 to 19, and -10 unless given, so that sound and
+video keep up on a busy machine. Lowering a niceness needs root, so
+*renice* asks *sudo renice* for what the kernel refuses it. Run it as
+yourself, not under *sudo*: root finds no server of yours.
+
+A program a person runs takes none of it. Panes, jobs, *run-shell*,
+*if-shell* and Wayland programs start at niceness 0 again. A niceness
+above 0 stays, because only root may lower it.
+
+*list-processes* is what *renice* reads: one role and one pid on each
+line.
 
 # ENVIRONMENT
 

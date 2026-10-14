@@ -13,6 +13,7 @@ from prompt_toolkit.application.current import get_app, set_app
 
 from pymux.commands import CommandParser, add_command
 from pymux.commands.common import show_listing
+from pymux.niceness import as_a_person_runs
 
 
 def run_shell(pymux: Pymux, args: argparse.Namespace):
@@ -51,7 +52,7 @@ def run_shell(pymux: Pymux, args: argparse.Namespace):
 
     async def job() -> None:
         try:
-            done = await anyio.run_process(shell_command, check=False)
+            done = await anyio.run_process(as_a_person_runs(shell_command), check=False)
             out = _text(done.stdout) + _text(done.stderr)
         except OSError as e:
             # A shell that is not there raises OSError. Say so where

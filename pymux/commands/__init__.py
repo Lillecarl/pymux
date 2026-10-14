@@ -157,6 +157,7 @@ MODULES = [
     "run",
     "wait_job",
     "list_jobs",
+    "list_processes",
     "show_job",
     "kill_job",
     "view_job",

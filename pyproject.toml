@@ -38,6 +38,9 @@ dependencies = [
     # wants that on the server they already have, not on one they built
     # with extras.
     "pyinstrument>=4.0.0",
+    # `pymux renice` reaches every thread of a process and every child
+    # of a client, on Linux and macOS alike.
+    "psutil",
     # `-S ssh://host/path` reaches a server on another machine, over a
     # `direct-streamlocal@openssh.com` channel to its unix socket.
     # Lillecarl/pymux#90.

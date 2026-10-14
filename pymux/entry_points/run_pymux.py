@@ -85,6 +85,7 @@ class Mode(StrEnum):
     LS = "ls"
     FIND = "find"
     DIAGNOSE = "diagnose"
+    RENICE = "renice"
     WEB = "web"
     #: An upgrade's new server. `pymux/upgrade.py`.
     RESUME_SERVER = "resume-server"
@@ -294,6 +295,14 @@ def _log_like_a_daemon(a: argparse.Namespace) -> None:
         logging.basicConfig(stream=sys.stdout, level=wanted)
 
 
+def _niceness(word: str) -> int:
+    "A niceness, as `setpriority` takes it."
+    value = int(word)
+    if not -20 <= value <= 19:
+        raise argparse.ArgumentTypeError("a niceness is from -20 to 19")
+    return value
+
+
 def parse_arguments(
     argv: list[str] | None = None,
 ) -> tuple[argparse.Namespace, Mode | None, str | None]:
@@ -341,6 +350,13 @@ def parse_arguments(
             flag_parser.add_argument("--json", action="store_true", default=False)
             flag_args, rest = flag_parser.parse_known_args(rest)
             a.diagnose_json = flag_args.json
+
+        if mode is Mode.RENICE:
+            # A positional, as `renice` takes it: `-n` is the client's name.
+            level_parser = argparse.ArgumentParser(prog="pymux renice")
+            level_parser.add_argument("niceness", nargs="?", type=_niceness)
+            a.niceness = level_parser.parse_args(rest).niceness
+            rest = []
 
         if mode == Mode.RESUME_SERVER:
             # What an upgrading server runs, never a person: the words
@@ -395,6 +411,7 @@ def _completion_parser() -> argparse.ArgumentParser:
         Mode.ATTACH,
         Mode.FIND,
         Mode.DIAGNOSE,
+        Mode.RENICE,
     ):
         mode_parser = modes.add_parser(
             str(mode),
@@ -403,6 +420,8 @@ def _completion_parser() -> argparse.ArgumentParser:
         _add_options(mode_parser, suppress_defaults=True)
         if mode is Mode.DIAGNOSE:
             mode_parser.add_argument("--json", action="store_true", help="Print the report as JSON.")
+        if mode is Mode.RENICE:
+            mode_parser.add_argument("niceness", nargs="?", help="From -20 to 19; -10 by default.")
     add_commands_to(modes)
     return parser
 
@@ -561,6 +580,21 @@ def run() -> None:
 
             report = diagnose(socket_name=socket_name, config_file=filename)
             print(as_json(report) if a.diagnose_json else human(report))
+
+        case Mode.RENICE:
+            # Every server of this user, or the one `-S` names. Not the
+            # one of `$PYMUX`: in a pane, "every" still means every.
+            # Lillecarl/pymux#673.
+            from libpymux.sockets import servers_newest_first
+
+            from pymux.niceness import DEFAULT_NICENESS, renice
+
+            if a.socket and is_ssh_url(socket_name):
+                print("pymux renice reaches the servers of this machine. Run it on the other one.")
+                sys.exit(1)
+            names = [socket_name] if a.socket and socket_name else servers_newest_first()
+            niceness = DEFAULT_NICENESS if a.niceness is None else a.niceness
+            sys.exit(renice(names, niceness))
 
         case Mode.START_SERVER:
             _refuse_nesting(socket_name_from_env)

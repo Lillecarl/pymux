@@ -11,6 +11,7 @@ import anyio
 
 from pymux.commands import CommandParser, add_command, handle_command
 from pymux.format import Language, format_pymux_string
+from pymux.niceness import as_a_person_runs
 
 
 def if_shell(pymux: Pymux, args: argparse.Namespace):
@@ -53,7 +54,7 @@ async def _ask_the_shell(pymux: Pymux, args: argparse.Namespace) -> None:
     # under a daemon, and the person's own terminal in the integrated
     # route, where it draws over the frame. tmux sends
     # it to /dev/null for the same reason. Lillecarl/pymux#312.
-    done = await anyio.run_process(args.shell_command, check=False)
+    done = await anyio.run_process(as_a_person_runs(args.shell_command), check=False)
 
     answer = _then_run(pymux, args, done.returncode == 0)
     if answer is not None:
