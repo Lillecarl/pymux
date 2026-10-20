@@ -792,6 +792,10 @@ class JobFeed:
             with suppress(anyio.ClosedResourceError, anyio.WouldBlock):
                 self._hint.send_nowait(None)
 
+    def hang_up(self) -> None:
+        "The same as `kill`: a viewer has nothing to hang up."
+        self.kill()
+
     @property
     def is_terminated(self) -> bool:
         "Nothing more will ever be fed: the job ended, or this was killed."

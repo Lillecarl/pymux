@@ -45,7 +45,8 @@ async def replace_pane_program(pymux: Pymux, pane: Pane, args: argparse.Namespac
     if not pane.process.is_terminated and not args.k:
         raise CommandException("Pane is busy: -k kills a program that runs.")
 
-    pane.process.kill()
+    # SIGHUP, so a shell writes its history on the way out.
+    pane.process.hang_up()
     # The pane stays where it was: a respawn restarts the program in
     # the directory it reported, and a pane that never reported starts
     # the way a new one does.
