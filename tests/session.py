@@ -142,6 +142,13 @@ OTHER_MACHINE = "buildbox-3"
 #: lives. The window the plain sessions make runs it.
 NOTHING = "%s -c pass" % (sys.executable,)
 
+#: How many times an attach asks before its five seconds count: a
+#: thousand turns is five seconds of a loop that runs freely. Under
+#: the gate's load the attach's time ran out before the server had a
+#: turn, in pymux-busy, pymux-turns and test_kitty_frames.
+#: Lillecarl/pymux#621.
+ATTACH_POLLS = 1000
+
 
 class _Sink(io.TextIOBase):
     """
@@ -221,18 +228,26 @@ def _watcher(watched: dict) -> Callable:
     return watch
 
 
-async def once(question, seconds: float, complaint: str | Callable[[], str]):
+async def once(question, seconds: float, complaint: str | Callable[[], str], polls: int = 0):
     """
     Wait for something the loop has to do first, or say it never did.
 
     A callable `complaint` is asked at the deadline, so it can name
     what the state was then.
+
+    `polls` says the wait gives up only after it asked that many times
+    as well. A loop starved by a loaded machine asks rarely, and its
+    time runs out while the server never had a turn to answer; a loop
+    that runs freely asks a thousand times in five seconds, so a real
+    "never" still fails in the time. Lillecarl/pymux#621.
     """
     deadline = time.monotonic() + seconds
-    while time.monotonic() < deadline:
+    asked = 0
+    while time.monotonic() < deadline or asked < polls:
         answer = question()
         if answer:
             return answer
+        asked += 1
         await anyio.sleep(0.005)
     raise SystemExit(complaint if isinstance(complaint, str) else complaint())
 
@@ -509,6 +524,7 @@ async def over_connection(pymux=None, read_packet=None):
             lambda: connection.client_state,
             5.0,
             "the server never made a client for this connection",
+            polls=ATTACH_POLLS,
         )
         # The first window is made by the client's `startup`, on a later
         # turn. Under load a command sent at once found no window and
@@ -521,6 +537,7 @@ async def over_connection(pymux=None, read_packet=None):
             ),
             5.0,
             "the server never made its first window",
+            polls=ATTACH_POLLS,
         )
         ends[id(state)] = (client_end, draining)
 
