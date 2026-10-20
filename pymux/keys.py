@@ -15,7 +15,9 @@ which prompt_toolkit key a `KeyEvent` is, which pyte cannot say
 because a toolkit sits above it.
 
 The parser below extends prompt_toolkit's `Vt100Parser`. A key it
-cannot name is consumed and written to the log, with the reason.
+cannot name is written to the log, with the reason, and handed on as
+`Keys.UnnamedKey` with the sequence the terminal sent, which the pane
+encodes for its own keyboard mode.
 
 A key that came back up is not a key press, so it takes the key of a
 release (`Keys.KeyRelease`) and keeps the sequence that the terminal
@@ -65,9 +67,9 @@ __all__ = [
     "KEYS_A_KEYBOARD_SPELLS_OUT",
     "KEY_BY_ITS_NAME",
     "NAME_OF_A_KEY",
-    "DropReason",
-    "Dropped",
     "KittyVt100Parser",
+    "Unnamed",
+    "UnnamedReason",
     "event_named",
     "key_named",
     "parse_kitty_key",
@@ -323,24 +325,23 @@ _KEYPAD = {
 
 
 @dataclass(frozen=True, slots=True)
-class Dropped:
+class Unnamed:
     """
-    A complete key sequence that pymux consumes and cannot name.
+    A complete key sequence that pymux cannot name.
 
-    It carries why, because a key that does nothing and leaves no
-    trace gives a person no way to find out what happened. The parser
-    writes the reason and the sequence to the log.
-    Lillecarl/pymux#167.
+    It carries why, because a key no binding of pymux's can take gives
+    a person no way to find out what happened. The parser writes the
+    reason and the sequence to the log. Lillecarl/pymux#167.
 
     **Not a tuple.** A tuple is how the parser spells a key that
-    arrives as several, so a `Dropped` that was one would be taken
+    arrives as several, so an `Unnamed` that was one would be taken
     apart and handed out as key presses.
     """
 
     reason: str
 
 
-class DropReason(StrEnum):
+class UnnamedReason(StrEnum):
     "Why pymux has no name for a key. The text goes in the log."
 
     KEYPAD_WITH_A_MODIFIER = "a keypad key with ctrl or alt"
@@ -416,8 +417,8 @@ def pixels_to_cells(report: str, width: int, height: int, origin: int) -> tuple[
 _KEY_RELEASE = object()
 
 #: A key that a name reads back as: a character, a `Keys` member, the
-#: two keys of alt, or a `Dropped` for a combination pymux cannot name.
-_Key = str | Keys | Dropped | tuple[str | Keys, ...]
+#: two keys of alt, or an `Unnamed` for a combination pymux cannot name.
+_Key = str | Keys | Unnamed | tuple[str | Keys, ...]
 
 #: Everything the parser may hand on, the reply sentinels included.
 _KeyResult = _Key | object
@@ -452,7 +453,7 @@ def _ctrl_mapping(char: str) -> Keys | None:
 
 def _apply_modifiers(key: str | Keys, mods: int) -> _Key:
     """
-    Apply the modifier bits to a plain key. Returns a `Dropped` when
+    Apply the modifier bits to a plain key. Returns an `Unnamed` when
     the combination has no prompt_toolkit representation.
 
     **It never returns None.** None means "this is not a key sequence"
@@ -475,14 +476,14 @@ def _apply_modifiers(key: str | Keys, mods: int) -> _Key:
         if ctrl:
             ctrl_key = _ctrl_mapping(key)
             if ctrl_key is None:
-                return Dropped(DropReason.CTRL_AND_A_CHARACTER)
+                return Unnamed(UnnamedReason.CTRL_AND_A_CHARACTER)
             key = ctrl_key
         elif shift and key.isalpha():
             key = key.upper()
     elif ctrl or shift:
         modified = _modified_form_of(key, ctrl, shift)
         if modified is None:
-            return Dropped(DropReason.MODIFIER_THIS_KEY_HAS_NO_NAME_FOR)
+            return Unnamed(UnnamedReason.MODIFIER_THIS_KEY_HAS_NO_NAME_FOR)
         key = modified
 
     if alt:
@@ -614,7 +615,7 @@ def key_named(base: str, mods: int) -> _Key:
     one of the four C0 keys by name. `mods` is the bits of
     `pyte.keys.Modifier`.
 
-    Returns a key, a character, a tuple of two for alt, or a `Dropped`
+    Returns a key, a character, a tuple of two for alt, or an `Unnamed`
     for a combination that prompt_toolkit cannot name.
 
     **This is the one translation, and both directions read it.** A key
@@ -667,7 +668,7 @@ def key_named(base: str, mods: int) -> _Key:
 
     member = KEY_BY_ITS_NAME.get(base)
     if member is None:
-        return Dropped(DropReason.KEY_THAT_WRITES_NOTHING)
+        return Unnamed(UnnamedReason.KEY_THAT_WRITES_NOTHING)
     return _apply_modifiers(member, mods)
 
 
@@ -698,7 +699,7 @@ def parse_kitty_key(prefix: str) -> _KeyResult | None:
 
     Returns a key, a character or a tuple of keys (the shapes that the
     prompt_toolkit parser supports), `_KEY_RELEASE` for a key that
-    came back up, a `Dropped` for a sequence that names a key pymux
+    came back up, an `Unnamed` for a sequence that names a key pymux
     cannot, and None when `prefix` is not a key sequence at all.
 
     **The reading is pyte's.** `parse_key_data` knows every mode a
@@ -769,7 +770,7 @@ def _named(event: KeyEvent) -> _KeyResult | None:
         # readings below may take the key away from it.
         base = _base_of(event)
         if base is None:
-            return Dropped(DropReason.KEY_THAT_WRITES_NOTHING)
+            return Unnamed(UnnamedReason.KEY_THAT_WRITES_NOTHING)
         return key_named(base, mods)
 
     # Three things that only a key off the wire can be, and that a name
@@ -784,13 +785,13 @@ def _named(event: KeyEvent) -> _KeyResult | None:
             if not isinstance(keypad_key, str):
                 return _apply_modifiers(keypad_key, mods)
             if mods & (_CTRL | _ALT):
-                return Dropped(DropReason.KEYPAD_WITH_A_MODIFIER)
+                return Unnamed(UnnamedReason.KEYPAD_WITH_A_MODIFIER)
             return keypad_key
 
         if key >= FIRST_FUNCTIONAL_KEY:
             # Other private use area keys (lock keys, media keys, ...)
-            # have no prompt_toolkit representation. Drop them.
-            return Dropped(DropReason.KEY_THAT_WRITES_NOTHING)
+            # have no prompt_toolkit representation.
+            return Unnamed(UnnamedReason.KEY_THAT_WRITES_NOTHING)
 
         # The text the terminal reported for this key, which accounts
         # for the shift modifier and the keyboard layout. Nothing else
@@ -802,16 +803,16 @@ def _named(event: KeyEvent) -> _KeyResult | None:
 
     elif final == "~":
         if _TILDE_KEYS.get(key) is None:
-            return Dropped(DropReason.TILDE_KEY_WITH_NO_NAME)
+            return Unnamed(UnnamedReason.TILDE_KEY_WITH_NO_NAME)
 
     elif _LETTER_KEYS.get(final) is None or key != 1:
         # The letter form names ten keys, and carries the number one
         # and nothing else.
-        return Dropped(DropReason.LETTER_KEY_WITH_NO_NAME)
+        return Unnamed(UnnamedReason.LETTER_KEY_WITH_NO_NAME)
 
     base = _base_of(event)
     if base is None:
-        return Dropped(DropReason.KEY_THAT_WRITES_NOTHING)
+        return Unnamed(UnnamedReason.KEY_THAT_WRITES_NOTHING)
     return key_named(base, mods)
 
 
@@ -887,19 +888,19 @@ class KittyVt100Parser(Vt100Parser):
         self._already_said: set[str] = set()
         super().__init__(feed_key_callback)
 
-    def _say_it_was_dropped(self, dropped: Dropped, sequence: str) -> None:
+    def _say_it_has_no_name(self, unnamed: Unnamed, sequence: str) -> None:
         """
-        Write to the log that a key went nowhere, and why.
+        Write to the log that a key has no name here, and why.
 
-        A key that does nothing and leaves no trace gives a person no
-        way to find out what happened. Once per sequence: a key that
-        is held down repeats. Lillecarl/pymux#167.
+        No binding of pymux's takes such a key, so this is how a person
+        finds out why it did nothing outside a pane. Once per sequence:
+        a key that is held down repeats. Lillecarl/pymux#167.
         """
         if sequence in self._already_said:
             return
         if len(self._already_said) < MAX_KEYS_TO_REMEMBER:
             self._already_said.add(sequence)
-        logger.debug("No name here for the key %r: %s.", sequence, dropped.reason)
+        logger.debug("No name here for the key %r: %s.", sequence, unnamed.reason)
 
     def _counts_protocol_modifiers(self) -> bool:
         """
@@ -957,8 +958,13 @@ class KittyVt100Parser(Vt100Parser):
             finally:
                 self._one_key_of_several = False
             return
-        if isinstance(key, Dropped):
-            self._say_it_was_dropped(key, insert_text)
+        if isinstance(key, Unnamed):
+            # The pane may still read it: F13 to a pane that asked for
+            # every key, or ctrl+1 to one that disambiguates. Only the
+            # binding for this key takes it, so it never self-inserts.
+            # Lillecarl/pymux#707.
+            self._say_it_has_no_name(key, insert_text)
+            super()._call_handler(Keys.UnnamedKey, insert_text)
             return
         if key in (
             _FLAGS_REPLY,

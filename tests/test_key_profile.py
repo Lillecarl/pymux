@@ -53,6 +53,18 @@ async def test_a_client_in_wezterm_sends_what_wezterm_sends():
     assert await _super_delete_from("WezTerm 20240203-110809-5046fc22") == "\x1b[3~"
 
 
+async def test_f13_from_wezterm_reaches_a_legacy_pane_as_rxvt_writes_it():
+    "A key prompt_toolkit has no name for still reaches the pane. Lillecarl/pymux#707."
+    async with over_connection() as session:
+        await session.pymux.create_window(WAITS)
+        state, _ = await session.attach("one", SIZE)
+        state.connection.graphics.handle_reply("\x1bP>|WezTerm 20240203-110809-5046fc22\x1b\\")
+        written = _what_the_pane_reads(session.pymux)
+        session.typed(state, "\x1b[57376u")
+        await once(lambda: written, 5.0, "F13 never reached the pane")
+        assert "".join(written) == "\x1b[25~"
+
+
 async def test_a_client_whose_terminal_named_nothing_gets_the_option():
     assert await _super_delete_from(None, fallback="xterm") == "\x1b[3~"
     assert await _super_delete_from(None) == "\x1b[3;9~"

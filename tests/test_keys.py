@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import logging
 
+import pytest
 from prompt_toolkit.key_binding.key_processor import _Flush
 from prompt_toolkit.keys import Keys
 
 from pymux.keys import (
-    Dropped,
-    DropReason,
     KittyVt100Parser,
+    Unnamed,
+    UnnamedReason,
     parse_kitty_key,
     pixels_to_cells,
 )
@@ -157,12 +158,12 @@ def test_keypad_keys():
     assert parse("\x1b[57413u") == [("+", "\x1b[57413u")]
     assert parse("\x1b[57414u") == [(Keys.Enter, "\x1b[57414u")]
     assert parse("\x1b[57417u") == [(Keys.Left, "\x1b[57417u")]
-    # Modified keypad keys are dropped.
-    assert parse("\x1b[57413;5u") == []
+    # A modified keypad key has no name, and the pane gets it.
+    assert parse("\x1b[57413;5u") == [(Keys.UnnamedKey, "\x1b[57413;5u")]
 
 
-def test_lock_keys_are_dropped():
-    assert parse("\x1b[57358u") == []
+def test_a_lock_key_has_no_name():
+    assert parse("\x1b[57358u") == [(Keys.UnnamedKey, "\x1b[57358u")]
 
 
 def test_plain_text_is_untouched():
@@ -471,23 +472,24 @@ def test_alt_escape_ends_nothing():
 # The keys pymux has no name for.
 
 
-def create_dropped_key(data: str) -> Dropped:
+def create_unnamed_key(data: str) -> Unnamed:
     "Parse one sequence that pymux cannot name, and give the reason."
     result = parse_kitty_key(data)
-    assert isinstance(result, Dropped), result
+    assert isinstance(result, Unnamed), result
     return result
 
 
-def test_key_with_no_name_is_eaten_and_not_taken_apart():
+def test_key_with_no_name_is_one_key_and_not_taken_apart():
     """
-    Nothing reaches a pane for a key pymux cannot name.
+    A key pymux cannot name is one `Keys.UnnamedKey`, whose binding
+    hands the sequence to the pane. Lillecarl/pymux#707.
 
-    The other way is worse than doing nothing: a `None` here means
-    "not a key sequence", and the parser then hands the characters of
-    the sequence out one by one. Lillecarl/pymux#167.
+    Not a `None`: that means "not a key sequence", and the parser then
+    hands the characters of the sequence out one by one.
+    Lillecarl/pymux#167.
     """
-    assert parse("\x1b[57358u") == []  # caps lock
-    assert parse("\x1b[57428u") == []  # play
+    assert parse("\x1b[57358u") == [(Keys.UnnamedKey, "\x1b[57358u")]  # caps lock
+    assert parse("\x1b[57428u") == [(Keys.UnnamedKey, "\x1b[57428u")]  # play
 
 
 def test_ctrl_escape_does_not_reach_pane_as_five_keys():
@@ -496,7 +498,7 @@ def test_ctrl_escape_does_not_reach_pane_as_five_keys():
     `_apply_modifiers` as None, which is what the parser reads as "not
     a key sequence", so a pane read "[27;5u".
     """
-    assert parse("\x1b[27;5u") == []
+    assert parse("\x1b[27;5u") == [(Keys.UnnamedKey, "\x1b[27;5u")]
 
 
 def test_functional_key_is_not_character():
@@ -639,10 +641,11 @@ def test_control_and_shift_on_digit_is_left_where_it_was():
     layout, so the letters are the ones worth naming.
 
     ctrl+shift+2 is the legacy ctrl+@, and ctrl+shift+1 has no control
-    code at all, so it goes nowhere and says so in the log.
+    code at all, so it has no name, says so in the log, and goes on
+    to the pane.
     """
     assert parse("\x1b[50;6u") == [(Keys.ControlAt, "\x1b[50;6u")]
-    assert parse("\x1b[49;6u") == []
+    assert parse("\x1b[49;6u") == [(Keys.UnnamedKey, "\x1b[49;6u")]
 
 
 def test_shift_and_tab_is_back_tab():
@@ -657,18 +660,24 @@ def test_shift_and_tab_is_back_tab():
 
 
 def test_reason_says_what_kind_of_key_it_was():
-    assert create_dropped_key("\x1b[57358u").reason == DropReason.KEY_THAT_WRITES_NOTHING
-    assert create_dropped_key("\x1b[57399;5u").reason == DropReason.KEYPAD_WITH_A_MODIFIER
-    assert create_dropped_key("\x1b[233;5u").reason == DropReason.CTRL_AND_A_CHARACTER
-    assert create_dropped_key("\x1b[99;5~").reason == DropReason.TILDE_KEY_WITH_NO_NAME
-    assert create_dropped_key("\x1b[27;5u").reason == DropReason.MODIFIER_THIS_KEY_HAS_NO_NAME_FOR
+    assert create_unnamed_key("\x1b[57358u").reason == UnnamedReason.KEY_THAT_WRITES_NOTHING
+    assert create_unnamed_key("\x1b[57399;5u").reason == UnnamedReason.KEYPAD_WITH_A_MODIFIER
+    assert create_unnamed_key("\x1b[233;5u").reason == UnnamedReason.CTRL_AND_A_CHARACTER
+    assert create_unnamed_key("\x1b[99;5~").reason == UnnamedReason.TILDE_KEY_WITH_NO_NAME
+    assert create_unnamed_key("\x1b[27;5u").reason == UnnamedReason.MODIFIER_THIS_KEY_HAS_NO_NAME_FOR
 
 
 def test_log_says_key_and_reason(caplog):
     with caplog.at_level(logging.DEBUG, logger="pymux.keys"):
         fed("\x1b[57358u")
     assert "\\x1b[57358u" in caplog.text
-    assert DropReason.KEY_THAT_WRITES_NOTHING in caplog.text
+    assert UnnamedReason.KEY_THAT_WRITES_NOTHING in caplog.text
+
+
+@pytest.mark.parametrize("data", ["\x1b[57376u", "\x1b[57363;5u", "\x1b[49;5u", "\x1b[99;5~"])
+def test_a_key_with_no_name_goes_on_with_its_sequence(data):
+    "F13, ctrl+Menu, ctrl+1 and a tilde key nobody names: a pane may read each. Lillecarl/pymux#707."
+    assert [(press.key, press.data) for press in fed(data)] == [(Keys.UnnamedKey, data)]
 
 
 def test_held_key_writes_one_line(caplog):

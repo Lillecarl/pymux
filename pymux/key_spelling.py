@@ -54,7 +54,7 @@ from .keys import (
     KEY_BY_ITS_NAME,
     KEYS_A_KEYBOARD_SPELLS_OUT,
     NAME_OF_A_KEY,
-    Dropped,
+    Unnamed,
     event_named,
     key_named,
 )
@@ -206,7 +206,7 @@ def chord(text: str) -> tuple[str, ...]:
     """
     mods, base = _modifiers_and_base_of(text)
     key = key_named(base, mods)
-    if isinstance(key, Dropped):
+    if isinstance(key, Unnamed):
         raise ValueError("No name here for the key %r: %s." % (text, key.reason))
     return key if isinstance(key, tuple) else (key,)
 

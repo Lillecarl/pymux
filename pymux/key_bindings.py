@@ -413,10 +413,13 @@ class PymuxKeyBindings:
             self.pymux.get_client_state().layout_manager.menu_key_pressed(event.key_sequence[-1].key, event.data)
 
         @kb.add(Keys.KeyRelease, eager=True)
+        @kb.add(Keys.UnnamedKey, eager=True)
         def _forward_key_release(event: E) -> object:
             """
-            A key came back up. Give the sequence to the pane that the
-            keyboard of this client reaches.
+            A key came back up, or one with no name here went down. Give
+            the sequence to the pane that the keyboard of this client
+            reaches, which encodes it for its own mode: F13 reaches a pane
+            that asked for every key. Lillecarl/pymux#707.
 
             A release is not a key press, so it drives nothing here: it
             does not leave the prefix, hide the pane numbers or stop

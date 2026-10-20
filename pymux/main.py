@@ -223,7 +223,7 @@ def _say_key_did_not_fit():
     A reporter for one pane, for a key it reads as something else.
 
     **Once per key, not once per repeat.** The same shape
-    `KittyVt100Parser._say_it_was_dropped` uses for a key pymux itself
+    `KittyVt100Parser._say_it_has_no_name` uses for a key pymux itself
     cannot name, so the two failures read alike. Lillecarl/pymux#238.
     """
     already_said: set = set()
