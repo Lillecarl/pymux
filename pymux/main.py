@@ -1194,6 +1194,8 @@ class Pymux:
         "source_file": Keep.SAVED,
         "startup_command": Keep.SAVED,
         "_startup_done": Keep.SAVED,
+        # Set while the first window opens; a loaded server opened it.
+        "_first_window": Keep.DROPPED,
         # `resume-server` reads the configuration again before the
         # snapshot, and what it finds wrong now is what counts.
         "startup_errors": Keep.REBUILT,
@@ -1570,6 +1572,7 @@ class Pymux:
         self.sourcing: str | None = None
 
         self._startup_done = False
+        self._first_window: anyio.Event | None = None
         self.source_file = source_file
         self.startup_command = startup_command
 
@@ -2363,10 +2366,20 @@ class Pymux:
         # (Does initial key bindings.)
         if not self._startup_done:
             self._startup_done = True
-            self.spawn_command(self.configure())
+            self._first_window = anyio.Event()
+            try:
+                self.spawn_command(self.configure())
 
-            # Make sure that there is one window created.
-            await self.create_window(command=self.startup_command)
+                # Make sure that there is one window created.
+                await self.create_window(command=self.startup_command)
+            finally:
+                self._first_window.set()
+        elif self._first_window is not None:
+            # The window waits for its process. A command that arrives
+            # meanwhile waits too, where it answered "no current
+            # window"; tmux opens it before an attach returns.
+            # Lillecarl/pymux#571.
+            await self._first_window.wait()
 
     def configure(self):
         """
