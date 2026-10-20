@@ -948,12 +948,16 @@ class KittyVt100Parser(Vt100Parser):
             self._say_it_has_no_name(key, insert_text)
             super()._call_handler(Keys.UnnamedKey, insert_text)
             return
+        # A cursor position report answers a probe of the server's: a
+        # full screen application asks for none of its own.
+        # Lillecarl/pymux#539.
         if key in (
             _FLAGS_REPLY,
             _DA1_REPLY,
             _STRING_REPLY,
             _CELL_SIZE_REPLY,
             _MODE_REPLY,
+            Keys.CPRResponse,
         ):
             if self.reply_callback is not None:
                 self.reply_callback(insert_text)

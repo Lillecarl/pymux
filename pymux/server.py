@@ -26,6 +26,7 @@ from prompt_toolkit.input.vt100 import Vt100Input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 from ptterm import Terminal
+from pyte.cells import VS16, without_widening_selectors
 from pyte.keep import Keep
 from pyte.placeholders import PLACEHOLDER, blanked
 
@@ -61,6 +62,14 @@ _SYNCHRONIZED_REPLY_RE = re.compile(r"^\x1b\[\?2026;(\d+)\$y$")
 
 #: Whether the terminal reports the mouse in pixels (SGR pixel mode,
 #: 1016): asked with DECRQM, answered like 2026. Lillecarl/pymux#648.
+#: Where a terminal draws a text emoji with U+FE0F after it. The probe
+#: writes one at the start of row 2 and asks where the cursor is:
+#: column 2 says one cell, column 3 says the terminal widened it, as
+#: kitty alone of seven does. Row 2, because "CSI 1;2R" is shift+F3 as
+#: well. The two cells are erased again, and the answer repaints.
+#: Lillecarl/pymux#539.
+EMOJI_WIDTH_PROBE = "\x1b7\x1b[2;1H✳️\x1b[6n\x1b[2;1H\x1b[2X\x1b8"
+_EMOJI_WIDTH_REPLY_RE = re.compile(r"^\x1b\[2;(\d+)R$")
 PIXEL_MOUSE_QUERY = "\x1b[?1016$p"
 PIXEL_MOUSE_ON = "\x1b[?1016h"
 PIXEL_MOUSE_OFF = "\x1b[?1016l"
@@ -170,6 +179,7 @@ class ServerConnection:
         "_frames_out": Keep.DROPPED,
         # The next server asks the terminal again.
         "pixel_mouse": Keep.DROPPED,
+        "widens_text_emoji": Keep.DROPPED,
         "_frames_shown": Keep.DROPPED,
         # A recording holds Python objects of this build, so it ends
         # with it. `upgrade.py` writes it out first.
@@ -197,6 +207,10 @@ class ServerConnection:
         #: Whether this client's terminal reports the mouse in pixels.
         #: Lillecarl/pymux#648.
         self.pixel_mouse = False
+
+        #: Whether this client's terminal draws a text emoji with U+FE0F
+        #: two columns wide, where a pane holds one. Lillecarl/pymux#539.
+        self.widens_text_emoji = False
 
         #: Window frames sent and not yet answered with `frame-shown`,
         #: for a client that answers; set while there are none.
@@ -610,6 +624,17 @@ class ServerConnection:
                 self._turn_on_pixel_mouse()
             return
 
+        emoji_width = _EMOJI_WIDTH_REPLY_RE.match(data)
+        if emoji_width is not None:
+            widens = int(emoji_width.group(1)) > 2
+            if widens != self.widens_text_emoji:
+                self.widens_text_emoji = widens
+                logger.info("The terminal of client %s draws a text emoji with U+FE0F wide.", self.client_id or "?")
+                # The emoji already on its screen were written for the
+                # other reading.
+                self._request_repaint()
+            return
+
         # The terminal processed a window pane's frame. Lillecarl/pymux#643.
         if self.graphics.frame_room is not None and self.graphics.is_frame_answer(data):
             self._frame_answered()
@@ -821,7 +846,7 @@ class ServerConnection:
             self._kitty_detection_pending = True
             # The server asks this one itself, so a client of any age
             # gets a pointer to the pixel. Lillecarl/pymux#648.
-            self._write_output_raw(PIXEL_MOUSE_QUERY)
+            self._write_output_raw(PIXEL_MOUSE_QUERY + EMOJI_WIDTH_PROBE)
             self._flush_output()
 
         # Set size. (The client reports the size.)
@@ -1349,6 +1374,7 @@ class ServerConnection:
         )
         output.keeps_placeholders = lambda: self.graphics.forwards_placeholders
         output.pixel_mouse = lambda: self.pixel_mouse
+        output.narrows_text_emoji = lambda: self.widens_text_emoji
 
         client_state = self.pymux.add_client(
             input=self._pipeinput,
@@ -1603,6 +1629,9 @@ class _FrameOutput(Vt100_Output):
         #: Whether the terminal reports the mouse in pixels when the mouse
         #: is on. Lillecarl/pymux#648.
         self.pixel_mouse: Callable[[], bool] = lambda: False
+        #: Whether U+FE0F goes after a one-column character, which this
+        #: terminal would widen. Lillecarl/pymux#539.
+        self.narrows_text_emoji: Callable[[], bool] = lambda: False
 
     @override
     def enable_mouse_support(self) -> None:
@@ -1632,6 +1661,8 @@ class _FrameOutput(Vt100_Output):
             frame = "".join(self._buffer)
             if PLACEHOLDER in frame and not self.keeps_placeholders():
                 frame = blanked(frame)
+            if VS16 in frame and self.narrows_text_emoji():
+                frame = without_widening_selectors(frame)
             self._buffer = [frame]
         if self._in_frame and self._after_frame:
             self.write_raw("".join(self._after_frame))
