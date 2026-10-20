@@ -18,7 +18,10 @@ place the difference exists: the whole message reaches
 
 from __future__ import annotations
 
+from prompt_toolkit.layout import walk
 from test_strip_draws import ROWS, create_client
+
+from pymux.layout import MessageToolbar
 
 #: Two complaints of the shape a configuration file makes, each long
 #: enough that the pair cannot fit on one row of the test's screen.
@@ -91,11 +94,19 @@ async def test_short_message_still_takes_one_row():
     """
     A message that fits may not push the panes up. `dont_extend_height`
     holds the toolbar to what it needs.
-    """
-    short, none = await drawn_with_and_without("a short message")
 
-    used = [number for number in sorted(short) if short[number] != none[number]]
-    assert len(used) == 1, (used, short, none)
+    **The toolbar's own height, not the cells.** Its rows past the
+    message are blank, and the second one fell on a row no pane covers:
+    a toolbar two rows high changed the same characters as one.
+    Lillecarl/pymux#586.
+    """
+    async with create_client(commands=NO_CLOCK, columns=40) as (pymux, draw):
+        state = pymux.get_client_state()
+        state.message = "a short message"
+        draw()
+        (toolbar,) = [item for item in walk(state.app.layout.container) if isinstance(item, MessageToolbar)]
+        assert toolbar.render_info is not None
+        assert toolbar.render_info.window_height == 1
 
 
 async def test_message_may_not_take_whole_screen():
