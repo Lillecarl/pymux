@@ -9,6 +9,8 @@ from collections.abc import Iterable
 from enum import StrEnum
 from typing import TYPE_CHECKING, override
 
+from pyte.keys import KEY_PROFILES
+
 from . import log
 from .arrangement import Window
 from .enums import AudioFrame, AudioServerMode, ClientAudio, PaneBrowser, WindowCodec, WindowScroll, WindowSize, Woke
@@ -997,6 +999,10 @@ ALL_OPTIONS = {
     # encodings, and for a person attaching with a terminal that
     # claims more than it does. Lillecarl/pymux#173.
     "extended-keys": ExtendedKeysOption("extended_keys"),
+    # Whose answer a program in the legacy encoding gets where the
+    # terminals split, for a client whose terminal pymux cannot name.
+    # A terminal that names itself gets its own. Lillecarl/pymux#706.
+    "key-profile": ChoiceOption("key_profile", KEY_PROFILES),
     # May a program inside a pane resize that pane? Off by default: a
     # pane sits in a layout, and making one taller makes another
     # shorter.

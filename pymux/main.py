@@ -53,7 +53,7 @@ from ptyhost.holder import HolderError
 from pyte.environment import terminal_name
 from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
 from pyte.keep import Keep
-from pyte.keys import KeyboardFlag
+from pyte.keys import KEY_PROFILES, KeyboardFlag, KeyProfile, key_profile_of
 from pyte.osc import Osc
 
 from . import hacks_and_lies, introspect, kernels, log
@@ -1227,6 +1227,7 @@ class Pymux:
         "enable_pane_status": Keep.SAVED,
         "enable_status": Keep.SAVED,
         "extended_keys": Keep.SAVED,
+        "key_profile": Keep.SAVED,
         "forward_mode": Keep.SAVED,
         "history_limit": Keep.SAVED,
         "job_ttl": Keep.SAVED,
@@ -1497,6 +1498,10 @@ class Pymux:
         #: person attaching with a terminal that claims more than it
         #: does. Lillecarl/pymux#173.
         self.extended_keys = ExtendedKeys.ON
+
+        #: The `KEY_PROFILES` name for a client whose terminal neither
+        #: XTVERSION nor TERM names. ("key-profile".) Lillecarl/pymux#706.
+        self.key_profile = "kitty"
 
         # May a program inside a pane resize that pane? DECSLPP and the
         # window resize sequences ask for it. Off, because a pane sits
@@ -2775,6 +2780,7 @@ class Pymux:
             # rows. A pane kept two thousand whatever the option said.
             get_history_limit=lambda: self.history_limit,
             unreadable_key_func=_say_key_did_not_fit(),
+            key_profile_func=lambda: self.key_profile_of(self.client_of(get_app())),
         )
         pane = Pane(terminal)
         # The name the pane answers XTVERSION with, asked at each query:
@@ -4154,6 +4160,17 @@ exec pymux notify -u "$urgency" -- "$@"
         if not clients:
             return None
         return max(clients, key=lambda client: client.last_used)
+
+    def key_profile_of(self, client: ClientState | None) -> KeyProfile:
+        """
+        Whose answer a legacy pane gets for a key from `client`: the
+        terminal it sits at, by its XTVERSION answer or its TERM, or
+        else "key-profile". Lillecarl/pymux#706.
+        """
+        graphics = getattr(getattr(client, "connection", None), "graphics", None)
+        version = graphics.terminal_version if graphics is not None else ""
+        term = hacks_and_lies.outer_term(client) if client is not None else ""
+        return KEY_PROFILES[key_profile_of(version, term) or self.key_profile]
 
     def latest_theme(self) -> str:
         """

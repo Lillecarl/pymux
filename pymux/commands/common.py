@@ -246,7 +246,8 @@ def send_key(pane: Pane, event: KeyEvent, written: str) -> None:
     """
     terminal = terminal_of(pane)
     try:
-        terminal.process.write_input(terminal.screen.encode_key_event(event, exactly=True))
+        profile = terminal.terminal_control.key_profile()
+        terminal.process.write_input(terminal.screen.encode_key_event(event, exactly=True, profile=profile))
     except Unhearable as cannot:
         raise CommandException(why_not(written, cannot))
 

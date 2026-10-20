@@ -48,5 +48,6 @@ The build switch: the root `default.nix` passes `pipewire` and `wireplumber` to 
 | --- | --- | --- | --- |
 | `mouse` | session | on | Unlike tmux: a click selects a pane and reaches the program. |
 | `extended-keys` | session | `on` | Every key a terminal can name reaches the pane. |
+| `key-profile` | session | `kitty` | Where terminals split on a key, a legacy program gets what the client's own terminal sends. This names the terminal for a client whose terminal does not name itself. |
 | `theme` | client | the theme nearest the terminal's own colours | Per client, because two people may sit at different screens. |
 | `full-screen` | client | off | On, one pane fills this terminal, with no status line. |
