@@ -63,6 +63,21 @@ async def five_writes(pane, text: str) -> None:
     await anyio.sleep(LONG_ENOUGH)
 
 
+async def settled(*states) -> None:
+    """
+    Until no client has a frame pending, twice in a row. The frames an
+    attach and a new window asked for are drawn before a count is taken:
+    under the gate's load one of them landed inside the writes, and a
+    client that looks elsewhere seemed to draw for the pane.
+    Lillecarl/pymux#669.
+    """
+    quiet = 0
+    with anyio.fail_after(10):
+        while quiet < 2:
+            await anyio.sleep(LONG_ENOUGH / 3)
+            quiet = 0 if any(state.app.invalidated for state in states) else quiet + 1
+
+
 def looks_at(pymux, state):
     with set_app(state.app):
         return pymux.arrangement.get_active_window()
@@ -85,6 +100,7 @@ async def test_pane_in_window_nobody_looks_at_draws_nothing():
         shown = looks_at(pymux, state)
         hidden = next(w for w in pymux.arrangement.windows if w is not shown)
 
+        await settled(state)
         drawn = state.app.render_counter
         await five_writes(hidden.panes[0], "nobody is looking\r\n")
         assert state.app.render_counter == drawn
@@ -113,6 +129,7 @@ async def test_pane_does_not_wake_client_looking_elsewhere():
         window_of_a = looks_at(pymux, a)
         assert looks_at(pymux, b) is not window_of_a
 
+        await settled(a, b)
         drawn_by_a = a.app.render_counter
         drawn_by_b = b.app.render_counter
         await five_writes(window_of_a.panes[0], "a pane of the other window\r\n")
