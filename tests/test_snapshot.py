@@ -387,6 +387,10 @@ def _window_count(pymux) -> int:
     return sum(len(session.arrangement.windows) for session in pymux.sessions)
 
 
+def _pane_count(pymux) -> int:
+    return sum(len(window.panes) for session in pymux.sessions for window in session.arrangement.windows)
+
+
 async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_path):
     alternate = tmp_path / "alternate.sh"
     alternate.write_text("printf '%s\\r\\n\\033[?1049h\\033[31mALT\\033[0m\\033[3'\nsleep 60\n" % ("wrapped " * 20))
@@ -424,6 +428,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 "new-session -d -s second",
             ):
                 windows = _window_count(pymux)
+                panes = _pane_count(pymux)
                 pymux.handle_command(command)
                 if command == "new-window":
                     # A window is made on a later turn, and a screen that
@@ -431,6 +436,10 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                     # it: `unlink-window` then took the strip instead.
                     # Lillecarl/pymux#664.
                     await once(lambda: _window_count(pymux) > windows, 10.0, "the new window never came")
+                elif command.startswith("split-window"):
+                    # So is a pane: the strip had one column when the
+                    # test set the width of its second. Lillecarl/pymux#664.
+                    await once(lambda: _pane_count(pymux) > panes, 10.0, "the new pane never came")
                 await settled(session, 0.1)
         await settled(session)
         _vary_what_no_command_reaches(pymux, connection.client_state)
