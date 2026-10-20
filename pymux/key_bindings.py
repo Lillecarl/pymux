@@ -29,6 +29,7 @@ from .commands.utils import wrap_argument
 from .enums import COMMAND, PROMPT, Chooser
 from .filters import HasPrefix, KeyTableIs, ModeActive, WaitsForConfirmation
 from .key_spelling import key_however_it_is_written
+from .window_pane import WindowWidget
 
 if TYPE_CHECKING:
     from pymux.main import Pymux
@@ -439,10 +440,17 @@ class PymuxKeyBindings:
             that has nothing in it. Lillecarl/pymux#246.
             """
             pane = pymux.get_focused_pane()
-            # A window pane presses and lets go of each key at once.
-            if pane is None or not event.data or not isinstance(pane.terminal, Terminal):
+            if pane is None or not event.data:
                 return NotImplemented
             terminal = pane.terminal
+            if isinstance(terminal, WindowWidget):
+                # A window presses and lets go of each key at once, so
+                # it takes only the presses. Lillecarl/pymux#627.
+                if terminal.takes_keys() and get_app().layout.has_focus(terminal):
+                    terminal.press_data(event.data)
+                return NotImplemented
+            if not isinstance(terminal, Terminal):
+                return NotImplemented
             try:
                 if not get_app().layout.has_focus(terminal):
                     # The keyboard is on the command line or a prompt.

@@ -493,6 +493,16 @@ async def test_keys_reach_the_window(tmp_path):
         assert "key 42 0" in lines
 
 
+async def test_a_key_pymux_cannot_name_reaches_the_window(tmp_path):
+    "ctrl+=, foot's zoom, as the client's terminal sends it. Lillecarl/pymux#627."
+    async with with_a_window(tmp_path) as (_pymux, state, _pane, _recorder, log, _probe):
+        await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
+        state.connection._process({"cmd": "in", "data": "\x1b[61;5u"})
+        await once(lambda: "key 13 0" in logged(log), 10.0, lambda: "ctrl+= never arrived: %s" % logged(log)[-8:])
+        lines = logged(log)
+        assert lines.index("key 29 1") < lines.index("key 13 1")
+
+
 async def test_a_click_from_the_terminal_reaches_the_window(tmp_path):
     "A mouse report the client's terminal sends, on the window pane's cells."
     async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, _probe):

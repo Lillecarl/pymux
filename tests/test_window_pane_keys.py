@@ -6,10 +6,11 @@ modifiers held around it. Lillecarl/pymux#620.
 from __future__ import annotations
 
 from prompt_toolkit.keys import Keys
+from pyte.keys import parse_key_data
 
-from pymux.window_pane import evdev_of
+from pymux.window_pane import WindowWidget, evdev_of, evdev_of_event
 
-SHIFT, CTRL = 42, 29
+SHIFT, CTRL, ALT = 42, 29, 56
 
 
 def test_a_letter_is_its_key():
@@ -41,3 +42,42 @@ def test_control_and_a_letter():
 
 def test_a_key_no_keyboard_types_is_none():
     assert evdev_of("é") is None
+
+
+def _event(data: str):
+    [event] = parse_key_data(data)
+    return evdev_of_event(event)
+
+
+def test_control_and_a_character_with_no_control_code():
+    # foot's zoom, as kitty and as xterm's modifyOtherKeys write it.
+    # Lillecarl/pymux#627.
+    assert _event("\x1b[61;5u") == ((CTRL,), 13)
+    assert _event("\x1b[27;5;61~") == ((CTRL,), 13)
+    assert _event("\x1b[45;5u") == ((CTRL,), 12)
+    assert _event("\x1b[48;5u") == ((CTRL,), 11)
+
+
+def test_every_modifier_of_the_event_is_held():
+    assert _event("\x1b[61;6u") == ((SHIFT, CTRL), 13)
+    assert _event("\x1b[61;7u") == ((CTRL, ALT), 13)
+
+
+def test_a_release_or_a_key_no_keyboard_types_presses_nothing():
+    assert _event("\x1b[61;5:3u") is None
+    assert _event("\x1b[57376u") is None
+
+
+class _Wayland:
+    def __init__(self) -> None:
+        self.pressed: list[tuple[tuple[int, ...], int]] = []
+
+    def press(self, _toplevel, modifiers, code, _time) -> None:
+        self.pressed.append((modifiers, code))
+
+
+def test_a_window_presses_the_keys_of_a_sequence():
+    wayland = _Wayland()
+    widget = WindowWidget(wayland, 1, lambda: True)
+    widget.press_data("\x1b[61;5u\x1b[61;5:3u\x1b[45;5u")
+    assert wayland.pressed == [((CTRL,), 13), ((CTRL,), 12)]

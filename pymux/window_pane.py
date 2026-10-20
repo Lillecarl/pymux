@@ -27,6 +27,7 @@ from prompt_toolkit.keys import Keys
 from prompt_toolkit.layout.containers import Window
 from prompt_toolkit.layout.controls import UIContent, UIControl
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
+from pyte.keys import EventType, KeyEvent, Modifier, parse_key_data
 
 if TYPE_CHECKING:
     from prompt_toolkit.formatted_text import StyleAndTextTuples
@@ -106,6 +107,33 @@ def evdev_of(key: str) -> tuple[tuple[int, ...], int] | None:
         code, shifted = character
         return ((_SHIFT,) if shifted else ()), code
     return None
+
+
+def evdev_of_event(event: KeyEvent) -> tuple[tuple[int, ...], int] | None:
+    """
+    `evdev_of` for a key the terminal reported in the protocol's terms:
+    the character key, with every modifier the event holds.
+
+    pymux has no name for ctrl with a character that has no control
+    code, so such a key comes as raw data. foot zooms on ctrl+=, ctrl+-
+    and ctrl+0. Lillecarl/pymux#627.
+    """
+    if event.final != "u" or event.event == EventType.RELEASE or not 0 <= event.code < 0x110000:
+        return None
+    character = _CHARACTERS.get(chr(event.code))
+    if character is None:
+        return None
+    code, shifted = character
+    modifiers = [
+        modifier
+        for modifier, held in (
+            (_SHIFT, shifted or event.mods & Modifier.SHIFT),
+            (_CTRL, event.mods & Modifier.CTRL),
+            (_ALT, event.mods & Modifier.ALT),
+        )
+        if held
+    ]
+    return tuple(modifiers), code
 
 
 _BUTTONS = {MouseButton.LEFT: 0x110, MouseButton.RIGHT: 0x111, MouseButton.MIDDLE: 0x112}
@@ -335,6 +363,14 @@ class WindowWidget:
             return
         modifiers, code = found
         self.wayland.press(self.toplevel, modifiers, code, now())
+
+    def press_data(self, data: str) -> None:
+        "The keys in a sequence the terminal sent, which pymux has no name for."
+        for item in parse_key_data(data):
+            found = evdev_of_event(item) if isinstance(item, KeyEvent) else None
+            if found is not None:
+                modifiers, code = found
+                self.wayland.press(self.toplevel, modifiers, code, now())
 
     def mouse(self, event: MouseEvent) -> None:
         if event.event_type == MouseEventType.SCROLL_UP:
