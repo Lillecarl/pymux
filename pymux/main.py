@@ -2856,8 +2856,11 @@ class Pymux:
     def adopt_window_pane(self, old: Pane, widget: WindowWidget) -> Pane | None:
         """
         A pane for a Wayland window, in the place of `old`, whose program
-        is killed: `pymux wl` turns the pane it ran in into the window.
-        None when `old` is gone. Lillecarl/pymux#630.
+        is sent SIGHUP: `pymux wl` turns the pane it ran in into the
+        window. None when `old` is gone. Lillecarl/pymux#630.
+
+        SIGHUP and not SIGKILL, so the shell writes the `pymux wl` line
+        to its history on the way out.
         """
         session = self.session_holding(old)
         if session is None:
@@ -2866,7 +2869,7 @@ class Pymux:
         # The swap first: an ended program takes its pane out of the
         # session, and a session left with none stops the server.
         session.arrangement.replace_pane(old, pane)
-        old.process.kill()
+        old.process.hang_up()
         self._window_pane_shown()
         return pane
 
@@ -2985,7 +2988,7 @@ class Pymux:
 
         process = pane.process
         if not process.is_terminated:
-            process.kill()
+            process.hang_up()
 
         self._sync_focus_everywhere()
         self.invalidate(Woke.OVERLAY_CLOSED)
@@ -4321,10 +4324,13 @@ exec pymux notify -u "$urgency" -- "$@"
         ends on its own as often as a person kills one. Doing it in
         both places would end a session while the program in its last
         pane is still answering the signal.
+
+        **SIGHUP, not SIGKILL**, the way closing a terminal ends what
+        runs in it: a shell writes its history on the way out, and a
+        program that ignores it gets SIGKILL after a grace.
         """
-        # Send kill signal.
         if not pane.process.is_terminated:
-            pane.process.kill()
+            pane.process.hang_up()
 
         # Remove from layout. The session the pane is in, and not the
         # session of whoever asked: `kill-pane -t` reaches across.

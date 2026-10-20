@@ -61,7 +61,7 @@ async def test_respawn_keeps_place_and_replaces_pane():
             assert len(window.panes) == count
             assert pymux.arrangement.get_active_pane().pane_id != old_id
             # The old program is gone: the kernel's reaping is a
-            # moment behind the SIGKILL, so it is waited for.
+            # moment behind the SIGHUP, so it is waited for.
             for _ in range(50):
                 if old_pane.process.is_terminated:
                     break

@@ -176,6 +176,10 @@ class WindowProcess:
         "Ask the window to close. The program decides; `closed` ends the pane."
         self._widget.close()
 
+    def hang_up(self) -> None:
+        "The same ask: a window gets no SIGHUP, and its close is already gentle."
+        self.kill()
+
     def get_name(self) -> str:
         return self._widget.app_id
 
