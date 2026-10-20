@@ -131,6 +131,10 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
             _resume(pymux)
         pymux.audio.resume()
         raise
+    # A program still in its grace after a SIGHUP has no pane in the
+    # snapshot, so no server would send its SIGKILL.
+    for backend in list(pymux.hanging_up):
+        backend.kill()
     await _answer_the_caller(pymux)
     _leave()
 

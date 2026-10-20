@@ -66,3 +66,4 @@ async def test_respawn_pane_k_lets_the_program_run_its_sighup_trap(tmp_path):
         await _command(pymux, state, "respawn-pane -k 'sleep 30'")
 
         await once(handled.exists, 5.0, "the program never ran its SIGHUP trap")
+        assert handled.read_text() == "handled\n"

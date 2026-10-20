@@ -249,6 +249,32 @@ def test_an_upgrade_keeps_every_pane_and_its_program(server, tmp_path, new_build
     assert _leftovers(old, pid) == []
 
 
+#: Ignores SIGHUP and writes its pid. `exec` keeps the pid, and an
+#: ignored signal stays ignored across it.
+IGNORES_HUP = "trap '' HUP; echo $$ > %s; exec sleep 600"
+
+
+def test_an_upgrade_kills_a_program_still_in_its_grace(server, tmp_path):
+    "A pane closed just before an upgrade is in no snapshot, so the old server ends its program. Lillecarl/pyterm#1."
+    written = tmp_path / "ignores.pid"
+    command = "sh -c %s" % shlex.quote(IGNORES_HUP % shlex.quote(str(written)))
+    pane = _answer(server, "split-window", "-d", "-P", "-F", "#{pane_id}", command).strip()
+    deadline = time.monotonic() + CLI_TIMEOUT
+    while not (text := written.read_text().strip() if written.exists() else ""):
+        assert time.monotonic() < deadline, "the program never wrote its pid"
+        time.sleep(0.05)
+    pid = int(text)
+
+    _answer(server, "kill-pane", "-t", pane)
+    said = cli(server, "upgrade-server", shlex.join([sys.executable, "-m", "pymux"]))
+    assert said.returncode == 0, said.stderr.decode()
+
+    deadline = time.monotonic() + CLI_TIMEOUT
+    while not _gone(pid):
+        assert time.monotonic() < deadline, "a program that ignores SIGHUP outlived the upgrade"
+        time.sleep(0.05)
+
+
 def test_a_build_that_ends_without_a_word_is_refused(server):
     before = _what_survives(server)
     refused = cli(server, "upgrade-server", shlex.join(["sh", "-c", "exit 3"]))

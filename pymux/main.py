@@ -1268,6 +1268,7 @@ class Pymux:
         "client_options": Keep.REBUILT,
         "option_tables": Keep.REBUILT,
         "panes_by_id": Keep.REBUILT,
+        "hanging_up": Keep.DROPPED,  # an upgrade kills them before it goes
         "_client_states": Keep.REBUILT,  # from the client records, as clients reconnect
         "_notify_shim_dir": Keep.REBUILT,
         "_open_url_shim_dir": Keep.REBUILT,
@@ -1586,6 +1587,9 @@ class Pymux:
 
         # Keep track of all the panes, by ID. (For quick lookup.)
         self.panes_by_id: weakref.WeakValueDictionary[PaneId, Pane] = weakref.WeakValueDictionary()
+        #: Held programs sent SIGHUP whose SIGKILL may still be due. The
+        #: grace task keeps each backend alive until the program ends.
+        self.hanging_up: weakref.WeakSet[HeldBackend] = weakref.WeakSet()
 
         # Socket information.
         self.socket_name: str | None = None
@@ -2869,9 +2873,20 @@ class Pymux:
         # The swap first: an ended program takes its pane out of the
         # session, and a session left with none stops the server.
         session.arrangement.replace_pane(old, pane)
-        old.process.hang_up()
+        self.hang_up(old)
         self._window_pane_shown()
         return pane
+
+    def hang_up(self, pane: Pane) -> None:
+        """
+        End the program of a pane a person closed: SIGHUP, and SIGKILL
+        after a grace. `hanging_up` keeps it, because a pane closed
+        within the grace is in no snapshot, and the server that resumes
+        one never sends that SIGKILL.
+        """
+        if isinstance(backend := pane.process.backend, HeldBackend):
+            self.hanging_up.add(backend)
+        pane.process.hang_up()
 
     def _window_pane_of(self, widget: WindowWidget) -> Pane:
         pane = Pane(widget)
@@ -2986,9 +3001,8 @@ class Pymux:
 
         session.overlay_pane = None
 
-        process = pane.process
-        if not process.is_terminated:
-            process.hang_up()
+        if not pane.process.is_terminated:
+            self.hang_up(pane)
 
         self._sync_focus_everywhere()
         self.invalidate(Woke.OVERLAY_CLOSED)
@@ -4330,7 +4344,7 @@ exec pymux notify -u "$urgency" -- "$@"
         program that ignores it gets SIGKILL after a grace.
         """
         if not pane.process.is_terminated:
-            pane.process.hang_up()
+            self.hang_up(pane)
 
         # Remove from layout. The session the pane is in, and not the
         # session of whoever asked: `kill-pane -t` reaches across.
