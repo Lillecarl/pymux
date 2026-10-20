@@ -207,6 +207,11 @@ MAX_USER_VARS = 64
 #: every other unbounded thing a program in a pane may send.
 MAX_MARKS = 256
 
+#: How often a client whose terminal fell behind looks again whether it
+#: caught up, in seconds: its next frame draws within this of it.
+#: Lillecarl/pymux#585.
+BEHIND_INTERVAL = 0.1
+
 #: What a client refreshes in the session it attaches to, by default.
 #: tmux's own list, which is every name that points at something on
 #: the machine a person is sitting at: a display, an agent, a session
@@ -349,6 +354,7 @@ class ClientState:
         "input_tick": Keep.DROPPED,
         "schedule_tick": Keep.DROPPED,
         "_waiting_for_drain": Keep.DROPPED,
+        "_paced_while_behind": Keep.DROPPED,
         # A command's client lives for one command, and no command
         # spans an upgrade.
         "temporary": Keep.DROPPED,
@@ -470,6 +476,10 @@ class ClientState:
         #: A wait for this client's terminal to take its bytes is out,
         #: and redraws the window panes after. Lillecarl/pymux#629.
         self._waiting_for_drain = False
+
+        #: Whether this client's redraws are paced because its terminal
+        #: fell behind; `should_skip_render` sets and clears it.
+        self._paced_while_behind = False
 
         #: The mode tables this client sits in, the innermost last.
         #: Empty when every key is read from root or prefix. A mode is
@@ -650,8 +660,26 @@ class ClientState:
         Equality is the steady state: every scheduled redraw records
         the tick, so input that has been handled reads equal and the
         frame draws. Lillecarl/pymux#524.
+
+        **A terminal that fell behind gets no frame either**, on a
+        route where the bytes would pile up in this process. The next
+        frame is a diff against the last one drawn, so a skipped one
+        loses nothing. A skip asks for the frame again, and an unpaced
+        client would ask on every turn of the loop, so it is paced
+        until the terminal caught up. Lillecarl/pymux#585.
         """
-        return self.input_tick != self.schedule_tick
+        if self.input_tick != self.schedule_tick:
+            return True
+        pipe = getattr(self.connection, "pipe_connection", None)
+        if pipe is not None and pipe.holds_frames_while_behind and pipe.outstanding:
+            if not self.app.min_redraw_interval:
+                self.app.min_redraw_interval = BEHIND_INTERVAL
+                self._paced_while_behind = True
+            return True
+        if self._paced_while_behind:
+            self._paced_while_behind = False
+            self.app.min_redraw_interval = None
+        return False
 
     @property
     def active_key_table(self) -> str:

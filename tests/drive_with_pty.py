@@ -2521,6 +2521,62 @@ def check_a_stopped_client_does_not_stop_the_server(tmp):
     print("a stopped client does not stop the server: ok")
 
 
+def check_an_integrated_server_answers_while_its_terminal_reads_nothing(tmp):
+    """
+    The integrated twin of the check above: the terminal stops reading,
+    and the server in the same process must go on answering.
+
+    The client wrote each frame to the pty itself, on the loop the
+    server runs on, so a terminal that stopped reading a flood blocked
+    both: measured, no command answered in twenty seconds, `kill-server`
+    included. The client writes from a task now, and the server skips
+    this client's frames while its terminal is behind, so nothing piles
+    up either. Once the terminal reads again, what it draws must be the
+    screen as it is. Lillecarl/pymux#585.
+    """
+    if ROUTE != "integrated":
+        print("a terminal that reads nothing: integrated route only")
+        return
+
+    terminal = Terminal(tmp, "kitty")
+    try:
+        terminal.wait_for_queries()
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"READY")
+
+        child = tmp / "flood-child.py"
+        child.write_text(FLOOD_CHILD)
+        made = _reading(terminal, ["split-window", "%s %s" % (sys.executable, child)])
+        assert made.returncode == 0, made.stderr
+        terminal.wait_for(b"FLOOD")
+
+        # Nothing reads the terminal from here: the pty fills, and the
+        # client's next write has no room.
+        time.sleep(5)
+        started = time.time()
+        answer = run_cli(terminal.sock_path, ["list-sessions"])
+        took = time.time() - started
+        assert answer.returncode == 0, answer.stderr
+        assert took < 5, "list-sessions took %.1fs while the terminal read nothing" % took
+
+        marker = tmp / "marker.py"
+        marker.write_text("import time\nprint('CAUGHTUP')\ntime.sleep(30)\n")
+        # A pane in the window the client looks at: a new window would
+        # be the command connection's to look at, not this client's.
+        made = run_cli(terminal.sock_path, ["split-window", "%s %s" % (sys.executable, marker)])
+        assert made.returncode == 0, made.stderr
+
+        # Reading again, the terminal catches up and draws the pane
+        # that opened while it was behind.
+        terminal.wait_for(b"CAUGHTUP", timeout=20)
+    except BaseException:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+    print("an integrated server answers while its terminal reads nothing: ok")
+
+
 def check_a_client_whose_stdin_ends_leaves(tmp):
     """
     A client whose stdin ends leaves, and the session holds.
@@ -3047,6 +3103,7 @@ CHECKS = (
     check_q_leaves_a_client_waiting_for_a_restart,
     check_a_server_that_ends_unannounced_ends_the_client,
     check_a_stopped_client_does_not_stop_the_server,
+    check_an_integrated_server_answers_while_its_terminal_reads_nothing,
     check_a_client_whose_stdin_ends_leaves,
     check_libpymux,
 )

@@ -345,7 +345,7 @@ class TerminalClient(Client):
         self._frame_parts.clear()
         self._decoders.clear()
         self._pictures.clear()
-        os.write(sys.stdout.fileno(), detection_queries(self._shm_probe()))
+        self._write_terminal(detection_queries(self._shm_probe()))
         self._send_packet({Field.CMD: Packet.KITTY_DETECT})
 
     def _shm_probe(self) -> str:
@@ -405,6 +405,10 @@ class TerminalClient(Client):
         output.disable_bracketed_paste()
         output.reset_attributes()
         output.flush()
+
+    def _write_terminal(self, data: bytes) -> None:
+        "Write a frame of the server, or a sequence of this client's, to the terminal."
+        _write_all(sys.stdout.fileno(), data)
 
     def _leave_the_terminal(self) -> None:
         """
@@ -467,7 +471,7 @@ class TerminalClient(Client):
             commands = frame_commands(image, whole, width, height, rects, self._carrier, answer)
         text = commands + packet.get(Field.AFTER, "")
         if text:
-            _write_all(sys.stdout.fileno(), (SAVE_CURSOR + text + RESTORE_CURSOR).encode("ascii"))
+            self._write_terminal((SAVE_CURSOR + text + RESTORE_CURSOR).encode("ascii"))
             self.placed_images = True
         return answer
 
@@ -504,7 +508,7 @@ class TerminalClient(Client):
 
         elif packet[Field.CMD] == Packet.OUT:
             data = packet[Field.DATA]
-            os.write(sys.stdout.fileno(), data.encode("utf-8"))
+            self._write_terminal(data.encode("utf-8"))
             if KITTY_GRAPHICS in data:
                 self.placed_images = True
 
@@ -619,9 +623,9 @@ class TerminalClient(Client):
         if self._kitty_flags is None:
             if flags == 0:
                 return  # Nothing of ours is on the stack; 0 changes nothing.
-            os.write(sys.stdout.fileno(), ("\x1b[>%du" % flags).encode())
+            self._write_terminal(("\x1b[>%du" % flags).encode())
         else:
-            os.write(sys.stdout.fileno(), ("\x1b[=%d;1u" % flags).encode())
+            self._write_terminal(("\x1b[=%d;1u" % flags).encode())
         self._kitty_flags = flags
 
     def _pop_kitty_flags(self) -> None:

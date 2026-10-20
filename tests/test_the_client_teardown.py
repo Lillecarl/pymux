@@ -81,7 +81,8 @@ def client(monkeypatch):
     monkeypatch.setattr("pymux.client.posix.raw_mode", lambda fd: contextlib.nullcontext())
     monkeypatch.setattr(sys, "stdin", open(os.devnull, "rb"))
     monkeypatch.setattr("pymux.client.posix.select", lambda fds, *a: ([7], [], []))
-    monkeypatch.setattr(os, "write", lambda fd, data: None)
+    # Every byte taken, as `os.write` answers: a writer loops until then.
+    monkeypatch.setattr(os, "write", lambda fd, data: len(data))
 
     yield Recording()
 
@@ -181,10 +182,17 @@ def memory_client(monkeypatch):
     read_end, write_end = os.pipe()
     keyboard = open(read_end, "rb")
     monkeypatch.setattr(sys, "stdin", keyboard)
-    monkeypatch.setattr(os, "write", lambda fd, data: None)
+    # A terminal with room: the client's writer waits for stdout to
+    # take bytes, so it needs a real one.
+    screen_read, screen_write = os.pipe()
+    screen = open(screen_write, "wb")
+    monkeypatch.setattr(sys, "stdout", screen)
+    monkeypatch.setattr(os, "write", lambda fd, data: len(data))
     yield RecordingMemory
     keyboard.close()
     os.close(write_end)
+    screen.close()
+    os.close(screen_read)
 
 
 @pytest.mark.parametrize("error", [ServerHungUp(), RuntimeError("the loop's own way out")])

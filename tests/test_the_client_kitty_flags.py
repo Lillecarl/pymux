@@ -30,7 +30,12 @@ class Recorder(TerminalClient):
 def _writes(monkeypatch):
     "What the client wrote to the outer terminal, one entry per call."
     written = []
-    monkeypatch.setattr(os, "write", lambda fd, data: written.append(data))
+
+    def write(fd, data):
+        written.append(bytes(data))
+        return len(data)
+
+    monkeypatch.setattr(os, "write", write)
     return written
 
 

@@ -100,6 +100,12 @@ class PipeConnection(ABC):
         "Bytes given to `write` that the other end has not taken yet."
         return 0
 
+    #: Whether `outstanding` is the client's terminal falling behind,
+    #: so frames wait for it rather than pile up. A socket bounds its
+    #: own instead, and leaves a client behind past `TOO_SLOW_BYTES`.
+    #: Lillecarl/pymux#585.
+    holds_frames_while_behind = False
+
     async def drained(self) -> None:
         "Wait until `outstanding` is zero."
 

@@ -37,6 +37,7 @@ that is read on a timer costs nothing and covers what a signal misses.
 from __future__ import annotations
 
 import contextlib
+import os
 import sys
 from typing import override
 
@@ -51,6 +52,9 @@ __all__ = [
     "MemoryClient",
 ]
 
+#: How long the way out waits for the terminal to take the last frame.
+DRAIN_SECONDS = 1.0
+
 
 class MemoryClient(TerminalClient):
     """
@@ -64,6 +68,45 @@ class MemoryClient(TerminalClient):
     def __init__(self, connection: MemoryConnection) -> None:
         super().__init__()
         self.connection = connection
+        #: Frames the terminal has not taken yet. The server in this
+        #: process skips frames while there are any, and draws what
+        #: changed once they are gone. Lillecarl/pymux#585.
+        self._backlog = bytearray()
+        self._more: anyio.Event | None = None
+        connection.held_for_terminal = lambda: len(self._backlog)
+
+    @override
+    def _write_terminal(self, data: bytes) -> None:
+        """
+        Hand the frame to the writer and return. A terminal that stops
+        reading -- XOFF, a stalled link, a stopped emulator -- blocked a
+        write here, and with it the server that runs on the same loop:
+        no command over the socket answered, `kill-server` included.
+        """
+        self._backlog += data
+        if self._more is not None:
+            self._more.set()
+
+    async def _write_backlog(self, stdout_fd: int) -> None:
+        "Write the backlog whenever the terminal takes more."
+        # A regular file is always writable, and epoll refuses one
+        # (EPERM): output sent to a file is written as it comes.
+        pollable = True
+        while True:
+            if not self._backlog:
+                self._more = anyio.Event()
+                await self._more.wait()
+                continue
+            if pollable:
+                try:
+                    await anyio.wait_writable(stdout_fd)
+                except PermissionError:
+                    pollable = False
+            try:
+                written = os.write(stdout_fd, self._backlog)
+            except BlockingIOError:
+                continue
+            del self._backlog[:written]
 
     @override
     def _send_packet(self, data) -> None:
@@ -82,11 +125,17 @@ class MemoryClient(TerminalClient):
         The process ends with it, because the server is in it.
         """
         stdin_fd = sys.stdin.fileno()
+        stdout_fd = sys.stdout.fileno()
 
         self._start_gui(detach_other_clients, color_depth)
 
+        # Non-blocking, so a write takes what the terminal has room for:
+        # a blocking write to a pty waits until every byte went.
+        was_blocking = os.get_blocking(stdout_fd)
+        os.set_blocking(stdout_fd, False)
         with raw_mode(stdin_fd):
             async with anyio.create_task_group() as tasks:
+                tasks.start_soon(self._write_backlog, stdout_fd)
                 tasks.start_soon(self._read_keyboard, stdin_fd)
                 tasks.start_soon(self._watch_signal)
                 tasks.start_soon(self._watch_size)
@@ -104,9 +153,15 @@ class MemoryClient(TerminalClient):
                             continue
                         self._process(packet)
                 finally:
-                    # The three readers above end with this scope.
+                    # The last frame, if the terminal takes it soon; a
+                    # frame cut short is worse than a short wait.
+                    with anyio.move_on_after(DRAIN_SECONDS, shield=True):
+                        while self._backlog:
+                            await anyio.sleep(0.01)
+                    # The four tasks above end with this scope.
                     tasks.cancel_scope.cancel()
                     self.stop_browsers()
+                    os.set_blocking(stdout_fd, was_blocking)
                     self._leave_the_terminal()
 
     async def _read_keyboard(self, stdin_fd: int) -> None:

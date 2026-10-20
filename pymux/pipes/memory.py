@@ -15,6 +15,7 @@ process, and nothing else.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import override
 
 import anyio
@@ -26,6 +27,9 @@ __all__ = [
     "MemoryConnection",
     "connect_in_memory",
 ]
+
+#: How often `drained` looks again, in seconds.
+DRAIN_POLL = 0.02
 
 
 class MemoryConnection(PipeConnection):
@@ -49,6 +53,10 @@ class MemoryConnection(PipeConnection):
         self._closed = False
         self._reader = PacketReader()
         self._ready: list[dict] = []
+        #: The bytes the client on this end holds for its terminal, which
+        #: has not taken them yet. `MemoryClient` sets it.
+        #: Lillecarl/pymux#585.
+        self.held_for_terminal: Callable[[], int] = lambda: 0
 
     def _join(self, peer: MemoryConnection) -> None:
         self._peer = peer
@@ -88,6 +96,23 @@ class MemoryConnection(PipeConnection):
             self._peer._send.send_nowait(frame)
         except anyio.BrokenResourceError, anyio.ClosedResourceError:
             raise BrokenPipeError
+
+    holds_frames_while_behind = True
+
+    @property
+    @override
+    def outstanding(self) -> int:
+        """
+        What the peer's terminal has not taken yet. The queue between
+        the two ends takes everything at once; the terminal is where
+        the bytes wait.
+        """
+        return self._peer.held_for_terminal() if self._peer is not None else 0
+
+    @override
+    async def drained(self) -> None:
+        while self.outstanding and not self._closed:
+            await anyio.sleep(DRAIN_POLL)
 
     @override
     async def write(self, frame: bytes, compress_after: bool = False, urgent: bool = False) -> None:
