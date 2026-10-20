@@ -15,8 +15,8 @@ A terminal multiplexer, like tmux, in Python, on top of
 
     nix run github:Lillecarl/pymux
 
-Running `pymux` with no arguments starts a server and attaches a client
-to it. Any other command, such as `split-window`, goes to the running
+Running `pymux` with no arguments attaches to the newest server that is
+running, and starts one when none is, as `tmux` does. Any other command, such as `split-window`, goes to the running
 server, the way tmux does it. `pymux --help` lists the modes and the
 options. pyterm's README shows how to configure it with home-manager.
 

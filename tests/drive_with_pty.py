@@ -684,10 +684,16 @@ class SecondClient(Attached):
     terminal to a session they started with `pymux integrated`.
     """
 
-    def __init__(self, tmp, sock_path, name, colorterm=""):
+    def __init__(self, tmp, sock_path, name, colorterm="", bare=False):
+        "`bare` runs `pymux -S <socket>` and not `attach`: attach or create. Lillecarl/pymux#417."
         self.sock_path = sock_path
         self.stderr_path = tmp / ("%s-stderr.log" % name)
-        self.master_fd, self.client, self.stderr = attach_client(sock_path, self.stderr_path, colorterm)
+        if bare:
+            self.master_fd, self.client, self.stderr = run_on_pty(
+                ["-S", sock_path], self.stderr_path, colorterm, 24, 80
+            )
+        else:
+            self.master_fd, self.client, self.stderr = attach_client(sock_path, self.stderr_path, colorterm)
         self.seen = b""
         self.arrivals = []
         self.passed = 0
@@ -2521,6 +2527,47 @@ def check_a_stopped_client_does_not_stop_the_server(tmp):
     print("a stopped client does not stop the server: ok")
 
 
+def check_bare_pymux_attaches_to_the_server_it_finds(tmp):
+    """
+    `pymux -S <socket>` with no command attaches to the server there,
+    and starts one only when none answers. It printed "Invalid command."
+    and bare `pymux` started a second server each time. tmux attaches
+    or creates. Lillecarl/pymux#417.
+    """
+    if ROUTE == "integrated":
+        print("bare pymux finds its server: socket route only")
+        return
+
+    terminal = Terminal(tmp, "kitty")
+    second = None
+    try:
+        terminal.wait_for_queries()
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"READY")
+
+        second = SecondClient(tmp, terminal.sock_path, "bare", bare=True)
+        second.wait_for_queries()
+        second.write(b"\x1b[?62;1;6c")
+        second.wait_for(b"READY")
+
+        clients = run_cli(terminal.sock_path, ["list-clients"])
+        assert clients.returncode == 0, clients.stderr
+        assert len(clients.stdout.splitlines()) == 2, clients.stdout
+        # The same session, and not a second one made for it.
+        sessions = run_cli(terminal.sock_path, ["list-sessions"])
+        assert len(sessions.stdout.splitlines()) == 1, sessions.stdout
+    except BaseException:
+        terminal.report()
+        if second is not None:
+            second.report()
+        raise
+    finally:
+        if second is not None:
+            second.close()
+        terminal.close()
+    print("bare pymux finds its server: ok")
+
+
 def check_an_integrated_server_answers_while_its_terminal_reads_nothing(tmp):
     """
     The integrated twin of the check above: the terminal stops reading,
@@ -3104,6 +3151,7 @@ CHECKS = (
     check_a_server_that_ends_unannounced_ends_the_client,
     check_a_stopped_client_does_not_stop_the_server,
     check_an_integrated_server_answers_while_its_terminal_reads_nothing,
+    check_bare_pymux_attaches_to_the_server_it_finds,
     check_a_client_whose_stdin_ends_leaves,
     check_libpymux,
 )

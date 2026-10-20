@@ -5,8 +5,9 @@ pymux: terminal multiplexer.
 Usage:
     pymux [options] [integrated|start-server|attach|list-sessions|ls|find|diagnose|renice|web] [<command> ...]
 
-Running pymux without arguments starts a server (daemonized) and attaches
-a client to it. Any other command (e.g. ``split-window``) is sent to a
+Running pymux without arguments attaches to the newest server that is
+running, and starts one (daemonized) to attach to when none is. With -S
+it does the same for that socket. Any other command (e.g. ``split-window``) is sent to a
 running server, like tmux does.
 
 Modes:
@@ -661,26 +662,49 @@ def run() -> None:
                 sys.exit(_send_command(newest, command, pane_id, attaching))
 
             elif not socket_name:
-                # Run client/server combination.
-                mux = _new_pymux(source_file=filename)
-                socket_name = mux.listen_on_socket(socket_name)
-                pid = daemonize()
+                # Attach or create, as bare `tmux` does: the newest
+                # server that answers, and a new one only when none
+                # does. Two servers by accident is never what a person
+                # who typed `pymux` twice meant. Lillecarl/pymux#417.
+                for newest in list_clients():
+                    attaching.attach(newest)
+                _start_and_attach(None, filename, attaching)
 
-                if pid > 0:
-                    # Create window. It is important that this happens in the daemon,
-                    # because the parent of the process running inside should be this
-                    # daemon. (Otherwise the `waitpid` call won't work.)
-                    mux.run_server()
-                else:
-                    attaching.attach(create_client(socket_name))
+            elif socket_name_from_env:
+                _refuse_nesting(socket_name_from_env)
+
+            elif is_ssh_url(socket_name):
+                # Starting a server on the far machine when none is
+                # there is Lillecarl/pymux#90's other half.
+                attaching.attach(create_client(socket_name))
 
             else:
-                _refuse_nesting(socket_name_from_env)
-                print("Invalid command.")
-                sys.exit(1)
+                # The server `-S` names, or a new one there.
+                try:
+                    named = create_client(socket_name)
+                except OSError:
+                    named = None
+                if named is not None:
+                    attaching.attach(named)
+                _start_and_attach(socket_name, filename, attaching)
 
         case _:
             assert_never(mode)
+
+
+def _start_and_attach(socket_name: str | None, filename: str | None, attaching: Attaching) -> NoReturn:
+    "Start a server on `socket_name`, or on a new one with None, and attach to it."
+    mux = _new_pymux(source_file=filename)
+    socket_name = mux.listen_on_socket(socket_name)
+    pid = daemonize()
+
+    if pid > 0:
+        # Create window. It is important that this happens in the daemon,
+        # because the parent of the process running inside should be this
+        # daemon. (Otherwise the `waitpid` call won't work.)
+        mux.run_server()
+        sys.exit(0)
+    attaching.attach(create_client(socket_name))
 
 
 def _new_pymux(source_file, startup_command=None, session_name=None, size_with_no_client=None):
