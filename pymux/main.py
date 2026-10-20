@@ -1785,7 +1785,7 @@ class Pymux:
             if active_id in windows:
                 arrangement._active_window_for_cli[app] = windows[active_id]
             if previous_id in windows:
-                arrangement._prev_active_window_for_cli[app] = windows[previous_id]
+                arrangement._window_history_for_cli[app] = [windows[previous_id]]
 
         for name, value in record["settings"].items():
             setattr(client_state, name, value)

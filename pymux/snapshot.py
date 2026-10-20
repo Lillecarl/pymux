@@ -458,7 +458,7 @@ WRITES: dict[str, frozenset[str]] = {
             "window_defaults",
             "_last_active_window",
             "_active_window_for_cli",
-            "_prev_active_window_for_cli",
+            "_window_history_for_cli",
         }
     ),
     "pymux.arrangement.Window": frozenset(Window.KEEP),
@@ -948,7 +948,8 @@ def write_tables(pymux: Pymux, db: sqlite3.Connection) -> None:
 
 
 def _write_window(db: sqlite3.Connection, session: Session, window: Window, linked: bool, place: int) -> None:
-    previous = window._prev_active_pane() if window._prev_active_pane is not None else None
+    # The newest of the history: a restored window can go back one step.
+    previous = window.previous_active_pane
     manual = window.manual_size
     _insert(
         db,
@@ -1075,7 +1076,7 @@ def _write_clients(pymux: Pymux, db: sqlite3.Connection) -> None:
         for session in pymux.sessions:
             arrangement = session.arrangement
             active = arrangement._active_window_for_cli.get(state.app)
-            previous = arrangement._prev_active_window_for_cli.get(state.app)
+            previous = arrangement.previous_window_for(state.app)
             if active is not None or previous is not None:
                 windows[session.session_id] = (
                     active.window_id if active is not None else None,
@@ -1393,7 +1394,7 @@ def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int]) -> int 
             window.root = split_of(root_row)  # type: ignore[assignment]
             window._active_pane = panes.get(window_row.active_pane_id)
             previous = panes.get(window_row.previous_active_pane_id)
-            window._prev_active_pane = ref(previous) if previous is not None else None
+            window._pane_history = [ref(previous)] if previous is not None else []
             layout = window_row.previous_layout
             window.previous_selected_layout = LayoutTypes(layout) if layout is not None else None
             window._strip = bool(window_row.strip)

@@ -198,7 +198,7 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     client_state.previous_session = second
     (elsewhere,) = second.arrangement.windows
     second.arrangement._active_window_for_cli[client_state.app] = elsewhere
-    first.arrangement._prev_active_window_for_cli[client_state.app] = strip
+    first.arrangement._window_history_for_cli[client_state.app] = [strip]
     pymux.named_buffers = {"one": "first text", "two": "second\ntext"}
     pymux.clipboard.set_data(ClipboardData("copied", SelectionType.LINES))
     pymux.prompt_history.append_string("rename-window a")
@@ -496,7 +496,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                     fresh.welcome_back(back, "gone")
                     (elsewhere,) = back.session.arrangement.windows
                     assert back.session.name == "second"
-                    assert back.session.arrangement._prev_active_window_for_cli[back.app] is elsewhere
+                    assert back.session.arrangement.previous_window_for(back.app) is elsewhere
                     assert (back.name, back.read_only, back.message) == ("phone", True, "job 2 exited 4")
                     assert "gone" not in fresh.returning_clients
                     assert back.connection.created == 1000.5

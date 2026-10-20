@@ -344,7 +344,7 @@ class Window:
         "index": Keep.SAVED,
         "root": Keep.SAVED,
         "_active_pane": Keep.SAVED,
-        "_prev_active_pane": Keep.SAVED,  # a weak reference, saved by pane id
+        "_pane_history": Keep.SAVED,  # weak references; its newest is saved, by pane id
         "chosen_name": Keep.SAVED,
         "previous_selected_layout": Keep.SAVED,
         "_strip": Keep.SAVED,
@@ -365,7 +365,9 @@ class Window:
         self.index = index
         self.root: VSplit | HSplit = HSplit()
         self._active_pane: Pane | None = None
-        self._prev_active_pane: ref[Pane] | None = None
+        #: The panes this window left, the newest last: closing the
+        #: active one returns to the newest still here. Lillecarl/pymux#658.
+        self._pane_history: list[ref[Pane]] = []
         self.chosen_name: str | None = None
         self.previous_selected_layout: LayoutTypes | None = None
 
@@ -592,28 +594,24 @@ class Window:
 
     @active_pane.setter
     def active_pane(self, value: Pane | None) -> None:
-        # Remember previous active pane. Never the pane itself: removing
-        # it would then make the removed pane active again.
-        if self._active_pane and self._active_pane is not value:
-            self._prev_active_pane = ref(self._active_pane)
+        # Never the pane itself: removing it would then make the removed
+        # pane active again.
+        old = self._active_pane
+        self._pane_history = [entry for entry in self._pane_history if entry() not in (None, old, value)]
+        if old is not None and old is not value:
+            self._pane_history.append(ref(old))
 
         self.zoom = False
         self._active_pane = value
 
     @property
     def previous_active_pane(self) -> Pane | None:
-        """
-        The previous active :class:`.Pane` or `None` if unknown.
-        """
-        if self._prev_active_pane is None:
-            return None
-
-        p = self._prev_active_pane()
-
-        # Only return when this pane actually still exists in the current
-        # window.
-        if p is not None and p in self.panes:
-            return p
+        "The newest pane this window left that is still in it, or None."
+        panes = self.panes
+        for entry in reversed(self._pane_history):
+            pane = entry()
+            if pane is not None and pane in panes and pane is not self._active_pane:
+                return pane
         return None
 
     @property
@@ -1030,7 +1028,8 @@ class Arrangement:
         "window_defaults": Keep.SAVED,
         "_last_active_window": Keep.SAVED,
         "_active_window_for_cli": Keep.SAVED,
-        "_prev_active_window_for_cli": Keep.SAVED,
+        # Its newest window, which is what `last-window` reaches.
+        "_window_history_for_cli": Keep.SAVED,
     }
 
     def __init__(self) -> None:
@@ -1069,7 +1068,11 @@ class Arrangement:
         self.window_defaults: dict[str, object] = {}
 
         self._active_window_for_cli: WeakKeyDictionary[Application, Window] = WeakKeyDictionary()
-        self._prev_active_window_for_cli: WeakKeyDictionary[Application, Window | None] = WeakKeyDictionary()
+        # The windows each client left, the newest last. Closing its
+        # window returns it to the newest one still open, as tmux's
+        # `session_last` does, and the next index only when there is
+        # none. Lillecarl/pymux#658.
+        self._window_history_for_cli: WeakKeyDictionary[Application, list[Window]] = WeakKeyDictionary()
 
         # The active window of the last CLI. Used as default when a new session
         # is attached.
@@ -1134,7 +1137,13 @@ class Arrangement:
         app = get_app()
 
         previous = self.get_active_window()
-        self._prev_active_window_for_cli[app] = previous
+        history = self._window_history_for_cli.setdefault(app, [])
+        if previous is not None and previous is not window:
+            if previous in history:
+                history.remove(previous)
+            history.append(previous)
+        if window in history:
+            history.remove(window)
         self._active_window_for_cli[app] = window
         self._last_active_window = window
 
@@ -1149,12 +1158,14 @@ class Arrangement:
 
     def get_previous_active_window(self) -> Window | None:
         "The previous active Window or None if unknown."
-        app = get_app()
+        return self.previous_window_for(get_app())
 
-        try:
-            return self._prev_active_window_for_cli[app]
-        except KeyError:
-            return None
+    def previous_window_for(self, app) -> Window | None:
+        "The newest window that `app` left and that is still in the order."
+        for window in reversed(self._window_history_for_cli.get(app, ())):
+            if window in self.windows:
+                return window
+        return None
 
     def get_window_by_index(self, index: WindowIndex):
         "Return the Window with this index or None if not found."
@@ -1405,13 +1416,19 @@ class Arrangement:
 
             # No panes left in this window?
             if not w.has_panes:
-                # Focus next.
-                for app, active_w in self._active_window_for_cli.items():
+                for app, active_w in list(self._active_window_for_cli.items()):
                     if w == active_w:
                         with set_app(app):
-                            self.focus_next_window()
+                            back = self.previous_window_for(app)
+                            if back is not None and back is not w:
+                                self.set_active_window(back)
+                            else:
+                                self.focus_next_window()
 
                 self.windows.remove(w)
+                for history in self._window_history_for_cli.values():
+                    if w in history:
+                        history.remove(w)
                 closed = True
 
         # A window closing is what `renumber-windows` is about, and the
