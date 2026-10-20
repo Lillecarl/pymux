@@ -17,7 +17,7 @@ import argparse
 import anyio
 import pytest
 from prompt_toolkit.application.current import set_app
-from session import create_session
+from session import create_session, once
 
 from pymux.commands import CommandException, handle_command
 from pymux.commands.respawn_pane import respawn_pane
@@ -95,10 +95,14 @@ async def test_pane_whose_program_ended_is_gone_and_says_so():
         with set_app(state.app):
             pane = pymux.arrangement.get_active_pane()
             pane.process.kill()
-            for _ in range(50):
-                if pane.process.is_terminated:
-                    break
-                await anyio.sleep(0.1)
+            # The pane leaving the tree, and not the process ending:
+            # under load the second came first, and the command still
+            # found the pane. Lillecarl/pymux#705.
+            await once(
+                lambda: pymux.session_holding(pane) is None,
+                10.0,
+                "the pane never left the tree",
+            )
 
             with pytest.raises(CommandException):
                 respawn_pane(
