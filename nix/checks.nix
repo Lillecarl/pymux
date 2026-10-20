@@ -190,6 +190,11 @@ let
   # is run under it. Lillecarl/pymux#549.
   openSshTests = builtins.getEnv "PYMUX_OPENSSH_TESTS";
 
+  # asyncio's debug mode for the openssh suite, which names where each
+  # callback was made: `PYMUX_ASYNCIO_DEBUG=1`. An error raised from a
+  # loop callback says nothing else. Lillecarl/pymux#587.
+  asyncioDebug = builtins.getEnv "PYMUX_ASYNCIO_DEBUG";
+
   # Which conformance tests run. It is a regular expression that the suite
   # matches against "Class.method", for instance
   # `PYMUX_ESCTEST_INCLUDE=BSTests nix build --file . checks.pymux-esctest`.
@@ -1068,6 +1073,7 @@ in
           PYMUX_NSS_WRAPPER = "${nss_wrapper}/lib/libnss_wrapper.so";
           PYMUX_LOGIN_SHELL = runtimeShell;
           PYMUX_OPENSSH_TESTS = openSshTests;
+          PYTHONASYNCIODEBUG = asyncioDebug;
         };
       }
       ''

@@ -33,10 +33,12 @@ checked "something came back" would pass on it.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import shutil
 import socket
 import subprocess
+import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -247,9 +249,34 @@ async def _bounded():
     a timeout shows the await it was in, and the fixture's teardown
     then prints what sshd said. Lillecarl/pymux#549.
     """
-    with anyio.fail_after(A_TEST_TAKES):
-        async with anyio.create_task_group() as tasks:
-            yield tasks
+    # anyio's runner keeps the exception of a failed loop callback and
+    # drops its context, whose handle names the callback and the future.
+    # #587 fails as InvalidStateError from such a callback, and nothing
+    # more. asyncio's own, because the context is asyncio's.
+    loop = asyncio.get_running_loop()
+    passed_on = loop.get_exception_handler()
+
+    def named(loop, context) -> None:
+        # The handle's repr names the method and not the future it is
+        # bound to; the future's names who waited on it.
+        callback = getattr(context.get("handle"), "_callback", None)
+        print(
+            "A loop callback failed: %r, on %r"
+            % ({k: v for k, v in context.items() if k != "exception"}, getattr(callback, "__self__", None)),
+            file=sys.stderr,
+        )
+        if passed_on is not None:
+            passed_on(loop, context)
+        else:
+            loop.default_exception_handler(context)
+
+    loop.set_exception_handler(named)
+    try:
+        with anyio.fail_after(A_TEST_TAKES):
+            async with anyio.create_task_group() as tasks:
+                yield tasks
+    finally:
+        loop.set_exception_handler(passed_on)
 
 
 async def _spoken_through(port: int, said: bytes = b"hello") -> bytes:
@@ -320,13 +347,18 @@ async def test_openssh_takes_the_unix_channel_the_client_lives_on(sshd):
     where = Path(os.environ.get("TMPDIR", "/tmp")) / "pymux-openssh"
     socket_path = str(where / "unix.sock")
 
+    served = anyio.Event()
+
     async def handle(stream) -> None:
-        async with stream:
-            try:
-                async for chunk in stream:
-                    await stream.send(chunk.upper())
-            except anyio.EndOfStream:
-                pass
+        try:
+            async with stream:
+                try:
+                    async for chunk in stream:
+                        await stream.send(chunk.upper())
+                except anyio.EndOfStream:
+                    pass
+        finally:
+            served.set()
 
     listener = await anyio.create_unix_listener(socket_path)
 
@@ -334,11 +366,18 @@ async def test_openssh_takes_the_unix_channel_the_client_lives_on(sshd):
         async with _bounded() as tasks:
             tasks.start_soon(listener.serve, handle)
 
+            # Every party ends on its own and in order -- the channel,
+            # then the connection, then the handler that saw its stream
+            # end -- before the listener is cancelled. Torn down at
+            # once, a callback completed a future whose waiter was
+            # already cancelled: InvalidStateError. Lillecarl/pymux#587.
             async with _connect_to(sshd) as connection:
                 reader, writer = await connection.open_unix_connection(socket_path)
                 writer.write(b"hello")
                 assert await reader.read(5) == b"HELLO"
                 writer.close()
+                await writer.wait_closed()
+            await served.wait()
 
             tasks.cancel_scope.cancel()
     finally:

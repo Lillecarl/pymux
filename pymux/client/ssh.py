@@ -142,6 +142,12 @@ COUNTDOWN_STEP = 1.0
 #: keepalive already spends before it calls a link dead.
 CONNECT_TIMEOUT = 8.0
 
+#: How long a way out waits for a closed connection to finish closing.
+#: asyncssh closes through loop callbacks, and one that ran after the
+#: scope it belonged to completed a future whose waiter was gone.
+#: Lillecarl/pymux#587.
+CLOSE_SECONDS = 2.0
+
 #: How long a link has to last before the backoff forgets it, in
 #: seconds.
 #:
@@ -471,6 +477,8 @@ class SshClient(TerminalClient):
             return exit_code
         finally:
             connection.close()
+            with anyio.move_on_after(CLOSE_SECONDS, shield=True):
+                await connection.wait_closed()
 
     @override
     def attach(self, detach_other_clients: bool = False, color_depth=None) -> None:
@@ -662,6 +670,8 @@ class SshClient(TerminalClient):
                 if self.audio is not None:
                     self.audio.close()
                 connection.close()
+                with anyio.move_on_after(CLOSE_SECONDS, shield=True):
+                    await connection.wait_closed()
 
         if lost is None and self._slept_through is not None:
             # The link ended cleanly because this client ended it. Left
