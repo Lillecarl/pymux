@@ -503,6 +503,14 @@ async def test_a_key_pymux_cannot_name_reaches_the_window(tmp_path):
         assert lines.index("key 29 1") < lines.index("key 13 1")
 
 
+async def test_kill_server_stops_with_a_window_open(tmp_path):
+    "A window pane has no reap to wait for. Lillecarl/pymux#679."
+    async with with_a_window(tmp_path) as (pymux, _state, _pane, _recorder, _log, _probe):
+        with anyio.fail_after(10):
+            await pymux.hang_up_and_stop()
+        assert pymux.done.is_set()
+
+
 async def test_a_click_from_the_terminal_reaches_the_window(tmp_path):
     "A mouse report the client's terminal sends, on the window pane's cells."
     async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, _probe):

@@ -47,7 +47,7 @@ from prompt_toolkit.styles import (
 )
 from ptterm import Terminal
 from ptyhost.backends import Backend
-from ptyhost.backends.posix import PosixBackend
+from ptyhost.backends.posix import GRACE, PosixBackend
 from ptyhost.held import HeldBackend, Holding
 from ptyhost.holder import HolderError
 from pyte.environment import terminal_name
@@ -1695,7 +1695,12 @@ class Pymux:
             return
 
         if len(self.sessions) == 1:
-            self.stop()
+            # `kill-session` hung its panes up a moment ago, and a
+            # SIGKILL now would race their shells' history.
+            if self.tasks is not None:
+                self.tasks.start_soon(self.hang_up_and_stop)
+            else:
+                self.stop()
             return
 
         self.sessions.remove(session)
@@ -4261,6 +4266,29 @@ exec pymux notify -u "$urgency" -- "$@"
                 logger.info("Recorded %s.", recording.finish())
             except OSError:
                 logger.exception("Writing the recording %s failed.", recording.name)
+
+    async def hang_up_and_stop(self) -> None:
+        """
+        End every pane's program the way closing a terminal does, then
+        `stop`.
+
+        SIGHUP first, and a shell writes its history on the way out.
+        Whatever has not ended `GRACE` seconds later gets `stop`'s
+        SIGKILL. `stop` alone SIGKILLs at once, and every shell lost the
+        lines typed before `kill-server`. tmux hangs its panes up too.
+        Lillecarl/pymux#679.
+        """
+        running = [pane.process for pane in self.panes_by_id.values() if not pane.process.is_terminated]
+        for process in running:
+            process.hang_up()
+        # A window pane's program has no reap to wait for: closing it
+        # asks the window to go.
+        reaps = [getattr(process.backend, "ready_f", None) for process in running]
+        with anyio.move_on_after(GRACE):
+            for reaped in reaps:
+                if isinstance(reaped, anyio.Event):
+                    await reaped.wait()
+        self.stop()
 
     def stop(self):
         self.finish_recordings()

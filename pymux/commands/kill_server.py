@@ -26,8 +26,7 @@ def kill_server(pymux: Pymux, args: argparse.Namespace):
     Lillecarl/pymux#409.
     """
     if not args.restarting:
-        pymux.stop()
-        return None
+        return pymux.hang_up_and_stop()
 
     async def tell_and_stop() -> None:
         # Refuse new clients first. A waiting client tries the socket at
@@ -39,7 +38,7 @@ def kill_server(pymux: Pymux, args: argparse.Namespace):
             client_state = connection.client_state
             if client_state is not None and not client_state.temporary:
                 await connection.say_restarting(RESTART_WAIT)
-        pymux.stop()
+        await pymux.hang_up_and_stop()
 
     return tell_and_stop()
 

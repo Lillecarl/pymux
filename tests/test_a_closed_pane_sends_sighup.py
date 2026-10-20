@@ -55,6 +55,36 @@ async def test_kill_pane_lets_the_program_run_its_sighup_trap(tmp_path):
         assert handled.read_text() == "handled\n"
 
 
+async def test_kill_server_lets_every_program_run_its_sighup_trap(tmp_path):
+    "And then stops. Lillecarl/pymux#679."
+    command, ready, handled = _trapping(tmp_path)
+    async with in_this_process(Pymux(startup_command="sleep 30")) as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", SIZE)
+        await _command(pymux, state, "split-window '%s'" % (command,))
+        await once(ready.exists, 5.0, "the script never set its trap")
+
+        await _command(pymux, state, "kill-server")
+
+        assert handled.read_text() == "handled\n"
+        assert pymux.done.is_set()
+
+
+async def test_the_last_kill_session_lets_the_program_run_its_sighup_trap(tmp_path):
+    "It stops the server, which SIGKILLed what kill-session had just hung up."
+    command, ready, handled = _trapping(tmp_path)
+    async with in_this_process(Pymux(startup_command="sleep 30")) as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", SIZE)
+        await _command(pymux, state, "split-window '%s'" % (command,))
+        await once(ready.exists, 5.0, "the script never set its trap")
+
+        await _command(pymux, state, "kill-session")
+
+        await once(pymux.done.is_set, 10.0, "the server never stopped")
+        assert handled.read_text() == "handled\n"
+
+
 async def test_respawn_pane_k_lets_the_program_run_its_sighup_trap(tmp_path):
     command, ready, handled = _trapping(tmp_path)
     async with in_this_process(Pymux(startup_command="sleep 30")) as session:
