@@ -123,7 +123,7 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
         written.finish()
 
         logger.info("Upgrading to %s.", shlex.join(command))
-        await _hand_over(pymux, [*command, *_log_arguments(), RESUME, str(path)])
+        await _hand_over(pymux, [*command, *log_arguments(), RESUME, str(path)])
     except BaseException:
         written.abandon()
         path.unlink(missing_ok=True)
@@ -236,8 +236,8 @@ def _flush_logs() -> None:
             handler.flush()
 
 
-def _log_arguments() -> list[str]:
-    "The log file this process writes, for the next one to write too."
+def log_arguments() -> list[str]:
+    "The log file this process writes, for the next one -- or the holder -- to write too."
     logfile = log._logfile
     return ["--log", str(logfile)] if logfile is not None else []
 

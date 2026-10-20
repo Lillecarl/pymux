@@ -2216,7 +2216,7 @@ class Pymux:
     @staticmethod
     async def _holder_at(path: str) -> Holding:
         "The holder on `path`, started first when none answers there."
-        from .upgrade import rooted_environment
+        from .upgrade import log_arguments, rooted_environment
 
         try:
             return await Holding.connect(path)
@@ -2227,7 +2227,9 @@ class Pymux:
         # the build it runs from out of the collector's reach, because it
         # outlives the server that starts it.
         started = await anyio.run_process(
-            [sys.executable, "-I", "-m", "ptyhost.holder", "--socket", path, "--detach"],
+            # The server's log, so the holder's faults land where the
+            # server's do. Lillecarl/pymux#558.
+            [sys.executable, "-I", "-m", "ptyhost.holder", "--socket", path, "--detach", *log_arguments()],
             env=rooted_environment(),
             check=False,
         )
