@@ -29,6 +29,8 @@ dependencies = [
     "prompt_toolkit_rs",
     # And pymux's own image loops, in `pymux_rs/`. Lillecarl/pymux#574.
     "pymux_rs",
+    # Every import lazy, installed by `pymux/entry_points/__init__.py`.
+    "deferimport",
     # The shell completes the command line through argcomplete: the
     # generated scripts of `share/bash-completion` and friends make the
     # shell ask `pymux`, and it answers from the parsers of the commands.

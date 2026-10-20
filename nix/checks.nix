@@ -617,6 +617,9 @@ in
           PYMUX_PROFILE_COLLECTION = builtins.getEnv "PYMUX_PROFILE_COLLECTION";
           PYMUX_HANG_SECONDS = toString hangIsSeconds;
           PYMUX_BASE16_SCHEMES = "${base16-schemes-json}/base16-schemes.json";
+          # The policy `pymux/entry_points/__init__.py` installs, so the
+          # suite judges the lazy program a person runs.
+          DEFERIMPORT_POLICY = "deny=hypothesis,asyncssh";
         };
       }
       # `--durations` names what the suite spends its time on, and
@@ -641,8 +644,8 @@ in
         # One collection first writes the rewritten test modules to
         # __pycache__; otherwise each worker rewrites every assert again.
         # Measured: 104 CPU s collecting on 16 workers, 54 after.
-        python -m pytest $selection -q -p no:cacheprovider -p no:xdist --collect-only > /dev/null || true
-        python -m pytest $selection -q -p no:cacheprovider -n "$cores" --dist worksteal \
+        python -m pytest $selection -q -p no:cacheprovider -p deferimport.pytest_plugin -p no:xdist --collect-only > /dev/null || true
+        python -m pytest $selection -q -p no:cacheprovider -p deferimport.pytest_plugin -n "$cores" --dist worksteal \
           --durations="$durations" --durations-min="$least"
       '';
 
