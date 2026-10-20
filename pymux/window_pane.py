@@ -360,6 +360,11 @@ class WindowWidget:
     def press(self, key: str) -> None:
         found = evdev_of(key)
         if found is None:
+            # A character no key types on the client's keymap goes as
+            # text; a named key with no evdev code goes nowhere.
+            # Lillecarl/pymux#624.
+            if not isinstance(key, Keys) and key.isprintable():
+                self.wayland.type_text(self.toplevel, key)
             return
         modifiers, code = found
         self.wayland.press(self.toplevel, modifiers, code, now())

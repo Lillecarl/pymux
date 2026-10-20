@@ -58,6 +58,7 @@ async def with_a_window(
     codecs: tuple[str, ...] = (),
     codec: WindowCodec = WindowCodec.LOSSLESS,
     shows: bool = False,
+    text: bool = False,
 ):
     """
     A server, a client at a kitty terminal, and the probe window open in a pane.
@@ -89,7 +90,14 @@ async def with_a_window(
         runtime = tmp_path / "run"
         runtime.mkdir(mode=0o700)
         async with await anyio.open_process(
-            [sys.executable, str(PROBE), str(log), *(["--animate"] if animate else []), *(["--idle"] if idle else [])],
+            [
+                sys.executable,
+                str(PROBE),
+                str(log),
+                *(["--animate"] if animate else []),
+                *(["--idle"] if idle else []),
+                *(["--text"] if text else []),
+            ],
             env=dict(os.environ, WAYLAND_DISPLAY=pymux.wayland.display, XDG_RUNTIME_DIR=str(runtime)),
         ) as probe:
             try:
@@ -501,6 +509,16 @@ async def test_a_key_pymux_cannot_name_reaches_the_window(tmp_path):
         await once(lambda: "key 13 0" in logged(log), 10.0, lambda: "ctrl+= never arrived: %s" % logged(log)[-8:])
         lines = logged(log)
         assert lines.index("key 29 1") < lines.index("key 13 1")
+
+
+async def test_text_no_key_types_reaches_the_window(tmp_path):
+    "é and an emoji, which no key of the US keymap types, arrive as text. Lillecarl/pymux#624."
+    async with with_a_window(tmp_path, text=True) as (_pymux, state, _pane, _recorder, log, _probe):
+        await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
+        state.connection._process({"cmd": "in", "data": "é"})
+        state.connection._process({"cmd": "in", "data": "😀"})
+        await once(lambda: "text 😀" in logged(log), 10.0, lambda: "the text never arrived: %s" % logged(log)[-8:])
+        assert [line for line in logged(log) if line.startswith("text")] == ["text é", "text 😀"]
 
 
 async def test_kill_server_stops_with_a_window_open(tmp_path):

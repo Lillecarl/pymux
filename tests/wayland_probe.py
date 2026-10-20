@@ -6,7 +6,8 @@ button it receives to the file named on its command line. With
 writes "frame" for each. With `--idle` it commits nothing but a frame
 callback instead, as Firefox does to wait for the next frame, and
 writes "idle" each time one is answered. Each time the pointer enters,
-it asks for a text pointer.
+it asks for a text pointer. With `--text` it takes text through text
+input while it has the keyboard, and writes "text <string>" for each.
 
 It stays up until it is asked to close, which is what a window pane
 does to a window when the pane is killed.
@@ -28,7 +29,7 @@ FILL = bytes([0x99, 0x66, 0x33, 0xFF])
 RED = bytes([0x00, 0x00, 0xFF, 0xFF])
 
 
-def main(log_path: str, animate: bool, idle: bool) -> None:
+def main(log_path: str, animate: bool, idle: bool, text: bool) -> None:
     log = open(log_path, "a", buffering=1)
     display = Display()
     display.connect()
@@ -124,6 +125,29 @@ def main(log_path: str, animate: bool, idle: bool) -> None:
     shown.clear()
     surface.frame().dispatcher["done"] = lambda _callback, _time: shown.append(True)
     surface.commit()
+
+    # With --text, a text field, as a toolkit has one: text input enabled
+    # whenever the window has the keyboard, and each committed string
+    # written. Lillecarl/pymux#624.
+    #
+    # **Only with --text, and after the first frames.** Importing
+    # pywayland's text_input_unstable_v3 is enough to stop this client's
+    # frame callbacks: imported at the top, no window here ever drew
+    # again, text input bound or not. With a faulthandler thread running
+    # it drew. foot binds text input and draws through pysmithay, so it
+    # is pywayland's. Lillecarl/pymux#711.
+    if text:
+        from pywayland.protocol.text_input_unstable_v3 import ZwpTextInputManagerV3
+
+        text_inputs = bind(ZwpTextInputManagerV3)
+        text_input = text_inputs.get_text_input(seat)
+
+        def take_text(text_input, _surface) -> None:
+            text_input.enable()
+            text_input.commit()
+
+        text_input.dispatcher["enter"] = take_text
+        text_input.dispatcher["commit_string"] = lambda _ti, text: log.write("text %s\n" % (text,))
     log.write("drew\n")
 
     # With --animate, a new frame each time the last was shown.
@@ -152,4 +176,4 @@ def main(log_path: str, animate: bool, idle: bool) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], "--animate" in sys.argv[2:], "--idle" in sys.argv[2:])
+    main(sys.argv[1], "--animate" in sys.argv[2:], "--idle" in sys.argv[2:], "--text" in sys.argv[2:])

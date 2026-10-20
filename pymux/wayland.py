@@ -486,6 +486,22 @@ class WaylandServer:
             for modifier in reversed(modifiers):
                 compositor.key(modifier, False, time)
 
+    def type_text(self, toplevel: int, text: str) -> bool:
+        """
+        Text no key of the keymap types, given to the window as text:
+        é, å, an emoji. False when the window has no text field enabled
+        where its focus is, and then the text goes nowhere, as before.
+        Lillecarl/pymux#624.
+        """
+        compositor = self.compositor
+        if compositor is None:
+            return False
+        try:
+            compositor.focus(toplevel)
+        except KeyError:
+            return False
+        return compositor.commit_text(text)
+
     def _pixel_of(self, position) -> tuple[float, float]:
         """
         Where in the window's pixels the pointer is: the cell, and where in
