@@ -40,10 +40,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import cast, override
 
-from prompt_toolkit.input.vt100_parser import (
-    Vt100Parser,
-    _IsPrefixOfLongerMatchCache,
-)
+from prompt_toolkit.input.vt100_parser import Vt100Parser
 from prompt_toolkit.key_binding.key_processor import _Flush
 from prompt_toolkit.keys import KeyName, Keys
 from pyte.keys import (
@@ -816,35 +813,6 @@ def _named(event: KeyEvent) -> _KeyResult | None:
     return key_named(base, mods)
 
 
-def _patch_prefix_cache() -> None:
-    """
-    Teach prompt_toolkit's "is prefix of a longer match" cache about
-    sequences with variable parameters, so that incomplete kitty key
-    sequences are buffered instead of being decomposed character by
-    character. (Same mechanism that prompt_toolkit uses for CPR and
-    mouse responses.)
-    """
-    if getattr(_IsPrefixOfLongerMatchCache, "_kitty_patched", False):
-        return
-
-    original = _IsPrefixOfLongerMatchCache.__missing__
-
-    def __missing__(self, prefix: str) -> bool:
-        if _KITTY_PREFIX_RE.match(prefix):
-            self[prefix] = True
-            return True
-        if len(prefix) <= MAX_STRING_LENGTH and _STRING_PREFIX_RE.match(prefix):
-            # Don't cache: the cache would grow with every payload.
-            return True
-        return original(self, prefix)
-
-    _IsPrefixOfLongerMatchCache.__missing__ = __missing__
-    _IsPrefixOfLongerMatchCache._kitty_patched = True
-
-
-_patch_prefix_cache()
-
-
 class KittyVt100Parser(Vt100Parser):
     """
     Vt100 parser that also decodes the key encoding of the kitty
@@ -920,6 +888,20 @@ class KittyVt100Parser(Vt100Parser):
         except Exception:
             logger.exception("Asking what the terminal reports failed.")
             return False
+
+    @override
+    def _is_prefix_of_longer_match(self, prefix: str) -> bool:
+        """
+        Wait for the rest of a kitty key sequence or a string reply,
+        instead of handing it out a character at a time. These two have
+        variable parameters, which prompt_toolkit's table cannot list.
+        Lillecarl/pymux#697.
+        """
+        if _KITTY_PREFIX_RE.match(prefix):
+            return True
+        if len(prefix) <= MAX_STRING_LENGTH and _STRING_PREFIX_RE.match(prefix):
+            return True
+        return super()._is_prefix_of_longer_match(prefix)
 
     @override
     def _get_match(self, prefix: str) -> Keys | tuple[Keys, ...] | None:

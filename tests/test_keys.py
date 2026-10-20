@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 
 import pytest
+from prompt_toolkit.input.vt100_parser import Vt100Parser
 from prompt_toolkit.key_binding.key_processor import _Flush
 from prompt_toolkit.keys import Keys
 
@@ -678,6 +679,26 @@ def test_log_says_key_and_reason(caplog):
 def test_a_key_with_no_name_goes_on_with_its_sequence(data):
     "F13, ctrl+Menu, ctrl+1 and a tilde key nobody names: a pane may read each. Lillecarl/pymux#707."
     assert [(press.key, press.data) for press in fed(data)] == [(Keys.UnnamedKey, data)]
+
+
+def test_a_plain_parser_in_the_same_process_reads_as_it_always_did():
+    """
+    pymux's parser waits on its own prefixes and changes no other parser:
+    prompt_toolkit's plain one, which ptterm's application in the same
+    process may hold, still hands out "ESC _ G" at once. Lillecarl/pymux#697.
+    """
+    pressed = []
+    Vt100Parser(pressed.append).feed("\x1b_G")
+    assert [press.key for press in pressed] == [Keys.Escape, "_", "G"]
+
+
+def test_a_string_reply_waits_for_its_end_across_feeds():
+    pressed = []
+    parser = KittyVt100Parser(pressed.append, reply_callback=lambda _reply: None)
+    parser.feed("\x1b_Gi=1")
+    assert pressed == []
+    parser.feed(";OK\x1b\\")
+    assert pressed == []
 
 
 def test_held_key_writes_one_line(caplog):
