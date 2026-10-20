@@ -225,20 +225,50 @@ def _connect_to(sshd):
     )
 
 
-async def _echoing(tasks) -> int:
-    "Start a TCP echo that answers in upper case; give back its port."
+class _Echo:
+    """
+    A TCP echo that answers in upper case, and the streams it serves.
 
-    async def handle(stream) -> None:
-        async with stream:
-            try:
-                async for chunk in stream:
-                    await stream.send(chunk.upper())
-            except anyio.EndOfStream:
-                pass
+    **A test waits for `quiet` before it cancels the listener.** Each
+    stream ends on its own once its far side closed; cancelled mid-flight
+    instead, its channel's close callbacks outlived their scopes.
+    Lillecarl/pymux#587.
+    """
 
+    def __init__(self) -> None:
+        self.port = 0
+        self._serving = 0
+        self._idle = anyio.Event()
+        self._idle.set()
+
+    async def handle(self, stream) -> None:
+        if not self._serving:
+            self._idle = anyio.Event()
+        self._serving += 1
+        try:
+            async with stream:
+                try:
+                    async for chunk in stream:
+                        await stream.send(chunk.upper())
+                except anyio.EndOfStream:
+                    pass
+        finally:
+            self._serving -= 1
+            if not self._serving:
+                self._idle.set()
+
+    async def quiet(self) -> None:
+        "Until no stream is served."
+        await self._idle.wait()
+
+
+async def _echoing(tasks) -> _Echo:
+    "Start an echo in `tasks`."
+    echo = _Echo()
     listener = await anyio.create_tcp_listener(local_host="127.0.0.1")
-    tasks.start_soon(listener.serve, handle)
-    return listener.extra(SocketAttribute.local_address)[1]
+    tasks.start_soon(listener.serve, echo.handle)
+    echo.port = listener.extra(SocketAttribute.local_address)[1]
+    return echo
 
 
 @asynccontextmanager
@@ -291,13 +321,13 @@ async def test_openssh_takes_a_local_forward(sshd):
     opens, rather than the asyncssh server standing in for it.
     """
     async with _bounded() as tasks:
-        echo_port = await _echoing(tasks)
+        echo = await _echoing(tasks)
 
         async with _connect_to(sshd) as connection:
             forwards = Forwards()
             opened = await forwards.add(
                 connection,
-                Forward(Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port),
+                Forward(Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo.port),
             )
 
             assert opened.error == "", opened.error
@@ -306,6 +336,7 @@ async def test_openssh_takes_a_local_forward(sshd):
 
             forwards.close()
 
+        await echo.quiet()
         tasks.cancel_scope.cancel()
 
 
@@ -315,13 +346,13 @@ async def test_openssh_takes_a_remote_forward(sshd):
     openssh answers, and the port it chose coming back in the reply.
     """
     async with _bounded() as tasks:
-        echo_port = await _echoing(tasks)
+        echo = await _echoing(tasks)
 
         async with _connect_to(sshd) as connection:
             forwards = Forwards()
             opened = await forwards.add(
                 connection,
-                Forward(Direction.REMOTE, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port),
+                Forward(Direction.REMOTE, "127.0.0.1", ANY_PORT, "127.0.0.1", echo.port),
             )
 
             assert opened.error == "", opened.error
@@ -332,6 +363,7 @@ async def test_openssh_takes_a_remote_forward(sshd):
 
             forwards.close()
 
+        await echo.quiet()
         tasks.cancel_scope.cancel()
 
 
@@ -392,9 +424,9 @@ async def test_a_forward_comes_back_on_a_new_openssh_connection(sshd):
     is free for it to take.
     """
     async with _bounded() as tasks:
-        echo_port = await _echoing(tasks)
+        echo = await _echoing(tasks)
         forwards = Forwards()
-        wanted = Forward(Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo_port)
+        wanted = Forward(Direction.LOCAL, "127.0.0.1", ANY_PORT, "127.0.0.1", echo.port)
 
         async with _connect_to(sshd) as first:
             was = await forwards.add(first, wanted)
@@ -418,6 +450,7 @@ async def test_a_forward_comes_back_on_a_new_openssh_connection(sshd):
 
             forwards.close()
 
+        await echo.quiet()
         tasks.cancel_scope.cancel()
 
 
@@ -435,13 +468,13 @@ async def test_openssh_narrows_a_remote_forward_rather_than_refusing_it(sshd):
     Lillecarl/pymux#440, Lillecarl/pymux#444.
     """
     async with _bounded() as tasks:
-        echo_port = await _echoing(tasks)
+        echo = await _echoing(tasks)
 
         async with _connect_to(sshd) as connection:
             forwards = Forwards()
             opened = await forwards.add(
                 connection,
-                Forward(Direction.REMOTE, "0.0.0.0", ANY_PORT, "127.0.0.1", echo_port),
+                Forward(Direction.REMOTE, "0.0.0.0", ANY_PORT, "127.0.0.1", echo.port),
             )
 
             assert opened.error == "", opened.error
@@ -451,4 +484,5 @@ async def test_openssh_narrows_a_remote_forward_rather_than_refusing_it(sshd):
 
             forwards.close()
 
+        await echo.quiet()
         tasks.cancel_scope.cancel()
