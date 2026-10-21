@@ -241,8 +241,14 @@ def stages(pymux, state):
     def parse():
         stream.feed(ANSWER)
 
+    # The layout's per-frame caches live between the two hooks that
+    # `before_render` and `after_render` call, and without them every
+    # question a frame asks twice is counted twice. Not the two events
+    # whole: the client's own handlers on them want a connection.
     def render():
+        state.layout_manager.frame_started(state.app)
         state.app.renderer.render(state.app, state.app.layout)
+        state.layout_manager.frame_ended(state.app)
 
     return {"key": key, "parse": parse, "render": render}
 
