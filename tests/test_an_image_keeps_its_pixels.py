@@ -37,7 +37,7 @@ import re
 from pyte.images import GraphicsImage, GraphicsPlacement, GraphicsState
 from pyte.sixel import decode_sixel
 
-from pymux.graphics import ClientGraphics, PaneView
+from pymux.graphics import ClientGraphics, PaneView, visible_placements
 
 #: An image that is four cells wide and two tall at a ten by twenty
 #: cell, and the same at a ten by nineteen one: `ceil(38/19)` is 2.
@@ -199,7 +199,7 @@ def test_a_piece_of_a_sixel_image_shows_its_part_of_the_pixels():
     "Text cut the top row away; the piece left is the bottom half. Lillecarl/pymux#598."
     pane = state(columns=4, rows=2)
     pane.placements = [pane.placements[0].piece(0, 1, 4, 1)]
-    ((_placement, _image, columns, rows, x, y, source),) = ClientGraphics._visible_placements(view(pane))
+    ((_placement, _image, columns, rows, x, y, source),) = visible_placements(view(pane))
 
     assert (columns, rows, x, y) == (4, 1, 0, 1)
     assert source == (0, IMAGE_HEIGHT // 2, IMAGE_WIDTH, IMAGE_HEIGHT // 2)

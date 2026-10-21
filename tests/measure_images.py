@@ -66,7 +66,7 @@ from pyte.streams import Stream
 from recorded import how_to_record, moved, read_counts, write_list
 
 from pymux import kernels, sixel
-from pymux.graphics import ClientGraphics, PaneView
+from pymux.graphics import ClientGraphics, PaneView, visible_placements
 
 HERE = Path(__file__).parent
 
@@ -210,7 +210,7 @@ def measurements(pngs: dict[str, bytes]):
                 graphics = client(kitty)
                 graphics.render([view_of(pane)])
                 stream.feed(SCROLL_ONE_ROW)
-                if not any(True for _ in graphics._visible_placements(view_of(pane))):
+                if not any(True for _ in visible_placements(view_of(pane))):
                     raise AssertionError("the scroll took the whole image off the pane")
                 return lambda: graphics.render([view_of(pane)])
 

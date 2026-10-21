@@ -63,6 +63,8 @@ __all__ = [
     "PaneView",
     "draws_placeholders",
     "is_query_reply",
+    "pane_placements",
+    "visible_placements",
 ]
 
 # Image id of the support query. The reply repeats it, which is how the
@@ -871,7 +873,7 @@ class ClientGraphics:
 
             if forwards:
                 self._collect_virtual(view, desired)
-            placements = self._visible_placements(view) if forwards else self._pane_placements(view)
+            placements = visible_placements(view) if forwards else self._pane_placements(view)
             for placement in placements:
                 (
                     pane_placement,
@@ -942,128 +944,7 @@ class ClientGraphics:
             )
 
     def _pane_placements(self, view: PaneView):
-        """
-        Everything of one pane that the client should draw: the plain
-        placements, and the images that the unicode placeholders in the
-        text of the pane point at.
-        """
-        yield from self._visible_placements(view)
-        yield from self._placeholder_placements(view)
-
-    def _placeholder_placements(self, view: PaneView):
-        """
-        Yield the images that the unicode placeholders of one pane
-        point at.
-
-        A placeholder cell says which cell of which image it stands
-        for. `Screen.placeholder_runs` gathers the neighbouring
-        cells into rectangles; each rectangle becomes one placement
-        with the matching piece of the image.
-        """
-        screen = view.screen
-        if screen is None or not hasattr(screen, "placeholder_runs"):
-            return
-
-        first_row = view.vertical_scroll
-        last_row = first_row + view.height - 1
-        for run in screen.placeholder_runs(first_row, last_row):
-            placement = view.graphics.virtual_placement(run.image_id, run.placement_id)
-            if placement is None or not placement.columns or not placement.rows:
-                continue
-            image = view.graphics.images_by_id.get(run.image_id)
-            if image is None or not image.width or not image.height:
-                continue
-
-            x = run.column - view.horizontal_scroll
-            y = run.row - first_row
-
-            crop_left = max(0, -x)
-            columns = min(run.columns - crop_left, view.width - x - crop_left)
-            rows = min(run.rows, view.height - y)
-            if columns <= 0 or rows <= 0:
-                continue  # Outside the pane.
-
-            source = _placeholder_source(
-                image,
-                placement,
-                run.image_column + crop_left,
-                run.image_row,
-                columns,
-                rows,
-                self.cell_width,
-                self.cell_height,
-            )
-            if source is None:
-                continue  # The empty border around a fitted image.
-
-            yield (
-                placement,
-                image,
-                columns,
-                rows,
-                view.x + x + crop_left,
-                view.y + y,
-                source,
-            )
-
-    @staticmethod
-    def _visible_placements(view: PaneView):
-        """
-        Yield the placements of one pane that the client can see, with
-        their position on the screen and their cropping.
-
-        The pane stores rows of its scroll buffer, so the scroll of the
-        pane turns them into screen rows. A placement that hangs over
-        the edge of the pane is cropped instead of dropped: kitty takes
-        a source rectangle in pixels on the put command.
-        """
-        width = view.width
-        height = view.height
-
-        for placement in view.graphics.placements:
-            if placement.virtual:
-                continue  # Unicode placeholders: the text carries them.
-            image = view.graphics.images_by_id.get(placement.image_id)
-            if image is None or not placement.columns or not placement.rows:
-                continue
-
-            # Position in the window, before cropping.
-            x = placement.x - view.horizontal_scroll
-            y = placement.y - view.vertical_scroll
-
-            crop_left = max(0, -x)
-            crop_top = max(0, -y)
-            columns = min(placement.columns - crop_left, width - x - crop_left)
-            rows = min(placement.rows - crop_top, height - y - crop_top)
-            if columns <= 0 or rows <= 0:
-                continue  # Fully outside the pane.
-
-            piece = placement.crop
-            if piece is not None or crop_left or crop_top or columns != placement.columns or rows != placement.rows:
-                # Crop in pixels: the cell box of the placement maps
-                # onto the pixels of the image. A piece that text cut
-                # out of a sixel image maps through the whole box.
-                piece_column, piece_row, box_columns, box_rows = piece or (0, 0, placement.columns, placement.rows)
-                px_per_column = image.width / box_columns
-                px_per_row = image.height / box_rows
-                source = (
-                    int((piece_column + crop_left) * px_per_column),
-                    int((piece_row + crop_top) * px_per_row),
-                    max(1, int(columns * px_per_column)),
-                    max(1, int(rows * px_per_row)),
-                )
-            else:
-                source = None
-
-            yield (
-                placement,
-                image,
-                columns,
-                rows,
-                view.x + x + crop_left,
-                view.y + y + crop_top,
-                source,
-            )
+        return pane_placements(view, self.cell_width, self.cell_height)
 
     # ------------------------------------------------------------------
     # Image transmission.
@@ -1498,6 +1379,132 @@ def _crop_rgba(pixels: bytes, width: int, height: int, source: tuple[int, int, i
         start = (row * width + left) * 4
         out += pixels[start : start + crop_width * 4]
     return bytes(out)
+
+
+def pane_placements(view: PaneView, cell_width: int, cell_height: int):
+    """
+    Everything of one pane that the client should draw: the plain
+    placements, and the images that the unicode placeholders in the
+    text of the pane point at.
+    """
+    yield from visible_placements(view)
+    yield from placeholder_placements(view, cell_width, cell_height)
+
+
+def placeholder_placements(view: PaneView, cell_width: int, cell_height: int):
+    """
+    Yield the images that the unicode placeholders of one pane
+    point at.
+
+    A placeholder cell says which cell of which image it stands
+    for. `Screen.placeholder_runs` gathers the neighbouring
+    cells into rectangles; each rectangle becomes one placement
+    with the matching piece of the image.
+    """
+    screen = view.screen
+    if screen is None or not hasattr(screen, "placeholder_runs"):
+        return
+
+    first_row = view.vertical_scroll
+    last_row = first_row + view.height - 1
+    for run in screen.placeholder_runs(first_row, last_row):
+        placement = view.graphics.virtual_placement(run.image_id, run.placement_id)
+        if placement is None or not placement.columns or not placement.rows:
+            continue
+        image = view.graphics.images_by_id.get(run.image_id)
+        if image is None or not image.width or not image.height:
+            continue
+
+        x = run.column - view.horizontal_scroll
+        y = run.row - first_row
+
+        crop_left = max(0, -x)
+        columns = min(run.columns - crop_left, view.width - x - crop_left)
+        rows = min(run.rows, view.height - y)
+        if columns <= 0 or rows <= 0:
+            continue  # Outside the pane.
+
+        source = _placeholder_source(
+            image,
+            placement,
+            run.image_column + crop_left,
+            run.image_row,
+            columns,
+            rows,
+            cell_width,
+            cell_height,
+        )
+        if source is None:
+            continue  # The empty border around a fitted image.
+
+        yield (
+            placement,
+            image,
+            columns,
+            rows,
+            view.x + x + crop_left,
+            view.y + y,
+            source,
+        )
+
+
+def visible_placements(view: PaneView):
+    """
+    Yield the placements of one pane that the client can see, with
+    their position on the screen and their cropping.
+
+    The pane stores rows of its scroll buffer, so the scroll of the
+    pane turns them into screen rows. A placement that hangs over
+    the edge of the pane is cropped instead of dropped: kitty takes
+    a source rectangle in pixels on the put command.
+    """
+    width = view.width
+    height = view.height
+
+    for placement in view.graphics.placements:
+        if placement.virtual:
+            continue  # Unicode placeholders: the text carries them.
+        image = view.graphics.images_by_id.get(placement.image_id)
+        if image is None or not placement.columns or not placement.rows:
+            continue
+
+        # Position in the window, before cropping.
+        x = placement.x - view.horizontal_scroll
+        y = placement.y - view.vertical_scroll
+
+        crop_left = max(0, -x)
+        crop_top = max(0, -y)
+        columns = min(placement.columns - crop_left, width - x - crop_left)
+        rows = min(placement.rows - crop_top, height - y - crop_top)
+        if columns <= 0 or rows <= 0:
+            continue  # Fully outside the pane.
+
+        piece = placement.crop
+        if piece is not None or crop_left or crop_top or columns != placement.columns or rows != placement.rows:
+            # Crop in pixels: the cell box of the placement maps
+            # onto the pixels of the image. A piece that text cut
+            # out of a sixel image maps through the whole box.
+            piece_column, piece_row, box_columns, box_rows = piece or (0, 0, placement.columns, placement.rows)
+            px_per_column = image.width / box_columns
+            px_per_row = image.height / box_rows
+            source = (
+                int((piece_column + crop_left) * px_per_column),
+                int((piece_row + crop_top) * px_per_row),
+                max(1, int(columns * px_per_column)),
+                max(1, int(rows * px_per_row)),
+            )
+        else:
+            source = None
+
+        yield (
+            placement,
+            image,
+            columns,
+            rows,
+            view.x + x + crop_left,
+            view.y + y + crop_top,
+            source,
+        )
 
 
 def _placeholder_source(image, placement, image_column, image_row, columns, rows, cell_width, cell_height):
