@@ -739,11 +739,11 @@ class LayoutManager:
 
     def frame_started(self, app: Application) -> None:
         "A render of this client starts: the arrangement holds still until it ends."
-        self._body.frame_started(app)
+        self._body.frame_started()
         self.frame_plans = {}
 
     def frame_ended(self, app: Application) -> None:
-        self._body.frame_ended(app)
+        self._body.frame_ended()
         self.frame_plans = None
 
     @property
@@ -2462,15 +2462,16 @@ class DynamicBody(Container):
 
     def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
-        self._bodies_for_app: weakref.WeakKeyDictionary[Application, tuple[tuple, Container]] = (
-            weakref.WeakKeyDictionary()
-        )  # Maps Application to (hash, Container)
+        # Each client's `LayoutManager` makes its own, so everything
+        # here is that client's and needs no key. Lillecarl/pymux#712.
 
-        #: The container that draws the panes, per client. It holds the
-        #: plan of the frame it drew, and everything drawn inside that
-        #: frame reads it rather than measuring again.
-        #: Lillecarl/pymux#217.
-        self._panes_for_app: weakref.WeakKeyDictionary[Application, PlanContainer] = weakref.WeakKeyDictionary()
+        #: The arrangement's hash the body was built for, and the body.
+        self._body: tuple[tuple, Container] | None = None
+
+        #: The container that draws the panes. It holds the plan of the
+        #: frame it drew, and everything drawn inside that frame reads
+        #: it rather than measuring again. Lillecarl/pymux#217.
+        self._panes: PlanContainer | None = None
 
         #: Where this client looks at each window's plane, by window.
         #:
@@ -2485,39 +2486,37 @@ class DynamicBody(Container):
         #: window and switching back leaves the strip where it was.
         self._views: weakref.WeakKeyDictionary[object, View] = weakref.WeakKeyDictionary()
 
-        #: The arrangement's hash, per client, while that client renders.
-        #: Every title bar asks for the plan, and every ask hashed the
-        #: arrangement again: 0.8 ms a frame with eight panes. Nothing
-        #: changes the arrangement inside a render, and outside one a
-        #: handler may, so the hash is kept from `frame_started` to
-        #: `frame_ended` and never across them.
-        self._frame_hashes: weakref.WeakKeyDictionary[Application, tuple | None] = weakref.WeakKeyDictionary()
+        #: The arrangement's hash while this client renders. Every title
+        #: bar asks for the plan, and every ask hashed the arrangement
+        #: again: 0.8 ms a frame with eight panes. Nothing changes the
+        #: arrangement inside a render, and outside one a handler may,
+        #: so the hash is kept from `frame_started` to `frame_ended` and
+        #: never across them.
+        self._framing = False
+        self._frame_hash: tuple | None = None
 
-    def frame_started(self, app: Application) -> None:
-        self._frame_hashes[app] = None
+    def frame_started(self) -> None:
+        self._framing = True
+        self._frame_hash = None
 
-    def frame_ended(self, app: Application) -> None:
-        self._frame_hashes.pop(app, None)
+    def frame_ended(self) -> None:
+        self._framing = False
+        self._frame_hash = None
 
     def _get_body(self) -> Container:
-        "Return the Container object for the current CLI."
-        app = get_app()
-        if app in self._frame_hashes:
-            new_hash = self._frame_hashes[app]
-            if new_hash is None:
-                new_hash = self._frame_hashes[app] = self.pymux.arrangement.invalidation_hash()
-        else:
+        "The container for the arrangement as it is, built again when it changed shape."
+        if not self._framing:
             new_hash = self.pymux.arrangement.invalidation_hash()
+        elif self._frame_hash is None:
+            new_hash = self._frame_hash = self.pymux.arrangement.invalidation_hash()
+        else:
+            new_hash = self._frame_hash
 
-        # Return existing layout if nothing has changed to the arrangement.
-        if app in self._bodies_for_app:
-            existing_hash, container = self._bodies_for_app[app]
-            if existing_hash == new_hash:
-                return container
+        if self._body is not None and self._body[0] == new_hash:
+            return self._body[1]
 
-        # The layout changed. Build a new layout when the arrangement changed.
         new_layout = self._build_layout()
-        self._bodies_for_app[app] = (new_hash, new_layout)
+        self._body = (new_hash, new_layout)
         return new_layout
 
     def panes(self) -> PlanContainer | None:
@@ -2534,7 +2533,7 @@ class DynamicBody(Container):
             return None
 
         self._get_body()
-        return self._panes_for_app.get(get_app())
+        return self._panes
 
     def view_of(self, window) -> View:
         """
@@ -2566,7 +2565,7 @@ class DynamicBody(Container):
         # zoomed pane keeps the row its title bar hangs in and a zoomed
         # strip is still a strip. Lillecarl/pymux#215.
         panes = _create_panes(self.pymux, window, self.view_of(window))
-        self._panes_for_app[get_app()] = panes
+        self._panes = panes
 
         return HSplit(
             [
@@ -2589,8 +2588,8 @@ class DynamicBody(Container):
 
     @override
     def reset(self) -> None:
-        for _invalidation_hash, body in self._bodies_for_app.values():
-            body.reset()
+        if self._body is not None:
+            self._body[1].reset()
 
     @override
     def preferred_width(self, max_available_width: int) -> D:

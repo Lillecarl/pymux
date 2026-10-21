@@ -34,10 +34,10 @@ def test_a_render_hashes_the_arrangement_once(monkeypatch):
     body, arrangement = make_body(monkeypatch)
     app = DummyApplication()
     with set_app(app):
-        body.frame_started(app)
+        body.frame_started()
         for _ in range(5):
             body._get_body()
-        body.frame_ended(app)
+        body.frame_ended()
     assert arrangement.asked == 1
 
 
@@ -46,9 +46,9 @@ def test_a_change_between_renders_is_seen(monkeypatch):
     body, arrangement = make_body(monkeypatch)
     app = DummyApplication()
     with set_app(app):
-        body.frame_started(app)
+        body.frame_started()
         before = body._get_body()
-        body.frame_ended(app)
+        body.frame_ended()
 
         arrangement.shape = ("two panes",)
         assert body._get_body() is not before
@@ -58,11 +58,11 @@ def test_the_next_render_hashes_again(monkeypatch):
     body, arrangement = make_body(monkeypatch)
     app = DummyApplication()
     with set_app(app):
-        body.frame_started(app)
+        body.frame_started()
         before = body._get_body()
-        body.frame_ended(app)
+        body.frame_ended()
 
         arrangement.shape = ("two panes",)
-        body.frame_started(app)
+        body.frame_started()
         assert body._get_body() is not before
-        body.frame_ended(app)
+        body.frame_ended()
