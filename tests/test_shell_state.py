@@ -422,6 +422,26 @@ def test_attention_with_bad_value_is_dropped():
         assert connection.written == []
 
 
+def test_a_simple_notification_records_hub_and_travels_on():
+    "urxvt's plain form, which foot, kitty and WezTerm read. Lillecarl/pymux#495."
+    pymux, connections = make_pymux()
+    pymux.forward_osc(FakePane(pane_id=7), "777", "notify;Build;done; 3 warnings")
+    (record,) = pymux.notification_center.notifications()
+    assert (record.title, record.body, record.pane_id) == ("Build", "done; 3 warnings", 7)
+    for connection in connections:
+        assert connection.written == [sequence("777", "notify;Build;done; 3 warnings")]
+
+
+@pytest.mark.parametrize("param", ["preexec", "notify", "notify;", "notify;;"])
+def test_the_rest_of_777_stays_inside(param):
+    "The other verbs drive urxvt's perl extensions, and an empty notice says nothing."
+    pymux, connections = make_pymux()
+    pymux.forward_osc(FakePane(), "777", param)
+    assert pymux.notification_center.notifications() == []
+    for connection in connections:
+        assert connection.written == []
+
+
 def test_copy_reaches_paste_buffer_and_clients():
     pymux, connections = make_pymux()
     pymux.forward_osc(FakePane(), "1337", "Copy=:aGVsbG8=")

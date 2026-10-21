@@ -2,7 +2,8 @@
 The OSC sequences that a pane sends to the terminal of the user.
 
 Three of them ask for something that pymux cannot give: the clipboard
-(52), a desktop notification (99) and the shape of the pointer (22).
+(52), a desktop notification (99, or 777 in urxvt's plain form) and
+the shape of the pointer (22).
 ptterm hands them over, and pymux writes them to the outer terminal of
 every client. iTerm2's namespace (1337) names services one by one:
 pymux serves the ones it parsed -- a browser, the clipboard, a mark --
@@ -35,6 +36,7 @@ __all__ = [
     "open_url_of",
     "request_attention_of",
     "set_user_var_of",
+    "simple_notification_of",
 ]
 
 #: The longest payload that pymux passes on. A clipboard holds a
@@ -220,6 +222,23 @@ def request_attention_of(param: str) -> str | None:
     if key != "RequestAttention" or value not in _REQUEST_ATTENTION:
         return None
     return value
+
+
+def simple_notification_of(param: str) -> tuple[str, str] | None:
+    """
+    The title and the body of `OSC 777 ; notify ; title ; body`, or None.
+
+    urxvt names its perl extensions with 777, and `notify` is the one
+    every other terminal took. The rest drive urxvt itself, so they
+    stay inside. The body may hold a semicolon; the title may not.
+    """
+    verb, _sep, rest = param.partition(";")
+    if verb != "notify":
+        return None
+    title, _sep, body = rest.partition(";")
+    if not title and not body:
+        return None
+    return title, body
 
 
 def copy_data_of(param: str) -> str | None:

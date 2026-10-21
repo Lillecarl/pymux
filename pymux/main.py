@@ -112,6 +112,7 @@ from .osc import (
     open_url_of,
     request_attention_of,
     set_user_var_of,
+    simple_notification_of,
 )
 from .pipes import bind_and_listen_on_socket, connect_in_memory
 from .rc import STARTUP_COMMANDS
@@ -3770,6 +3771,14 @@ exec pymux notify -u "$urgency" -- "$@"
                 # And keep it for the hub, which lists what the
                 # terminal was asked, not only what it showed.
                 self.notification_center.add_osc99(pane.pane_id, param)
+
+            if code == Osc.SIMPLE_NOTIFICATION:
+                # No identifier and no answer, so nothing to route.
+                notice = simple_notification_of(param)
+                if notice is None:
+                    return
+                title, body = notice
+                self.notification_center.add(title, body, pane_id=pane.pane_id)
 
             sequence = build_osc(code, param)
             if sequence is None:
