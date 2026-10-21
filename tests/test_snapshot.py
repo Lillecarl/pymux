@@ -20,6 +20,7 @@ from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.selection import SelectionState, SelectionType
 from pyte.keep import Keep
+from pyte.page import RowMark
 from session import once
 from test_a_session_on_a_pyte_screen import attached, settled, shows
 from test_every_attribute_has_a_fate import declared, live_objects
@@ -170,10 +171,10 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     pane.current_host = "far"
     pane.command_zone = "C"
     pane.last_exit_status = 2
-    pane.marks = [3, 7]
+    pane.screen.mark_row(RowMark.PROMPT)
     pane.user_vars = {"badge": "on", "role": "build"}
     strip.panes[0].user_vars = {"badge": "off"}
-    strip.panes[0].marks = [1]
+    strip.panes[0].screen.mark_row(RowMark.PROMPT | RowMark.OUTPUT)
 
     stacked.zoom = True
     stacked.synchronize_panes = True
@@ -622,21 +623,23 @@ def test_the_table_list_is_the_schema_in_order():
     assert _shape(live) == {name: shape for name, shape in _shape(db).items() if name in snapshot.WHOLE_TABLES}
 
 
-def test_a_version_22_snapshot_reads_with_the_default_bitrates(pymux, tmp_path):
-    "Version 23 keeps a client's two sound bitrates. Lillecarl/pymux#674."
-    path = tmp_path / "v22.sqlite"
+def test_a_version_23_snapshot_reads_with_unmarked_rows(pymux, tmp_path):
+    "Version 24 keeps a shell's marks on the screen's rows. Lillecarl/pymux#500."
+    path = tmp_path / "v23.sqlite"
     snapshot.save(pymux, path)
     db = sqlite3.connect(path)
-    db.execute("ALTER TABLE clients DROP COLUMN audio_speaker_bitrate")
-    db.execute("ALTER TABLE clients DROP COLUMN audio_microphone_bitrate")
-    db.execute("PRAGMA user_version = 22")
+    db.execute("ALTER TABLE screen_rows DROP COLUMN marks")
+    db.execute(
+        "CREATE TABLE pane_marks(pane_id INTEGER NOT NULL REFERENCES panes(pane_id),"
+        " position INTEGER NOT NULL, row INTEGER NOT NULL, PRIMARY KEY (pane_id, position))"
+    )
+    db.execute("PRAGMA user_version = 23")
     db.commit()
     db.close()
 
     stepped = snapshot._open(path)
     assert _shape(stepped) == _shape_of_a_fresh_snapshot()
-    bitrates = stepped.execute("SELECT DISTINCT audio_speaker_bitrate, audio_microphone_bitrate FROM clients")
-    assert bitrates.fetchall() in ([], [(None, None)])
+    assert stepped.execute("SELECT DISTINCT marks FROM screen_rows").fetchall() in ([], [(0,)])
 
 
 async def test_a_running_job_this_server_forked_is_refused(pymux, tmp_path):

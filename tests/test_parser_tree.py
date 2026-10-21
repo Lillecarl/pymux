@@ -273,8 +273,9 @@ def test_send_keys_offers_key_names_until_l_says_text():
     keys = [word for word, _said in _offered("send-keys C", pymux)]
     assert keys
 
-    literal = _offered("send-keys -l C", pymux)
-    assert literal == []
+    # A flag may still match the word, through its help.
+    literal = [word for word, _said in _offered("send-keys -l C", pymux)]
+    assert [word for word in literal if not word.startswith("-")] == []
 
 
 # ----------------------------------------------------------------------

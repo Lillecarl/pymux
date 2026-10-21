@@ -14,9 +14,10 @@ from __future__ import annotations
 
 import pytest
 from prompt_toolkit.application.current import set_app
+from pyte.page import RowMark
 from session import create_session
 
-from pymux.main import MAX_MARKS, MAX_USER_VARS, Pymux
+from pymux.main import MAX_USER_VARS, Pymux
 from pymux.notifications import Urgency
 from pymux.options import Clipboard
 from pymux.osc import (
@@ -49,6 +50,11 @@ class FakeScreen:
 
     def __init__(self, cursor_y=3):
         self.cursor_y = cursor_y
+        #: What `mark_row` was asked to put on the cursor's row, in order.
+        self.marks: list[RowMark] = []
+
+    def mark_row(self, mark: RowMark) -> None:
+        self.marks.append(mark)
 
 
 class FakePane:
@@ -56,7 +62,8 @@ class FakePane:
     A pane with the shell-state fields of the real one.
 
     Keep in sync with `arrangement.Pane`: the directory, the host,
-    the user variables, the marks, the zone and the exit status.
+    the user variables, the zone and the exit status. The marks are
+    the screen's.
     """
 
     def __init__(self, pane_id=7, cursor_y=3):
@@ -65,7 +72,6 @@ class FakePane:
         self.current_directory = None
         self.current_host = None
         self.user_vars = {}
-        self.marks = []
         self.command_zone = None
         self.last_exit_status = None
 
@@ -312,11 +318,11 @@ def test_user_vars_forget_oldest_first():
 # What the program marked and how commands finished.
 
 
-def test_set_mark_keeps_cursor_row_and_travels_on():
+def test_set_mark_marks_a_prompt_and_travels_on():
     pymux, connections = make_pymux()
     pane = FakePane(cursor_y=5)
     pymux.forward_osc(pane, "1337", "SetMark")
-    assert pane.marks == [5]
+    assert pane.screen.marks == [RowMark.PROMPT]
     for connection in connections:
         assert connection.written == [sequence("1337", "SetMark")]
 
@@ -325,18 +331,9 @@ def test_set_mark_with_arguments_is_dropped():
     pymux, connections = make_pymux()
     pane = FakePane()
     pymux.forward_osc(pane, "1337", "SetMark=x")
-    assert pane.marks == []
+    assert pane.screen.marks == []
     for connection in connections:
         assert connection.written == []
-
-
-def test_marks_forget_oldest_first():
-    pymux, _connections = make_pymux()
-    pymux._client_states = {}
-    pane = FakePane()
-    for _ in range(MAX_MARKS + 1):
-        pymux.forward_osc(pane, "1337", "SetMark")
-    assert pane.marks == [3] * MAX_MARKS
 
 
 def test_zones_track_prompt_command_output():
@@ -345,6 +342,9 @@ def test_zones_track_prompt_command_output():
     for letter in "ABC":
         pymux.forward_osc(pane, "133", letter)
         assert pane.command_zone == letter
+    # A prompt and the start of the output mark their rows, as tmux's
+    # `input_osc_133` does; the command typed at the prompt does not.
+    assert pane.screen.marks == [RowMark.PROMPT, RowMark.OUTPUT]
     for connection in connections:
         assert connection.written == [sequence("133", letter) for letter in "ABC"]
 
@@ -490,7 +490,7 @@ def test_unparsed_namespace_stays_inside(param):
     pane = FakePane()
     pymux.forward_osc(pane, "1337", param)
     assert pane.user_vars == {}
-    assert pane.marks == []
+    assert pane.screen.marks == []
     assert pane.current_directory is None
     assert pymux.notification_center.notifications() == []
     for connection in connections:

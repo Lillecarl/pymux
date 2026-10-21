@@ -71,7 +71,7 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "load", "program_ids", "save", "start
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 23
+SNAPSHOT_VERSION = 24
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -102,11 +102,12 @@ CLIENT_COLUMNS = ("client_id", "session_id", "previous_session_id", *CLIENT_SETT
 #: change of shape adds the one step from the version before it and
 #: deletes any older step. Version 12 is the first a holder hands over.
 STEPS: dict[int, str] = {
-    # 23 keeps a client's two sound bitrates. A null reads as the
-    # default. Lillecarl/pymux#674.
-    22: """
-ALTER TABLE clients ADD COLUMN audio_speaker_bitrate INTEGER;
-ALTER TABLE clients ADD COLUMN audio_microphone_bitrate INTEGER;
+    # 24 keeps a shell's marks on the row they mark, and drops the list
+    # of screen rows a pane kept, which no longer named the row after a
+    # scroll. Lillecarl/pymux#500.
+    23: """
+ALTER TABLE screen_rows ADD COLUMN marks INTEGER NOT NULL DEFAULT 0;
+DROP TABLE pane_marks;
 """,
 }
 
@@ -216,12 +217,6 @@ CREATE TABLE panes(
   current_host TEXT,
   command_zone TEXT,
   last_exit_status INTEGER
-);
-CREATE TABLE pane_marks(
-  pane_id INTEGER NOT NULL REFERENCES panes(pane_id),
-  position INTEGER NOT NULL,
-  row INTEGER NOT NULL,
-  PRIMARY KEY (pane_id, position)
 );
 CREATE TABLE pane_user_vars(
   pane_id INTEGER NOT NULL REFERENCES panes(pane_id),
@@ -381,6 +376,7 @@ CREATE TABLE screen_rows(
   wrapped INTEGER NOT NULL,
   text TEXT NOT NULL,
   cells TEXT NOT NULL,
+  marks INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (pane_id, buffer, number)
 );
 """
@@ -397,7 +393,6 @@ TABLES = (
     "windows",
     "splits",
     "panes",
-    "pane_marks",
     "pane_user_vars",
     "pane_viewers",
     "split_weights",
@@ -838,11 +833,11 @@ class Snapshot:
         _insert_many(
             db,
             "screen_rows",
-            ("pane_id", "buffer", "number", "wrapped", "text", "cells"),
+            ("pane_id", "buffer", "number", "wrapped", "text", "cells", "marks"),
             [
-                (pane.pane_id, buffer, number, wrapped, _text_of(cells), json.dumps(cells))
+                (pane.pane_id, buffer, number, wrapped, _text_of(cells), json.dumps(cells), marks)
                 for buffer, rows in screen.buffers.items()
-                for number, wrapped, cells in rows
+                for number, wrapped, cells, marks in rows
             ],
             replace=True,
         )
@@ -1173,12 +1168,6 @@ def _write_pane(
     )
     _insert_many(
         db,
-        "pane_marks",
-        ("pane_id", "position", "row"),
-        [(pane.pane_id, position, row) for position, row in enumerate(pane.marks)],
-    )
-    _insert_many(
-        db,
         "pane_user_vars",
         ("pane_id", "name", "value"),
         [(pane.pane_id, name, value) for name, value in sorted(pane.user_vars.items())],
@@ -1397,10 +1386,12 @@ def _program(db: sqlite3.Connection, pane_id: PaneId) -> Program:
     ]
     buffers: dict[str, list] = {}
     for entry in _rows(
-        db, "SELECT buffer, number, wrapped, cells FROM screen_rows WHERE pane_id = ? ORDER BY buffer, number", pane_id
+        db,
+        "SELECT buffer, number, wrapped, cells, marks FROM screen_rows WHERE pane_id = ? ORDER BY buffer, number",
+        pane_id,
     ):
         buffers.setdefault(entry["buffer"], []).append(
-            [entry["number"], bool(entry["wrapped"]), json.loads(entry["cells"])]
+            [entry["number"], bool(entry["wrapped"]), json.loads(entry["cells"]), entry["marks"]]
         )
     return Program(
         pane_id=pane_id,
@@ -1507,10 +1498,6 @@ def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int], pipes: 
         pane.current_host = row.current_host
         pane.command_zone = row.command_zone
         pane.last_exit_status = row.last_exit_status
-        pane.marks = [
-            mark["row"]
-            for mark in _rows(db, "SELECT row FROM pane_marks WHERE pane_id = ? ORDER BY position", pane.pane_id)
-        ]
         pane.user_vars = {
             var["name"]: var["value"]
             for var in _rows(db, "SELECT * FROM pane_user_vars WHERE pane_id = ?", pane.pane_id)

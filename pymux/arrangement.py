@@ -101,7 +101,6 @@ class Pane:
         "terminal": Keep.SAVED,
         "chosen_name": Keep.SAVED,
         "clock_mode": Keep.SAVED,
-        "marks": Keep.SAVED,
         "user_vars": Keep.SAVED,
         "current_directory": Keep.SAVED,
         "current_host": Keep.SAVED,
@@ -165,12 +164,6 @@ class Pane:
         #: WezTerm for titles; here they wait for a reader, the way the
         #: notification hub waited for its chooser.
         self.user_vars: dict[str, str] = {}
-
-        #: The screen rows a program marked, from "OSC 1337 ; SetMark",
-        #: oldest first. Rows move as output scrolls, so these are where
-        #: the marks were, not where they are; the jump UI that resolves
-        #: them comes later.
-        self.marks: list[int] = []
 
         #: The shell integration zone the program stands in, from
         #: "OSC 133": "A" a prompt, "B" a command, "C" its output.

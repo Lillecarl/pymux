@@ -56,6 +56,7 @@ from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
 from pyte.keep import Keep
 from pyte.keys import KEY_PROFILES, KeyboardFlag, KeyProfile, key_profile_of
 from pyte.osc import CLEAR_SCROLLBACK, Osc
+from pyte.page import RowMark
 
 from . import hacks_and_lies, introspect, kernels, log
 from .agentic import CallerContext
@@ -204,10 +205,9 @@ MAX_KEYS_TO_REMEMBER = 512
 #: notification hub does.
 MAX_USER_VARS = 64
 
-#: How many marked rows one pane keeps, from "OSC 1337 ; SetMark".
-#: Marks wait for a jump UI; until it comes they are bounded like
-#: every other unbounded thing a program in a pane may send.
-MAX_MARKS = 256
+#: The rows "OSC 133" marks: where a prompt starts, and where the output
+#: of a command starts.
+_FTCS_ROW_MARKS = {"A": RowMark.PROMPT, "C": RowMark.OUTPUT}
 
 #: How often a client whose terminal fell behind looks again whether it
 #: caught up, in seconds: its next frame draws within this of it.
@@ -3889,6 +3889,11 @@ exec pymux notify -u "$urgency" -- "$@"
             pane.last_exit_status = status
         else:
             pane.command_zone = letter
+        # The rows copy mode jumps between, as tmux's `input_osc_133`
+        # marks them. Lillecarl/pymux#500.
+        mark = _FTCS_ROW_MARKS.get(letter)
+        if mark is not None:
+            pane.screen.mark_row(mark)
 
     def _read_terminal_extension(self, pane, param: str) -> bool:
         """
@@ -3922,13 +3927,9 @@ exec pymux notify -u "$urgency" -- "$@"
         if key == "SetMark":
             if rest:
                 return False
-            try:
-                row = pane.screen.cursor_y
-            except AttributeError:
-                return True
-            pane.marks.append(row)
-            while len(pane.marks) > MAX_MARKS:
-                del pane.marks[0]
+            # iTerm2's mark is where a person wants to come back to,
+            # which is what a prompt mark is for.
+            pane.screen.mark_row(RowMark.PROMPT)
             return True
 
         if key == "SetUserVar":
