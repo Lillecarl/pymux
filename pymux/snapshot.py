@@ -26,6 +26,7 @@ upgrade.
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import sqlite3
@@ -619,12 +620,21 @@ class _Row(Protocol):
     __dataclass_fields__: ClassVar[dict[str, Field[Any]]]
 
 
+@functools.cache
+def _insert_of(kind: type[_Row]) -> tuple[str, tuple[str, ...]]:
+    """
+    The statement that inserts a row of `kind`, and its columns in order.
+    Built once per kind: the live store inserts thousands of rows on a
+    big server, four times a second while somebody types, and building
+    it per row was a third of the flush. Lillecarl/pymux#557.
+    """
+    names = tuple(field.name for field in fields(kind))
+    return "INSERT INTO %s (%s) VALUES (%s)" % (kind.TABLE, ", ".join(names), ", ".join("?" * len(names))), names
+
+
 def _insert(db: sqlite3.Connection, row: _Row) -> None:
-    names = [field.name for field in fields(row)]
-    db.execute(
-        "INSERT INTO %s (%s) VALUES (%s)" % (row.TABLE, ", ".join(names), ", ".join(":" + name for name in names)),
-        {name: getattr(row, name) for name in names},
-    )
+    statement, names = _insert_of(type(row))
+    db.execute(statement, [getattr(row, name) for name in names])
 
 
 def _insert_many(db: sqlite3.Connection, table: str, columns: tuple[str, ...], rows, replace: bool = False) -> None:
