@@ -27,6 +27,7 @@ from test_ssh_client import create_ssh_server, live_servers
 from pymux.client import ssh as ssh_module
 from pymux.client.forwards import Forwards
 from pymux.client.ssh import SshClient
+from pymux.commands import list_forwards as list_forwards_command
 from pymux.forwarding import (
     ANY_PORT,
     LOOPBACK,
@@ -799,6 +800,43 @@ async def test_a_forward_carrying_a_connection_is_never_idle():
         assert len(forwards) == 0
 
 
+async def test_the_report_says_what_a_url_forward_has_left_or_carries():
+    "The clock stops while a connection is open, so the report says which. Lillecarl/pymux#487."
+    async with echoing() as echo_port, ssh_connection() as connection:
+        forwards = Forwards()
+
+        with _clock(forwards) as stands_at:
+            opened = await forwards.add(
+                connection,
+                Forward(Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port),
+                idle=60,
+            )
+            stands_at[0] += 15
+            ((one,),) = [forwards.report()]
+            assert (one["live"], one["left"]) == (0, 45.0)
+
+            async with await anyio.connect_tcp("127.0.0.1", opened.port) as held:
+                await held.send(b"hello")
+                assert await held.receive() == b"HELLO"
+                ((one,),) = [forwards.report()]
+                assert (one["live"], one["left"]) == (1, None)
+
+            await once(lambda: _nothing_connected(forwards, opened.port), 2.0, "The connection never ended.")
+            ((one,),) = [forwards.report()]
+            assert (one["live"], one["left"]) == (0, 60.0)
+
+        forwards.close()
+
+
+async def test_the_report_gives_a_persons_forward_no_time_left():
+    async with echoing() as echo_port, ssh_connection() as connection:
+        forwards = Forwards()
+        await forwards.add(connection, Forward(Direction.LOCAL, "127.0.0.1", _free_port(), "127.0.0.1", echo_port))
+        ((one,),) = [forwards.report()]
+        assert (one["live"], one["left"]) == (0, None)
+        forwards.close()
+
+
 async def test_a_forward_that_only_receives_is_not_reaped():
     """
     **The question the counters exist to answer.** A live-reload
@@ -1449,6 +1487,82 @@ async def test_the_request_reaches_the_client_that_asked():
         "dest_host": "localhost",
         "dest_port": 3000,
     }
+
+
+async def test_the_listing_asks_for_a_fresh_table_and_shows_the_time_left():
+    "What a forward pymux made has left moves between reports, so the listing asks. Lillecarl/pymux#487."
+    answering = []
+
+    def answer(packet: dict) -> None:
+        if packet.get("cmd") == "report-forwards":
+            answering[0]._process(
+                {
+                    "cmd": "forwards",
+                    "data": [
+                        {**_URL_FORWARD, "port": 8080, "left": 245.6},
+                        {**_URL_FORWARD, "port": 8081, "live": 2},
+                    ],
+                }
+            )
+
+    async with over_connection(read_packet=answer) as session:
+        await session.attach("the client", SIZE)
+        connection = session.pymux.clients[0].connection
+        connection.can_forward = connection.answers_forwards = True
+        connection.forwards = [{**_URL_FORWARD, "port": 8080, "left": 900.0}]
+        answering.append(connection)
+
+        session.pymux.command_output = []
+        session.pymux.handle_command("list-forwards")
+        said = "\n".join(await once(lambda: session.pymux.command_output, 5.0, "Nothing was listed."))
+
+    assert "-L localhost:8080 -> localhost:3000 (pymux, closes in 4m05s)" in said, said
+    assert "-L localhost:8081 -> localhost:3000 (pymux, in use by 2)" in said, said
+
+
+async def test_the_listing_draws_the_last_copy_when_nobody_answers(monkeypatch):
+    monkeypatch.setattr(list_forwards_command, "FRESH_SECONDS", 0.1)
+    async with over_connection() as session:
+        await session.attach("the client", SIZE)
+        connection = session.pymux.clients[0].connection
+        connection.can_forward = connection.answers_forwards = True
+        connection.forwards = [{**_URL_FORWARD, "port": 8080, "left": 12.0}]
+
+        session.pymux.command_output = []
+        session.pymux.handle_command("list-forwards")
+        said = "\n".join(await once(lambda: session.pymux.command_output, 5.0, "Nothing was listed."))
+
+    assert "-L localhost:8080 -> localhost:3000 (pymux, closes in 12s)" in said, said
+
+
+async def test_a_listing_after_an_unanswered_one_asks_again(monkeypatch):
+    monkeypatch.setattr(list_forwards_command, "FRESH_SECONDS", 0.1)
+    seen = []
+    async with over_connection(read_packet=seen.append) as session:
+        await session.attach("the client", SIZE)
+        connection = session.pymux.clients[0].connection
+        connection.can_forward = connection.answers_forwards = True
+
+        for _ in range(2):
+            session.pymux.command_output = []
+            session.pymux.handle_command("list-forwards")
+            await once(lambda: session.pymux.command_output, 5.0, "Nothing was listed.")
+
+        asks = [packet for packet in seen if packet.get("cmd") == "report-forwards"]
+
+    assert len(asks) == 2, asks
+
+
+#: One forward pymux made for a URL, as a client reports it.
+_URL_FORWARD = {
+    "direction": "local",
+    "listen_host": "localhost",
+    "dest": "localhost:3000",
+    "error": "",
+    "ours": True,
+    "live": 0,
+    "left": None,
+}
 
 
 async def test_removing_asks_by_the_listening_end_alone():

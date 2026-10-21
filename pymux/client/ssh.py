@@ -643,6 +643,10 @@ class SshClient(TerminalClient):
                         )
                         continue
 
+                    if packet[Field.CMD] == Packet.REPORT_FORWARDS:
+                        self._report_forwards()
+                        continue
+
                     if packet[Field.CMD] == Packet.BROWSER:
                         tasks.start_soon(self._while_the_link_holds, self._browser_asked, connection, packet)
                         continue

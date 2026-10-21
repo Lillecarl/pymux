@@ -69,12 +69,19 @@ class Opened(NamedTuple):
     it is. `ours` is whether pymux opened it by itself, for a loopback
     URL; one of those is reaped when idle, so the listing says so.
     Lillecarl/pymux#448.
+
+    `live` is how many connections it carries now, and `left` how many
+    seconds one of pymux's has until it is reaped: `None` for a
+    person's, and for one in use, whose clock has not started.
+    Lillecarl/pymux#487.
     """
 
     forward: Forward
     port: int
     error: str
     ours: bool = False
+    live: int = 0
+    left: float | None = None
 
     def report(self) -> dict:
         """
@@ -90,6 +97,8 @@ class Opened(NamedTuple):
             "dest": self.forward.dest,
             "error": self.error,
             "ours": self.ours,
+            "live": self.live,
+            "left": self.left,
         }
 
 
@@ -451,11 +460,18 @@ class Forwards:
 
     def _one(self, where: Where) -> Opened:
         wanted = self._wanted[where]
+        live = len(self._live.get(where, ()))
+        left = None
+        if wanted.idle is not None and not live:
+            now = self._now()
+            left = max(0.0, self._used.get(where, now) + wanted.idle - now)
         return Opened(
             wanted.forward,
             self._ports.get(where, wanted.forward.listen_port),
             self._errors.get(where, ""),
             ours=wanted.idle is not None,
+            live=live,
+            left=left,
         )
 
     def opened(self) -> list[Opened]:

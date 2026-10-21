@@ -140,6 +140,10 @@ class Packet(StrEnum):
     # The server asks, and the machine the person sits at acts.
     OPEN = "open"
     FORWARD = "forward"
+    # "Send `forwards` again, now." What a forward pymux made has left
+    # before it is reaped moves between the reports a change sends, so
+    # `list-forwards` asks. Lillecarl/pymux#487.
+    REPORT_FORWARDS = "report-forwards"
     PING = "ping"
     # Start a browser a program on the server drives, or stop it.
     # Lillecarl/pymux#653.
@@ -201,6 +205,8 @@ class Field(StrEnum):
     COLORTERM = "colorterm"
     HOSTNAME = "hostname"
     FORWARDS = "forwards"
+    #: In `start-gui`: this client answers `report-forwards`.
+    REPORTS = "reports"
     PINGS = "pings"
     ENVIRONMENT = "environment"
     #: The directory a detached command is sent from. A job without

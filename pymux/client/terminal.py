@@ -290,6 +290,7 @@ class TerminalClient(Client):
                 # end: a unix socket is a unix socket either way.
                 # Lillecarl/pymux#436.
                 Field.FORWARDS: self.can_forward,
+                Field.REPORTS: self.can_forward,
                 Field.BROWSERS: True,
                 # Whether this client answers a ping. A server drops a
                 # client that stops answering, and never one that did

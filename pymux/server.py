@@ -127,6 +127,11 @@ CANNOT_ATTACH = (
 FRAME_ANSWER_SECONDS = 2.0
 
 
+def _without_left(forwards: list[dict]) -> list[dict]:
+    "A forwarding table without the time each forward has left."
+    return [{key: value for key, value in one.items() if key != "left"} for one in forwards]
+
+
 class ServerConnection:
     """
     For each client that connects, we have one instance of this class.
@@ -161,6 +166,8 @@ class ServerConnection:
         "_pointer_shape_sent": Keep.REBUILT,
         "answers_ping": Keep.REBUILT,
         "can_forward": Keep.REBUILT,
+        "answers_forwards": Keep.REBUILT,
+        "_next_forwards": Keep.DROPPED,
         "starts_browsers": Keep.REBUILT,
         "may_attach": Keep.REBUILT,
         "forwards": Keep.DROPPED,
@@ -322,6 +329,10 @@ class ServerConnection:
         #: truth. Lillecarl/pymux#436.
         self.can_forward = False
         self.forwards: list[dict] = []
+        #: Whether it sends its table again when asked, and what the
+        #: next table that arrives sets. Lillecarl/pymux#487.
+        self.answers_forwards = False
+        self._next_forwards: anyio.Event | None = None
         #: Whether this client starts browsers. Lillecarl/pymux#653.
         self.starts_browsers = False
         #: This client's sound, when it plays it. Lillecarl/pymux#657.
@@ -922,6 +933,7 @@ class ServerConnection:
             # Whether `forward-port` can reach this client at all. Only
             # the SSH client says yes. Lillecarl/pymux#436.
             self.can_forward = bool(packet.get(Field.FORWARDS))
+            self.answers_forwards = bool(packet.get(Field.REPORTS))
             self.starts_browsers = bool(packet.get(Field.BROWSERS))
             self.answers_ping = bool(packet.get(Field.PINGS))
             self.environment = packet.get(Field.ENVIRONMENT) or {}
@@ -998,6 +1010,7 @@ class ServerConnection:
         elif packet[Field.CMD] == Packet.FORWARDS:
             reported = packet.get(Field.DATA) or []
             said = packet.get(Field.MESSAGE)
+            arrived, self._next_forwards = self._next_forwards, None
 
             if said and self.client_state is not None:
                 self.client_state.message = said
@@ -1006,10 +1019,28 @@ class ServerConnection:
             # always with nothing forwarded. A frame that draws the
             # same screen again is a fault of its own
             # (Lillecarl/pymux#117), so the unchanged case asks for
-            # none.
-            if reported != self.forwards or said:
-                self.forwards = reported
+            # none. The time left moves on every report and only a
+            # listing reads it, so it is no change.
+            changed = _without_left(reported) != _without_left(self.forwards)
+            self.forwards = reported
+            if changed or said:
                 self.pymux.invalidate(Woke.FORWARDS_CHANGED)
+            if arrived is not None:
+                arrived.set()
+
+    async def fresh_forwards(self) -> None:
+        """
+        Ask the client for its table now, and wait until it arrives.
+
+        **Every call asks.** A request the client never answered leaves
+        its event unset, and a caller that only waited on it would wait
+        out every listing after it.
+        """
+        if self._next_forwards is None:
+            self._next_forwards = anyio.Event()
+        arrived = self._next_forwards
+        self._send_packet({Field.CMD: Packet.REPORT_FORWARDS})
+        await arrived.wait()
 
     def _detach_the_others(self, hang_up: bool = False) -> None:
         """
