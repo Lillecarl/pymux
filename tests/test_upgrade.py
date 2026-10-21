@@ -249,6 +249,22 @@ def test_an_upgrade_keeps_every_pane_and_its_program(server, tmp_path, new_build
     assert _leftovers(old, pid) == []
 
 
+#: A job that counts past the upgrade, on a terminal the holder keeps.
+JOB_COUNT = 'i=0; while [ $i -lt %d ]; do i=$((i+1)); echo "job $i"; sleep 0.02; done; exit 3'
+
+
+def test_an_upgrade_keeps_a_running_pty_job(server):
+    "The holder forked it, so the new server reads it on and hears its end. Lillecarl/pymux#556."
+    job = _answer(server, "run", "--pty", JOB_COUNT % LINES).strip()
+    said = cli(server, "upgrade-server", shlex.join([sys.executable, "-m", "pymux"]))
+    assert said.returncode == 0, said.stderr.decode()
+
+    waited = cli(server, "wait-job", job)
+    assert "job %s exited 3" % job in waited.stderr.decode()
+    numbers = [int(line.split()[1]) for line in waited.stdout.decode().splitlines() if line.startswith("job ")]
+    assert numbers == list(range(1, LINES + 1))
+
+
 #: Ignores SIGHUP and writes its pid. `exec` keeps the pid, and an
 #: ignored signal stays ignored across it.
 IGNORES_HUP = "trap '' HUP; echo $$ > %s; exec sleep 600"

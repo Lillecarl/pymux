@@ -21,10 +21,12 @@ says how much of its answer is missing.
 from __future__ import annotations
 
 import codecs
+import errno
 import fcntl
 import os
 import pty
 import re
+import signal
 import struct
 import subprocess
 import termios
@@ -37,6 +39,9 @@ from typing import ClassVar, NewType
 import anyio
 import anyio.abc
 from anyio.streams.memory import MemoryObjectSendStream
+from ptyhost.held import HeldBackend, Holding
+from ptyhost.holder import HolderError
+from ptyhost.spawn import Spawn
 from pyte.keep import Keep
 
 from pymux.commands import CommandException
@@ -117,8 +122,9 @@ class Job:
     "One command the server ran, running or remembered."
 
     #: What a hot upgrade does with each attribute; `pyte.keep` says.
-    #: A snapshot holds finished jobs only: a running one refuses it.
-    #: Lillecarl/pymux#399.
+    #: A running job crosses only when the holder forked it, and the
+    #: next server takes its terminal from the holder by `program_id`.
+    #: Lillecarl/pymux#399, Lillecarl/pymux#556.
     KEEP: ClassVar[dict[str, Keep]] = {
         "job_id": Keep.SAVED,
         "command": Keep.SAVED,
@@ -138,6 +144,10 @@ class Job:
         "stderr_kept": Keep.SAVED,
         "stdout_dropped": Keep.SAVED,
         "stderr_dropped": Keep.SAVED,
+        "program_id": Keep.SAVED,
+        "pid": Keep.SAVED,
+        "backend": Keep.REBUILT,  # adopted from the holder by `program_id`
+        "crlf": Keep.DROPPED,  # the pause lands what it held back
         "done": Keep.REBUILT,  # set: the job is finished
         "followers": Keep.DROPPED,  # the clients that followed went with the exec
         "waiters": Keep.DROPPED,  # and so did the commands that waited
@@ -206,6 +216,13 @@ class Job:
         #: somebody still waits for.
         self.waiters = 0
         self.process: anyio.abc.Process | None = None
+        #: The holder's name for the program, and its pid, when the
+        #: holder forked it. None for a job this server forked itself.
+        self.program_id: int | None = None
+        self.pid: int | None = None
+        #: The terminal of a job the holder forked.
+        self.backend: HeldBackend | None = None
+        self.crlf = _CrLf()
         #: Set by `kill-job` before the process exists: the supervise
         #: ends it as soon as it starts.
         self.kill_requested = False
@@ -276,11 +293,14 @@ class JobTable:
         "last_id": Keep.SAVED,
         "saved_queries": Keep.SAVED,
         "store": Keep.REBUILT,  # in memory: `restore` writes the rows again
+        "holding": Keep.REBUILT,  # the server's, which connects for itself
     }
 
     def __init__(self) -> None:
         self._jobs: dict[JobId, Job] = {}
         self.store = JobStore()
+        #: The server's holder. A pty job runs under it when there is one.
+        self.holding: Holding | None = None
         #: The newest id the database handed out. It outlives the jobs
         #: it named, so a restored server never hands one out again.
         self.last_id = 0
@@ -348,13 +368,15 @@ class JobTable:
 
     async def restore(self) -> None:
         """
-        Write the rows of the finished jobs a snapshot's load put here.
+        Write the rows of the jobs a snapshot's load put here.
 
         The database is in memory and the exec emptied it. The sequence
-        goes back too, so the next id is past every id ever given.
+        goes back too, so the next id is past every id ever given. A
+        job that still runs is not done: its `supervise` goes on.
         """
         for job in self.listing():
-            job.done.set()
+            if job.is_done:
+                job.done.set()
             await self.store.write(
                 "INSERT OR REPLACE INTO jobs(id, command, directory, status, returncode, error, started, finished, pty)"
                 " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -430,6 +452,16 @@ class JobTable:
         output is complete before `done` is set, and a waiter never
         reads half of it.
         """
+        if job.backend is not None:
+            await self._supervise_held_pty(job, job.backend)
+            return
+        if job.pty and self.holding is not None:
+            backend = self._held_pty(job, self.holding)
+            if backend is None:
+                await self._finish(job, None)
+            else:
+                await self._supervise_held_pty(job, backend)
+            return
         if job.pty:
             await self._supervise_pty(job)
             return
@@ -549,6 +581,92 @@ class JobTable:
         finally:
             if job.status == "running":
                 await self._finish(job, job.returncode)
+
+    def _held_pty(self, job: Job, holding: Holding) -> HeldBackend | None:
+        """
+        A terminal for a pty job that the holder will fork, or None when
+        the job cannot start, with the reason on it.
+
+        The holder's child starts where the holder is when the directory
+        is gone, so a gone one is refused here, the way a fork here
+        refuses it.
+        """
+        env = dict(job.env)
+        env.setdefault("TERM", PTY_TERM)
+        env["PYMUX_JOB"] = str(job.job_id)
+        # The holder's child gives back a raised priority itself.
+        spawn = Spawn(["/bin/sh", "-c", job.command], env, job.directory)
+        try:
+            if job.directory is not None and not os.path.isdir(job.directory):
+                raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), job.directory)
+            backend = HeldBackend(holding, lambda: spawn)
+        except OSError as e:
+            job.error = "%s: %s" % (job.command, e)
+            return None
+        backend.set_size(PTY_COLUMNS, PTY_ROWS)
+        return backend
+
+    async def _supervise_held_pty(self, job: Job, backend: HeldBackend) -> None:
+        """
+        Run a pty job that the holder forks and reaps, so that it
+        outlives this server: an upgrade hands it to the next server the
+        way it hands a pane. A job a snapshot loaded comes with its
+        terminal, adopted from the holder, and goes on where the last
+        server stopped. Lillecarl/pymux#556.
+
+        The exit is recorded once the pump read the end and the holder
+        said how the program ended, as `_supervise_pty` gates it.
+        """
+
+        async def land() -> None:
+            data = job.crlf.feed(backend.read_bytes(65536))
+            if data:
+                _land(job, "stdout", data)
+
+        backend.add_input_ready_callback(land)
+        try:
+            async with anyio.create_task_group() as pumps:
+                try:
+                    await backend.start(pumps)
+                except (HolderError, OSError) as e:
+                    backend.close()
+                    if backend.slave is not None:
+                        with suppress(OSError):
+                            os.close(backend.slave)
+                    job.error = "%s: %s" % (job.command, e)
+                    return
+                job.backend = backend
+                job.pid = backend.pid
+                job.program_id = backend.program_id
+                if job.kill_requested:
+                    backend.send_signal(signal.SIGTERM)
+            if job.crlf.pending:
+                _land(job, "stdout", job.crlf.flush())
+            if job.program_id is not None:
+                job.returncode = backend.holding.statuses.get(job.program_id)
+        except anyio.get_cancelled_exc_class():
+            # The holder keeps the program: `kill-server` asks it to hang
+            # up, and an upgrade leaves it to the next server.
+            if job.returncode is None:
+                job.error = "stopped with the server"
+            raise
+        finally:
+            if job.status == "running":
+                await self._finish(job, job.returncode)
+
+    def pause_reading(self) -> None:
+        "Read no held job, so that what it writes waits for the next server."
+        for job in self.listing():
+            if job.backend is not None and not job.is_done:
+                job.backend.pause_reading()
+                if job.crlf.pending:
+                    _land(job, "stdout", job.crlf.flush())
+
+    def resume_reading(self) -> None:
+        "Read the held jobs again, as before the pause."
+        for job in self.listing():
+            if job.backend is not None and not job.is_done:
+                job.backend.resume_reading()
 
     async def _finish(self, job: Job, returncode: int | None) -> None:
         job.returncode = returncode
@@ -693,6 +811,8 @@ class JobTable:
         job.kill_requested = True
         if job.process is not None:
             job.process.terminate()
+        if job.backend is not None:
+            job.backend.send_signal(signal.SIGTERM)
         return True
 
 
@@ -1006,20 +1126,51 @@ async def _pump(stream: anyio.abc.ByteReceiveStream, job: Job, name: str) -> Non
     other await, so a cancellation never lands with the tail half
     written.
     """
-    chunks = job.stdout_chunks if name == "stdout" else job.stderr_chunks
     try:
         async for data in stream:
-            chunks.append((job.end(name), data))
-            job.last_active = time.time()
-            if name == "stdout":
-                job.stdout_kept += len(data)
-            else:
-                job.stderr_kept += len(data)
-            _trim(job, name)
-            _poke(job)
+            _land(job, name, data)
     finally:
         with suppress(Exception):
             await stream.aclose()
+
+
+def _land(job: Job, name: str, data: bytes) -> None:
+    "One chunk into the tail of a stream, at its offset, then the followers."
+    chunks = job.stdout_chunks if name == "stdout" else job.stderr_chunks
+    chunks.append((job.end(name), data))
+    job.last_active = time.time()
+    if name == "stdout":
+        job.stdout_kept += len(data)
+    else:
+        job.stderr_kept += len(data)
+    _trim(job, name)
+    _poke(job)
+
+
+class _CrLf:
+    """
+    Fold the `\\r\\n` a terminal writes back to `\\n`, across reads.
+
+    The terminal folds `\\n` to `\\r\\n` on the way out, so the tails
+    of a pty job read the way piped ones do. A `\\r` at the end of a
+    read waits for the next one rather than surviving as a stray.
+    """
+
+    def __init__(self) -> None:
+        self.pending = b""
+
+    def feed(self, data: bytes) -> bytes:
+        data = self.pending + data
+        if data.endswith(b"\r"):
+            self.pending, data = b"\r", data[:-1]
+        else:
+            self.pending = b""
+        return data.replace(b"\r\n", b"\n")
+
+    def flush(self) -> bytes:
+        "What waits, for the end of the stream."
+        pending, self.pending = self.pending, b""
+        return pending
 
 
 async def _pump_pty(primary: int, job: Job) -> None:
@@ -1027,14 +1178,10 @@ async def _pump_pty(primary: int, job: Job) -> None:
     Drain a pty job's primary into the stdout tail the job keeps.
 
     The read runs in a thread: the fd blocks, and nothing else here
-    may wait on it. The terminal folds `\\n` to `\\r\\n` on the way
-    out, so the fold comes off before storing and the tails read the
-    way piped ones do; a `\\r` split across two reads rides along to
-    the next one rather than surviving as a stray. The primary closes
-    here at the end, which also releases a reader a cancelled
+    may wait on it. `_CrLf` takes the terminal's fold off. The primary
+    closes here at the end, which also releases a reader a cancelled
     supervise left on the fd.
     """
-    pending = b""
     try:
         while True:
             try:
@@ -1045,24 +1192,11 @@ async def _pump_pty(primary: int, job: Job) -> None:
                 break
             if not data:
                 break
-            data = pending + data
-            if data.endswith(b"\r"):
-                pending, data = b"\r", data[:-1]
-            else:
-                pending = b""
-            data = data.replace(b"\r\n", b"\n")
+            data = job.crlf.feed(data)
             if data:
-                job.stdout_chunks.append((job.end("stdout"), data))
-                job.last_active = time.time()
-                job.stdout_kept += len(data)
-                _trim(job, "stdout")
-                _poke(job)
-        if pending:
-            job.stdout_chunks.append((job.end("stdout"), pending))
-            job.last_active = time.time()
-            job.stdout_kept += len(pending)
-            _trim(job, "stdout")
-            _poke(job)
+                _land(job, "stdout", data)
+        if job.crlf.pending:
+            _land(job, "stdout", job.crlf.flush())
     finally:
         with suppress(OSError):
             os.close(primary)

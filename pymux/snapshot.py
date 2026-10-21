@@ -70,7 +70,7 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "load", "program_ids", "save", "start
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 20
+SNAPSHOT_VERSION = 21
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -99,14 +99,12 @@ CLIENT_COLUMNS = ("client_id", "session_id", "previous_session_id", *CLIENT_SETT
 #: change of shape adds the one step from the version before it and
 #: deletes any older step. Version 12 is the first a holder hands over.
 STEPS: dict[int, str] = {
-    # 20 keeps copy mode with the client that has it open, in
-    # `clients.modes`. A program the build before held still for its
-    # copy mode reads again: nothing here would ever let it go.
-    # Lillecarl/pymux#470.
-    19: """
-UPDATE pane_programs SET process = json_set(process, '$.fields.suspended', json('false'))
-  WHERE pane_id IN (SELECT pane_id FROM copy_modes);
-DROP TABLE copy_modes;
+    # 21 keeps a running job the holder forked: its program and pid. The
+    # build before refused to write a running job, so every row is done.
+    # Lillecarl/pymux#556.
+    20: """
+ALTER TABLE jobs ADD COLUMN program_id INTEGER;
+ALTER TABLE jobs ADD COLUMN pid INTEGER;
 """,
 }
 
@@ -334,7 +332,9 @@ CREATE TABLE jobs(
   last_active REAL NOT NULL,
   env TEXT NOT NULL,
   stdout_dropped INTEGER NOT NULL,
-  stderr_dropped INTEGER NOT NULL
+  stderr_dropped INTEGER NOT NULL,
+  program_id INTEGER,
+  pid INTEGER
 );
 CREATE TABLE job_tags(
   job_id INTEGER NOT NULL REFERENCES jobs(job_id),
@@ -671,8 +671,9 @@ class Snapshot:
             _refuse_what_cannot_be_saved(pane)
         jobs = pymux.jobs.listing()
         for job in jobs:
-            if not job.is_done:
-                raise SnapshotError("job %d is still running" % job.job_id)
+            if not job.is_done and job.program_id is None:
+                # Only the holder can hand a program to the next server.
+                raise SnapshotError("job %d runs and was forked by this server, not by its holder" % job.job_id)
         with self.db:
             for table in WHOLE_TABLES:
                 self.db.execute("DELETE FROM %s" % table)
@@ -689,10 +690,13 @@ class Snapshot:
     def _write_jobs(self, jobs: list[Job]) -> None:
         db = self.db
         alive = {job.job_id for job in jobs}
-        for gone in self.jobs_written - alive:
+        # A running job wrote more since, and its tail is capped, so it
+        # is written whole again.
+        stale = {job.job_id for job in jobs if not job.is_done}
+        for gone in self.jobs_written - (alive - stale):
             for table in _JOB_TABLES:
                 db.execute("DELETE FROM %s WHERE job_id = ?" % table, (gone,))
-        self.jobs_written &= alive
+        self.jobs_written &= alive - stale
         for job in jobs:
             if job.job_id in self.jobs_written:
                 continue
@@ -714,6 +718,8 @@ class Snapshot:
                     "env",
                     "stdout_dropped",
                     "stderr_dropped",
+                    "program_id",
+                    "pid",
                 ),
                 [
                     (
@@ -730,6 +736,8 @@ class Snapshot:
                         json.dumps(job.env, sort_keys=True),
                         job.stdout_dropped,
                         job.stderr_dropped,
+                        job.program_id,
+                        job.pid,
                     )
                 ],
             )
@@ -1244,6 +1252,9 @@ async def start(pymux: Pymux) -> None:
     if pymux.tasks is None:
         raise RuntimeError("start the loaded programs inside `Pymux.running`")
     await pymux.jobs.restore()
+    for job in pymux.jobs.listing():
+        if not job.is_done:
+            pymux.tasks.start_soon(pymux.jobs.supervise, job)
     for pane in _panes_of(pymux):
         control = _terminal(pane).terminal_control
         if not control._running:
@@ -1280,7 +1291,10 @@ def program_ids(path: str | os.PathLike[str]) -> list[int]:
     "The holder's id of every program the snapshot names: the masters `load` needs."
     db = _open(path)
     try:
-        return [row["program_id"] for row in _rows(db, "SELECT program_id FROM pane_programs")]
+        return [row["program_id"] for row in _rows(db, "SELECT program_id FROM pane_programs")] + [
+            row["program_id"]
+            for row in _rows(db, "SELECT program_id FROM jobs WHERE status = 'running' AND program_id IS NOT NULL")
+        ]
     finally:
         db.close()
 
@@ -1535,13 +1549,16 @@ def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int]) -> int 
         row["name"]: (row["sql"], row["description"]) for row in _rows(db, "SELECT * FROM saved_queries")
     }
     _read_notifications(pymux, db, counters)
-    for job in _read_jobs(db):
+    for job in _read_jobs(pymux, db, masters):
         pymux.jobs._jobs[job.job_id] = job
     return server["listener_fd"]
 
 
-def _read_jobs(db: sqlite3.Connection) -> list[Job]:
-    "The finished jobs, for `start` to write into the jobs database."
+def _read_jobs(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int]) -> list[Job]:
+    """
+    The jobs, for `start` to write into the jobs database. A running one
+    takes its terminal from `masters`, and `start` supervises it again.
+    """
     jobs = []
     for row in _rows(db, "SELECT * FROM jobs ORDER BY job_id"):
         job = Job(
@@ -1565,5 +1582,13 @@ def _read_jobs(db: sqlite3.Connection) -> list[Job]:
             chunks.append((chunk["start"], chunk["data"]))
         job.stdout_kept = sum(len(data) for _, data in job.stdout_chunks)
         job.stderr_kept = sum(len(data) for _, data in job.stderr_chunks)
+        job.program_id = row["program_id"]
+        job.pid = row["pid"]
+        if not job.is_done:
+            if pymux.holding is None:
+                raise SnapshotError("this server has no holder to take job %d from" % (job.job_id,))
+            if job.program_id not in masters:
+                raise SnapshotError("the holder keeps no program for job %d" % (job.job_id,))
+            job.backend = HeldBackend.adopt_held(pymux.holding, job.program_id, job.pid, masters[job.program_id])
         jobs.append(job)
     return jobs

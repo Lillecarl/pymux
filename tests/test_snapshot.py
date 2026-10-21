@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import dataclasses
 import importlib
-import json
 import os
+import signal
 import sqlite3
 import sys
 
@@ -19,8 +19,6 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.selection import SelectionState, SelectionType
-from ptyhost.process import Process
-from pyte.freeze import Frozen, freeze, thaw
 from pyte.keep import Keep
 from session import once
 from test_a_session_on_a_pyte_screen import attached, settled, shows
@@ -292,12 +290,11 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
 #: Columns that hold one value in every row however the server is used.
 CONSTANT = {
     ("counters", "value"),  # five counters, and two of them may agree
-    ("jobs", "status"),  # a running job refuses a snapshot
 }
 
 
 async def _run_jobs(pymux) -> None:
-    "Finished jobs that differ in every column a snapshot writes."
+    "Jobs that differ in every column a snapshot writes, and one that runs on."
     jobs = pymux.jobs
     for command, directory, tags, pty in (
         ("printf out; printf err >&2", None, [("build", None), ("session", "agent")], False),
@@ -316,6 +313,10 @@ async def _run_jobs(pymux) -> None:
         job = await jobs.submit(command, directory, tags, {"WHO": command}, pty)
         await jobs.supervise(job)
     await jobs._forget(job)
+    # The holder forks it, so it runs past the snapshot. Lillecarl/pymux#556.
+    running = await jobs.submit("echo started; exec sleep 60", None, [("long", None)], dict(os.environ), True)
+    pymux.tasks.start_soon(jobs.supervise, running)
+    await once(lambda: b"started" in running.kept("stdout"), 10.0, "the running job never printed")
     # A question kept, and a seed taken away, which must stay away.
     await jobs.save_query("mine", "SELECT id FROM jobs WHERE pty = 1", None)
     assert await jobs.forget_query("running")
@@ -448,6 +449,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
         # it no longer reads them.
         for pane in snapshot._panes_of(pymux):
             pane.process.backend.pause_reading()
+        pymux.jobs.pause_reading()
 
         fresh = Pymux()
         fresh.test_mode = True
@@ -464,6 +466,12 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 snapshot.save(fresh, second)
                 await snapshot.start(fresh)
                 assert _jobs_of(fresh) == jobs
+                # The job runs on under the new server, which can end it.
+                (adopted,) = [job for job in fresh.jobs.listing() if not job.is_done]
+                assert fresh.jobs.kill(adopted)
+                with anyio.fail_after(10):
+                    await fresh.jobs.wait(adopted)
+                assert (adopted.returncode, adopted.kept("stdout")) == (-signal.SIGTERM, b"started\n")
                 assert await _questions_of(fresh) == questions
                 assert "running" not in dict((name, sql) for name, sql, _ in questions)
                 assert fresh.named_buffers == pymux.named_buffers
@@ -585,46 +593,41 @@ def test_the_table_list_is_the_schema_in_order():
     assert _shape(live) == {name: shape for name, shape in _shape(db).items() if name in snapshot.WHOLE_TABLES}
 
 
-def test_a_version_19_snapshot_lets_a_program_held_for_copy_mode_go(pymux, tmp_path):
+def test_a_version_20_snapshot_reads_its_jobs_as_forked_by_nobody(pymux, tmp_path):
     """
-    Version 20 keeps copy mode with the client. The build before held
-    the program of a pane in copy mode still, and nothing here would let
-    it go again. Lillecarl/pymux#470.
+    Version 21 keeps the program and the pid of a running job the
+    holder forked. The build before wrote finished jobs only, so each
+    of its rows names neither. Lillecarl/pymux#556.
     """
-    path = tmp_path / "v19.sqlite"
+    path = tmp_path / "v20.sqlite"
     snapshot.save(pymux, path)
     db = sqlite3.connect(path)
     db.execute(
-        "CREATE TABLE copy_modes(pane_id INTEGER PRIMARY KEY, cursor_position INTEGER NOT NULL,"
-        " selection_start INTEGER, selection_type TEXT)"
+        "INSERT INTO jobs(job_id, command, pty, status, returncode, started, finished, last_active, env,"
+        " stdout_dropped, stderr_dropped) VALUES (1, 'true', 0, 'done', 0, 1.0, 2.0, 2.0, '{}', 0, 0)"
     )
-    # A program as the build before froze it: held still, by a real
-    # freeze, so the step is judged against the shape that build wrote.
-    # Made without `__init__`, which wants a backend to read from.
-    program = Process.__new__(Process)
-    program.backend, program.sx, program.sy, program.suspended = None, 80, 24, True
-    held = json.dumps(freeze(program).root)
-    db.executemany(
-        "INSERT INTO pane_programs VALUES (?, 1, 0, '{}', '{}', ?, NULL)",
-        [(1, held), (2, held)],
-    )
-    db.execute("INSERT INTO copy_modes VALUES (1, 0, NULL, NULL)")
-    db.execute("PRAGMA user_version = 19")
+    db.execute("ALTER TABLE jobs DROP COLUMN program_id")
+    db.execute("ALTER TABLE jobs DROP COLUMN pid")
+    db.execute("PRAGMA user_version = 20")
     db.commit()
     db.close()
 
     stepped = snapshot._open(path)
     assert _shape(stepped) == _shape_of_a_fresh_snapshot()
-    programs = stepped.execute(
-        "SELECT pane_id, process ->> '$.fields.suspended', process ->> '$.fields.sx' FROM pane_programs"
-    )
-    assert [tuple(row) for row in programs] == [(1, 0, 80), (2, 1, 80)]
+    assert stepped.execute("SELECT job_id, status, program_id, pid FROM jobs").fetchall() == [(1, "done", None, None)]
 
-    # And the program thaws free to read.
-    ((stepped_program,),) = stepped.execute("SELECT process FROM pane_programs WHERE pane_id = 1")
-    thawed = Process.__new__(Process)
-    thaw(Frozen(json.loads(stepped_program), {}, [], [], {}), thawed)
-    assert (thawed.suspended, thawed.sx) == (False, 80)
+
+async def test_a_running_job_this_server_forked_is_refused(pymux, tmp_path):
+    "Only the holder can hand a program to the next server. Lillecarl/pymux#556."
+    async with pymux.running():
+        job = await pymux.jobs.submit("exec sleep 60")
+        pymux.tasks.start_soon(pymux.jobs.supervise, job)
+        await once(lambda: job.process is not None, 10.0, "the job never started")
+        try:
+            with pytest.raises(snapshot.SnapshotError, match="job 1 runs and was forked by this server"):
+                snapshot.save(pymux, tmp_path / "refused.sqlite")
+        finally:
+            pymux.jobs.kill(job)
 
 
 async def test_a_snapshot_is_refused_while_a_command_waits(pymux, tmp_path):

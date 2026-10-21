@@ -169,6 +169,7 @@ def _pause(pymux: Pymux) -> None:
     for pane in snapshot._panes_of(pymux):
         if isinstance(backend := pane.process.backend, HeldBackend):
             backend.pause_reading()
+    pymux.jobs.pause_reading()
 
 
 def _resume(pymux: Pymux) -> None:
@@ -178,6 +179,7 @@ def _resume(pymux: Pymux) -> None:
     for pane in snapshot._panes_of(pymux):
         if isinstance(backend := pane.process.backend, HeldBackend):
             backend.resume_reading()
+    pymux.jobs.resume_reading()
 
 
 async def _hand_over(pymux: Pymux, argv: list[str]) -> None:

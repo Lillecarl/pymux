@@ -2255,7 +2255,7 @@ class Pymux:
         except OSError, HolderError:
             logger.exception("No holder at %s: this server forks its panes itself.", path)
             return
-        self.holding = holding
+        self.holding = self.jobs.holding = holding
         self.tasks.start_soon(holding.run)
         if not keep_orphans:
             await self.release_orphans()
@@ -2285,7 +2285,7 @@ class Pymux:
         return await Holding.connect(path)
 
     async def release_orphans(self) -> None:
-        "Let go of every program the holder keeps that no pane of this server runs."
+        "Let go of every program the holder keeps that no pane or job of this server runs."
         if self.holding is None:
             return
         mine = {
@@ -2293,6 +2293,7 @@ class Pymux:
             for pane in self.panes_by_id.values()
             if isinstance(backend := pane.process.backend, HeldBackend)
         }
+        mine |= {job.program_id for job in self.jobs.listing() if job.program_id is not None and not job.is_done}
         for program in await self.holding.programs():
             if program["id"] not in mine:
                 await self.holding.release(program["id"])
@@ -2300,6 +2301,7 @@ class Pymux:
     async def unhold(self) -> None:
         "End the holder with this server: `kill-server` ends its programs too."
         holding, self.holding = self.holding, None
+        self.jobs.holding = None
         if holding is not None:
             with suppress(HolderError, OSError):
                 await holding.quit()
