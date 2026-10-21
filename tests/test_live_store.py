@@ -15,7 +15,7 @@ import anyio
 from prompt_toolkit.application.current import set_app
 from test_a_session_on_a_pyte_screen import attached, pymux, said, settled, shows  # noqa: F401 -- a fixture
 
-from pymux import live, snapshot
+from pymux import live, snapshot, tables
 
 #: Each one changes a table the live store holds.
 COMMANDS = (
@@ -40,15 +40,13 @@ COMMANDS = (
 
 
 def _tables(db: sqlite3.Connection) -> dict[str, list[tuple]]:
-    return {
-        table: sorted(db.execute("SELECT * FROM %s" % table).fetchall(), key=repr) for table in snapshot.WHOLE_TABLES
-    }
+    return {table: sorted(db.execute("SELECT * FROM %s" % table).fetchall(), key=repr) for table in tables.WHOLE_TABLES}
 
 
 def _now(pymux) -> dict[str, list[tuple]]:
     "What the writer makes of the objects as they are."
     scratch = sqlite3.connect(":memory:")
-    scratch.executescript(snapshot.LIVE_SCHEMA)
+    scratch.executescript(tables.LIVE_SCHEMA)
     snapshot.write_tables(pymux, scratch)
     return _tables(scratch)
 
@@ -58,7 +56,7 @@ async def _caught_up(pymux, what: str) -> None:
     deadline = anyio.current_time() + 10 * live.WRITE_AFTER
     while True:
         now = _now(pymux)
-        behind = [table for table in snapshot.WHOLE_TABLES if _tables(pymux.live.db)[table] != now[table]]
+        behind = [table for table in tables.WHOLE_TABLES if _tables(pymux.live.db)[table] != now[table]]
         if not behind:
             return
         assert anyio.current_time() < deadline, "after %s the live store is behind in %s" % (what, behind)
@@ -67,9 +65,9 @@ async def _caught_up(pymux, what: str) -> None:
 
 def test_the_live_store_holds_no_screen_and_no_job():
     db = sqlite3.connect(":memory:")
-    db.executescript(snapshot.LIVE_SCHEMA)
+    db.executescript(tables.LIVE_SCHEMA)
     held = {name for (name,) in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
-    assert held == set(snapshot.WHOLE_TABLES)
+    assert held == set(tables.WHOLE_TABLES)
     assert not held & {"pane_programs", "screen_appearances", "screen_rows", "jobs", "job_tags", "job_output"}
 
 

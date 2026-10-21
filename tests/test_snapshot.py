@@ -25,7 +25,7 @@ from session import once
 from test_a_session_on_a_pyte_screen import attached, settled, shows
 from test_every_attribute_has_a_fate import declared, live_objects
 
-from pymux import snapshot
+from pymux import snapshot, tables
 from pymux.arrangement import LayoutTypes
 from pymux.commands.wait_for import WaitChannel
 from pymux.enums import Chooser, WindowCodec, WindowSize
@@ -62,14 +62,28 @@ def test_a_snapshot_writes_every_saved_field(name):
     )
 
 
-@pytest.mark.parametrize("row", snapshot.ROWS, ids=lambda row: row.TABLE)
+@pytest.mark.parametrize("row", tables.ROWS, ids=lambda row: row.TABLE)
 def test_a_row_names_the_columns_of_its_table(row):
     db = sqlite3.connect(":memory:")
-    db.executescript(snapshot.SCHEMA)
+    db.executescript(tables.SCHEMA)
 
     columns = [column[1] for column in db.execute("PRAGMA table_info(%s)" % (row.TABLE,))]
 
     assert [field.name for field in dataclasses.fields(row)] == columns
+
+
+@pytest.mark.parametrize("row", tables.ROWS, ids=lambda row: row.TABLE)
+def test_a_row_names_the_key_of_its_table(row):
+    db = sqlite3.connect(":memory:")
+    db.executescript(tables.SCHEMA)
+
+    key = sorted((column[5], column[1]) for column in db.execute("PRAGMA table_info(%s)" % (row.TABLE,)) if column[5])
+
+    assert row.KEY == tuple(name for _, name in key)
+
+
+def test_every_table_has_a_row():
+    assert [row.TABLE for row in tables.ROWS] == list(tables.TABLES)
 
 
 async def test_every_class_with_a_saved_field_is_written(pymux):
@@ -363,7 +377,7 @@ def _constant_columns(path) -> list[tuple[str, str]]:
     db = sqlite3.connect(path)
     try:
         found = []
-        for table in snapshot.TABLES:
+        for table in tables.TABLES:
             if db.execute("SELECT count(*) FROM %s" % table).fetchone()[0] < 2:
                 found.append((table, "(fewer than two rows)"))
                 continue
@@ -609,21 +623,21 @@ def _shape(db: sqlite3.Connection) -> dict[str, list[tuple]]:
 
 def _shape_of_a_fresh_snapshot() -> dict[str, list[tuple]]:
     db = sqlite3.connect(":memory:")
-    db.executescript(snapshot.SCHEMA)
+    db.executescript(tables.SCHEMA)
     return _shape(db)
 
 
 def test_the_table_list_is_the_schema_in_order():
     "`WHOLE_TABLES` and `LIVE_SCHEMA` are cut from it by name. Lillecarl/pymux#555."
     db = sqlite3.connect(":memory:")
-    db.executescript(snapshot.SCHEMA)
+    db.executescript(tables.SCHEMA)
     made = [row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY rowid")]
-    assert list(snapshot.TABLES) == made
+    assert list(tables.TABLES) == made
 
     live = sqlite3.connect(":memory:")
-    live.executescript(snapshot.LIVE_SCHEMA)
-    assert set(_shape(live)) == set(snapshot.WHOLE_TABLES)
-    assert _shape(live) == {name: shape for name, shape in _shape(db).items() if name in snapshot.WHOLE_TABLES}
+    live.executescript(tables.LIVE_SCHEMA)
+    assert set(_shape(live)) == set(tables.WHOLE_TABLES)
+    assert _shape(live) == {name: shape for name, shape in _shape(db).items() if name in tables.WHOLE_TABLES}
 
 
 def test_a_version_24_snapshot_reads_with_no_bell_and_bells_monitored(pymux, tmp_path):

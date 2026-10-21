@@ -9,7 +9,7 @@ half done. A reader (`sql`) writes what is marked before it asks, so
 it never reads the moment's lag. Step 5 of Lillecarl/pymux#399; Carl
 chose the shape.
 
-The schema is the snapshot's own, up to the jobs (`snapshot.LIVE_SCHEMA`),
+The schema is the snapshot's own, up to the jobs (`tables.LIVE_SCHEMA`),
 and the snapshot's writer fills it. No screen goes in, ever: what a
 program draws is not window management, and only the hand-over file of
 an upgrade may hold it.
@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING
 import anyio
 
 from .log import logger
+from .tables import LIVE_SCHEMA, WHOLE_TABLES
 
 if TYPE_CHECKING:
     from .main import Pymux
@@ -62,7 +63,7 @@ class LiveStore:
         # lock. Measured. A write that meets one fails, and `keep`
         # tries again.
         self.db = sqlite3.connect(self.uri, uri=True, timeout=0)
-        self.db.executescript(snapshot.LIVE_SCHEMA)
+        self.db.executescript(LIVE_SCHEMA)
         #: Something changed since the last write.
         self.dirty = True
         self._woken: anyio.Event | None = None
@@ -78,7 +79,7 @@ class LiveStore:
         if not self.dirty:
             return
         with self.db:
-            for table in self._snapshot.WHOLE_TABLES:
+            for table in WHOLE_TABLES:
                 self.db.execute("DELETE FROM %s" % table)
             self._snapshot.write_tables(pymux, self.db)
         self.dirty = False

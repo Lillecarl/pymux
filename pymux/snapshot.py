@@ -26,15 +26,13 @@ upgrade.
 
 from __future__ import annotations
 
-import functools
 import json
 import os
 import sqlite3
-from collections.abc import Callable
-from dataclasses import Field, dataclass, fields
+from collections.abc import Callable, Iterator
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, Protocol, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
 from weakref import ref
 
 from prompt_toolkit.clipboard import ClipboardData
@@ -63,6 +61,45 @@ from .notifications import Notification
 from .options import ALL_OPTIONS
 from .pipes.posix import PosixSocketListener
 from .session import Session
+from .tables import (
+    JOB_TABLES,
+    SCHEMA,
+    SCREEN_TABLES,
+    WHOLE_TABLES,
+    AppearanceRow,
+    ClientRow,
+    ClientWindowRow,
+    ColumnWidthRow,
+    CounterRow,
+    GlobalEnvironmentRow,
+    HookRow,
+    JobOutputRow,
+    JobRow,
+    JobTagRow,
+    KeyBindingRow,
+    NamedBufferRow,
+    NotificationRouteRow,
+    NotificationRow,
+    OptionRow,
+    PaneRow,
+    PaneUserVarRow,
+    ProgramRow,
+    Row,
+    SavedQueryRow,
+    ScreenRow,
+    ServerListRow,
+    ServerRow,
+    SessionEnvironmentRow,
+    SessionRow,
+    SplitRow,
+    SplitWeightRow,
+    ViewerRow,
+    WaitChannelRow,
+    WindowDefaultRow,
+    WindowRow,
+    insert,
+    select,
+)
 
 if TYPE_CHECKING:
     from .main import ClientState, Pymux
@@ -95,7 +132,6 @@ _CLIENT_SETTING_TYPES: dict[str, type] = {
     "audio_microphone_bitrate": int,
 }
 CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
-CLIENT_COLUMNS = ("client_id", "session_id", "previous_session_id", *CLIENT_SETTINGS, "modes", "connected")
 
 #: What takes a snapshot of the version before this one up to it. A
 #: snapshot only ever goes from a running build to the next one, so a
@@ -131,319 +167,6 @@ CLIENT_MODES = frozenset(
         "choose_window_command",
     }
 )
-
-SCHEMA = """
-CREATE TABLE server(
-  name TEXT PRIMARY KEY,
-  value
-);
-CREATE TABLE counters(
-  name TEXT PRIMARY KEY,
-  value INTEGER NOT NULL
-);
-CREATE TABLE options(
-  name TEXT PRIMARY KEY,
-  value
-);
-CREATE TABLE global_environment(
-  name TEXT PRIMARY KEY,
-  value TEXT
-);
-CREATE TABLE sessions(
-  session_id INTEGER PRIMARY KEY,
-  session_name TEXT NOT NULL,
-  position INTEGER NOT NULL,
-  session_created REAL NOT NULL,
-  last_used INTEGER NOT NULL,
-  default_height INTEGER NOT NULL,
-  default_width INTEGER NOT NULL,
-  base_index INTEGER NOT NULL,
-  renumber_windows INTEGER NOT NULL,
-  last_active_window_id INTEGER,
-  overlay_pane_id INTEGER,
-  overlay_title TEXT NOT NULL,
-  overlay_width TEXT,
-  overlay_height TEXT
-);
-CREATE TABLE session_environment(
-  session_id INTEGER NOT NULL REFERENCES sessions(session_id),
-  name TEXT NOT NULL,
-  value TEXT,
-  PRIMARY KEY (session_id, name)
-);
-CREATE TABLE window_defaults(
-  session_id INTEGER NOT NULL REFERENCES sessions(session_id),
-  name TEXT NOT NULL,
-  value,
-  PRIMARY KEY (session_id, name)
-);
-CREATE TABLE windows(
-  window_id INTEGER PRIMARY KEY,
-  session_id INTEGER NOT NULL REFERENCES sessions(session_id),
-  linked INTEGER NOT NULL,
-  position INTEGER NOT NULL,
-  window_index INTEGER NOT NULL,
-  window_name TEXT,
-  root_split_id INTEGER NOT NULL,
-  active_pane_id INTEGER,
-  previous_active_pane_id INTEGER,
-  previous_layout TEXT,
-  strip INTEGER NOT NULL,
-  window_size TEXT NOT NULL,
-  manual_height INTEGER,
-  manual_width INTEGER,
-  zoom INTEGER NOT NULL,
-  synchronize_panes INTEGER NOT NULL,
-  frame_rate INTEGER NOT NULL,
-  frame_rate_set INTEGER NOT NULL,
-  wayland_scale TEXT NOT NULL,
-  window_codec TEXT NOT NULL,
-  monitor_bell INTEGER NOT NULL DEFAULT 1,
-  bell INTEGER NOT NULL DEFAULT 0
-);
-CREATE TABLE splits(
-  split_id INTEGER PRIMARY KEY,
-  window_id INTEGER NOT NULL REFERENCES windows(window_id),
-  kind TEXT NOT NULL CHECK (kind IN ('hsplit', 'vsplit')),
-  parent_split_id INTEGER REFERENCES splits(split_id),
-  position INTEGER
-);
-CREATE TABLE panes(
-  pane_id INTEGER PRIMARY KEY,
-  window_id INTEGER REFERENCES windows(window_id),
-  parent_split_id INTEGER REFERENCES splits(split_id),
-  position INTEGER,
-  pane_name TEXT,
-  clock_mode INTEGER NOT NULL,
-  pane_current_path TEXT,
-  current_host TEXT,
-  command_zone TEXT,
-  last_exit_status INTEGER,
-  bell INTEGER NOT NULL DEFAULT 0
-);
-CREATE TABLE pane_user_vars(
-  pane_id INTEGER NOT NULL REFERENCES panes(pane_id),
-  name TEXT NOT NULL,
-  value TEXT NOT NULL,
-  PRIMARY KEY (pane_id, name)
-);
-CREATE TABLE pane_viewers(
-  pane_id INTEGER PRIMARY KEY REFERENCES panes(pane_id),
-  job_id INTEGER NOT NULL REFERENCES jobs(job_id),
-  pane_width INTEGER NOT NULL,
-  pane_height INTEGER NOT NULL
-);
-CREATE TABLE split_weights(
-  split_id INTEGER NOT NULL REFERENCES splits(split_id),
-  kind TEXT NOT NULL CHECK (kind IN ('pane', 'split')),
-  id INTEGER NOT NULL,
-  weight INTEGER NOT NULL,
-  PRIMARY KEY (split_id, kind, id)
-);
-CREATE TABLE column_widths(
-  window_id INTEGER NOT NULL REFERENCES windows(window_id),
-  kind TEXT NOT NULL CHECK (kind IN ('pane', 'split')),
-  id INTEGER NOT NULL,
-  width REAL NOT NULL,
-  PRIMARY KEY (window_id, kind, id)
-);
-CREATE TABLE clients(
-  client_id TEXT PRIMARY KEY,
-  session_id INTEGER REFERENCES sessions(session_id),
-  previous_session_id INTEGER REFERENCES sessions(session_id),
-  name TEXT,
-  last_used INTEGER,
-  read_only INTEGER,
-  ignore_size INTEGER,
-  full_screen INTEGER,
-  theme TEXT,
-  swap_dark_and_light INTEGER,
-  message TEXT,
-  modes TEXT,
-  connected REAL,
-  window_scroll TEXT,
-  browser_program TEXT,
-  browser_profile TEXT,
-  audio TEXT,
-  audio_rtt_multiplier REAL,
-  audio_frame TEXT,
-  audio_speaker_bitrate INTEGER,
-  audio_microphone_bitrate INTEGER
-);
-CREATE TABLE client_windows(
-  client_id TEXT NOT NULL REFERENCES clients(client_id),
-  session_id INTEGER NOT NULL REFERENCES sessions(session_id),
-  active_window_id INTEGER REFERENCES windows(window_id),
-  previous_window_id INTEGER REFERENCES windows(window_id),
-  PRIMARY KEY (client_id, session_id)
-);
-CREATE TABLE named_buffers(
-  name TEXT PRIMARY KEY,
-  text TEXT NOT NULL
-);
-CREATE TABLE server_lists(
-  list TEXT NOT NULL CHECK (list IN ('prompt_history', 'message_log')),
-  position INTEGER NOT NULL,
-  text TEXT NOT NULL,
-  PRIMARY KEY (list, position)
-);
-CREATE TABLE hooks(
-  hook TEXT NOT NULL,
-  position INTEGER NOT NULL,
-  command TEXT NOT NULL,
-  PRIMARY KEY (hook, position)
-);
-CREATE TABLE key_bindings(
-  key_table TEXT NOT NULL,
-  written TEXT NOT NULL,
-  command TEXT NOT NULL,
-  arguments TEXT NOT NULL,
-  PRIMARY KEY (key_table, written)
-);
-CREATE TABLE notifications(
-  notification_id INTEGER PRIMARY KEY,
-  title TEXT NOT NULL,
-  body TEXT NOT NULL,
-  urgency INTEGER NOT NULL,
-  pane_id INTEGER,
-  at REAL NOT NULL,
-  position INTEGER UNIQUE,
-  identifier TEXT,
-  CHECK ((position IS NULL) != (identifier IS NULL))
-);
-CREATE TABLE notification_routes(
-  ours TEXT PRIMARY KEY,
-  pane_id INTEGER NOT NULL,
-  identifier TEXT NOT NULL,
-  position INTEGER NOT NULL UNIQUE
-);
-CREATE TABLE wait_channels(
-  name TEXT PRIMARY KEY,
-  woken INTEGER NOT NULL,
-  locked INTEGER NOT NULL
-);
-CREATE TABLE saved_queries(
-  name TEXT PRIMARY KEY,
-  sql TEXT NOT NULL,
-  description TEXT
-);
-CREATE TABLE jobs(
-  job_id INTEGER PRIMARY KEY,
-  command TEXT NOT NULL,
-  directory TEXT,
-  pty INTEGER NOT NULL,
-  status TEXT NOT NULL,
-  returncode INTEGER,
-  error TEXT,
-  started REAL NOT NULL,
-  finished REAL,
-  last_active REAL NOT NULL,
-  env TEXT NOT NULL,
-  stdout_dropped INTEGER NOT NULL,
-  stderr_dropped INTEGER NOT NULL,
-  program_id INTEGER,
-  pid INTEGER
-);
-CREATE TABLE job_tags(
-  job_id INTEGER NOT NULL REFERENCES jobs(job_id),
-  key TEXT NOT NULL,
-  value TEXT,
-  PRIMARY KEY (job_id, key)
-);
-CREATE TABLE job_output(
-  job_id INTEGER NOT NULL REFERENCES jobs(job_id),
-  stream TEXT NOT NULL CHECK (stream IN ('stdout', 'stderr')),
-  start INTEGER NOT NULL,
-  data BLOB NOT NULL,
-  PRIMARY KEY (job_id, stream, start)
-);
-CREATE TABLE pane_programs(
-  pane_id INTEGER PRIMARY KEY REFERENCES panes(pane_id),
-  pane_pid INTEGER NOT NULL,
-  pane_revision INTEGER NOT NULL,
-  screen TEXT NOT NULL,
-  stream TEXT NOT NULL,
-  process TEXT NOT NULL,
-  program_id INTEGER
-);
-CREATE TABLE screen_appearances(
-  pane_id INTEGER NOT NULL REFERENCES panes(pane_id),
-  appearance INTEGER NOT NULL,
-  value TEXT NOT NULL,
-  PRIMARY KEY (pane_id, appearance)
-);
-CREATE TABLE screen_rows(
-  pane_id INTEGER NOT NULL REFERENCES panes(pane_id),
-  buffer TEXT NOT NULL,
-  number INTEGER NOT NULL,
-  wrapped INTEGER NOT NULL,
-  text TEXT NOT NULL,
-  cells TEXT NOT NULL,
-  marks INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (pane_id, buffer, number)
-);
-"""
-
-#: The tables in the order a dump compares them.
-TABLES = (
-    "server",
-    "counters",
-    "options",
-    "global_environment",
-    "sessions",
-    "session_environment",
-    "window_defaults",
-    "windows",
-    "splits",
-    "panes",
-    "pane_user_vars",
-    "pane_viewers",
-    "split_weights",
-    "column_widths",
-    "clients",
-    "client_windows",
-    "named_buffers",
-    "server_lists",
-    "hooks",
-    "key_bindings",
-    "notifications",
-    "notification_routes",
-    "wait_channels",
-    "saved_queries",
-    "jobs",
-    "job_tags",
-    "job_output",
-    "pane_programs",
-    "screen_appearances",
-    "screen_rows",
-)
-
-_JOB_TABLES = ("jobs", "job_tags", "job_output")
-
-#: A pane's program and its screen, which only the transition holds.
-_SCREEN_TABLES = ("pane_programs", "screen_appearances", "screen_rows")
-
-#: The tables a later write replaces whole. A finished job never
-#: changes, and the screens' tables take only what changed since the
-#: write before.
-WHOLE_TABLES = tuple(table for table in TABLES if table not in _JOB_TABLES + _SCREEN_TABLES)
-
-
-def _schema_of(tables: tuple[str, ...]) -> str:
-    "The part of `SCHEMA` that creates these tables, as sqlite read it."
-    db = sqlite3.connect(":memory:")
-    try:
-        db.executescript(SCHEMA)
-        made = dict(db.execute("SELECT name, sql FROM sqlite_master WHERE type = 'table'").fetchall())
-    finally:
-        db.close()
-    return "".join("%s;\n" % made[table] for table in tables)
-
-
-#: The tables of `WHOLE_TABLES`, which are what the live store holds:
-#: no job, which the job store holds live, and no screen, which never
-#: goes in a live store (Lillecarl/pymux#399).
-LIVE_SCHEMA = _schema_of(WHOLE_TABLES)
 
 _SPLIT_KINDS: dict[type[_Split], str] = {HSplit: "hsplit", VSplit: "vsplit"}
 
@@ -550,112 +273,6 @@ def _optional_id(item) -> int | None:
     return None if item is None else int(node_key(item)[1])
 
 
-@dataclass(frozen=True, slots=True)
-class WindowRow:
-    TABLE: ClassVar[str] = "windows"
-    window_id: int
-    session_id: int
-    linked: int
-    position: int
-    window_index: int
-    window_name: str | None
-    root_split_id: int
-    active_pane_id: int | None
-    previous_active_pane_id: int | None
-    previous_layout: str | None
-    strip: int
-    window_size: str
-    manual_height: int | None
-    manual_width: int | None
-    zoom: int
-    synchronize_panes: int
-    frame_rate: int
-    frame_rate_set: int
-    wayland_scale: str
-    window_codec: str
-    monitor_bell: int
-    bell: int
-
-
-@dataclass(frozen=True, slots=True)
-class SplitRow:
-    TABLE: ClassVar[str] = "splits"
-    split_id: int
-    window_id: int
-    kind: str
-    parent_split_id: int | None
-    position: int | None
-
-
-@dataclass(frozen=True, slots=True)
-class PaneRow:
-    TABLE: ClassVar[str] = "panes"
-    pane_id: int
-    window_id: int | None
-    parent_split_id: int | None
-    position: int | None
-    pane_name: str | None
-    clock_mode: int
-    pane_current_path: str | None
-    current_host: str | None
-    command_zone: str | None
-    last_exit_status: int | None
-    bell: int
-
-
-@dataclass(frozen=True, slots=True)
-class ViewerRow:
-    TABLE: ClassVar[str] = "pane_viewers"
-    pane_id: int
-    job_id: int
-    pane_width: int
-    pane_height: int
-
-
-#: Every table a dataclass names. A test holds each against the schema.
-ROWS = (WindowRow, SplitRow, PaneRow, ViewerRow)
-
-
-class _Row(Protocol):
-    TABLE: ClassVar[str]
-    __dataclass_fields__: ClassVar[dict[str, Field[Any]]]
-
-
-@functools.cache
-def _insert_of(kind: type[_Row]) -> tuple[str, tuple[str, ...]]:
-    """
-    The statement that inserts a row of `kind`, and its columns in order.
-    Built once per kind: the live store inserts thousands of rows on a
-    big server, four times a second while somebody types, and building
-    it per row was a third of the flush. Lillecarl/pymux#557.
-    """
-    names = tuple(field.name for field in fields(kind))
-    return "INSERT INTO %s (%s) VALUES (%s)" % (kind.TABLE, ", ".join(names), ", ".join("?" * len(names))), names
-
-
-def _insert(db: sqlite3.Connection, row: _Row) -> None:
-    statement, names = _insert_of(type(row))
-    db.execute(statement, [getattr(row, name) for name in names])
-
-
-def _insert_many(db: sqlite3.Connection, table: str, columns: tuple[str, ...], rows, replace: bool = False) -> None:
-    """
-    Rows into `table`, each in the order `columns` names. Never the
-    table's own order: a column that moves in `SCHEMA` would take
-    another column's value without a word.
-    """
-    db.executemany(
-        "INSERT %sINTO %s (%s) VALUES (%s)"
-        % ("OR REPLACE " if replace else "", table, ", ".join(columns), ", ".join("?" * len(columns))),
-        rows,
-    )
-
-
-def _select[R: _Row](db: sqlite3.Connection, cls: type[R], where: str, *params) -> list[R]:
-    "`cls` for each row of its table that `where` picks. A column it does not name raises."
-    return [cls(**dict(row)) for row in _rows(db, "SELECT * FROM %s %s" % (cls.TABLE, where), *params)]
-
-
 def save(pymux: Pymux, path: str | os.PathLike[str]) -> None:
     "Write `pymux` to `path` in one go. `Snapshot` says how."
     snapshot = Snapshot(path)
@@ -714,7 +331,7 @@ class Snapshot:
             alive = {pane.pane_id for pane in panes}
             for gone in set(self.freezers) - alive:
                 del self.freezers[gone]
-                for table in _SCREEN_TABLES:
+                for table in SCREEN_TABLES:
                     self.db.execute("DELETE FROM %s WHERE pane_id = ?" % table, (gone,))
             for pane in panes:
                 self._write_program(pane)
@@ -726,67 +343,39 @@ class Snapshot:
         # is written whole again.
         stale = {job.job_id for job in jobs if not job.is_done}
         for gone in self.jobs_written - (alive - stale):
-            for table in _JOB_TABLES:
+            for table in JOB_TABLES:
                 db.execute("DELETE FROM %s WHERE job_id = ?" % table, (gone,))
         self.jobs_written &= alive - stale
         for job in jobs:
             if job.job_id in self.jobs_written:
                 continue
             self.jobs_written.add(job.job_id)
-            _insert_many(
+            insert(
                 db,
-                "jobs",
-                (
-                    "job_id",
-                    "command",
-                    "directory",
-                    "pty",
-                    "status",
-                    "returncode",
-                    "error",
-                    "started",
-                    "finished",
-                    "last_active",
-                    "env",
-                    "stdout_dropped",
-                    "stderr_dropped",
-                    "program_id",
-                    "pid",
-                ),
                 [
-                    (
-                        job.job_id,
-                        job.command,
-                        job.directory,
-                        job.pty,
-                        job.status,
-                        job.returncode,
-                        job.error,
-                        job.started,
-                        job.finished,
-                        job.last_active,
-                        json.dumps(job.env, sort_keys=True),
-                        job.stdout_dropped,
-                        job.stderr_dropped,
-                        job.program_id,
-                        job.pid,
-                    )
-                ],
-            )
-            _insert_many(
-                db,
-                "job_tags",
-                ("job_id", "key", "value"),
-                [(job.job_id, key, value) for key, value in sorted(job.tags.items())],
-            )
-            _insert_many(
-                db,
-                "job_output",
-                ("job_id", "stream", "start", "data"),
-                [
-                    (job.job_id, stream, start, data)
-                    for stream, chunks in (("stdout", job.stdout_chunks), ("stderr", job.stderr_chunks))
-                    for start, data in chunks
+                    JobRow(
+                        job_id=job.job_id,
+                        command=job.command,
+                        directory=job.directory,
+                        pty=job.pty,
+                        status=job.status,
+                        returncode=job.returncode,
+                        error=job.error,
+                        started=job.started,
+                        finished=job.finished,
+                        last_active=job.last_active,
+                        env=json.dumps(job.env, sort_keys=True),
+                        stdout_dropped=job.stdout_dropped,
+                        stderr_dropped=job.stderr_dropped,
+                        program_id=job.program_id,
+                        pid=job.pid,
+                    ),
+                    *(JobTagRow(job.job_id, key, value) for key, value in sorted(job.tags.items())),
+                    *(
+                        JobOutputRow(job.job_id, stream, start, data)
+                        for stream, chunks in (("stdout", job.stdout_chunks), ("stderr", job.stderr_chunks))
+                        for start, data in chunks
+                    ),
                 ],
             )
 
@@ -795,39 +384,40 @@ class Snapshot:
         process = control.process
         if isinstance(process, JobFeed):
             # The new viewer replays the job, so the screen stays here.
-            _insert(self.db, ViewerRow(pane.pane_id, process.job.job_id, process.sx, process.sy))
+            insert(self.db, [ViewerRow(pane.pane_id, process.job.job_id, process.sx, process.sy)])
             return
         backend = process.backend
         assert isinstance(backend, HeldBackend)  # `write` refused anything else
+        if backend.pid is None:
+            raise SnapshotError("pane %%%d holds a program with no pid" % pane.pane_id)
         freezer = self.freezers.get(pane.pane_id)
         if freezer is None:
             freezer = self.freezers[pane.pane_id] = Freezer()
         screen = freezer.freeze(control.screen)
         db = self.db
-        _insert_many(
+        insert(
             db,
-            "pane_programs",
-            ("pane_id", "pane_pid", "pane_revision", "screen", "stream", "process", "program_id"),
             [
-                (
-                    pane.pane_id,
-                    backend.pid,
+                ProgramRow(
+                    pane_id=pane.pane_id,
+                    pane_pid=backend.pid,
                     # Output moves it, so it lives with the screen.
-                    pane.revision,
-                    json.dumps(screen.root),
-                    json.dumps(freeze(control.stream).root),
-                    json.dumps(freeze(process).root),
-                    backend.program_id,
+                    pane_revision=pane.revision,
+                    screen=json.dumps(screen.root),
+                    stream=json.dumps(freeze(control.stream).root),
+                    process=json.dumps(freeze(process).root),
+                    program_id=backend.program_id,
                 )
             ],
             replace=True,
         )
         first = len(freezer.appearance_index) - len(screen.appearances)
-        _insert_many(
+        insert(
             db,
-            "screen_appearances",
-            ("pane_id", "appearance", "value"),
-            [(pane.pane_id, first + index, json.dumps(value)) for index, value in enumerate(screen.appearances)],
+            [
+                AppearanceRow(pane.pane_id, first + index, json.dumps(value))
+                for index, value in enumerate(screen.appearances)
+            ],
         )
         for buffer in screen.whole:
             db.execute("DELETE FROM screen_rows WHERE pane_id = ? AND buffer = ?", (pane.pane_id, buffer))
@@ -836,12 +426,10 @@ class Snapshot:
                 "DELETE FROM screen_rows WHERE pane_id = ? AND buffer = ? AND number = ?",
                 [(pane.pane_id, buffer, number) for number in numbers],
             )
-        _insert_many(
+        insert(
             db,
-            "screen_rows",
-            ("pane_id", "buffer", "number", "wrapped", "text", "cells", "marks"),
             [
-                (pane.pane_id, buffer, number, wrapped, _text_of(cells), json.dumps(cells), marks)
+                ScreenRow(pane.pane_id, buffer, number, wrapped, _text_of(cells), json.dumps(cells), marks)
                 for buffer, rows in screen.buffers.items()
                 for number, wrapped, cells, marks in rows
             ],
@@ -924,266 +512,170 @@ def _refuse_the_server(pymux: Pymux) -> None:
 
 def write_tables(pymux: Pymux, db: sqlite3.Connection) -> None:
     "Every table of `LIVE_SCHEMA`, from what `pymux` holds now, into empty ones."
+    insert(db, rows_of(pymux))
+
+
+def rows_of(pymux: Pymux) -> Iterator[Row]:
+    "Every row of `LIVE_SCHEMA` that `pymux` holds now."
     listener = pymux.listener
     clipboard = pymux.clipboard.get_data()
-    _insert_many(
-        db,
-        "server",
-        ("name", "value"),
-        [
-            ("created", pymux.created),
-            ("socket_name", pymux.socket_name),
-            # The new server gets it under this number (`upgrade._hand_over`).
-            (
-                "listener_fd",
-                listener.socket.fileno() if isinstance(listener, PosixSocketListener) else None,
-            ),
-            ("original_cwd", pymux.original_cwd),
-            ("source_file", pymux.source_file),
-            ("startup_done", pymux._startup_done),
-            ("clipboard", clipboard.text),
-            ("clipboard_type", clipboard.type.value),
-            ("startup_command", pymux.startup_command),
-        ],
-    )
-    _insert_many(db, "named_buffers", ("name", "text"), sorted(pymux.named_buffers.items()))
-    _insert_many(
-        db,
-        "server_lists",
-        ("list", "position", "text"),
-        [
-            *(("prompt_history", n, text) for n, text in enumerate(pymux.prompt_history.get_strings())),
-            *(("message_log", n, text) for n, text in enumerate(pymux.message_log)),
-        ],
-    )
-    _insert_many(
-        db,
-        "hooks",
-        ("hook", "position", "command"),
-        [(hook, n, command) for hook, commands in sorted(pymux.hooks.items()) for n, command in enumerate(commands)],
-    )
-    _insert_many(
-        db,
-        "key_bindings",
-        ("key_table", "written", "command", "arguments"),
-        sorted(
-            (table, binding.written, binding.command, json.dumps(binding.arguments))
-            for (table, _keys), binding in pymux.key_bindings_manager.custom_bindings.items()
-        ),
-    )
+    for name, value in (
+        ("created", pymux.created),
+        ("socket_name", pymux.socket_name),
+        # The new server gets it under this number (`upgrade._hand_over`).
+        ("listener_fd", listener.socket.fileno() if isinstance(listener, PosixSocketListener) else None),
+        ("original_cwd", pymux.original_cwd),
+        ("source_file", pymux.source_file),
+        ("startup_done", pymux._startup_done),
+        ("clipboard", clipboard.text),
+        ("clipboard_type", clipboard.type.value),
+        ("startup_command", pymux.startup_command),
+    ):
+        yield ServerRow(name, value)
+    for name, text in sorted(pymux.named_buffers.items()):
+        yield NamedBufferRow(name, text)
+    for position, text in enumerate(pymux.prompt_history.get_strings()):
+        yield ServerListRow("prompt_history", position, text)
+    for position, text in enumerate(pymux.message_log):
+        yield ServerListRow("message_log", position, text)
+    for hook, commands in sorted(pymux.hooks.items()):
+        for position, command in enumerate(commands):
+            yield HookRow(hook, position, command)
+    for (table, _keys), binding in sorted(
+        pymux.key_bindings_manager.custom_bindings.items(), key=lambda item: (item[0][0], item[1].written)
+    ):
+        yield KeyBindingRow(table, binding.written, binding.command, json.dumps(binding.arguments))
     # A finished record has its place in the hub; one still assembling
     # has the identifier its chunks name instead.
     center = pymux.notification_center
-    _insert_many(
-        db,
-        "notifications",
-        ("notification_id", "title", "body", "urgency", "pane_id", "at", "position", "identifier"),
-        [
-            *((*record, position, None) for position, record in enumerate(center._records)),
-            *((*record, None, identifier) for (_pane_id, identifier), record in center._pending.items()),
-        ],
-    )
-    _insert_many(
-        db,
-        "saved_queries",
-        ("name", "sql", "description"),
-        [(name, sql, description) for name, (sql, description) in sorted(pymux.jobs.saved_queries.items())],
-    )
-    _insert_many(
-        db,
-        "wait_channels",
-        ("name", "woken", "locked"),
-        [(name, channel.woken, channel.locked) for name, channel in sorted(pymux.wait_channels.items())],
-    )
-    _insert_many(
-        db,
-        "notification_routes",
-        ("ours", "pane_id", "identifier", "position"),
-        [
-            (ours, pane_id, identifier, position)
-            for position, (ours, (pane_id, identifier)) in enumerate(pymux.notifications._incoming.items())
-        ],
-    )
-    _insert_many(
-        db,
-        "counters",
-        ("name", "value"),
-        [
-            ("pane", Pane._pane_counter),
-            ("window", Window._window_counter),
-            ("split", _Split._split_counter),
-            ("session", pymux._session_counter),
-            ("uses", pymux._uses),
-            ("job", pymux.jobs.last_id),
-            ("notification", pymux.notification_center._next),
-            ("notification_route", pymux.notifications._next),
-        ],
-    )
-    _insert_many(
-        db,
-        "options",
-        ("name", "value"),
-        [(name, _value(getattr(pymux, attribute))) for name, attribute in sorted(_server_options().items())],
-    )
-    _insert_many(db, "global_environment", ("name", "value"), sorted(pymux.global_environment.items()))
+    for position, record in enumerate(center._records):
+        yield NotificationRow(*record, position=position, identifier=None)
+    for (_pane_id, identifier), record in center._pending.items():
+        yield NotificationRow(*record, position=None, identifier=identifier)
+    for name, (sql, description) in sorted(pymux.jobs.saved_queries.items()):
+        yield SavedQueryRow(name, sql, description)
+    for name, channel in sorted(pymux.wait_channels.items()):
+        yield WaitChannelRow(name, channel.woken, channel.locked)
+    for position, (ours, (pane_id, identifier)) in enumerate(pymux.notifications._incoming.items()):
+        yield NotificationRouteRow(ours, pane_id, identifier, position)
+    for name, value in (
+        ("pane", Pane._pane_counter),
+        ("window", Window._window_counter),
+        ("split", _Split._split_counter),
+        ("session", pymux._session_counter),
+        ("uses", pymux._uses),
+        ("job", pymux.jobs.last_id),
+        ("notification", pymux.notification_center._next),
+        ("notification_route", pymux.notifications._next),
+    ):
+        yield CounterRow(name, value)
+    for name, attribute in sorted(_server_options().items()):
+        yield OptionRow(name, _value(getattr(pymux, attribute)))
+    for name, value in sorted(pymux.global_environment.items()):
+        yield GlobalEnvironmentRow(name, value)
 
     window_option_names = _window_option_names()
     for position, session in enumerate(pymux.sessions):
         arrangement = session.arrangement
-        _insert_many(
-            db,
-            "sessions",
-            (
-                "session_id",
-                "session_name",
-                "position",
-                "session_created",
-                "last_used",
-                "default_height",
-                "default_width",
-                "base_index",
-                "renumber_windows",
-                "last_active_window_id",
-                "overlay_pane_id",
-                "overlay_title",
-                "overlay_width",
-                "overlay_height",
-            ),
-            [
-                (
-                    session.session_id,
-                    session.name,
-                    position,
-                    session.created,
-                    session.last_used,
-                    session.default_size.rows,
-                    session.default_size.columns,
-                    arrangement.base_index,
-                    arrangement.renumber_windows,
-                    last.window_id if (last := arrangement._last_active_window) is not None else None,
-                    _optional_id(session.overlay_pane),
-                    session.overlay_title,
-                    session.overlay_width,
-                    session.overlay_height,
-                )
-            ],
+        last = arrangement._last_active_window
+        yield SessionRow(
+            session_id=session.session_id,
+            session_name=session.name,
+            position=position,
+            session_created=session.created,
+            last_used=session.last_used,
+            default_height=session.default_size.rows,
+            default_width=session.default_size.columns,
+            base_index=arrangement.base_index,
+            renumber_windows=arrangement.renumber_windows,
+            last_active_window_id=last.window_id if last is not None else None,
+            overlay_pane_id=_optional_id(session.overlay_pane),
+            overlay_title=session.overlay_title,
+            overlay_width=session.overlay_width,
+            overlay_height=session.overlay_height,
         )
-        _insert_many(
-            db,
-            "session_environment",
-            ("session_id", "name", "value"),
-            [(session.session_id, name, value) for name, value in sorted(session.environment.items())],
-        )
-        _insert_many(
-            db,
-            "window_defaults",
-            ("session_id", "name", "value"),
-            [
-                (session.session_id, window_option_names.get(attribute, attribute), _value(value))
-                for attribute, value in sorted(arrangement.window_defaults.items())
-            ],
-        )
+        for name, value in sorted(session.environment.items()):
+            yield SessionEnvironmentRow(session.session_id, name, value)
+        for attribute, value in sorted(arrangement.window_defaults.items()):
+            yield WindowDefaultRow(session.session_id, window_option_names.get(attribute, attribute), _value(value))
         for linked, windows in ((True, arrangement.windows), (False, arrangement._unlinked_windows)):
             for place, window in enumerate(windows):
-                _write_window(db, session, window, linked, place)
+                yield from _window_rows(session, window, linked, place)
         if session.overlay_pane is not None:
-            _write_pane(db, session.overlay_pane, None, None, None)
+            yield from _pane_rows(session.overlay_pane, None, None, None)
 
-    _write_clients(pymux, db)
+    yield from _client_rows(pymux)
 
 
-def _write_window(db: sqlite3.Connection, session: Session, window: Window, linked: bool, place: int) -> None:
+def _window_rows(session: Session, window: Window, linked: bool, place: int) -> Iterator[Row]:
     # The newest of the history: a restored window can go back one step.
     previous = window.previous_active_pane
     manual = window.manual_size
-    _insert(
-        db,
-        WindowRow(
-            window_id=window.window_id,
-            session_id=session.session_id,
-            linked=linked,
-            position=place,
-            window_index=int(window.index),
-            window_name=window.chosen_name,
-            root_split_id=window.root.split_id,
-            active_pane_id=_optional_id(window._active_pane),
-            previous_active_pane_id=_optional_id(previous),
-            previous_layout=_value(window.previous_selected_layout),
-            strip=window._strip,
-            window_size=_value(window.window_size),
-            manual_height=manual.rows if manual is not None else None,
-            manual_width=manual.columns if manual is not None else None,
-            zoom=window.zoom,
-            synchronize_panes=window.synchronize_panes,
-            frame_rate=window.frame_rate,
-            frame_rate_set=window.frame_rate_set,
-            wayland_scale=window.wayland_scale,
-            window_codec=_value(window.window_codec),
-            monitor_bell=window.monitor_bell,
-            bell=window.bell,
-        ),
+    yield WindowRow(
+        window_id=window.window_id,
+        session_id=session.session_id,
+        linked=linked,
+        position=place,
+        window_index=int(window.index),
+        window_name=window.chosen_name,
+        root_split_id=window.root.split_id,
+        active_pane_id=_optional_id(window._active_pane),
+        previous_active_pane_id=_optional_id(previous),
+        previous_layout=_value(window.previous_selected_layout),
+        strip=window._strip,
+        window_size=_value(window.window_size),
+        manual_height=manual.rows if manual is not None else None,
+        manual_width=manual.columns if manual is not None else None,
+        zoom=window.zoom,
+        synchronize_panes=window.synchronize_panes,
+        frame_rate=window.frame_rate,
+        frame_rate_set=window.frame_rate_set,
+        wayland_scale=window.wayland_scale,
+        window_codec=_value(window.window_codec),
+        monitor_bell=window.monitor_bell,
+        bell=window.bell,
     )
-    _insert_many(
-        db,
-        "column_widths",
-        ("window_id", "kind", "id", "width"),
-        [(window.window_id, kind, id, width) for (kind, id), width in sorted(window.column_widths.items())],
-    )
-    _write_split(db, window, window.root, None, None)
+    for (kind, id), width in sorted(window.column_widths.items()):
+        yield ColumnWidthRow(window.window_id, kind, id, width)
+    yield from _split_rows(window, window.root, None, None)
 
 
-def _write_split(db: sqlite3.Connection, window: Window, split: _Split, parent: _Split | None, place: int | None):
-    _insert(
-        db,
-        SplitRow(
-            split_id=split.split_id,
-            window_id=window.window_id,
-            kind=_SPLIT_KINDS[type(split)],
-            parent_split_id=parent.split_id if parent is not None else None,
-            position=place,
-        ),
+def _split_rows(window: Window, split: _Split, parent: _Split | None, place: int | None) -> Iterator[Row]:
+    yield SplitRow(
+        split_id=split.split_id,
+        window_id=window.window_id,
+        kind=_SPLIT_KINDS[type(split)],
+        parent_split_id=parent.split_id if parent is not None else None,
+        position=place,
     )
-    _insert_many(
-        db,
-        "split_weights",
-        ("split_id", "kind", "id", "weight"),
-        [(split.split_id, kind, id, weight) for (kind, id), weight in sorted(split.weights.items())],
-    )
+    for (kind, id), weight in sorted(split.weights.items()):
+        yield SplitWeightRow(split.split_id, kind, id, weight)
     for position, child in enumerate(split):
         if isinstance(child, Pane):
-            _write_pane(db, child, window, split, position)
+            yield from _pane_rows(child, window, split, position)
         else:
-            _write_split(db, window, child, split, position)
+            yield from _split_rows(window, child, split, position)
 
 
-def _write_pane(
-    db: sqlite3.Connection, pane: Pane, window: Window | None, parent: _Split | None, place: int | None
-) -> None:
-    _insert(
-        db,
-        PaneRow(
-            pane_id=pane.pane_id,
-            window_id=window.window_id if window is not None else None,
-            parent_split_id=parent.split_id if parent is not None else None,
-            position=place,
-            pane_name=pane.chosen_name,
-            clock_mode=pane.clock_mode,
-            pane_current_path=pane.current_directory,
-            current_host=pane.current_host,
-            command_zone=pane.command_zone,
-            last_exit_status=pane.last_exit_status,
-            bell=pane.bell,
-        ),
+def _pane_rows(pane: Pane, window: Window | None, parent: _Split | None, place: int | None) -> Iterator[Row]:
+    yield PaneRow(
+        pane_id=pane.pane_id,
+        window_id=window.window_id if window is not None else None,
+        parent_split_id=parent.split_id if parent is not None else None,
+        position=place,
+        pane_name=pane.chosen_name,
+        clock_mode=pane.clock_mode,
+        pane_current_path=pane.current_directory,
+        current_host=pane.current_host,
+        command_zone=pane.command_zone,
+        last_exit_status=pane.last_exit_status,
+        bell=pane.bell,
     )
-    _insert_many(
-        db,
-        "pane_user_vars",
-        ("pane_id", "name", "value"),
-        [(pane.pane_id, name, value) for name, value in sorted(pane.user_vars.items())],
-    )
+    for name, value in sorted(pane.user_vars.items()):
+        yield PaneUserVarRow(pane.pane_id, name, value)
 
 
-def _write_clients(pymux: Pymux, db: sqlite3.Connection) -> None:
+def _client_rows(pymux: Pymux) -> Iterator[Row]:
     """
     Each client by the id it keeps across reattaches, and the windows it
     was on in each session. A client the server loaded and that has not
@@ -1215,27 +707,16 @@ def _write_clients(pymux: Pymux, db: sqlite3.Connection) -> None:
     for client_id, client in sorted(clients.items()):
         settings = client["settings"]
         modes = client.get("modes")
-        _insert_many(
-            db,
-            "clients",
-            CLIENT_COLUMNS,
-            [
-                (
-                    client_id,
-                    client["session_id"],
-                    client["previous_session_id"],
-                    *(settings.get(name) for name in CLIENT_SETTINGS),
-                    json.dumps(modes) if modes is not None else None,
-                    client.get("connected"),
-                )
-            ],
+        yield ClientRow(
+            client_id=client_id,
+            session_id=client["session_id"],
+            previous_session_id=client["previous_session_id"],
+            modes=json.dumps(modes) if modes is not None else None,
+            connected=client.get("connected"),
+            **{name: settings.get(name) for name in CLIENT_SETTINGS},
         )
-        _insert_many(
-            db,
-            "client_windows",
-            ("client_id", "session_id", "active_window_id", "previous_window_id"),
-            [(client_id, session_id, *pair) for session_id, pair in sorted(client["windows"].items())],
-        )
+        for session_id, (active, previous) in sorted(client["windows"].items()):
+            yield ClientWindowRow(client_id, session_id, active, previous)
 
 
 class SnapshotError(Exception):
@@ -1329,13 +810,13 @@ def read_server(path: str | os.PathLike[str]) -> dict[str, Any]:
     "The `server` table alone, for what has to be known before `load`."
     db = _open(path)
     try:
-        return {row["name"]: row["value"] for row in _rows(db, "SELECT * FROM server")}
+        return {row.name: row.value for row in select(db, ServerRow)}
     finally:
         db.close()
 
 
 #: The running jobs the holder forked, on a terminal (1) or on pipes (0).
-_HELD_JOBS = "SELECT program_id FROM jobs WHERE status = 'running' AND program_id IS NOT NULL AND pty = ?"
+_HELD_JOBS = "WHERE status = 'running' AND program_id IS NOT NULL AND pty = ?"
 
 
 def program_ids(path: str | os.PathLike[str]) -> tuple[list[int], list[int]]:
@@ -1345,9 +826,9 @@ def program_ids(path: str | os.PathLike[str]) -> tuple[list[int], list[int]]:
     """
     db = _open(path)
     try:
-        on_terminals = [row["program_id"] for row in _rows(db, "SELECT program_id FROM pane_programs")]
-        on_terminals += [row["program_id"] for row in _rows(db, _HELD_JOBS, 1)]
-        return on_terminals, [row["program_id"] for row in _rows(db, _HELD_JOBS, 0)]
+        on_terminals = [row.program_id for row in select(db, ProgramRow) if row.program_id is not None]
+        on_terminals += [cast(int, row.program_id) for row in select(db, JobRow, _HELD_JOBS, 1)]
+        return on_terminals, [cast(int, row.program_id) for row in select(db, JobRow, _HELD_JOBS, 0)]
     finally:
         db.close()
 
@@ -1388,33 +869,23 @@ def load(
 
 
 def _program(db: sqlite3.Connection, pane_id: PaneId) -> Program:
-    (row,) = _rows(db, "SELECT * FROM pane_programs WHERE pane_id = ?", pane_id)
+    (row,) = select(db, ProgramRow, "WHERE pane_id = ?", pane_id)
     appearances = [
-        json.loads(entry["value"])
-        for entry in _rows(db, "SELECT value FROM screen_appearances WHERE pane_id = ? ORDER BY appearance", pane_id)
+        json.loads(entry.value) for entry in select(db, AppearanceRow, "WHERE pane_id = ? ORDER BY appearance", pane_id)
     ]
     buffers: dict[str, list] = {}
-    for entry in _rows(
-        db,
-        "SELECT buffer, number, wrapped, cells, marks FROM screen_rows WHERE pane_id = ? ORDER BY buffer, number",
-        pane_id,
-    ):
-        buffers.setdefault(entry["buffer"], []).append(
-            [entry["number"], bool(entry["wrapped"]), json.loads(entry["cells"]), entry["marks"]]
+    for entry in select(db, ScreenRow, "WHERE pane_id = ? ORDER BY buffer, number", pane_id):
+        buffers.setdefault(entry.buffer, []).append(
+            [entry.number, bool(entry.wrapped), json.loads(entry.cells), entry.marks]
         )
     return Program(
         pane_id=pane_id,
-        pid=row["pane_pid"],
-        program_id=row["program_id"],
-        screen=Frozen(json.loads(row["screen"]), buffers, appearances, sorted(buffers), {}),
-        stream=Frozen(json.loads(row["stream"]), {}, [], [], {}),
-        process=Frozen(json.loads(row["process"]), {}, [], [], {}),
+        pid=row.pane_pid,
+        program_id=cast(int, row.program_id),
+        screen=Frozen(json.loads(row.screen), buffers, appearances, sorted(buffers), {}),
+        stream=Frozen(json.loads(row.stream), {}, [], [], {}),
+        process=Frozen(json.loads(row.process), {}, [], [], {}),
     )
-
-
-def _rows(db: sqlite3.Connection, sql: str, *params) -> list[sqlite3.Row]:
-    db.row_factory = sqlite3.Row
-    return db.execute(sql, params).fetchall()
 
 
 def _read_bindings(pymux: Pymux, db: sqlite3.Connection) -> None:
@@ -1424,68 +895,66 @@ def _read_bindings(pymux: Pymux, db: sqlite3.Connection) -> None:
     these and not in it.
     """
     pymux.hooks = {}
-    for row in _rows(db, "SELECT * FROM hooks ORDER BY hook, position"):
-        pymux.hooks.setdefault(row["hook"], []).append(row["command"])
+    for row in select(db, HookRow, "ORDER BY hook, position"):
+        pymux.hooks.setdefault(row.hook, []).append(row.command)
     bindings = pymux.key_bindings_manager
     for table, keys in list(bindings.custom_bindings):
         bindings.remove_custom_binding(bindings.custom_bindings[table, keys].written, table=table)
-    for row in _rows(db, "SELECT * FROM key_bindings"):
-        bindings.add_custom_binding(
-            row["written"], row["command"], json.loads(row["arguments"]), table=row["key_table"]
-        )
+    for row in select(db, KeyBindingRow):
+        bindings.add_custom_binding(row.written, row.command, json.loads(row.arguments), table=row.key_table)
 
 
 def _read_notifications(pymux: Pymux, db: sqlite3.Connection, counters: dict[str, int]) -> None:
     "The hub and its routes."
     center = pymux.notification_center
     center._next = counters["notification"]
-    for row in _rows(db, "SELECT * FROM notifications ORDER BY position"):
-        pane_id = PaneId(row["pane_id"]) if row["pane_id"] is not None else None
-        record = Notification(row["notification_id"], row["title"], row["body"], row["urgency"], pane_id, row["at"])
-        if row["identifier"] is None:
+    for row in select(db, NotificationRow, "ORDER BY position"):
+        pane_id = PaneId(row.pane_id) if row.pane_id is not None else None
+        record = Notification(row.notification_id, row.title, row.body, row.urgency, pane_id, row.at)
+        if row.identifier is None:
             center._records.append(record)
         else:
-            center._pending[pane_id, row["identifier"]] = record
+            center._pending[pane_id, row.identifier] = record
     routes = pymux.notifications
     routes._next = counters["notification_route"]
-    for row in _rows(db, "SELECT * FROM notification_routes ORDER BY position"):
-        key = (PaneId(row["pane_id"]), row["identifier"])
-        routes._outgoing[key] = row["ours"]
-        routes._incoming[row["ours"]] = key
+    for row in select(db, NotificationRouteRow, "ORDER BY position"):
+        key = (PaneId(row.pane_id), row.identifier)
+        routes._outgoing[key] = row.ours
+        routes._incoming[row.ours] = key
 
 
 def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int], pipes: dict[int, list[int]]) -> int | None:
-    server = {row["name"]: row["value"] for row in _rows(db, "SELECT * FROM server")}
+    server = {row.name: row.value for row in select(db, ServerRow)}
     pymux.created = server["created"]
     pymux.socket_name = server["socket_name"]
     pymux.original_cwd = server["original_cwd"]
     pymux.source_file = server["source_file"]
     pymux._startup_done = bool(server["startup_done"])
     pymux.clipboard.set_data(ClipboardData(server["clipboard"], SelectionType(server["clipboard_type"])))
-    pymux.named_buffers = {row["name"]: row["text"] for row in _rows(db, "SELECT * FROM named_buffers")}
-    for row in _rows(db, "SELECT text FROM server_lists WHERE list = 'prompt_history' ORDER BY position"):
-        pymux.prompt_history.append_string(row["text"])
+    pymux.named_buffers = {row.name: row.text for row in select(db, NamedBufferRow)}
+    for row in select(db, ServerListRow, "WHERE list = 'prompt_history' ORDER BY position"):
+        pymux.prompt_history.append_string(row.text)
     pymux.message_log.extend(
-        row["text"] for row in _rows(db, "SELECT text FROM server_lists WHERE list = 'message_log' ORDER BY position")
+        row.text for row in select(db, ServerListRow, "WHERE list = 'message_log' ORDER BY position")
     )
     _read_bindings(pymux, db)
     pymux.startup_command = server["startup_command"]
     pymux.wait_channels = {}
-    for row in _rows(db, "SELECT * FROM wait_channels"):
+    for row in select(db, WaitChannelRow):
         channel = WaitChannel()
-        channel.woken = bool(row["woken"])
-        channel.locked = bool(row["locked"])
-        pymux.wait_channels[row["name"]] = channel
+        channel.woken = bool(row.woken)
+        channel.locked = bool(row.locked)
+        pymux.wait_channels[row.name] = channel
 
-    counters = {row["name"]: row["value"] for row in _rows(db, "SELECT * FROM counters")}
+    counters = {row.name: row.value for row in select(db, CounterRow)}
 
     server_options = _server_options()
-    for row in _rows(db, "SELECT * FROM options"):
-        attribute = server_options.get(row["name"])
+    for row in select(db, OptionRow):
+        attribute = server_options.get(row.name)
         # An option this build dropped is not an error: it has nothing to hold it.
         if attribute is not None:
-            setattr(pymux, attribute, _like(getattr(pymux, attribute), row["value"]))
-    pymux.global_environment = {row["name"]: row["value"] for row in _rows(db, "SELECT * FROM global_environment")}
+            setattr(pymux, attribute, _like(getattr(pymux, attribute), row.value))
+    pymux.global_environment = {row.name: row.value for row in select(db, GlobalEnvironmentRow)}
 
     panes: dict[int | None, Pane] = {}
 
@@ -1494,12 +963,13 @@ def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int], pipes: 
         pymux.jobs._jobs[job.job_id] = job
 
     def pane_of(row: PaneRow, on_done: Callable[[], None] | None = None) -> Pane:
-        viewing = _select(db, ViewerRow, "WHERE pane_id = ?", row.pane_id)
+        viewing = select(db, ViewerRow, "WHERE pane_id = ?", row.pane_id)
         if viewing:
             pane = _viewer(pymux, viewing[0])
         else:
             pane = _adopted(pymux, masters, _program(db, PaneId(row.pane_id)), on_done)
-            ((pane.revision,),) = _rows(db, "SELECT pane_revision FROM pane_programs WHERE pane_id = ?", row.pane_id)
+            (program,) = select(db, ProgramRow, "WHERE pane_id = ?", row.pane_id)
+            pane.revision = program.pane_revision
         pane.pane_id = PaneId(row.pane_id)
         pane.chosen_name = row.pane_name
         pane.clock_mode = bool(row.clock_mode)
@@ -1508,10 +978,7 @@ def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int], pipes: 
         pane.command_zone = row.command_zone
         pane.last_exit_status = row.last_exit_status
         pane.bell = bool(row.bell)
-        pane.user_vars = {
-            var["name"]: var["value"]
-            for var in _rows(db, "SELECT * FROM pane_user_vars WHERE pane_id = ?", pane.pane_id)
-        }
+        pane.user_vars = {var.name: var.value for var in select(db, PaneUserVarRow, "WHERE pane_id = ?", pane.pane_id)}
         panes[pane.pane_id] = pane
         pymux.panes_by_id[pane.pane_id] = pane
         return pane
@@ -1520,12 +987,12 @@ def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int], pipes: 
         split = (HSplit if row.kind == "hsplit" else VSplit)()
         split.split_id = row.split_id
         split.weights = {
-            (weight["kind"], weight["id"]): weight["weight"]
-            for weight in _rows(db, "SELECT * FROM split_weights WHERE split_id = ?", split.split_id)
+            (weight.kind, weight.id): weight.weight
+            for weight in select(db, SplitWeightRow, "WHERE split_id = ?", split.split_id)
         }
         children = [
-            *[(r.position, split_of(r)) for r in _select(db, SplitRow, "WHERE parent_split_id = ?", split.split_id)],
-            *[(r.position, pane_of(r)) for r in _select(db, PaneRow, "WHERE parent_split_id = ?", split.split_id)],
+            *[(r.position, split_of(r)) for r in select(db, SplitRow, "WHERE parent_split_id = ?", split.split_id)],
+            *[(r.position, pane_of(r)) for r in select(db, PaneRow, "WHERE parent_split_id = ?", split.split_id)],
         ]
         # Rows with a parent always carry a position: the writer
         # numbers every child and leaves None only for parentless
@@ -1536,34 +1003,33 @@ def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int], pipes: 
     windows: dict[int, Window] = {}
     window_attributes = {name: attribute for attribute, name in _window_option_names().items()}
     sessions = []
-    for row in _rows(db, "SELECT * FROM sessions ORDER BY position"):
-        session = Session(SessionId(row["session_id"]), row["session_name"])
-        session.created = row["session_created"]
-        session.last_used = row["last_used"]
-        session.default_size = Size(rows=row["default_height"], columns=row["default_width"])
-        session.overlay_title = row["overlay_title"]
-        session.overlay_width = row["overlay_width"]
-        session.overlay_height = row["overlay_height"]
+    for row in select(db, SessionRow, "ORDER BY position"):
+        session = Session(SessionId(row.session_id), row.session_name)
+        session.created = row.session_created
+        session.last_used = row.last_used
+        session.default_size = Size(rows=row.default_height, columns=row.default_width)
+        session.overlay_title = row.overlay_title
+        session.overlay_width = row.overlay_width
+        session.overlay_height = row.overlay_height
         session.environment = {
-            env["name"]: env["value"]
-            for env in _rows(db, "SELECT * FROM session_environment WHERE session_id = ?", session.session_id)
+            env.name: env.value for env in select(db, SessionEnvironmentRow, "WHERE session_id = ?", session.session_id)
         }
         arrangement = session.arrangement
-        arrangement.base_index = row["base_index"]
-        arrangement.renumber_windows = bool(row["renumber_windows"])
-        for default in _rows(db, "SELECT * FROM window_defaults WHERE session_id = ?", session.session_id):
-            attribute = window_attributes.get(default["name"], default["name"])
+        arrangement.base_index = row.base_index
+        arrangement.renumber_windows = bool(row.renumber_windows)
+        for default in select(db, WindowDefaultRow, "WHERE session_id = ?", session.session_id):
+            attribute = window_attributes.get(default.name, default.name)
             fresh = Window()
             if hasattr(fresh, attribute):
-                arrangement.window_defaults[attribute] = _like(getattr(fresh, attribute), default["value"])
+                arrangement.window_defaults[attribute] = _like(getattr(fresh, attribute), default.value)
 
-        for window_row in _select(
+        for window_row in select(
             db, WindowRow, "WHERE session_id = ? ORDER BY linked DESC, position", session.session_id
         ):
             window = Window(WindowIndex(window_row.window_index))
             window.window_id = WindowId(window_row.window_id)
             window.chosen_name = window_row.window_name
-            (root_row,) = _select(db, SplitRow, "WHERE split_id = ?", window_row.root_split_id)
+            (root_row,) = select(db, SplitRow, "WHERE split_id = ?", window_row.root_split_id)
             window.root = split_of(root_row)  # type: ignore[assignment]
             window._active_pane = panes.get(window_row.active_pane_id)
             previous = panes.get(window_row.previous_active_pane_id)
@@ -1583,15 +1049,15 @@ def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int], pipes: 
             window.monitor_bell = bool(window_row.monitor_bell)
             window.bell = bool(window_row.bell)
             window.column_widths = {
-                (width["kind"], width["id"]): width["width"]
-                for width in _rows(db, "SELECT * FROM column_widths WHERE window_id = ?", window.window_id)
+                (width.kind, width.id): width.width
+                for width in select(db, ColumnWidthRow, "WHERE window_id = ?", window.window_id)
             }
             (arrangement.windows if window_row.linked else arrangement._unlinked_windows).append(window)
             windows[window.window_id] = window
 
-        arrangement._last_active_window = windows.get(row["last_active_window_id"])
-        if row["overlay_pane_id"] is not None:
-            (overlay_row,) = _select(db, PaneRow, "WHERE pane_id = ?", row["overlay_pane_id"])
+        arrangement._last_active_window = windows.get(cast(int, row.last_active_window_id))
+        if row.overlay_pane_id is not None:
+            (overlay_row,) = select(db, PaneRow, "WHERE pane_id = ?", row.overlay_pane_id)
             overlay: list[Pane] = []
             session.overlay_pane = pane_of(
                 overlay_row,
@@ -1603,19 +1069,21 @@ def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int], pipes: 
     pymux.sessions = sessions
 
     pymux.returning_clients = {}
-    for row in _rows(db, "SELECT * FROM clients"):
-        pymux.returning_clients[row["client_id"]] = {
-            "session_id": row["session_id"],
-            "previous_session_id": row["previous_session_id"],
+    for client in select(db, ClientRow):
+        pymux.returning_clients[client.client_id] = {
+            "session_id": client.session_id,
+            "previous_session_id": client.previous_session_id,
             "windows": {
-                window["session_id"]: (window["active_window_id"], window["previous_window_id"])
-                for window in _rows(db, "SELECT * FROM client_windows WHERE client_id = ?", row["client_id"])
+                window.session_id: (window.active_window_id, window.previous_window_id)
+                for window in select(db, ClientWindowRow, "WHERE client_id = ?", client.client_id)
             },
             "settings": {
-                name: _CLIENT_SETTING_TYPES[name](row[name]) for name in CLIENT_SETTINGS if row[name] is not None
+                name: _CLIENT_SETTING_TYPES[name](value)
+                for name in CLIENT_SETTINGS
+                if (value := getattr(client, name)) is not None
             },
-            "modes": json.loads(row["modes"]) if row["modes"] is not None else None,
-            "connected": row["connected"],
+            "modes": json.loads(client.modes) if client.modes is not None else None,
+            "connected": client.connected,
         }
 
     Pane._pane_counter = counters["pane"]
@@ -1624,9 +1092,7 @@ def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int], pipes: 
     pymux._session_counter = counters["session"]
     pymux._uses = counters["uses"]
     pymux.jobs.last_id = counters["job"]
-    pymux.jobs.saved_queries = {
-        row["name"]: (row["sql"], row["description"]) for row in _rows(db, "SELECT * FROM saved_queries")
-    }
+    pymux.jobs.saved_queries = {row.name: (row.sql, row.description) for row in select(db, SavedQueryRow)}
     _read_notifications(pymux, db, counters)
     return server["listener_fd"]
 
@@ -1638,33 +1104,35 @@ def _read_jobs(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int], pi
     `start` supervises it again.
     """
     jobs = []
-    for row in _rows(db, "SELECT * FROM jobs ORDER BY job_id"):
+    for row in select(db, JobRow, "ORDER BY job_id"):
         job = Job(
-            JobId(row["job_id"]),
-            row["command"],
-            row["directory"],
-            row["started"],
-            [(tag["key"], tag["value"]) for tag in _rows(db, "SELECT * FROM job_tags WHERE job_id = ?", row["job_id"])],
-            json.loads(row["env"]),
-            bool(row["pty"]),
+            JobId(row.job_id),
+            row.command,
+            row.directory,
+            row.started,
+            [(tag.key, tag.value) for tag in select(db, JobTagRow, "WHERE job_id = ?", row.job_id)],
+            json.loads(row.env),
+            bool(row.pty),
         )
-        job.status = row["status"]
-        job.returncode = row["returncode"]
-        job.error = row["error"]
-        job.finished = row["finished"]
-        job.last_active = row["last_active"]
-        job.stdout_dropped = row["stdout_dropped"]
-        job.stderr_dropped = row["stderr_dropped"]
-        for chunk in _rows(db, "SELECT * FROM job_output WHERE job_id = ? ORDER BY stream, start", job.job_id):
-            chunks = job.stdout_chunks if chunk["stream"] == "stdout" else job.stderr_chunks
-            chunks.append((chunk["start"], chunk["data"]))
+        job.status = row.status
+        job.returncode = row.returncode
+        job.error = row.error
+        job.finished = row.finished
+        job.last_active = row.last_active
+        job.stdout_dropped = row.stdout_dropped
+        job.stderr_dropped = row.stderr_dropped
+        for chunk in select(db, JobOutputRow, "WHERE job_id = ? ORDER BY stream, start", job.job_id):
+            chunks = job.stdout_chunks if chunk.stream == "stdout" else job.stderr_chunks
+            chunks.append((chunk.start, chunk.data))
         job.stdout_kept = sum(len(data) for _, data in job.stdout_chunks)
         job.stderr_kept = sum(len(data) for _, data in job.stderr_chunks)
-        job.program_id = row["program_id"]
-        job.pid = row["pid"]
+        job.program_id = row.program_id
+        job.pid = row.pid
         if not job.is_done:
             if pymux.holding is None:
                 raise SnapshotError("this server has no holder to take job %d from" % (job.job_id,))
+            if job.pid is None:
+                raise SnapshotError("job %d runs and the snapshot holds no pid for it" % (job.job_id,))
             if job.pty and job.program_id in masters:
                 job.backend = HeldBackend.adopt_held(pymux.holding, job.program_id, job.pid, masters[job.program_id])
             elif not job.pty and job.program_id in pipes:
