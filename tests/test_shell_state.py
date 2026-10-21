@@ -49,10 +49,6 @@ class FakeScreen:
 
     def __init__(self, cursor_y=3):
         self.cursor_y = cursor_y
-        self.cleared = 0
-
-    def clear_history(self):
-        self.cleared += 1
 
 
 class FakePane:
@@ -459,20 +455,17 @@ def test_copy_follows_clipboard_option(mode):
         assert connection.written == []
 
 
-def test_clear_scrollback_clears_screen_and_travels_on():
+def test_clear_scrollback_travels_on():
+    "The pane's screen clears its own history. Lillecarl/pymux#504."
     pymux, connections = make_pymux()
-    pane = FakePane()
-    pymux.forward_osc(pane, "1337", "ClearScrollback")
-    assert pane.screen.cleared == 1
+    pymux.forward_osc(FakePane(), "1337", "ClearScrollback")
     for connection in connections:
         assert connection.written == [sequence("1337", "ClearScrollback")]
 
 
 def test_clear_scrollback_with_arguments_is_dropped():
     pymux, connections = make_pymux()
-    pane = FakePane()
-    pymux.forward_osc(pane, "1337", "ClearScrollback=x")
-    assert pane.screen.cleared == 0
+    pymux.forward_osc(FakePane(), "1337", "ClearScrollback=x")
     for connection in connections:
         assert connection.written == []
 

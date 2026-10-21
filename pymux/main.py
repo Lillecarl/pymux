@@ -55,7 +55,7 @@ from pyte.environment import terminal_name
 from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
 from pyte.keep import Keep
 from pyte.keys import KEY_PROFILES, KeyboardFlag, KeyProfile, key_profile_of
-from pyte.osc import Osc
+from pyte.osc import CLEAR_SCROLLBACK, Osc
 
 from . import hacks_and_lies, introspect, kernels, log
 from .agentic import CallerContext
@@ -3968,11 +3968,9 @@ exec pymux notify -u "$urgency" -- "$@"
             self._mirror_clipboard("c;" + data)
             return True
 
-        if key == "ClearScrollback":
-            if rest:
-                return False
-            pane.screen.clear_history()
-            return True
+        if key == CLEAR_SCROLLBACK:
+            # The pane's screen has cleared its own history already.
+            return not rest
 
         return False
 
