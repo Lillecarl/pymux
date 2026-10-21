@@ -407,7 +407,15 @@ def _pane_current_command(context: FormatContext) -> str:
 
 
 def _pane_current_path(context: FormatContext) -> str:
-    "Working directory of the process in the pane."
+    """
+    Where the pane says it is, else where its process is.
+
+    The same order a new pane starts in (`_directory_to_start_in`), so
+    `split-window -c "#{pane_current_path}"` and a bare `split-window`
+    agree. Over ssh the process table sees only the local ssh.
+    """
+    if context.pane.current_directory:
+        return context.pane.current_directory
     try:
         return context.pane.process.get_cwd() or ""
     except Exception:

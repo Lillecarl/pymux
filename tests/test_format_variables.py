@@ -137,6 +137,18 @@ async def test_a_pane_showing_the_clock_is_in_a_mode(pymux):
     assert format_pymux_string(pymux, "#{pane_in_mode}") == "1"
 
 
+async def test_the_current_path_is_where_the_pane_says_it_is(pymux):
+    """
+    A shell reports its directory on every prompt, and a new pane starts
+    there. `#{pane_current_path}` read the process table alone, so
+    `split-window -c "#{pane_current_path}"` started somewhere else.
+    Lillecarl/pymux#498.
+    """
+    _context(pymux).pane.current_directory = "/reported"
+
+    assert format_pymux_string(pymux, "#{pane_current_path}") == "/reported"
+
+
 async def test_the_prefix_a_client_holds_is_a_format(pymux):
     """
     `#{client_prefix}` says the client waits for the key after the
