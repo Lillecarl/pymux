@@ -1426,7 +1426,7 @@ class LayoutManager:
                 format_str = self.pymux.window_status_current_format
 
             else:
-                style = "class:window"
+                style = "class:window.bell" if w.bell else "class:window"
                 format_str = self.pymux.window_status_format
 
             result.append(

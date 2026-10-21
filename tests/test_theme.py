@@ -235,6 +235,7 @@ RULES = {
     "statusbar": "noreverse bg:ansigreen #000000",
     "statusbar window": "#ffffff",
     "statusbar window.current": "bg:#44ff44 #000000",
+    "statusbar window.bell": "reverse",
     "auto-suggestion": "bg:#4e5e4e #88aa88",
     "message": "bg:#bbee88 #222222",
     # No role in them: a selection on a reversed pane is turned back

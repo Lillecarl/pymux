@@ -171,6 +171,7 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     pane.current_host = "far"
     pane.command_zone = "C"
     pane.last_exit_status = 2
+    pane.bell = True
     pane.screen.mark_row(RowMark.PROMPT)
     pane.user_vars = {"badge": "on", "role": "build"}
     strip.panes[0].user_vars = {"badge": "off"}
@@ -185,6 +186,8 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     stacked.frame_rate_set = True
     stacked.wayland_scale = "auto*1.5"
     stacked.window_codec = WindowCodec.VP9
+    stacked.monitor_bell = False
+    stacked.bell = True
     strip.set_column_width(strip.root[0], 0.75)
     strip.set_column_width(strip.root[1], 0.5)
     strip.root.set_weight(strip.root[1], 2)
@@ -623,23 +626,22 @@ def test_the_table_list_is_the_schema_in_order():
     assert _shape(live) == {name: shape for name, shape in _shape(db).items() if name in snapshot.WHOLE_TABLES}
 
 
-def test_a_version_23_snapshot_reads_with_unmarked_rows(pymux, tmp_path):
-    "Version 24 keeps a shell's marks on the screen's rows. Lillecarl/pymux#500."
-    path = tmp_path / "v23.sqlite"
+def test_a_version_24_snapshot_reads_with_no_bell_and_bells_monitored(pymux, tmp_path):
+    "Version 25 keeps the bell flags and `monitor-bell`. Lillecarl/pymux#501."
+    path = tmp_path / "v24.sqlite"
     snapshot.save(pymux, path)
     db = sqlite3.connect(path)
-    db.execute("ALTER TABLE screen_rows DROP COLUMN marks")
-    db.execute(
-        "CREATE TABLE pane_marks(pane_id INTEGER NOT NULL REFERENCES panes(pane_id),"
-        " position INTEGER NOT NULL, row INTEGER NOT NULL, PRIMARY KEY (pane_id, position))"
-    )
-    db.execute("PRAGMA user_version = 23")
+    db.execute("ALTER TABLE windows DROP COLUMN monitor_bell")
+    db.execute("ALTER TABLE windows DROP COLUMN bell")
+    db.execute("ALTER TABLE panes DROP COLUMN bell")
+    db.execute("PRAGMA user_version = 24")
     db.commit()
     db.close()
 
     stepped = snapshot._open(path)
     assert _shape(stepped) == _shape_of_a_fresh_snapshot()
-    assert stepped.execute("SELECT DISTINCT marks FROM screen_rows").fetchall() in ([], [(0,)])
+    assert stepped.execute("SELECT DISTINCT monitor_bell, bell FROM windows").fetchall() in ([], [(1, 0)])
+    assert stepped.execute("SELECT DISTINCT bell FROM panes").fetchall() in ([], [(0,)])
 
 
 async def test_a_running_job_this_server_forked_is_refused(pymux, tmp_path):

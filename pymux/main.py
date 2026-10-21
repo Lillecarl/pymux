@@ -2826,10 +2826,15 @@ class Pymux:
             self.invalidate(Woke.PANE_ENDED)
 
         def bell():
-            "Sound bell on all clients."
+            "Sound bell on all clients, and flag it where nobody saw it."
             if self.enable_bell:
                 for c in self.apps:
                     c.output.bell()
+            place = self._place_of(pane)
+            if place is not None:
+                session, window = place
+                if session.arrangement.ring(window, pane, self.apps):
+                    self.invalidate(Woke.PANE_RANG)
 
         def forward_osc(code: str, param: str) -> None:
             "Pass an OSC sequence of this pane to the terminals of the clients."

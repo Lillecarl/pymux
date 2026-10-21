@@ -137,6 +137,9 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         "statusbar": "noreverse bg:%s %s" % (r["signal"], r["signal-text"]),
         "statusbar window": r["text-bright"],
         "statusbar window.current": "bg:%s %s" % (r["signal-bright"], r["signal-text"]),
+        # A window whose bell rang unseen, reversed as tmux's
+        # `window-status-bell-style` is. Lillecarl/pymux#501.
+        "statusbar window.bell": "reverse",
         "auto-suggestion": "bg:%s %s" % (r["suggestion"], r["suggestion-text"]),
         "message": "bg:%s %s" % (r["notice"], r["notice-text"]),
         # A selection on a pane that a program reversed with DECSCNM.

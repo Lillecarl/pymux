@@ -342,16 +342,18 @@ def _symbol_window_name(context: FormatContext) -> str:
 def _symbol_window_flags(context: FormatContext) -> str:
     arrangement = context.session.arrangement
     window = context.window
+    # tmux's order: the bell before the current mark, the zoom after.
+    bell = "!" if window.bell else ""
     z = "Z" if window.zoom else ""
 
     if window == arrangement.get_active_window():
-        return "*" + z
+        return bell + "*" + z
     if window == arrangement.get_previous_active_window():
-        return "-" + z
+        return bell + "-" + z
     # One column wide either way, so the windows beside this one do
     # not move when it becomes the current one. `#{window_flags}`
     # answers the flags alone.
-    return z + " "
+    return bell + z + " "
 
 
 def _symbol_pane_id(context: FormatContext) -> str:
@@ -448,13 +450,22 @@ def _window_active(context: FormatContext) -> str:
 def _window_flags(context: FormatContext) -> str:
     arrangement = context.session.arrangement
     window = context.window
+    bell = "!" if window.bell else ""
     z = "Z" if window.zoom else ""
 
     if window == arrangement.get_active_window():
-        return "*" + z
+        return bell + "*" + z
     if window == arrangement.get_previous_active_window():
-        return "-" + z
-    return z
+        return bell + "-" + z
+    return bell + z
+
+
+def _window_bell_flag(context: FormatContext) -> str:
+    return "1" if context.window.bell else "0"
+
+
+def _pane_bell_flag(context: FormatContext) -> str:
+    return "1" if context.pane.bell else "0"
 
 
 def _window_panes(context: FormatContext) -> str:
@@ -750,6 +761,8 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     # rather than how much. `Pane.revision` says what moves it.
     # Lillecarl/pymux#387.
     "pane_revision": lambda c: str(c.pane.revision),
+    # Not tmux's: which pane of the window rang. Lillecarl/pymux#501.
+    "pane_bell_flag": _pane_bell_flag,
     "history_size": _history_size,
     "history_limit": lambda c: str(c.pymux.history_limit),
     # Window.
@@ -758,6 +771,7 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "window_name": _window_name,
     "window_active": _window_active,
     "window_flags": _window_flags,
+    "window_bell_flag": _window_bell_flag,
     "window_panes": _window_panes,
     "window_width": lambda c: str(c.pane.process.sx),
     "window_height": lambda c: str(c.pane.process.sy),

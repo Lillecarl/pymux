@@ -1118,6 +1118,9 @@ ALL_CLIENT_OPTIONS = {
 
 ALL_WINDOW_OPTIONS = {
     "synchronize-panes": OnOffOption("synchronize_panes", scope=Scope.WINDOW),
+    # Whether a bell nobody saw flags the window and the pane it rang
+    # in. Lillecarl/pymux#501.
+    "monitor-bell": OnOffOption("monitor_bell", scope=Scope.WINDOW),
     # Lay this window's panes out as a strip that may run past the
     # edge of the screen, the way niri's scrollable tiling works,
     # instead of dividing the window between them.

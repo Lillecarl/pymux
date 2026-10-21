@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import math
 import os
+from collections.abc import Iterable
 from enum import Enum
 from typing import TYPE_CHECKING, ClassVar
 from weakref import WeakKeyDictionary, ref
@@ -106,6 +107,7 @@ class Pane:
         "current_host": Keep.SAVED,
         "command_zone": Keep.SAVED,
         "last_exit_status": Keep.SAVED,
+        "bell": Keep.SAVED,
         # `#{pane_revision}` only grows: an agent waiting on a change
         # holds a number from before the upgrade.
         "revision": Keep.SAVED,
@@ -174,6 +176,12 @@ class Pane:
         #: "OSC 133 ; D ; status". `None` is no finished command yet,
         #: or one that was aborted.
         self.last_exit_status: int | None = None
+
+        #: The program rang the bell where nobody saw it: in a pane that
+        #: was not the active one of a window a client looks at. Making
+        #: the pane active clears it. `#{pane_bell_flag}` is it.
+        #: Lillecarl/pymux#501.
+        self.bell = False
 
         #: What `record-pane` is recording of this pane, or None.
         self.recording: Recording | None = None
@@ -351,6 +359,8 @@ class Window:
         "frame_rate_set": Keep.SAVED,
         "wayland_scale": Keep.SAVED,
         "window_codec": Keep.SAVED,
+        "monitor_bell": Keep.SAVED,
+        "bell": Keep.SAVED,
     }
 
     _window_counter = 1000  # Start here, to avoid confusion with window index.
@@ -416,6 +426,15 @@ class Window:
         #: How the Wayland windows in it reach a client, as
         #: `window-codec` says. Lillecarl/pymux#639.
         self.window_codec = WindowCodec.LOSSLESS
+
+        #: Whether a bell in this window raises the flags below, as
+        #: `monitor-bell` says. On, as in tmux.
+        self.monitor_bell = True
+        #: A pane in it rang the bell while no client looked at it.
+        #: A client that makes it its window clears it, and
+        #: `#{window_bell_flag}` and the `!` of `#F` are it.
+        #: Lillecarl/pymux#501.
+        self.bell = False
 
         # Give unique ID.
         Window._window_counter += 1
@@ -597,6 +616,14 @@ class Window:
 
         self.zoom = False
         self._active_pane = value
+        if value is not None:
+            value.bell = False
+
+    def seen(self) -> None:
+        "A client looks at this window now, so its bell and its active pane's are heard."
+        self.bell = False
+        if self._active_pane is not None:
+            self._active_pane.bell = False
 
     @property
     def previous_active_pane(self) -> Pane | None:
@@ -1125,6 +1152,7 @@ class Arrangement:
                 window = self.windows[0]
 
             self._active_window_for_cli[app] = window
+            window.seen()
             return window
 
     def set_active_window(self, window: Window) -> None:
@@ -1140,6 +1168,28 @@ class Arrangement:
             history.remove(window)
         self._active_window_for_cli[app] = window
         self._last_active_window = window
+        window.seen()
+
+    def ring(self, window: Window, pane: Pane, apps: Iterable[Application]) -> bool:
+        """
+        Raise the bell flags for a bell of `pane` that nobody saw ring.
+        True when a flag went up, so a status line has something new.
+
+        A window is seen when one of `apps`, the clients attached now,
+        has it as its window, and a pane when it is also the active pane
+        there. A detached client keeps its window for when it comes back,
+        and sees nothing meanwhile. tmux keeps the window's flag alone;
+        the pane's says which pane of a split it was.
+        """
+        if not window.monitor_bell:
+            return False
+        watched = any(self._active_window_for_cli.get(app) is window for app in apps)
+        raised = False
+        if not watched and not window.bell:
+            window.bell = raised = True
+        if (not watched or pane is not window.active_pane) and not pane.bell:
+            pane.bell = raised = True
+        return raised
 
     def set_active_window_from_pane_id(self, pane_id: PaneId) -> None:
         """
