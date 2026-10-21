@@ -409,17 +409,32 @@ TABLES = (
     "screen_rows",
 )
 
+_JOB_TABLES = ("jobs", "job_tags", "job_output")
+
+#: A pane's program and its screen, which only the transition holds.
+_SCREEN_TABLES = ("pane_programs", "screen_appearances", "screen_rows")
+
 #: The tables a later write replaces whole. A finished job never
 #: changes, and the screens' tables take only what changed since the
 #: write before.
-WHOLE_TABLES = TABLES[: TABLES.index("jobs")]
+WHOLE_TABLES = tuple(table for table in TABLES if table not in _JOB_TABLES + _SCREEN_TABLES)
+
+
+def _schema_of(tables: tuple[str, ...]) -> str:
+    "The part of `SCHEMA` that creates these tables, as sqlite read it."
+    db = sqlite3.connect(":memory:")
+    try:
+        db.executescript(SCHEMA)
+        made = dict(db.execute("SELECT name, sql FROM sqlite_master WHERE type = 'table'").fetchall())
+    finally:
+        db.close()
+    return "".join("%s;\n" % made[table] for table in tables)
+
 
 #: The tables of `WHOLE_TABLES`, which are what the live store holds:
 #: no job, which the job store holds live, and no screen, which never
 #: goes in a live store (Lillecarl/pymux#399).
-LIVE_SCHEMA = SCHEMA[: SCHEMA.index("CREATE TABLE jobs(")]
-
-_JOB_TABLES = ("jobs", "job_tags", "job_output")
+LIVE_SCHEMA = _schema_of(WHOLE_TABLES)
 
 _SPLIT_KINDS: dict[type[_Split], str] = {HSplit: "hsplit", VSplit: "vsplit"}
 
@@ -591,6 +606,19 @@ def _insert(db: sqlite3.Connection, row: _Row) -> None:
     )
 
 
+def _insert_many(db: sqlite3.Connection, table: str, columns: tuple[str, ...], rows, replace: bool = False) -> None:
+    """
+    Rows into `table`, each in the order `columns` names. Never the
+    table's own order: a column that moves in `SCHEMA` would take
+    another column's value without a word.
+    """
+    db.executemany(
+        "INSERT %sINTO %s (%s) VALUES (%s)"
+        % ("OR REPLACE " if replace else "", table, ", ".join(columns), ", ".join("?" * len(columns))),
+        rows,
+    )
+
+
 def _select[R: _Row](db: sqlite3.Connection, cls: type[R], where: str, *params) -> list[R]:
     "`cls` for each row of its table that `where` picks. A column it does not name raises."
     return [cls(**dict(row)) for row in _rows(db, "SELECT * FROM %s %s" % (cls.TABLE, where), *params)]
@@ -653,7 +681,7 @@ class Snapshot:
             alive = {pane.pane_id for pane in panes}
             for gone in set(self.freezers) - alive:
                 del self.freezers[gone]
-                for table in ("pane_programs", "screen_appearances", "screen_rows"):
+                for table in _SCREEN_TABLES:
                     self.db.execute("DELETE FROM %s WHERE pane_id = ?" % table, (gone,))
             for pane in panes:
                 self._write_program(pane)
@@ -669,30 +697,52 @@ class Snapshot:
             if job.job_id in self.jobs_written:
                 continue
             self.jobs_written.add(job.job_id)
-            db.execute(
-                "INSERT INTO jobs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            _insert_many(
+                db,
+                "jobs",
                 (
-                    job.job_id,
-                    job.command,
-                    job.directory,
-                    job.pty,
-                    job.status,
-                    job.returncode,
-                    job.error,
-                    job.started,
-                    job.finished,
-                    job.last_active,
-                    json.dumps(job.env, sort_keys=True),
-                    job.stdout_dropped,
-                    job.stderr_dropped,
+                    "job_id",
+                    "command",
+                    "directory",
+                    "pty",
+                    "status",
+                    "returncode",
+                    "error",
+                    "started",
+                    "finished",
+                    "last_active",
+                    "env",
+                    "stdout_dropped",
+                    "stderr_dropped",
                 ),
+                [
+                    (
+                        job.job_id,
+                        job.command,
+                        job.directory,
+                        job.pty,
+                        job.status,
+                        job.returncode,
+                        job.error,
+                        job.started,
+                        job.finished,
+                        job.last_active,
+                        json.dumps(job.env, sort_keys=True),
+                        job.stdout_dropped,
+                        job.stderr_dropped,
+                    )
+                ],
             )
-            db.executemany(
-                "INSERT INTO job_tags VALUES (?, ?, ?)",
+            _insert_many(
+                db,
+                "job_tags",
+                ("job_id", "key", "value"),
                 [(job.job_id, key, value) for key, value in sorted(job.tags.items())],
             )
-            db.executemany(
-                "INSERT INTO job_output VALUES (?, ?, ?, ?)",
+            _insert_many(
+                db,
+                "job_output",
+                ("job_id", "stream", "start", "data"),
                 [
                     (job.job_id, stream, start, data)
                     for stream, chunks in (("stdout", job.stdout_chunks), ("stderr", job.stderr_chunks))
@@ -710,22 +760,29 @@ class Snapshot:
             freezer = self.freezers[pane.pane_id] = Freezer()
         screen = freezer.freeze(control.screen)
         db = self.db
-        db.execute(
-            "INSERT OR REPLACE INTO pane_programs VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (
-                pane.pane_id,
-                backend.pid,
-                # Output moves it, so it lives with the screen.
-                pane.revision,
-                json.dumps(screen.root),
-                json.dumps(freeze(control.stream).root),
-                json.dumps(freeze(process).root),
-                backend.program_id,
-            ),
+        _insert_many(
+            db,
+            "pane_programs",
+            ("pane_id", "pane_pid", "pane_revision", "screen", "stream", "process", "program_id"),
+            [
+                (
+                    pane.pane_id,
+                    backend.pid,
+                    # Output moves it, so it lives with the screen.
+                    pane.revision,
+                    json.dumps(screen.root),
+                    json.dumps(freeze(control.stream).root),
+                    json.dumps(freeze(process).root),
+                    backend.program_id,
+                )
+            ],
+            replace=True,
         )
         first = len(freezer.appearance_index) - len(screen.appearances)
-        db.executemany(
-            "INSERT INTO screen_appearances VALUES (?, ?, ?)",
+        _insert_many(
+            db,
+            "screen_appearances",
+            ("pane_id", "appearance", "value"),
             [(pane.pane_id, first + index, json.dumps(value)) for index, value in enumerate(screen.appearances)],
         )
         for buffer in screen.whole:
@@ -735,13 +792,16 @@ class Snapshot:
                 "DELETE FROM screen_rows WHERE pane_id = ? AND buffer = ? AND number = ?",
                 [(pane.pane_id, buffer, number) for number in numbers],
             )
-        db.executemany(
-            "INSERT OR REPLACE INTO screen_rows VALUES (?, ?, ?, ?, ?, ?)",
+        _insert_many(
+            db,
+            "screen_rows",
+            ("pane_id", "buffer", "number", "wrapped", "text", "cells"),
             [
                 (pane.pane_id, buffer, number, wrapped, _text_of(cells), json.dumps(cells))
                 for buffer, rows in screen.buffers.items()
                 for number, wrapped, cells in rows
             ],
+            replace=True,
         )
 
     def finish(self) -> None:
@@ -820,8 +880,10 @@ def write_tables(pymux: Pymux, db: sqlite3.Connection) -> None:
     "Every table of `LIVE_SCHEMA`, from what `pymux` holds now, into empty ones."
     listener = pymux.listener
     clipboard = pymux.clipboard.get_data()
-    db.executemany(
-        "INSERT INTO server VALUES (?, ?)",
+    _insert_many(
+        db,
+        "server",
+        ("name", "value"),
         [
             ("created", pymux.created),
             ("socket_name", pymux.socket_name),
@@ -838,20 +900,26 @@ def write_tables(pymux: Pymux, db: sqlite3.Connection) -> None:
             ("startup_command", pymux.startup_command),
         ],
     )
-    db.executemany("INSERT INTO named_buffers VALUES (?, ?)", sorted(pymux.named_buffers.items()))
-    db.executemany(
-        "INSERT INTO server_lists VALUES (?, ?, ?)",
+    _insert_many(db, "named_buffers", ("name", "text"), sorted(pymux.named_buffers.items()))
+    _insert_many(
+        db,
+        "server_lists",
+        ("list", "position", "text"),
         [
             *(("prompt_history", n, text) for n, text in enumerate(pymux.prompt_history.get_strings())),
             *(("message_log", n, text) for n, text in enumerate(pymux.message_log)),
         ],
     )
-    db.executemany(
-        "INSERT INTO hooks VALUES (?, ?, ?)",
+    _insert_many(
+        db,
+        "hooks",
+        ("hook", "position", "command"),
         [(hook, n, command) for hook, commands in sorted(pymux.hooks.items()) for n, command in enumerate(commands)],
     )
-    db.executemany(
-        "INSERT INTO key_bindings VALUES (?, ?, ?, ?)",
+    _insert_many(
+        db,
+        "key_bindings",
+        ("key_table", "written", "command", "arguments"),
         sorted(
             (table, binding.written, binding.command, json.dumps(binding.arguments))
             for (table, _keys), binding in pymux.key_bindings_manager.custom_bindings.items()
@@ -860,30 +928,40 @@ def write_tables(pymux: Pymux, db: sqlite3.Connection) -> None:
     # A finished record has its place in the hub; one still assembling
     # has the identifier its chunks name instead.
     center = pymux.notification_center
-    db.executemany(
-        "INSERT INTO notifications VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    _insert_many(
+        db,
+        "notifications",
+        ("notification_id", "title", "body", "urgency", "pane_id", "at", "position", "identifier"),
         [
             *((*record, position, None) for position, record in enumerate(center._records)),
             *((*record, None, identifier) for (_pane_id, identifier), record in center._pending.items()),
         ],
     )
-    db.executemany(
-        "INSERT INTO saved_queries VALUES (?, ?, ?)",
+    _insert_many(
+        db,
+        "saved_queries",
+        ("name", "sql", "description"),
         [(name, sql, description) for name, (sql, description) in sorted(pymux.jobs.saved_queries.items())],
     )
-    db.executemany(
-        "INSERT INTO wait_channels VALUES (?, ?, ?)",
+    _insert_many(
+        db,
+        "wait_channels",
+        ("name", "woken", "locked"),
         [(name, channel.woken, channel.locked) for name, channel in sorted(pymux.wait_channels.items())],
     )
-    db.executemany(
-        "INSERT INTO notification_routes VALUES (?, ?, ?, ?)",
+    _insert_many(
+        db,
+        "notification_routes",
+        ("ours", "pane_id", "identifier", "position"),
         [
             (ours, pane_id, identifier, position)
             for position, (ours, (pane_id, identifier)) in enumerate(pymux.notifications._incoming.items())
         ],
     )
-    db.executemany(
-        "INSERT INTO counters VALUES (?, ?)",
+    _insert_many(
+        db,
+        "counters",
+        ("name", "value"),
         [
             ("pane", Pane._pane_counter),
             ("window", Window._window_counter),
@@ -895,40 +973,65 @@ def write_tables(pymux: Pymux, db: sqlite3.Connection) -> None:
             ("notification_route", pymux.notifications._next),
         ],
     )
-    db.executemany(
-        "INSERT INTO options VALUES (?, ?)",
+    _insert_many(
+        db,
+        "options",
+        ("name", "value"),
         [(name, _value(getattr(pymux, attribute))) for name, attribute in sorted(_server_options().items())],
     )
-    db.executemany("INSERT INTO global_environment VALUES (?, ?)", sorted(pymux.global_environment.items()))
+    _insert_many(db, "global_environment", ("name", "value"), sorted(pymux.global_environment.items()))
 
     window_option_names = _window_option_names()
     for position, session in enumerate(pymux.sessions):
         arrangement = session.arrangement
-        db.execute(
-            "INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        _insert_many(
+            db,
+            "sessions",
             (
-                session.session_id,
-                session.name,
-                position,
-                session.created,
-                session.last_used,
-                session.default_size.rows,
-                session.default_size.columns,
-                arrangement.base_index,
-                arrangement.renumber_windows,
-                last.window_id if (last := arrangement._last_active_window) is not None else None,
-                _optional_id(session.overlay_pane),
-                session.overlay_title,
-                session.overlay_width,
-                session.overlay_height,
+                "session_id",
+                "session_name",
+                "position",
+                "session_created",
+                "last_used",
+                "default_height",
+                "default_width",
+                "base_index",
+                "renumber_windows",
+                "last_active_window_id",
+                "overlay_pane_id",
+                "overlay_title",
+                "overlay_width",
+                "overlay_height",
             ),
+            [
+                (
+                    session.session_id,
+                    session.name,
+                    position,
+                    session.created,
+                    session.last_used,
+                    session.default_size.rows,
+                    session.default_size.columns,
+                    arrangement.base_index,
+                    arrangement.renumber_windows,
+                    last.window_id if (last := arrangement._last_active_window) is not None else None,
+                    _optional_id(session.overlay_pane),
+                    session.overlay_title,
+                    session.overlay_width,
+                    session.overlay_height,
+                )
+            ],
         )
-        db.executemany(
-            "INSERT INTO session_environment VALUES (?, ?, ?)",
+        _insert_many(
+            db,
+            "session_environment",
+            ("session_id", "name", "value"),
             [(session.session_id, name, value) for name, value in sorted(session.environment.items())],
         )
-        db.executemany(
-            "INSERT INTO window_defaults VALUES (?, ?, ?)",
+        _insert_many(
+            db,
+            "window_defaults",
+            ("session_id", "name", "value"),
             [
                 (session.session_id, window_option_names.get(attribute, attribute), _value(value))
                 for attribute, value in sorted(arrangement.window_defaults.items())
@@ -972,8 +1075,10 @@ def _write_window(db: sqlite3.Connection, session: Session, window: Window, link
             window_codec=_value(window.window_codec),
         ),
     )
-    db.executemany(
-        "INSERT INTO column_widths VALUES (?, ?, ?, ?)",
+    _insert_many(
+        db,
+        "column_widths",
+        ("window_id", "kind", "id", "width"),
         [(window.window_id, kind, id, width) for (kind, id), width in sorted(window.column_widths.items())],
     )
     _write_split(db, window, window.root, None, None)
@@ -990,8 +1095,10 @@ def _write_split(db: sqlite3.Connection, window: Window, split: _Split, parent: 
             position=place,
         ),
     )
-    db.executemany(
-        "INSERT INTO split_weights VALUES (?, ?, ?, ?)",
+    _insert_many(
+        db,
+        "split_weights",
+        ("split_id", "kind", "id", "weight"),
         [(split.split_id, kind, id, weight) for (kind, id), weight in sorted(split.weights.items())],
     )
     for position, child in enumerate(split):
@@ -1019,12 +1126,16 @@ def _write_pane(
             last_exit_status=pane.last_exit_status,
         ),
     )
-    db.executemany(
-        "INSERT INTO pane_marks VALUES (?, ?, ?)",
+    _insert_many(
+        db,
+        "pane_marks",
+        ("pane_id", "position", "row"),
         [(pane.pane_id, position, row) for position, row in enumerate(pane.marks)],
     )
-    db.executemany(
-        "INSERT INTO pane_user_vars VALUES (?, ?, ?)",
+    _insert_many(
+        db,
+        "pane_user_vars",
+        ("pane_id", "name", "value"),
         [(pane.pane_id, name, value) for name, value in sorted(pane.user_vars.items())],
     )
 
@@ -1061,20 +1172,25 @@ def _write_clients(pymux: Pymux, db: sqlite3.Connection) -> None:
     for client_id, client in sorted(clients.items()):
         settings = client["settings"]
         modes = client.get("modes")
-        db.execute(
-            # By name: `ALTER TABLE` puts a new setting after `connected`.
-            "INSERT INTO clients (%s) VALUES (%s)" % (", ".join(CLIENT_COLUMNS), ", ".join("?" * len(CLIENT_COLUMNS))),
-            (
-                client_id,
-                client["session_id"],
-                client["previous_session_id"],
-                *(settings.get(name) for name in CLIENT_SETTINGS),
-                json.dumps(modes) if modes is not None else None,
-                client.get("connected"),
-            ),
+        _insert_many(
+            db,
+            "clients",
+            CLIENT_COLUMNS,
+            [
+                (
+                    client_id,
+                    client["session_id"],
+                    client["previous_session_id"],
+                    *(settings.get(name) for name in CLIENT_SETTINGS),
+                    json.dumps(modes) if modes is not None else None,
+                    client.get("connected"),
+                )
+            ],
         )
-        db.executemany(
-            "INSERT INTO client_windows VALUES (?, ?, ?, ?)",
+        _insert_many(
+            db,
+            "client_windows",
+            ("client_id", "session_id", "active_window_id", "previous_window_id"),
             [(client_id, session_id, *pair) for session_id, pair in sorted(client["windows"].items())],
         )
 

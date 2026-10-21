@@ -560,6 +560,31 @@ def test_a_snapshot_of_another_version_is_refused(pymux, tmp_path, off_by):
         snapshot.load(Pymux(), path)
 
 
+def _shape(db: sqlite3.Connection) -> dict[str, list[tuple]]:
+    "Each table's columns, as sqlite reads them: name, type, not null, default, key."
+    names = [row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")]
+    return {name: [tuple(column)[1:] for column in db.execute("PRAGMA table_info(%s)" % name)] for name in names}
+
+
+def _shape_of_a_fresh_snapshot() -> dict[str, list[tuple]]:
+    db = sqlite3.connect(":memory:")
+    db.executescript(snapshot.SCHEMA)
+    return _shape(db)
+
+
+def test_the_table_list_is_the_schema_in_order():
+    "`WHOLE_TABLES` and `LIVE_SCHEMA` are cut from it by name. Lillecarl/pymux#555."
+    db = sqlite3.connect(":memory:")
+    db.executescript(snapshot.SCHEMA)
+    made = [row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY rowid")]
+    assert list(snapshot.TABLES) == made
+
+    live = sqlite3.connect(":memory:")
+    live.executescript(snapshot.LIVE_SCHEMA)
+    assert set(_shape(live)) == set(snapshot.WHOLE_TABLES)
+    assert _shape(live) == {name: shape for name, shape in _shape(db).items() if name in snapshot.WHOLE_TABLES}
+
+
 def test_a_version_19_snapshot_lets_a_program_held_for_copy_mode_go(pymux, tmp_path):
     """
     Version 20 keeps copy mode with the client. The build before held
@@ -589,8 +614,7 @@ def test_a_version_19_snapshot_lets_a_program_held_for_copy_mode_go(pymux, tmp_p
     db.close()
 
     stepped = snapshot._open(path)
-    tables = {row[0] for row in stepped.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
-    assert "copy_modes" not in tables
+    assert _shape(stepped) == _shape_of_a_fresh_snapshot()
     programs = stepped.execute(
         "SELECT pane_id, process ->> '$.fields.suspended', process ->> '$.fields.sx' FROM pane_programs"
     )
