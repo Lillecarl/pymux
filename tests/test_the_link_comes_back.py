@@ -721,12 +721,34 @@ async def test_a_client_told_to_hang_up_does_not_come_back(monkeypatch):
         await it.until(lambda: len(it.pymux.connections) == 1, "the attach")
         await it.until(lambda: ALTERNATE_SCREEN in it.terminal.said, "the first frame")
 
+        # It failed once under the full gate, and the assertion could not
+        # say why. What the client read last, and the loss it would have
+        # retried (none is the server closing), tell the cases apart.
+        # Lillecarl/pymux#710.
+        read: list[str] = []
+        retried: list[object] = []
+        process, link_again = it.client._process, it.client._link_again
+
+        def recording_process(packet):
+            read.append(packet.get(Field.CMD))
+            return process(packet)
+
+        async def recording_link_again(stdin_fd, waits, lost):
+            retried.append(lost)
+            return await link_again(stdin_fd, waits, lost)
+
+        it.client._process = recording_process
+        it.client._link_again = recording_link_again
+
         for connection in list(it.pymux.connections):
             connection.detach_and_close(hang_up=True)
 
         await it.wait_for_attach(10)
 
-        assert it.client.hang_up_asked, "the client never heard the hangup"
+        assert it.client.hang_up_asked, "the client never heard the hangup: read %r, then retried %r" % (
+            read[-5:],
+            retried,
+        )
         assert "lost the server" not in it.terminal.said
 
 
