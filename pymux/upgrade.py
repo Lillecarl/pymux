@@ -187,7 +187,7 @@ async def _hand_over(pymux: Pymux, argv: list[str]) -> None:
     ready, told = os.pipe()
     try:
         # A session of its own: this process ends, and the new one goes on.
-        process = subprocess.Popen(
+        process = await anyio.open_process(
             [*argv, "--ready-fd", str(told)],
             pass_fds=(listening, told),
             start_new_session=True,
@@ -208,7 +208,7 @@ async def _hand_over(pymux: Pymux, argv: list[str]) -> None:
     finally:
         os.close(ready)
     if said != READY:
-        await anyio.to_thread.run_sync(process.wait)
+        await process.wait()
         reason = said.removeprefix(FAILED).decode(errors="replace").strip()
         raise CommandException(
             "the new build cannot take this server over: %s" % (reason or "it ended with %s" % process.returncode)
