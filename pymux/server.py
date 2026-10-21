@@ -44,6 +44,7 @@ from .log import logger
 from .nearest import NEAREST, nearest_theme, wanted_from
 from .options import ExtendedKeys, SetOptionError
 from .pipes import BrokenPipeError
+from .rate import Rate
 
 if TYPE_CHECKING:
     from pymux.main import ClientState, Pymux
@@ -184,6 +185,9 @@ class ServerConnection:
         # A recording holds Python objects of this build, so it ends
         # with it. `upgrade.py` writes it out first.
         "recording": Keep.DROPPED,
+        # The pipe's counts start again on the next server's connection.
+        "rate_down": Keep.DROPPED,
+        "rate_up": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux, pipe_connection, may_attach: bool = True) -> None:
@@ -222,6 +226,11 @@ class ServerConnection:
         #: What `record-client` is recording of this client, or None.
         #: Lillecarl/pymux#612.
         self.recording: Recording | None = None
+
+        #: What `#{client_rate_down}` and `#{client_rate_up}` read, off
+        #: the pipe's counts. Lillecarl/pymux#678.
+        self.rate_down = Rate()
+        self.rate_up = Rate()
 
         #: The scope the background work of this connection runs in.
         #: `serve()` opens it, so every task of a client ends when that

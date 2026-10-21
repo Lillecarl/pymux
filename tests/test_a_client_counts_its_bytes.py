@@ -103,6 +103,17 @@ async def test_each_client_reads_its_own_counts():
             assert 0 < up == counted[name][1]
 
 
+async def test_a_client_reads_its_rate_in_a_unit():
+    "The arithmetic is `test_a_rate.py`'s; this is the wiring. Lillecarl/pymux#678."
+    async with over_connection() as session:
+        await session.attach("here", SIZE)
+
+        (said,) = await _lines(session, "list-clients -F '#{client_rate_down}|#{client_rate_up}'")
+
+        down, up = said.split("|")
+        assert down.endswith("B/s") and up.endswith("B/s")
+
+
 async def test_a_client_that_leaves_stays_in_the_total():
     async with over_connection() as session:
         here, _ = await session.attach("here", SIZE)

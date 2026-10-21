@@ -18,11 +18,13 @@ from __future__ import annotations
 
 import os
 import socket
+import time
 from collections.abc import Callable
 from enum import Enum
 from typing import TYPE_CHECKING, NamedTuple
 
 from pymux.commands import CommandException
+from pymux.rate import per_second
 
 if TYPE_CHECKING:
     from pymux.arrangement import Pane, Window
@@ -664,6 +666,23 @@ def _client_bytes(direction: str) -> Callable[[FormatContext], str]:
     return bytes_of
 
 
+def _client_rate(direction: str, rate: str) -> Callable[[FormatContext], str]:
+    """
+    The same bytes per second over the last few seconds, in a unit
+    that fits (`pymux.rate`). For a person; a script reads the counts.
+    Lillecarl/pymux#678.
+    """
+
+    def rate_of(context: FormatContext) -> str:
+        connection = _connection_of(context)
+        pipe = getattr(connection, "pipe_connection", None)
+        if pipe is None:
+            return ""
+        return per_second(getattr(connection, rate).read(getattr(pipe, direction), time.monotonic()))
+
+    return rate_of
+
+
 def _client_readonly(context: FormatContext) -> str:
     "Whether this client only watches. tmux spells it the same way."
     client = context.client
@@ -755,6 +774,8 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "client_flags": _client_flags,
     "client_bytes_down": _client_bytes("bytes_out"),
     "client_bytes_up": _client_bytes("bytes_in"),
+    "client_rate_down": _client_rate("bytes_out", "rate_down"),
+    "client_rate_up": _client_rate("bytes_in", "rate_up"),
     "client_session": lambda c: c.client.session.name if c.client else "",
     # Server.
     "socket_path": _socket_path,
