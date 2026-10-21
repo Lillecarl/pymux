@@ -23,15 +23,27 @@ the same address: a table keyed by `id()` would hand a viewer a style
 that belongs to something else. Keying by the string also means two
 appearances that spell alike share one number.
 
+**An image is sent once, as a PNG, and placed by number.** Every frame
+whose placements moved carries the whole list of them, in cells of the
+screen and with the pixels of the image each one shows. The list is the
+only truth about images: an image no placement names is dropped by both
+ends, so the two never disagree about what the other holds.
+Lillecarl/pymux#480.
+
 Nothing here does any I/O, imports no transport and holds no socket.
 Lillecarl/pymux#461.
 """
 
 from __future__ import annotations
 
+import base64
 from typing import Any, NamedTuple
 
 from pyte.html import CSS, href_of, runs_of_row, style_of, theme_css
+from pyte.images import PixelFormat
+from pyte.png import encode_png
+
+from pymux import graphics, sixel
 
 __all__ = [
     "FRAME",
@@ -93,6 +105,14 @@ class PaneView:
 
         self._cursor: tuple[int, int] | None = None
         self._welcomed = False
+
+        #: The images this viewer holds, by the number each went out as,
+        #: with the data it was sent: a program may give a new image the
+        #: id of an old one, so neither the id nor the record says it is
+        #: the same picture.
+        self._images: dict[int, tuple[Any, bytes]] = {}
+        self._next_image = 1
+        self._placements: list[list[int]] | None = None
 
     # -- what to send --------------------------------------------------
 
@@ -161,11 +181,14 @@ class PaneView:
             rows[str(index)] = self._runs(data_buffer.get(number), columns, reverse_video, styles)
 
         cursor = self._cursor_of(screen)
+        images, placements = self._pictures(screen)
+        placed = whole or placements != self._placements
 
-        if not rows and cursor == self._cursor and not whole:
+        if not rows and cursor == self._cursor and not placed:
             return None
 
         self._cursor = cursor
+        self._placements = placements
 
         answer: dict[str, Any] = {
             "type": FRAME,
@@ -175,6 +198,10 @@ class PaneView:
         }
         if styles:
             answer["styles"] = styles
+        if images:
+            answer["images"] = images
+        if placed:
+            answer["placements"] = placements
         if whole:
             # A client that holds rows drawn under another size, another
             # reverse video or another palette throws them away: every
@@ -248,6 +275,54 @@ class PaneView:
         styles[str(held)] = entry
         return held
 
+    def _pictures(self, screen) -> tuple[dict[str, str], list[list[int]]]:
+        """
+        The images this viewer has not been sent, and every placement the
+        screen shows as `[image, row, column, rows, columns, x, y, width,
+        height]`: the cells it covers, then the pixels of the image.
+
+        Placeholder cells are fitted with the pane's own cell, which is
+        what the program sized the image by. A browser's cell is its own
+        and nobody here knows it.
+        """
+        view = graphics.PaneView(
+            pane_id=0,
+            x=0,
+            y=0,
+            width=screen.columns,
+            height=screen.lines,
+            vertical_scroll=screen.line_offset,
+            horizontal_scroll=0,
+            graphics=screen.graphics,
+            screen=screen,
+        )
+        held: dict[int, tuple[Any, bytes]] = {}
+        sent: dict[str, str] = {}
+        placements: list[list[int]] = []
+        for _placement, image, columns, rows, x, y, source in graphics.pane_placements(
+            view, screen.cell_width, screen.cell_height
+        ):
+            number = next(
+                (
+                    n
+                    for n, (known, data) in [*held.items(), *self._images.items()]
+                    if known is image and data is image.data
+                ),
+                None,
+            )
+            if number is None:
+                png = _png_of(image)
+                if png is None:
+                    continue
+                number = self._next_image
+                self._next_image += 1
+                sent[str(number)] = base64.b64encode(png).decode("ascii")
+            held[number] = (image, image.data)
+            left, top, width, height = source or (0, 0, image.width, image.height)
+            placements.append([number, y, x, rows, columns, left, top, width, height])
+        self._images = held
+        return sent, placements
+
     def _cursor_of(self, screen) -> tuple[int, int]:
         """
         Where the cursor is, in rows of the screen.
@@ -261,6 +336,16 @@ class PaneView:
         if not 0 <= row < screen.lines:
             return (-1, -1)
         return (row, position.x)
+
+
+def _png_of(image) -> bytes | None:
+    "An image as a browser reads one, or None when it does not decode."
+    if image.format == PixelFormat.PNG:
+        return image.data
+    pixels = sixel.to_rgba(image.format, image.width, image.height, image.data)
+    if pixels is None:
+        return None
+    return encode_png(image.width, image.height, pixels)
 
 
 #: What a client may say. Anything else is refused by name, so a typo in

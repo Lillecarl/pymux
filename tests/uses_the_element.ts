@@ -18,6 +18,7 @@ import type {
   Frame,
   InputMessage,
   PasteMessage,
+  Placement,
   PymuxPane,
   ReconnectingDetail,
   Run,
@@ -102,6 +103,13 @@ if (frame.type === "welcome") {
   // are load-bearing and this reaches for both.
   const palette: string | undefined = frame.palette;
   void palette;
+
+  const images: Record<string, string> | undefined = frame.images;
+  void images;
+  for (const placed of frame.placements ?? []) {
+    const [image, row, column, rows, columns, x, y, width, height]: Placement = placed;
+    void [image, row, column, rows, columns, x, y, width, height];
+  }
 }
 
 void takesInput;

@@ -108,7 +108,33 @@ export interface Frame {
    * that put both into one stylesheet lost every rule the welcome sent.
    */
   palette?: string;
+  /**
+   * Images this stream has not sent before, by number: a PNG, in base64.
+   * Lillecarl/pymux#480.
+   */
+  images?: Record<string, string>;
+  /**
+   * Every image the screen shows, when that changed. An image no
+   * placement names is one the server has forgotten too.
+   */
+  placements?: Placement[];
 }
+
+/**
+ * One image on the screen: the cells it covers, then the rectangle of
+ * the image's pixels that fills them.
+ */
+export type Placement = [
+  image: number,
+  row: number,
+  column: number,
+  rows: number,
+  columns: number,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+];
 
 /** The names of keys, which the server spells. */
 export interface InputMessage {
@@ -220,6 +246,14 @@ const OWN_RULES = `
   pointer-events: none;
 }
 .cursor[hidden] { display: none; }
+/* Over the text, as kitty draws an image, and never in a click's way.
+   Each canvas is placed by a rule of its own in the image sheet. */
+.images {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.images canvas { position: absolute; }
 /* What a cell measures, for "fit". Absolute, so it adds no row. */
 .probe {
   position: absolute;
@@ -276,6 +310,20 @@ export interface PymuxPane {
   ): void;
 }
 
+/**
+ * A PNG the server sent, as something a canvas draws. Not an `<img>`: a
+ * `data:` or `blob:` address is one the page's `default-src 'self'`
+ * refuses, and decoding bytes fetches nothing.
+ */
+async function decoded(png: string): Promise<ImageBitmap | null> {
+  const bytes = Uint8Array.from(atob(png), (character) => character.charCodeAt(0));
+  try {
+    return await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+  } catch {
+    return null;
+  }
+}
+
 export class PymuxPane extends HTMLElement {
   static observedAttributes = ["src"];
 
@@ -294,6 +342,9 @@ export class PymuxPane extends HTMLElement {
   #themeSheet: CSSStyleSheet;
   #paletteSheet: CSSStyleSheet;
   #styleSheet: CSSStyleSheet;
+  #imageSheet: CSSStyleSheet;
+  #images: HTMLDivElement;
+  #bitmaps = new Map<string, Promise<ImageBitmap | null>>();
   #styles = new Map<string, StyleEntry>();
   #rows: HTMLDivElement[] = [];
   #socket: WebSocket | null = null;
@@ -324,11 +375,13 @@ export class PymuxPane extends HTMLElement {
     this.#themeSheet = new CSSStyleSheet();
     this.#paletteSheet = new CSSStyleSheet();
     this.#styleSheet = new CSSStyleSheet();
+    this.#imageSheet = new CSSStyleSheet();
     root.adoptedStyleSheets = [
       this.#ownSheet,
       this.#themeSheet,
       this.#paletteSheet,
       this.#styleSheet,
+      this.#imageSheet,
     ];
 
     this.#screen = document.createElement("pre");
@@ -354,11 +407,14 @@ export class PymuxPane extends HTMLElement {
     this.#cursor.className = "cursor";
     this.#cursor.hidden = true;
 
+    this.#images = document.createElement("div");
+    this.#images.className = "images";
+
     // The cursor goes **inside** the screen, so that it is positioned
     // against the screen's content box rather than the host's padding
     // box. A page that gives the host padding then moves the text and
     // the cursor together.
-    this.#screen.append(this.#cursor);
+    this.#screen.append(this.#cursor, this.#images);
     root.append(this.#keyboard, this.#screen);
 
     this.#screen.addEventListener("mousedown", (event) => {
@@ -582,6 +638,39 @@ export class PymuxPane extends HTMLElement {
       this.#drawRow(Number(number), runs);
     }
     if (frame.cursor) this.#moveCursor(frame.cursor);
+    for (const [number, png] of Object.entries(frame.images || {})) {
+      this.#bitmaps.set(number, decoded(png));
+    }
+    if (frame.placements) this.#place(frame.placements);
+  }
+
+  #place(placements: Placement[]): void {
+    const named = new Set(placements.map(([image]) => String(image)));
+    for (const [number, bitmap] of this.#bitmaps) {
+      if (named.has(number)) continue;
+      this.#bitmaps.delete(number);
+      void bitmap.then((held) => held?.close());
+    }
+
+    // Numbers only, so the rules cannot carry anything a program wrote.
+    const rules: string[] = [];
+    const canvases: HTMLCanvasElement[] = [];
+    placements.forEach(([image, row, column, rows, columns, x, y, width, height], index) => {
+      rules.push(
+        `.image-${index} { top: calc(${row} * 1.2em); left: calc(${column} * 1ch); ` +
+          `height: calc(${rows} * 1.2em); width: calc(${columns} * 1ch); }`,
+      );
+      const canvas = document.createElement("canvas");
+      canvas.className = `image-${index}`;
+      canvas.width = width;
+      canvas.height = height;
+      canvases.push(canvas);
+      void this.#bitmaps.get(String(image))?.then((bitmap) => {
+        if (bitmap) canvas.getContext("2d")?.drawImage(bitmap, x, y, width, height, 0, 0, width, height);
+      });
+    });
+    this.#imageSheet.replaceSync(rules.join("\n"));
+    this.#images.replaceChildren(...canvases);
   }
 
   /**
@@ -630,8 +719,8 @@ export class PymuxPane extends HTMLElement {
     // away.** It is in there so that a page's padding moves the text and
     // the cursor together, and this is the price: every resize has to put
     // it back. A frame that resizes then carries a cursor position with
-    // nothing to position.
-    this.#screen.append(this.#cursor);
+    // nothing to position. The images live there for the same reason.
+    this.#screen.append(this.#cursor, this.#images);
   }
 
   #drawRow(number: number, runs: Run[]): void {

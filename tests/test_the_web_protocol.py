@@ -13,8 +13,12 @@ and it is the deciding that is worth testing. Lillecarl/pymux#461.
 
 from __future__ import annotations
 
+import base64
+
 import pytest
+from pyte.png import decode_png
 from pyte.screen import Screen
+from pyte.sequences import apc
 from pyte.streams import Stream
 
 from pymux.web.protocol import FRAME, PLAIN_STYLE, WELCOME, PaneView, typed_of
@@ -351,6 +355,74 @@ def test_a_cursor_off_the_screen_says_so():
     # Put the cursor into the history, where no client draws it.
     screen.pt_cursor_position.y = 0
     assert view.frame(screen, 2)["cursor"] == {"row": -1, "column": -1}
+
+
+# ----------------------------------------------------------------------
+# Images. Lillecarl/pymux#480.
+
+#: Two by two RGBA pixels, every one different.
+PIXELS = bytes(range(16))
+OTHER_PIXELS = bytes(range(16, 32))
+
+
+def show(screen, pixels: bytes = PIXELS) -> None:
+    "A program shows a two by two image in four by two cells, at the cursor."
+    payload = base64.b64encode(pixels).decode()
+    feed(screen, apc("Ga=T,f=32,s=2,v=2,i=1,q=2,c=4,r=2;" + payload))
+
+
+def test_an_image_is_sent_once_and_placed_in_cells():
+    screen = a_screen()
+    show(screen)
+    view = PaneView()
+
+    frame = view.frame(screen, 1)
+
+    ((number, png),) = frame["images"].items()
+    assert decode_png(base64.b64decode(png)) == (2, 2, PIXELS)
+    assert frame["placements"] == [[int(number), 0, 0, 2, 4, 0, 0, 2, 2]]
+
+
+def test_a_frame_whose_placements_did_not_move_names_none():
+    screen = a_screen()
+    show(screen)
+    view = PaneView()
+    view.frame(screen, 1)
+
+    feed(screen, "\x1b[4;1Htext")
+    frame = view.frame(screen, 2)
+
+    assert "images" not in frame
+    assert "placements" not in frame
+
+
+def test_a_scroll_moves_the_placement_and_crops_it_without_sending_the_image():
+    screen = a_screen()
+    show(screen)
+    view = PaneView()
+    number = int(next(iter(view.frame(screen, 1)["images"])))
+
+    feed(screen, "\x1b[%d;1H\n" % LINES)
+    frame = view.frame(screen, 2)
+
+    assert "images" not in frame
+    assert frame["placements"] == [[number, 0, 0, 1, 4, 0, 1, 2, 1]]
+
+
+def test_a_new_picture_under_an_old_id_is_sent_again():
+    screen = a_screen()
+    show(screen)
+    view = PaneView()
+    first = view.frame(screen, 1)
+
+    feed(screen, apc("Ga=d,d=A,q=2"))
+    assert view.frame(screen, 2)["placements"] == []
+
+    show(screen, OTHER_PIXELS)
+    frame = view.frame(screen, 3)
+    ((number, png),) = frame["images"].items()
+    assert number not in first["images"]
+    assert decode_png(base64.b64decode(png)) == (2, 2, OTHER_PIXELS)
 
 
 # ----------------------------------------------------------------------
