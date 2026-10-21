@@ -313,10 +313,12 @@ async def _run_jobs(pymux) -> None:
         job = await jobs.submit(command, directory, tags, {"WHO": command}, pty)
         await jobs.supervise(job)
     await jobs._forget(job)
-    # The holder forks it, so it runs past the snapshot. Lillecarl/pymux#556.
-    running = await jobs.submit("echo started; exec sleep 60", None, [("long", None)], dict(os.environ), True)
-    pymux.tasks.start_soon(jobs.supervise, running)
-    await once(lambda: b"started" in running.kept("stdout"), 10.0, "the running job never printed")
+    # The holder forks these, so they run past the snapshot: one on a
+    # terminal, one on pipes. Lillecarl/pymux#556.
+    for pty in (True, False):
+        running = await jobs.submit("echo started; exec sleep 60", None, [("long", None)], dict(os.environ), pty)
+        pymux.tasks.start_soon(jobs.supervise, running)
+        await once(lambda running=running: b"started" in running.kept("stdout"), 10.0, "a running job never printed")
     # A question kept, and a seed taken away, which must stay away.
     await jobs.save_query("mine", "SELECT id FROM jobs WHERE pty = 1", None)
     assert await jobs.forget_query("running")
@@ -458,20 +460,19 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
         try:
             async with fresh.running(hold=True, keep_orphans=True):
                 assert fresh.holding is not None
-                masters = {
-                    program["id"]: await fresh.holding.master(program["id"])
-                    for program in await fresh.holding.programs()
-                }
-                snapshot.load(fresh, first, masters)
+                masters, pipes = await snapshot.handed_over(fresh.holding, first)
+                snapshot.load(fresh, first, masters, pipes)
                 snapshot.save(fresh, second)
                 await snapshot.start(fresh)
                 assert _jobs_of(fresh) == jobs
-                # The job runs on under the new server, which can end it.
-                (adopted,) = [job for job in fresh.jobs.listing() if not job.is_done]
-                assert fresh.jobs.kill(adopted)
-                with anyio.fail_after(10):
-                    await fresh.jobs.wait(adopted)
-                assert (adopted.returncode, adopted.kept("stdout")) == (-signal.SIGTERM, b"started\n")
+                # The jobs run on under the new server, which can end them.
+                adopted = [job for job in fresh.jobs.listing() if not job.is_done]
+                assert [job.pty for job in adopted] == [True, False]
+                for job in adopted:
+                    assert fresh.jobs.kill(job)
+                    with anyio.fail_after(10):
+                        await fresh.jobs.wait(job)
+                    assert (job.returncode, job.kept("stdout")) == (-signal.SIGTERM, b"started\n")
                 assert await _questions_of(fresh) == questions
                 assert "running" not in dict((name, sql) for name, sql, _ in questions)
                 assert fresh.named_buffers == pymux.named_buffers

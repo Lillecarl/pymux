@@ -86,6 +86,22 @@ async def test_a_piped_job_holds_no_terminal(session):
     assert job is not None and not job.pty and job.is_done and job.returncode == 1
 
 
+async def test_a_holder_with_no_pipes_leaves_a_piped_job_to_this_server(tmp_path):
+    "A holder from before the op is the one a running server has. Lillecarl/pymux#556."
+    async with create_session() as (pymux, state):
+        pymux.socket_name = str(tmp_path / "server.sock")
+        await pymux.hold()
+        assert pymux.holding is not None
+        pymux.holding.ops = frozenset()
+        try:
+            await _run_answering(pymux, state, "run -w 'echo here'")
+            job = pymux.jobs.get(1)
+            assert job is not None and job.returncode == 0 and job.program_id is None
+            assert job.kept("stdout") == b"here\n"
+        finally:
+            await pymux.unhold()
+
+
 async def test_a_pty_job_collects_into_stdout_with_stderr_empty(session):
     pymux, state = session
     said = await _run_answering(pymux, state, "run --pty -w 'echo out; echo err >&2'")

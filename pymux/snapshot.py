@@ -42,7 +42,7 @@ from prompt_toolkit.selection import SelectionType
 from ptterm import Terminal
 from ptyhost.backends.posix import PosixBackend
 from ptyhost.backends.posix_utils import PtyReader
-from ptyhost.held import HeldBackend
+from ptyhost.held import HeldBackend, Holding
 from ptyhost.process import Process
 from pyte.freeze import Freezer, Frozen, freeze, saved_fields, thaw
 from pyte.images import GraphicsImage, GraphicsPlacement, GraphicsState
@@ -57,7 +57,7 @@ from .arrangement import HSplit, LayoutTypes, Pane, VSplit, Window, _Split, node
 from .commands.wait_for import WaitChannel
 from .enums import AudioFrame, ClientAudio, WindowScroll
 from .ids import PaneId, SessionId, WindowId, WindowIndex
-from .jobs import Job, JobId
+from .jobs import HeldPipes, Job, JobId
 from .notifications import Notification
 from .options import ALL_OPTIONS
 from .pipes.posix import PosixSocketListener
@@ -1287,24 +1287,47 @@ def read_server(path: str | os.PathLike[str]) -> dict[str, Any]:
         db.close()
 
 
-def program_ids(path: str | os.PathLike[str]) -> list[int]:
-    "The holder's id of every program the snapshot names: the masters `load` needs."
+#: The running jobs the holder forked, on a terminal (1) or on pipes (0).
+_HELD_JOBS = "SELECT program_id FROM jobs WHERE status = 'running' AND program_id IS NOT NULL AND pty = ?"
+
+
+def program_ids(path: str | os.PathLike[str]) -> tuple[list[int], list[int]]:
+    """
+    The holder's id of every program the snapshot names: the ones on a
+    terminal, whose masters `load` needs, and the jobs on pipes.
+    """
     db = _open(path)
     try:
-        return [row["program_id"] for row in _rows(db, "SELECT program_id FROM pane_programs")] + [
-            row["program_id"]
-            for row in _rows(db, "SELECT program_id FROM jobs WHERE status = 'running' AND program_id IS NOT NULL")
-        ]
+        on_terminals = [row["program_id"] for row in _rows(db, "SELECT program_id FROM pane_programs")]
+        on_terminals += [row["program_id"] for row in _rows(db, _HELD_JOBS, 1)]
+        return on_terminals, [row["program_id"] for row in _rows(db, _HELD_JOBS, 0)]
     finally:
         db.close()
 
 
-def load(pymux: Pymux, path: str | os.PathLike[str], masters: dict[int, int] | None = None) -> int | None:
+async def handed_over(holding: Holding, path: str | os.PathLike[str]) -> tuple[dict[int, int], dict[int, list[int]]]:
+    """
+    Copies of what the holder keeps of each program the snapshot names:
+    a master, or a job's two pipes. Only those: a copy fetched and not
+    adopted would stay open for the life of the server.
+    """
+    on_terminals, on_pipes = program_ids(path)
+    masters = {program_id: await holding.master(program_id) for program_id in on_terminals}
+    pipes = {program_id: await holding.fds(program_id) for program_id in on_pipes}
+    return masters, pipes
+
+
+def load(
+    pymux: Pymux,
+    path: str | os.PathLike[str],
+    masters: dict[int, int] | None = None,
+    pipes: dict[int, list[int]] | None = None,
+) -> int | None:
     """
     Replace what a fresh `pymux` holds with a snapshot's.
 
-    `masters` are the ones the holder handed over, by the holder's id,
-    one for each of `program_ids`. None is a server with no pane.
+    `masters` and `pipes` are what the holder handed over, by the
+    holder's id (`handed_over`). None is a server with no program.
 
     Returns the fd of the listening socket, or None when the server had
     none. The old server passed it to the new one under the same number,
@@ -1312,7 +1335,7 @@ def load(pymux: Pymux, path: str | os.PathLike[str], masters: dict[int, int] | N
     """
     db = _open(path)
     try:
-        return _read(pymux, db, masters or {})
+        return _read(pymux, db, masters or {}, pipes or {})
     finally:
         db.close()
 
@@ -1382,7 +1405,7 @@ def _read_notifications(pymux: Pymux, db: sqlite3.Connection, counters: dict[str
         routes._incoming[row["ours"]] = key
 
 
-def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int]) -> int | None:
+def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int], pipes: dict[int, list[int]]) -> int | None:
     server = {row["name"]: row["value"] for row in _rows(db, "SELECT * FROM server")}
     pymux.created = server["created"]
     pymux.socket_name = server["socket_name"]
@@ -1549,15 +1572,16 @@ def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int]) -> int 
         row["name"]: (row["sql"], row["description"]) for row in _rows(db, "SELECT * FROM saved_queries")
     }
     _read_notifications(pymux, db, counters)
-    for job in _read_jobs(pymux, db, masters):
+    for job in _read_jobs(pymux, db, masters, pipes):
         pymux.jobs._jobs[job.job_id] = job
     return server["listener_fd"]
 
 
-def _read_jobs(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int]) -> list[Job]:
+def _read_jobs(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int], pipes: dict[int, list[int]]) -> list[Job]:
     """
     The jobs, for `start` to write into the jobs database. A running one
-    takes its terminal from `masters`, and `start` supervises it again.
+    takes its terminal from `masters` or its pipes from `pipes`, and
+    `start` supervises it again.
     """
     jobs = []
     for row in _rows(db, "SELECT * FROM jobs ORDER BY job_id"):
@@ -1587,8 +1611,12 @@ def _read_jobs(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int]) ->
         if not job.is_done:
             if pymux.holding is None:
                 raise SnapshotError("this server has no holder to take job %d from" % (job.job_id,))
-            if job.program_id not in masters:
+            if job.pty and job.program_id in masters:
+                job.backend = HeldBackend.adopt_held(pymux.holding, job.program_id, job.pid, masters[job.program_id])
+            elif not job.pty and job.program_id in pipes:
+                stdout, stderr = pipes[job.program_id]
+                job.backend = HeldPipes(pymux.holding, job.program_id, job.pid, stdout, stderr)
+            else:
                 raise SnapshotError("the holder keeps no program for job %d" % (job.job_id,))
-            job.backend = HeldBackend.adopt_held(pymux.holding, job.program_id, job.pid, masters[job.program_id])
         jobs.append(job)
     return jobs

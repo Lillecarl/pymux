@@ -287,12 +287,8 @@ def resume(path: str, ready: int) -> None:
             # A configuration file may make a window, and the snapshot's
             # sessions replace whatever it made.
             strays = list(pymux.panes_by_id.values())
-            # Only the masters it names: a copy fetched and not adopted
-            # would stay open for the life of this server.
-            masters = {}
-            for program_id in snapshot.program_ids(path):
-                masters[program_id] = await pymux.holding.master(program_id)
-            listener = snapshot.load(pymux, path, masters)
+            masters, pipes = await snapshot.handed_over(pymux.holding, path)
+            listener = snapshot.load(pymux, path, masters, pipes)
             if listener is None:
                 raise snapshot.SnapshotError("the snapshot names no listening socket")
             # `pass_fds` made it inheritable, and nothing this server forks may get it.

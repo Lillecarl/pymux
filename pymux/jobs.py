@@ -220,8 +220,8 @@ class Job:
         #: holder forked it. None for a job this server forked itself.
         self.program_id: int | None = None
         self.pid: int | None = None
-        #: The terminal of a job the holder forked.
-        self.backend: HeldBackend | None = None
+        #: The terminal or the pipes of a job the holder forked.
+        self.backend: HeldBackend | HeldPipes | None = None
         self.crlf = _CrLf()
         #: Set by `kill-job` before the process exists: the supervise
         #: ends it as soon as it starts.
@@ -452,8 +452,16 @@ class JobTable:
         output is complete before `done` is set, and a waiter never
         reads half of it.
         """
-        if job.backend is not None:
+        if isinstance(job.backend, HeldBackend):
             await self._supervise_held_pty(job, job.backend)
+            return
+        if isinstance(job.backend, HeldPipes):
+            await self._supervise_held_pipes(job, job.backend.holding, job.backend)
+            return
+        if not job.pty and self.holding is not None and "spawn-pipes" in self.holding.ops:
+            # A holder from before the op runs no job on pipes, and the
+            # job then runs here, as a child of this server.
+            await self._supervise_held_pipes(job, self.holding, None)
             return
         if job.pty and self.holding is not None:
             backend = self._held_pty(job, self.holding)
@@ -647,6 +655,41 @@ class JobTable:
         except anyio.get_cancelled_exc_class():
             # The holder keeps the program: `kill-server` asks it to hang
             # up, and an upgrade leaves it to the next server.
+            if job.returncode is None:
+                job.error = "stopped with the server"
+            raise
+        finally:
+            if job.status == "running":
+                await self._finish(job, job.returncode)
+
+    async def _supervise_held_pipes(self, job: Job, holding: Holding, pipes: HeldPipes | None) -> None:
+        """
+        Run a piped job that the holder forks and reaps, so that it
+        outlives this server, as `_supervise_held_pty` runs a pty job.
+        The holder keeps copies of the read ends, so what the job writes
+        between two servers waits in the pipes. Lillecarl/pymux#556.
+        """
+        if pipes is None:
+            env = {**job.env, "PYMUX_JOB": str(job.job_id)}
+            # The holder's child gives back a raised priority itself.
+            spawn = Spawn(["/bin/sh", "-c", job.command], env, job.directory)
+            try:
+                reply, stdout, stderr = await holding.spawn_on_pipes(spawn)
+            except HolderError as e:
+                job.error = "%s: %s" % (job.command, e)
+                await self._finish(job, None)
+                return
+            pipes = HeldPipes(holding, reply["id"], reply["pid"], stdout, stderr)
+            job.backend, job.program_id, job.pid = pipes, pipes.program_id, pipes.pid
+            if job.kill_requested:
+                pipes.send_signal(signal.SIGTERM)
+        try:
+            async with anyio.create_task_group() as pumps:
+                pumps.start_soon(pipes.pump, pipes.stdout, job, "stdout")
+                pumps.start_soon(pipes.pump, pipes.stderr, job, "stderr")
+                job.returncode = await pipes.reap()
+        except anyio.get_cancelled_exc_class():
+            # As for a held pty job: the holder keeps the program.
             if job.returncode is None:
                 job.error = "stopped with the server"
             raise
@@ -1132,6 +1175,75 @@ async def _pump(stream: anyio.abc.ByteReceiveStream, job: Job, name: str) -> Non
     finally:
         with suppress(Exception):
             await stream.aclose()
+
+
+class HeldPipes:
+    """
+    The pipes of a job the holder forked: the read ends of its stdout
+    and stderr, and the holder's name for it. Lillecarl/pymux#556.
+
+    A read parks while paused, as `PosixBackend._pump` does, so that an
+    upgrade reads nothing after the snapshot that describes the job.
+    """
+
+    def __init__(self, holding: Holding, program_id: int, pid: int, stdout: int, stderr: int) -> None:
+        self.holding = holding
+        self.program_id = program_id
+        self.pid = pid
+        self.stdout = stdout
+        self.stderr = stderr
+        self._reading = anyio.Event()
+        self._reading.set()
+
+    def pause_reading(self) -> None:
+        self._reading = anyio.Event()
+
+    def resume_reading(self) -> None:
+        self._reading.set()
+
+    @property
+    def reaped(self) -> bool:
+        "The holder said how it ended, so its pid may be another program's now."
+        return self.holding.statuses.get(self.program_id) is not None
+
+    def send_signal(self, number: int) -> None:
+        if not self.reaped:
+            with suppress(OSError):
+                os.kill(self.pid, number)
+
+    async def pump(self, fd: int, job: Job, name: str) -> None:
+        "Drain one pipe into the tail of its stream, until the end."
+        os.set_blocking(fd, False)
+        try:
+            while True:
+                await self._reading.wait()
+                try:
+                    await anyio.wait_readable(fd)
+                except anyio.ClosedResourceError, OSError, ValueError:
+                    break
+                # A pause that came while it waited holds too.
+                if not self._reading.is_set():
+                    continue
+                try:
+                    data = os.read(fd, 65536)
+                except BlockingIOError:
+                    continue
+                except OSError:
+                    break
+                if not data:
+                    break
+                _land(job, name, data)
+        finally:
+            with suppress(OSError):
+                os.close(fd)
+
+    async def reap(self) -> int | None:
+        "Wait for the holder to say how it ended, then let the holder forget it."
+        status = await self.holding.ended(self.program_id)
+        if not self.holding.lost:
+            with suppress(HolderError):
+                await self.holding.release(self.program_id)
+        return status
 
 
 def _land(job: Job, name: str, data: bytes) -> None:

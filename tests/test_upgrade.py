@@ -253,9 +253,10 @@ def test_an_upgrade_keeps_every_pane_and_its_program(server, tmp_path, new_build
 JOB_COUNT = 'i=0; while [ $i -lt %d ]; do i=$((i+1)); echo "job $i"; sleep 0.02; done; exit 3'
 
 
-def test_an_upgrade_keeps_a_running_pty_job(server):
+@pytest.mark.parametrize("streams", [["--pty"], []], ids=["on a terminal", "on pipes"])
+def test_an_upgrade_keeps_a_running_job(server, streams):
     "The holder forked it, so the new server reads it on and hears its end. Lillecarl/pymux#556."
-    job = _answer(server, "run", "--pty", JOB_COUNT % LINES).strip()
+    job = _answer(server, "run", *streams, JOB_COUNT % LINES).strip()
     said = cli(server, "upgrade-server", shlex.join([sys.executable, "-m", "pymux"]))
     assert said.returncode == 0, said.stderr.decode()
 
