@@ -165,6 +165,15 @@ async def test_only_the_facts_a_template_asks_for_are_read(pymux, monkeypatch):
     assert read == ["session_name"]
 
 
+async def test_a_template_reads_the_user_variables_of_the_pane(pymux):
+    "What a shell publishes with SetUserVar, for a status line. Lillecarl/pymux#499."
+    window = pymux.current_session.arrangement.get_active_window()
+    window.active_pane.user_vars = {"git_branch": "main"}
+
+    assert format_pymux_string(pymux, "{{ user_vars.git_branch }}") == "main"
+    assert format_pymux_string(pymux, "{{ user_vars.nothing_set }}") == ""
+
+
 async def test_a_template_is_compiled_once(pymux):
     "The cache is what keeps this off the frame budget."
     from pymux.jinja import _compile

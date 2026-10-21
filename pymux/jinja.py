@@ -60,9 +60,12 @@ BROKEN = "<template error>"
 
 #: Facts that are not `#{name}` variables. `now` is the clock that
 #: test-mode pins, so a template that prints the time holds still in a
-#: test the same way a `%H:%M` status line does.
+#: test the same way a `%H:%M` status line does. `user_vars` is what the
+#: pane's program set with "OSC 1337 ; SetUserVar", such as
+#: `{{ user_vars.git_branch }}`.
 EXTRA_FACTS: dict[str, Callable[[FormatContext], object]] = {
     "now": lambda context: context.pymux.displayed_now(),
+    "user_vars": lambda context: dict(context.pane.user_vars),
 }
 
 
