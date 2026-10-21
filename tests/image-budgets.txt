@@ -1,0 +1,62 @@
+# What images cost pyte and pymux, in bytecode instructions.
+# `tests/measure_images.py` says why the unit is not a second, what
+# each measurement covers, and why (rust) counts no kernel.
+# This is what the run saw. To make it what the check expects:
+#     nix build --file . checks.pymux-images.run
+#     cp result/image-budgets.txt pymux/tests/image-budgets.txt
+icon kitty frame (pure) 928
+icon kitty frame (rust) 928
+icon kitty frame again (pure) 628
+icon kitty frame again (rust) 628
+icon kitty frame scrolled (pure) 705
+icon kitty frame scrolled (rust) 705
+icon kitty transmission (pure) 374276
+icon kitty transmission (rust) 374258
+icon sixel frame (pure) 24885202
+icon sixel frame (rust) 1197
+icon sixel frame again (pure) 535
+icon sixel frame again (rust) 535
+icon sixel frame scrolled (pure) 23615021
+icon sixel frame scrolled (rust) 2148
+icon sixel transmission (pure) 3394667
+icon sixel transmission (rust) 1971272
+icon text over it (pure) 100142
+icon text over it (rust) 13387
+panorama kitty frame (pure) 16056
+panorama kitty frame (rust) 16056
+panorama kitty frame again (pure) 628
+panorama kitty frame again (rust) 628
+panorama kitty frame scrolled (pure) 705
+panorama kitty frame scrolled (rust) 705
+panorama kitty transmission (pure) 61534424
+panorama kitty transmission (rust) 61532210
+panorama sixel frame (pure) 166206415
+panorama sixel frame (rust) 2780
+panorama sixel frame again (pure) 535
+panorama sixel frame again (rust) 535
+panorama sixel frame scrolled (pure) 134470490
+panorama sixel frame scrolled (rust) 5935
+panorama sixel transmission (pure) 7308277
+panorama sixel transmission (rust) 3698754
+panorama text over it (pure) 100043
+panorama text over it (rust) 13288
+square kitty frame (pure) 3408
+square kitty frame (rust) 3408
+square kitty frame again (pure) 628
+square kitty frame again (rust) 628
+square kitty frame scrolled (pure) 705
+square kitty frame scrolled (rust) 705
+square kitty transmission (pure) 10371388
+square kitty transmission (rust) 10371010
+square sixel frame (pure) 193140368
+square sixel frame (rust) 1413
+square sixel frame again (pure) 535
+square sixel frame again (rust) 535
+square sixel frame scrolled (pure) 189836559
+square sixel frame scrolled (rust) 5974
+square sixel transmission (pure) 18928584
+square sixel transmission (rust) 9706499
+square text over it (pure) 100142
+square text over it (rust) 13387
+text alone (pure) 98979
+text alone (rust) 11239

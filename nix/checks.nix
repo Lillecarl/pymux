@@ -254,6 +254,11 @@ let
   frameInclude = builtins.getEnv "PYMUX_FRAME_INCLUDE";
   frameTolerance = builtins.getEnv "PYMUX_FRAME_TOLERANCE";
 
+  # The same two for the image measurement, for instance
+  # `PYMUX_IMAGES_INCLUDE=panorama nix build --file . checks.pymux-images`.
+  imagesInclude = builtins.getEnv "PYMUX_IMAGES_INCLUDE";
+  imagesTolerance = builtins.getEnv "PYMUX_IMAGES_TOLERANCE";
+
   # How big a window the profiler draws, and how many frames of it, for
   # instance
   # `PYMUX_PROFILE_PANES=16 nix build --file . checks.pymux-profile.run`.
@@ -767,6 +772,30 @@ in
       }
       ''
         python tests/measure_frame.py
+      '';
+
+  # What images cost pyte and pymux, in instructions as `frame` counts.
+  # pymux decodes PNG itself and nothing else, so the panorama goes from
+  # JPEG to PNG here, outside the count. Lillecarl/pymux#604.
+  images =
+    runInSandbox
+      {
+        name = "pymux-images";
+        inputs = [ imagemagick ];
+        env = { inherit imagesInclude imagesTolerance; };
+        setup = ''
+          export PYMUX_IMAGES_INCLUDE="$imagesInclude"
+          export PYMUX_IMAGES_TOLERANCE="$imagesTolerance"
+          export PYMUX_IMAGES_OUT="$out"
+          export PYMUX_IMAGES_PNG="$TMPDIR/png"
+          export PYTHONHASHSEED=0
+          mkdir -p "$PYMUX_IMAGES_PNG"
+          cp tests/scenario-fixtures/images/pug.png tests/scenario-fixtures/images/puppy-icon.png "$PYMUX_IMAGES_PNG"
+          magick tests/scenario-fixtures/images/river-panorama.jpg -strip "$PYMUX_IMAGES_PNG/river-panorama.png"
+        '';
+      }
+      ''
+        python tests/measure_images.py
       '';
 
   # What pymux still holds after a pane, a window or a client has gone.
