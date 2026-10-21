@@ -57,7 +57,7 @@ from .arrangement import HSplit, LayoutTypes, Pane, VSplit, Window, _Split, node
 from .commands.wait_for import WaitChannel
 from .enums import AudioFrame, ClientAudio, WindowScroll
 from .ids import PaneId, SessionId, WindowId, WindowIndex
-from .jobs import HeldPipes, Job, JobId
+from .jobs import HeldPipes, Job, JobFeed, JobId
 from .notifications import Notification
 from .options import ALL_OPTIONS
 from .pipes.posix import PosixSocketListener
@@ -70,7 +70,7 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "load", "program_ids", "save", "start
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 21
+SNAPSHOT_VERSION = 22
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -99,12 +99,15 @@ CLIENT_COLUMNS = ("client_id", "session_id", "previous_session_id", *CLIENT_SETT
 #: change of shape adds the one step from the version before it and
 #: deletes any older step. Version 12 is the first a holder hands over.
 STEPS: dict[int, str] = {
-    # 21 keeps a running job the holder forked: its program and pid. The
-    # build before refused to write a running job, so every row is done.
-    # Lillecarl/pymux#556.
-    20: """
-ALTER TABLE jobs ADD COLUMN program_id INTEGER;
-ALTER TABLE jobs ADD COLUMN pid INTEGER;
+    # 22 keeps a pane that views a job. The build before refused to
+    # write one, so the table starts empty. Lillecarl/pymux#715.
+    21: """
+CREATE TABLE pane_viewers(
+  pane_id INTEGER PRIMARY KEY REFERENCES panes(pane_id),
+  job_id INTEGER NOT NULL REFERENCES jobs(job_id),
+  pane_width INTEGER NOT NULL,
+  pane_height INTEGER NOT NULL
+);
 """,
 }
 
@@ -226,6 +229,12 @@ CREATE TABLE pane_user_vars(
   name TEXT NOT NULL,
   value TEXT NOT NULL,
   PRIMARY KEY (pane_id, name)
+);
+CREATE TABLE pane_viewers(
+  pane_id INTEGER PRIMARY KEY REFERENCES panes(pane_id),
+  job_id INTEGER NOT NULL REFERENCES jobs(job_id),
+  pane_width INTEGER NOT NULL,
+  pane_height INTEGER NOT NULL
 );
 CREATE TABLE split_weights(
   split_id INTEGER NOT NULL REFERENCES splits(split_id),
@@ -389,6 +398,7 @@ TABLES = (
     "panes",
     "pane_marks",
     "pane_user_vars",
+    "pane_viewers",
     "split_weights",
     "column_widths",
     "clients",
@@ -482,6 +492,8 @@ WRITES: dict[str, frozenset[str]] = {
     "pymux.jobs.JobTable": frozenset({"_jobs", "last_id", "saved_queries"}),
     # The kept counts are the lengths of the chunks `job_output` holds.
     "pymux.jobs.Job": frozenset(name for name, fate in Job.KEEP.items() if fate == Keep.SAVED),
+    # A viewer's row, in `pane_viewers`.
+    "pymux.jobs.JobFeed": frozenset({"job", "sx", "sy"}),
     "ptterm.terminal.Terminal": frozenset({"terminal_control"}),
     "ptterm.terminal._TerminalControl": frozenset({"screen", "stream", "process"}),
     # What `pyte.freeze` walks writes every saved field, by construction.
@@ -589,8 +601,17 @@ class PaneRow:
     last_exit_status: int | None
 
 
+@dataclass(frozen=True, slots=True)
+class ViewerRow:
+    TABLE: ClassVar[str] = "pane_viewers"
+    pane_id: int
+    job_id: int
+    pane_width: int
+    pane_height: int
+
+
 #: Every table a dataclass names. A test holds each against the schema.
-ROWS = (WindowRow, SplitRow, PaneRow)
+ROWS = (WindowRow, SplitRow, PaneRow, ViewerRow)
 
 
 class _Row(Protocol):
@@ -761,6 +782,10 @@ class Snapshot:
     def _write_program(self, pane: Pane) -> None:
         control = _terminal(pane).terminal_control
         process = control.process
+        if isinstance(process, JobFeed):
+            # The new viewer replays the job, so the screen stays here.
+            _insert(self.db, ViewerRow(pane.pane_id, process.job.job_id, process.sx, process.sy))
+            return
         backend = process.backend
         assert isinstance(backend, HeldBackend)  # `write` refused anything else
         freezer = self.freezers.get(pane.pane_id)
@@ -855,10 +880,12 @@ def _terminal(pane: Pane) -> Terminal:
 
 
 def _refuse_what_cannot_be_saved(pane: Pane) -> None:
-    terminal = _terminal(pane)
-    backend = getattr(terminal.terminal_control.process, "backend", None)
+    process = _terminal(pane).terminal_control.process
+    if isinstance(process, JobFeed):
+        return
+    backend = getattr(process, "backend", None)
     if not isinstance(backend, PosixBackend):
-        raise SnapshotError("pane %%%d runs no program on a pty, such as a job viewer" % pane.pane_id)
+        raise SnapshotError("pane %%%d runs no program on a pty" % pane.pane_id)
     if not isinstance(backend, HeldBackend):
         # Only the holder can hand a program to the next server.
         raise SnapshotError("pane %%%d was forked by this server and not by its holder" % pane.pane_id)
@@ -1236,6 +1263,18 @@ def _adopted(pymux: Pymux, masters: dict[int, int], program: Program, on_done: C
     return _thawed(pymux, program, pymux._build_pane(backend=backend, on_done=on_done))
 
 
+def _viewer(pymux: Pymux, row: ViewerRow) -> Pane:
+    "A pane that views its job again. The replay draws the screen once `start` starts it."
+    job = pymux.jobs.get(JobId(row.job_id))
+    if job is None:
+        raise SnapshotError("pane %d views job %d, which the snapshot does not hold" % (row.pane_id, row.job_id))
+    pane = pymux._build_viewer(job)
+    pane.pane_id = PaneId(row.pane_id)
+    _terminal(pane).terminal_control.set_size(row.pane_width, row.pane_height)
+    pymux._register_pane(pane)
+    return pane
+
+
 def _thawed(pymux: Pymux, program: Program, pane: Pane) -> Pane:
     pane.pane_id = program.pane_id
     control = _terminal(pane).terminal_control
@@ -1440,8 +1479,17 @@ def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int], pipes: 
 
     panes: dict[int | None, Pane] = {}
 
+    # Before the panes: a viewer follows its job.
+    for job in _read_jobs(pymux, db, masters, pipes):
+        pymux.jobs._jobs[job.job_id] = job
+
     def pane_of(row: PaneRow, on_done: Callable[[], None] | None = None) -> Pane:
-        pane = _adopted(pymux, masters, _program(db, PaneId(row.pane_id)), on_done)
+        viewing = _select(db, ViewerRow, "WHERE pane_id = ?", row.pane_id)
+        if viewing:
+            pane = _viewer(pymux, viewing[0])
+        else:
+            pane = _adopted(pymux, masters, _program(db, PaneId(row.pane_id)), on_done)
+            ((pane.revision,),) = _rows(db, "SELECT pane_revision FROM pane_programs WHERE pane_id = ?", row.pane_id)
         pane.pane_id = PaneId(row.pane_id)
         pane.chosen_name = row.pane_name
         pane.clock_mode = bool(row.clock_mode)
@@ -1449,7 +1497,6 @@ def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int], pipes: 
         pane.current_host = row.current_host
         pane.command_zone = row.command_zone
         pane.last_exit_status = row.last_exit_status
-        ((pane.revision,),) = _rows(db, "SELECT pane_revision FROM pane_programs WHERE pane_id = ?", pane.pane_id)
         pane.marks = [
             mark["row"]
             for mark in _rows(db, "SELECT row FROM pane_marks WHERE pane_id = ? ORDER BY position", pane.pane_id)
@@ -1572,8 +1619,6 @@ def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int], pipes: 
         row["name"]: (row["sql"], row["description"]) for row in _rows(db, "SELECT * FROM saved_queries")
     }
     _read_notifications(pymux, db, counters)
-    for job in _read_jobs(pymux, db, masters, pipes):
-        pymux.jobs._jobs[job.job_id] = job
     return server["listener_fd"]
 
 

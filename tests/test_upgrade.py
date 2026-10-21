@@ -266,6 +266,31 @@ def test_an_upgrade_keeps_a_running_job(server, streams):
     assert numbers == list(range(1, LINES + 1))
 
 
+def _pane_ids(sock) -> set[str]:
+    return set(_answer(sock, "list-panes", "-F", "#{pane_id}").split())
+
+
+def test_an_upgrade_keeps_a_pane_that_views_a_job(server):
+    "The new server views the job again, and says once how it ended. Lillecarl/pymux#715."
+    job = _answer(server, "run", JOB_COUNT % LINES).strip()
+    split = _answer(server, "split-window", "-d", "-P", "-F", "#{pane_id}").strip()
+    before = _pane_ids(server)
+    # The viewer takes the place of the split, under an id of its own.
+    _answer(server, "view-job", "-k", "-t", split, job)
+    (viewer,) = _pane_ids(server) - before
+    said = cli(server, "upgrade-server", shlex.join([sys.executable, "-m", "pymux"]))
+    assert said.returncode == 0, said.stderr.decode()
+
+    ended = "[job %s exited 3]" % job
+    deadline = time.monotonic() + CLI_TIMEOUT
+    while ended not in (text := _answer(server, "capture-pane", "-p", "-S", "-", "-t", viewer)):
+        assert time.monotonic() < deadline, "the viewer never said how the job ended"
+        time.sleep(0.1)
+    assert text.count(ended) == 1
+    numbers = [int(line.split()[1]) for line in text.splitlines() if line.startswith("job ")]
+    assert numbers == list(range(1, LINES + 1))
+
+
 #: Ignores SIGHUP and writes its pid. `exec` keeps the pid, and an
 #: ignored signal stays ignored across it.
 IGNORES_HUP = "trap '' HUP; echo $$ > %s; exec sleep 600"

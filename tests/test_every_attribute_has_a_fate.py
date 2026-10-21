@@ -22,6 +22,7 @@ from prompt_toolkit.application.current import set_app
 from pyte.keep import Keep
 from test_a_session_on_a_pyte_screen import attached, settled, shows
 
+from pymux.jobs import JobFeed
 from pymux.main import Pymux
 
 
@@ -80,6 +81,8 @@ def live_objects(pymux):
                 yield terminal.terminal_control.stream
                 yield pane.process
                 yield pane.process.backend
+                if isinstance(pane.process, JobFeed):
+                    continue
                 yield pane.process.backend._reader
                 screen = pane.screen
                 yield screen
@@ -104,6 +107,10 @@ async def test_every_attribute_has_a_fate(pymux):
             pymux.handle_command("split-window -h")
         await settled(session)
         await pymux.jobs.supervise(await pymux.jobs.submit("true"))
+        # A viewer, so a field added to `JobFeed` needs a fate too. Lillecarl/pymux#715.
+        with set_app(client_state.app):
+            pymux.handle_command("view-job -k 1")
+        await settled(session)
 
         found = []
         seen_classes = set()

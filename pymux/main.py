@@ -2707,39 +2707,18 @@ class Pymux:
         if self.notify_shim:
             self._ensure_notify_shim()
 
-        pane = self._build_pane(
-            command=command_list,
-            environment=environment_of_the_pane,
-            directory=path or self.original_cwd,
-            # A viewer forks nothing, so the holder has nothing to keep.
-            holding=self.holding if job is None else None,
-            on_done=on_done,
-            # A viewer never ends on its own: the job ending feeds an
-            # exit line and the pane stays, so there is nothing to call
-            # back. `JobFeed.kill` stops the follow; whoever kills
-            # removes the pane.
-            watch_end=job is None,
-        )
+        if job is not None:
+            pane = self._build_viewer(job)
+        else:
+            pane = self._build_pane(
+                command=command_list,
+                environment=environment_of_the_pane,
+                directory=path or self.original_cwd,
+                holding=self.holding,
+                on_done=on_done,
+            )
         assert isinstance(pane.terminal, Terminal), "`_build_pane` builds a terminal pane"
         terminal_control = pane.terminal.terminal_control
-
-        if job is not None:
-            # A viewer: the feed stands where the process would, so
-            # the eager start below and the first render both meet it,
-            # and nothing ever forks.
-            old_process = terminal_control.process
-            terminal_control.process = JobFeed(job, terminal_control.feed_output)
-            # No fork, so the pty the construction opened is dead
-            # weight: give both ends back. The reader never connected,
-            # so `close` only drops the master; the slave would
-            # otherwise stay open until the server exits, which closes
-            # it only on a reap that never comes.
-            backend = old_process.backend
-            if isinstance(backend, PosixBackend):
-                backend.close()
-                if backend.slave is not None:
-                    os.close(backend.slave)
-                    backend.slave = None
 
         if not terminal_control._running:
             # The size of the session this pane is going into, until a
@@ -2771,6 +2750,37 @@ class Pymux:
         else:
             logger.info("Created process %r.", command_list)
 
+        return pane
+
+    def _build_viewer(self, job: Job) -> Pane:
+        """
+        A pane that shows `job` where a program would run, with nothing
+        started. The feed replays the tail and follows the rest once it
+        starts. Nothing forks, so the holder has nothing to keep.
+        """
+        pane = self._build_pane(
+            command=[self.default_shell],
+            # A viewer never ends on its own: the job ending feeds an
+            # exit line and the pane stays, so there is nothing to call
+            # back. `JobFeed.kill` stops the follow; whoever kills
+            # removes the pane.
+            watch_end=False,
+        )
+        assert isinstance(pane.terminal, Terminal), "`_build_pane` builds a terminal pane"
+        terminal_control = pane.terminal.terminal_control
+        old_process = terminal_control.process
+        terminal_control.process = JobFeed(job, terminal_control.feed_output)
+        # No fork, so the pty the construction opened is dead weight:
+        # give both ends back. The reader never connected, so `close`
+        # only drops the master; the slave would otherwise stay open
+        # until the server exits, which closes it only on a reap that
+        # never comes.
+        backend = old_process.backend
+        if isinstance(backend, PosixBackend):
+            backend.close()
+            if backend.slave is not None:
+                os.close(backend.slave)
+                backend.slave = None
         return pane
 
     def _build_pane(

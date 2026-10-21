@@ -28,6 +28,7 @@ from pymux import snapshot
 from pymux.arrangement import LayoutTypes
 from pymux.commands.wait_for import WaitChannel
 from pymux.enums import Chooser, WindowCodec, WindowSize
+from pymux.jobs import JobFeed
 from pymux.main import Pymux
 from pymux.notifications import Urgency
 
@@ -161,7 +162,7 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     that forgot one cannot pass by writing the default back.
     """
     first, second = pymux.sessions
-    stacked, strip = first.arrangement.windows
+    stacked, strip, _viewing = first.arrangement.windows
     pane = stacked.panes[0]
     pane.chosen_name = "named"
     pane.clock_mode = True
@@ -378,6 +379,11 @@ def _text(pane) -> str:
     return "\n".join(line.text for line in screen.page.text_lines(0, screen.max_y))
 
 
+def _viewers_of(pymux) -> dict:
+    "Each pane that views a job, by the job's id."
+    return {pane.process.job.job_id: pane for pane in pymux.panes_by_id.values() if isinstance(pane.process, JobFeed)}
+
+
 def _window_count(pymux) -> int:
     return sum(len(session.arrangement.windows) for session in pymux.sessions)
 
@@ -393,6 +399,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
     pymux.socket_name = str(tmp_path / "server.sock")
     async with pymux.running(hold=True), attached(pymux) as session:
         await shows(session, "$")
+        await _run_jobs(pymux)
         connection = pymux.connections[-1]
         # The web viewer here sends no id; a terminal client does.
         connection.client_id = "returning"
@@ -419,6 +426,14 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 "select-pane -L",
                 "new-window",
                 "unlink-window",
+                # A pane that views a finished job, and one that views a
+                # job running on, of other sizes. Lillecarl/pymux#715.
+                "new-window",
+                "view-job -k 2",
+                "split-window -v",
+                "view-job -k 5",
+                "resize-pane -U 2",
+                "split-window -h",
                 "display-popup -w 40 -h 10 -T pop 'sleep 60'",
                 "new-session -d -s second",
             ):
@@ -435,10 +450,12 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                     # So is a pane: the strip had one column when the
                     # test set the width of its second. Lillecarl/pymux#664.
                     await once(lambda: _pane_count(pymux) > panes, 10.0, "the new pane never came")
+                elif command.startswith("view-job"):
+                    viewed = int(command.split()[-1])
+                    await once(lambda: viewed in _viewers_of(pymux), 10.0, "the viewer never came")
                 await settled(session, 0.1)
         await settled(session)
         _vary_what_no_command_reaches(pymux, connection.client_state)
-        await _run_jobs(pymux)
         jobs = _jobs_of(pymux)
         questions = await _questions_of(pymux)
 
@@ -450,7 +467,8 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
         # What an upgrade does to the old server: its programs go on, and
         # it no longer reads them.
         for pane in snapshot._panes_of(pymux):
-            pane.process.backend.pause_reading()
+            if not isinstance(pane.process, JobFeed):
+                pane.process.backend.pause_reading()
         pymux.jobs.pause_reading()
 
         fresh = Pymux()
@@ -473,6 +491,14 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                     with anyio.fail_after(10):
                         await fresh.jobs.wait(job)
                     assert (job.returncode, job.kept("stdout")) == (-signal.SIGTERM, b"started\n")
+                # Each viewer replays its job, and says once how it ended.
+                viewers = _viewers_of(fresh)
+                for job_id, ended in ((2, "[job 2 exited 3]"), (5, "[job 5 exited -15]")):
+                    with anyio.fail_after(10):
+                        while ended not in _text(viewers[job_id]):
+                            await anyio.sleep(0.05)
+                    assert _text(viewers[job_id]).count(ended) == 1
+                assert "started" in _text(viewers[5])
                 assert await _questions_of(fresh) == questions
                 assert "running" not in dict((name, sql) for name, sql, _ in questions)
                 assert fresh.named_buffers == pymux.named_buffers
@@ -536,10 +562,12 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
             if pymux.holding is not None:
                 pymux.holding.close()
 
-    assert _rows(first, "SELECT count(*) FROM panes") == [(9,)]
+    assert _rows(first, "SELECT count(*) FROM panes") == [(12,)]
+    assert _rows(first, "SELECT job_id FROM pane_viewers ORDER BY 1") == [(2,), (5,)]
     # One under each root: the stack split beside, and the strip's
     # first column, which turning the strip on wraps the old root in.
-    assert _rows(first, "SELECT count(*) FROM splits WHERE parent_split_id IS NOT NULL") == [(2,)]
+    # And the viewers' window: split down, then beside.
+    assert _rows(first, "SELECT count(*) FROM splits WHERE parent_split_id IS NOT NULL") == [(3,)]
     assert _rows(first, "SELECT window_name FROM windows WHERE window_name IS NOT NULL") == [("built",)]
     assert _rows(first, "SELECT value FROM options WHERE name = 'status-left'") == [("left",)]
     assert _rows(first, "SELECT value FROM window_defaults WHERE name = 'frame-rate'") == [(10,)]
@@ -594,28 +622,22 @@ def test_the_table_list_is_the_schema_in_order():
     assert _shape(live) == {name: shape for name, shape in _shape(db).items() if name in snapshot.WHOLE_TABLES}
 
 
-def test_a_version_20_snapshot_reads_its_jobs_as_forked_by_nobody(pymux, tmp_path):
+def test_a_version_21_snapshot_reads_as_viewing_no_job(pymux, tmp_path):
     """
-    Version 21 keeps the program and the pid of a running job the
-    holder forked. The build before wrote finished jobs only, so each
-    of its rows names neither. Lillecarl/pymux#556.
+    Version 22 keeps a pane that views a job. The build before refused
+    to write one. Lillecarl/pymux#715.
     """
-    path = tmp_path / "v20.sqlite"
+    path = tmp_path / "v21.sqlite"
     snapshot.save(pymux, path)
     db = sqlite3.connect(path)
-    db.execute(
-        "INSERT INTO jobs(job_id, command, pty, status, returncode, started, finished, last_active, env,"
-        " stdout_dropped, stderr_dropped) VALUES (1, 'true', 0, 'done', 0, 1.0, 2.0, 2.0, '{}', 0, 0)"
-    )
-    db.execute("ALTER TABLE jobs DROP COLUMN program_id")
-    db.execute("ALTER TABLE jobs DROP COLUMN pid")
-    db.execute("PRAGMA user_version = 20")
+    db.execute("DROP TABLE pane_viewers")
+    db.execute("PRAGMA user_version = 21")
     db.commit()
     db.close()
 
     stepped = snapshot._open(path)
     assert _shape(stepped) == _shape_of_a_fresh_snapshot()
-    assert stepped.execute("SELECT job_id, status, program_id, pid FROM jobs").fetchall() == [(1, "done", None, None)]
+    assert stepped.execute("SELECT count(*) FROM pane_viewers").fetchall() == [(0,)]
 
 
 async def test_a_running_job_this_server_forked_is_refused(pymux, tmp_path):

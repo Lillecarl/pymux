@@ -896,7 +896,24 @@ class JobFeed:
 
     `feed_output` writes one piece to the screen and says it may have
     changed.
+
+    An upgrade carries the job and the size, in `pane_viewers`, and the
+    new server's viewer replays the tail again: what the screen showed
+    is the job's, so nothing else needs to cross. Lillecarl/pymux#715.
     """
+
+    KEEP: ClassVar[dict[str, Keep]] = {
+        "job": Keep.SAVED,
+        "sx": Keep.SAVED,
+        "sy": Keep.SAVED,
+        "_feed_output": Keep.REBUILT,
+        "backend": Keep.REBUILT,
+        "_alive": Keep.REBUILT,
+        "_terminated": Keep.REBUILT,  # the replay says again how the job ended
+        "suspended": Keep.DROPPED,  # the replay starts on a fresh screen, which no copy mode reads
+        "_started": Keep.REBUILT,
+        "_hint": Keep.DROPPED,
+    }
 
     def __init__(self, job: Job, feed_output: Callable[[str], None]) -> None:
         self.job = job
