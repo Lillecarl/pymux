@@ -336,8 +336,7 @@ def demo_keys():
     and then the program that answered, which is what a pane looks
     like in use rather than at rest. **The split is also what keeps
     the fence alive**: the first pane stays the forwarder, and the
-    fence needs it -- a pane whose program is suspended carries
-    nothing back, and copy mode suspends the one it opens on.
+    fence needs it.
     """
     return keys(
         (0.0, PREFIX),
@@ -620,6 +619,21 @@ FIXTURES = {
     "copy-mode": Fixture(
         CHROME,
         demo_keys() + keys(("quiet", 0.5), (0.0, PREFIX), (0.6, b"[")),
+        (2,),
+        mode="copy-mode",
+    ),
+    # Copy mode over a pane that writes again after it opened: the
+    # corner says the copy is older than the pane. Lillecarl/pymux#714.
+    "copy-mode-newer": Fixture(
+        CHROME,
+        keys(
+            (0.0, PREFIX),
+            (0.4, b"%"),
+            (0.8, b"printf 'older\\n'; sleep 2; printf 'newer\\n'\n"),
+            (0.4, PREFIX),
+            (0.4, b"["),
+            ("quiet", 3.0),
+        ),
         (2,),
         mode="copy-mode",
     ),
