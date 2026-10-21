@@ -600,6 +600,33 @@ FIXTURES = {
         ),
         (2, 1, 1),
     ),
+    # More windows than one row of the status line holds, so the list
+    # wraps onto more rows, a whole window at a time, and the pane and
+    # the question above the status line move up with it. `-d` keeps
+    # the client on window 0, where the forwarder runs.
+    # Lillecarl/pymux#723.
+    "status-wraps": Fixture(
+        CHROME,
+        keys(
+            *[
+                step
+                for name in (
+                    "frontend-server",
+                    "backend-server",
+                    "database-shell",
+                    "application-logs",
+                    "integration-tests",
+                    "meeting-notes",
+                    "nightly-builds",
+                    "staging-deploy",
+                )
+                for step in create_command("new-window -d -n %s" % (name,))
+            ],
+            (0.8, PREFIX),
+            (0.6, b"x"),
+        ),
+        (1,) * 9,
+    ),
     # A question waiting for an answer. `prefix x` is
     # `confirm-before -p "kill-pane #P?" kill-pane`, so the prompt is
     # also the one piece of chrome that expands a format string into
