@@ -106,6 +106,11 @@ _CARRIES_A_HIGH_MODIFIER_RE = re.compile(r"^\x1b\[[\d:]*;(\d+)[\d:]*(?:;[\d:]*)?
 #: alt and ctrl together, which is one plus seven.
 _CTRL_ALT_SHIFT = 8
 
+#: F3 with shift, alt or ctrl as a legacy terminal spells it, the letter
+#: form that is also a cursor report of row 1. Modifier 1 is no
+#: modifier, and the parameter of a report of row 1, column 1.
+_MODIFIED_F3_RE = re.compile(r"^\x1b\[1;([2-8])R\Z")
+
 # A prefix that could still become a kitty key sequence (or any other
 # CSI sequence with variable parameters).
 #
@@ -920,6 +925,15 @@ class KittyVt100Parser(Vt100Parser):
                 named = parse_kitty_key(prefix)
                 if named is not None:
                     return cast("Keys | tuple[Keys, ...]", named)
+
+        # ctrl+F3 is "CSI 1;5R" in every legacy terminal, which is also a
+        # cursor report of row 1. The one report the server asks for is
+        # `EMOJI_WIDTH_PROBE`'s, on row 2, so row 1 is the key. A probe
+        # that asks on row 1 would be read as a key press here.
+        # Lillecarl/pymux#244.
+        f3 = _MODIFIED_F3_RE.match(prefix)
+        if f3 is not None:
+            return cast("Keys | tuple[Keys, ...]", key_named(str.__str__(Keys.F3), int(f3.group(1)) - 1))
 
         # prompt_toolkit's own table otherwise: it knows richer
         # variants (like shift+arrow) for the sequences that it covers.

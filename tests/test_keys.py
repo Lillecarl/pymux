@@ -155,6 +155,29 @@ def test_f3_arrives_as_number_and_not_as_letter():
     assert parse("\x1b[13;9~") == [("super-f3", "\x1b[13;9~")]
 
 
+def test_a_legacy_modified_f3_is_the_key_and_not_a_cursor_report():
+    """
+    xterm, foot, WezTerm, Ghostty, Alacritty, VTE and tmux all send
+    "CSI 1;5R" for ctrl+F3, which is also a cursor report of row 1.
+    Lillecarl/pymux#244.
+    """
+    assert parse("\x1b[1;5R") == [(Keys.ControlF3, "\x1b[1;5R")]
+    for modifier in range(2, 9):
+        letter = [key for key, _data in parse("\x1b[1;%dR" % modifier)]
+        number = [key for key, _data in parse("\x1b[13;%d~" % modifier)]
+        assert letter == number, modifier
+
+
+def test_the_emoji_probe_report_is_still_a_reply():
+    "The server's one cursor report, `EMOJI_WIDTH_PROBE`'s, is on row 2."
+    pressed = []
+    replies = []
+    parser = KittyVt100Parser(pressed.append, reply_callback=replies.append)
+    parser.feed_and_flush("\x1b[2;3R\x1b[1;1R")
+    assert [kp for kp in pressed if kp is not _Flush] == []
+    assert replies == ["\x1b[2;3R", "\x1b[1;1R"]
+
+
 def test_keypad_keys():
     assert parse("\x1b[57413u") == [("+", "\x1b[57413u")]
     assert parse("\x1b[57414u") == [(Keys.Enter, "\x1b[57414u")]
