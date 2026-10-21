@@ -37,8 +37,10 @@ Lillecarl/pymux#461.
 from __future__ import annotations
 
 import base64
+import functools
 from typing import Any, NamedTuple
 
+import anyio
 from pyte.html import CSS, href_of, runs_of_row, style_of, theme_css
 from pyte.images import PixelFormat
 from pyte.png import encode_png
@@ -51,6 +53,8 @@ __all__ = [
     "WELCOME",
     "PaneView",
     "Typed",
+    "base64_png",
+    "encode_unsent",
     "typed_of",
 ]
 
@@ -285,23 +289,10 @@ class PaneView:
         what the program sized the image by. A browser's cell is its own
         and nobody here knows it.
         """
-        view = graphics.PaneView(
-            pane_id=0,
-            x=0,
-            y=0,
-            width=screen.columns,
-            height=screen.lines,
-            vertical_scroll=screen.line_offset,
-            horizontal_scroll=0,
-            graphics=screen.graphics,
-            screen=screen,
-        )
         held: dict[int, tuple[Any, bytes]] = {}
         sent: dict[str, str] = {}
         placements: list[list[int]] = []
-        for _placement, image, columns, rows, x, y, source in graphics.pane_placements(
-            view, screen.cell_width, screen.cell_height
-        ):
+        for _placement, image, columns, rows, x, y, source in _placed(screen):
             number = next(
                 (
                     n
@@ -311,17 +302,25 @@ class PaneView:
                 None,
             )
             if number is None:
-                png = _png_of(image)
+                png = base64_png(image.format, image.width, image.height, image.data)
                 if png is None:
                     continue
                 number = self._next_image
                 self._next_image += 1
-                sent[str(number)] = base64.b64encode(png).decode("ascii")
+                sent[str(number)] = png
             held[number] = (image, image.data)
             left, top, width, height = source or (0, 0, image.width, image.height)
             placements.append([number, y, x, rows, columns, left, top, width, height])
         self._images = held
         return sent, placements
+
+    def unsent(self, screen) -> list[Any]:
+        "The images the screen places that this viewer has not been sent."
+        return [
+            image
+            for _placement, image, *_where in _placed(screen)
+            if not any(known is image and data is image.data for known, data in self._images.values())
+        ]
 
     def _cursor_of(self, screen) -> tuple[int, int]:
         """
@@ -338,14 +337,57 @@ class PaneView:
         return (row, position.x)
 
 
-def _png_of(image) -> bytes | None:
-    "An image as a browser reads one, or None when it does not decode."
-    if image.format == PixelFormat.PNG:
-        return image.data
-    pixels = sixel.to_rgba(image.format, image.width, image.height, image.data)
-    if pixels is None:
-        return None
-    return encode_png(image.width, image.height, pixels)
+def _placed(screen):
+    view = graphics.PaneView(
+        pane_id=0,
+        x=0,
+        y=0,
+        width=screen.columns,
+        height=screen.lines,
+        vertical_scroll=screen.line_offset,
+        horizontal_scroll=0,
+        graphics=screen.graphics,
+        screen=screen,
+    )
+    return graphics.pane_placements(view, screen.cell_width, screen.cell_height)
+
+
+@functools.lru_cache(maxsize=64)
+def base64_png(format: int, width: int, height: int, data: bytes) -> str | None:
+    """
+    An image as a browser reads one, in base64, or None when it does not
+    decode.
+
+    **Keyed by the pixels, so every viewer of a pane shares one encode.**
+    A `GraphicsImage` has slots and no weak reference, and a program may
+    give an old image new data, so the image itself is no key.
+    """
+    if format == PixelFormat.PNG:
+        png = data
+    else:
+        pixels = sixel.to_rgba(format, width, height, data)
+        if pixels is None:
+            return None
+        png = encode_png(width, height, pixels)
+    return base64.b64encode(png).decode("ascii")
+
+
+async def encode_unsent(view: PaneView, screen) -> None:
+    """
+    Encode in a thread the images `view.frame` would send, so the frame
+    finds them in `base64_png`'s cache.
+
+    A zlib pass over a large sixel holds the loop, and every client of the
+    server waits for it. The loop repeats for an image that arrived while
+    a thread ran, and nothing awaits between the last pass and the frame.
+    Lillecarl/pymux#719.
+    """
+    done: list[Any] = []
+    while todo := [image for image in view.unsent(screen) if not any(image.data is data for data in done)]:
+        await anyio.to_thread.run_sync(
+            lambda: [base64_png(image.format, image.width, image.height, image.data) for image in todo]
+        )
+        done.extend(image.data for image in todo)
 
 
 #: What a client may say. Anything else is refused by name, so a typo in

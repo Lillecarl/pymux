@@ -25,7 +25,7 @@ from pyte.modes import PrivateMode
 from pymux.commands import CommandException
 from pymux.commands.common import send_key
 from pymux.key_spelling import event_however_it_is_written
-from pymux.web.protocol import PaneView, Typed, typed_of
+from pymux.web.protocol import PaneView, Typed, encode_unsent, typed_of
 
 __all__ = ["PaneStream"]
 
@@ -100,6 +100,7 @@ class PaneStream:
 
     async def _push(self) -> None:
         "Send what this viewer has not seen, if anything."
+        await encode_unsent(self._view, self.pane.screen)
         frame = self._view.frame(self.pane.screen, self.pane.revision)
         if frame is not None:
             await self._send(frame)

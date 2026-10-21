@@ -38,7 +38,7 @@ from pyte.streams import GroundTimer, Stream
 
 from pymux.key_spelling import event_however_it_is_written
 from pymux.log import logger
-from pymux.web.protocol import PaneView, Typed, typed_of
+from pymux.web.protocol import PaneView, Typed, encode_unsent, typed_of
 
 __all__ = ["SessionScreen", "run_session"]
 
@@ -130,8 +130,9 @@ class SessionScreen:
     def welcome(self) -> dict[str, Any]:
         return self._view.welcome(self.screen, self.screen.writes, not self.read_only)
 
-    def frame(self) -> dict[str, Any] | None:
+    async def frame(self) -> dict[str, Any] | None:
         "What the viewer has not seen, or None."
+        await encode_unsent(self._view, self.screen)
         return self._view.frame(self.screen, self.screen.writes)
 
     def take(self, data: str) -> str | None:
@@ -256,7 +257,7 @@ async def run_session(
                     if raw and session.take_packet(json.loads(raw.decode("utf-8"))):
                         ended = True
                 await flush()
-                frame = session.frame()
+                frame = await session.frame()
                 if frame is not None:
                     await to_viewer(frame)
                 if ended:

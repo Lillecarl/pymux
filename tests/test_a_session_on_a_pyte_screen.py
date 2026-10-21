@@ -201,7 +201,7 @@ async def test_a_frame_carries_what_it_drew(pymux):
         await shows(session, "$")
 
         assert session.welcome()["size"] == {"columns": COLUMNS, "rows": ROWS}
-        drawn = "".join(text for runs in session.frame()["rows"].values() for _style, text in runs)
+        drawn = "".join(text for runs in (await session.frame())["rows"].values() for _style, text in runs)
         assert "$" in drawn
 
 

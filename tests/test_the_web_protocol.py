@@ -21,7 +21,7 @@ from pyte.screen import Screen
 from pyte.sequences import apc
 from pyte.streams import Stream
 
-from pymux.web.protocol import FRAME, PLAIN_STYLE, WELCOME, PaneView, typed_of
+from pymux.web.protocol import FRAME, PLAIN_STYLE, WELCOME, PaneView, base64_png, encode_unsent, typed_of
 
 LINES = 5
 COLUMNS = 20
@@ -423,6 +423,32 @@ def test_a_new_picture_under_an_old_id_is_sent_again():
     ((number, png),) = frame["images"].items()
     assert number not in first["images"]
     assert decode_png(base64.b64decode(png)) == (2, 2, OTHER_PIXELS)
+
+
+def test_two_viewers_share_one_encode():
+    screen = a_screen()
+    show(screen, bytes(range(100, 116)))
+    before = base64_png.cache_info().misses
+
+    PaneView().frame(screen, 1)
+    PaneView().frame(screen, 1)
+
+    assert base64_png.cache_info().misses == before + 1
+
+
+async def test_a_frame_after_encode_unsent_encodes_nothing():
+    "The encode runs in a thread, so the frame that follows does none on the loop."
+    screen = a_screen()
+    show(screen, bytes(range(200, 216)))
+    view = PaneView()
+
+    await encode_unsent(view, screen)
+    before = base64_png.cache_info().misses
+    frame = view.frame(screen, 1)
+
+    assert base64_png.cache_info().misses == before
+    assert len(frame["images"]) == 1
+    assert view.unsent(screen) == []
 
 
 # ----------------------------------------------------------------------
