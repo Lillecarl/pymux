@@ -20,6 +20,7 @@ import sys
 
 from pywayland.client import Display
 from pywayland.protocol.cursor_shape_v1 import WpCursorShapeDeviceV1, WpCursorShapeManagerV1
+from pywayland.protocol.text_input_unstable_v3 import ZwpTextInputManagerV3
 from pywayland.protocol.wayland import WlCompositor, WlSeat, WlShm
 from pywayland.protocol.xdg_shell import XdgWmBase
 from pywayland.utils import AnonymousFile
@@ -100,7 +101,17 @@ def main(log_path: str, animate: bool, idle: bool, text: bool) -> None:
     surface.attach(buffer, 0, 0)
     surface.damage_buffer(0, 0, width, height)
     shown = []
-    surface.frame().dispatcher["done"] = lambda _callback, _time: shown.append(True)
+    #: The frame callback not yet answered. pywayland holds a proxy only
+    #: weakly, in a cycle, so one nobody holds dies at the next garbage
+    #: collection and is never answered. Lillecarl/pymux#711.
+    waiting = []
+
+    def ask_for_frame() -> None:
+        callback = surface.frame()
+        callback.dispatcher["done"] = lambda _callback, _time: shown.append(True)
+        waiting[:] = [callback]
+
+    ask_for_frame()
     surface.commit()
     # The buffer keeps its first size, and the square comes after the
     # pane's size did: a canvas that changes size is sent whole, so an
@@ -112,7 +123,7 @@ def main(log_path: str, animate: bool, idle: bool, text: bool) -> None:
     shown.clear()
     surface.attach(buffer, 0, 0)
     surface.damage_buffer(0, 0, 1, 1)
-    surface.frame().dispatcher["done"] = lambda _callback, _time: shown.append(True)
+    ask_for_frame()
     surface.commit()
     while not shown:
         display.dispatch(block=True)
@@ -123,22 +134,13 @@ def main(log_path: str, animate: bool, idle: bool, text: bool) -> None:
     surface.attach(buffer, 0, 0)
     surface.damage_buffer(10, 5, 4, 4)
     shown.clear()
-    surface.frame().dispatcher["done"] = lambda _callback, _time: shown.append(True)
+    ask_for_frame()
     surface.commit()
 
     # With --text, a text field, as a toolkit has one: text input enabled
     # whenever the window has the keyboard, and each committed string
     # written. Lillecarl/pymux#624.
-    #
-    # **Only with --text, and after the first frames.** Importing
-    # pywayland's text_input_unstable_v3 is enough to stop this client's
-    # frame callbacks: imported at the top, no window here ever drew
-    # again, text input bound or not. With a faulthandler thread running
-    # it drew. foot binds text input and draws through pysmithay, so it
-    # is pywayland's. Lillecarl/pymux#711.
     if text:
-        from pywayland.protocol.text_input_unstable_v3 import ZwpTextInputManagerV3
-
         text_inputs = bind(ZwpTextInputManagerV3)
         text_input = text_inputs.get_text_input(seat)
 
@@ -161,12 +163,12 @@ def main(log_path: str, animate: bool, idle: bool, text: bool) -> None:
             pixels[0:4] = RED if flip else FILL
             surface.attach(buffer, 0, 0)
             surface.damage_buffer(0, 0, 1, 1)
-            surface.frame().dispatcher["done"] = lambda _callback, _time: shown.append(True)
+            ask_for_frame()
             surface.commit()
         elif idle and shown:
             shown.clear()
             log.write("idle\n")
-            surface.frame().dispatcher["done"] = lambda _callback, _time: shown.append(True)
+            ask_for_frame()
             surface.commit()
     log.write("closed\n")
     toplevel.destroy()
