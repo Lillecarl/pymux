@@ -65,6 +65,11 @@ if (!pane || !token) {
   element.addEventListener("closed", (event) =>
     say(`${pane}: the stream ended (${event.detail.code}).`),
   );
+  element.addEventListener("reconnecting", (event) =>
+    say(
+      `${pane}: the stream ended; trying again in ${Math.ceil(event.detail.delay / 1000)} s.`,
+    ),
+  );
   element.addEventListener("error", () => say(`${pane}: the stream failed.`));
 
   element.setAttribute("src", where.toString());

@@ -19,6 +19,7 @@ import type {
   InputMessage,
   PasteMessage,
   PymuxPane,
+  ReconnectingDetail,
   Run,
   Size,
   StyleEntry,
@@ -51,6 +52,11 @@ element.addEventListener("closed", (event) => {
   const why: ClosedDetail = event.detail;
   void why.code;
   void why.reason;
+});
+element.addEventListener("reconnecting", (event) => {
+  const after: ReconnectingDetail = event.detail;
+  void after.delay;
+  void after.attempt;
 });
 element.addEventListener("error", () => {});
 

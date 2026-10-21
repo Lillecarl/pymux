@@ -65,6 +65,8 @@ let
         # the package does not carry is a package that does not load.
         "keys.js"
         "keys.d.ts"
+        "retry.js"
+        "retry.d.ts"
       ];
     }
   );
@@ -90,7 +92,7 @@ runCommand "pymux-element-${npmVersion}"
     # `page.js` rides along and the manifest does not export it: the
     # demo page is served beside the element, not imported through it.
     install -m644 dist/pymux-pane.js dist/pymux-pane.d.ts \
-      dist/keys.js dist/keys.d.ts dist/page.js \
+      dist/keys.js dist/keys.d.ts dist/retry.js dist/retry.d.ts dist/page.js \
       dist/replay.js dist/replay.d.ts dist/replay-page.js "$out"/
     install -m644 ${manifest} "$out"/package.json
   ''

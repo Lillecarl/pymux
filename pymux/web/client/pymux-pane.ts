@@ -35,6 +35,7 @@
 // `.js` and not `.ts`: this line survives into the emitted
 // `pymux-pane.js`, where a browser resolves it.
 import { keysFor } from "./keys.js";
+import { retryAfter } from "./retry.js";
 
 // ----------------------------------------------------------------------
 // The protocol, as a consumer reads it.
@@ -149,6 +150,13 @@ export interface ClosedDetail {
   reason: string;
 }
 
+/** The element opens its stream again after `delay` milliseconds. */
+export interface ReconnectingDetail {
+  delay: number;
+  /** One for the first attempt since the stream last worked. */
+  attempt: number;
+}
+
 // ----------------------------------------------------------------------
 // The element.
 
@@ -244,6 +252,15 @@ export interface PymuxPane {
     options?: boolean | AddEventListenerOptions,
   ): void;
   /**
+   * A stream this element opened, which once worked, closed and opens
+   * again. Fires after `closed`. Lillecarl/pymux#492.
+   */
+  addEventListener(
+    type: "reconnecting",
+    listener: (event: CustomEvent<ReconnectingDetail>) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  /**
    * `connected` is the welcome and not the socket: `writable` and the
    * size are true by then.
    */
@@ -282,6 +299,10 @@ export class PymuxPane extends HTMLElement {
   #socket: WebSocket | null = null;
   #ownsSocket = false;
   #writable = false;
+  /** Whether a welcome came since `src` was set; see `retryAfter`. */
+  #welcomed = false;
+  #failures = 0;
+  #retry: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     super();
@@ -444,6 +465,12 @@ export class PymuxPane extends HTMLElement {
   }
 
   #open(url: string): void {
+    this.#welcomed = false;
+    this.#failures = 0;
+    this.#connect(url);
+  }
+
+  #connect(url: string): void {
     this.close();
     const socket = new WebSocket(url);
     this.#socket = socket;
@@ -458,20 +485,37 @@ export class PymuxPane extends HTMLElement {
     // a listener that read them there read `false` and said "showing
     // only" to somebody who could type. Measured in a browser. The event
     // fires from the welcome instead, where what it reports is true.
-    socket.addEventListener("close", (event) =>
+    socket.addEventListener("close", (event) => {
       this.dispatchEvent(
         new CustomEvent<ClosedDetail>("closed", {
           detail: { code: event.code, reason: event.reason },
         }),
-      ),
-    );
+      );
+      // A socket `close()` let go of, or one the page gave, stays closed.
+      if (socket === this.#socket && this.#ownsSocket) this.#tryAgain(event.code);
+    });
     socket.addEventListener("error", () =>
       this.dispatchEvent(new CustomEvent("error")),
     );
   }
 
-  /** Close a socket this element opened. */
+  #tryAgain(code: number): void {
+    const url = this.#socket?.url;
+    const delay = retryAfter(code, this.#welcomed, this.#failures);
+    if (url === undefined || delay === null) return;
+    this.#failures += 1;
+    this.#retry = setTimeout(() => this.#connect(url), delay);
+    this.dispatchEvent(
+      new CustomEvent<ReconnectingDetail>("reconnecting", {
+        detail: { delay, attempt: this.#failures },
+      }),
+    );
+  }
+
+  /** Close a socket this element opened, and attempt nothing more. */
   close(): void {
+    if (this.#retry !== null) clearTimeout(this.#retry);
+    this.#retry = null;
     if (this.#socket && this.#ownsSocket) this.#socket.close();
     this.#socket = null;
   }
@@ -506,6 +550,8 @@ export class PymuxPane extends HTMLElement {
   receive(frame: Welcome | Frame): void {
     if (frame.type === "welcome") {
       this.#writable = Boolean(frame.writable);
+      this.#welcomed = true;
+      this.#failures = 0;
       this.#adopt(this.#themeSheet, frame.css || "");
       this.#resize(frame.size);
       // A new stream has been told nothing yet.

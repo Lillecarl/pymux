@@ -76,6 +76,8 @@ let
     "pymux-pane.d.ts"
     "keys.js"
     "keys.d.ts"
+    "retry.js"
+    "retry.d.ts"
     "page.js"
     "replay.js"
     "replay.d.ts"

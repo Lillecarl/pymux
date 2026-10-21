@@ -45,6 +45,7 @@ def test_the_element_is_in_the_installed_package():
     assert (web.STATIC / "pymux-pane.d.ts").is_file()
     # Imported by the element, so a browser asks for it by itself.
     assert (web.STATIC / "keys.js").is_file()
+    assert (web.STATIC / "retry.js").is_file()
     assert (web.STATIC / "index.html").is_file()
     assert (web.STATIC / "page.js").is_file()
     assert (web.STATIC / "page.css").is_file()
