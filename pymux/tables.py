@@ -158,7 +158,6 @@ CREATE TABLE clients(
   theme TEXT,
   swap_dark_and_light INTEGER,
   message TEXT,
-  modes TEXT,
   connected REAL,
   window_scroll TEXT,
   browser_program TEXT,
@@ -281,6 +280,10 @@ CREATE TABLE screen_rows(
   marks INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (pane_id, buffer, number)
 );
+CREATE TABLE client_modes(
+  client_id TEXT PRIMARY KEY REFERENCES clients(client_id),
+  modes TEXT NOT NULL
+);
 """
 
 #: The tables in the order a dump compares them.
@@ -315,6 +318,7 @@ TABLES = (
     "pane_programs",
     "screen_appearances",
     "screen_rows",
+    "client_modes",
 )
 
 JOB_TABLES = ("jobs", "job_tags", "job_output")
@@ -322,9 +326,13 @@ JOB_TABLES = ("jobs", "job_tags", "job_output")
 #: A pane's program and its screen, which only the transition holds.
 SCREEN_TABLES = ("pane_programs", "screen_appearances", "screen_rows")
 
+#: What a client is in the middle of -- a held prefix, a key table, a
+#: prompt -- which typing changes, so only the transition holds it too.
+CLIENT_MODE_TABLES = ("client_modes",)
+
 #: The tables of window management, which the live store holds. A
-#: snapshot holds the jobs and the screens beside them.
-LIVE_TABLES = tuple(table for table in TABLES if table not in JOB_TABLES + SCREEN_TABLES)
+#: snapshot holds the jobs, the screens and the client modes beside them.
+LIVE_TABLES = tuple(table for table in TABLES if table not in JOB_TABLES + SCREEN_TABLES + CLIENT_MODE_TABLES)
 
 
 def _schema_of(tables: tuple[str, ...]) -> str:
@@ -339,8 +347,8 @@ def _schema_of(tables: tuple[str, ...]) -> str:
 
 
 #: The schema of `LIVE_TABLES`: no job, which the job store holds
-#: live, and no screen, which never goes in a live store
-#: (Lillecarl/pymux#399).
+#: live, no screen and no client's modes, which never go in a live
+#: store (Lillecarl/pymux#399, Lillecarl/pymux#557).
 LIVE_SCHEMA = _schema_of(LIVE_TABLES)
 
 
@@ -524,7 +532,6 @@ class ClientRow:
     theme: str | None
     swap_dark_and_light: int | None
     message: str | None
-    modes: str | None
     connected: float | None
     window_scroll: str | None
     browser_program: str | None
@@ -701,6 +708,14 @@ class ScreenRow:
     marks: int
 
 
+@dataclass(frozen=True, slots=True)
+class ClientModesRow:
+    TABLE: ClassVar[str] = "client_modes"
+    KEY: ClassVar[tuple[str, ...]] = ("client_id",)
+    client_id: str
+    modes: str
+
+
 #: One class per table, in the order of `TABLES`.
 ROWS = (
     ServerRow,
@@ -733,6 +748,7 @@ ROWS = (
     ProgramRow,
     AppearanceRow,
     ScreenRow,
+    ClientModesRow,
 )
 
 

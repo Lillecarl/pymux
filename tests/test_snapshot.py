@@ -640,22 +640,23 @@ def test_the_table_list_is_the_schema_in_order():
     assert _shape(live) == {name: shape for name, shape in _shape(db).items() if name in tables.LIVE_TABLES}
 
 
-def test_a_version_24_snapshot_reads_with_no_bell_and_bells_monitored(pymux, tmp_path):
-    "Version 25 keeps the bell flags and `monitor-bell`. Lillecarl/pymux#501."
-    path = tmp_path / "v24.sqlite"
+def test_a_version_25_snapshot_moves_the_client_modes_to_their_own_table(pymux, tmp_path):
+    "Version 26 keeps keyboard state out of `clients`, which the live store holds. Lillecarl/pymux#557."
+    path = tmp_path / "v25.sqlite"
     snapshot.save(pymux, path)
     db = sqlite3.connect(path)
-    db.execute("ALTER TABLE windows DROP COLUMN monitor_bell")
-    db.execute("ALTER TABLE windows DROP COLUMN bell")
-    db.execute("ALTER TABLE panes DROP COLUMN bell")
-    db.execute("PRAGMA user_version = 24")
+    db.execute("DROP TABLE client_modes")
+    db.execute("ALTER TABLE clients ADD COLUMN modes TEXT")
+    db.execute("INSERT INTO clients (client_id, modes) VALUES ('typing', '{\"has_prefix\": true}'), ('idle', NULL)")
+    db.execute("PRAGMA user_version = 25")
     db.commit()
     db.close()
 
     stepped = snapshot._open(path)
     assert _shape(stepped) == _shape_of_a_fresh_snapshot()
-    assert stepped.execute("SELECT DISTINCT monitor_bell, bell FROM windows").fetchall() in ([], [(1, 0)])
-    assert stepped.execute("SELECT DISTINCT bell FROM panes").fetchall() in ([], [(0,)])
+    assert stepped.execute("SELECT client_id, modes FROM client_modes").fetchall() == [
+        ("typing", '{"has_prefix": true}')
+    ]
 
 
 async def test_a_running_job_this_server_forked_is_refused(pymux, tmp_path):

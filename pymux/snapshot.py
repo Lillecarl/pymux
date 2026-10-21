@@ -68,6 +68,7 @@ from .tables import (
     SCREEN_TABLES,
     AppearanceRow,
     ChangedRows,
+    ClientModesRow,
     ClientRow,
     ClientWindowRow,
     ColumnWidthRow,
@@ -109,7 +110,7 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "load", "program_ids", "save", "start
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 25
+SNAPSHOT_VERSION = 26
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -139,16 +140,21 @@ CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
 #: change of shape adds the one step from the version before it and
 #: deletes any older step. Version 12 is the first a holder hands over.
 STEPS: dict[int, str] = {
-    # 25 keeps the bell flags of windows and panes, and `monitor-bell`.
-    # Lillecarl/pymux#501.
-    24: """
-ALTER TABLE windows ADD COLUMN monitor_bell INTEGER NOT NULL DEFAULT 1;
-ALTER TABLE windows ADD COLUMN bell INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE panes ADD COLUMN bell INTEGER NOT NULL DEFAULT 0;
+    # 26 keeps what a client is in the middle of -- a held prefix, a
+    # key table, a prompt -- in a table of its own, which only the
+    # hand-over file holds: typing is not window management.
+    # Lillecarl/pymux#557.
+    25: """
+CREATE TABLE client_modes(
+  client_id TEXT PRIMARY KEY REFERENCES clients(client_id),
+  modes TEXT NOT NULL
+);
+INSERT INTO client_modes SELECT client_id, modes FROM clients WHERE modes IS NOT NULL;
+ALTER TABLE clients DROP COLUMN modes;
 """,
 }
 
-#: The fields `ClientState.modes` holds, one JSON value in `clients`.
+#: The fields `ClientState.modes` holds, one JSON value in `client_modes`.
 CLIENT_MODES = frozenset(
     {
         "has_prefix",
@@ -313,6 +319,7 @@ class Snapshot:
         self.freezers: dict[int, Freezer] = {}
         self.jobs_written: set[int] = set()
         self.rows = ChangedRows(LIVE_ROWS)
+        self.modes = ChangedRows((ClientModesRow,))
 
     def write(self, pymux: Pymux) -> None:
         "Write what `pymux` holds now over what the write before held."
@@ -327,6 +334,7 @@ class Snapshot:
                 raise SnapshotError("job %d runs and was forked by this server, not by its holder" % job.job_id)
         with self.db:
             written = self.rows.write(self.db, rows_of(pymux))
+            modes = self.modes.write(self.db, _client_mode_rows(pymux))
             self._write_jobs(jobs)
             alive = {pane.pane_id for pane in panes}
             for gone in set(self.freezers) - alive:
@@ -336,6 +344,7 @@ class Snapshot:
             for pane in panes:
                 self._write_program(pane)
         self.rows.written = written
+        self.modes.written = modes
 
     def _write_jobs(self, jobs: list[Job]) -> None:
         db = self.db
@@ -671,7 +680,7 @@ def _pane_rows(pane: Pane, window: Window | None, parent: _Split | None, place: 
         yield PaneUserVarRow(pane.pane_id, name, value)
 
 
-def _client_rows(pymux: Pymux) -> Iterator[Row]:
+def _clients(pymux: Pymux) -> dict[str, dict]:
     """
     Each client by the id it keeps across reattaches, and the windows it
     was on in each session. A client the server loaded and that has not
@@ -700,19 +709,29 @@ def _client_rows(pymux: Pymux) -> Iterator[Row]:
             "modes": state.modes(),
             "connected": connection.created,
         }
-    for client_id, client in sorted(clients.items()):
+    return clients
+
+
+def _client_rows(pymux: Pymux) -> Iterator[Row]:
+    for client_id, client in sorted(_clients(pymux).items()):
         settings = client["settings"]
-        modes = client.get("modes")
         yield ClientRow(
             client_id=client_id,
             session_id=client["session_id"],
             previous_session_id=client["previous_session_id"],
-            modes=json.dumps(modes) if modes is not None else None,
             connected=client.get("connected"),
             **{name: settings.get(name) for name in CLIENT_SETTINGS},
         )
         for session_id, (active, previous) in sorted(client["windows"].items()):
             yield ClientWindowRow(client_id, session_id, active, previous)
+
+
+def _client_mode_rows(pymux: Pymux) -> Iterator[ClientModesRow]:
+    "What each client is in the middle of, which only the hand-over file holds."
+    for client_id, client in sorted(_clients(pymux).items()):
+        modes = client.get("modes")
+        if modes is not None:
+            yield ClientModesRow(client_id, json.dumps(modes))
 
 
 class SnapshotError(Exception):
@@ -1065,6 +1084,7 @@ def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int], pipes: 
     pymux.sessions = sessions
 
     pymux.returning_clients = {}
+    modes = {row.client_id: json.loads(row.modes) for row in select(db, ClientModesRow)}
     for client in select(db, ClientRow):
         pymux.returning_clients[client.client_id] = {
             "session_id": client.session_id,
@@ -1078,7 +1098,7 @@ def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int], pipes: 
                 for name in CLIENT_SETTINGS
                 if (value := getattr(client, name)) is not None
             },
-            "modes": json.loads(client.modes) if client.modes is not None else None,
+            "modes": modes.get(client.client_id),
             "connected": client.connected,
         }
 

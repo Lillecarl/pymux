@@ -64,7 +64,15 @@ def test_the_live_store_holds_no_screen_and_no_job():
     db.executescript(tables.LIVE_SCHEMA)
     held = {name for (name,) in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     assert held == set(tables.LIVE_TABLES)
-    assert not held & {"pane_programs", "screen_appearances", "screen_rows", "jobs", "job_tags", "job_output"}
+    assert not held & {
+        "pane_programs",
+        "screen_appearances",
+        "screen_rows",
+        "jobs",
+        "job_tags",
+        "job_output",
+        "client_modes",
+    }
 
 
 async def test_the_live_store_follows_every_kind_of_change(pymux, tmp_path):
