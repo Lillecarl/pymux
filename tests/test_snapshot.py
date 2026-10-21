@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import dataclasses
 import importlib
+import json
 import os
 import sqlite3
 import sys
@@ -18,6 +19,8 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.selection import SelectionState, SelectionType
+from ptyhost.process import Process
+from pyte.freeze import Frozen, freeze, thaw
 from pyte.keep import Keep
 from session import once
 from test_a_session_on_a_pyte_screen import attached, settled, shows
@@ -570,7 +573,12 @@ def test_a_version_19_snapshot_lets_a_program_held_for_copy_mode_go(pymux, tmp_p
         "CREATE TABLE copy_modes(pane_id INTEGER PRIMARY KEY, cursor_position INTEGER NOT NULL,"
         " selection_start INTEGER, selection_type TEXT)"
     )
-    held = '{"object": "ptyhost.process.Process", "id": 0, "fields": {"suspended": true, "sx": 80}}'
+    # A program as the build before froze it: held still, by a real
+    # freeze, so the step is judged against the shape that build wrote.
+    # Made without `__init__`, which wants a backend to read from.
+    program = Process.__new__(Process)
+    program.backend, program.sx, program.sy, program.suspended = None, 80, 24, True
+    held = json.dumps(freeze(program).root)
     db.executemany(
         "INSERT INTO pane_programs VALUES (?, 1, 0, '{}', '{}', ?, NULL)",
         [(1, held), (2, held)],
@@ -587,6 +595,12 @@ def test_a_version_19_snapshot_lets_a_program_held_for_copy_mode_go(pymux, tmp_p
         "SELECT pane_id, process ->> '$.fields.suspended', process ->> '$.fields.sx' FROM pane_programs"
     )
     assert [tuple(row) for row in programs] == [(1, 0, 80), (2, 1, 80)]
+
+    # And the program thaws free to read.
+    ((stepped_program,),) = stepped.execute("SELECT process FROM pane_programs WHERE pane_id = 1")
+    thawed = Process.__new__(Process)
+    thaw(Frozen(json.loads(stepped_program), {}, [], [], {}), thawed)
+    assert (thawed.suspended, thawed.sx) == (False, 80)
 
 
 async def test_a_snapshot_is_refused_while_a_command_waits(pymux, tmp_path):
