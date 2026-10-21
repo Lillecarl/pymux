@@ -152,27 +152,32 @@ async def a_real_client(monkeypatch, config_file, chosen_name):
                 finally:
                     finished = True
 
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(_attach)
-            try:
-                ends_at = time.monotonic() + 20.0
-                while connection.client_state is None and time.monotonic() < ends_at:
-                    if finished:
-                        if error is not None:
-                            raise error
-                        raise AssertionError("the attach ended before it attached")
-                    await anyio.sleep(0.02)
+        try:
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(_attach)
+                try:
+                    ends_at = time.monotonic() + 20.0
+                    while connection.client_state is None and time.monotonic() < ends_at:
+                        if finished:
+                            if error is not None:
+                                raise error
+                            raise AssertionError("the attach ended before it attached")
+                        await anyio.sleep(0.02)
 
-                assert connection.client_state is not None, "the client never attached"
-                yield pymux, connection.client_state
-            finally:
-                scope.cancel()
-                terminal.close()
-                pymux.stop()
-                for window in list(pymux.arrangement.windows):
-                    for pane in list(window.panes):
-                        if not pane.process.is_terminated:
-                            pane.process.kill()
+                    assert connection.client_state is not None, "the client never attached"
+                    yield pymux, connection.client_state
+                finally:
+                    scope.cancel()
+        finally:
+            # Only once the cancelled client has stopped waiting on the
+            # pty: a writer it still has registered fires on a closed fd
+            # and fails the test with EBADF. Lillecarl/pymux#716.
+            terminal.close()
+            pymux.stop()
+            for window in list(pymux.arrangement.windows):
+                for pane in list(window.panes):
+                    if not pane.process.is_terminated:
+                        pane.process.kill()
 
 
 async def test_the_flag_reaches_the_server(monkeypatch, tmp_path):
