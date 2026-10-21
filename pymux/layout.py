@@ -12,6 +12,7 @@ from functools import partial
 from typing import TYPE_CHECKING, cast, override
 
 from prompt_toolkit.application import Application, get_app
+from prompt_toolkit.application.current import set_app
 from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.data_structures import Point, Size
 from prompt_toolkit.enums import EditingMode
@@ -52,6 +53,7 @@ from prompt_toolkit.layout.processors import (
 )
 from prompt_toolkit.layout.screen import Char, Screen
 from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
+from prompt_toolkit.utils import get_cwidth
 from prompt_toolkit.widgets import Dialog, SearchToolbar, TextArea
 
 from pymux import arrangement
@@ -738,16 +740,23 @@ class LayoutManager:
         #: handler may change what it measures.
         self.frame_plans: dict[arrangement.Window, Plan] | None = None
 
+        #: `_status_lines`'s answer, while this client renders. The
+        #: room for the body asks it for every float and the plane
+        #: asks it again, and each answer formats every window.
+        self._frame_status_lines: list[StyleAndTextTuples] | None = None
+
         self.layout = self._create_layout()
 
     def frame_started(self, app: Application) -> None:
         "A render of this client starts: the arrangement holds still until it ends."
         self._body.frame_started()
         self.frame_plans = {}
+        self._frame_status_lines = None
 
     def frame_ended(self, app: Application) -> None:
         self._body.frame_ended()
         self.frame_plans = None
+        self._frame_status_lines = None
 
     @property
     def pane_write_positions(self) -> dict[arrangement.Pane, WritePosition]:
@@ -778,8 +787,7 @@ class LayoutManager:
         how much of the plane fits -- reads this one.
         """
         size = self.client_state.app.output.get_size()
-        rows = size.rows - (1 if self.pymux.show_status else 0)
-        return Size(rows=max(1, rows), columns=size.columns)
+        return Size(rows=max(1, size.rows - self.status_rows()), columns=size.columns)
 
     def room_for_body(self) -> Size:
         """
@@ -1408,19 +1416,26 @@ class LayoutManager:
         return handler
 
     def _get_status_tokens(self) -> StyleAndTextTuples:
-        "The tokens for the status bar."
+        "The tokens for the status bar: the window list, a line per row."
+        result: StyleAndTextTuples = []
+        for row, line in enumerate(self._status_lines()):
+            if row > 0:
+                result.append(("", "\n"))
+            for i, entry in enumerate(line):
+                if i > 0:
+                    result.append(("", " "))
+                result.append(entry)
+        return result
+
+    def _status_entries(self) -> StyleAndTextTuples:
+        "Each thing the window list shows, one fragment each."
         result: StyleAndTextTuples = []
 
         recording = getattr(self.client_state.connection, "recording", None)
         if recording is not None:
             result.append(("class:recording", " ● REC %s " % recording.name))
-            result.append(("", " "))
 
-        # Display panes.
-        for i, w in enumerate(self.client_state.session.arrangement.windows):
-            if i > 0:
-                result.append(("", " "))
-
+        for w in self.client_state.session.arrangement.windows:
             if w == self.client_state.session.arrangement.get_active_window():
                 style = "class:window.current"
                 format_str = self.pymux.window_status_current_format
@@ -1444,6 +1459,65 @@ class LayoutManager:
             )
 
         return result
+
+    def _status_lines(self) -> list[StyleAndTextTuples]:
+        """
+        The window list, broken into the rows it takes.
+
+        An entry moves to the next row whole, and never breaks across
+        two. From `status-max-rows` on, the rest go on the last row and
+        are cut where it ends. Lillecarl/pymux#723.
+
+        **Under this client's application, whoever asks.** The plane
+        asks it of every watcher while one of them renders, and which
+        window is current -- the `*` of `#F`, and so the width of an
+        entry -- is a question each client answers for itself.
+        """
+        if self.frame_plans is not None and self._frame_status_lines is not None:
+            return self._frame_status_lines
+
+        with set_app(self.client_state.app):
+            room = self._room_for_window_list()
+            lines: list[StyleAndTextTuples] = [[]]
+            used = 0
+            for entry in self._status_entries():
+                width = get_cwidth(entry[1])
+                wanted = used + 1 + width if lines[-1] else width
+                if lines[-1] and wanted > room and len(lines) < self.pymux.status_max_rows:
+                    lines.append([entry])
+                    used = width
+                else:
+                    lines[-1].append(entry)
+                    used = wanted
+
+        if self.frame_plans is not None:
+            self._frame_status_lines = lines
+        return lines
+
+    def _room_for_window_list(self) -> int:
+        """
+        The columns between `status-left` and `status-right`.
+
+        The same arithmetic the `VSplit` of the status line does: each
+        side is as wide as its text, up to its `-length` option.
+        """
+        columns = self.client_state.app.output.get_size().columns
+        left = min(get_cwidth(self._get_status_left_tokens()), self.pymux.status_left_length)
+        right_length = self.pymux.status_right_length + (FPS_WIDTH if self.pymux.status_fps else 0)
+        right = min(get_cwidth(self._get_status_right_tokens()), right_length)
+        return max(1, columns - left - right)
+
+    def status_rows(self) -> int:
+        """
+        How many rows this client's status line takes off its terminal.
+
+        **Asked of this client, and not of the one rendering.** The
+        plane asks it of every watcher, so it reads this client's own
+        `full-screen` rather than `Pymux.show_status`.
+        """
+        if not self.pymux.enable_status or self.client_state.full_screen:
+            return 0
+        return len(self._status_lines())
 
     def _get_status_left_tokens(self) -> str:
         return self._format_status(self.pymux.status_left)
@@ -2170,6 +2244,54 @@ class LayoutManager:
             filter=has_completions & ~is_done,
         )
 
+    def _floats_above_the_status_line(self, waits_for_confirmation, which_key_shows) -> list[Float]:
+        "The floats placed from the bottom of the body, which is the top of the status line."
+        return [
+            Float(
+                bottom=0,
+                left=0,
+                z_index=Z_INDEX.MESSAGE_TOOLBAR,
+                content=MessageToolbar(self.client_state),
+            ),
+            # A question waiting for an answer sits above the status
+            # line, where a message sits, and not over it. The status
+            # line is where a person reads which window they are on,
+            # and "kill-window #W?" is the moment they want it: the
+            # question names something the window list is the context
+            # for. Lillecarl/pymux#339.
+            # **No `right`.** A float given both sides is as wide as the
+            # screen, and an opaque one paints that row even when its
+            # content is empty: it erased a row of the pane under it,
+            # which `checks.pymux-alacritty` caught as a changed cell
+            # colour. The message toolbar beside it takes its width from
+            # its content, and so does this.
+            Float(
+                left=0,
+                bottom=0,
+                z_index=Z_INDEX.CONFIRMATION,
+                content=ConditionalContainer(
+                    content=Window(
+                        height=1,
+                        content=ConfirmationToolbar(self.pymux, self.client_state),
+                    ),
+                    filter=waits_for_confirmation,
+                ),
+            ),
+            # The keys a prefix leads to, in the corner diagonally
+            # opposite the top right. `_create_layout` holds the other
+            # corner and says why there are two.
+            Float(
+                content=ConditionalContainer(
+                    content=DynamicContainer(self._which_key_box),
+                    filter=which_key_shows & Condition(lambda: self._cursor_is_in_top_right()),
+                ),
+                # A row clear of the status line.
+                bottom=1,
+                left=1,
+                z_index=Z_INDEX.POPUP,
+            ),
+        ]
+
     def _create_layout(self) -> Container:
         """
         Generate the main prompt_toolkit layout.
@@ -2188,6 +2310,12 @@ class LayoutManager:
             content=HSplit(
                 [
                     # The main window.
+                    # **The floats that sit above the status line are
+                    # here, and not on the outer container.** A float's
+                    # sides are numbers fixed at build time, and the
+                    # status line's height is not: anchored to the
+                    # bottom of the body, they rise with it.
+                    # Lillecarl/pymux#723.
                     FloatContainer(
                         Background(painted=Condition(lambda: self.pymux.paint_screen)),
                         floats=[
@@ -2195,7 +2323,8 @@ class LayoutManager:
                                 width=lambda: self.room_for_body().columns,
                                 height=lambda: self.room_for_body().rows,
                                 content=self._body,
-                            )
+                            ),
+                            *self._floats_above_the_status_line(waits_for_confirmation, which_key_shows),
                         ],
                     ),
                     # Status bar.
@@ -2211,7 +2340,7 @@ class LayoutManager:
                                 ),
                                 # List of windows in the middle.
                                 Window(
-                                    height=1,
+                                    height=lambda: D.exact(max(1, self.status_rows())),
                                     char=" ",
                                     align=self._get_align,
                                     content=FormattedTextControl(self._get_status_tokens),
@@ -2238,38 +2367,8 @@ class LayoutManager:
                 ]
             ),
             floats=[
-                Float(
-                    bottom=1,
-                    left=0,
-                    z_index=Z_INDEX.MESSAGE_TOOLBAR,
-                    content=MessageToolbar(self.client_state),
-                ),
                 # It draws where each link is, and not in its own box.
                 Float(top=0, left=0, transparent=True, content=UrlLabels(self.client_state)),
-                # A question waiting for an answer sits above the status
-                # line, where a message sits, and not over it. The
-                # status line is where a person reads which window they
-                # are on, and "kill-window #W?" is the moment they want
-                # it: the question names something the window list is
-                # the context for. Lillecarl/pymux#339.
-                # **No `right`.** A float given both sides is as wide as
-                # the screen, and an opaque one paints that row even
-                # when its content is empty: it erased a row of the
-                # pane under it, which `checks.pymux-alacritty` caught
-                # as a changed cell colour. The message toolbar beside
-                # it takes its width from its content, and so does this.
-                Float(
-                    left=0,
-                    bottom=1,
-                    z_index=Z_INDEX.CONFIRMATION,
-                    content=ConditionalContainer(
-                        content=Window(
-                            height=1,
-                            content=ConfirmationToolbar(self.pymux, self.client_state),
-                        ),
-                        filter=waits_for_confirmation,
-                    ),
-                ),
                 Float(
                     left=0,
                     right=0,
@@ -2409,16 +2508,6 @@ class LayoutManager:
                     ),
                     top=0,
                     right=1,
-                    z_index=Z_INDEX.POPUP,
-                ),
-                Float(
-                    content=ConditionalContainer(
-                        content=DynamicContainer(self._which_key_box),
-                        filter=which_key_shows & Condition(lambda: self._cursor_is_in_top_right()),
-                    ),
-                    # The status line keeps its row.
-                    bottom=2,
-                    left=1,
                     z_index=Z_INDEX.POPUP,
                 ),
                 # The overlay pane, in the middle of the screen. A

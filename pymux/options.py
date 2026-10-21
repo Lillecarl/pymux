@@ -1007,6 +1007,9 @@ ALL_OPTIONS = {
     "status-left": StringOption("status_left"),
     "status-right-length": PositiveIntOption("status_right_length", [20]),
     "status-left-length": PositiveIntOption("status_left_length", [20]),
+    # The most rows the window list wraps to when it does not fit on
+    # one. A window past the last row is cut. Lillecarl/pymux#723.
+    "status-max-rows": PositiveIntOption("status_max_rows", [1, 2, 3, 5]),
     "window-status-format": StringOption("window_status_format"),
     "window-status-current-format": StringOption("window_status_current_format"),
     "default-shell": StringOption("default_shell", [get_default_shell()]),

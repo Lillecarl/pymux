@@ -19,6 +19,7 @@ Lillecarl/pymux#339.
 from __future__ import annotations
 
 from prompt_toolkit.data_structures import Size
+from prompt_toolkit.layout.containers import FloatContainer
 from session import in_this_process
 
 from pymux.layout import Z_INDEX
@@ -26,8 +27,16 @@ from pymux.layout import Z_INDEX
 SIZE = Size(rows=24, columns=80)
 
 
+def body_floats(state):
+    "The floats of the container that holds the windows, above the status line."
+    body = state.layout_manager.layout.content.children[0]
+    assert isinstance(body, FloatContainer)
+    return body.floats
+
+
 def floats_of(state):
-    return state.layout_manager.layout.floats
+    "Every float, the body's own included: the question is one of those."
+    return state.layout_manager.layout.floats + body_floats(state)
 
 
 def the_confirmation_float(state):
@@ -45,11 +54,19 @@ def the_message_float(state):
     raise AssertionError("the layout draws no message toolbar")
 
 
-async def test_a_question_sits_above_the_bottom_row():
+async def test_a_question_sits_above_the_status_line():
+    """
+    On the bottom row of the body, which is the row above the status
+    line however many rows that takes. `test_the_status_line_wraps.py`
+    draws the frame and reads where it lands.
+    """
     async with in_this_process() as session:
         state, _ = await session.attach("only", SIZE)
 
-        assert the_confirmation_float(state).bottom == 1
+        question = the_confirmation_float(state)
+
+        assert question.bottom == 0
+        assert any(one is question for one in body_floats(state))
 
 
 async def test_it_sits_where_a_message_sits():
@@ -79,5 +96,7 @@ async def test_the_command_line_still_takes_the_bottom_row():
     async with in_this_process() as session:
         state, _ = await session.attach("only", SIZE)
 
-        bottoms = [one.bottom for one in floats_of(state)]
+        # The outer floats only: those of the body sit on its own
+        # bottom row, which is above the status line.
+        bottoms = [one.bottom for one in state.layout_manager.layout.floats]
         assert 0 in bottoms, "nothing draws on the bottom row any more"

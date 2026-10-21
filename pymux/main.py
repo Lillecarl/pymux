@@ -1334,6 +1334,7 @@ class Pymux:
         "status_keys_vi_mode": Keep.SAVED,
         "status_left": Keep.SAVED,
         "status_left_length": Keep.SAVED,
+        "status_max_rows": Keep.SAVED,
         "status_right": Keep.SAVED,
         "status_right_length": Keep.SAVED,
         "strip_animation_time": Keep.SAVED,
@@ -1514,6 +1515,7 @@ class Pymux:
         self.lock_command = "vlock"
         self.status_left = "[#S] "
         self.status_left_length = 20
+        self.status_max_rows = 3
         self.status_right = " %H:%M %d-%b-%y "
         self.status_right_length = 20
         self.window_status_current_format = "#I:#W#F"
@@ -2002,9 +2004,10 @@ class Pymux:
         **The client that is asking, because `full-screen` is one
         terminal's.** Every reader of this draws, and a frame is drawn
         under the application of the client it is for, so the client
-        asking is the client the answer is about. The two questions
-        about the plane are `any_watcher_shows_status` and its pair,
-        which are not this one. Lillecarl/pymux#471.
+        asking is the client the answer is about. The plane asks every
+        watcher's `LayoutManager.status_rows` instead, and
+        `any_watcher_shows_pane_status`, which are not this one.
+        Lillecarl/pymux#471.
         """
         return self.enable_status and not self._asking_is_full_screen()
 
@@ -2040,29 +2043,25 @@ class Pymux:
         """
         return any(one.full_screen for one in self._client_states.values())
 
-    def any_watcher_shows_status(self, window=None) -> bool:
+    def any_watcher_shows_pane_status(self, window=None) -> bool:
         """
-        Whether any client watching that window draws the status line.
+        Whether any client watching that window draws the titlebar of a
+        pane.
 
-        **This is the plane's question, and `show_status` is not.** The
-        plane is one size for every client watching a window, because a
-        pane has one pty, so it keeps the rows the chrome of any watcher
-        needs and a client that dropped its own draws background in
-        them. The other way round -- a plane that grew when the last
-        client with chrome turned it off -- resizes everybody's
-        programs because somebody else changed their mind.
+        **This is the plane's question, and `show_pane_status` is
+        not.** The plane is one size for every client watching a
+        window, because a pane has one pty, so it keeps the rows the
+        chrome of any watcher needs and a client that dropped its own
+        draws background in them. The other way round -- a plane that
+        grew when the last client with chrome turned it off -- resizes
+        everybody's programs because somebody else changed their mind.
+        `plane_size` asks the same of the status line.
 
         **Nobody watching is yes**, which is what the plane was
         measured with before this question existed.
         `_any_of_them_wants_chrome` says why it is not the other
         answer. Lillecarl/pymux#471.
         """
-        if not self._anyone_is_full_screen():
-            return self.enable_status
-        return self.enable_status and _any_of_them_wants_chrome(self.clients_watching(window))
-
-    def any_watcher_shows_pane_status(self, window=None) -> bool:
-        "The same question for the titlebar of a pane."
         if not self._anyone_is_full_screen():
             return self.enable_pane_status
         return self.enable_pane_status and _any_of_them_wants_chrome(self.clients_watching(window))
@@ -2518,9 +2517,9 @@ class Pymux:
         if window.window_size is WindowSize.MANUAL and window.manual_size is not None:
             return window.manual_size
 
-        clients = self.clients_watching(window)
+        watchers = self.clients_watching(window)
 
-        if not clients:
+        if not watchers:
             return self.size_with_no_client(self.session_showing(window))
 
         # A client that attached with `-r` is left out, and the filter
@@ -2529,7 +2528,7 @@ class Pymux:
         # then they decide it between them, because the alternative is
         # a plane no terminal here can show. tmux does the same, and
         # for the same reason (`resize.c:95-107`). Lillecarl/pymux#467.
-        clients = [one for one in clients if not one.ignore_size] or clients
+        clients = [one for one in watchers if not one.ignore_size] or watchers
 
         if window.window_size is WindowSize.LATEST:
             newest = max(clients, key=lambda client: client.last_used)
@@ -2543,14 +2542,13 @@ class Pymux:
             )
 
         # **Every watcher, and not the ones that size it.** A read-only
-        # client still draws its own status line, so the row it needs
-        # comes off the plane even while its columns do not. The ask
-        # is by window rather than by the list here, because it walks
-        # no clients at all until somebody is in full screen.
-        return Size(
-            rows=size.rows - (1 if self.any_watcher_shows_status(window) else 0),
-            columns=size.columns,
-        )
+        # client still draws its own status line, so the rows it needs
+        # come off the plane even while its columns do not. The tallest
+        # one decides: a phone whose window list wraps to three rows
+        # takes three off everybody's plane, and the others draw
+        # background there. Lillecarl/pymux#723.
+        status_rows = max(one.layout_manager.status_rows() for one in watchers)
+        return Size(rows=size.rows - status_rows, columns=size.columns)
 
     def size_with_no_client(self, session: Session | None) -> Size:
         """

@@ -24,14 +24,17 @@ from pymux.options import ALL_OPTIONS
 
 def which_key_floats(state) -> list[Float]:
     """
-    The four floats the which-key box can draw in, in draw order.
+    The floats the which-key box can draw in.
 
     Like the palette's box, each is a `DynamicContainer` over the
     method that builds it, and the method's name tells them apart
     from everything else the layout floats.
     """
     found = []
-    for one in state.layout_manager.layout.floats:
+    # The corner above the status line is the body's float, so it
+    # rises with a status line that wraps. Lillecarl/pymux#723.
+    layout = state.layout_manager.layout
+    for one in layout.floats + layout.content.children[0].floats:
         inner = getattr(one.content, "content", None)
         builder = getattr(inner, "get_container", None)
         if builder is not None and builder.__name__ == "_which_key_box":
