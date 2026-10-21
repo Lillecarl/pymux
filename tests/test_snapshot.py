@@ -10,10 +10,10 @@ import dataclasses
 import importlib
 import os
 import signal
-import sqlite3
 import sys
 
 import anyio
+import apsw
 import pytest
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.clipboard import ClipboardData
@@ -65,8 +65,8 @@ def test_a_snapshot_writes_every_saved_field(name):
 
 @pytest.mark.parametrize("row", tables.ROWS, ids=lambda row: row.TABLE)
 def test_a_row_names_the_columns_of_its_table(row):
-    db = sqlite3.connect(":memory:")
-    db.executescript(tables.SCHEMA)
+    db = apsw.Connection(":memory:")
+    db.execute(tables.SCHEMA)
 
     columns = [column[1] for column in db.execute("PRAGMA table_info(%s)" % (row.TABLE,))]
 
@@ -75,8 +75,8 @@ def test_a_row_names_the_columns_of_its_table(row):
 
 @pytest.mark.parametrize("row", tables.ROWS, ids=lambda row: row.TABLE)
 def test_a_row_names_the_key_of_its_table(row):
-    db = sqlite3.connect(":memory:")
-    db.executescript(tables.SCHEMA)
+    db = apsw.Connection(":memory:")
+    db.execute(tables.SCHEMA)
 
     key = sorted((column[5], column[1]) for column in db.execute("PRAGMA table_info(%s)" % (row.TABLE,)) if column[5])
 
@@ -156,16 +156,20 @@ def test_a_loaded_server_adopts_the_listener_it_names(pymux, tmp_path):
     pymux.listener.close()
 
 
-def _dump(path) -> list[str]:
-    db = sqlite3.connect(path)
+def _dump(path) -> dict[str, list]:
+    "Every table's definition and its rows, in the order the rows sort."
+    db = apsw.Connection(str(path))
     try:
-        return list(db.iterdump())
+        return {
+            name: [sql, sorted(db.execute("SELECT * FROM %s" % name).fetchall(), key=repr)]
+            for name, sql in db.execute("SELECT name, sql FROM sqlite_master WHERE type = 'table' ORDER BY name")
+        }
     finally:
         db.close()
 
 
 def _rows(path, sql: str) -> list[tuple]:
-    db = sqlite3.connect(path)
+    db = apsw.Connection(str(path))
     try:
         return db.execute(sql).fetchall()
     finally:
@@ -373,7 +377,7 @@ def _jobs_of(pymux) -> list[tuple]:
 
 def _constant_columns(path) -> list[tuple[str, str]]:
     "Every column that holds one value across a table of several rows."
-    db = sqlite3.connect(path)
+    db = apsw.Connection(str(path))
     try:
         found = []
         for table in tables.TABLES:
@@ -605,50 +609,43 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
 def test_a_snapshot_of_another_version_is_refused(pymux, tmp_path, off_by):
     path = tmp_path / "old.sqlite"
     snapshot.save(pymux, path)
-    db = sqlite3.connect(path)
+    db = apsw.Connection(str(path))
     db.execute("PRAGMA user_version = %d" % (snapshot.SNAPSHOT_VERSION + off_by))
-    db.commit()
     db.close()
 
     with pytest.raises(snapshot.SnapshotError, match="version"):
         snapshot.load(Pymux(), path)
 
 
-def _shape(db: sqlite3.Connection) -> dict[str, list[tuple]]:
+def _shape(db: apsw.Connection) -> dict[str, list[tuple]]:
     "Each table's columns, as sqlite reads them: name, type, not null, default, key."
     names = [row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")]
     return {name: [tuple(column)[1:] for column in db.execute("PRAGMA table_info(%s)" % name)] for name in names}
 
 
 def _shape_of_a_fresh_snapshot() -> dict[str, list[tuple]]:
-    db = sqlite3.connect(":memory:")
-    db.executescript(tables.SCHEMA)
+    db = apsw.Connection(":memory:")
+    db.execute(tables.SCHEMA)
     return _shape(db)
 
 
 def test_the_table_list_is_the_schema_in_order():
-    "`LIVE_TABLES` and `LIVE_SCHEMA` are cut from it by name. Lillecarl/pymux#555."
-    db = sqlite3.connect(":memory:")
-    db.executescript(tables.SCHEMA)
+    "`LIVE_TABLES` is cut from it by name. Lillecarl/pymux#555."
+    db = apsw.Connection(":memory:")
+    db.execute(tables.SCHEMA)
     made = [row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY rowid")]
     assert list(tables.TABLES) == made
-
-    live = sqlite3.connect(":memory:")
-    live.executescript(tables.LIVE_SCHEMA)
-    assert set(_shape(live)) == set(tables.LIVE_TABLES)
-    assert _shape(live) == {name: shape for name, shape in _shape(db).items() if name in tables.LIVE_TABLES}
 
 
 def test_a_version_25_snapshot_moves_the_client_modes_to_their_own_table(pymux, tmp_path):
     "Version 26 keeps keyboard state out of `clients`, which the live store holds. Lillecarl/pymux#557."
     path = tmp_path / "v25.sqlite"
     snapshot.save(pymux, path)
-    db = sqlite3.connect(path)
+    db = apsw.Connection(str(path))
     db.execute("DROP TABLE client_modes")
     db.execute("ALTER TABLE clients ADD COLUMN modes TEXT")
     db.execute("INSERT INTO clients (client_id, modes) VALUES ('typing', '{\"has_prefix\": true}'), ('idle', NULL)")
     db.execute("PRAGMA user_version = 25")
-    db.commit()
     db.close()
 
     stepped = snapshot._open(path)

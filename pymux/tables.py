@@ -1,5 +1,5 @@
 """
-The tables a snapshot and the live store hold, and one dataclass per
+The tables a snapshot holds and `sql` reads, and one dataclass per
 table for its row.
 
 `SCHEMA` is the authority. A row class is the shape of one row and
@@ -13,14 +13,14 @@ disagree about them. Lillecarl/pymux#554.
 from __future__ import annotations
 
 import functools
-import sqlite3
 from collections.abc import Iterable
 from dataclasses import Field, dataclass, fields
 from typing import Any, ClassVar, Protocol
 
+import apsw
+
 __all__ = [
     "LIVE_ROWS",
-    "LIVE_SCHEMA",
     "LIVE_TABLES",
     "ROWS",
     "SCHEMA",
@@ -330,26 +330,9 @@ SCREEN_TABLES = ("pane_programs", "screen_appearances", "screen_rows")
 #: prompt -- which typing changes, so only the transition holds it too.
 CLIENT_MODE_TABLES = ("client_modes",)
 
-#: The tables of window management, which the live store holds. A
+#: The tables of window management, which `sql` reads under `live`. A
 #: snapshot holds the jobs, the screens and the client modes beside them.
 LIVE_TABLES = tuple(table for table in TABLES if table not in JOB_TABLES + SCREEN_TABLES + CLIENT_MODE_TABLES)
-
-
-def _schema_of(tables: tuple[str, ...]) -> str:
-    "The part of `SCHEMA` that creates these tables, as sqlite read it."
-    db = sqlite3.connect(":memory:")
-    try:
-        db.executescript(SCHEMA)
-        made = dict(db.execute("SELECT name, sql FROM sqlite_master WHERE type = 'table'").fetchall())
-    finally:
-        db.close()
-    return "".join("%s;\n" % made[table] for table in tables)
-
-
-#: The schema of `LIVE_TABLES`: no job, which the job store holds
-#: live, no screen and no client's modes, which never go in a live
-#: store (Lillecarl/pymux#399, Lillecarl/pymux#557).
-LIVE_SCHEMA = _schema_of(LIVE_TABLES)
 
 
 @dataclass(frozen=True, slots=True)
@@ -766,8 +749,8 @@ class Row(Protocol):
 def _insert_of(kind: type[Row], replace: bool) -> tuple[str, tuple[str, ...]]:
     """
     The statement that inserts a row of `kind`, and its columns in order.
-    Built once per kind: the live store inserts thousands of rows on a
-    big server, and building it per row was a third of a write.
+    Built once per kind: a snapshot inserts thousands of rows on a big
+    server, and building it per row was a third of a write.
     Lillecarl/pymux#557.
     """
     names = tuple(field.name for field in fields(kind))
@@ -780,7 +763,7 @@ def _insert_of(kind: type[Row], replace: bool) -> tuple[str, tuple[str, ...]]:
     return statement, names
 
 
-def insert(db: sqlite3.Connection, rows: Iterable[Row], replace: bool = False) -> None:
+def insert(db: apsw.Connection, rows: Iterable[Row], replace: bool = False) -> None:
     """
     Rows into their tables, one statement per table.
 
@@ -812,7 +795,9 @@ class ChangedRows:
     """
     Writes the rows of some tables, and after the first time only the
     rows that differ from what it wrote last: a row whose key is gone is
-    deleted, and a new or changed one inserted. Lillecarl/pymux#557.
+    deleted, and a new or changed one inserted. An upgrade's snapshot
+    writes twice, and the second time, in the pause, is this.
+    Lillecarl/pymux#557.
 
     **A changed row is deleted and inserted, never replaced.**
     `notifications` and `notification_routes` hold a `position` that is
@@ -830,7 +815,7 @@ class ChangedRows:
         self.kinds = tuple(kinds)
         self.written: Written = {kind: {} for kind in self.kinds}
 
-    def write(self, db: sqlite3.Connection, rows: Iterable[Row]) -> Written:
+    def write(self, db: apsw.Connection, rows: Iterable[Row]) -> Written:
         "Write the difference, inside the caller's transaction, and answer what the tables hold then."
         now: Written = {kind: {} for kind in self.kinds}
         for row in rows:
@@ -846,8 +831,14 @@ class ChangedRows:
         return now
 
 
-def select[R: Row](db: sqlite3.Connection, kind: type[R], where: str = "", *params) -> list[R]:
-    "`kind` for each row of its table that `where` picks. A column it does not name raises."
-    cursor = db.execute("SELECT * FROM %s %s" % (kind.TABLE, where), params)
-    names = [column[0] for column in cursor.description]
-    return [kind(**dict(zip(names, values, strict=True))) for values in cursor.fetchall()]
+def select[R: Row](db: apsw.Connection, kind: type[R], where: str = "", *params) -> list[R]:
+    """
+    `kind` for each row of its table that `where` picks.
+
+    The columns are named from the class and not read off the cursor:
+    a question that answers no rows has finished before its cursor
+    could name them.
+    """
+    names = [field.name for field in fields(kind)]
+    query = "SELECT %s FROM %s %s" % (", ".join(names), kind.TABLE, where)
+    return [kind(*values) for values in db.execute(query, params)]

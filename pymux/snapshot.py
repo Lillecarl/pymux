@@ -2,21 +2,20 @@
 A server's window management, in an sqlite file a new build can load.
 
 A hot upgrade writes this, and the new build reads it back
-(Lillecarl/pymux#399). The live store that `sql` reads holds the same
-tables, so they are shaped for a person or an agent to query: one row
-per session, window, split and pane, and a column named after the
+(Lillecarl/pymux#399). `sql` reads the same tables under `live`,
+built from the objects as a question starts (`pymux/query.py`), so
+they are shaped for a person or an agent to query: one row per
+session, window, split and pane, and a column named after the
 `#{format}` variable where one exists. `pymux/tables.py` holds them.
 
 **It runs synchronously, on purpose.** The pause of an upgrade is the
 event loop standing still. A writer that awaited anything would let a
 pane read between two tables, and the file would describe two moments.
 
-**Screen state belongs to the transition, never to the live store.**
-`pane_programs`, `screen_rows` and `screen_appearances` exist only in
-this file, written once while handing over and read once by the new
-build. The live store holds the window-management tables and not
-these three: a store that held every pane's cells would serialize them
-on every write.
+**Screen state belongs to the transition.** `pane_programs`,
+`screen_rows` and `screen_appearances` exist only in this file,
+written while handing over and read once by the new build, and so does
+`client_modes`. `sql` sees the window-management tables and not these.
 
 What each class writes is declared in `WRITES`. `tests/test_snapshot.py`
 holds it against every `Keep.SAVED` in the classes' `KEEP`, so a saved
@@ -28,13 +27,13 @@ from __future__ import annotations
 
 import json
 import os
-import sqlite3
 from collections.abc import Callable, Iterator
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
 from weakref import ref
 
+import apsw
 from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.selection import SelectionType
@@ -313,8 +312,8 @@ class Snapshot:
         # Private before the first byte: the screens hold what was typed.
         # sqlite gives its journal the file's mode.
         os.close(os.open(self.partial, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600))
-        self.db = sqlite3.connect(self.partial)
-        self.db.executescript(SCHEMA)
+        self.db = apsw.Connection(str(self.partial))
+        self.db.execute(SCHEMA)
         self.db.execute("PRAGMA user_version = %d" % SNAPSHOT_VERSION)
         self.freezers: dict[int, Freezer] = {}
         self.jobs_written: set[int] = set()
@@ -509,7 +508,7 @@ def _text_of(cells: list) -> str:
 
 
 def _refuse_the_server(pymux: Pymux) -> None:
-    "What no handover carries. The live store writes such a server all the same."
+    "What no handover carries. `sql` reads such a server all the same."
     listener = pymux.listener
     if listener is not None and not isinstance(listener, PosixSocketListener):
         raise SnapshotError("the server listens on a named pipe, which no handover carries")
@@ -521,7 +520,7 @@ def _refuse_the_server(pymux: Pymux) -> None:
 
 
 def rows_of(pymux: Pymux) -> Iterator[Row]:
-    "Every row of `LIVE_SCHEMA` that `pymux` holds now."
+    "Every row of `LIVE_TABLES` that `pymux` holds now."
     listener = pymux.listener
     clipboard = pymux.clipboard.get_data()
     for name, value in (
@@ -804,20 +803,26 @@ async def start(pymux: Pymux) -> None:
             await control.start(pymux.tasks)
 
 
-def _open(path: str | os.PathLike[str]) -> sqlite3.Connection:
+def _open(path: str | os.PathLike[str]) -> apsw.Connection:
     "The snapshot at `path`, read only, refused if another build wrote it."
-    db = sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True)
-    version = db.execute("PRAGMA user_version").fetchone()[0]
+    db = apsw.Connection(str(Path(path).resolve()), flags=apsw.SQLITE_OPEN_READONLY)
+    version = int(db.pragma("user_version"))
     if version == SNAPSHOT_VERSION:
         return db
     if version != SNAPSHOT_VERSION - 1 or version not in STEPS:
         db.close()
         raise SnapshotError("snapshot version %d, and this build reads %d" % (version, SNAPSHOT_VERSION))
     # The file stays as the old server wrote it: it serves on if this fails.
-    stepped = sqlite3.connect(":memory:")
-    db.backup(stepped)
+    stepped = apsw.Connection(":memory:")
+    # Not `with`: apsw 3.54.1.0's stub types `Backup.__exit__` so that
+    # no checker accepts it.
+    backup = stepped.backup("main", db, "main")
+    try:
+        backup.step()
+    finally:
+        backup.finish()
     db.close()
-    stepped.executescript(STEPS[version])
+    stepped.execute(STEPS[version])
     return stepped
 
 
@@ -883,7 +888,7 @@ def load(
         db.close()
 
 
-def _program(db: sqlite3.Connection, pane_id: PaneId) -> Program:
+def _program(db: apsw.Connection, pane_id: PaneId) -> Program:
     (row,) = select(db, ProgramRow, "WHERE pane_id = ?", pane_id)
     appearances = [
         json.loads(entry.value) for entry in select(db, AppearanceRow, "WHERE pane_id = ? ORDER BY appearance", pane_id)
@@ -903,7 +908,7 @@ def _program(db: sqlite3.Connection, pane_id: PaneId) -> Program:
     )
 
 
-def _read_bindings(pymux: Pymux, db: sqlite3.Connection) -> None:
+def _read_bindings(pymux: Pymux, db: apsw.Connection) -> None:
     """
     The hooks and key bindings, whole, over what the configuration set:
     a person's `bind-key` and `set-hook` since the server started are in
@@ -919,7 +924,7 @@ def _read_bindings(pymux: Pymux, db: sqlite3.Connection) -> None:
         bindings.add_custom_binding(row.written, row.command, json.loads(row.arguments), table=row.key_table)
 
 
-def _read_notifications(pymux: Pymux, db: sqlite3.Connection, counters: dict[str, int]) -> None:
+def _read_notifications(pymux: Pymux, db: apsw.Connection, counters: dict[str, int]) -> None:
     "The hub and its routes."
     center = pymux.notification_center
     center._next = counters["notification"]
@@ -938,7 +943,7 @@ def _read_notifications(pymux: Pymux, db: sqlite3.Connection, counters: dict[str
         routes._incoming[row.ours] = key
 
 
-def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int], pipes: dict[int, list[int]]) -> int | None:
+def _read(pymux: Pymux, db: apsw.Connection, masters: dict[int, int], pipes: dict[int, list[int]]) -> int | None:
     server = {row.name: row.value for row in select(db, ServerRow)}
     pymux.created = server["created"]
     pymux.socket_name = server["socket_name"]
@@ -1113,7 +1118,7 @@ def _read(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int], pipes: 
     return server["listener_fd"]
 
 
-def _read_jobs(pymux: Pymux, db: sqlite3.Connection, masters: dict[int, int], pipes: dict[int, list[int]]) -> list[Job]:
+def _read_jobs(pymux: Pymux, db: apsw.Connection, masters: dict[int, int], pipes: dict[int, list[int]]) -> list[Job]:
     """
     The jobs, for `start` to write into the jobs database. A running one
     takes its terminal from `masters` or its pipes from `pipes`, and
