@@ -51,6 +51,7 @@ from .log import level, logfile, logger
 
 if TYPE_CHECKING:
     from pymux.main import Pymux
+    from pymux.pipes.base import PipeConnection
 
 __all__ = [
     "Counters",
@@ -80,8 +81,10 @@ class Counters:
     (Lillecarl/pymux#248). These are the same numbers with nothing
     written down.
 
-    Two counts and no more, because each one has to be free. A server
-    pays for them on every frame.
+    Each count has to be free, because a server pays for it on every
+    frame. The bytes each client moves are counted on its own pipe
+    (`PipeConnection.bytes_out`), and only a client that leaves adds
+    to these.
     """
 
     def __init__(self) -> None:
@@ -98,12 +101,22 @@ class Counters:
         self.frames = 0
         self.frame_bytes = 0
 
+        #: What the clients that have gone moved on the wire, to them
+        #: and from them. With what the clients still here moved, these
+        #: are the server's whole traffic. Lillecarl/pymux#677.
+        self.gone_bytes_out = 0
+        self.gone_bytes_in = 0
+
     def invalidated(self, reason: str) -> None:
         self.invalidates[reason] += 1
 
     def frame_went_out(self, characters: int) -> None:
         self.frames += 1
         self.frame_bytes += characters
+
+    def client_left(self, pipe: PipeConnection) -> None:
+        self.gone_bytes_out += pipe.bytes_out
+        self.gone_bytes_in += pipe.bytes_in
 
 
 def where_dump_goes() -> Path:
@@ -362,6 +375,7 @@ def counters(pymux: Pymux) -> str:
     """
     counters = pymux.counters
     seconds = max(1e-9, time.time() - counters.started)
+    sent, received = traffic(pymux)
 
     lines = [
         "--- what it has done, over %s ---" % (_for_how_long(seconds),),
@@ -369,6 +383,8 @@ def counters(pymux: Pymux) -> str:
         "%-46s %10s %9s" % ("", "total", "per second"),
         "%-46s %10d %9.2f" % ("frames out", counters.frames, counters.frames / seconds),
         "%-46s %10d %9.0f" % ("characters in them", counters.frame_bytes, counters.frame_bytes / seconds),
+        "%-46s %10d %9.0f" % ("bytes to clients", sent, sent / seconds),
+        "%-46s %10d %9.0f" % ("bytes from clients", received, received / seconds),
         # Now, and not a total: a client that stopped reading holds
         # these until it reads or is left behind.
         "%-46s %10d" % ("bytes waiting for a client", _waiting(pymux)),
@@ -383,6 +399,16 @@ def counters(pymux: Pymux) -> str:
         lines.append("nothing has.")
 
     return "\n".join(lines)
+
+
+def traffic(pymux: Pymux) -> tuple[int, int]:
+    "The bytes this server sent to its clients and took from them, the gone ones too."
+    counters = pymux.counters
+    pipes = [connection.pipe_connection for connection in pymux.connections]
+    return (
+        counters.gone_bytes_out + sum(pipe.bytes_out for pipe in pipes),
+        counters.gone_bytes_in + sum(pipe.bytes_in for pipe in pipes),
+    )
 
 
 def _waiting(pymux: Pymux) -> int:

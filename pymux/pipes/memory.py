@@ -57,6 +57,8 @@ class MemoryConnection(PipeConnection):
         #: has not taken them yet. `MemoryClient` sets it.
         #: Lillecarl/pymux#585.
         self.held_for_terminal: Callable[[], int] = lambda: 0
+        self.bytes_out = 0
+        self.bytes_in = 0
 
     def _join(self, peer: MemoryConnection) -> None:
         self._peer = peer
@@ -75,6 +77,7 @@ class MemoryConnection(PipeConnection):
             except anyio.EndOfStream, anyio.ClosedResourceError:
                 self._closed = True
                 raise BrokenPipeError
+            self.bytes_in += len(frame)
             self._ready.extend(self._reader.feed(frame))
         return self._ready.pop(0)
 
@@ -96,6 +99,7 @@ class MemoryConnection(PipeConnection):
             self._peer._send.send_nowait(frame)
         except anyio.BrokenResourceError, anyio.ClosedResourceError:
             raise BrokenPipeError
+        self.bytes_out += len(frame)
 
     holds_frames_while_behind = True
 

@@ -65,6 +65,12 @@ class Turns:
 class PipeConnection(ABC):
     "One connection between a server and a client: a unix socket, or queues in one process."
 
+    #: The bytes this end sent and the bytes it took in, as the wire
+    #: carried them: after zstd, so a client over ssh counts what the
+    #: network moved. Lillecarl/pymux#677.
+    bytes_out: int
+    bytes_in: int
+
     @abstractmethod
     async def read(self) -> dict:
         """

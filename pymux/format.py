@@ -650,6 +650,20 @@ def _client_height(context: FormatContext) -> str:
     return str(size.rows) if size is not None else ""
 
 
+def _client_bytes(direction: str) -> Callable[[FormatContext], str]:
+    """
+    What the wire carried to this client ("bytes_out") or from it
+    ("bytes_in"), after zstd: the bytes a metered link pays for. Not
+    tmux's. Lillecarl/pymux#677.
+    """
+
+    def bytes_of(context: FormatContext) -> str:
+        pipe = getattr(_connection_of(context), "pipe_connection", None)
+        return str(getattr(pipe, direction)) if pipe is not None else ""
+
+    return bytes_of
+
+
 def _client_readonly(context: FormatContext) -> str:
     "Whether this client only watches. tmux spells it the same way."
     client = context.client
@@ -739,6 +753,8 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "client_height": _client_height,
     "client_readonly": _client_readonly,
     "client_flags": _client_flags,
+    "client_bytes_down": _client_bytes("bytes_out"),
+    "client_bytes_up": _client_bytes("bytes_in"),
     "client_session": lambda c: c.client.session.name if c.client else "",
     # Server.
     "socket_path": _socket_path,

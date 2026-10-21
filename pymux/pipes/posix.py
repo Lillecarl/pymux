@@ -277,6 +277,8 @@ class PosixSocketConnection(PipeConnection):
         self._empty: anyio.Event | None = None
         #: The zstd stream every write goes into, once one turned it.
         self._compressor: Compressor | None = None
+        self.bytes_out = 0
+        self.bytes_in = 0
 
     @property
     @override
@@ -325,6 +327,7 @@ class PosixSocketConnection(PipeConnection):
         if not data:
             raise BrokenPipeError
 
+        self.bytes_in += len(data)
         return data
 
     @override
@@ -384,6 +387,7 @@ class PosixSocketConnection(PipeConnection):
                 continue
             except OSError:
                 raise BrokenPipeError
+            self.bytes_out += sent
             view = view[sent:]
 
     @override

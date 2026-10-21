@@ -5024,6 +5024,7 @@ exec pymux notify -u "$urgency" -- "$@"
         gone = self._client_states.pop(connection, None)
         if connection in self.connections:
             self.connections.remove(connection)
+            self.counters.client_left(connection.pipe_connection)
         if gone is not None:
             self.browsers.client_gone(gone)
         # One client fewer can mean that the rest speak more.
