@@ -15,7 +15,7 @@ import anyio
 from prompt_toolkit.application.current import set_app
 from test_a_session_on_a_pyte_screen import attached, pymux, said, settled, shows  # noqa: F401 -- a fixture
 
-from pymux import live, snapshot, tables
+from pymux import snapshot, tables
 
 #: Each one changes a table the live store holds.
 COMMANDS = (
@@ -52,15 +52,11 @@ def _now(pymux) -> dict[str, list[tuple]]:
 
 
 async def _caught_up(pymux, what: str) -> None:
-    "The live tables come to equal the objects, without anybody asking."
-    deadline = anyio.current_time() + 10 * live.WRITE_AFTER
-    while True:
-        now = _now(pymux)
-        behind = [table for table in tables.LIVE_TABLES if _tables(pymux.live.db)[table] != now[table]]
-        if not behind:
-            return
-        assert anyio.current_time() < deadline, "after %s the live store is behind in %s" % (what, behind)
-        await anyio.sleep(0.02)
+    "One write, after many before it, leaves the tables equal to a fresh write of the objects."
+    pymux.live.write(pymux)
+    now = _now(pymux)
+    behind = [table for table in tables.LIVE_TABLES if _tables(pymux.live.db)[table] != now[table]]
+    assert not behind, "after %s the live store is behind in %s" % (what, behind)
 
 
 def test_the_live_store_holds_no_screen_and_no_job():
@@ -78,7 +74,6 @@ async def test_the_live_store_follows_every_kind_of_change(pymux, tmp_path):
         # The web viewer sends no id; a terminal client sends one in the
         # attach itself, before anything is written. This is not a path.
         connection.client_id = "here"
-        pymux.live.mark()
         await _caught_up(pymux, "the attach")
 
         with set_app(connection.client_state.app):
@@ -118,16 +113,31 @@ async def test_a_change_writes_its_own_rows_and_no_others(pymux):
             for _ in range(5):
                 pymux.handle_command("new-window")
             await settled(session, 0.05)
-        pymux.live.mark()
         pymux.live.write(pymux)
         held = sum(len(rows) for rows in _tables(pymux.live.db).values())
 
         pane = pymux.arrangement.get_active_pane()
         pane.bell = True
         before = pymux.live.db.total_changes
-        pymux.live.mark()
         pymux.live.write(pymux)
 
     # The pane's row, deleted and inserted again.
     assert pymux.live.db.total_changes - before == 2, held
     assert held > 30
+
+
+async def test_typing_never_writes_the_live_store(pymux):
+    "Only `sql` writes it. Lillecarl/pymux#557."
+    async with pymux.running(), attached(pymux) as session:
+        await shows(session, "$")
+        pymux.live.write(pymux)
+        before = pymux.live.db.total_changes
+
+        said(session, type="text", text="echo $((6*7))")
+        said(session, type="input", keys="Enter")
+        await shows(session, "42")
+        said(session, type="input", keys="C-b")
+        said(session, type="input", keys="Escape")
+        await settled(session, 0.3)
+
+        assert pymux.live.db.total_changes == before

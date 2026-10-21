@@ -941,8 +941,6 @@ class ClientState:
             pymux.client_was_used(self)
 
         app.key_processor.before_key_press += key_pressed
-        # What a key changed of this client: a prefix, a table, a prompt.
-        app.key_processor.after_key_press += lambda _: pymux.live.mark()
 
         # A frame this client asked for is already stale when input
         # arrived after it was scheduled: the renderer skips it and
@@ -1641,9 +1639,8 @@ class Pymux:
         #: any pane, so it outlives every view onto it.
         self.jobs = JobTable()
 
-        #: Windows, panes, sessions and clients as live SQL tables.
-        #: Whatever changes one of them calls `live.mark()`.
-        #: Lillecarl/pymux#399.
+        #: Windows, panes, sessions and clients as SQL tables, written
+        #: when `sql` asks. Lillecarl/pymux#399.
         self.live = LiveStore()
         # `sql` reads both through the job store's readers.
         self.jobs.store.attach("live", self.live.uri)
@@ -2228,7 +2225,6 @@ class Pymux:
             await self.jobs.open()
             tasks.start_soon(self._auto_refresh)
             tasks.start_soon(self._sweep_jobs)
-            tasks.start_soon(self.live.keep, self)
             tasks.start_soon(self.wayland.keep)
             tasks.start_soon(self.audio.keep)
             if hold:
@@ -3248,9 +3244,6 @@ class Pymux:
         here, and holds every reason but the one that carries a name.
         """
         self.counters.invalidated(reason)
-        # Every named change comes through here: a command, an attach,
-        # a window, a session. A pane that writes does not.
-        self.live.mark()
         self.fire_hook(_hook_of(reason))
         # DEBUG: a server draws eleven frames a second when a pane
         # animates, and a line each is what made one log 86 MB in four
@@ -4625,7 +4618,6 @@ exec pymux notify -u "$urgency" -- "$@"
         :param message: String.
         """
         self.message_log.append(message)
-        self.live.mark()
 
         # Not `get_client_state`. A command from a pane runs under a fake
         # CLI that draws nothing, and a message left there is a message

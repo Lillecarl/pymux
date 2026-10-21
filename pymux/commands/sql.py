@@ -135,8 +135,8 @@ async def _ask(pymux: Pymux, args: argparse.Namespace, query: str, params: dict[
     limit = args.lines
     bound = args.timeout
     scope = anyio.fail_after(bound) if bound else nullcontext()
-    # A change made in this loop step, by the command before on the same
-    # line, is not written yet.
+    # The tables are written here and nowhere else, so they say what the
+    # objects say now. Lillecarl/pymux#557.
     pymux.live.write(pymux)
     try:
         async with pymux.jobs.store.reader() as conn:

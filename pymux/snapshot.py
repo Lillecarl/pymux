@@ -2,10 +2,10 @@
 A server's window management, in an sqlite file a new build can load.
 
 A hot upgrade writes this, and the new build reads it back
-(Lillecarl/pymux#399). The tables are meant to become the live store
-later, so they are shaped for a person or an agent to query: one row
+(Lillecarl/pymux#399). The live store that `sql` reads holds the same
+tables, so they are shaped for a person or an agent to query: one row
 per session, window, split and pane, and a column named after the
-`#{format}` variable where one exists.
+`#{format}` variable where one exists. `pymux/tables.py` holds them.
 
 **It runs synchronously, on purpose.** The pause of an upgrade is the
 event loop standing still. A writer that awaited anything would let a
