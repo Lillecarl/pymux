@@ -39,6 +39,7 @@ from prompt_toolkit.filters import Condition
 from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.key_binding.vi_state import InputMode
 from prompt_toolkit.layout.layout import Layout
+from prompt_toolkit.selection import SelectionState, SelectionType
 from prompt_toolkit.styles import (
     BaseStyle,
     ConditionalStyleTransformation,
@@ -733,7 +734,7 @@ class ClientState:
         for pane, write_position in self.layout_manager.pane_write_positions.items():
             terminal = pane.terminal
             # A window pane's picture goes through `_window_views`.
-            if pane.clock_mode or not isinstance(terminal, Terminal) or terminal.is_copying:
+            if pane.clock_mode or not isinstance(terminal, Terminal) or pane.is_copying_for(self.app):
                 continue
             window = terminal.terminal_window
             result.append(
@@ -1002,7 +1003,33 @@ class ClientState:
             "chooser_return_to": (
                 [going_back[0].session_id, going_back[1].window_id] if going_back is not None else None
             ),
+            "copying": self._copy_modes(),
         }
+
+    def _copy_modes(self) -> list[list]:
+        """
+        Each pane this client reads the history of: the pane, the caret,
+        and where the selection starts and what it selects.
+
+        The copy itself is not saved. It is read from the screen again,
+        which has moved on by then, so a caret can land on another line
+        than the one it stood on. Lillecarl/pymux#470.
+        """
+        copying = []
+        for pane_id, pane in sorted(self.pymux.panes_by_id.items()):
+            view = pane.terminal.copy_views.of(self.app)
+            if view is None:
+                continue
+            selection = view.buffer.selection_state
+            copying.append(
+                [
+                    pane_id,
+                    view.buffer.cursor_position,
+                    selection.original_cursor_position if selection is not None else None,
+                    selection.type.value if selection is not None else None,
+                ]
+            )
+        return copying
 
     def take_modes(self, modes: dict) -> None:
         """
@@ -1016,6 +1043,17 @@ class ClientState:
             self.has_prefix = modes["has_prefix"]
             self.key_tables = list(modes["key_tables"])
             self.confirmations = [(text, command) for text, command in modes["confirmations"]]
+
+            # A record from the build before holds none.
+            for pane_id, caret, start, kind in modes.get("copying", []):
+                pane = self.pymux.panes_by_id.get(pane_id)
+                view = pane.terminal.enter_copy_mode() if pane is not None else None
+                if view is None:
+                    continue
+                buffer = view.buffer
+                buffer.cursor_position = min(caret, len(buffer.text))
+                if start is not None:
+                    buffer.selection_state = SelectionState(min(start, len(buffer.text)), SelectionType(kind))
 
             if modes["popup"] is not None:
                 layout.display_popup(*modes["popup"])

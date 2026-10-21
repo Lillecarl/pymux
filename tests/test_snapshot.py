@@ -208,14 +208,12 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     pymux.key_bindings_manager.add_custom_binding("F5", "display-message", ["it's F5"], table="root")
     pymux.key_bindings_manager.add_custom_binding("x", "kill-pane", [])
 
-    # Copy mode as `enter_copy_mode` opens it, less the focus no client
-    # here has. Not the shell, which the round trip types into.
-    for place, copying in enumerate(strip.panes[:2]):
-        copying.process.suspend()
-        copying.terminal.read_the_screen_into_the_copy_buffer()
-        copying.terminal.is_copying = True
-        copying.terminal.copy_buffer.cursor_position = place
-    strip.panes[1].terminal.copy_buffer.selection_state = SelectionState(0, SelectionType.LINES)
+    # Copy mode, for this client. Not the shell, which the round trip
+    # types into.
+    with set_app(client_state.app):
+        for place, copying in enumerate(strip.panes[:2]):
+            copying.terminal.enter_copy_mode().buffer.cursor_position = place
+        strip.panes[1].terminal.copy_view.buffer.selection_state = SelectionState(0, SelectionType.LINES)
 
     signalled, held = WaitChannel(), WaitChannel()
     signalled.woken = True
@@ -327,21 +325,12 @@ async def _questions_of(pymux) -> list[tuple]:
         return list(await cursor.fetchall())
 
 
-def _copy_modes_of(pymux) -> dict:
-    "Each pane in copy mode: its document, caret, selection, and whether its program is held."
-    found = {}
-    for pane_id, pane in pymux.panes_by_id.items():
-        terminal = pane.terminal
-        if terminal.is_copying:
-            buffer = terminal.copy_buffer
-            selection = buffer.selection_state
-            found[pane_id] = (
-                buffer.text,
-                buffer.cursor_position,
-                (selection.original_cursor_position, selection.type) if selection else None,
-                pane.process.suspended,
-            )
-    return found
+def _copy_modes_of(pymux) -> list:
+    "What the returning client reads the history of, as its record says."
+    for connection in pymux.connections:
+        if connection.client_id == "returning":
+            return connection.client_state.modes()["copying"]
+    return pymux.returning_clients["returning"]["modes"]["copying"]
 
 
 def _bindings_of(pymux) -> dict:
@@ -521,6 +510,12 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                     assert (back.menu_title, back.menu_entries) == ("Do", [("a", "again", "display-message again")])
                     assert back.command_buffer.text == "kill-ses"
                     assert back.app.layout.has_focus(back.command_buffer)
+                async with attached(fresh):
+                    back = fresh.connections[-1].client_state
+                    fresh.welcome_back(back, "returning")
+                    copying = [pane for pane in fresh.panes_by_id.values() if pane.is_copying_for(back.app)]
+                    assert len(copying) == 2
+                    assert not any(pane.process.suspended for pane in fresh.panes_by_id.values())
                 fresh.stop()
                 await fresh.unhold()
         finally:
@@ -562,19 +557,36 @@ def test_a_snapshot_of_another_version_is_refused(pymux, tmp_path, off_by):
         snapshot.load(Pymux(), path)
 
 
-def test_a_version_18_snapshot_gains_a_frame_size_per_client(pymux, tmp_path):
-    "Version 19 adds `audio_frame`, empty. Lillecarl/pymux#657."
-    path = tmp_path / "v18.sqlite"
+def test_a_version_19_snapshot_lets_a_program_held_for_copy_mode_go(pymux, tmp_path):
+    """
+    Version 20 keeps copy mode with the client. The build before held
+    the program of a pane in copy mode still, and nothing here would let
+    it go again. Lillecarl/pymux#470.
+    """
+    path = tmp_path / "v19.sqlite"
     snapshot.save(pymux, path)
     db = sqlite3.connect(path)
-    db.execute("ALTER TABLE clients DROP COLUMN audio_frame")
-    db.execute("PRAGMA user_version = 18")
+    db.execute(
+        "CREATE TABLE copy_modes(pane_id INTEGER PRIMARY KEY, cursor_position INTEGER NOT NULL,"
+        " selection_start INTEGER, selection_type TEXT)"
+    )
+    held = '{"object": "ptyhost.process.Process", "id": 0, "fields": {"suspended": true, "sx": 80}}'
+    db.executemany(
+        "INSERT INTO pane_programs VALUES (?, 1, 0, '{}', '{}', ?, NULL)",
+        [(1, held), (2, held)],
+    )
+    db.execute("INSERT INTO copy_modes VALUES (1, 0, NULL, NULL)")
+    db.execute("PRAGMA user_version = 19")
     db.commit()
     db.close()
 
     stepped = snapshot._open(path)
-    columns = {row[1] for row in stepped.execute("PRAGMA table_info(clients)")}
-    assert "audio_frame" in columns
+    tables = {row[0] for row in stepped.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    assert "copy_modes" not in tables
+    programs = stepped.execute(
+        "SELECT pane_id, process ->> '$.fields.suspended', process ->> '$.fields.sx' FROM pane_programs"
+    )
+    assert [tuple(row) for row in programs] == [(1, 0, 80), (2, 1, 80)]
 
 
 async def test_a_snapshot_is_refused_while_a_command_waits(pymux, tmp_path):

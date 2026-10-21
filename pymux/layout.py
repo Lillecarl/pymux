@@ -3074,9 +3074,9 @@ def _create_container_for_process(
         if arrangement_pane.process.is_terminated:
             result.append(("class:terminated", " Terminated "))
 
-        # A pane whose program is suspended while a person reads its
-        # history says so. Where in the history they are is drawn in
-        # the corner of the pane itself, by the widget that knows.
+        # A pane this client reads the history of says so. Where in the
+        # history it is is drawn in the corner of the pane itself, by
+        # the widget that knows.
         if arrangement_pane.is_copying:
             result.append(("class:copymode", " Copy "))
 

@@ -290,7 +290,7 @@ async def test_copy_mode_ends_the_mode():
         run_as_client(pymux, state, "copy-mode")
 
         assert state.key_tables == []
-        assert pymux.arrangement.get_active_pane().is_copying
+        assert pymux.arrangement.get_active_pane().is_copying_for(state.app)
 
 
 async def test_prefix_m_enters_it():

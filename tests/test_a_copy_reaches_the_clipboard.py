@@ -69,17 +69,17 @@ async def pymux():
 
 
 def a_selection(mux):
-    "The active pane, in copy mode, with `SELECTED` selected."
+    "The active pane, and its copy mode with `SELECTED` selected."
     pane = mux.arrangement.get_active_window().active_pane
     pane.screen.resize(LINES, COLUMNS)
     pane.terminal.terminal_control.stream.feed(WRITTEN)
-    pane.terminal.read_the_screen_into_the_copy_buffer()
+    view = pane.terminal.enter_copy_mode()
 
-    buffer = pane.terminal.copy_buffer
+    buffer = view.buffer
     buffer.cursor_position = 0
     buffer.start_selection()
     buffer.cursor_position = len(SELECTED)
-    return pane, buffer
+    return pane, view
 
 
 def listening(mux):
@@ -97,9 +97,9 @@ def asked_for(text):
 
 async def test_a_copy_reaches_the_terminal_of_the_client(pymux):
     connection = listening(pymux)
-    pane, buffer = a_selection(pymux)
+    pane, view = a_selection(pymux)
 
-    pane.terminal.copy_selection(buffer)
+    view.copy_selection()
 
     assert connection.written == [asked_for(SELECTED)]
 
@@ -115,10 +115,10 @@ async def test_a_copy_reaches_the_paste_buffer_of_the_session(pymux):
     """
     app = DummyApplication()
     app.clipboard = pymux.clipboard
-    pane, buffer = a_selection(pymux)
+    pane, view = a_selection(pymux)
 
     with set_app(app):
-        pane.terminal.copy_selection(buffer)
+        view.copy_selection()
 
     assert pymux.clipboard.get_data().text == SELECTED
 
@@ -139,9 +139,9 @@ async def test_a_copy_goes_out_on_both_of_the_values_that_allow_it(pymux, mode):
     """
     connection = listening(pymux)
     pymux.clipboard_mode = mode
-    pane, buffer = a_selection(pymux)
+    pane, view = a_selection(pymux)
 
-    pane.terminal.copy_selection(buffer)
+    view.copy_selection()
 
     assert connection.written == [asked_for(SELECTED)]
 
@@ -150,8 +150,8 @@ async def test_set_clipboard_off_keeps_the_copy_inside(pymux):
     "The one value that says no to the person as well."
     connection = listening(pymux)
     pymux.clipboard_mode = Clipboard.OFF
-    pane, buffer = a_selection(pymux)
+    pane, view = a_selection(pymux)
 
-    pane.terminal.copy_selection(buffer)
+    view.copy_selection()
 
     assert connection.written == []

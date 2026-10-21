@@ -99,7 +99,7 @@ def in_copy_mode(pymux, state):
         pymux.handle_command("copy-mode")
 
     pane = pymux.arrangement.get_active_window().active_pane
-    return pane.terminal.copy_buffer
+    return pane.terminal.copy_views.of(state.app).buffer
 
 
 def matches_in(popup):

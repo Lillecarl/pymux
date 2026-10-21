@@ -245,8 +245,8 @@ def upgrade_in(terminal, seat, work, out):
         # view on both sides has them. Lillecarl/pymux#551.
         answer(socket_path, "display-message", "kept across the upgrade")
         answer(socket_path, "confirm-before", "-p", "Still asking? (y/n)", "display-message answered")
-        # The active pane of the window the client is on stops in copy
-        # mode, and stays stopped across the upgrade.
+        # The client reads the history of the active pane of its window,
+        # and reads it again after the upgrade.
         answer(socket_path, "copy-mode")
         in_mode = answer(socket_path, "list-panes", "-a", "-F", "#{pane_id} #{pane_in_mode}")
         if " 1" not in in_mode:

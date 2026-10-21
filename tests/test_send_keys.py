@@ -313,15 +313,15 @@ async def test_dash_l_sends_names_as_text(pymux):
     assert send(pymux, "-l", "Enter")[0] == "Enter"
 
 
-async def test_keys_are_refused_while_person_reads_history(pymux):
+async def test_keys_reach_the_program_while_a_person_reads_its_history(pymux):
     """
-    The program is suspended in copy mode, so it cannot answer.
-    Lillecarl/pymux#133.
+    Copy mode reads a copy of the buffer and the program runs on, so
+    there is nothing to refuse. Lillecarl/pymux#470.
     """
     pane = create_pane(pymux, "hello")
-    pane.terminal.is_copying = True
+    pane.terminal.enter_copy_mode()
 
     written, errors = send(pymux, "Enter")
 
-    assert written == ""
-    assert errors == ["pymux: Cannot send keys. Pane is in copy mode."]
+    assert written == "\r"
+    assert errors == []

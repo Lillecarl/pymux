@@ -526,11 +526,19 @@ def _pane_mode(context: FormatContext) -> str:
     pymux has those two. **Clock mode is the topmost of the pair**: the
     clock draws in place of the pane whether or not copy mode is open,
     which `layout.py` decides.
+
+    **Copy mode is the client's**, where tmux's is the pane's, so the
+    answer is for the client the string is formatted for. A command over
+    the socket has none a person sits at, and the answer is for the
+    client `copy-mode` opens for then. Lillecarl/pymux#470.
     """
     pane = context.pane
     if pane.clock_mode:
         return "clock-mode"
-    if pane.is_copying:
+    client = context.client
+    if client is None or client.temporary:
+        client = context.pymux.the_client_to_tell()
+    if client is not None and pane.is_copying_for(client.app):
         return "copy-mode"
     return ""
 

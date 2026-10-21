@@ -137,11 +137,6 @@ class PaneStream:
         if not self.writable:
             return "this stream does not take input"
 
-        if self.pane.is_copying:
-            # The same refusal `send-keys` gives. A person reading the
-            # history of a pane is not typing into the program.
-            return "the pane is in copy mode"
-
         try:
             self._type(typed)
         except CommandException as refused:

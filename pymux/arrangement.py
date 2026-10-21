@@ -192,18 +192,22 @@ class Pane:
     @property
     def is_copying(self) -> bool:
         """
-        Is a person reading the history of this pane rather than the
-        program in it?
+        Is the client that runs now reading the history of this pane
+        rather than the program in it?
 
-        **The widget knows, and a pane asks it.** A pane held a buffer,
-        a flag and a title of its own for this, from before copy mode
-        moved into `ptterm`. Nothing had set the flag since, so five
-        readers of it all answered "no": the mark in the title bar
-        never showed, `#{pane_in_mode}` was always zero, and `send-keys`
-        and `clear-history` never refused a pane whose program is
-        suspended. Lillecarl/pymux#133.
+        **The widget knows, and a pane asks it.** A flag of the pane's
+        own went out of step with the widget once, and five readers of
+        it all answered "no". Lillecarl/pymux#133.
+
+        **Copy mode is a client's, not the pane's.** Each client that
+        shows the pane is an application of its own, and the program
+        runs on under all of them. Lillecarl/pymux#470.
         """
         return self.terminal.is_copying
+
+    def is_copying_for(self, app: Application | None) -> bool:
+        "Is the client of `app` reading the history of this pane?"
+        return self.terminal.copy_views.of(app) is not None
 
     @property
     def process(self):
@@ -230,10 +234,7 @@ class Pane:
         return ""
 
     def enter_copy_mode(self) -> None:
-        """
-        Suspend the process, and copy the screen content to the `scroll_buffer`.
-        That way the user can search through the history and copy/paste.
-        """
+        "Open copy mode on this pane, for the client that runs now."
         self.terminal.enter_copy_mode()
 
     def focus(self) -> None:

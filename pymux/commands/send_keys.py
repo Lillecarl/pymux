@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands import CommandParser, add_command
 from pymux.commands.common import send_key, terminal_of, the_pane
 from pymux.key_spelling import event_however_it_is_written
 
@@ -24,9 +24,6 @@ def send_keys(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     pane = the_pane(pymux, args.target_pane)
     terminal = terminal_of(pane)
-
-    if pane.is_copying:
-        raise CommandException("Cannot send keys. Pane is in copy mode.")
 
     if args.R:
         # Reset the terminal of this pane. (Like `reset`.)

@@ -17,8 +17,8 @@ def clear_history(pymux: Pymux, args: argparse.Namespace) -> None:
     if pane is None:
         raise CommandException("no current pane")
 
-    if pane.is_copying:
-        raise CommandException("Not available in copy mode")
+    # A copy mode open on the pane reads its own copy of the history,
+    # which this leaves alone.
     terminal_of(pane).screen.clear_history()
 
 

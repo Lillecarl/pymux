@@ -27,6 +27,7 @@ from prompt_toolkit.keys import Keys
 from prompt_toolkit.layout.containers import Window
 from prompt_toolkit.layout.controls import UIContent, UIControl
 from prompt_toolkit.mouse_events import MouseButton, MouseEvent, MouseEventType
+from ptterm.per_application import PerApplication
 from pyte.keys import EventType, KeyEvent, Modifier, parse_key_data
 
 if TYPE_CHECKING:
@@ -323,6 +324,8 @@ class WindowWidget:
     is_copying = False
 
     def __init__(self, wayland: WaylandServer, toplevel: int, takes_keys) -> None:
+        #: Empty for ever: `enter_copy_mode` opens nothing.
+        self.copy_views: PerApplication[None] = PerApplication()
         self.wayland = wayland
         self.toplevel = toplevel
         self.takes_keys = takes_keys

@@ -172,11 +172,11 @@ def _pause(pymux: Pymux) -> None:
 
 
 def _resume(pymux: Pymux) -> None:
-    "Serve again, as before the pause. Copy mode keeps the panes it stopped."
+    "Serve again, as before the pause."
     if isinstance(pymux.listener, PosixSocketListener):
         pymux.listener.resume()
     for pane in snapshot._panes_of(pymux):
-        if isinstance(backend := pane.process.backend, HeldBackend) and not pane.process.suspended:
+        if isinstance(backend := pane.process.backend, HeldBackend):
             backend.resume_reading()
 
 

@@ -75,11 +75,11 @@ def test_every_theme_carries_the_rule():
 
 
 def test_the_class_only_arrives_when_the_pane_is_reversed():
-    "`Terminal._copy_style` is what puts it on, and only then."
-    from ptterm.terminal import Terminal
+    "`CopyView._style` is what puts it on, and only then."
+    from ptterm.copy_mode import CopyView
 
-    reversed_style = Terminal._copy_style(type("T", (), {"copy_reverse_video": True})())
-    plain = Terminal._copy_style(type("T", (), {"copy_reverse_video": False})())
+    reversed_style = CopyView._style(type("V", (), {"reverse_video": True})())
+    plain = CopyView._style(type("V", (), {"reverse_video": False})())
 
     assert "class:reversed-pane" in reversed_style
     assert "reverse" in reversed_style
