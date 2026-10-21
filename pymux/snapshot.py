@@ -794,7 +794,7 @@ async def start(pymux: Pymux) -> None:
     "Start pumping and reaping every loaded program, in the server's scope."
     if pymux.tasks is None:
         raise RuntimeError("start the loaded programs inside `Pymux.running`")
-    await pymux.jobs.restore()
+    pymux.jobs.restore()
     for job in pymux.jobs.listing():
         if not job.is_done:
             pymux.tasks.start_soon(pymux.jobs.supervise, job)

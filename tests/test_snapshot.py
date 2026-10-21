@@ -32,6 +32,7 @@ from pymux.enums import Chooser, WindowCodec, WindowSize
 from pymux.jobs import JobFeed
 from pymux.main import Pymux
 from pymux.notifications import Urgency
+from pymux.query import ask
 
 
 @pytest.fixture
@@ -329,25 +330,23 @@ async def _run_jobs(pymux) -> None:
         # Forgotten below: the next id is past it all the same.
         ("true", None, [], False),
     ):
-        job = await jobs.submit(command, directory, tags, {"WHO": command}, pty)
+        job = jobs.submit(command, directory, tags, {"WHO": command}, pty)
         await jobs.supervise(job)
-    await jobs._forget(job)
+    jobs._forget(job)
     # The holder forks these, so they run past the snapshot: one on a
     # terminal, one on pipes. Lillecarl/pymux#556.
     for pty in (True, False):
-        running = await jobs.submit("echo started; exec sleep 60", None, [("long", None)], dict(os.environ), pty)
+        running = jobs.submit("echo started; exec sleep 60", None, [("long", None)], dict(os.environ), pty)
         pymux.tasks.start_soon(jobs.supervise, running)
         await once(lambda running=running: b"started" in running.kept("stdout"), 10.0, "a running job never printed")
     # A question kept, and a seed taken away, which must stay away.
-    await jobs.save_query("mine", "SELECT id FROM jobs WHERE pty = 1", None)
-    assert await jobs.forget_query("running")
+    jobs.save_query("mine", "SELECT id FROM jobs WHERE pty = 1", None)
+    assert jobs.forget_query("running")
 
 
 async def _questions_of(pymux) -> list[tuple]:
-    "What the job store itself answers about the kept questions."
-    async with pymux.jobs.store.reader() as conn:
-        cursor = await conn.execute("SELECT name, sql, description FROM saved_queries ORDER BY name")
-        return list(await cursor.fetchall())
+    "What a question answers about the kept questions."
+    return (await ask(pymux, "SELECT name, sql, description FROM saved_queries ORDER BY name", {}, 0, 0)).rows
 
 
 def _copy_modes_of(pymux) -> list:
@@ -538,7 +537,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 assert _copy_modes_of(fresh) == _copy_modes_of(pymux)
                 assert len(_copy_modes_of(fresh)) == 2
                 assert _bindings_of(fresh) == _bindings_of(pymux)
-                assert (await fresh.jobs.submit("true")).job_id == pymux.jobs.last_id + 1
+                assert (fresh.jobs.submit("true")).job_id == pymux.jobs.last_id + 1
                 reloaded = fresh.panes_by_id[shell.pane_id]
                 assert _text(reloaded) == before
                 reloaded.process.write_input("echo mar''ker\r")
@@ -662,7 +661,7 @@ def test_a_version_25_snapshot_moves_the_client_modes_to_their_own_table(pymux, 
 async def test_a_running_job_this_server_forked_is_refused(pymux, tmp_path):
     "Only the holder can hand a program to the next server. Lillecarl/pymux#556."
     async with pymux.running():
-        job = await pymux.jobs.submit("exec sleep 60")
+        job = pymux.jobs.submit("exec sleep 60")
         pymux.tasks.start_soon(pymux.jobs.supervise, job)
         await once(lambda: job.process is not None, 10.0, "the job never started")
         try:

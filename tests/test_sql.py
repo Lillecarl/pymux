@@ -21,7 +21,7 @@ from session import create_session
 
 from pymux.commands import CommandException, handle_command
 from pymux.commands.sql import DEFAULT_LIMIT, sql
-from pymux.jobstore import is_read_only_query
+from pymux.query import is_read_only_query
 
 
 async def _ask(pymux, state, command) -> list:
@@ -60,7 +60,9 @@ async def _run_handler(pymux, state, **over) -> list:
     pymux.command_output = []
     try:
         with set_app(state.app):
-            await sql(pymux, _ns(**over))
+            answer = sql(pymux, _ns(**over))
+            if answer is not None:
+                await answer
             return list(pymux.command_output)
     finally:
         pymux.command_output = None
@@ -84,8 +86,8 @@ def test_reads_run_and_writes_do_not():
 
 async def test_free_form_select_answers_a_table():
     async with create_session() as (pymux, state):
-        await pymux.jobs.submit("echo one", None)
-        await pymux.jobs.submit("echo two", None)
+        pymux.jobs.submit("echo one", None)
+        pymux.jobs.submit("echo two", None)
         said = await _ask(pymux, state, "sql SELECT id, command FROM jobs ORDER BY id")
         assert len(said) == 1
         assert "id" in said[0].splitlines()[0] and "command" in said[0].splitlines()[0]
@@ -101,7 +103,7 @@ async def test_the_windows_are_there_beside_the_jobs():
     there when the question runs depends on the load.
     """
     async with create_session(window=None) as (pymux, state):
-        await pymux.jobs.submit("echo one", None)
+        pymux.jobs.submit("echo one", None)
         # The rename and the question in one step: `sql` writes what the
         # step changed before it asks.
         with set_app(state.app):
@@ -117,11 +119,11 @@ async def test_the_windows_are_there_beside_the_jobs():
         assert json.loads(said[0])["rows"] == [{"n": held}]
 
 
-async def test_the_live_store_writes_while_questions_read():
+async def test_questions_at_once_share_nothing_to_lock():
     """
-    A writer on the loop and readers on their threads share one cache,
-    which answers a lock with an error and not a wait. Readers take
-    none, so neither side ever sees one.
+    Each question has a connection of its own and no table holds a row,
+    so questions that run together and a server that changes under them
+    never meet a lock. Lillecarl/pymux#722.
     """
     async with create_session() as (pymux, state):
         failures: list[str] = []
@@ -136,7 +138,7 @@ async def test_the_live_store_writes_while_questions_read():
 
         async def write() -> None:
             for _ in range(200):
-                pymux.live.write(pymux)
+                pymux.jobs.submit("true", None)
                 await anyio.sleep(0)
 
         # The answers themselves are not the question here.
@@ -153,7 +155,7 @@ async def test_the_live_store_writes_while_questions_read():
 
 async def test_json_answers_objects():
     async with create_session() as (pymux, state):
-        await pymux.jobs.submit("echo one", None)
+        pymux.jobs.submit("echo one", None)
         said = await _ask(pymux, state, "sql --json SELECT id, command FROM jobs ORDER BY id")
         payload = json.loads(said[0])
         assert payload["columns"] == ["id", "command"]
@@ -163,7 +165,7 @@ async def test_json_answers_objects():
 
 async def test_writes_are_refused_and_leave_the_table():
     async with create_session() as (pymux, state):
-        await pymux.jobs.submit("echo one", None)
+        pymux.jobs.submit("echo one", None)
         queries = (
             "DELETE FROM jobs",
             "DROP TABLE jobs",
@@ -192,7 +194,7 @@ async def test_params_fill_a_free_form_query():
 
 async def test_save_run_list_and_delete_roundtrip():
     async with create_session() as (pymux, state):
-        await pymux.jobs.submit("echo one", None)
+        pymux.jobs.submit("echo one", None)
         said = await _run_handler(
             pymux,
             state,
@@ -227,7 +229,7 @@ async def test_the_seeds_are_kept():
 async def test_the_cap_names_its_truncation():
     async with create_session() as (pymux, state):
         for index in range(3):
-            await pymux.jobs.submit("echo %d" % index, None)
+            pymux.jobs.submit("echo %d" % index, None)
         said = await _ask(pymux, state, "sql -n 2 SELECT id FROM jobs ORDER BY id")
         assert "truncated at 2 rows" in said[0]
         said = await _run_handler(

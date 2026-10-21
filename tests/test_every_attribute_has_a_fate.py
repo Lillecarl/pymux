@@ -106,7 +106,7 @@ async def test_every_attribute_has_a_fate(pymux):
         with set_app(client_state.app):
             pymux.handle_command("split-window -h")
         await settled(session)
-        await pymux.jobs.supervise(await pymux.jobs.submit("true"))
+        await pymux.jobs.supervise(pymux.jobs.submit("true"))
         # A viewer, so a field added to `JobFeed` needs a fate too. Lillecarl/pymux#715.
         with set_app(client_state.app):
             pymux.handle_command("view-job -k 1")

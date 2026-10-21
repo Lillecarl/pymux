@@ -17,6 +17,7 @@ from session import create_session
 
 from pymux.commands import handle_command
 from pymux.jobs import JobTable
+from pymux.query import ask
 
 
 async def _run(pymux, state, command) -> None:
@@ -40,16 +41,13 @@ async def _run_answering(pymux, state, command) -> list:
         pymux.command_output = None
 
 
-async def _ids_of(store) -> list:
-    async with store.reader() as conn:
-        cursor = await conn.execute("SELECT id FROM jobs ORDER BY id")
-        return [row[0] for row in await cursor.fetchall()]
+async def _ids_of(pymux) -> list:
+    return [id for (id,) in (await ask(pymux, "SELECT id FROM jobs ORDER BY id", {}, 0, 0)).rows]
 
 
-async def _tags_of(store, job_id) -> dict:
-    async with store.reader() as conn:
-        cursor = await conn.execute("SELECT key, value FROM job_tags WHERE job_id = ?", (job_id,))
-        return dict(await cursor.fetchall())
+async def _tags_of(pymux, job_id) -> dict:
+    answer = await ask(pymux, "SELECT key, value FROM job_tags WHERE job_id = :id", {"id": job_id}, 0, 0)
+    return dict(answer.rows)
 
 
 async def test_a_finished_job_idle_past_its_time_is_forgotten():
@@ -59,11 +57,11 @@ async def test_a_finished_job_idle_past_its_time_is_forgotten():
         assert job is not None and job.is_done
         job.last_active -= 7200
 
-        await pymux.jobs.sweep(3600)
+        pymux.jobs.sweep(3600)
 
         assert pymux.jobs.get(1) is None
-        assert await _ids_of(pymux.jobs.store) == []
-        assert await _tags_of(pymux.jobs.store, 1) == {}
+        assert await _ids_of(pymux) == []
+        assert await _tags_of(pymux, 1) == {}
 
 
 async def test_a_fresh_finished_job_stays():
@@ -72,10 +70,10 @@ async def test_a_fresh_finished_job_stays():
         job = pymux.jobs.get(1)
         assert job is not None and job.is_done
 
-        await pymux.jobs.sweep(3600)
+        pymux.jobs.sweep(3600)
 
         assert pymux.jobs.get(1) is job
-        assert await _ids_of(pymux.jobs.store) == [1]
+        assert await _ids_of(pymux) == [1]
 
 
 async def test_output_counts_as_activity():
@@ -87,7 +85,7 @@ async def test_output_counts_as_activity():
         assert job.last_active > job.started
         job.started -= 7200
 
-        await pymux.jobs.sweep(3600)
+        pymux.jobs.sweep(3600)
 
         assert pymux.jobs.get(1) is job
 
@@ -99,10 +97,10 @@ async def test_a_running_job_idle_past_its_time_is_ended():
         assert job is not None and not job.is_done
         job.last_active -= 7200
 
-        await pymux.jobs.sweep(3600)
+        pymux.jobs.sweep(3600)
 
         assert pymux.jobs.get(1) is None
-        assert await _ids_of(pymux.jobs.store) == []
+        assert await _ids_of(pymux) == []
         with anyio.fail_after(5):
             await pymux.jobs.wait(job)
         assert job.is_done
@@ -120,7 +118,7 @@ async def test_a_waited_job_stays_however_idle():
                 while not job.waiters:
                     await anyio.sleep(0)
 
-                await pymux.jobs.sweep(3600)
+                pymux.jobs.sweep(3600)
 
                 assert pymux.jobs.get(1) is job
                 waiters.cancel_scope.cancel()
@@ -137,10 +135,10 @@ async def test_zero_keeps_everything():
         assert job is not None and job.is_done
         job.last_active -= 7200
 
-        await pymux.jobs.sweep(0)
+        pymux.jobs.sweep(0)
 
         assert pymux.jobs.get(1) is job
-        assert await _ids_of(pymux.jobs.store) == [1]
+        assert await _ids_of(pymux) == [1]
 
 
 async def test_the_time_to_live_is_an_option():
@@ -152,11 +150,6 @@ async def test_the_time_to_live_is_an_option():
         assert said and "60" in said[0]
 
 
-async def test_submit_starts_the_clock_at_the_start():
-    table = JobTable()
-    await table.open()
-    try:
-        job = await table.submit("true", None)
-        assert job.last_active == job.started
-    finally:
-        await table.close()
+def test_submit_starts_the_clock_at_the_start():
+    job = JobTable().submit("true", None)
+    assert job.last_active == job.started

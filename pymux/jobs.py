@@ -45,9 +45,9 @@ from ptyhost.spawn import Spawn
 from pyte.keep import Keep
 
 from pymux.commands import CommandException
-from pymux.jobstore import SEEDS, JobStore
 from pymux.log import logger
 from pymux.niceness import as_a_person_runs
+from pymux.query import SEEDS
 
 #: A newline with no return before it. What the viewer turns into a
 #: full return, the way ONLCR would have on a pty.
@@ -292,48 +292,31 @@ class JobTable:
         "_jobs": Keep.SAVED,
         "last_id": Keep.SAVED,
         "saved_queries": Keep.SAVED,
-        "store": Keep.REBUILT,  # in memory: `restore` writes the rows again
         "holding": Keep.REBUILT,  # the server's, which connects for itself
     }
 
     def __init__(self) -> None:
         self._jobs: dict[JobId, Job] = {}
-        self.store = JobStore()
         #: The server's holder. A pty job runs under it when there is one.
         self.holding: Holding | None = None
-        #: The newest id the database handed out. It outlives the jobs
-        #: it named, so a restored server never hands one out again.
+        #: The newest id handed out. It outlives the jobs it named, so
+        #: a restored server never hands one out again.
         self.last_id = 0
-        #: The kept questions by name: their SQL and description. The
-        #: store holds the same rows; this copy is what a snapshot, which
-        #: may not await, reads. Lillecarl/pymux#547.
+        #: The kept questions by name: their SQL and description. `sql`
+        #: reads them as the table `saved_queries`. Lillecarl/pymux#547.
         self.saved_queries: dict[str, tuple[str, str | None]] = {
             name: (sql, description) for name, sql, description in SEEDS
         }
 
-    async def save_query(self, name: str, sql: str, description: str | None) -> None:
+    def save_query(self, name: str, sql: str, description: str | None) -> None:
         "Keep a question, or replace the one of that name."
-        await self.store.write(
-            "INSERT OR REPLACE INTO saved_queries(name, sql, description) VALUES (?, ?, ?)",
-            (name, sql, description),
-        )
         self.saved_queries[name] = (sql, description)
 
-    async def forget_query(self, name: str) -> bool:
+    def forget_query(self, name: str) -> bool:
         "Forget a kept question. False when none had that name."
-        cursor = await self.store.write("DELETE FROM saved_queries WHERE name = ?", (name,))
-        self.saved_queries.pop(name, None)
-        return bool(cursor.rowcount)
+        return self.saved_queries.pop(name, None) is not None
 
-    async def open(self) -> None:
-        "Build the database. The server calls this; the rest is lazy."
-        await self.store.open()
-
-    async def close(self) -> None:
-        "Forget the database. In-memory, so this is also forgetting."
-        await self.store.close()
-
-    async def submit(
+    def submit(
         self,
         command: str,
         directory: str | None = None,
@@ -344,70 +327,20 @@ class JobTable:
         """
         Record a job. Starting it is `supervise`, in the caller's task.
 
-        The id comes from the database, so it is the row and the job
-        or neither: nothing hands out an id the table cannot answer.
-        The tags go down with the row, in the same step. The
-        environment falls back to the server's own: `run` passes what
+        The environment falls back to the server's own: `run` passes what
         the calling packet said, and anything else -- a key binding,
         an old client -- runs where the server stands.
         """
-        now = time.time()
-        cursor = await self.store.write(
-            "INSERT INTO jobs(command, directory, status, started, pty) VALUES (?, ?, 'running', ?, ?)",
-            (command, directory, now, 1 if pty else 0),
-        )
-        job = Job(JobId(cursor.lastrowid), command, directory, now, tags, env or dict(os.environ), pty)
-        self.last_id = max(self.last_id, job.job_id)
+        self.last_id += 1
+        job = Job(JobId(self.last_id), command, directory, time.time(), tags, env or dict(os.environ), pty)
         self._jobs[job.job_id] = job
-        for key, value in job.tags.items():
-            await self.store.write(
-                "INSERT OR REPLACE INTO job_tags(job_id, key, value) VALUES (?, ?, ?)",
-                (job.job_id, key, value),
-            )
         return job
 
-    async def restore(self) -> None:
-        """
-        Write the rows of the jobs a snapshot's load put here.
-
-        The database is in memory and the exec emptied it. The sequence
-        goes back too, so the next id is past every id ever given. A
-        job that still runs is not done: its `supervise` goes on.
-        """
+    def restore(self) -> None:
+        "Set the done event of each finished job a snapshot's load put here."
         for job in self.listing():
             if job.is_done:
                 job.done.set()
-            await self.store.write(
-                "INSERT OR REPLACE INTO jobs(id, command, directory, status, returncode, error, started, finished, pty)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    job.job_id,
-                    job.command,
-                    job.directory,
-                    job.status,
-                    job.returncode,
-                    job.error,
-                    job.started,
-                    job.finished,
-                    1 if job.pty else 0,
-                ),
-            )
-            for key, value in job.tags.items():
-                await self.store.write(
-                    "INSERT OR REPLACE INTO job_tags(job_id, key, value) VALUES (?, ?, ?)",
-                    (job.job_id, key, value),
-                )
-        # `sqlite_sequence` has no key, so a second row for the table
-        # would be added, not replaced.
-        await self.store.write("DELETE FROM sqlite_sequence WHERE name = 'jobs'")
-        await self.store.write("INSERT INTO sqlite_sequence(name, seq) VALUES ('jobs', ?)", (self.last_id,))
-        # The store seeded itself as it opened; a seed somebody deleted
-        # stays deleted.
-        await self.store.write("DELETE FROM saved_queries")
-        for name, (sql, description) in sorted(self.saved_queries.items()):
-            await self.store.write(
-                "INSERT INTO saved_queries(name, sql, description) VALUES (?, ?, ?)", (name, sql, description)
-            )
 
     def get(self, job_id: JobId) -> Job | None:
         return self._jobs.get(job_id)
@@ -466,7 +399,7 @@ class JobTable:
         if job.pty and self.holding is not None:
             backend = self._held_pty(job, self.holding)
             if backend is None:
-                await self._finish(job, None)
+                self._finish(job, None)
             else:
                 await self._supervise_held_pty(job, backend)
             return
@@ -487,7 +420,7 @@ class JobTable:
             )
         except OSError as e:
             job.error = "%s: %s" % (job.command, e)
-            await self._finish(job, None)
+            self._finish(job, None)
             return
 
         job.process = process
@@ -516,7 +449,7 @@ class JobTable:
                 job.error = "%s: %s" % (job.command, e)
         finally:
             if job.status == "running":
-                await self._finish(job, job.returncode)
+                self._finish(job, job.returncode)
 
     async def _supervise_pty(self, job: Job) -> None:
         """
@@ -539,7 +472,7 @@ class JobTable:
             primary, replica = pty.openpty()
         except OSError as e:
             job.error = "%s: %s" % (job.command, e)
-            await self._finish(job, None)
+            self._finish(job, None)
             return
         with suppress(OSError):
             fcntl.ioctl(primary, termios.TIOCSWINSZ, struct.pack("HHHH", PTY_ROWS, PTY_COLUMNS, 0, 0))
@@ -560,7 +493,7 @@ class JobTable:
             with suppress(OSError):
                 os.close(primary)
             job.error = "%s: %s" % (job.command, e)
-            await self._finish(job, None)
+            self._finish(job, None)
             return
         finally:
             # The child holds its own end; the parent's copy would
@@ -588,7 +521,7 @@ class JobTable:
                 job.error = "%s: %s" % (job.command, e)
         finally:
             if job.status == "running":
-                await self._finish(job, job.returncode)
+                self._finish(job, job.returncode)
 
     def _held_pty(self, job: Job, holding: Holding) -> HeldBackend | None:
         """
@@ -660,7 +593,7 @@ class JobTable:
             raise
         finally:
             if job.status == "running":
-                await self._finish(job, job.returncode)
+                self._finish(job, job.returncode)
 
     async def _supervise_held_pipes(self, job: Job, holding: Holding, pipes: HeldPipes | None) -> None:
         """
@@ -677,7 +610,7 @@ class JobTable:
                 reply, stdout, stderr = await holding.spawn_on_pipes(spawn)
             except HolderError as e:
                 job.error = "%s: %s" % (job.command, e)
-                await self._finish(job, None)
+                self._finish(job, None)
                 return
             pipes = HeldPipes(holding, reply["id"], reply["pid"], stdout, stderr)
             job.backend, job.program_id, job.pid = pipes, pipes.program_id, pipes.pid
@@ -695,7 +628,7 @@ class JobTable:
             raise
         finally:
             if job.status == "running":
-                await self._finish(job, job.returncode)
+                self._finish(job, job.returncode)
 
     def pause_reading(self) -> None:
         "Read no held job, so that what it writes waits for the next server."
@@ -711,33 +644,28 @@ class JobTable:
             if job.backend is not None and not job.is_done:
                 job.backend.resume_reading()
 
-    async def _finish(self, job: Job, returncode: int | None) -> None:
+    def _finish(self, job: Job, returncode: int | None) -> None:
         job.returncode = returncode
         job.status = "done"
         job.finished = time.time()
         job.last_active = job.finished
-        await self.store.write(
-            "UPDATE jobs SET status = 'done', returncode = ?, error = ?, finished = ? WHERE id = ?",
-            (returncode, job.error, job.finished, job.job_id),
-        )
         job.done.set()
         _poke(job)
-        await self._reap()
+        self._reap()
 
-    async def _reap(self) -> None:
+    def _reap(self) -> None:
         "Forget the oldest finished past the cap. The waited stay."
         finished = [job for job in self.listing() if job.is_done]
         while len(finished) > FINISHED_KEEP:
             oldest = finished[0]
             if oldest.waiters:
                 return
-            await self._forget(oldest)
+            self._forget(oldest)
             finished.pop(0)
 
-    async def _forget(self, job: Job) -> None:
+    def _forget(self, job: Job) -> None:
         """
-        Forget one job: out of the table and out of the database, tags
-        with it through the cascade.
+        Forget one job, and its tags with it.
 
         A supervise that still runs does not mind: it finishes onto
         the job, whose update then matches no row, and the reap finds
@@ -745,9 +673,8 @@ class JobTable:
         no job, the way one arriving after the cap does.
         """
         self._jobs.pop(job.job_id, None)
-        await self.store.write("DELETE FROM jobs WHERE id = ?", (job.job_id,))
 
-    async def sweep(self, ttl_seconds: float) -> None:
+    def sweep(self, ttl_seconds: float) -> None:
         """
         Forget every job idle past its time, ending the running ones.
 
@@ -764,7 +691,7 @@ class JobTable:
                 continue
             if not job.is_done:
                 self.kill(job)
-            await self._forget(job)
+            self._forget(job)
 
     async def wait(self, job: Job) -> Job:
         "Hold until the job ends, then answer it. Reaping waits too."

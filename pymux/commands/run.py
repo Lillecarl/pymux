@@ -75,7 +75,7 @@ async def _submit(pymux: Pymux, args: argparse.Namespace, shell_command: str) ->
     for word in args.env:
         key, value = parse_env(word)
         env[key] = value
-    job = await pymux.jobs.submit(shell_command, directory, list(tags.items()), env, args.pty)
+    job = pymux.jobs.submit(shell_command, directory, list(tags.items()), env, args.pty)
 
     if args.w:
         refuse_without_a_waiter(pymux, "wait")

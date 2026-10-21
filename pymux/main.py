@@ -87,7 +87,6 @@ from .jobs import JOB_SWEEP_EVERY, Job, JobFeed, JobTable, describe
 from .key_bindings import PymuxKeyBindings
 from .key_spelling import why_pane_cannot_read
 from .layout import Justify, LayoutManager, change_pane_size
-from .live import LiveStore
 from .log import logger
 from .nearest import NEAREST
 from .notifications import NotificationCenter, NotificationRoutes, Urgency
@@ -1294,7 +1293,6 @@ class Pymux:
         "notifications": Keep.SAVED,
         "notification_center": Keep.SAVED,
         "jobs": Keep.SAVED,
-        "live": Keep.REBUILT,  # written again from the loaded objects
         # Bindings a person may have changed with `bind-key`.
         "key_bindings_manager": Keep.SAVED,
         # Option values.
@@ -1638,12 +1636,6 @@ class Pymux:
         #: instead of a terminal, owned by the server rather than by
         #: any pane, so it outlives every view onto it.
         self.jobs = JobTable()
-
-        #: Windows, panes, sessions and clients as SQL tables, written
-        #: when `sql` asks. Lillecarl/pymux#399.
-        self.live = LiveStore()
-        # `sql` reads both through the job store's readers.
-        self.jobs.store.attach("live", self.live.uri)
 
         # The hooks of the session: a name for an event, and the
         # commands it runs. `set-hook` fills it, `invalidate` reads it.
@@ -2222,7 +2214,6 @@ class Pymux:
         async with anyio.create_task_group() as tasks:
             self.tasks = tasks
             self.loop = asyncio.get_running_loop()
-            await self.jobs.open()
             tasks.start_soon(self._auto_refresh)
             tasks.start_soon(self._sweep_jobs)
             tasks.start_soon(self.wayland.keep)
@@ -2239,9 +2230,6 @@ class Pymux:
                 # on its own.
                 tasks.cancel_scope.cancel()
                 self.tasks = None
-                # No task touches the jobs past here, so the database
-                # closes with nobody left to read it.
-                await self.jobs.close()
 
     async def hold(self, keep_orphans: bool = False) -> None:
         """
@@ -2368,7 +2356,7 @@ class Pymux:
             await anyio.sleep(JOB_SWEEP_EVERY)
             try:
                 if self.job_ttl:
-                    await self.jobs.sweep(self.job_ttl)
+                    self.jobs.sweep(self.job_ttl)
             except Exception:
                 logger.exception("The sweep of idle jobs failed.")
 

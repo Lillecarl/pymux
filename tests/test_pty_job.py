@@ -23,7 +23,7 @@ from session import create_session
 
 from pymux.commands import CommandException, handle_command
 from pymux.commands.run import run_job
-from pymux.jobs import JobTable
+from pymux.query import ask
 
 
 @pytest.fixture(params=["forked here", "forked by the holder"])
@@ -173,14 +173,9 @@ async def test_kill_ends_a_pty_job(session):
     assert job.is_done
 
 
-async def test_submit_stores_the_terminal_with_the_row():
-    table = JobTable()
-    await table.open()
-    try:
-        job = await table.submit("true", None, [], None, True)
+async def test_a_question_reads_a_job_on_a_terminal():
+    async with create_session() as (pymux, _state):
+        job = pymux.jobs.submit("true", None, [], None, True)
         assert job.pty
-        async with table.store.reader() as conn:
-            cursor = await conn.execute("SELECT pty FROM jobs WHERE id = ?", (job.job_id,))
-            assert (await cursor.fetchone()) == (1,)
-    finally:
-        await table.close()
+        answer = await ask(pymux, "SELECT pty FROM jobs WHERE id = :id", {"id": job.job_id}, 0, 0)
+        assert answer.rows == [(1,)]
