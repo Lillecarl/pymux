@@ -36,6 +36,7 @@ from pyte.modes import PrivateMode
 from pyte.screen import Screen
 from pyte.streams import GroundTimer, Stream
 
+from pymux.client.terminal import DETECTION_QUERIES
 from pymux.key_spelling import event_however_it_is_written
 from pymux.log import logger
 from pymux.web.protocol import PaneView, Typed, encode_unsent, typed_of
@@ -97,6 +98,12 @@ class SessionScreen:
                 Field.COLORTERM: COLORTERM,
             }
         )
+        # The server reads the answers only after this packet, and this
+        # screen answers as it is fed, so the packet goes first. Without
+        # the queries the server never learns that this terminal draws
+        # images. Lillecarl/pymux#718.
+        self._send({Field.CMD: Packet.KITTY_DETECT})
+        self._ground_timer.feed(DETECTION_QUERIES.decode("ascii"))
 
     def take_packet(self, packet: dict[str, Any]) -> bool:
         """

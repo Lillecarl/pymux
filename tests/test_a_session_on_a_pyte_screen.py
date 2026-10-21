@@ -12,6 +12,7 @@ that is the session a person attaching to a new server gets too.
 
 from __future__ import annotations
 
+import base64
 import contextvars
 import json
 import logging
@@ -27,6 +28,7 @@ import pytest
 from libpymux.protocol import Packet
 from libpymux.wire import encode_json
 from prompt_toolkit.application.current import set_app
+from pyte.png import decode_png
 from session import once
 
 from pymux import plan_container
@@ -203,6 +205,33 @@ async def test_a_frame_carries_what_it_drew(pymux):
         assert session.welcome()["size"] == {"columns": COLUMNS, "rows": ROWS}
         drawn = "".join(text for runs in (await session.frame())["rows"].values() for _style, text in runs)
         assert "$" in drawn
+
+
+async def test_a_frame_carries_an_image_the_pane_shows(pymux):
+    """
+    pymux's client sends kitty graphics only to a terminal that answers
+    the support query, and this screen is that terminal.
+    Lillecarl/pymux#718.
+    """
+    pixels = base64.b64encode(bytes(range(16))).decode()
+    async with pymux.running(), attached(pymux) as session:
+        await shows(session, "$")
+        said(session, type="text", text="printf '\\033_Ga=T,f=32,s=2,v=2,q=2,c=4,r=2;%s\\033\\\\'\r" % pixels)
+
+        images: dict = {}
+        placements: list = []
+        with anyio.fail_after(10):
+            while not (images and placements):
+                frame = await session.frame()
+                if frame is not None:
+                    images.update(frame.get("images", {}))
+                    placements = frame.get("placements", placements)
+                await anyio.sleep(0.01)
+
+        ((number, png),) = images.items()
+        assert decode_png(base64.b64decode(png)) == (2, 2, bytes(range(16)))
+        assert [placement[0] for placement in placements] == [int(number)]
+        assert placements[0][3:5] == [2, 4]
 
 
 async def test_a_read_only_client_refuses_keys(pymux):
