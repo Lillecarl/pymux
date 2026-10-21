@@ -126,6 +126,38 @@ async def test_a_read_only_client_may_still_leave():
         assert state.message != "client is read-only"
 
 
+async def test_a_read_only_client_reads_the_history_and_leaves():
+    """
+    Copy mode is the client's and reads a copy, so a watcher may open
+    it, and its keys are the copy buffer's, which the read-only rule
+    does not reach. tmux marks `copy-mode` read only and then drops
+    every key, so a watcher there is stuck in it. Lillecarl/pymux#470.
+    """
+    async with over_connection() as session:
+        pymux = session.pymux
+        await pymux.create_window(WAITS)
+        state, _ = await session.attach("watcher", SIZE)
+        state.read_only = True
+        pane = _the_pane(pymux)
+        written = _what_the_pane_reads(pymux)
+        pane.terminal.terminal_control.stream.feed("one\r\ntwo\r\nthree")
+
+        with set_app(state.app):
+            pymux.handle_command("copy-mode")
+        assert state.message != "client is read-only"
+        assert pane.is_copying_for(state.app)
+
+        view = pane.terminal.copy_views.of(state.app)
+        before = view.buffer.cursor_position
+        # The up arrow, which both key tables move by.
+        session.typed(state, "\x1b[A")
+        await once(lambda: view.buffer.cursor_position != before, 5.0, "a watcher could not move in copy mode")
+
+        session.typed(state, "q")
+        await once(lambda: not pane.is_copying_for(state.app), 5.0, "a watcher could not leave copy mode")
+        assert written == []
+
+
 # ----------------------------------------------------------------------
 # What it may not do to anybody else.
 #

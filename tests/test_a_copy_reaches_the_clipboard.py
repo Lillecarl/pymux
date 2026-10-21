@@ -104,6 +104,26 @@ async def test_a_copy_reaches_the_terminal_of_the_client(pymux):
     assert connection.written == [asked_for(SELECTED)]
 
 
+async def test_a_copy_reaches_the_terminal_of_the_client_that_made_it(pymux):
+    """
+    Copy mode is a client's, and so is what it copies: a second person
+    on the session keeps their own clipboard. Lillecarl/pymux#470.
+    """
+    clients = {}
+    for name in ("copying", "watching"):
+        state = FakeClientState()
+        state.app, state.connection = DummyApplication(), FakeConnection()
+        clients[name] = state
+    pymux._client_states = {state.connection: state for state in clients.values()}
+    pane, view = a_selection(pymux)
+
+    with set_app(clients["copying"].app):
+        view.copy_selection()
+
+    assert clients["copying"].connection.written == [asked_for(SELECTED)]
+    assert clients["watching"].connection.written == []
+
+
 async def test_a_copy_reaches_the_paste_buffer_of_the_session(pymux):
     """
     Which is what `paste-buffer` reads.
@@ -126,7 +146,23 @@ async def test_a_copy_reaches_the_paste_buffer_of_the_session(pymux):
 async def test_the_clipboard_of_a_client_is_the_buffer_of_the_session():
     "The wiring the test above stands on."
     async with create_session() as (mux, state):
-        assert state.app.clipboard is mux.clipboard
+        mux.clipboard.set_text("shared")
+        assert state.app.clipboard.get_data().text == "shared"
+
+
+async def test_a_client_that_only_watches_copies_into_a_buffer_of_its_own():
+    """
+    A watcher may read the history and copy from it, and writes nothing
+    the others share: the paste buffer of the session stays as it was.
+    Lillecarl/pymux#470.
+    """
+    async with create_session() as (mux, state):
+        mux.clipboard.set_text("shared")
+        state.read_only = True
+        state.app.clipboard.set_text("watched")
+
+        assert mux.clipboard.get_data().text == "shared"
+        assert state.app.clipboard.get_data().text == "watched"
 
 
 @pytest.mark.parametrize("mode", [Clipboard.EXTERNAL, Clipboard.ON])

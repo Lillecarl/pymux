@@ -40,12 +40,11 @@ def copy_mode(pymux: Pymux, args: argparse.Namespace) -> None:
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    # **Not `read_only`, although tmux marks it.** Copy mode belongs to
-    # the pane, so a client that entered one stops the live screen for
-    # everybody else watching it. And the keys that drive it are
-    # prompt_toolkit's buffer keys, which `may_type` does not reach: a
-    # read-only client that entered could not scroll and could not
-    # leave. tmux marks the command and drops those keys, which is the
-    # same trap. Lillecarl/pymux#467.
-    parser = add_command(subparsers, copy_mode)
+    # **`read_only`, as tmux marks it.** Copy mode is the client's and
+    # reads a copy, so a person who only watches stops nothing for
+    # anybody. Its keys are the copy buffer's and `may_type` does not
+    # reach them, so that person can scroll and leave. tmux marks the
+    # command and then drops every key of such a client, so a read-only
+    # tmux client that enters is stuck. Lillecarl/pymux#470.
+    parser = add_command(subparsers, copy_mode, read_only=True)
     parser.add_argument("-u", dest="u", action="store_true", help="Accepted for tmux. Pymux does not page up yet.")

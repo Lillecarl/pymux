@@ -29,7 +29,7 @@ from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app, set_app
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.buffer import Buffer
-from prompt_toolkit.clipboard import ClipboardData, InMemoryClipboard
+from prompt_toolkit.clipboard import ClipboardData, DynamicClipboard, InMemoryClipboard
 from prompt_toolkit.completion import Completer, DynamicCompleter
 from prompt_toolkit.cursor_shapes import CursorShape, CursorShapeConfig
 from prompt_toolkit.data_structures import Size
@@ -312,6 +312,7 @@ class ClientState:
         "name": Keep.SAVED,
         "last_used": Keep.SAVED,
         "read_only": Keep.SAVED,
+        "watched_clipboard": Keep.DROPPED,
         "ignore_size": Keep.SAVED,
         "full_screen": Keep.SAVED,
         "theme": Keep.SAVED,
@@ -450,6 +451,10 @@ class ClientState:
         #: unless `add_command` marked it read only.
         #: Lillecarl/pymux#467.
         self.read_only = False
+
+        #: What copy mode copies while `read_only`, in place of the
+        #: paste buffer of the session.
+        self.watched_clipboard = InMemoryClipboard()
 
         #: Whether this client is left out of the size of the plane.
         #: `attach-session -r` sets this too: a person who watches a
@@ -871,8 +876,11 @@ class ClientState:
             input=self.input,
             # One buffer for the whole session. Copy mode in one client
             # and "paste-buffer" in another are the same buffer, and a
-            # pane that writes the clipboard fills it as well.
-            clipboard=pymux.clipboard,
+            # pane that writes the clipboard fills it as well. A client
+            # that only watches writes nothing the others share, so its
+            # copy mode copies into a buffer of its own.
+            # Lillecarl/pymux#470.
+            clipboard=DynamicClipboard(lambda: self.watched_clipboard if self.read_only else pymux.clipboard),
             # Read on every render: the detection of the outer
             # terminal can raise the depth after the app started.
             color_depth=lambda: self.color_depth,
@@ -2852,7 +2860,7 @@ class Pymux:
             # sequence for it: the option that says whether it goes
             # out lives here, and so does the check every payload
             # passes. Lillecarl/pymux#378.
-            copy_func=self.write_user_clipboard,
+            copy_func=self._copied_in_copy_mode,
             resize_func=resize,
             may_resize=may_resize,
             may_type=may_type,
@@ -3936,10 +3944,23 @@ exec pymux notify -u "$urgency" -- "$@"
 
         return False
 
-    def write_user_clipboard(self, text: str, selection: str = "c") -> None:
+    def _copied_in_copy_mode(self, text: str) -> None:
+        """
+        Copy mode is a client's, so what it copied goes to that client's
+        terminal and to nobody else's. Another person on the session
+        keeps their own clipboard. Lillecarl/pymux#470.
+        """
+        try:
+            client = self.get_client_state()
+        except ValueError:
+            client = None
+        self.write_user_clipboard(text, client=client)
+
+    def write_user_clipboard(self, text: str, selection: str = "c", client: ClientState | None = None) -> None:
         """
         Put what a person copied on the clipboard of their terminal, or
-        on the selection OSC 52's letter names: "p" is the primary.
+        on the selection OSC 52's letter names: "p" is the primary. With
+        `client`, on that client's terminal alone.
 
         Copy mode calls this, and so does a pane's wl-copy, which
         `wayland.py` lets through only under "on". **It is not `forward_osc`**, although the
@@ -3966,7 +3987,8 @@ exec pymux notify -u "$urgency" -- "$@"
                 # megabyte gets nothing, and has to know why.
                 logger.warning("The copy is too long for the clipboard.")
                 return
-            for connection in self._client_states:
+            connections = list(self._client_states) if client is None else [client.connection]
+            for connection in connections:
                 # No connection is a socket command's temporary
                 # client: nothing to send to. Lillecarl/pymux#493.
                 if connection is None:
