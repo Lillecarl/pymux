@@ -51,3 +51,4 @@ The build switch: the root `default.nix` passes `pipewire` and `wireplumber` to 
 | `key-profile` | session | `kitty` | Where terminals split on a key, a legacy program gets what the client's own terminal sends. This names the terminal for a client whose terminal does not name itself. |
 | `theme` | client | the theme nearest the terminal's own colours | Per client, because two people may sit at different screens. |
 | `full-screen` | client | off | On, one pane fills this terminal, with no status line. |
+| `status-fps` | session | off | On, the status line shows the frames a second this client gets, over the last five seconds, before the clock. Off because the number moves: an idle client then gets a frame each `status-interval`, and the number counts that frame too. `#{client_rate_down}` shows the bytes the same way. |

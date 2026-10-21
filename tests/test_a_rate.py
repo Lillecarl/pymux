@@ -5,14 +5,15 @@ The rules this judges: the first read has nothing to compare with and
 reads zero; later reads divide the bytes since a sample by the seconds
 since it; a count that stopped reads zero once a window has passed;
 and a rate prints in B/s, kB/s, MB/s or GB/s, with a decimal only
-under ten. Lillecarl/pymux#678.
+under ten. Lillecarl/pymux#678. A frame rate prints in fps.
+Lillecarl/pymux#596.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from pymux.rate import RATE_WINDOW, Rate, per_second
+from pymux.rate import RATE_WINDOW, Rate, frames_per_second, per_second
 
 
 def test_the_first_read_is_zero():
@@ -55,3 +56,8 @@ def test_reads_many_times_a_second_keep_few_samples():
 )
 def test_a_rate_picks_its_unit(rate, said):
     assert per_second(rate) == said
+
+
+@pytest.mark.parametrize(("rate", "said"), [(0, "0.0 fps"), (0.25, "0.2 fps"), (9.96, "10 fps"), (60.2, "60 fps")])
+def test_a_frame_rate_has_a_decimal_under_ten(rate, said):
+    assert frames_per_second(rate) == said

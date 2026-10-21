@@ -159,6 +159,9 @@ BELOW_MARK = "▾"
 #: hour and the minute in big numbers, and nothing else of it moves.
 CLOCK_FORMAT = "%H:%M"
 
+#: The room `status-fps` adds to `status-right-length`: " 120 fps".
+FPS_WIDTH = 8
+
 
 class Justify:
     "Justify enum for the status bar."
@@ -1446,7 +1449,13 @@ class LayoutManager:
         return self._format_status(self.pymux.status_left)
 
     def _get_status_right_tokens(self) -> str:
-        return self._format_status(self.pymux.status_right)
+        text = self._format_status(self.pymux.status_right)
+        if self.pymux.status_fps and text:
+            fps = format_pymux_string(
+                self.pymux, "#{client_fps}", session=self.client_state.session, client=self.client_state
+            )
+            return " %s%s" % (fps, text)
+        return text
 
     def _format_status(self, string: str) -> str:
         """
@@ -2210,7 +2219,12 @@ class LayoutManager:
                                 # Right.
                                 Window(
                                     height=1,
-                                    width=(lambda: D(max=self.pymux.status_right_length)),
+                                    width=(
+                                        lambda: D(
+                                            max=self.pymux.status_right_length
+                                            + (FPS_WIDTH if self.pymux.status_fps else 0)
+                                        )
+                                    ),
                                     dont_extend_width=True,
                                     align=WindowAlign.RIGHT,
                                     content=FormattedTextControl(self._get_status_right_tokens),

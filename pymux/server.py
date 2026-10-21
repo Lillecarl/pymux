@@ -188,6 +188,8 @@ class ServerConnection:
         # The pipe's counts start again on the next server's connection.
         "rate_down": Keep.DROPPED,
         "rate_up": Keep.DROPPED,
+        "frames_sent": Keep.DROPPED,
+        "rate_frames": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux, pipe_connection, may_attach: bool = True) -> None:
@@ -231,6 +233,10 @@ class ServerConnection:
         #: the pipe's counts. Lillecarl/pymux#678.
         self.rate_down = Rate()
         self.rate_up = Rate()
+        #: The frames this client was sent, and what `#{client_fps}`
+        #: reads off them. Lillecarl/pymux#596.
+        self.frames_sent = 0
+        self.rate_frames = Rate()
 
         #: The scope the background work of this connection runs in.
         #: `serve()` opens it, so every task of a client ends when that
@@ -1358,6 +1364,9 @@ class ServerConnection:
         except BrokenPipeError:
             self.detach_and_close()
 
+    def _frame_went_out(self) -> None:
+        self.frames_sent += 1
+
     def _create_app(
         self,
         color_depth: ColorDepth = ColorDepth.DEPTH_8_BIT,
@@ -1375,7 +1384,7 @@ class ServerConnection:
         :param session: The session this client is on. Without one it is
             the session a person looked at last.
         """
-        stdout = _SocketStdout(self._send_packet, self.pymux.counters) if start else _NoStdout()
+        stdout = _SocketStdout(self._send_packet, self.pymux.counters, self._frame_went_out) if start else _NoStdout()
         output = _FrameOutput(
             cast(TextIO, stdout),
             lambda: self.size,
@@ -1579,9 +1588,11 @@ class _SocketStdout:
     client.
     """
 
-    def __init__(self, send_packet: Callable, counters=None) -> None:
+    def __init__(self, send_packet: Callable, counters=None, frame_went_out: Callable[[], None] | None = None) -> None:
         self.send_packet = send_packet
         self.counters = counters
+        #: Told of each frame, for the count of the one client it goes to.
+        self.frame_went_out = frame_went_out
         self._buffer: list[str] = []
 
     def write(self, data: str) -> int:
@@ -1596,6 +1607,8 @@ class _SocketStdout:
         written = "".join(self._buffer)
         if self.counters is not None:
             self.counters.frame_went_out(len(written))
+        if self.frame_went_out is not None:
+            self.frame_went_out()
 
         self.send_packet({Field.CMD: Packet.OUT, Field.DATA: written})
         self._buffer = []

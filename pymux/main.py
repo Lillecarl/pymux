@@ -1326,6 +1326,7 @@ class Pymux:
         "paint_screen": Keep.SAVED,
         "remain_on_exit": Keep.SAVED,
         "render_mode": Keep.SAVED,
+        "status_fps": Keep.SAVED,
         "status_interval": Keep.SAVED,
         "status_justify": Keep.SAVED,
         "status_keys_vi_mode": Keep.SAVED,
@@ -1398,6 +1399,10 @@ class Pymux:
         # who knows the keys turns it off; a person who does not yet
         # reads the list instead of a manual. Lillecarl/pymux#29.
         self.which_key = False
+        # Draw the frames a second this client gets before the clock.
+        # Off: the number moves, so it costs an idle client a frame each
+        # `status-interval`. Lillecarl/pymux#596.
+        self.status_fps = False
         self.enable_bell = True
 
         # Who may write the clipboard of the person at the keyboard.

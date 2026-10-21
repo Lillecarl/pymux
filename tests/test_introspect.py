@@ -219,6 +219,19 @@ async def test_frame_that_went_out_is_counted():
     assert counters.frame_bytes == len("hello there")
 
 
+async def test_a_frame_is_counted_for_its_client():
+    "What `#{client_fps}` reads. Lillecarl/pymux#596."
+    told = []
+    stdout = _SocketStdout(lambda packet: None, None, lambda: told.append(1))
+
+    stdout.write("one")
+    stdout.flush()
+    stdout.write("two")
+    stdout.flush()
+
+    assert len(told) == 2
+
+
 async def test_create_server_with_no_counters_still_writes(create_server):
     "The counting is not what a frame is for."
     sent = []

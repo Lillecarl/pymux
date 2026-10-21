@@ -24,7 +24,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, NamedTuple
 
 from pymux.commands import CommandException
-from pymux.rate import per_second
+from pymux.rate import frames_per_second, per_second
 
 if TYPE_CHECKING:
     from pymux.arrangement import Pane, Window
@@ -683,6 +683,17 @@ def _client_rate(direction: str, rate: str) -> Callable[[FormatContext], str]:
     return rate_of
 
 
+def _client_fps(context: FormatContext) -> str:
+    """
+    The frames a second this client gets, over the last few seconds.
+    What `status-fps` draws. Lillecarl/pymux#596.
+    """
+    connection = _connection_of(context)
+    if connection is None:
+        return ""
+    return frames_per_second(connection.rate_frames.read(connection.frames_sent, time.monotonic()))
+
+
 def _client_readonly(context: FormatContext) -> str:
     "Whether this client only watches. tmux spells it the same way."
     client = context.client
@@ -776,6 +787,7 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "client_bytes_up": _client_bytes("bytes_in"),
     "client_rate_down": _client_rate("bytes_out", "rate_down"),
     "client_rate_up": _client_rate("bytes_in", "rate_up"),
+    "client_fps": _client_fps,
     "client_session": lambda c: c.client.session.name if c.client else "",
     # Server.
     "socket_path": _socket_path,

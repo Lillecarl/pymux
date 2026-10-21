@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from collections import deque
 
-__all__ = ["RATE_WINDOW", "Rate", "per_second"]
+__all__ = ["RATE_WINDOW", "Rate", "frames_per_second", "per_second"]
 
 #: How far back a rate looks, in seconds: past the 4 s of the default
 #: `status-interval`, so a status line always has a sample that old.
@@ -48,6 +48,13 @@ class Rate:
         if now <= then:
             return 0.0
         return (total - before) / (now - then)
+
+
+def frames_per_second(rate: float) -> str:
+    "A frame rate as a person reads it: `0.3 fps`, `12 fps`."
+    if rate < 9.95:
+        return "%.1f fps" % (rate,)
+    return "%d fps" % (round(rate),)
 
 
 def per_second(rate: float) -> str:
