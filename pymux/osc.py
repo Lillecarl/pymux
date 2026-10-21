@@ -271,14 +271,19 @@ def ftcs_of(param: str) -> tuple[str, int | None] | None:
     of the command and `D` its end. Only `D` carries `;status`, a
     number from 0 to 255; a bare `D` aborts the command, which clears
     the zone instead of recording a status.
+
+    **Options after the mark are read past**, `A;cl=m` and `D;0;aid=7`
+    alike: shell integrations send them, and WezTerm documents both.
+    tmux's `input_osc_133` reads the letter alone. Lillecarl/pymux#720.
     """
-    letter, sep, status = param.partition(";")
+    letter, sep, rest = param.partition(";")
     if letter not in _FTCS_MARKS:
         return None
     if letter != "D":
-        return (letter, None) if not sep else None
+        return (letter, None)
     if not sep:
         return ("D", None)
+    status = rest.partition(";")[0]
     if not status.isdigit() or not 0 <= int(status) <= 255:
         return None
     return ("D", int(status))

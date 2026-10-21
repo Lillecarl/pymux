@@ -218,6 +218,12 @@ def test_copy_rejects_empty_and_not_base64(param):
         ("D", ("D", None)),
         ("D;0", ("D", 0)),
         ("D;255", ("D", 255)),
+        # Options a shell integration sends after the mark.
+        # Lillecarl/pymux#720.
+        ("A;cl=m", ("A", None)),
+        ("A;aid=7;k=s", ("A", None)),
+        ("C;", ("C", None)),
+        ("D;1;aid=7", ("D", 1)),
     ],
 )
 def test_ftcs_names_zone_and_status(param, wanted):
@@ -230,8 +236,8 @@ def test_ftcs_names_zone_and_status(param, wanted):
         "",
         "E",
         "AB",
-        "A;x",
         "D;x",
+        "D;aid=7",
         "D;256",
         "D;-1",
     ],
