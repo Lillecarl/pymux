@@ -69,10 +69,12 @@ xterm 4 Test of double-sized characters #2 18859
 # `differences` crops the two pictures to the rectangle they share and
 # measures that, so the 480 pixels of width that only one of them has
 # are not in the count.
-xterm 4 Test of double-sized characters #3 14774
-xterm 4 Test of double-sized characters #4 17760
+xterm 4 Test of double-sized characters #3 14771
+xterm 4 Test of double-sized characters #4 17757
 
-# The same again, on a screen that also blinks.
+# The same again, on a screen that also blinks. xterm draws the blinking
+# text bold for these pictures (`take_picture.py` says why), so both
+# sides show it. Lillecarl/pymux#597.
 xterm 4 Test of double-sized characters #5 20925
 
 # "Exactly half of the box should remain." vttest draws a box and makes
@@ -83,7 +85,7 @@ xterm 4 Test of double-sized characters #5 20925
 # xterm puts it (Lillecarl/pymux#115). It is not any more: the top row
 # of the two pictures is identical to the pixel. The doubling was what
 # moved it.
-xterm 4 Test of double-sized characters #6 5626
+xterm 4 Test of double-sized characters #6 10104
 
 # Item 9 is the screens that expose xterm's own bugs, one screen per
 # bug, and the pane is not xterm: its emulator answers each question
@@ -95,8 +97,8 @@ xterm 4 Test of double-sized characters #6 5626
 # Every count is the emulator's answer, not a fault of pymux, and the
 # pictures to read are the run's `differ/` directory.
 # Lillecarl/pymux#280.
-xterm 9 Test of known bugs / 2 Bug B: Scrolling region #1 4362
-xterm 9 Test of known bugs / 2 Bug B: Scrolling region #2 4898
+xterm 9 Test of known bugs / 2 Bug B: Scrolling region #1 4360
+xterm 9 Test of known bugs / 2 Bug B: Scrolling region #2 4894
 
 # **Three screens of item 9 draw closer to xterm than they did**, and
 # nothing said so. A count can never be smaller than the channel error
@@ -112,15 +114,7 @@ xterm 9 Test of known bugs / 2 Bug B: Scrolling region #2 4898
 # while this check was not a gate and nobody was reading it.
 xterm 9 Test of known bugs / 5 Bug E: Cursor move from double- to single-wide line #1 11716
 
-# One and two pixels. These three were recorded as no difference at
-# all, and they were never that: the old instrument weighed them at
-# under one whole channel of error over an 800 by 480 picture and
-# truncated it to zero. Lillecarl/pymux#368.
-xterm 9 Test of known bugs / 7 Wrap around with cursor addressing #1 1
-xterm 9 Test of known bugs / 8 Erase right half of double width lines #1 2
-xterm 9 Test of known bugs / 8 Erase right half of double width lines #3 2
-
-xterm 9 Test of known bugs / 8 Erase right half of double width lines #2 4570
-xterm 9 Test of known bugs / 8 Erase right half of double width lines #4 2273
-xterm 9 Test of known bugs / 8 Erase right half of double width lines #5 6841
-xterm 9 Test of known bugs / 8 Erase right half of double width lines #6 2273
+xterm 9 Test of known bugs / 8 Erase right half of double width lines #2 4568
+xterm 9 Test of known bugs / 8 Erase right half of double width lines #4 2272
+xterm 9 Test of known bugs / 8 Erase right half of double width lines #5 6840
+xterm 9 Test of known bugs / 8 Erase right half of double width lines #6 2272

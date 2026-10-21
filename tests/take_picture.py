@@ -744,6 +744,13 @@ def xterm_argv(command, background="black", foreground="white"):
         "+sb",  # No scrollbar.
         "-xrm",
         "xterm*cursorBlink: false",
+        # Nor can text that blinks. A window with no focus steps its
+        # blink phase only when xterm reads its pty, so the phase a
+        # picture caught was the count of writes before it: "4 Test of
+        # double-sized characters #5" read lit bare and dark through
+        # pymux, steadily, from the same SGR 5. Lillecarl/pymux#597.
+        "-xrm",
+        "xterm*showBlinkAsBold: true",
         "-xrm",
         # The fixture ends in an OSC 52, and xterm drops the clipboard
         # escape while this is off: no clipboard, no fence.
