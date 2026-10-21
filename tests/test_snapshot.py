@@ -622,22 +622,21 @@ def test_the_table_list_is_the_schema_in_order():
     assert _shape(live) == {name: shape for name, shape in _shape(db).items() if name in snapshot.WHOLE_TABLES}
 
 
-def test_a_version_21_snapshot_reads_as_viewing_no_job(pymux, tmp_path):
-    """
-    Version 22 keeps a pane that views a job. The build before refused
-    to write one. Lillecarl/pymux#715.
-    """
-    path = tmp_path / "v21.sqlite"
+def test_a_version_22_snapshot_reads_with_the_default_bitrates(pymux, tmp_path):
+    "Version 23 keeps a client's two sound bitrates. Lillecarl/pymux#674."
+    path = tmp_path / "v22.sqlite"
     snapshot.save(pymux, path)
     db = sqlite3.connect(path)
-    db.execute("DROP TABLE pane_viewers")
-    db.execute("PRAGMA user_version = 21")
+    db.execute("ALTER TABLE clients DROP COLUMN audio_speaker_bitrate")
+    db.execute("ALTER TABLE clients DROP COLUMN audio_microphone_bitrate")
+    db.execute("PRAGMA user_version = 22")
     db.commit()
     db.close()
 
     stepped = snapshot._open(path)
     assert _shape(stepped) == _shape_of_a_fresh_snapshot()
-    assert stepped.execute("SELECT count(*) FROM pane_viewers").fetchall() == [(0,)]
+    bitrates = stepped.execute("SELECT DISTINCT audio_speaker_bitrate, audio_microphone_bitrate FROM clients")
+    assert bitrates.fetchall() in ([], [(None, None)])
 
 
 async def test_a_running_job_this_server_forked_is_refused(pymux, tmp_path):

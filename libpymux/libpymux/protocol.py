@@ -273,6 +273,9 @@ class Field(StrEnum):
     BUFFER = "buffer"
     CHANNELS = "channels"
     FRAME = "frame"
+    #: In `audio`, the bits a second the client's microphone encodes
+    #: at. Lillecarl/pymux#674.
+    BITRATE = "bitrate"
 
 
 class Codec(StrEnum):

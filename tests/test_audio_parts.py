@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import math
+import time
 
 import pytest
 
@@ -37,6 +38,7 @@ from pymux.jitter import (
     stats_every,
 )
 from pymux.main import Pymux
+from pymux.options import AudioBitrateOption, SetOptionError
 
 PIPEWIRE = {"pipewire": "/bin/pipewire", "wireplumber": "/bin/wireplumber"}
 
@@ -332,6 +334,8 @@ class _Client:
         self.audio = mode
         self.audio_rtt_multiplier = 2.0
         self.audio_frame = AudioFrame.MS_10
+        self.audio_speaker_bitrate = 128
+        self.audio_microphone_bitrate = 64
         self.message = ""
 
 
@@ -411,9 +415,12 @@ def test_the_person_is_told_when_their_microphone_is_refused(routed):
 def test_a_client_hears_its_options(routed):
     server, clients, links = routed
     clients[0].audio_rtt_multiplier = 3.5
+    clients[0].audio_speaker_bitrate = 256
+    clients[0].audio_microphone_bitrate = 24
     server.client_options_changed()
-    assert links["a"].sent[-1] == {"cmd": "audio", "data": "on", "frame": 10.0}
+    assert links["a"].sent[-1] == {"cmd": "audio", "data": "on", "frame": 10.0, "bitrate": 24000}
     assert links["a"].multiplier == 3.5
+    assert links["a"].speaker_bitrate == 256000
 
 
 def test_the_options_are_there():
@@ -509,3 +516,31 @@ def test_a_speaker_that_ran_dry_reports_only_a_gap(monkeypatch, comes_back_after
     now[0] += comes_back_after
     client.heard(_sound(encoder, 480))
     assert ({"cmd": "behind"} in sent) is reported
+
+
+def test_an_open_microphone_takes_a_new_bitrate():
+    "The server says a bitrate, and the next frame encodes at it. Lillecarl/pymux#674."
+    pytest.importorskip("opuslib")
+    from pymux.client import audio as client_audio
+
+    sent: list[dict] = []
+    client = client_audio.AudioClient(_Quiet(), sent.append)
+    client.heard({"cmd": "audio", "data": "on", "frame": 10.0, "bitrate": 32000})
+    client.heard({"cmd": "microphone", "data": True})
+    microphone = client._microphone
+    try:
+        assert microphone is not None and microphone.bitrate == 32000
+        client.heard({"cmd": "audio", "data": "on", "frame": 10.0, "bitrate": 24000})
+        microphone._hear(bytes(480 * 2))
+        deadline = time.monotonic() + 10
+        while not any(packet.get("cmd") == "sound" for packet in sent) and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert microphone._encoder.bitrate == 24000
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize("value", ["5", "511", "fast"])
+def test_a_bitrate_opus_cannot_encode_is_refused(value):
+    with pytest.raises(SetOptionError):
+        AudioBitrateOption("audio_speaker_bitrate")._read(value)

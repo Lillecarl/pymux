@@ -321,6 +321,32 @@ class AudioRttOption(PositiveFloatOption):
         pymux.audio.client_options_changed()
 
 
+class AudioBitrateOption(PositiveIntOption):
+    """
+    `audio-speaker-bitrate` or `audio-microphone-bitrate`, in kbit/s,
+    which the encoder takes at the next frame. Lillecarl/pymux#674.
+    """
+
+    #: What Opus encodes at: 6 to 510 kbit/s.
+    LOWEST = 6
+    HIGHEST = 510
+
+    def __init__(self, attribute_name: str) -> None:
+        super().__init__(attribute_name, scope=Scope.CLIENT)
+
+    @override
+    def _read(self, value: str) -> int:
+        number = super()._read(value)
+        if not self.LOWEST <= number <= self.HIGHEST:
+            raise SetOptionError("Expecting kbit/s from %d to %d." % (self.LOWEST, self.HIGHEST))
+        return number
+
+    @override
+    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+        super().set_value(pymux, value, target)
+        pymux.audio.client_options_changed()
+
+
 class FrameRateOption(PositiveIntOption):
     """
     `frame-rate`, which also says the window has one a person chose: that
@@ -1084,6 +1110,9 @@ ALL_CLIENT_OPTIONS = {
     "audio-rtt-multiplier": AudioRttOption("audio_rtt_multiplier", scope=Scope.CLIENT),
     # How much sound a packet carries, in ms: any size Opus encodes.
     "audio-frame": AudioFrameOption("audio_frame"),
+    # What the sound costs the link each way, in kbit/s. Lillecarl/pymux#674.
+    "audio-speaker-bitrate": AudioBitrateOption("audio_speaker_bitrate"),
+    "audio-microphone-bitrate": AudioBitrateOption("audio_microphone_bitrate"),
 }
 
 

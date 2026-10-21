@@ -52,6 +52,7 @@ RATE = 48000
 #: The most a frame of Opus holds, 60 ms: what a decoder is offered.
 MAX_FRAME = samples_per_frame(60)
 MICROPHONE_CHANNELS = 1
+#: What the microphone encodes at until the server says.
 MICROPHONE_BITRATE = 64000
 
 #: `fcntl`'s name for a pipe's size, which Python names from 3.10 on
@@ -102,6 +103,9 @@ class AudioClient:
         #: How long each frame is, both ways: the server says, from this
         #: client's `audio-frame`.
         self.frame_ms: float = DEFAULT_FRAME_MS
+        #: Bits a second the microphone encodes at: the server says, from
+        #: this client's `audio-microphone-bitrate`.
+        self.microphone_bitrate = MICROPHONE_BITRATE
         self.speaker_buffer = JitterBuffer(frame_ms=self.frame_ms)
         self._lock = threading.Lock()
         self._speaker: Stream | None = None
@@ -146,6 +150,11 @@ class AudioClient:
             frame_ms = packet.get(Field.FRAME)
             if isinstance(frame_ms, (int, float)) and frame_ms > 0 and frame_ms != self.frame_ms:
                 self._reframe(float(frame_ms))
+            bitrate = packet.get(Field.BITRATE)
+            if isinstance(bitrate, int) and bitrate > 0:
+                self.microphone_bitrate = bitrate
+                if self._microphone is not None:
+                    self._microphone.bitrate = bitrate
             if self.mode == ClientAudio.OFF:
                 self._close_speaker()
             if self.mode != ClientAudio.ON:
@@ -261,7 +270,7 @@ class AudioClient:
 
     def _open_microphone(self) -> None:
         if self._microphone is None and opuslib is not None:
-            self._microphone = _Microphone(self.devices, self._send, self.frame_ms)
+            self._microphone = _Microphone(self.devices, self._send, self.frame_ms, self.microphone_bitrate)
 
     def _close_microphone(self) -> None:
         microphone, self._microphone = self._microphone, None
@@ -280,15 +289,19 @@ class _Microphone:
     and no error. The server is told once, and says so to the person.
     """
 
-    def __init__(self, devices: Devices, send: Callable[[dict], None], frame_ms: float) -> None:
+    def __init__(self, devices: Devices, send: Callable[[dict], None], frame_ms: float, bitrate: int) -> None:
         assert opuslib is not None
         self._send = send
+        #: What the encoder takes before its next frame. Only this
+        #: thread's own loop touches the encoder: libopus is not safe
+        #: from two threads at once.
+        self.bitrate = bitrate
+        self._encoding_at = 0
         self._samples = samples_per_frame(frame_ms)
         self._silent_frames = round(SILENT_SECONDS * 1000 / frame_ms)
         self._frames: queue.Queue[bytes] = queue.Queue(maxsize=50)
         self._stop = threading.Event()
         self._encoder = opuslib.Encoder(RATE, MICROPHONE_CHANNELS, opuslib.APPLICATION_VOIP)
-        self._encoder.bitrate = MICROPHONE_BITRATE
         self._thread = threading.Thread(target=self._run, name="pymux-microphone", daemon=True)
         self._thread.start()
         try:
@@ -312,6 +325,8 @@ class _Microphone:
             silent = silent + 1 if frame.count(0) == len(frame) else 0
             if silent == self._silent_frames:
                 self._send({Field.CMD: Packet.MICROPHONE, Field.ERROR: "silent"})
+            if self._encoding_at != self.bitrate:
+                self._encoding_at = self._encoder.bitrate = self.bitrate
             self._send({Field.CMD: Packet.SOUND, Field.DATA: self._encoder.encode(frame, self._samples)})
 
     def close(self) -> None:

@@ -70,7 +70,7 @@ __all__ = ["SNAPSHOT_VERSION", "Snapshot", "load", "program_ids", "save", "start
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 22
+SNAPSHOT_VERSION = 23
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -90,6 +90,8 @@ _CLIENT_SETTING_TYPES: dict[str, type] = {
     "audio": ClientAudio,
     "audio_rtt_multiplier": float,
     "audio_frame": AudioFrame,
+    "audio_speaker_bitrate": int,
+    "audio_microphone_bitrate": int,
 }
 CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
 CLIENT_COLUMNS = ("client_id", "session_id", "previous_session_id", *CLIENT_SETTINGS, "modes", "connected")
@@ -99,15 +101,11 @@ CLIENT_COLUMNS = ("client_id", "session_id", "previous_session_id", *CLIENT_SETT
 #: change of shape adds the one step from the version before it and
 #: deletes any older step. Version 12 is the first a holder hands over.
 STEPS: dict[int, str] = {
-    # 22 keeps a pane that views a job. The build before refused to
-    # write one, so the table starts empty. Lillecarl/pymux#715.
-    21: """
-CREATE TABLE pane_viewers(
-  pane_id INTEGER PRIMARY KEY REFERENCES panes(pane_id),
-  job_id INTEGER NOT NULL REFERENCES jobs(job_id),
-  pane_width INTEGER NOT NULL,
-  pane_height INTEGER NOT NULL
-);
+    # 23 keeps a client's two sound bitrates. A null reads as the
+    # default. Lillecarl/pymux#674.
+    22: """
+ALTER TABLE clients ADD COLUMN audio_speaker_bitrate INTEGER;
+ALTER TABLE clients ADD COLUMN audio_microphone_bitrate INTEGER;
 """,
 }
 
@@ -269,7 +267,9 @@ CREATE TABLE clients(
   browser_profile TEXT,
   audio TEXT,
   audio_rtt_multiplier REAL,
-  audio_frame TEXT
+  audio_frame TEXT,
+  audio_speaker_bitrate INTEGER,
+  audio_microphone_bitrate INTEGER
 );
 CREATE TABLE client_windows(
   client_id TEXT NOT NULL REFERENCES clients(client_id),

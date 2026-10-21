@@ -324,6 +324,8 @@ class ClientState:
         "audio": Keep.SAVED,
         "audio_rtt_multiplier": Keep.SAVED,
         "audio_frame": Keep.SAVED,
+        "audio_speaker_bitrate": Keep.SAVED,
+        "audio_microphone_bitrate": Keep.SAVED,
         "matched": Keep.REBUILT,  # the nearest theme to the colours the terminal answers
         # Where the person was: a prefix held, a key table, a prompt,
         # a question, a menu, a chooser.
@@ -441,6 +443,10 @@ class ClientState:
         self.audio = ClientAudio.ON
         self.audio_rtt_multiplier = 2.0
         self.audio_frame = AudioFrame.AUTO
+        #: kbit/s of Opus each way: music needs the 128, a voice the 64.
+        #: Lillecarl/pymux#674.
+        self.audio_speaker_bitrate = 128
+        self.audio_microphone_bitrate = 64
 
         #: Whether this client only watches. `attach-session -r` sets
         #: it, and nothing clears it: tmux's `-r` only sets as well

@@ -84,9 +84,6 @@ QUANTUM = samples_per_frame(QUANTUM_MS)
 MAX_FRAME = samples_per_frame(60)
 SPEAKER_CHANNELS = 2
 MICROPHONE_CHANNELS = 1
-#: Enough for music. Opus spends less on silence by itself.
-SPEAKER_BITRATE = 128000
-MICROPHONE_BITRATE = 64000
 
 #: The `sound` packets a slow link may hold before the oldest go.
 #: Sound that comes too late is worth less than the next sound.
@@ -319,6 +316,8 @@ class AudioLink:
         #: counted since: the times of gaps the client heard, and of sound
         #: let go as late here.
         self.adaptive = False
+        #: The client's `audio-speaker-bitrate`, in bits a second.
+        self.speaker_bitrate = 128000
         self._raised = -math.inf
         self._trouble: deque[float] = deque()
         self.microphone = JitterBuffer(frame_ms=self.frame_ms)
@@ -518,7 +517,7 @@ class AudioServer:
         self._steer_microphone()
 
     def client_options_changed(self) -> None:
-        "A client's `audio` or `audio-rtt-multiplier` moved."
+        "A client's sound option moved."
         for link in self.links.values():
             self._tell(link)
         self._steer_microphone()
@@ -554,7 +553,15 @@ class AudioServer:
             frame_ms = frame.ms
             link.adaptive = False
         link.reframe(frame_ms)
-        link.send({Field.CMD: Packet.AUDIO, Field.DATA: str(client_state.audio), Field.FRAME: frame_ms})
+        link.speaker_bitrate = client_state.audio_speaker_bitrate * 1000
+        link.send(
+            {
+                Field.CMD: Packet.AUDIO,
+                Field.DATA: str(client_state.audio),
+                Field.FRAME: frame_ms,
+                Field.BITRATE: client_state.audio_microphone_bitrate * 1000,
+            }
+        )
         link.retarget(client_state.audio_rtt_multiplier)
 
     def raise_frame(self, link: AudioLink, now: float) -> None:
@@ -652,7 +659,6 @@ class AudioServer:
         runtime = None if shared else runtime_dir_of(self.pymux.socket_name)
         work = tempfile.mkdtemp(prefix="pymux-audio-conf-")
         encoder = opuslib.Encoder(RATE, SPEAKER_CHANNELS, opuslib.APPLICATION_AUDIO)
-        encoder.bitrate = SPEAKER_BITRATE
         try:
             async with anyio.create_task_group() as tasks:
                 environment = dict(os.environ)
@@ -751,9 +757,11 @@ class AudioServer:
     async def _speak(self, argv: list[str], environment: dict[str, str], encoder: Encoder) -> None:
         """
         What panes play, from the speaker's `pw-cat` to the current
-        client as Opus, in frames as long as that client takes.
+        client as Opus, in frames as long as that client takes and at
+        its bitrate. Opus takes a new bitrate between two frames.
         """
         held = bytearray()
+        bitrate = None
         async with self._program(argv, environment, stdout=PIPE) as process:
             assert process.stdout is not None
             async for chunk in process.stdout:
@@ -767,6 +775,8 @@ class AudioServer:
                     pcm = bytes(held[:whole])
                     del held[:whole]
                     if link is not None:
+                        if bitrate != link.speaker_bitrate:
+                            bitrate = encoder.bitrate = link.speaker_bitrate
                         link.send(
                             {
                                 Field.CMD: Packet.SOUND,
