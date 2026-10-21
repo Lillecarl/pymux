@@ -16,6 +16,7 @@ import math
 import os
 import shutil
 import socket
+import statistics
 import struct
 import sys
 import threading
@@ -59,17 +60,32 @@ def tone(hz: float, seconds: float, channels: int, start: int = 0) -> bytes:
 CANDIDATES = range(200, 1600, 10)
 
 
+#: The window `loudest` weighs a frequency over: a quarter second
+#: resolves about 4 Hz, finer than the candidates.
+QUARTER = RATE // 4
+
+
 def loudest(pcm: bytes, channels: int) -> int:
     """
-    The loudest frequency in the middle quarter second of the first
-    channel, by Goertzel.
+    The loudest frequency of the first channel, by Goertzel: the median
+    of what each quarter second says.
 
     Not zero crossings. A glitch -- frames a lagging consumer dropped at
     the buffer's cap -- adds crossings that are not the tone, and under
-    the gate's load that was most of a second. A glitch spreads its
-    energy over every frequency; a wrong rate moves the peak.
+    the gate's load that was most of a second.
+
+    Not one window either. A gap or a dropped frame moves the phase,
+    and two of 20 ms in one quarter second move its peak one candidate
+    away: `870 == 880` under the gate, Lillecarl/pymux#683. Glitches
+    come in a cluster, so the other windows outvote it. A wrong rate
+    moves every window the same way, and the median still sees it.
     """
-    window = _middle(pcm, channels)
+    first = struct.unpack("<%dh" % (len(pcm) // 2), pcm)[::channels]
+    windows = [first[at : at + QUARTER] for at in range(0, len(first) - QUARTER + 1, QUARTER)]
+    return statistics.median_low([_peak(window) for window in windows])
+
+
+def _peak(window: tuple[int, ...]) -> int:
     return max(CANDIDATES, key=lambda hz: _power(window, hz))
 
 
@@ -103,6 +119,33 @@ def silent_frames(pcm: bytes, channels: int = 1) -> int:
     "How many 20 ms frames of sound are all near zero, in the first channel."
     samples = struct.unpack("<%dh" % (len(pcm) // 2), pcm)[::channels]
     return sum(1 for at in range(0, len(samples), FRAME) if max(map(abs, samples[at : at + FRAME]), default=0) < 100)
+
+
+def _with_gaps(hz: float, gaps_in_second_window: int) -> bytes:
+    """
+    A second of mono tone, with 20 ms of silence put in its second
+    quarter this many times. Each gap delays the tone after it, as a
+    speaker that ran dry does.
+    """
+    samples = list(struct.unpack("<%dh" % RATE, tone(hz, 1.0, 1)))
+    gap = [0] * (RATE // 50)
+    for n in reversed(range(gaps_in_second_window)):
+        at = QUARTER + QUARTER * (2 * n + 1) // (2 * gaps_in_second_window)
+        samples[at:at] = gap
+    return struct.pack("<%dh" % RATE, *samples[:RATE])
+
+
+def test_two_glitches_move_one_window_and_lose_the_vote():
+    "Measured by hand for Lillecarl/pymux#683, and the reason `loudest` votes."
+    glitched = _with_gaps(880, 2)
+    second = struct.unpack("<%dh" % RATE, glitched)[QUARTER : 2 * QUARTER]
+    assert _peak(second) != 880
+    assert loudest(glitched, 1) == 880
+
+
+@pytest.mark.parametrize("off", [1.01, 44100 / 48000])
+def test_a_wrong_rate_still_moves_the_vote(off):
+    assert loudest(tone(880 * off, 1.0, 1), 1) != 880
 
 
 class _Ticking:
