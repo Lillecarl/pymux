@@ -3,16 +3,18 @@ What windows, panes, sessions and clients are, as live SQL tables.
 
 The objects stay the truth, and these tables follow them the way the
 job store follows `JobTable`: whatever changes them marks the store,
-and the store writes its tables again a moment later (`WRITE_AFTER`),
-whole. So a burst of changes costs one write, and nothing reads a step
-half done. A reader (`sql`) writes what is marked before it asks, so
-it never reads the moment's lag. Step 5 of Lillecarl/pymux#399; Carl
-chose the shape.
+and a moment later (`WRITE_AFTER`) the store writes the rows that
+changed since its last write and deletes the rows whose objects are
+gone (`tables.ChangedRows`). So a burst of changes costs one write, a
+keystroke costs the rows it changed and not the whole server, and
+nothing reads a step half done. A reader (`sql`) has the store write
+first, so it never reads the moment's lag. Step 5 of
+Lillecarl/pymux#399, and Lillecarl/pymux#557; Carl chose the shape.
 
 The schema is the snapshot's own, up to the jobs (`tables.LIVE_SCHEMA`),
-and the snapshot's writer fills it. No screen goes in, ever: what a
-program draws is not window management, and only the hand-over file of
-an upgrade may hold it.
+and the snapshot's rows fill it (`snapshot.rows_of`). No screen goes in,
+ever: what a program draws is not window management, and only the
+hand-over file of an upgrade may hold it.
 
 **One connection, on the loop thread.** A mark comes from a key
 binding or a command handler, which are not coroutines, and the write
@@ -30,7 +32,7 @@ from typing import TYPE_CHECKING
 import anyio
 
 from .log import logger
-from .tables import LIVE_SCHEMA, WHOLE_TABLES
+from .tables import LIVE_ROWS, LIVE_SCHEMA, ChangedRows
 
 if TYPE_CHECKING:
     from .main import Pymux
@@ -64,6 +66,7 @@ class LiveStore:
         # tries again.
         self.db = sqlite3.connect(self.uri, uri=True, timeout=0)
         self.db.executescript(LIVE_SCHEMA)
+        self._rows = ChangedRows(LIVE_ROWS)
         #: Something changed since the last write.
         self.dirty = True
         self._woken: anyio.Event | None = None
@@ -74,14 +77,13 @@ class LiveStore:
         if self._woken is not None:
             self._woken.set()
 
-    def flush(self, pymux: Pymux) -> None:
-        "Write the tables again, if anything changed since the last time."
+    def write(self, pymux: Pymux) -> None:
+        "Write the rows that changed since the last write, if anything was marked."
         if not self.dirty:
             return
         with self.db:
-            for table in WHOLE_TABLES:
-                self.db.execute("DELETE FROM %s" % table)
-            self._snapshot.write_tables(pymux, self.db)
+            written = self._rows.write(self.db, self._snapshot.rows_of(pymux))
+        self._rows.written = written
         self.dirty = False
 
     async def keep(self, pymux: Pymux) -> None:
@@ -93,7 +95,7 @@ class LiveStore:
         while True:
             self._woken = anyio.Event()
             try:
-                self.flush(pymux)
+                self.write(pymux)
             except Exception:
                 logger.exception("The live store could not write its tables.")
                 await anyio.sleep(RETRY_AFTER)
@@ -102,7 +104,7 @@ class LiveStore:
             # Not at once: a write in the step after a key lands before
             # the frame that answers it, and a person typing waits for
             # it. Measured, 0.7 ms on the median round trip. A reader
-            # flushes first, so it never sees the wait.
+            # has the store write first, so it never sees the wait.
             await anyio.sleep(WRITE_AFTER)
 
     def close(self) -> None:

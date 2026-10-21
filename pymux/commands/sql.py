@@ -137,7 +137,7 @@ async def _ask(pymux: Pymux, args: argparse.Namespace, query: str, params: dict[
     scope = anyio.fail_after(bound) if bound else nullcontext()
     # A change made in this loop step, by the command before on the same
     # line, is not written yet.
-    pymux.live.flush(pymux)
+    pymux.live.write(pymux)
     try:
         async with pymux.jobs.store.reader() as conn:
             try:

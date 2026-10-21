@@ -40,14 +40,14 @@ COMMANDS = (
 
 
 def _tables(db: sqlite3.Connection) -> dict[str, list[tuple]]:
-    return {table: sorted(db.execute("SELECT * FROM %s" % table).fetchall(), key=repr) for table in tables.WHOLE_TABLES}
+    return {table: sorted(db.execute("SELECT * FROM %s" % table).fetchall(), key=repr) for table in tables.LIVE_TABLES}
 
 
 def _now(pymux) -> dict[str, list[tuple]]:
     "What the writer makes of the objects as they are."
     scratch = sqlite3.connect(":memory:")
     scratch.executescript(tables.LIVE_SCHEMA)
-    snapshot.write_tables(pymux, scratch)
+    tables.insert(scratch, snapshot.rows_of(pymux))
     return _tables(scratch)
 
 
@@ -56,7 +56,7 @@ async def _caught_up(pymux, what: str) -> None:
     deadline = anyio.current_time() + 10 * live.WRITE_AFTER
     while True:
         now = _now(pymux)
-        behind = [table for table in tables.WHOLE_TABLES if _tables(pymux.live.db)[table] != now[table]]
+        behind = [table for table in tables.LIVE_TABLES if _tables(pymux.live.db)[table] != now[table]]
         if not behind:
             return
         assert anyio.current_time() < deadline, "after %s the live store is behind in %s" % (what, behind)
@@ -67,7 +67,7 @@ def test_the_live_store_holds_no_screen_and_no_job():
     db = sqlite3.connect(":memory:")
     db.executescript(tables.LIVE_SCHEMA)
     held = {name for (name,) in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
-    assert held == set(tables.WHOLE_TABLES)
+    assert held == set(tables.LIVE_TABLES)
     assert not held & {"pane_programs", "screen_appearances", "screen_rows", "jobs", "job_tags", "job_output"}
 
 
@@ -108,3 +108,26 @@ async def test_the_live_store_follows_every_kind_of_change(pymux, tmp_path):
             while connection.client_state.has_prefix:
                 await anyio.sleep(0.02)
         await _caught_up(pymux, "letting go of the prefix")
+
+
+async def test_a_change_writes_its_own_rows_and_no_others(pymux):
+    "Lillecarl/pymux#557: a keystroke costs what it changed, not the whole server."
+    async with pymux.running(), attached(pymux) as session:
+        await shows(session, "$")
+        with set_app(pymux.connections[-1].client_state.app):
+            for _ in range(5):
+                pymux.handle_command("new-window")
+            await settled(session, 0.05)
+        pymux.live.mark()
+        pymux.live.write(pymux)
+        held = sum(len(rows) for rows in _tables(pymux.live.db).values())
+
+        pane = pymux.arrangement.get_active_pane()
+        pane.bell = True
+        before = pymux.live.db.total_changes
+        pymux.live.mark()
+        pymux.live.write(pymux)
+
+    # The pane's row, deleted and inserted again.
+    assert pymux.live.db.total_changes - before == 2, held
+    assert held > 30

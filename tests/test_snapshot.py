@@ -628,7 +628,7 @@ def _shape_of_a_fresh_snapshot() -> dict[str, list[tuple]]:
 
 
 def test_the_table_list_is_the_schema_in_order():
-    "`WHOLE_TABLES` and `LIVE_SCHEMA` are cut from it by name. Lillecarl/pymux#555."
+    "`LIVE_TABLES` and `LIVE_SCHEMA` are cut from it by name. Lillecarl/pymux#555."
     db = sqlite3.connect(":memory:")
     db.executescript(tables.SCHEMA)
     made = [row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY rowid")]
@@ -636,8 +636,8 @@ def test_the_table_list_is_the_schema_in_order():
 
     live = sqlite3.connect(":memory:")
     live.executescript(tables.LIVE_SCHEMA)
-    assert set(_shape(live)) == set(tables.WHOLE_TABLES)
-    assert _shape(live) == {name: shape for name, shape in _shape(db).items() if name in tables.WHOLE_TABLES}
+    assert set(_shape(live)) == set(tables.LIVE_TABLES)
+    assert _shape(live) == {name: shape for name, shape in _shape(db).items() if name in tables.LIVE_TABLES}
 
 
 def test_a_version_24_snapshot_reads_with_no_bell_and_bells_monitored(pymux, tmp_path):

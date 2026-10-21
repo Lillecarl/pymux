@@ -63,10 +63,11 @@ from .pipes.posix import PosixSocketListener
 from .session import Session
 from .tables import (
     JOB_TABLES,
+    LIVE_ROWS,
     SCHEMA,
     SCREEN_TABLES,
-    WHOLE_TABLES,
     AppearanceRow,
+    ChangedRows,
     ClientRow,
     ClientWindowRow,
     ColumnWidthRow,
@@ -311,6 +312,7 @@ class Snapshot:
         self.db.execute("PRAGMA user_version = %d" % SNAPSHOT_VERSION)
         self.freezers: dict[int, Freezer] = {}
         self.jobs_written: set[int] = set()
+        self.rows = ChangedRows(LIVE_ROWS)
 
     def write(self, pymux: Pymux) -> None:
         "Write what `pymux` holds now over what the write before held."
@@ -324,9 +326,7 @@ class Snapshot:
                 # Only the holder can hand a program to the next server.
                 raise SnapshotError("job %d runs and was forked by this server, not by its holder" % job.job_id)
         with self.db:
-            for table in WHOLE_TABLES:
-                self.db.execute("DELETE FROM %s" % table)
-            write_tables(pymux, self.db)
+            written = self.rows.write(self.db, rows_of(pymux))
             self._write_jobs(jobs)
             alive = {pane.pane_id for pane in panes}
             for gone in set(self.freezers) - alive:
@@ -335,6 +335,7 @@ class Snapshot:
                     self.db.execute("DELETE FROM %s WHERE pane_id = ?" % table, (gone,))
             for pane in panes:
                 self._write_program(pane)
+        self.rows.written = written
 
     def _write_jobs(self, jobs: list[Job]) -> None:
         db = self.db
@@ -508,11 +509,6 @@ def _refuse_the_server(pymux: Pymux) -> None:
         # and this process ends: the script that waits would fail.
         if channel.waiters or channel.lockers:
             raise SnapshotError("a command waits on channel %s; signal it first" % name)
-
-
-def write_tables(pymux: Pymux, db: sqlite3.Connection) -> None:
-    "Every table of `LIVE_SCHEMA`, from what `pymux` holds now, into empty ones."
-    insert(db, rows_of(pymux))
 
 
 def rows_of(pymux: Pymux) -> Iterator[Row]:

@@ -137,7 +137,7 @@ async def test_the_live_store_writes_while_questions_read():
         async def write() -> None:
             for _ in range(200):
                 pymux.live.mark()
-                pymux.live.flush(pymux)
+                pymux.live.write(pymux)
                 await anyio.sleep(0)
 
         # The answers themselves are not the question here.

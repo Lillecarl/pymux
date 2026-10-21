@@ -19,12 +19,14 @@ from dataclasses import Field, dataclass, fields
 from typing import Any, ClassVar, Protocol
 
 __all__ = [
+    "LIVE_ROWS",
     "LIVE_SCHEMA",
+    "LIVE_TABLES",
     "ROWS",
     "SCHEMA",
     "SCREEN_TABLES",
     "TABLES",
-    "WHOLE_TABLES",
+    "ChangedRows",
     "insert",
     "select",
 ]
@@ -320,10 +322,9 @@ JOB_TABLES = ("jobs", "job_tags", "job_output")
 #: A pane's program and its screen, which only the transition holds.
 SCREEN_TABLES = ("pane_programs", "screen_appearances", "screen_rows")
 
-#: The tables a later write replaces whole. A finished job never
-#: changes, and the screens' tables take only what changed since the
-#: write before.
-WHOLE_TABLES = tuple(table for table in TABLES if table not in JOB_TABLES + SCREEN_TABLES)
+#: The tables of window management, which the live store holds. A
+#: snapshot holds the jobs and the screens beside them.
+LIVE_TABLES = tuple(table for table in TABLES if table not in JOB_TABLES + SCREEN_TABLES)
 
 
 def _schema_of(tables: tuple[str, ...]) -> str:
@@ -337,10 +338,10 @@ def _schema_of(tables: tuple[str, ...]) -> str:
     return "".join("%s;\n" % made[table] for table in tables)
 
 
-#: The tables of `WHOLE_TABLES`, which are what the live store holds:
-#: no job, which the job store holds live, and no screen, which never
-#: goes in a live store (Lillecarl/pymux#399).
-LIVE_SCHEMA = _schema_of(WHOLE_TABLES)
+#: The schema of `LIVE_TABLES`: no job, which the job store holds
+#: live, and no screen, which never goes in a live store
+#: (Lillecarl/pymux#399).
+LIVE_SCHEMA = _schema_of(LIVE_TABLES)
 
 
 @dataclass(frozen=True, slots=True)
@@ -735,6 +736,10 @@ ROWS = (
 )
 
 
+#: The rows of `LIVE_TABLES`.
+LIVE_ROWS = tuple(row for row in ROWS if row.TABLE in LIVE_TABLES)
+
+
 class Row(Protocol):
     TABLE: ClassVar[str]
     KEY: ClassVar[tuple[str, ...]]
@@ -772,6 +777,57 @@ def insert(db: sqlite3.Connection, rows: Iterable[Row], replace: bool = False) -
     for kind, batch in by_kind.items():
         statement, names = _insert_of(kind, replace)
         db.executemany(statement, [[getattr(row, name) for name in names] for row in batch])
+
+
+#: Each table's rows by key, as a `ChangedRows` last wrote them.
+Written = dict[type[Row], dict[tuple, Row]]
+
+
+@functools.cache
+def _delete_of(kind: type[Row]) -> str:
+    return "DELETE FROM %s WHERE %s" % (kind.TABLE, " AND ".join("%s = ?" % name for name in kind.KEY))
+
+
+def key_of(row: Row) -> tuple:
+    return tuple(getattr(row, name) for name in row.KEY)
+
+
+class ChangedRows:
+    """
+    Writes the rows of some tables, and after the first time only the
+    rows that differ from what it wrote last: a row whose key is gone is
+    deleted, and a new or changed one inserted. Lillecarl/pymux#557.
+
+    **A changed row is deleted and inserted, never replaced.**
+    `notifications` and `notification_routes` hold a `position` that is
+    unique beyond the key, and `INSERT OR REPLACE` would delete whatever
+    neighbour holds that position now. Every delete runs before every
+    insert, so the positions are free; a row that takes another's
+    position has changed too, so it is in the inserts.
+
+    **`written` moves only after the caller's transaction commits.** A
+    write that rolls back and moved it anyway would make the retry see
+    nothing to do.
+    """
+
+    def __init__(self, kinds: Iterable[type[Row]]) -> None:
+        self.kinds = tuple(kinds)
+        self.written: Written = {kind: {} for kind in self.kinds}
+
+    def write(self, db: sqlite3.Connection, rows: Iterable[Row]) -> Written:
+        "Write the difference, inside the caller's transaction, and answer what the tables hold then."
+        now: Written = {kind: {} for kind in self.kinds}
+        for row in rows:
+            now[type(row)][key_of(row)] = row
+        inserts: list[Row] = []
+        for kind in self.kinds:
+            before, after = self.written[kind], now[kind]
+            stale = [key for key, row in before.items() if after.get(key) != row]
+            if stale:
+                db.executemany(_delete_of(kind), stale)
+            inserts.extend(row for key, row in after.items() if before.get(key) != row)
+        insert(db, inserts)
+        return now
 
 
 def select[R: Row](db: sqlite3.Connection, kind: type[R], where: str = "", *params) -> list[R]:
