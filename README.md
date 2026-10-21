@@ -43,6 +43,8 @@ to be a clone, and it does more than tmux in several places:
 
 `docs/tmux-compat-decisions.md` lists where pymux differs from tmux on
 purpose, and `docs/notable-options.md` the options it adds.
+`docs/window-pane-support.md` records which terminals show a window
+pane, and with which features.
 
 ![Multiple clients](images/multiple-clients.png)
 
