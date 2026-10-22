@@ -80,6 +80,7 @@ from .enums import (
     WindowSize,
     Woke,
 )
+from .error_notice import ErrorNotice
 from .forwarding import LOOPBACK_NAMES, loopback_port
 from .graphics import OuterImageIds, PaneView
 from .ids import PaneId, SessionId, WindowIndex
@@ -1362,6 +1363,7 @@ class Pymux:
         # The running server.
         "connections": Keep.DROPPED,
         "tasks": Keep.DROPPED,
+        "error_notice": Keep.REBUILT,
         "loop": Keep.DROPPED,
         "done": Keep.DROPPED,
         "counters": Keep.DROPPED,
@@ -1609,6 +1611,9 @@ class Pymux:
         #: it is there for exactly as long as this server serves, and
         #: `None` before and after. Lillecarl/pymux#87.
         self.tasks: anyio.abc.TaskGroup | None = None
+
+        #: The corner that says an error was logged. Lillecarl/pymux#241.
+        self.error_notice = ErrorNotice(self)
 
         #: The asyncio loop under anyio, for inspection only: `introspect`
         #: lists the tasks of a running server, and only the loop can
@@ -2217,6 +2222,7 @@ class Pymux:
         async with anyio.create_task_group() as tasks:
             self.tasks = tasks
             self.loop = asyncio.get_running_loop()
+            self.error_notice.install()
             tasks.start_soon(self._auto_refresh)
             tasks.start_soon(self._sweep_jobs)
             tasks.start_soon(self.wayland.keep)
@@ -2233,6 +2239,7 @@ class Pymux:
                 # on its own.
                 tasks.cancel_scope.cancel()
                 self.tasks = None
+                self.error_notice.uninstall()
 
     async def hold(self, keep_orphans: bool = False) -> None:
         """

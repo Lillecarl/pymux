@@ -199,6 +199,9 @@ class Z_INDEX:
     WINDOW_TITLE_BAR = 9
     POPUP = 10
     OVERLAY = 11
+    #: Over everything a person works in, because it is about all of
+    #: it, and gone in seconds. Lillecarl/pymux#241.
+    ERROR_NOTICE = 12
 
     #: A clock and a pane number are drawn inside the pane they belong
     #: to, over the content of that pane. Nothing else draws in those
@@ -2418,6 +2421,23 @@ class LayoutManager:
             floats=[
                 # It draws where each link is, and not in its own box.
                 Float(top=0, left=0, transparent=True, content=UrlLabels(self.client_state)),
+                # That an error was logged, and where. It takes no focus
+                # and hides no cursor: a person typing in the pane under
+                # it keeps both. Lillecarl/pymux#241.
+                Float(
+                    top=0,
+                    right=0,
+                    z_index=Z_INDEX.ERROR_NOTICE,
+                    content=ConditionalContainer(
+                        content=Window(
+                            FormattedTextControl(lambda: self.pymux.error_notice.text(), focusable=False),
+                            height=1,
+                            dont_extend_width=True,
+                            style="class:error-notice",
+                        ),
+                        filter=Condition(lambda: bool(self.pymux.error_notice.count)),
+                    ),
+                ),
                 Float(
                     left=0,
                     right=0,
