@@ -22,14 +22,9 @@ from __future__ import annotations
 
 import codecs
 import errno
-import fcntl
 import os
-import pty
 import re
 import signal
-import struct
-import subprocess
-import termios
 import time
 from collections import deque
 from collections.abc import Callable, Iterable, Mapping
@@ -39,14 +34,14 @@ from typing import ClassVar, NewType
 import anyio
 import anyio.abc
 from anyio.streams.memory import MemoryObjectSendStream
+from ptyhost.backends.posix import PosixBackend, reaped_now, stranger_ended
 from ptyhost.held import HeldBackend, Holding
 from ptyhost.holder import HolderError
-from ptyhost.spawn import Spawn
+from ptyhost.spawn import Spawn, fork_on_pipes
 from pyte.keep import Keep
 
 from pymux.commands import CommandException
 from pymux.log import logger
-from pymux.niceness import as_a_person_runs
 from pymux.query import SEEDS
 
 #: A newline with no return before it. What the viewer turns into a
@@ -122,9 +117,9 @@ class Job:
     "One command the server ran, running or remembered."
 
     #: What a hot upgrade does with each attribute; `pyte.keep` says.
-    #: A running job crosses only when the holder forked it, and the
-    #: next server takes its terminal from the holder by `program_id`.
-    #: Lillecarl/pymux#399, Lillecarl/pymux#556.
+    #: A running job crosses an upgrade's exec as a child of the same
+    #: process, and the new image adopts its pty or its pipes.
+    #: Lillecarl/pymux#399, Lillecarl/pymux#736.
     KEEP: ClassVar[dict[str, Keep]] = {
         "job_id": Keep.SAVED,
         "command": Keep.SAVED,
@@ -146,12 +141,11 @@ class Job:
         "stderr_dropped": Keep.SAVED,
         "program_id": Keep.SAVED,
         "pid": Keep.SAVED,
-        "backend": Keep.REBUILT,  # adopted from the holder by `program_id`
+        "backend": Keep.REBUILT,  # adopted from the fds the snapshot names
         "crlf": Keep.DROPPED,  # the pause lands what it held back
         "done": Keep.REBUILT,  # set: the job is finished
         "followers": Keep.DROPPED,  # the clients that followed went with the exec
         "waiters": Keep.DROPPED,  # and so did the commands that waited
-        "process": Keep.DROPPED,
         "kill_requested": Keep.DROPPED,
     }
 
@@ -215,13 +209,12 @@ class Job:
         #: Commands waiting on `done`, so reaping never takes a job
         #: somebody still waits for.
         self.waiters = 0
-        self.process: anyio.abc.Process | None = None
-        #: The holder's name for the program, and its pid, when the
-        #: holder forked it. None for a job this server forked itself.
+        #: The holder's name for the program, when the holder forked it,
+        #: and its pid.
         self.program_id: int | None = None
         self.pid: int | None = None
-        #: The terminal or the pipes of a job the holder forked.
-        self.backend: HeldBackend | HeldPipes | None = None
+        #: The terminal or the pipes the job runs on, once it runs.
+        self.backend: PosixBackend | JobPipes | None = None
         self.crlf = _CrLf()
         #: Set by `kill-job` before the process exists: the supervise
         #: ends it as soon as it starts.
@@ -384,12 +377,23 @@ class JobTable:
         together and the exit is recorded only once both hit EOF: the
         output is complete before `done` is set, and a waiter never
         reads half of it.
+
+        This server forks every job itself, so an upgrade's exec keeps
+        it: the new image adopts its pty or its pipes, which `backend`
+        holds then. A server with a holder runs it under the holder,
+        which stage E of Lillecarl/pymux#736 deletes.
         """
         if isinstance(job.backend, HeldBackend):
             await self._supervise_held_pty(job, job.backend)
             return
         if isinstance(job.backend, HeldPipes):
             await self._supervise_held_pipes(job, job.backend.holding, job.backend)
+            return
+        if isinstance(job.backend, PosixBackend):
+            await self._supervise_on_a_terminal(job, job.backend)
+            return
+        if isinstance(job.backend, JobPipes):
+            await self._supervise_on_pipes(job, job.backend)
             return
         if not job.pty and self.holding is not None and "spawn-pipes" in self.holding.ops:
             # A holder from before the op runs no job on pipes, and the
@@ -404,121 +408,110 @@ class JobTable:
                 await self._supervise_held_pty(job, backend)
             return
         if job.pty:
-            await self._supervise_pty(job)
+            backend = self._terminal_for(job)
+            if backend is None:
+                self._finish(job, None)
+            else:
+                await self._supervise_on_a_terminal(job, backend)
             return
+        await self._supervise_on_pipes(job, None)
+
+    def _spawn_of(self, job: Job, env: Mapping[str, str]) -> Spawn:
+        """
+        What starts the job: the caller's environment, as the submit
+        stamped it, with the id last, so nothing a caller sent overrides
+        which job this is. The child gives back a raised priority itself.
+        """
+        return Spawn(["/bin/sh", "-c", job.command], {**env, "PYMUX_JOB": str(job.job_id)}, job.directory)
+
+    def _terminal_for(self, job: Job) -> PosixBackend | None:
+        """
+        A terminal for a pty job, or None when the job cannot start, with
+        the reason on it. The child would start where the server is when
+        the directory is gone, so a gone one is refused here.
+        """
+        env = dict(job.env)
+        env.setdefault("TERM", PTY_TERM)
+        spawn = self._spawn_of(job, env)
         try:
-            process = await anyio.open_process(
-                as_a_person_runs(job.command),
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                cwd=job.directory,
-                # The caller's environment, as the submit stamped it,
-                # with the id last: nothing a caller sent overrides
-                # which job this is.
-                env={**job.env, "PYMUX_JOB": str(job.job_id)},
-            )
+            if job.directory is not None and not os.path.isdir(job.directory):
+                raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), job.directory)
+            backend = PosixBackend(lambda: spawn)
         except OSError as e:
             job.error = "%s: %s" % (job.command, e)
-            self._finish(job, None)
-            return
+            return None
+        backend.set_size(PTY_COLUMNS, PTY_ROWS)
+        return backend
 
-        job.process = process
-        if job.kill_requested:
-            process.terminate()
+    async def _supervise_on_a_terminal(self, job: Job, backend: PosixBackend) -> None:
+        """
+        Run the job on a terminal: one pty for all three streams.
 
-        stdout, stderr = process.stdout, process.stderr
-        if stdout is None or stderr is None:
-            raise RuntimeError("A job opened with two pipes came back without one.")
+        The child is its own session, so the server's terminal signals
+        never reach it, but `isatty` answers yes on every stream.
+        Everything the pty says lands in the stdout tail with `\\r\\n`
+        folded back to `\\n`, so the viewer, `show-job` and the waiters
+        read a pty job exactly the way they read a piped one; the stderr
+        tail stays empty.
+
+        A job a snapshot loaded comes with its terminal adopted, and goes
+        on where the image before the exec stopped. The exit is recorded
+        once the pump read the end and the reap said how it ended.
+        """
+
+        async def land() -> None:
+            data = job.crlf.feed(backend.read_bytes(65536))
+            if data:
+                _land(job, "stdout", data)
+
+        backend.add_input_ready_callback(land)
         try:
             async with anyio.create_task_group() as pumps:
-                pumps.start_soon(_pump, stdout, job, "stdout")
-                pumps.start_soon(_pump, stderr, job, "stderr")
-                job.returncode = await process.wait()
-        except BaseException as e:
-            # The server is going down, or the pumps failed: no
-            # orphan. A failed pump fails the job, never the server.
-            with suppress(Exception):
-                process.kill()
-            if isinstance(e, anyio.get_cancelled_exc_class()):
-                if job.returncode is None:
-                    job.error = "stopped with the server"
-                raise
-            logger.exception("Running a job failed.")
-            if job.returncode is None and job.error is None:
-                job.error = "%s: %s" % (job.command, e)
+                await backend.start(pumps)
+                job.backend = backend
+                job.pid = backend.pid
+                if job.kill_requested:
+                    backend.send_signal(signal.SIGTERM)
+            if job.crlf.pending:
+                _land(job, "stdout", job.crlf.flush())
+            job.returncode = backend.returncode
+        except anyio.get_cancelled_exc_class():
+            # The reap killed it: a job does not outlive its server.
+            if job.returncode is None:
+                job.error = "stopped with the server"
+            raise
         finally:
             if job.status == "running":
                 self._finish(job, job.returncode)
 
-    async def _supervise_pty(self, job: Job) -> None:
+    async def _supervise_on_pipes(self, job: Job, pipes: JobPipes | None) -> None:
         """
-        Run the job on a terminal: one pty for all three streams.
-
-        The child is its own session without a controlling terminal,
-        so the server's terminal signals never reach it, but `isatty`
-        answers yes on every stream. Everything the pty says lands in
-        the stdout tail with `\\r\\n` folded back to `\\n`, so the
-        viewer, `show-job` and the waiters read a pty job exactly the
-        way they read a piped one; the stderr tail stays empty.
-
-        The pump drains the primary in a thread and closes it when it
-        ends, so a cancelled supervise releases the reader rather
-        than leaving it on the fd. The exit is recorded only once the
-        drain and the wait both finish, the way the two pumps gate a
-        piped job.
+        Run a piped job: nothing on stdin, a pipe each for stdout and
+        stderr, and both pumped into the job's tails. A job a snapshot
+        loaded comes with its pipes adopted.
         """
-        try:
-            primary, replica = pty.openpty()
-        except OSError as e:
-            job.error = "%s: %s" % (job.command, e)
-            self._finish(job, None)
-            return
-        with suppress(OSError):
-            fcntl.ioctl(primary, termios.TIOCSWINSZ, struct.pack("HHHH", PTY_ROWS, PTY_COLUMNS, 0, 0))
-        env = dict(job.env)
-        env.setdefault("TERM", PTY_TERM)
-        try:
-            process = await anyio.open_process(
-                as_a_person_runs(job.command),
-                stdin=replica,
-                stdout=replica,
-                stderr=replica,
-                cwd=job.directory,
-                env={**env, "PYMUX_JOB": str(job.job_id)},
-                start_new_session=True,
-            )
-        except OSError as e:
-            # No pump will ever close the primary.
-            with suppress(OSError):
-                os.close(primary)
-            job.error = "%s: %s" % (job.command, e)
-            self._finish(job, None)
-            return
-        finally:
-            # The child holds its own end; the parent's copy would
-            # hold the primary open past every exit.
-            with suppress(OSError):
-                os.close(replica)
-
-        job.process = process
-        if job.kill_requested:
-            process.terminate()
-
+        if pipes is None:
+            try:
+                pid, stdout, stderr = fork_on_pipes(self._spawn_of(job, job.env))
+            except OSError as e:
+                job.error = "%s: %s" % (job.command, e)
+                self._finish(job, None)
+                return
+            pipes = JobPipes(pid, stdout, stderr, parent=True)
+            job.backend, job.pid = pipes, pid
+            if job.kill_requested:
+                pipes.send_signal(signal.SIGTERM)
         try:
             async with anyio.create_task_group() as pumps:
-                pumps.start_soon(_pump_pty, primary, job)
-                job.returncode = await process.wait()
-        except BaseException as e:
-            with suppress(Exception):
-                process.kill()
-            if isinstance(e, anyio.get_cancelled_exc_class()):
-                if job.returncode is None:
-                    job.error = "stopped with the server"
-                raise
-            logger.exception("Running a job failed.")
-            if job.returncode is None and job.error is None:
-                job.error = "%s: %s" % (job.command, e)
+                pumps.start_soon(pipes.pump, pipes.stdout, job, "stdout")
+                pumps.start_soon(pipes.pump, pipes.stderr, job, "stderr")
+                job.returncode = await pipes.reap()
+        except anyio.get_cancelled_exc_class():
+            # The server is going down: no orphan.
+            pipes.send_signal(signal.SIGKILL)
+            if job.returncode is None:
+                job.error = "stopped with the server"
+            raise
         finally:
             if job.status == "running":
                 self._finish(job, job.returncode)
@@ -556,7 +549,7 @@ class JobTable:
         server stopped. Lillecarl/pymux#556.
 
         The exit is recorded once the pump read the end and the holder
-        said how the program ended, as `_supervise_pty` gates it.
+        said how the program ended, as `_supervise_on_a_terminal` gates it.
         """
 
         async def land() -> None:
@@ -779,8 +772,6 @@ class JobTable:
         if job.is_done:
             return False
         job.kill_requested = True
-        if job.process is not None:
-            job.process.terminate()
         if job.backend is not None:
             job.backend.send_signal(signal.SIGTERM)
         return True
@@ -1101,43 +1092,34 @@ def decode(data: bytes) -> str:
     return data.decode("utf-8", "replace") if data else ""
 
 
-async def _pump(stream: anyio.abc.ByteReceiveStream, job: Job, name: str) -> None:
+class JobPipes:
     """
-    Drain one stream into the tail the job keeps, counting the rest.
-
-    A chunk that straddles the cap is split: its head falls off and
-    its tail stays, so the tail is the cap to the byte no matter how
-    the pipe read. Every chunk lands with its offset in one
-    synchronous step, then pokes the followers, so a follower that
-    reads the offsets sees the chunk they count. The loop holds no
-    other await, so a cancellation never lands with the tail half
-    written.
-    """
-    try:
-        async for data in stream:
-            _land(job, name, data)
-    finally:
-        with suppress(Exception):
-            await stream.aclose()
-
-
-class HeldPipes:
-    """
-    The pipes of a job the holder forked: the read ends of its stdout
-    and stderr, and the holder's name for it. Lillecarl/pymux#556.
+    The pipes of a job on pipes: the read ends of its stdout and stderr,
+    and its pid. `parent` says whether this process forked it, and so
+    can wait for it: an upgrade's exec keeps the pid, and a job taken
+    over from the holder never was its child. Lillecarl/pymux#736.
 
     A read parks while paused, as `PosixBackend._pump` does, so that an
     upgrade reads nothing after the snapshot that describes the job.
     """
 
-    def __init__(self, holding: Holding, program_id: int, pid: int, stdout: int, stderr: int) -> None:
-        self.holding = holding
-        self.program_id = program_id
+    def __init__(self, pid: int, stdout: int, stderr: int, parent: bool) -> None:
         self.pid = pid
         self.stdout = stdout
         self.stderr = stderr
+        self.parent = parent
+        self.returncode: int | None = None
+        self._ended = False
         self._reading = anyio.Event()
         self._reading.set()
+        self._open = 2
+        #: Both pipes read their end.
+        self._drained = anyio.Event()
+
+    @property
+    def fds(self) -> list[int]:
+        "What crosses an exec."
+        return [self.stdout, self.stderr]
 
     def pause_reading(self) -> None:
         self._reading = anyio.Event()
@@ -1145,18 +1127,10 @@ class HeldPipes:
     def resume_reading(self) -> None:
         self._reading.set()
 
-    def adopted_by(self, holding: Holding, program_id: int) -> None:
-        """
-        A new holder keeps this job now, its old one gone. The job ends
-        when its pipes do, as it did once the old one went; this only
-        names it for the next upgrade. Lillecarl/pymux#730.
-        """
-        self.holding, self.program_id = holding, program_id
-
     @property
     def reaped(self) -> bool:
-        "The holder said how it ended, so its pid may be another program's now."
-        return self.holding.statuses.get(self.program_id) is not None
+        "It was waited for, so its pid may be another program's now."
+        return self._ended
 
     def send_signal(self, number: int) -> None:
         if not self.reaped:
@@ -1188,6 +1162,58 @@ class HeldPipes:
         finally:
             with suppress(OSError):
                 os.close(fd)
+            self._open -= 1
+            if not self._open:
+                self._drained.set()
+
+    async def reap(self) -> int | None:
+        """
+        Wait for the program to end, and say how. A child that ended
+        already -- during an exec -- is reaped at once; a program this
+        process did not fork ends with no code.
+        """
+        if not self.parent:
+            await stranger_ended(self.pid, self._drained)
+        else:
+            ended, self.returncode = reaped_now(self.pid)
+            if not ended:
+                # Abandoned on a cancel: the caller kills the child, and the
+                # thread's wait then returns.
+                self.returncode = await anyio.to_thread.run_sync(_wait_for, self.pid, abandon_on_cancel=True)
+        self._ended = True
+        return self.returncode
+
+
+def _wait_for(pid: int) -> int | None:
+    try:
+        return os.waitstatus_to_exitcode(os.waitpid(pid, 0)[1])
+    except ChildProcessError:
+        return None
+
+
+class HeldPipes(JobPipes):
+    """
+    The pipes of a job the holder forked, and the holder's name for it.
+    Lillecarl/pymux#556. Stage E of Lillecarl/pymux#736 deletes it.
+    """
+
+    def __init__(self, holding: Holding, program_id: int, pid: int, stdout: int, stderr: int) -> None:
+        super().__init__(pid, stdout, stderr, parent=False)
+        self.holding = holding
+        self.program_id = program_id
+
+    def adopted_by(self, holding: Holding, program_id: int) -> None:
+        """
+        A new holder keeps this job now, its old one gone. The job ends
+        when its pipes do, as it did once the old one went; this only
+        names it for the next upgrade. Lillecarl/pymux#730.
+        """
+        self.holding, self.program_id = holding, program_id
+
+    @property
+    def reaped(self) -> bool:
+        "The holder said how it ended, so its pid may be another program's now."
+        return self.holding.statuses.get(self.program_id) is not None
 
     async def reap(self) -> int | None:
         "Wait for the holder to say how it ended, then let the holder forget it."
@@ -1235,35 +1261,6 @@ class _CrLf:
         "What waits, for the end of the stream."
         pending, self.pending = self.pending, b""
         return pending
-
-
-async def _pump_pty(primary: int, job: Job) -> None:
-    """
-    Drain a pty job's primary into the stdout tail the job keeps.
-
-    The read runs in a thread: the fd blocks, and nothing else here
-    may wait on it. `_CrLf` takes the terminal's fold off. The primary
-    closes here at the end, which also releases a reader a cancelled
-    supervise left on the fd.
-    """
-    try:
-        while True:
-            try:
-                data = await anyio.to_thread.run_sync(os.read, primary, 65536)
-            except OSError:
-                # The last write end closed: on a pty that reads as
-                # EIO rather than EOF.
-                break
-            if not data:
-                break
-            data = job.crlf.feed(data)
-            if data:
-                _land(job, "stdout", data)
-        if job.crlf.pending:
-            _land(job, "stdout", job.crlf.flush())
-    finally:
-        with suppress(OSError):
-            os.close(primary)
 
 
 def _trim(job: Job, name: str) -> None:
