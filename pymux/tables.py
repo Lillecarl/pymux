@@ -239,7 +239,6 @@ CREATE TABLE jobs(
   env TEXT NOT NULL,
   stdout_dropped INTEGER NOT NULL,
   stderr_dropped INTEGER NOT NULL,
-  program_id INTEGER,
   pid INTEGER,
   fds TEXT,
   parent INTEGER
@@ -264,7 +263,6 @@ CREATE TABLE pane_programs(
   screen TEXT NOT NULL,
   stream TEXT NOT NULL,
   process TEXT NOT NULL,
-  program_id INTEGER,
   master_fd INTEGER,
   parent INTEGER
 );
@@ -635,7 +633,6 @@ class JobRow:
     env: str
     stdout_dropped: int
     stderr_dropped: int
-    program_id: int | None
     pid: int | None
     #: A running job's master, or its stdout and stderr, as a JSON list:
     #: the fds an upgrade's exec carries. Lillecarl/pymux#736.
@@ -673,8 +670,6 @@ class ProgramRow:
     screen: str
     stream: str
     process: str
-    #: The holder's name for it. Only a holder's program has one.
-    program_id: int | None
     #: The master, which an upgrade's exec carries under this number.
     master_fd: int | None
     #: Whether the server is its parent, so the next image can wait for it.

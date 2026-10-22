@@ -40,7 +40,6 @@ from prompt_toolkit.selection import SelectionType
 from ptterm import Terminal
 from ptyhost.backends.posix import PosixBackend
 from ptyhost.backends.posix_utils import PtyReader
-from ptyhost.held import HeldBackend, Holding
 from ptyhost.process import Process
 from pyte.freeze import Freezer, Frozen, freeze, saved_fields, thaw
 from pyte.images import GraphicsImage, GraphicsPlacement, GraphicsState
@@ -107,19 +106,17 @@ if TYPE_CHECKING:
 
 __all__ = [
     "SNAPSHOT_VERSION",
-    "FromTheHolder",
     "Inherited",
     "Snapshot",
     "Takeover",
     "load",
-    "program_ids",
     "save",
     "start",
 ]
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 27
+SNAPSHOT_VERSION = 28
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -149,16 +146,11 @@ CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
 #: change of shape adds the one step from the version before it and
 #: deletes any older step.
 STEPS: dict[int, str] = {
-    # 27 names the fds an exec carries and whether the server is each
-    # program's parent. A version 26 server handed its programs over
-    # through the holder, so they have no fds of their own here, and the
-    # load takes them from the holder (`FromTheHolder`).
-    # Lillecarl/pymux#736.
-    26: """
-ALTER TABLE jobs ADD COLUMN fds TEXT;
-ALTER TABLE jobs ADD COLUMN parent INTEGER;
-ALTER TABLE pane_programs ADD COLUMN master_fd INTEGER;
-ALTER TABLE pane_programs ADD COLUMN parent INTEGER;
+    # 28 has no program id: that was the name a holder gave a program,
+    # and this build has no holder. Lillecarl/pymux#736.
+    27: """
+ALTER TABLE jobs DROP COLUMN program_id;
+ALTER TABLE pane_programs DROP COLUMN program_id;
 """,
 }
 
@@ -249,7 +241,6 @@ WRITES: dict[str, frozenset[str]] = {
             Stream,
             Process,
             PosixBackend,
-            HeldBackend,
             PtyReader,
         )
     },
@@ -388,7 +379,6 @@ class Snapshot:
                         env=json.dumps(job.env, sort_keys=True),
                         stdout_dropped=job.stdout_dropped,
                         stderr_dropped=job.stderr_dropped,
-                        program_id=job.program_id,
                         pid=job.pid,
                         fds=None if job.is_done else json.dumps(_fds_of(job)),
                         parent=None if job.is_done or job.backend is None else job.backend.parent,
@@ -429,7 +419,6 @@ class Snapshot:
                     screen=json.dumps(screen.root),
                     stream=json.dumps(freeze(control.stream).root),
                     process=json.dumps(freeze(process).root),
-                    program_id=backend.program_id if isinstance(backend, HeldBackend) else None,
                     master_fd=backend.master,
                     parent=backend.parent,
                 )
@@ -787,10 +776,6 @@ class Takeover:
     def job(self, row: JobRow) -> PosixBackend | JobPipes | None:
         return None
 
-    def thawable(self, frozen: Frozen) -> Frozen:
-        "The frozen process, in the shape the backend `pane` built thaws from."
-        return frozen
-
 
 class Inherited(Takeover):
     "The fds an upgrade's exec carried under the numbers the snapshot names."
@@ -821,7 +806,6 @@ def _adopted(pymux: Pymux, takeover: Takeover, program: Program, on_done: Callab
     made. Nothing starts until `start`.
     """
     backend = takeover.pane(program)
-    program = program._replace(process=takeover.thawable(program.process))
     return _thawed(pymux, program, pymux._build_pane(backend=backend, on_done=on_done))
 
 
@@ -894,92 +878,13 @@ def read_server(path: str | os.PathLike[str]) -> dict[str, Any]:
         db.close()
 
 
-#: The running jobs the holder forked, on a terminal (1) or on pipes (0).
-_HELD_JOBS = "WHERE status = 'running' AND program_id IS NOT NULL AND pty = ?"
-
-
-def program_ids(path: str | os.PathLike[str]) -> tuple[list[int], list[int]]:
-    """
-    The holder's id of every program the snapshot names: the ones on a
-    terminal, whose masters `load` needs, and the jobs on pipes.
-    """
-    db = _open(path)
-    try:
-        on_terminals = [row.program_id for row in select(db, ProgramRow) if row.program_id is not None]
-        on_terminals += [cast(int, row.program_id) for row in select(db, JobRow, _HELD_JOBS, 1)]
-        return on_terminals, [cast(int, row.program_id) for row in select(db, JobRow, _HELD_JOBS, 0)]
-    finally:
-        db.close()
-
-
-class FromTheHolder(Takeover):
-    """
-    **The one move off the holder; delete it with the holder (stage E of
-    Lillecarl/pymux#736).** A server from before this build forked
-    nothing itself: the holder did, and hands copies of each master and
-    pipe over by its own id. Those programs are not this process's
-    children, so the backends wait for them as strangers.
-    """
-
-    def __init__(self, masters: dict[int, int], pipes: dict[int, list[int]], holder_pid: int | None) -> None:
-        self.masters = masters
-        self.pipes = pipes
-        #: Ended with SIGTERM once the new server serves, which leaves
-        #: every program running.
-        self.holder_pid = holder_pid
-
-    @classmethod
-    async def handed_over(cls, holding: Holding, path: str | os.PathLike[str]) -> FromTheHolder:
-        """
-        Copies of what the holder keeps of each program the snapshot names:
-        a master, or a job's two pipes. Only those: a copy fetched and not
-        adopted would stay open for the life of the server.
-        """
-        on_terminals, on_pipes = program_ids(path)
-        masters = {program_id: await holding.master(program_id) for program_id in on_terminals}
-        pipes = {program_id: await holding.fds(program_id) for program_id in on_pipes}
-        return cls(masters, pipes, holding.pid)
-
-    @override
-    def pane(self, program: Program) -> PosixBackend:
-        program_id = program.row.program_id
-        if program_id not in self.masters:
-            raise SnapshotError("the holder keeps no program for pane %d" % (program.pane_id,))
-        return PosixBackend.adopt(self.masters[program_id], program.row.pane_pid, parent=False)
-
-    @override
-    def job(self, row: JobRow) -> PosixBackend | JobPipes | None:
-        if row.pid is None:
-            raise SnapshotError("job %d runs and the snapshot holds no pid for it" % (row.job_id,))
-        if row.pty and row.program_id in self.masters:
-            return PosixBackend.adopt(self.masters[row.program_id], row.pid, parent=False)
-        if not row.pty and row.program_id in self.pipes:
-            stdout, stderr = self.pipes[row.program_id]
-            return JobPipes(row.pid, stdout, stderr, parent=False)
-        raise SnapshotError("the holder keeps no program for job %d" % (row.job_id,))
-
-    @override
-    def thawable(self, frozen: Frozen) -> Frozen:
-        "A held program froze as a `HeldBackend`, and thaws into a `PosixBackend`."
-        backend = frozen.root["fields"].get("backend")
-        if isinstance(backend, dict) and backend.get("object") == _qualified(HeldBackend):
-            fields = {name: value for name, value in backend["fields"].items() if name in PosixBackend.KEEP}
-            backend = {**backend, "object": _qualified(PosixBackend), "fields": fields}
-            frozen = frozen._replace(root={**frozen.root, "fields": {**frozen.root["fields"], "backend": backend}})
-        return frozen
-
-
-def _qualified(cls: type) -> str:
-    return "%s.%s" % (cls.__module__, cls.__qualname__)
-
-
 def load(pymux: Pymux, path: str | os.PathLike[str], takeover: Takeover | None = None) -> int | None:
     """
     Replace what a fresh `pymux` holds with a snapshot's.
 
     `takeover` says where each running program's fds come from:
-    `Inherited` after an upgrade's exec, `FromTheHolder` for the one
-    move off the holder. The default adopts nothing, for the dry run.
+    `Inherited` after an upgrade's exec. The default adopts nothing, for
+    the dry run.
 
     Returns the fd of the listening socket, or None when the server had
     none. An exec carries it under the same number, and adopting it is
@@ -1250,11 +1155,8 @@ def _read_jobs(db: apsw.Connection, takeover: Takeover) -> list[Job]:
             chunks.append((chunk.start, chunk.data))
         job.stdout_kept = sum(len(data) for _, data in job.stdout_chunks)
         job.stderr_kept = sum(len(data) for _, data in job.stderr_chunks)
-        job.program_id = row.program_id
         job.pid = row.pid
         if not job.is_done:
             job.backend = takeover.job(row)
-            # Held no more: a later upgrade carries it by its fds.
-            job.program_id = None
         jobs.append(job)
     return jobs

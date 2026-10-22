@@ -29,14 +29,12 @@ import time
 from collections import deque
 from collections.abc import Callable, Iterable, Mapping
 from contextlib import suppress
-from typing import ClassVar, NewType, override
+from typing import ClassVar, NewType
 
 import anyio
 import anyio.abc
 from anyio.streams.memory import MemoryObjectSendStream
 from ptyhost.backends.posix import PosixBackend, reaped_now, stranger_ended
-from ptyhost.held import HeldBackend, Holding
-from ptyhost.holder import HolderError
 from ptyhost.spawn import Spawn, fork_on_pipes
 from pyte.keep import Keep
 
@@ -139,7 +137,6 @@ class Job:
         "stderr_kept": Keep.SAVED,
         "stdout_dropped": Keep.SAVED,
         "stderr_dropped": Keep.SAVED,
-        "program_id": Keep.SAVED,
         "pid": Keep.SAVED,
         "backend": Keep.REBUILT,  # adopted from the fds the snapshot names
         "crlf": Keep.DROPPED,  # the pause lands what it held back
@@ -209,9 +206,7 @@ class Job:
         #: Commands waiting on `done`, so reaping never takes a job
         #: somebody still waits for.
         self.waiters = 0
-        #: The holder's name for the program, when the holder forked it,
-        #: and its pid.
-        self.program_id: int | None = None
+        #: The program's pid, once it runs.
         self.pid: int | None = None
         #: The terminal or the pipes the job runs on, once it runs.
         self.backend: PosixBackend | JobPipes | None = None
@@ -285,13 +280,10 @@ class JobTable:
         "_jobs": Keep.SAVED,
         "last_id": Keep.SAVED,
         "saved_queries": Keep.SAVED,
-        "holding": Keep.REBUILT,  # the server's, which connects for itself
     }
 
     def __init__(self) -> None:
         self._jobs: dict[JobId, Job] = {}
-        #: The server's holder. A pty job runs under it when there is one.
-        self.holding: Holding | None = None
         #: The newest id handed out. It outlives the jobs it named, so
         #: a restored server never hands one out again.
         self.last_id = 0
@@ -380,32 +372,13 @@ class JobTable:
 
         This server forks every job itself, so an upgrade's exec keeps
         it: the new image adopts its pty or its pipes, which `backend`
-        holds then. A server with a holder runs it under the holder,
-        which stage E of Lillecarl/pymux#736 deletes.
+        holds then.
         """
-        if isinstance(job.backend, HeldBackend):
-            await self._supervise_held_pty(job, job.backend)
-            return
-        if isinstance(job.backend, HeldPipes):
-            await self._supervise_held_pipes(job, job.backend.holding, job.backend)
-            return
         if isinstance(job.backend, PosixBackend):
             await self._supervise_on_a_terminal(job, job.backend)
             return
         if isinstance(job.backend, JobPipes):
             await self._supervise_on_pipes(job, job.backend)
-            return
-        if not job.pty and self.holding is not None and "spawn-pipes" in self.holding.ops:
-            # A holder from before the op runs no job on pipes, and the
-            # job then runs here, as a child of this server.
-            await self._supervise_held_pipes(job, self.holding, None)
-            return
-        if job.pty and self.holding is not None:
-            backend = self._held_pty(job, self.holding)
-            if backend is None:
-                self._finish(job, None)
-            else:
-                await self._supervise_held_pty(job, backend)
             return
         if job.pty:
             backend = self._terminal_for(job)
@@ -516,115 +489,8 @@ class JobTable:
             if job.status == "running":
                 self._finish(job, job.returncode)
 
-    def _held_pty(self, job: Job, holding: Holding) -> HeldBackend | None:
-        """
-        A terminal for a pty job that the holder will fork, or None when
-        the job cannot start, with the reason on it.
-
-        The holder's child starts where the holder is when the directory
-        is gone, so a gone one is refused here, the way a fork here
-        refuses it.
-        """
-        env = dict(job.env)
-        env.setdefault("TERM", PTY_TERM)
-        env["PYMUX_JOB"] = str(job.job_id)
-        # The holder's child gives back a raised priority itself.
-        spawn = Spawn(["/bin/sh", "-c", job.command], env, job.directory)
-        try:
-            if job.directory is not None and not os.path.isdir(job.directory):
-                raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), job.directory)
-            backend = HeldBackend(holding, lambda: spawn)
-        except OSError as e:
-            job.error = "%s: %s" % (job.command, e)
-            return None
-        backend.set_size(PTY_COLUMNS, PTY_ROWS)
-        return backend
-
-    async def _supervise_held_pty(self, job: Job, backend: HeldBackend) -> None:
-        """
-        Run a pty job that the holder forks and reaps, so that it
-        outlives this server: an upgrade hands it to the next server the
-        way it hands a pane. A job a snapshot loaded comes with its
-        terminal, adopted from the holder, and goes on where the last
-        server stopped. Lillecarl/pymux#556.
-
-        The exit is recorded once the pump read the end and the holder
-        said how the program ended, as `_supervise_on_a_terminal` gates it.
-        """
-
-        async def land() -> None:
-            data = job.crlf.feed(backend.read_bytes(65536))
-            if data:
-                _land(job, "stdout", data)
-
-        backend.add_input_ready_callback(land)
-        try:
-            async with anyio.create_task_group() as pumps:
-                try:
-                    await backend.start(pumps)
-                except (HolderError, OSError) as e:
-                    backend.close()
-                    if backend.slave is not None:
-                        with suppress(OSError):
-                            os.close(backend.slave)
-                    job.error = "%s: %s" % (job.command, e)
-                    return
-                job.backend = backend
-                job.pid = backend.pid
-                job.program_id = backend.program_id
-                if job.kill_requested:
-                    backend.send_signal(signal.SIGTERM)
-            if job.crlf.pending:
-                _land(job, "stdout", job.crlf.flush())
-            if job.program_id is not None:
-                job.returncode = backend.holding.statuses.get(job.program_id)
-        except anyio.get_cancelled_exc_class():
-            # The holder keeps the program: `kill-server` asks it to hang
-            # up, and an upgrade leaves it to the next server.
-            if job.returncode is None:
-                job.error = "stopped with the server"
-            raise
-        finally:
-            if job.status == "running":
-                self._finish(job, job.returncode)
-
-    async def _supervise_held_pipes(self, job: Job, holding: Holding, pipes: HeldPipes | None) -> None:
-        """
-        Run a piped job that the holder forks and reaps, so that it
-        outlives this server, as `_supervise_held_pty` runs a pty job.
-        The holder keeps copies of the read ends, so what the job writes
-        between two servers waits in the pipes. Lillecarl/pymux#556.
-        """
-        if pipes is None:
-            env = {**job.env, "PYMUX_JOB": str(job.job_id)}
-            # The holder's child gives back a raised priority itself.
-            spawn = Spawn(["/bin/sh", "-c", job.command], env, job.directory)
-            try:
-                reply, stdout, stderr = await holding.spawn_on_pipes(spawn)
-            except HolderError as e:
-                job.error = "%s: %s" % (job.command, e)
-                self._finish(job, None)
-                return
-            pipes = HeldPipes(holding, reply["id"], reply["pid"], stdout, stderr)
-            job.backend, job.program_id, job.pid = pipes, pipes.program_id, pipes.pid
-            if job.kill_requested:
-                pipes.send_signal(signal.SIGTERM)
-        try:
-            async with anyio.create_task_group() as pumps:
-                pumps.start_soon(pipes.pump, pipes.stdout, job, "stdout")
-                pumps.start_soon(pipes.pump, pipes.stderr, job, "stderr")
-                job.returncode = await pipes.reap()
-        except anyio.get_cancelled_exc_class():
-            # As for a held pty job: the holder keeps the program.
-            if job.returncode is None:
-                job.error = "stopped with the server"
-            raise
-        finally:
-            if job.status == "running":
-                self._finish(job, job.returncode)
-
     def pause_reading(self) -> None:
-        "Read no held job, so that what it writes waits for the next server."
+        "Read no running job, so that what it writes waits for the next image."
         for job in self.listing():
             if job.backend is not None and not job.is_done:
                 job.backend.pause_reading()
@@ -632,7 +498,7 @@ class JobTable:
                     _land(job, "stdout", job.crlf.flush())
 
     def resume_reading(self) -> None:
-        "Read the held jobs again, as before the pause."
+        "Read the running jobs again, as before the pause."
         for job in self.listing():
             if job.backend is not None and not job.is_done:
                 job.backend.resume_reading()
@@ -1096,8 +962,8 @@ class JobPipes:
     """
     The pipes of a job on pipes: the read ends of its stdout and stderr,
     and its pid. `parent` says whether this process forked it, and so
-    can wait for it: an upgrade's exec keeps the pid, and a job taken
-    over from the holder never was its child. Lillecarl/pymux#736.
+    can wait for it: an upgrade's exec keeps the pid, and a job another
+    process forked never is its child. Lillecarl/pymux#736.
 
     A read parks while paused, as `PosixBackend._pump` does, so that an
     upgrade reads nothing after the snapshot that describes the job.
@@ -1191,41 +1057,6 @@ def _wait_for(pid: int) -> int | None:
         return os.waitstatus_to_exitcode(os.waitpid(pid, 0)[1])
     except ChildProcessError:
         return None
-
-
-class HeldPipes(JobPipes):
-    """
-    The pipes of a job the holder forked, and the holder's name for it.
-    Lillecarl/pymux#556. Stage E of Lillecarl/pymux#736 deletes it.
-    """
-
-    def __init__(self, holding: Holding, program_id: int, pid: int, stdout: int, stderr: int) -> None:
-        super().__init__(pid, stdout, stderr, parent=False)
-        self.holding = holding
-        self.program_id = program_id
-
-    def adopted_by(self, holding: Holding, program_id: int) -> None:
-        """
-        A new holder keeps this job now, its old one gone. The job ends
-        when its pipes do, as it did once the old one went; this only
-        names it for the next upgrade. Lillecarl/pymux#730.
-        """
-        self.holding, self.program_id = holding, program_id
-
-    @property
-    @override
-    def reaped(self) -> bool:
-        "The holder said how it ended, so its pid may be another program's now."
-        return self.holding.statuses.get(self.program_id) is not None
-
-    @override
-    async def reap(self) -> int | None:
-        "Wait for the holder to say how it ended, then let the holder forget it."
-        status = await self.holding.ended(self.program_id)
-        if not self.holding.lost:
-            with suppress(HolderError):
-                await self.holding.release(self.program_id)
-        return status
 
 
 def _land(job: Job, name: str, data: bytes) -> None:

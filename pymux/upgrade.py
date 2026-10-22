@@ -36,22 +36,19 @@ directory, and it is deleted once the panes run.
 
 from __future__ import annotations
 
-import contextlib
 import importlib
 import os
 import pkgutil
 import shlex
 import shutil
-import signal
 import sys
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, NoReturn
+from typing import TYPE_CHECKING
 
 import anyio
-from libpymux.sockets import HOLDER_SUFFIX, socket_directory
+from libpymux.sockets import socket_directory
 from ptyhost.backends.posix import PosixBackend
-from ptyhost.held import Holding
 
 from . import introspect, log, snapshot
 from .commands import CommandException
@@ -81,22 +78,6 @@ KILL_TIMEOUT = 2.0
 #: A missing module outside them is an optional dependency this machine
 #: lacks, such as pysmithay on macOS: absent, not broken.
 OURS = ("pymux", "libpymux", "ptterm", "ptyhost", "pyte", "prompt_toolkit")
-
-
-def rooted_environment() -> dict[str, str]:
-    """
-    This environment, naming every path this build runs from.
-
-    Nix's collector treats a store path in any process's environment as
-    a root (`findRuntimeRoots` reads `/proc/<pid>/environ`). The holder
-    outlives the server that starts it, so it carries the paths of the
-    build it runs from this way. Lillecarl/pymux#408.
-    """
-    # The interpreter alone is not the build: what it imports comes from
-    # the other store paths on `sys.path`.
-    environment = dict(os.environ)
-    environment["PYMUX_BUILD"] = os.pathsep.join([sys.executable, *sys.path])
-    return environment
 
 
 async def upgrade(pymux: Pymux, command: list[str]) -> None:
@@ -262,7 +243,7 @@ def _flush_logs() -> None:
 
 
 def log_arguments() -> list[str]:
-    "The log file this process writes, for the next image -- or the holder -- to write too."
+    "The log file this process writes, for the next image to write too."
     logfile = log._logfile
     return ["--log", str(logfile)] if logfile is not None else []
 
@@ -307,7 +288,7 @@ def _optional(error: BaseException | None) -> bool:
     return isinstance(error, ModuleNotFoundError) and error.name is not None and error.name.split(".")[0] not in OURS
 
 
-def resume(path: str, ready: int | None) -> None:
+def resume(path: str) -> None:
     """
     Serve again, in the new build, from the snapshot the old one wrote.
 
@@ -316,13 +297,7 @@ def resume(path: str, ready: int | None) -> None:
     not record. The snapshot then wins for everything it holds -- the
     options, the bindings and the hooks -- because a person may have
     changed one since the file was read.
-
-    `ready` is the pipe of a server from before Lillecarl/pymux#736,
-    which starts this build beside itself (`_take_over_from_the_holder`).
     """
-    if ready is not None:
-        _take_over_from_the_holder(path, ready)
-        return
     from .main import Pymux
 
     introspect.note_for_a_crash("resuming from the snapshot %s, which is kept" % (path,))
@@ -368,100 +343,3 @@ def _crashed(error: BaseException, started: float) -> None:
     report = introspect.write_crash_report(error, started)
     logger.critical("Resuming failed: %r. The report is %s.", error, report, exc_info=error)
     _flush_logs()
-
-
-#: What the new build writes on the pipe of a server from before
-#: Lillecarl/pymux#736 once it holds every pane, or `error: ` and why.
-READY = b"ok"
-FAILED = b"error: "
-
-
-def _take_over_from_the_holder(path: str, ready: int) -> None:
-    """
-    **The one move off the holder; delete it with the holder (stage E
-    of Lillecarl/pymux#736).**
-
-    A server from before this build forked nothing itself: the holder
-    did. It starts this build beside itself, and ends once this one says
-    `ok`. So this one takes a copy of every master and pipe from the
-    holder, says `ok`, and ends the holder with SIGTERM -- not `quit`,
-    which hangs every program up. The programs run on, children of the
-    person's service manager now, and this server waits for them as
-    strangers.
-
-    Anything that goes wrong before `ok` ends this process at once, with
-    the reason on the pipe: the old server serves on, and nothing of this
-    one may touch its panes or its socket file on the way out.
-    """
-    from .main import Pymux
-
-    introspect.note_for_a_crash("taking the server over from the holder, by the snapshot %s" % (path,))
-    started = time.monotonic()
-
-    def give_up(error: BaseException) -> NoReturn:
-        _crashed(error, started)
-        with open(ready, "wb", closefd=False) as pipe:
-            pipe.write(FAILED + ("%s: %s" % (type(error).__name__, error)).encode())
-        os._exit(1)
-
-    try:
-        pymux = Pymux()
-        server = snapshot.read_server(path)
-        pymux.source_file = server["source_file"]
-        pymux.socket_name = server["socket_name"]
-    except Exception as error:
-        give_up(error)
-
-    async def resumed() -> None:
-        try:
-            answer = pymux.configure()
-            if answer is not None:
-                await answer
-            strays = list(pymux.panes_by_id.values())
-            takeover = await _from_the_holder(pymux.socket_name, path)
-            listener = snapshot.load(pymux, path, takeover)
-            if listener is None:
-                raise snapshot.SnapshotError("the snapshot names no listening socket")
-            # `pass_fds` made it inheritable, and nothing this server forks may get it.
-            os.set_inheritable(listener, False)
-            pymux.adopt_listener(listener)
-            os.write(ready, READY)
-            os.close(ready)
-        except Exception as error:
-            give_up(error)
-        # The old server ends now, and nothing reads a pane until here.
-        for pane in strays:
-            pane.process.kill()
-        pymux.serve_listener()
-        await snapshot.start(pymux)
-        if takeover.holder_pid is not None:
-            with contextlib.suppress(ProcessLookupError):
-                os.kill(takeover.holder_pid, signal.SIGTERM)
-        Path(path).unlink(missing_ok=True)
-        introspect.note_for_a_crash(None)
-        logger.info("Took %d panes over from the holder, which ends.", len(pymux.panes_by_id))
-
-    pymux.run_server(resumed)
-
-
-async def _from_the_holder(socket_name: str | None, path: str) -> snapshot.FromTheHolder:
-    "Copies of what the holder beside `socket_name` keeps of each program the snapshot names."
-    holding = await Holding.connect("%s%s" % (socket_name, HOLDER_SUFFIX))
-    try:
-        async with anyio.create_task_group() as reading:
-            reading.start_soon(holding.run)
-            takeover = await snapshot.FromTheHolder.handed_over(holding, path)
-            reading.cancel_scope.cancel()
-    finally:
-        holding.close()
-    return takeover
-
-
-def resume_arguments(rest: list[str]) -> tuple[str, int | None]:
-    "The snapshot, and the pipe of a server from before Lillecarl/pymux#736: `resume-server PATH [--ready-fd N]`."
-    match rest:
-        case [path]:
-            return path, None
-        case [path, "--ready-fd", number] if number.isdigit():
-            return path, int(number)
-    raise SystemExit("usage: pymux %s PATH [--ready-fd N]" % RESUME)

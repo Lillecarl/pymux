@@ -91,7 +91,7 @@ SEEDS = [
 class JobView:
     """
     A job, as a question reads it. The snapshot's `JobRow` holds more --
-    the environment, the holder's ids -- which no question should read.
+    the environment, the fds -- which no question should read.
     """
 
     id: int

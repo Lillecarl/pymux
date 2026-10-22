@@ -12,6 +12,7 @@ import json
 import os
 import shutil
 import sys
+from typing import override
 
 import anyio
 import apsw
@@ -20,18 +21,18 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.selection import SelectionState, SelectionType
-from pyte.freeze import Frozen
+from ptyhost.backends.posix import PosixBackend
 from pyte.keep import Keep
 from pyte.page import RowMark
 from session import once
 from test_a_session_on_a_pyte_screen import attached, settled, shows
 from test_every_attribute_has_a_fate import declared, live_objects
 
-from pymux import snapshot, tables, upgrade
+from pymux import snapshot, tables
 from pymux.arrangement import LayoutTypes
 from pymux.commands.wait_for import WaitChannel
 from pymux.enums import Chooser, WindowCodec, WindowSize
-from pymux.jobs import JobFeed
+from pymux.jobs import JobFeed, JobPipes
 from pymux.main import Pymux
 from pymux.notifications import Urgency
 from pymux.query import ask
@@ -316,8 +317,7 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
 #: Columns that hold one value in every row however the server is used.
 CONSTANT = {
     ("counters", "value"),  # five counters, and two of them may agree
-    # The holder forks every pane here, for the move off it to load;
-    # `test_upgrade.py` runs servers that are their programs' parents.
+    # This server forks every pane here; `_Copied` writes the other value.
     ("pane_programs", "parent"),
 }
 
@@ -342,8 +342,8 @@ async def _run_jobs(pymux) -> None:
         job = jobs.submit(command, directory, tags, {"WHO": command}, pty)
         await jobs.supervise(job)
     jobs._forget(job)
-    # The holder forks these, so they run past the snapshot: one on a
-    # terminal, one on pipes. Lillecarl/pymux#556.
+    # These run past the snapshot: one on a terminal, one on pipes.
+    # Lillecarl/pymux#556.
     for pty in (True, False):
         running = jobs.submit("echo started; exec sleep 60", None, [("long", None)], dict(os.environ), pty)
         pymux.tasks.start_soon(jobs.supervise, running)
@@ -421,9 +421,8 @@ def _pane_count(pymux) -> int:
 async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_path):
     alternate = tmp_path / "alternate.sh"
     alternate.write_text("printf '%s\\r\\n\\033[?1049h\\033[31mALT\\033[0m\\033[3'\nsleep 60\n" % ("wrapped " * 20))
-    # A holder beside this name forks every pane, as for a server on a socket.
     pymux.socket_name = str(tmp_path / "server.sock")
-    async with pymux.running(hold=True), attached(pymux) as session:
+    async with pymux.running(), attached(pymux) as session:
         await shows(session, "$")
         await _run_jobs(pymux)
         connection = pymux.connections[-1]
@@ -497,17 +496,16 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 pane.process.backend.pause_reading()
         pymux.jobs.pause_reading()
 
-        # The new server takes every program from the holder, as the one
-        # move off it does (Lillecarl/pymux#736): no longer anybody's
-        # child, so each one's end is seen and its code is not.
+        # The new server takes a copy of every fd the snapshot names. The
+        # old one stays each program's parent, so each one's end is seen
+        # here and its code is not.
         fresh = Pymux()
         fresh.test_mode = True
         fresh.socket_name = pymux.socket_name
         second = tmp_path / "second.sqlite"
         try:
             async with fresh.running():
-                takeover = await upgrade._from_the_holder(fresh.socket_name, str(first))
-                snapshot.load(fresh, first, takeover)
+                snapshot.load(fresh, first, _Copied())
                 snapshot.save(fresh, second)
                 await snapshot.start(fresh)
                 assert _jobs_of(fresh) == jobs
@@ -586,8 +584,6 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
         finally:
             for pane in list(fresh.panes_by_id.values()):
                 pane.process.kill()
-            if pymux.holding is not None:
-                pymux.holding.close()
 
     assert _rows(first, "SELECT count(*) FROM panes") == [(12,)]
     assert _rows(first, "SELECT job_id FROM pane_viewers ORDER BY 1") == [(2,), (5,)]
@@ -613,20 +609,36 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
     )
 
 
+class _Copied(snapshot.Takeover):
+    """
+    A copy of each fd the snapshot names, for a second server in this
+    process. The first server stays each program's parent and reaps it,
+    so the second waits for it as a stranger.
+    """
+
+    @override
+    def pane(self, program: snapshot.Program) -> PosixBackend:
+        row = program.row
+        assert row.master_fd is not None
+        return PosixBackend.adopt(os.dup(row.master_fd), row.pane_pid, parent=False)
+
+    @override
+    def job(self, row: tables.JobRow) -> PosixBackend | JobPipes | None:
+        assert row.fds is not None and row.pid is not None
+        fds = [os.dup(fd) for fd in json.loads(row.fds)]
+        if row.pty:
+            return PosixBackend.adopt(fds[0], row.pid, parent=False)
+        stdout, stderr = fds
+        return JobPipes(row.pid, stdout, stderr, parent=False)
+
+
 def _as_the_takeover_leaves_it(path, copy):
-    """
-    A copy of a snapshot with what the move off the holder changes: no
-    holder's ids, other fd numbers, and each held backend frozen as the
-    `PosixBackend` it thaws into.
-    """
+    "A copy of a snapshot with what `_Copied` changes: other fd numbers, and no program the server's child."
     shutil.copy(path, copy)
     db = apsw.Connection(str(copy))
     try:
-        db.execute("UPDATE pane_programs SET program_id = NULL, master_fd = NULL")
-        db.execute("UPDATE jobs SET program_id = NULL, fds = NULL")
-        for pane_id, process in db.execute("SELECT pane_id, process FROM pane_programs").fetchall():
-            frozen = snapshot.FromTheHolder({}, {}, None).thawable(Frozen(json.loads(process), {}, [], [], {}))
-            db.execute("UPDATE pane_programs SET process = ? WHERE pane_id = ?", (json.dumps(frozen.root), pane_id))
+        db.execute("UPDATE pane_programs SET master_fd = NULL, parent = NULL")
+        db.execute("UPDATE jobs SET fds = NULL, parent = NULL")
     finally:
         db.close()
     return copy
@@ -664,19 +676,14 @@ def test_the_table_list_is_the_schema_in_order():
     assert list(tables.TABLES) == made
 
 
-def test_a_version_26_snapshot_names_no_fds(pymux, tmp_path):
-    "The server before Lillecarl/pymux#736 handed its programs over through the holder."
-    path = tmp_path / "v26.sqlite"
+def test_a_version_27_snapshot_names_a_program_id(pymux, tmp_path):
+    "The server before Lillecarl/pymux#736 wrote the holder's id of each program."
+    path = tmp_path / "v27.sqlite"
     snapshot.save(pymux, path)
     db = apsw.Connection(str(path))
-    for table, column in (
-        ("jobs", "fds"),
-        ("jobs", "parent"),
-        ("pane_programs", "master_fd"),
-        ("pane_programs", "parent"),
-    ):
-        db.execute("ALTER TABLE %s DROP COLUMN %s" % (table, column))
-    db.execute("PRAGMA user_version = 26")
+    for table in ("jobs", "pane_programs"):
+        db.execute("ALTER TABLE %s ADD COLUMN program_id INTEGER" % (table,))
+    db.execute("PRAGMA user_version = 27")
     db.close()
 
     stepped = snapshot._open(path)

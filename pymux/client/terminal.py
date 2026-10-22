@@ -82,8 +82,7 @@ KITTY_GRAPHICS = "\x1b_G"
 DELETE_EVERY_IMAGE = b"\x1b_Ga=d,d=A,q=2\x1b\\"
 
 #: A server ends every command with its exit code. A peer that closes
-#: without one ran no command, or is not a pymux server: a pty holder
-#: answers a connect and speaks another protocol. Lillecarl/pymux#606.
+#: without one ran no command, or is not a pymux server. Lillecarl/pymux#606.
 NO_ANSWER = "pymux: %s closed the connection with no answer. Is a pymux server listening there?\n"
 
 #: The device attributes query, which closes the detection. The shared

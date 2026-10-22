@@ -518,12 +518,6 @@ def _pid(context: FormatContext) -> str:
     return str(os.getpid())
 
 
-def _holder_pid(context: FormatContext) -> str:
-    "The pid of the holder that keeps this server's programs, or nothing. Lillecarl/pymux#730."
-    holding = context.pymux.holding
-    return str(holding.pid) if holding is not None and holding.pid is not None else ""
-
-
 def _version(context: FormatContext) -> str:
     from pymux import __version__
 
@@ -821,7 +815,6 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     # Server.
     "socket_path": _socket_path,
     "pid": _pid,
-    "holder_pid": _holder_pid,
     "version": _version,
     "start_time": _created,
     "host": lambda c: _hostname(),

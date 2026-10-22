@@ -645,7 +645,11 @@ def run() -> None:
             # Where the image before this one logged, which it passed
             # on. Its stdout is this process's, as `start-server` has it.
             _log_like_a_daemon(a)
-            upgrade.resume(*upgrade.resume_arguments(a.upgrade_words))
+            match a.upgrade_words:
+                case [path]:
+                    upgrade.resume(path)
+                case _:
+                    sys.exit("usage: pymux %s PATH" % (Mode.RESUME_SERVER,))
 
         case Mode.ATTACH:
             _refuse_nesting(socket_name_from_env)

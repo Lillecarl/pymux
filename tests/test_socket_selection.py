@@ -159,21 +159,11 @@ def test_the_lock_a_bind_takes_is_not_a_server(sockets, tmp_path):
     assert _names() == ["pymux.sock.someone.0"]
 
 
-def test_the_pty_holder_is_not_a_server(sockets):
-    """
-    It answers a connect and is newer than its server, so it went in
-    front, and an attach sent to it got no reply. Lillecarl/pymux#605.
-    """
-    sockets(["pymux.sock.someone.0", "pymux.sock.someone.0.holder"])
-
-    assert _names() == ["pymux.sock.someone.0"]
-
-
 def test_a_peer_that_closes_with_no_answer_is_an_error(tmp_path, capsys):
-    "A pty holder reads the command and closes. Lillecarl/pymux#606."
+    "A peer that is no pymux server reads the command and closes. Lillecarl/pymux#606."
     from pymux.client.posix import PosixClient
 
-    path = str(tmp_path / "pymux.sock.someone.0.holder")
+    path = str(tmp_path / "pymux.sock.someone.0")
     listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     listener.bind(path)
     listener.listen(1)

@@ -23,7 +23,6 @@ from typing import TYPE_CHECKING, ClassVar, NamedTuple, override
 import anyio
 import anyio.abc
 from libpymux.protocol import Field, Packet
-from libpymux.sockets import HOLDER_SUFFIX
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app, set_app
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
@@ -49,8 +48,6 @@ from ptterm import Terminal
 from ptyhost.backends import Backend
 from ptyhost.backends.posix import GRACE, PosixBackend
 from ptyhost.ending import say_how_it_ends
-from ptyhost.held import HeldBackend, Holding
-from ptyhost.holder import HolderError
 from pyte.environment import terminal_name
 from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
 from pyte.keep import Keep
@@ -84,7 +81,7 @@ from .error_notice import ErrorNotice
 from .forwarding import LOOPBACK_NAMES, loopback_port
 from .graphics import OuterImageIds, PaneView
 from .ids import PaneId, SessionId, WindowIndex
-from .jobs import JOB_SWEEP_EVERY, HeldPipes, Job, JobFeed, JobTable, describe
+from .jobs import JOB_SWEEP_EVERY, Job, JobFeed, JobTable, describe
 from .key_bindings import PymuxKeyBindings
 from .key_spelling import why_pane_cannot_read
 from .layout import Justify, LayoutManager, change_pane_size
@@ -1282,7 +1279,6 @@ class Pymux:
         "created": Keep.SAVED,
         "socket_name": Keep.SAVED,
         "listener": Keep.SAVED,
-        "holding": Keep.REBUILT,  # the next server connects to the same holder
         "original_cwd": Keep.SAVED,
         "source_file": Keep.SAVED,
         "startup_command": Keep.SAVED,
@@ -1579,11 +1575,6 @@ class Pymux:
         #: Lillecarl/pymux#159.
         self._serves_one_terminal = False
 
-        #: The holder that forks this server's panes and keeps them for
-        #: the next one (`ptyhost.held`). Only a server on a socket has
-        #: one: the others end with the terminal they draw on.
-        #: Lillecarl/pymux#553.
-        self.holding: Holding | None = None
         self.connections = []
 
         #: Kitty keyboard protocol flags last sent to the clients. (The
@@ -1695,7 +1686,7 @@ class Pymux:
 
         # Keep track of all the panes, by ID. (For quick lookup.)
         self.panes_by_id: weakref.WeakValueDictionary[PaneId, Pane] = weakref.WeakValueDictionary()
-        #: Held programs sent SIGHUP whose SIGKILL may still be due. The
+        #: Programs sent SIGHUP whose SIGKILL may still be due. The
         #: grace task keeps each backend alive until the program ends.
         self.hanging_up: weakref.WeakSet[PosixBackend] = weakref.WeakSet()
 
@@ -2218,7 +2209,7 @@ class Pymux:
         say_how_it_ends(logger)
 
     @asynccontextmanager
-    async def running(self, hold: bool = False, keep_orphans: bool = False):
+    async def running(self):
         """
         The scope this server serves in.
 
@@ -2230,10 +2221,6 @@ class Pymux:
         Both routes enter it, and so does the test harness. A
         route that built its own would be a route the harness could
         not be. Lillecarl/pymux#87.
-
-        `hold` connects to the holder (`hold`) before the first client
-        is taken, so that no pane forks without it. `keep_orphans` is
-        for an upgrade, whose snapshot names the programs it takes.
         """
         async with anyio.create_task_group() as tasks:
             self.tasks = tasks
@@ -2243,8 +2230,6 @@ class Pymux:
             tasks.start_soon(self._sweep_jobs)
             tasks.start_soon(self.wayland.keep)
             tasks.start_soon(self.audio.keep)
-            if hold:
-                await self.hold(keep_orphans)
             if self.listener is not None:
                 self.serve_listener()
             try:
@@ -2256,151 +2241,6 @@ class Pymux:
                 tasks.cancel_scope.cancel()
                 self.tasks = None
                 self.error_notice.uninstall()
-
-    async def hold(self, keep_orphans: bool = False) -> None:
-        """
-        Connect to this server's holder, and start one when none answers.
-
-        A holder that answers may hold programs of a server that ended
-        without a word. A server that does not take them over lets them
-        go, because a server connected keeps a holder from hanging up
-        its orphans. Lillecarl/pymux#553.
-
-        A server with no holder still serves, and forks its panes
-        itself: what it loses is the upgrade.
-        """
-        assert self.tasks is not None
-        path = "%s%s" % (self.socket_name, HOLDER_SUFFIX)
-        try:
-            holding = await self._holder_at(path)
-        except OSError, HolderError:
-            logger.exception("No holder at %s: this server forks its panes itself.", path)
-            return
-        self.holding = self.jobs.holding = holding
-        self.tasks.start_soon(self._keep_holding, holding, path)
-        if not keep_orphans:
-            await self.release_orphans()
-
-    async def _keep_holding(self, holding: Holding, path: str) -> None:
-        """
-        Read the holder, and when it goes, start another and have it
-        adopt every program.
-
-        **The panes never noticed.** This server holds its own copy of
-        every master and pipe, so the programs keep their terminals;
-        what a holder that is gone takes with it is the next upgrade,
-        which needs a holder to hand them to. A crash of the holder and
-        `restart-holder` both come here. Lillecarl/pymux#730.
-        """
-        await holding.run()
-        # `unhold` and a server that stops let go of it on purpose.
-        if self.holding is not holding or self.done.is_set():
-            return
-        holding.close()
-        logger.warning("The holder went away: starting a new one to keep every program.")
-        try:
-            new = await self._holder_at(path)
-        except OSError, HolderError:
-            logger.exception("No new holder at %s: the next upgrade is refused.", path)
-            return
-        assert self.tasks is not None
-        self.tasks.start_soon(self._keep_holding, new, path)
-        # Only the connection broke: the same holder keeps every program
-        # under the ids it gave them, and adopting them again would keep
-        # each twice.
-        same = new.pid is not None and new.pid == holding.pid
-        adopted = await self._adopt_into(new, again=not same)
-        self.holding = self.jobs.holding = new
-        logger.info("The %s holder keeps %d programs.", "same" if same else "new", adopted)
-
-    async def _adopt_into(self, holding: Holding, again: bool = True) -> int:
-        """
-        Give `holding` every program this server runs through a holder.
-        How many it took. `again` false is the same holder on a new
-        connection: each program keeps its id.
-        """
-        adopted = 0
-        for pane in self.panes_by_id.values():
-            if await self._adopt_one(holding, pane.process.backend, again) is not None:
-                adopted += 1
-        for job in self.jobs.listing():
-            if job.is_done:
-                continue
-            # The snapshot names a job's program by the job's own copy.
-            program_id = await self._adopt_one(holding, job.backend, again)
-            if program_id is not None:
-                job.program_id = program_id
-                adopted += 1
-        return adopted
-
-    @staticmethod
-    async def _adopt_one(holding: Holding, backend, again: bool = True) -> int | None:
-        "Give `holding` one program, if a holder forked it. Its id there, or None."
-        try:
-            if isinstance(backend, HeldBackend) and backend.master is not None and backend.pid is not None:
-                program_id = await holding.adopt(backend.pid, [backend.master]) if again else backend.program_id
-            elif isinstance(backend, HeldPipes):
-                program_id = (
-                    await holding.adopt(backend.pid, [backend.stdout, backend.stderr], on_pipes=True)
-                    if again
-                    else backend.program_id
-                )
-            else:
-                return None
-            if program_id is None:
-                return None
-        except OSError, HolderError:
-            logger.exception("The new holder could not adopt %r.", backend)
-            return None
-        backend.adopted_by(holding, program_id)
-        return program_id
-
-    @staticmethod
-    async def _holder_at(path: str) -> Holding:
-        "The holder on `path`, started first when none answers there."
-        from .upgrade import log_arguments, rooted_environment
-
-        try:
-            return await Holding.connect(path)
-        except OSError, HolderError:
-            pass
-        # `-I`: the holder takes nothing from this environment's
-        # PYTHONPATH or working directory. The rooted environment keeps
-        # the build it runs from out of the collector's reach, because it
-        # outlives the server that starts it.
-        started = await anyio.run_process(
-            # The server's log, so the holder's faults land where the
-            # server's do. Lillecarl/pymux#558.
-            [sys.executable, "-I", "-m", "ptyhost.holder", "--socket", path, "--detach", *log_arguments()],
-            env=rooted_environment(),
-            check=False,
-        )
-        if started.returncode != 0:
-            raise HolderError(started.stderr.decode(errors="replace").strip() or "the holder did not start")
-        return await Holding.connect(path)
-
-    async def release_orphans(self) -> None:
-        "Let go of every program the holder keeps that no pane or job of this server runs."
-        if self.holding is None:
-            return
-        mine = {
-            backend.program_id
-            for pane in self.panes_by_id.values()
-            if isinstance(backend := pane.process.backend, HeldBackend)
-        }
-        mine |= {job.program_id for job in self.jobs.listing() if job.program_id is not None and not job.is_done}
-        for program in await self.holding.programs():
-            if program["id"] not in mine:
-                await self.holding.release(program["id"])
-
-    async def unhold(self) -> None:
-        "End the holder with this server: `kill-server` ends its programs too."
-        holding, self.holding = self.holding, None
-        self.jobs.holding = None
-        if holding is not None:
-            with suppress(HolderError, OSError):
-                await holding.quit()
-            holding.close()
 
     def serve_listener(self) -> None:
         "Take clients on `listener`, in the server's task group."
@@ -2808,7 +2648,6 @@ class Pymux:
                 command=command_list,
                 environment=environment_of_the_pane,
                 directory=path or self.original_cwd,
-                holding=self.holding,
                 on_done=on_done,
             )
         assert isinstance(pane.terminal, Terminal), "`_build_pane` builds a terminal pane"
@@ -2850,7 +2689,7 @@ class Pymux:
         """
         A pane that shows `job` where a program would run, with nothing
         started. The feed replays the tail and follows the rest once it
-        starts. Nothing forks, so the holder has nothing to keep.
+        starts. Nothing forks.
         """
         pane = self._build_pane(
             command=[self.default_shell],
@@ -2883,7 +2722,6 @@ class Pymux:
         command: list[str] | None = None,
         environment: Callable[[dict[str, str]], None] | None = None,
         directory: str | None = None,
-        holding: Holding | None = None,
         on_done: Callable[[], None] | None = None,
         watch_end: bool = True,
     ) -> Pane:
@@ -2979,7 +2817,6 @@ class Pymux:
             takes_key_first=takes_key_first,
             environment=environment,
             directory=directory,
-            holding=holding,
             command=command,
             # The `history-limit` option, which said how far copy mode
             # could scroll and never reached the screen that holds the
@@ -4914,8 +4751,8 @@ exec pymux notify -u "$urgency" -- "$@"
 
         async def serve() -> None:
             try:
-                # No holder: this server forks its programs, and an upgrade
-                # execs in place to keep them. Lillecarl/pymux#736.
+                # This server forks its programs, and an upgrade execs in
+                # place to keep them. Lillecarl/pymux#736.
                 async with self.running():
                     if resumed is not None:
                         await resumed()

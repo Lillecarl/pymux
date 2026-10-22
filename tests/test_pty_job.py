@@ -6,10 +6,7 @@ every stream, so `test -t` passes where a piped job fails; the
 waiting and the reading stay the same -- `run -w` answers with the
 output, `wait-job` holds and reports, `show-job` reads it -- with
 the whole terminal output in the stdout tail and nothing in stderr;
-and `list-jobs` names which jobs hold a terminal.
-
-Each rule holds twice: for a job this server forks, and for one its
-holder forks, which outlives the server. Lillecarl/pymux#556.
+and `list-jobs` names which jobs hold a terminal. Lillecarl/pymux#556.
 """
 
 from __future__ import annotations
@@ -26,18 +23,11 @@ from pymux.commands.run import run_job
 from pymux.query import ask
 
 
-@pytest.fixture(params=["forked here", "forked by the holder"])
-async def session(request, tmp_path):
-    "A server and its client, with a holder beside it or none."
+@pytest.fixture
+async def session():
+    "A server and its client."
     async with create_session() as (pymux, state):
-        if request.param == "forked by the holder":
-            pymux.socket_name = str(tmp_path / "server.sock")
-            await pymux.hold()
-            assert pymux.jobs.holding is not None
-        try:
-            yield pymux, state
-        finally:
-            await pymux.unhold()
+        yield pymux, state
 
 
 async def _run_answering(pymux, state, command) -> list:
@@ -59,7 +49,6 @@ async def test_a_pty_job_holds_a_terminal_on_every_stream(session):
     await _run_answering(pymux, state, "run --pty -w 'test -t 0 && test -t 1 && test -t 2'")
     job = pymux.jobs.get(1)
     assert job is not None and job.pty and job.is_done and job.returncode == 0
-    assert (job.program_id is not None) == (pymux.holding is not None)
 
 
 async def test_a_piped_job_holds_no_terminal(session):
@@ -86,22 +75,6 @@ async def test_a_piped_job_holds_no_terminal(session):
     assert job is not None and not job.pty and job.is_done and job.returncode == 1
 
 
-async def test_a_holder_with_no_pipes_leaves_a_piped_job_to_this_server(tmp_path):
-    "A holder from before the op is the one a running server has. Lillecarl/pymux#556."
-    async with create_session() as (pymux, state):
-        pymux.socket_name = str(tmp_path / "server.sock")
-        await pymux.hold()
-        assert pymux.holding is not None
-        pymux.holding.ops = frozenset()
-        try:
-            await _run_answering(pymux, state, "run -w 'echo here'")
-            job = pymux.jobs.get(1)
-            assert job is not None and job.returncode == 0 and job.program_id is None
-            assert job.kept("stdout") == b"here\n"
-        finally:
-            await pymux.unhold()
-
-
 async def test_a_pty_job_collects_into_stdout_with_stderr_empty(session):
     pymux, state = session
     said = await _run_answering(pymux, state, "run --pty -w 'echo out; echo err >&2'")
@@ -116,7 +89,7 @@ async def test_a_pty_job_collects_into_stdout_with_stderr_empty(session):
 
 
 async def test_a_pty_job_in_a_directory_that_is_gone_never_starts(session):
-    "The holder's child would start where the holder is, so it is refused first."
+    "The child would start where the server is, so it is refused first."
     pymux, state = session
     pymux.command_output = []
     try:

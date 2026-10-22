@@ -18,7 +18,6 @@ import tempfile
 from typing import List
 
 __all__ = [
-    "HOLDER_SUFFIX",
     "nobody_answers",
     "servers_newest_first",
     "socket_directory",
@@ -26,12 +25,6 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
-
-#: A server's pty holder listens on the server's name and this
-#: (`ptyhost.holder`). It answers a connect and speaks another protocol,
-#: so a client sent to it gets no reply. Lillecarl/pymux#605.
-HOLDER_SUFFIX = ".holder"
-
 
 def socket_directory() -> str:
     """
@@ -169,17 +162,12 @@ def _every_server() -> List[str]:
     release also in the flat place they bound before it
     (Lillecarl/pymux#405). The lock a bind takes the name under is in
     the room as well and matches this glob, which is one of the two
-    reasons a name here is asked what it is. The holder of each server
-    matches it too, and is a live socket, so its name leaves it out.
+    reasons a name here is asked what it is.
     """
     user = getpass.getuser()
     found = glob.glob("%s/pymux.sock.%s.*" % (socket_directory(), user))
     found += glob.glob("%s/pymux.sock.%s.*" % (tempfile.gettempdir(), user))
-    return [
-        path
-        for path in set(found)
-        if not path.endswith(HOLDER_SUFFIX) and _is_socket(path) and not nobody_answers(path)
-    ]
+    return [path for path in set(found) if _is_socket(path) and not nobody_answers(path)]
 
 
 def _started_at(path: str) -> float:

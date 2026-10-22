@@ -182,9 +182,8 @@ def _gone(pid: int) -> bool:
 
 
 def test_kill_server_ends_its_programs(server):
-    "A server that ends on purpose takes its programs along, and starts no holder. Lillecarl/pymux#736."
+    "A server that ends on purpose takes its programs along. Lillecarl/pymux#736."
     pids = [int(one) for one in _answer(server, "list-panes", "-F", "#{pane_pid}").split()]
-    assert not os.path.exists("%s.holder" % (server,))
 
     cli(server, "kill-server")
 
@@ -282,9 +281,8 @@ def test_an_upgrade_keeps_every_pane_and_its_program(server, tmp_path, new_build
     _answer(server, "split-window", "-d", "sleep 60")
     newest = max(int(one) for one in _answer(server, "list-panes", "-F", "#{pane_pid}").split())
     if READS_PROC:
-        # The server forks its programs itself, and starts no holder.
+        # The server forks its programs itself.
         assert _parent_of(newest) == pid
-        assert not os.path.exists("%s.holder" % (server,))
         assert _inheritable(pid) == []
     numbers = _counted(server)
     assert numbers == list(range(1, LINES + 1))
