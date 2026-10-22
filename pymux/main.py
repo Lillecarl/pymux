@@ -49,6 +49,7 @@ from prompt_toolkit.styles import (
 from ptterm import Terminal
 from ptyhost.backends import Backend
 from ptyhost.backends.posix import GRACE, PosixBackend
+from ptyhost.ending import say_how_it_ends
 from ptyhost.held import HeldBackend, Holding
 from ptyhost.holder import HolderError
 from pyte.environment import terminal_name
@@ -2214,6 +2215,7 @@ class Pymux:
         `running()`.
         """
         introspect.answer_signal()
+        say_how_it_ends(logger)
 
     @asynccontextmanager
     async def running(self, hold: bool = False, keep_orphans: bool = False):
