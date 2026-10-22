@@ -110,6 +110,10 @@ SETTLE_SECONDS = 3.0
 #: How long a server waits to start PipeWire again after it ended.
 RETRY_SECONDS = 5.0
 
+#: How long an upgrade waits for a SIGTERM to end PipeWire before it
+#: sends SIGKILL.
+STOP_SECONDS = 2.0
+
 #: The pipe to the microphone's `pw-cat` holds one page, 43 ms of mono:
 #: what waits in it waits before the person's voice, and a recorder that
 #: starts hears it first.
@@ -613,17 +617,29 @@ class AudioServer:
         "The programs sound runs now. `list-processes` names them."
         return [process.pid for process in self._processes]
 
-    def pause(self) -> None:
+    async def pause(self) -> None:
         """
-        Stop PipeWire now, for `upgrade-server`. The old server leaves
-        with `os._exit`, which would orphan both programs, and the new
-        one starts its own in the same directory.
+        Stop PipeWire, for `upgrade-server`, and wait until it has gone.
+        The new image starts its own in the same directory.
+
+        **The exec keeps this pid**, so a program not waited for here
+        stays a zombie child of the new image, which never knew it.
+        Lillecarl/pymux#739.
         """
         self.paused = True
-        for process in list(self._processes):
+        processes = list(self._processes)
+        for process in processes:
             with contextlib.suppress(ProcessLookupError):
                 process.terminate()
         self.option_changed()
+        with anyio.move_on_after(STOP_SECONDS):
+            for process in processes:
+                await process.wait()
+        for process in processes:
+            if process.returncode is None:
+                with contextlib.suppress(ProcessLookupError):
+                    process.kill()
+                await process.wait()
 
     def resume(self) -> None:
         "An upgrade that failed: sound again."

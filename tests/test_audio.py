@@ -508,6 +508,16 @@ async def test_a_new_pane_finds_the_private_pipewire(tmp_path):
         assert os.path.exists(remote)
 
 
+async def test_a_pause_reaps_pipewire_before_it_returns(tmp_path):
+    "An upgrade execs right after it, and a program not reaped stays the new image's zombie. Lillecarl/pymux#739."
+    async with serving(tmp_path) as pymux:
+        await once(lambda: pymux.audio.pids(), 10.0, "sound never started")
+        processes = list(pymux.audio._processes)
+        await pymux.audio.pause()
+        assert [process.returncode is not None for process in processes] == [True] * len(processes)
+        pymux.audio.resume()
+
+
 async def test_a_linux_client_plays_and_records_through_its_own_pipewire(tmp_path):
     """
     `pw-cat` on the client's side, into a PipeWire that stands for the

@@ -100,7 +100,7 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
     try:
         # Sound stops too: the PipeWire is this server's child, and the
         # new image would not know it. Lillecarl/pymux#657.
-        pymux.audio.pause()
+        await pymux.audio.pause()
         try:
             written.write(pymux)
             await _check(command, written.partial)
