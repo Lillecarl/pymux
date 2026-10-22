@@ -76,7 +76,7 @@ async def test_after_an_answer_the_next_frame_waits_for_the_next_one():
         # Every report answered: the terminal is known to answer.
         for _ in range(connection.reports_out):
             session.typed(state, ANSWER)
-        await once(lambda: connection.terminal_answers and not connection.reports_out, 5.0, "answers not read")
+        await once(lambda: connection.answers_reports and not connection.reports_out, 5.0, "answers not read")
 
         state.message = "one"
         redraw(state)
@@ -108,6 +108,6 @@ async def test_the_answer_never_reaches_a_pane():
         pane.process.write_input = written.append
 
         session.typed(state, ANSWER)
-        await once(lambda: state.connection.terminal_answers, 5.0, "the answer was not read")
+        await once(lambda: state.connection.answers_reports, 5.0, "the answer was not read")
 
         assert "".join(written) == ""

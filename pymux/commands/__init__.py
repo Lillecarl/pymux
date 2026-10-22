@@ -89,6 +89,7 @@ MODULES = [
     "show_options",
     "show_window_options",
     "show_client_options",
+    "show_terminal",
     "list_commands",
     "refresh_client",
     "show_prompt_history",

@@ -45,6 +45,7 @@ from .nearest import NEAREST, nearest_theme, wanted_from
 from .options import ExtendedKeys, SetOptionError
 from .pipes import BrokenPipeError
 from .rate import Rate
+from .terminal_answers import SURVEY, TerminalAnswers
 
 if TYPE_CHECKING:
     from pymux.main import ClientState, Pymux
@@ -195,7 +196,9 @@ class ServerConnection:
         # A new server asks its own reports, and learns again whether
         # the terminal answers them.
         "reports_out": Keep.DROPPED,
-        "terminal_answers": Keep.DROPPED,
+        # The client asks again when it reattaches to the new server.
+        "terminal_said": Keep.DROPPED,
+        "answers_reports": Keep.DROPPED,
         # The next server asks the terminal again.
         "pixel_mouse": Keep.DROPPED,
         "widens_text_emoji": Keep.DROPPED,
@@ -248,7 +251,10 @@ class ServerConnection:
         #: whether one ever was. Lillecarl/pymux#259.
         self.paced = False
         self.reports_out = 0
-        self.terminal_answers = False
+        self.answers_reports = False
+
+        #: Every reply this client's terminal gave. Lillecarl/pymux#725.
+        self.terminal_said = TerminalAnswers()
 
         #: What `record-client` is recording of this client, or None.
         #: Lillecarl/pymux#612.
@@ -657,6 +663,10 @@ class ServerConnection:
         arrive at any time, long after the detection, and it belongs to
         one pane.
         """
+        # Every reply is kept, whatever is done with it below.
+        # Lillecarl/pymux#725.
+        self.terminal_said.heard(data)
+
         # The terminal reports the mouse in pixels if asked: from here on
         # it is asked, with the rest of the mouse. Lillecarl/pymux#648.
         pixel_mouse = _PIXEL_MOUSE_REPLY_RE.match(data)
@@ -744,7 +754,9 @@ class ServerConnection:
         if self.graphics.cell_size_known and not knew_the_cell:
             self.pymux.sync_cell_size()
 
-        if not data.endswith("c"):
+        # The secondary attributes end in `c` too, and are the survey's,
+        # never the fence. Lillecarl/pymux#725.
+        if not data.endswith("c") or data.startswith("\x1b[>"):
             return
 
         # Device attributes reply: the fence of the detection. What did
@@ -895,7 +907,9 @@ class ServerConnection:
             self._kitty_detection_pending = True
             # The server asks this one itself, so a client of any age
             # gets a pointer to the pixel. Lillecarl/pymux#648.
-            self._write_output_raw(PIXEL_MOUSE_QUERY + EMOJI_WIDTH_PROBE)
+            # And the survey, whose answers are only kept.
+            # Lillecarl/pymux#725.
+            self._write_output_raw(PIXEL_MOUSE_QUERY + EMOJI_WIDTH_PROBE + SURVEY)
             self._flush_output()
 
         # Set size. (The client reports the size.)
@@ -1439,7 +1453,7 @@ class ServerConnection:
         The terminal read a frame. A frame held back for it can draw.
         """
         self.reports_out = max(0, self.reports_out - 1)
-        self.terminal_answers = True
+        self.answers_reports = True
         if self.client_state is not None and not self.reports_out:
             self.client_state.app.invalidate()
 
@@ -1452,7 +1466,7 @@ class ServerConnection:
         one that answered and went quiet holds one frame and no more,
         which is the dead link of a phone that lost its signal.
         """
-        return self.terminal_answers and self.reports_out > 0
+        return self.answers_reports and self.reports_out > 0
 
     def _create_app(
         self,

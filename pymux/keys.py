@@ -433,8 +433,10 @@ _KeyResult = _Key | object
 # Reply of the "CSI ? u" flags query.
 _FLAGS_REPLY_RE = re.compile(r"^\x1b\[\?(\d+)u$")
 
-# Primary or Secondary device attributes reply.
-_DA1_REPLY_RE = re.compile(r"^\x1b\[\?[\d;]*c$")
+# Primary ("CSI ? ... c") or secondary ("CSI > ... c") device
+# attributes reply. The secondary one answers the survey of
+# Lillecarl/pymux#725, and left out it reached a pane as keys.
+_DA1_REPLY_RE = re.compile(r"^\x1b\[[?>][\d;]*c$")
 
 # Reply of the "CSI 16 t" cell size query.
 _CELL_SIZE_REPLY_RE = re.compile(r"^\x1b\[6;\d+;\d+t$")
