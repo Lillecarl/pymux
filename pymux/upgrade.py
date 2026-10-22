@@ -61,6 +61,9 @@ if TYPE_CHECKING:
 
 __all__ = ["CHECK", "RESUME", "check", "resume", "upgrade"]
 
+#: What a client shows while the new build starts.
+UPGRADING = "pymux is being upgraded."
+
 #: The mode words of the new build: the check, and the start after the exec.
 CHECK = "check-snapshot"
 RESUME = "resume-server"
@@ -107,7 +110,7 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
             for connection in list(pymux.connections):
                 client_state = connection.client_state
                 if client_state is not None and not client_state.temporary:
-                    await connection.say_restarting(RESTART_WAIT)
+                    await connection.say_restarting(RESTART_WAIT, UPGRADING)
             # From the sweep on, a command that ends a pane would leave a
             # program neither image ends or reaps. Lillecarl/pymux#740.
             pymux.refusing_commands = True

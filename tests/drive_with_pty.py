@@ -2355,7 +2355,7 @@ def check_an_upgraded_server_keeps_the_client_and_the_pane(tmp):
 
         # Its own connection goes with the exec, so its answer is no verdict.
         run_cli(terminal.sock_path, ["upgrade-server", shlex.join([sys.executable, "-m", "pymux"])])
-        terminal.wait_for(b"pymux is restarting.")
+        terminal.wait_for(b"pymux is being upgraded.")
         back = terminal.passed
 
         terminal.wait_for_queries()

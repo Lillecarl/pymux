@@ -25,6 +25,15 @@ __all__ = [
 ]
 
 
+#: The clients that may wait to be taken. tmux's number.
+#:
+#: **An upgrade takes no client for about a second**, from the pause to
+#: the new image's first accept, and every client comes back in that
+#: second. At 0 the kernel queued one: the rest were refused, and an
+#: SSH client heard "open failed" and left. Lillecarl/pymux#750.
+BACKLOG = 128
+
+
 def bind_and_listen_on_posix_socket(socket_name: str, accept_callback: Callable):
     """
     Bind a unix socket, and answer with the listener that serves it.
@@ -50,7 +59,7 @@ def bind_and_listen_on_posix_socket(socket_name: str, accept_callback: Callable)
     finally:
         _ = os.umask(old_umask)
 
-    sock.listen(0)
+    sock.listen(BACKLOG)
 
     logger.info("Listening on %r." % socket_name)
     return PosixSocketListener(socket_name, sock, accept_callback)

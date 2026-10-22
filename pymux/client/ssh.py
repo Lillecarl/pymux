@@ -169,6 +169,23 @@ REAP_POLL = 30.0
 #: What a person types to stop trying.
 LEAVE = ("q", "Q", "\x03")
 
+#: Seconds between two tries while a server restarts. Its next image
+#: answers within about one, so the backoff's long waits would only
+#: keep the person waiting. The local client tries every 0.1 s.
+RESTART_RETRY = 0.25
+
+
+class Restarting(ConnectionResetError):
+    """
+    The server said it is restarting, and closed the link. The message
+    is the reason it gave; `until` is when its window ends, on the
+    loop's clock.
+    """
+
+    def __init__(self, why: str, until: float) -> None:
+        super().__init__(why)
+        self.until = until
+
 
 class _Left:
     "The person stopped the client. A type, so a result can be told apart."
@@ -519,11 +536,12 @@ class SshClient(TerminalClient):
                     # this is a link to open again and not a detach.
                     # The old server's images go: the next one knows
                     # none of them. Lillecarl/pymux#409.
+                    until = anyio.current_time() + self.restart_wait
                     self.restart_wait = None
                     if self.placed_images:
                         os.write(sys.stdout.fileno(), DELETE_EVERY_IMAGE)
                         self.placed_images = False
-                    lost = ConnectionResetError("The server is restarting.")
+                    lost = Restarting(self.restart_why, until)
 
                 if lost is None:
                     break  # The server closed the connection.
@@ -966,12 +984,24 @@ class SshClient(TerminalClient):
         output = Vt100_Output.from_pty(sys.stdout)
         internet = Internet()
         outcome = None
+        restart = lost if isinstance(lost, Restarting) else None
+
+        def restarting() -> bool:
+            return restart is not None and anyio.current_time() < restart.until
 
         try:
             async with anyio.create_task_group() as watching:
                 watching.start_soon(watch_internet, internet, WAN_INTERVAL)
-                while link_may_come_back(lost):
-                    outcome = await self._one_try(output, stdin_fd, waits.next(), lost, internet)
+                # **A restart's refusals are not answers.** A socket that
+                # takes no channel is one that is not there, which never
+                # comes back -- except in the window the server named:
+                # the next image takes the socket over within it, and
+                # its queue may be full until then. Lillecarl/pymux#750.
+                while link_may_come_back(lost) or restarting():
+                    if restarting():
+                        outcome = await self._one_try(output, stdin_fd, RESTART_RETRY, restart, internet)
+                    else:
+                        outcome = await self._one_try(output, stdin_fd, waits.next(), lost, internet)
                     if not isinstance(outcome, Exception):
                         break
                     lost = outcome

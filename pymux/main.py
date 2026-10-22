@@ -4807,7 +4807,7 @@ exec pymux notify -u "$urgency" -- "$@"
         Binding again is no answer, because this process still listens
         there. Lillecarl/pymux#408.
         """
-        from .pipes.posix import PosixSocketListener
+        from .pipes.posix import BACKLOG, PosixSocketListener
 
         sock = socket.socket(fileno=fd)
         if sock.family != socket.AF_UNIX or not _listens(sock):
@@ -4817,6 +4817,9 @@ exec pymux notify -u "$urgency" -- "$@"
         if socket_name is None or sock.getsockname() != socket_name:
             sock.detach()
             raise OSError(errno.EADDRNOTAVAIL, "fd %d does not listen on %r" % (fd, socket_name))
+        # The backlog is the socket's, and a server bound by an older
+        # build carries that build's number across every exec.
+        sock.listen(BACKLOG)
         self.listener = PosixSocketListener(socket_name, sock, self._accept_connection)
 
     def _accept_connection(self, pipe_connection) -> None:

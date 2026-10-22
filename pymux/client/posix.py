@@ -227,7 +227,7 @@ class PosixClient(TerminalClient):
             size.rows,
             size.columns,
             [
-                "pymux is restarting.",
+                self.restart_why,
                 "Waiting up to %d seconds for it on %s." % (wait, self.socket_name),
                 "",
                 "Press q to leave.",

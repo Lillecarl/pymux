@@ -1212,13 +1212,14 @@ class ServerConnection:
         # was true when it was sent, in the format of the moment.
         self._spawn(self._write(self._encode(data), compress_after))
 
-    async def say_restarting(self, wait: float) -> None:
+    async def say_restarting(self, wait: float, why: str) -> None:
         """
         Tell this client that the next server comes on the same socket,
-        and how many seconds to wait for it. Awaited, so the packet is
-        written before the server stops. Lillecarl/pymux#409.
+        how many seconds to wait for it, and why, for the screen it
+        draws meanwhile. Awaited, so the packet is written before the
+        server stops. Lillecarl/pymux#409.
         """
-        await self._write_packet({Field.CMD: Packet.RESTARTING, Field.WAIT: wait})
+        await self._write_packet({Field.CMD: Packet.RESTARTING, Field.WAIT: wait, Field.MESSAGE: why})
 
     async def _refuse_the_attach(self) -> None:
         """

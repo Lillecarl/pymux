@@ -683,12 +683,48 @@ async def test_a_server_that_restarts_is_reached_again(monkeypatch):
         await it.until(lambda: ALTERNATE_SCREEN in it.terminal.said, "the first frame")
 
         for connection in list(it.pymux.connections):
-            await connection.say_restarting(5.0)
+            await connection.say_restarting(5.0, "pymux is being upgraded.")
             connection._close_connection()
 
-        await it.until(lambda: "The server is restarting." in it.terminal.said, "the restarting screen")
+        await it.until(lambda: "pymux is being upgraded." in it.terminal.said, "the restarting screen")
         it.terminal.type("\r")
         await it.until(lambda: len(it.pymux.connections) == 1, "the attach after the restart")
+
+        for connection in list(it.pymux.connections):
+            connection.detach_and_close()
+        await it.wait_for_attach(10)
+
+
+async def test_a_restarting_server_s_refusals_are_waited_out(monkeypatch):
+    """
+    sshd connects to the socket without blocking, so a server whose
+    queue is full while it restarts refuses the channel: asyncssh says
+    "open failed". Anywhere else that is an answer, and the client
+    leaves. Inside the window the server named, the client tries again,
+    by itself. Lillecarl/pymux#750.
+    """
+    import asyncssh
+
+    async with attached(monkeypatch) as it:
+        await it.until(lambda: len(it.pymux.connections) == 1, "the first attach")
+        await it.until(lambda: ALTERNATE_SCREEN in it.terminal.said, "the first frame")
+
+        real = it.client._connect
+        refusals = []
+
+        async def refused_twice(*arguments):
+            if len(refusals) < 2:
+                refusals.append(True)
+                raise asyncssh.ChannelOpenError(asyncssh.OPEN_CONNECT_FAILED, "open failed")
+            return await real(*arguments)
+
+        it.client._connect = refused_twice
+        for connection in list(it.pymux.connections):
+            await connection.say_restarting(5.0, "pymux is being upgraded.")
+            connection._close_connection()
+
+        await it.until(lambda: len(it.pymux.connections) == 1, "the attach after the refusals")
+        assert len(refusals) == 2
 
         for connection in list(it.pymux.connections):
             connection.detach_and_close()

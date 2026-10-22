@@ -37,7 +37,7 @@ def kill_server(pymux: Pymux, args: argparse.Namespace):
         for connection in list(pymux.connections):
             client_state = connection.client_state
             if client_state is not None and not client_state.temporary:
-                await connection.say_restarting(RESTART_WAIT)
+                await connection.say_restarting(RESTART_WAIT, "pymux is restarting.")
         await pymux.hang_up_and_stop()
 
     return tell_and_stop()

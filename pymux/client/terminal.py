@@ -108,6 +108,10 @@ DELETE_EVERY_IMAGE = b"\x1b_Ga=d,d=A,q=2\x1b\\"
 #: without one ran no command, or is not a pymux server. Lillecarl/pymux#606.
 NO_ANSWER = "pymux: %s closed the connection with no answer. Is a pymux server listening there?\n"
 
+#: What a client shows while the next server starts, when the server
+#: said no reason.
+RESTARTING = "pymux is restarting."
+
 #: The device attributes query, which closes the detection. The shared
 #: memory probe goes in front of it, so its answer comes first.
 DEVICE_ATTRIBUTES_QUERY = b"\x1b[c"
@@ -239,6 +243,8 @@ class TerminalClient(Client):
         #: that ends without one is gone, and the client leaves.
         #: Lillecarl/pymux#409.
         self.restart_wait: float | None = None
+        #: Why, as the server said it, for the screen drawn meanwhile.
+        self.restart_why = RESTARTING
 
         #: Whether a server put a kitty image on this terminal. The
         #: next server knows none of them, so a restart takes them off,
@@ -642,6 +648,8 @@ class TerminalClient(Client):
 
         elif packet[Field.CMD] == Packet.RESTARTING:
             self.restart_wait = float(packet[Field.WAIT])
+            # An older server says no reason.
+            self.restart_why = str(packet.get(Field.MESSAGE) or RESTARTING)
 
         elif packet[Field.CMD] == Packet.ECHO:
             # The server measures the round trip that sizes the sound
