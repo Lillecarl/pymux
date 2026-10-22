@@ -269,8 +269,11 @@ def upgrade_in(terminal, seat, work, out):
         )
         if ended() is not None:
             raise RuntimeError("the terminal closed across the upgrade")
-        if answer(socket_path, "display-message", "-p", "#{pid}") == pid:
-            raise RuntimeError("the old server still answers, so nothing was handed over")
+        if answer(socket_path, "display-message", "-p", "#{pid}") != pid:
+            raise RuntimeError("the server's pid changed, so this was no exec")
+        with open("/proc/%s/cmdline" % pid.strip(), "rb") as cmdline:
+            if b"resume-server" not in cmdline.read().split(b"\0"):
+                raise RuntimeError("the server runs the build it ran before, so nothing was upgraded")
         if what_the_jobs_say(socket_path) != jobs:
             raise RuntimeError("the jobs answer differently after the upgrade")
         if answer(socket_path, "list-panes", "-a", "-F", "#{pane_id} #{pane_in_mode}") != in_mode:

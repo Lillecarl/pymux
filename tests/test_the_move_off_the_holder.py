@@ -17,11 +17,12 @@ import sys
 import time
 
 import anyio
+import apsw
+from ptyhost.held import HeldBackend
 from session import create_session
 from test_jobs_over_the_socket import CLI_TIMEOUT, cli
 from test_upgrade import _gone
 
-from ptyhost.held import HeldBackend
 from pymux import snapshot
 
 
@@ -31,10 +32,11 @@ async def _answer(sock, *args) -> str:
     return done.stdout.decode()
 
 
-async def _until(what, complaint: str) -> None:
+async def _until(what, complaint) -> None:
+    "Wait for `what`. `complaint` is a string, or what makes one once the wait failed."
     deadline = time.monotonic() + CLI_TIMEOUT
     while not await what():
-        assert time.monotonic() < deadline, complaint
+        assert time.monotonic() < deadline, complaint() if callable(complaint) else complaint
         await anyio.sleep(0.1)
 
 
@@ -65,6 +67,17 @@ async def test_the_move_off_the_holder_keeps_every_program(tmp_path):
         path = tmp_path / "old.sqlite"
         snapshot.save(pymux, path)
         backend.pause_reading()
+        # In the shape that server writes: version 26, with no fds.
+        db = apsw.Connection(str(path))
+        for table, column in (
+            ("jobs", "fds"),
+            ("jobs", "parent"),
+            ("pane_programs", "master_fd"),
+            ("pane_programs", "parent"),
+        ):
+            db.execute("ALTER TABLE %s DROP COLUMN %s" % (table, column))
+        db.execute("PRAGMA user_version = 26")
+        db.close()
         ready, told = os.pipe()
         try:
             new = await anyio.open_process(
@@ -92,9 +105,7 @@ async def test_the_move_off_the_holder_keeps_every_program(tmp_path):
             panes = await _answer(sock, "list-panes", "-F", "#{pane_pid}")
             assert panes.split() == [str(program)]
             await _answer(sock, "send-keys", "echo mar''ker", "Enter")
-            await _until(
-                lambda: _shows(sock, "marker"), "the program never answered: %s" % (log.read_text(),)
-            )
+            await _until(lambda: _shows(sock, "marker"), lambda: "the program never answered: %s" % (log.read_text(),))
             assert "Took 1 panes over from the holder, which ends." in log.read_text()
 
             # Not its child, and still its program: it ends with the server.
