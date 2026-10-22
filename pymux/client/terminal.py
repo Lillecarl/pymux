@@ -303,6 +303,7 @@ class TerminalClient(Client):
                 Field.FORWARDS: self.can_forward,
                 Field.REPORTS: self.can_forward,
                 Field.BROWSERS: True,
+                Field.SAVES_FILES: True,
                 # Whether this client answers a ping. A server drops a
                 # client that stops answering, and never one that did
                 # not say it would. Lillecarl/pymux#446.

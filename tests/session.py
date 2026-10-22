@@ -123,6 +123,8 @@ class Connection:
         self.recording = None
         self.client_id = ""
         self.starts_browsers = False
+        # As every pymux client of this build says it does.
+        self.saves_files = True
         self.waits_for_terminal = False
         self.pointer_fraction = (0.5, 0.5)
 
@@ -555,6 +557,8 @@ async def over_connection(pymux=None, read_packet=None):
                     "pings": pings,
                     "paced": paced,
                     "forwards": forwards,
+                    # Every pymux client of this build says it.
+                    "saves-files": True,
                     "data": "",
                     **({"wire": ["msgpack"], "frames": True, "codecs": list(codecs), "shows": shows} if frames else {}),
                 }

@@ -3970,12 +3970,15 @@ exec pymux notify -u "$urgency" -- "$@"
         # the client came over SSH.
         terminal_saves = terminal_saves_downloads(client.connection.graphics.terminal_version)
         route = route_of(client.file_transfer, client.connection.can_forward, terminal_saves)
+        refused = None
         if route is FileTransfer.PASSTHROUGH and not terminal_saves:
-            refused = "Did not send %s: file-transfer is passthrough, and this terminal saves no iTerm2 download." % (
-                download.name,
-            )
-            logger.warning(refused)
-            client.message = refused
+            refused = "file-transfer is passthrough, and this terminal saves no iTerm2 download"
+        elif route is FileTransfer.PYMUX and not client.connection.saves_files:
+            refused = "this pymux client is too old to save one; start a new one"
+        if refused is not None:
+            message = "Did not send %s: %s." % (download.name, refused)
+            logger.warning(message)
+            client.message = message
             self.invalidate(Woke.PANE_WROTE_AN_OSC)
             return
         if route is FileTransfer.PASSTHROUGH:

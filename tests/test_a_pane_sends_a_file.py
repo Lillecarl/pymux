@@ -333,6 +333,21 @@ async def test_passthrough_to_a_terminal_that_saves_no_download_is_refused():
         assert "saves no iTerm2 download" in state.message
 
 
+async def test_a_client_too_old_to_save_a_file_is_told_so():
+    "It drops `file` packets unread, and the person never learned. Lillecarl/pymux#745."
+    async with in_this_process() as session:
+        state, _ = await session.attach("old", SIZE)
+        state.connection.can_forward = True
+        state.connection.saves_files = False
+        got = Collected(state)
+        pane = await a_pane(session.pymux, state)
+
+        send(session.pymux, pane, [file_sequence(NAME, DATA)])
+
+        assert got.files() == []
+        assert "too old to save one" in state.message
+
+
 async def test_only_the_client_used_last_gets_it():
     async with in_this_process() as session:
         pymux = session.pymux

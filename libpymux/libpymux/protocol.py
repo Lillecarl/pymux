@@ -268,6 +268,9 @@ class Field(StrEnum):
     BROWSER = "browser"
     #: In `start-gui`: this client starts browsers.
     BROWSERS = "browsers"
+    #: In `start-gui`: this client saves the files `file` packets carry.
+    #: An older one drops them unread. Lillecarl/pymux#745.
+    SAVES_FILES = "saves-files"
     PORT = "port"
     PROGRAM = "program"
     PROFILE = "profile"

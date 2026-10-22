@@ -177,6 +177,7 @@ class ServerConnection:
         "answers_forwards": Keep.REBUILT,
         "_next_forwards": Keep.DROPPED,
         "starts_browsers": Keep.REBUILT,
+        "saves_files": Keep.REBUILT,
         "may_attach": Keep.REBUILT,
         "forwards": Keep.DROPPED,
         "pipe_connection": Keep.DROPPED,
@@ -359,6 +360,8 @@ class ServerConnection:
         self._next_forwards: anyio.Event | None = None
         #: Whether this client starts browsers. Lillecarl/pymux#653.
         self.starts_browsers = False
+        #: Whether this client saves a download. Lillecarl/pymux#745.
+        self.saves_files = False
         #: This client's sound, when it plays it. Lillecarl/pymux#657.
         self._audio: AudioLink | None = None
 
@@ -972,6 +975,7 @@ class ServerConnection:
             self.can_forward = bool(packet.get(Field.FORWARDS))
             self.answers_forwards = bool(packet.get(Field.REPORTS))
             self.starts_browsers = bool(packet.get(Field.BROWSERS))
+            self.saves_files = bool(packet.get(Field.SAVES_FILES))
             self.answers_ping = bool(packet.get(Field.PINGS))
             self.paced = bool(packet.get(Field.PACED))
             self.environment = packet.get(Field.ENVIRONMENT) or {}
