@@ -18,13 +18,15 @@ pymux - pure Python terminal multiplexer, with server-owned background jobs
 
 *pymux renice* [_NICENESS_]
 
+*pymux send-file* _FILE_...
+
 # DESCRIPTION
 
 *pymux* is a terminal multiplexer in the shape of *tmux*(1): a server
 holds sessions, windows and panes, and clients attach to them or send
 them commands. Any word that is not a mode (*integrated*,
 *start-server*, *attach*, *list-sessions*, *ls*, *find*, *diagnose*,
-*renice*, *web*) is a command for a running server, answered on stdout; *--help*
+*renice*, *web*, *send-file*) is a command for a running server, answered on stdout; *--help*
 lists the rest.
 
 *run* starts a command as a server-owned job: pipes instead of a
@@ -128,6 +130,22 @@ above 0 stays, because only root may lower it.
 
 *list-processes* is what *renice* reads: one role and one pid on each
 line.
+
+# FILES TO THE PERSON
+
+*send-file* _FILE_...
+
+*send-file* run in a pane sends each file to the person at the client
+used last on the pane's session. It writes iTerm2's multipart download
+sequence to its own terminal, so a program that writes that sequence
+itself is treated the same, and a terminal outside pymux that reads the
+sequence saves the file too. A file is at most 64 MiB.
+
+The client option *file-transfer* says who saves the file. *pymux*: the
+pymux client, in *$XDG_DOWNLOAD_DIR*, else *~/Downloads*, else its own
+directory, never over a file that is there. *passthrough*: the client's
+terminal. *auto*, the default: *pymux* for a client that came over SSH,
+*passthrough* for one on the server's machine.
 
 # ENVIRONMENT
 

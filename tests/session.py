@@ -484,8 +484,13 @@ async def over_connection(pymux=None, read_packet=None):
         codecs=(),
         shows=False,
         paced=False,
+        forwards=False,
     ):
         """
+        `forwards` is what `SshClient` says and no other client does:
+        it came over SSH, so it can forward a port and is on another
+        machine. Lillecarl/pymux#436, Lillecarl/pymux#743.
+
         `paced` says its terminal answers a status report, which the
         test answers itself with `typed`. Lillecarl/pymux#259.
 
@@ -549,6 +554,7 @@ async def over_connection(pymux=None, read_packet=None):
                     "client-options": client_options or [],
                     "pings": pings,
                     "paced": paced,
+                    "forwards": forwards,
                     "data": "",
                     **({"wire": ["msgpack"], "frames": True, "codecs": list(codecs), "shows": shows} if frames else {}),
                 }

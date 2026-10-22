@@ -111,6 +111,9 @@ class Packet(StrEnum):
     # Lillecarl/pymux#653.
     BROWSER_STARTED = "browser-started"
     BROWSER_ENDED = "browser-ended"
+    # "I saved the file of `file`", or why not, under `message`.
+    # Lillecarl/pymux#743.
+    FILE_SAVED = "file-saved"
 
     # The server tells.
     OUT = "out"
@@ -149,6 +152,11 @@ class Packet(StrEnum):
     # Lillecarl/pymux#653.
     BROWSER = "browser"
     BROWSER_STOP = "browser-stop"
+    # Save a file that a pane sent, on the machine the person sits at:
+    # one part of it as base64 under `data`, with its `name`, the
+    # `transfer` the parts share, and `last` on the final part. Base64,
+    # because a JSON connection carries no bytes. Lillecarl/pymux#743.
+    FILE = "file"
 
     # Sound, on the attached connection of a client that said `audio` in
     # `start-gui`. Lillecarl/pymux#657.
@@ -286,6 +294,10 @@ class Field(StrEnum):
     #: In `audio`, the bits a second the client's microphone encodes
     #: at. Lillecarl/pymux#674.
     BITRATE = "bitrate"
+    #: In `file`: the name the pane gave the file, and the id its parts
+    #: share. Lillecarl/pymux#743.
+    NAME = "name"
+    TRANSFER = "transfer"
 
 
 class Codec(StrEnum):

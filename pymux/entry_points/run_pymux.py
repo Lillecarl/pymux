@@ -98,6 +98,9 @@ class Mode(StrEnum):
     DIAGNOSE = "diagnose"
     RENICE = "renice"
     WEB = "web"
+    #: Send files to the person, from a pane. Not `send`, which is
+    #: tmux's name for `send-keys`. Lillecarl/pymux#743.
+    SEND_FILE = "send-file"
     #: An upgrade's check of the new build, and its new server.
     #: `pymux/upgrade.py`.
     CHECK_SNAPSHOT = "check-snapshot"
@@ -371,6 +374,11 @@ def parse_arguments(
             a.niceness = level_parser.parse_args(rest).niceness
             rest = []
 
+        if mode is Mode.SEND_FILE:
+            # The paths, before the fallthrough below sends them to a
+            # server as a command.
+            a.send_paths, rest = rest, []
+
         if mode in (Mode.CHECK_SNAPSHOT, Mode.RESUME_SERVER):
             # What an upgrading server runs, never a person: the words
             # are `pymux.upgrade`'s to read.
@@ -426,6 +434,7 @@ def _completion_parser() -> argparse.ArgumentParser:
         Mode.DIAGNOSE,
         Mode.RENICE,
         Mode.WEB,
+        Mode.SEND_FILE,
     ):
         mode_parser = modes.add_parser(
             str(mode),
@@ -436,6 +445,8 @@ def _completion_parser() -> argparse.ArgumentParser:
             mode_parser.add_argument("--json", action="store_true", help="Print the report as JSON.")
         if mode is Mode.RENICE:
             mode_parser.add_argument("niceness", nargs="?", help="From -20 to 19; -10 by default.")
+        if mode is Mode.SEND_FILE:
+            mode_parser.add_argument("files", nargs="+", help="The files to send to the person.")
     add_commands_to(modes)
     return parser
 
@@ -557,6 +568,13 @@ def run() -> None:
 
         case Mode.WEB:
             sys.exit(_web(socket_name, a))
+
+        case Mode.SEND_FILE:
+            # Written to this terminal, which in a pane is the pane: no
+            # socket, so it works wherever iTerm2's protocol is read.
+            from pymux.downloads import send_files
+
+            sys.exit(send_files(a.send_paths, sys.stdout.buffer, sys.stderr))
 
         case Mode.LIST_SESSIONS | Mode.LS:
             if socket_name:

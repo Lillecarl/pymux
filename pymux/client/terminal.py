@@ -40,6 +40,7 @@ from pymux.utils import nonblocking
 
 from . import browser
 from .base import Client
+from .downloads import Downloads
 
 if TYPE_CHECKING:
     from .audio import AudioClient
@@ -229,6 +230,9 @@ class TerminalClient(Client):
         #: The browsers a program on the server drives, by launch.
         #: Lillecarl/pymux#653.
         self._browsers: dict[str, Any] = {}
+        #: The files a pane sends the person, until each is whole.
+        #: Lillecarl/pymux#743.
+        self.downloads = Downloads()
 
     @property
     def _stdin_reader(self) -> PosixStdinReader:
@@ -267,6 +271,9 @@ class TerminalClient(Client):
         # A new connection, to this server or the next: JSON until it
         # answers the offer below.
         self._encode = encode_json
+        # And the rest of a file the last connection was sending never
+        # arrives.
+        self.downloads.clear()
         self._send_size()
         self._send_packet(
             {
@@ -582,6 +589,13 @@ class TerminalClient(Client):
 
         elif packet[Field.CMD] == Packet.BROWSER:
             self._start_browser(packet)
+
+        elif packet[Field.CMD] == Packet.FILE:
+            # A pane's download, saved on this machine. The server
+            # shows where it went: only this side knows the path.
+            said = self.downloads.receive(packet)
+            if said is not None:
+                self._send_packet({Field.CMD: Packet.FILE_SAVED, Field.MESSAGE: said})
 
         elif packet[Field.CMD] == Packet.BROWSER_STOP:
             self.stop_browser(packet[Field.BROWSER])

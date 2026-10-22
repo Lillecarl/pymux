@@ -1029,6 +1029,13 @@ class ServerConnection:
         elif packet[Field.CMD] == Packet.BROWSER_ENDED:
             self.pymux.browsers.ended(packet[Field.BROWSER])
 
+        # Where the client saved a pane's download, or why it did not.
+        # Only the client knows the path. Lillecarl/pymux#743.
+        elif packet[Field.CMD] == Packet.FILE_SAVED:
+            if self.client_state is not None:
+                self.client_state.message = str(packet.get(Field.MESSAGE) or "")
+                self.client_state.app.invalidate()
+
         elif packet[Field.CMD] == Packet.OPEN_FAILED:
             if self.client_state is not None:
                 self.client_state.message = "Could not open %s in a browser on this machine." % (packet[Field.DATA],)

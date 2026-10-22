@@ -22,6 +22,7 @@ from prompt_toolkit.data_structures import Size
 from ptterm import Terminal
 from pyte.keep import Keep
 
+from .downloads import DownloadReader
 from .enums import WindowCodec, WindowSize
 from .ids import PaneId, PaneIndex, WindowId, WindowIndex
 from .wayland_scale import DEFAULT_WAYLAND_SCALE
@@ -113,6 +114,8 @@ class Pane:
         "revision": Keep.SAVED,
         # An upgrade writes it out first: `upgrade.upgrade`.
         "recording": Keep.DROPPED,
+        # A file half sent is lost; its sender sends it again.
+        "downloads": Keep.DROPPED,
     }
 
     def __init__(self, terminal: Terminal | WindowWidget) -> None:
@@ -185,6 +188,10 @@ class Pane:
 
         #: What `record-pane` is recording of this pane, or None.
         self.recording: Recording | None = None
+
+        #: The files this pane sends to the person, as their parts
+        #: arrive. Lillecarl/pymux#743.
+        self.downloads = DownloadReader()
 
     def content_changed(self) -> None:
         "Say that what this pane shows may have changed."

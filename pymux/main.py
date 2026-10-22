@@ -64,6 +64,7 @@ from .client.memory import MemoryClient
 from .colors import DefaultColors, theme_color_base
 from .commands import CommandException, call_command_handler, handle_command
 from .commands.completer import create_command_completer
+from .downloads import FILE_KEYS, DownloadRefused, FinishedDownload, file_packets, route_of, sequences_of
 from .enums import (
     CHOOSE,
     COMMAND,
@@ -3837,9 +3838,10 @@ exec pymux notify -u "$urgency" -- "$@"
         The browser keeps its question (`open-url-mode` asks it). The
         working directory, a user variable, a mark, an attention ask
         and a clipboard write travel on once parsed, the way the
-        sequences they synonymise do. Anything else stays inside:
-        images wait for their slice, and an unchecked payload never
-        reaches the terminal of the user.
+        sequences they synonymise do. A download goes to one client,
+        through `send_download`. Anything else stays inside: images
+        wait for their slice, and an unchecked payload never reaches
+        the terminal of the user.
         """
         url = open_url_of(param)
         if url is not None:
@@ -3907,7 +3909,66 @@ exec pymux notify -u "$urgency" -- "$@"
             # The pane's screen has cleared its own history already.
             return not rest
 
+        if key in FILE_KEYS:
+            # A download goes to one client, which `send_download`
+            # chooses; it is never this broadcast.
+            self._read_download(pane, key, rest)
+            return False
+
         return False
+
+    def _read_download(self, pane, key: str, rest: str) -> None:
+        "Read one sequence of a pane's download, and send a whole file on."
+        try:
+            finished = pane.downloads.read(key, rest)
+        except DownloadRefused as refused:
+            client = self.download_client(pane)
+            logger.warning("Refused a download of pane %s: %s", pane.pane_id, refused)
+            if client is not None:
+                client.message = str(refused)
+            return
+        if finished is not None:
+            self.send_download(pane, finished)
+
+    def download_client(self, pane) -> ClientState | None:
+        """
+        The client a download from this pane goes to: of the clients on
+        the pane's session, the one a person used last. `None` when
+        nobody is attached to that session.
+
+        **One client and not every one.** A file written twice is not
+        what anybody asked for, and the clipboard's broadcast is not a
+        rule for it. A person in another session did not ask for it
+        either.
+        """
+        session = self.session_holding(pane)
+        if session is None:
+            return None
+        clients = self.clients_on(session)
+        if not clients:
+            return None
+        return max(clients, key=lambda client: client.last_used)
+
+    def send_download(self, pane, download: FinishedDownload) -> None:
+        """
+        Give a whole file from a pane to the person, the way the
+        client's `file-transfer` says. Lillecarl/pymux#743.
+        """
+        client = self.download_client(pane)
+        if client is None:
+            logger.warning("Dropped the download %s of pane %s: nobody is attached.", download.name, pane.pane_id)
+            return
+        # Only `SshClient` says it can forward, so this is the fact that
+        # the client came over SSH.
+        route = route_of(client.file_transfer, client.connection.can_forward)
+        if route is FileTransfer.PASSTHROUGH:
+            for sequence in sequences_of(download):
+                client.connection.forward_osc(sequence)
+            # The sequences go behind a frame, so there has to be one.
+            self.invalidate(Woke.PANE_WROTE_AN_OSC)
+            return
+        for packet in file_packets(download):
+            client.connection._send_packet(packet)
 
     def _copied_in_copy_mode(self, text: str) -> None:
         """
