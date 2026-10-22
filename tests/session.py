@@ -37,7 +37,7 @@ from typing import Any, NamedTuple
 
 import anyio
 from libpymux.wire import encode_json
-from prompt_toolkit.application.current import set_app
+from prompt_toolkit.application.current import create_app_session, set_app
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
@@ -336,7 +336,10 @@ async def in_this_process(pymux=None):
             # gave a server with no window one, and `add_client` no
             # longer does that by itself. Under this client's
             # application, so the new pane is focused where it looks.
-            with set_app(state.app):
+            # In a session of its own, as the server's connections are:
+            # two attaches at once would save and restore each other's
+            # application. Lillecarl/pymux#230.
+            with create_app_session(), set_app(state.app):
                 await pymux.startup()
             # The socket route takes these from the `start-gui` packet.
             # This route has no packet, so the attach is here.

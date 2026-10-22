@@ -16,7 +16,7 @@ import json
 
 import anyio
 import pytest
-from prompt_toolkit.application.current import set_app
+from prompt_toolkit.application.current import create_app_session, set_app
 from session import create_session
 
 from pymux.commands import CommandException, handle_command
@@ -131,7 +131,7 @@ async def test_questions_at_once_share_nothing_to_lock():
         async def ask() -> None:
             for _ in range(20):
                 try:
-                    with set_app(state.app):
+                    with create_app_session(), set_app(state.app):
                         await sql(pymux, _ns(query=["SELECT * FROM windows, panes, sessions"]))
                 except CommandException as e:
                     failures.append(e.message)

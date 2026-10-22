@@ -24,6 +24,7 @@ from pathlib import Path
 
 import pytest
 from hypothesis import HealthCheck, settings
+from prompt_toolkit.application.current import _current_app_session
 from ptyhost.process import Process
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -174,6 +175,30 @@ def a_server_in_test_mode(monkeypatch):
         self.paint_screen = True
 
     monkeypatch.setattr(Pymux, "__init__", __init__)
+
+
+@pytest.fixture(autouse=True)
+def no_application_left_current():
+    """
+    A test leaves no application current behind it.
+
+    `set_app` saves and restores one attribute of the default
+    `AppSession`, which every task shares. Two tasks that each hold
+    `set_app` across an `await` restore in the wrong order, and an
+    application of a finished test stays current. The next test on that
+    worker then reads another server's application through `get_app()`:
+    `test_full_screen.py` found no client watching its window, at random.
+    Lillecarl/pymux#752. A task that holds `set_app` across an await
+    needs `create_app_session()` around it, as the server's connections
+    have (Lillecarl/pymux#230).
+
+    The fixture blames the test that leaked and clears it, so the next
+    test starts clean whatever happened.
+    """
+    yield
+    session = _current_app_session.get()
+    left, session.app = session.app, None
+    assert left is None, "this test left %r current; see no_application_left_current" % (left,)
 
 
 @pytest.fixture
