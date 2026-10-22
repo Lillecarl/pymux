@@ -170,6 +170,10 @@ def _pause(pymux: Pymux) -> None:
         if isinstance(backend := pane.process.backend, HeldBackend):
             backend.pause_reading()
     pymux.jobs.pause_reading()
+    # A program that ends from here on is the new build's to take.
+    # Lillecarl/pymux#727.
+    assert pymux.holding is not None
+    pymux.holding.hold_releases()
 
 
 def _resume(pymux: Pymux) -> None:
@@ -180,6 +184,8 @@ def _resume(pymux: Pymux) -> None:
         if isinstance(backend := pane.process.backend, HeldBackend):
             backend.resume_reading()
     pymux.jobs.resume_reading()
+    if pymux.holding is not None and pymux.tasks is not None:
+        pymux.tasks.start_soon(pymux.holding.release_held)
 
 
 async def _hand_over(pymux: Pymux, argv: list[str]) -> None:
