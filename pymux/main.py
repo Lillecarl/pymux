@@ -14,7 +14,6 @@ import socket
 import sys
 import tempfile
 import time
-import traceback
 import weakref
 from collections import deque
 from collections.abc import Awaitable, Callable, Iterable
@@ -2215,6 +2214,7 @@ class Pymux:
         `running()`.
         """
         introspect.answer_signal()
+        introspect.log_what_escapes()
         say_how_it_ends(logger)
 
     @asynccontextmanager
@@ -4927,16 +4927,16 @@ exec pymux notify -u "$urgency" -- "$@"
                 self.stop()
 
         # Run eventloop.
+        started = time.monotonic()
         try:
             anyio.run(serve)
-        except:
-            # When something bad happens, always dump the traceback.
-            # (Otherwise, when running as a daemon, and stdout/stderr are not
-            # available, it's hard to see what went wrong.)
-            fd, path = tempfile.mkstemp(prefix="pymux.crash-")
-            logger.fatal(f"Pymux has crashed, dumping traceback to {path}")
-            os.write(fd, traceback.format_exc().encode("utf-8"))
-            os.close(fd)
+        except BaseException as error:
+            # A daemon's stderr is /dev/null, so a crash that is not
+            # written down is a crash nobody can read. The report goes
+            # beside the log, and the log's last line names it.
+            # Lillecarl/pymux#736.
+            report = introspect.write_crash_report(error, started)
+            logger.critical("Pymux crashed: %r. The report is %s.", error, report, exc_info=error)
             raise
 
         finally:

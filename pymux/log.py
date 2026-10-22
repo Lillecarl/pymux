@@ -98,7 +98,7 @@ logger = logging.getLogger(__package__)
 #: handler so that an embedder gets no stderr. Without this line the
 #: warning that names a socket room somebody else owns would be written
 #: nowhere. Lillecarl/pymux#405.
-LOGGERS = [logger, logging.getLogger("libpymux")]
+LOGGERS = [logger, logging.getLogger("libpymux"), logging.getLogger("asyncio")]
 
 #: How large the log may get before it starts again, and how many of the
 #: old ones to keep.

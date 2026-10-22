@@ -154,12 +154,70 @@ def answer_signal() -> Path | None:
         path.parent.mkdir(parents=True, exist_ok=True)
         _stacks_file = open(path, "a", buffering=1)
         faulthandler.register(signal.SIGUSR1, file=_stacks_file, all_threads=True, chain=False)
+        # And a fatal signal -- SIGSEGV, SIGABRT, SIGBUS, SIGFPE, SIGILL
+        # -- writes them there before the process goes. The server that
+        # died on 2026-10-22 left this file empty. Lillecarl/pymux#736.
+        faulthandler.enable(file=_stacks_file, all_threads=True)
     except OSError, ValueError, RuntimeError:
         # A read only home, a full disk, or not the main thread.
         _stacks_file = None
         return None
 
     logger.info("SIGUSR1 dumps the stacks of this server to %s", path)
+    return path
+
+
+def log_what_escapes() -> None:
+    """
+    Log an exception that escapes a thread, and one Python cannot
+    raise anywhere (a finaliser, a callback). Both went to a stderr
+    that a daemon points at /dev/null. Lillecarl/pymux#736.
+    """
+
+    def thread_died(info: threading.ExceptHookArgs) -> None:
+        name = info.thread.name if info.thread is not None else "?"
+        logger.critical(
+            "Thread %s died.", name, exc_info=(info.exc_type, info.exc_value or info.exc_type(), info.exc_traceback)
+        )
+
+    def unraisable(info) -> None:
+        logger.error(
+            "Unraisable: %s %r",
+            info.err_msg or "Exception ignored in",
+            info.object,
+            exc_info=(info.exc_type, info.exc_value, info.exc_traceback),
+        )
+
+    threading.excepthook = thread_died
+    sys.unraisablehook = unraisable
+
+
+def write_crash_report(error: BaseException, started: float | None = None) -> Path | None:
+    """
+    Everything a person needs to understand a crash, in one file beside
+    the log: what ran, how long, the whole chain of the exception, and
+    the stack of every thread at the moment. Its name is in the log's
+    last line. Lillecarl/pymux#736.
+    """
+    path = where_dump_goes() / ("crash-%d-%s.log" % (os.getpid(), time.strftime("%Y%m%d-%H%M%S")))
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w") as report:
+            report.write("pymux crashed at %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"),))
+            report.write("pid %d, python %s\n" % (os.getpid(), sys.version.split()[0]))
+            report.write("executable %s\n" % (sys.executable,))
+            report.write("argv %r\n" % (sys.argv,))
+            report.write("build %s\n" % (os.environ.get("PYMUX_BUILD", "-"),))
+            if started is not None:
+                report.write("ran for %.0f s\n" % (time.monotonic() - started,))
+            report.write("\n")
+            report.write("".join(traceback.format_exception(error)))
+            report.write("\nEvery thread:\n")
+            report.flush()
+            faulthandler.dump_traceback(file=report, all_threads=True)
+    except OSError:
+        logger.exception("The crash report could not be written to %s.", path)
+        return None
     return path
 
 
