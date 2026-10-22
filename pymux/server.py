@@ -1377,6 +1377,18 @@ class ServerConnection:
         self._send_packet(upload.packet(pane))
         return upload
 
+    def stop_waiting_for_files(self, upload: Upload) -> None:
+        """
+        Forget a request whose `pymux receive` stopped waiting. One the
+        client has not finished is withdrawn, or its question stays up
+        and a later "y" sends a file nobody takes.
+        """
+        self.uploads.pop(upload.request, None)
+        if upload.ended or self._closed:
+            return
+        with suppress(BrokenPipeError):
+            self._send_packet({Field.CMD: Packet.FILES_WITHDRAWN, Field.REQUEST: upload.request})
+
     async def answer(self, exit_code: int) -> None:
         "Send the exit code of a command, for one that ends the server before it returns."
         with suppress(BrokenPipeError):

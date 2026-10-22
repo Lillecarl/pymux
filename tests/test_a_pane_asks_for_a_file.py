@@ -31,6 +31,7 @@ from pymux.client.uploads import (
     size_text,
     upload_settings,
 )
+from pymux.commands.receive import wait_for_files
 from pymux.main import Pymux
 from pymux.uploads import Upload, receive_into
 
@@ -260,6 +261,52 @@ async def test_a_frame_does_not_wipe_the_question(home, config):
         assert client.drawn[0] == b"a frame"
         assert b"y once" in client.drawn[-1]
         tasks.cancel_scope.cancel()
+
+
+async def test_a_withdrawn_request_takes_its_question_down(home, config):
+    "A later y is a key for the pane, and sends no file nobody takes."
+    (home / "x.pdf").write_bytes(DATA)
+    client = AskedClient(config)
+    async with anyio.create_task_group() as tasks:
+        client._tasks = tasks
+        ask(client, ["~/x.pdf"], "one")
+        await until_asked_or_done(client, "one")
+        client._process({Field.CMD: Packet.FILES_WITHDRAWN, Field.REQUEST: "one"})
+        assert client._asking is None
+        assert client.of(Packet.REDRAW)
+        client._take_input("y")
+        assert client.of(Packet.IN) == [{Field.CMD: Packet.IN, Field.DATA: "y"}]
+        assert client.of(Packet.UPLOAD) == []
+        tasks.cancel_scope.cancel()
+
+
+def test_a_request_withdrawn_while_looked_at_is_never_asked(home, config):
+    (home / "x.pdf").write_bytes(DATA)
+    client = AskedClient(config)
+    looks = []
+    client._off_the_loop = lambda work, then: looks.append((work, then))
+    ask(client, ["~/x.pdf"], "one")
+    client._process({Field.CMD: Packet.FILES_WITHDRAWN, Field.REQUEST: "one"})
+    [(work, then)] = looks
+    then(work())
+    assert client._asking is None
+    assert client.done("one") is None
+
+
+async def test_a_stopped_receive_withdraws_its_request():
+    sent: list[dict] = []
+    async with over_connection(read_packet=sent.append) as session:
+        state, _ = await session.attach("asked", SIZE, forwards=True)
+        connection = state.connection
+        upload = connection.ask_for_files(["x"], "%1")
+        with anyio.move_on_after(0.1):
+            await wait_for_files(session.pymux, connection, upload, Path("/"))
+        await once(
+            lambda: any(packet["cmd"] == Packet.FILES_WITHDRAWN for packet in sent),
+            10.0,
+            lambda: "the server never withdrew the request; it sent %r" % ([packet["cmd"] for packet in sent],),
+        )
+        assert upload.request not in connection.uploads
 
 
 def test_the_keyboard_flags_are_off_while_it_asks(home, config):

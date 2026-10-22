@@ -68,6 +68,8 @@ class Upload:
         self.paths = paths
         self._parts = ArrivingFiles()
         self._send, self.outcomes = anyio.create_memory_object_stream[_Outcome](math.inf)
+        #: The client said it sent all it will, or it went.
+        self.ended = False
 
     def packet(self, pane: str) -> dict[Field, object]:
         "The `send-files` packet that asks the client."
@@ -91,6 +93,7 @@ class Upload:
 
     def end(self, why: str | None) -> None:
         "Nothing more arrives: the client said so, or it went."
+        self.ended = True
         self._put(_Ended(why))
         self._send.close()
 

@@ -171,6 +171,9 @@ class Packet(StrEnum):
     # the pane `pane` asked, under the id `request`, for `paths`. The
     # client asks the person first. Lillecarl/pymux#743.
     SEND_FILES = "send-files"
+    # "Nobody waits for `request` any more": the `pymux receive` that
+    # asked was stopped. The client takes its question down.
+    FILES_WITHDRAWN = "files-withdrawn"
 
     # Sound, on the attached connection of a client that said `audio` in
     # `start-gui`. Lillecarl/pymux#657.

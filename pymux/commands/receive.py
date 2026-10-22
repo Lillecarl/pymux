@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pymux.main import Pymux
+    from pymux.server import ServerConnection
     from pymux.uploads import Upload
 
 
@@ -47,14 +48,14 @@ def receive(pymux: Pymux, args: argparse.Namespace):
         raise CommandException("%s is not a directory." % (directory,))
 
     upload = connection.ask_for_files(list(args.paths), "%%%d" % (pane.pane_id,))
-    return _wait(pymux, connection.uploads, upload, directory)
+    return wait_for_files(pymux, connection, upload, directory)
 
 
-async def _wait(pymux: Pymux, uploads: dict[str, Upload], upload: Upload, directory: Path) -> None:
+async def wait_for_files(pymux: Pymux, connection: ServerConnection, upload: Upload, directory: Path) -> None:
     try:
         failed = await receive_into(upload, directory, lambda text: answer(pymux, text))
     finally:
-        uploads.pop(upload.request, None)
+        connection.stop_waiting_for_files(upload)
     if failed:
         raise CommandException("\n".join("Did not receive %s." % (why,) for why in failed))
 

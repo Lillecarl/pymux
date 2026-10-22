@@ -287,6 +287,9 @@ class TerminalClient(Client):
         #: Lillecarl/pymux#743.
         self._asking: _Asking | None = None
         self._grant_until: float | None = None
+        #: Requests whose paths are being looked at, off the loop. One the
+        #: server withdraws meanwhile leaves, and is never asked about.
+        self._looking: set[str] = set()
         #: One write to the terminal at a time: the socket client draws
         #: a question from a thread.
         self._terminal_lock = threading.Lock()
@@ -340,6 +343,7 @@ class TerminalClient(Client):
         self.downloads.clear()
         # A question about a request of the last connection has nobody
         # to answer to.
+        self._looking.clear()
         if self._asking is not None:
             self._stop_asking()
         self._send_size()
@@ -681,6 +685,9 @@ class TerminalClient(Client):
         elif packet[Field.CMD] == Packet.SEND_FILES:
             self._files_asked(packet)
 
+        elif packet[Field.CMD] == Packet.FILES_WITHDRAWN:
+            self._files_withdrawn(str(packet.get(Field.REQUEST) or ""))
+
         elif packet[Field.CMD] == Packet.BROWSER_STOP:
             self.stop_browser(packet[Field.BROWSER])
 
@@ -820,7 +827,19 @@ class TerminalClient(Client):
         def look() -> tuple[UploadSettings, list[Wanted]]:
             return self._upload_settings(), inspect(paths, Path.home())
 
-        self._off_the_loop(look, lambda found: self._decide(request, pane, *found))
+        def then(found: tuple[UploadSettings, list[Wanted]]) -> None:
+            if request in self._looking:
+                self._looking.discard(request)
+                self._decide(request, pane, *found)
+
+        self._looking.add(request)
+        self._off_the_loop(look, then)
+
+    def _files_withdrawn(self, request: str) -> None:
+        "The `pymux receive` that asked stopped waiting: ask nothing more about it."
+        self._looking.discard(request)
+        if self._asking is not None and self._asking.request == request:
+            self._stop_asking()
 
     def _decide(self, request: str, pane: str, settings: UploadSettings, wanted: list[Wanted]) -> None:
         "Send what a grant or `upload-paths` lets pass, and ask the person about the rest."
