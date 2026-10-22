@@ -13,7 +13,17 @@ from pyte.keys import KEY_PROFILES
 
 from . import log
 from .arrangement import Window
-from .enums import AudioFrame, AudioServerMode, ClientAudio, PaneBrowser, WindowCodec, WindowScroll, WindowSize, Woke
+from .enums import (
+    AudioFrame,
+    AudioServerMode,
+    ClientAudio,
+    FileTransfer,
+    PaneBrowser,
+    WindowCodec,
+    WindowScroll,
+    WindowSize,
+    Woke,
+)
 from .key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS
 from .key_spelling import key_however_it_is_written
 from .layout import Justify
@@ -1120,6 +1130,9 @@ ALL_CLIENT_OPTIONS = {
     # What the sound costs the link each way, in kbit/s. Lillecarl/pymux#674.
     "audio-speaker-bitrate": AudioBitrateOption("audio_speaker_bitrate"),
     "audio-microphone-bitrate": AudioBitrateOption("audio_microphone_bitrate"),
+    # Who saves a file a pane sends to the person: this terminal, or
+    # the pymux client on the person's machine. Lillecarl/pymux#743.
+    "file-transfer": EnumOption(FileTransfer, "file_transfer", scope=Scope.CLIENT),
 }
 
 

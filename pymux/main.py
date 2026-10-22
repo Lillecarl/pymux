@@ -72,6 +72,7 @@ from .enums import (
     AudioServerMode,
     Chooser,
     ClientAudio,
+    FileTransfer,
     PaneBrowser,
     WindowScroll,
     WindowSize,
@@ -323,6 +324,7 @@ class ClientState:
         "audio_frame": Keep.SAVED,
         "audio_speaker_bitrate": Keep.SAVED,
         "audio_microphone_bitrate": Keep.SAVED,
+        "file_transfer": Keep.SAVED,
         "matched": Keep.REBUILT,  # the nearest theme to the colours the terminal answers
         # Where the person was: a prefix held, a key table, a prompt,
         # a question, a menu, a chooser.
@@ -449,6 +451,10 @@ class ClientState:
         #: Lillecarl/pymux#674.
         self.audio_speaker_bitrate = 128
         self.audio_microphone_bitrate = 64
+
+        #: Who saves a file a pane sends to the person on this client.
+        #: Lillecarl/pymux#743.
+        self.file_transfer = FileTransfer.AUTO
 
         #: Whether this client only watches. `attach-session -r` sets
         #: it, and nothing clears it: tmux's `-r` only sets as well

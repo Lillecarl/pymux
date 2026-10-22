@@ -7,6 +7,7 @@ __all__ = [
     "COMMAND",
     "PROMPT",
     "Chooser",
+    "FileTransfer",
     "PaneBrowser",
     "WindowCodec",
     "WindowScroll",
@@ -119,6 +120,22 @@ class AudioFrame(StrEnum):
     def ms(self) -> float:
         "Its length, and for `auto` the length it starts at."
         return 2.5 if self is AudioFrame.AUTO else float(self.value)
+
+
+class FileTransfer(StrEnum):
+    """
+    Who saves a file that a program in a pane sends to the person: the
+    terminal of the client, or the pymux client itself.
+    Lillecarl/pymux#743.
+    """
+
+    #: `passthrough` for a client on the machine of the server, and
+    #: `pymux` for a client that came over SSH.
+    AUTO = "auto"
+    #: The pymux client writes the file on the machine it runs on.
+    PYMUX = "pymux"
+    #: The sequence of the pane goes on to the terminal of the client.
+    PASSTHROUGH = "passthrough"
 
 
 class WindowScroll(StrEnum):

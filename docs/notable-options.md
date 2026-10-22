@@ -21,6 +21,7 @@ client reads where the person sits.
 | `notify-shim` | session | off | On, `notify-send` in a pane notifies through pymux. |
 | `forward-mode` | session | `on` | A loopback URL a pane opens is forwarded to the client's machine. |
 | `set-clipboard` | session | `external` | A pane's copy reaches the person's clipboard. |
+| `file-transfer` | client | `auto` | A file a pane sends (iTerm2's `File=` download, or `pymux send FILE`) goes to the client the person used last on that session. `pymux` saves it on the client's machine, in `$XDG_DOWNLOAD_DIR`, else `~/Downloads`, else the client's directory, and never over a file that is there. `passthrough` gives the sequence to the client's terminal, which saves it if it speaks iTerm2's protocol. `auto` is `pymux` for a client that came over SSH and `passthrough` for one on the server's machine, whose terminal is the person's. Up to 64 MiB a file. Lillecarl/pymux#743. |
 
 ## Sound
 
