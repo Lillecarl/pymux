@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandException, CommandParser, add_command
-from pymux.commands.common import send_key
+from pymux.commands.common import find_pane, send_key
 from pymux.key_spelling import event_however_it_is_written
 
 
@@ -16,7 +16,7 @@ def send_prefix(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Send the prefix on to the pane, so a program can read it.
     """
-    pane = pymux.arrangement.get_active_pane()
+    pane = find_pane(pymux, None)
     if pane is None:
         raise CommandException("no current pane")
 

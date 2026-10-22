@@ -8,13 +8,14 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandException, CommandParser, add_command
+from pymux.commands.common import find_pane
 
 
 def rename_pane(pymux: Pymux, args: argparse.Namespace) -> None:
     """
-    Rename the active pane.
+    Rename the active pane, or the pane a socket command came from.
     """
-    pane = pymux.arrangement.get_active_pane()
+    pane = find_pane(pymux, None)
     if pane is None:
         raise CommandException("no current pane")
     pane.chosen_name = args.name

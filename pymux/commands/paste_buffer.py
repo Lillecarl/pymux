@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandException, CommandParser, add_command
-from pymux.commands.common import terminal_of
+from pymux.commands.common import find_pane, terminal_of
 
 
 def paste_buffer(pymux: Pymux, args: argparse.Namespace) -> None:
@@ -19,7 +19,7 @@ def paste_buffer(pymux: Pymux, args: argparse.Namespace) -> None:
     clipboard of the user. It belongs to the session, so the command
     reads it there and not from the application of one client.
     """
-    pane = pymux.arrangement.get_active_pane()
+    pane = find_pane(pymux, None)
     if pane is None:
         raise CommandException("no current pane")
     terminal = terminal_of(pane)

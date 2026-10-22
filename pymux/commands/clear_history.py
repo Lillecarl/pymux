@@ -8,12 +8,12 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandException, CommandParser, add_command
-from pymux.commands.common import terminal_of
+from pymux.commands.common import find_pane, terminal_of
 
 
 def clear_history(pymux: Pymux, args: argparse.Namespace) -> None:
     "Clear the scrollback of the pane."
-    pane = pymux.arrangement.get_active_pane()
+    pane = find_pane(pymux, None)
     if pane is None:
         raise CommandException("no current pane")
 

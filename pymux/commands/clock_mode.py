@@ -8,13 +8,16 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandParser, add_command
+from pymux.commands.common import find_pane
 
 
 def clock_mode(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     Show a clock in the active pane, or put the program back.
+
+    A socket command from a pane shows it in that pane instead.
     """
-    pane = pymux.arrangement.get_active_pane()
+    pane = find_pane(pymux, None)
     if pane:
         pane.clock_mode = not pane.clock_mode
 

@@ -89,3 +89,20 @@ async def test_command_without_caller_keeps_active_pane():
     async with two_panes() as (pymux, state, session, _caller, active):
         with set_app(state.app), calling_as(pymux, session, caller_pane_id=None):
             assert find_pane(pymux, None) is active
+
+
+async def test_the_commands_with_no_target_reach_the_calling_pane():
+    """
+    Each of these read the active pane itself, so an agent's
+    `rename-pane` renamed the pane a person had focused.
+    Lillecarl/pymux#506.
+    """
+    async with two_panes() as (pymux, state, session, caller, active):
+        with set_app(state.app), calling_as(pymux, session, caller_pane_id=caller.pane_id):
+            handle_command(pymux, "rename-pane mine")
+            handle_command(pymux, "clock-mode")
+
+        assert caller.chosen_name == "mine"
+        assert caller.clock_mode
+        assert active.chosen_name != "mine"
+        assert not active.clock_mode
