@@ -20,6 +20,8 @@ pymux - pure Python terminal multiplexer, with server-owned background jobs
 
 *pymux send-file* _FILE_...
 
+*pymux receive* [_-d DIRECTORY_] _PATH_...
+
 # DESCRIPTION
 
 *pymux* is a terminal multiplexer in the shape of *tmux*(1): a server
@@ -148,6 +150,41 @@ terminal, when it is iTerm2; another terminal saves no such file, so
 pymux refuses and says why. *auto*, the default: *passthrough* for a
 client on the server's machine whose terminal is iTerm2, and *pymux*
 for every other.
+
+# FILES FROM THE PERSON
+
+*receive* [_-d DIRECTORY_] _PATH_...
+
+*receive* run in a pane asks the pymux client used last on the pane's
+session for files on the person's machine. There, *~* and a path that
+is not absolute start at the person's home directory. Each file lands
+in _DIRECTORY_, by default the directory *receive* runs in, never over
+a file that is there. *receive* waits, then prints where each file
+went, or why it did not, and exits 1 when one did not arrive. A file is
+at most 64 MiB.
+
+The client asks the person on its own terminal before it reads a byte.
+The question takes the last row: the pane, the server's host as the
+client knows it, each file and its size, and three answers. *y* sends
+this once. *a* sends it and lets this server read without asking for
+*upload-grant* minutes. *n*, Escape or Ctrl-C refuse. Only one key read
+from the client's own keyboard answers, so a pane cannot answer it, and
+neither can a paste.
+
+Two client options decide what passes without the question. The client
+reads both only from its own configuration file, and never tells the
+server: *set-client-option* on the server refuses them.
+
+*upload-paths* _DIR_[:_DIR_]...
+	Directories whose files pass. A path is resolved first, symlinks
+	followed and *..* removed, so a link or a *..* out of a directory is
+	outside it, and the person is asked.
+
+*upload-grant* _MINUTES_
+	How long *a* lasts, 10 unless set.
+
+	set-client-option upload-paths ~/share:~/Downloads++
+	set-client-option upload-grant 30
 
 # ENVIRONMENT
 
