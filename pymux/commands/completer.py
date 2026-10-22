@@ -29,7 +29,7 @@ from prompt_toolkit.completion import CompleteEvent, Completer, Completion
 from prompt_toolkit.document import Document
 
 from pymux.arrangement import LayoutTypes
-from pymux.commands import CommandException, CommandParser, parser_tree
+from pymux.commands import CommandException, CommandParser, build_parser_tree, parser_tree
 from pymux.commands.aliases import ALIASES
 from pymux.forwarding import Direction
 from pymux.key_spelling import KeyCompleter
@@ -308,6 +308,7 @@ class FuzzyFinder(argcomplete.CompletionFinder):
 
 
 _finder: FuzzyFinder | None = None
+_completion_tree: tuple[CommandParser, argparse._SubParsersAction[CommandParser]] | None = None
 
 
 def create_command_completer(pymux: Pymux):
@@ -324,8 +325,11 @@ def create_command_completer(pymux: Pymux):
     server, so nothing a person does reaches it; a suite that makes a
     `Pymux` per test does, and the answer it got depended on test order.
     """
-    global _finder
-    parser, subparsers = parser_tree()
+    global _finder, _completion_tree
+    # Not `parser_tree()`: argcomplete patches what it walks for good.
+    if _completion_tree is None:
+        _completion_tree = build_parser_tree()
+    parser, subparsers = _completion_tree
     if _finder is None:
         _finder = FuzzyFinder(
             parser,

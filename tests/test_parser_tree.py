@@ -17,7 +17,7 @@ import sys
 import pytest
 from prompt_toolkit.document import Document
 
-from pymux.commands import call_command_handler, parser_tree
+from pymux.commands import call_command_handler, completer, parser_tree
 from pymux.commands.completer import create_command_completer
 from pymux.main import Pymux
 
@@ -73,8 +73,17 @@ def test_option_of_bound_command_is_not_option_of_bind_key():
     assert binding.arguments == ["-g", "status", "off"]
 
 
-def test_dropped_double_dash_still_separates():
-    "A `--` the caller wrote is dropped, and what follows is the command."
+@pytest.mark.parametrize("completed_first", [False, True], ids=["fresh", "after a completion"])
+def test_dropped_double_dash_still_separates(completed_first):
+    """
+    A `--` the caller wrote is dropped, and what follows is the command.
+
+    Also after the command bar completed a line: argcomplete patched the
+    tree that runs commands, and `--` then became part of the key.
+    Lillecarl/pymux#735.
+    """
+    if completed_first:
+        list(create_command_completer(Pymux()).get_completions(Document("bind-key x "), None))
     pymux = Pymux()
     call_command_handler("bind-key", pymux, ["x", "--", "next-window"])
     (binding,) = list(pymux.key_bindings_manager.custom_bindings.values())
@@ -383,7 +392,8 @@ def test_the_completer_reads_the_server_it_was_made_for():
     create_command_completer(first)
     create_command_completer(second)
 
-    _parser, subparsers = parser_tree()
+    assert completer._completion_tree is not None
+    _parser, subparsers = completer._completion_tree
     action = next(a for a in subparsers.choices["set-option"]._actions if a.dest == "option")
     assert action.completer.args[0] is second
 

@@ -28,6 +28,7 @@ __all__ = [
     "CommandException",
     "add_command",
     "add_commands_to",
+    "build_parser_tree",
     "call_command_handler",
     "handle_command",
     "not_past_this_client",
@@ -298,17 +299,28 @@ def add_commands_to(subparsers: Any) -> None:
 _parser_tree = None
 
 
+def build_parser_tree() -> tuple[CommandParser, argparse._SubParsersAction[CommandParser]]:
+    "A new parser of the whole command line: every command under one subparsers action."
+    parser = CommandParser(prog="pymux", add_help=False, allow_abbrev=False)
+    subparsers = parser.add_subparsers(metavar="COMMAND", parser_class=CommandParser)
+    add_commands_to(subparsers)
+    return parser, subparsers
+
+
 def parser_tree():
     """
-    The parser of the whole command line: every command under one
-    subparsers action. Built once, on first use.
+    The tree that runs commands. Built once, on first use.
+
+    **Completion never touches it.** argcomplete swaps the class of
+    every parser it walks for its own, whose copy of argparse's
+    `_parse_known_args` keeps a `--` that Python 3.14 drops, and it
+    never swaps back. A `bind-key x -- next-window` after any completion
+    then bound the key `['x', '--']`. The completer builds a tree of its
+    own. Lillecarl/pymux#735.
     """
     global _parser_tree
     if _parser_tree is None:
-        parser = CommandParser(prog="pymux", add_help=False, allow_abbrev=False)
-        subparsers = parser.add_subparsers(metavar="COMMAND", parser_class=CommandParser)
-        add_commands_to(subparsers)
-        _parser_tree = (parser, subparsers)
+        _parser_tree = build_parser_tree()
     return _parser_tree
 
 
