@@ -7,46 +7,64 @@ person used, so the vi keys of copy mode reached nothing: `v`, `y` and
 `$` do nothing in a read-only buffer with emacs keys, and a person
 pressing them read that as copy mode being unable to copy.
 Lillecarl/pymux#375.
+
+Helix gives Helix keys on the line, and copy mode stays on emacs keys
+until it has Helix keys of its own. Lillecarl/pymux#749.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from pymux.utils import keys_are_vi
+from pymux.enums import EditingKeys
+from pymux.main import Pymux
+from pymux.utils import editor_keys
 
-#: What the editor of a person says, and whether it means vi keys.
-#: `nvim` is the case that says why tmux tests for the substring and
-#: not for the start of the name.
+#: What the editor of a person says, and the keys it means. `nvim` is
+#: the case that says why tmux tests for the substring and not for the
+#: start of the name.
 EDITORS = [
-    ("vi", True),
-    ("vim", True),
-    ("nvim", True),
-    ("/usr/bin/vim", True),
-    ("/run/current-system/sw/bin/nvim", True),
-    ("emacs", False),
-    ("/usr/bin/emacs", False),
-    ("nano", False),
-    ("code --wait", False),
-    ("", False),
+    ("vi", EditingKeys.VI),
+    ("vim", EditingKeys.VI),
+    ("nvim", EditingKeys.VI),
+    ("/usr/bin/vim", EditingKeys.VI),
+    ("/run/current-system/sw/bin/nvim", EditingKeys.VI),
+    ("hx", EditingKeys.HELIX),
+    ("helix", EditingKeys.HELIX),
+    ("/run/current-system/sw/bin/hx", EditingKeys.HELIX),
+    ("hx --vsplit", EditingKeys.HELIX),
+    ("hxd", EditingKeys.EMACS),
+    ("emacs", EditingKeys.EMACS),
+    ("/usr/bin/emacs", EditingKeys.EMACS),
+    ("nano", EditingKeys.EMACS),
+    ("code --wait", EditingKeys.EMACS),
+    ("", EditingKeys.EMACS),
 ]
 
 
-@pytest.mark.parametrize(("editor", "vi"), EDITORS)
-def test_the_editor_says_which_keys(editor, vi):
-    assert keys_are_vi({"EDITOR": editor}) is vi
+@pytest.mark.parametrize(("editor", "keys"), EDITORS)
+def test_the_editor_says_which_keys(editor, keys):
+    assert editor_keys({"EDITOR": editor}) is keys
 
 
 def test_nothing_in_the_environment_gives_emacs_keys():
-    assert keys_are_vi({}) is False
+    assert editor_keys({}) is EditingKeys.EMACS
 
 
 def test_visual_answers_before_editor():
     "tmux asks for VISUAL first and takes it, empty or not."
-    assert keys_are_vi({"VISUAL": "nano", "EDITOR": "vim"}) is False
-    assert keys_are_vi({"VISUAL": "vim", "EDITOR": "nano"}) is True
+    assert editor_keys({"VISUAL": "nano", "EDITOR": "vim"}) is EditingKeys.EMACS
+    assert editor_keys({"VISUAL": "vim", "EDITOR": "nano"}) is EditingKeys.VI
 
 
 def test_the_path_of_an_editor_does_not_decide():
     "Only the name does. A path that holds 'vi' is not an answer."
-    assert keys_are_vi({"EDITOR": "/home/vim/bin/nano"}) is False
+    assert editor_keys({"EDITOR": "/home/vim/bin/nano"}) is EditingKeys.EMACS
+
+
+def test_helix_leaves_copy_mode_on_emacs_keys(monkeypatch):
+    monkeypatch.setenv("EDITOR", "hx")
+    monkeypatch.delenv("VISUAL", raising=False)
+    pymux = Pymux()
+    assert pymux.status_keys is EditingKeys.HELIX
+    assert pymux.mode_keys is EditingKeys.EMACS

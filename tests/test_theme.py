@@ -232,6 +232,7 @@ RULES = {
     "commandline.command": "bold",
     "commandline.prompt": "bold",
     "commandline.mode": "bold bg:#5f5f87 #ffffff",
+    "commandline.pending": "italic",
     "statusbar": "noreverse bg:ansigreen #000000",
     "statusbar window": "#ffffff",
     "statusbar window.current": "bg:#44ff44 #000000",

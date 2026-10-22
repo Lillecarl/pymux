@@ -7,6 +7,7 @@ __all__ = [
     "COMMAND",
     "PROMPT",
     "Chooser",
+    "EditingKeys",
     "FileTransfer",
     "PaneBrowser",
     "WindowCodec",
@@ -14,6 +15,19 @@ __all__ = [
     "WindowSize",
     "Woke",
 ]
+
+
+class EditingKeys(StrEnum):
+    """
+    Which keys a line a person types on takes: `status-keys` for the
+    command line and prompts, `mode-keys` for copy mode.
+    """
+
+    EMACS = "emacs"
+    VI = "vi"
+    #: Helix's modal keys, through ptkhx. The command line and prompts
+    #: only, so far. Lillecarl/pymux#749.
+    HELIX = "helix"
 
 
 #: Name of the command buffer.

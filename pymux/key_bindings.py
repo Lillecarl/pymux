@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.filters import (
@@ -22,11 +22,13 @@ from prompt_toolkit.key_binding.bindings.auto_suggest import (
 )
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent as E
 from prompt_toolkit.keys import Keys
+from ptkhx import Mode
+from ptkhx.bindings import HelixBindings
 from ptterm import Terminal
 
 from .commands import call_command_handler
 from .commands.utils import wrap_argument
-from .enums import COMMAND, PROMPT, Chooser
+from .enums import COMMAND, PROMPT, Chooser, EditingKeys
 from .filters import HasPrefix, KeyTableIs, ModeActive, ModeTakesPrefix, WaitsForConfirmation
 from .key_spelling import key_however_it_is_written
 from .osc import PASSTHROUGH_VARIABLE, set_user_var
@@ -49,6 +51,35 @@ PREFIX_TABLE = "prefix"
 #: themselves. The keys are prompt_toolkit's, so every spelling of one
 #: key gives the same one.
 _ABinding = tuple[str, tuple[str, ...]]
+
+
+class PromptHelix(HelixBindings):
+    """
+    Helix keys on the ":" line and on a `command-prompt`, with
+    `status-keys helix`. One for the server: each client's buffers hold
+    an editor of their own. Lillecarl/pymux#749.
+
+    **Escape closes the line from normal mode**, as the second Escape
+    does with vi status keys: the first leaves insert mode, and a
+    person in normal mode who presses Escape is asking to leave.
+    Lillecarl/pymux#255.
+    """
+
+    def __init__(self, pymux: Pymux) -> None:
+        self.pymux = pymux
+        super().__init__(
+            filter=Condition(lambda: pymux.status_keys is EditingKeys.HELIX) & (has_focus(COMMAND) | has_focus(PROMPT))
+        )
+
+    @override
+    def before_escape(self, event: E) -> bool:
+        if super().before_escape(event):
+            return True
+        editor = self.editor_for(event.current_buffer)
+        if editor.mode is Mode.NORMAL and not editor.pending:
+            self.pymux.leave_command_mode(append_to_history=False)
+            return True
+        return False
 
 
 class KeyTable:
@@ -138,6 +169,8 @@ class PymuxKeyBindings:
         self.mode_tables: dict[str, KeyTable] = {}
         _register_builtin_mode_tables(self)
 
+        self.helix = PromptHelix(pymux)
+
         self.key_bindings = merge_key_bindings(
             [
                 self._load_builtins(),
@@ -152,6 +185,9 @@ class PymuxKeyBindings:
                 # have a right arrow of their own, and the suggestion
                 # has to win while there is one. Lillecarl/pymux#163.
                 load_auto_suggest_bindings(),
+                # After the builtins and the suggestion, so Helix wins a
+                # tie on the line; before the person's own `bind-key`.
+                self.helix.key_bindings,
                 self.custom_key_bindings,
             ]
         )
@@ -262,7 +298,10 @@ class PymuxKeyBindings:
             "Ignore unknown Ctrl-B prefixed key sequences."
             pymux.get_client_state().has_prefix = False
 
-        @kb.add("escape", filter=prompt_or_command_focus & ~has_prefix & emacs_mode)
+        # Helix's own Escape decides, with `PromptHelix.before_escape`.
+        helix = Condition(lambda: pymux.status_keys is EditingKeys.HELIX)
+
+        @kb.add("escape", filter=prompt_or_command_focus & ~has_prefix & emacs_mode & ~helix)
         @kb.add(
             "escape",
             filter=prompt_or_command_focus & ~has_prefix & vi_navigation_mode,

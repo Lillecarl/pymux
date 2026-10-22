@@ -17,6 +17,7 @@ from .enums import (
     AudioFrame,
     AudioServerMode,
     ClientAudio,
+    EditingKeys,
     FileTransfer,
     PaneBrowser,
     WindowCodec,
@@ -476,32 +477,6 @@ class RenumberOption(Option):
             pymux.arrangement.renumber()
 
 
-class KeysOption(Option):
-    "Emacs or Vi mode."
-
-    def __init__(self, attribute_name: str, scope: Scope = Scope.SESSION) -> None:
-        self.attribute_name = attribute_name
-        self.scope = scope
-
-    @override
-    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
-        return ["emacs", "vi"]
-
-    @override
-    def as_written(self, value: object, holder: Arrangement | ClientState | Pymux | Window | None) -> str:
-        """
-        The mode is a bool inside and a word outside: tmux answers
-        `vi` and `emacs`, and `on` answers nothing. #382.
-        """
-        return "vi" if value else "emacs"
-
-    @override
-    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
-        if value not in ("emacs", "vi"):
-            raise SetOptionError('Expecting "vi" or "emacs".')
-        setattr(self.held_by(pymux, target), self._attribute(), value == "vi")
-
-
 class ExtendedKeys(StrEnum):
     """
     How much of the keyboard a session uses.
@@ -627,6 +602,27 @@ class EnumOption(Option):
 
     def after(self, pymux: Pymux) -> None:
         "What the server does once the value has changed."
+
+
+class KeysOption(EnumOption):
+    """
+    The keys a line takes: emacs, vi, and for `status-keys` Helix's.
+    Copy mode has no Helix keys yet. Lillecarl/pymux#749.
+    """
+
+    def __init__(self, attribute_name: str, allowed: tuple[EditingKeys, ...], scope: Scope = Scope.SESSION) -> None:
+        super().__init__(EditingKeys, attribute_name, scope)
+        self.allowed = allowed
+
+    @override
+    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
+        return [str(one) for one in self.allowed]
+
+    @override
+    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
+        if value not in self.allowed:
+            raise SetOptionError("Expecting one of: %s." % ", ".join('"%s"' % one for one in self.allowed))
+        super().set_value(pymux, value, target)
 
 
 class AudioServerOption(EnumOption):
@@ -1011,8 +1007,8 @@ ALL_OPTIONS = {
     # The window chooser starts each session on a line of its own, so
     # the sessions read as groups. Lillecarl/pymux#531.
     "chooser-session-lines": OnOffOption("chooser_session_lines"),
-    "status-keys": KeysOption("status_keys_vi_mode"),
-    "mode-keys": KeysOption("mode_keys_vi_mode"),
+    "status-keys": KeysOption("status_keys", tuple(EditingKeys)),
+    "mode-keys": KeysOption("mode_keys", (EditingKeys.EMACS, EditingKeys.VI)),
     "default-terminal": StringOption("default_terminal", ["xterm", "xterm-256color", "screen"]),
     # What lock-server, lock-session and lock-client run to hold the
     # keyboard. tmux's default is vlock.

@@ -31,6 +31,9 @@ dependencies = [
     "pymux_rs",
     # Every import lazy, installed by `pymux/entry_points/__init__.py`.
     "deferimport",
+    # Helix's keys on the command line, with `status-keys helix`.
+    # Lillecarl/pymux#749.
+    "ptkhx",
     # The shell completes the command line through argcomplete: the
     # generated scripts of `share/bash-completion` and friends make the
     # shell ask `pymux`, and it answers from the parsers of the commands.

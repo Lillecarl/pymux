@@ -81,6 +81,7 @@ from .enums import (
     AudioServerMode,
     Chooser,
     ClientAudio,
+    EditingKeys,
     FileTransfer,
     PaneBrowser,
     WindowScroll,
@@ -127,7 +128,7 @@ from .rc import STARTUP_COMMANDS
 from .server import ServerConnection
 from .session import DEFAULT_SIZE, Session
 from .style import DEFAULT_THEME, theme
-from .utils import get_default_shell, keys_are_vi
+from .utils import editor_keys, get_default_shell
 from .wayland import WaylandServer
 from .window_pane import WindowWidget, is_window_pane
 
@@ -944,10 +945,12 @@ class ClientState:
             VI = EditingMode.VI
             EMACS = EditingMode.EMACS
 
+            # Helix keys sit on top of the emacs ones, which is what
+            # prompt_toolkit's insert mode is.
             if self.confirm_text or self.prompt_command or self.command_mode:
-                app.editing_mode = VI if pymux.status_keys_vi_mode else EMACS
+                app.editing_mode = VI if pymux.status_keys is EditingKeys.VI else EMACS
             else:
-                app.editing_mode = VI if pymux.mode_keys_vi_mode else EMACS
+                app.editing_mode = VI if pymux.mode_keys is EditingKeys.VI else EMACS
 
         app.key_processor.before_key_press += sync_vi_state
         app.key_processor.after_key_press += sync_vi_state
@@ -1337,7 +1340,7 @@ class Pymux:
         "history_limit": Keep.SAVED,
         "job_ttl": Keep.SAVED,
         "lock_command": Keep.SAVED,
-        "mode_keys_vi_mode": Keep.SAVED,
+        "mode_keys": Keep.SAVED,
         "notify_shim": Keep.SAVED,
         "wayland_server": Keep.SAVED,
         # The compositor's task starts again in `running`.
@@ -1357,7 +1360,7 @@ class Pymux:
         "status_fps": Keep.SAVED,
         "status_interval": Keep.SAVED,
         "status_justify": Keep.SAVED,
-        "status_keys_vi_mode": Keep.SAVED,
+        "status_keys": Keep.SAVED,
         "status_left": Keep.SAVED,
         "status_left_length": Keep.SAVED,
         "status_max_rows": Keep.SAVED,
@@ -1507,9 +1510,13 @@ class Pymux:
         # mode reach nothing at all in a read-only buffer: a person
         # pressing `v`, `y` and `$` there read that as copy mode being
         # unable to copy. Lillecarl/pymux#375.
-        vi_keys = keys_are_vi()
-        self.status_keys_vi_mode = vi_keys
-        self.mode_keys_vi_mode = vi_keys
+        #
+        # Helix, as `hx`, gives Helix keys on the line and leaves copy
+        # mode on emacs keys: it has no Helix keys yet, and vi keys are
+        # not what a Helix person asked for. Lillecarl/pymux#749.
+        keys = editor_keys()
+        self.status_keys = keys
+        self.mode_keys = EditingKeys.VI if keys is EditingKeys.VI else EditingKeys.EMACS
         # How many lines above the screen a pane keeps. tmux keeps two
         # thousand by default and this keeps the same, so a person who
         # moves over finds the depth they had. People do configure
@@ -4553,6 +4560,10 @@ exec pymux notify -u "$urgency" -- "$@"
 
         client_state.command_buffer.reset(append_to_history=append_to_history)
         client_state.prompt_buffer.reset(append_to_history=True)
+        # The next line starts in insert mode, with no undo of this one.
+        helix = self.key_bindings_manager.helix
+        helix.reset(client_state.command_buffer)
+        helix.reset(client_state.prompt_buffer)
 
         client_state.prompt_command = ""
         client_state.forget_questions()

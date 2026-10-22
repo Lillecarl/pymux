@@ -7,32 +7,43 @@ from __future__ import annotations
 import os
 import sys
 
+from .enums import EditingKeys
+
 __all__ = [
     "daemonize",
+    "editor_keys",
     "get_default_shell",
-    "keys_are_vi",
     "nonblocking",
 ]
 
+#: The names Helix runs under.
+HELIX_EDITORS = frozenset({"hx", "helix"})
 
-def keys_are_vi(environ=os.environ) -> bool:
+
+def editor_keys(environ=os.environ) -> EditingKeys:
     """
-    Whether copy mode and the status line take vi keys.
+    The keys the editor of the person says a line takes.
 
-    tmux reads the editor of the person and switches both, in
-    `tmux.c`: "Override keys to vi if VISUAL or EDITOR are set". Any
-    editor whose name holds "vi" gives vi keys and everything else
-    gives emacs keys.
+    tmux reads the editor and switches to vi keys, in `tmux.c`:
+    "Override keys to vi if VISUAL or EDITOR are set". Any editor whose
+    name holds "vi" gives vi keys, and everything else emacs keys.
 
     **It is a substring of the name and not the start of it**, so
     `nvim` gives vi keys. That is the point of writing it that way.
+
+    Helix, named `hx` or `helix`, gives Helix keys. Lillecarl/pymux#749.
     """
     editor = environ.get("VISUAL")
     if editor is None:
         editor = environ.get("EDITOR")
     if editor is None:
-        return False
-    return "vi" in os.path.basename(editor)
+        return EditingKeys.EMACS
+    name = os.path.basename(editor)
+    if "vi" in name:
+        return EditingKeys.VI
+    if (name.split() or [""])[0] in HELIX_EDITORS:
+        return EditingKeys.HELIX
+    return EditingKeys.EMACS
 
 
 def daemonize(stdin="/dev/null", stdout="/dev/null", stderr="/dev/null"):

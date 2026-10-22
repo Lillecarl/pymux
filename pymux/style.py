@@ -131,6 +131,9 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         # as more of the line, because it is not what a person typed.
         # Lillecarl/pymux#255.
         "commandline.mode": "bold bg:%s %s" % (r["accent"], r["text-bright"]),
+        # What Helix keys hold half typed: a count, a menu key, the
+        # regex of `s`. Lillecarl/pymux#749.
+        "commandline.pending": "italic",
         # The fill of the layout behind the panes, which shows where
         # nothing else draws.
         "background": r["border"],

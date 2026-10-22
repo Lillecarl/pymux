@@ -676,17 +676,20 @@ def test_the_table_list_is_the_schema_in_order():
     assert list(tables.TABLES) == made
 
 
-def test_a_version_28_snapshot_has_no_file_transfer(pymux, tmp_path):
-    "The server before Lillecarl/pymux#743 kept no file-transfer of a client."
-    path = tmp_path / "v28.sqlite"
+@pytest.mark.parametrize(("vi", "word"), [(1, "vi"), (0, "emacs")])
+def test_a_version_29_snapshot_held_the_keys_as_a_vi_bool(pymux, tmp_path, vi, word):
+    "The server before Lillecarl/pymux#749 had two kinds of keys, and a bool for which."
+    path = tmp_path / "v29.sqlite"
     snapshot.save(pymux, path)
     db = apsw.Connection(str(path))
-    db.execute("ALTER TABLE clients DROP COLUMN file_transfer")
-    db.execute("PRAGMA user_version = 28")
+    db.execute("UPDATE options SET value = ? WHERE name IN ('status-keys', 'mode-keys')", (vi,))
+    db.execute("PRAGMA user_version = 29")
     db.close()
 
-    stepped = snapshot._open(path)
-    assert _shape(stepped) == _shape_of_a_fresh_snapshot()
+    loaded = Pymux()
+    snapshot.load(loaded, path)
+    assert loaded.status_keys == word
+    assert loaded.mode_keys == word
 
 
 @pytest.mark.parametrize("pty", [True, False], ids=["on a terminal", "on pipes"])

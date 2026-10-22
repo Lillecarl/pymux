@@ -61,7 +61,7 @@ from pymux import arrangement
 
 from .cut_shade import Hidden, hex_of, hidden_of, lifts, shade
 from .divided import Divided
-from .enums import Chooser, Woke
+from .enums import Chooser, EditingKeys, Woke
 from .filters import WaitsForConfirmation
 from .format import format_pymux_string
 from .log import logger
@@ -1664,7 +1664,9 @@ class LayoutManager:
         The tag is one width whatever it says, so the line a person is
         typing on never moves under them.
         """
-        if self.pymux.status_keys_vi_mode is False:
+        if self.pymux.status_keys is EditingKeys.HELIX:
+            return self._helix_mode_tokens()
+        if self.pymux.status_keys is not EditingKeys.VI:
             return []
 
         app = get_app()
@@ -1680,6 +1682,21 @@ class LayoutManager:
             name = "INSERT"
 
         return [("class:commandline.mode", " %-7s " % (name,))]
+
+    def _helix_mode_tokens(self) -> StyleAndTextTuples:
+        """
+        Helix's mode, as Helix spells it, and what is half typed: a
+        count, a menu key, or the regex `s` reads, which shows nowhere
+        else. The mode is one width; the half-typed part grows only
+        while it is typed. Lillecarl/pymux#749.
+        """
+        helix = self.pymux.key_bindings_manager.helix
+        buffer = get_app().current_buffer
+        tokens: StyleAndTextTuples = [("class:commandline.mode", " %s " % (helix.mode_of(buffer).label,))]
+        pending = helix.pending_of(buffer)
+        if pending:
+            tokens.append(("class:commandline.pending", " %s " % (pending,)))
+        return tokens
 
     def _before_command_tokens(self) -> StyleAndTextTuples:
         'What stands before what a person types after ":".'
@@ -1758,6 +1775,8 @@ class LayoutManager:
                     BeforeInput(self._before_command_tokens),
                     ShowArg(),
                     HighlightSelectionProcessor(),
+                    # Paints nothing unless the status keys are Helix's.
+                    self.pymux.key_bindings_manager.helix.processor(),
                 ],
             ),
             z_index=Z_INDEX.COMMAND_LINE,
@@ -1784,6 +1803,7 @@ class LayoutManager:
                     BeforeInput(self._before_prompt_command_tokens),
                     AppendAutoSuggestion(),
                     HighlightSelectionProcessor(),
+                    self.pymux.key_bindings_manager.helix.processor(),
                 ],
             ),
             z_index=Z_INDEX.COMMAND_LINE,

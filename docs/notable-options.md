@@ -53,6 +53,8 @@ The build switch: the root `default.nix` passes `pipewire` and `wireplumber` to 
 | --- | --- | --- | --- |
 | `mouse` | session | on | Unlike tmux: a click selects a pane and reaches the program. |
 | `extended-keys` | session | `on` | Every key a terminal can name reaches the pane. |
+| `status-keys` | session | from `$VISUAL`, else `$EDITOR` | The keys of the `:` line and of `command-prompt`: `emacs`, `vi`, or `helix`. An editor whose name holds `vi` gives `vi`, as tmux does; `hx` or `helix` gives `helix`. With `vi` or `helix` the first Escape leaves insert mode and the second closes the line, and the line shows its mode. Lillecarl/pymux#749. |
+| `mode-keys` | session | from the editor, as above | The keys of copy mode: `emacs` or `vi`. Helix gives `emacs` here until copy mode has Helix keys. |
 | `key-profile` | session | `kitty` | Where terminals split on a key, a legacy program gets what the client's own terminal sends. This names the terminal for a client whose terminal does not name itself. |
 | `theme` | client | the theme nearest the terminal's own colours | Per client, because two people may sit at different screens. |
 | `chooser-session-lines` | session | on | The window chooser starts each session on a line of its own, so the sessions read as groups. With one session it changes nothing. |
