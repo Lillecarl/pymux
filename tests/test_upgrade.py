@@ -403,6 +403,29 @@ def test_an_upgrade_kills_a_program_still_in_its_grace(server, tmp_path):
         time.sleep(0.05)
 
 
+def _dead(sock, pane: str) -> str:
+    listed = _once_it_answers(sock, "list-panes", "-a", "-F", "#{pane_id} #{pane_dead}")
+    return dict(line.split() for line in listed.splitlines()).get(pane, "gone")
+
+
+def test_an_upgrade_keeps_a_pane_whose_program_ended(server):
+    "remain-on-exit keeps it, with its screen and no program to carry. Lillecarl/pymux#738."
+    _answer(server, "set-option", "-g", "remain-on-exit", "on")
+    pane = _answer(server, "split-window", "-d", "-P", "-F", "#{pane_id}", "sh -c 'echo last words; exit 3'").strip()
+    deadline = time.monotonic() + CLI_TIMEOUT
+    while _dead(server, pane) != "1":
+        assert time.monotonic() < deadline, "the program never ended"
+        time.sleep(0.05)
+
+    said = cli(server, "upgrade-server", shlex.join([sys.executable, "-m", "pymux"]))
+    assert said.returncode == 0, said.stderr.decode()
+
+    assert _dead(server, pane) == "1", _log_of(server)
+    assert "last words" in _once_it_answers(server, "capture-pane", "-p", "-t", pane)
+    _answer(server, "respawn-pane", "-t", pane, "sleep 60")
+    _shell_answers(server)
+
+
 def test_a_build_that_ends_without_a_word_is_refused(server):
     before = _what_survives(server)
     refused = cli(server, "upgrade-server", shlex.join(["sh", "-c", "exit 3"]))

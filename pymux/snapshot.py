@@ -401,7 +401,9 @@ class Snapshot:
             return
         backend = process.backend
         assert isinstance(backend, PosixBackend)  # `write` refused anything else
-        if backend.pid is None or backend.master is None:
+        # A program that ended leaves no pty, and `remain-on-exit` keeps its
+        # pane: it goes with no master. Lillecarl/pymux#738.
+        if backend.pid is None or (backend.master is None and not backend.closed):
             raise SnapshotError("pane %%%d holds a program with no pid or no pty" % pane.pane_id)
         freezer = self.freezers.get(pane.pane_id)
         if freezer is None:
@@ -784,7 +786,7 @@ class Inherited(Takeover):
     def pane(self, program: Program) -> PosixBackend:
         row = program.row
         if row.master_fd is None:
-            raise SnapshotError("pane %d names no master" % (program.pane_id,))
+            return PosixBackend.ended(row.pane_pid)
         return PosixBackend.adopt(row.master_fd, row.pane_pid, bool(row.parent))
 
     @override
