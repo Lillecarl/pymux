@@ -21,9 +21,9 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.data_structures import Size
 from session import in_this_process, once, over_connection
 
-from pymux import downloads
+from pymux import downloads, files
 from pymux.client import downloads as client_downloads
-from pymux.client.downloads import Downloads, Whole, download_directory, safe_name, save, save_whole
+from pymux.client.downloads import download_directory, save_whole
 from pymux.client.terminal import TerminalClient
 from pymux.downloads import (
     DEFAULT_NAME,
@@ -38,6 +38,7 @@ from pymux.downloads import (
 )
 from pymux.entry_points.run_pymux import Mode, parse_arguments
 from pymux.enums import FileTransfer
+from pymux.files import ArrivingFiles, Whole, safe_name, save
 from pymux.options import ALL_CLIENT_OPTIONS, SetOptionError
 from pymux.osc import extension_key_of
 
@@ -433,7 +434,7 @@ def test_a_name_has_no_path_in_it(name, safe):
 
 
 def test_a_long_name_is_cut_to_what_a_file_system_takes():
-    assert len(safe_name("å" * 300).encode("utf-8")) <= client_downloads.MAX_NAME_BYTES
+    assert len(safe_name("å" * 300).encode("utf-8")) <= files.MAX_NAME_BYTES
 
 
 def test_a_save_never_overwrites(tmp_path):
@@ -478,7 +479,7 @@ def test_the_download_directory(tmp_path):
 def test_the_client_saves_the_parts_as_one_file(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DOWNLOAD_DIR", str(tmp_path))
     data = bytes(downloads.PACKET_BYTES + 10)
-    receiving = Downloads()
+    receiving = ArrivingFiles()
     said = [receiving.receive(packet) for packet in file_packets(FinishedDownload(NAME, data, multipart=True))]
     assert said[:-1] == [None]
     whole = said[-1]
@@ -489,8 +490,8 @@ def test_the_client_saves_the_parts_as_one_file(tmp_path, monkeypatch):
 
 def test_the_client_bounds_a_file_too(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DOWNLOAD_DIR", str(tmp_path))
-    monkeypatch.setattr(client_downloads, "MAX_DOWNLOAD_BYTES", 10)
-    receiving = Downloads()
+    monkeypatch.setattr(files, "MAX_DOWNLOAD_BYTES", 10)
+    receiving = ArrivingFiles()
     packets = list(file_packets(FinishedDownload(NAME, bytes(downloads.PACKET_BYTES + 10), multipart=True)))
     assert "larger than" in (receiving.receive(packets[0]) or "")
     assert receiving.receive(packets[1]) is None
@@ -641,7 +642,7 @@ def test_send_is_still_send_keys():
 
 def test_no_file_is_written_outside(tmp_path: Path):
     "`..` in a name the server forwards still lands in the directory."
-    receiving = Downloads()
+    receiving = ArrivingFiles()
     packets = file_packets(FinishedDownload("../../escape", b"x", multipart=False))
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv("XDG_DOWNLOAD_DIR", str(tmp_path))
