@@ -85,7 +85,7 @@ from .error_notice import ErrorNotice
 from .forwarding import LOOPBACK_NAMES, loopback_port
 from .graphics import OuterImageIds, PaneView
 from .ids import PaneId, SessionId, WindowIndex
-from .jobs import JOB_SWEEP_EVERY, Job, JobFeed, JobTable, describe
+from .jobs import JOB_SWEEP_EVERY, HeldPipes, Job, JobFeed, JobTable, describe
 from .key_bindings import PymuxKeyBindings
 from .key_spelling import why_pane_cannot_read
 from .layout import Justify, LayoutManager, change_pane_size
@@ -2277,9 +2277,83 @@ class Pymux:
             logger.exception("No holder at %s: this server forks its panes itself.", path)
             return
         self.holding = self.jobs.holding = holding
-        self.tasks.start_soon(holding.run)
+        self.tasks.start_soon(self._keep_holding, holding, path)
         if not keep_orphans:
             await self.release_orphans()
+
+    async def _keep_holding(self, holding: Holding, path: str) -> None:
+        """
+        Read the holder, and when it goes, start another and have it
+        adopt every program.
+
+        **The panes never noticed.** This server holds its own copy of
+        every master and pipe, so the programs keep their terminals;
+        what a holder that is gone takes with it is the next upgrade,
+        which needs a holder to hand them to. A crash of the holder and
+        `restart-holder` both come here. Lillecarl/pymux#730.
+        """
+        await holding.run()
+        # `unhold` and a server that stops let go of it on purpose.
+        if self.holding is not holding or self.done.is_set():
+            return
+        holding.close()
+        logger.warning("The holder went away: starting a new one to keep every program.")
+        try:
+            new = await self._holder_at(path)
+        except OSError, HolderError:
+            logger.exception("No new holder at %s: the next upgrade is refused.", path)
+            return
+        assert self.tasks is not None
+        self.tasks.start_soon(self._keep_holding, new, path)
+        # Only the connection broke: the same holder keeps every program
+        # under the ids it gave them, and adopting them again would keep
+        # each twice.
+        same = new.pid is not None and new.pid == holding.pid
+        adopted = await self._adopt_into(new, again=not same)
+        self.holding = self.jobs.holding = new
+        logger.info("The %s holder keeps %d programs.", "same" if same else "new", adopted)
+
+    async def _adopt_into(self, holding: Holding, again: bool = True) -> int:
+        """
+        Give `holding` every program this server runs through a holder.
+        How many it took. `again` false is the same holder on a new
+        connection: each program keeps its id.
+        """
+        adopted = 0
+        for pane in self.panes_by_id.values():
+            if await self._adopt_one(holding, pane.process.backend, again) is not None:
+                adopted += 1
+        for job in self.jobs.listing():
+            if job.is_done:
+                continue
+            # The snapshot names a job's program by the job's own copy.
+            program_id = await self._adopt_one(holding, job.backend, again)
+            if program_id is not None:
+                job.program_id = program_id
+                adopted += 1
+        return adopted
+
+    @staticmethod
+    async def _adopt_one(holding: Holding, backend, again: bool = True) -> int | None:
+        "Give `holding` one program, if a holder forked it. Its id there, or None."
+        try:
+            if isinstance(backend, HeldBackend) and backend.master is not None and backend.pid is not None:
+                program_id = await holding.adopt(backend.pid, [backend.master]) if again else backend.program_id
+            elif isinstance(backend, HeldPipes):
+                program_id = (
+                    await holding.adopt(backend.pid, [backend.stdout, backend.stderr], on_pipes=True)
+                    if again
+                    else backend.program_id
+                )
+            else:
+                return None
+            if program_id is None:
+                return None
+        except OSError, HolderError:
+            logger.exception("The new holder could not adopt %r.", backend)
+            return None
+        backend.adopted_by(holding, program_id)
+        return program_id
 
     @staticmethod
     async def _holder_at(path: str) -> Holding:

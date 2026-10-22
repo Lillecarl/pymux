@@ -1145,6 +1145,14 @@ class HeldPipes:
     def resume_reading(self) -> None:
         self._reading.set()
 
+    def adopted_by(self, holding: Holding, program_id: int) -> None:
+        """
+        A new holder keeps this job now, its old one gone. The job ends
+        when its pipes do, as it did once the old one went; this only
+        names it for the next upgrade. Lillecarl/pymux#730.
+        """
+        self.holding, self.program_id = holding, program_id
+
     @property
     def reaped(self) -> bool:
         "The holder said how it ended, so its pid may be another program's now."

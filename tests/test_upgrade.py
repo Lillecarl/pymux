@@ -253,6 +253,38 @@ def test_an_upgrade_keeps_every_pane_and_its_program(server, tmp_path, new_build
 JOB_COUNT = 'i=0; while [ $i -lt %d ]; do i=$((i+1)); echo "job $i"; sleep 0.02; done; exit 3'
 
 
+def _holder_pid(sock) -> str:
+    return _answer(sock, "display-message", "-p", "#{holder_pid}").strip()
+
+
+def test_restart_holder_keeps_every_pane_and_the_next_upgrade(server):
+    """
+    The server keeps its own copy of every terminal, so the programs
+    never notice the holder change; the new one adopts them, and the
+    next upgrade takes them from it. Lillecarl/pymux#730.
+    """
+    before = _what_survives(server)
+    old = _holder_pid(server)
+    assert old
+
+    _answer(server, "restart-holder")
+    deadline = time.monotonic() + CLI_TIMEOUT
+    while _holder_pid(server) in ("", old):
+        assert time.monotonic() < deadline, "no new holder took over"
+        time.sleep(0.1)
+    while not _gone(int(old)):
+        assert time.monotonic() < deadline, "the old holder never ended"
+        time.sleep(0.1)
+
+    assert _what_survives(server) == before
+    _shell_answers(server)
+
+    said = cli(server, "upgrade-server", shlex.join([sys.executable, "-m", "pymux"]))
+    assert said.returncode == 0, said.stderr.decode()
+    assert _what_survives(server) == before
+    _shell_answers(server)
+
+
 @pytest.mark.parametrize("streams", [["--pty"], []], ids=["on a terminal", "on pipes"])
 def test_an_upgrade_keeps_a_running_job(server, streams):
     "The holder forked it, so the new server reads it on and hears its end. Lillecarl/pymux#556."
