@@ -30,7 +30,7 @@ import os
 from collections.abc import Callable, Iterator
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NamedTuple, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, cast, override
 from weakref import ref
 
 import apsw
@@ -55,7 +55,7 @@ from .arrangement import HSplit, LayoutTypes, Pane, VSplit, Window, _Split, node
 from .commands.wait_for import WaitChannel
 from .enums import AudioFrame, ClientAudio, WindowScroll
 from .ids import PaneId, SessionId, WindowId, WindowIndex
-from .jobs import HeldPipes, Job, JobFeed, JobId
+from .jobs import Job, JobFeed, JobId, JobPipes
 from .notifications import Notification
 from .options import ALL_OPTIONS
 from .pipes.posix import PosixSocketListener
@@ -105,11 +105,21 @@ from .tables import (
 if TYPE_CHECKING:
     from .main import ClientState, Pymux
 
-__all__ = ["SNAPSHOT_VERSION", "Snapshot", "load", "program_ids", "save", "start"]
+__all__ = [
+    "SNAPSHOT_VERSION",
+    "FromTheHolder",
+    "Inherited",
+    "Snapshot",
+    "Takeover",
+    "load",
+    "program_ids",
+    "save",
+    "start",
+]
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 26
+SNAPSHOT_VERSION = 27
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -137,19 +147,18 @@ CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
 #: What takes a snapshot of the version before this one up to it. A
 #: snapshot only ever goes from a running build to the next one, so a
 #: change of shape adds the one step from the version before it and
-#: deletes any older step. Version 12 is the first a holder hands over.
+#: deletes any older step.
 STEPS: dict[int, str] = {
-    # 26 keeps what a client is in the middle of -- a held prefix, a
-    # key table, a prompt -- in a table of its own, which only the
-    # hand-over file holds: typing is not window management.
-    # Lillecarl/pymux#557.
-    25: """
-CREATE TABLE client_modes(
-  client_id TEXT PRIMARY KEY REFERENCES clients(client_id),
-  modes TEXT NOT NULL
-);
-INSERT INTO client_modes SELECT client_id, modes FROM clients WHERE modes IS NOT NULL;
-ALTER TABLE clients DROP COLUMN modes;
+    # 27 names the fds an exec carries and whether the server is each
+    # program's parent. A version 26 server handed its programs over
+    # through the holder, so they have no fds of their own here, and the
+    # load takes them from the holder (`FromTheHolder`).
+    # Lillecarl/pymux#736.
+    26: """
+ALTER TABLE jobs ADD COLUMN fds TEXT;
+ALTER TABLE jobs ADD COLUMN parent INTEGER;
+ALTER TABLE pane_programs ADD COLUMN master_fd INTEGER;
+ALTER TABLE pane_programs ADD COLUMN parent INTEGER;
 """,
 }
 
@@ -317,6 +326,8 @@ class Snapshot:
         self.db.execute("PRAGMA user_version = %d" % SNAPSHOT_VERSION)
         self.freezers: dict[int, Freezer] = {}
         self.jobs_written: set[int] = set()
+        #: The jobs the last write wrote as running.
+        self.running_written: set[int] = set()
         self.rows = ChangedRows(LIVE_ROWS)
         self.modes = ChangedRows((ClientModesRow,))
 
@@ -328,9 +339,8 @@ class Snapshot:
             _refuse_what_cannot_be_saved(pane)
         jobs = pymux.jobs.listing()
         for job in jobs:
-            if not job.is_done and job.program_id is None:
-                # Only the holder can hand a program to the next server.
-                raise SnapshotError("job %d runs and was forked by this server, not by its holder" % job.job_id)
+            if not job.is_done and (job.backend is None or job.pid is None):
+                raise SnapshotError("job %d is still starting; try again" % job.job_id)
         with self.db:
             written = self.rows.write(self.db, rows_of(pymux))
             modes = self.modes.write(self.db, _client_mode_rows(pymux))
@@ -349,12 +359,14 @@ class Snapshot:
         db = self.db
         alive = {job.job_id for job in jobs}
         # A running job wrote more since, and its tail is capped, so it
-        # is written whole again.
-        stale = {job.job_id for job in jobs if not job.is_done}
+        # is written whole again; so is one that ended since it was
+        # written running, or its row would still say it runs.
+        stale = {job.job_id for job in jobs if not job.is_done} | self.running_written
         for gone in self.jobs_written - (alive - stale):
             for table in JOB_TABLES:
                 db.execute("DELETE FROM %s WHERE job_id = ?" % table, (gone,))
         self.jobs_written &= alive - stale
+        self.running_written = {job.job_id for job in jobs if not job.is_done}
         for job in jobs:
             if job.job_id in self.jobs_written:
                 continue
@@ -378,6 +390,8 @@ class Snapshot:
                         stderr_dropped=job.stderr_dropped,
                         program_id=job.program_id,
                         pid=job.pid,
+                        fds=None if job.is_done else json.dumps(_fds_of(job)),
+                        parent=None if job.is_done or job.backend is None else job.backend.parent,
                     ),
                     *(JobTagRow(job.job_id, key, value) for key, value in sorted(job.tags.items())),
                     *(
@@ -396,9 +410,9 @@ class Snapshot:
             insert(self.db, [ViewerRow(pane.pane_id, process.job.job_id, process.sx, process.sy)])
             return
         backend = process.backend
-        assert isinstance(backend, HeldBackend)  # `write` refused anything else
-        if backend.pid is None:
-            raise SnapshotError("pane %%%d holds a program with no pid" % pane.pane_id)
+        assert isinstance(backend, PosixBackend)  # `write` refused anything else
+        if backend.pid is None or backend.master is None:
+            raise SnapshotError("pane %%%d holds a program with no pid or no pty" % pane.pane_id)
         freezer = self.freezers.get(pane.pane_id)
         if freezer is None:
             freezer = self.freezers[pane.pane_id] = Freezer()
@@ -415,7 +429,9 @@ class Snapshot:
                     screen=json.dumps(screen.root),
                     stream=json.dumps(freeze(control.stream).root),
                     process=json.dumps(freeze(process).root),
-                    program_id=backend.program_id,
+                    program_id=backend.program_id if isinstance(backend, HeldBackend) else None,
+                    master_fd=backend.master,
+                    parent=backend.parent,
                 )
             ],
             replace=True,
@@ -494,9 +510,16 @@ def _refuse_what_cannot_be_saved(pane: Pane) -> None:
     backend = getattr(process, "backend", None)
     if not isinstance(backend, PosixBackend):
         raise SnapshotError("pane %%%d runs no program on a pty" % pane.pane_id)
-    if not isinstance(backend, HeldBackend):
-        # Only the holder can hand a program to the next server.
-        raise SnapshotError("pane %%%d was forked by this server and not by its holder" % pane.pane_id)
+
+
+def _fds_of(job: Job) -> list[int]:
+    "What an exec carries of a running job: its master, or its two pipes."
+    backend = job.backend
+    if isinstance(backend, JobPipes):
+        return backend.fds
+    if isinstance(backend, PosixBackend) and backend.master is not None:
+        return [backend.master]
+    raise SnapshotError("job %d runs on nothing an exec can carry" % job.job_id)
 
 
 def _text_of(cells: list) -> str:
@@ -741,28 +764,64 @@ class Program(NamedTuple):
     "What a snapshot holds of one pane's program, for `load` to adopt it."
 
     pane_id: PaneId
-    pid: int
-    #: The holder's name for the program.
-    program_id: int
+    row: ProgramRow
     screen: Frozen
     stream: Frozen
     process: Frozen
 
 
-def _adopted(pymux: Pymux, masters: dict[int, int], program: Program, on_done: Callable[[], None] | None) -> Pane:
+class Takeover:
+    """
+    How a load comes by the programs that still run: a pane's pty, and a
+    running job's pty or pipes. Lillecarl/pymux#736.
+
+    This one is the dry run's (`upgrade.check`): it adopts nothing and
+    starts nothing, in a process that holds none of the fds. The new
+    build proves it reads every table and thaws every screen. **Start
+    nothing it built**: the thaw writes the old owner's pid over each pty.
+    """
+
+    def pane(self, program: Program) -> PosixBackend:
+        return PosixBackend(None)
+
+    def job(self, row: JobRow) -> PosixBackend | JobPipes | None:
+        return None
+
+    def thawable(self, frozen: Frozen) -> Frozen:
+        "The frozen process, in the shape the backend `pane` built thaws from."
+        return frozen
+
+
+class Inherited(Takeover):
+    "The fds an upgrade's exec carried under the numbers the snapshot names."
+
+    @override
+    def pane(self, program: Program) -> PosixBackend:
+        row = program.row
+        if row.master_fd is None:
+            raise SnapshotError("pane %d names no master" % (program.pane_id,))
+        return PosixBackend.adopt(row.master_fd, row.pane_pid, bool(row.parent))
+
+    @override
+    def job(self, row: JobRow) -> PosixBackend | JobPipes | None:
+        if row.fds is None or row.pid is None:
+            raise SnapshotError("job %d runs and the snapshot names no fds for it" % (row.job_id,))
+        fds = json.loads(row.fds)
+        if row.pty:
+            (master,) = fds
+            return PosixBackend.adopt(master, row.pid, bool(row.parent))
+        stdout, stderr = fds
+        return JobPipes(row.pid, stdout, stderr, parent=bool(row.parent))
+
+
+def _adopted(pymux: Pymux, takeover: Takeover, program: Program, on_done: Callable[[], None] | None) -> Pane:
     """
     A pane built around a program the snapshot names, which still runs.
-
-    The holder keeps it and handed this server its master, which
-    `masters` holds by the holder's id. The screen, the parser and the
-    process thaw over what `_build_pane` made. Nothing starts until
-    `start`.
+    The screen, the parser and the process thaw over what `_build_pane`
+    made. Nothing starts until `start`.
     """
-    if pymux.holding is None:
-        raise SnapshotError("this server has no holder to take pane %d from" % (program.pane_id,))
-    if program.program_id not in masters:
-        raise SnapshotError("the holder keeps no program for pane %d" % (program.pane_id,))
-    backend = HeldBackend.adopt_held(pymux.holding, program.program_id, program.pid, masters[program.program_id])
+    backend = takeover.pane(program)
+    program = program._replace(process=takeover.thawable(program.process))
     return _thawed(pymux, program, pymux._build_pane(backend=backend, on_done=on_done))
 
 
@@ -853,37 +912,82 @@ def program_ids(path: str | os.PathLike[str]) -> tuple[list[int], list[int]]:
         db.close()
 
 
-async def handed_over(holding: Holding, path: str | os.PathLike[str]) -> tuple[dict[int, int], dict[int, list[int]]]:
+class FromTheHolder(Takeover):
     """
-    Copies of what the holder keeps of each program the snapshot names:
-    a master, or a job's two pipes. Only those: a copy fetched and not
-    adopted would stay open for the life of the server.
+    **The one move off the holder; delete it with the holder (stage E of
+    Lillecarl/pymux#736).** A server from before this build forked
+    nothing itself: the holder did, and hands copies of each master and
+    pipe over by its own id. Those programs are not this process's
+    children, so the backends wait for them as strangers.
     """
-    on_terminals, on_pipes = program_ids(path)
-    masters = {program_id: await holding.master(program_id) for program_id in on_terminals}
-    pipes = {program_id: await holding.fds(program_id) for program_id in on_pipes}
-    return masters, pipes
+
+    def __init__(self, masters: dict[int, int], pipes: dict[int, list[int]], holder_pid: int | None) -> None:
+        self.masters = masters
+        self.pipes = pipes
+        #: Ended with SIGTERM once the new server serves, which leaves
+        #: every program running.
+        self.holder_pid = holder_pid
+
+    @classmethod
+    async def handed_over(cls, holding: Holding, path: str | os.PathLike[str]) -> FromTheHolder:
+        """
+        Copies of what the holder keeps of each program the snapshot names:
+        a master, or a job's two pipes. Only those: a copy fetched and not
+        adopted would stay open for the life of the server.
+        """
+        on_terminals, on_pipes = program_ids(path)
+        masters = {program_id: await holding.master(program_id) for program_id in on_terminals}
+        pipes = {program_id: await holding.fds(program_id) for program_id in on_pipes}
+        return cls(masters, pipes, holding.pid)
+
+    @override
+    def pane(self, program: Program) -> PosixBackend:
+        program_id = program.row.program_id
+        if program_id not in self.masters:
+            raise SnapshotError("the holder keeps no program for pane %d" % (program.pane_id,))
+        return PosixBackend.adopt(self.masters[program_id], program.row.pane_pid, parent=False)
+
+    @override
+    def job(self, row: JobRow) -> PosixBackend | JobPipes | None:
+        if row.pid is None:
+            raise SnapshotError("job %d runs and the snapshot holds no pid for it" % (row.job_id,))
+        if row.pty and row.program_id in self.masters:
+            return PosixBackend.adopt(self.masters[row.program_id], row.pid, parent=False)
+        if not row.pty and row.program_id in self.pipes:
+            stdout, stderr = self.pipes[row.program_id]
+            return JobPipes(row.pid, stdout, stderr, parent=False)
+        raise SnapshotError("the holder keeps no program for job %d" % (row.job_id,))
+
+    @override
+    def thawable(self, frozen: Frozen) -> Frozen:
+        "A held program froze as a `HeldBackend`, and thaws into a `PosixBackend`."
+        backend = frozen.root["fields"].get("backend")
+        if isinstance(backend, dict) and backend.get("object") == _qualified(HeldBackend):
+            fields = {name: value for name, value in backend["fields"].items() if name in PosixBackend.KEEP}
+            backend = {**backend, "object": _qualified(PosixBackend), "fields": fields}
+            frozen = frozen._replace(root={**frozen.root, "fields": {**frozen.root["fields"], "backend": backend}})
+        return frozen
 
 
-def load(
-    pymux: Pymux,
-    path: str | os.PathLike[str],
-    masters: dict[int, int] | None = None,
-    pipes: dict[int, list[int]] | None = None,
-) -> int | None:
+def _qualified(cls: type) -> str:
+    return "%s.%s" % (cls.__module__, cls.__qualname__)
+
+
+def load(pymux: Pymux, path: str | os.PathLike[str], takeover: Takeover | None = None) -> int | None:
     """
     Replace what a fresh `pymux` holds with a snapshot's.
 
-    `masters` and `pipes` are what the holder handed over, by the
-    holder's id (`handed_over`). None is a server with no program.
+    `takeover` says where each running program's fds come from:
+    `Inherited` after an upgrade's exec, `FromTheHolder` for the one
+    move off the holder. The default adopts nothing, for the dry run.
 
     Returns the fd of the listening socket, or None when the server had
-    none. The old server passed it to the new one under the same number,
-    and adopting it is the caller's: `Pymux.adopt_listener`.
+    none. An exec carries it under the same number, and adopting it is
+    the caller's: `Pymux.adopt_listener`.
     """
     db = _open(path)
     try:
-        return _read(pymux, db, masters or {}, pipes or {})
+        return _read(pymux, db, takeover or Takeover())
     finally:
         db.close()
 
@@ -900,8 +1004,7 @@ def _program(db: apsw.Connection, pane_id: PaneId) -> Program:
         )
     return Program(
         pane_id=pane_id,
-        pid=row.pane_pid,
-        program_id=cast(int, row.program_id),
+        row=row,
         screen=Frozen(json.loads(row.screen), buffers, appearances, sorted(buffers), {}),
         stream=Frozen(json.loads(row.stream), {}, [], [], {}),
         process=Frozen(json.loads(row.process), {}, [], [], {}),
@@ -943,7 +1046,7 @@ def _read_notifications(pymux: Pymux, db: apsw.Connection, counters: dict[str, i
         routes._incoming[row.ours] = key
 
 
-def _read(pymux: Pymux, db: apsw.Connection, masters: dict[int, int], pipes: dict[int, list[int]]) -> int | None:
+def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
     server = {row.name: row.value for row in select(db, ServerRow)}
     pymux.created = server["created"]
     pymux.socket_name = server["socket_name"]
@@ -979,7 +1082,7 @@ def _read(pymux: Pymux, db: apsw.Connection, masters: dict[int, int], pipes: dic
     panes: dict[int | None, Pane] = {}
 
     # Before the panes: a viewer follows its job.
-    for job in _read_jobs(pymux, db, masters, pipes):
+    for job in _read_jobs(db, takeover):
         pymux.jobs._jobs[job.job_id] = job
 
     def pane_of(row: PaneRow, on_done: Callable[[], None] | None = None) -> Pane:
@@ -987,9 +1090,9 @@ def _read(pymux: Pymux, db: apsw.Connection, masters: dict[int, int], pipes: dic
         if viewing:
             pane = _viewer(pymux, viewing[0])
         else:
-            pane = _adopted(pymux, masters, _program(db, PaneId(row.pane_id)), on_done)
-            (program,) = select(db, ProgramRow, "WHERE pane_id = ?", row.pane_id)
-            pane.revision = program.pane_revision
+            program = _program(db, PaneId(row.pane_id))
+            pane = _adopted(pymux, takeover, program, on_done)
+            pane.revision = program.row.pane_revision
         pane.pane_id = PaneId(row.pane_id)
         pane.chosen_name = row.pane_name
         pane.clock_mode = bool(row.clock_mode)
@@ -1118,11 +1221,11 @@ def _read(pymux: Pymux, db: apsw.Connection, masters: dict[int, int], pipes: dic
     return server["listener_fd"]
 
 
-def _read_jobs(pymux: Pymux, db: apsw.Connection, masters: dict[int, int], pipes: dict[int, list[int]]) -> list[Job]:
+def _read_jobs(db: apsw.Connection, takeover: Takeover) -> list[Job]:
     """
     The jobs, for `start` to write into the jobs database. A running one
-    takes its terminal from `masters` or its pipes from `pipes`, and
-    `start` supervises it again.
+    takes its terminal or its pipes from `takeover`, and `start`
+    supervises it again.
     """
     jobs = []
     for row in select(db, JobRow, "ORDER BY job_id"):
@@ -1150,16 +1253,8 @@ def _read_jobs(pymux: Pymux, db: apsw.Connection, masters: dict[int, int], pipes
         job.program_id = row.program_id
         job.pid = row.pid
         if not job.is_done:
-            if pymux.holding is None:
-                raise SnapshotError("this server has no holder to take job %d from" % (job.job_id,))
-            if job.pid is None:
-                raise SnapshotError("job %d runs and the snapshot holds no pid for it" % (job.job_id,))
-            if job.pty and job.program_id in masters:
-                job.backend = HeldBackend.adopt_held(pymux.holding, job.program_id, job.pid, masters[job.program_id])
-            elif not job.pty and job.program_id in pipes:
-                stdout, stderr = pipes[job.program_id]
-                job.backend = HeldPipes(pymux.holding, job.program_id, job.pid, stdout, stderr)
-            else:
-                raise SnapshotError("the holder keeps no program for job %d" % (job.job_id,))
+            job.backend = takeover.job(row)
+            # Held no more: a later upgrade carries it by its fds.
+            job.program_id = None
         jobs.append(job)
     return jobs

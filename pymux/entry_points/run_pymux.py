@@ -98,7 +98,9 @@ class Mode(StrEnum):
     DIAGNOSE = "diagnose"
     RENICE = "renice"
     WEB = "web"
-    #: An upgrade's new server. `pymux/upgrade.py`.
+    #: An upgrade's check of the new build, and its new server.
+    #: `pymux/upgrade.py`.
+    CHECK_SNAPSHOT = "check-snapshot"
     RESUME_SERVER = "resume-server"
 
 
@@ -369,7 +371,7 @@ def parse_arguments(
             a.niceness = level_parser.parse_args(rest).niceness
             rest = []
 
-        if mode == Mode.RESUME_SERVER:
+        if mode in (Mode.CHECK_SNAPSHOT, Mode.RESUME_SERVER):
             # What an upgrading server runs, never a person: the words
             # are `pymux.upgrade`'s to read.
             a.upgrade_words, rest = rest, []
@@ -515,7 +517,7 @@ def run() -> None:
     # `pymux/log.py` says the rest.
     #
     # `start-server` sets this up for itself below, after it has forked.
-    if mode not in (Mode.START_SERVER, Mode.RESUME_SERVER):
+    if mode not in (Mode.START_SERVER, Mode.RESUME_SERVER, Mode.CHECK_SNAPSHOT):
         log.configure(a.logfile, _how_much_to_log(a.log_level))
 
     if a.show_tmux_version:
@@ -625,10 +627,22 @@ def run() -> None:
             except KeyboardInterrupt:
                 sys.exit(1)
 
+        case Mode.CHECK_SNAPSHOT:
+            from pymux import upgrade
+
+            # A failure is a traceback on stderr and a status, which the
+            # upgrading server logs and answers with. So is a warning.
+            logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
+            match a.upgrade_words:
+                case [path]:
+                    upgrade.check(path)
+                case _:
+                    sys.exit("usage: pymux %s PATH" % (Mode.CHECK_SNAPSHOT,))
+
         case Mode.RESUME_SERVER:
             from pymux import upgrade
 
-            # Where the server before this one logged, which it passed
+            # Where the image before this one logged, which it passed
             # on. Its stdout is this process's, as `start-server` has it.
             _log_like_a_daemon(a)
             upgrade.resume(*upgrade.resume_arguments(a.upgrade_words))

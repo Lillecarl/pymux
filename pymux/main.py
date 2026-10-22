@@ -1697,7 +1697,7 @@ class Pymux:
         self.panes_by_id: weakref.WeakValueDictionary[PaneId, Pane] = weakref.WeakValueDictionary()
         #: Held programs sent SIGHUP whose SIGKILL may still be due. The
         #: grace task keeps each backend alive until the program ends.
-        self.hanging_up: weakref.WeakSet[HeldBackend] = weakref.WeakSet()
+        self.hanging_up: weakref.WeakSet[PosixBackend] = weakref.WeakSet()
 
         # Socket information.
         self.socket_name: str | None = None
@@ -3096,7 +3096,7 @@ class Pymux:
         within the grace is in no snapshot, and the server that resumes
         one never sends that SIGKILL.
         """
-        if isinstance(backend := pane.process.backend, HeldBackend):
+        if isinstance(backend := pane.process.backend, PosixBackend):
             self.hanging_up.add(backend)
         pane.process.hang_up()
 
@@ -4898,7 +4898,8 @@ exec pymux notify -u "$urgency" -- "$@"
         Serve on the socket until the server stops.
 
         `resumed` runs first inside `running()`: an upgrade's new build
-        loads its snapshot there (`pymux.upgrade.resume`).
+        loads its snapshot there (`pymux.upgrade.resume`). An exception
+        from it ends the server with a crash report, as any other does.
         """
 
         # Ignore keyboard. (When people run "pymux server" and press Ctrl-C.)
@@ -4913,11 +4914,12 @@ exec pymux notify -u "$urgency" -- "$@"
 
         async def serve() -> None:
             try:
-                async with self.running(hold=True, keep_orphans=resumed is not None):
+                # No holder: this server forks its programs, and an upgrade
+                # execs in place to keep them. Lillecarl/pymux#736.
+                async with self.running():
                     if resumed is not None:
                         await resumed()
                     await self.done.wait()
-                    await self.unhold()
             finally:
                 # `stop()` is what set `done`, so this is usually a
                 # second call that finds nothing. It is here for the

@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import dataclasses
 import importlib
+import json
 import os
-import signal
+import shutil
 import sys
 
 import anyio
@@ -19,13 +20,14 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.data_structures import Size
 from prompt_toolkit.selection import SelectionState, SelectionType
+from pyte.freeze import Frozen
 from pyte.keep import Keep
 from pyte.page import RowMark
 from session import once
 from test_a_session_on_a_pyte_screen import attached, settled, shows
 from test_every_attribute_has_a_fate import declared, live_objects
 
-from pymux import snapshot, tables
+from pymux import snapshot, tables, upgrade
 from pymux.arrangement import LayoutTypes
 from pymux.commands.wait_for import WaitChannel
 from pymux.enums import Chooser, WindowCodec, WindowSize
@@ -314,6 +316,9 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
 #: Columns that hold one value in every row however the server is used.
 CONSTANT = {
     ("counters", "value"),  # five counters, and two of them may agree
+    # The holder forks every pane here, for the move off it to load;
+    # `test_upgrade.py` runs servers that are their programs' parents.
+    ("pane_programs", "parent"),
 }
 
 
@@ -492,15 +497,17 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                 pane.process.backend.pause_reading()
         pymux.jobs.pause_reading()
 
+        # The new server takes every program from the holder, as the one
+        # move off it does (Lillecarl/pymux#736): no longer anybody's
+        # child, so each one's end is seen and its code is not.
         fresh = Pymux()
         fresh.test_mode = True
         fresh.socket_name = pymux.socket_name
         second = tmp_path / "second.sqlite"
         try:
-            async with fresh.running(hold=True, keep_orphans=True):
-                assert fresh.holding is not None
-                masters, pipes = await snapshot.handed_over(fresh.holding, first)
-                snapshot.load(fresh, first, masters, pipes)
+            async with fresh.running():
+                takeover = await upgrade._from_the_holder(fresh.socket_name, str(first))
+                snapshot.load(fresh, first, takeover)
                 snapshot.save(fresh, second)
                 await snapshot.start(fresh)
                 assert _jobs_of(fresh) == jobs
@@ -511,10 +518,10 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                     assert fresh.jobs.kill(job)
                     with anyio.fail_after(10):
                         await fresh.jobs.wait(job)
-                    assert (job.returncode, job.kept("stdout")) == (-signal.SIGTERM, b"started\n")
+                    assert (job.returncode, job.kept("stdout")) == (None, b"started\n")
                 # Each viewer replays its job, and says once how it ended.
                 viewers = _viewers_of(fresh)
-                for job_id, ended in ((2, "[job 2 exited 3]"), (5, "[job 5 exited -15]")):
+                for job_id, ended in ((2, "[job 2 exited 3]"), (5, "[job 5 exited None]")):
                     with anyio.fail_after(10):
                         while ended not in _text(viewers[job_id]):
                             await anyio.sleep(0.05)
@@ -576,7 +583,6 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                     assert len(copying) == 2
                     assert not any(pane.process.suspended for pane in fresh.panes_by_id.values())
                 fresh.stop()
-                await fresh.unhold()
         finally:
             for pane in list(fresh.panes_by_id.values()):
                 pane.process.kill()
@@ -602,7 +608,28 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
         (3, 1, 1)
     ]
     assert _constant_columns(first) == []
-    assert _dump(second) == _dump(first)
+    assert _dump(_as_the_takeover_leaves_it(second, tmp_path / "second-taken.sqlite")) == _dump(
+        _as_the_takeover_leaves_it(first, tmp_path / "first-taken.sqlite")
+    )
+
+
+def _as_the_takeover_leaves_it(path, copy):
+    """
+    A copy of a snapshot with what the move off the holder changes: no
+    holder's ids, other fd numbers, and each held backend frozen as the
+    `PosixBackend` it thaws into.
+    """
+    shutil.copy(path, copy)
+    db = apsw.Connection(str(copy))
+    try:
+        db.execute("UPDATE pane_programs SET program_id = NULL, master_fd = NULL")
+        db.execute("UPDATE jobs SET program_id = NULL, fds = NULL")
+        for pane_id, process in db.execute("SELECT pane_id, process FROM pane_programs").fetchall():
+            frozen = snapshot.FromTheHolder({}, {}, None).thawable(Frozen(json.loads(process), {}, [], [], {}))
+            db.execute("UPDATE pane_programs SET process = ? WHERE pane_id = ?", (json.dumps(frozen.root), pane_id))
+    finally:
+        db.close()
+    return copy
 
 
 @pytest.mark.parametrize("off_by", [1, -2], ids=["newer", "older with no step"])
@@ -637,35 +664,64 @@ def test_the_table_list_is_the_schema_in_order():
     assert list(tables.TABLES) == made
 
 
-def test_a_version_25_snapshot_moves_the_client_modes_to_their_own_table(pymux, tmp_path):
-    "Version 26 keeps keyboard state out of `clients`, which the live store holds. Lillecarl/pymux#557."
-    path = tmp_path / "v25.sqlite"
+def test_a_version_26_snapshot_names_no_fds(pymux, tmp_path):
+    "The server before Lillecarl/pymux#736 handed its programs over through the holder."
+    path = tmp_path / "v26.sqlite"
     snapshot.save(pymux, path)
     db = apsw.Connection(str(path))
-    db.execute("DROP TABLE client_modes")
-    db.execute("ALTER TABLE clients ADD COLUMN modes TEXT")
-    db.execute("INSERT INTO clients (client_id, modes) VALUES ('typing', '{\"has_prefix\": true}'), ('idle', NULL)")
-    db.execute("PRAGMA user_version = 25")
+    for table, column in (
+        ("jobs", "fds"),
+        ("jobs", "parent"),
+        ("pane_programs", "master_fd"),
+        ("pane_programs", "parent"),
+    ):
+        db.execute("ALTER TABLE %s DROP COLUMN %s" % (table, column))
+    db.execute("PRAGMA user_version = 26")
     db.close()
 
     stepped = snapshot._open(path)
     assert _shape(stepped) == _shape_of_a_fresh_snapshot()
-    assert stepped.execute("SELECT client_id, modes FROM client_modes").fetchall() == [
-        ("typing", '{"has_prefix": true}')
-    ]
 
 
-async def test_a_running_job_this_server_forked_is_refused(pymux, tmp_path):
-    "Only the holder can hand a program to the next server. Lillecarl/pymux#556."
+@pytest.mark.parametrize("pty", [True, False], ids=["on a terminal", "on pipes"])
+async def test_a_running_job_this_server_forked_is_carried_by_its_fds(pymux, tmp_path, pty):
+    "An exec keeps it a child of the server, on the fds the snapshot names. Lillecarl/pymux#736."
     async with pymux.running():
-        job = pymux.jobs.submit("exec sleep 60")
+        job = pymux.jobs.submit("exec sleep 60", pty=pty)
         pymux.tasks.start_soon(pymux.jobs.supervise, job)
-        await once(lambda: job.process is not None, 10.0, "the job never started")
+        await once(lambda: job.pid is not None, 10.0, "the job never started")
         try:
-            with pytest.raises(snapshot.SnapshotError, match="job 1 runs and was forked by this server"):
-                snapshot.save(pymux, tmp_path / "refused.sqlite")
+            path = tmp_path / "carried.sqlite"
+            snapshot.save(pymux, path)
+            assert _rows(path, "SELECT pid, fds, parent FROM jobs") == [(job.pid, json.dumps(snapshot._fds_of(job)), 1)]
+            assert len(snapshot._fds_of(job)) == (1 if pty else 2)
         finally:
             pymux.jobs.kill(job)
+
+
+async def test_a_job_that_ends_between_two_writes_is_written_ended(pymux, tmp_path):
+    """
+    An upgrade writes once, checks the new build, and writes again in
+    the pause. A job that ended in between still read as running, and
+    the new image adopted fds the exec no longer carried. Lillecarl/pymux#736.
+    """
+    async with pymux.running():
+        go = tmp_path / "go"
+        job = pymux.jobs.submit("while [ ! -e %s ]; do sleep 0.02; done; exit 3" % go)
+        pymux.tasks.start_soon(pymux.jobs.supervise, job)
+        await once(lambda: job.pid is not None, 10.0, "the job never started")
+        written = snapshot.Snapshot(tmp_path / "twice.sqlite")
+        try:
+            written.write(pymux)
+            go.touch()
+            with anyio.fail_after(10):
+                await pymux.jobs.wait(job)
+            written.write(pymux)
+            written.finish()
+        except BaseException:
+            written.abandon()
+            raise
+    assert _rows(tmp_path / "twice.sqlite", "SELECT status, returncode, fds FROM jobs") == [("done", 3, None)]
 
 
 async def test_a_snapshot_is_refused_while_a_command_waits(pymux, tmp_path):

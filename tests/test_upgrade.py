@@ -1,9 +1,11 @@
 """
-An upgraded server keeps its panes and their programs.
+An upgraded server keeps its pid, its panes and their programs.
 
-A real daemon on a socket, handed over to this same build by
-`upgrade-server`: the new server takes every pane from the holder, which
-only works across processes. Lillecarl/pymux#408, Lillecarl/pymux#553.
+A real daemon on a socket, upgraded by `upgrade-server`: the exec is the
+subject, and only a process of its own can exec. A new build that fails
+its check is refused with the reason, and one that passes it and then
+crashes leaves a report that holds enough to fix it.
+Lillecarl/pymux#408, Lillecarl/pymux#736.
 """
 
 from __future__ import annotations
@@ -27,6 +29,9 @@ LINES = 300
 #: The file the counted pane touches once it printed every line.
 COUNTED = "counted"
 
+#: The server's log, in the test's directory.
+LOG = "server.log"
+
 #: A new build that starts, then cannot read the snapshot it was handed:
 #: the version it reads is one more than the file's.
 CANNOT_RESUME = """#!/bin/sh
@@ -38,6 +43,39 @@ from pymux.entry_points.run_pymux import run
 run()
 ' "$@"
 """
+
+#: A new build with a module of pymux that raises when it is imported.
+CANNOT_IMPORT = """#!/bin/sh
+exec %(python)s -c '
+import pymux
+pymux.__path__.append("%(extra)s")
+from pymux.entry_points.run_pymux import run
+run()
+' "$@"
+"""
+
+#: The module `CANNOT_IMPORT` adds.
+BROKEN_MODULE = 'raise RuntimeError("broken on purpose, at import")\n'
+
+#: A new build that passes the check, then crashes as it resumes.
+CRASHES_AFTER_THE_EXEC = """#!/bin/sh
+exec %(python)s -c '
+from pymux import snapshot
+async def start(pymux):
+    raise RuntimeError("broken on purpose, after the exec")
+snapshot.start = start
+from pymux.entry_points.run_pymux import run
+run()
+' "$@"
+"""
+
+
+def _new_build(tmp_path, script: str, **values) -> list[str]:
+    "A wrapper that starts this build with `script`'s change."
+    wrapper = tmp_path / "new-build"
+    wrapper.write_text(script % {"python": shlex.quote(sys.executable), **values})
+    wrapper.chmod(wrapper.stat().st_mode | stat.S_IXUSR)
+    return [str(wrapper)]
 
 
 def _answer(sock, *args) -> str:
@@ -75,6 +113,12 @@ def _counted(sock) -> list[int]:
         if LINES in numbers or time.monotonic() > deadline:
             return numbers
         time.sleep(0.1)
+
+
+def _log_of(sock) -> str:
+    "What the server logged, for a failure to show."
+    path = sock.parent / LOG
+    return path.read_text() if path.exists() else "(no log)"
 
 
 def _server_pid(sock) -> int:
@@ -116,13 +160,6 @@ def _inheritable(pid: int) -> list[str]:
     return found
 
 
-def _environment_of(pid: int) -> dict[str, str]:
-    "The environment a process started with, as the kernel keeps it."
-    with open("/proc/%d/environ" % pid, "rb") as f:
-        pairs = [entry.split(b"=", 1) for entry in f.read().split(b"\0") if b"=" in entry]
-    return {key.decode(): value.decode(errors="replace") for key, value in pairs}
-
-
 def _parent_of(pid: int) -> int:
     with open("/proc/%d/stat" % pid) as f:
         return int(f.read().rsplit(")", 1)[1].split()[1])
@@ -144,17 +181,16 @@ def _gone(pid: int) -> bool:
         return True
 
 
-def test_kill_server_ends_the_holder_and_its_programs(server):
-    "A server that ends on purpose takes its programs along. Lillecarl/pymux#553."
+def test_kill_server_ends_its_programs(server):
+    "A server that ends on purpose takes its programs along, and starts no holder. Lillecarl/pymux#736."
     pids = [int(one) for one in _answer(server, "list-panes", "-F", "#{pane_pid}").split()]
-    holder = "%s.holder" % (server,)
-    assert os.path.exists(holder)
+    assert not os.path.exists("%s.holder" % (server,))
 
     cli(server, "kill-server")
 
     deadline = time.monotonic() + CLI_TIMEOUT
-    while os.path.exists(holder) or not all(_gone(pid) for pid in pids):
-        assert time.monotonic() < deadline, "the holder or a program outlived kill-server"
+    while not all(_gone(pid) for pid in pids):
+        assert time.monotonic() < deadline, "a program outlived kill-server"
         time.sleep(0.05)
 
 
@@ -172,7 +208,9 @@ def server(tmp_path):
     sock = tmp_path / "upgrade.sock"
     count = tmp_path / "count.sh"
     count.write_text(COUNT % (LINES, shlex.quote(str(tmp_path / COUNTED))))
-    started = cli(sock, "new-session", "-d", "-x", "80", "-y", "24", "sh %s" % count)
+    # The log names the directory a crash report goes to, and every
+    # image of the server writes it.
+    started = cli(sock, "--log", tmp_path / LOG, "new-session", "-d", "-x", "80", "-y", "24", "sh %s" % count)
     assert started.returncode == 0, started.stderr.decode()
     _wait_for_server(sock)
     try:
@@ -200,100 +238,117 @@ def _shell_answers(sock) -> None:
         time.sleep(0.1)
 
 
-@pytest.mark.parametrize("new_build", ["same", "cannot-resume"])
+def _cmdline(pid: int) -> list[bytes]:
+    with open("/proc/%d/cmdline" % pid, "rb") as f:
+        return f.read().split(b"\0")
+
+
+@pytest.mark.parametrize("new_build", ["same", "cannot-resume", "cannot-import"])
 def test_an_upgrade_keeps_every_pane_and_its_program(server, tmp_path, new_build):
     before = _what_survives(server)
     old = _server_pid(server)
     command = [sys.executable, "-m", "pymux"]
     if new_build == "cannot-resume":
-        wrapper = tmp_path / "new-build"
-        wrapper.write_text(CANNOT_RESUME % {"python": shlex.quote(sys.executable)})
-        wrapper.chmod(wrapper.stat().st_mode | stat.S_IXUSR)
-        command = [str(wrapper)]
+        command = _new_build(tmp_path, CANNOT_RESUME)
+        reason = "snapshot version"
+    elif new_build == "cannot-import":
+        extra = tmp_path / "extra"
+        extra.mkdir()
+        (extra / "broken_on_purpose.py").write_text(BROKEN_MODULE)
+        command = _new_build(tmp_path, CANNOT_IMPORT, extra=extra)
+        reason = "pymux.broken_on_purpose does not import"
 
     said = cli(server, "upgrade-server", shlex.join(command))
-    if new_build == "cannot-resume":
-        assert said.returncode != 0
-        assert "snapshot version" in said.stderr.decode() + said.stdout.decode()
-    else:
-        # The old server answers before it ends. A client that reads no
+    if new_build == "same":
+        # The server answers before the exec. A client that reads no
         # answer says so and fails. Lillecarl/pymux#606.
         assert said.returncode == 0, said.stderr.decode()
+    else:
+        # Refused, with the reason, and the log holds the whole of it.
+        assert said.returncode != 0
+        assert reason in said.stderr.decode() + said.stdout.decode()
+        logged = (tmp_path / LOG).read_text()
+        assert "failed its check, so the upgrade is refused" in logged
+        assert reason in logged
+        if new_build == "cannot-import":
+            assert "broken on purpose, at import" in logged
 
     assert _what_survives(server) == before
+    # The same process serves either way: an exec keeps the pid.
     pid = _server_pid(server)
-    if new_build == "same":
-        # Another process serves, the new build, and the old one is gone.
-        assert pid != old
-        if READS_PROC:
-            assert _gone(old)
-            with open("/proc/%d/cmdline" % pid, "rb") as f:
-                assert b"resume-server" in f.read().split(b"\0")
-    else:
-        # A new build that cannot take over leaves the old one serving.
-        assert pid == old
+    assert pid == old
+    if READS_PROC:
+        assert (b"resume-server" in _cmdline(pid)) == (new_build == "same")
     _answer(server, "split-window", "-d", "sleep 60")
     newest = max(int(one) for one in _answer(server, "list-panes", "-F", "#{pane_pid}").split())
     if READS_PROC:
-        # The holder forked it, and keeps it for the next server. It
-        # outlives every build, so it holds the build it runs from for
-        # nix's collector.
-        holder = _parent_of(newest)
-        assert holder != pid
-        assert _environment_of(holder).get("PYMUX_BUILD", "").startswith(sys.executable)
-        assert "PYMUX_BUILD" not in _environment_of(newest)
+        # The server forks its programs itself, and starts no holder.
+        assert _parent_of(newest) == pid
+        assert not os.path.exists("%s.holder" % (server,))
         assert _inheritable(pid) == []
     numbers = _counted(server)
     assert numbers == list(range(1, LINES + 1))
     _shell_answers(server)
-    assert _leftovers(old, pid) == []
+    assert _leftovers(old) == []
 
 
-#: A job that counts past the upgrade, on a terminal the holder keeps.
-JOB_COUNT = 'i=0; while [ $i -lt %d ]; do i=$((i+1)); echo "job $i"; sleep 0.02; done; exit 3'
-
-
-def _holder_pid(sock) -> str:
-    return _answer(sock, "display-message", "-p", "#{holder_pid}").strip()
-
-
-def test_restart_holder_keeps_every_pane_and_the_next_upgrade(server):
+def test_a_build_that_crashes_after_the_exec_leaves_a_report(server, tmp_path):
     """
-    The server keeps its own copy of every terminal, so the programs
-    never notice the holder change; the new one adopts them, and the
-    next upgrade takes them from it. Lillecarl/pymux#730.
+    It passed the check, so the server exec'd it, and it crashed loading
+    the snapshot. The panes go with it; what is needed to fix it stays.
     """
-    before = _what_survives(server)
-    old = _holder_pid(server)
-    assert old
-
-    _answer(server, "restart-holder")
-    deadline = time.monotonic() + CLI_TIMEOUT
-    while _holder_pid(server) in ("", old):
-        assert time.monotonic() < deadline, "no new holder took over"
-        time.sleep(0.1)
-    while not _gone(int(old)):
-        assert time.monotonic() < deadline, "the old holder never ended"
-        time.sleep(0.1)
-
-    assert _what_survives(server) == before
-    _shell_answers(server)
-
-    said = cli(server, "upgrade-server", shlex.join([sys.executable, "-m", "pymux"]))
+    old = _server_pid(server)
+    said = cli(server, "upgrade-server", shlex.join(_new_build(tmp_path, CRASHES_AFTER_THE_EXEC)))
     assert said.returncode == 0, said.stderr.decode()
-    assert _what_survives(server) == before
-    _shell_answers(server)
+
+    deadline = time.monotonic() + CLI_TIMEOUT
+    while not (reports := list(tmp_path.glob("crash-%d-*.log" % old))):
+        assert time.monotonic() < deadline, "no crash report: %s" % ((tmp_path / LOG).read_text(),)
+        time.sleep(0.1)
+    while not _gone(old):
+        assert time.monotonic() < deadline, "the crashed server still runs"
+        time.sleep(0.1)
+    (kept,) = _leftovers(old)
+    try:
+        (report,) = reports
+        text = report.read_text()
+        assert "while resuming from the snapshot %s, which is kept" % (kept,) in text
+        assert "RuntimeError: broken on purpose, after the exec" in text
+        # The chain: the error, and every frame down to the one that raised.
+        assert "Traceback (most recent call last)" in text
+        assert "in resumed" in text
+        assert "Every thread:" in text
+        assert "Current thread" in text or "Thread 0x" in text
+        assert "argv" in text and "resume-server" in text
+        # The log's last line names the report.
+        assert str(report) in (tmp_path / LOG).read_text()
+    finally:
+        os.unlink(kept)
+
+
+#: A job that counts, then waits for the file `GO` past the upgrade: the
+#: check alone can take longer than the count.
+JOB_COUNT = (
+    'i=0; while [ $i -lt %d ]; do i=$((i+1)); echo "job $i"; sleep 0.02; done; '
+    "while [ ! -e %s ]; do sleep 0.05; done; exit 3"
+)
+GO = "go"
+
+
+def _job_count(sock) -> str:
+    return JOB_COUNT % (LINES, shlex.quote(str(sock.parent / GO)))
 
 
 @pytest.mark.parametrize("streams", [["--pty"], []], ids=["on a terminal", "on pipes"])
 def test_an_upgrade_keeps_a_running_job(server, streams):
-    "The holder forked it, so the new server reads it on and hears its end. Lillecarl/pymux#556."
-    job = _answer(server, "run", *streams, JOB_COUNT % LINES).strip()
+    "The exec keeps it a child, so the new image reads it on and hears its end. Lillecarl/pymux#736."
+    job = _answer(server, "run", *streams, _job_count(server)).strip()
     said = cli(server, "upgrade-server", shlex.join([sys.executable, "-m", "pymux"]))
     assert said.returncode == 0, said.stderr.decode()
+    (server.parent / GO).touch()
 
     waited = cli(server, "wait-job", job)
-    assert "job %s exited 3" % job in waited.stderr.decode()
+    assert "job %s exited 3" % job in waited.stderr.decode(), _log_of(server)
     numbers = [int(line.split()[1]) for line in waited.stdout.decode().splitlines() if line.startswith("job ")]
     assert numbers == list(range(1, LINES + 1))
 
@@ -304,7 +359,7 @@ def _pane_ids(sock) -> set[str]:
 
 def test_an_upgrade_keeps_a_pane_that_views_a_job(server):
     "The new server views the job again, and says once how it ended. Lillecarl/pymux#715."
-    job = _answer(server, "run", JOB_COUNT % LINES).strip()
+    job = _answer(server, "run", _job_count(server)).strip()
     split = _answer(server, "split-window", "-d", "-P", "-F", "#{pane_id}").strip()
     before = _pane_ids(server)
     # The viewer takes the place of the split, under an id of its own.
@@ -312,6 +367,7 @@ def test_an_upgrade_keeps_a_pane_that_views_a_job(server):
     (viewer,) = _pane_ids(server) - before
     said = cli(server, "upgrade-server", shlex.join([sys.executable, "-m", "pymux"]))
     assert said.returncode == 0, said.stderr.decode()
+    (server.parent / GO).touch()
 
     ended = "[job %s exited 3]" % job
     deadline = time.monotonic() + CLI_TIMEOUT

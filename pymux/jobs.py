@@ -29,7 +29,7 @@ import time
 from collections import deque
 from collections.abc import Callable, Iterable, Mapping
 from contextlib import suppress
-from typing import ClassVar, NewType
+from typing import ClassVar, NewType, override
 
 import anyio
 import anyio.abc
@@ -1176,7 +1176,9 @@ class JobPipes:
             await stranger_ended(self.pid, self._drained)
         else:
             ended, self.returncode = reaped_now(self.pid)
-            if not ended:
+            if ended:
+                logger.info("Job program %d ended before it was watched, with %s.", self.pid, self.returncode)
+            else:
                 # Abandoned on a cancel: the caller kills the child, and the
                 # thread's wait then returns.
                 self.returncode = await anyio.to_thread.run_sync(_wait_for, self.pid, abandon_on_cancel=True)
@@ -1211,10 +1213,12 @@ class HeldPipes(JobPipes):
         self.holding, self.program_id = holding, program_id
 
     @property
+    @override
     def reaped(self) -> bool:
         "The holder said how it ended, so its pid may be another program's now."
         return self.holding.statuses.get(self.program_id) is not None
 
+    @override
     async def reap(self) -> int | None:
         "Wait for the holder to say how it ended, then let the holder forget it."
         status = await self.holding.ended(self.program_id)
