@@ -29,17 +29,17 @@ from pymux.entry_points.run_pymux import _how_much_to_log
 
 @pytest.fixture(autouse=True)
 def create_clean_logger():
-    "Give each test the logger as a fresh process would have it."
-    handlers = list(log.logger.handlers)
-    level = log.logger.level
-    propagate = log.logger.propagate
-    log.logger.handlers = []
+    "Give each test every logger `configure` touches as a fresh process would have it."
+    kept = [(one, list(one.handlers), one.level, one.propagate) for one in log.LOGGERS]
+    for one in log.LOGGERS:
+        one.handlers = []
     yield
-    for handler in log.logger.handlers:
-        handler.close()
-    log.logger.handlers = handlers
-    log.logger.setLevel(level)
-    log.logger.propagate = propagate
+    for one, handlers, level, propagate in kept:
+        for handler in one.handlers:
+            handler.close()
+        one.handlers = handlers
+        one.setLevel(level)
+        one.propagate = propagate
 
 
 # ----------------------------------------------------------------------
@@ -89,6 +89,17 @@ def test_message_reaches_file(tmp_path):
     for handler in log.logger.handlers:
         handler.flush()
     assert "a packet went wrong" in wanted.read_text()
+
+
+@pytest.mark.parametrize("package", ["libpymux", "ptyhost"])
+def test_a_package_of_its_own_reaches_file(tmp_path, package):
+    "ptyhost's records went nowhere in a server. Lillecarl/pymux#737."
+    wanted = tmp_path / "server.log"
+    log.configure(str(wanted))
+    logging.getLogger("%s.somewhere" % package).warning("said by %s", package)
+    for handler in log.logger.handlers:
+        handler.flush()
+    assert "said by %s" % package in wanted.read_text()
 
 
 def test_traceback_reaches_file(tmp_path):
