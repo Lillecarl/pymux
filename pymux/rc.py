@@ -70,7 +70,6 @@ bind-key x confirm-before -p "kill-pane #P?" kill-pane
 bind-key & confirm-before -p "kill-window #W?" kill-window
 bind-key C-o rotate-window
 bind-key M-o rotate-window -D
-bind-key C-b send-prefix
 bind-key . command-prompt "move-window -t '%%'"
 bind-key [ copy-mode
 bind-key ] paste-buffer

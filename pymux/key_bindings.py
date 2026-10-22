@@ -161,6 +161,7 @@ class PymuxKeyBindings:
 
         self._prefix: tuple[str, ...] = ("c-b",)
         self._prefix_binding: Callable[[E], None] | None = None
+        self._prefix_again_binding: Callable[[E], None] | None = None
 
         # Load initial bindings.
         self._load_prefix_binding()
@@ -184,6 +185,27 @@ class PymuxKeyBindings:
         # Remove previous binding.
         if self._prefix_binding:
             self.custom_key_bindings.remove_binding(self._prefix_binding)
+        if self._prefix_again_binding:
+            self.custom_key_bindings.remove_binding(self._prefix_again_binding)
+
+        # **The prefix pressed twice sends it to the pane, whatever the
+        # prefix is.** tmux binds `C-b send-prefix` in its table, so a
+        # person who moves the prefix to C-a loses it until they bind
+        # C-a too. A `bind-key` of their own on that key wins over this.
+        prefix = self._prefix
+
+        @self.custom_key_bindings.add(
+            *prefix,
+            filter=HasPrefix(pymux)
+            & ~(has_focus(COMMAND) | has_focus(PROMPT) | WaitsForConfirmation(pymux))
+            & Condition(lambda: (PREFIX_TABLE, prefix) not in self.custom_bindings),
+        )
+        def send_prefix_handler(event: E) -> None:
+            "Send the prefix on to the pane."
+            pymux.get_client_state().has_prefix = False
+            pymux.handle_command("send-prefix")
+
+        self._prefix_again_binding = send_prefix_handler
 
         # Create new Python binding.
         @self.custom_key_bindings.add(

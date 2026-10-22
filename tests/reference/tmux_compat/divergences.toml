@@ -22,3 +22,20 @@ until the differential harness (#384) makes matching tmux the cheap
 default. Lillecarl/pymux#400.
 """
 references = ["Lillecarl/pymux#400", "Lillecarl/pymux#385"]
+
+[[divergence]]
+name = "the prefix pressed twice sends the prefix, whatever key it is"
+command = "send-prefix"
+tmux = "send-prefix is bound to C-b in the prefix table, and stays there when the prefix option changes"
+pymux = "the prefix key pressed twice sends the prefix to the pane, following the prefix option; a bind-key on that key wins"
+test = "test_a_moved_prefix_twice_reaches_the_pane_product_divergence"
+evidence = "tests/fixtures/tmux37/accepted_product_divergences.txt"
+reason = """
+In tmux a person who moves the prefix to C-a cannot send C-a to the
+pane until they also bind C-a send-prefix, and C-b stays bound to a
+command that sends C-a. Pressing the prefix twice is how a person
+sends it, so that rule follows the prefix. Carl, 2026-10-22: "the
+way prefix passes into panes by default is pressing it twice, that
+should be a feature".
+"""
+references = ["Lillecarl/pymux#385"]

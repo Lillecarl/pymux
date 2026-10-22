@@ -39,3 +39,15 @@ the first attempt at this probe.
 
 tmux(1) swap-pane: "-U: swap the active pane with the pane above (or
 previous)", "-D: swap the active pane with the pane below (or next)".
+
+== send-prefix after the prefix moves (tmux 3.7c)
+
+No configuration file, so the table is tmux's own.
+
+$ tmux -S probe.sock -f /dev/null new-session -d -s probe 'sleep 999'
+$ tmux -S probe.sock set-option -g prefix C-a
+$ tmux -S probe.sock list-keys -T prefix | grep send-prefix
+bind-key    -T prefix C-b     send-prefix
+
+send-prefix stays on C-b: C-a C-a sends nothing to the pane, and
+C-a C-b sends C-a.
