@@ -260,6 +260,10 @@ def main() -> int:
             sys.stdout.write("DONE\n" if known else "?\n")
             sys.stdout.flush()
     finally:
+        wire = os.environ.get("PYMUX_VTERM_WIRE")
+        if wire and middle.pane.terminal is not None:
+            # Raw, fences and all: the judge read it after `FENCE.sub`.
+            Path(wire).write_bytes(middle.pane.terminal.seen)
         try:
             middle.close()
         except Exception:

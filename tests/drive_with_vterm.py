@@ -217,8 +217,15 @@ def left_out(name: str) -> bool:
     return any(re.search(pattern, name) for pattern, _ in NOT_OURS)
 
 
-def run_one(directory: Path, name: str):
-    "Run one test file and return what the runner printed."
+def run_one(directory: Path, name: str, wires: Path | None = None):
+    """
+    Run one test file and return what the runner printed.
+
+    With `wires`, the middle man keeps everything pymux wrote in
+    `<wires>/<name>.bin`. Always, and not behind a knob: a failure under
+    load does not come back when asked, and a knob is a new build that
+    asks. A stray "o8" on a row was all one red run left. Lillecarl/pymux#742.
+    """
     command = [
         "perl",
         str(directory / "run-test.pl"),
@@ -226,6 +233,9 @@ def run_one(directory: Path, name: str):
         "%s %s" % (sys.executable, MIDDLEMAN),
         str(directory / name),
     ]
+    env = dict(os.environ)
+    if wires is not None:
+        env["PYMUX_VTERM_WIRE"] = str(wires / (name + ".bin"))
     try:
         done = subprocess.run(
             command,
@@ -233,6 +243,7 @@ def run_one(directory: Path, name: str):
             capture_output=True,
             text=True,
             timeout=FILE_TIMEOUT,
+            env=env,
         )
     except subprocess.TimeoutExpired as expired:
         # What the run had said by then. A hang says nothing about
@@ -360,11 +371,16 @@ def main() -> int:
 
     ran = [name for name in names if not left_out(name) and re.search(include, name)]
 
+    out = os.environ.get("PYMUX_VTERM_OUT", "")
+    wires = Path(out) / "wire" if out else None
+    if wires is not None:
+        wires.mkdir(parents=True, exist_ok=True)
+
     # Each file is a pymux of its own, in a directory named for its
     # process, and mostly waits on it, so the files run at once.
     workers = int(os.environ.get("NIX_BUILD_CORES") or 0) or os.cpu_count()
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        answers = pool.map(lambda name: run_one(suite, name), ran)
+        answers = pool.map(lambda name: run_one(suite, name, wires), ran)
 
     for name, (output, errors) in zip(ran, answers, strict=True):
         failed += failures_in(name, output)
@@ -378,7 +394,6 @@ def main() -> int:
 
     log = "\n".join(pieces)
 
-    out = os.environ.get("PYMUX_VTERM_OUT", "")
     if out:
         keep(Path(out), failed, log)
 
