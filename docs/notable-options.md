@@ -52,6 +52,7 @@ The build switch: the root `default.nix` passes `pipewire` and `wireplumber` to 
 | `extended-keys` | session | `on` | Every key a terminal can name reaches the pane. |
 | `key-profile` | session | `kitty` | Where terminals split on a key, a legacy program gets what the client's own terminal sends. This names the terminal for a client whose terminal does not name itself. |
 | `theme` | client | the theme nearest the terminal's own colours | Per client, because two people may sit at different screens. |
+| `chooser-session-lines` | session | on | The window chooser starts each session on a line of its own, so the sessions read as groups. With one session it changes nothing. |
 | `full-screen` | client | off | On, one pane fills this terminal, with no status line. |
 | `status-max-rows` | session | `3` | A window list wider than its row wraps onto more rows, a whole window at a time, so a phone still shows every window. Past this many rows the rest are cut. `1` is tmux's single row. The tallest status line of any client watching a window comes off that window's size. |
 | `status-fps` | session | off | On, the status line shows the frames a second this client gets, over the last five seconds, before the clock. Off because the number moves: an idle client then gets a frame each `status-interval`, and the number counts that frame too. `#{client_rate_down}` shows the bytes the same way. |

@@ -998,6 +998,9 @@ ALL_OPTIONS = {
     # waits. Off, because a person who knows the keys does not want a
     # popup in the way. Lillecarl/pymux#29.
     "which-key": OnOffOption("which_key"),
+    # The window chooser starts each session on a line of its own, so
+    # the sessions read as groups. Lillecarl/pymux#531.
+    "chooser-session-lines": OnOffOption("chooser_session_lines"),
     "status-keys": KeysOption("status_keys_vi_mode"),
     "mode-keys": KeysOption("mode_keys_vi_mode"),
     "default-terminal": StringOption("default_terminal", ["xterm", "xterm-256color", "screen"]),

@@ -954,13 +954,22 @@ class LayoutManager:
         next line. One wider than the whole bar takes a line of its own
         and the screen cuts it, which is what a long word does too.
         Lillecarl/pymux#327.
+
+        With `chooser-session-lines` on and more than one session, each
+        session also starts a line, so the sessions read as groups.
+        Lillecarl/pymux#531.
         """
         lines: list[list[int]] = [[]]
         room = width
 
+        sessions: list = []
+        if self.pymux.chooser_session_lines and len(self.pymux.sessions) > 1:
+            sessions = [self.pymux.session_of_window(window) for window in self.chooser_matches()]
+
         for index, label in enumerate(self.chooser_entries()):
             cost = len(label) + (1 if lines[-1] else 0)
-            if lines[-1] and cost > room:
+            new_session = bool(sessions) and index > 0 and sessions[index] is not sessions[index - 1]
+            if lines[-1] and (cost > room or new_session):
                 lines.append([])
                 room = width
                 cost = len(label)

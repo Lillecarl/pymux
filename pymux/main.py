@@ -1342,6 +1342,7 @@ class Pymux:
         "cut_shade_strength": Keep.SAVED,
         "synthesize_key_events": Keep.SAVED,
         "which_key": Keep.SAVED,
+        "chooser_session_lines": Keep.SAVED,
         "window_status_current_format": Keep.SAVED,
         "window_status_format": Keep.SAVED,
         # Tables, indexes and what the server last pushed.
@@ -1402,6 +1403,9 @@ class Pymux:
         # who knows the keys turns it off; a person who does not yet
         # reads the list instead of a manual. Lillecarl/pymux#29.
         self.which_key = False
+        # On: Carl asked for sessions as groups, and with one session
+        # it changes nothing. Lillecarl/pymux#531.
+        self.chooser_session_lines = True
         # Draw the frames a second this client gets before the clock.
         # Off: the number moves, so it costs an idle client a frame each
         # `status-interval`. Lillecarl/pymux#596.

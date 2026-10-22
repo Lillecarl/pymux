@@ -380,6 +380,42 @@ async def test_the_chooser_lists_every_session():
         assert any(label.startswith("work:1") for label in labels)
 
 
+def _sessions_of_lines(pymux, state) -> list[set]:
+    "The sessions on each line of the chooser."
+    manager = state.layout_manager
+    with set_app(state.app):
+        matches = manager.chooser_matches()
+        lines = manager.chooser_lines(manager._bar_width())
+    return [{pymux.session_of_window(matches[i]).name for i in line} for line in lines]
+
+
+async def test_each_session_starts_a_line_of_the_chooser():
+    "Lillecarl/pymux#531: the sessions read as groups."
+    async with in_this_process(_server()) as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", SIZE)
+        await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
+        with set_app(state.app):
+            state.layout_manager.display_chooser()
+
+        lines = _sessions_of_lines(pymux, state)
+
+        assert len(lines) == 2
+        assert all(len(names) == 1 for names in lines)
+
+
+async def test_the_option_off_flows_the_sessions_together():
+    async with in_this_process(_server()) as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", SIZE)
+        await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
+        await _command(pymux, state, "set-option chooser-session-lines off")
+        with set_app(state.app):
+            state.layout_manager.display_chooser()
+
+        assert len(_sessions_of_lines(pymux, state)) == 1
+
+
 async def test_choosing_a_window_of_another_session_moves_the_client():
     async with in_this_process(_server()) as session:
         pymux = session.pymux
