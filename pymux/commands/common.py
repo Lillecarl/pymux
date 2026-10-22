@@ -296,7 +296,7 @@ def clients_named(pymux: Pymux, wanted: str) -> list[ClientState]:
         if wanted
         in (
             getattr(client_state, "name", ""),
-            getattr(client_state.connection, "name", ""),
+            client_state.connection.name,
         )
     ]
     if not found:

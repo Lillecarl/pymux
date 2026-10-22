@@ -76,5 +76,5 @@ def outer_term(client) -> str:
     socket reported it; an integrated server is its own client, so its
     own environment says it.
     """
-    colors = getattr(getattr(client, "connection", None), "colors", None)
-    return getattr(colors, "term", "") or os.environ.get("TERM", "")
+    term = client.connection.colors.term if client is not None else ""
+    return term or os.environ.get("TERM", "")

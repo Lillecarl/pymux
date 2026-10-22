@@ -30,13 +30,11 @@ def show_terminal(pymux: Pymux, args: argparse.Namespace) -> None:
         raise CommandException("no client to show the terminal of")
 
     connection = client.connection
-    said = getattr(connection, "terminal_said", None)
-    colors = getattr(connection, "colors", None)
     lines = [
-        "term %s" % (getattr(colors, "term", "") or "-",),
-        "colorterm %s" % (getattr(colors, "colorterm", "") or "-",),
+        "term %s" % (connection.colors.term or "-",),
+        "colorterm %s" % (connection.colors.colorterm or "-",),
     ]
-    for answer in said or ():
+    for answer in connection.terminal_said:
         when = datetime.datetime.fromtimestamp(answer.last).strftime("%H:%M:%S")
         lines.append("%s  x%d  %s" % (readable(answer.text), answer.count, when))
     show_listing(pymux, "show-terminal", "\n".join(lines))

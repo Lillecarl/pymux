@@ -1450,7 +1450,7 @@ class LayoutManager:
         "Each thing the window list shows, one fragment each."
         result: StyleAndTextTuples = []
 
-        recording = getattr(self.client_state.connection, "recording", None)
+        recording = self.client_state.connection.recording
         if recording is not None:
             result.append(("class:recording", " ● REC %s " % recording.name))
 

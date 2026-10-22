@@ -532,7 +532,7 @@ class AudioServer:
 
     def _client_of(self, link: AudioLink):
         for client_state in self.pymux.clients:
-            if getattr(client_state.connection, "client_id", None) == link.client_id:
+            if client_state.connection.client_id == link.client_id:
                 return client_state
         return None
 

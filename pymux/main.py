@@ -366,11 +366,16 @@ class ClientState:
         "caller_pane_id": Keep.DROPPED,
     }
 
-    def __init__(self, pymux: Pymux, input, output, color_depth, connection, session: Session) -> None:
+    def __init__(
+        self, pymux: Pymux, input, output, color_depth, connection: ServerConnection, session: Session
+    ) -> None:
         self.pymux = pymux
         self.input = input
         self.output = output
         self.color_depth = color_depth
+        #: Every route builds a `ServerConnection`, so its attributes
+        #: are read plainly. A test's stand-in carries them too.
+        #: Lillecarl/pymux#726.
         self.connection = connection
 
         #: The session this client looks at. `attach-session` and
@@ -683,8 +688,8 @@ class ClientState:
         """
         if self.input_tick != self.schedule_tick:
             return True
-        pipe = getattr(self.connection, "pipe_connection", None)
-        behind = pipe is not None and pipe.holds_frames_while_behind and pipe.outstanding
+        pipe = self.connection.pipe_connection
+        behind = pipe.holds_frames_while_behind and pipe.outstanding
         # **The terminal has not read the last frame**, on any route.
         # Over ssh the bytes wait where no route sees them, in sshd's
         # buffers and the link, and only the terminal's answer to the
@@ -693,7 +698,7 @@ class ClientState:
         # backlog of old ones; a keystroke's frame waits for one frame
         # and not for thirty. The answer asks for the frame at once,
         # and the pacing below is the fallback. Lillecarl/pymux#259.
-        if behind or getattr(self.connection, "waits_for_terminal", False):
+        if behind or self.connection.waits_for_terminal:
             if not self.app.min_redraw_interval:
                 self.app.min_redraw_interval = BEHIND_INTERVAL
                 self._paced_while_behind = True
@@ -1846,7 +1851,7 @@ class Pymux:
         here, except for the names this option lists -- those belong to
         whoever attached. Lillecarl/pymux#271, Lillecarl/pymux#270.
         """
-        reported = getattr(client_state.connection, "environment", None) or {}
+        reported = client_state.connection.environment
         environment = client_state.session.environment
 
         for pattern in self.update_environment.split():
@@ -4181,10 +4186,10 @@ exec pymux notify -u "$urgency" -- "$@"
         Lillecarl/pymux#369.
         """
         for connection, client_state in self._client_states.items():
-            if connection is None or getattr(client_state, "temporary", False):
+            if connection is None or client_state.temporary:
                 continue
-            graphics = getattr(connection, "graphics", None)
-            if graphics is not None and getattr(graphics, "cell_size_known", False):
+            graphics = connection.graphics
+            if graphics.cell_size_known:
                 return (graphics.cell_width, graphics.cell_height)
         return (ASSUMED_CELL_WIDTH, ASSUMED_CELL_HEIGHT)
 
@@ -4310,8 +4315,7 @@ exec pymux notify -u "$urgency" -- "$@"
         terminal it sits at, by its XTVERSION answer or its TERM, or
         else "key-profile". Lillecarl/pymux#706.
         """
-        graphics = getattr(getattr(client, "connection", None), "graphics", None)
-        version = graphics.terminal_version if graphics is not None else ""
+        version = client.connection.graphics.terminal_version if client is not None else ""
         term = hacks_and_lies.outer_term(client) if client is not None else ""
         return KEY_PROFILES[key_profile_of(version, term) or self.key_profile]
 

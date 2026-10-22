@@ -433,8 +433,7 @@ class WaylandServer:
             state = self.pymux.get_client_state()
         except ValueError:
             return False
-        graphics = getattr(state.connection, "graphics", None)
-        return bool(graphics is not None and graphics.kitty_supported)
+        return bool(state.connection.graphics.kitty_supported)
 
     def configure(self, toplevel: int, columns: int, rows: int) -> None:
         """
@@ -515,13 +514,14 @@ class WaylandServer:
     def _pointer_fraction(self) -> tuple[float, float]:
         "Where in its cell the mouse report being handled was, from the client it came from."
         client = self.pymux.client_of(get_app())
-        connection = getattr(client, "connection", None)
-        return getattr(connection, "pointer_fraction", (0.5, 0.5))
+        if client is None:
+            return (0.5, 0.5)
+        return client.connection.pointer_fraction
 
     def _scrolls_smooth(self) -> bool:
         "Whether the client the scroll came from says `window-scroll smooth`."
         client = self.pymux.client_of(get_app())
-        return getattr(client, "window_scroll", WindowScroll.SMOOTH) == WindowScroll.SMOOTH
+        return client is None or client.window_scroll == WindowScroll.SMOOTH
 
     def pointer(self, toplevel: int, position, button: int | None, pressed: bool, time: int) -> None:
         compositor = self.compositor
@@ -638,11 +638,9 @@ class WaylandServer:
     async def _read_the_terminal(self, target: str) -> str | None:
         "The selection of the terminal a person used last, or None."
         client = self.pymux.latest_client()
-        connection = getattr(client, "connection", None)
-        read = getattr(connection, "read_clipboard", None)
-        if read is None:
+        if client is None:
             return None
-        return await read(OSC52_LETTER[target])
+        return await client.connection.read_clipboard(OSC52_LETTER[target])
 
     def _fallback(self, target: str) -> str:
         "What pymux itself knows was copied last."

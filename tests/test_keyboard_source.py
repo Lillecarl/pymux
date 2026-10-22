@@ -13,15 +13,17 @@ from __future__ import annotations
 
 import pytest
 from pyte.keys import KeyboardFlag
+from session import Connection
 
 from pymux.main import Pymux
 from pymux.options import ALL_OPTIONS, ExtendedKeys, SetOptionError
 
 
-class FakeConnection:
+class FakeConnection(Connection):
     "A client connection, with the mask that its detection found."
 
     def __init__(self, flags=0):
+        super().__init__()
         self.kitty_source_flags = flags
 
 

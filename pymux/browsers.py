@@ -95,7 +95,7 @@ class Browsers:
         if client_state is None:
             raise BrowserRefused("nobody is attached to open a browser for")
         connection = client_state.connection
-        if not getattr(connection, "starts_browsers", False):
+        if not connection.starts_browsers:
             raise BrowserRefused("the client in use cannot start a browser; update pymux there")
 
         launch = Launch(secrets.token_hex(8), client_state, arguments, pane_label)

@@ -29,6 +29,9 @@ from pymux.rate import frames_per_second, per_second
 if TYPE_CHECKING:
     from pymux.arrangement import Pane, Window
     from pymux.main import ClientState, Pymux
+    from pymux.pipes.base import PipeConnection
+    from pymux.rate import Rate
+    from pymux.server import ServerConnection
     from pymux.session import Session
 
 __all__ = ["FormatContext", "Language", "format_pymux_string"]
@@ -525,16 +528,15 @@ def _created(context: FormatContext) -> str:
     return str(int(context.pymux.created))
 
 
-def _connection_of(context: FormatContext):
+def _connection_of(context: FormatContext) -> ServerConnection | None:
     """
     The connection of the client this is drawn for, when there is one.
 
-    A command formats without a client, and the in-process route has a
-    connection that carries none of this. Both answer nothing, which is
+    A command formats without a client and answers nothing, which is
     what tmux does when its own client is NULL.
     """
     client = context.client
-    return getattr(client, "connection", None) if client is not None else None
+    return client.connection if client is not None else None
 
 
 def _pane_mode(context: FormatContext) -> str:
@@ -603,7 +605,8 @@ def _client_hostname(context: FormatContext) -> str:
     the server's answer and this is the other one. The client reports
     it when it attaches. Lillecarl/pymux#287, Lillecarl/pymux#330.
     """
-    return getattr(_connection_of(context), "hostname", "") or ""
+    connection = _connection_of(context)
+    return connection.hostname if connection is not None else ""
 
 
 def _client_name(context: FormatContext) -> str:
@@ -617,7 +620,7 @@ def _client_name(context: FormatContext) -> str:
     thing a person can paste into a command. Lillecarl/pymux#340.
     """
     client = context.client
-    chosen = getattr(client, "name", "") if client is not None else ""
+    chosen = client.name if client is not None else ""
     return chosen or _client_tty(context)
 
 
@@ -632,7 +635,8 @@ def _client_tty(context: FormatContext) -> str:
     says why the machine is always in front of it.
     Lillecarl/pymux#335, Lillecarl/pymux#340.
     """
-    return getattr(_connection_of(context), "name", "") or ""
+    connection = _connection_of(context)
+    return connection.name if connection is not None else ""
 
 
 def _client_created(context: FormatContext) -> str:
@@ -643,41 +647,47 @@ def _client_created(context: FormatContext) -> str:
     of one terminal apart: a reattach from the same window takes the
     same name and a later time.
     """
-    created = getattr(_connection_of(context), "created", None)
-    return str(int(created)) if created else ""
+    connection = _connection_of(context)
+    return str(int(connection.created)) if connection is not None else ""
+
+
+def _client_id(context: FormatContext) -> str:
+    connection = _connection_of(context)
+    return connection.client_id if connection is not None else ""
 
 
 def _client_termname(context: FormatContext) -> str:
     "What the client says its terminal is. (`TERM`, as it reported it.)"
-    colors = getattr(_connection_of(context), "colors", None)
-    return getattr(colors, "term", "") or ""
+    connection = _connection_of(context)
+    return connection.colors.term if connection is not None else ""
 
 
 def _client_width(context: FormatContext) -> str:
-    size = getattr(_connection_of(context), "size", None)
-    return str(size.columns) if size is not None else ""
+    connection = _connection_of(context)
+    return str(connection.size.columns) if connection is not None else ""
 
 
 def _client_height(context: FormatContext) -> str:
-    size = getattr(_connection_of(context), "size", None)
-    return str(size.rows) if size is not None else ""
+    connection = _connection_of(context)
+    return str(connection.size.rows) if connection is not None else ""
 
 
-def _client_bytes(direction: str) -> Callable[[FormatContext], str]:
+def _client_bytes(count: Callable[[PipeConnection], int]) -> Callable[[FormatContext], str]:
     """
-    What the wire carried to this client ("bytes_out") or from it
-    ("bytes_in"), after zstd: the bytes a metered link pays for. Not
-    tmux's. Lillecarl/pymux#677.
+    What the wire carried to this client or from it, after zstd: the
+    bytes a metered link pays for. Not tmux's. Lillecarl/pymux#677.
     """
 
     def bytes_of(context: FormatContext) -> str:
-        pipe = getattr(_connection_of(context), "pipe_connection", None)
-        return str(getattr(pipe, direction)) if pipe is not None else ""
+        connection = _connection_of(context)
+        return str(count(connection.pipe_connection)) if connection is not None else ""
 
     return bytes_of
 
 
-def _client_rate(direction: str, rate: str) -> Callable[[FormatContext], str]:
+def _client_rate(
+    count: Callable[[PipeConnection], int], rate: Callable[[ServerConnection], Rate]
+) -> Callable[[FormatContext], str]:
     """
     The same bytes per second over the last few seconds, in a unit
     that fits (`pymux.rate`). For a person; a script reads the counts.
@@ -686,10 +696,9 @@ def _client_rate(direction: str, rate: str) -> Callable[[FormatContext], str]:
 
     def rate_of(context: FormatContext) -> str:
         connection = _connection_of(context)
-        pipe = getattr(connection, "pipe_connection", None)
-        if pipe is None:
+        if connection is None:
             return ""
-        return per_second(getattr(connection, rate).read(getattr(pipe, direction), time.monotonic()))
+        return per_second(rate(connection).read(count(connection.pipe_connection), time.monotonic()))
 
     return rate_of
 
@@ -788,7 +797,7 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "client_created": _client_created,
     # Not tmux's: the token a client keeps across reattaches to a
     # restarted server. Lillecarl/pymux#399.
-    "client_id": lambda c: getattr(_connection_of(c), "client_id", "") or "",
+    "client_id": _client_id,
     "client_hostname": _client_hostname,
     "client_prefix": _client_prefix,
     "client_key_table": _client_key_table,
@@ -797,10 +806,10 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "client_height": _client_height,
     "client_readonly": _client_readonly,
     "client_flags": _client_flags,
-    "client_bytes_down": _client_bytes("bytes_out"),
-    "client_bytes_up": _client_bytes("bytes_in"),
-    "client_rate_down": _client_rate("bytes_out", "rate_down"),
-    "client_rate_up": _client_rate("bytes_in", "rate_up"),
+    "client_bytes_down": _client_bytes(lambda pipe: pipe.bytes_out),
+    "client_bytes_up": _client_bytes(lambda pipe: pipe.bytes_in),
+    "client_rate_down": _client_rate(lambda pipe: pipe.bytes_out, lambda connection: connection.rate_down),
+    "client_rate_up": _client_rate(lambda pipe: pipe.bytes_in, lambda connection: connection.rate_up),
     "client_fps": _client_fps,
     "client_session": lambda c: c.client.session.name if c.client else "",
     # Server.

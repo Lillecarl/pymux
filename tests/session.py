@@ -43,11 +43,23 @@ from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import ColorDepth
 from prompt_toolkit.output.vt100 import Vt100_Output
 
-from pymux.colors import DefaultColors
+from pymux.colors import ColorDetection, DefaultColors
+from pymux.graphics import ClientGraphics
 from pymux.keys import KittyVt100Parser
 from pymux.main import Pymux
 from pymux.pipes.memory import connect_in_memory
+from pymux.rate import Rate
 from pymux.server import ServerConnection
+from pymux.terminal_answers import TerminalAnswers
+
+
+class _NoPipe:
+    "The transport of a stub: it never falls behind and carries nothing."
+
+    holds_frames_while_behind = False
+    outstanding = 0
+    bytes_in = 0
+    bytes_out = 0
 
 
 class Connection:
@@ -63,7 +75,6 @@ class Connection:
 
     kitty_source_flags = 0
     pointer_shape = None
-    graphics = None
 
     #: What a client on a unix socket reports: it holds no SSH
     #: connection, so it can forward nothing and has nothing to list.
@@ -98,6 +109,25 @@ class Connection:
         #: stub answers nothing, which is what a terminal that never
         #: replied is. Lillecarl/pymux#223.
         self.default_colors = DefaultColors()
+        #: The graphics of a terminal that answered no query: no
+        #: protocol, no cell size. It writes nowhere. Lillecarl/pymux#726.
+        self.graphics = ClientGraphics(lambda data: None, lambda: None)
+        # What a `ServerConnection` holds that production reads, each
+        # as a client that never answered and moved no bytes.
+        self.colors = ColorDetection()
+        self.pipe_connection = _NoPipe()
+        self.size = DEFAULT_SIZE
+        self.rate_down = Rate()
+        self.rate_up = Rate()
+        self.terminal_said = TerminalAnswers()
+        self.recording = None
+        self.client_id = ""
+        self.starts_browsers = False
+        self.waits_for_terminal = False
+        self.pointer_fraction = (0.5, 0.5)
+
+    async def read_clipboard(self, selection: str = "c") -> str | None:
+        return None
 
     @property
     def name(self) -> str:
