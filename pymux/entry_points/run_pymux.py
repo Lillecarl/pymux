@@ -73,6 +73,7 @@ from typing import NoReturn, assert_never
 from pymux import __version__, log
 from pymux.client import create_client, is_ssh_url, list_clients
 from pymux.config import find_config
+from pymux.scope import rerun_in_a_scope
 from pymux.utils import daemonize
 
 __all__ = ["run"]
@@ -609,6 +610,7 @@ def run() -> None:
 
         case Mode.START_SERVER:
             _refuse_nesting(socket_name_from_env)
+            rerun_in_a_scope()
 
             _log_like_a_daemon(a)
 
@@ -694,6 +696,7 @@ def run() -> None:
 
 def _start_and_attach(socket_name: str | None, filename: str | None, attaching: Attaching) -> NoReturn:
     "Start a server on `socket_name`, or on a new one with None, and attach to it."
+    rerun_in_a_scope()
     mux = _new_pymux(source_file=filename)
     socket_name = mux.listen_on_socket(socket_name)
     pid = daemonize()
@@ -1110,7 +1113,8 @@ def _new_session(socket_name: str | None, command: str, args: list[str], pane_id
             return 1
         return client.run_command(command, pane_id)
 
-    # Start a new daemonized server.
+    # Start a new daemonized server, in a scope of its own.
+    rerun_in_a_scope()
     if start_directory:
         with contextlib.suppress(OSError):
             os.chdir(os.path.abspath(os.path.expanduser(start_directory)))
