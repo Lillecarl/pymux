@@ -36,7 +36,9 @@ SMALL = Size(rows=12, columns=40)
 
 #: A window. `plane_size` answers the session's default size while
 #: nobody watches, so the sizing tests need a client and a window.
-NOTHING = "%s -c pass" % ("python3",)
+#: **The program stays.** One that ends at once takes its window with
+#: it, and a test that asks a moment later reads the default size.
+NOTHING = "%s -c 'import time; time.sleep(30)'" % ("python3",)
 
 
 def set_option(pymux, state, name, value):
