@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import os
 import weakref
 from collections.abc import Callable
 from functools import partial
@@ -2113,6 +2114,9 @@ class LayoutManager:
             if record.body:
                 text += " - " + record.body
             source = "%%%d" % record.pane_id if record.pane_id is not None else "-"
+            where = self._where_pane_is(record.pane_id)
+            if where:
+                source += " " + where
             tokens.append(
                 (
                     style,
@@ -2121,6 +2125,24 @@ class LayoutManager:
                 )
             )
         return tokens
+
+    def _where_pane_is(self, pane_id) -> str:
+        """
+        The directory the shell of that pane reported, with the home
+        directory as `~`, or nothing. Lillecarl/pymux#498.
+
+        **Only what the shell said**, not the process table that
+        `#{pane_current_path}` falls back to: that is a system call per
+        row per frame, and over ssh it names the local ssh.
+        """
+        pane = self.pymux.panes_by_id.get(pane_id) if pane_id is not None else None
+        directory = pane.current_directory if pane is not None else None
+        if not directory:
+            return ""
+        home = os.path.expanduser("~")
+        if directory == home or directory.startswith(home + os.sep):
+            return "~" + directory[len(home) :]
+        return directory
 
     def _choose_buffer_tokens(self) -> StyleAndTextTuples:
         """

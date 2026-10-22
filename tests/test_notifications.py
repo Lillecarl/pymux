@@ -11,6 +11,8 @@ not instead of it.
 
 from __future__ import annotations
 
+import os
+
 from prompt_toolkit.application.current import set_app
 from session import create_session
 
@@ -141,6 +143,33 @@ async def test_hub_lists_newest_first():
         assert len(rows) == 2
         assert "Second" in rows[0][1]
         assert "First" in rows[1][1]
+
+
+async def test_a_row_says_where_its_pane_is():
+    "The directory the pane's shell reported, home as ~. Lillecarl/pymux#498."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pane = pymux.arrangement.get_active_pane()
+        pane.current_directory = os.path.join(os.path.expanduser("~"), "Code", "pyterm")
+        pymux.notification_center.add(title="Built", body="", urgency=1, pane_id=pane.pane_id)
+        with set_app(state.app):
+            pymux.handle_command("choose-notifications")
+
+        (row,) = state.layout_manager._choose_notification_tokens()
+        assert "%%%d ~/Code/pyterm" % pane.pane_id in row[1]
+
+
+async def test_a_pane_that_said_nothing_has_no_directory():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pane = pymux.arrangement.get_active_pane()
+        pane.current_directory = None
+        pymux.notification_center.add(title="Built", body="", urgency=1, pane_id=pane.pane_id)
+        with set_app(state.app):
+            pymux.handle_command("choose-notifications")
+
+        (row,) = state.layout_manager._choose_notification_tokens()
+        assert "(%%%d)" % pane.pane_id in row[1]
 
 
 async def test_empty_hub_says_so():
