@@ -166,7 +166,8 @@ CREATE TABLE clients(
   audio_rtt_multiplier REAL,
   audio_frame TEXT,
   audio_speaker_bitrate INTEGER,
-  audio_microphone_bitrate INTEGER
+  audio_microphone_bitrate INTEGER,
+  file_transfer TEXT
 );
 CREATE TABLE client_windows(
   client_id TEXT NOT NULL REFERENCES clients(client_id),
@@ -526,6 +527,7 @@ class ClientRow:
     audio_frame: str | None
     audio_speaker_bitrate: int | None
     audio_microphone_bitrate: int | None
+    file_transfer: str | None
 
 
 @dataclass(frozen=True, slots=True)

@@ -676,14 +676,13 @@ def test_the_table_list_is_the_schema_in_order():
     assert list(tables.TABLES) == made
 
 
-def test_a_version_27_snapshot_names_a_program_id(pymux, tmp_path):
-    "The server before Lillecarl/pymux#736 wrote the holder's id of each program."
-    path = tmp_path / "v27.sqlite"
+def test_a_version_28_snapshot_has_no_file_transfer(pymux, tmp_path):
+    "The server before Lillecarl/pymux#743 kept no file-transfer of a client."
+    path = tmp_path / "v28.sqlite"
     snapshot.save(pymux, path)
     db = apsw.Connection(str(path))
-    for table in ("jobs", "pane_programs"):
-        db.execute("ALTER TABLE %s ADD COLUMN program_id INTEGER" % (table,))
-    db.execute("PRAGMA user_version = 27")
+    db.execute("ALTER TABLE clients DROP COLUMN file_transfer")
+    db.execute("PRAGMA user_version = 28")
     db.close()
 
     stepped = snapshot._open(path)

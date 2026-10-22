@@ -52,7 +52,7 @@ from pyte.titles import Titles
 
 from .arrangement import HSplit, LayoutTypes, Pane, VSplit, Window, _Split, node_key
 from .commands.wait_for import WaitChannel
-from .enums import AudioFrame, ClientAudio, WindowScroll
+from .enums import AudioFrame, ClientAudio, FileTransfer, WindowScroll
 from .ids import PaneId, SessionId, WindowId, WindowIndex
 from .jobs import Job, JobFeed, JobId, JobPipes
 from .notifications import Notification
@@ -116,7 +116,7 @@ __all__ = [
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 28
+SNAPSHOT_VERSION = 29
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -138,6 +138,7 @@ _CLIENT_SETTING_TYPES: dict[str, type] = {
     "audio_frame": AudioFrame,
     "audio_speaker_bitrate": int,
     "audio_microphone_bitrate": int,
+    "file_transfer": FileTransfer,
 }
 CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
 
@@ -146,11 +147,10 @@ CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
 #: change of shape adds the one step from the version before it and
 #: deletes any older step.
 STEPS: dict[int, str] = {
-    # 28 has no program id: that was the name a holder gave a program,
-    # and this build has no holder. Lillecarl/pymux#736.
-    27: """
-ALTER TABLE jobs DROP COLUMN program_id;
-ALTER TABLE pane_programs DROP COLUMN program_id;
+    # 29 keeps a client's file-transfer. A null reads as the default.
+    # Lillecarl/pymux#743.
+    28: """
+ALTER TABLE clients ADD COLUMN file_transfer TEXT;
 """,
 }
 
