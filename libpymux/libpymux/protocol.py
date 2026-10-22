@@ -114,6 +114,16 @@ class Packet(StrEnum):
     # "I saved the file of `file`", or why not, under `message`.
     # Lillecarl/pymux#743.
     FILE_SAVED = "file-saved"
+    # One part of a file that `send-files` asked for, in the fields of
+    # `file` plus `request` and the `path` it answers; or, with `error`
+    # and no `data`, why that path is not sent.
+    UPLOAD = "upload"
+    # "Nothing more comes for `request`", with `error` when the person
+    # refused all of it.
+    UPLOAD_DONE = "upload-done"
+    # "Draw my terminal again from nothing": the client drew over the
+    # frame, for a question of its own.
+    REDRAW = "redraw"
 
     # The server tells.
     OUT = "out"
@@ -157,6 +167,10 @@ class Packet(StrEnum):
     # `transfer` the parts share, and `last` on the final part. Base64,
     # because a JSON connection carries no bytes. Lillecarl/pymux#743.
     FILE = "file"
+    # "Send these files from the person's machine": `pymux receive` in
+    # the pane `pane` asked, under the id `request`, for `paths`. The
+    # client asks the person first. Lillecarl/pymux#743.
+    SEND_FILES = "send-files"
 
     # Sound, on the attached connection of a client that said `audio` in
     # `start-gui`. Lillecarl/pymux#657.
@@ -271,6 +285,13 @@ class Field(StrEnum):
     #: In `start-gui`: this client saves the files `file` packets carry.
     #: An older one drops them unread. Lillecarl/pymux#745.
     SAVES_FILES = "saves-files"
+    #: In `start-gui`: this client answers `send-files`. An older one
+    #: drops it unread, and `pymux receive` would wait for ever.
+    SENDS_FILES = "sends-files"
+    #: In `send-files` and its answers: the id of the request, and the
+    #: paths it asks for.
+    REQUEST = "request"
+    PATHS = "paths"
     PORT = "port"
     PROGRAM = "program"
     PROFILE = "profile"

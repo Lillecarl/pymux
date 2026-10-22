@@ -74,6 +74,7 @@ MODULES = [
     "detach_client",
     "confirm_before",
     "open_url",
+    "receive",
     "compose_key",
     "command_prompt",
     "send_prefix",

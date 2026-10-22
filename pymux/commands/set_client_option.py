@@ -7,7 +7,8 @@ if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
-from pymux.commands import CommandParser, add_command, not_past_this_client, this_client
+from pymux.client.uploads import LOCAL_CLIENT_OPTIONS
+from pymux.commands import CommandException, CommandParser, add_command, not_past_this_client, this_client
 from pymux.commands.common import clients_named
 from pymux.commands.set_option import set_option
 from pymux.options import Scope
@@ -53,6 +54,19 @@ def set_client_option(pymux: Pymux, args: argparse.Namespace) -> None:
         # attached. #199 is the same shape: a command that raises here
         # takes `source-file` with it, and pymux draws nothing at all.
         return
+
+    # **The upload options are the client's alone.** They say which of
+    # the person's files a pane may read without asking, and the server
+    # is the side a program in a pane can control. The option system
+    # has no "only from the client's own file", so they never reach it:
+    # the client reads them itself and does not announce them.
+    # Lillecarl/pymux#743.
+    if args.option in LOCAL_CLIENT_OPTIONS:
+        if pymux.sourcing:
+            return
+        raise CommandException(
+            "%s is read only from the configuration file on the client's own machine." % (args.option,)
+        )
 
     target = None
     if args.target_client is not None:

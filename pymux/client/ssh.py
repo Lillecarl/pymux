@@ -309,6 +309,11 @@ class SshClient(TerminalClient):
     # The transport.
 
     @override
+    def server_host(self) -> str:
+        "The host this client dialed, and not a name the server gives itself."
+        return self.target.host
+
+    @override
     def _send_packet(self, data) -> None:
         "Send to the server."
         if self._writer is None:
