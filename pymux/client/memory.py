@@ -135,6 +135,7 @@ class MemoryClient(TerminalClient):
         os.set_blocking(stdout_fd, False)
         with raw_mode(stdin_fd):
             async with anyio.create_task_group() as tasks:
+                self._tasks = tasks
                 tasks.start_soon(self._write_backlog, stdout_fd)
                 tasks.start_soon(self._read_keyboard, stdin_fd)
                 tasks.start_soon(self._watch_signal)
@@ -160,6 +161,7 @@ class MemoryClient(TerminalClient):
                             await anyio.sleep(0.01)
                     # The four tasks above end with this scope.
                     tasks.cancel_scope.cancel()
+                    self._tasks = None
                     self.stop_browsers()
                     os.set_blocking(stdout_fd, was_blocking)
                     self._leave_the_terminal()

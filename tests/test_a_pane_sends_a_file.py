@@ -10,8 +10,11 @@ import base64
 import io
 import shlex
 import sys
+import threading
+import time
 from pathlib import Path
 
+import anyio
 import pytest
 from libpymux.protocol import Field, Packet
 from prompt_toolkit.application.current import set_app
@@ -20,7 +23,7 @@ from session import in_this_process, once, over_connection
 
 from pymux import downloads
 from pymux.client import downloads as client_downloads
-from pymux.client.downloads import Downloads, download_directory, safe_name, save
+from pymux.client.downloads import Downloads, Whole, download_directory, safe_name, save, save_whole
 from pymux.client.terminal import TerminalClient
 from pymux.downloads import (
     DEFAULT_NAME,
@@ -412,7 +415,9 @@ def test_the_client_saves_the_parts_as_one_file(tmp_path, monkeypatch):
     receiving = Downloads()
     said = [receiving.receive(packet) for packet in file_packets(FinishedDownload(NAME, data, multipart=True))]
     assert said[:-1] == [None]
-    assert said[-1] == "Saved %s." % (tmp_path / NAME,)
+    whole = said[-1]
+    assert isinstance(whole, Whole)
+    assert save_whole(whole) == "Saved %s." % (tmp_path / NAME,)
     assert (tmp_path / NAME).read_bytes() == data
 
 
@@ -438,12 +443,43 @@ class AClient(TerminalClient):
 
 
 def test_the_client_says_where_the_file_went(tmp_path, monkeypatch):
+    "The socket client has no loop, so a thread writes the file and answers."
     monkeypatch.setenv("XDG_DOWNLOAD_DIR", str(tmp_path))
     client = AClient()
     for packet in file_packets(FinishedDownload(NAME, DATA, multipart=False)):
         client._process(packet)
+    deadline = time.monotonic() + 10
+    while not client.sent:
+        assert time.monotonic() < deadline, "the client never answered"
+        time.sleep(0.01)
     assert client.sent == [{Field.CMD: Packet.FILE_SAVED, Field.MESSAGE: "Saved %s." % (tmp_path / NAME,)}]
     assert (tmp_path / NAME).read_bytes() == DATA
+
+
+async def test_a_client_on_a_loop_draws_on_while_a_file_is_written(tmp_path, monkeypatch):
+    "A write of 64 MiB on the loop stopped drawing and typing. Lillecarl/pymux#747."
+    monkeypatch.setenv("XDG_DOWNLOAD_DIR", str(tmp_path))
+    written = threading.Event()
+    real = client_downloads.save
+
+    def slow_save(*arguments):
+        written.wait(10)
+        return real(*arguments)
+
+    monkeypatch.setattr(client_downloads, "save", slow_save)
+    client = AClient()
+    async with anyio.create_task_group() as tasks:
+        client._tasks = tasks
+        for packet in file_packets(FinishedDownload(NAME, DATA, multipart=False)):
+            client._process(packet)
+        # The save is still held, and the loop runs on.
+        await anyio.sleep(0.05)
+        assert client.sent == []
+        written.set()
+        with anyio.fail_after(10):
+            while not client.sent:
+                await anyio.sleep(0.01)
+    assert client.sent == [{Field.CMD: Packet.FILE_SAVED, Field.MESSAGE: "Saved %s." % (tmp_path / NAME,)}]
 
 
 # ----------------------------------------------------------------------
@@ -544,5 +580,7 @@ def test_no_file_is_written_outside(tmp_path: Path):
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv("XDG_DOWNLOAD_DIR", str(tmp_path))
         for packet in packets:
-            receiving.receive(packet)
+            arrived = receiving.receive(packet)
+        assert isinstance(arrived, Whole)
+        save_whole(arrived)
     assert (tmp_path / "escape").read_bytes() == b"x"

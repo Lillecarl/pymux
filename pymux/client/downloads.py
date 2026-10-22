@@ -24,9 +24,11 @@ from ..downloads import DEFAULT_NAME, MAX_DOWNLOAD_BYTES
 __all__ = [
     "DOWNLOAD_DIR_VARIABLE",
     "Downloads",
+    "Whole",
     "download_directory",
     "safe_name",
     "save",
+    "save_whole",
 ]
 
 #: The variable that names the person's downloads directory.
@@ -133,10 +135,10 @@ class Downloads:
             self._refused.add(transfer)
         return message
 
-    def receive(self, packet: Mapping[str, object]) -> str | None:
+    def receive(self, packet: Mapping[str, object]) -> Whole | str | None:
         """
-        Take one `file` packet. The last part saves the file and returns
-        the message for the person: where it went, or why it did not.
+        Take one `file` packet. The last part answers with the file,
+        whole; a refusal answers with the message for the person.
         """
         transfer = str(packet.get(Field.TRANSFER, ""))
         last = bool(packet.get(Field.LAST))
@@ -162,9 +164,27 @@ class Downloads:
             return None
 
         del self._arriving[transfer]
-        directory = download_directory(os.environ, Path.home(), Path.cwd())
-        try:
-            path = save(directory, name, b"".join(incoming.parts))
-        except OSError as error:
-            return "Could not save %s: %s" % (name, error)
-        return "Saved %s." % (path,)
+        return Whole(name, b"".join(incoming.parts))
+
+
+@dataclass(frozen=True, slots=True)
+class Whole:
+    "A file whose every part arrived, for `save_whole` to write."
+
+    name: str
+    data: bytes
+
+
+def save_whole(whole: Whole) -> str:
+    """
+    Write a file that arrived whole, and say where it went or why not.
+
+    **Never on a loop that draws.** 64 MiB stopped drawing and typing
+    for as long as the write took. Lillecarl/pymux#747.
+    """
+    directory = download_directory(os.environ, Path.home(), Path.cwd())
+    try:
+        path = save(directory, whole.name, whole.data)
+    except OSError as error:
+        return "Could not save %s: %s" % (whole.name, error)
+    return "Saved %s." % (path,)

@@ -591,6 +591,7 @@ class SshClient(TerminalClient):
                         connection.close()
                         return
 
+            self._tasks = tasks
             tasks.start_soon(self._while_the_link_holds, read_keyboard)
             tasks.start_soon(self._while_the_link_holds, self._watch_signal)
             tasks.start_soon(self._while_the_link_holds, self._watch_size)
@@ -657,6 +658,7 @@ class SshClient(TerminalClient):
             finally:
                 # The three readers above end with this scope.
                 tasks.cancel_scope.cancel()
+                self._tasks = None
                 # Restore the keyboard mode of the outer terminal, also
                 # when the loop ends through an exception.
                 self._set_kitty_flags(0)

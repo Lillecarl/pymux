@@ -20,6 +20,7 @@ import select
 import signal
 import socket
 import sys
+import threading
 import webbrowser
 from typing import TYPE_CHECKING, Any
 
@@ -40,7 +41,7 @@ from pymux.utils import nonblocking
 
 from . import browser
 from .base import Client
-from .downloads import Downloads
+from .downloads import Downloads, Whole, save_whole
 
 if TYPE_CHECKING:
     from .audio import AudioClient
@@ -233,6 +234,9 @@ class TerminalClient(Client):
         #: The files a pane sends the person, until each is whole.
         #: Lillecarl/pymux#743.
         self.downloads = Downloads()
+        #: The attachment's task group, for a client that runs on a loop.
+        #: A download is written from it, and from a thread without it.
+        self._tasks: anyio.abc.TaskGroup | None = None
 
     @property
     def _stdin_reader(self) -> PosixStdinReader:
@@ -593,9 +597,11 @@ class TerminalClient(Client):
         elif packet[Field.CMD] == Packet.FILE:
             # A pane's download, saved on this machine. The server
             # shows where it went: only this side knows the path.
-            said = self.downloads.receive(packet)
-            if said is not None:
-                self._send_packet({Field.CMD: Packet.FILE_SAVED, Field.MESSAGE: said})
+            arrived = self.downloads.receive(packet)
+            if isinstance(arrived, Whole):
+                self._save(arrived)
+            elif arrived is not None:
+                self._send_packet({Field.CMD: Packet.FILE_SAVED, Field.MESSAGE: arrived})
 
         elif packet[Field.CMD] == Packet.BROWSER_STOP:
             self.stop_browser(packet[Field.BROWSER])
@@ -662,6 +668,29 @@ class TerminalClient(Client):
             return  # Never enabled anything.
         os.write(sys.stdout.fileno(), b"\x1b[<1u")
         self._kitty_flags = None
+
+    def _save(self, whole: Whole) -> None:
+        """
+        Write a download off the loop, and tell the server where it went.
+        A write of 64 MiB here stopped drawing and typing. Lillecarl/pymux#747.
+
+        A client on a loop answers from it: asyncssh's writer and the
+        memory stream are not safe from a thread. The socket client has
+        no loop, and its send takes a lock.
+        """
+        if self._tasks is not None:
+            self._tasks.start_soon(self._save_and_say, whole)
+            return
+
+        def save_and_say() -> None:
+            self._send_packet({Field.CMD: Packet.FILE_SAVED, Field.MESSAGE: save_whole(whole)})
+
+        threading.Thread(target=save_and_say, name="pymux-download", daemon=True).start()
+
+    async def _save_and_say(self, whole: Whole) -> None:
+        said = await anyio.to_thread.run_sync(save_whole, whole)
+        with contextlib.suppress(BrokenPipeError):
+            self._send_packet({Field.CMD: Packet.FILE_SAVED, Field.MESSAGE: said})
 
     def _start_browser(self, packet: dict) -> None:
         """
