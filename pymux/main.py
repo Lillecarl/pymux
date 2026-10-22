@@ -1363,6 +1363,7 @@ class Pymux:
         "option_tables": Keep.REBUILT,
         "panes_by_id": Keep.REBUILT,
         "hanging_up": Keep.DROPPED,  # an upgrade kills them before it goes
+        "refusing_commands": Keep.DROPPED,  # the new image takes them again
         "_client_states": Keep.REBUILT,  # from the client records, as clients reconnect
         "_notify_shim_dir": Keep.REBUILT,
         "_open_url_shim_dir": Keep.REBUILT,
@@ -1689,6 +1690,11 @@ class Pymux:
         #: Programs sent SIGHUP whose SIGKILL may still be due. The
         #: grace task keeps each backend alive until the program ends.
         self.hanging_up: weakref.WeakSet[PosixBackend] = weakref.WeakSet()
+        #: Set from an upgrade's last snapshot write to its exec. A command
+        #: then changes what the snapshot no longer describes: a pane
+        #: killed in that window was neither killed nor reaped by either
+        #: image. Lillecarl/pymux#740.
+        self.refusing_commands = False
 
         # Socket information.
         self.socket_name: str | None = None

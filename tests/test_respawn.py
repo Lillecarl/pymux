@@ -36,6 +36,16 @@ async def run(pymux, state, command):
             await answer
 
 
+async def test_an_upgrading_server_refuses_a_command():
+    "From the sweep to the exec, a killed pane's program would be ended and reaped by neither image. Lillecarl/pymux#740."
+    async with create_session() as (pymux, state):
+        panes = set(pymux.panes_by_id)
+        pymux.refusing_commands = True
+        await run(pymux, state, "kill-pane")
+        assert set(pymux.panes_by_id) == panes
+        assert "the server is upgrading" in state.message
+
+
 async def test_pane_whose_program_runs_refuses_without_k():
     async with create_session() as (pymux, state):
         with set_app(state.app):

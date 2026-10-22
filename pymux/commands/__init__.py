@@ -427,6 +427,10 @@ def call_command_handler(command: str, pymux: Pymux, arguments: list[str]):
     # binding here holds one command, so the difference shows only for
     # a line somebody types, and a read-only client cannot open the
     # command bar: `command-prompt` is not a read-only command.
+    if pymux.refusing_commands:
+        _failed(pymux, CommandException("the server is upgrading"))
+        return None
+
     client_state = this_client(pymux)
     if client_state is not None and client_state.read_only and not namespace._read_only:
         _failed(pymux, CommandException("client is read-only"))

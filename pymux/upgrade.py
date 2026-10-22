@@ -108,6 +108,9 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
                 client_state = connection.client_state
                 if client_state is not None and not client_state.temporary:
                     await connection.say_restarting(RESTART_WAIT)
+            # From the sweep on, a command that ends a pane would leave a
+            # program neither image ends or reaps. Lillecarl/pymux#740.
+            pymux.refusing_commands = True
             await _end_the_hung_up(pymux)
 
             # The pause. Nothing from here to the write awaits.
@@ -127,6 +130,7 @@ async def upgrade(pymux: Pymux, command: list[str]) -> None:
     except BaseException:
         written.abandon()
         path.unlink(missing_ok=True)
+        pymux.refusing_commands = False
         if paused:
             _resume(pymux)
         pymux.audio.resume()
