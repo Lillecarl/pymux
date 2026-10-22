@@ -173,6 +173,18 @@ async def test_kill_ends_a_pty_job(session):
     assert job.is_done
 
 
+@pytest.mark.parametrize("pty", [True, False], ids=["on a terminal", "on pipes"])
+async def test_a_running_job_ends_with_its_server(pty):
+    "The scope's end kills it, and does not wait for it to end on its own. Lillecarl/pymux#736."
+    with anyio.fail_after(10):
+        async with create_session() as (pymux, _state):
+            job = pymux.jobs.submit("exec sleep 60", None, [], None, pty)
+            pymux.tasks.start_soon(pymux.jobs.supervise, job)
+            while job.pid is None:
+                await anyio.sleep(0.01)
+    assert job.is_done and job.error == "stopped with the server"
+
+
 async def test_a_question_reads_a_job_on_a_terminal():
     async with create_session() as (pymux, _state):
         job = pymux.jobs.submit("true", None, [], None, True)
