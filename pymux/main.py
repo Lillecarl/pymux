@@ -684,7 +684,16 @@ class ClientState:
         if self.input_tick != self.schedule_tick:
             return True
         pipe = getattr(self.connection, "pipe_connection", None)
-        if pipe is not None and pipe.holds_frames_while_behind and pipe.outstanding:
+        behind = pipe is not None and pipe.holds_frames_while_behind and pipe.outstanding
+        # **The terminal has not read the last frame**, on any route.
+        # Over ssh the bytes wait where no route sees them, in sshd's
+        # buffers and the link, and only the terminal's answer to the
+        # status report behind the frame says they arrived. So a slow
+        # link carries the newest screen, a little late, and never a
+        # backlog of old ones; a keystroke's frame waits for one frame
+        # and not for thirty. The answer asks for the frame at once,
+        # and the pacing below is the fallback. Lillecarl/pymux#259.
+        if behind or getattr(self.connection, "waits_for_terminal", False):
             if not self.app.min_redraw_interval:
                 self.app.min_redraw_interval = BEHIND_INTERVAL
                 self._paced_while_behind = True

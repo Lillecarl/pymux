@@ -76,6 +76,12 @@ PIXEL_MOUSE_ON = "\x1b[?1016h"
 PIXEL_MOUSE_OFF = "\x1b[?1016l"
 _PIXEL_MOUSE_REPLY_RE = re.compile(r"^\x1b\[\?1016;(\d+)\$y$")
 
+#: A status report and its answer: 0 is ready, 3 a malfunction, and
+#: either says the terminal read everything sent before the report.
+#: Lillecarl/pymux#259.
+STATUS_REPORT = "\x1b[5n"
+_STATUS_REPLY_RE = re.compile(r"^\x1b\[[03]n$")
+
 _OSC_REPLY_RE = re.compile(r"^(?:\x1b\]|\x9d)(\d+);(.*?)(?:\x1b\\|\x9c|\x07)$", re.DOTALL)
 
 #: The start of a terminal's answer to a clipboard query.
@@ -165,6 +171,7 @@ class ServerConnection:
         "_kitty_supported": Keep.REBUILT,
         "_pointer_shape_sent": Keep.REBUILT,
         "answers_ping": Keep.REBUILT,
+        "paced": Keep.REBUILT,
         "can_forward": Keep.REBUILT,
         "answers_forwards": Keep.REBUILT,
         "_next_forwards": Keep.DROPPED,
@@ -185,6 +192,10 @@ class ServerConnection:
         "_unanswered": Keep.DROPPED,
         # A frame in flight belongs to the connection it went out on.
         "_frames_out": Keep.DROPPED,
+        # A new server asks its own reports, and learns again whether
+        # the terminal answers them.
+        "reports_out": Keep.DROPPED,
+        "terminal_answers": Keep.DROPPED,
         # The next server asks the terminal again.
         "pixel_mouse": Keep.DROPPED,
         "widens_text_emoji": Keep.DROPPED,
@@ -231,6 +242,13 @@ class ServerConnection:
         self._frames_out = 0
         self._frames_shown = anyio.Event()
         self._frames_shown.set()
+
+        #: Whether this client said its terminal answers a status
+        #: report, the status reports asked and not yet answered, and
+        #: whether one ever was. Lillecarl/pymux#259.
+        self.paced = False
+        self.reports_out = 0
+        self.terminal_answers = False
 
         #: What `record-client` is recording of this client, or None.
         #: Lillecarl/pymux#612.
@@ -661,6 +679,11 @@ class ServerConnection:
                 self._request_repaint()
             return
 
+        # The terminal read a frame. Lillecarl/pymux#259.
+        if _STATUS_REPLY_RE.match(data):
+            self._status_answered()
+            return
+
         # The terminal processed a window pane's frame. Lillecarl/pymux#643.
         if self.graphics.frame_room is not None and self.graphics.is_frame_answer(data):
             self._frame_answered()
@@ -936,6 +959,7 @@ class ServerConnection:
             self.answers_forwards = bool(packet.get(Field.REPORTS))
             self.starts_browsers = bool(packet.get(Field.BROWSERS))
             self.answers_ping = bool(packet.get(Field.PINGS))
+            self.paced = bool(packet.get(Field.PACED))
             self.environment = packet.get(Field.ENVIRONMENT) or {}
             self.ttyname = packet.get(Field.TTYNAME, "")
             self.pid = packet.get(Field.PID) or 0
@@ -1398,6 +1422,38 @@ class ServerConnection:
     def _frame_went_out(self) -> None:
         self.frames_sent += 1
 
+    def _report_after_frame(self) -> str:
+        """
+        What goes behind a frame: a status report, for a client whose
+        terminal answers one. The answer arrives once the terminal read
+        everything before it, which over ssh is the only thing that
+        says a frame reached the person. Lillecarl/pymux#259.
+        """
+        if not self.paced:
+            return ""
+        self.reports_out += 1
+        return STATUS_REPORT
+
+    def _status_answered(self) -> None:
+        """
+        The terminal read a frame. A frame held back for it can draw.
+        """
+        self.reports_out = max(0, self.reports_out - 1)
+        self.terminal_answers = True
+        if self.client_state is not None and not self.reports_out:
+            self.client_state.app.invalidate()
+
+    @property
+    def waits_for_terminal(self) -> bool:
+        """
+        Whether the next frame waits: a frame is in flight to a terminal
+        that has answered before. One that never answered is never
+        waited for, so a terminal that ignores the report costs nothing;
+        one that answered and went quiet holds one frame and no more,
+        which is the dead link of a phone that lost its signal.
+        """
+        return self.terminal_answers and self.reports_out > 0
+
     def _create_app(
         self,
         color_depth: ColorDepth = ColorDepth.DEPTH_8_BIT,
@@ -1415,7 +1471,11 @@ class ServerConnection:
         :param session: The session this client is on. Without one it is
             the session a person looked at last.
         """
-        stdout = _SocketStdout(self._send_packet, self.pymux.counters, self._frame_went_out) if start else _NoStdout()
+        stdout = (
+            _SocketStdout(self._send_packet, self.pymux.counters, self._frame_went_out, self._report_after_frame)
+            if start
+            else _NoStdout()
+        )
         output = _FrameOutput(
             cast(TextIO, stdout),
             lambda: self.size,
@@ -1619,11 +1679,19 @@ class _SocketStdout:
     client.
     """
 
-    def __init__(self, send_packet: Callable, counters=None, frame_went_out: Callable[[], None] | None = None) -> None:
+    def __init__(
+        self,
+        send_packet: Callable,
+        counters=None,
+        frame_went_out: Callable[[], None] | None = None,
+        after_frame: Callable[[], str] | None = None,
+    ) -> None:
         self.send_packet = send_packet
         self.counters = counters
         #: Told of each frame, for the count of the one client it goes to.
         self.frame_went_out = frame_went_out
+        #: What goes behind each frame that holds anything.
+        self.after_frame = after_frame
         self._buffer: list[str] = []
 
     def write(self, data: str) -> int:
@@ -1636,6 +1704,8 @@ class _SocketStdout:
         # actually sent, which the invalidates cannot say -- several of
         # those become one frame.
         written = "".join(self._buffer)
+        if written and self.after_frame is not None:
+            written += self.after_frame()
         if self.counters is not None:
             self.counters.frame_went_out(len(written))
         if self.frame_went_out is not None:

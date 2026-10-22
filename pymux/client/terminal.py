@@ -297,6 +297,11 @@ class TerminalClient(Client):
                 # client that stops answering, and never one that did
                 # not say it would. Lillecarl/pymux#446.
                 Field.PINGS: self.answers_ping,
+                # A real terminal answers a status report, and its
+                # answer is what says a frame arrived: over ssh the
+                # bytes wait in buffers this client cannot see.
+                # Lillecarl/pymux#259.
+                Field.PACED: True,
                 # The whole environment of this client, of which the
                 # server keeps the names "update-environment" lists and
                 # drops the rest. The client cannot do the filtering: it

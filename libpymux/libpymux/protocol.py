@@ -232,6 +232,10 @@ class Field(StrEnum):
     FRAMES = "frames"
     #: In `start-gui`: this client answers each frame with `frame-shown`.
     SHOWS = "shows"
+    #: In `start-gui`: this client's terminal answers a status report,
+    #: so the server may ask one after a frame and draw the next only
+    #: once the terminal answered. Lillecarl/pymux#259.
+    PACED = "paced"
     #: In the last part of a `window-frame`: let the terminal answer the
     #: frame's last command, which the server counts as `frame-shown`.
     #: kitty answers once it processed the command, and the client's

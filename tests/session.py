@@ -453,8 +453,12 @@ async def over_connection(pymux=None, read_packet=None):
         frames=False,
         codecs=(),
         shows=False,
+        paced=False,
     ):
         """
+        `paced` says its terminal answers a status report, which the
+        test answers itself with `typed`. Lillecarl/pymux#259.
+
         `read_only` is `pymux attach -r`: the flag rides on the
         `start-gui` packet, so this is the only route that can ask for
         it the way a person does. Lillecarl/pymux#467.
@@ -514,6 +518,7 @@ async def over_connection(pymux=None, read_packet=None):
                     # Lillecarl/pymux#340.
                     "client-options": client_options or [],
                     "pings": pings,
+                    "paced": paced,
                     "data": "",
                     **({"wire": ["msgpack"], "frames": True, "codecs": list(codecs), "shows": shows} if frames else {}),
                 }

@@ -376,6 +376,11 @@ _CELL_SIZE_REPLY = object()
 # is painted ("CSI ? 2026 $ p").
 _MODE_REPLY = object()
 
+# Sentinel for the "CSI 0 n" reply of a status report, which the
+# server asks after a frame to learn that the frame arrived.
+# Lillecarl/pymux#259.
+_STATUS_REPLY = object()
+
 #: An SGR mouse report: button, x, y, and press or release.
 _SGR_MOUSE_RE = re.compile(r"^\x1b\[<(\d+);(\d+);(\d+)([Mm])$")
 
@@ -436,6 +441,9 @@ _CELL_SIZE_REPLY_RE = re.compile(r"^\x1b\[6;\d+;\d+t$")
 
 # Reply of a DECRQM request: "CSI ? <mode> ; <state> $ y".
 _MODE_REPLY_RE = re.compile(r"^\x1b\[\?\d+;\d+\$y$")
+
+# Reply of a status report, "CSI 5 n": 0 is ready, 3 a malfunction.
+_STATUS_REPLY_RE = re.compile(r"^\x1b\[[03]n$")
 
 
 def _ctrl_mapping(char: str) -> Keys | None:
@@ -689,6 +697,8 @@ def _reply(prefix: str) -> object | None:
         return _CELL_SIZE_REPLY
     if _MODE_REPLY_RE.match(prefix):
         return _MODE_REPLY
+    if _STATUS_REPLY_RE.match(prefix):
+        return _STATUS_REPLY
     if _STRING_RE.match(prefix):
         return _STRING_REPLY
     return None
@@ -971,6 +981,7 @@ class KittyVt100Parser(Vt100Parser):
             _STRING_REPLY,
             _CELL_SIZE_REPLY,
             _MODE_REPLY,
+            _STATUS_REPLY,
             Keys.CPRResponse,
         ):
             if self.reply_callback is not None:
