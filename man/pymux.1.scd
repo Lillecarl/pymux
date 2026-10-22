@@ -144,8 +144,10 @@ sequence saves the file too. A file is at most 64 MiB.
 The client option *file-transfer* says who saves the file. *pymux*: the
 pymux client, in *$XDG_DOWNLOAD_DIR*, else *~/Downloads*, else its own
 directory, never over a file that is there. *passthrough*: the client's
-terminal. *auto*, the default: *pymux* for a client that came over SSH,
-*passthrough* for one on the server's machine.
+terminal, when it is iTerm2; another terminal saves no such file, so
+pymux refuses and says why. *auto*, the default: *passthrough* for a
+client on the server's machine whose terminal is iTerm2, and *pymux*
+for every other.
 
 # ENVIRONMENT
 

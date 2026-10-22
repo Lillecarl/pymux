@@ -47,6 +47,7 @@ __all__ = [
     "route_of",
     "send_files",
     "sequences_of",
+    "terminal_saves_downloads",
 ]
 
 #: The largest file one download may carry. The server holds all of it
@@ -65,6 +66,9 @@ PACKET_BYTES: Final = 192 * 1024
 
 #: The name of a file whose sender gave none.
 DEFAULT_NAME: Final = "download"
+
+#: How iTerm2's answer to XTVERSION starts: "iTerm2 3.5.14".
+ITERM2_VERSION_PREFIX: Final = "iTerm2 "
 
 #: The value of `inline` that makes a file an image to draw.
 _INLINE: Final = "1"
@@ -279,7 +283,17 @@ def sequences_of(download: FinishedDownload) -> Iterator[str]:
         yield file_sequence(download.name, download.data)
 
 
-def route_of(chosen: FileTransfer, over_ssh: bool) -> FileTransfer:
+def terminal_saves_downloads(version: str) -> bool:
+    """
+    Whether the terminal that answered XTVERSION with `version` saves an
+    iTerm2 download. Only iTerm2 is known to: Ghostty parses the sequence
+    and drops it (`src/terminal/osc/parsers/iterm2.zig`), and a terminal
+    that reads none of it draws nothing or the base64. Lillecarl/pymux#746.
+    """
+    return version.startswith(ITERM2_VERSION_PREFIX)
+
+
+def route_of(chosen: FileTransfer, over_ssh: bool, terminal_saves: bool) -> FileTransfer:
     """
     Who saves a download for a client: `PYMUX` or `PASSTHROUGH`.
 
@@ -287,12 +301,15 @@ def route_of(chosen: FileTransfer, over_ssh: bool) -> FileTransfer:
     the person's machine, and the server's machine is somewhere else, so
     the pymux client saves the file. A client on the server's machine
     draws on a terminal that is either there too or at the end of a
-    plain shell over SSH, and in both cases only that terminal reaches
-    the person.
+    plain shell over SSH, and only that terminal reaches the person, if
+    it saves downloads. One that does not leaves it to the pymux client,
+    which writes to this machine's downloads directory.
     """
     if chosen is not FileTransfer.AUTO:
         return chosen
-    return FileTransfer.PYMUX if over_ssh else FileTransfer.PASSTHROUGH
+    if over_ssh or not terminal_saves:
+        return FileTransfer.PYMUX
+    return FileTransfer.PASSTHROUGH
 
 
 def file_packets(download: FinishedDownload) -> Iterator[dict[Field, object]]:

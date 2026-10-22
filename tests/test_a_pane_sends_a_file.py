@@ -34,6 +34,7 @@ from pymux.downloads import (
     file_sequence,
     multipart_sequences,
     route_of,
+    terminal_saves_downloads,
 )
 from pymux.entry_points.run_pymux import Mode, parse_arguments
 from pymux.enums import FileTransfer
@@ -164,18 +165,29 @@ def test_a_multipart_file_too_large_is_refused_and_its_rest_dropped(monkeypatch)
 
 
 @pytest.mark.parametrize(
-    ("chosen", "over_ssh", "route"),
+    ("chosen", "over_ssh", "terminal_saves", "route"),
     [
-        (FileTransfer.AUTO, False, FileTransfer.PASSTHROUGH),
-        (FileTransfer.AUTO, True, FileTransfer.PYMUX),
-        (FileTransfer.PYMUX, False, FileTransfer.PYMUX),
-        (FileTransfer.PYMUX, True, FileTransfer.PYMUX),
-        (FileTransfer.PASSTHROUGH, False, FileTransfer.PASSTHROUGH),
-        (FileTransfer.PASSTHROUGH, True, FileTransfer.PASSTHROUGH),
+        (FileTransfer.AUTO, False, True, FileTransfer.PASSTHROUGH),
+        # A local terminal that saves no download: the pymux client
+        # writes to this machine's downloads directory. Lillecarl/pymux#746.
+        (FileTransfer.AUTO, False, False, FileTransfer.PYMUX),
+        (FileTransfer.AUTO, True, True, FileTransfer.PYMUX),
+        (FileTransfer.PYMUX, False, True, FileTransfer.PYMUX),
+        (FileTransfer.PYMUX, True, False, FileTransfer.PYMUX),
+        (FileTransfer.PASSTHROUGH, False, False, FileTransfer.PASSTHROUGH),
+        (FileTransfer.PASSTHROUGH, True, True, FileTransfer.PASSTHROUGH),
     ],
 )
-def test_the_route_of_a_download(chosen, over_ssh, route):
-    assert route_of(chosen, over_ssh) is route
+def test_the_route_of_a_download(chosen, over_ssh, terminal_saves, route):
+    assert route_of(chosen, over_ssh, terminal_saves) is route
+
+
+@pytest.mark.parametrize(
+    ("version", "saves"),
+    [("iTerm2 3.5.14", True), ("kitty(0.49.2)", False), ("ghostty 1.3.1", False), ("", False)],
+)
+def test_only_iterm2_saves_a_download(version, saves):
+    assert terminal_saves_downloads(version) is saves
 
 
 def test_the_option_takes_its_words_only():
@@ -223,9 +235,15 @@ def saved(packets: list[dict]) -> bytes:
     return b"".join(base64.b64decode(packet[Field.DATA]) for packet in packets)
 
 
+def on_iterm2(state) -> None:
+    "The client's terminal answered XTVERSION as iTerm2, which saves a download."
+    state.connection.graphics.terminal_version = "iTerm2 3.5.14"
+
+
 async def test_a_local_client_gets_the_sequence():
     async with in_this_process() as session:
         state, _ = await session.attach("local", SIZE)
+        on_iterm2(state)
         got = Collected(state)
         pane = await a_pane(session.pymux, state)
 
@@ -239,6 +257,7 @@ async def test_a_local_client_gets_the_sequence():
 async def test_a_single_file_passes_through_as_one():
     async with in_this_process() as session:
         state, _ = await session.attach("local", SIZE)
+        on_iterm2(state)
         got = Collected(state)
         pane = await a_pane(session.pymux, state)
 
@@ -273,6 +292,7 @@ async def test_a_remote_client_gets_packets():
 async def test_the_option_wins_over_auto(chosen, remote, packets):
     async with in_this_process() as session:
         state, _ = await session.attach("one", SIZE)
+        on_iterm2(state)
         state.connection.can_forward = remote
         ALL_CLIENT_OPTIONS["file-transfer"].set_value(session.pymux, chosen, target=state)
         got = Collected(state)
@@ -284,11 +304,42 @@ async def test_the_option_wins_over_auto(chosen, remote, packets):
         assert bool(got.sequences) is not packets
 
 
+async def test_a_local_terminal_that_saves_no_download_gets_the_file_from_pymux():
+    "auto: the pymux client writes to this machine's downloads directory. Lillecarl/pymux#746."
+    async with in_this_process() as session:
+        state, _ = await session.attach("local", SIZE)
+        state.connection.graphics.terminal_version = "kitty(0.49.2)"
+        got = Collected(state)
+        pane = await a_pane(session.pymux, state)
+
+        send(session.pymux, pane, [file_sequence(NAME, DATA)])
+
+        assert got.sequences == []
+        assert saved(got.files()) == DATA
+
+
+async def test_passthrough_to_a_terminal_that_saves_no_download_is_refused():
+    "It would draw nothing, or the base64. The person is told why. Lillecarl/pymux#746."
+    async with in_this_process() as session:
+        state, _ = await session.attach("local", SIZE)
+        ALL_CLIENT_OPTIONS["file-transfer"].set_value(session.pymux, "passthrough", target=state)
+        got = Collected(state)
+        pane = await a_pane(session.pymux, state)
+
+        send(session.pymux, pane, [file_sequence(NAME, DATA)])
+
+        assert got.sequences == []
+        assert got.files() == []
+        assert "saves no iTerm2 download" in state.message
+
+
 async def test_only_the_client_used_last_gets_it():
     async with in_this_process() as session:
         pymux = session.pymux
         a, _ = await session.attach("a", SIZE)
         b, _ = await session.attach("b", SIZE)
+        on_iterm2(a)
+        on_iterm2(b)
         got_a, got_b = Collected(a), Collected(b)
         pane = await a_pane(pymux, a)
 

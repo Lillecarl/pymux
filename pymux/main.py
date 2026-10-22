@@ -64,7 +64,15 @@ from .client.memory import MemoryClient
 from .colors import DefaultColors, theme_color_base
 from .commands import CommandException, call_command_handler, handle_command
 from .commands.completer import create_command_completer
-from .downloads import FILE_KEYS, DownloadRefused, FinishedDownload, file_packets, route_of, sequences_of
+from .downloads import (
+    FILE_KEYS,
+    DownloadRefused,
+    FinishedDownload,
+    file_packets,
+    route_of,
+    sequences_of,
+    terminal_saves_downloads,
+)
 from .enums import (
     CHOOSE,
     COMMAND,
@@ -3960,7 +3968,16 @@ exec pymux notify -u "$urgency" -- "$@"
             return
         # Only `SshClient` says it can forward, so this is the fact that
         # the client came over SSH.
-        route = route_of(client.file_transfer, client.connection.can_forward)
+        terminal_saves = terminal_saves_downloads(client.connection.graphics.terminal_version)
+        route = route_of(client.file_transfer, client.connection.can_forward, terminal_saves)
+        if route is FileTransfer.PASSTHROUGH and not terminal_saves:
+            refused = "Did not send %s: file-transfer is passthrough, and this terminal saves no iTerm2 download." % (
+                download.name,
+            )
+            logger.warning(refused)
+            client.message = refused
+            self.invalidate(Woke.PANE_WROTE_AN_OSC)
+            return
         if route is FileTransfer.PASSTHROUGH:
             for sequence in sequences_of(download):
                 client.connection.forward_osc(sequence)
