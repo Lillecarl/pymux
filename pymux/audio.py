@@ -134,6 +134,33 @@ PROGRAMS_FILE = "audio-programs.json"
 #: `fcntl`'s name for a pipe's size, which Python names on Linux only.
 F_SETPIPE_SZ = getattr(fcntl, "F_SETPIPE_SZ", 1031)
 
+#: Starts a program that SIGKILL ends once its parent is gone:
+#: `PR_SET_PDEATHSIG` (1), which survives the exec. It ends at once when
+#: the parent went before the call. Arguments: the parent's pid, then the
+#: program and its arguments.
+_DIES_WITH_PARENT = (
+    "import ctypes, os, signal, sys\n"
+    "ctypes.CDLL(None).prctl(1, signal.SIGKILL)\n"
+    "if os.getppid() != int(sys.argv[1]):\n"
+    "    sys.exit(1)\n"
+    "os.execvp(sys.argv[2], sys.argv[2:])\n"
+)
+
+
+def dies_with_this_process(argv: list[str]) -> list[str]:
+    """
+    `argv`, started so that it ends when this process does, however this
+    one ends. A killed server left its PipeWire running for days, with
+    parent 1. Linux alone has the call; elsewhere `argv` is unchanged.
+    Lillecarl/pymux#729.
+
+    The signal follows the thread that forks, and the server forks these
+    from its loop, on the main thread, which lives as long as it does.
+    """
+    if not sys.platform.startswith("linux"):
+        return argv
+    return [sys.executable, "-I", "-c", _DIES_WITH_PARENT, str(os.getpid()), *argv]
+
 
 def programs() -> dict[str, str]:
     """
@@ -757,7 +784,9 @@ class AudioServer:
     @contextlib.asynccontextmanager
     async def _program(self, argv: list[str], environment: dict[str, str], stdin=DEVNULL, stdout=DEVNULL):
         "A program of sound's, ended with the block. `pause` can end it sooner."
-        process = await anyio.open_process(argv, env=environment, stdin=stdin, stdout=stdout, stderr=None)
+        process = await anyio.open_process(
+            dies_with_this_process(argv), env=environment, stdin=stdin, stdout=stdout, stderr=None
+        )
         self._processes.append(process)
         try:
             yield process
