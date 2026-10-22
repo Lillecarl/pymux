@@ -604,27 +604,6 @@ class EnumOption(Option):
         "What the server does once the value has changed."
 
 
-class KeysOption(EnumOption):
-    """
-    The keys a line takes: emacs, vi, and for `status-keys` Helix's.
-    Copy mode has no Helix keys yet. Lillecarl/pymux#749.
-    """
-
-    def __init__(self, attribute_name: str, allowed: tuple[EditingKeys, ...], scope: Scope = Scope.SESSION) -> None:
-        super().__init__(EditingKeys, attribute_name, scope)
-        self.allowed = allowed
-
-    @override
-    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
-        return [str(one) for one in self.allowed]
-
-    @override
-    def set_value(self, pymux: Pymux, value: str, target: ClientState | None = None) -> None:
-        if value not in self.allowed:
-            raise SetOptionError("Expecting one of: %s." % ", ".join('"%s"' % one for one in self.allowed))
-        super().set_value(pymux, value, target)
-
-
 class AudioServerOption(EnumOption):
     "`audio-server`, which stops PipeWire and starts it again as it says."
 
@@ -1007,8 +986,8 @@ ALL_OPTIONS = {
     # The window chooser starts each session on a line of its own, so
     # the sessions read as groups. Lillecarl/pymux#531.
     "chooser-session-lines": OnOffOption("chooser_session_lines"),
-    "status-keys": KeysOption("status_keys", tuple(EditingKeys)),
-    "mode-keys": KeysOption("mode_keys", (EditingKeys.EMACS, EditingKeys.VI)),
+    "status-keys": EnumOption(EditingKeys, "status_keys"),
+    "mode-keys": EnumOption(EditingKeys, "mode_keys"),
     "default-terminal": StringOption("default_terminal", ["xterm", "xterm-256color", "screen"]),
     # What lock-server, lock-session and lock-client run to hold the
     # keyboard. tmux's default is vlock.

@@ -62,9 +62,9 @@ def test_the_path_of_an_editor_does_not_decide():
     assert editor_keys({"EDITOR": "/home/vim/bin/nano"}) is EditingKeys.EMACS
 
 
-def test_helix_leaves_copy_mode_on_emacs_keys(monkeypatch):
+def test_helix_gives_helix_keys_on_the_line_and_in_copy_mode(monkeypatch):
     monkeypatch.setenv("EDITOR", "hx")
     monkeypatch.delenv("VISUAL", raising=False)
     pymux = Pymux()
     assert pymux.status_keys is EditingKeys.HELIX
-    assert pymux.mode_keys is EditingKeys.EMACS
+    assert pymux.mode_keys is EditingKeys.HELIX

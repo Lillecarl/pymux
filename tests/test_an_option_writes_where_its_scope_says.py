@@ -25,10 +25,10 @@ from pymux.enums import EditingKeys
 from pymux.main import Pymux
 from pymux.options import (
     ChoiceOption,
+    EnumOption,
     ExtendedKeys,
     ExtendedKeysOption,
     JustifyOption,
-    KeysOption,
     OnOffOption,
     PositiveIntOption,
     Scope,
@@ -47,7 +47,7 @@ WRITERS = [
         "two",
     ),
     ("int", lambda: PositiveIntOption("judged", scope=Scope.CLIENT), "5", 5),
-    ("keys", lambda: KeysOption("judged", tuple(EditingKeys), scope=Scope.CLIENT), "vi", EditingKeys.VI),
+    ("keys", lambda: EnumOption(EditingKeys, "judged", scope=Scope.CLIENT), "vi", EditingKeys.VI),
     (
         "extended keys",
         lambda: ExtendedKeysOption("judged", scope=Scope.CLIENT),

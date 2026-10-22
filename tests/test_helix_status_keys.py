@@ -8,7 +8,6 @@ mode and the line stays open, and Escape in normal mode closes it.
 
 from __future__ import annotations
 
-import pytest
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import fragment_list_to_text
@@ -17,8 +16,7 @@ from ptkhx import Mode
 from session import create_session
 from test_command_mode import leaves_command_mode, press
 
-from pymux.enums import EditingKeys
-from pymux.options import ALL_OPTIONS, SetOptionError
+from pymux.options import ALL_OPTIONS
 
 
 def _helix(pymux, state, text: str = "new-window") -> None:
@@ -113,10 +111,3 @@ async def test_emacs_status_keys_leave_the_line_alone():
         _helix(pymux, state)
         ALL_OPTIONS["status-keys"].set_value(pymux, "emacs")
         assert leaves_command_mode(pymux, state, Keys.Escape)
-
-
-async def test_copy_mode_has_no_helix_keys_yet():
-    async with create_session() as (pymux, state):
-        with pytest.raises(SetOptionError):
-            ALL_OPTIONS["mode-keys"].set_value(pymux, "helix")
-        assert pymux.mode_keys is not EditingKeys.HELIX

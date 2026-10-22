@@ -1509,14 +1509,11 @@ class Pymux:
         # were emacs whatever the person used, and the vi keys of copy
         # mode reach nothing at all in a read-only buffer: a person
         # pressing `v`, `y` and `$` there read that as copy mode being
-        # unable to copy. Lillecarl/pymux#375.
-        #
-        # Helix, as `hx`, gives Helix keys on the line and leaves copy
-        # mode on emacs keys: it has no Helix keys yet, and vi keys are
-        # not what a Helix person asked for. Lillecarl/pymux#749.
+        # unable to copy. Lillecarl/pymux#375. Helix, as `hx`, gives
+        # Helix keys in both. Lillecarl/pymux#749.
         keys = editor_keys()
         self.status_keys = keys
-        self.mode_keys = EditingKeys.VI if keys is EditingKeys.VI else EditingKeys.EMACS
+        self.mode_keys = keys
         # How many lines above the screen a pane keeps. tmux keeps two
         # thousand by default and this keeps the same, so a person who
         # moves over finds the depth they had. People do configure
@@ -2852,6 +2849,7 @@ class Pymux:
             get_history_limit=lambda: self.history_limit,
             unreadable_key_func=_say_key_did_not_fit(),
             key_profile_func=lambda: self.key_profile_of(self.client_of(get_app())),
+            helix_keys=lambda: self.mode_keys is EditingKeys.HELIX,
         )
         pane = Pane(terminal)
         # The name the pane answers XTVERSION with, asked at each query:
