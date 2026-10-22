@@ -64,7 +64,7 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Iterator
 from enum import Enum
-from typing import NamedTuple
+from typing import NamedTuple, cast
 
 from prompt_toolkit.data_structures import Point, Size
 
@@ -541,6 +541,9 @@ class Slot:
 #: writes here, and it is the only plane anything builds today.
 GROUND = 0
 
+#: What `Plan.neighbour` has not been asked yet. `None` is an answer.
+_UNASKED = object()
+
 
 class Layer:
     """
@@ -753,6 +756,7 @@ class Plan:
         #: is comes through here.
         self._slots: dict[int, Slot] = {}
         self._planes: dict[Slot, Layer] = {}
+        self._neighbours: dict[tuple[Slot, Side], Slot | None] = {}
         for layer in planes:
             for slot in layer.rects:
                 self._planes[slot] = layer
@@ -845,8 +849,37 @@ class Plan:
         **On that slot's own plane.** Across two planes the question
         has no answer: they may overlap, so "beyond this edge" stops
         being a place. Lillecarl/pymux#228.
+
+        **Kept, because a plan is a value.** Every title bar asks three
+        sides of its pane on every frame, and a plan that `same_as`
+        the last one is kept across frames. Lillecarl/pymux#578.
         """
-        return self.layer_of(slot).neighbour(slot, side)
+        # `get` and not `try`: a fresh plan misses every time, and a
+        # raised KeyError costs more than the lookup it guards.
+        key = (slot, side)
+        beside = self._neighbours.get(key, _UNASKED)
+        if beside is _UNASKED:
+            beside = self._neighbours[key] = self.layer_of(slot).neighbour(slot, side)
+        return cast("Slot | None", beside)
+
+    def same_as(self, other: Plan) -> bool:
+        """
+        Whether the two plans put the same panes in the same places.
+
+        Slots are new on every measure, so this compares what they
+        hold: the panes, the one shown, and the rectangle.
+        """
+        if self.lines != other.lines or self.layers.keys() != other.layers.keys():
+            return False
+        for number, layer in self.layers.items():
+            mine = layer.rects.items()
+            theirs = other.layers[number].rects.items()
+            if len(mine) != len(theirs):
+                return False
+            for (slot, rect), (other_slot, other_rect) in zip(mine, theirs, strict=True):
+                if rect != other_rect or slot.showing != other_slot.showing or slot.panes != other_slot.panes:
+                    return False
+        return True
 
     def trace(self, origin: Point, angle: float) -> Slot | None:
         """

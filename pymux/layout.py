@@ -3304,6 +3304,12 @@ def _create_container_for_process(
                     content=ConditionalContainer(
                         content=Window(
                             height=1,
+                            # A window that fills its row owns every
+                            # cell of it, which is what lets an unchanged
+                            # bar write its last cells again. The bar
+                            # pads to the width, so this changes no cell.
+                            # Lillecarl/pymux#578.
+                            char=" ",
                             content=PaneTitleBar(
                                 get_number=get_pane_number,
                                 get_left=get_bar_left,
@@ -3327,6 +3333,7 @@ def _create_container_for_process(
                     content=ConditionalContainer(
                         content=Window(
                             height=1,
+                            char=" ",
                             content=PaneTitleBar(
                                 get_number=nothing,
                                 get_left=nothing,

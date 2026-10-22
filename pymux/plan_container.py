@@ -159,7 +159,12 @@ class PlanContainer(Container):
         seen = Size(rows=write_position.height, columns=write_position.width)
         plane = seen if self.room is None else self.room()
 
-        self.plan = self.layout.measure(plane)
+        # The last plan, when nothing moved: what it already answered
+        # stays answered, which is every title bar's neighbours on an
+        # idle frame. Lillecarl/pymux#578.
+        plan = self.layout.measure(plane)
+        if self.plan is None or not plan.same_as(self.plan):
+            self.plan = plan
         self.measured_for = plane
 
         self.view.size = seen

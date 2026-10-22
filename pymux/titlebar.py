@@ -41,6 +41,7 @@ The order the parts give way in is the order they matter:
 
 from __future__ import annotations
 
+from collections.abc import Hashable
 from typing import override
 
 from prompt_toolkit.formatted_text import StyleAndTextTuples
@@ -83,6 +84,23 @@ class PaneTitleBar(UIControl):
         self.get_left = get_left
         self.get_middle = get_middle
         self.get_right = get_right
+
+    @override
+    def content_version(self, width: int, height: int) -> Hashable:
+        """
+        The parts and the width: a bar that reads the same writes the
+        cells it wrote before. Lillecarl/pymux#578.
+
+        **Not kept for `create_content`.** A frame that does not ask
+        for a version would lay out the parts of an older one.
+        """
+        return (
+            width,
+            tuple(self.get_number()),
+            tuple(self.get_left()),
+            tuple(self.get_middle()),
+            tuple(self.get_right()),
+        )
 
     @override
     def create_content(self, width: int, height: int) -> UIContent:
