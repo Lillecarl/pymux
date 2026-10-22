@@ -402,6 +402,7 @@ class KeyPrefixOption(Option):
             raise SetOptionError("Invalid key: %r" % (value,))
         else:
             pymux.key_bindings_manager.prefix = keys
+            pymux.key_bindings_manager.prefix_written = value
 
 
 class BaseIndexOption(Option):

@@ -33,6 +33,12 @@ def list_keys(pymux: Pymux, args: argparse.Namespace) -> None:
             )
         )
 
+    # The prefix pressed twice is built in, so that it follows the
+    # prefix option, and is listed as the binding it acts as.
+    manager = pymux.key_bindings_manager
+    if args.table in (None, "prefix") and manager.prefix_sends_itself():
+        result.append("bind-key -T %-16s %s send-prefix" % ("prefix", manager.prefix_written))
+
     show_listing(pymux, "list-keys", "\n".join(sorted(result)))
 
 

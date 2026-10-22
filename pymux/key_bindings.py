@@ -160,6 +160,8 @@ class PymuxKeyBindings:
         )
 
         self._prefix: tuple[str, ...] = ("c-b",)
+        #: The prefix as the person wrote it, for the listings.
+        self.prefix_written = "C-b"
         self._prefix_binding: Callable[[E], None] | None = None
         self._prefix_again_binding: Callable[[E], None] | None = None
 
@@ -198,7 +200,7 @@ class PymuxKeyBindings:
             *prefix,
             filter=HasPrefix(pymux)
             & ~(has_focus(COMMAND) | has_focus(PROMPT) | WaitsForConfirmation(pymux))
-            & Condition(lambda: (PREFIX_TABLE, prefix) not in self.custom_bindings),
+            & Condition(self.prefix_sends_itself),
         )
         def send_prefix_handler(event: E) -> None:
             "Send the prefix on to the pane."
@@ -703,7 +705,13 @@ class PymuxKeyBindings:
             if binding.arguments:
                 meaning += " " + " ".join(map(wrap_argument, binding.arguments))
             rows.append((binding.written, meaning))
+        if self.prefix_sends_itself():
+            rows.append((self.prefix_written, "send-prefix"))
         return sorted(rows)
+
+    def prefix_sends_itself(self) -> bool:
+        "Whether the prefix pressed twice sends it: no binding of a person's own is on that key."
+        return (PREFIX_TABLE, self._prefix) not in self.custom_bindings
 
     def binding_on(self, key_name: str, table: str = PREFIX_TABLE) -> CustomBinding | None:
         """

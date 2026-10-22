@@ -10,7 +10,7 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.keys import Keys
 from session import create_session, once
 from test_command_mode import press
-from test_key_tables import run, written_keys
+from test_key_tables import listed, run, written_keys
 
 
 def set_prefix(pymux, state, key):
@@ -60,3 +60,34 @@ async def test_a_binding_of_ones_own_on_the_prefix_wins():
 
         await once(lambda: len(pymux.arrangement.windows) == before + 1, 5.0, "the binding never ran")
         assert "".join(written) == ""
+
+
+# ----------------------------------------------------------------------
+# It is built in, and listed as the binding it acts as.
+
+
+async def test_which_key_lists_it_on_the_prefix():
+    async with create_session() as (pymux, state):
+        set_prefix(pymux, state, "C-a")
+
+        rows = pymux.key_bindings_manager.prefix_keys()
+
+        assert ("C-a", "send-prefix") in rows
+        assert ("C-b", "send-prefix") not in rows
+
+
+async def test_list_keys_lists_it_on_the_prefix():
+    async with create_session() as (pymux, state):
+        out = await listed(pymux, "list-keys -T prefix")
+
+        assert "bind-key -T prefix           C-b send-prefix" in out
+
+
+async def test_a_binding_of_ones_own_takes_its_row():
+    async with create_session() as (pymux, state):
+        await run(pymux, "bind-key C-b new-window")
+
+        rows = pymux.key_bindings_manager.prefix_keys()
+
+        assert ("C-b", "send-prefix") not in rows
+        assert ("C-b", "new-window") in rows
