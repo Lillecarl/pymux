@@ -124,6 +124,8 @@ class Packet(StrEnum):
     # "Draw my terminal again from nothing": the client drew over the
     # frame, for a question of its own.
     REDRAW = "redraw"
+    # The names `list-files` asked for, under `paths`.
+    FILES_LISTED = "files-listed"
 
     # The server tells.
     OUT = "out"
@@ -174,6 +176,10 @@ class Packet(StrEnum):
     # "Nobody waits for `request` any more": the `pymux receive` that
     # asked was stopped. The client takes its question down.
     FILES_WITHDRAWN = "files-withdrawn"
+    # "Which names are in the directory `path`?", under the id
+    # `request`, to complete `pymux receive`. The client answers only
+    # inside a grant or `upload-paths`.
+    LIST_FILES = "list-files"
 
     # Sound, on the attached connection of a client that said `audio` in
     # `start-gui`. Lillecarl/pymux#657.

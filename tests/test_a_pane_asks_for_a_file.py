@@ -6,6 +6,7 @@ allow-list from its own configuration file. Lillecarl/pymux#743.
 
 from __future__ import annotations
 
+import argparse
 import base64
 import shlex
 import sys
@@ -26,6 +27,7 @@ from pymux.client.uploads import (
     allowed,
     answer_of,
     inspect,
+    listing,
     outcome_packets,
     read,
     size_text,
@@ -33,7 +35,7 @@ from pymux.client.uploads import (
 )
 from pymux.commands.receive import wait_for_files
 from pymux.main import Pymux
-from pymux.uploads import Upload, receive_into
+from pymux.uploads import LIST_SECONDS, Upload, receive_into
 
 SIZE = Size(rows=24, columns=80)
 
@@ -402,6 +404,65 @@ def test_a_symlinked_root_still_holds_its_own_files(home, tmp_path):
     assert allowed(inspect(["~/shared/x"], home), roots)
 
 
+def test_a_grant_lists_a_whole_directory(home):
+    (home / "dir").mkdir()
+    (home / "x.pdf").write_bytes(b"x")
+    assert listing("~", home, (), granted=True) == ["dir/", "x.pdf"]
+    assert listing("", home, (), granted=True) == ["dir/", "x.pdf"]
+
+
+def test_without_a_grant_only_the_way_into_upload_paths_lists(home):
+    shared = home / "a" / "shared"
+    shared.mkdir(parents=True)
+    (shared / "x.pdf").write_bytes(b"x")
+    (home / "a" / "private.txt").write_bytes(b"x")
+    (home / "secret.txt").write_bytes(b"x")
+    roots = upload_settings([("upload-paths", "~/a/shared")], home).roots
+    assert listing("~", home, roots, granted=False) == ["a/"]
+    assert listing("~/a/", home, roots, granted=False) == ["shared/"]
+    assert listing("~/a/shared", home, roots, granted=False) == ["x.pdf"]
+    assert listing("~", home, (), granted=False) == []
+
+
+def test_a_missing_directory_lists_nothing(home):
+    assert listing("~/missing", home, (), granted=True) == []
+
+
+async def test_the_client_answers_a_listing_without_asking(home, config):
+    (home / "x.pdf").write_bytes(DATA)
+    config.write_text("set-client-option upload-paths ~\n")
+    client = AskedClient(config)
+    async with anyio.create_task_group() as tasks:
+        client._tasks = tasks
+        client._process({Field.CMD: Packet.LIST_FILES, Field.REQUEST: "one", Field.PATH: "~"})
+        [answered] = await once(
+            lambda: client.of(Packet.FILES_LISTED), 10.0, lambda: "no listing; sent %r" % (client.sent,)
+        )
+        assert answered == {Field.CMD: Packet.FILES_LISTED, Field.REQUEST: "one", Field.PATHS: ["x.pdf"]}
+        assert client._asking is None
+
+
+async def test_the_server_waits_for_a_listing_then_gives_up():
+    async with over_connection() as session:
+        state, _ = await session.attach("listed", SIZE, forwards=True)
+        connection = state.connection
+
+        async def answer_soon() -> None:
+            await once(lambda: connection.listings, 10.0, lambda: "never asked")
+            [request] = connection.listings
+            connection._process({Field.CMD: Packet.FILES_LISTED, Field.REQUEST: request, Field.PATHS: ["a/", "b"]})
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(answer_soon)
+            assert await connection.list_files("~") == ["a/", "b"]
+        assert connection.listings == {}
+
+        # Nobody answers this one.
+        with anyio.fail_after(LIST_SECONDS + 5):
+            assert await connection.list_files("~") == []
+        assert connection.listings == {}
+
+
 def test_upload_paths_takes_several(home):
     settings = upload_settings([("upload-paths", "~/a:/srv/b")], home)
     assert settings.roots == (home / "a", Path("/srv/b"))
@@ -595,4 +656,58 @@ async def test_pymux_receive_gets_a_file_from_the_client(tmp_path, home, config)
             )
             assert target.read_bytes() == DATA * 30
             assert said.read_text() == "Saved %s.\n" % (target,)
+            tasks.cancel_scope.cancel()
+
+
+def test_the_shell_completion_of_receive_asks_the_person():
+    from pymux.entry_points.run_pymux import _completion_parser, _person_paths
+
+    modes = next(action for action in _completion_parser()._actions if isinstance(action, argparse._SubParsersAction))
+    [paths] = [action for action in modes.choices["receive"]._actions if action.dest == "paths"]
+    assert paths.completer is _person_paths
+
+
+async def test_a_shell_in_a_pane_completes_the_persons_paths(tmp_path, home, config):
+    "Inside the grant that `a` gave: the completer asks the server, which asks the client."
+    (home / "notes").mkdir()
+    (home / "notes" / "today.txt").write_bytes(b"x")
+    (home / "notebook.pdf").write_bytes(b"x")
+    said = tmp_path / "said"
+
+    pymux = Pymux()
+    pymux.listen_on_socket(str(tmp_path / "pymux.sock"))
+    connection_of: list = []
+    client = AskedClient(config, send=lambda packet: connection_of[0]._process(packet))
+    client._grant_until = client.clock.now + 60
+
+    def read_packet(packet: dict) -> None:
+        if packet[Field.CMD] == Packet.LIST_FILES:
+            client._process(packet)
+
+    complete = (
+        "from pymux.entry_points.run_pymux import _person_paths\n"
+        "for prefix in ('~/note', '~/notes/t'):\n"
+        "    print([path for path in _person_paths(prefix) if path.startswith(prefix)])\n"
+    )
+    async with over_connection(pymux=pymux, read_packet=read_packet) as session:
+        state, _ = await session.attach("remote", SIZE, forwards=True)
+        state.connection.sends_files = True
+        connection_of.append(state.connection)
+        async with anyio.create_task_group() as tasks:
+            client._tasks = tasks
+            with set_app(state.app):
+                await pymux.create_window(
+                    "/bin/sh -c %s"
+                    % shlex.quote(
+                        "%s -c %s >%s 2>&1; %s" % (sys.executable, shlex.quote(complete), said, PANE_THAT_STAYS)
+                    ),
+                )
+            await once(
+                lambda: said.exists() and said.read_text().count("\n") >= 2,
+                20.0,
+                lambda: "the completer printed %r" % (said.exists() and said.read_text(),),
+            )
+            # The completer offers the whole directory, and the shell
+            # keeps what starts with the word, as the print does here.
+            assert said.read_text() == "['~/notebook.pdf', '~/notes/']\n['~/notes/today.txt']\n"
             tasks.cancel_scope.cancel()

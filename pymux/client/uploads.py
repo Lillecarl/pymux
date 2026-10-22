@@ -41,6 +41,8 @@ __all__ = [
     "done_packet",
     "expand",
     "inspect",
+    "listed_packet",
+    "listing",
     "outcome_packets",
     "question",
     "read",
@@ -53,6 +55,9 @@ __all__ = [
 DEFAULT_GRANT_MINUTES: Final = 10
 
 SECONDS_PER_MINUTE: Final = 60
+
+#: The most names one `list-files` answers with.
+MAX_LISTED: Final = 1000
 
 #: What separates the directories of `upload-paths`, as in `PATH`.
 PATH_SEPARATOR: Final = ":"
@@ -180,6 +185,50 @@ def _under(path: Path, roots: Iterable[Path]) -> bool:
         if path.is_relative_to(real):
             return True
     return False
+
+
+def _on_the_way(path: Path, roots: Iterable[Path]) -> bool:
+    "Whether `path` lies under a root, or a root lies under it."
+    for root in roots:
+        try:
+            real = root.resolve(strict=True)
+        except OSError:
+            continue
+        if path.is_relative_to(real) or real.is_relative_to(path):
+            return True
+    return False
+
+
+def listing(asked: str, home: Path, roots: tuple[Path, ...], granted: bool) -> list[str]:
+    """
+    The names in a directory a pane asked about, for completing
+    `pymux receive`. A directory's name ends in `/`. **It blocks.**
+
+    Inside a grant, every name. Without one, only the names that lead
+    into `upload-paths` or lie under it, so a completion shows nothing
+    the person has not let pass. Names are only names: no content is
+    read, and at most `MAX_LISTED` come back.
+    """
+    try:
+        directory = expand(asked or "~", home).resolve(strict=True)
+        children = sorted(directory.iterdir())
+    except OSError:
+        return []
+    names = []
+    for child in children[:MAX_LISTED]:
+        try:
+            real = child.resolve(strict=True)
+        except OSError:
+            continue
+        if not granted and not _on_the_way(real, roots):
+            continue
+        names.append(child.name + "/" if real.is_dir() else child.name)
+    return names
+
+
+def listed_packet(request: str, names: list[str]) -> dict[Field, object]:
+    "The answer to `list-files`."
+    return {Field.CMD: Packet.FILES_LISTED, Field.REQUEST: request, Field.PATHS: names}
 
 
 def allowed(wanted: Iterable[Wanted], roots: tuple[Path, ...]) -> bool:

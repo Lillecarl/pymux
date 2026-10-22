@@ -448,7 +448,38 @@ def _completion_parser() -> argparse.ArgumentParser:
         if mode is Mode.SEND_FILE:
             mode_parser.add_argument("files", nargs="+", help="The files to send to the person.")
     add_commands_to(modes)
+    for action in modes.choices["receive"]._actions:
+        if action.dest == "paths":
+            action.completer = _person_paths  # pyrefly: ignore[missing-attribute]
     return parser
+
+
+def _person_paths(prefix: str, **_) -> list[str]:
+    """
+    The paths on the person's machine that start with `prefix`, asked
+    of the server of this pane: `list-person-files` on the directory
+    the prefix names. Nothing, outside a pane or when the client says
+    nothing. Lillecarl/pymux#748.
+    """
+    import io
+
+    from pymux.client.posix import PosixClient
+    from pymux.uploads import LIST_SECONDS
+
+    socket_name, _, pane_id = os.environ.get("PYMUX", "").rpartition(",")
+    if not socket_name:
+        return []
+    head = prefix[: prefix.rfind("/") + 1]
+    printed = io.StringIO()
+    try:
+        client = PosixClient(socket_name)
+        with contextlib.redirect_stdout(printed), contextlib.redirect_stderr(io.StringIO()):
+            code = client.run_command(shlex.join(["list-person-files", head or "~"]), pane_id, timeout=LIST_SECONDS + 1)
+    except OSError:
+        return []
+    if code != 0:
+        return []
+    return [head + name for name in printed.getvalue().splitlines() if name]
 
 
 def _answer_completion() -> None:

@@ -57,6 +57,8 @@ from .uploads import (
     answer_of,
     done_packet,
     inspect,
+    listed_packet,
+    listing,
     outcome_packets,
     question,
     upload_settings,
@@ -688,6 +690,9 @@ class TerminalClient(Client):
         elif packet[Field.CMD] == Packet.FILES_WITHDRAWN:
             self._files_withdrawn(str(packet.get(Field.REQUEST) or ""))
 
+        elif packet[Field.CMD] == Packet.LIST_FILES:
+            self._listing_asked(packet)
+
         elif packet[Field.CMD] == Packet.BROWSER_STOP:
             self.stop_browser(packet[Field.BROWSER])
 
@@ -834,6 +839,17 @@ class TerminalClient(Client):
 
         self._looking.add(request)
         self._off_the_loop(look, then)
+
+    def _listing_asked(self, packet: dict) -> None:
+        "A completion of `pymux receive` asks what a directory here holds. Nobody is asked."
+        request = str(packet.get(Field.REQUEST) or "")
+        asked = str(packet.get(Field.PATH) or "")
+        granted = self._granted()
+
+        def look() -> list[str]:
+            return listing(asked, Path.home(), self._upload_settings().roots, granted)
+
+        self._off_the_loop(look, lambda names: self._send_packet(listed_packet(request, names)))
 
     def _files_withdrawn(self, request: str) -> None:
         "The `pymux receive` that asked stopped waiting: ask nothing more about it."

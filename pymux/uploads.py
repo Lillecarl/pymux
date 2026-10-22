@@ -26,9 +26,15 @@ from libpymux.protocol import Field, Packet
 from .files import ArrivingFiles, Whole, save
 
 __all__ = [
+    "LIST_SECONDS",
+    "Listing",
     "Upload",
     "receive_into",
 ]
+
+#: How long a completion waits for the client's listing. A shell holds
+#: the Tab until it ends.
+LIST_SECONDS = 2.0
 
 #: What `pymux receive` says for a path the client never answered.
 NO_ANSWER = "the client sent nothing for it"
@@ -101,6 +107,25 @@ class Upload:
         # A part after the end, or after the command stopped waiting.
         with suppress(anyio.ClosedResourceError, anyio.BrokenResourceError):
             self._send.send_nowait(outcome)
+
+
+class Listing:
+    "One `list-files` question, until the client answers or goes."
+
+    def __init__(self, path: str) -> None:
+        self.request = secrets.token_hex(8)
+        self.path = path
+        self.names: list[str] = []
+        self.answered = anyio.Event()
+
+    def packet(self) -> dict[Field, object]:
+        return {Field.CMD: Packet.LIST_FILES, Field.REQUEST: self.request, Field.PATH: self.path}
+
+    def take(self, packet: Mapping[str, object]) -> None:
+        names = packet.get(Field.PATHS)
+        if isinstance(names, list):
+            self.names = [str(name) for name in names]
+        self.answered.set()
 
 
 async def receive_into(upload: Upload, directory: Path, say: Callable[[str], None]) -> list[str]:

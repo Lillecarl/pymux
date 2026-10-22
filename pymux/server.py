@@ -46,7 +46,7 @@ from .options import ExtendedKeys, SetOptionError
 from .pipes import BrokenPipeError
 from .rate import Rate
 from .terminal_answers import SURVEY, TerminalAnswers
-from .uploads import Upload
+from .uploads import LIST_SECONDS, Listing, Upload
 
 if TYPE_CHECKING:
     from pymux.main import ClientState, Pymux
@@ -182,6 +182,7 @@ class ServerConnection:
         "sends_files": Keep.REBUILT,
         # A `pymux receive` that waits ends when the client goes.
         "uploads": Keep.DROPPED,
+        "listings": Keep.DROPPED,
         "may_attach": Keep.REBUILT,
         "forwards": Keep.DROPPED,
         "pipe_connection": Keep.DROPPED,
@@ -370,6 +371,7 @@ class ServerConnection:
         #: requests that wait for its answer, by id. Lillecarl/pymux#743.
         self.sends_files = False
         self.uploads: dict[str, Upload] = {}
+        self.listings: dict[str, Listing] = {}
         #: This client's sound, when it plays it. Lillecarl/pymux#657.
         self._audio: AudioLink | None = None
 
@@ -1057,6 +1059,11 @@ class ServerConnection:
             if upload is not None:
                 upload.take(packet)
 
+        elif packet[Field.CMD] == Packet.FILES_LISTED:
+            listed = self.listings.pop(str(packet.get(Field.REQUEST)), None)
+            if listed is not None:
+                listed.take(packet)
+
         # The client drew a question over the frame, and it is gone.
         elif packet[Field.CMD] == Packet.REDRAW:
             if self.client_state is not None:
@@ -1389,6 +1396,22 @@ class ServerConnection:
         with suppress(BrokenPipeError):
             self._send_packet({Field.CMD: Packet.FILES_WITHDRAWN, Field.REQUEST: upload.request})
 
+    async def list_files(self, path: str) -> list[str]:
+        """
+        The names the client lets show in a directory on the person's
+        machine, for completing `pymux receive`. Empty when it answers
+        nothing within `LIST_SECONDS`, or goes.
+        """
+        if self._closed:
+            return []
+        listed = Listing(path)
+        self.listings[listed.request] = listed
+        self._send_packet(listed.packet())
+        with anyio.move_on_after(LIST_SECONDS):
+            await listed.answered.wait()
+        self.listings.pop(listed.request, None)
+        return listed.names
+
     async def answer(self, exit_code: int) -> None:
         "Send the exit code of a command, for one that ends the server before it returns."
         with suppress(BrokenPipeError):
@@ -1637,6 +1660,9 @@ class ServerConnection:
         for upload in self.uploads.values():
             upload.end("the client went before it answered")
         self.uploads.clear()
+        for listed in self.listings.values():
+            listed.answered.set()
+        self.listings.clear()
 
         # The background work of this connection ends with the read
         # loop that `serve` runs: leaving that scope cancels the group.

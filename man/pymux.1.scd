@@ -186,6 +186,15 @@ server: *set-client-option* on the server refuses them.
 	set-client-option upload-paths ~/share:~/Downloads++
 	set-client-option upload-grant 30
 
+*list-person-files* [_DIRECTORY_]
+
+A shell in a pane completes the paths of *receive* with this, and
+it prints one name a line, a directory's with */* after it. The client
+answers without asking the person. Inside the grant that *a* gave, it
+lists the whole directory. Otherwise it lists only the names that lead
+into *upload-paths* or lie under it, and nothing at all when that is
+empty. Its answer waits 2 seconds at most.
+
 # ENVIRONMENT
 
 *OPENCODE_SESSION_ID*, *OCAHUB_SESSION*, *OC_SESSION*,
