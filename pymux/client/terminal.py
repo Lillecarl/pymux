@@ -35,6 +35,7 @@ from pymux.config import client_options_in, find_config
 from pymux.graphics import CELL_SIZE_QUERY, RESTORE_CURSOR, SAVE_CURSOR, VERSION_QUERY
 from pymux.graphics import QUERY_SEQUENCE as GRAPHICS_QUERY
 from pymux.kitty_frames import Base64Carrier, Pictures, ShmCarrier, decoders, frame_commands, shm_probe
+from pymux.osc import PASSTHROUGH_VARIABLE, set_user_var
 from pymux.utils import nonblocking
 
 from . import browser
@@ -403,6 +404,11 @@ class TerminalClient(Client):
         # SGR pixel mouse, which the server may have turned on: the next
         # program would read pixels as cells. Lillecarl/pymux#648.
         output.write_raw("\x1b[?1016l")
+        # The user variable passthrough sets, which a terminal may hold
+        # its own shortcuts back on. Cleared whatever mode the client
+        # was in, because a detach in passthrough leaves no leave-mode.
+        # Lillecarl/pymux#530.
+        output.write_raw(set_user_var(PASSTHROUGH_VARIABLE, None))
         output.disable_bracketed_paste()
         output.reset_attributes()
         output.flush()

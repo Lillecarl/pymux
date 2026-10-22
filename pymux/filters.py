@@ -7,6 +7,7 @@ __all__ = [
     "InCommandMode",
     "KeyTableIs",
     "ModeActive",
+    "ModeTakesPrefix",
     "WaitsForConfirmation",
     "WaitsForPrompt",
 ]
@@ -66,6 +67,28 @@ class ModeActive(Filter):
             return bool(self.pymux.get_client_state().key_tables)
         except ValueError:
             return False
+
+
+class ModeTakesPrefix(Filter):
+    """
+    When the mode on top of this client's stack takes the prefix key
+    away from pymux, so the pane gets it. Passthrough is that mode.
+    Lillecarl/pymux#530.
+    """
+
+    def __init__(self, pymux):
+        self.pymux = pymux
+        super().__init__()
+
+    def __call__(self):
+        try:
+            tables = self.pymux.get_client_state().key_tables
+        except ValueError:
+            return False
+        if not tables:
+            return False
+        table = self.pymux.key_bindings_manager.mode_tables.get(tables[-1])
+        return table is not None and not table.keeps_prefix
 
 
 class WaitsForConfirmation(Filter):

@@ -164,6 +164,12 @@ CLOCK_FORMAT = "%H:%M"
 #: The room `status-fps` adds to `status-right-length`: " 120 fps".
 FPS_WIDTH = 8
 
+#: Before `status-right` while passthrough holds every key: a person
+#: who wonders why the prefix does nothing reads the answer by the
+#: clock. In code and not in the default format, so a person's own
+#: `status-right` gets it too. Lillecarl/pymux#530.
+PASSTHROUGH_MARK = " PASSTHROUGH "
+
 
 class Justify:
     "Justify enum for the status bar."
@@ -1503,8 +1509,7 @@ class LayoutManager:
         """
         columns = self.client_state.app.output.get_size().columns
         left = min(get_cwidth(self._get_status_left_tokens()), self.pymux.status_left_length)
-        right_length = self.pymux.status_right_length + (FPS_WIDTH if self.pymux.status_fps else 0)
-        right = min(get_cwidth(self._get_status_right_tokens()), right_length)
+        right = min(get_cwidth(self._get_status_right_tokens()), self._status_right_length())
         return max(1, columns - left - right)
 
     def status_rows(self) -> int:
@@ -1528,8 +1533,26 @@ class LayoutManager:
             fps = format_pymux_string(
                 self.pymux, "#{client_fps}", session=self.client_state.session, client=self.client_state
             )
-            return " %s%s" % (fps, text)
+            text = " %s%s" % (fps, text)
+        if self._in_passthrough():
+            text = PASSTHROUGH_MARK + text
         return text
+
+    def _in_passthrough(self) -> bool:
+        tables = self.client_state.key_tables
+        return bool(tables) and tables[-1] == "passthrough"
+
+    def _status_right_length(self) -> int:
+        """
+        The most `status-right` may take, and the room for what pymux
+        puts beside it: the frame rate, and the passthrough mark.
+        """
+        length = self.pymux.status_right_length
+        if self.pymux.status_fps:
+            length += FPS_WIDTH
+        if self._in_passthrough():
+            length += len(PASSTHROUGH_MARK)
+        return length
 
     def _format_status(self, string: str) -> str:
         """
@@ -2348,12 +2371,7 @@ class LayoutManager:
                                 # Right.
                                 Window(
                                     height=1,
-                                    width=(
-                                        lambda: D(
-                                            max=self.pymux.status_right_length
-                                            + (FPS_WIDTH if self.pymux.status_fps else 0)
-                                        )
-                                    ),
+                                    width=lambda: D(max=self._status_right_length()),
                                     dont_extend_width=True,
                                     align=WindowAlign.RIGHT,
                                     content=FormattedTextControl(self._get_status_right_tokens),

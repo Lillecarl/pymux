@@ -27,6 +27,7 @@ from urllib.parse import unquote
 __all__ = [
     "MAX_OSC_LENGTH",
     "OPEN_URL_PREFIX",
+    "PASSTHROUGH_VARIABLE",
     "build_osc",
     "copy_data_of",
     "current_dir_of",
@@ -35,6 +36,7 @@ __all__ = [
     "ftcs_of",
     "open_url_of",
     "request_attention_of",
+    "set_user_var",
     "set_user_var_of",
     "simple_notification_of",
 ]
@@ -167,6 +169,23 @@ def set_user_var_of(rest: str) -> tuple[str, str] | None:
     except ValueError:
         return None
     return name, value
+
+
+#: The user variable passthrough sets on the client's own terminal, so
+#: that the terminal can let go of its shortcuts too. In kitty:
+#: `map --when-focus-on var:pymux_passthrough kitty_mod+t`.
+#: Lillecarl/pymux#530.
+PASSTHROUGH_VARIABLE = "pymux_passthrough"
+
+
+def set_user_var(name: str, value: str | None) -> str:
+    """
+    `OSC 1337 ; SetUserVar`, which kitty, WezTerm and iTerm2 read. No
+    value clears the variable.
+    """
+    if value is None:
+        return "\x1b]1337;SetUserVar=%s\x07" % (name,)
+    return "\x1b]1337;SetUserVar=%s=%s\x07" % (name, base64.b64encode(value.encode()).decode("ascii"))
 
 
 def current_dir_of(rest: str) -> str | None:

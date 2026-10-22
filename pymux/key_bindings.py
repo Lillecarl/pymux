@@ -27,8 +27,9 @@ from ptterm import Terminal
 from .commands import call_command_handler
 from .commands.utils import wrap_argument
 from .enums import COMMAND, PROMPT, Chooser
-from .filters import HasPrefix, KeyTableIs, ModeActive, WaitsForConfirmation
+from .filters import HasPrefix, KeyTableIs, ModeActive, ModeTakesPrefix, WaitsForConfirmation
 from .key_spelling import key_however_it_is_written
+from .osc import PASSTHROUGH_VARIABLE, set_user_var
 from .window_pane import WindowWidget
 
 if TYPE_CHECKING:
@@ -64,13 +65,18 @@ class KeyTable:
     That is what makes a mode transparent, and strictness is a
     binding of its own: `bind-key -T <table> Any noop` swallows
     everything the table does not name. Lillecarl/pymux#394.
+
+    `keeps_prefix` is whether the prefix still answers in the mode. It
+    does in every mode but passthrough, whose point is that the pane
+    gets the prefix too. Lillecarl/pymux#530.
     """
 
-    def __init__(self, name: str, on_enter=None, on_leave=None) -> None:
+    def __init__(self, name: str, on_enter=None, on_leave=None, keeps_prefix: bool = True) -> None:
         self.name = name
         #: The mode's own side effects. Each takes the pymux.
         self.on_enter = on_enter
         self.on_leave = on_leave
+        self.keeps_prefix = keeps_prefix
 
 
 def _hold_pane_numbers_up(pymux: Pymux) -> None:
@@ -80,6 +86,18 @@ def _hold_pane_numbers_up(pymux: Pymux) -> None:
 
 def _put_pane_numbers_back(pymux: Pymux) -> None:
     pymux.display_pane_numbers = False
+
+
+def _tell_the_terminal(pymux: Pymux, value: str | None) -> None:
+    """
+    Set or clear `PASSTHROUGH_VARIABLE` on this client's terminal. The
+    client clears it again when it leaves the terminal, whatever mode
+    it was in.
+    """
+    connection = pymux.get_client_state().connection
+    forward = getattr(connection, "forward_osc", None)
+    if forward is not None:
+        forward(set_user_var(PASSTHROUGH_VARIABLE, value))
 
 
 def _register_builtin_mode_tables(manager: PymuxKeyBindings) -> None:
@@ -96,6 +114,14 @@ def _register_builtin_mode_tables(manager: PymuxKeyBindings) -> None:
         "pane-management",
         on_enter=_hold_pane_numbers_up,
         on_leave=_put_pane_numbers_back,
+    )
+    # Every key goes to the pane, the prefix too, but the one that
+    # leaves. For a tmux or a pymux inside a pane. Lillecarl/pymux#530.
+    manager.mode_tables["passthrough"] = KeyTable(
+        "passthrough",
+        on_enter=lambda pymux: _tell_the_terminal(pymux, "1"),
+        on_leave=lambda pymux: _tell_the_terminal(pymux, None),
+        keeps_prefix=False,
     )
 
 
@@ -162,7 +188,13 @@ class PymuxKeyBindings:
         # Create new Python binding.
         @self.custom_key_bindings.add(
             *self._prefix,
-            filter=~(HasPrefix(pymux) | has_focus(COMMAND) | has_focus(PROMPT) | WaitsForConfirmation(pymux)),
+            filter=~(
+                HasPrefix(pymux)
+                | has_focus(COMMAND)
+                | has_focus(PROMPT)
+                | WaitsForConfirmation(pymux)
+                | ModeTakesPrefix(pymux)
+            ),
         )
         def enter_prefix_handler(event: E) -> None:
             "Enter prefix mode."

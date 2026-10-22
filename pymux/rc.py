@@ -116,6 +116,13 @@ bind-key "'" command-prompt -p index "select-window -t ':%%'"
 # A key the table does not name still reaches the pane, so a person
 # can keep working while they manage; q and Escape leave.
 # Lillecarl/pymux#395.
+# Passthrough: every key goes to the pane, the prefix too, for a tmux
+# or a pymux inside it. F12 enters and F12 leaves; F12 is what nested
+# tmux setups use, and a program in a pane rarely needs it. The status
+# line says so while it lasts. Lillecarl/pymux#530.
+bind-key -n F12 enter-mode passthrough
+bind-key -T passthrough F12 leave-mode
+
 bind-key M enter-mode pane-management
 bind-key -T pane-management h select-pane -L
 bind-key -T pane-management l select-pane -R
