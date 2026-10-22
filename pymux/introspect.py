@@ -192,12 +192,23 @@ def log_what_escapes() -> None:
     sys.unraisablehook = unraisable
 
 
+#: What this process is in the middle of that a crash report must name:
+#: the snapshot a resume loads. `note_for_a_crash` sets it.
+_doing: str | None = None
+
+
+def note_for_a_crash(doing: str | None) -> None:
+    "Say what a crash from now on happens in the middle of, or that it is done with None."
+    global _doing
+    _doing = doing
+
+
 def write_crash_report(error: BaseException, started: float | None = None) -> Path | None:
     """
     Everything a person needs to understand a crash, in one file beside
-    the log: what ran, how long, the whole chain of the exception, and
-    the stack of every thread at the moment. Its name is in the log's
-    last line. Lillecarl/pymux#736.
+    the log: what ran, how long, what it was in the middle of, the whole
+    chain of the exception, and the stack of every thread at the moment.
+    Its name is in the log's last line. Lillecarl/pymux#736.
     """
     path = where_dump_goes() / ("crash-%d-%s.log" % (os.getpid(), time.strftime("%Y%m%d-%H%M%S")))
     try:
@@ -210,6 +221,8 @@ def write_crash_report(error: BaseException, started: float | None = None) -> Pa
             report.write("build %s\n" % (os.environ.get("PYMUX_BUILD", "-"),))
             if started is not None:
                 report.write("ran for %.0f s\n" % (time.monotonic() - started,))
+            if _doing is not None:
+                report.write("while %s\n" % (_doing,))
             report.write("\n")
             report.write("".join(traceback.format_exception(error)))
             report.write("\nEvery thread:\n")

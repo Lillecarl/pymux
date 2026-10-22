@@ -36,6 +36,20 @@ def test_a_crash_report_holds_the_chain_and_every_thread(tmp_path, monkeypatch):
     assert "executable %s" % (sys.executable,) in report
 
 
+def test_a_crash_report_says_what_the_server_was_in_the_middle_of(tmp_path, monkeypatch):
+    "A resume names the snapshot it loads, and a crash after it names nothing."
+    monkeypatch.setattr(introspect, "where_dump_goes", lambda: tmp_path)
+    introspect.note_for_a_crash("resuming from the snapshot /x.sqlite")
+    try:
+        first = introspect.write_crash_report(RuntimeError("during"))
+    finally:
+        introspect.note_for_a_crash(None)
+    assert first is not None and "while resuming from the snapshot /x.sqlite" in first.read_text()
+    # The same second names the same file, so this one replaces it.
+    second = introspect.write_crash_report(RuntimeError("after"))
+    assert second is not None and "while " not in second.read_text()
+
+
 def test_an_exception_that_kills_a_thread_is_logged(monkeypatch, caplog):
     monkeypatch.setattr(threading, "excepthook", threading.excepthook)
     monkeypatch.setattr(sys, "unraisablehook", sys.unraisablehook)
