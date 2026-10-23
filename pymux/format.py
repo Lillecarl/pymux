@@ -706,7 +706,7 @@ def _client_rate(
 def _client_fps(context: FormatContext) -> str:
     """
     The frames a second this client gets, over the last few seconds.
-    What `status-fps` draws. Lillecarl/pymux#596.
+    A status line shows it where a template puts it. Lillecarl/pymux#596.
     """
     connection = _connection_of(context)
     if connection is None:

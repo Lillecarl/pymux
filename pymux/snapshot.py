@@ -116,7 +116,7 @@ __all__ = [
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 30
+SNAPSHOT_VERSION = 31
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -147,11 +147,10 @@ CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
 #: change of shape adds the one step from the version before it and
 #: deletes any older step.
 STEPS: dict[int, str] = {
-    # 30 holds status-keys and mode-keys as words, and 29 as a vi bool.
-    # Lillecarl/pymux#749.
-    29: """
-UPDATE options SET value = CASE WHEN value THEN 'vi' ELSE 'emacs' END
-WHERE name IN ('status-keys', 'mode-keys');
+    # 31 has no status-fps: a template shows `client_fps` where a person
+    # wants it, per client.
+    30: """
+DELETE FROM options WHERE name = 'status-fps';
 """,
 }
 

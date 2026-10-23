@@ -676,20 +676,18 @@ def test_the_table_list_is_the_schema_in_order():
     assert list(tables.TABLES) == made
 
 
-@pytest.mark.parametrize(("vi", "word"), [(1, "vi"), (0, "emacs")])
-def test_a_version_29_snapshot_held_the_keys_as_a_vi_bool(pymux, tmp_path, vi, word):
-    "The server before Lillecarl/pymux#749 had two kinds of keys, and a bool for which."
-    path = tmp_path / "v29.sqlite"
+def test_a_version_30_snapshot_held_status_fps(pymux, tmp_path):
+    "The server before it went had a status-fps option, saved on."
+    path = tmp_path / "v30.sqlite"
     snapshot.save(pymux, path)
     db = apsw.Connection(str(path))
-    db.execute("UPDATE options SET value = ? WHERE name IN ('status-keys', 'mode-keys')", (vi,))
-    db.execute("PRAGMA user_version = 29")
+    db.execute("INSERT OR REPLACE INTO options (name, value) VALUES ('status-fps', 1)")
+    db.execute("PRAGMA user_version = 30")
     db.close()
 
     loaded = Pymux()
     snapshot.load(loaded, path)
-    assert loaded.status_keys == word
-    assert loaded.mode_keys == word
+    assert not hasattr(loaded, "status_fps")
 
 
 @pytest.mark.parametrize("pty", [True, False], ids=["on a terminal", "on pipes"])

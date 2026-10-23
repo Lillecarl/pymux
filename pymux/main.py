@@ -1357,7 +1357,6 @@ class Pymux:
         "paint_screen": Keep.SAVED,
         "remain_on_exit": Keep.SAVED,
         "render_mode": Keep.SAVED,
-        "status_fps": Keep.SAVED,
         "status_interval": Keep.SAVED,
         "status_justify": Keep.SAVED,
         "status_keys": Keep.SAVED,
@@ -1437,10 +1436,6 @@ class Pymux:
         # On: Carl asked for sessions as groups, and with one session
         # it changes nothing. Lillecarl/pymux#531.
         self.chooser_session_lines = True
-        # Draw the frames a second this client gets before the clock.
-        # Off: the number moves, so it costs an idle client a frame each
-        # `status-interval`. Lillecarl/pymux#596.
-        self.status_fps = False
         self.enable_bell = True
 
         # Who may write the clipboard of the person at the keyboard.
