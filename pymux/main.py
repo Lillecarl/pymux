@@ -1553,7 +1553,9 @@ class Pymux:
         self.status_left_length = 20
         self.status_max_rows = 3
         self.status_right = " %H:%M %d-%b-%y "
-        self.status_right_length = 20
+        # tmux's 40. At 20 a rate and a byte count beside the clock ran
+        # past it and lost the clock off the end.
+        self.status_right_length = 40
         self.window_status_current_format = "#I:#W#F"
         self.window_status_format = "#I:#W#F"
         self.status_justify = Justify.LEFT

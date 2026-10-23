@@ -994,7 +994,7 @@ ALL_OPTIONS = {
     "lock-command": StringOption("lock_command", ["vlock"]),
     "status-right": StringOption("status_right"),
     "status-left": StringOption("status_left"),
-    "status-right-length": PositiveIntOption("status_right_length", [20]),
+    "status-right-length": PositiveIntOption("status_right_length", [40]),
     "status-left-length": PositiveIntOption("status_left_length", [20]),
     # The most rows the window list wraps to when it does not fit on
     # one. A window past the last row is cut. Lillecarl/pymux#723.
