@@ -10,7 +10,10 @@ from __future__ import annotations
 import re
 import time
 
+import pytest
 from prompt_toolkit.application.current import set_app
+from prompt_toolkit.data_structures import Size
+from session import over_connection
 from test_a_session_on_a_pyte_screen import attached, shows
 
 from pymux.main import Pymux
@@ -35,8 +38,24 @@ async def test_a_template_shows_the_frame_rates_where_it_says():
             connection.rate_window_frames.read(0, time.monotonic() - 2)
             assert re.fullmatch(r"\d+\.?\d* fps", right())
 
-            # Sixty window frames a second since.
+            # Sixty window frames a second since: a little under, as the
+            # rate divides by the seconds that passed.
             connection.window_frames_sent = 120
-            assert right().endswith(" / 60 fps wl")
+            assert re.search(r" / (5\d|60) fps wl$", right())
         for pane in list(pymux.panes_by_id.values()):
             pane.process.kill()
+
+
+#: A template that tells a phone from a desktop by its width.
+BY_WIDTH = "{% if client_width|int < 100 %}phone {{ client_width }}{% else %}desk {{ client_width }}{% endif %}"
+
+
+@pytest.mark.parametrize(("columns", "drawn"), [(342, "desk 342"), (60, "phone 60")])
+async def test_a_template_tells_clients_apart_by_width(columns, drawn):
+    "Over a real connection: the width is what the client's terminal reported."
+    async with over_connection() as session:
+        await session.pymux.create_window("sleep 60")
+        client, _ = await session.attach("only", Size(rows=40, columns=columns))
+        with set_app(client.app):
+            session.pymux.handle_command("set-option -g status-right '%s'" % BY_WIDTH)
+            assert client.layout_manager._get_status_right_tokens() == drawn
