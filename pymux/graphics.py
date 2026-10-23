@@ -477,8 +477,13 @@ class ClientGraphics:
         self._windows: dict[int, _ShownWindow] = {}
         #: Pane id -> where each window pane shows now: its put command.
         self._window_places: dict[int, str] = {}
-        #: The window panes whose update is being encoded.
-        self._window_pending: set[int] = set()
+        #: The window panes whose update is being encoded, and how often
+        #: each had left view when it started.
+        self._window_pending: dict[int, int] = {}
+        #: Pane id -> how often it left view. Leaving deletes this
+        #: client's image, so an update encoded before is for an image
+        #: that is gone. Lillecarl/pymux#753.
+        self._window_departures: dict[int, int] = {}
         #: The ones that drew again meanwhile, and the view to send it by.
         self._window_again: dict[int, WindowView] = {}
         #: Moves on `reset`, so an update encoded before it is dropped.
@@ -648,6 +653,7 @@ class ClientGraphics:
         for pane_id in gone:
             self._delete_image(self._windows.pop(pane_id).outer_id)
             self._encoders.pop(pane_id, None)
+            self._window_departures[pane_id] = self._window_departures.get(pane_id, 0) + 1
         if commands:
             self._write_raw(SAVE_CURSOR + "".join(commands) + RESTORE_CURSOR)
         if commands or gone:
@@ -670,9 +676,17 @@ class ClientGraphics:
         self._start_window_update(view)
 
     def _start_window_update(self, view: WindowView) -> None:
-        if self._spawn is None or view.pane_id in self._window_pending:
+        if self._spawn is None:
             return
-        self._window_pending.add(view.pane_id)
+        departures = self._window_departures.get(view.pane_id, 0)
+        started = self._window_pending.get(view.pane_id)
+        if started is not None:
+            # Back in view while an update for the image it left is out:
+            # that one is dropped, and a whole frame follows it.
+            if started != departures:
+                self._window_again[view.pane_id] = view
+            return
+        self._window_pending[view.pane_id] = departures
         outer_id = self._image_ids.id_of(view.pane_id, WINDOW_IMAGE)
         known = self._windows.get(view.pane_id)
         # Raw edits go on top of raw frames only: what a decoder made is
@@ -680,12 +694,18 @@ class ClientGraphics:
         since = known.serial if known is not None and not known.codec else None
         self._spawn(self._update_window(view, outer_id, since, self._window_generation))
 
+    def _still_current(self, pane_id: int, generation: int) -> bool:
+        "Is an update started at `generation` still for the image this client holds?"
+        return generation == self._window_generation and self._window_pending.get(
+            pane_id
+        ) == self._window_departures.get(pane_id, 0)
+
     async def _update_window(self, view: WindowView, outer_id: int, since: int | None, generation: int) -> None:
         "Await one window's update, and write it if the window still shows here."
         try:
             await self._write_window_update(view, outer_id, since, generation)
         finally:
-            self._window_pending.discard(view.pane_id)
+            self._window_pending.pop(view.pane_id, None)
             again = self._window_again.pop(view.pane_id, None)
             if again is not None and generation == self._window_generation:
                 self.refresh_window(again)
@@ -706,7 +726,7 @@ class ClientGraphics:
             logger.exception("Encoding a window pane's frame failed.")
             return
         put = self._window_places.get(view.pane_id)
-        if update is None or put is None or generation != self._window_generation:
+        if update is None or put is None or not self._still_current(view.pane_id, generation):
             return
         known = self._windows.get(view.pane_id)
         commands = [update] if update else []
@@ -738,7 +758,7 @@ class ClientGraphics:
             logger.exception("Reading a window pane's frame failed.")
             return
         put = self._window_places.get(view.pane_id)
-        if frame is None or put is None or generation != self._window_generation:
+        if frame is None or put is None or not self._still_current(view.pane_id, generation):
             return
         serial, whole, _width, _height, rects = frame
         known = self._windows.get(view.pane_id)
@@ -772,7 +792,7 @@ class ClientGraphics:
             logger.exception("Encoding a window pane's frame failed.")
             return
         put = self._window_places.get(view.pane_id)
-        if frame is None or put is None or generation != self._window_generation:
+        if frame is None or put is None or not self._still_current(view.pane_id, generation):
             return
         serial, keyframe, _width, _height, data, _rects = frame
         known = self._windows.get(view.pane_id)
