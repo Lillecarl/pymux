@@ -162,8 +162,8 @@ BELOW_MARK = "▾"
 #: hour and the minute in big numbers, and nothing else of it moves.
 CLOCK_FORMAT = "%H:%M"
 
-#: The room `status-fps` adds to `status-right-length`: " 120 fps".
-FPS_WIDTH = 8
+#: The room `status-fps` adds to `status-right-length`: " 120 fps · 120 wl".
+FPS_WIDTH = 17
 
 #: Before `status-right` while passthrough holds every key: a person
 #: who wonders why the prefix does nothing reads the answer by the
@@ -1543,9 +1543,12 @@ class LayoutManager:
     def _get_status_right_tokens(self) -> str:
         text = self._format_status(self.pymux.status_right)
         if self.pymux.status_fps and text:
-            fps = format_pymux_string(
-                self.pymux, "#{client_fps}", session=self.client_state.session, client=self.client_state
-            )
+            session, client = self.client_state.session, self.client_state
+            fps = format_pymux_string(self.pymux, "#{client_fps}", session=session, client=client)
+            window = format_pymux_string(self.pymux, "#{client_window_fps}", session=session, client=client)
+            if window:
+                # The window panes' own, which "fps" alone does not count.
+                fps += " · %s wl" % (window.removesuffix(" fps"),)
             text = " %s%s" % (fps, text)
         if self._in_passthrough():
             text = PASSTHROUGH_MARK + text

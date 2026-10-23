@@ -217,6 +217,8 @@ class ServerConnection:
         "rate_up": Keep.DROPPED,
         "frames_sent": Keep.DROPPED,
         "rate_frames": Keep.DROPPED,
+        "window_frames_sent": Keep.DROPPED,
+        "rate_window_frames": Keep.DROPPED,
     }
 
     def __init__(self, pymux: Pymux, pipe_connection, may_attach: bool = True) -> None:
@@ -274,6 +276,10 @@ class ServerConnection:
         #: reads off them. Lillecarl/pymux#596.
         self.frames_sent = 0
         self.rate_frames = Rate()
+        #: The window panes' frames, which go out apart from the frames
+        #: above, and what `#{client_window_fps}` reads off them.
+        self.window_frames_sent = 0
+        self.rate_window_frames = Rate()
 
         #: The scope the background work of this connection runs in.
         #: `serve()` opens it, so every task of a client ends when that
@@ -1449,6 +1455,7 @@ class ServerConnection:
         What the terminal was sent before goes first. Lillecarl/pymux#634.
         """
         self._flush_output()
+        self.window_frames_sent += 1
         if self.graphics.frame_room is not None:
             self._frames_out += 1
             if self._frames_shown.is_set():

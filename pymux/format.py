@@ -714,6 +714,20 @@ def _client_fps(context: FormatContext) -> str:
     return frames_per_second(connection.rate_frames.read(connection.frames_sent, time.monotonic()))
 
 
+def _client_window_fps(context: FormatContext) -> str:
+    """
+    The window panes' frames a second this client gets, the same way;
+    empty while none draws. They go out apart from the frames
+    `#{client_fps}` counts, which a video in a Wayland pane does not
+    move.
+    """
+    connection = _connection_of(context)
+    if connection is None:
+        return ""
+    rate = connection.rate_window_frames.read(connection.window_frames_sent, time.monotonic())
+    return frames_per_second(rate) if rate else ""
+
+
 def _client_readonly(context: FormatContext) -> str:
     "Whether this client only watches. tmux spells it the same way."
     client = context.client
@@ -811,6 +825,7 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "client_rate_down": _client_rate(lambda pipe: pipe.bytes_out, lambda connection: connection.rate_down),
     "client_rate_up": _client_rate(lambda pipe: pipe.bytes_in, lambda connection: connection.rate_up),
     "client_fps": _client_fps,
+    "client_window_fps": _client_window_fps,
     "client_session": lambda c: c.client.session.name if c.client else "",
     # Server.
     "socket_path": _socket_path,
