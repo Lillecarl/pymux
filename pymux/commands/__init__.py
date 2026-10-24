@@ -17,6 +17,7 @@ from collections.abc import Awaitable, Callable
 from importlib import import_module
 from typing import TYPE_CHECKING, Any, NoReturn, overload, override
 
+from pymux.actions import Kind, arguments_of, note, words_of
 from pymux.commands.aliases import ALIASES
 from pymux.enums import Woke
 from pymux.log import logger
@@ -419,6 +420,8 @@ def call_command_handler(command: str, pymux: Pymux, arguments: list[str]):
     if parser is None:
         pymux.show_message("Invalid command: %s" % (command,))
         pymux.add_command_error("pymux: invalid command: %s" % (command,))
+        if pymux.action_log:
+            note(pymux, Kind.COMMAND, command, words_of(command, arguments), "invalid command")
         return None
 
     try:
@@ -428,6 +431,8 @@ def call_command_handler(command: str, pymux: Pymux, arguments: list[str]):
         message = "%s (%s)" % (e.message, usage)
         pymux.show_message(message)
         pymux.add_command_error("pymux: %s" % (message,))
+        if pymux.action_log:
+            note(pymux, Kind.COMMAND, command, words_of(command, arguments), e.message)
         return None
 
     # **Every route to a command comes through here**: a key binding,
@@ -441,40 +446,48 @@ def call_command_handler(command: str, pymux: Pymux, arguments: list[str]):
     # a line somebody types, and a read-only client cannot open the
     # command bar: `command-prompt` is not a read-only command.
     if pymux.refusing_commands:
-        _failed(pymux, CommandException("the server is upgrading"))
+        _failed(pymux, command, namespace, CommandException("the server is upgrading"))
         return None
 
     client_state = this_client(pymux)
     if client_state is not None and client_state.read_only and not namespace._read_only:
-        _failed(pymux, CommandException("client is read-only"))
+        _failed(pymux, command, namespace, CommandException("client is read-only"))
         return None
 
     try:
         answer = namespace._handler(pymux, namespace)
     except CommandException as e:
-        _failed(pymux, e)
+        _failed(pymux, command, namespace, e)
         return None
 
     if answer is not None:
         # A coroutine: the command is not done, so neither the message
         # it may fail with nor the redraw it earns can happen yet.
-        return _finish(pymux, command, answer)
+        return _finish(pymux, command, namespace, answer)
 
-    pymux.invalidate(Woke.COMMAND_RAN % command)
+    _ran(pymux, command, namespace)
     return None
 
 
-async def _finish(pymux: Pymux, command: str, answer: Awaitable[Any]) -> None:
+async def _finish(pymux: Pymux, command: str, namespace: argparse.Namespace, answer: Awaitable[Any]) -> None:
     "Wait for a handler that answers later, and end it the same way."
     try:
         await answer
     except CommandException as e:
-        _failed(pymux, e)
+        _failed(pymux, command, namespace, e)
         return
 
+    _ran(pymux, command, namespace)
+
+
+def _ran(pymux: Pymux, command: str, namespace: argparse.Namespace) -> None:
     pymux.invalidate(Woke.COMMAND_RAN % command)
+    if pymux.action_log:
+        note(pymux, Kind.COMMAND, command, arguments_of(command, namespace))
 
 
-def _failed(pymux: Pymux, error: CommandException) -> None:
+def _failed(pymux: Pymux, command: str, namespace: argparse.Namespace, error: CommandException) -> None:
     pymux.show_message(error.message)
     pymux.add_command_error("pymux: %s" % (error.message,))
+    if pymux.action_log:
+        note(pymux, Kind.COMMAND, command, arguments_of(command, namespace), error.message)

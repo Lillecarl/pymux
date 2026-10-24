@@ -26,6 +26,7 @@ from ptkhx import Mode
 from ptkhx.bindings import HelixBindings
 from ptterm import Terminal
 
+from .actions import Origin, started_by
 from .commands import call_command_handler
 from .commands.utils import wrap_argument
 from .enums import COMMAND, PROMPT, Chooser, EditingKeys
@@ -238,7 +239,8 @@ class PymuxKeyBindings:
         def send_prefix_handler(event: E) -> None:
             "Send the prefix on to the pane."
             pymux.get_client_state().has_prefix = False
-            pymux.handle_command("send-prefix")
+            with started_by(Origin.KEY, PREFIX_TABLE, "prefix"):
+                pymux.handle_command("send-prefix")
 
         self._prefix_again_binding = send_prefix_handler
 
@@ -342,7 +344,8 @@ class PymuxKeyBindings:
 
             command = client_state.answer()
             if command:
-                pymux.handle_command(command)
+                with started_by(Origin.CONFIRM):
+                    pymux.handle_command(command)
 
         @kb.add("n", filter=waits_for_confirmation)
         @kb.add("N", filter=waits_for_confirmation)
@@ -665,7 +668,8 @@ class PymuxKeyBindings:
             client has gone changes nothing that anybody reads.
             """
             client_state = self.pymux.get_client_state()
-            self.pymux.spawn_command(call_command_handler(command, self.pymux, arguments))
+            with started_by(Origin.KEY, table, key_name):
+                self.pymux.spawn_command(call_command_handler(command, self.pymux, arguments))
             client_state.has_prefix = False
 
         # An `Any` binding is eager, or it loses to an eager one below

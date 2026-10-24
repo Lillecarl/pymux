@@ -32,6 +32,7 @@ from pyte.placeholders import PLACEHOLDER, blanked
 
 from pymux.commands.common import find_pane
 
+from .actions import Origin, started_by
 from .agentic import caller_context
 from .audio import AudioLink
 from .colors import ColorDetection, DefaultColors
@@ -1351,9 +1352,10 @@ class ServerConnection:
                 # who typed `pymux wait-for done` waits for it, while
                 # every other client of this server keeps running.
                 # Lillecarl/pymux#87.
-                answer = handle_command(pymux, packet[Field.DATA])
-                if answer is not None:
-                    await answer
+                with started_by(Origin.SOCKET):
+                    answer = handle_command(pymux, packet[Field.DATA])
+                    if answer is not None:
+                        await answer
             finally:
                 # Send the output of the command back to the client, and
                 # close the connection.

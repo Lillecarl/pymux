@@ -967,6 +967,14 @@ ALL_OPTIONS = {
     # finished one just forgotten, and a waited one never. Zero keeps
     # every job until the cap forgets the finished ones.
     "job-ttl": PositiveIntOption("job_ttl", [0, 600, 3600, 86400]),
+    # Write what a person does to `actions.db` under the state
+    # directory: each command, what started it -- a key, the command
+    # bar, a click, a hook -- and the clicks that run none. Never what a
+    # pane shows or what is typed into one. Off, because nobody expects
+    # a multiplexer to keep that. `pymux/actions.py` says the rest.
+    "action-log": OnOffOption("action_log"),
+    # The most rows `actions.db` keeps; the oldest go first. Zero keeps all.
+    "action-log-limit": PositiveIntOption("action_log_limit", [0, 100_000, 500_000, 1_000_000]),
     "mouse": OnOffOption("enable_mouse_support"),
     "prefix": KeyPrefixOption(),
     "remain-on-exit": OnOffOption("remain_on_exit"),

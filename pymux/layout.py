@@ -59,6 +59,7 @@ from prompt_toolkit.widgets import Dialog, SearchToolbar, TextArea
 
 from pymux import arrangement
 
+from .actions import Kind, Origin, note, started_by
 from .cut_shade import Hidden, hex_of, hidden_of, lifts, shade
 from .divided import Divided
 from .enums import Chooser, EditingKeys, Woke
@@ -1130,14 +1131,16 @@ class LayoutManager:
     def _run_menu_entry(self, entry) -> None:
         _key, _name, command = entry
         self.close_menu()
-        self.pymux.handle_command(command)
+        with started_by(Origin.MENU):
+            self.pymux.handle_command(command)
 
     def _create_menu_click_handler(self, entry) -> Callable[[MouseEvent], NotImplementedOrNone]:
         "Return a mouse handler that runs the entry when clicking."
 
         def handler(mouse_event: MouseEvent) -> NotImplementedOrNone:
             if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
-                self._run_menu_entry(entry)
+                with started_by(Origin.MOUSE):
+                    self._run_menu_entry(entry)
                 return None
             return NotImplemented  # Event not handled here.
 
@@ -1252,17 +1255,20 @@ class LayoutManager:
 
     def choose_pointed(self) -> None:
         "Take the row the chooser points at, by the kind that shows."
-        match self.client_state.chooser:
-            case Chooser.OPTIONS:
-                self.choose_pointed_option()
-            case Chooser.BUFFER:
-                self.choose_pointed_buffer()
-            case Chooser.NOTIFICATIONS:
-                self.choose_pointed_notification()
-            case Chooser.JOB:
-                self.choose_pointed_job()
-            case _:
-                self.choose_pointed_window()
+        chooser = self.client_state.chooser or Chooser.WINDOW
+        with started_by(Origin.CHOOSER):
+            note(self.pymux, Kind.CHOICE, chooser.replace("_", "-"))
+            match chooser:
+                case Chooser.OPTIONS:
+                    self.choose_pointed_option()
+                case Chooser.BUFFER:
+                    self.choose_pointed_buffer()
+                case Chooser.NOTIFICATIONS:
+                    self.choose_pointed_notification()
+                case Chooser.JOB:
+                    self.choose_pointed_job()
+                case _:
+                    self.choose_pointed_window()
 
     def _session_name_of(self, window) -> str:
         "The name of the session that holds a window, or nothing."
@@ -1426,6 +1432,8 @@ class LayoutManager:
             if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
                 self.client_state.session.arrangement.set_active_window(window)
                 self.pymux.invalidate(Woke.CLICK_CHOSE_A_WINDOW)
+                with started_by(Origin.MOUSE):
+                    note(self.pymux, Kind.CLICK, "select-window")
                 return None
             return NotImplemented  # Event not handled here.
 
@@ -2230,14 +2238,15 @@ class LayoutManager:
 
         def handler(mouse_event: MouseEvent) -> NotImplementedOrNone:
             if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
-                if self.client_state.chooser is Chooser.WINDOW:
-                    # Through `point_at`, so the click switches to the
-                    # window before taking it -- the same path the keys
-                    # take. Lillecarl/pymux#327.
-                    self.point_at(row)
-                else:
-                    self.client_state.choose_window_index = row
-                self.choose_pointed()
+                with started_by(Origin.MOUSE):
+                    if self.client_state.chooser is Chooser.WINDOW:
+                        # Through `point_at`, so the click switches to the
+                        # window before taking it -- the same path the keys
+                        # take. Lillecarl/pymux#327.
+                        self.point_at(row)
+                    else:
+                        self.client_state.choose_window_index = row
+                    self.choose_pointed()
                 return None
             return NotImplemented
 

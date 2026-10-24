@@ -47,6 +47,19 @@ The build switch: the root `default.nix` passes `pipewire` and `wireplumber` to 
 | `wayland-scale` | window | `auto` | A window draws at the density of the client's cells. |
 | `window-scroll` | client | `smooth` | One scroll event moves one cell of pixels, which follows a trackpad. `notch` is a mouse wheel's step. The terminal does not say which device it has. |
 
+## A log of what you do
+
+| option | scope | default | why |
+| --- | --- | --- | --- |
+| `action-log` | session | off | On, every command goes to `$XDG_STATE_HOME/pymux/actions.db`, with what started it (a key and its table, the command bar, a menu, a chooser, a click, a hook, the config file, the socket), the client, session, window and pane, the program in that pane, and why it failed if it did. So do clicks that select a pane or a window, and rows taken in a chooser. The text of `send-keys` and the value of `set-buffer` are only their length; nothing a pane shows is kept. It is for reading back, by a person or a model, to find the bindings and features worth learning. Off, because nobody expects a multiplexer to write down what they do. |
+| `action-log-limit` | session | `500000` | The most rows the file keeps, oldest out first: about a year of a busy day, near 100 MB. Zero keeps all. The servers of every socket write the one file. |
+
+Ask it with `sqlite3`, for example the commands you run most and how:
+
+    sqlite3 ~/.local/state/pymux/actions.db \
+      "SELECT name, origin, key_table, key, count(*) AS n FROM actions
+       GROUP BY 1, 2, 3, 4 ORDER BY n DESC LIMIT 30"
+
 ## The person's terminal
 
 | option | scope | default | why |

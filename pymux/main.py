@@ -56,6 +56,7 @@ from pyte.osc import CLEAR_SCROLLBACK, Osc
 from pyte.page import RowMark
 
 from . import hacks_and_lies, introspect, kernels, log
+from .actions import ActionLog, Kind, Origin, awaited_as, note, started_by
 from .agentic import CallerContext
 from .arrangement import Arrangement, Pane, Window
 from .audio import AudioServer
@@ -878,8 +879,8 @@ class ClientState:
         # pane is focused again before executing the command handers.
         self.pymux.leave_command_mode(append_to_history=True)
 
-        # Execute command.
-        self.pymux.handle_command(text)
+        with started_by(Origin.PROMPT):
+            self.pymux.handle_command(text)
         return False
 
     def _handle_prompt_command(self, buffer) -> bool:
@@ -891,7 +892,8 @@ class ClientState:
         self.pymux.leave_command_mode(append_to_history=True)
         if prompt_command is None:
             return False
-        self.pymux.handle_command(prompt_command.replace("%%", text))
+        with started_by(Origin.PROMPT):
+            self.pymux.handle_command(prompt_command.replace("%%", text))
         return False
 
     def _accept_chooser(self, buffer) -> bool:
@@ -1339,6 +1341,11 @@ class Pymux:
         "forward_mode": Keep.SAVED,
         "history_limit": Keep.SAVED,
         "job_ttl": Keep.SAVED,
+        "action_log": Keep.SAVED,
+        "action_log_limit": Keep.SAVED,
+        # Its writer starts again in `running`; what waited was written
+        # as the old scope ended.
+        "actions": Keep.REBUILT,
         "lock_command": Keep.SAVED,
         "mode_keys": Keep.SAVED,
         "notify_shim": Keep.SAVED,
@@ -1533,6 +1540,13 @@ class Pymux:
         # job that hangs silent is ended and forgotten. Zero keeps
         # every job until the cap forgets the finished ones.
         self.job_ttl = 3600
+        # Whether what a person does goes to `actions.db`, and how many
+        # rows it keeps; zero keeps all. Off: nobody expects a
+        # multiplexer to write down what they do. Half a million rows
+        # is a year of a busy day's two thousand, near 100 MB.
+        self.action_log = False
+        self.action_log_limit = 500_000
+        self.actions = ActionLog()
         # What a pane is told it is. The entry of pyte describes what a
         # pane really does; a build without one falls back to xterm.
         #
@@ -2250,6 +2264,7 @@ class Pymux:
             self.error_notice.install()
             tasks.start_soon(self._auto_refresh)
             tasks.start_soon(self._sweep_jobs)
+            tasks.start_soon(self.actions.keep, lambda: self.action_log_limit)
             tasks.start_soon(self.wayland.keep)
             tasks.start_soon(self.audio.keep)
             if self.listener is not None:
@@ -2422,11 +2437,13 @@ class Pymux:
         Run the default commands, and answer with the configuration file's
         reading to await, or None when there is no file.
         """
-        for cmd in STARTUP_COMMANDS.splitlines():
-            self.handle_command(cmd)
+        with started_by(Origin.CONFIG):
+            for cmd in STARTUP_COMMANDS.splitlines():
+                self.handle_command(cmd)
 
-        if self.source_file:
-            return call_command_handler("source-file", self, [self.source_file])
+            if self.source_file:
+                answer = call_command_handler("source-file", self, [self.source_file])
+                return None if answer is None else awaited_as(Origin.CONFIG, answer)
         return None
 
     def get_title(self):
@@ -2881,6 +2898,8 @@ class Pymux:
                 return
             _, window, _ = found
             window.active_pane = pane
+            with started_by(Origin.MOUSE):
+                note(self, Kind.CLICK, "select-pane")
 
         # What a click selects. It is wired here and not in `Pane`,
         # for the reason `on_content_changed` gives above: a pane is
@@ -2968,6 +2987,8 @@ class Pymux:
             found = self.window_of_pane(pane.pane_id)
             if found is not None:
                 found[1].active_pane = pane
+                with started_by(Origin.MOUSE):
+                    note(self, Kind.CLICK, "select-pane")
 
         widget.on_mouse_focus = focus_pane_on_click
         self._register_pane(pane)
@@ -4627,8 +4648,9 @@ exec pymux notify -u "$urgency" -- "$@"
             return
         self._hooks_running.add(name)
         try:
-            for command in commands:
-                self.handle_command(command)
+            with started_by(Origin.HOOK):
+                for command in commands:
+                    self.handle_command(command)
         finally:
             self._hooks_running.discard(name)
 
