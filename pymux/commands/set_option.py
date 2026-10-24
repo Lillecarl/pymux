@@ -46,8 +46,9 @@ def set_option(
     Set an option, of the session, of a window or of a client.
 
     -g: for a window option, say what every new window starts with.
-        For a session option it changes nothing, because pymux has one
-        session and every session option is already global. `set -g`
+        For a session option it changes nothing: the server holds every
+        session option once, for all its sessions, so each one is
+        already global. `set -g`
         is the most common line in a tmux configuration, and `pymux -V`
         says pymux speaks tmux 3.4, so it has to be a line pymux takes.
 
@@ -75,9 +76,10 @@ def set_option(
         # option, because that file is read before there is a
         # window. Lillecarl/pymux#199.
         #
-        # It means nothing for a session option: pymux has one
-        # session, so every session option is already global. That
-        # is why the flag is read here and not by the option.
+        # It means nothing for a session option: the server holds
+        # one value for all its sessions, so every session option is
+        # already global. That is why the flag is read here and not
+        # by the option.
         if scope is Scope.WINDOW and args.g:
             option.set_default(pymux, value)
         else:
