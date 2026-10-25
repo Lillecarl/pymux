@@ -30,7 +30,7 @@ from .connection import (
     ServerNotRunning,
     quote,
 )
-from .objects import Pane, Server, Session, Window
+from .objects import Job, Pane, Server, Session, Window
 from .sockets import socket_paths
 from .streams import PaneStream, StreamRefused
 
@@ -45,6 +45,7 @@ __all__ = [
     "CommandError",
     "CommandResult",
     "Connection",
+    "Job",
     "Pane",
     "PaneStream",
     "Server",

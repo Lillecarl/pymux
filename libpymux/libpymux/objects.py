@@ -28,12 +28,12 @@ import anyio
 
 from . import operations
 from .connection import CommandResult, Connection, ServerNotRunning
-from .operations import Ask, Operation, Row, drive
+from .operations import Ask, JobRecord, Operation, Row, drive
 from .records import PaneFields, SessionFields, WindowFields
 from .sockets import socket_paths
 from .streams import PaneStream
 
-__all__ = ["Pane", "Server", "Session", "Window"]
+__all__ = ["Job", "Pane", "Server", "Session", "Window"]
 
 
 class Pane(PaneFields):
@@ -282,6 +282,75 @@ class Session(SessionFields):
         return self
 
 
+class Job:
+    """
+    One command the server runs without a pane, or remembers having run.
+
+    `record` is the job as it was last read: `refresh()` reads it again,
+    and `tail()` reads it again when the tail stops.
+    """
+
+    def __init__(self, server: Server, record: JobRecord) -> None:
+        self.server = server
+        self.record = record
+
+    def __repr__(self) -> str:
+        return "Job(%d, %s, command=%r)" % (self.id, self.status, self.command)
+
+    @property
+    def id(self) -> int:
+        return self.record.id
+
+    @property
+    def command(self) -> str:
+        return self.record.command
+
+    @property
+    def status(self) -> str:
+        'What it was last read as: "running" or "done".'
+        return self.record.status
+
+    @property
+    def running(self) -> bool:
+        return self.record.running
+
+    @property
+    def returncode(self) -> int | None:
+        return self.record.returncode
+
+    @property
+    def tags(self) -> dict[str, str | None]:
+        return self.record.tags
+
+    async def tail(self, timeout: float, lines: int = 10) -> str:
+        """
+        Replay the last `lines` of stdout, follow both streams until the
+        job ends or `timeout` seconds pass, and answer what was read.
+
+        `running` and `returncode` then say which of the two happened. A
+        timeout leaves the job running, and tailing again picks up where
+        this stopped; `lines=0` follows without the replay.
+        """
+        tail = await self.server.run(operations.tail_job(self.id, lines, timeout))
+        self.record = tail.job
+        return tail.text
+
+    async def output(self, stderr: bool = False) -> str:
+        "The kept tail of stdout, or of stderr, without waiting."
+        return await self.server.run(operations.job_output(self.id, stderr))
+
+    async def kill(self) -> None:
+        "Send the job SIGTERM. A job that already ended raises `CommandError`."
+        await self.server.run(operations.kill_job(self.id))
+
+    async def refresh(self) -> Job:
+        record = await self.server.run(operations.job(self.id))
+        if record is None:
+            raise LookupError("the job %d is gone" % (self.id,))
+        self.record = record
+        return self
+
+
 class Server:
     """
     A pymux server, addressed by the path of its socket.
@@ -431,6 +500,37 @@ class Server:
     async def has_session(self, name: str = "") -> bool:
         "True when the server answers to this session name."
         return await self.run(operations.has_session(name))
+
+    # -- jobs ----------------------------------------------------------
+
+    async def run_job(
+        self,
+        command: str,
+        tags: Mapping[str, str | None] | None = None,
+        directory: str | None = None,
+        env: Mapping[str, str] | None = None,
+        pty: bool = False,
+    ) -> Job:
+        """
+        Start `command` through the shell as a job, and answer it at once.
+
+        It runs in `directory`, or where this server's caller stands, with
+        the caller's environment and `env` over it. A tag with the value
+        `None` is a bare key. The caller's agent session stamps the job
+        as the tag `session`, so `jobs({"session": ...})` finds it.
+        `pty` gives it a terminal instead of pipes.
+        """
+        record = await self.run(operations.run_job(command, tags or {}, directory, env or {}, pty))
+        return Job(self, record)
+
+    async def jobs(self, tags: Mapping[str, str | None] | None = None) -> builtins.list[Job]:
+        "Every job the server remembers, oldest first, or those carrying every tag. A bare key takes any value."
+        return [Job(self, record) for record in await self.run(operations.jobs(tags))]
+
+    async def job(self, job_id: int) -> Job | None:
+        "The job with this id, or None when the server forgot it."
+        record = await self.run(operations.job(job_id))
+        return None if record is None else Job(self, record)
 
     async def kill(self) -> None:
         "End the server and everything in it."

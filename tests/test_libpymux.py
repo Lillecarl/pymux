@@ -18,6 +18,7 @@ import pytest
 from libpymux import (
     CommandError,
     Connection,
+    Job,
     Pane,
     Server,
     ServerNotRunning,
@@ -26,7 +27,7 @@ from libpymux import (
     quote,
 )
 from libpymux.connection import CommandResult, Reply, command_packet
-from libpymux.operations import PANE_FIELDS, SEPARATOR, format_string
+from libpymux.operations import PANE_FIELDS, SEPARATOR, JobRecord, format_string
 from libpymux.protocol import Framer
 
 # ----------------------------------------------------------------------
@@ -447,6 +448,91 @@ async def test_killing_the_server_does_not_raise_on_its_exit_code(fake):
     server = fake([("", "", 1)])
     await Server(server.path).kill()
     assert server.asked == ["kill-server"]
+
+
+# ----------------------------------------------------------------------
+# Jobs.
+
+
+def job_rows(*jobs):
+    "What `sql --json` answers for the jobs table."
+    defaults = {
+        "command": "true",
+        "directory": None,
+        "status": "done",
+        "returncode": 0,
+        "error": None,
+        "started": 1.0,
+        "finished": 2.0,
+        "pty": 0,
+    }
+    return (json.dumps({"columns": [], "rows": [{**defaults, **job} for job in jobs], "truncated": False}), "", 0)
+
+
+def tag_rows(*tags):
+    rows = [{"job_id": job_id, "key": key, "value": value} for job_id, key, value in tags]
+    return (json.dumps({"columns": [], "rows": rows, "truncated": False}), "", 0)
+
+
+async def test_running_a_job_names_everything_it_was_given(fake):
+    server = fake([("7\n", "", 0), job_rows({"id": 7, "status": "running"}), tag_rows((7, "deploy", None))])
+    job = await Server(server.path).run_job(
+        "make; make install",
+        tags={"deploy": None, "branch": "main"},
+        directory="/src",
+        env={"CC": "clang"},
+        pty=True,
+    )
+    assert server.asked[0] == (
+        "run --tag deploy --tag branch=main -d /src --env CC=clang --pty -- 'make; make install'"
+    )
+    assert (job.id, job.running, job.tags) == (7, True, {"deploy": None})
+
+
+async def test_jobs_are_read_with_their_tags_and_filtered_by_them(fake):
+    server = fake(
+        [
+            job_rows({"id": 1}, {"id": 2, "pty": 1}, {"id": 3}),
+            tag_rows((1, "deploy", None), (2, "deploy", "prod"), (2, "session", "agent-1"), (3, "other", None)),
+        ]
+    )
+    jobs = await Server(server.path).jobs({"deploy": None})
+    assert [job.id for job in jobs] == [1, 2]
+    assert jobs[1].record.pty
+    assert jobs[1].tags == {"deploy": "prod", "session": "agent-1"}
+    assert server.asked[0].startswith("sql --json -n 0 ")
+
+
+async def test_a_tag_with_a_value_matches_that_value_alone(fake):
+    server = fake([job_rows({"id": 1}, {"id": 2}), tag_rows((1, "deploy", "prod"), (2, "deploy", "test"))])
+    assert [job.id for job in await Server(server.path).jobs({"deploy": "test"})] == [2]
+
+
+async def test_a_job_that_exits_124_is_not_a_job_still_running(fake):
+    "`pymux tail` answers 124 for both; the record read after says which."
+    server = fake([("out\n", "", 124), job_rows({"id": 5, "returncode": 124}), tag_rows()])
+    job = Job(Server(server.path), _record(5, "running"))
+    assert await job.tail(timeout=1, lines=0) == "out\n"
+    assert not job.running
+    assert job.returncode == 124
+    assert server.asked[0] == "tail 5 --lines 0 --timeout 1"
+
+
+async def test_a_tail_past_its_timeout_leaves_the_job_running(fake):
+    server = fake([("", "", 124), job_rows({"id": 5, "status": "running", "returncode": None}), tag_rows()])
+    job = Job(Server(server.path), _record(5, "running"))
+    await job.tail(timeout=1)
+    assert job.running
+
+
+async def test_tailing_a_job_the_server_forgot_says_so(fake):
+    server = fake([("", "no job 5\n", 4), job_rows(), tag_rows()])
+    with pytest.raises(LookupError):
+        await Job(Server(server.path), _record(5, "running")).tail(timeout=1)
+
+
+def _record(job_id, status):
+    return JobRecord(job_id, "true", None, status, None, None, 1.0, None, False, {})
 
 
 # ----------------------------------------------------------------------

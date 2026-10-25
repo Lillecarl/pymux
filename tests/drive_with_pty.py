@@ -2770,6 +2770,22 @@ def check_libpymux(tmp):
         await anyio.to_thread.run_sync(terminal.drain, 2.0)
         assert len(await server.panes()) == 1
 
+        # A job, from a caller that says who it is and where it stands.
+        caller = Server(
+            server.socket_path,
+            environment={**os.environ, "PYMUX_AGENTIC_ID": "libpymux-check"},
+            cwd=str(tmp),
+        )
+        job = await caller.run_job("echo hi; exit 3", tags={"check": "libpymux"})
+        assert job.record.directory == str(tmp), job.record
+        assert job.tags.get("session") == "libpymux-check", job.tags
+        text = await job.tail(timeout=30)
+        assert "hi" in text, text
+        assert not job.running and job.returncode == 3, job.record
+        assert "hi" in await job.output()
+        assert [one.id for one in await caller.jobs({"check": "libpymux"})] == [job.id]
+        assert (await caller.job(job.id)).returncode == 3
+
     terminal = Terminal(tmp, "kitty")
     try:
         terminal.wait_for_queries()

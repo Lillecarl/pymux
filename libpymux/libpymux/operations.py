@@ -13,8 +13,10 @@ from.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Generator, Sequence
-from typing import NamedTuple
+import json
+from collections.abc import Awaitable, Callable, Generator, Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any, NamedTuple
 
 from .connection import CommandResult
 
@@ -25,8 +27,10 @@ __all__ = [
     "SESSION_FIELDS",
     "WINDOW_FIELDS",
     "Ask",
+    "JobRecord",
     "Operation",
     "Row",
+    "Tail",
     "drive",
     "format_string",
     "rows",
@@ -130,7 +134,7 @@ def as_int(value: str, fallback: int = 0) -> int:
         return fallback
 
 
-def first(found: list[Row]) -> Row | None:
+def first[T](found: list[T]) -> T | None:
     return found[0] if found else None
 
 
@@ -361,3 +365,163 @@ def new_session(name: str, attach: bool) -> Operation[Row | None]:
 
 def kill_server() -> Operation[None]:
     yield Ask(["kill-server"], check=False)
+
+
+# -- jobs ----------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class JobRecord:
+    """
+    One job, as the server's `jobs` and `job_tags` tables gave it.
+
+    A tag with no value is `None`, so `key` and `key=` stay two tags,
+    as they are on the command line.
+    """
+
+    id: int
+    command: str
+    directory: str | None
+    #: "running" or "done".
+    status: str
+    returncode: int | None
+    #: Why the job never started, when it did not.
+    error: str | None
+    started: float
+    finished: float | None
+    pty: bool
+    tags: dict[str, str | None]
+
+    @property
+    def running(self) -> bool:
+        return self.status == "running"
+
+
+class Tail(NamedTuple):
+    "What a tail read, and the job as it stood when the tail stopped."
+
+    text: str
+    job: JobRecord
+
+
+_JOB_COLUMNS = "id, command, directory, status, returncode, error, started, finished, pty"
+
+
+def _sql(query: str, **params: object) -> Operation[list[dict[str, Any]]]:
+    """
+    The rows of one read-only question, every one of them.
+
+    A row is the JSON `sql --json` writes: a column name to a value of
+    whatever type the column holds.
+    """
+    arguments = ["sql", "--json", "-n", "0"]
+    for name, value in params.items():
+        arguments += ["--param", "%s=%s" % (name, value)]
+    return json.loads((yield Ask([*arguments, query])).stdout)["rows"]
+
+
+def _job_records(found: list[dict[str, Any]], tagged: list[dict[str, Any]]) -> list[JobRecord]:
+    tags: dict[int, dict[str, str | None]] = {}
+    for row in tagged:
+        tags.setdefault(row["job_id"], {})[row["key"]] = row["value"]
+    return [
+        JobRecord(
+            id=row["id"],
+            command=row["command"],
+            directory=row["directory"],
+            status=row["status"],
+            returncode=row["returncode"],
+            error=row["error"],
+            started=row["started"],
+            finished=row["finished"],
+            pty=bool(row["pty"]),
+            tags=tags.get(row["id"], {}),
+        )
+        for row in found
+    ]
+
+
+def carries(record: JobRecord, wanted: Mapping[str, str | None]) -> bool:
+    "Whether the job carries every tag: a bare key takes any value, as `pymux tail --tag` reads one."
+    for key, value in wanted.items():
+        if key not in record.tags:
+            return False
+        if value is not None and record.tags[key] != value:
+            return False
+    return True
+
+
+def jobs(tags: Mapping[str, str | None] | None = None) -> Operation[list[JobRecord]]:
+    "Every job the server remembers, oldest first, or those carrying every tag."
+    found = yield from _sql("SELECT %s FROM jobs ORDER BY id" % (_JOB_COLUMNS,))
+    tagged = yield from _sql("SELECT job_id, key, value FROM job_tags")
+    return [record for record in _job_records(found, tagged) if carries(record, tags or {})]
+
+
+def job(job_id: int) -> Operation[JobRecord | None]:
+    found = yield from _sql("SELECT %s FROM jobs WHERE id = :id" % (_JOB_COLUMNS,), id=job_id)
+    tagged = yield from _sql("SELECT job_id, key, value FROM job_tags WHERE job_id = :id", id=job_id)
+    return first(_job_records(found, tagged))
+
+
+def _tag_word(key: str, value: str | None) -> str:
+    return key if value is None else "%s=%s" % (key, value)
+
+
+def run_job(
+    command: str,
+    tags: Mapping[str, str | None],
+    directory: str | None,
+    env: Mapping[str, str],
+    pty: bool,
+) -> Operation[JobRecord]:
+    """
+    Start `command` through the shell, as a job, and answer it.
+
+    The command goes as one word, which `run` reads as a whole command
+    line, so `echo a; echo b` stays two commands of one shell.
+    """
+    arguments = ["run"]
+    for key, value in tags.items():
+        arguments += ["--tag", _tag_word(key, value)]
+    if directory is not None:
+        arguments += ["-d", directory]
+    for key, value in env.items():
+        arguments += ["--env", "%s=%s" % (key, value)]
+    if pty:
+        arguments.append("--pty")
+    job_id = int((yield Ask([*arguments, "--", command])).stdout.strip())
+    record = yield from job(job_id)
+    if record is None:
+        raise LookupError("job %d is gone as soon as it started" % (job_id,))
+    return record
+
+
+def tail_job(job_id: int, lines: int, timeout: float) -> Operation[Tail]:
+    """
+    Replay the last `lines` of stdout and follow both streams for up to
+    `timeout` seconds, or until the job ends.
+
+    **The job is read back after the tail, and the tail's exit code is
+    not trusted.** `pymux tail` answers 124 for a job that still runs
+    and 4 for no job, and a job may exit with 124 or 4 itself, so the
+    code alone cannot say which happened.
+    """
+    result = yield Ask(["tail", str(job_id), "--lines", str(lines), "--timeout", str(timeout)], check=False)
+    record = yield from job(job_id)
+    if record is None:
+        raise LookupError("no job %d: %s" % (job_id, result.stderr.strip() or "the server forgot it"))
+    return Tail(result.stdout, record)
+
+
+def job_output(job_id: int, stderr: bool) -> Operation[str]:
+    "The kept tail of one stream, with a note on how much fell off past the cap."
+    arguments = ["show-job"]
+    if stderr:
+        arguments.append("-e")
+    return (yield Ask([*arguments, str(job_id)])).stdout
+
+
+def kill_job(job_id: int) -> Operation[None]:
+    "Send the job SIGTERM. A job that already ended raises `CommandError`."
+    yield Ask(["kill-job", str(job_id)])
