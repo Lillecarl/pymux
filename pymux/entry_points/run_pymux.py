@@ -101,6 +101,8 @@ class Mode(StrEnum):
     #: Send files to the person, from a pane. Not `send`, which is
     #: tmux's name for `send-keys`. Lillecarl/pymux#743.
     SEND_FILE = "send-file"
+    #: Show images in the terminal it runs in. Lillecarl/pymux#764.
+    IMGCAT = "imgcat"
     #: An upgrade's check of the new build, and its new server.
     #: `pymux/upgrade.py`.
     CHECK_SNAPSHOT = "check-snapshot"
@@ -379,6 +381,10 @@ def parse_arguments(
             # server as a command.
             a.send_paths, rest = rest, []
 
+        if mode is Mode.IMGCAT:
+            # Its files and flags, which `pymux.imgcat` reads.
+            a.imgcat_words, rest = rest, []
+
         if mode in (Mode.CHECK_SNAPSHOT, Mode.RESUME_SERVER):
             # What an upgrading server runs, never a person: the words
             # are `pymux.upgrade`'s to read.
@@ -435,6 +441,7 @@ def _completion_parser() -> argparse.ArgumentParser:
         Mode.RENICE,
         Mode.WEB,
         Mode.SEND_FILE,
+        Mode.IMGCAT,
     ):
         mode_parser = modes.add_parser(
             str(mode),
@@ -447,6 +454,9 @@ def _completion_parser() -> argparse.ArgumentParser:
             mode_parser.add_argument("niceness", nargs="?", help="From -20 to 19; -10 by default.")
         if mode is Mode.SEND_FILE:
             mode_parser.add_argument("files", nargs="+", help="The files to send to the person.")
+        if mode is Mode.IMGCAT:
+            mode_parser.add_argument("-w", "--width", type=int, help="The columns an image covers.")
+            mode_parser.add_argument("files", nargs="+", help="The images to show; - reads standard input.")
     add_commands_to(modes)
     for action in modes.choices["receive"]._actions:
         if action.dest == "paths":
@@ -606,6 +616,12 @@ def run() -> None:
             from pymux.downloads import send_files
 
             sys.exit(send_files(a.send_paths, sys.stdout.buffer, sys.stderr))
+
+        case Mode.IMGCAT:
+            # Written to this terminal too, as the kitty graphics protocol.
+            from pymux.imgcat import imgcat
+
+            sys.exit(imgcat(a.imgcat_words, sys.stdin.buffer, sys.stdout.buffer, sys.stderr))
 
         case Mode.LIST_SESSIONS | Mode.LS:
             if socket_name:
