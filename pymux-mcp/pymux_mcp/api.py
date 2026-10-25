@@ -301,6 +301,26 @@ async def job_output(server: Server, job: JobId, stderr: bool = False) -> str:
     return await (await _job(server, job)).output(stderr=stderr)
 
 
+@operation("job.view")
+async def view_job(
+    server: Server,
+    job: JobId,
+    session: Annotated[str | None, Field(description="The session's name; the oldest session when left out.")] = None,
+    name: Annotated[str | None, Field(description='The window\'s name; "job <id>" when left out.')] = None,
+) -> Json:
+    """
+    Show a job to a person: a new window, in front, that follows the job.
+
+    The window is read-only and outlives the job; closing it leaves the
+    job running. Answers the window with its one pane.
+    """
+    found = await _job(server, job)
+    window = await new_window(server, session, name or "job %d" % (job,), select=True)
+    (pane,) = window["panes"]
+    await found.view(Pane(server, {"pane_id": pane["id"]}), kill=True)
+    return {**window, "panes": [pane_json(pane) for pane in await Window(server, {"window_id": window["id"]}).panes()]}
+
+
 @operation("job.kill")
 async def kill_job(server: Server, job: JobId) -> None:
     "Send a running job SIGTERM."

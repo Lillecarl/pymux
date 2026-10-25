@@ -2857,6 +2857,13 @@ def check_pymux_mcp(tmp):
             rows = json.loads(await ask("sql", query=query, params={"id": ran["job"]["id"]}))
             assert rows == [{"id": ran["job"]["id"]}], rows
 
+            shown = json.loads(await ask("job.view", job=ran["job"]["id"]))
+            assert shown["name"] == "job %d" % ran["job"]["id"] and shown["active"], shown
+            (viewer,) = shown["panes"]
+            with anyio.fail_after(10):
+                while "from-a-job" not in await ask("pane.capture", pane=viewer["id"]):
+                    await anyio.sleep(0.1)
+
             raw = json.loads(await ask("command", command="display-message -p '#{session_name}'"))
             assert raw["exit_code"] == 0 and raw["stdout"].strip() == terminal.session_name, raw
 

@@ -531,6 +531,14 @@ async def test_tailing_a_job_the_server_forgot_says_so(fake):
         await Job(Server(server.path), _record(5, "running")).tail(timeout=1)
 
 
+@pytest.mark.parametrize(("kill", "asked"), [(False, "view-job -t %3 5"), (True, "view-job -k -t %3 5")])
+async def test_viewing_a_job_replaces_the_pane_it_names(fake, kill, asked):
+    server = fake([("", "", 0)])
+    connected = Server(server.path)
+    await Job(connected, _record(5, "running")).view(Pane(connected, {"pane_id": "%3"}), kill=kill)
+    assert server.asked == [asked]
+
+
 def _record(job_id, status):
     return JobRecord(job_id, "true", None, status, None, None, 1.0, None, False, {})
 

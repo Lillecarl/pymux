@@ -27,9 +27,17 @@ async def _nowhere(tmp_path):
 
 
 def test_every_operation_has_a_summary_and_a_schema():
-    assert {"tree", "sql", "command", "pane.capture", "pane.send", "pane.wait", "job.run", "job.tail"} <= set(
-        OPERATIONS
-    )
+    assert {
+        "tree",
+        "sql",
+        "command",
+        "pane.capture",
+        "pane.send",
+        "pane.wait",
+        "job.run",
+        "job.tail",
+        "job.view",
+    } <= set(OPERATIONS)
     for name, found in OPERATIONS.items():
         assert found.summary, name
         schema = found.schema()

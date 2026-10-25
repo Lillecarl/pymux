@@ -343,6 +343,15 @@ class Job:
         "Send the job SIGTERM. A job that already ended raises `CommandError`."
         await self.server.run(operations.kill_job(self.id))
 
+    async def view(self, pane: Pane, kill: bool = False) -> None:
+        """
+        Replace `pane` with a read-only viewer that follows this job.
+
+        The viewer takes a new pane id. A pane whose program still runs
+        raises `CommandError`, unless `kill` ends that program first.
+        """
+        await self.server.run(operations.view_job(self.id, pane.id, kill))
+
     async def refresh(self) -> Job:
         record = await self.server.run(operations.job(self.id))
         if record is None:

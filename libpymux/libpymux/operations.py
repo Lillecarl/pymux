@@ -527,3 +527,13 @@ def job_output(job_id: int, stderr: bool) -> Operation[str]:
 def kill_job(job_id: int) -> Operation[None]:
     "Send the job SIGTERM. A job that already ended raises `CommandError`."
     yield Ask(["kill-job", str(job_id)])
+
+
+def view_job(job_id: int, pane_id: str, kill: bool = False) -> Operation[None]:
+    """
+    Replace a pane with a read-only viewer that follows the job.
+
+    The viewer takes a new pane id. A pane whose program still runs
+    raises `CommandError`, unless `kill` ends that program first.
+    """
+    yield Ask(["view-job", *(["-k"] if kill else []), "-t", pane_id, str(job_id)])
