@@ -61,6 +61,8 @@
   makeFontsConf,
   runtimeShell,
   dejavu_fonts,
+  # The font pymux-mcp bundles, which `capture-pane --png` is judged with.
+  nerd-fonts,
   # The CJK glyphs DejaVu does not have, so a wide character draws as
   # itself and not as a box. Lillecarl/pymux#548.
   wqy_microhei,
@@ -627,6 +629,9 @@ in
           PYMUX_PROFILE_COLLECTION = builtins.getEnv "PYMUX_PROFILE_COLLECTION";
           PYMUX_HANG_SECONDS = toString hangIsSeconds;
           PYMUX_BASE16_SCHEMES = "${base16-schemes-json}/base16-schemes.json";
+          # The faces `capture-pane --png` draws with in its tests: the
+          # Nerd Font pymux-mcp hands pymux.
+          PYMUX_TEST_FONT_DIR = "${nerd-fonts.jetbrains-mono}/share/fonts/truetype/NerdFonts/JetBrainsMono";
           # The policy `pymux/entry_points/__init__.py` installs, so the
           # suite judges the lazy program a person runs.
           DEFERIMPORT_POLICY = "deny=hypothesis,asyncssh";
