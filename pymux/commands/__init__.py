@@ -476,6 +476,13 @@ async def _finish(pymux: Pymux, command: str, namespace: argparse.Namespace, ans
     except CommandException as e:
         _failed(pymux, command, namespace, e)
         return
+    except Exception as e:
+        # Up from here only the log hears it, and the caller hears that
+        # the command ran: `upgrade-server` answered 0 to every upgrade
+        # a snapshot bug refused.
+        logger.error("%s failed.", command, exc_info=e)
+        _failed(pymux, command, namespace, CommandException("%s failed: %r" % (command, e)))
+        return
 
     _ran(pymux, command, namespace)
 

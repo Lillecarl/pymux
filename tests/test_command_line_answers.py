@@ -9,8 +9,12 @@ client, which went nowhere. Lillecarl/pymux#288, #289, #292.
 
 from __future__ import annotations
 
+import argparse
+
 from prompt_toolkit.application.current import set_app
 from session import create_session
+
+from pymux.commands import _finish
 
 
 async def test_list_windows_answers_command_line():
@@ -146,3 +150,17 @@ async def test_set_option_ignores_g_on_read():
         pymux.handle_command("set-option -g status")
 
         assert pymux.command_output == ["status on"]
+
+
+async def test_a_command_that_breaks_after_it_starts_answers_that_it_failed():
+    "`upgrade-server` answered 0 to every upgrade a snapshot bug refused."
+
+    async def broken():
+        raise RuntimeError("no snapshot")
+
+    async with create_session() as (pymux, state):
+        errors = []
+        pymux.add_command_error = errors.append
+        await _finish(pymux, "upgrade-server x", argparse.Namespace(), broken())
+
+    assert errors == ["pymux: upgrade-server x failed: RuntimeError('no snapshot')"]
