@@ -15,16 +15,11 @@ import threading
 
 import pytest
 from libpymux import (
-    AsyncConnection,
-    AsyncPane,
-    AsyncServer,
-    AsyncSession,
-    AsyncWindow,
     CommandError,
+    Connection,
     Pane,
     Server,
     ServerNotRunning,
-    Session,
     Window,
     operations,
     quote,
@@ -105,45 +100,48 @@ def pane_row(**values):
 # The wire.
 
 
-def test_command_reaches_server(fake):
+async def test_command_reaches_server(fake):
     server = fake([("hello\n", "", 0)])
-    result = Server(server.path).cmd("list-windows")
+    result = await Server(server.path).cmd("list-windows")
     assert result.stdout == "hello\n"
     assert result.exit_code == 0
     assert server.asked == ["list-windows"]
 
 
-def test_list_of_arguments_is_quoted(fake):
+async def test_list_of_arguments_is_quoted(fake):
     server = fake([("", "", 0)])
-    Server(server.path).cmd(["send-keys", "-l", "two words"])
+    await Server(server.path).cmd(["send-keys", "-l", "two words"])
     assert server.asked == ["send-keys -l 'two words'"]
 
 
-def test_failing_command_raises(fake):
+async def test_failing_command_raises(fake):
     server = fake([("", "no such window\n", 1)])
     with pytest.raises(CommandError) as raised:
-        Server(server.path).cmd("select-window -t 99")
+        await Server(server.path).cmd("select-window -t 99")
     assert "no such window" in str(raised.value)
     assert raised.value.result.exit_code == 1
 
 
-def test_failing_command_can_be_asked_not_to_raise(fake):
+async def test_failing_command_can_be_asked_not_to_raise(fake):
     server = fake([("", "nope\n", 1)])
-    result = Server(server.path).cmd("has-session -t x", check=False)
+    result = await Server(server.path).cmd("has-session -t x", check=False)
     assert not result.ok
     assert result.stderr == "nope\n"
 
 
-def test_has_session_reads_exit_code(fake):
+async def test_has_session_reads_exit_code(fake):
     server = fake([("", "", 0), ("", "can't find session\n", 1)])
     server_object = Server(server.path)
-    assert server_object.has_session("here")
-    assert not server_object.has_session("gone")
+    assert await server_object.has_session("here")
+    assert not await server_object.has_session("gone")
 
 
-def test_server_that_is_not_there(tmp_path):
-    server = Server(str(tmp_path / "nothing.sock"))
-    assert not server.is_alive()
+async def test_server_that_is_not_there(tmp_path):
+    connection = Connection(str(tmp_path / "nothing.sock"))
+    assert not await connection.is_alive()
+    assert not await Server(connection.socket_path).is_alive()
+    with pytest.raises(ServerNotRunning):
+        await connection.run("list-sessions")
 
 
 def test_a_reply_cut_across_reads_comes_out_whole():
@@ -168,35 +166,11 @@ def test_a_command_packet_names_its_pane():
     assert json.loads(packet[:-1]) == {"cmd": "run-command", "data": "list-panes", "pane_id": "%1001"}
 
 
-async def test_an_awaited_command_reaches_server(fake):
-    server = fake([("hello\n", "", 0)])
-    result = await AsyncConnection(server.path).run(["send-keys", "-l", "two words"])
-    assert result == CommandResult("hello\n", "", 0)
-    assert server.asked == ["send-keys -l 'two words'"]
-
-
-async def test_an_awaited_failing_command_raises(fake):
-    server = fake([("", "no such window\n", 1)])
-    connection = AsyncConnection(server.path)
-    with pytest.raises(CommandError) as raised:
-        await connection.run("select-window -t 99")
-    assert raised.value.result.exit_code == 1
-    result = await connection.run("has-session -t x", check=False)
-    assert result.exit_code == 0
-
-
-async def test_an_awaited_server_that_is_not_there(tmp_path):
-    connection = AsyncConnection(str(tmp_path / "nothing.sock"))
-    assert not await connection.is_alive()
-    with pytest.raises(ServerNotRunning):
-        await connection.run("list-sessions")
-
-
 # ----------------------------------------------------------------------
 # The format strings, and the rows that come back.
 
 
-def testformat_string_asks_for_every_field():
+def test_format_string_asks_for_every_field():
     text = format_string(["pane_id", "pane_index"])
     assert text == "#{pane_id}" + SEPARATOR + "#{pane_index}"
 
@@ -225,7 +199,7 @@ def test_empty_output_is_no_rows():
 # The objects.
 
 
-def test_panes_of_server(fake):
+async def test_panes_of_server(fake):
     rows = "\n".join(
         [
             pane_row(pane_id="%1", pane_index="0", window_id="@0", pane_active="1"),
@@ -233,14 +207,14 @@ def test_panes_of_server(fake):
         ]
     )
     server = fake([(rows + "\n", "", 0)])
-    panes = Server(server.path).panes
+    panes = await Server(server.path).panes()
     assert [pane.id for pane in panes] == ["%1", "%2"]
     assert [pane.index for pane in panes] == [0, 1]
     assert [pane.active for pane in panes] == [True, False]
     assert server.asked[0].startswith("list-panes -a -F ")
 
 
-def test_pane_reads_its_numbers(fake):
+async def test_pane_reads_its_numbers(fake):
     row = pane_row(
         pane_id="%7",
         pane_width="80",
@@ -251,7 +225,7 @@ def test_pane_reads_its_numbers(fake):
         pane_dead="0",
     )
     server = fake([(row + "\n", "", 0)])
-    pane = Server(server.path).panes[0]
+    (pane,) = await Server(server.path).panes()
     assert (pane.width, pane.height) == (80, 24)
     assert pane.pid == 4242
     assert pane.title == "a title"
@@ -259,24 +233,24 @@ def test_pane_reads_its_numbers(fake):
     assert not pane.dead
 
 
-def test_a_pane_says_which_mode_is_over_it(fake):
+async def test_a_pane_says_which_mode_is_over_it(fake):
     "And `in_mode` counts every mode, not copy mode alone."
     row = pane_row(pane_id="%7", pane_in_mode="1", pane_mode="clock-mode")
     server = fake([(row + "\n", "", 0)])
-    pane = Server(server.path).panes[0]
+    (pane,) = await Server(server.path).panes()
     assert pane.in_mode
     assert pane.mode == "clock-mode"
 
 
-def test_field_that_server_left_empty_is_not_crash(fake):
+async def test_field_that_server_left_empty_is_not_crash(fake):
     server = fake([(pane_row(pane_id="%1") + "\n", "", 0)])
-    pane = Server(server.path).panes[0]
+    (pane,) = await Server(server.path).panes()
     assert pane.width == 0
     assert pane.pid == -1
     assert pane.index == -1
 
 
-def test_panes_of_window_are_ones_it_holds(fake):
+async def test_panes_of_window_are_ones_it_holds(fake):
     rows = "\n".join(
         [
             pane_row(pane_id="%1", window_id="@0"),
@@ -286,40 +260,40 @@ def test_panes_of_window_are_ones_it_holds(fake):
     )
     server = fake([(rows + "\n", "", 0)])
     window = Window(Server(server.path), {"window_id": "@1"})
-    assert [pane.id for pane in window.panes] == ["%2", "%3"]
+    assert [pane.id for pane in await window.panes()] == ["%2", "%3"]
 
 
-def test_send_keys_sends_text_and_then_return(fake):
+async def test_send_keys_sends_text_and_then_return(fake):
     server = fake([("", "", 0), ("", "", 0)])
-    Pane(Server(server.path), {"pane_id": "%5"}).send_keys("echo hi")
+    await Pane(Server(server.path), {"pane_id": "%5"}).send_keys("echo hi")
     assert server.asked == [
         "send-keys -t %5 -l 'echo hi'",
         "send-keys -t %5 Enter",
     ]
 
 
-def test_send_keys_without_return(fake):
+async def test_send_keys_without_return(fake):
     server = fake([("", "", 0)])
-    Pane(Server(server.path), {"pane_id": "%5"}).send_keys("hi", enter=False)
+    await Pane(Server(server.path), {"pane_id": "%5"}).send_keys("hi", enter=False)
     assert server.asked == ["send-keys -t %5 -l hi"]
 
 
-def test_send_keys_can_name_key(fake):
+async def test_send_keys_can_name_key(fake):
     server = fake([("", "", 0)])
-    Pane(Server(server.path), {"pane_id": "%5"}).send_key("C-c")
+    await Pane(Server(server.path), {"pane_id": "%5"}).send_key("C-c")
     assert server.asked == ["send-keys -t %5 C-c"]
 
 
-def test_capture_asks_for_lines_it_was_given(fake):
+async def test_capture_asks_for_lines_it_was_given(fake):
     server = fake([("one\ntwo\n", "", 0)])
     pane = Pane(Server(server.path), {"pane_id": "%5"})
-    assert pane.capture(start=-10, end=0) == "one\ntwo\n"
+    assert await pane.capture(start=-10, end=0) == "one\ntwo\n"
     assert server.asked == ["capture-pane -p -t %5 -S -10 -E 0"]
 
 
-def test_capture_without_lines_asks_for_screen(fake):
+async def test_capture_without_lines_asks_for_screen(fake):
     server = fake([("", "", 0)])
-    Pane(Server(server.path), {"pane_id": "%5"}).capture()
+    await Pane(Server(server.path), {"pane_id": "%5"}).capture()
     assert server.asked == ["capture-pane -p -t %5"]
 
 
@@ -331,7 +305,7 @@ def test_the_revision_of_a_pane_is_the_one_it_was_read_at(fake):
     assert server.asked == []
 
 
-def test_asking_for_the_revision_now_goes_to_the_server(fake):
+async def test_asking_for_the_revision_now_goes_to_the_server(fake):
     """
     The trap this exists for: a caller that keeps its `Pane` would seed a
     wait with the number from when the object was made, so every wait
@@ -340,56 +314,71 @@ def test_asking_for_the_revision_now_goes_to_the_server(fake):
     server = fake([(pane_row(pane_id="%5", pane_revision="99") + "\n", "", 0)])
     pane = Pane(Server(server.path), {"pane_id": "%5", "pane_revision": "1"})
 
-    assert pane.current_revision() == 99
+    assert await pane.current_revision() == 99
     assert server.asked, "it has to ask the server"
 
 
-def test_capture_html_asks_for_the_html_of_a_pane(fake):
+async def test_a_pane_that_is_gone_says_so(fake):
+    server = fake([(pane_row(pane_id="%1") + "\n", "", 0)])
+    pane = Pane(Server(server.path), {"pane_id": "%7"})
+    with pytest.raises(LookupError):
+        await pane.current_revision()
+
+
+async def test_waiting_for_a_change_names_what_it_saw(fake):
+    server = fake([("100\n", "", 0)])
+    pane = Pane(Server(server.path), {"pane_id": "%5"})
+    assert await pane.wait_for_change(since=3, timeout=1.5) == 100
+    assert server.asked == ["wait-pane-change -t %5 --since 3 --timeout 1.5"]
+
+
+async def test_capture_html_asks_for_the_html_of_a_pane(fake):
     server = fake([("<pre></pre>\n", "", 0)])
     pane = Pane(Server(server.path), {"pane_id": "%5"})
-    assert pane.capture_html() == "<pre></pre>\n"
+    assert await pane.capture_html() == "<pre></pre>\n"
     assert server.asked == ["capture-pane -p -H -t %5"]
 
 
-def test_capture_html_asks_for_lines_it_was_given(fake):
+async def test_capture_html_asks_for_lines_it_was_given(fake):
     server = fake([("", "", 0)])
-    Pane(Server(server.path), {"pane_id": "%5"}).capture_html(start=-10, end=0)
+    await Pane(Server(server.path), {"pane_id": "%5"}).capture_html(start=-10, end=0)
     assert server.asked == ["capture-pane -p -H -t %5 -S -10 -E 0"]
 
 
-def test_the_stylesheet_of_no_pane_names_none(fake):
+async def test_the_stylesheet_of_no_pane_names_none(fake):
     server = fake([(".pyte-screen { }\n", "", 0)])
-    assert Server(server.path).html_stylesheet() == ".pyte-screen { }\n"
+    assert await Server(server.path).html_stylesheet() == ".pyte-screen { }\n"
     assert server.asked == ["show-html-stylesheet"]
 
 
-def test_the_stylesheet_of_one_pane_names_it(fake):
+async def test_the_stylesheet_of_one_pane_names_it(fake):
     server = fake([("", "", 0)])
     pymux_server = Server(server.path)
     pane = Pane(pymux_server, {"pane_id": "%5"})
-    pymux_server.html_stylesheet(pane)
+    await pymux_server.html_stylesheet(pane)
     assert server.asked == ["show-html-stylesheet -t %5"]
 
 
-def test_splitting_window_returns_new_pane(fake):
+async def test_splitting_window_returns_new_pane(fake):
     server = fake([(pane_row(pane_id="%9", pane_index="1") + "\n", "", 0)])
     window = Window(Server(server.path), {"window_id": "@0", "window_index": "0"})
-    pane = window.split(command="fish")
+    pane = await window.split(command="fish")
     assert pane.id == "%9"
+    assert pane.server is window.server
     asked = server.asked[0]
     assert asked.startswith("split-window -t @0 -v ")
     assert asked.endswith(" fish")
     assert " -P -F " in asked
 
 
-def test_splitting_other_way(fake):
+async def test_splitting_other_way(fake):
     server = fake([("", "", 0)])
     window = Window(Server(server.path), {"window_id": "@0", "window_index": "0"})
-    assert window.split(vertical=False) is None
+    assert await window.split(vertical=False) is None
     assert server.asked[0].startswith("split-window -t @0 -h ")
 
 
-def test_new_window_carries_its_name(fake):
+async def test_new_window_carries_its_name(fake):
     # Reading the session asks first, and making the window asks second.
     server = fake(
         [
@@ -397,7 +386,8 @@ def test_new_window_carries_its_name(fake):
             ("@4\x1f2\x1fbuild\x1f1\x1f*\x1f1\x1f80\x1f24\n", "", 0),
         ]
     )
-    window = Server(server.path).session.new_window(name="build")
+    session = await Server(server.path).session()
+    window = await session.new_window(name="build")
     assert window.id == "@4"
     assert window.index == 2
     assert window.name == "build"
@@ -406,102 +396,33 @@ def test_new_window_carries_its_name(fake):
     assert server.asked[1].startswith("new-window -t work: -n build -P -F ")
 
 
-def test_session_of_server(fake):
+async def test_session_of_server(fake):
     server = fake([("$0\x1fwork\x1f1\x1f3\x1f/home\x1f0\n", "", 0)])
-    session = Server(server.path).session
+    session = await Server(server.path).session()
     assert session.id == "$0"
     assert session.name == "work"
     assert session.attached == 1
     assert session.path == "/home"
 
 
-def test_server_with_no_session_says_so(fake):
+async def test_server_with_no_session_says_so(fake):
     server = fake([("", "", 0)])
     with pytest.raises(LookupError):
-        Server(server.path).session
+        await Server(server.path).session()
 
 
-def test_finding_pane_by_id(fake):
+async def test_finding_pane_by_id(fake):
     rows = pane_row(pane_id="%1") + "\n" + pane_row(pane_id="%2") + "\n"
     server = fake([(rows, "", 0), (rows, "", 0)])
     server_object = Server(server.path)
-    assert server_object.pane("%2").id == "%2"
-    assert server_object.pane("%99") is None
+    assert (await server_object.pane("%2")).id == "%2"
+    assert await server_object.pane("%99") is None
 
 
-# ----------------------------------------------------------------------
-# The awaited objects ask what the blocking ones ask.
-
-
-def _blocking(path):
-    server = Server(path)
-    pane = Pane(server, {"pane_id": "%5", "window_id": "@1"})
-    window = Window(server, {"window_id": "@1", "window_index": "2"})
-    session = Session(server, {"session_id": "$0", "session_name": "work"})
-    pane.send_keys("echo hi")
-    pane.capture(start=-10, end=5)
-    pane.capture_html()
-    pane.wait_for_change(since=3, timeout=1.5)
-    window.split(command="fish", vertical=False, select=False)
-    window.select()
-    session.new_window(name="logs", start_directory="/tmp")
-    session.windows
-    server.has_session("gone")
-    server.html_stylesheet(pane)
-    server.kill()
-
-
-async def _awaited(path):
-    server = AsyncServer(path)
-    pane = AsyncPane(server, {"pane_id": "%5", "window_id": "@1"})
-    window = AsyncWindow(server, {"window_id": "@1", "window_index": "2"})
-    session = AsyncSession(server, {"session_id": "$0", "session_name": "work"})
-    await pane.send_keys("echo hi")
-    await pane.capture(start=-10, end=5)
-    await pane.capture_html()
-    await pane.wait_for_change(since=3, timeout=1.5)
-    await window.split(command="fish", vertical=False, select=False)
-    await window.select()
-    await session.new_window(name="logs", start_directory="/tmp")
-    await session.windows()
-    await server.has_session("gone")
-    await server.html_stylesheet(pane)
-    await server.kill()
-
-
-async def test_the_awaited_objects_send_the_same_commands(fake):
-    blocking = fake()
-    _blocking(blocking.path)
-    awaited = fake()
-    await _awaited(awaited.path)
-    assert len(awaited.asked) == 12
-    assert awaited.asked == blocking.asked
-
-
-async def test_awaited_panes_of_server(fake):
-    rows = pane_row(pane_id="%1", window_id="@0", pane_active="1") + "\n" + pane_row(pane_id="%2", window_id="@1")
-    server = fake([(rows + "\n", "", 0), (rows + "\n", "", 0)])
-    server_object = AsyncServer(server.path)
-    panes = await server_object.panes()
-    assert [(type(pane), pane.id, pane.active) for pane in panes] == [(AsyncPane, "%1", True), (AsyncPane, "%2", False)]
-    window = AsyncWindow(server_object, {"window_id": "@1"})
-    assert [pane.id for pane in await window.panes()] == ["%2"]
-
-
-async def test_an_awaited_split_answers_with_its_pane(fake):
-    server = fake([(pane_row(pane_id="%9", window_id="@1") + "\n", "", 0)])
-    window = AsyncWindow(AsyncServer(server.path), {"window_id": "@1"})
-    pane = await window.split()
-    assert isinstance(pane, AsyncPane)
-    assert pane.id == "%9"
-    assert pane.server is window.server
-
-
-async def test_an_awaited_pane_that_is_gone_says_so(fake):
-    server = fake([(pane_row(pane_id="%1") + "\n", "", 0)])
-    pane = AsyncPane(AsyncServer(server.path), {"pane_id": "%7"})
-    with pytest.raises(LookupError):
-        await pane.current_revision()
+async def test_killing_the_server_does_not_raise_on_its_exit_code(fake):
+    server = fake([("", "", 1)])
+    await Server(server.path).kill()
+    assert server.asked == ["kill-server"]
 
 
 # ----------------------------------------------------------------------

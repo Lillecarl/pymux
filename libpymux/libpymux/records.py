@@ -1,8 +1,8 @@
 """
 The fields of a session, a window and a pane, as one read gave them.
 
-These hold no server and do no I/O. `objects.py` and `async_objects.py`
-each add a server and what an object does, on top of the same fields.
+These hold no server and do no I/O. `objects.py` adds a server and
+what an object does, on top of them.
 """
 
 from __future__ import annotations

@@ -1,32 +1,28 @@
 """
-Drive a pymux server from python.
+Drive a pymux server from python, with anyio.
 
-The shape follows libtmux: a server holds sessions, a session holds
-windows, a window holds panes. Unlike libtmux, nothing here starts a
-program: the wire of pymux is JSON on a unix socket, so this talks to
-the server itself.
+A server holds sessions, a session holds windows, a window holds panes.
+Nothing here starts a program: the wire of pymux is JSON on a unix
+socket, so this talks to the server itself. Every read that asks the
+server is awaited.
 
     from libpymux import Server
 
-    server = Server.first()
-    pane = server.session.active_window.active_pane
-    pane.send_keys("echo hello")
-    print(pane.capture())
+    server = await Server.first()
+    window = await (await server.session()).active_window()
+    pane = await window.active_pane()
+    await pane.send_keys("echo hello")
+    print(await pane.capture())
 
 `Server.cmd()` runs any pymux command, so nothing the command line can
 do is out of reach.
 
-`AsyncServer` is the same model for a caller that runs a loop, with
-`await` in front of every read that asks the server:
-
-    server = await AsyncServer.first()
-    pane = await (await (await server.session()).active_window()).active_pane()
+For a tmux-shaped API with no `await`, libtmux drives pymux as it
+drives tmux: `libtmux.Server(tmux_bin="pymux")`.
 """
 
 import logging
 
-from .async_connection import AsyncConnection
-from .async_objects import AsyncPane, AsyncServer, AsyncSession, AsyncWindow
 from .connection import (
     CommandError,
     CommandResult,
@@ -46,11 +42,6 @@ from .streams import PaneStream, StreamRefused
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
-    "AsyncConnection",
-    "AsyncPane",
-    "AsyncServer",
-    "AsyncSession",
-    "AsyncWindow",
     "CommandError",
     "CommandResult",
     "Connection",

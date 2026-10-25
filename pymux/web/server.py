@@ -275,8 +275,8 @@ def _one_of(query: str, name: str) -> str | None:
     return None
 
 
-def the_server(socket_path: str | None) -> Server:
+async def the_server(socket_path: str | None) -> Server:
     "The pymux server to serve panes of."
     if socket_path:
         return Server(socket_path)
-    return Server.first()
+    return await Server.first()

@@ -853,7 +853,8 @@ def _web(socket_name: str | None, a) -> int:
     from pymux.web.server import MISSING, a_token, serve, the_server
 
     try:
-        server = the_server(socket_name)
+        server = anyio.run(the_server, socket_name)
+        pane_ids = [pane.id for pane in anyio.run(server.panes)]
     except OSError as none:
         sys.stderr.write("pymux: %s\n" % (none,))
         return 1
@@ -887,7 +888,7 @@ def _web(socket_name: str | None, a) -> int:
         already running.
         """
         say("pymux web on http://%s:%d/?pane=<pane>&t=%s" % (host, port, token))
-        say("  panes: %s" % (" ".join(pane.id for pane in server.panes) or "none",))
+        say("  panes: %s" % (" ".join(pane_ids) or "none",))
         say("  the session, as a client sees it: http://%s:%d/?session&t=%s" % (host, port, token))
         if not a.web_allow_input:
             say("  showing only; --allow-input takes keys")

@@ -50,25 +50,25 @@ pane, and with which features.
 
 ## Driving pymux from Python
 
-`libpymux` drives a running server over its socket, with the object
-model that libtmux uses: a server holds sessions, a session holds
-windows, a window holds panes. It is a distribution of its own, in
-`libpymux/`, and it carries nothing of the terminal: a program that
-drives a server installs a socket, a JSON message and platformdirs.
+`libpymux` drives a running server over its socket, with anyio: a
+server holds sessions, a session holds windows, a window holds panes.
+It is a distribution of its own, in `libpymux/`, and it carries nothing
+of the terminal: a program that drives a server installs a socket, a
+JSON message and platformdirs.
 
 ```python
 from libpymux import Server
 
-server = Server.first()
-pane = server.session.active_window.active_pane
-pane.send_keys("echo hello")
-print(pane.capture())
+server = await Server.first()
+pane = await (await (await server.session()).active_window()).active_pane()
+await pane.send_keys("echo hello")
+print(await pane.capture())
 ```
 
 `libpymux/README.md` says more. pymux also takes the tmux command line,
-so libtmux itself can drive it through a `tmux` shim, as
-`tests/drive_with_libtmux.py` does. That route reaches only what tmux
-has, so it is a compatibility check and not the way to write a program.
+so libtmux itself drives it with `libtmux.Server(tmux_bin="pymux")`, as
+`tests/drive_with_libtmux.py` does. That route has no `await` and
+reaches only what tmux has a command for.
 
 ## Configuring
 

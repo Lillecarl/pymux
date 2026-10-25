@@ -2699,7 +2699,76 @@ def check_libpymux(tmp):
     options, and output that does not parse.
     """
     import anyio
-    from libpymux import AsyncConnection, AsyncServer, CommandError, Server
+    from libpymux import CommandError, Server
+
+    async def drive(server):
+        assert await server.is_alive(), "the library cannot reach the server"
+
+        # The session. A pymux server runs one.
+        session = await server.session()
+        # The two routes name the session differently: the socket route
+        # asks `new-session` for a name, the integrated route takes the
+        # default. `Terminal` says which one it started.
+        assert session.name == terminal.session_name, session.name
+        assert session.id == "$0", session.id
+        assert session.attached >= 1, session.attached
+        assert len(await server.sessions()) == 1
+
+        # The window and the pane that the session started with.
+        windows = await server.windows()
+        assert len(windows) == 1, windows
+        window = windows[0]
+        assert window.id.startswith("@"), window.id
+        assert window.active, "the only window is not the active one"
+        assert (await session.active_window()).id == window.id
+
+        panes = await server.panes()
+        assert len(panes) == 1, panes
+        pane = panes[0]
+        assert pane.id.startswith("%"), pane.id
+        assert pane.pid > 0, pane.pid
+        assert pane.width > 0 and pane.height > 0, (pane.width, pane.height)
+        assert not pane.dead
+        assert pane.window_id == window.id
+        assert (await window.panes())[0].id == pane.id
+        assert (await window.active_pane()).id == pane.id
+        assert (await server.pane(pane.id)).id == pane.id
+        assert await server.pane("%99999") is None
+
+        # Every field the library asks for comes back with something in
+        # it. A variable that the server dropped would be empty here.
+        for name in ("pane_id", "pane_index", "window_id", "pane_width"):
+            assert pane.get(name), "%s came back empty" % (name,)
+
+        # A second pane, made through the library.
+        # A python with no arguments waits on its stdin, so the pane
+        # stays alive for the rest of this check.
+        second = await window.split(command=sys.executable)
+        assert second is not None, "split-window said nothing"
+        await anyio.to_thread.run_sync(terminal.drain, 2.0)
+        assert len(await server.panes()) == 2
+        assert len(await window.panes()) == 2
+        assert second.id != pane.id
+
+        # Reading a pane back.
+        text = await pane.capture()
+        assert "READY" in text, text[:200]
+
+        # The escape hatch, and the errors.
+        assert (await server.cmd("list-windows")).ok
+        assert await server.has_session()
+        assert not await server.has_session("not-a-session")
+        try:
+            await server.cmd(["select-window", "-t", "99"])
+        except CommandError as error:
+            assert error.result.exit_code != 0
+        else:
+            raise AssertionError("a command that fails has to raise")
+
+        # Killing the pane that the library made.
+        await second.kill()
+        await anyio.to_thread.run_sync(terminal.drain, 2.0)
+        assert len(await server.panes()) == 1
 
     terminal = Terminal(tmp, "kitty")
     try:
@@ -2710,96 +2779,7 @@ def check_libpymux(tmp):
         terminal.write(b"\x1b[?62;1;6c")
         terminal.wait_for(b"READY")
 
-        server = Server(str(terminal.sock_path))
-        assert server.is_alive(), "the library cannot reach the server"
-
-        # The session. A pymux server runs one.
-        session = server.session
-        # The two routes name the session differently: the socket route
-        # asks `new-session` for a name, the integrated route takes the
-        # default. `Terminal` says which one it started.
-        assert session.name == terminal.session_name, session.name
-        assert session.id == "$0", session.id
-        assert session.attached >= 1, session.attached
-        assert len(server.sessions) == 1
-
-        # The window and the pane that the session started with.
-        windows = server.windows
-        assert len(windows) == 1, windows
-        window = windows[0]
-        assert window.id.startswith("@"), window.id
-        assert window.active, "the only window is not the active one"
-
-        panes = server.panes
-        assert len(panes) == 1, panes
-        pane = panes[0]
-        assert pane.id.startswith("%"), pane.id
-        assert pane.pid > 0, pane.pid
-        assert pane.width > 0 and pane.height > 0, (pane.width, pane.height)
-        assert not pane.dead
-        assert pane.window_id == window.id
-        assert window.panes[0].id == pane.id
-        assert window.active_pane.id == pane.id
-        assert server.pane(pane.id).id == pane.id
-        assert server.pane("%99999") is None
-
-        # Every field the library asks for comes back with something in
-        # it. A variable that the server dropped would be empty here.
-        for name in ("pane_id", "pane_index", "window_id", "pane_width"):
-            assert pane.get(name), "%s came back empty" % (name,)
-
-        # A second pane, made through the library.
-        # A python with no arguments waits on its stdin, so the pane
-        # stays alive for the rest of this check.
-        second = window.split(command=sys.executable)
-        assert second is not None, "split-window said nothing"
-        terminal.drain(2.0)
-        assert len(server.panes) == 2, server.panes
-        assert len(window.panes) == 2, window.panes
-        assert second.id != pane.id
-
-        # Reading a pane back.
-        text = pane.capture()
-        assert "READY" in text, text[:200]
-
-        # The awaited wire says what the blocking one says.
-        listed = server.cmd("list-panes -a")
-        assert listed.ok and listed.stdout, listed
-        awaited = anyio.run(AsyncConnection(server.socket_path).run, "list-panes -a")
-        assert awaited == listed, (awaited, listed)
-
-        # And the awaited objects read what the blocking ones read.
-        async def read_awaited():
-            served = AsyncServer(server.socket_path)
-            session = await served.session()
-            window = await session.active_window()
-            return (
-                session.id,
-                window.id,
-                [one.fields for one in await window.panes()],
-                await (await served.pane(pane.id)).capture(),
-            )
-
-        awaited_ids = anyio.run(read_awaited)
-        assert awaited_ids[:2] == (session.id, window.id), awaited_ids[:2]
-        assert [one.id for one in window.panes] == [one["pane_id"] for one in awaited_ids[2]]
-        assert "READY" in awaited_ids[3], awaited_ids[3][:200]
-
-        # The escape hatch, and the errors.
-        assert server.cmd("list-windows").ok
-        assert server.has_session()
-        assert not server.has_session("not-a-session")
-        try:
-            server.cmd(["select-window", "-t", "99"])
-        except CommandError as error:
-            assert error.result.exit_code != 0
-        else:
-            raise AssertionError("a command that fails has to raise")
-
-        # Killing the pane that the library made.
-        second.kill()
-        terminal.drain(2.0)
-        assert len(server.panes) == 1, server.panes
+        anyio.run(drive, Server(str(terminal.sock_path)))
     except BaseException:
         terminal.report()
         raise

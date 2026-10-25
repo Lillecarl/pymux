@@ -3,13 +3,12 @@ What the objects of libpymux ask a server, with no I/O.
 
 An operation is a generator. It yields each command it needs as an
 `Ask`, receives the `CommandResult`, and returns its answer. `drive`
-runs one over a blocking connection and `drive_async` over an awaited
-one, so `objects.py` and `async_objects.py` spell no command and parse
-no row themselves: both run what is written here once.
+runs one over a connection, so `objects.py` spells no command and parses
+no row itself, and a test runs an operation with no socket at all.
 
-An operation answers with rows, as dictionaries of text. Each shell
-makes its own objects of them, because an object holds the server it
-came from.
+An operation answers with rows, as dictionaries of text. `objects.py`
+makes its objects of them, because an object holds the server it came
+from.
 """
 
 from __future__ import annotations
@@ -29,7 +28,6 @@ __all__ = [
     "Operation",
     "Row",
     "drive",
-    "drive_async",
     "format_string",
     "rows",
 ]
@@ -96,18 +94,8 @@ class Ask(NamedTuple):
 type Operation[T] = Generator[Ask, CommandResult, T]
 
 
-def drive[T](operation: Operation[T], run: Callable[[Ask], CommandResult]) -> T:
+async def drive[T](operation: Operation[T], run: Callable[[Ask], Awaitable[CommandResult]]) -> T:
     "Run `operation`, with `run` carrying each command to the server."
-    try:
-        ask = next(operation)
-        while True:
-            ask = operation.send(run(ask))
-    except StopIteration as done:
-        return done.value
-
-
-async def drive_async[T](operation: Operation[T], run: Callable[[Ask], Awaitable[CommandResult]]) -> T:
-    "`drive`, with `run` awaited."
     try:
         ask = next(operation)
         while True:

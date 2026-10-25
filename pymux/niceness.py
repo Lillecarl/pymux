@@ -74,13 +74,14 @@ def renice(socket_names: Sequence[str], niceness: int) -> int:
     Set `niceness` on every pymux process of these servers. Prints one
     line for each process, and answers an exit code.
     """
+    import anyio
     import psutil
     from libpymux.connection import Connection
 
     targets: list[Target] = []
     for socket_name in socket_names:
         try:
-            listing = Connection(socket_name).run("list-processes").lines()
+            listing = anyio.run(Connection(socket_name).run, "list-processes").lines()
         except OSError, RuntimeError:
             print("%s: no answer" % (socket_name,), file=sys.stderr)
             continue

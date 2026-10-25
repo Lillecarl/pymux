@@ -9,15 +9,17 @@ output, the errors and the exit code, and then it closes. So every
 call here opens a socket of its own, the same way the command line of
 pymux does.
 
-**The wire does no I/O here.** `command_packet` is the bytes to send and
-`Reply` reads what comes back, so `Connection` and `AsyncConnection`
-(`async_connection.py`) differ only in how they move the bytes.
+`command_packet` is the bytes to send and `Reply` reads what comes back.
+Neither does I/O, so a test reaches them with no socket, and
+`Connection` only moves the bytes.
 """
 
 import json
 import shlex
-import socket
 from typing import List, NamedTuple, Optional, Sequence, Union
+
+import anyio
+import anyio.abc
 
 from .protocol import END, READ_SIZE, Field, Framer, Packet
 
@@ -146,15 +148,16 @@ class Connection:
     def __repr__(self) -> str:
         return "Connection(%r)" % (self.socket_path,)
 
-    def is_alive(self) -> bool:
+    async def is_alive(self) -> bool:
         "True when a server answers on this socket."
         try:
-            self._connect().close()
-        except OSError:
+            stream = await self._connect()
+        except ServerNotRunning:
             return False
+        await stream.aclose()
         return True
 
-    def run(
+    async def run(
         self,
         command: Union[str, Sequence[str]],
         pane_id: Optional[str] = None,
@@ -175,31 +178,18 @@ class Connection:
         """
         text = as_command(command)
         reply = Reply()
-        sock = self._connect()
-        try:
-            sock.sendall(command_packet(text, pane_id))
+        async with await self._connect() as stream:
+            await stream.send(command_packet(text, pane_id))
             while True:
                 try:
-                    data = sock.recv(READ_SIZE)
-                except OSError:
-                    break
-                if not data:
+                    data = await stream.receive(READ_SIZE)
+                except anyio.EndOfStream, anyio.ClosedResourceError, OSError:
                     break
                 reply.feed(data)
-        finally:
-            sock.close()
         return checked(text, reply.result(), check)
 
-    # ------------------------------------------------------------------
-
-    def _connect(self) -> socket.socket:
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    async def _connect(self) -> anyio.abc.SocketStream:
         try:
-            sock.connect(self.socket_path)
+            return await anyio.connect_unix(self.socket_path)
         except OSError as error:
-            sock.close()
-            raise ServerNotRunning(
-                "no pymux server on %s" % (self.socket_path,)
-            ) from error
-        sock.setblocking(True)
-        return sock
+            raise ServerNotRunning("no pymux server on %s" % (self.socket_path,)) from error
