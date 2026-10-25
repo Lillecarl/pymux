@@ -1,0 +1,40 @@
+# What pymux-mcp is and what it needs.
+#
+# **A project of its own, inside the repository of the server it
+# drives**, for the reason libpymux is: the test that says it works
+# drives a real server, and that test is pymux's.
+#
+# It takes libpymux and never pymux. An agent harness that starts it
+# gets the client library, the MCP SDK and pydantic, and none of the
+# terminal.
+[project]
+name = "pymux-mcp"
+version = "0.1"
+description = "Drive a pymux server from an agent, over MCP."
+readme = "README.md"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+requires-python = ">=3.14"
+dependencies = [
+    "libpymux",
+    "anyio>=4.7.0",
+    # The protocol, and the stdio transport a harness starts it on.
+    "mcp>=1.20.0",
+    # Each operation's arguments become a model: it checks what an agent
+    # sent, and its JSON Schema is what `pymux_describe` answers and what
+    # the OpenAPI document is built from.
+    "pydantic>=2.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Lillecarl/pymux"
+
+[project.scripts]
+pymux-mcp = "pymux_mcp.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pymux_mcp"]

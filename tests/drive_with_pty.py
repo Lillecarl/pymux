@@ -2804,6 +2804,83 @@ def check_libpymux(tmp):
     print("libpymux: ok")
 
 
+def check_pymux_mcp(tmp):
+    """
+    pymux-mcp's two tools against a server that is really there.
+
+    An MCP client in memory calls them as a harness would, so the
+    arguments go through the models and the answers through `render`.
+    """
+    import json
+
+    import anyio
+    from libpymux import Server
+    from mcp.shared.memory import create_connected_server_and_client_session
+    from pymux_mcp.server import build
+
+    async def drive(server):
+        async def server_for():
+            return server
+
+        async with create_connected_server_and_client_session(build(server_for)) as client:
+
+            async def ask(op, **args):
+                answer = await client.call_tool("pymux", {"op": op, "args": args})
+                assert not answer.isError, (op, args, answer.content[0].text)
+                return answer.content[0].text
+
+            (session,) = json.loads(await ask("tree"))
+            assert session["name"] == terminal.session_name, session
+            (window,) = session["windows"]
+            (pane,) = window["panes"]
+            assert pane["id"].startswith("%"), pane
+
+            made = json.loads(await ask("window.new", name="mcp", command="cat"))
+            assert made["name"] == "mcp", made
+            (cat,) = made["panes"]
+            revision = json.loads(await ask("pane.wait", pane=cat["id"], timeout=0.1))["revision"]
+            await ask("pane.send", pane=cat["id"], text="hello from mcp", enter=True)
+            waited = json.loads(await ask("pane.wait", pane=cat["id"], since=revision, timeout=10))
+            assert waited["changed"], waited
+            assert "hello from mcp" in await ask("pane.capture", pane=cat["id"]), "cat never echoed"
+
+            split = json.loads(await ask("window.split", window=made["id"], command="cat"))
+            assert split["window"] == made["id"], split
+            await ask("pane.kill", pane=split["id"])
+
+            ran = json.loads(await ask("job.run", command="echo from-a-job; exit 2", tags={"via": "mcp"}, timeout=30))
+            assert "from-a-job" in ran["output"], ran
+            assert ran["job"]["returncode"] == 2 and ran["job"]["status"] == "done", ran
+            listed = json.loads(await ask("job.list", tags={"via": None}))
+            assert [job["id"] for job in listed] == [ran["job"]["id"]], listed
+            query = "SELECT id FROM jobs WHERE id = :id"
+            rows = json.loads(await ask("sql", query=query, params={"id": ran["job"]["id"]}))
+            assert rows == [{"id": ran["job"]["id"]}], rows
+
+            raw = json.loads(await ask("command", command="display-message -p '#{session_name}'"))
+            assert raw["exit_code"] == 0 and raw["stdout"].strip() == terminal.session_name, raw
+
+            refused = await client.call_tool("pymux", {"op": "job.tail", "args": {"job": 999999, "timeout": 0}})
+            assert refused.isError and "no job" in refused.content[0].text, refused
+
+    terminal = Terminal(tmp, "kitty")
+    try:
+        terminal.wait_for_queries()
+        terminal.write(b"\x1b[?1u")
+        terminal.write(b"\x1b_Gi=31;OK\x1b\\")
+        terminal.write(b"\x1b[6;20;10t")
+        terminal.write(b"\x1b[?62;1;6c")
+        terminal.wait_for(b"READY")
+
+        anyio.run(drive, Server(str(terminal.sock_path)))
+    except BaseException:
+        terminal.report()
+        raise
+    finally:
+        terminal.close()
+    print("pymux-mcp: ok")
+
+
 #: Every check, in the order a whole run does them. Each one starts a
 #: server of its own, so the order is the order somebody wrote them in
 #: and not a chain.
@@ -3174,6 +3251,7 @@ CHECKS = (
     check_bare_pymux_attaches_to_the_server_it_finds,
     check_a_client_whose_stdin_ends_leaves,
     check_libpymux,
+    check_pymux_mcp,
 )
 
 

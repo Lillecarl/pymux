@@ -1,0 +1,54 @@
+# pymux-mcp
+
+Drive a pymux server from an agent, over MCP.
+
+```sh
+pymux-mcp                 # an MCP server on stdio, for the one running pymux server
+pymux-mcp --socket PATH   # for the server on that socket
+pymux-mcp --openapi       # the operations as an OpenAPI 3.1 document
+```
+
+## Two tools
+
+A harness carries every tool's definition on every turn. So this server
+has two tools, whatever the number of operations:
+
+- `pymux(op, args)` runs one operation and answers its result. Text is
+  answered as it is, and everything else as JSON.
+- `pymux_describe(op?)` lists the operations, one line each. With a name
+  it answers that operation's arguments as JSON Schema.
+
+```json
+{"op": "pane.capture", "args": {"pane": "%5", "start": -20}}
+```
+
+Start with `tree`: it answers every session, window and pane, with the
+ids that the other operations take.
+
+## The operations
+
+`tree`, `sql`, `command`, `session.new`, `window.new`, `window.split`,
+`pane.capture`, `pane.send`, `pane.wait`, `pane.kill`, `job.run`,
+`job.tail`, `job.list`, `job.output` and `job.kill`.
+
+`command` runs any pymux command line, for what the rest do not cover.
+
+## One place for each argument
+
+Each operation is a typed async function over libpymux, in
+`pymux_mcp/api.py`. Its signature is read once into a pydantic model.
+That model checks what an agent sends, is what `pymux_describe` answers,
+and is the request body in the OpenAPI document.
+
+## Who is calling
+
+Every command carries this process's environment and directory, as the
+`pymux` command line does. A job then starts where the harness started
+this server, and an agent session id that the harness put in the
+environment stamps the job.
+
+## Tests
+
+`tests/test_pymux_mcp.py` in pymux checks the registry and the schemas
+with no server. `check_pymux_mcp` in `tests/drive_with_pty.py` drives the
+two tools through an MCP client against a server that is really there.

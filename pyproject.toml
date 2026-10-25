@@ -125,6 +125,9 @@ test = [
     # suite that starts it. Linux's alone: wayland is, and macOS runs the
     # suites that need no seat.
     "pywayland; sys_platform == 'linux'",
+    # `tests/test_pymux_mcp.py` and `check_pymux_mcp` judge it, and the
+    # second one needs a real server, which is why its tests are here.
+    "pymux-mcp",
     # TEMPORARY for the Lillecarl/pymux#258 scratch measurement. Remove
     # with `tests/measure_wire_sizes.py` and the `wire` check.
     "msgpack",
