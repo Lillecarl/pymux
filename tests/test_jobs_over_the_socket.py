@@ -23,8 +23,7 @@ import sys
 import time
 
 import pytest
-
-from pymux.agentic import AGENT_SESSION_VARS
+from libpymux.agentic import AGENT_SESSION_VARS
 
 #: How long one CLI call may take. A detached command answers at
 #: once; anything slower is the server not answering at all.

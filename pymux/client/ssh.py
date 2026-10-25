@@ -49,12 +49,12 @@ from typing import TYPE_CHECKING, NamedTuple, override
 from urllib.parse import urlparse
 
 import anyio
+from libpymux.agentic import caller_fields
 from libpymux.protocol import READ_SIZE, Field, Packet
 from libpymux.wire import MSGPACK, MSGPACK_ZSTD, PacketReader
 from prompt_toolkit.input.vt100 import raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output
 
-from pymux.agentic import caller_cwd, caller_environment
 from pymux.forwarding import (
     MAY_NARROW,
     Direction,
@@ -470,9 +470,8 @@ class SshClient(TerminalClient):
                     Field.PANE_ID: pane_id,
                     # Resolved on this machine, where the agent's
                     # environment is: the far side only forwards it.
-                    # `pymux/agentic.py` holds the names.
-                    Field.ENVIRONMENT: {**dict(os.environ), **caller_environment()},
-                    Field.CWD: caller_cwd(),
+                    # `libpymux/agentic.py` holds the names.
+                    **caller_fields(),
                 }
             )
 

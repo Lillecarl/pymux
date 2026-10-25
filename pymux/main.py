@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, ClassVar, NamedTuple, override
 
 import anyio
 import anyio.abc
+from libpymux.agentic import CallerContext
 from libpymux.protocol import Field, Packet
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app, set_app
@@ -57,7 +58,6 @@ from pyte.page import RowMark
 
 from . import hacks_and_lies, introspect, kernels, log
 from .actions import ActionLog, Kind, Origin, awaited_as, note, started_by
-from .agentic import CallerContext
 from .arrangement import Arrangement, Pane, Window
 from .audio import AudioServer
 from .browsers import Browsers

@@ -11,13 +11,12 @@ import time
 from select import select
 from typing import override
 
+from libpymux.agentic import caller_fields
 from libpymux.protocol import READ_SIZE, Field, Framer, Packet
 from libpymux.sockets import servers_newest_first
 from libpymux.wire import PacketReader
 from prompt_toolkit.input.vt100 import raw_mode
 from prompt_toolkit.output.vt100 import Vt100_Output
-
-from pymux.agentic import caller_cwd, caller_environment
 
 from .audio import AudioClient, sound_devices
 from .reconnect import draw
@@ -84,9 +83,8 @@ class PosixClient(TerminalClient):
                 # caller's context itself, so the client sends the
                 # whole environment -- resolved to one id under
                 # `PYMUX_AGENTIC_ID` beside it -- and the directory it
-                # stands in. `pymux/agentic.py` holds the names.
-                Field.ENVIRONMENT: {**dict(os.environ), **caller_environment()},
-                Field.CWD: caller_cwd(),
+                # stands in. `libpymux/agentic.py` holds the names.
+                **caller_fields(),
             }
         )
         if timeout is not None:

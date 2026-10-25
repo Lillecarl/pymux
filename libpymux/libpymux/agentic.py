@@ -11,7 +11,9 @@ one name, and the directory it stands in under `Field.CWD`.
 
 The names live here once, and both sides import them: a wire name
 spelled by hand in two files matches nothing when it drifts, raises
-nothing, and drops the meaning silently. Lillecarl/pymux#447.
+nothing, and drops the meaning silently. Lillecarl/pymux#447. That is
+why this is in the client library and not in pymux: the server, the
+command line and `libpymux.Connection` all send or read these fields.
 
 A value already sitting in `PYMUX_AGENTIC_ID` passes straight
 through: that is the documented override, and it wins over every
@@ -26,6 +28,8 @@ import os
 from collections.abc import Mapping
 from typing import NamedTuple
 
+from .protocol import Field
+
 __all__ = [
     "AGENT_SESSION_VARS",
     "PYMUX_AGENTIC_ID",
@@ -33,6 +37,7 @@ __all__ = [
     "caller_context",
     "caller_cwd",
     "caller_environment",
+    "caller_fields",
     "resolve_session_id",
 ]
 
@@ -95,6 +100,23 @@ def caller_cwd() -> str | None:
     with contextlib.suppress(OSError):
         return os.getcwd()
     return None
+
+
+def caller_fields(environment: Mapping[str, str] | None = None, cwd: str | None = None) -> dict[str, object]:
+    """
+    The two fields of a `run-command` packet that say who sent it.
+
+    Without arguments that is this process: its whole environment, with
+    the session id `resolve_session_id` finds under `PYMUX_AGENTIC_ID`,
+    and its directory. A caller that acts for someone else names their
+    environment and directory instead.
+    """
+    if environment is None:
+        environment = os.environ
+    return {
+        Field.ENVIRONMENT: {**dict(environment), **caller_environment(environment)},
+        Field.CWD: caller_cwd() if cwd is None else cwd,
+    }
 
 
 class CallerContext(NamedTuple):

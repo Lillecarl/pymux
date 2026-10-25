@@ -16,6 +16,7 @@ from typing import (
 )
 
 import anyio
+from libpymux.agentic import caller_context
 from libpymux.protocol import Field, Mode, Packet
 from libpymux.wire import MSGPACK_ZSTD, choose, encode_json, encode_msgpack
 from prompt_toolkit.application.current import create_app_session, set_app
@@ -33,7 +34,6 @@ from pyte.placeholders import PLACEHOLDER, blanked
 from pymux.commands.common import find_pane
 
 from .actions import Origin, started_by
-from .agentic import caller_context
 from .audio import AudioLink
 from .colors import ColorDetection, DefaultColors
 from .commands import handle_command
@@ -1336,7 +1336,7 @@ class ServerConnection:
         # Who sent this, and from where: the client resolves both fresh
         # on every invocation and says them in the packet, because the
         # server's own environment names nothing about the caller.
-        # `pymux/agentic.py` holds the names.
+        # `libpymux/agentic.py` holds the names.
         pymux.caller_context = caller_context(packet.get(Field.ENVIRONMENT), packet.get(Field.CWD))
 
         client_state = self.client_state

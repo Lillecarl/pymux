@@ -16,11 +16,12 @@ Neither does I/O, so a test reaches them with no socket, and
 
 import json
 import shlex
-from typing import List, NamedTuple, Optional, Sequence, Union
+from typing import Dict, List, Mapping, NamedTuple, Optional, Sequence, Union
 
 import anyio
 import anyio.abc
 
+from .agentic import caller_fields
 from .protocol import END, READ_SIZE, Field, Framer, Packet
 
 __all__ = [
@@ -89,9 +90,14 @@ def as_command(command: Union[str, Sequence[str]]) -> str:
     return " ".join(quote(argument) for argument in command)
 
 
-def command_packet(text: str, pane_id: Optional[str] = None) -> bytes:
-    "The bytes that ask the server to run one command."
-    packet = {Field.CMD: Packet.RUN_COMMAND, Field.DATA: text, Field.PANE_ID: pane_id}
+def command_packet(text: str, pane_id: Optional[str] = None, caller: Optional[Dict[str, object]] = None) -> bytes:
+    """
+    The bytes that ask the server to run one command.
+
+    `caller` is the fields `agentic.caller_fields` makes: who sent the
+    command, and from which directory.
+    """
+    packet = {Field.CMD: Packet.RUN_COMMAND, Field.DATA: text, Field.PANE_ID: pane_id, **(caller or {})}
     return json.dumps(packet).encode("utf-8") + END
 
 
@@ -162,6 +168,8 @@ class Connection:
         command: Union[str, Sequence[str]],
         pane_id: Optional[str] = None,
         check: bool = True,
+        environment: Optional[Mapping[str, str]] = None,
+        cwd: Optional[str] = None,
     ) -> CommandResult:
         """
         Run one command on the server and read what it says.
@@ -175,11 +183,16 @@ class Connection:
         `check` raises `CommandError` on a non-zero exit code. Pass
         False for a command that answers with its exit code, such as
         `has-session`.
+
+        `environment` and `cwd` say who sends the command, as the
+        command line of pymux says it: a job starts in that directory
+        with that environment, and the agent session id in it stamps
+        the job. They default to this process's own.
         """
         text = as_command(command)
         reply = Reply()
         async with await self._connect() as stream:
-            await stream.send(command_packet(text, pane_id))
+            await stream.send(command_packet(text, pane_id, caller_fields(environment, cwd)))
             while True:
                 try:
                     data = await stream.receive(READ_SIZE)

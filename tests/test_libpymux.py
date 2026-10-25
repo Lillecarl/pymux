@@ -10,6 +10,7 @@ library against a server that is really there.
 from __future__ import annotations
 
 import json
+import os
 import socket
 import threading
 
@@ -42,6 +43,7 @@ class FakeServer:
         self.path = str(path)
         self.answers = list(answers)
         self.asked = []
+        self.packets = []
         self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.socket.bind(self.path)
         self.socket.listen(8)
@@ -63,6 +65,7 @@ class FakeServer:
                     data += chunk
                 packet = json.loads(data.split(b"\0", 1)[0].decode("utf-8"))
                 self.asked.append(packet["data"])
+                self.packets.append(packet)
 
                 answer = self.answers.pop(0) if self.answers else ("", "", 0)
                 out, err, code = answer
@@ -142,6 +145,27 @@ async def test_server_that_is_not_there(tmp_path):
     assert not await Server(connection.socket_path).is_alive()
     with pytest.raises(ServerNotRunning):
         await connection.run("list-sessions")
+
+
+async def test_a_command_says_who_sent_it(fake):
+    "A job then starts where the caller stands, stamped with its session."
+    server = fake()
+    environment = {"OPENCODE_SESSION_ID": "agent-1", "HOME": "/home/someone"}
+    await Server(server.path, environment=environment, cwd="/work").cmd("list-sessions")
+    (packet,) = server.packets
+    assert packet["environment"] == {**environment, "PYMUX_AGENTIC_ID": "agent-1"}
+    assert packet["cwd"] == "/work"
+
+
+async def test_a_command_says_this_process_sent_it_by_default(fake, monkeypatch, tmp_path):
+    monkeypatch.setenv("PYMUX_AGENTIC_ID", "this-one")
+    monkeypatch.chdir(tmp_path)
+    server = fake()
+    await Connection(server.path).run("list-sessions")
+    (packet,) = server.packets
+    assert packet["environment"]["PYMUX_AGENTIC_ID"] == "this-one"
+    assert packet["environment"]["HOME"] == os.environ["HOME"]
+    assert packet["cwd"] == str(tmp_path)
 
 
 def test_a_reply_cut_across_reads_comes_out_whole():

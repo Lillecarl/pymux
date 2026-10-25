@@ -22,7 +22,7 @@ from __future__ import annotations
 
 # `Server.list` hides the builtin inside that class.
 import builtins
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 import anyio
 
@@ -289,10 +289,21 @@ class Server:
     Nothing here holds a connection open. Every read and every command
     opens a socket, sends one message and reads the answer, which is
     what the server expects.
+
+    `environment` and `cwd` say who every command comes from, for a
+    caller that acts for someone else; `Connection.run` says what the
+    server does with them. Left out, they are this process's own.
     """
 
-    def __init__(self, socket_path: str) -> None:
+    def __init__(
+        self,
+        socket_path: str,
+        environment: Mapping[str, str] | None = None,
+        cwd: str | None = None,
+    ) -> None:
         self.connection = Connection(socket_path)
+        self.environment = environment
+        self.cwd = cwd
 
     def __repr__(self) -> str:
         return "Server(%r)" % (self.socket_path,)
@@ -336,7 +347,9 @@ class Server:
         This is the way out of the object model: anything the command
         line can do, this can do.
         """
-        return await self.connection.run(command, pane_id=pane_id, check=check)
+        return await self.connection.run(
+            command, pane_id=pane_id, check=check, environment=self.environment, cwd=self.cwd
+        )
 
     async def run[T](self, operation: Operation[T]) -> T:
         "Run one operation of `operations.py`."

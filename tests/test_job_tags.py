@@ -19,10 +19,10 @@ import json
 import os
 
 import pytest
+from libpymux.agentic import CallerContext
 from prompt_toolkit.application.current import set_app
 from session import create_session
 
-from pymux.agentic import CallerContext
 from pymux.commands import CommandException, handle_command
 from pymux.commands.run import run_job
 from pymux.commands.show_job import show_job

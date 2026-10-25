@@ -20,11 +20,11 @@ import sys
 
 import anyio
 import pytest
+from libpymux.agentic import CallerContext
 from prompt_toolkit.application.current import set_app
 from session import create_session
 
 import pymux.jobs as jobs_module
-from pymux.agentic import CallerContext
 from pymux.commands import CommandException, handle_command
 from pymux.commands.kill_job import kill_job
 from pymux.commands.run import run_job

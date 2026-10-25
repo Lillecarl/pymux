@@ -13,10 +13,10 @@ from __future__ import annotations
 
 import anyio
 import pytest
+from libpymux.agentic import CallerContext
 from prompt_toolkit.application.current import set_app
 from session import create_session
 
-from pymux.agentic import CallerContext
 from pymux.commands import CommandException, handle_command
 
 
