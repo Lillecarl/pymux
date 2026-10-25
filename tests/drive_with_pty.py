@@ -2699,7 +2699,7 @@ def check_libpymux(tmp):
     options, and output that does not parse.
     """
     import anyio
-    from libpymux import AsyncConnection, CommandError, Server
+    from libpymux import AsyncConnection, AsyncServer, CommandError, Server
 
     terminal = Terminal(tmp, "kitty")
     try:
@@ -2767,6 +2767,23 @@ def check_libpymux(tmp):
         assert listed.ok and listed.stdout, listed
         awaited = anyio.run(AsyncConnection(server.socket_path).run, "list-panes -a")
         assert awaited == listed, (awaited, listed)
+
+        # And the awaited objects read what the blocking ones read.
+        async def read_awaited():
+            served = AsyncServer(server.socket_path)
+            session = await served.session()
+            window = await session.active_window()
+            return (
+                session.id,
+                window.id,
+                [one.fields for one in await window.panes()],
+                await (await served.pane(pane.id)).capture(),
+            )
+
+        awaited_ids = anyio.run(read_awaited)
+        assert awaited_ids[:2] == (session.id, window.id), awaited_ids[:2]
+        assert [one.id for one in window.panes] == [one["pane_id"] for one in awaited_ids[2]]
+        assert "READY" in awaited_ids[3], awaited_ids[3][:200]
 
         # The escape hatch, and the errors.
         assert server.cmd("list-windows").ok

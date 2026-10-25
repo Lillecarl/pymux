@@ -15,11 +15,18 @@ the server itself.
 
 `Server.cmd()` runs any pymux command, so nothing the command line can
 do is out of reach.
+
+`AsyncServer` is the same model for a caller that runs a loop, with
+`await` in front of every read that asks the server:
+
+    server = await AsyncServer.first()
+    pane = await (await (await server.session()).active_window()).active_pane()
 """
 
 import logging
 
 from .async_connection import AsyncConnection
+from .async_objects import AsyncPane, AsyncServer, AsyncSession, AsyncWindow
 from .connection import (
     CommandError,
     CommandResult,
@@ -40,6 +47,10 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "AsyncConnection",
+    "AsyncPane",
+    "AsyncServer",
+    "AsyncSession",
+    "AsyncWindow",
     "CommandError",
     "CommandResult",
     "Connection",
