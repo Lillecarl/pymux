@@ -14,8 +14,8 @@ import socket
 import threading
 
 import pytest
-from libpymux import CommandError, Pane, Server, Window, quote
-from libpymux.connection import CommandResult
+from libpymux import AsyncConnection, CommandError, Pane, Server, ServerNotRunning, Window, quote
+from libpymux.connection import CommandResult, Reply, command_packet
 from libpymux.objects import _PANE_FIELDS, _SEPARATOR, _format_string, _rows
 from libpymux.protocol import Framer
 
@@ -130,6 +130,52 @@ def test_has_session_reads_exit_code(fake):
 def test_server_that_is_not_there(tmp_path):
     server = Server(str(tmp_path / "nothing.sock"))
     assert not server.is_alive()
+
+
+def test_a_reply_cut_across_reads_comes_out_whole():
+    reply = Reply()
+    data = b"".join(
+        json.dumps(packet).encode() + b"\0"
+        for packet in (
+            {"cmd": "out", "data": "one\n"},
+            {"cmd": "err", "data": "warn\n"},
+            {"cmd": "out", "data": "two\n"},
+            {"cmd": "exit", "code": 3},
+        )
+    )
+    for index in range(0, len(data), 5):
+        reply.feed(data[index : index + 5])
+    assert reply.result() == CommandResult("one\ntwo\n", "warn\n", 3)
+
+
+def test_a_command_packet_names_its_pane():
+    packet = command_packet("list-panes", "%1001")
+    assert packet.endswith(b"\0")
+    assert json.loads(packet[:-1]) == {"cmd": "run-command", "data": "list-panes", "pane_id": "%1001"}
+
+
+async def test_an_awaited_command_reaches_server(fake):
+    server = fake([("hello\n", "", 0)])
+    result = await AsyncConnection(server.path).run(["send-keys", "-l", "two words"])
+    assert result == CommandResult("hello\n", "", 0)
+    assert server.asked == ["send-keys -l 'two words'"]
+
+
+async def test_an_awaited_failing_command_raises(fake):
+    server = fake([("", "no such window\n", 1)])
+    connection = AsyncConnection(server.path)
+    with pytest.raises(CommandError) as raised:
+        await connection.run("select-window -t 99")
+    assert raised.value.result.exit_code == 1
+    result = await connection.run("has-session -t x", check=False)
+    assert result.exit_code == 0
+
+
+async def test_an_awaited_server_that_is_not_there(tmp_path):
+    connection = AsyncConnection(str(tmp_path / "nothing.sock"))
+    assert not await connection.is_alive()
+    with pytest.raises(ServerNotRunning):
+        await connection.run("list-sessions")
 
 
 # ----------------------------------------------------------------------

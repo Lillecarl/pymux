@@ -2698,7 +2698,8 @@ def check_libpymux(tmp):
     catches a format variable that went away, a command that changed its
     options, and output that does not parse.
     """
-    from libpymux import CommandError, Server
+    import anyio
+    from libpymux import AsyncConnection, CommandError, Server
 
     terminal = Terminal(tmp, "kitty")
     try:
@@ -2760,6 +2761,12 @@ def check_libpymux(tmp):
         # Reading a pane back.
         text = pane.capture()
         assert "READY" in text, text[:200]
+
+        # The awaited wire says what the blocking one says.
+        listed = server.cmd("list-panes -a")
+        assert listed.ok and listed.stdout, listed
+        awaited = anyio.run(AsyncConnection(server.socket_path).run, "list-panes -a")
+        assert awaited == listed, (awaited, listed)
 
         # The escape hatch, and the errors.
         assert server.cmd("list-windows").ok

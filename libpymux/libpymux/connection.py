@@ -8,6 +8,10 @@ Running a command takes one connection. The server answers with the
 output, the errors and the exit code, and then it closes. So every
 call here opens a socket of its own, the same way the command line of
 pymux does.
+
+**The wire does no I/O here.** `command_packet` is the bytes to send and
+`Reply` reads what comes back, so `Connection` and `AsyncConnection`
+(`async_connection.py`) differ only in how they move the bytes.
 """
 
 import json
@@ -21,7 +25,9 @@ __all__ = [
     "CommandError",
     "CommandResult",
     "Connection",
+    "Reply",
     "ServerNotRunning",
+    "command_packet",
     "quote",
 ]
 
@@ -74,11 +80,56 @@ def quote(argument: str) -> str:
     return shlex.quote(argument)
 
 
-def _as_command(command: Union[str, Sequence[str]]) -> str:
+def as_command(command: Union[str, Sequence[str]]) -> str:
     "One command string, from a string or from a list of arguments."
     if isinstance(command, str):
         return command
     return " ".join(quote(argument) for argument in command)
+
+
+def command_packet(text: str, pane_id: Optional[str] = None) -> bytes:
+    "The bytes that ask the server to run one command."
+    packet = {Field.CMD: Packet.RUN_COMMAND, Field.DATA: text, Field.PANE_ID: pane_id}
+    return json.dumps(packet).encode("utf-8") + END
+
+
+class Reply:
+    """
+    What the server says to one command, fed in as it arrives.
+
+    The server writes the output and the errors and then the exit code,
+    and closes. So a caller feeds every read and asks for `result()` at
+    the close.
+    """
+
+    def __init__(self) -> None:
+        self._framer = Framer()
+        self._out: List[str] = []
+        self._err: List[str] = []
+        self._exit_code = 0
+
+    def feed(self, data: bytes) -> None:
+        for raw in self._framer.feed(data):
+            if not raw:
+                continue
+            packet = json.loads(raw.decode("utf-8"))
+            kind = packet.get(Field.CMD)
+            if kind == Packet.OUT:
+                self._out.append(packet[Field.DATA])
+            elif kind == Packet.ERR:
+                self._err.append(packet[Field.DATA])
+            elif kind == Packet.EXIT:
+                self._exit_code = packet[Field.CODE]
+
+    def result(self) -> CommandResult:
+        return CommandResult("".join(self._out), "".join(self._err), self._exit_code)
+
+
+def checked(text: str, result: CommandResult, check: bool) -> CommandResult:
+    "`result`, or `CommandError` when `check` asks for a zero exit code."
+    if check and not result.ok:
+        raise CommandError(text, result)
+    return result
 
 
 class Connection:
@@ -122,17 +173,22 @@ class Connection:
         False for a command that answers with its exit code, such as
         `has-session`.
         """
-        text = _as_command(command)
+        text = as_command(command)
+        reply = Reply()
         sock = self._connect()
         try:
-            self._send(sock, {Field.CMD: Packet.RUN_COMMAND, Field.DATA: text, Field.PANE_ID: pane_id})
-            result = self._read(sock)
+            sock.sendall(command_packet(text, pane_id))
+            while True:
+                try:
+                    data = sock.recv(READ_SIZE)
+                except OSError:
+                    break
+                if not data:
+                    break
+                reply.feed(data)
         finally:
             sock.close()
-
-        if check and not result.ok:
-            raise CommandError(text, result)
-        return result
+        return checked(text, reply.result(), check)
 
     # ------------------------------------------------------------------
 
@@ -147,37 +203,3 @@ class Connection:
             ) from error
         sock.setblocking(True)
         return sock
-
-    @staticmethod
-    def _send(sock: socket.socket, packet: object) -> None:
-        sock.sendall(json.dumps(packet).encode("utf-8") + END)
-
-    @staticmethod
-    def _read(sock: socket.socket) -> CommandResult:
-        "Read until the server closes, and gather what it said."
-        out: List[str] = []
-        err: List[str] = []
-        exit_code = 0
-        framer = Framer()
-
-        while True:
-            try:
-                data = sock.recv(READ_SIZE)
-            except OSError:
-                break
-            if not data:
-                break
-
-            for raw in framer.feed(data):
-                if not raw:
-                    continue
-                packet = json.loads(raw.decode("utf-8"))
-                kind = packet.get(Field.CMD)
-                if kind == Packet.OUT:
-                    out.append(packet[Field.DATA])
-                elif kind == Packet.ERR:
-                    err.append(packet[Field.DATA])
-                elif kind == Packet.EXIT:
-                    exit_code = packet[Field.CODE]
-
-        return CommandResult("".join(out), "".join(err), exit_code)

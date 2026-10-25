@@ -19,6 +19,7 @@ do is out of reach.
 
 import logging
 
+from .async_connection import AsyncConnection
 from .connection import (
     CommandError,
     CommandResult,
@@ -38,6 +39,7 @@ from .streams import PaneStream, StreamRefused
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
+    "AsyncConnection",
     "CommandError",
     "CommandResult",
     "Connection",
