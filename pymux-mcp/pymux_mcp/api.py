@@ -102,7 +102,9 @@ async def sql(server: Server, query: str, params: dict[str, str | int | float] |
 
     Jobs are the tables `jobs` and `job_tags`; sessions, windows, panes
     and clients are under `live`, as `live.windows`. `:name` in the
-    query reads `params`. A question that writes is refused.
+    query reads `params`. A question that writes is refused. Ids there
+    are bare numbers: `window_id = 1` is the window other operations
+    call `@1`, and `pane_id = 5` the pane `%5`.
     """
     return await server.sql(query, params)
 
