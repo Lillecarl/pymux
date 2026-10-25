@@ -100,14 +100,14 @@ def _cell_of(pymux: Pymux, given: str | None) -> tuple[int, int]:
     return int(width), int(height)
 
 
-def _fitted_cell(cell: tuple[int, int], grid: screenshot.Grid, fit: int | None) -> tuple[int, int]:
+def _fitted_cell(cell: tuple[int, int], columns: int, rows: int, fit: int | None) -> tuple[int, int]:
     """
     The cell, made smaller until the longest edge of the picture is at
     most `fit` pixels. The font is sized to the cell, so the glyphs stay
     sharp where scaling the picture down would blur them.
     """
     width, height = cell
-    longest = max(grid.columns * width, len(grid.rows) * height)
+    longest = max(columns * width, rows * height)
     if fit is None or longest <= fit:
         return width, height
     scale = fit / longest
@@ -122,8 +122,9 @@ async def _png(pymux: Pymux, screen: Screen, page: Page, args: argparse.Namespac
     pane at the moment the command arrived.
     """
     first, last = _drawn_rows(screen, page, args)
-    grid = screenshot.grid_of(screen, first, last, cast(ColorOverrides, screen.colors))
-    width, height = _fitted_cell(_cell_of(pymux, args.cell), grid, args.fit)
+    cell = _fitted_cell(_cell_of(pymux, args.cell), screen.columns, max(1, last - first + 1), args.fit)
+    grid = screenshot.grid_of(screen, first, last, cast(ColorOverrides, screen.colors), cell)
+    width, height = cell
     paths = args.fonts or await screenshot.system_fonts()
     if not paths:
         raise CommandException("capture-pane: no font to draw with: pass --font, or put fontconfig's fc-match on PATH")

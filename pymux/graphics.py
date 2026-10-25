@@ -64,6 +64,7 @@ __all__ = [
     "draws_placeholders",
     "is_query_reply",
     "pane_placements",
+    "source_rgba",
     "visible_placements",
 ]
 
@@ -1337,7 +1338,7 @@ def _transmission(outer_id: int, image) -> list[str]:
     return commands
 
 
-def _source_rgba(image, source) -> tuple[bytes, int, int] | None:
+def source_rgba(image, source) -> tuple[bytes, int, int] | None:
     "The RGBA pixels a placement shows, and their size."
     pixels = sixel.to_rgba(image.format, image.width, image.height, image.data)
     if pixels is None:
@@ -1352,7 +1353,7 @@ def _source_rgba(image, source) -> tuple[bytes, int, int] | None:
 
 def _encode_blocks(image, source, columns: int, rows: int, depth) -> list[str]:
     "The half block rows of one placement. It runs in a worker thread."
-    found = _source_rgba(image, source)
+    found = source_rgba(image, source)
     if found is None:
         return []
     pixels, width, height = found
@@ -1369,7 +1370,7 @@ def _encode_sixel(image, source, target: tuple[int, int] | None) -> str | None:
     `draws_at_its_own_size` says when the own size is right, and
     `_put_command` says why the cells below the image are safe then.
     """
-    found = _source_rgba(image, source)
+    found = source_rgba(image, source)
     if found is None:
         return None
     pixels, width, height = found

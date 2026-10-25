@@ -140,6 +140,36 @@ def test_a_fallback_is_known_by_what_it_holds():
     assert 0x23BF not in screenshot._characters(FONTS[0])
 
 
+RED = (255, 0, 0)
+
+#: A two by two red image, as RGB, put over four columns and two rows.
+KITTY_RED = "\x1b_Ga=T,f=24,s=2,v=2,c=4,r=2%s;" + base64.b64encode(bytes(RED) * 4).decode() + "\x1b\\"
+
+
+async def test_a_kitty_image_covers_the_cells_it_was_put_on(pymux):
+    create_pane(pymux, "\x1b[?25l" + KITTY_RED % "")
+    image = await picture(pymux, "--cell", "9x18")
+    for column, row in ((0, 0), (3, 1)):
+        assert _cell(image, column, row, 9, 18) == {RED}, (column, row)
+    assert RED not in _cell(image, 4, 0, 9, 18)
+
+
+async def test_a_sixel_image_is_drawn_where_it_was_written(pymux):
+    "Red in colour register 0, one band of six rows, twelve columns wide."
+    create_pane(pymux, "\x1b[?25l\x1bPq#0;2;100;0;0#0" + "~" * 12 + "\x1b\\")
+    image = await picture(pymux, "--cell", "9x18")
+    assert RED in _cell(image, 0, 0, 9, 18)
+
+
+async def test_an_image_under_the_text_lets_the_text_show(pymux):
+    "z below zero is under the text, as kitty draws it; the glyph's ink lands on the red."
+    create_pane(pymux, "\x1b[?25l" + KITTY_RED % ",z=-1,C=1" + "X")
+    image = await picture(pymux, "--cell", "9x18")
+    assert RED in _cell(image, 0, 0, 9, 18)
+    assert len(_cell(image, 0, 0, 9, 18)) > 1, "the X is not drawn over the image"
+    assert _cell(image, 1, 0, 9, 18) == {RED}
+
+
 async def test_the_cursor_is_an_outline_where_it_stands(pymux):
     pane = create_pane(pymux, "ab")
     paint = Paint.of(pane.screen.colors)

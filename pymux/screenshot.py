@@ -24,7 +24,10 @@ map. Without one a missing glyph is the font's box. The person's
 terminal draws its own fallbacks on its own machine, and none of its
 fonts reach the server.
 
-Not drawn yet: images in the pane (kitty, sixel). Lillecarl/pymux#763.
+**Images are placed as a client would place them**: `graphics.
+pane_placements` answers each one's cells and crop, kitty's and
+sixel's alike, and a negative z-index goes under the text.
+Lillecarl/pymux#763.
 """
 
 from __future__ import annotations
@@ -32,9 +35,9 @@ from __future__ import annotations
 import io
 import shutil
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cache
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any, Final
 
 import anyio
 from fontTools.ttLib import TTFont
@@ -42,6 +45,8 @@ from PIL import Image, ImageDraw, ImageFont
 from pyte.cells import PLAIN_APPEARANCE
 from pyte.html import visible_char
 from pyte.painted import Paint
+
+from .graphics import PaneView, pane_placements, source_rgba
 
 if TYPE_CHECKING:
     from pyte.cells import Appearance
@@ -125,6 +130,23 @@ async def system_fonts() -> list[str]:
 
 
 @dataclass(frozen=True, slots=True)
+class Shown:
+    """
+    One image the rows show, as a client would place it: the cells it
+    covers, the crop of the image in pixels (None for all of it), and
+    its z-index, which puts it below the text when negative.
+    """
+
+    column: int
+    row: int
+    columns: int
+    rows: int
+    z: int
+    image: Any
+    source: tuple[int, int, int, int] | None
+
+
+@dataclass(frozen=True, slots=True)
 class Grid:
     "What a picture draws, copied out of a screen: each row as (character, appearance) per column."
 
@@ -134,10 +156,15 @@ class Grid:
     reverse_video: bool
     #: The cursor's column and row in `rows`, when it shows inside them.
     cursor: tuple[int, int] | None
+    images: list[Shown] = field(default_factory=list)
 
 
-def grid_of(screen: Screen, first: int, last: int, colors: ColorOverrides | None) -> Grid:
-    "The rows from `first` to `last`, numbered as the buffer numbers them."
+def grid_of(screen: Screen, first: int, last: int, colors: ColorOverrides | None, cell: tuple[int, int]) -> Grid:
+    """
+    The rows from `first` to `last`, numbered as the buffer numbers them,
+    with the images on them. `cell` is the picture's cell in pixels,
+    which a placeholder image's crop is counted in.
+    """
     page = screen.page
     assert page is not None
     columns = screen.columns
@@ -152,7 +179,12 @@ def grid_of(screen: Screen, first: int, last: int, colors: ColorOverrides | None
     cursor = None
     if page.show_cursor and first <= position.y <= last and position.x < columns:
         cursor = (position.x, position.y - first)
-    return Grid(rows, columns, Paint.of(colors), screen.has_reverse_video, cursor)
+    view = PaneView(0, 0, 0, columns, last - first + 1, first, 0, screen.graphics, screen)
+    images = [
+        Shown(x, y, width, height, placement.z, image, source)
+        for placement, image, width, height, x, y, source in pane_placements(view, *cell)
+    ]
+    return Grid(rows, columns, Paint.of(colors), screen.has_reverse_video, cursor, images)
 
 
 def _mixed(color: str, toward: str) -> str:
@@ -202,6 +234,18 @@ class _Pens:
         return self.faces[face]
 
 
+def _paste(picture: Image.Image, images: list[Shown], width: int, height: int) -> None:
+    "Each image scaled to the cells it covers, over what is drawn, through its own alpha."
+    for shown in images:
+        found = source_rgba(shown.image, shown.source)
+        if found is None:
+            continue  # A format nothing here reads.
+        pixels, image_width, image_height = found
+        drawn = Image.frombytes("RGBA", (image_width, image_height), pixels)
+        drawn = drawn.resize((shown.columns * width, shown.rows * height), Image.Resampling.LANCZOS)
+        picture.paste(drawn, (shown.column * width, shown.row * height), drawn)
+
+
 def draw(grid: Grid, faces: Faces, width: int, height: int) -> bytes:
     "The grid as a PNG, `width` by `height` pixels to a cell."
     paint = grid.paint
@@ -209,6 +253,16 @@ def draw(grid: Grid, faces: Faces, width: int, height: int) -> bytes:
     image = Image.new("RGB", (grid.columns * width, max(1, len(grid.rows)) * height), screen_background)
     pen = ImageDraw.Draw(image)
     pens = _Pens(faces, width, height)
+    # As kitty layers them: backgrounds, the images under the text, the
+    # text, and the images over it.
+    for y, row in enumerate(grid.rows):
+        for x, (char, appearance) in enumerate(row):
+            _, background = paint.shown(appearance, grid.reverse_video)
+            if char and background != screen_background:
+                span = 2 if x + 1 < len(row) and not row[x + 1][0] else 1
+                left, upper = x * width, y * height
+                pen.rectangle((left, upper, left + span * width - 1, upper + height - 1), fill=background)
+    _paste(image, [shown for shown in grid.images if shown.z < 0], width, height)
     for y, row in enumerate(grid.rows):
         for x, (char, appearance) in enumerate(row):
             if not char:
@@ -217,8 +271,6 @@ def draw(grid: Grid, faces: Faces, width: int, height: int) -> bytes:
             left, upper = x * width, y * height
             right, lower = left + span * width - 1, upper + height - 1
             foreground, background = paint.shown(appearance, grid.reverse_video)
-            if background != screen_background:
-                pen.rectangle((left, upper, right, lower), fill=background)
             rendition = appearance.rendition
             if rendition.dim:
                 foreground = _mixed(foreground, background)
@@ -231,6 +283,7 @@ def draw(grid: Grid, faces: Faces, width: int, height: int) -> bytes:
                 pen.line((left, lower - 1, right, lower - 1), fill=foreground)
             if rendition.strike:
                 pen.line((left, upper + height // 2, right, upper + height // 2), fill=foreground)
+    _paste(image, [shown for shown in grid.images if shown.z >= 0], width, height)
     if grid.cursor is not None:
         x, y = grid.cursor
         pen.rectangle((x * width, y * height, (x + 1) * width - 1, (y + 1) * height - 1), outline=screen_foreground)
