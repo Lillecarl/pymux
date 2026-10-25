@@ -22,6 +22,7 @@ from __future__ import annotations
 
 # `Server.list` hides the builtin inside that class.
 import builtins
+import os
 from collections.abc import Mapping, Sequence
 
 import anyio
@@ -389,6 +390,21 @@ class Server:
     @property
     def socket_path(self) -> str:
         return self.connection.socket_path
+
+    @classmethod
+    def enclosing(cls, environment: Mapping[str, str] | None = None) -> tuple[Server, Pane] | None:
+        """
+        The server and the pane this process runs inside, or nothing.
+
+        pymux names both in `$PYMUX` for every program it starts in a
+        pane, as `<socket path>,<pane number>`. `environment` is read
+        in place of this process's own.
+        """
+        socket_path, _, number = (os.environ if environment is None else environment).get("PYMUX", "").rpartition(",")
+        if not socket_path or not number.isdigit():
+            return None
+        server = cls(socket_path)
+        return server, Pane(server, {"pane_id": "%" + number})
 
     @classmethod
     async def list(cls) -> builtins.list[Server]:

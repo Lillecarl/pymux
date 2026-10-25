@@ -2,7 +2,9 @@
 `pymux-mcp`: serve MCP on stdio, or print the OpenAPI document.
 
 A harness starts it as a stdio MCP server. With no `--socket` each call
-acts on the one pymux server that is running, found again every time.
+acts on the server whose pane this runs in, as `$PYMUX` names it, and
+outside a pane on the one pymux server that is running, found again
+every time.
 The caller is this process: its environment and directory travel with
 every command, so a job starts where the harness started this, and the
 agent session id the harness put in the environment stamps it.
@@ -34,6 +36,9 @@ def main() -> None:
     async def server_for() -> Server:
         if arguments.socket:
             return Server(arguments.socket)
+        enclosing = Server.enclosing()
+        if enclosing is not None:
+            return enclosing[0]
         return await Server.first()
 
     build(server_for).run("stdio")

@@ -539,6 +539,16 @@ async def test_viewing_a_job_replaces_the_pane_it_names(fake, kill, asked):
     assert server.asked == [asked]
 
 
+def test_the_enclosing_pane_is_the_one_pymux_names_in_the_environment():
+    server, pane = Server.enclosing({"PYMUX": "/run/user/1/pymux.sock.a,b,1001"})
+    assert (server.socket_path, pane.id) == ("/run/user/1/pymux.sock.a,b", "%1001")
+
+
+@pytest.mark.parametrize("value", ["", "/run/pymux.sock", "/run/pymux.sock,", ",5", "/run/pymux.sock,%5"])
+def test_outside_a_pane_nothing_encloses(value):
+    assert Server.enclosing({"PYMUX": value} if value else {}) is None
+
+
 def _record(job_id, status):
     return JobRecord(job_id, "true", None, status, None, None, 1.0, None, False, {})
 

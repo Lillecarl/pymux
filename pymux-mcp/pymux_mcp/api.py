@@ -80,11 +80,14 @@ async def tree(server: Server) -> list[Json]:
     Every session, with its windows, and each window with its panes.
 
     Start here: the ids in the answer are what every other operation
-    names its targets by.
+    names its targets by. `here` marks the pane the agent itself runs
+    in, when it runs in one of this server's.
     """
+    enclosing = Server.enclosing()
+    here = enclosing[1].id if enclosing is not None and enclosing[0].socket_path == server.socket_path else None
     by_window: dict[str, list[Json]] = {}
     for pane in await server.panes():
-        by_window.setdefault(pane.window_id, []).append(pane_json(pane))
+        by_window.setdefault(pane.window_id, []).append({**pane_json(pane), "here": pane.id == here})
     found = []
     for session in await server.sessions():
         windows = [{**window_json(window), "panes": by_window.get(window.id, [])} for window in await session.windows()]

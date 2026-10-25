@@ -2833,7 +2833,14 @@ def check_pymux_mcp(tmp):
             assert session["name"] == terminal.session_name, session
             (window,) = session["windows"]
             (pane,) = window["panes"]
-            assert pane["id"].startswith("%"), pane
+            assert pane["id"].startswith("%") and not pane["here"], pane
+
+            os.environ["PYMUX"] = "%s,%s" % (server.socket_path, pane["id"].lstrip("%"))
+            try:
+                (session,) = json.loads(await ask("tree"))
+            finally:
+                del os.environ["PYMUX"]
+            assert session["windows"][0]["panes"][0]["here"], session
 
             made = json.loads(await ask("window.new", name="mcp", command="cat"))
             assert made["name"] == "mcp", made
