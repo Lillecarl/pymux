@@ -9,8 +9,9 @@ with those ids as its targets.
 from __future__ import annotations
 
 import dataclasses
-from typing import Annotated, Any
+from typing import Annotated, Any, Final
 
+import anyio
 from libpymux import Job, Pane, Server, Session, Window
 from pydantic import Field
 
@@ -30,6 +31,9 @@ type Json = dict[str, Any]
 
 Seconds = Annotated[float, Field(ge=0, description="How long to wait, in seconds.")]
 JobId = Annotated[int, Field(description="The job's id, as `job.run` and `job.list` answer it.")]
+
+#: Seconds between the text and the Return of a `no_paste` send.
+NO_PASTE_DELAY: Final = 0.5
 
 
 def pane_json(pane: Pane) -> Json:
@@ -182,14 +186,31 @@ async def send(
     text: Annotated[str, Field(description="Typed as it stands.")] = "",
     keys: Annotated[list[str] | None, Field(description='Named keys, after the text: "C-c", "Escape", "Up".')] = None,
     enter: Annotated[bool, Field(description="Press Return at the end.")] = False,
+    no_paste: Annotated[
+        bool,
+        Field(
+            description=(
+                "Wait a moment before Return, so a program that tells a paste by its speed, as Claude Code "
+                "does, reads Return as Enter and not as a newline inside the pasted text."
+            )
+        ),
+    ] = False,
 ) -> None:
-    "Type into a pane: text, then named keys, then Return when asked."
+    """
+    Type into a pane: text, then named keys, then Return when asked.
+
+    The text arrives in one burst, which some programs read as a paste,
+    and a Return in the same burst then joins the paste. `no_paste`
+    sends the Return apart from it.
+    """
     target = Pane(server, {"pane_id": pane})
     if text:
         await target.send_keys(text, enter=False)
     for key in keys or []:
         await target.send_key(key)
     if enter:
+        if no_paste:
+            await anyio.sleep(NO_PASTE_DELAY)
         await target.send_key("Enter")
 
 

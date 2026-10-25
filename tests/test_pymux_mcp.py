@@ -10,8 +10,11 @@ from __future__ import annotations
 import json
 
 import pydantic
+import pymux_mcp.api
 import pytest
 from libpymux import Server
+from libpymux.connection import CommandResult
+from libpymux.operations import drive
 from mcp.shared.memory import create_connected_server_and_client_session
 from pymux_mcp.api import OPERATIONS
 from pymux_mcp.openapi import document
@@ -61,6 +64,35 @@ async def test_a_wait_of_no_time_is_refused_before_the_server_is_asked(tmp_path)
 async def test_a_missing_argument_is_refused_before_the_server_is_asked(tmp_path):
     with pytest.raises(pydantic.ValidationError):
         await OPERATIONS.call(await _nowhere(tmp_path), "pane.wait", {"pane": "%1"})
+
+
+class RecordingServer:
+    "Runs libpymux's operations against a list, with no socket."
+
+    def __init__(self, events):
+        self.events = events
+
+    async def run(self, operation):
+        async def ask(asked):
+            self.events.append(" ".join(asked.arguments))
+            return CommandResult("", "", 0)
+
+        return await drive(operation, ask)
+
+
+@pytest.mark.parametrize("no_paste", [False, True])
+async def test_no_paste_sends_return_apart_from_the_text(monkeypatch, no_paste):
+    events = []
+
+    async def sleep(seconds):
+        events.append("sleep %g" % seconds)
+
+    monkeypatch.setattr(pymux_mcp.api.anyio, "sleep", sleep)
+    await OPERATIONS.call(
+        RecordingServer(events), "pane.send", {"pane": "%5", "text": "hi", "enter": True, "no_paste": no_paste}
+    )
+    pause = ["sleep %g" % pymux_mcp.api.NO_PASTE_DELAY] if no_paste else []
+    assert events == ["send-keys -t %5 -l hi", *pause, "send-keys -t %5 Enter"]
 
 
 def test_the_openapi_document_has_one_path_per_operation():
