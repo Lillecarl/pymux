@@ -256,10 +256,12 @@ def send_key(pane_id: str, name: str) -> Operation[None]:
     yield Ask(["send-keys", "-t", pane_id, name])
 
 
-def capture(pane_id: str, start: int | None, end: int | None, html: bool = False) -> Operation[str]:
+def capture(
+    pane_id: str, start: int | None, end: int | None, html: bool = False, compact: bool = False
+) -> Operation[str]:
     arguments = ["capture-pane", "-p"]
     if html:
-        arguments.append("-H")
+        arguments += ["-H", "--compact"] if compact else ["-H"]
     arguments += ["-t", pane_id, *_lines(start, end)]
     return (yield Ask(arguments)).stdout
 

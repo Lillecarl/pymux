@@ -370,6 +370,12 @@ async def test_capture_html_asks_for_lines_it_was_given(fake):
     assert server.asked == ["capture-pane -p -H -t %5 -S -10 -E 0"]
 
 
+async def test_compact_html_asks_for_the_spelling_a_reader_reads(fake):
+    server = fake([("", "", 0)])
+    await Pane(Server(server.path), {"pane_id": "%5"}).capture_html(compact=True)
+    assert server.asked == ["capture-pane -p -H --compact -t %5"]
+
+
 async def test_the_stylesheet_of_no_pane_names_none(fake):
     server = fake([(".pyte-screen { }\n", "", 0)])
     assert await Server(server.path).html_stylesheet() == ".pyte-screen { }\n"

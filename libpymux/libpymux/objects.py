@@ -84,13 +84,15 @@ class Pane(PaneFields):
         """
         return await self.server.run(operations.capture(self.id, start, end))
 
-    async def capture_html(self, start: int | None = None, end: int | None = None) -> str:
+    async def capture_html(self, start: int | None = None, end: int | None = None, compact: bool = False) -> str:
         """
         Read the content of this pane back as HTML.
 
         One `pre` element, holding the colours, the renditions and the
         hyperlinks that `capture` drops. `Server.html_stylesheet` is the
-        other half of it, and a caller needs that once.
+        other half of it, and a caller needs that once. `compact` needs
+        no stylesheet: it writes each colour as it looks and each
+        rendition as a tag, for a reader that reads and never draws.
 
         **The default range is the visible pane**, where `capture` reads
         the whole buffer. The line numbers are the same ones: 0 is the
@@ -103,7 +105,7 @@ class Pane(PaneFields):
         here either; `in_mode` says when that is happening and `mode`
         says which one. Lillecarl/pymux#452.
         """
-        return await self.server.run(operations.capture(self.id, start, end, html=True))
+        return await self.server.run(operations.capture(self.id, start, end, html=True, compact=compact))
 
     async def wait_for_change(self, since: int | None = None, timeout: float | None = None) -> int:
         """

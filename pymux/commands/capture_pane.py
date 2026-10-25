@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import argparse
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from pymux.main import Pymux
 
 
+from pyte.compact_html import compact_html_of_page
 from pyte.html import SCREEN_CLASS, html_of_page
+from pyte.osc import ColorOverrides
 from pyte.screen import Page, Screen
 
 from pymux.commands import CommandException, CommandParser, add_command
@@ -80,6 +82,10 @@ def _html(screen: Screen, page: Page, args: argparse.Namespace) -> str:
     first = max(_row_of(args.start, "start", top, lowest, line_offset), lowest)
     last = min(_row_of(args.end, "end", bottom, highest, line_offset), highest)
 
+    if args.compact:
+        colors = cast(ColorOverrides, screen.colors)
+        return compact_html_of_page(page, first, last, screen.columns, colors, screen.has_reverse_video)
+
     body = ""
     if first <= last:
         body = html_of_page(page, first, last, screen.columns, screen.has_reverse_video)
@@ -103,7 +109,8 @@ def capture_pane(pymux: Pymux, args: argparse.Namespace) -> None:
     **`-H` answers HTML instead of text**, so that a caller with no
     terminal can draw the pane: the colours, the renditions and the
     hyperlinks that the text drops. `show-html-stylesheet` is the other
-    half of it. Lillecarl/pymux#452.
+    half of it. Lillecarl/pymux#452. `--compact` spells it for a
+    reader with no stylesheet, an agent: `pyte.compact_html`.
 
     **The range is the visible pane, and `-S -` is the history.** A
     caller that asks for a pane means the screenful it draws, not the
@@ -117,6 +124,9 @@ def capture_pane(pymux: Pymux, args: argparse.Namespace) -> None:
 
     if page is None:
         raise CommandException("capture-pane: the screen has no page")
+
+    if args.compact and not args.H:
+        raise CommandException("capture-pane: --compact spells the HTML of -H")
 
     if args.H and args.J:
         raise CommandException("capture-pane: -J joins rows into one line, which -H cannot draw")
@@ -200,6 +210,11 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser.add_argument("-J", dest="J", action="store_true", help="Join the pieces a wrapped line was cut into.")
     parser.add_argument(
         "-H", dest="H", action="store_true", help="Answer HTML instead of text. The default range is the visible pane."
+    )
+    parser.add_argument(
+        "--compact",
+        action="store_true",
+        help="With -H: HTML for a reader, not a browser. Colours as they look, no stylesheet.",
     )
     parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to capture.")
     parser.add_argument(

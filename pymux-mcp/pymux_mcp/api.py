@@ -9,7 +9,7 @@ with those ids as its targets.
 from __future__ import annotations
 
 import dataclasses
-from typing import Annotated, Any, Final
+from typing import Annotated, Any, Final, Literal
 
 import anyio
 from libpymux import Job, Pane, Server, Session, Window
@@ -179,9 +179,23 @@ async def capture(
         int | None, Field(description="First line; 0 is the top of the screen, negative is history.")
     ] = None,
     end: Annotated[int | None, Field(description="Last line, counted the same way.")] = None,
+    format: Annotated[
+        Literal["text", "html"],
+        Field(description="`html` adds colours, bold, underline and links, at a few times the size."),
+    ] = "text",
 ) -> str:
-    "The text a pane shows, or the lines between `start` and `end`."
-    return await Pane(server, {"pane_id": pane}).capture(start, end)
+    """
+    The text a pane shows, or the lines between `start` and `end`.
+
+    `html` is one `pre`: colours as `#rrggbb` on spans, `b` `i` `u` `s`
+    for renditions, and the pane's own colours on the `pre`. Ask for it
+    when the look carries meaning, as a highlighted menu entry or a red
+    status line does.
+    """
+    target = Pane(server, {"pane_id": pane})
+    if format == "html":
+        return await target.capture_html(start, end, compact=True)
+    return await target.capture(start, end)
 
 
 @operation("pane.send")

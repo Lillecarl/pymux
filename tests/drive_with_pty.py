@@ -2850,6 +2850,8 @@ def check_pymux_mcp(tmp):
             waited = json.loads(await ask("pane.wait", pane=cat["id"], since=revision, timeout=10))
             assert waited["changed"], waited
             assert "hello from mcp" in await ask("pane.capture", pane=cat["id"]), "cat never echoed"
+            html = await ask("pane.capture", pane=cat["id"], format="html")
+            assert html.startswith("<pre style=") and "hello from mcp" in html, html
 
             split = json.loads(await ask("window.split", window=made["id"], command="cat"))
             assert split["window"] == made["id"], split
