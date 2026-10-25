@@ -636,7 +636,7 @@ in
           PYMUX_TEST_FALLBACK = "${unifont.out}/share/fonts/opentype/unifont/unifont.otf";
           # The policy `pymux/entry_points/__init__.py` installs, so the
           # suite judges the lazy program a person runs.
-          DEFERIMPORT_POLICY = "deny=hypothesis,asyncssh";
+          DEFERIMPORT_POLICY = "deny=hypothesis,asyncssh,olefile";
         };
       }
       # `--durations` names what the suite spends its time on, and
