@@ -125,6 +125,9 @@ test = [
     # suite that starts it. Linux's alone: wayland is, and macOS runs the
     # suites that need no seat.
     "pywayland; sys_platform == 'linux'",
+    # `tests/test_libpymux_is_libtmux.py` compares libpymux's objects with
+    # libtmux's, by introspection: it never runs `tmux`.
+    "libtmux",
     # TEMPORARY for the Lillecarl/pymux#258 scratch measurement. Remove
     # with `tests/measure_wire_sizes.py` and the `wire` check.
     "msgpack",
@@ -133,8 +136,7 @@ test = [
 # runs pymux behind a `tmux` shim and drives it with the client library of
 # tmux, so it judges how tmux-compatible the command line is. Not the wire:
 # libtmux runs the `tmux` executable, and pymux's own socket protocol is
-# never involved. Nothing in the sandbox runs it, so `test` would put this
-# in the closure of every pymux check for nothing.
+# never involved. Nothing in the sandbox runs it.
 #
 # The driver does not pass today. Lillecarl/pymux#321.
 dev = ["libtmux"]
