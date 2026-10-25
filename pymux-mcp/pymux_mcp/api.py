@@ -214,12 +214,13 @@ async def capture(
     if format == "html":
         return await target.capture_html(start, end, compact=True)
     if format == "png":
+        fonts = bundled()
         try:
-            return Png(await target.capture_png(start, end, cell=cell))
+            return Png(await target.capture_png(start, end, fallbacks=fonts.fallbacks, cell=cell))
         except CommandError as error:
-            if NO_FONT not in str(error) or not bundled():
+            if NO_FONT not in str(error) or not fonts.faces:
                 raise
-            return Png(await target.capture_png(start, end, fonts=bundled(), cell=cell))
+            return Png(await target.capture_png(start, end, fonts.faces, fonts.fallbacks, cell))
     return await target.capture(start, end)
 
 

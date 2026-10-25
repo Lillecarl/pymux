@@ -16,6 +16,11 @@
   # draws. Its faces go in `pymux_mcp/fonts.json`, written into the
   # output, never beside the source.
   nerdFont,
+  # The fallbacks for every glyph the font lacks, always handed over:
+  # GNU Unifont, whose two files cover the whole of Unicode once each,
+  # the multilingual plane and the planes above it. Its other files are
+  # variants of the same glyphs and stay out.
+  unifont,
 }:
 (mkProject {
   root = ./.;
@@ -23,10 +28,12 @@
   extra = rendered: {
     postInstall = ''
       faces=${nerdFont}/share/fonts/truetype/NerdFonts/JetBrainsMono/JetBrainsMonoNerdFontMono
-      for face in Regular Bold Italic BoldItalic; do
-        test -f "$faces-$face.ttf"
+      fallbacks=${unifont}/share/fonts/opentype/unifont
+      for file in "$faces"-{Regular,Bold,Italic,BoldItalic}.ttf "$fallbacks"/unifont{,_upper}.otf; do
+        test -f "$file"
       done
-      printf '["%s", "%s", "%s", "%s"]\n' "$faces-Regular.ttf" "$faces-Bold.ttf" "$faces-Italic.ttf" "$faces-BoldItalic.ttf" \
+      printf '{"faces": ["%s", "%s", "%s", "%s"], "fallbacks": ["%s", "%s"]}\n' \
+        "$faces"-{Regular,Bold,Italic,BoldItalic}.ttf "$fallbacks"/unifont{,_upper}.otf \
         > "$out/${python.sitePackages}/pymux_mcp/fonts.json"
     '';
     meta = rendered.meta // {

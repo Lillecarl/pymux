@@ -112,6 +112,7 @@ class Pane(PaneFields):
         start: int | None = None,
         end: int | None = None,
         fonts: Sequence[str] = (),
+        fallbacks: Sequence[str] = (),
         cell: tuple[int, int] | None = None,
     ) -> bytes:
         """
@@ -119,10 +120,11 @@ class Pane(PaneFields):
 
         `fonts` are font files, one per face; without them the server
         draws with fontconfig's monospace, and refuses when it finds
-        none. `cell` is the width and height of a cell in pixels; the
-        attached terminal's without it. The range is `capture_html`'s.
+        none. `fallbacks` are font files tried in order for a glyph the
+        font lacks. `cell` is the width and height of a cell in pixels;
+        the attached terminal's without it. The range is `capture_html`'s.
         """
-        return await self.server.run(operations.capture_png(self.id, start, end, fonts, cell))
+        return await self.server.run(operations.capture_png(self.id, start, end, fonts, fallbacks, cell))
 
     async def wait_for_change(self, since: int | None = None, timeout: float | None = None) -> int:
         """

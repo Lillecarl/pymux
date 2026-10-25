@@ -272,11 +272,14 @@ def capture_png(
     start: int | None,
     end: int | None,
     fonts: Sequence[str] = (),
+    fallbacks: Sequence[str] = (),
     cell: tuple[int, int] | None = None,
 ) -> Operation[bytes]:
     arguments = ["capture-pane", "-p", "--png"]
     for font in fonts:
         arguments += ["--font", font]
+    for font in fallbacks:
+        arguments += ["--fallback", font]
     if cell is not None:
         arguments += ["--cell", "%dx%d" % cell]
     arguments += ["-t", pane_id, *_lines(start, end)]
