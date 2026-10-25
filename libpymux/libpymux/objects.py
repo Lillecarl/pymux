@@ -28,7 +28,7 @@ import anyio
 
 from . import operations
 from .connection import CommandResult, Connection, ServerNotRunning
-from .operations import Ask, JobRecord, Operation, Row, drive
+from .operations import Ask, JobRecord, Operation, Row, SqlRow, drive
 from .records import PaneFields, SessionFields, WindowFields
 from .sockets import socket_paths
 from .streams import PaneStream
@@ -500,6 +500,17 @@ class Server:
     async def has_session(self, name: str = "") -> bool:
         "True when the server answers to this session name."
         return await self.run(operations.has_session(name))
+
+    async def sql(self, query: str, params: Mapping[str, object] | None = None) -> builtins.list[SqlRow]:
+        """
+        Every row of one read-only question, as dictionaries.
+
+        The server's jobs are the tables `jobs` and `job_tags`, and its
+        sessions, windows, panes and clients are under `live`:
+        `live.windows`. `:name` in the query reads `params`. A question
+        that writes is refused.
+        """
+        return await self.run(operations.sql(query, params))
 
     # -- jobs ----------------------------------------------------------
 

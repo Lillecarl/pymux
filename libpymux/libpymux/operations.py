@@ -30,6 +30,7 @@ __all__ = [
     "JobRecord",
     "Operation",
     "Row",
+    "SqlRow",
     "Tail",
     "drive",
     "format_string",
@@ -407,15 +408,16 @@ class Tail(NamedTuple):
 _JOB_COLUMNS = "id, command, directory, status, returncode, error, started, finished, pty"
 
 
-def _sql(query: str, **params: object) -> Operation[list[dict[str, Any]]]:
-    """
-    The rows of one read-only question, every one of them.
+#: One row `sql --json` answers: a column name to a value of whatever
+#: type the column holds. The columns are the question's, so no fixed
+#: shape fits them.
+type SqlRow = dict[str, Any]
 
-    A row is the JSON `sql --json` writes: a column name to a value of
-    whatever type the column holds.
-    """
+
+def sql(query: str, params: Mapping[str, object] | None = None) -> Operation[list[SqlRow]]:
+    "The rows of one read-only question, every one of them. `:name` in the query reads `params`."
     arguments = ["sql", "--json", "-n", "0"]
-    for name, value in params.items():
+    for name, value in (params or {}).items():
         arguments += ["--param", "%s=%s" % (name, value)]
     return json.loads((yield Ask([*arguments, query])).stdout)["rows"]
 
@@ -453,14 +455,14 @@ def carries(record: JobRecord, wanted: Mapping[str, str | None]) -> bool:
 
 def jobs(tags: Mapping[str, str | None] | None = None) -> Operation[list[JobRecord]]:
     "Every job the server remembers, oldest first, or those carrying every tag."
-    found = yield from _sql("SELECT %s FROM jobs ORDER BY id" % (_JOB_COLUMNS,))
-    tagged = yield from _sql("SELECT job_id, key, value FROM job_tags")
+    found = yield from sql("SELECT %s FROM jobs ORDER BY id" % (_JOB_COLUMNS,))
+    tagged = yield from sql("SELECT job_id, key, value FROM job_tags")
     return [record for record in _job_records(found, tagged) if carries(record, tags or {})]
 
 
 def job(job_id: int) -> Operation[JobRecord | None]:
-    found = yield from _sql("SELECT %s FROM jobs WHERE id = :id" % (_JOB_COLUMNS,), id=job_id)
-    tagged = yield from _sql("SELECT job_id, key, value FROM job_tags WHERE job_id = :id", id=job_id)
+    found = yield from sql("SELECT %s FROM jobs WHERE id = :id" % (_JOB_COLUMNS,), {"id": job_id})
+    tagged = yield from sql("SELECT job_id, key, value FROM job_tags WHERE job_id = :id", {"id": job_id})
     return first(_job_records(found, tagged))
 
 
