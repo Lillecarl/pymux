@@ -2811,7 +2811,9 @@ def check_pymux_mcp(tmp):
     An MCP client in memory calls them as a harness would, so the
     arguments go through the models and the answers through `render`.
     """
+    import base64
     import json
+    import struct
 
     import anyio
     from libpymux import Server
@@ -2852,6 +2854,15 @@ def check_pymux_mcp(tmp):
             assert "hello from mcp" in await ask("pane.capture", pane=cat["id"]), "cat never echoed"
             html = await ask("pane.capture", pane=cat["id"], format="html")
             assert html.startswith("<pre style=") and "hello from mcp" in html, html
+            # No fontconfig in the sandbox, so pymux finds no font and the
+            # bundled one is the backup.
+            shot = {"pane": cat["id"], "format": "png", "cell": [9, 18]}
+            drawn = await client.call_tool("pymux", {"op": "pane.capture", "args": shot})
+            assert not drawn.isError, drawn.content[0]
+            (image,) = drawn.content
+            png = base64.b64decode(image.data)
+            assert image.mimeType == "image/png" and png.startswith(b"\x89PNG"), image.mimeType
+            assert struct.unpack(">II", png[16:24]) == (cat["width"] * 9, cat["height"] * 18), png[16:24]
 
             split = json.loads(await ask("window.split", window=made["id"], command="cat"))
             assert split["window"] == made["id"], split

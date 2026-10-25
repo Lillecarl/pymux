@@ -12,12 +12,13 @@ import dataclasses
 from typing import Annotated, Any, Final, Literal
 
 import anyio
-from libpymux import Job, Pane, Server, Session, Window
+from libpymux import CommandError, Job, Pane, Server, Session, Window
 from pydantic import Field
 
+from .fonts import bundled
 from .registry import Registry
 
-__all__ = ["OPERATIONS"]
+__all__ = ["OPERATIONS", "Png"]
 
 #: Every operation below. `registry.py` says why it is read from here.
 OPERATIONS = Registry()
@@ -34,6 +35,17 @@ JobId = Annotated[int, Field(description="The job's id, as `job.run` and `job.li
 
 #: Seconds between the text and the Return of a `no_paste` send.
 NO_PASTE_DELAY: Final = 0.5
+
+#: What pymux says when it has no font to draw a PNG with, and the
+#: bundled one is offered instead.
+NO_FONT: Final = "no font to draw with"
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Png:
+    "A picture an operation answers: `server.render` sends it as image content."
+
+    data: bytes
 
 
 def pane_json(pane: Pane) -> Json:
@@ -180,21 +192,34 @@ async def capture(
     ] = None,
     end: Annotated[int | None, Field(description="Last line, counted the same way.")] = None,
     format: Annotated[
-        Literal["text", "html"],
-        Field(description="`html` adds colours, bold, underline and links, at a few times the size."),
+        Literal["text", "html", "png"],
+        Field(description="`html` adds colours, bold, underline and links; `png` is a picture of the pane."),
     ] = "text",
-) -> str:
+    cell: Annotated[
+        tuple[int, int] | None,
+        Field(description="For `png`: one cell's width and height in pixels; the attached terminal's when left out."),
+    ] = None,
+) -> str | Png:
     """
     The text a pane shows, or the lines between `start` and `end`.
 
     `html` is one `pre`: colours as `#rrggbb` on spans, `b` `i` `u` `s`
     for renditions, and the pane's own colours on the `pre`. Ask for it
     when the look carries meaning, as a highlighted menu entry or a red
-    status line does.
+    status line does. `png` draws the pane in its own colours, cursor
+    and all, for an agent that reads images: layout and box drawing at
+    a glance, where exact text reads better from `text`.
     """
     target = Pane(server, {"pane_id": pane})
     if format == "html":
         return await target.capture_html(start, end, compact=True)
+    if format == "png":
+        try:
+            return Png(await target.capture_png(start, end, cell=cell))
+        except CommandError as error:
+            if NO_FONT not in str(error) or not bundled():
+                raise
+            return Png(await target.capture_png(start, end, fonts=bundled(), cell=cell))
     return await target.capture(start, end)
 
 

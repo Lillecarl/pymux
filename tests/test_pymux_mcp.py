@@ -7,6 +7,7 @@ server that is really there.
 
 from __future__ import annotations
 
+import base64
 import json
 
 import pydantic
@@ -16,7 +17,8 @@ from libpymux import Server
 from libpymux.connection import CommandResult
 from libpymux.operations import drive
 from mcp.shared.memory import create_connected_server_and_client_session
-from pymux_mcp.api import OPERATIONS
+from mcp.types import ImageContent
+from pymux_mcp.api import OPERATIONS, Png
 from pymux_mcp.openapi import document
 from pymux_mcp.registry import UnknownOperation
 from pymux_mcp.server import build, render
@@ -118,6 +120,12 @@ def test_text_is_answered_as_it_is_and_the_rest_as_json():
     assert render("two\nlines\n") == "two\nlines\n"
     assert render(None) == "ok"
     assert json.loads(render({"a": [1, None]})) == {"a": [1, None]}
+
+
+def test_a_picture_is_answered_as_an_image():
+    image = render(Png(b"\x89PNG"))
+    assert isinstance(image, ImageContent)
+    assert (image.mimeType, base64.b64decode(image.data)) == ("image/png", b"\x89PNG")
 
 
 async def test_two_tools_over_mcp(tmp_path):

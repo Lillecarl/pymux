@@ -13,6 +13,7 @@ from.
 
 from __future__ import annotations
 
+import base64
 import json
 from collections.abc import Awaitable, Callable, Generator, Mapping, Sequence
 from dataclasses import dataclass
@@ -264,6 +265,22 @@ def capture(
         arguments += ["-H", "--compact"] if compact else ["-H"]
     arguments += ["-t", pane_id, *_lines(start, end)]
     return (yield Ask(arguments)).stdout
+
+
+def capture_png(
+    pane_id: str,
+    start: int | None,
+    end: int | None,
+    fonts: Sequence[str] = (),
+    cell: tuple[int, int] | None = None,
+) -> Operation[bytes]:
+    arguments = ["capture-pane", "-p", "--png"]
+    for font in fonts:
+        arguments += ["--font", font]
+    if cell is not None:
+        arguments += ["--cell", "%dx%d" % cell]
+    arguments += ["-t", pane_id, *_lines(start, end)]
+    return base64.b64decode((yield Ask(arguments)).stdout)
 
 
 def wait_for_change(pane_id: str, since: int | None, timeout: float | None) -> Operation[int]:

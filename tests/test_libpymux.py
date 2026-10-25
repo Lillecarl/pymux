@@ -9,6 +9,7 @@ library against a server that is really there.
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import socket
@@ -368,6 +369,13 @@ async def test_capture_html_asks_for_lines_it_was_given(fake):
     server = fake([("", "", 0)])
     await Pane(Server(server.path), {"pane_id": "%5"}).capture_html(start=-10, end=0)
     assert server.asked == ["capture-pane -p -H -t %5 -S -10 -E 0"]
+
+
+async def test_a_picture_names_its_fonts_and_cell_and_answers_bytes(fake):
+    server = fake([(base64.b64encode(b"\x89PNG").decode() + "\n", "", 0)])
+    pane = Pane(Server(server.path), {"pane_id": "%5"})
+    assert await pane.capture_png(fonts=["/f/a.ttf", "/f/b.ttf"], cell=(9, 18)) == b"\x89PNG"
+    assert server.asked == ["capture-pane -p --png --font /f/a.ttf --font /f/b.ttf --cell 9x18 -t %5"]
 
 
 async def test_compact_html_asks_for_the_spelling_a_reader_reads(fake):

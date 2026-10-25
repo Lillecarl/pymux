@@ -107,6 +107,23 @@ class Pane(PaneFields):
         """
         return await self.server.run(operations.capture(self.id, start, end, html=True, compact=compact))
 
+    async def capture_png(
+        self,
+        start: int | None = None,
+        end: int | None = None,
+        fonts: Sequence[str] = (),
+        cell: tuple[int, int] | None = None,
+    ) -> bytes:
+        """
+        Read this pane back as a picture: PNG bytes, drawn by the server.
+
+        `fonts` are font files, one per face; without them the server
+        draws with fontconfig's monospace, and refuses when it finds
+        none. `cell` is the width and height of a cell in pixels; the
+        attached terminal's without it. The range is `capture_html`'s.
+        """
+        return await self.server.run(operations.capture_png(self.id, start, end, fonts, cell))
+
     async def wait_for_change(self, since: int | None = None, timeout: float | None = None) -> int:
         """
         Hold until this pane shows something else, and answer its

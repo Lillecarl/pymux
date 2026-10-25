@@ -10,6 +10,7 @@ when it needs it.
 
 from __future__ import annotations
 
+import base64
 import json
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -18,8 +19,9 @@ import pydantic
 from libpymux import CommandError, Server, ServerNotRunning
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
+from mcp.types import ImageContent
 
-from .api import OPERATIONS
+from .api import OPERATIONS, Png
 
 __all__ = ["build", "describe", "render"]
 
@@ -35,10 +37,12 @@ answers its arguments as JSON Schema. Start with the operation `tree`.
 _ANSWERABLE = (LookupError, CommandError, ServerNotRunning, pydantic.ValidationError)
 
 
-def render(result: Any) -> str:
-    "An operation's answer as the text the agent reads: text as it is, anything else as JSON."
+def render(result: Any) -> str | ImageContent:
+    "An operation's answer as the agent reads it: text as it is, a picture as an image, anything else as JSON."
     if isinstance(result, str):
         return result
+    if isinstance(result, Png):
+        return ImageContent(type="image", data=base64.b64encode(result.data).decode("ascii"), mimeType="image/png")
     if result is None:
         return "ok"
     return json.dumps(result, ensure_ascii=False)
@@ -63,7 +67,7 @@ def build(server_for: Callable[[], Awaitable[Server]]) -> FastMCP:
     # At INFO the SDK writes a line to stderr for every request.
     mcp = FastMCP("pymux", instructions=INSTRUCTIONS, log_level="WARNING")
 
-    async def pymux(op: str, args: dict[str, Any] | None = None) -> str:
+    async def pymux(op: str, args: dict[str, Any] | None = None) -> str | ImageContent:
         "Run one pymux operation. `pymux_describe` lists them; start with `tree`."
         try:
             return render(await OPERATIONS.call(await server_for(), op, args or {}))
