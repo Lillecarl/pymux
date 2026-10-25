@@ -18,16 +18,13 @@ sent and received on.
 """
 
 import json
-from typing import Any, AsyncIterator, Dict, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 import anyio
 
-from .protocol import Field, Packet
+from .protocol import END, Field, Framer, Packet
 
 __all__ = ["PaneStream", "StreamRefused"]
-
-#: The byte that ends one JSON message on the wire.
-_END = b"\0"
 
 
 class StreamRefused(RuntimeError):
@@ -58,7 +55,8 @@ class PaneStream:
         self.pane_id = pane_id
         self.writable = writable
         self._stream: Optional[anyio.abc.ByteStream] = None
-        self._buffer = b""
+        self._framer = Framer()
+        self._ready: List[bytes] = []
 
     async def __aenter__(self) -> "PaneStream":
         await self.open()
@@ -115,17 +113,16 @@ class PaneStream:
     async def _next_packet(self) -> Optional[Dict[str, Any]]:
         assert self._stream is not None, "the stream is not open"
 
-        while _END not in self._buffer:
+        while True:
+            while self._ready:
+                raw = self._ready.pop(0)
+                if raw:
+                    return json.loads(raw.decode("utf-8"))
             try:
                 data = await self._stream.receive()
             except anyio.EndOfStream, anyio.ClosedResourceError:
                 return None
-            self._buffer += data
-
-        raw, self._buffer = self._buffer.split(_END, 1)
-        if not raw:
-            return await self._next_packet()
-        return json.loads(raw.decode("utf-8"))
+            self._ready.extend(self._framer.feed(data))
 
     # -- writing -------------------------------------------------------
 
@@ -160,4 +157,4 @@ class PaneStream:
 
     async def _packet(self, packet: Dict[str, Any]) -> None:
         assert self._stream is not None, "the stream is not open"
-        await self._stream.send(json.dumps(packet).encode("utf-8") + _END)
+        await self._stream.send(json.dumps(packet).encode("utf-8") + END)
