@@ -397,7 +397,7 @@ class Snapshot:
         process = control.process
         if isinstance(process, JobFeed):
             # The new viewer replays the job, so the screen stays here.
-            insert(self.db, [ViewerRow(pane.pane_id, process.job.job_id, process.sx, process.sy)])
+            insert(self.db, [ViewerRow(pane.pane_id, process.job.job_id, process.sx, process.sy)], replace=True)
             return
         backend = process.backend
         assert isinstance(backend, PosixBackend)  # `write` refused anything else

@@ -731,6 +731,29 @@ async def test_a_job_that_ends_between_two_writes_is_written_ended(pymux, tmp_pa
     assert _rows(tmp_path / "twice.sqlite", "SELECT status, returncode, fds FROM jobs") == [("done", 3, None)]
 
 
+async def test_a_viewer_is_written_again_by_the_second_write(pymux, tmp_path):
+    "An upgrade writes twice, and a pane viewing a job failed every upgrade on the second write."
+    pymux.socket_name = str(tmp_path / "server.sock")
+    async with pymux.running(), attached(pymux) as session:
+        await shows(session, "$")
+        job = pymux.jobs.submit("echo viewed")
+        pymux.tasks.start_soon(pymux.jobs.supervise, job)
+        with anyio.fail_after(10):
+            await pymux.jobs.wait(job)
+        with set_app(pymux.connections[-1].client_state.app):
+            pymux.handle_command("view-job -k %d" % job.job_id)
+        await once(lambda: job.job_id in _viewers_of(pymux), 10.0, "the viewer never came")
+        written = snapshot.Snapshot(tmp_path / "twice.sqlite")
+        try:
+            written.write(pymux)
+            written.write(pymux)
+            written.finish()
+        except BaseException:
+            written.abandon()
+            raise
+    assert _rows(tmp_path / "twice.sqlite", "SELECT job_id FROM pane_viewers") == [(job.job_id,)]
+
+
 async def test_a_snapshot_is_refused_while_a_command_waits(pymux, tmp_path):
     "The exec closes the waiting connection, and the script behind it would fail."
     channel = WaitChannel()
