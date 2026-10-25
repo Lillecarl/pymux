@@ -100,6 +100,20 @@ def _cell_of(pymux: Pymux, given: str | None) -> tuple[int, int]:
     return int(width), int(height)
 
 
+def _fitted_cell(cell: tuple[int, int], grid: screenshot.Grid, fit: int | None) -> tuple[int, int]:
+    """
+    The cell, made smaller until the longest edge of the picture is at
+    most `fit` pixels. The font is sized to the cell, so the glyphs stay
+    sharp where scaling the picture down would blur them.
+    """
+    width, height = cell
+    longest = max(grid.columns * width, len(grid.rows) * height)
+    if fit is None or longest <= fit:
+        return width, height
+    scale = fit / longest
+    return max(1, int(width * scale)), max(1, int(height * scale))
+
+
 async def _png(pymux: Pymux, screen: Screen, page: Page, args: argparse.Namespace) -> str:
     """
     The rows of a pane as a PNG, in base64: `pymux.screenshot` draws it.
@@ -109,7 +123,7 @@ async def _png(pymux: Pymux, screen: Screen, page: Page, args: argparse.Namespac
     """
     first, last = _drawn_rows(screen, page, args)
     grid = screenshot.grid_of(screen, first, last, cast(ColorOverrides, screen.colors))
-    width, height = _cell_of(pymux, args.cell)
+    width, height = _fitted_cell(_cell_of(pymux, args.cell), grid, args.fit)
     paths = args.fonts or await screenshot.system_fonts()
     if not paths:
         raise CommandException("capture-pane: no font to draw with: pass --font, or put fontconfig's fc-match on PATH")
@@ -185,8 +199,8 @@ def capture_pane(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | No
         if not args.p:
             raise CommandException("capture-pane: --png prints base64, so it needs -p")
         return _print_png(pymux, screen, page, args)
-    if args.fonts or args.fallbacks or args.cell:
-        raise CommandException("capture-pane: --font, --fallback and --cell draw the picture of --png")
+    if args.fonts or args.fallbacks or args.cell or args.fit is not None:
+        raise CommandException("capture-pane: --font, --fallback, --cell and --fit draw the picture of --png")
 
     if args.H and args.J:
         raise CommandException("capture-pane: -J joins rows into one line, which -H cannot draw")
@@ -301,6 +315,12 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         "--cell",
         metavar="<width>x<height>",
         help="The pixels of one cell for --png. The attached terminal's cell without it.",
+    )
+    parser.add_argument(
+        "--fit",
+        type=int,
+        metavar="<pixels>",
+        help="Shrink the cell of --png until the picture's longest edge is at most this.",
     )
     parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane to capture.")
     parser.add_argument(

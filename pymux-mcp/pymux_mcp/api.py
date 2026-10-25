@@ -36,6 +36,10 @@ JobId = Annotated[int, Field(description="The job's id, as `job.run` and `job.li
 #: Seconds between the text and the Return of a `no_paste` send.
 NO_PASTE_DELAY: Final = 0.5
 
+#: The longest edge of a PNG, in pixels: what Claude reads without
+#: scaling it down, which costs tokens and blurs it both.
+PNG_FIT: Final = 1568
+
 #: What pymux says when it has no font to draw a PNG with, and the
 #: bundled one is offered instead.
 NO_FONT: Final = "no font to draw with"
@@ -199,6 +203,10 @@ async def capture(
         tuple[int, int] | None,
         Field(description="For `png`: one cell's width and height in pixels; the attached terminal's when left out."),
     ] = None,
+    fit: Annotated[
+        int | None,
+        Field(gt=0, description="For `png`: the longest edge in pixels; the cell shrinks to fit. null for none."),
+    ] = PNG_FIT,
 ) -> str | Png:
     """
     The text a pane shows, or the lines between `start` and `end`.
@@ -216,11 +224,11 @@ async def capture(
     if format == "png":
         fonts = bundled()
         try:
-            return Png(await target.capture_png(start, end, fallbacks=fonts.fallbacks, cell=cell))
+            return Png(await target.capture_png(start, end, fallbacks=fonts.fallbacks, cell=cell, fit=fit))
         except CommandError as error:
             if NO_FONT not in str(error) or not fonts.faces:
                 raise
-            return Png(await target.capture_png(start, end, fonts.faces, fonts.fallbacks, cell))
+            return Png(await target.capture_png(start, end, fonts.faces, fonts.fallbacks, cell, fit))
     return await target.capture(start, end)
 
 

@@ -84,6 +84,13 @@ async def test_the_picture_is_the_grid_at_the_cell_it_was_given(pymux):
     assert (await picture(pymux, "--cell", "9x18")).size == (COLUMNS * 9, LINES * 18)
 
 
+async def test_fit_shrinks_the_cell_until_the_longest_edge_fits(pymux):
+    create_pane(pymux, "hello")
+    image = await picture(pymux, "--cell", "20x40", "--fit", "200")
+    assert max(image.size) <= 200
+    assert image.size == (COLUMNS * 10, LINES * 20)
+
+
 async def test_without_a_cell_it_takes_the_attached_terminals(pymux):
     "Nobody attached here, so the cell pyte assumes."
     create_pane(pymux, "hello")

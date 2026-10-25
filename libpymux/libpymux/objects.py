@@ -114,6 +114,7 @@ class Pane(PaneFields):
         fonts: Sequence[str] = (),
         fallbacks: Sequence[str] = (),
         cell: tuple[int, int] | None = None,
+        fit: int | None = None,
     ) -> bytes:
         """
         Read this pane back as a picture: PNG bytes, drawn by the server.
@@ -122,9 +123,11 @@ class Pane(PaneFields):
         draws with fontconfig's monospace, and refuses when it finds
         none. `fallbacks` are font files tried in order for a glyph the
         font lacks. `cell` is the width and height of a cell in pixels;
-        the attached terminal's without it. The range is `capture_html`'s.
+        the attached terminal's without it. `fit` shrinks the cell until
+        the longest edge is at most that many pixels. The range is
+        `capture_html`'s.
         """
-        return await self.server.run(operations.capture_png(self.id, start, end, fonts, fallbacks, cell))
+        return await self.server.run(operations.capture_png(self.id, start, end, fonts, fallbacks, cell, fit))
 
     async def wait_for_change(self, since: int | None = None, timeout: float | None = None) -> int:
         """
