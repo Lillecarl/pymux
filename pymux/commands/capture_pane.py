@@ -114,7 +114,7 @@ async def _png(pymux: Pymux, screen: Screen, page: Page, args: argparse.Namespac
     if not paths:
         raise CommandException("capture-pane: no font to draw with: pass --font, or put fontconfig's fc-match on PATH")
     try:
-        drawn = await anyio.to_thread.run_sync(_drawn, grid, paths, width, height)
+        drawn = await anyio.to_thread.run_sync(_drawn, grid, paths, args.fallbacks, width, height)
     except ValueError as error:
         raise CommandException("capture-pane: %s" % (error,))
     return base64.b64encode(drawn).decode("ascii")
@@ -124,8 +124,8 @@ async def _print_png(pymux: Pymux, screen: Screen, page: Page, args: argparse.Na
     pymux.print_command_line(await _png(pymux, screen, page, args))
 
 
-def _drawn(grid: screenshot.Grid, paths: list[str], width: int, height: int) -> bytes:
-    return screenshot.draw(grid, screenshot.faces_of(paths), width, height)
+def _drawn(grid: screenshot.Grid, paths: list[str], fallbacks: list[str], width: int, height: int) -> bytes:
+    return screenshot.draw(grid, screenshot.faces_of(paths, fallbacks), width, height)
 
 
 def _html(screen: Screen, page: Page, args: argparse.Namespace) -> str:
@@ -185,8 +185,8 @@ def capture_pane(pymux: Pymux, args: argparse.Namespace) -> Awaitable[None] | No
         if not args.p:
             raise CommandException("capture-pane: --png prints base64, so it needs -p")
         return _print_png(pymux, screen, page, args)
-    if args.fonts or args.cell:
-        raise CommandException("capture-pane: --font and --cell draw the picture of --png")
+    if args.fonts or args.fallbacks or args.cell:
+        raise CommandException("capture-pane: --font, --fallback and --cell draw the picture of --png")
 
     if args.H and args.J:
         raise CommandException("capture-pane: -J joins rows into one line, which -H cannot draw")
@@ -288,6 +288,14 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         default=[],
         metavar="<file>",
         help="A font file --png draws with, once per face. fontconfig's monospace without it.",
+    )
+    parser.add_argument(
+        "--fallback",
+        dest="fallbacks",
+        action="append",
+        default=[],
+        metavar="<file>",
+        help="A font file --png draws a glyph from when the font lacks it, tried in order.",
     )
     parser.add_argument(
         "--cell",

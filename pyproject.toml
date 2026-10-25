@@ -84,6 +84,8 @@ dependencies = [
     # `capture-pane --png` draws a pane's cells with a font, for an
     # agent that reads pictures. Lillecarl/pymux#763.
     "pillow>=10.0.0",
+    # And reads which characters each font has, to fall back per glyph.
+    "fonttools>=4.0.0",
     # `@override` on every override: the type check asks for it.
     # `typing` carries it from 3.12, so on this floor the shim is
     # vestigial; it stays until somebody rewrites the imports that

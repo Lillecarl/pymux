@@ -28,16 +28,17 @@ LINES = 5
 
 FONT_DIR = Path(os.environ.get("PYMUX_TEST_FONT_DIR", "/nonexistent"))
 FONTS = [str(FONT_DIR / ("JetBrainsMonoNerdFontMono-%s.ttf" % face)) for face in ("Regular", "Bold", "Italic")]
+FALLBACK = os.environ.get("PYMUX_TEST_FALLBACK", "/nonexistent")
 
 pytestmark = pytest.mark.skipif(not FONT_DIR.is_dir(), reason="PYMUX_TEST_FONT_DIR names no fonts")
 
 
 @pytest.fixture
 async def pymux():
-    "A server with one window, whose program ends at once."
+    "A server with one window, whose program waits, so the pane outlives a picture or two."
     mux = Pymux()
     async with mux.running():
-        await mux.create_window("%s -c pass" % (sys.executable,))
+        await mux.create_window("%s -c 'import time; time.sleep(60)'" % (sys.executable,))
         try:
             yield mux
         finally:
@@ -115,6 +116,21 @@ async def test_a_nerd_font_icon_is_drawn_and_not_the_missing_glyph(pymux):
     image = await picture(pymux, "--cell", "9x18")
     icon, missing = (image.crop((column * 9, 0, (column + 1) * 9, 18)).tobytes() for column in (0, 2))
     assert len(set(icon)) > 1 and icon != missing
+
+
+async def test_a_glyph_the_font_lacks_comes_from_the_fallback(pymux):
+    "U+23BF, the corner Claude Code draws under a tool call: no Nerd Font has it, and Unifont does."
+    create_pane(pymux, "\x1b[?25l⎿ \U0010fffd")
+    alone = await picture(pymux, "--cell", "9x18")
+    helped = await picture(pymux, "--cell", "9x18", "--fallback", FALLBACK)
+    corner, missing = (helped.crop((column * 9, 0, (column + 1) * 9, 18)).tobytes() for column in (0, 2))
+    assert corner != missing
+    assert alone.crop((0, 0, 9, 18)).tobytes() == alone.crop((18, 0, 27, 18)).tobytes(), "the font has U+23BF after all"
+
+
+def test_a_fallback_is_known_by_what_it_holds():
+    assert 0x23BF in screenshot._characters(FALLBACK)
+    assert 0x23BF not in screenshot._characters(FONTS[0])
 
 
 async def test_the_cursor_is_an_outline_where_it_stands(pymux):

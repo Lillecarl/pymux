@@ -18,6 +18,12 @@ and each one's own style name says which face it is. Without one,
 fontconfig's `monospace` answers, when `fc-match` is on PATH. pymux
 ships no font: pymux-mcp bundles one and passes it.
 
+**A glyph the font lacks comes from a fallback**, as a terminal does
+it: `--fallback` files are tried in order, each by its own character
+map. Without one a missing glyph is the font's box. The person's
+terminal draws its own fallbacks on its own machine, and none of its
+fonts reach the server.
+
 Not drawn yet: images in the pane (kitty, sixel). Lillecarl/pymux#763.
 """
 
@@ -25,10 +31,13 @@ from __future__ import annotations
 
 import io
 import shutil
+from collections.abc import Sequence
 from dataclasses import dataclass
+from functools import cache
 from typing import TYPE_CHECKING, Final
 
 import anyio
+from fontTools.ttLib import TTFont
 from PIL import Image, ImageDraw, ImageFont
 from pyte.cells import PLAIN_APPEARANCE
 from pyte.html import visible_char
@@ -51,12 +60,24 @@ _REGULAR_NAMES: Final = {"book", "normal", "roman", "medium"}
 
 @dataclass(frozen=True, slots=True)
 class Faces:
-    "The font files a picture draws with; a face nobody gave takes the regular one."
+    """
+    The font files a picture draws with; a face nobody gave takes the
+    regular one. `fallbacks` are tried in order for a character the
+    regular face lacks, as a terminal falls back per glyph.
+    """
 
     regular: str
     bold: str
     italic: str
     bolditalic: str
+    fallbacks: tuple[str, ...] = ()
+
+
+@cache
+def _characters(path: str) -> frozenset[int]:
+    "Every code point a font file has a glyph for."
+    with TTFont(path, lazy=True) as font:
+        return frozenset(font.getBestCmap() or ())
 
 
 def _face_of(path: str) -> str:
@@ -68,13 +89,16 @@ def _face_of(path: str) -> str:
     return "regular" if face in _REGULAR_NAMES else face
 
 
-def faces_of(paths: list[str]) -> Faces:
+def faces_of(paths: Sequence[str], fallbacks: Sequence[str] = ()) -> Faces:
     """
-    The faces of the font files given, each known by its own style name.
+    The faces of the font files given, each known by its own style name,
+    and the fallbacks after them.
 
     Raises `ValueError` for a file nothing reads, and for a set with no
     regular face.
     """
+    for path in fallbacks:
+        _face_of(path)
     found: dict[str, str] = {}
     for path in paths:
         found.setdefault(_face_of(path), path)
@@ -83,7 +107,7 @@ def faces_of(paths: list[str]) -> Faces:
         raise ValueError("no regular face among %s" % (", ".join(paths),))
     bold = found.get("bold", regular)
     italic = found.get("italic", regular)
-    return Faces(regular, bold, italic, found.get("bolditalic", bold))
+    return Faces(regular, bold, italic, found.get("bolditalic", bold), tuple(fallbacks))
 
 
 async def system_fonts() -> list[str]:
@@ -138,18 +162,44 @@ def _mixed(color: str, toward: str) -> str:
     return "#%02x%02x%02x" % tuple((a + b) // 2 for a, b in zip(ours, theirs, strict=True))
 
 
-def _sized(faces: Faces, width: int, height: int) -> tuple[dict[str, ImageFont.FreeTypeFont], int]:
-    """
-    Each face at the largest size whose glyph fits one cell, and how far
-    down the cell a glyph starts.
-    """
-    probe = ImageFont.truetype(faces.regular, 100)
+def _size_of(path: str, width: int, height: int) -> int:
+    "The largest size at which the font's glyph fits one cell."
+    probe = ImageFont.truetype(path, 100)
     ascent, descent = probe.getmetrics()
     advance = probe.getlength("M")
-    size = max(1, int(min(height * 100 / (ascent + descent), width * 100 / advance)))
-    fonts = {face: ImageFont.truetype(getattr(faces, face), size) for face in _FACES}
-    ascent, descent = fonts["regular"].getmetrics()
-    return fonts, (height - ascent - descent) // 2
+    return max(1, int(min(height * 100 / (ascent + descent), width * 100 / advance)))
+
+
+def _fitted(path: str, size: int, height: int) -> tuple[ImageFont.FreeTypeFont, int]:
+    "A font at `size`, and how far down the cell its glyph starts."
+    font = ImageFont.truetype(path, size)
+    ascent, descent = font.getmetrics()
+    return font, (height - ascent - descent) // 2
+
+
+class _Pens:
+    "The fonts of one picture, and which one draws each glyph."
+
+    def __init__(self, faces: Faces, width: int, height: int) -> None:
+        size = _size_of(faces.regular, width, height)
+        self.faces = {face: _fitted(getattr(faces, face), size, height) for face in _FACES}
+        self.known = _characters(faces.regular)
+        self.fallbacks = [
+            (_characters(path), _fitted(path, _size_of(path, width, height), height)) for path in faces.fallbacks
+        ]
+
+    def font_for(self, glyph: str, face: str) -> tuple[ImageFont.FreeTypeFont, int]:
+        """
+        The face asked for when it has the glyph, or the first fallback
+        that does. The bold and italic faces are taken to hold what the
+        regular one holds. A glyph nobody has gets the face's own box.
+        """
+        code = ord(glyph[0])
+        if code not in self.known:
+            for known, fitted in self.fallbacks:
+                if code in known:
+                    return fitted
+        return self.faces[face]
 
 
 def draw(grid: Grid, faces: Faces, width: int, height: int) -> bytes:
@@ -158,7 +208,7 @@ def draw(grid: Grid, faces: Faces, width: int, height: int) -> bytes:
     screen_foreground, screen_background = paint.shown(PLAIN_APPEARANCE, grid.reverse_video)
     image = Image.new("RGB", (grid.columns * width, max(1, len(grid.rows)) * height), screen_background)
     pen = ImageDraw.Draw(image)
-    fonts, top = _sized(faces, width, height)
+    pens = _Pens(faces, width, height)
     for y, row in enumerate(grid.rows):
         for x, (char, appearance) in enumerate(row):
             if not char:
@@ -175,7 +225,8 @@ def draw(grid: Grid, faces: Faces, width: int, height: int) -> bytes:
             glyph = visible_char(char)
             if glyph.strip() and not rendition.hidden:
                 face = ("bold" if rendition.bold else "") + ("italic" if rendition.italic else "")
-                pen.text((left, upper + top), glyph, font=fonts[face or "regular"], fill=foreground)
+                font, top = pens.font_for(glyph, face or "regular")
+                pen.text((left, upper + top), glyph, font=font, fill=foreground)
             if rendition.underline:
                 pen.line((left, lower - 1, right, lower - 1), fill=foreground)
             if rendition.strike:
