@@ -81,8 +81,8 @@ async def test_full_screen_leaves_the_two_options_as_a_person_set_them():
     async with in_this_process() as session:
         state, _ = await session.attach("only", BIG)
         set_option(session.pymux, state, "full-screen", "on")
-        assert session.pymux.enable_status
-        assert session.pymux.enable_pane_status
+        assert session.pymux.session_defaults.status
+        assert session.pymux.session_defaults.pane_border_status
 
 
 async def test_turning_full_screen_off_gives_the_decoration_back():

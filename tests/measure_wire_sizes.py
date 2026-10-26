@@ -278,7 +278,7 @@ async def scenario_typing(tmp, recorder) -> list:
     child = tmp / "echo.py"
     child.write_text(ECHO_CHILD)
     pymux = Pymux(startup_command="%s %s" % (sys.executable, child))
-    pymux.status_interval = NO_REFRESH
+    pymux.session_defaults.status_interval = NO_REFRESH
     before = len(recorder.packets)
     async with over_connection(pymux=pymux, read_packet=recorder) as session:
         state, _size = await session.attach("typing", SIZE)
@@ -298,7 +298,7 @@ async def scenario_burst(tmp, recorder) -> list:
     child = tmp / "burst.py"
     child.write_text(BURST_CHILD)
     pymux = Pymux(startup_command="%s %s" % (sys.executable, child))
-    pymux.status_interval = NO_REFRESH
+    pymux.session_defaults.status_interval = NO_REFRESH
     before = len(recorder.packets)
     async with over_connection(pymux=pymux, read_packet=recorder) as session:
         state, _size = await session.attach("burst", SIZE)
@@ -315,7 +315,7 @@ async def scenario_churn(tmp, recorder) -> list:
     child = tmp / "churn.py"
     child.write_text(CHURN_CHILD)
     pymux = Pymux(startup_command="%s %s" % (sys.executable, child))
-    pymux.status_interval = NO_REFRESH
+    pymux.session_defaults.status_interval = NO_REFRESH
     before = len(recorder.packets)
     async with over_connection(pymux=pymux, read_packet=recorder) as session:
         state, _size = await session.attach("churn", SIZE)

@@ -361,3 +361,11 @@ class RenderMode(StrEnum):
 
     OPTIMIZED = "optimized"
     REFERENCE = "reference"
+
+
+class Justify(StrEnum):
+    "Where the window list sits in the status line: `status-justify`."
+
+    LEFT = "left"
+    CENTER = "center"
+    RIGHT = "right"

@@ -51,6 +51,6 @@ async def test_its_last_frame_draws(client):
 @pytest.mark.parametrize("status", [True, False])
 async def test_what_time_moves_has_an_answer(client, status):
     "With the status line off, the panes in view are what it reads."
-    client.layout_manager.pymux.enable_status = status
+    client.layout_manager.pymux.session_defaults.status = status
     with set_app(client.app):
         client.layout_manager.what_time_moves()

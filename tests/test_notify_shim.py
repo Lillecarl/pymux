@@ -22,7 +22,7 @@ from pymux.main import Pymux
 
 def test_shim_holds_notify_send_script():
     pymux = Pymux()
-    pymux.notify_shim = True
+    pymux.session_defaults.notify_shim = True
     pymux._ensure_notify_shim()
 
     directory = pymux._notify_shim_dir
@@ -38,7 +38,7 @@ def test_shim_holds_notify_send_script():
 
 def test_shim_rides_path_of_new_pane():
     pymux = Pymux()
-    pymux.notify_shim = True
+    pymux.session_defaults.notify_shim = True
     pymux._ensure_notify_shim()
 
     environment = {"PATH": "/usr/bin"}
@@ -104,7 +104,7 @@ def run_script(pymux, arguments, tmp_path, monkeypatch):
 
 def test_summary_and_body_reach_notify(tmp_path, monkeypatch):
     pymux = Pymux()
-    pymux.notify_shim = True
+    pymux.session_defaults.notify_shim = True
     pymux._ensure_notify_shim()
 
     assert run_script(pymux, ["Build done", "Three files"], tmp_path, monkeypatch) == [
@@ -114,7 +114,7 @@ def test_summary_and_body_reach_notify(tmp_path, monkeypatch):
 
 def test_short_urgency_flag_picks_urgency(tmp_path, monkeypatch):
     pymux = Pymux()
-    pymux.notify_shim = True
+    pymux.session_defaults.notify_shim = True
     pymux._ensure_notify_shim()
 
     assert run_script(pymux, ["-u", "critical", "Fire", "Down"], tmp_path, monkeypatch) == [
@@ -124,7 +124,7 @@ def test_short_urgency_flag_picks_urgency(tmp_path, monkeypatch):
 
 def test_long_urgency_flag_picks_urgency(tmp_path, monkeypatch):
     pymux = Pymux()
-    pymux.notify_shim = True
+    pymux.session_defaults.notify_shim = True
     pymux._ensure_notify_shim()
 
     assert run_script(pymux, ["--urgency=low", "Note"], tmp_path, monkeypatch) == ["notify -u low -- Note"]
@@ -132,7 +132,7 @@ def test_long_urgency_flag_picks_urgency(tmp_path, monkeypatch):
 
 def test_other_flags_are_eaten_not_summaries(tmp_path, monkeypatch):
     pymux = Pymux()
-    pymux.notify_shim = True
+    pymux.session_defaults.notify_shim = True
     pymux._ensure_notify_shim()
 
     assert run_script(
@@ -145,7 +145,7 @@ def test_other_flags_are_eaten_not_summaries(tmp_path, monkeypatch):
 
 def test_dashes_end_flags(tmp_path, monkeypatch):
     pymux = Pymux()
-    pymux.notify_shim = True
+    pymux.session_defaults.notify_shim = True
     pymux._ensure_notify_shim()
 
     assert run_script(pymux, ["--", "-not-a-flag"], tmp_path, monkeypatch) == ["notify -u normal -- -not-a-flag"]

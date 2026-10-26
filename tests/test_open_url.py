@@ -22,6 +22,7 @@ from prompt_toolkit.data_structures import Size
 from session import in_this_process, once, over_connection
 
 from pymux.client.terminal import TerminalClient
+from pymux.main import Pymux
 from pymux.options import ALL_OPTIONS, SetOptionError
 
 URL = "https://example.com/auth"
@@ -91,7 +92,7 @@ async def test_broadcast_reaches_every_client():
         pymux = session.pymux
         await session.attach("a", SIZE)
         await session.attach("b", SIZE)
-        pymux.open_url_target = "broadcast"
+        pymux.session_defaults.open_url_target = "broadcast"
 
         pymux.handle_command("open-url %s" % URL)
 
@@ -162,7 +163,7 @@ async def test_ask_asks_and_opens_nothing():
     async with over_connection(read_packet=packets.append) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
-        pymux.open_url_mode = "ask"
+        pymux.session_defaults.open_url_mode = "ask"
 
         pymux.handle_command("open-url %s" % URL)
 
@@ -184,7 +185,7 @@ async def test_a_pane_cannot_confirm_its_own_open():
     async with over_connection(read_packet=packets.append) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
-        pymux.open_url_mode = "ask"
+        pymux.session_defaults.open_url_mode = "ask"
 
         await session.command("open-url -c %s" % URL)
 
@@ -197,7 +198,7 @@ async def test_yes_opens():
     async with over_connection(read_packet=packets.append) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
-        pymux.open_url_mode = "ask"
+        pymux.session_defaults.open_url_mode = "ask"
         pymux.handle_command("open-url %s" % URL)
 
         session.typed(state, "y")
@@ -212,7 +213,7 @@ async def test_no_opens_nothing():
     async with over_connection(read_packet=packets.append) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
-        pymux.open_url_mode = "ask"
+        pymux.session_defaults.open_url_mode = "ask"
         pymux.handle_command("open-url %s" % URL)
 
         session.typed(state, "n")
@@ -236,7 +237,7 @@ async def test_a_second_question_waits_its_turn():
     async with over_connection(read_packet=packets.append) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
-        pymux.open_url_mode = "ask"
+        pymux.session_defaults.open_url_mode = "ask"
 
         # `confirm-before` asks the client that ran it, so it needs the
         # app in context; `open-url` walks the attached clients instead.
@@ -285,7 +286,7 @@ async def test_off_opens_nothing():
     async with over_connection(read_packet=packets.append) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
-        pymux.open_url_mode = "off"
+        pymux.session_defaults.open_url_mode = "off"
 
         pymux.handle_command("open-url %s" % URL)
 
@@ -298,8 +299,8 @@ async def test_ask_asks_on_every_client_of_broadcast():
         pymux = session.pymux
         a, _ = await session.attach("a", SIZE)
         b, _ = await session.attach("b", SIZE)
-        pymux.open_url_mode = "ask"
-        pymux.open_url_target = "broadcast"
+        pymux.session_defaults.open_url_mode = "ask"
+        pymux.session_defaults.open_url_target = "broadcast"
 
         pymux.handle_command("open-url %s" % URL)
 
@@ -313,7 +314,7 @@ async def test_confirmed_command_opens_without_asking():
     async with over_connection(read_packet=packets.append) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
-        pymux.open_url_mode = "ask"
+        pymux.session_defaults.open_url_mode = "ask"
 
         # Inside the client's application, which is where a person's
         # yes runs it: `ClientState` answers the question from its own
@@ -365,11 +366,7 @@ async def test_another_subcommand_of_1337_opens_nothing():
 
 
 def test_open_url_option_takes_its_words_only():
-    class _Holder:
-        open_url_target = "last"
-        open_url_mode = "open"
-
-    holder = _Holder()
+    holder = Pymux()
     # The words, not their order: `commands/completer.py` sorts what it
     # offers, so nothing reads the order.
     assert sorted(ALL_OPTIONS["open-url-target"].get_all_values(holder)) == [
@@ -383,7 +380,7 @@ def test_open_url_option_takes_its_words_only():
         ALL_OPTIONS["open-url-mode"].set_value(holder, "nonsense")
 
     ALL_OPTIONS["open-url-target"].set_value(holder, "broadcast")
-    assert holder.open_url_target == "broadcast"
+    assert holder.session_defaults.open_url_target == "broadcast"
 
 
 # ----------------------------------------------------------------------
@@ -479,7 +476,7 @@ def test_mac_tries_its_opener_with_no_display(monkeypatch):
 async def test_shim_names_opener_of_session():
     async with in_this_process() as session:
         pymux = session.pymux
-        pymux.open_url_shim = True
+        pymux.session_defaults.open_url_shim = True
         pymux._ensure_open_url_shim()
 
         directory = pymux._open_url_shim_dir
@@ -497,7 +494,7 @@ async def test_shim_names_opener_of_session():
 async def test_shim_rides_path_of_new_pane():
     async with in_this_process() as session:
         pymux = session.pymux
-        pymux.open_url_shim = True
+        pymux.session_defaults.open_url_shim = True
         pymux._ensure_open_url_shim()
 
         environment = {"PATH": "/usr/bin"}
@@ -511,7 +508,7 @@ async def test_pane_that_starts_with_shim_finds_opener():
     "The whole hook, from the option through the fork to the program."
     async with in_this_process() as session:
         pymux = session.pymux
-        pymux.open_url_shim = True
+        pymux.session_defaults.open_url_shim = True
         state, _ = await session.attach("only", SIZE)
 
         # The pane prints the whole verdict on one line: is $BROWSER the

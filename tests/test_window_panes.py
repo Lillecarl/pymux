@@ -533,7 +533,7 @@ async def test_a_click_from_the_terminal_reaches_the_window(tmp_path):
     "A mouse report the client's terminal sends, on the window pane's cells."
     async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
-        pymux.enable_mouse_support = True
+        pymux.session_defaults.mouse = True
         where = await once(
             lambda: state.layout_manager.pane_write_positions.get(pane), 10.0, "the pane was never drawn"
         )
@@ -584,7 +584,7 @@ async def test_a_terminal_that_keeps_its_cell_size_keeps_the_mouse_in_cells(tmp_
     "xterm answers 1016 and not the cell size query: a pixel would be read as a cell. Lillecarl/pymux#651."
     async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
-        pymux.enable_mouse_support = True
+        pymux.session_defaults.mouse = True
         state.connection._process({"cmd": "kitty-detect"})
         state.connection._process({"cmd": "in", "data": "\x1b[?1016;2$y"})
         where = await once(
@@ -606,7 +606,7 @@ async def test_the_terminal_shows_the_pointer_the_window_asks_for(tmp_path):
     "Lillecarl/pymux#650."
     async with with_a_window(tmp_path) as (pymux, state, pane, recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
-        pymux.enable_mouse_support = True
+        pymux.session_defaults.mouse = True
         where = await once(
             lambda: state.layout_manager.pane_write_positions.get(pane), 10.0, "the pane was never drawn"
         )
@@ -620,7 +620,7 @@ async def test_a_scroll_reaches_the_window_as_the_client_says(tmp_path, scroll):
     "One cell of pixels for `smooth`, one wheel notch for `notch`. Lillecarl/pymux#652."
     async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
-        pymux.enable_mouse_support = True
+        pymux.session_defaults.mouse = True
         state.window_scroll = scroll
         where = await once(
             lambda: state.layout_manager.pane_write_positions.get(pane), 10.0, "the pane was never drawn"

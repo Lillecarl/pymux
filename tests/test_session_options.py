@@ -15,8 +15,6 @@ import pytest
 from pymux.actions import Origin, started_by
 from pymux.commands import call_command_handler
 from pymux.main import Pymux
-from pymux.options import ALL_OPTIONS
-from pymux.session import SessionOptions
 
 ENDS_AT_ONCE = "%s -c pass" % (sys.executable,)
 
@@ -56,7 +54,7 @@ async def test_t_sets_one_session_s_own_value(two):
     await run(two, "set-option", "-t", "home", "status-right", "mine")
 
     assert right(two, "home") == "mine"
-    assert right(two, "work") == two.status_right != "mine"
+    assert right(two, "work") == two.session_defaults.status_right != "mine"
 
 
 async def test_g_sets_the_default_a_session_without_its_own_reads(two):
@@ -80,7 +78,7 @@ async def test_no_flag_sets_the_caller_s_session(two):
     await run(two, "set-option", "status-right", "here")
 
     assert caller.options.own() == {"status_right": "here"}
-    assert two.status_right != "here"
+    assert two.session_defaults.status_right != "here"
 
 
 async def test_a_configuration_line_sets_the_default(two):
@@ -88,7 +86,7 @@ async def test_a_configuration_line_sets_the_default(two):
     with started_by(Origin.CONFIG):
         await run(two, "set-option", "status-right", "configured")
 
-    assert two.status_right == "configured"
+    assert two.session_defaults.status_right == "configured"
     assert all(not session.options.own() for session in two.sessions)
 
 
@@ -103,7 +101,7 @@ async def test_show_options_reads_the_session_and_the_default(two):
     await run(two, "set-option", "-t", "home", "status-right", "mine")
 
     assert await run(two, "show-options", "-t", "home", "status-right") == ["mine"]
-    assert await run(two, "show-options", "-g", "status-right") == [two.status_right]
+    assert await run(two, "show-options", "-g", "status-right") == [two.session_defaults.status_right]
 
 
 async def test_a_marks_what_a_session_did_not_set(two):
@@ -115,29 +113,17 @@ async def test_a_marks_what_a_session_did_not_set(two):
     assert "status-left*" in names
 
 
-def test_a_session_may_hold_every_session_option_and_nothing_else():
-    "A name missing here reads the default for ever; one extra reads nothing."
-    names = {option.attribute_name for option in ALL_OPTIONS.values() if option.attribute_name is not None}
-    assert set(SessionOptions.__annotations__) == names
-
-
-def test_every_name_has_a_default():
-    pymux = Pymux()
-    for name in SessionOptions.__annotations__:
-        assert hasattr(pymux, name), name
-
-
 def test_a_session_reads_the_default_until_it_sets_its_own():
     pymux = Pymux()
     options = pymux.sessions[0].options
 
-    assert options.status_right == pymux.status_right
-    pymux.status_right = "later"
+    assert options.status_right == pymux.session_defaults.status_right
+    pymux.session_defaults.status_right = "later"
     assert options.status_right == "later"
 
     options.status_right = "mine"
     assert options.status_right == "mine"
-    assert pymux.status_right == "later"
+    assert pymux.session_defaults.status_right == "later"
     assert options.own() == {"status_right": "mine"}
 
     options.forget("status_right")
@@ -154,9 +140,9 @@ def test_the_window_order_reads_through_the_session():
     pymux = Pymux()
     arrangement = pymux.sessions[0].arrangement
 
-    pymux.renumber_windows = True
+    pymux.session_defaults.renumber_windows = True
     assert arrangement.renumber_windows is True
 
     arrangement.base_index = 0
     assert pymux.sessions[0].options.own() == {"base_index": 0}
-    assert pymux.base_index == 1
+    assert pymux.session_defaults.base_index == 1

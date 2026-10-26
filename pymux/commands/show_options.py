@@ -11,7 +11,7 @@ from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import answer, option_as_written
 from pymux.commands.set_option import find_option, session_holder
 from pymux.options import Option, Scope
-from pymux.session import SessionOptions
+from pymux.session import OwnOptions
 
 
 def show_options(pymux: Pymux, args: argparse.Namespace) -> None:
@@ -47,7 +47,7 @@ def show_options(pymux: Pymux, args: argparse.Namespace) -> None:
         return (
             option.scope is Scope.SESSION
             and option.attribute_name is not None
-            and isinstance(holder, SessionOptions)
+            and isinstance(holder, OwnOptions)
             and not holder.holds(option.attribute_name)
         )
 

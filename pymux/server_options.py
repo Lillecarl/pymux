@@ -131,7 +131,7 @@ class ServerOptions(Options):
         choices=[0, 100_000, 500_000, 1_000_000],
     )
     default_terminal: str = option(
-        terminal_name(),
+        factory=terminal_name,
         doc="The TERM a new pane starts with.",
         choices=["xterm", "xterm-256color", "screen"],
     )

@@ -300,7 +300,7 @@ async def measure(samples: int) -> tuple:
         # The auto refresh arms itself before a client attaches, so this
         # is set before there is one. A tick inside a keystroke is a
         # turn that the keystroke did not ask for.
-        pymux.status_interval = NO_REFRESH
+        pymux.session_defaults.status_interval = NO_REFRESH
 
         coming_back = TheFrameComingBack(loop)
 

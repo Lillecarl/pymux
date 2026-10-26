@@ -75,7 +75,7 @@ def cursor_menu_float(state) -> Float:
 async def test_palette_is_off_to_begin_with():
     "A person used to the bar does not have it move without asking."
     async with create_session() as (pymux, state):
-        assert not pymux.command_palette
+        assert not pymux.session_defaults.command_palette
 
         in_command_mode(state)
 

@@ -229,7 +229,7 @@ def test_the_server_reads_the_same_line_and_does_nothing(tmp_path):
 
     assert list(pymux.startup_errors) == []
     # And the line under it still ran, so the file was not abandoned.
-    assert pymux.enable_status is False
+    assert pymux.session_defaults.status is False
 
 
 def test_a_person_who_types_it_with_nobody_attached_is_told():

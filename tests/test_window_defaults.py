@@ -141,11 +141,11 @@ def test_dash_g_on_session_option_just_sets_it():
     session, so a session option is already global.
     """
     pymux = Pymux()
-    assert pymux.enable_status is True
+    assert pymux.session_defaults.status is True
 
     assert run(pymux, "set-option -g status off") == []
 
-    assert pymux.enable_status is False
+    assert pymux.session_defaults.status is False
 
 
 def test_tmux_spelling_of_it_works_too():
@@ -155,7 +155,7 @@ def test_tmux_spelling_of_it_works_too():
     assert run(pymux, "set -g status off") == []
     assert run(pymux, "setw -g strip on") == []
 
-    assert pymux.enable_status is False
+    assert pymux.session_defaults.status is False
     assert pymux.arrangement.window_defaults == {"strip": True}
 
 

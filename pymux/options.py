@@ -9,37 +9,30 @@ from collections.abc import Iterable
 from enum import StrEnum
 from typing import TYPE_CHECKING, override
 
-from pyte.keys import KEY_PROFILES
-
 from .arrangement import Window
 from .enums import (
     AudioFrame,
     ClientAudio,
-    EditingKeys,
     FileTransfer,
-    OpenUrlMode,
-    OpenUrlTarget,
-    PaneBrowser,
     WindowScroll,
     Woke,
 )
 from .key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS
 from .key_spelling import key_however_it_is_written
-from .layout import Justify
 from .nearest import NEAREST
 from .option_fields import Declared, Options
 from .server_options import ServerOptions
+from .session import OwnOptions
+from .session_options import SessionOptions
 from .style import THEMES
-from .utils import get_default_shell
 from .window_options import WindowOptions
 
 if TYPE_CHECKING:
     from pymux.main import ClientState, Pymux
-    from pymux.session import SessionOptions
 
     #: What an option is written on and read from: a client, one
     #: session's own values, or the server's, which hold the defaults.
-    type Holder = ClientState | SessionOptions | Pymux
+    type Holder = ClientState | OwnOptions | Pymux
 
 __all__ = [
     "ALL_CLIENT_OPTIONS",
@@ -227,14 +220,19 @@ class FieldOption(Option):
     everything this does. Lillecarl/pymux#769.
     """
 
-    def __init__(self, declared: Declared, scope: Scope) -> None:
+    def __init__(self, declared: Declared, scope: Scope, held_as: str = "options") -> None:
         self.declared = declared
         self.scope = scope
         self.attribute_name = declared.attribute
+        #: The attribute of the owner that holds its options: a window's
+        #: `options`, and the server's `session_defaults` for a session option.
+        self.held_as = held_as
 
-    def _options_of(self, owner: Holder | Window | None) -> Options:
+    def _options_of(self, owner: Holder | Window | None) -> Options | OwnOptions:
         "The options `owner` holds, which a field option is written on."
-        options = getattr(owner, "options", None)
+        if isinstance(owner, OwnOptions):
+            return owner
+        options = getattr(owner, self.held_as, None)
         if not isinstance(options, Options):
             raise SetOptionError("This is a %s option." % self.scope)
         return options
@@ -413,55 +411,6 @@ class KeyPrefixOption(Option):
             pymux.key_bindings_manager.prefix_written = value
 
 
-class BaseIndexOption(Option):
-    "The index the first new window takes."
-
-    "Base index for window numbering."
-
-    attribute_name = "base_index"
-
-    @override
-    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
-        return ["0", "1"]
-
-    @override
-    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
-        try:
-            number = int(value)
-        except ValueError:
-            raise SetOptionError("Expecting an integer.")
-        else:
-            setattr(self.held_by(pymux, target), self._attribute(), number)
-
-
-class RenumberOption(Option):
-    """
-    Whether closing a window closes the gap it leaves.
-
-    Setting it on closes the gaps that are open already; setting it
-    off changes nothing, because no setting opens one.
-    Lillecarl/pymux#342.
-    """
-
-    attribute_name = "renumber_windows"
-
-    @override
-    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
-        return ["on", "off"]
-
-    @override
-    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
-        value = value.lower()
-        if value not in ("on", "off"):
-            raise SetOptionError('Expecting "on" or "off".')
-        setattr(self.held_by(pymux, target), self._attribute(), value == "on")
-        # A default reaches every session without its own value, so
-        # each session that reads "on" now closes its gaps.
-        for session in pymux.sessions:
-            if session.arrangement.renumber_windows:
-                session.arrangement.renumber()
-
-
 class EnumOption(Option):
     """
     One of the values of a `StrEnum`, held as the member itself.
@@ -602,177 +551,15 @@ class ThemeOption(Option):
     attribute_name = "theme"
 
 
-class JustifyOption(Option):
-    def __init__(self, attribute_name: str, scope: Scope = Scope.SESSION) -> None:
-        self.attribute_name = attribute_name
-        self.scope = scope
-
-    @override
-    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
-        return Justify._ALL
-
-    @override
-    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
-        if value not in Justify._ALL:
-            raise SetOptionError("Invalid justify option.")
-        setattr(self.held_by(pymux, target), self._attribute(), value)
-
-
-class ChoiceOption(Option):
-    """
-    An option whose value is one word of a few.
-
-    `StringOption` takes anything; this one takes the words it was
-    given, and nothing else. A word that is not one of them would
-    change nothing and say nothing, which is the worst answer a
-    configuration mistake can get.
-    """
-
-    def __init__(self, attribute_name: str, choices: Iterable[str], scope: Scope = Scope.SESSION) -> None:
-        self.attribute_name = attribute_name
-        self.choices = tuple(choices)
-        self.scope = scope
-
-    @override
-    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
-        try:
-            now = getattr(self.held_by(pymux), self._attribute())
-        except SetOptionError:
-            return sorted(set(self.choices))
-        return sorted(set((*self.choices, now)))
-
-    @override
-    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
-        if value not in self.choices:
-            raise SetOptionError("Expecting one of: %s." % ", ".join(sorted(self.choices)))
-        setattr(self.held_by(pymux, target), self._attribute(), value)
-
-
 #: What the process holds, once for every session. Lillecarl/pymux#757.
 ALL_SERVER_OPTIONS = {name: FieldOption(declared, Scope.SERVER) for name, declared in ServerOptions.DECLARED.items()}
 
 
-ALL_OPTIONS = {
-    "base-index": BaseIndexOption(),
-    # Whether closing a window packs the ones above it down, so the
-    # order has no gaps. Off, the way tmux ships it.
-    # Lillecarl/pymux#342.
-    "renumber-windows": RenumberOption(),
-    "bell": OnOffOption("enable_bell"),
-    # Which client's browser it lands on. `OpenUrlTarget` says.
-    "open-url-target": EnumOption(OpenUrlTarget, "open_url_target"),
-    # What happens to an open request. `OpenUrlMode` says.
-    "open-url-mode": EnumOption(OpenUrlMode, "open_url_mode"),
-    # Put the opener of this session on the PATH of a pane, as
-    # "xdg-open", and name it in $BROWSER, so that a program in a pane
-    # opens a browser here without knowing pymux. A pane that runs
-    # already keeps the PATH it was born with; only new panes see it.
-    "open-url-shim": OnOffOption("open_url_shim"),
-    # Which programs in a pane find `pymux-browser` as their browser:
-    # "agents" (Playwright MCP and playwright-cli), "all" (Puppeteer
-    # too), or "off". `PaneBrowser` says why the default is "agents".
-    # A pane that runs already keeps the environment it was born with.
-    "pane-browser": EnumOption(PaneBrowser, "pane_browser"),
-    # Put the notifier of this session on the PATH of a pane, as
-    # "notify-send", so that a program in a pane notifies the hub
-    # without knowing pymux. It shadows the notifier of the desktop:
-    # inside a pane a notification belongs to the session first, and
-    # the hub is where it waits until something emits it. A pane that
-    # runs already keeps the PATH it was born with; only new panes
-    # see it.
-    "notify-shim": OnOffOption("notify_shim"),
-    # Bring the port with the URL. A "localhost" address opened on the
-    # browser of the machine at the keyboard means a service on that
-    # machine, which is the wrong one, so the client forwards the port
-    # first. Lillecarl/pymux#437.
-    "open-url-forward": OnOffOption("open_url_forward"),
-    # How long such a forward outlives its last connection, in seconds.
-    # A forward carrying a connection is never idle, however quiet it
-    # is, so this measures a page nobody has open. Opening the URL
-    # again brings a reaped forward back.
-    "open-url-forward-idle": PositiveIntOption("open_url_forward_idle", [60, 300, 600, 3600]),
-    "history-limit": PositiveIntOption("history_limit", [200, 500, 1000, 2000, 5000, 10000]),
-    # How long a strip's view takes to glide to the column a person
-    # moved to, in milliseconds. Zero jumps.
-    "strip-animation-time": PositiveIntOption("strip_animation_time", [0, 100, 150, 250]),
-    # The shade at the edge where the view cuts a pane: how many cells
-    # it fades over, zero for none, and how far the cell at the edge
-    # moves towards black or white, in percent. Lillecarl/pymux#616.
-    "cut-shade-width": PositiveIntOption("cut_shade_width", [0, 2, 4, 6, 8]),
-    "cut-shade-strength": PositiveIntOption("cut_shade_strength", [8, 12, 16, 24]),
-    "mouse": OnOffOption("enable_mouse_support"),
-    "prefix": KeyPrefixOption(),
-    "remain-on-exit": OnOffOption("remain_on_exit"),
-    "status": OnOffOption("enable_status"),
-    "pane-border-status": OnOffOption("enable_pane_status"),
-    # **`full-screen` is not here.** It hides the two options above,
-    # and it belongs to one terminal, so it is in
-    # `ALL_CLIENT_OPTIONS`. Lillecarl/pymux#471.
-    # Draw the ":" command line as a box in the middle of the screen
-    # instead of a bar along the bottom. Off, because a person used to
-    # the bar should not have it move without asking.
-    "command-palette": OnOffOption("command_palette"),
-    # Draw the keys a prefix leads to in a popup while the prefix
-    # waits. Off, because a person who knows the keys does not want a
-    # popup in the way. Lillecarl/pymux#29.
-    "which-key": OnOffOption("which_key"),
-    # The window chooser starts each session on a line of its own, so
-    # the sessions read as groups. Lillecarl/pymux#531.
-    "chooser-session-lines": OnOffOption("chooser_session_lines"),
-    "status-keys": EnumOption(EditingKeys, "status_keys"),
-    "mode-keys": EnumOption(EditingKeys, "mode_keys"),
-    # What lock-server, lock-session and lock-client run to hold the
-    # keyboard. tmux's default is vlock.
-    "lock-command": StringOption("lock_command", ["vlock"]),
-    "status-right": StringOption("status_right"),
-    "status-left": StringOption("status_left"),
-    "status-right-length": PositiveIntOption("status_right_length", [40]),
-    "status-left-length": PositiveIntOption("status_left_length", [20]),
-    # The most rows the window list wraps to when it does not fit on
-    # one. A window past the last row is cut. Lillecarl/pymux#723.
-    "status-max-rows": PositiveIntOption("status_max_rows", [1, 2, 3, 5]),
-    "window-status-format": StringOption("window_status_format"),
-    "window-status-current-format": StringOption("window_status_current_format"),
-    # What `#F` writes for each mark of a window. ASCII, so every font
-    # has them; a configuration may set icons. Lillecarl/pymux#767.
-    "bell-symbol": StringOption("bell_symbol"),
-    "activity-symbol": StringOption("activity_symbol"),
-    "silence-symbol": StringOption("silence_symbol"),
-    "notification-symbol": StringOption("notification_symbol"),
-    "default-shell": StringOption("default_shell", [get_default_shell()]),
-    "status-justify": JustifyOption("status_justify"),
-    "status-interval": PositiveIntOption("status_interval", [1, 2, 4, 8, 16, 30, 60]),
-    # The names a client brings with it, space separated, each one a
-    # pattern. `Pymux.take_environment_from` says what happens to them.
-    # Lillecarl/pymux#271.
-    "update-environment": StringOption("update_environment"),
-    # Make up the halves of a key event that the keyboard of a client
-    # cannot send, so that a pane gets the keyboard protocol whole from
-    # any terminal.
-    "synthesize-key-events": OnOffOption("synthesize_key_events"),
-    # Whose answer a program in the legacy encoding gets where the
-    # terminals split, for a client whose terminal pymux cannot name.
-    # A terminal that names itself gets its own. Lillecarl/pymux#706.
-    "key-profile": ChoiceOption("key_profile", KEY_PROFILES),
-    # May a program inside a pane resize that pane? Off by default: a
-    # pane sits in a layout, and making one taller makes another
-    # shorter.
-    "allow-program-resize": OnOffOption("allow_program_resize"),
-    # Draw the theme's own background behind every cell of a pane, so
-    # the terminal's background is never seen and a theme is the
-    # colour of the whole screen. Off by default: a program that
-    # relies on the terminal's background through its default cells --
-    # an image viewer, a sixel client -- keeps seeing the terminal
-    # while this is off, and the terminal's ANSI palette stays the
-    # terminal's either way. A client that asks the terminal its
-    # background (OSC 11, Lillecarl/pymux#223) is the softer cousin of
-    # the same idea; with this on, the asking is unnecessary rather
-    # than wrong. The panes answer a program's colour queries with
-    # the theme's sixteen as well, so a theme is one colour scheme
-    # from the chrome to the palette. Lillecarl/pymux#273,
-    # Lillecarl/pymux#283.
-    "paint-screen": OnOffOption("paint_screen"),
+ALL_OPTIONS: dict[str, Option] = {
+    name: FieldOption(declared, Scope.SESSION, "session_defaults") for name, declared in SessionOptions.DECLARED.items()
 }
+# The prefix lives in the binding manager, which saves it with the keys.
+ALL_OPTIONS["prefix"] = KeyPrefixOption()
 
 
 #: What one attached terminal holds. Only a client can know these:

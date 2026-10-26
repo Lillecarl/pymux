@@ -327,7 +327,7 @@ async def test_theme_that_owns_screen_gives_pane_its_palette():
     Lillecarl/pymux#223.
     """
     async with a_client() as (pymux, client):
-        pymux.paint_screen = True
+        pymux.session_defaults.paint_screen = True
         client.theme = "pygments:dracula"
         pane = SimpleNamespace(screen=Screen(24, 80, write_process_input=lambda data: None))
 
@@ -348,7 +348,7 @@ def test_pane_keeps_convention_while_terminal_owns_colours():
     # The case this judges is the one where the theme does *not* own
     # the screen, which `conftest.py` turns on for the suite.
     ALL_OPTIONS["paint-screen"].set_value(pymux, "off")
-    assert pymux.paint_screen is False
+    assert pymux.session_defaults.paint_screen is False
     screen = Screen(24, 80, write_process_input=lambda data: None)
     pane = SimpleNamespace(screen=screen)
 

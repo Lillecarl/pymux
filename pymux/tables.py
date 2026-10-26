@@ -27,6 +27,7 @@ from pyte.keep import Keep
 
 from .option_fields import Options
 from .server_options import ServerOptions
+from .session_options import SessionOptions
 from .window_options import WindowOptions
 
 __all__ = [
@@ -104,8 +105,15 @@ WindowOptionRow = options_table(
 #: The server's options, in its one row.
 ServerOptionRow = options_table(ServerOptions, "ServerOptionRow", "server_options", "id", None, defaults=False)
 
+#: What every session reads unless it set its own, in one row.
+SessionDefaultRow = options_table(SessionOptions, "SessionDefaultRow", "session_defaults", "id", None, defaults=False)
+#: The values one session set itself. Lillecarl/pymux#756.
+SessionOptionRow = options_table(
+    SessionOptions, "SessionOptionRow", "session_options", "session_id", "sessions(session_id)", defaults=True
+)
+
 #: The tables `options_table` writes.
-GENERATED = (ServerOptionRow, WindowDefaultRow, WindowOptionRow)
+GENERATED = (ServerOptionRow, SessionDefaultRow, SessionOptionRow, WindowDefaultRow, WindowOptionRow)
 
 SCHEMA = (
     """
@@ -117,12 +125,9 @@ CREATE TABLE counters(
   name TEXT PRIMARY KEY,
   value INTEGER NOT NULL
 );
-CREATE TABLE options(
-  name TEXT PRIMARY KEY,
-  value
-);
 """
     + ServerOptionRow.SQL
+    + SessionDefaultRow.SQL
     + """CREATE TABLE global_environment(
   name TEXT PRIMARY KEY,
   value TEXT
@@ -153,13 +158,8 @@ CREATE TABLE session_tags(
   value TEXT,
   PRIMARY KEY (session_id, key)
 );
-CREATE TABLE session_options(
-  session_id INTEGER NOT NULL REFERENCES sessions(session_id),
-  name TEXT NOT NULL,
-  value,
-  PRIMARY KEY (session_id, name)
-);
 """
+    + SessionOptionRow.SQL
     + WindowDefaultRow.SQL
     + """CREATE TABLE windows(
   window_id INTEGER PRIMARY KEY,
@@ -393,8 +393,8 @@ CREATE TABLE client_modes(
 TABLES = (
     "server",
     "counters",
-    "options",
     "server_options",
+    "session_defaults",
     "global_environment",
     "sessions",
     "session_environment",
@@ -478,14 +478,6 @@ class CounterRow:
 
 
 @dataclass(frozen=True, slots=True)
-class OptionRow:
-    TABLE: ClassVar[str] = "options"
-    KEY: ClassVar[tuple[str, ...]] = ("name",)
-    name: str
-    value: Any
-
-
-@dataclass(frozen=True, slots=True)
 class GlobalEnvironmentRow:
     TABLE: ClassVar[str] = "global_environment"
     KEY: ClassVar[tuple[str, ...]] = ("name",)
@@ -527,17 +519,6 @@ class SessionTagRow:
     session_id: int
     key: str
     value: str | None
-
-
-@dataclass(frozen=True, slots=True)
-class SessionOptionRow:
-    "A value one session set itself; the rest read `options`. Lillecarl/pymux#756."
-
-    TABLE: ClassVar[str] = "session_options"
-    KEY: ClassVar[tuple[str, ...]] = ("session_id", "name")
-    session_id: int
-    name: str
-    value: Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -876,8 +857,8 @@ class ClientModesRow:
 ROWS = (
     ServerRow,
     CounterRow,
-    OptionRow,
     ServerOptionRow,
+    SessionDefaultRow,
     GlobalEnvironmentRow,
     SessionRow,
     SessionEnvironmentRow,

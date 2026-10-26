@@ -62,7 +62,7 @@ from pymux import arrangement
 from .actions import Kind, Origin, note, started_by
 from .cut_shade import Hidden, hex_of, hidden_of, lifts, shade
 from .divided import Divided
-from .enums import Chooser, EditingKeys, Woke
+from .enums import Chooser, EditingKeys, Justify, Woke
 from .filters import WaitsForConfirmation
 from .format import format_pymux_string
 from .log import logger
@@ -86,10 +86,6 @@ def option_value_of(pymux, name: str) -> str:
     What one option holds, spelled the way set-option with no value
     reads it back. A window option reads the window that is active, a
     client option the client this command means.
-
-    Imported here, and not at the top: options.py reads this module
-    for Justify, so this module may not read options.py while it
-    loads.
     """
     from pymux.commands.common import option_as_written
     from pymux.options import Scope
@@ -170,16 +166,6 @@ CLOCK_FORMAT = "%H:%M"
 #: clock. In code and not in the default format, so a person's own
 #: `status-right` gets it too. Lillecarl/pymux#530.
 PASSTHROUGH_MARK = " PASSTHROUGH "
-
-
-class Justify:
-    "Justify enum for the status bar."
-
-    LEFT = "left"
-    CENTER = "center"
-    RIGHT = "right"
-
-    _ALL = [LEFT, CENTER, RIGHT]
 
 
 class Z_INDEX:
@@ -1593,7 +1579,7 @@ class LayoutManager:
         plane asks it of every watcher, so it reads this client's own
         `full-screen` rather than `Pymux.show_status`.
         """
-        if not self.client_state.session.options.enable_status or self.client_state.full_screen:
+        if not self.client_state.session.options.status or self.client_state.full_screen:
             return 0
         return len(self._status_lines())
 

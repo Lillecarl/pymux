@@ -74,7 +74,7 @@ async def test_a_pattern_takes_a_family_of_names():
     "tmux matches each entry with `fnmatch`, and so does this."
     async with in_this_process() as session:
         pymux = session.pymux
-        pymux.update_environment = "XDG_*"
+        pymux.session_defaults.update_environment = "XDG_*"
 
         state, _ = await session.attach(
             "only",
@@ -96,7 +96,7 @@ async def test_what_a_person_set_by_hand_is_not_touched():
         await session.attach("second", SIZE, environment={"DISPLAY": ":1"})
 
         assert state.session.environment["MY_OWN"] == "kept"
-        assert pymux.update_environment.startswith("DISPLAY ")
+        assert pymux.session_defaults.update_environment.startswith("DISPLAY ")
 
 
 async def test_the_option_reads_back_as_it_was_written():

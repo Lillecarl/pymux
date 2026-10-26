@@ -69,7 +69,7 @@ def put_cursor(state, x: int, y: int) -> None:
 async def test_which_key_is_off_to_begin_with():
     "A person who knows the keys does not want a popup in the way."
     async with create_session() as (pymux, state):
-        assert not pymux.which_key
+        assert not pymux.session_defaults.which_key
 
         state.has_prefix = True
 
@@ -108,7 +108,7 @@ async def test_prefix_alone_asks_for_frame():
         assert asked
 
         asked.clear()
-        pymux.which_key = False
+        pymux.session_defaults.which_key = False
         with set_app(state.app):
             pymux.key_bindings_manager._prefix_binding(None)
 

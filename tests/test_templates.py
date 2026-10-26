@@ -74,7 +74,9 @@ async def test_a_template_can_ask_a_question(pymux):
 
 async def test_a_template_can_do_arithmetic_and_filters(pymux):
     assert format_pymux_string(pymux, "{{ session_name | upper }}") == (pymux.session_name.upper())
-    assert format_pymux_string(pymux, "{{ (history_limit | int) + 1 }}") == str(pymux.history_limit + 1)
+    assert format_pymux_string(pymux, "{{ (history_limit | int) + 1 }}") == str(
+        pymux.session_defaults.history_limit + 1
+    )
 
 
 async def test_a_name_nobody_knows_draws_nothing(pymux):

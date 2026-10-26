@@ -360,13 +360,13 @@ def test_pane_painting_is_option():
     # so that a picture shows what a theme does. This is the test of
     # the option itself, so it says which way it wants it.
     ALL_OPTIONS["paint-screen"].set_value(pymux, "off")
-    assert pymux.paint_screen is False
+    assert pymux.session_defaults.paint_screen is False
 
     ALL_OPTIONS["paint-screen"].set_value(pymux, "on")
-    assert pymux.paint_screen is True
+    assert pymux.session_defaults.paint_screen is True
 
     ALL_OPTIONS["paint-screen"].set_value(pymux, "off")
-    assert pymux.paint_screen is False
+    assert pymux.session_defaults.paint_screen is False
 
 
 def test_body_of_overlay_pane_draws_like_pane():

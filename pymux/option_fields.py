@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass, field, fields
+from dataclasses import MISSING, dataclass, field, fields
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -43,9 +43,10 @@ class _Said:
 
 
 def option(
-    default: Any,
+    default: Any = MISSING,
     *,
     doc: str,
+    factory: Callable[[], Any] | None = None,
     choices: Iterable[object] = (),
     parse: Callable[[str], Any] | None = None,
     on_set: Callable[[Pymux, Any], None] | None = None,
@@ -55,6 +56,8 @@ def option(
     """
     Declare one option.
 
+    :param factory: Makes the default when an owner is made, in place
+        of `default`: one that reads the environment, such as `$SHELL`.
     :param choices: What Tab offers besides the value it holds. A
         boolean or an enum offers its own values.
     :param parse: The written value to what the option holds, or
@@ -69,6 +72,8 @@ def option(
         `REBUILT`, and the snapshot has no column for it.
     """
     said = _Said(doc, tuple(str(one) for one in choices), parse, on_set, on_write, keep)
+    if factory is not None:
+        return field(default_factory=factory, metadata={_KEY: said})
     return field(default=default, metadata={_KEY: said})
 
 
@@ -218,13 +223,15 @@ def options[T: Options](cls: type[T]) -> type[T]:
     for each in fields(made):  # type: ignore[arg-type]
         said: _Said = each.metadata[_KEY]
         name = each.name.replace("_", "-")
+        # A factory's default, as this process makes it, says the type.
+        default = each.default if each.default is not MISSING else each.default_factory()  # type: ignore[misc]
         declared[name] = Declared(
             name=name,
             attribute=each.name,
-            default=each.default,
+            default=default,
             doc=said.doc,
             choices=said.choices,
-            parse=said.parse or _parse_of(each.default),
+            parse=said.parse or _parse_of(default),
             on_set=said.on_set,
             keep=said.keep,
         )

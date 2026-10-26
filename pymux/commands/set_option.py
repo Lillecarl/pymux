@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pymux.main import Pymux
     from pymux.options import Holder
-    from pymux.session import SessionOptions
+    from pymux.session import OwnOptions
 
 
 from pymux.actions import Origin, started_by_now
@@ -45,7 +45,7 @@ def find_option(pymux: Pymux, name: str, scope: Scope) -> Option | None:
     return None
 
 
-def session_holder(pymux: Pymux, args: argparse.Namespace) -> SessionOptions | Pymux:
+def session_holder(pymux: Pymux, args: argparse.Namespace) -> OwnOptions | Pymux:
     """
     What a session option is written on and read from: the defaults
     on `Pymux` or one session's own values.
@@ -139,11 +139,10 @@ def set_option(
             if option.scope is Scope.SESSION and args.g > 1 and option.attribute_name is not None:
                 for session in pymux.sessions:
                     session.options.forget(option.attribute_name)
-            # The colour base of every pane is derived from two
-            # things: which theme owns the screen, and whether it
-            # does. A pane that exists heard the old answer, and
-            # hears the new one now. Lillecarl/pymux#283.
-            if name in ("theme", "paint-screen"):
+            # The colour base of every pane is derived from which theme
+            # owns the screen; `paint-screen` says whether it does.
+            # Lillecarl/pymux#283.
+            if name == "theme":
                 pymux.sync_color_bases()
     except SetOptionError as e:
         raise CommandException(e.message)

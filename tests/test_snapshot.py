@@ -36,8 +36,8 @@ from pymux.jobs import JobFeed, JobPipes
 from pymux.main import Pymux
 from pymux.notifications import Urgency
 from pymux.query import ask
-from pymux.server_options import ServerOptions
-from pymux.tables import ServerOptionRow
+from pymux.session_options import SessionOptions
+from pymux.tables import SessionDefaultRow
 
 
 @pytest.fixture
@@ -241,6 +241,10 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     second.arrangement.base_index = 0
     second.arrangement.renumber_windows = True
     first.options.status_right = "first's own"
+    # The second holds a value of its own for every option, so each
+    # column differs between the two rows.
+    for each in SessionOptions.DECLARED.values():
+        setattr(second.options, each.attribute, getattr(second.options, each.attribute))
     # Every default but frame-rate, which the first session's holds.
     second.arrangement.window_defaults.update(
         synchronize_panes=True,
@@ -352,7 +356,7 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
 
 
 #: A table that holds one row, so no column of it can vary.
-ONE_ROW = {"server_options"}
+ONE_ROW = {"server_options", "session_defaults"}
 
 #: Columns that hold one value in every row however the server is used.
 CONSTANT = {
@@ -636,7 +640,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
     # And the viewers' window: split down, then beside.
     assert _rows(first, "SELECT count(*) FROM splits WHERE parent_split_id IS NOT NULL") == [(3,)]
     assert _rows(first, "SELECT window_name FROM windows WHERE window_name IS NOT NULL") == [("built",)]
-    assert _rows(first, "SELECT value FROM options WHERE name = 'status-left'") == [("left",)]
+    assert _rows(first, "SELECT status_left FROM session_defaults") == [("left",)]
     assert _rows(first, "SELECT frame_rate FROM window_defaults WHERE frame_rate IS NOT NULL") == [(10,)]
     assert _rows(
         first, "SELECT count(*) FROM split_weights WHERE kind = 'pane' AND id NOT IN (SELECT pane_id FROM panes)"
@@ -720,33 +724,44 @@ def test_the_table_list_is_the_schema_in_order():
     assert list(tables.TABLES) == made
 
 
-def _as_version_37(path) -> None:
-    "Put the server's options back in `options`, as names and values, as 37 kept them."
+def _as_version_38(path) -> None:
+    "Put the session defaults and each session's own values back as names and values, as 38 kept them."
+    declared = [each for each in SessionOptions.DECLARED.values() if each.attribute in SessionDefaultRow.COLUMNS]
     db = apsw.Connection(str(path))
-    for each in ServerOptions.DECLARED.values():
-        if each.attribute in ServerOptionRow.COLUMNS:
-            db.execute(
-                f"INSERT INTO options SELECT ?, {each.attribute} FROM server_options",
-                (each.name,),
-            )
-    db.execute("DROP TABLE server_options")
-    db.execute("PRAGMA user_version = 37")
+    db.execute("CREATE TABLE options(name TEXT PRIMARY KEY, value)")
+    for each in declared:
+        db.execute(f"INSERT INTO options SELECT ?, {each.attribute} FROM session_defaults", (each.name,))
+    db.execute("DROP TABLE session_defaults")
+    db.execute("ALTER TABLE session_options RENAME TO new_session_options")
+    db.execute(
+        "CREATE TABLE session_options(session_id INTEGER NOT NULL, name TEXT NOT NULL, value,"
+        " PRIMARY KEY (session_id, name))"
+    )
+    for each in declared:
+        column = each.attribute
+        db.execute(
+            f"INSERT INTO session_options SELECT session_id, ?, {column} FROM new_session_options"
+            f" WHERE {column} IS NOT NULL",
+            (each.name,),
+        )
+    db.execute("DROP TABLE new_session_options")
+    db.execute("PRAGMA user_version = 38")
     db.close()
 
 
-def test_a_version_37_snapshot_loads_its_server_options(pymux, tmp_path):
-    "37 kept them in `options` as names and values. Lillecarl/pymux#769."
-    pymux.options.set_clipboard = Clipboard.ON
-    pymux.options.job_ttl = 60
-    path = tmp_path / "v37.sqlite"
+def test_a_version_38_snapshot_loads_its_session_options(pymux, tmp_path):
+    "38 kept them as names and values in `options` and `session_options`. Lillecarl/pymux#769."
+    pymux.session_defaults.status_left = "everyone's"
+    pymux.sessions[0].options.status_right = "mine"
+    path = tmp_path / "v38.sqlite"
     snapshot.save(pymux, path)
-    _as_version_37(path)
+    _as_version_38(path)
 
     loaded = Pymux()
     snapshot.load(loaded, path)
 
-    assert (loaded.options.set_clipboard, loaded.options.job_ttl) == (Clipboard.ON, 60)
-    assert loaded.status_left == pymux.status_left
+    assert loaded.session_defaults.status_left == "everyone's"
+    assert loaded.sessions[0].options.own() == {"status_right": "mine"}
 
 
 async def test_a_column_this_build_declares_and_the_file_lacks_takes_its_default(pymux, tmp_path):
@@ -779,7 +794,7 @@ def test_a_session_s_own_value_survives_and_the_rest_follow_the_default(pymux, t
     first, second = loaded.sessions
     assert first.options.own()["status_right"] == "mine"
     assert not second.options.holds("status_right")
-    loaded.status_right = "later"
+    loaded.session_defaults.status_right = "later"
     assert second.options.status_right == "later"
     assert first.options.status_right == "mine"
 

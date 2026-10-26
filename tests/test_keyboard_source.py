@@ -193,7 +193,7 @@ def test_screen_that_knows_nothing_about_host_is_no_error():
 
 
 def test_making_up_key_events_is_on_by_default():
-    assert Pymux().synthesize_key_events is True
+    assert Pymux().session_defaults.synthesize_key_events is True
 
 
 def test_every_pane_hears_option():
@@ -204,7 +204,7 @@ def test_every_pane_hears_option():
     pymux.sync_keyboard_source_flags()
     assert pane.screen.synthesize_key_events is True
 
-    pymux.synthesize_key_events = False
+    pymux.session_defaults.synthesize_key_events = False
     pymux.sync_keyboard_source_flags()
     assert pane.screen.synthesize_key_events is False
 
@@ -216,7 +216,7 @@ def test_option_alone_reaches_panes():
     pymux.panes_by_id[pane.pane_id] = pane
     pymux.sync_keyboard_source_flags()
 
-    pymux.synthesize_key_events = False
+    pymux.session_defaults.synthesize_key_events = False
     pymux.sync_keyboard_source_flags()
     assert pane.screen.synthesize_key_events is False
     assert pane.screen.keyboard_source_flags == 0b11111

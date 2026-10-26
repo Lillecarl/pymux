@@ -28,7 +28,7 @@ def environment_of(pymux) -> dict[str, str]:
 
 def test_agents_get_the_browser_of_the_person_by_default(pymux):
     "An agent's browser is one a person wants to see."
-    assert pymux.pane_browser == PaneBrowser.AGENTS
+    assert pymux.session_defaults.pane_browser == PaneBrowser.AGENTS
     environment = environment_of(pymux)
     assert environment["PLAYWRIGHT_MCP_EXECUTABLE_PATH"] == SHIM
     assert "PUPPETEER_EXECUTABLE_PATH" not in environment

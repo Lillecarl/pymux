@@ -564,7 +564,7 @@ async def test_lock_server_covers_every_session():
     async with in_this_process(_server()) as session:
         pymux = session.pymux
         state, _ = await session.attach("only", SIZE)
-        pymux.lock_command = WAITING
+        pymux.session_defaults.lock_command = WAITING
 
         await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
 

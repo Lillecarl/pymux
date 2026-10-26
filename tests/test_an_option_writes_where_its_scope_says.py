@@ -24,9 +24,7 @@ import pytest
 from pymux.enums import EditingKeys
 from pymux.main import Pymux
 from pymux.options import (
-    ChoiceOption,
     EnumOption,
-    JustifyOption,
     OnOffOption,
     PositiveIntOption,
     Scope,
@@ -38,15 +36,8 @@ from pymux.options import (
 WRITERS = [
     ("on/off", lambda: OnOffOption("judged", scope=Scope.CLIENT), "on", True),
     ("string", lambda: StringOption("judged", scope=Scope.CLIENT), "desk", "desk"),
-    (
-        "choice",
-        lambda: ChoiceOption("judged", ("one", "two"), scope=Scope.CLIENT),
-        "two",
-        "two",
-    ),
     ("int", lambda: PositiveIntOption("judged", scope=Scope.CLIENT), "5", 5),
     ("keys", lambda: EnumOption(EditingKeys, "judged", scope=Scope.CLIENT), "vi", EditingKeys.VI),
-    ("justify", lambda: JustifyOption("judged", scope=Scope.CLIENT), "left", "left"),
 ]
 
 

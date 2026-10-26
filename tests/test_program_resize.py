@@ -38,7 +38,7 @@ def _pymux(allow=False):
     reads the size of a pane and writes the weights of a split.
     """
     pymux = Pymux()
-    pymux.allow_program_resize = allow
+    pymux.session_defaults.allow_program_resize = allow
 
     first = Pane(terminal=_FakeTerminal(sy=24))
     second = Pane(terminal=_FakeTerminal(sy=24))

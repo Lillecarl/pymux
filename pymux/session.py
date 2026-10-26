@@ -16,13 +16,12 @@ from pyte.keep import Keep
 
 from .arrangement import Arrangement, Pane
 from .ids import SessionId
+from .session_options import SessionOptions
 
 if TYPE_CHECKING:
-    from .enums import EditingKeys, OpenUrlMode, OpenUrlTarget, PaneBrowser
-    from .layout import Justify
     from .tags import Tags
 
-__all__ = ["DEFAULT_SIZE", "Session", "SessionOptions"]
+__all__ = ["DEFAULT_SIZE", "OwnOptions", "Session"]
 
 #: How big a window of this session is while no client is watching it.
 #:
@@ -32,66 +31,28 @@ __all__ = ["DEFAULT_SIZE", "Session", "SessionOptions"]
 DEFAULT_SIZE = Size(rows=24, columns=80)
 
 
-class SessionOptions:
+if TYPE_CHECKING:
+    # A checker reads a session's options as the declaration's types.
+    _Typed = SessionOptions
+else:
+    _Typed = object
+
+
+class OwnOptions(_Typed):
     """
     One session's options: the values it set itself, over the defaults.
 
     A value written here is this session's own. A name it does not hold
-    reads the default on `Pymux`, so a later `set-option -g` reaches
+    reads `Pymux.session_defaults`, so a later `set-option -g` reaches
     every session that never set its own: tmux's `options_get` walks to
     the parent table the same way (`options.c`). `forget` drops an own
     value, which is what `-gg` does to every session.
     Lillecarl/pymux#756.
 
-    The annotations are the names a session may hold, and
-    `tests/test_session_options.py` holds them to `ALL_OPTIONS`.
+    The names are `SessionOptions`', each read through `_Default`.
     """
 
-    activity_symbol: str
-    allow_program_resize: bool
-    base_index: int
-    bell_symbol: str
-    chooser_session_lines: bool
-    command_palette: bool
-    cut_shade_strength: int
-    cut_shade_width: int
-    default_shell: str
-    enable_bell: bool
-    enable_mouse_support: bool
-    enable_pane_status: bool
-    enable_status: bool
-    history_limit: int
-    key_profile: str
-    lock_command: str
-    mode_keys: EditingKeys
-    notification_symbol: str
-    notify_shim: bool
-    open_url_forward: bool
-    open_url_forward_idle: int
-    open_url_mode: OpenUrlMode
-    open_url_shim: bool
-    open_url_target: OpenUrlTarget
-    paint_screen: bool
-    pane_browser: PaneBrowser
-    remain_on_exit: bool
-    renumber_windows: bool
-    silence_symbol: str
-    status_interval: int
-    status_justify: Justify
-    status_keys: EditingKeys
-    status_left: str
-    status_left_length: int
-    status_max_rows: int
-    status_right: str
-    status_right_length: int
-    strip_animation_time: int
-    synthesize_key_events: bool
-    update_environment: str
-    which_key: bool
-    window_status_current_format: str
-    window_status_format: str
-
-    def __init__(self, defaults: object) -> None:
+    def __init__(self, defaults: SessionOptions) -> None:
         self._defaults = defaults
 
     def own(self) -> dict[str, object]:
@@ -107,12 +68,12 @@ class SessionOptions:
         vars(self).pop(name, None)
 
 
-_SESSION_OPTION_NAMES = frozenset(SessionOptions.__annotations__)
+_SESSION_OPTION_NAMES = frozenset(each.attribute for each in SessionOptions.DECLARED.values())
 
 
 class _Default:
     """
-    A session option this session did not set: the default on `Pymux`.
+    A session option this session did not set: the default.
 
     Not a data descriptor, so an own value in the instance's dict wins
     with no call at all. Not `__getattr__` either: that runs after a
@@ -126,14 +87,14 @@ class _Default:
     def __init__(self, name: str) -> None:
         self.name = name
 
-    def __get__(self, instance: SessionOptions | None, owner: type) -> object:
+    def __get__(self, instance: OwnOptions | None, owner: type) -> object:
         if instance is None:
             return self
         return getattr(instance._defaults, self.name)
 
 
 for _name in _SESSION_OPTION_NAMES:
-    setattr(SessionOptions, _name, _Default(_name))
+    setattr(OwnOptions, _name, _Default(_name))
 del _name
 
 
@@ -162,14 +123,14 @@ class Session:
         "last_used": Keep.SAVED,
     }
 
-    def __init__(self, session_id: SessionId, name: str, defaults: object) -> None:
+    def __init__(self, session_id: SessionId, name: str, defaults: SessionOptions) -> None:
         #: The number in `$0`, the way tmux spells a session. It counts
         #: from zero for each server, and no two sessions of one server
         #: ever share it, including after one is killed.
         self.session_id = session_id
 
         self.name = name
-        self.options = SessionOptions(defaults)
+        self.options = OwnOptions(defaults)
         self.arrangement = Arrangement(self.options)
 
         #: What `set-environment` without `-g` fills. A new pane of this

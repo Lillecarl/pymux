@@ -25,11 +25,12 @@ from pyte.keep import Keep
 
 from .downloads import DownloadReader
 from .ids import PaneId, PaneIndex, WindowId, WindowIndex
+from .session_options import SessionOptions
 from .window_options import WindowOptions
 
 if TYPE_CHECKING:
     from .recording import Recording
-    from .session import SessionOptions
+    from .session import OwnOptions
     from .tags import Tags
     from .window_pane import WindowWidget
 
@@ -1034,14 +1035,6 @@ class Window:
         return PaneIndex(self.panes.index(pane))
 
 
-class WindowOrder:
-    "The order options of an arrangement that no session holds: `Pymux`'s defaults."
-
-    def __init__(self) -> None:
-        self.base_index = 1
-        self.renumber_windows = False
-
-
 class Arrangement:
     """
     Arrangement class for one Pymux session.
@@ -1082,13 +1075,14 @@ class Arrangement:
     def renumber_windows(self, value: bool) -> None:
         self.options.renumber_windows = value
 
-    def __init__(self, options: WindowOrder | SessionOptions | None = None) -> None:
+    def __init__(self, options: SessionOptions | OwnOptions | None = None) -> None:
         self.windows: list[Window] = []
 
         #: Where `base_index` and `renumber_windows` live: the session's
         #: options, so that `set-option -g` reaches a session that has
         #: no value of its own. Lillecarl/pymux#756.
-        self.options = options if options is not None else WindowOrder()
+        # An arrangement no session holds reads the declared defaults.
+        self.options = options if options is not None else SessionOptions()
 
         # The windows that link-window can put back. An unlinked
         # window keeps its panes running; it is only out of the order

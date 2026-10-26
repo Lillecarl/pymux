@@ -43,7 +43,7 @@ def test_tmux_spelling_of_global_option_runs(tmp_path):
     "The line that started this. It works now, so it reports nothing."
     pymux, errors = source(tmp_path, "set -g status off\n")
     assert errors == []
-    assert pymux.enable_status is False
+    assert pymux.session_defaults.status is False
 
 
 def test_line_with_word_too_many_is_reported(tmp_path):

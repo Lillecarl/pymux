@@ -147,12 +147,12 @@ async def create_wide_column(pymux, state, focus_left=True):
 
 def a_fade(pymux, plain: str) -> list[str]:
     "What a band of the shade over `plain` should be, from the cut edge inward."
-    width, strength = pymux.cut_shade_width, pymux.cut_shade_strength / 100
+    width, strength = pymux.session_defaults.cut_shade_width, pymux.session_defaults.cut_shade_strength / 100
     return [tinted(plain, strength * (width - inward) / width) for inward in range(width)]
 
 
 def at_the_edge(pymux, plain: str) -> str:
-    return tinted(plain, pymux.cut_shade_strength / 100)
+    return tinted(plain, pymux.session_defaults.cut_shade_strength / 100)
 
 
 async def test_nothing_is_shaded_when_every_column_fits():
@@ -175,7 +175,7 @@ async def test_a_column_cut_on_the_right_fades_in_at_the_right_edge():
 
         shown = backgrounds(state, screen)
         plain = shown[cut.x]
-        width = pymux.cut_shade_width
+        width = pymux.session_defaults.cut_shade_width
         # Only the last few cells, strongest at the edge.
         assert shown[cut.x : COLUMNS - width] == [plain] * (COLUMNS - width - cut.x)
         assert shown[COLUMNS - width :][::-1] == a_fade(pymux, plain)
@@ -191,7 +191,7 @@ async def test_a_column_cut_on_the_left_fades_in_at_the_left_edge():
         assert left.x < panes.view.shown_rect.x
 
         shown = backgrounds(state, screen)
-        width = pymux.cut_shade_width
+        width = pymux.session_defaults.cut_shade_width
         assert shown[:width] == a_fade(pymux, shown[width])
 
 
