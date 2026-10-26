@@ -2094,12 +2094,26 @@ class Pymux:
         `any_watcher_shows_pane_status`, which are not this one.
         Lillecarl/pymux#471.
         """
-        return self.current_session.options.enable_status and not self._asking_is_full_screen()
+        options, full_screen = self._asking_for_chrome()
+        return options.enable_status and not full_screen
 
     @property
     def show_pane_status(self) -> bool:
         "Whether the client that is asking draws the titlebar of a pane."
-        return self.current_session.options.enable_pane_status and not self._asking_is_full_screen()
+        options, full_screen = self._asking_for_chrome()
+        return options.enable_pane_status and not full_screen
+
+    def _asking_for_chrome(self) -> tuple[SessionOptions, bool]:
+        """
+        The options of the asking client's session, and whether it is
+        full screen, from one lookup of the client: every frame asks
+        both, several times. Lillecarl/pymux#770.
+        """
+        try:
+            state = self.get_client_state()
+        except ValueError:
+            return self.last_used_session.options, False
+        return state.session.options, state.full_screen
 
     def _asking_is_full_screen(self) -> bool:
         """

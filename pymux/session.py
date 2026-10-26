@@ -95,12 +95,6 @@ class SessionOptions:
     def __init__(self, defaults: object) -> None:
         self._defaults = defaults
 
-    def __getattr__(self, name: str):
-        # Only a name this object does not hold reaches here.
-        if name in _SESSION_OPTION_NAMES:
-            return getattr(self._defaults, name)
-        raise AttributeError(name)
-
     def own(self) -> dict[str, object]:
         "The values this session set itself, by attribute name."
         return {name: value for name, value in vars(self).items() if name in _SESSION_OPTION_NAMES}
@@ -115,6 +109,33 @@ class SessionOptions:
 
 
 _SESSION_OPTION_NAMES = frozenset(SessionOptions.__annotations__)
+
+
+class _Default:
+    """
+    A session option this session did not set: the default on `Pymux`.
+
+    Not a data descriptor, so an own value in the instance's dict wins
+    with no call at all. Not `__getattr__` either: that runs after a
+    lookup has failed and raised, and the status line reads dozens of
+    options a frame -- 1099 instructions of a keystroke's render.
+    Lillecarl/pymux#770.
+    """
+
+    __slots__ = ("name",)
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def __get__(self, instance: SessionOptions | None, owner: type) -> object:
+        if instance is None:
+            return self
+        return getattr(instance._defaults, self.name)
+
+
+for _name in _SESSION_OPTION_NAMES:
+    setattr(SessionOptions, _name, _Default(_name))
+del _name
 
 
 class Session:
