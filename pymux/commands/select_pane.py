@@ -19,17 +19,19 @@ def select_pane(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     if args.pane_id:
         pane_id = args.pane_id
-        w = the_window(pymux, None)
 
         if pane_id == ":.+":
-            w.focus_next()
+            the_window(pymux, None).focus_next()
         elif pane_id == ":.-":
-            w.focus_previous()
+            the_window(pymux, None).focus_previous()
         else:
             pane = find_pane(pymux, pane_id)
-            if pane is None:
+            window = pymux._window_holding(pane) if pane is not None else None
+            if pane is None or window is None:
                 raise CommandException("can't find pane: %s" % (pane_id,))
-            w.active_pane = pane
+            # Its own window's: the window a person used last may not
+            # hold it. Lillecarl/pymux#506.
+            window.active_pane = pane
 
     elif args.l:
         the_window(pymux, None).rotate(with_pane_after_only=True)
