@@ -174,6 +174,36 @@ async def test_a_helix_command_is_written_by_its_keys_and_never_the_text(tmp_pat
         assert keys == [("copy-mode", "w"), ("copy-mode", "gg"), ("copy-mode", "q"), ("prompt", "b")]
 
 
+@pytest.mark.parametrize(
+    ("mode_keys", "presses", "expected"),
+    [
+        (
+            "vi",
+            [("w",), ("g", "g"), ("/",), *[(c,) for c in "secret"], (Keys.ControlM,), ("n",), ("q",)],
+            ["w", "gg", "/", "n", "q"],
+        ),
+        ("emacs", [(Keys.Escape, "f"), (Keys.ControlN,), ("q",)], ["escape f", "c-n", "q"]),
+    ],
+)
+async def test_copy_mode_s_vi_and_emacs_keys_are_written_and_never_the_search(tmp_path, mode_keys, presses, expected):
+    "Lillecarl/pymux#773."
+    async with create_session() as (pymux, state):
+        pymux.actions.path = tmp_path / "actions.db"
+        pymux.options.action_log = True
+        pane = pymux.arrangement.get_active_window().active_pane
+        pane.terminal.terminal_control.stream.feed("hello secret world\r\nsecret again")
+        with set_app(state.app):
+            pymux.handle_command("set-option mode-keys %s" % mode_keys)
+            pymux.handle_command("copy-mode")
+        for keys in presses:
+            press_key(state, *keys)
+        await pymux.actions.settled()
+
+        assert pane.terminal.copy_views.of(state.app) is None
+        rows = [(row["key_table"], row["name"]) for row in _rows(pymux.actions.path) if row["kind"] == Kind.KEY]
+        assert rows == [("copy-mode", name) for name in expected]
+
+
 async def test_a_command_over_the_socket_has_no_client(tmp_path):
     async with create_session() as (pymux, state):
         pymux.actions.path = tmp_path / "actions.db"

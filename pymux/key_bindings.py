@@ -26,6 +26,7 @@ from prompt_toolkit.keys import Keys
 from ptkhx import Mode
 from ptkhx.bindings import HelixBindings
 from ptterm import Terminal
+from ptterm.copy_mode import copy_mode_key_bindings
 
 from .actions import Kind, Origin, note, note_keys, started_by
 from .commands import call_command_handler
@@ -198,6 +199,9 @@ class PymuxKeyBindings:
 
         self.key_bindings = merge_key_bindings(
             [
+                # First, where prompt_toolkit's own copies of them rank.
+                # Lillecarl/pymux#773.
+                copy_mode_key_bindings(),
                 self._load_builtins(),
                 # The right arrow accepts what the command line is
                 # suggesting. prompt_toolkit writes the binding and
