@@ -43,7 +43,7 @@ from .ids import PaneId
 from .keys import KittyVt100Parser
 from .log import logger
 from .nearest import NEAREST, nearest_theme, wanted_from
-from .options import ExtendedKeys, SetOptionError
+from .options import ExtendedKeys, Scope, SetOptionError
 from .pipes import BrokenPipeError
 from .rate import Rate
 from .terminal_answers import SURVEY, TerminalAnswers
@@ -1189,7 +1189,7 @@ class ServerConnection:
         for one in announced:
             try:
                 name, value = one
-                option = self.pymux.client_options[name]
+                option = self.pymux.option_tables[Scope.CLIENT][name]
             except KeyError, TypeError, ValueError:
                 self.client_state.message = "Invalid client option: %s" % (one,)
                 continue

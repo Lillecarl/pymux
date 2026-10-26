@@ -32,7 +32,7 @@ from session import Connection
 
 from pymux.format import format_pymux_string
 from pymux.main import Pymux
-from pymux.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS
+from pymux.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS, ALL_SERVER_OPTIONS
 
 ROWS, COLUMNS = 24, 80
 
@@ -92,7 +92,7 @@ def set_option(pymux, name, value, state=None):
     A client option belongs to one terminal, so `full-screen` needs
     the client to set it under. Lillecarl/pymux#471.
     """
-    table = ALL_CLIENT_OPTIONS if name in ALL_CLIENT_OPTIONS else ALL_OPTIONS
+    table = ALL_CLIENT_OPTIONS if name in ALL_CLIENT_OPTIONS else ALL_SERVER_OPTIONS | ALL_OPTIONS
     if state is None:
         table[name].set_value(pymux, value)
         return

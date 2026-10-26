@@ -25,6 +25,7 @@ from pymux.commands.show_window_options import show_window_options
 from pymux.options import (
     ALL_CLIENT_OPTIONS,
     ALL_OPTIONS,
+    ALL_SERVER_OPTIONS,
     ALL_WINDOW_OPTIONS,
     KeyPrefixOption,
     Scope,
@@ -116,7 +117,7 @@ def test_every_option_names_where_it_lives():
     key is the one deliberate exception: it lives in the binding
     manager. Lillecarl/pymux#494.
     """
-    tables = (ALL_OPTIONS, ALL_WINDOW_OPTIONS, ALL_CLIENT_OPTIONS)
+    tables = (ALL_SERVER_OPTIONS, ALL_OPTIONS, ALL_WINDOW_OPTIONS, ALL_CLIENT_OPTIONS)
     for table in tables:
         for name, option in table.items():
             assert option.attribute_name is not None or isinstance(option, KeyPrefixOption), name
@@ -162,14 +163,64 @@ async def test_client_list_holds_client_options_only():
         assert "strip" not in names  # a window option
 
 
-async def test_the_three_scopes_hold_every_option_between_them():
+async def test_each_table_holds_the_options_of_its_scope():
     "A scope nobody lists is an option nobody can read back."
-    tables = (ALL_OPTIONS, ALL_WINDOW_OPTIONS, ALL_CLIENT_OPTIONS)
-    wanted = {Scope.SESSION: 0, Scope.WINDOW: 1, Scope.CLIENT: 2}
+    wanted = {
+        Scope.SERVER: ALL_SERVER_OPTIONS,
+        Scope.SESSION: ALL_OPTIONS,
+        Scope.WINDOW: ALL_WINDOW_OPTIONS,
+        Scope.CLIENT: ALL_CLIENT_OPTIONS,
+    }
 
-    for scope, which in wanted.items():
-        for name, option in tables[which].items():
+    for scope, table in wanted.items():
+        for name, option in table.items():
             assert option.scope is scope, name
+
+
+def test_no_name_is_in_two_tables():
+    "`set-option` finds a server option by its name, so a name has one table."
+    tables = (ALL_SERVER_OPTIONS, ALL_OPTIONS, ALL_WINDOW_OPTIONS, ALL_CLIENT_OPTIONS)
+    names = [name for table in tables for name in table]
+    assert len(names) == len(set(names))
+
+
+@pytest.mark.parametrize("flag", ["", "-s "])
+async def test_a_server_option_is_set_and_read_with_or_without_s(flag):
+    "tmux's `options_scope_from_name`: the name finds the table. Lillecarl/pymux#757."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("set-option %sset-clipboard on" % flag)
+            pymux.handle_command("show-options %sset-clipboard" % flag)
+
+        assert state.message == "on"
+
+
+async def test_the_server_list_holds_server_options_only():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("show-options -s")
+
+        names = {row.split()[0] for row in state.message.splitlines()}
+        assert names == set(ALL_SERVER_OPTIONS)
+
+
+async def test_the_session_list_leaves_the_server_out():
+    "What tmux lists for `show-options`."
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("show-options")
+
+        names = {row.split()[0] for row in state.message.splitlines()}
+        assert "log-level" not in names
+        assert "status" in names
+
+
+async def test_a_window_command_names_set_option_for_a_server_option():
+    async with create_session() as (pymux, state):
+        with set_app(state.app):
+            pymux.handle_command("set-window-option log-level debug")
+
+        assert state.message == "log-level is a server option: use set-option"
 
 
 async def test_wrong_kind_of_option_is_unknown():

@@ -103,6 +103,7 @@ from .notifications import NotificationCenter, NotificationRoutes, Urgency
 from .options import (
     ALL_CLIENT_OPTIONS,
     ALL_OPTIONS,
+    ALL_SERVER_OPTIONS,
     ALL_WINDOW_OPTIONS,
     Clipboard,
     ExtendedKeys,
@@ -1386,9 +1387,6 @@ class Pymux:
         "window_status_current_format": Keep.SAVED,
         "window_status_format": Keep.SAVED,
         # Tables, indexes and what the server last pushed.
-        "options": Keep.REBUILT,
-        "window_options": Keep.REBUILT,
-        "client_options": Keep.REBUILT,
         "option_tables": Keep.REBUILT,
         "panes_by_id": Keep.REBUILT,
         "hanging_up": Keep.DROPPED,  # an upgrade kills them before it goes
@@ -1578,16 +1576,14 @@ class Pymux:
         self.test_mode = False
         self.render_mode = RenderMode.OPTIMIZED
 
-        self.options = ALL_OPTIONS
-        self.window_options = ALL_WINDOW_OPTIONS
-        self.client_options = ALL_CLIENT_OPTIONS
-
         #: Which table a scope reads. `set-option`, `set-window-option`
-        #: and `set-client-option` are one command with three of these.
+        #: and `set-client-option` are one command over these, and
+        #: `set-option` takes the server's names too.
         self.option_tables = {
-            Scope.SESSION: self.options,
-            Scope.WINDOW: self.window_options,
-            Scope.CLIENT: self.client_options,
+            Scope.SERVER: ALL_SERVER_OPTIONS,
+            Scope.SESSION: ALL_OPTIONS,
+            Scope.WINDOW: ALL_WINDOW_OPTIONS,
+            Scope.CLIENT: ALL_CLIENT_OPTIONS,
         }
 
         #: Which pane a desktop notification came from. The terminal of

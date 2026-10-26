@@ -15,7 +15,7 @@ import pytest
 
 from pymux import log
 from pymux.main import Pymux
-from pymux.options import ALL_OPTIONS, SetOptionError
+from pymux.options import ALL_SERVER_OPTIONS, SetOptionError
 
 
 @pytest.fixture(autouse=True)
@@ -27,11 +27,11 @@ def put_level_back():
 
 
 def test_option_is_there():
-    assert "log-level" in ALL_OPTIONS
+    assert "log-level" in ALL_SERVER_OPTIONS
 
 
 def test_it_offers_levels_person_may_name():
-    assert ALL_OPTIONS["log-level"].get_all_values(Pymux()) == [
+    assert ALL_SERVER_OPTIONS["log-level"].get_all_values(Pymux()) == [
         log.LogLevel.DEBUG,
         log.LogLevel.ERROR,
         log.LogLevel.INFO,
@@ -41,16 +41,16 @@ def test_it_offers_levels_person_may_name():
 
 def test_setting_it_reaches_logger():
     pymux = Pymux()
-    ALL_OPTIONS["log-level"].set_value(pymux, log.LogLevel.DEBUG)
+    ALL_SERVER_OPTIONS["log-level"].set_value(pymux, log.LogLevel.DEBUG)
     assert log.logger.level == logging.DEBUG
 
-    ALL_OPTIONS["log-level"].set_value(pymux, log.LogLevel.WARNING)
+    ALL_SERVER_OPTIONS["log-level"].set_value(pymux, log.LogLevel.WARNING)
     assert log.logger.level == logging.WARNING
 
 
 def test_name_that_is_not_level_is_refused():
     with pytest.raises(SetOptionError):
-        ALL_OPTIONS["log-level"].set_value(Pymux(), "chatty")
+        ALL_SERVER_OPTIONS["log-level"].set_value(Pymux(), "chatty")
 
 
 def test_server_says_which_level_it_is_at():

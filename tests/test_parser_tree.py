@@ -20,6 +20,7 @@ from prompt_toolkit.document import Document
 from pymux.commands import call_command_handler, completer, parser_tree
 from pymux.commands.completer import create_command_completer
 from pymux.main import Pymux
+from pymux.options import Scope
 
 # ----------------------------------------------------------------------
 # The tree: what a command takes.
@@ -221,7 +222,7 @@ def test_set_option_offers_option_names_then_their_values():
     names = [word for word, _said in _offered("set-option s", pymux)]
     assert "status" in names
 
-    pymux.options["status"].set_value(pymux, "off")
+    pymux.option_tables[Scope.SESSION]["status"].set_value(pymux, "off")
     values = [word for word, _said in _offered("set-option status ", pymux)]
     assert "on" in values
     assert "off" in values

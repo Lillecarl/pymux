@@ -56,7 +56,7 @@ from .enums import AudioFrame, ClientAudio, FileTransfer, WindowScroll
 from .ids import PaneId, SessionId, WindowId, WindowIndex
 from .jobs import Job, JobFeed, JobId, JobPipes
 from .notifications import Notification
-from .options import ALL_OPTIONS
+from .options import ALL_OPTIONS, ALL_SERVER_OPTIONS
 from .pipes.posix import PosixSocketListener
 from .session import Session
 from .tables import (
@@ -201,7 +201,7 @@ def _server_options() -> dict[str, str]:
 
     return {
         name: option.attribute_name
-        for name, option in ALL_OPTIONS.items()
+        for name, option in (ALL_SERVER_OPTIONS | ALL_OPTIONS).items()
         if option.attribute_name is not None and Pymux.KEEP.get(option.attribute_name) is not None
     }
 

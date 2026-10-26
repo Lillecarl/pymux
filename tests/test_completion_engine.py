@@ -87,6 +87,29 @@ async def test_an_option_value_follows_its_name():
     assert found.offered[:2] == ["off", "on"]
 
 
+async def test_set_option_offers_the_server_s_names_too():
+    async with create_session(window=WAITS) as (_pymux, state):
+        found = await tab(state, "set-option ")
+
+    assert "status" in found.offered
+    assert "set-clipboard" in found.offered
+
+
+async def test_s_offers_only_the_server_s_names():
+    async with create_session(window=WAITS) as (_pymux, state):
+        found = await tab(state, "set-option -s ")
+
+    assert "set-clipboard" in found.offered
+    assert "status" not in found.offered
+
+
+async def test_a_server_option_s_values_follow_its_name():
+    async with create_session(window=WAITS) as (_pymux, state):
+        found = await tab(state, "set-option set-clipboard ")
+
+    assert "external" in found.offered
+
+
 async def test_a_window_target_opens_a_menu_of_every_window():
     async with create_session(window=WAITS) as (pymux, state):
         await pymux.create_window(WAITS)

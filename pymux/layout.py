@@ -93,7 +93,7 @@ def option_value_of(pymux, name: str) -> str:
     """
     from pymux.commands.common import option_as_written
 
-    for table in (pymux.options, pymux.window_options, pymux.client_options):
+    for table in pymux.option_tables.values():
         option = table.get(name)
         if option is not None:
             return option_as_written(pymux, option, argparse.Namespace(g=False))
@@ -1215,13 +1215,7 @@ class LayoutManager:
         text = self.client_state.choose_window_filter.text.lower()
         kind = self.client_state.chooser
         if kind is Chooser.OPTIONS:
-            from pymux.options import (
-                ALL_CLIENT_OPTIONS,
-                ALL_OPTIONS,
-                ALL_WINDOW_OPTIONS,
-            )
-
-            names = sorted(set(ALL_OPTIONS) | set(ALL_WINDOW_OPTIONS) | set(ALL_CLIENT_OPTIONS))
+            names = sorted(name for table in self.pymux.option_tables.values() for name in table)
             if not text:
                 return names
             return [name for name in names if text in name.lower() or text in option_value_of(self.pymux, name).lower()]
@@ -2093,10 +2087,11 @@ class LayoutManager:
         """
         The options, one row each: the name, and what it holds. A
         window or client option says which scope it is, because the
-        three scopes are set by three commands.
+        three scopes are set by three commands; a server option says
+        so too, because it is one value for every session.
         Lillecarl/pymux#297. Lillecarl/pymux#472.
         """
-        from pymux.options import ALL_CLIENT_OPTIONS, ALL_WINDOW_OPTIONS
+        from pymux.options import ALL_CLIENT_OPTIONS, ALL_SERVER_OPTIONS, ALL_WINDOW_OPTIONS
 
         matches = self.chooser_matches()
         if not matches:
@@ -2111,6 +2106,8 @@ class LayoutManager:
                 kind = " (window)"
             elif name in ALL_CLIENT_OPTIONS:
                 kind = " (client)"
+            elif name in ALL_SERVER_OPTIONS:
+                kind = " (server)"
             else:
                 kind = ""
             tokens.append(

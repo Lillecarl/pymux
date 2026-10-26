@@ -186,7 +186,7 @@ class JobView:
 
 @dataclass(frozen=True, slots=True)
 class KnownOptionView:
-    "An option a command can set, and the scope `set-option`, `-window-` or `-client-` names."
+    "An option a command can set, and its scope: server, session, window or client."
 
     scope: str
     name: str
@@ -268,13 +268,9 @@ def _saved_queries(pymux: Pymux) -> Iterator[SavedQueryRow]:
 
 
 def _scoped_options(pymux: Pymux) -> Iterator[tuple[str, str, Any]]:
-    for scope, options in (
-        ("session", pymux.options),
-        ("window", pymux.window_options),
-        ("client", pymux.client_options),
-    ):
+    for scope, options in pymux.option_tables.items():
         for name, option in sorted(options.items()):
-            yield scope, name, option
+            yield scope.value, name, option
 
 
 def _known_options(pymux: Pymux) -> Iterator[KnownOptionView]:

@@ -97,12 +97,27 @@ def _keys(questions: Questions, prefix: str, **_) -> dict[str, str]:
     }
 
 
-def _option_names(scope: str, questions: Questions, **_) -> dict[str, str]:
-    return questions.ask("complete-option", scope=scope)
+def _scopes_of(scope: str, parsed_args: argparse.Namespace) -> tuple[str, ...]:
+    "`set-option` takes the server's names too, and `-s` takes only those."
+    if scope != "session":
+        return (scope,)
+    if getattr(parsed_args, "s", False):
+        return ("server",)
+    return ("session", "server")
+
+
+def _option_names(scope: str, questions: Questions, parsed_args: argparse.Namespace, **_) -> dict[str, str]:
+    found: dict[str, str] = {}
+    for each in _scopes_of(scope, parsed_args):
+        found |= questions.ask("complete-option", scope=each)
+    return found
 
 
 def _option_values(scope: str, questions: Questions, parsed_args: argparse.Namespace, **_) -> dict[str, str]:
-    return questions.ask("complete-option-value", scope=scope, option=parsed_args.option)
+    found: dict[str, str] = {}
+    for each in _scopes_of(scope, parsed_args):
+        found |= questions.ask("complete-option-value", scope=each, option=parsed_args.option)
+    return found
 
 
 def _bound_command(questions: Questions, prefix: str, parsed_args: argparse.Namespace, **_) -> dict[str, str]:
@@ -226,6 +241,9 @@ _VALUE_COMPLETERS = {
     ("set-window-option", "value"): partial(_option_values, "window"),
     ("set-client-option", "option"): partial(_option_names, "client"),
     ("set-client-option", "value"): partial(_option_values, "client"),
+    ("show-options", "option"): partial(_option_names, "session"),
+    ("show-window-options", "option"): partial(_option_names, "window"),
+    ("show-client-options", "option"): partial(_option_names, "client"),
     ("select-layout", "layout_type"): partial(_asked, "complete-layout"),
     ("compose-key", "default"): _keys,
     ("bind-key", "key"): _keys,

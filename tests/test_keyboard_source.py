@@ -16,7 +16,7 @@ from pyte.keys import KeyboardFlag
 from session import Connection
 
 from pymux.main import Pymux
-from pymux.options import ALL_OPTIONS, ExtendedKeys, SetOptionError
+from pymux.options import ALL_SERVER_OPTIONS, ExtendedKeys, SetOptionError
 
 
 class FakeConnection(Connection):
@@ -263,7 +263,7 @@ def test_off_asks_terminal_for_nothing():
     Lillecarl/pymux#173.
     """
     pymux, _ = make_pymux(0b11111)
-    ALL_OPTIONS["extended-keys"].set_value(pymux, "off")
+    ALL_SERVER_OPTIONS["extended-keys"].set_value(pymux, "off")
 
     assert pymux.keyboard_flags_for_client() == 0
 
@@ -274,7 +274,7 @@ def test_off_tells_every_pane_as_well():
     pane = FakePane(1)
     pymux.panes_by_id[pane.pane_id] = pane
 
-    ALL_OPTIONS["extended-keys"].set_value(pymux, "off")
+    ALL_SERVER_OPTIONS["extended-keys"].set_value(pymux, "off")
 
     assert pane.screen.extended_keys_allowed is False
 
@@ -284,9 +284,9 @@ def test_turning_it_back_on_reaches_panes():
     pymux, _ = make_pymux(0b11111)
     pane = FakePane(1)
     pymux.panes_by_id[pane.pane_id] = pane
-    ALL_OPTIONS["extended-keys"].set_value(pymux, "off")
+    ALL_SERVER_OPTIONS["extended-keys"].set_value(pymux, "off")
 
-    ALL_OPTIONS["extended-keys"].set_value(pymux, "on")
+    ALL_SERVER_OPTIONS["extended-keys"].set_value(pymux, "on")
 
     assert pane.screen.extended_keys_allowed is True
     assert pymux.keyboard_flags_for_client() == KeyboardFlag.DISAMBIGUATE
@@ -295,7 +295,7 @@ def test_turning_it_back_on_reaches_panes():
 def test_always_still_asks_terminal():
     "It changes what a client believes about its terminal, not the flags."
     pymux, _ = make_pymux(0b11111)
-    ALL_OPTIONS["extended-keys"].set_value(pymux, "always")
+    ALL_SERVER_OPTIONS["extended-keys"].set_value(pymux, "always")
 
     assert pymux.keyboard_flags_for_client() == KeyboardFlag.DISAMBIGUATE
 
@@ -303,4 +303,4 @@ def test_always_still_asks_terminal():
 def test_value_nobody_defines_is_error():
     pymux, _ = make_pymux(0)
     with pytest.raises(SetOptionError):
-        ALL_OPTIONS["extended-keys"].set_value(pymux, "sometimes")
+        ALL_SERVER_OPTIONS["extended-keys"].set_value(pymux, "sometimes")

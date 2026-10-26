@@ -10,6 +10,7 @@ from session import create_session
 
 import pymux.jobs as jobs_module
 from pymux import snapshot, tables
+from pymux.options import Scope
 from pymux.query import SCHEMA_VERSION, ask
 
 
@@ -78,7 +79,7 @@ async def test_an_equal_narrows_what_a_table_builds(monkeypatch):
     listed = []
     real = {}
     async with create_session(window=None) as (pymux, _state):
-        for name, option in pymux.options.items():
+        for name, option in pymux.option_tables[Scope.SESSION].items():
             real[name] = option.get_all_values
 
             def spy(pymux, name=name):

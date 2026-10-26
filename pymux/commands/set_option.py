@@ -9,14 +9,37 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import answer, option_as_written
-from pymux.options import Scope, SetOptionError
+from pymux.options import Option, Scope, SetOptionError
 
 #: Which command sets an option of each scope.
 _COMMAND_FOR = {
+    Scope.SERVER: "set-option",
     Scope.SESSION: "set-option",
     Scope.WINDOW: "set-window-option",
     Scope.CLIENT: "set-client-option",
 }
+
+
+def _scopes_read_by(scope: Scope) -> tuple[Scope, ...]:
+    """
+    The tables one command reads a name from.
+
+    `set-option` and `show-options` find a server option by its name,
+    with or without `-s`, the way tmux's `options_scope_from_name`
+    does, so a tmux configuration's `set -g set-clipboard on` holds.
+    """
+    if scope is Scope.SESSION:
+        return (Scope.SESSION, Scope.SERVER)
+    return (scope,)
+
+
+def find_option(pymux: Pymux, name: str, scope: Scope) -> Option | None:
+    "The option `name` of the tables a command of `scope` reads."
+    for each in _scopes_read_by(scope):
+        option = pymux.option_tables[each].get(name)
+        if option is not None:
+            return option
+    return None
 
 
 def _not_here(pymux: Pymux, name: str, scope: Scope) -> str:
@@ -30,7 +53,7 @@ def _not_here(pymux: Pymux, name: str, scope: Scope) -> str:
     typo rather than as a line to change.
     """
     for other, table in pymux.option_tables.items():
-        if other is not scope and name in table:
+        if other not in _scopes_read_by(scope) and name in table:
             return "%s is a %s option: use %s" % (name, other, _COMMAND_FOR[other])
 
     return "Invalid option: %s" % (name,)
@@ -52,6 +75,10 @@ def set_option(
         is the most common line in a tmux configuration, and `pymux -V`
         says pymux speaks tmux 3.4, so it has to be a line pymux takes.
 
+    -s: the option is the server's. A server option's name finds it
+        without the flag too, as in tmux; Tab with it offers only
+        those.
+
     With no value, tmux prints what the option holds, and pymux does
     the same. Without it the command line was write-only: a person
     could change `mouse` and had no way to see what it was.
@@ -60,7 +87,7 @@ def set_option(
     name = args.option
     value = args.value
 
-    option = pymux.option_tables[scope].get(name)
+    option = find_option(pymux, name, scope)
 
     if option is None:
         raise CommandException(_not_here(pymux, name, scope))
@@ -99,5 +126,6 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser.add_argument(
         "-g", dest="g", action="store_true", help="For a window option: what every new window starts with."
     )
+    parser.add_argument("-s", dest="s", action="store_true", help="A server option.")
     parser.add_argument("option", metavar="<option>")
     parser.add_argument("value", metavar="<value>", nargs="?")
