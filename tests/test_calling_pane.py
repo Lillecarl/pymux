@@ -109,6 +109,17 @@ async def test_the_commands_with_no_target_reach_the_calling_pane():
         assert not active.clock_mode
 
 
+async def test_rename_pane_takes_a_target():
+    "So a caller aims it at a pane that is neither its own nor the active one."
+    async with two_panes() as (pymux, state, session, caller, active):
+        with set_app(state.app), calling_as(pymux, session, caller_pane_id=caller.pane_id):
+            handle_command(pymux, "rename-pane -t %%%d aimed" % active.pane_id)
+            handle_command(pymux, "rename-pane -t %999999 nowhere")
+
+        assert active.chosen_name == "aimed"
+        assert caller.chosen_name != "aimed"
+
+
 async def _answered(session, text, pane_id=None) -> tuple[str, int]:
     "What a command over a socket of its own said on stderr, and its exit code."
     got = await session.command(text, pane_id=pane_id)
