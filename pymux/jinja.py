@@ -62,10 +62,14 @@ BROKEN = "<template error>"
 #: test-mode pins, so a template that prints the time holds still in a
 #: test the same way a `%H:%M` status line does. `user_vars` is what the
 #: pane's program set with "OSC 1337 ; SetUserVar", such as
-#: `{{ user_vars.git_branch }}`.
+#: `{{ user_vars.git_branch }}`. The tags of `set-tag` are dictionaries
+#: here, where a tmux format spells them as one string.
 EXTRA_FACTS: dict[str, Callable[[FormatContext], object]] = {
     "now": lambda context: context.pymux.displayed_now(),
     "user_vars": lambda context: dict(context.pane.user_vars),
+    "session_tags": lambda context: dict(context.session.tags),
+    "window_tags": lambda context: dict(context.window.tags),
+    "pane_tags": lambda context: dict(context.pane.tags),
 }
 
 

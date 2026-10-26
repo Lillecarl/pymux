@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandParser, add_command
+from pymux.commands.common import add_tag_arguments
 from pymux.commands.split_window import add_arguments, split_window
 
 
@@ -24,4 +25,6 @@ def new_pane(pymux: Pymux, args: argparse.Namespace):
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    add_arguments(add_command(subparsers, new_pane))
+    parser = add_command(subparsers, new_pane)
+    add_arguments(parser)
+    add_tag_arguments(parser, "pane")

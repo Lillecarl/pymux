@@ -6,15 +6,18 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pymux.main import Pymux
     from pymux.session import Session
+    from pymux.tags import Tags
 
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import (
     add_format_arguments,
+    add_tag_arguments,
     print_object_format,
     session_part,
 )
 from pymux.ids import WindowIndex
+from pymux.tags import parse_tags
 
 
 def index(target: str | None) -> WindowIndex | None:
@@ -143,23 +146,26 @@ def new_window(pymux: Pymux, args: argparse.Namespace):
     to sit next to, and the active one is the default. tmux reads a
     bare `-t` as the index to create at instead, and so does this. A
     session part in the target -- `-t work:` -- opens the window in
-    that session. Lillecarl/pymux#323.
+    that session. Lillecarl/pymux#323. `--tag` tags the new window, as
+    `set-tag -w` would.
     """
+    tags = parse_tags(args.tags)
     session, target = which_session(pymux, args)
     arrangement = session.arrangement
 
     window = arrangement.get_active_window()
-    return _open(pymux, args, session, target, arrangement, window)
+    return _open(pymux, args, session, target, arrangement, window, tags)
 
 
-async def _open(pymux: Pymux, args: argparse.Namespace, session, target, arrangement, window) -> None:
-    await pymux.create_window(
+async def _open(pymux: Pymux, args: argparse.Namespace, session, target, arrangement, window, tags: Tags) -> None:
+    made = await pymux.create_window(
         args.executable,
         start_directory=args.start_directory,
         name=args.name,
         index=where_new_window_goes(pymux, args, session, target),
         session=session,
     )
+    made.tags.update(tags)
 
     # **The one that is active, and not the last of the list.** A new
     # window went at the end while it always took the highest index,
@@ -202,4 +208,5 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser.add_argument("-d", dest="d", action="store_true", help="Leave the new window unfocused.")
     parser.add_argument("-P", dest="P", action="store_true", help="Print information about the new window.")
     add_format_arguments(parser, "The format to print with -P.")
+    add_tag_arguments(parser, "window")
     parser.add_argument("executable", nargs="?", metavar="<executable>")

@@ -82,6 +82,7 @@ from .tables import (
     NotificationRow,
     OptionRow,
     PaneRow,
+    PaneTagRow,
     PaneUserVarRow,
     ProgramRow,
     Row,
@@ -91,12 +92,14 @@ from .tables import (
     ServerRow,
     SessionEnvironmentRow,
     SessionRow,
+    SessionTagRow,
     SplitRow,
     SplitWeightRow,
     ViewerRow,
     WaitChannelRow,
     WindowDefaultRow,
     WindowRow,
+    WindowTagRow,
     insert,
     select,
 )
@@ -116,7 +119,7 @@ __all__ = [
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 31
+SNAPSHOT_VERSION = 32
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -147,10 +150,26 @@ CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
 #: change of shape adds the one step from the version before it and
 #: deletes any older step.
 STEPS: dict[int, str] = {
-    # 31 has no status-fps: a template shows `client_fps` where a person
-    # wants it, per client.
-    30: """
-DELETE FROM options WHERE name = 'status-fps';
+    # 32 tags sessions, windows and panes; 31 had nothing to tag them with.
+    31: """
+CREATE TABLE session_tags(
+  session_id INTEGER NOT NULL REFERENCES sessions(session_id),
+  key TEXT NOT NULL,
+  value TEXT,
+  PRIMARY KEY (session_id, key)
+);
+CREATE TABLE window_tags(
+  window_id INTEGER NOT NULL REFERENCES windows(window_id),
+  key TEXT NOT NULL,
+  value TEXT,
+  PRIMARY KEY (window_id, key)
+);
+CREATE TABLE pane_tags(
+  pane_id INTEGER NOT NULL REFERENCES panes(pane_id),
+  key TEXT NOT NULL,
+  value TEXT,
+  PRIMARY KEY (pane_id, key)
+);
 """,
 }
 
@@ -614,6 +633,8 @@ def rows_of(pymux: Pymux) -> Iterator[Row]:
         )
         for name, value in sorted(session.environment.items()):
             yield SessionEnvironmentRow(session.session_id, name, value)
+        for key, value in sorted(session.tags.items()):
+            yield SessionTagRow(session.session_id, key, value)
         for attribute, value in sorted(arrangement.window_defaults.items()):
             yield WindowDefaultRow(session.session_id, window_option_names.get(attribute, attribute), _value(value))
         for linked, windows in ((True, arrangement.windows), (False, arrangement._unlinked_windows)):
@@ -653,6 +674,8 @@ def _window_rows(session: Session, window: Window, linked: bool, place: int) -> 
         monitor_bell=window.monitor_bell,
         bell=window.bell,
     )
+    for key, value in sorted(window.tags.items()):
+        yield WindowTagRow(window.window_id, key, value)
     for (kind, id), width in sorted(window.column_widths.items()):
         yield ColumnWidthRow(window.window_id, kind, id, width)
     yield from _split_rows(window, window.root, None, None)
@@ -691,6 +714,8 @@ def _pane_rows(pane: Pane, window: Window | None, parent: _Split | None, place: 
     )
     for name, value in sorted(pane.user_vars.items()):
         yield PaneUserVarRow(pane.pane_id, name, value)
+    for key, value in sorted(pane.tags.items()):
+        yield PaneTagRow(pane.pane_id, key, value)
 
 
 def _clients(pymux: Pymux) -> dict[str, dict]:
@@ -1009,6 +1034,7 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
         pane.last_exit_status = row.last_exit_status
         pane.bell = bool(row.bell)
         pane.user_vars = {var.name: var.value for var in select(db, PaneUserVarRow, "WHERE pane_id = ?", pane.pane_id)}
+        pane.tags = {tag.key: tag.value for tag in select(db, PaneTagRow, "WHERE pane_id = ?", pane.pane_id)}
         panes[pane.pane_id] = pane
         pymux.panes_by_id[pane.pane_id] = pane
         return pane
@@ -1044,6 +1070,9 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
         session.environment = {
             env.name: env.value for env in select(db, SessionEnvironmentRow, "WHERE session_id = ?", session.session_id)
         }
+        session.tags = {
+            tag.key: tag.value for tag in select(db, SessionTagRow, "WHERE session_id = ?", session.session_id)
+        }
         arrangement = session.arrangement
         arrangement.base_index = row.base_index
         arrangement.renumber_windows = bool(row.renumber_windows)
@@ -1059,6 +1088,9 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
             window = Window(WindowIndex(window_row.window_index))
             window.window_id = WindowId(window_row.window_id)
             window.chosen_name = window_row.window_name
+            window.tags = {
+                tag.key: tag.value for tag in select(db, WindowTagRow, "WHERE window_id = ?", window.window_id)
+            }
             (root_row,) = select(db, SplitRow, "WHERE split_id = ?", window_row.root_split_id)
             window.root = split_of(root_row)  # type: ignore[assignment]
             window._active_pane = panes.get(window_row.active_pane_id)

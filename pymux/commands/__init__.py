@@ -89,6 +89,8 @@ MODULES = [
     "set_window_option",
     "set_client_option",
     "set_environment",
+    "set_tag",
+    "show_tags",
     "show_options",
     "show_window_options",
     "show_client_options",

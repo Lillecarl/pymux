@@ -463,6 +463,46 @@ def chosen_format(args: argparse.Namespace, default: str) -> ChosenFormat:
     return ChosenFormat(args.format or default, Language.TMUX, bool(args.format))
 
 
+def add_tag_filter(parser: argparse.ArgumentParser, what: str) -> None:
+    "`--tag`, repeated: only the things carrying every tag; a bare key takes any value."
+    parser.add_argument(
+        "--tag",
+        dest="tags",
+        action="append",
+        default=[],
+        metavar="<key[=value]>",
+        help="Only %s carrying this tag. A bare key takes any value. Repeat for every tag." % (what,),
+    )
+
+
+def add_tag_arguments(parser: argparse.ArgumentParser, what: str) -> None:
+    "`--tag`, repeated, on a command that makes something: the tags it starts with."
+    parser.add_argument(
+        "--tag",
+        dest="tags",
+        action="append",
+        default=[],
+        metavar="<key[=value]>",
+        help="Tag the new %s: a bare key, or a key with a value. Repeat to tag it twice." % (what,),
+    )
+
+
+def session_of_target(pymux: Pymux, target: str | None) -> Session:
+    """
+    The session a target names, as tmux's target-session reads one: a
+    bare name is a session, and `session:window` keeps its session part.
+    No target is the session holding the pane the caller means.
+    """
+    if not target:
+        pane = find_pane(pymux, None)
+        session = pymux.session_holding(pane) if pane is not None else None
+        return session or pymux.current_session
+    session = session_part(pymux, target)[0] if ":" in target else pymux.get_session(target)
+    if session is None:
+        raise CommandException("can't find session: %s" % (target,))
+    return session
+
+
 #: What `-P` prints when nothing named a format. (tmux's own.)
 NEW_OBJECT_FORMAT = "#{session_name}:#{window_index}.#{pane_index}"
 

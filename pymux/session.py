@@ -9,13 +9,16 @@ until Lillecarl/pymux#323.
 from __future__ import annotations
 
 import time
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from prompt_toolkit.data_structures import Size
 from pyte.keep import Keep
 
 from .arrangement import Arrangement, Pane
 from .ids import SessionId
+
+if TYPE_CHECKING:
+    from .tags import Tags
 
 __all__ = ["DEFAULT_SIZE", "Session"]
 
@@ -41,6 +44,7 @@ class Session:
         "name": Keep.SAVED,
         "arrangement": Keep.SAVED,
         "environment": Keep.SAVED,
+        "tags": Keep.SAVED,
         "default_size": Keep.SAVED,
         "overlay_pane": Keep.SAVED,
         "overlay_title": Keep.SAVED,
@@ -63,6 +67,9 @@ class Session:
         #: session reads this over the global environment.
         #: Lillecarl/pymux#270.
         self.environment: dict[str, str | None] = {}
+
+        #: What a caller said about this session, with `set-tag -s`.
+        self.tags: Tags = {}
 
         #: The overlay pane: a pane that floats in the middle of the
         #: screen over the layout, like the popup of tmux. It belongs

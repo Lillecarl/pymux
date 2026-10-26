@@ -51,8 +51,9 @@ if not apsw.using_amalgamation or not apsw.apsw_version().startswith(apsw.sqlite
 
 #: What this server answers with. Agents read it with `PRAGMA
 #: user_version` and re-read the tables when it differs from what they
-#: were told. 7: `live.clients` has no `modes`.
-SCHEMA_VERSION = 7
+#: were told. 8: `live` has `session_tags`, `window_tags` and
+#: `pane_tags`.
+SCHEMA_VERSION = 8
 
 #: The questions every boot starts with. A name an agent saves later
 #: replaces one of these for the rest of the boot; the next boot seeds

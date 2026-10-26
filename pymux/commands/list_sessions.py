@@ -8,8 +8,9 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandParser, add_command
-from pymux.commands.common import add_format_arguments, chosen_format, show_listing
+from pymux.commands.common import add_format_arguments, add_tag_filter, chosen_format, show_listing
 from pymux.format import format_pymux_string
+from pymux.tags import carries, parse_tag
 
 #: What a line says when nobody asked for a format. tmux writes the
 #: name, the window count and whether anybody is on it.
@@ -21,12 +22,16 @@ def list_sessions(pymux: Pymux, args: argparse.Namespace) -> None:
     List the sessions of this server, one to a line.
 
     With `-F`, each line is that format. (Like tmux.) `-J` is the same
-    line written as a jinja2 template. Lillecarl/pymux#333.
+    line written as a jinja2 template. Lillecarl/pymux#333. `--tag`
+    keeps the sessions carrying every tag it names.
     """
     chosen = chosen_format(args, DEFAULT_FORMAT)
+    wanted = [parse_tag(word) for word in args.tags]
 
     lines = []
     for session in pymux.sessions:
+        if not carries(session.tags, wanted):
+            continue
         windows = session.arrangement.windows
         window = windows[0] if windows else None
         lines.append(
@@ -57,3 +62,4 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         "-a", dest="a", action="store_true", help="Accepted for tmux. Every session of this server is listed anyway."
     )
     add_format_arguments(parser, "Print this format for each session.")
+    add_tag_filter(parser, "sessions")

@@ -10,9 +10,10 @@ if TYPE_CHECKING:
 from prompt_toolkit.data_structures import Size
 
 from pymux.commands import CommandException, CommandParser, add_command
-from pymux.commands.common import add_format_arguments, print_object_format
+from pymux.commands.common import add_format_arguments, add_tag_arguments, print_object_format
 from pymux.enums import Woke
 from pymux.session import DEFAULT_SIZE
+from pymux.tags import parse_tags
 
 
 def _axis(given: str | None, standing: int, watching: int) -> int:
@@ -76,8 +77,12 @@ def new_session(pymux: Pymux, args: argparse.Namespace):
     size to stay, so a client that attaches keeps it and scrolls. This
     one gives way to the client, and tmux reads the same two flags the
     same way.
+
+    `--tag` tags the session, as `set-tag -s` would, before its first
+    pane starts.
     """
     name = args.session_name
+    tags = parse_tags(args.tags)
 
     if name is not None and pymux.get_session(name) is not None:
         raise CommandException("duplicate session: %s" % (name,))
@@ -88,6 +93,7 @@ def new_session(pymux: Pymux, args: argparse.Namespace):
 
     session = pymux.create_session(name=name)
     session.default_size = size
+    session.tags.update(tags)
     return _open(pymux, args, session)
 
 
@@ -147,4 +153,5 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     )
     parser.add_argument("-P", dest="P", action="store_true", help="Print information about the session.")
     add_format_arguments(parser, "The format to print with -P.")
+    add_tag_arguments(parser, "session")
     parser.add_argument("command", metavar="<shell-command>", nargs="?", help="What the first pane runs.")

@@ -70,6 +70,12 @@ CREATE TABLE session_environment(
   value TEXT,
   PRIMARY KEY (session_id, name)
 );
+CREATE TABLE session_tags(
+  session_id INTEGER NOT NULL REFERENCES sessions(session_id),
+  key TEXT NOT NULL,
+  value TEXT,
+  PRIMARY KEY (session_id, key)
+);
 CREATE TABLE window_defaults(
   session_id INTEGER NOT NULL REFERENCES sessions(session_id),
   name TEXT NOT NULL,
@@ -100,6 +106,12 @@ CREATE TABLE windows(
   monitor_bell INTEGER NOT NULL DEFAULT 1,
   bell INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE window_tags(
+  window_id INTEGER NOT NULL REFERENCES windows(window_id),
+  key TEXT NOT NULL,
+  value TEXT,
+  PRIMARY KEY (window_id, key)
+);
 CREATE TABLE splits(
   split_id INTEGER PRIMARY KEY,
   window_id INTEGER NOT NULL REFERENCES windows(window_id),
@@ -125,6 +137,12 @@ CREATE TABLE pane_user_vars(
   name TEXT NOT NULL,
   value TEXT NOT NULL,
   PRIMARY KEY (pane_id, name)
+);
+CREATE TABLE pane_tags(
+  pane_id INTEGER NOT NULL REFERENCES panes(pane_id),
+  key TEXT NOT NULL,
+  value TEXT,
+  PRIMARY KEY (pane_id, key)
 );
 CREATE TABLE pane_viewers(
   pane_id INTEGER PRIMARY KEY REFERENCES panes(pane_id),
@@ -297,11 +315,14 @@ TABLES = (
     "global_environment",
     "sessions",
     "session_environment",
+    "session_tags",
     "window_defaults",
     "windows",
+    "window_tags",
     "splits",
     "panes",
     "pane_user_vars",
+    "pane_tags",
     "pane_viewers",
     "split_weights",
     "column_widths",
@@ -400,6 +421,15 @@ class SessionEnvironmentRow:
 
 
 @dataclass(frozen=True, slots=True)
+class SessionTagRow:
+    TABLE: ClassVar[str] = "session_tags"
+    KEY: ClassVar[tuple[str, ...]] = ("session_id", "key")
+    session_id: int
+    key: str
+    value: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class WindowDefaultRow:
     TABLE: ClassVar[str] = "window_defaults"
     KEY: ClassVar[tuple[str, ...]] = ("session_id", "name")
@@ -437,6 +467,15 @@ class WindowRow:
 
 
 @dataclass(frozen=True, slots=True)
+class WindowTagRow:
+    TABLE: ClassVar[str] = "window_tags"
+    KEY: ClassVar[tuple[str, ...]] = ("window_id", "key")
+    window_id: int
+    key: str
+    value: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class SplitRow:
     TABLE: ClassVar[str] = "splits"
     KEY: ClassVar[tuple[str, ...]] = ("split_id",)
@@ -471,6 +510,15 @@ class PaneUserVarRow:
     pane_id: int
     name: str
     value: str
+
+
+@dataclass(frozen=True, slots=True)
+class PaneTagRow:
+    TABLE: ClassVar[str] = "pane_tags"
+    KEY: ClassVar[tuple[str, ...]] = ("pane_id", "key")
+    pane_id: int
+    key: str
+    value: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -718,11 +766,14 @@ ROWS = (
     GlobalEnvironmentRow,
     SessionRow,
     SessionEnvironmentRow,
+    SessionTagRow,
     WindowDefaultRow,
     WindowRow,
+    WindowTagRow,
     SplitRow,
     PaneRow,
     PaneUserVarRow,
+    PaneTagRow,
     ViewerRow,
     SplitWeightRow,
     ColumnWidthRow,

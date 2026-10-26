@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from pymux.commands import CommandException
 from pymux.rate import frames_per_second, per_second
+from pymux.tags import spelled
 
 if TYPE_CHECKING:
     from pymux.arrangement import Pane, Window
@@ -786,6 +787,9 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "pane_revision": lambda c: str(c.pane.revision),
     # Not tmux's: which pane of the window rang. Lillecarl/pymux#501.
     "pane_bell_flag": _pane_bell_flag,
+    # Not tmux's: the tags of `set-tag`, as `--tag` takes them, and a
+    # dictionary in a template. Lillecarl/pymux#762.
+    "pane_tags": lambda c: spelled(c.pane.tags),
     "history_size": _history_size,
     "history_limit": lambda c: str(c.pymux.history_limit),
     # Window.
@@ -798,6 +802,7 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "window_panes": _window_panes,
     "window_width": lambda c: str(c.pane.process.sx),
     "window_height": lambda c: str(c.pane.process.sy),
+    "window_tags": lambda c: spelled(c.window.tags),
     # Session.
     "session_id": _session_id,
     "session_name": lambda c: c.session.name,
@@ -805,6 +810,7 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "session_windows": _session_windows,
     "session_path": lambda c: c.pymux.original_cwd,
     "session_created": lambda c: str(int(c.session.created)),
+    "session_tags": lambda c: spelled(c.session.tags),
     # Client.
     "client_name": _client_name,
     "client_tty": _client_tty,

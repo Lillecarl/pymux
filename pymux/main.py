@@ -4488,9 +4488,10 @@ exec pymux notify -u "$urgency" -- "$@"
         index: WindowIndex | None = None,
         session: Session | None = None,
         task_group: anyio.abc.TaskGroup | None = None,
-    ):
+    ) -> Window:
         """
-        Create a new :class:`pymux.arrangement.Window` in the arrangement.
+        Create a new :class:`pymux.arrangement.Window` in the arrangement,
+        and answer it.
 
         `index` says where it goes. Without one it takes the lowest
         free index. Lillecarl/pymux#191.
@@ -4512,10 +4513,11 @@ exec pymux notify -u "$urgency" -- "$@"
             None, command, start_directory=start_directory, session=session, task_group=task_group
         )
 
-        session.arrangement.create_window(pane, name=name, index=index)
+        window = session.arrangement.create_window(pane, name=name, index=index)
         if session is asked_for:
             pane.focus()
         self.invalidate(Woke.WINDOW_OPENED)
+        return window
 
     async def add_process(
         self,
@@ -4524,10 +4526,10 @@ exec pymux notify -u "$urgency" -- "$@"
         start_directory: str | None = None,
         window: Window | None = None,
         task_group: anyio.abc.TaskGroup | None = None,
-    ):
+    ) -> Pane:
         """
         Add a new process to the given window (or the active window).
-        (vsplit/hsplit).
+        (vsplit/hsplit). Answers the new pane.
         """
         if window is None:
             window = self.arrangement.get_active_window()
@@ -4544,6 +4546,7 @@ exec pymux notify -u "$urgency" -- "$@"
         window.add_pane(pane, vsplit=vsplit)
         pane.focus()
         self.invalidate(Woke.PANE_WAS_SPLIT_OFF)
+        return pane
 
     def kill_pane(self, pane: Pane) -> None:
         """

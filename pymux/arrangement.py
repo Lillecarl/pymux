@@ -29,6 +29,7 @@ from .wayland_scale import DEFAULT_WAYLAND_SCALE
 
 if TYPE_CHECKING:
     from .recording import Recording
+    from .tags import Tags
     from .window_pane import WindowWidget
 
 __all__ = [
@@ -104,6 +105,7 @@ class Pane:
         "chosen_name": Keep.SAVED,
         "clock_mode": Keep.SAVED,
         "user_vars": Keep.SAVED,
+        "tags": Keep.SAVED,
         "current_directory": Keep.SAVED,
         "current_host": Keep.SAVED,
         "command_zone": Keep.SAVED,
@@ -169,6 +171,9 @@ class Pane:
         #: WezTerm for titles; here they wait for a reader, the way the
         #: notification hub waited for its chooser.
         self.user_vars: dict[str, str] = {}
+
+        #: What a caller said about this pane, with `set-tag`.
+        self.tags: Tags = {}
 
         #: The shell integration zone the program stands in, from
         #: "OSC 133": "A" a prompt, "B" a command, "C" its output.
@@ -368,6 +373,7 @@ class Window:
         "window_codec": Keep.SAVED,
         "monitor_bell": Keep.SAVED,
         "bell": Keep.SAVED,
+        "tags": Keep.SAVED,
     }
 
     _window_counter = 1000  # Start here, to avoid confusion with window index.
@@ -381,6 +387,8 @@ class Window:
         self._pane_history: list[ref[Pane]] = []
         self.chosen_name: str | None = None
         self.previous_selected_layout: LayoutTypes | None = None
+        #: What a caller said about this window, with `set-tag -w`.
+        self.tags: Tags = {}
 
         #: Lay the panes out as a strip that may be wider than the
         #: screen, instead of dividing the screen between them. Read
@@ -1286,9 +1294,9 @@ class Arrangement:
         name: str | None = None,
         set_active: bool = True,
         index: WindowIndex | None = None,
-    ) -> None:
+    ) -> Window:
         """
-        Create a new window that contains just this pane.
+        Create a new window that contains just this pane, and answer it.
 
         :param pane: The :class:`.Pane` instance to put in the new window.
         :param name: If given, name for the new window.
@@ -1327,6 +1335,7 @@ class Arrangement:
 
         assert w.active_pane == pane
         assert w._get_parent(pane)
+        return w
 
     def move_window(self, window: Window, new_index: WindowIndex) -> None:
         """

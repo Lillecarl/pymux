@@ -13,7 +13,8 @@ if TYPE_CHECKING:
 
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import answer, is_agent, refuse_without_a_waiter
-from pymux.jobs import SESSION_TAG, Job, outcome_text, parse_env, parse_tag
+from pymux.jobs import SESSION_TAG, Job, outcome_text, parse_env
+from pymux.tags import parse_tags
 
 
 def run_job(pymux: Pymux, args: argparse.Namespace):
@@ -57,7 +58,7 @@ def run_job(pymux: Pymux, args: argparse.Namespace):
 
 async def _submit(pymux: Pymux, args: argparse.Namespace, shell_command: str) -> None:
     caller = pymux.caller_context
-    tags = dict(parse_tag(word) for word in args.tags)
+    tags = parse_tags(args.tags)
     # An explicit session wins; the caller's stamps the rest, so its
     # later lookups prefer this job. A hand-typed session tag is left
     # alone: it filters like any other tag.

@@ -12,11 +12,13 @@ if TYPE_CHECKING:
 from pymux.commands import CommandException, CommandParser, add_command
 from pymux.commands.common import (
     add_format_arguments,
+    add_tag_filter,
     chosen_format,
     session_part,
     show_listing,
 )
 from pymux.format import format_pymux_string
+from pymux.tags import carries, parse_tag
 
 
 def _sessions(pymux: Pymux, args: argparse.Namespace) -> list[Session]:
@@ -51,14 +53,20 @@ def list_windows(pymux: Pymux, args: argparse.Namespace) -> None:
 
     With `-F`, the formatted window information is printed to the
     output of the pymux command line. (Like tmux.)
+
+    `--tag` keeps the windows carrying every tag it names, and with no
+    `-t` it looks through every session, as `-a` does.
     """
-    sessions = _sessions(pymux, args)
+    wanted = [parse_tag(word) for word in args.tags]
+    sessions = list(pymux.sessions) if wanted and not args.target_session else _sessions(pymux, args)
 
     chosen = chosen_format(args, "#{window_id}")
 
-    if chosen.asked:
+    if chosen.asked or wanted:
         for session in sessions:
             for w in session.arrangement.windows:
+                if not carries(w.tags, wanted):
+                    continue
                 pymux.print_command_line(
                     format_pymux_string(
                         pymux,
@@ -98,3 +106,4 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         "-t", dest="target_session", metavar="<target-session>", help="The session whose windows to list."
     )
     add_format_arguments(parser, "Print this format for every window.")
+    add_tag_filter(parser, "windows")

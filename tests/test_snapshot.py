@@ -196,7 +196,9 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     pane.bell = True
     pane.screen.mark_row(RowMark.PROMPT)
     pane.user_vars = {"badge": "on", "role": "build"}
+    pane.tags = {"agent": "a1", "bare": None, "empty": ""}
     strip.panes[0].user_vars = {"badge": "off"}
+    strip.panes[0].tags = {"agent": "a2"}
     strip.panes[0].screen.mark_row(RowMark.PROMPT | RowMark.OUTPUT)
 
     stacked.zoom = True
@@ -210,6 +212,8 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     stacked.window_codec = WindowCodec.VP9
     stacked.monitor_bell = False
     stacked.bell = True
+    stacked.tags = {"role": "logs"}
+    strip.tags = {"role": "build", "bare": None}
     strip.set_column_width(strip.root[0], 0.75)
     strip.set_column_width(strip.root[1], 0.5)
     strip.root.set_weight(strip.root[1], 2)
@@ -218,6 +222,8 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     first.default_size = Size(rows=40, columns=120)
     first.environment["ALSO"] = "this"
     second.environment["ONLY"] = "there"
+    first.tags = {"owner": "person"}
+    second.tags = {"owner": "agent", "bare": None}
     second.arrangement.base_index = 0
     second.arrangement.renumber_windows = True
     second.arrangement.window_defaults["synchronize_panes"] = True
@@ -676,18 +682,19 @@ def test_the_table_list_is_the_schema_in_order():
     assert list(tables.TABLES) == made
 
 
-def test_a_version_30_snapshot_held_status_fps(pymux, tmp_path):
-    "The server before it went had a status-fps option, saved on."
-    path = tmp_path / "v30.sqlite"
+def test_a_version_31_snapshot_had_no_tags(pymux, tmp_path):
+    "The server before it went held no tag but a job's."
+    path = tmp_path / "v31.sqlite"
     snapshot.save(pymux, path)
     db = apsw.Connection(str(path))
-    db.execute("INSERT OR REPLACE INTO options (name, value) VALUES ('status-fps', 1)")
-    db.execute("PRAGMA user_version = 30")
+    for table in ("session_tags", "window_tags", "pane_tags"):
+        db.execute("DROP TABLE %s" % table)
+    db.execute("PRAGMA user_version = 31")
     db.close()
 
     loaded = Pymux()
     snapshot.load(loaded, path)
-    assert not hasattr(loaded, "status_fps")
+    assert [session.tags for session in loaded.sessions] == [{} for _ in pymux.sessions]
 
 
 @pytest.mark.parametrize("pty", [True, False], ids=["on a terminal", "on pipes"])

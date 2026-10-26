@@ -41,6 +41,7 @@ from pyte.keep import Keep
 from pymux.commands import CommandException
 from pymux.log import logger
 from pymux.query import SEEDS
+from pymux.tags import Tags, carries, parse_tag, spelled
 
 #: A newline with no return before it. What the viewer turns into a
 #: full return, the way ONLCR would have on a pty.
@@ -75,20 +76,6 @@ PTY_TERM = "xterm-256color"
 #: distinct type to the checker, so a pane id, a window id, or a bare
 #: number never passes where a job is expected without saying so.
 JobId = NewType("JobId", int)
-
-
-def parse_tag(word: str) -> tuple[str, str | None]:
-    """
-    One `--tag`: a bare key, or a key with a value.
-
-    A bare key carries no value -- NULL in the database, not an empty
-    string -- so `key` and `key=` stay two different tags. A repeated
-    key keeps its last value.
-    """
-    key, separator, value = word.partition("=")
-    if not key:
-        raise CommandException("a tag names a key: %r" % word)
-    return key, value if separator else None
 
 
 def parse_env(word: str) -> tuple[str, str]:
@@ -167,7 +154,7 @@ class Job:
         #: carries no value, and a repeated key keeps its last one.
         #: The `session` key names the agent session that ran it, when
         #: one did: `run` stamps what the calling packet said.
-        self.tags: dict[str, str | None] = dict(tags)
+        self.tags: Tags = dict(tags)
         #: What the process starts with: the caller's environment and
         #: the `--env` of the `run`, or the server's own where no
         #: caller said anything. In-memory only, like everything else
@@ -355,7 +342,9 @@ class JobTable:
         `--session`: only that session is searched at all. Neither
         given is pure newness, the way lookups always read.
         """
-        found = [job for job in self._jobs.values() if (scope is None or job.session == scope) and _matches(job, tags)]
+        found = [
+            job for job in self._jobs.values() if (scope is None or job.session == scope) and carries(job.tags, tags)
+        ]
         if not found:
             return None
         return max(found, key=lambda job: (hint is not None and job.session == hint, job.started, job.job_id))
@@ -852,16 +841,6 @@ class JobFeed:
             logger.exception("Feeding a job marker to its viewer failed.")
 
 
-def _matches(job: Job, tags: list[tuple[str, str | None]]) -> bool:
-    "Whether the job carries every tag: a bare key takes any value."
-    for key, value in tags:
-        if key not in job.tags:
-            return False
-        if value is not None and job.tags[key] != value:
-            return False
-    return True
-
-
 def find_job(pymux, job: int | None, words: list[str], session: str | None) -> Job:
     """
     The job an id or a set of tags names: the id as given, or what the
@@ -931,8 +910,7 @@ def describe(job: Job) -> str:
         state += " pty"
     line = "%d %s %.1fs %s" % (job.job_id, state, job.age(), job.command)
     if job.tags:
-        tagged = ",".join(key if value is None else "%s=%s" % (key, value) for key, value in job.tags.items())
-        line += " [%s]" % tagged
+        line += " [%s]" % spelled(job.tags)
     return line
 
 

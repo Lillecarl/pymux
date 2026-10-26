@@ -9,8 +9,16 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandException, CommandParser, add_command
-from pymux.commands.common import add_format_arguments, chosen_format, find_window, show_listing, the_window
+from pymux.commands.common import (
+    add_format_arguments,
+    add_tag_filter,
+    chosen_format,
+    find_window,
+    show_listing,
+    the_window,
+)
 from pymux.format import format_pymux_string
+from pymux.tags import carries, parse_tag
 
 
 def list_panes(pymux: Pymux, args: argparse.Namespace) -> None:
@@ -20,13 +28,18 @@ def list_panes(pymux: Pymux, args: argparse.Namespace) -> None:
     Without `-F`, this displays the pane overview as a pop-up in the user
     interface. With `-F`, the formatted pane information is printed to the
     output of the pymux command line. (Like tmux.)
+
+    `--tag` keeps the panes carrying every tag it names, and with no
+    `-t` or `-s` it looks through the whole server, as `-a` does: a tag
+    finds a pane wherever it is.
     """
+    wanted = [parse_tag(word) for word in args.tags]
     if args.target_pane:
         window = find_window(pymux, args.target_pane.rsplit(".", 1)[0])
         if window is None:
             raise CommandException("can't find window: %s" % (args.target_pane,))
         windows: list[Window] = [window]
-    elif args.a:
+    elif args.a or (wanted and not args.s):
         # Every window of every session. tmux reads `-a` as the whole
         # server too. Lillecarl/pymux#323.
         windows = [w for session in pymux.sessions for w in session.arrangement.windows]
@@ -35,15 +48,15 @@ def list_panes(pymux: Pymux, args: argparse.Namespace) -> None:
     else:
         windows = [the_window(pymux, None)]
 
-    active_pane = windows[0].active_pane
-
     chosen = chosen_format(args, "#{pane_id}")
 
-    if chosen.asked:
+    if chosen.asked or wanted:
         # Print one line for every pane.
         for w in windows:
             session = pymux.session_of_window(w)
             for p in w.panes:
+                if not carries(p.tags, wanted):
+                    continue
                 pymux.print_command_line(
                     format_pymux_string(
                         pymux,
@@ -55,6 +68,7 @@ def list_panes(pymux: Pymux, args: argparse.Namespace) -> None:
                     )
                 )
     else:
+        active_pane = windows[0].active_pane
         result = []
 
         for i, p in enumerate(windows[0].panes):
@@ -84,3 +98,4 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser.add_argument("-s", dest="s", action="store_true", help="The panes of every window of this session.")
     parser.add_argument("-t", dest="target_pane", metavar="<target-pane>", help="The pane whose window to list.")
     add_format_arguments(parser, "Print this format for every pane.")
+    add_tag_filter(parser, "panes")

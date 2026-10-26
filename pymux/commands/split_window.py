@@ -5,33 +5,47 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pymux.main import Pymux
+    from pymux.tags import Tags
 
 
 from pymux.commands import CommandException, CommandParser, add_command
-from pymux.commands.common import add_format_arguments, find_window, print_object_format, the_window
+from pymux.commands.common import (
+    add_format_arguments,
+    add_tag_arguments,
+    find_window,
+    print_object_format,
+    the_window,
+)
+from pymux.tags import parse_tags
 
 
 def split_window(pymux: Pymux, args: argparse.Namespace):
     """
     Split this window into two panes, side by side or stacked.
+
+    `--tag` tags the new pane, as `set-tag` would.
     """
     executable = args.executable
     start_directory = args.start_directory
+    tags = parse_tags(args.tags)
 
     # Split in the target window. (libtmux targets the pane of the window.)
     target_window = find_window(pymux, args.target_window)
 
-    return _split(pymux, executable, start_directory, target_window, args)
+    return _split(pymux, executable, start_directory, target_window, tags, args)
 
 
-async def _split(pymux: Pymux, executable, start_directory, target_window, args: argparse.Namespace) -> None:
+async def _split(
+    pymux: Pymux, executable, start_directory, target_window, tags: Tags, args: argparse.Namespace
+) -> None:
     # The tmux definition of horizontal is the opposite of prompt_toolkit.
-    await pymux.add_process(
+    pane = await pymux.add_process(
         executable,
         vsplit=args.h,
         start_directory=start_directory,
         window=target_window,
     )
+    pane.tags.update(tags)
 
     if args.P:
         window = the_window(pymux, None)
@@ -57,4 +71,6 @@ def add_arguments(parser: argparse.ArgumentParser):
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
-    add_arguments(add_command(subparsers, split_window))
+    parser = add_command(subparsers, split_window)
+    add_arguments(parser)
+    add_tag_arguments(parser, "pane")
