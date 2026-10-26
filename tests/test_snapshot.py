@@ -35,7 +35,7 @@ from pymux.enums import Chooser, WindowCodec, WindowSize
 from pymux.jobs import JobFeed, JobPipes
 from pymux.main import Pymux
 from pymux.notifications import Urgency
-from pymux.query import SEEDS, ask
+from pymux.query import ask
 
 
 @pytest.fixture
@@ -234,6 +234,7 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     second.tags = {"owner": "agent", "bare": None}
     second.arrangement.base_index = 0
     second.arrangement.renumber_windows = True
+    first.options.status_right = "first's own"
     second.arrangement.window_defaults["synchronize_panes"] = True
     pymux.global_environment["UNSET"] = None
 
@@ -692,35 +693,48 @@ def test_the_table_list_is_the_schema_in_order():
     assert list(tables.TABLES) == made
 
 
-def test_a_version_32_snapshot_saved_its_seeds(pymux, tmp_path):
+def test_a_version_33_snapshot_keeps_the_order_a_session_set(pymux, tmp_path):
     """
-    32 saved every question, its build's seeds among them. An untouched
-    seed copy goes, so this build's seeds take its place; a changed one
-    is a person's; a missing one was taken away.
+    33 kept base-index and renumber-windows on every session's row. A
+    value other than the default is one the session set, and the rest
+    follow `set-option -g` from now on. Lillecarl/pymux#756.
     """
-    path = tmp_path / "v32.sqlite"
+    pymux.create_session("second")
+    path = tmp_path / "v33.sqlite"
     snapshot.save(pymux, path)
     db = apsw.Connection(str(path))
-    db.execute("DROP TABLE forgotten_seeds")
-    db.execute("DELETE FROM saved_queries")
-    for name, sql, description in SEEDS[:4]:
-        if name == "running":
-            continue
-        if name == "failed":
-            sql = "SELECT 1"
-        db.execute("INSERT INTO saved_queries VALUES (?, ?, ?)", (name, sql, description))
-    db.execute("PRAGMA user_version = 32")
+    db.execute("DROP TABLE session_options")
+    db.execute("ALTER TABLE sessions ADD COLUMN base_index INTEGER NOT NULL DEFAULT 1")
+    db.execute("ALTER TABLE sessions ADD COLUMN renumber_windows INTEGER NOT NULL DEFAULT 0")
+    db.execute("UPDATE sessions SET base_index = 0, renumber_windows = 1 WHERE position = 1")
+    db.execute("PRAGMA user_version = 33")
     db.close()
 
     loaded = Pymux()
     snapshot.load(loaded, path)
 
-    queries = loaded.jobs.queries
-    assert "running" not in queries
-    assert queries["failed"][0] == "SELECT 1"
-    assert "recent" in queries
-    assert "complete-option" in queries
-    assert loaded.jobs.saved_queries == {"failed": ("SELECT 1", queries["failed"][1])}
+    first, second = loaded.sessions
+    assert first.options.own() == {}
+    assert second.options.own() == {"base_index": 0, "renumber_windows": True}
+    loaded.renumber_windows = True
+    assert first.arrangement.renumber_windows is True
+
+
+def test_a_session_s_own_value_survives_and_the_rest_follow_the_default(pymux, tmp_path):
+    pymux.create_session("second")
+    pymux.sessions[0].options.status_right = "mine"
+    path = tmp_path / "own.sqlite"
+    snapshot.save(pymux, path)
+
+    loaded = Pymux()
+    snapshot.load(loaded, path)
+
+    first, second = loaded.sessions
+    assert first.options.own()["status_right"] == "mine"
+    assert not second.options.holds("status_right")
+    loaded.status_right = "later"
+    assert second.options.status_right == "later"
+    assert first.options.status_right == "mine"
 
 
 @pytest.mark.parametrize("pty", [True, False], ids=["on a terminal", "on pipes"])

@@ -18,9 +18,12 @@ from .arrangement import Arrangement, Pane
 from .ids import SessionId
 
 if TYPE_CHECKING:
+    from .enums import EditingKeys, PaneBrowser
+    from .layout import Justify
+    from .options import OpenUrlMode, OpenUrlTarget
     from .tags import Tags
 
-__all__ = ["DEFAULT_SIZE", "Session"]
+__all__ = ["DEFAULT_SIZE", "Session", "SessionOptions"]
 
 #: How big a window of this session is while no client is watching it.
 #:
@@ -28,6 +31,86 @@ __all__ = ["DEFAULT_SIZE", "Session"]
 #: a size from the first byte it writes. tmux answers the same two numbers
 #: and calls them `default-size` (`cmd-new-session.c`, `dsx` and `dsy`).
 DEFAULT_SIZE = Size(rows=24, columns=80)
+
+
+class SessionOptions:
+    """
+    One session's options: the values it set itself, over the defaults.
+
+    A value written here is this session's own. A name it does not hold
+    reads the default on `Pymux`, so a later `set-option -g` reaches
+    every session that never set its own: tmux's `options_get` walks to
+    the parent table the same way (`options.c`). `forget` drops an own
+    value, which is what `-gg` does to every session.
+    Lillecarl/pymux#756.
+
+    The annotations are the names a session may hold, and
+    `tests/test_session_options.py` holds them to `ALL_OPTIONS`.
+    """
+
+    allow_program_resize: bool
+    base_index: int
+    chooser_session_lines: bool
+    command_palette: bool
+    cut_shade_strength: int
+    cut_shade_width: int
+    default_shell: str
+    enable_bell: bool
+    enable_mouse_support: bool
+    enable_pane_status: bool
+    enable_status: bool
+    history_limit: int
+    key_profile: str
+    lock_command: str
+    mode_keys: EditingKeys
+    notify_shim: bool
+    open_url_forward: bool
+    open_url_forward_idle: int
+    open_url_mode: OpenUrlMode
+    open_url_shim: bool
+    open_url_target: OpenUrlTarget
+    paint_screen: bool
+    pane_browser: PaneBrowser
+    remain_on_exit: bool
+    renumber_windows: bool
+    status_interval: int
+    status_justify: Justify
+    status_keys: EditingKeys
+    status_left: str
+    status_left_length: int
+    status_max_rows: int
+    status_right: str
+    status_right_length: int
+    strip_animation_time: int
+    synthesize_key_events: bool
+    update_environment: str
+    which_key: bool
+    window_status_current_format: str
+    window_status_format: str
+
+    def __init__(self, defaults: object) -> None:
+        self._defaults = defaults
+
+    def __getattr__(self, name: str):
+        # Only a name this object does not hold reaches here.
+        if name in _SESSION_OPTION_NAMES:
+            return getattr(self._defaults, name)
+        raise AttributeError(name)
+
+    def own(self) -> dict[str, object]:
+        "The values this session set itself, by attribute name."
+        return {name: value for name, value in vars(self).items() if name in _SESSION_OPTION_NAMES}
+
+    def holds(self, name: str) -> bool:
+        "Whether this session set `name` itself."
+        return name in vars(self)
+
+    def forget(self, name: str) -> None:
+        "Drop this session's own value, so it reads the default again."
+        vars(self).pop(name, None)
+
+
+_SESSION_OPTION_NAMES = frozenset(SessionOptions.__annotations__)
 
 
 class Session:
@@ -42,6 +125,7 @@ class Session:
     KEEP: ClassVar[dict[str, Keep]] = {
         "session_id": Keep.SAVED,
         "name": Keep.SAVED,
+        "options": Keep.SAVED,
         "arrangement": Keep.SAVED,
         "environment": Keep.SAVED,
         "tags": Keep.SAVED,
@@ -54,14 +138,15 @@ class Session:
         "last_used": Keep.SAVED,
     }
 
-    def __init__(self, session_id: SessionId, name: str) -> None:
+    def __init__(self, session_id: SessionId, name: str, defaults: object) -> None:
         #: The number in `$0`, the way tmux spells a session. It counts
         #: from zero for each server, and no two sessions of one server
         #: ever share it, including after one is killed.
         self.session_id = session_id
 
         self.name = name
-        self.arrangement = Arrangement()
+        self.options = SessionOptions(defaults)
+        self.arrangement = Arrangement(self.options)
 
         #: What `set-environment` without `-g` fills. A new pane of this
         #: session reads this over the global environment.

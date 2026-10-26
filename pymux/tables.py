@@ -56,8 +56,6 @@ CREATE TABLE sessions(
   last_used INTEGER NOT NULL,
   default_height INTEGER NOT NULL,
   default_width INTEGER NOT NULL,
-  base_index INTEGER NOT NULL,
-  renumber_windows INTEGER NOT NULL,
   last_active_window_id INTEGER,
   overlay_pane_id INTEGER,
   overlay_title TEXT NOT NULL,
@@ -75,6 +73,12 @@ CREATE TABLE session_tags(
   key TEXT NOT NULL,
   value TEXT,
   PRIMARY KEY (session_id, key)
+);
+CREATE TABLE session_options(
+  session_id INTEGER NOT NULL REFERENCES sessions(session_id),
+  name TEXT NOT NULL,
+  value,
+  PRIMARY KEY (session_id, name)
 );
 CREATE TABLE window_defaults(
   session_id INTEGER NOT NULL REFERENCES sessions(session_id),
@@ -319,6 +323,7 @@ TABLES = (
     "sessions",
     "session_environment",
     "session_tags",
+    "session_options",
     "window_defaults",
     "windows",
     "window_tags",
@@ -422,8 +427,6 @@ class SessionRow:
     last_used: int
     default_height: int
     default_width: int
-    base_index: int
-    renumber_windows: int
     last_active_window_id: int | None
     overlay_pane_id: int | None
     overlay_title: str
@@ -447,6 +450,17 @@ class SessionTagRow:
     session_id: int
     key: str
     value: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class SessionOptionRow:
+    "A value one session set itself; the rest read `options`. Lillecarl/pymux#756."
+
+    TABLE: ClassVar[str] = "session_options"
+    KEY: ClassVar[tuple[str, ...]] = ("session_id", "name")
+    session_id: int
+    name: str
+    value: Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -802,6 +816,7 @@ ROWS = (
     SessionRow,
     SessionEnvironmentRow,
     SessionTagRow,
+    SessionOptionRow,
     WindowDefaultRow,
     WindowRow,
     WindowTagRow,

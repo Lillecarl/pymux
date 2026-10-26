@@ -80,8 +80,8 @@ def list_panes(pymux: Pymux, args: argparse.Namespace) -> None:
                     i,
                     process.sx,
                     process.sy,
-                    min(pymux.history_limit, p.screen.line_offset + process.sy),
-                    pymux.history_limit,
+                    min(pymux.current_session.options.history_limit, p.screen.line_offset + process.sy),
+                    pymux.current_session.options.history_limit,
                     ("(active)" if p == active_pane else ""),
                 )
             )

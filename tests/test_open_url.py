@@ -501,7 +501,7 @@ async def test_shim_rides_path_of_new_pane():
         pymux._ensure_open_url_shim()
 
         environment = {"PATH": "/usr/bin"}
-        pymux._shim_pane_environment(environment)
+        pymux._shim_pane_environment(environment, pymux.current_session.options)
 
         assert environment["PATH"].startswith(pymux._open_url_shim_dir + os.pathsep)
         assert environment["BROWSER"] == os.path.join(pymux._open_url_shim_dir, "pymux-open-url")
@@ -551,7 +551,7 @@ async def test_shim_leaves_pane_alone_when_it_is_off():
         pymux.handle_command("set-option pane-browser off")
 
         environment = {"PATH": "/usr/bin"}
-        pymux._shim_pane_environment(environment)
+        pymux._shim_pane_environment(environment, pymux.current_session.options)
 
         assert environment == {"PATH": "/usr/bin"}
 

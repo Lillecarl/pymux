@@ -128,7 +128,7 @@ from .osc import (
 from .pipes import bind_and_listen_on_socket, connect_in_memory
 from .rc import STARTUP_COMMANDS
 from .server import ServerConnection
-from .session import DEFAULT_SIZE, Session
+from .session import DEFAULT_SIZE, Session, SessionOptions
 from .style import DEFAULT_THEME, theme
 from .utils import editor_keys, get_default_shell
 from .wayland import WaylandServer
@@ -931,7 +931,7 @@ class ClientState:
             cursor=PaneCursor(pymux),
             layout=Layout(container=self.layout_manager.layout),
             key_bindings=pymux.key_bindings_manager.key_bindings,
-            mouse_support=Condition(lambda: pymux.enable_mouse_support),
+            mouse_support=Condition(lambda: self.session.options.enable_mouse_support),
             full_screen=True,
             # Read on every render, so a theme chosen while a client is
             # attached reaches it without rebuilding the application.
@@ -956,9 +956,9 @@ class ClientState:
             # Helix keys sit on top of the emacs ones, which is what
             # prompt_toolkit's insert mode is.
             if self.confirm_text or self.prompt_command or self.command_mode:
-                app.editing_mode = VI if pymux.status_keys is EditingKeys.VI else EMACS
+                app.editing_mode = VI if self.session.options.status_keys is EditingKeys.VI else EMACS
             else:
-                app.editing_mode = VI if pymux.mode_keys is EditingKeys.VI else EMACS
+                app.editing_mode = VI if self.session.options.mode_keys is EditingKeys.VI else EMACS
 
         app.key_processor.before_key_press += sync_vi_state
         app.key_processor.after_key_press += sync_vi_state
@@ -1339,6 +1339,8 @@ class Pymux:
         "default_shell": Keep.SAVED,
         "default_terminal": Keep.SAVED,
         "enable_bell": Keep.SAVED,
+        "base_index": Keep.SAVED,
+        "renumber_windows": Keep.SAVED,
         "enable_mouse_support": Keep.SAVED,
         "enable_pane_status": Keep.SAVED,
         "enable_status": Keep.SAVED,
@@ -1429,7 +1431,22 @@ class Pymux:
         #: `window-size latest` reads the stamps.
         self._uses = 0
 
-        # Options
+        # Options. A session option here is the default; a session reads
+        # it through `Session.options` unless it set its own.
+        # Lillecarl/pymux#756.
+
+        # The number of the first window. tmux starts at zero, but a
+        # keyboard starts at one: the "1" key is easier to reach than
+        # the "0" key, and it sits where the first window belongs.
+        # `set-option base-index 0` brings the tmux default back.
+        self.base_index = 1
+
+        # Whether closing a window renumbers the ones that are left,
+        # so the order has no gaps in it. Off, the way tmux ships it:
+        # a person who learned that their build is window 4 keeps
+        # window 4 until they say otherwise. Lillecarl/pymux#342.
+        self.renumber_windows = False
+
         self.enable_mouse_support = True
         self.enable_status = True
         self.enable_pane_status = True  # False
@@ -1792,6 +1809,7 @@ class Pymux:
         session = Session(
             session_id=session_id,
             name=name if name is not None else str(session_id),
+            defaults=self,
         )
         self.sessions.append(session)
 
@@ -1882,7 +1900,7 @@ class Pymux:
         reported = client_state.connection.environment
         environment = client_state.session.environment
 
-        for pattern in self.update_environment.split():
+        for pattern in client_state.session.options.update_environment.split():
             # A pattern, because tmux matches one: `XDG_*` is how a
             # person takes a family of them without naming each.
             found = False
@@ -2060,12 +2078,12 @@ class Pymux:
         `any_watcher_shows_pane_status`, which are not this one.
         Lillecarl/pymux#471.
         """
-        return self.enable_status and not self._asking_is_full_screen()
+        return self.current_session.options.enable_status and not self._asking_is_full_screen()
 
     @property
     def show_pane_status(self) -> bool:
         "Whether the client that is asking draws the titlebar of a pane."
-        return self.enable_pane_status and not self._asking_is_full_screen()
+        return self.current_session.options.enable_pane_status and not self._asking_is_full_screen()
 
     def _asking_is_full_screen(self) -> bool:
         """
@@ -2113,9 +2131,11 @@ class Pymux:
         `_any_of_them_wants_chrome` says why it is not the other
         answer. Lillecarl/pymux#471.
         """
+        session = self.session_of_window(window) if window is not None else None
+        wanted = (session or self.current_session).options.enable_pane_status
         if not self._anyone_is_full_screen():
-            return self.enable_pane_status
-        return self.enable_pane_status and _any_of_them_wants_chrome(self.clients_watching(window))
+            return wanted
+        return wanted and _any_of_them_wants_chrome(self.clients_watching(window))
 
     def refresh_what_time_moves(self, but_not=None) -> None:
         """
@@ -2309,10 +2329,12 @@ class Pymux:
         another client's application. Lillecarl/pymux#155.
 
         The interval is read each turn, so a `set-option
-        status-interval` reaches the tick after this one.
+        status-interval` reaches the tick after this one. One timer
+        serves every session, so it ticks at the shortest any of them
+        asks for.
         """
         while True:
-            await anyio.sleep(self.status_interval)
+            await anyio.sleep(min((s.options.status_interval for s in self.sessions), default=self.status_interval))
             try:
                 self.refresh_what_time_moves()
             except Exception:
@@ -2622,6 +2644,7 @@ class Pymux:
         path: str | None
 
         path = start_directory or self._directory_to_start_in(window, session)
+        options = (session or self.current_session).options
 
         def environment_of_the_pane(environment: dict[str, str]) -> None:
             # A pane is not the terminal that the client attached
@@ -2656,7 +2679,7 @@ class Pymux:
             # The shims, when they are on, reach the opener and the
             # notifier of this session before anything else on the PATH
             # of the pane, and name the opener for what reads $BROWSER.
-            self._shim_pane_environment(environment)
+            self._shim_pane_environment(environment, options)
 
             # Our compositor only where the session names no display:
             # a program started beside a desktop belongs on it.
@@ -2671,14 +2694,14 @@ class Pymux:
         #
         # `run_pymux.run` builds the string with `shlex.quote`, so this
         # undoes exactly what that did.
-        command_list = shlex.split(command) if command else [self.default_shell]
+        command_list = shlex.split(command) if command else [options.default_shell]
 
         # The shim directory has to exist in this process, before the
         # fork: a directory made in the child is made once per pane,
         # and two panes starting together would race for it.
-        if self.open_url_shim:
+        if options.open_url_shim:
             self._ensure_open_url_shim()
-        if self.notify_shim:
+        if options.notify_shim:
             self._ensure_notify_shim()
 
         if job is not None:
@@ -2781,17 +2804,17 @@ class Pymux:
 
             self.finish_recordings([pane])
 
-            if not self.remain_on_exit:
+            if not self.options_of_pane(pane).remain_on_exit:
                 self._take_ended_pane(pane)
 
             self.invalidate(Woke.PANE_ENDED)
 
         def bell():
             "Sound bell on all clients, and flag it where nobody saw it."
-            if self.enable_bell:
+            place = self._place_of(pane)
+            if (self if place is None else place[0].options).enable_bell:
                 for c in self.apps:
                     c.output.bell()
-            place = self._place_of(pane)
             if place is not None:
                 session, window = place
                 if session.arrangement.ring(window, pane, self.apps):
@@ -2814,7 +2837,7 @@ class Pymux:
             gives no room sends a program to lay its output out for a
             width it does not have.
             """
-            return self.allow_program_resize
+            return self.options_of_pane(pane).allow_program_resize
 
         def may_type() -> bool:
             """
@@ -2861,10 +2884,10 @@ class Pymux:
             # The `history-limit` option, which said how far copy mode
             # could scroll and never reached the screen that holds the
             # rows. A pane kept two thousand whatever the option said.
-            get_history_limit=lambda: self.history_limit,
+            get_history_limit=lambda: self.options_of_pane(pane).history_limit,
             unreadable_key_func=_say_key_did_not_fit(),
             key_profile_func=lambda: self.key_profile_of(self.client_of(get_app())),
-            helix_keys=lambda: self.mode_keys is EditingKeys.HELIX,
+            helix_keys=lambda: self.options_of_pane(pane).mode_keys is EditingKeys.HELIX,
         )
         pane = Pane(terminal)
         # The name the pane answers XTVERSION with, asked at each query:
@@ -3312,7 +3335,7 @@ class Pymux:
         Never raises: this runs on the read path of a pane, and one
         sequence may not stop it.
         """
-        if not self.allow_program_resize:
+        if not self.options_of_pane(pane).allow_program_resize:
             return
 
         try:
@@ -3337,6 +3360,15 @@ class Pymux:
                 if pane in window.panes:
                     return session, window
         return None
+
+    def options_of_pane(self, pane) -> SessionOptions | Pymux:
+        """
+        The options of the session holding this pane, read when asked:
+        `move-window` takes a pane to another session. A pane that is
+        gone reads the defaults.
+        """
+        place = self._place_of(pane)
+        return self if place is None else place[0].options
 
     def _window_holding(self, pane):
         "The window that holds this pane, or None when it is gone."
@@ -3399,7 +3431,7 @@ class Pymux:
         the answer is still being sent.
         """
         latest = self.latest_client()
-        if self.open_url_target != OpenUrlTarget.BROADCAST and latest is not None:
+        if self.current_session.options.open_url_target != OpenUrlTarget.BROADCAST and latest is not None:
             return [latest]
         return self.clients
 
@@ -3423,7 +3455,8 @@ class Pymux:
         says so, because binding a port here is part of what a yes
         allows. Lillecarl/pymux#437.
         """
-        if self.open_url_mode == OpenUrlMode.OFF:
+        options = self.current_session.options
+        if options.open_url_mode == OpenUrlMode.OFF:
             logger.info("Not opening %s: open-url-mode is off.", url)
             return
 
@@ -3440,7 +3473,7 @@ class Pymux:
         # and is not one. Lillecarl/pymux#443.
         confirmed = confirmed and self.a_person_asked()
 
-        asking = self.open_url_mode == OpenUrlMode.ASK or (self.forward_mode == ForwardMode.ASK and any(forwards))
+        asking = options.open_url_mode == OpenUrlMode.ASK or (self.forward_mode == ForwardMode.ASK and any(forwards))
 
         if asking and not confirmed:
             command = "open-url -c %s" % (shlex.quote(url),)
@@ -3471,7 +3504,8 @@ class Pymux:
         """
         if not client_state.connection.can_forward:
             return None
-        if not self.open_url_forward:
+        options = self.current_session.options
+        if not options.open_url_forward:
             return None
         if self.forward_mode == ForwardMode.OFF:
             # Somebody turned port forwarding off. A URL is not a way
@@ -3483,7 +3517,7 @@ class Pymux:
             return None
 
         host, port = found
-        return {"host": host, "port": port, "idle": self.open_url_forward_idle}
+        return {"host": host, "port": port, "idle": options.open_url_forward_idle}
 
     def a_person_asked(self) -> bool:
         """
@@ -3681,17 +3715,17 @@ exec pymux notify -u "$urgency" -- "$@"
                 merged[name] = value
         return merged
 
-    def _shim_pane_environment(self, environment: dict[str, str]) -> None:
+    def _shim_pane_environment(self, environment: dict[str, str], options: SessionOptions) -> None:
         "Put the shims on the PATH of a pane, and name the opener in $BROWSER."
-        if self.open_url_shim and self._open_url_shim_dir:
+        if options.open_url_shim and self._open_url_shim_dir:
             environment["PATH"] = self._open_url_shim_dir + os.pathsep + environment["PATH"]
             environment["BROWSER"] = os.path.join(self._open_url_shim_dir, "pymux-open-url")
-        if self.notify_shim and self._notify_shim_dir:
+        if options.notify_shim and self._notify_shim_dir:
             environment["PATH"] = self._notify_shim_dir + os.pathsep + environment["PATH"]
         shim = _browser_shim()
-        if shim is not None and self.pane_browser != PaneBrowser.OFF:
+        if shim is not None and options.pane_browser != PaneBrowser.OFF:
             environment["PLAYWRIGHT_MCP_EXECUTABLE_PATH"] = shim
-            if self.pane_browser == PaneBrowser.ALL:
+            if options.pane_browser == PaneBrowser.ALL:
                 environment["PUPPETEER_EXECUTABLE_PATH"] = shim
 
     def forward_osc(self, pane, code: str, param: str) -> None:
@@ -4188,7 +4222,7 @@ exec pymux notify -u "$urgency" -- "$@"
         """
         state = (
             self.keyboard_source_flags(),
-            self.synthesize_key_events,
+            tuple((session.session_id, session.options.synthesize_key_events) for session in self.sessions),
             self.extended_keys,
         )
         if state == self._keyboard_state_sent:
@@ -4275,7 +4309,7 @@ exec pymux notify -u "$urgency" -- "$@"
             return
         try:
             screen.keyboard_source_flags = self.keyboard_source_flags()
-            screen.synthesize_key_events = self.synthesize_key_events
+            screen.synthesize_key_events = self.options_of_pane(pane).synthesize_key_events
             screen.extended_keys_allowed = self.extended_keys is not ExtendedKeys.OFF
         except AttributeError:
             # An older ptterm knows nothing about the keyboard of the
@@ -4301,7 +4335,8 @@ exec pymux notify -u "$urgency" -- "$@"
             # already follows for a terminal's own colours, and the
             # one that decides where a browser opens.
             # Lillecarl/pymux#223.
-            base = theme_color_base(self.latest_theme()) if self.paint_screen else self.latest_client_color_base()
+            painted = self.options_of_pane(pane).paint_screen
+            base = theme_color_base(self.latest_theme()) if painted else self.latest_client_color_base()
             if base is None:
                 return
             pane.screen.set_color_base(base)
@@ -4347,7 +4382,8 @@ exec pymux notify -u "$urgency" -- "$@"
         """
         version = client.connection.graphics.terminal_version if client is not None else ""
         term = hacks_and_lies.outer_term(client) if client is not None else ""
-        return KEY_PROFILES[key_profile_of(version, term) or self.key_profile]
+        options = client.session.options if client is not None else self
+        return KEY_PROFILES[key_profile_of(version, term) or options.key_profile]
 
     def latest_theme(self) -> str:
         """

@@ -24,7 +24,7 @@ def _colors_of(pymux: Pymux, client_state: ClientState) -> ColorOverrides:
     else the table pyte reports. `Pymux.tell_pane_about_colours` reads
     them the same way.
     """
-    if pymux.paint_screen:
+    if client_state.session.options.paint_screen:
         return ColorOverrides(theme_color_base(client_state.theme_in_use))
     try:
         base = client_state.default_colors.color_base()

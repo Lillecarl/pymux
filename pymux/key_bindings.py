@@ -69,7 +69,8 @@ class PromptHelix(HelixBindings):
     def __init__(self, pymux: Pymux) -> None:
         self.pymux = pymux
         super().__init__(
-            filter=Condition(lambda: pymux.status_keys is EditingKeys.HELIX) & (has_focus(COMMAND) | has_focus(PROMPT))
+            filter=Condition(lambda: pymux.current_session.options.status_keys is EditingKeys.HELIX)
+            & (has_focus(COMMAND) | has_focus(PROMPT))
         )
 
     @override
@@ -263,7 +264,7 @@ class PymuxKeyBindings:
             # when something asks for a frame, and the prefix alone
             # changes nothing else. `which-key` is the one thing that
             # wants one here. Lillecarl/pymux#29.
-            if pymux.which_key:
+            if client_state.session.options.which_key:
                 client_state.app.invalidate()
 
         self._prefix_binding = enter_prefix_handler
@@ -301,7 +302,7 @@ class PymuxKeyBindings:
             pymux.get_client_state().has_prefix = False
 
         # Helix's own Escape decides, with `PromptHelix.before_escape`.
-        helix = Condition(lambda: pymux.status_keys is EditingKeys.HELIX)
+        helix = Condition(lambda: pymux.current_session.options.status_keys is EditingKeys.HELIX)
 
         @kb.add("escape", filter=prompt_or_command_focus & ~has_prefix & emacs_mode & ~helix)
         @kb.add(

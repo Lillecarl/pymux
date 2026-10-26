@@ -966,7 +966,7 @@ class LayoutManager:
         room = width
 
         sessions: list = []
-        if self.pymux.chooser_session_lines and len(self.pymux.sessions) > 1:
+        if self.client_state.session.options.chooser_session_lines and len(self.pymux.sessions) > 1:
             sessions = [self.pymux.session_of_window(window) for window in self.chooser_matches()]
 
         for index, label in enumerate(self.chooser_entries()):
@@ -1463,11 +1463,11 @@ class LayoutManager:
         for w in self.client_state.session.arrangement.windows:
             if w == self.client_state.session.arrangement.get_active_window():
                 style = "class:window.current"
-                format_str = self.pymux.window_status_current_format
+                format_str = self.client_state.session.options.window_status_current_format
 
             else:
                 style = "class:window.bell" if w.bell else "class:window"
-                format_str = self.pymux.window_status_format
+                format_str = self.client_state.session.options.window_status_format
 
             result.append(
                 (
@@ -1508,7 +1508,7 @@ class LayoutManager:
             for entry in self._status_entries():
                 width = get_cwidth(entry[1])
                 wanted = used + 1 + width if lines[-1] else width
-                if lines[-1] and wanted > room and len(lines) < self.pymux.status_max_rows:
+                if lines[-1] and wanted > room and len(lines) < self.client_state.session.options.status_max_rows:
                     lines.append([entry])
                     used = width
                 else:
@@ -1527,7 +1527,7 @@ class LayoutManager:
         side is as wide as its text, up to its `-length` option.
         """
         columns = self.client_state.app.output.get_size().columns
-        left = min(get_cwidth(self._get_status_left_tokens()), self.pymux.status_left_length)
+        left = min(get_cwidth(self._get_status_left_tokens()), self.client_state.session.options.status_left_length)
         right = min(get_cwidth(self._get_status_right_tokens()), self._status_right_length())
         return max(1, columns - left - right)
 
@@ -1539,15 +1539,15 @@ class LayoutManager:
         plane asks it of every watcher, so it reads this client's own
         `full-screen` rather than `Pymux.show_status`.
         """
-        if not self.pymux.enable_status or self.client_state.full_screen:
+        if not self.client_state.session.options.enable_status or self.client_state.full_screen:
             return 0
         return len(self._status_lines())
 
     def _get_status_left_tokens(self) -> str:
-        return self._format_status(self.pymux.status_left)
+        return self._format_status(self.client_state.session.options.status_left)
 
     def _get_status_right_tokens(self) -> str:
-        text = self._format_status(self.pymux.status_right)
+        text = self._format_status(self.client_state.session.options.status_right)
         if self._in_passthrough():
             text = PASSTHROUGH_MARK + text
         return text
@@ -1561,7 +1561,7 @@ class LayoutManager:
         The most `status-right` may take, and the room for what pymux
         puts beside it: the passthrough mark.
         """
-        length = self.pymux.status_right_length
+        length = self.client_state.session.options.status_right_length
         if self._in_passthrough():
             length += len(PASSTHROUGH_MARK)
         return length
@@ -1642,9 +1642,9 @@ class LayoutManager:
         return [] if window is None else list(window.panes)
 
     def _get_align(self) -> WindowAlign:
-        if self.pymux.status_justify == Justify.RIGHT:
+        if self.client_state.session.options.status_justify == Justify.RIGHT:
             return WindowAlign.RIGHT
-        if self.pymux.status_justify == Justify.CENTER:
+        if self.client_state.session.options.status_justify == Justify.CENTER:
             return WindowAlign.CENTER
         return WindowAlign.LEFT
 
@@ -1663,9 +1663,9 @@ class LayoutManager:
         The tag is one width whatever it says, so the line a person is
         typing on never moves under them.
         """
-        if self.pymux.status_keys is EditingKeys.HELIX:
+        if self.client_state.session.options.status_keys is EditingKeys.HELIX:
             return self._helix_mode_tokens()
-        if self.pymux.status_keys is not EditingKeys.VI:
+        if self.client_state.session.options.status_keys is not EditingKeys.VI:
             return []
 
         app = get_app()
@@ -2377,14 +2377,16 @@ class LayoutManager:
         Generate the main prompt_toolkit layout.
         """
         waits_for_confirmation = WaitsForConfirmation(self.pymux)
-        palette = Condition(lambda: self.pymux.command_palette)
+        palette = Condition(lambda: self.client_state.session.options.command_palette)
         # A prompt that knows its answers draws in a box, because the
         # completions are what need the room. Lillecarl/pymux#220.
         asks_for_key = Condition(lambda: self.client_state.prompt_completer is not None)
         in_box = (has_focus(self.client_state.command_buffer) & palette) | (
             has_focus(self.client_state.prompt_buffer) & asks_for_key
         )
-        which_key_shows = Condition(lambda: self.pymux.which_key) & Condition(lambda: self.client_state.has_prefix)
+        which_key_shows = Condition(lambda: self.client_state.session.options.which_key) & Condition(
+            lambda: self.client_state.has_prefix
+        )
 
         return FloatContainer(
             content=HSplit(
@@ -2397,7 +2399,7 @@ class LayoutManager:
                     # bottom of the body, they rise with it.
                     # Lillecarl/pymux#723.
                     FloatContainer(
-                        Background(painted=Condition(lambda: self.pymux.paint_screen)),
+                        Background(painted=Condition(lambda: self.client_state.session.options.paint_screen)),
                         floats=[
                             Float(
                                 width=lambda: self.room_for_body().columns,
@@ -2414,7 +2416,7 @@ class LayoutManager:
                                 # Left.
                                 Window(
                                     height=1,
-                                    width=(lambda: D(max=self.pymux.status_left_length)),
+                                    width=(lambda: D(max=self.client_state.session.options.status_left_length)),
                                     dont_extend_width=True,
                                     content=FormattedTextControl(self._get_status_left_tokens),
                                 ),
@@ -2849,7 +2851,7 @@ def _create_panes(pymux: Pymux, window, view: View) -> PlanContainer:
         _tell_pane_its_size,
         view=view,
         room=partial(room_for_panes, pymux, window),
-        glide_time=lambda: pymux.strip_animation_time / 1000,
+        glide_time=lambda: pymux.current_session.options.strip_animation_time / 1000,
     )
 
 
@@ -3071,6 +3073,12 @@ def hidden_of_pane(pymux: Pymux, pane: arrangement.Pane) -> Hidden | None:
     return hidden_of(container.view.shown_rect, rect)
 
 
+def _cut_shade(pymux: Pymux) -> tuple[int, float]:
+    "How many cells the shade at a cut fades over, and how strong it is, for the client drawn."
+    options = pymux.current_session.options
+    return options.cut_shade_width, options.cut_shade_strength / 100
+
+
 def cut_backdrop(pymux: Pymux) -> str | None:
     """
     What a cell the program left at the default background really shows.
@@ -3083,7 +3091,7 @@ def cut_backdrop(pymux: Pymux) -> str | None:
     already names the theme's, and a terminal that answered nothing
     leaves the theme's as the best guess.
     """
-    if not pymux.paint_screen:
+    if not pymux.current_session.options.paint_screen:
         try:
             background = pymux.get_client_state().default_colors.background
         except ValueError, AttributeError:
@@ -3251,7 +3259,7 @@ def _create_container_for_process(
     def get_terminal_style() -> str:
         result = "class:terminal.focused" if terminal_is_focused() else "class:terminal"
 
-        if pymux.paint_screen:
+        if pymux.current_session.options.paint_screen:
             # The theme's background behind every cell the program left
             # at a default one, so the terminal's own colours are never
             # seen. Lillecarl/pymux#273.
@@ -3472,7 +3480,7 @@ def _create_container_for_process(
         has_bar_below=lambda: bool(get_bar_below()),
         hidden=lambda: hidden_of_pane(pymux, arrangement_pane),
         backdrop=lambda: cut_backdrop(pymux),
-        fade=lambda: lifts(pymux.cut_shade_width, pymux.cut_shade_strength / 100),
+        fade=lambda: lifts(*_cut_shade(pymux)),
     )
 
 

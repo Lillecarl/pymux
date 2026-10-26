@@ -22,7 +22,7 @@ def pymux(monkeypatch):
 
 def environment_of(pymux) -> dict[str, str]:
     environment = {"PATH": "/usr/bin"}
-    pymux._shim_pane_environment(environment)
+    pymux._shim_pane_environment(environment, pymux.current_session.options)
     return environment
 
 

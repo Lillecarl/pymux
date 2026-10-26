@@ -61,9 +61,9 @@ if not apsw.using_amalgamation or not apsw.apsw_version().startswith(apsw.sqlite
 
 #: What this server answers with. Agents read it with `PRAGMA
 #: user_version` and re-read the tables when it differs from what they
-#: were told. 11: `live` has `forgotten_seeds`, and `live.saved_queries`
-#: holds only what was saved; `main.saved_queries` has the seeds too.
-SCHEMA_VERSION = 11
+#: were told. 12: `live.session_options` holds what each session set
+#: itself, and `live.sessions` lost `base_index` and `renumber_windows`.
+SCHEMA_VERSION = 12
 
 #: The questions every boot starts with. A name an agent saves later
 #: replaces one of these for the rest of the boot; the next boot seeds

@@ -58,7 +58,7 @@ from .jobs import Job, JobFeed, JobId, JobPipes
 from .notifications import Notification
 from .options import ALL_OPTIONS, ALL_SERVER_OPTIONS
 from .pipes.posix import PosixSocketListener
-from .session import Session
+from .session import Session, SessionOptions
 from .tables import (
     JOB_TABLES,
     LIVE_ROWS,
@@ -92,6 +92,7 @@ from .tables import (
     ServerListRow,
     ServerRow,
     SessionEnvironmentRow,
+    SessionOptionRow,
     SessionRow,
     SessionTagRow,
     SplitRow,
@@ -120,7 +121,7 @@ __all__ = [
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 33
+SNAPSHOT_VERSION = 34
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -151,23 +152,21 @@ CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
 #: change of shape adds the one step from the version before it and
 #: deletes any older step.
 STEPS: dict[int, str] = {
-    # 33 saves what a person saved and the seeds they took away; 32 saved
-    # every question, its seeds among them, so an upgrade carried the old
-    # build's seeds and never got the new ones. Its seeds as they were:
-    # an untouched copy goes, and one that is missing was taken away.
-    32: """
-CREATE TABLE forgotten_seeds(
-  name TEXT PRIMARY KEY
+    # 34 keeps the values each session set itself in `session_options`;
+    # 33 kept base-index and renumber-windows on every session's row,
+    # whether the session set them or not. A value other than the
+    # default is one a session set. Lillecarl/pymux#756.
+    33: """
+CREATE TABLE session_options(
+  session_id INTEGER NOT NULL REFERENCES sessions(session_id),
+  name TEXT NOT NULL,
+  value,
+  PRIMARY KEY (session_id, name)
 );
-CREATE TEMP TABLE seeds_of_32(name TEXT PRIMARY KEY, sql TEXT NOT NULL);
-INSERT INTO seeds_of_32 VALUES
-  ('running', 'SELECT id, command FROM jobs WHERE status = ''running'' ORDER BY id'),
-  ('failed', 'SELECT id, command, returncode, error FROM jobs WHERE status = ''done'' AND (returncode != 0 OR error IS NOT NULL) ORDER BY id'),
-  ('recent', 'SELECT id, command, status, returncode FROM jobs ORDER BY id DESC LIMIT :n'),
-  ('by_tag', 'SELECT DISTINCT j.id, j.command FROM jobs j JOIN job_tags t ON t.job_id = j.id WHERE t.key = :tag ORDER BY j.id');
-INSERT INTO forgotten_seeds SELECT name FROM seeds_of_32 WHERE name NOT IN (SELECT name FROM saved_queries);
-DELETE FROM saved_queries WHERE (name, sql) IN (SELECT name, sql FROM seeds_of_32);
-DROP TABLE seeds_of_32;
+INSERT INTO session_options SELECT session_id, 'base-index', base_index FROM sessions WHERE base_index != 1;
+INSERT INTO session_options SELECT session_id, 'renumber-windows', renumber_windows FROM sessions WHERE renumber_windows != 0;
+ALTER TABLE sessions DROP COLUMN base_index;
+ALTER TABLE sessions DROP COLUMN renumber_windows;
 """,
 }
 
@@ -206,6 +205,15 @@ def _server_options() -> dict[str, str]:
     }
 
 
+def _session_options() -> dict[str, str]:
+    "Option name to attribute, for every option a session may hold its own value of."
+    return {
+        name: option.attribute_name
+        for name, option in ALL_OPTIONS.items()
+        if option.attribute_name in SessionOptions.__annotations__
+    }
+
+
 def _window_option_names() -> dict[str, str]:
     "Window attribute to option name, for `window_defaults`."
     from .options import ALL_WINDOW_OPTIONS
@@ -221,8 +229,6 @@ WRITES: dict[str, frozenset[str]] = {
         {
             "windows",
             "_unlinked_windows",
-            "base_index",
-            "renumber_windows",
             "window_defaults",
             "_last_active_window",
             "_active_window_for_cli",
@@ -612,6 +618,7 @@ def rows_of(pymux: Pymux) -> Iterator[Row]:
         yield GlobalEnvironmentRow(name, value)
 
     window_option_names = _window_option_names()
+    session_option_names = {attribute: name for name, attribute in _session_options().items()}
     for position, session in enumerate(pymux.sessions):
         arrangement = session.arrangement
         last = arrangement._last_active_window
@@ -623,8 +630,6 @@ def rows_of(pymux: Pymux) -> Iterator[Row]:
             last_used=session.last_used,
             default_height=session.default_size.rows,
             default_width=session.default_size.columns,
-            base_index=arrangement.base_index,
-            renumber_windows=arrangement.renumber_windows,
             last_active_window_id=last.window_id if last is not None else None,
             overlay_pane_id=_optional_id(session.overlay_pane),
             overlay_title=session.overlay_title,
@@ -635,6 +640,8 @@ def rows_of(pymux: Pymux) -> Iterator[Row]:
             yield SessionEnvironmentRow(session.session_id, name, value)
         for key, value in sorted(session.tags.items()):
             yield SessionTagRow(session.session_id, key, value)
+        for attribute, value in sorted(session.options.own().items()):
+            yield SessionOptionRow(session.session_id, session_option_names[attribute], _value(value))
         for attribute, value in sorted(arrangement.window_defaults.items()):
             yield WindowDefaultRow(session.session_id, window_option_names.get(attribute, attribute), _value(value))
         for linked, windows in ((True, arrangement.windows), (False, arrangement._unlinked_windows)):
@@ -1071,9 +1078,10 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
 
     windows: dict[int, Window] = {}
     window_attributes = {name: attribute for attribute, name in _window_option_names().items()}
+    session_options = _session_options()
     sessions = []
     for row in select(db, SessionRow, "ORDER BY position"):
-        session = Session(SessionId(row.session_id), row.session_name)
+        session = Session(SessionId(row.session_id), row.session_name, defaults=pymux)
         session.created = row.session_created
         session.last_used = row.last_used
         session.default_size = Size(rows=row.default_height, columns=row.default_width)
@@ -1086,9 +1094,12 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
         session.tags = {
             tag.key: tag.value for tag in select(db, SessionTagRow, "WHERE session_id = ?", session.session_id)
         }
+        for own in select(db, SessionOptionRow, "WHERE session_id = ?", session.session_id):
+            attribute = session_options.get(own.name)
+            # An option this build dropped, or moved to the server, has nothing to hold it.
+            if attribute is not None:
+                setattr(session.options, attribute, _like(getattr(pymux, attribute), own.value))
         arrangement = session.arrangement
-        arrangement.base_index = row.base_index
-        arrangement.renumber_windows = bool(row.renumber_windows)
         for default in select(db, WindowDefaultRow, "WHERE session_id = ?", session.session_id):
             attribute = window_attributes.get(default.name, default.name)
             fresh = Window()

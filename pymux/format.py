@@ -433,7 +433,7 @@ def _pane_current_path(context: FormatContext) -> str:
 def _history_size(context: FormatContext) -> str:
     "Number of lines in the history."
     pane = context.pane
-    return str(min(context.pymux.history_limit, pane.screen.line_offset + pane.process.sy))
+    return str(min(context.session.options.history_limit, pane.screen.line_offset + pane.process.sy))
 
 
 def _pane_active(context: FormatContext) -> str:
@@ -791,7 +791,7 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     # dictionary in a template. Lillecarl/pymux#762.
     "pane_tags": lambda c: spelled(c.pane.tags),
     "history_size": _history_size,
-    "history_limit": lambda c: str(c.pymux.history_limit),
+    "history_limit": lambda c: str(c.session.options.history_limit),
     # Window.
     "window_id": _window_id,
     "window_index": _window_index,

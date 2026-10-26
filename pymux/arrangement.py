@@ -29,6 +29,7 @@ from .wayland_scale import DEFAULT_WAYLAND_SCALE
 
 if TYPE_CHECKING:
     from .recording import Recording
+    from .session import SessionOptions
     from .tags import Tags
     from .window_pane import WindowWidget
 
@@ -1044,6 +1045,14 @@ class Window:
         return PaneIndex(self.panes.index(pane))
 
 
+class WindowOrder:
+    "The order options of an arrangement that no session holds: `Pymux`'s defaults."
+
+    def __init__(self) -> None:
+        self.base_index = 1
+        self.renumber_windows = False
+
+
 class Arrangement:
     """
     Arrangement class for one Pymux session.
@@ -1059,8 +1068,8 @@ class Arrangement:
     KEEP: ClassVar[dict[str, Keep]] = {
         "windows": Keep.SAVED,
         "_unlinked_windows": Keep.SAVED,
-        "base_index": Keep.SAVED,
-        "renumber_windows": Keep.SAVED,
+        # The session's options, which the session saves.
+        "options": Keep.REBUILT,
         "window_defaults": Keep.SAVED,
         "_last_active_window": Keep.SAVED,
         "_active_window_for_cli": Keep.SAVED,
@@ -1068,27 +1077,34 @@ class Arrangement:
         "_window_history_for_cli": Keep.SAVED,
     }
 
-    def __init__(self) -> None:
+    @property
+    def base_index(self) -> int:
+        return self.options.base_index
+
+    @base_index.setter
+    def base_index(self, value: int) -> None:
+        self.options.base_index = value
+
+    @property
+    def renumber_windows(self) -> bool:
+        return self.options.renumber_windows
+
+    @renumber_windows.setter
+    def renumber_windows(self, value: bool) -> None:
+        self.options.renumber_windows = value
+
+    def __init__(self, options: WindowOrder | SessionOptions | None = None) -> None:
         self.windows: list[Window] = []
+
+        #: Where `base_index` and `renumber_windows` live: the session's
+        #: options, so that `set-option -g` reaches a session that has
+        #: no value of its own. Lillecarl/pymux#756.
+        self.options = options if options is not None else WindowOrder()
 
         # The windows that link-window can put back. An unlinked
         # window keeps its panes running; it is only out of the order
         # nobody sees. Lillecarl/pymux#297.
         self._unlinked_windows: list[Window] = []
-
-        # The number of the first window. tmux starts at zero, but a
-        # keyboard starts at one: the "1" key is easier to reach than
-        # the "0" key, and it sits where the first window belongs.
-        # `set-option base-index 0` brings the tmux default back.
-        self.base_index = 1
-
-        # Whether closing a window renumbers the ones that are left,
-        # so the order has no gaps in it. Off, the way tmux ships it:
-        # a person who learned that their build is window 4 keeps
-        # window 4 until they say otherwise. `set-option
-        # renumber-windows on` is the other choice.
-        # Lillecarl/pymux#342.
-        self.renumber_windows = False
 
         # What a new window starts with, by the attribute the option
         # writes. tmux calls these the global window options and
