@@ -1357,10 +1357,16 @@ class Arrangement:
         pen in between never escapes this method: the window is out
         of one order and in the other when it returns.
         Lillecarl/pymux#533.
+
+        A window that leaves closes its gap under `renumber-windows`,
+        as one that closes does: to this order it is gone. tmux
+        renumbers the source after a move too (`cmd-move-window.c:116`).
         """
         self.unlink_window(window)
         self._unlinked_windows.remove(window)
         dst.link_window(window, index)
+        if self.renumber_windows:
+            self.renumber()
 
     def replace_pane(self, old: Pane, new: Pane) -> None:
         """
@@ -1491,9 +1497,9 @@ class Arrangement:
                         history.remove(w)
                 closed = True
 
-        # A window closing is what `renumber-windows` is about, and the
-        # only thing: a `move-window` that opens a gap leaves it, in
-        # pymux as in tmux. Lillecarl/pymux#342.
+        # A window closing is what `renumber-windows` is about, or one
+        # leaving for another session (`move_window_to`). A `move-window`
+        # inside the session that opens a gap leaves it. Lillecarl/pymux#342.
         if closed and self.renumber_windows:
             self.renumber()
 

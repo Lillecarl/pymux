@@ -103,6 +103,24 @@ async def test_a_window_moves_to_another_session(pymux):
     assert pymux.session_of_window(moving) is pymux.get_session("work")
 
 
+async def test_a_window_that_leaves_closes_its_gap_under_renumber_windows(pymux):
+    await two_sessions(pymux, home_windows=3)
+    pymux.get_session("home").arrangement.renumber_windows = True
+
+    assert await run(pymux, "move-window", "-s", "home:2", "-S", "work") == []
+
+    assert indices(pymux, "home") == [1, 2]
+    assert indices(pymux, "work") == [1, 2]
+
+
+async def test_a_window_that_leaves_keeps_its_gap_without_renumber_windows(pymux):
+    await two_sessions(pymux, home_windows=3)
+
+    assert await run(pymux, "move-window", "-s", "home:2", "-S", "work") == []
+
+    assert indices(pymux, "home") == [1, 3]
+
+
 async def test_a_live_pane_survives_the_move(pymux):
     "The point of moving and not of killing and reopening."
     await new_session(pymux, "home")
