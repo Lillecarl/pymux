@@ -212,6 +212,28 @@ async def test_a_session_alone_takes_the_next_free_index(pymux, target):
     assert pymux.get_session("work").arrangement.get_active_window() is moving
 
 
+async def test_the_session_switch_moves_the_window(pymux):
+    await two_sessions(pymux)
+    moving = pymux.get_session("home").arrangement.get_window_by_index(1)
+
+    assert await run(pymux, "move-window", "-s", "home:1", "--session", "work") == []
+    assert pymux.session_of_window(moving) is pymux.get_session("work")
+    assert moving.index == 2
+
+    assert await run(pymux, "move-window", "-s", "work:2", "--session", "home", "-t", "7") == []
+    assert pymux.session_of_window(moving) is pymux.get_session("home")
+    assert moving.index == 7
+
+
+async def test_the_session_switch_and_a_session_in_t_are_refused_together(pymux):
+    await two_sessions(pymux)
+
+    assert await run(pymux, "move-window", "-s", "home:1", "--session", "work", "-t", "home:3") == [
+        "pymux: Can't move window: -t names a session, and so does --session."
+    ]
+    assert indices(pymux, "home") == [1, 2]
+
+
 async def test_after_with_a_session_alone_goes_after_its_active_window(pymux):
     await two_sessions(pymux, work_windows=2)
     work = pymux.get_session("work")

@@ -44,6 +44,8 @@ def move_window(pymux: Pymux, args: argparse.Namespace) -> None:
     index reads that way -- puts the window after the last one there,
     which is what `prefix .` then a session name asks for. With `-a`
     or `-b` the index is that session's active window, as in tmux.
+    `--session work` says the same with the session apart, and then
+    `-t` is the bare index there.
     """
     window = the_window(pymux, args.src_window)
 
@@ -51,7 +53,13 @@ def move_window(pymux: Pymux, args: argparse.Namespace) -> None:
     assert src is not None  # `the_window` only returns windows in an order.
 
     target = args.dst_window
-    if ":" not in target and not target.isdigit() and pymux.get_session(target) is not None:
+    if args.session is not None:
+        if target is not None and ":" in target:
+            raise CommandException("Can't move window: -t names a session, and so does --session.")
+        target = "%s:%s" % (args.session, target or "")
+    elif target is None:
+        raise CommandException("Can't move window: say where, with -t or --session.")
+    elif ":" not in target and not target.isdigit() and pymux.get_session(target) is not None:
         target += ":"
     dst, rest = session_part(pymux, target)
     if dst is None:
@@ -107,9 +115,14 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser.add_argument(
         "-t",
         dest="dst_window",
-        metavar="<dst-window>",
-        required=True,
-        help="The index to move to, with an optional session in front (`work:5`). A session alone (`work`) takes the next free index there.",
+        metavar="[<dst-session>:]<dst-index>",
+        help="The index to move to, with an optional session in front (`work:5`). A session alone (`work:`) takes the next free index there.",
+    )
+    parser.add_argument(
+        "--session",
+        dest="session",
+        metavar="<target-session>",
+        help="Move the window to this session: after its last window, or at the index -t names.",
     )
     parser.add_argument(
         "-a", dest="after", action="store_true", help="Insert after that index, moving the windows in the way up."
