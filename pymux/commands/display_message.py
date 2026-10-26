@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandParser, add_command
-from pymux.commands.common import answer
+from pymux.commands.common import answer, clients_named
 from pymux.format import format_pymux_string
 
 
@@ -23,15 +23,21 @@ def display_message(pymux: Pymux, args: argparse.Namespace) -> None:
     With `-p`, print the message instead: the way a script asks the
     session a question and reads the answer. tmux spells it the same.
     Lillecarl/pymux#289.
+
+    `-c` names the client, as tmux's does: shown to that one, or with
+    `-p` printed as drawn for it. Its `client_` variables are what a
+    status line reads there. Lillecarl/pymux#754.
     """
+    named = clients_named(pymux, args.target_client)[0] if args.target_client is not None else None
     if args.p:
-        answer(pymux, format_pymux_string(pymux, args.message))
+        session = named.session if named is not None else None
+        answer(pymux, format_pymux_string(pymux, args.message, session=session, client=named))
         return
 
     # The client a person is looking at. A command typed in a pane runs
     # under a fake CLI that draws nothing, so this used to say the
     # message to nobody at all. Lillecarl/pymux#272.
-    client_state = pymux.the_client_to_tell()
+    client_state = named or pymux.the_client_to_tell()
     if client_state is None:
         pymux.add_command_error("pymux: nobody is attached to show a message to.")
         return
@@ -47,4 +53,10 @@ def display_message(pymux: Pymux, args: argparse.Namespace) -> None:
 def register(subparsers: argparse._SubParsersAction[CommandParser]):
     parser = add_command(subparsers, display_message)
     parser.add_argument("-p", dest="p", action="store_true", help="Print the message instead of showing it.")
+    parser.add_argument(
+        "-c",
+        dest="target_client",
+        metavar="<target-client>",
+        help="The client to show it to, or to print it as drawn for.",
+    )
     parser.add_argument("message", metavar="<message>")

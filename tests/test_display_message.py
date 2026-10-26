@@ -11,7 +11,8 @@ the command, and tmux expands it either way. Lillecarl/pymux#334.
 from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app
-from session import create_session
+from prompt_toolkit.data_structures import Size
+from session import create_session, over_connection
 
 
 async def _run(pymux, state, command) -> None:
@@ -67,3 +68,29 @@ async def test_printing_a_message_still_answers_on_the_command_line():
 
         assert said == [pymux.session_name]
         assert state.message is None, "a printed message was also shown"
+
+
+async def test_a_named_client_answers_for_itself():
+    """
+    `-c` prints a template as the status line draws it for that client,
+    and shows a message to that client only. Over a real connection,
+    since the in-process client is always 80 columns. Lillecarl/pymux#754.
+    """
+    by_width = "{% if client_width|int < 100 %}phone {{ client_width }}{% else %}desk {{ client_width }}{% endif %}"
+    async with over_connection() as session:
+        pymux = session.pymux
+        await pymux.create_window("sleep 60")
+        desk, _ = await session.attach("desk", Size(rows=40, columns=342))
+        phone, _ = await session.attach("phone", Size(rows=40, columns=60))
+
+        pymux.command_output = []
+        try:
+            for client in (desk, phone):
+                await _run(pymux, desk, "display-message -c %s -p '%s'" % (client.connection.name, by_width))
+            said = list(pymux.command_output)
+        finally:
+            pymux.command_output = None
+        assert said == ["desk 342", "phone 60"]
+
+        await _run(pymux, desk, "display-message -c %s 'for #{client_width}'" % phone.connection.name)
+        assert (desk.message, phone.message) == (None, "for 60")
