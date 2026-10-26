@@ -726,8 +726,14 @@ async def test_a_restarting_server_s_refusals_are_waited_out(monkeypatch):
             return await real(*arguments)
 
         it.client._connect = refused_twice
+        # Whether the server's own write let the client go while it sent
+        # the notice: the warning `say_restarting` logs for that does not
+        # reach this log once a test on the same worker stopped the
+        # loggers propagating. Lillecarl/pymux#766.
+        dropped = []
         for connection in list(it.pymux.connections):
             await connection.say_restarting(5.0, "pymux is being upgraded.")
+            dropped.append(connection._closed)
             connection._close_connection()
 
         # What the client left with says which way the notice was lost:
@@ -735,8 +741,8 @@ async def test_a_restarting_server_s_refusals_are_waited_out(monkeypatch):
         await it.until(
             lambda: len(it.pymux.connections) == 1,
             lambda: (
-                "the attach after the refusals (exit code %s, restart wait %s, %d refused)"
-                % (it.client.exit_code, it.client.restart_wait, len(refusals))
+                "the attach after the refusals (exit code %s, restart wait %s, %d refused, dropped while told %s)"
+                % (it.client.exit_code, it.client.restart_wait, len(refusals), dropped)
             ),
         )
         assert len(refusals) == 2
