@@ -23,9 +23,11 @@ The rules this judges, Lillecarl/pymux#295 and Lillecarl/pymux#327:
 
 from __future__ import annotations
 
+import weakref
+
 from prompt_toolkit.application.current import set_app
 from prompt_toolkit.formatted_text import fragment_list_to_text
-from prompt_toolkit.key_binding.key_processor import KeyPress, _Flush
+from prompt_toolkit.key_binding.key_processor import KeyPress, KeyPressEvent, _Flush
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Screen as PtScreen
@@ -73,7 +75,15 @@ def fire(state, key: str) -> None:
         assert answers, "no binding answered %r" % (key,)
         # The handler asks the app for its client state, so it runs
         # while the app is current.
-        answers[-1].handler(None)
+        answers[-1].handler(
+            KeyPressEvent(
+                weakref.ref(state.app.key_processor),
+                arg=None,
+                key_sequence=[KeyPress(wanted, _DATA.get(wanted, key))],
+                previous_key_sequence=[],
+                is_repeat=False,
+            )
+        )
 
 
 def here(pymux, state):

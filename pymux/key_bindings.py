@@ -4,6 +4,7 @@ Key bindings.
 
 from __future__ import annotations
 
+import functools
 import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, override
@@ -26,7 +27,7 @@ from ptkhx import Mode
 from ptkhx.bindings import HelixBindings
 from ptterm import Terminal
 
-from .actions import Origin, started_by
+from .actions import Kind, Origin, note, started_by
 from .commands import call_command_handler
 from .commands.utils import wrap_argument
 from .enums import COMMAND, PROMPT, Chooser, EditingKeys
@@ -52,6 +53,27 @@ PREFIX_TABLE = "prefix"
 #: themselves. The keys are prompt_toolkit's, so every spelling of one
 #: key gives the same one.
 _ABinding = tuple[str, tuple[str, ...]]
+
+
+def _noted(pymux: Pymux, name: str, *, keyed: bool = True) -> Callable[[Callable[[E], object]], Callable[[E], object]]:
+    """
+    Log a built-in key that runs no command as `name`. `keyed=False`
+    leaves the key out, for a binding that takes any key: that key may
+    be the first of what a person meant to type.
+    """
+
+    def wrap(handler: Callable[[E], object]) -> Callable[[E], object]:
+        @functools.wraps(handler)
+        def noted(event: E) -> object:
+            pressed = event.key_sequence[-1].key
+            key = (pressed.value if isinstance(pressed, Keys) else pressed) if keyed else None
+            with started_by(Origin.KEY, key=key):
+                note(pymux, Kind.KEY, name)
+            return handler(event)
+
+        return noted
+
+    return wrap
 
 
 class PromptHelix(HelixBindings):
@@ -403,6 +425,7 @@ class PymuxKeyBindings:
             return self.pymux.get_client_state().chooser is Chooser.WINDOW
 
         @kb.add("/", filter=chooser_displayed & ~chooser_search_focused)
+        @_noted(self.pymux, "chooser-search")
         def _chooser_search(event: E) -> None:
             "Search the names; what is typed narrows the list."
             get_app().layout.focus(self.pymux.get_client_state().layout_manager.chooser_search_control())
@@ -412,6 +435,7 @@ class PymuxKeyBindings:
         @kb.add("up", filter=chooser_displayed & ~window_bar)
         @kb.add("k", filter=chooser_displayed & ~window_bar)
         @kb.add("c-p", filter=chooser_displayed)
+        @_noted(self.pymux, "chooser-back")
         def _chooser_back(event: E) -> None:
             "The entry before this one, rolling round to the last."
             state = self.pymux.get_client_state()
@@ -422,6 +446,7 @@ class PymuxKeyBindings:
         @kb.add("down", filter=chooser_displayed & ~window_bar)
         @kb.add("j", filter=chooser_displayed & ~window_bar)
         @kb.add("c-n", filter=chooser_displayed)
+        @_noted(self.pymux, "chooser-next")
         def _chooser_on(event: E) -> None:
             "The entry after this one, rolling round to the first."
             state = self.pymux.get_client_state()
@@ -432,12 +457,14 @@ class PymuxKeyBindings:
         # is why only the bar binds these. Lillecarl/pymux#327.
         @kb.add("up", filter=window_bar & ~chooser_search_focused)
         @kb.add("k", filter=window_bar & ~chooser_search_focused)
+        @_noted(self.pymux, "chooser-line-up")
         def _bar_up(event: E) -> None:
             "The line above, keeping the place along it."
             self.pymux.get_client_state().layout_manager.step_line(-1)
 
         @kb.add("down", filter=window_bar & ~chooser_search_focused)
         @kb.add("j", filter=window_bar & ~chooser_search_focused)
+        @_noted(self.pymux, "chooser-line-down")
         def _bar_down(event: E) -> None:
             "The line below, keeping the place along it."
             self.pymux.get_client_state().layout_manager.step_line(1)
@@ -453,11 +480,13 @@ class PymuxKeyBindings:
             return self.pymux.get_client_state().chooser is Chooser.JOB
 
         @kb.add("o", filter=job_chooser_displayed & ~chooser_search_focused)
+        @_noted(self.pymux, "open-job-in-pane")
         def _chooser_open_job_in_pane(event: E) -> None:
             "Open the pointed job as a pane in a new window."
             self.pymux.get_client_state().layout_manager.open_pointed_job_in_pane()
 
         @kb.add("t", filter=job_chooser_displayed & ~chooser_search_focused)
+        @_noted(self.pymux, "take-over-job")
         def _chooser_take_over_job(event: E) -> None:
             "Run the pointed job's command again, interactively."
             self.pymux.get_client_state().layout_manager.take_over_pointed_job()
@@ -465,6 +494,7 @@ class PymuxKeyBindings:
         @kb.add("q", filter=chooser_displayed & ~chooser_search_focused, eager=True)
         @kb.add("escape", filter=chooser_displayed & ~chooser_search_focused, eager=True)
         @kb.add("c-c", filter=chooser_displayed & ~chooser_search_focused, eager=True)
+        @_noted(self.pymux, "leave-chooser")
         def _quit_chooser(event: E) -> None:
             """
             Leave the chooser without taking anything.
@@ -477,6 +507,7 @@ class PymuxKeyBindings:
             state.layout_manager.leave_chooser(restore=True)
 
         @kb.add("escape", filter=chooser_search_focused, eager=True)
+        @_noted(self.pymux, "leave-chooser-search")
         def _quit_chooser_search(event: E) -> None:
             "Leave the search, keeping the chooser."
             state = self.pymux.get_client_state()
@@ -500,6 +531,7 @@ class PymuxKeyBindings:
 
         @kb.add("escape", filter=menu_displayed, eager=True)
         @kb.add("c-c", filter=menu_displayed, eager=True)
+        @_noted(self.pymux, "leave-menu")
         def _quit_menu(event: E) -> None:
             "Leave the menu without taking anything."
             self.pymux.get_client_state().layout_manager.close_menu()
@@ -615,6 +647,7 @@ class PymuxKeyBindings:
             return pane is not None and pane.clock_mode
 
         @kb.add(Keys.Any, eager=True, filter=clock_displayed)
+        @_noted(self.pymux, "leave-clock", keyed=False)
         def _hide_clock(event: E) -> None:
             "When the clock is displayed. Any key press should hide it."
             pane = pymux.arrangement.get_active_pane()

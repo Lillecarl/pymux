@@ -5,9 +5,9 @@ pane shows or a person types into one.
 The rules this judges: nothing is written while the option is off; a
 command is written with what started it and the client, session,
 window and pane it happened at; send-keys text and a buffer's value
-are their length; a command that fails says why; the outermost origin
-wins; the upkeep keeps the newest rows; a file of another schema is
-moved aside.
+are their length; a command that fails says why; a key that runs no
+command is written by what it does; the outermost origin wins; the
+upkeep keeps the newest rows; a file of another schema is moved aside.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ import apsw
 import pytest
 from prompt_toolkit.application.current import set_app
 from session import create_session
+from test_choose_window import press, run
 
 from pymux.actions import SCHEMA_VERSION, Kind, Origin, _upkeep, note, started_by
 
@@ -121,6 +122,35 @@ async def test_the_outermost_origin_wins(tmp_path):
             note(pymux, Kind.CLICK, "select-pane")
         await pymux.actions.settled()
         assert [row["origin"] for row in _rows(pymux.actions.path)] == ["mouse"]
+
+
+async def test_a_key_that_runs_no_command_is_written(tmp_path):
+    "Moving through a chooser and leaving it. Lillecarl/pymux#755."
+    async with create_session() as (pymux, state):
+        pymux.actions.path = tmp_path / "actions.db"
+        pymux.options.action_log = True
+        await run(pymux, state, "new-window")
+        await run(pymux, state, "choose-window")
+        press(state, "l", "j", "/")
+        press(state, "escape")
+        press(state, "escape")
+        await run(pymux, state, "clock-mode")
+        press(state, "x")
+        await pymux.actions.settled()
+
+        keys = [
+            (row["name"], row["origin"], row["key"]) for row in _rows(pymux.actions.path) if row["kind"] == Kind.KEY
+        ]
+        assert keys == [
+            ("chooser-next", "key", "l"),
+            ("chooser-line-down", "key", "j"),
+            ("chooser-search", "key", "/"),
+            ("leave-chooser-search", "key", "escape"),
+            ("leave-chooser", "key", "escape"),
+            # Any key leaves the clock, and it may be the first of
+            # what the person meant to type.
+            ("leave-clock", "key", None),
+        ]
 
 
 async def test_a_command_over_the_socket_has_no_client(tmp_path):

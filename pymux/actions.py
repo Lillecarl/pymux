@@ -107,6 +107,8 @@ class Kind(StrEnum):
     CLICK = "click"
     #: A row taken in a chooser; what it runs, if anything, follows.
     CHOICE = "choice"
+    #: A key that runs no command: a move in a chooser, or leaving one.
+    KEY = "key"
 
 
 class Origin(StrEnum):

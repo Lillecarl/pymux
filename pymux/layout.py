@@ -3438,6 +3438,8 @@ def _create_container_for_process(
 
     def on_click() -> None:
         "Click handler for the clock. When clicked, select this pane."
+        with started_by(Origin.MOUSE):
+            note(pymux, Kind.CLICK, "leave-clock")
         arrangement_pane.clock_mode = False
         window = pymux.arrangement.get_active_window()
         if window is not None:

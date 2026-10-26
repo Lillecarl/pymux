@@ -10,8 +10,8 @@ Lillecarl/pymux#297.
 from __future__ import annotations
 
 from prompt_toolkit.application.current import set_app
-from prompt_toolkit.keys import Keys
 from session import create_session
+from test_choose_window import press
 
 
 async def test_menu_opens_with_its_entries_and_title():
@@ -58,13 +58,7 @@ async def test_escape_leaves_menu():
         with set_app(state.app):
             pymux.handle_command("display-menu 'Do this' o 'display did-this'")
 
-            (quit_menu,) = [
-                binding
-                for binding in state.app.key_bindings.get_bindings_for_keys((Keys.Escape,))
-                if binding.handler.__name__ == "_quit_menu"
-            ]
-            assert quit_menu.filter()
-            quit_menu.handler(None)
+        press(state, "escape")
 
         assert not state.menu_entries
         assert state.message != "did-this"
