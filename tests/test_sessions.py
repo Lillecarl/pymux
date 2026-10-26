@@ -372,12 +372,54 @@ async def test_the_chooser_lists_every_session():
         state, _ = await session.attach("only", SIZE)
 
         await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
+        await _command(pymux, state, "set-option chooser-session-lines off")
         with set_app(state.app):
             state.layout_manager.display_chooser()
             labels = state.layout_manager.chooser_entries()
 
         assert any(label.startswith("0:1") for label in labels)
         assert any(label.startswith("work:1") for label in labels)
+
+
+async def test_a_session_line_names_its_session_once():
+    "Lillecarl/pymux#765: a label at the start of the line, not on each entry."
+    async with in_this_process(_server()) as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", SIZE)
+        await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
+        await _command(pymux, state, "new-window -d -t work: '%s'" % (WAITING,))
+        manager = state.layout_manager
+        with set_app(state.app):
+            manager.display_chooser()
+            entries = manager.chooser_entries()
+            lines = manager.chooser_lines(manager._bar_width())
+            labels = manager.chooser_line_labels(lines)
+            text = "".join(fragment[1] for fragment in manager._choose_window_tokens())
+
+        assert not any(entry.startswith("work:") for entry in entries)
+        assert labels == ["0    ", "work "]
+        assert text.splitlines()[1].startswith("work 1:")
+        assert len(lines[1]) == 2
+
+
+async def test_a_wrapped_session_line_leaves_the_label_blank():
+    async with in_this_process(_server()) as session:
+        pymux = session.pymux
+        state, _ = await session.attach("only", SIZE)
+        await _command(pymux, state, "new-session -d -s work '%s'" % (WAITING,))
+        for _ in range(3):
+            await _command(pymux, state, "new-window -d -t work: '%s'" % (WAITING,))
+        manager = state.layout_manager
+        with set_app(state.app):
+            manager.display_chooser()
+            width = len(manager.chooser_entries()[1]) + 6
+            lines = manager.chooser_lines(width)
+            labels = manager.chooser_line_labels(lines)
+
+        assert labels[0] == "0    "
+        assert labels[1] == "work "
+        assert len(lines) > 2
+        assert all(label == "     " for label in labels[2:])
 
 
 def _sessions_of_lines(pymux, state) -> list[set]:

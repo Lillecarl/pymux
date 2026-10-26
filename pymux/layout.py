@@ -923,22 +923,24 @@ class LayoutManager:
         What the bar says about each window it lists, in its order.
 
         `index:name`, and `session:index:name` when the server holds
-        more than one session -- with one the word is the same on every
-        entry and says nothing. A star marks the window this client was
+        more than one session and they flow together -- with one the
+        word is the same on every entry and says nothing, and with
+        `chooser-session-lines` the line's label says it once.
+        Lillecarl/pymux#765. A star marks the window this client was
         on when the chooser opened, which is the one Escape goes back
         to.
 
-        The pane count is not here. It was, on a row of its own in a
-        box; the bar sits over the window itself, so a person counts
-        the panes by looking at them. Lillecarl/pymux#327.
+        The pane count is not here. The bar sits over the window
+        itself, so a person counts the panes by looking at them.
+        Lillecarl/pymux#327.
         """
-        many_sessions = len(self.pymux.sessions) > 1
+        prefixed = len(self.pymux.sessions) > 1 and not self._chooser_grouped()
         going_back = self.client_state.chooser_return_to
         started_on = going_back[1] if going_back is not None else None
 
         entries = []
         for window in self.chooser_matches():
-            if many_sessions:
+            if prefixed:
                 label = "%s:%s:%s" % (
                     self._session_name_of(window),
                     window.index,
@@ -962,13 +964,15 @@ class LayoutManager:
 
         With `chooser-session-lines` on and more than one session, each
         session also starts a line, so the sessions read as groups.
-        Lillecarl/pymux#531.
+        Lillecarl/pymux#531. The label column takes its width from
+        every line, so the entries flow in what is left.
         """
         lines: list[list[int]] = [[]]
+        width = max(1, width - self._chooser_label_width())
         room = width
 
         sessions: list = []
-        if self.client_state.session.options.chooser_session_lines and len(self.pymux.sessions) > 1:
+        if self._chooser_grouped():
             sessions = [self.pymux.session_of_window(window) for window in self.chooser_matches()]
 
         for index, label in enumerate(self.chooser_entries()):
@@ -982,6 +986,38 @@ class LayoutManager:
             room -= cost
 
         return lines
+
+    def _chooser_grouped(self) -> bool:
+        "Whether each session of the window chooser has lines of its own."
+        return self.client_state.session.options.chooser_session_lines and len(self.pymux.sessions) > 1
+
+    def _chooser_label_width(self) -> int:
+        "The columns the session labels take, a space after them included."
+        if not self._chooser_grouped():
+            return 0
+        names = {self._session_name_of(window) for window in self.chooser_matches()}
+        return max((len(name) for name in names), default=0) + 1
+
+    def chooser_line_labels(self, lines: list[list[int]]) -> list[str]:
+        """
+        The session label of each line, padded to one column.
+
+        The first line of a session names it, and a line it wrapped
+        onto stays blank, so the name is said once and the entries
+        still line up. Lillecarl/pymux#765.
+        """
+        width = self._chooser_label_width()
+        if not width:
+            return [""] * len(lines)
+        matches = self.chooser_matches()
+        labels = []
+        previous = None
+        for line in lines:
+            session = self.pymux.session_of_window(matches[line[0]]) if line else None
+            name = session.name if session is not None and session is not previous else ""
+            labels.append(name.ljust(width))
+            previous = session
+        return labels
 
     def step_line(self, step: int) -> None:
         """
@@ -2220,9 +2256,12 @@ class LayoutManager:
         chosen = self._pointed_index(len(entries))
 
         tokens: StyleAndTextTuples = []
-        for number, line in enumerate(self.chooser_lines(self._bar_width())):
+        lines = self.chooser_lines(self._bar_width())
+        for number, (line, label) in enumerate(zip(lines, self.chooser_line_labels(lines), strict=True)):
             if number:
                 tokens.append(("class:commandpalette", "\n"))
+            if label:
+                tokens.append(("class:chooser.session", label))
             for place, index in enumerate(line):
                 if place:
                     tokens.append(("class:commandpalette", " "))

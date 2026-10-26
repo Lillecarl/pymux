@@ -224,6 +224,10 @@ def derive(r: dict[str, str]) -> dict[str, str]:
         # The search row of the chooser, and its empty answer.
         # Lillecarl/pymux#295.
         "chooser.hint": "%s" % (r["text"],),
+        # The session name at the start of a line of the window
+        # chooser. It is not an entry, so it reads as a heading.
+        # Lillecarl/pymux#765.
+        "chooser.session": "bold %s" % (r["text-bright"],),
         # The overlay pane, which floats over the layout. Its body draws
         # like any pane: a cell the program left at the default background
         # shows the terminal's own background, and a rule that named a

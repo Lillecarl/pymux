@@ -274,6 +274,7 @@ RULES = {
     "which-key.key": "bold #ffffff",
     "chooser.selected": "bg:#5f5f87 #ffffff",
     "chooser.hint": "#d0d0d0",
+    "chooser.session": "bold #ffffff",
     "overlay": "",
     "overlay.titlebar": "bg:#5f5f87 #ffffff",
     "overlay.title": "bold",
