@@ -1,26 +1,23 @@
 """
-The tables a snapshot holds and `sql` reads, and one dataclass per
-table for its row.
+The tables a snapshot holds and `sql` reads, one dataclass per table.
 
-`SCHEMA` is the authority. A row class is the shape of one row and
-nothing more: its fields are the table's columns in order, and `KEY` is
-the table's primary key. `tests/test_snapshot.py` holds both against
-what sqlite reads out of `SCHEMA`. The SQL stays hand-written; the
-classes only name the columns, so that a writer and a reader cannot
-disagree about them. Lillecarl/pymux#554.
+A row class is the declaration, and `create_table` writes its SQL: a
+field is a column, its annotation the type and `NOT NULL` unless it
+takes None, its default the column's, and `KEY` the primary key.
+`column` adds what an annotation cannot say. A load adds a table or a
+column the snapshot lacks, so an addition needs no step.
+Lillecarl/pymux#771.
 
-**The tables of options are the exception.** A scope's options declare
-their columns, so `options_table` writes the SQL and the row class
-from the declaration, and a load adds a column a newer build declared.
-Lillecarl/pymux#769.
+A scope's options declare their own columns, and `options_table` makes
+the row class from that declaration. Lillecarl/pymux#769.
 """
 
 from __future__ import annotations
 
 import functools
 from collections.abc import Iterable
-from dataclasses import Field, dataclass, field, fields, make_dataclass
-from typing import Any, ClassVar, Final, Protocol
+from dataclasses import MISSING, Field, dataclass, field, fields, make_dataclass
+from typing import Any, ClassVar, Final, Protocol, get_args, get_type_hints
 
 import apsw
 from pyte.keep import Keep
@@ -32,7 +29,6 @@ from .session_options import SessionOptions
 from .window_options import WindowOptions
 
 __all__ = [
-    "GENERATED",
     "LIVE_ROWS",
     "LIVE_TABLES",
     "ROWS",
@@ -40,9 +36,13 @@ __all__ = [
     "SCREEN_TABLES",
     "TABLES",
     "ChangedRows",
-    "added_columns",
+    "affinity",
+    "column",
+    "columns_of",
+    "create_table",
     "insert",
     "literal",
+    "missing_from",
     "select",
 ]
 
@@ -56,6 +56,66 @@ def literal(value: Any) -> str:
     return "'%s'" % str(value).replace("'", "''")
 
 
+_AFFINITY: Final = {int: "INTEGER", bool: "INTEGER", float: "REAL", str: "TEXT", bytes: "BLOB"}
+
+
+def affinity(hint: Any) -> str:
+    "The column type of a field annotated `hint`; none for `Any` or a union of two types."
+    types = [each for each in get_args(hint) or (hint,) if each is not type(None)]
+    return _AFFINITY.get(types[0], "") if len(types) == 1 else ""
+
+
+def column(
+    *,
+    references: str | None = None,
+    check: str | None = None,
+    unique: bool = False,
+    affinity: str | None = None,
+) -> dict[str, Any]:
+    """
+    A field's metadata for what its annotation cannot say; `affinity`
+    overrides the annotation's. Not a field itself: a checker reads any
+    call but `field` as a default.
+    """
+    metadata = {"references": references, "check": check, "unique": unique, "affinity": affinity}
+    return {name: value for name, value in metadata.items() if value}
+
+
+@functools.cache
+def columns_of(kind: type[Row]) -> dict[str, str]:
+    "Each stored column of `kind` by name, as `CREATE TABLE` and `ADD COLUMN` write it."
+    hints = get_type_hints(kind)
+    single = kind.KEY if len(kind.KEY) == 1 else ()
+    columns = {}
+    for each in stored_fields(kind):
+        hint = hints[each.name]
+        words = [each.name, each.metadata.get("affinity") or affinity(hint)]
+        if each.name in single:
+            words.append("PRIMARY KEY")
+        elif hint is not Any and type(None) not in get_args(hint):
+            words.append("NOT NULL")
+        if each.metadata.get("unique"):
+            words.append("UNIQUE")
+        if each.default not in (MISSING, None):
+            words.append("DEFAULT " + literal(each.default))
+        if references := each.metadata.get("references"):
+            words.append("REFERENCES " + references)
+        if check := each.metadata.get("check"):
+            words.append("CHECK (%s)" % check)
+        columns[each.name] = " ".join(word for word in words if word)
+    return columns
+
+
+@functools.cache
+def create_table(kind: type[Row]) -> str:
+    "The `CREATE TABLE` of `kind`."
+    lines = list(columns_of(kind).values())
+    if len(kind.KEY) > 1:
+        lines.append("PRIMARY KEY (%s)" % ", ".join(kind.KEY))
+    lines.extend("CHECK (%s)" % check for check in getattr(kind, "CHECKS", ()))
+    return "CREATE TABLE %s(\n  %s\n);\n" % (kind.TABLE, ",\n  ".join(lines))
+
+
 def options_table(
     scope: type[Options],
     name: str,
@@ -67,38 +127,27 @@ def options_table(
     key_type: type = int,
 ) -> type:
     """
-    The row class of one scope's options, one column per option, with
-    its `CREATE TABLE` as `SQL` and each column's own as `COLUMNS`.
+    The row class of one scope's options, one column per option.
 
     `defaults` makes the table of what a new owner starts with: a
     column is NULL until somebody set it, which `show-options -g` reads
     as not set.
     """
-    columns = {}
-    specs: list[Any] = [(key, key_type)]
+    specs: list[Any] = [(key, key_type, field(metadata=column(references=references)))]
     for declared in scope.DECLARED.values():
         if declared.keep is not Keep.SAVED:
             continue
         kind = declared.python_type()
         if defaults:
-            columns[declared.attribute] = "%s %s" % (declared.attribute, declared.column_type())
-            specs.append((declared.attribute, kind | None, field(default=None)))
+            specs.append(
+                (declared.attribute, kind | None, field(default=None, metadata=column(affinity=declared.column_type())))
+            )
         else:
             stored = declared.stored(declared.default)
-            columns[declared.attribute] = "%s %s NOT NULL DEFAULT %s" % (
-                declared.attribute,
-                declared.column_type(),
-                literal(stored),
+            specs.append(
+                (declared.attribute, kind, field(default=stored, metadata=column(affinity=declared.column_type())))
             )
-            specs.append((declared.attribute, kind, field(default=stored)))
-    sql = "CREATE TABLE %s(\n  %s %s PRIMARY KEY%s,\n  %s\n);\n" % (
-        table,
-        key,
-        "TEXT" if key_type is str else "INTEGER",
-        "" if references is None else " REFERENCES " + references,
-        ",\n  ".join(columns.values()),
-    )
-    namespace = {"TABLE": table, "KEY": (key,), "SQL": sql, "COLUMNS": columns}
+    namespace = {"TABLE": table, "KEY": (key,)}
     return make_dataclass(name, specs, frozen=True, slots=True, namespace=namespace, module=__name__)
 
 
@@ -126,315 +175,6 @@ ClientOptionRow = options_table(
     ClientOptions, "ClientOptionRow", "client_options", "client_id", "clients(client_id)", defaults=False, key_type=str
 )
 
-#: The tables `options_table` writes.
-GENERATED = (ServerOptionRow, SessionDefaultRow, SessionOptionRow, WindowDefaultRow, WindowOptionRow, ClientOptionRow)
-
-SCHEMA = (
-    """
-CREATE TABLE server(
-  name TEXT PRIMARY KEY,
-  value
-);
-CREATE TABLE counters(
-  name TEXT PRIMARY KEY,
-  value INTEGER NOT NULL
-);
-"""
-    + ServerOptionRow.SQL
-    + SessionDefaultRow.SQL
-    + """CREATE TABLE global_environment(
-  name TEXT PRIMARY KEY,
-  value TEXT
-);
-CREATE TABLE sessions(
-  session_id INTEGER PRIMARY KEY,
-  session_name TEXT NOT NULL,
-  position INTEGER NOT NULL,
-  session_created REAL NOT NULL,
-  last_used INTEGER NOT NULL,
-  default_height INTEGER NOT NULL,
-  default_width INTEGER NOT NULL,
-  last_active_window_id INTEGER,
-  overlay_pane_id INTEGER,
-  overlay_title TEXT NOT NULL,
-  overlay_width TEXT,
-  overlay_height TEXT
-);
-CREATE TABLE session_environment(
-  session_id INTEGER NOT NULL REFERENCES sessions(session_id),
-  name TEXT NOT NULL,
-  value TEXT,
-  PRIMARY KEY (session_id, name)
-);
-CREATE TABLE session_tags(
-  session_id INTEGER NOT NULL REFERENCES sessions(session_id),
-  key TEXT NOT NULL,
-  value TEXT,
-  PRIMARY KEY (session_id, key)
-);
-"""
-    + SessionOptionRow.SQL
-    + WindowDefaultRow.SQL
-    + """CREATE TABLE windows(
-  window_id INTEGER PRIMARY KEY,
-  session_id INTEGER NOT NULL REFERENCES sessions(session_id),
-  linked INTEGER NOT NULL,
-  position INTEGER NOT NULL,
-  window_index INTEGER NOT NULL,
-  window_name TEXT,
-  root_split_id INTEGER NOT NULL,
-  active_pane_id INTEGER,
-  previous_active_pane_id INTEGER,
-  previous_layout TEXT,
-  manual_height INTEGER,
-  manual_width INTEGER,
-  zoom INTEGER NOT NULL,
-  frame_rate_set INTEGER NOT NULL,
-  bell INTEGER NOT NULL DEFAULT 0,
-  activity INTEGER NOT NULL DEFAULT 0,
-  silence INTEGER NOT NULL DEFAULT 0,
-  notified INTEGER NOT NULL DEFAULT 0
-);
-"""
-    + WindowOptionRow.SQL
-    + """CREATE TABLE window_tags(
-  window_id INTEGER NOT NULL REFERENCES windows(window_id),
-  key TEXT NOT NULL,
-  value TEXT,
-  PRIMARY KEY (window_id, key)
-);
-CREATE TABLE splits(
-  split_id INTEGER PRIMARY KEY,
-  window_id INTEGER NOT NULL REFERENCES windows(window_id),
-  kind TEXT NOT NULL CHECK (kind IN ('hsplit', 'vsplit')),
-  parent_split_id INTEGER REFERENCES splits(split_id),
-  position INTEGER
-);
-CREATE TABLE panes(
-  pane_id INTEGER PRIMARY KEY,
-  window_id INTEGER REFERENCES windows(window_id),
-  parent_split_id INTEGER REFERENCES splits(split_id),
-  position INTEGER,
-  pane_name TEXT,
-  clock_mode INTEGER NOT NULL,
-  pane_current_path TEXT,
-  current_host TEXT,
-  command_zone TEXT,
-  last_exit_status INTEGER,
-  bell INTEGER NOT NULL DEFAULT 0
-);
-CREATE TABLE pane_user_vars(
-  pane_id INTEGER NOT NULL REFERENCES panes(pane_id),
-  name TEXT NOT NULL,
-  value TEXT NOT NULL,
-  PRIMARY KEY (pane_id, name)
-);
-CREATE TABLE pane_tags(
-  pane_id INTEGER NOT NULL REFERENCES panes(pane_id),
-  key TEXT NOT NULL,
-  value TEXT,
-  PRIMARY KEY (pane_id, key)
-);
-CREATE TABLE pane_viewers(
-  pane_id INTEGER PRIMARY KEY REFERENCES panes(pane_id),
-  job_id INTEGER NOT NULL REFERENCES jobs(job_id),
-  pane_width INTEGER NOT NULL,
-  pane_height INTEGER NOT NULL
-);
-CREATE TABLE split_weights(
-  split_id INTEGER NOT NULL REFERENCES splits(split_id),
-  kind TEXT NOT NULL CHECK (kind IN ('pane', 'split')),
-  id INTEGER NOT NULL,
-  weight INTEGER NOT NULL,
-  PRIMARY KEY (split_id, kind, id)
-);
-CREATE TABLE column_widths(
-  window_id INTEGER NOT NULL REFERENCES windows(window_id),
-  kind TEXT NOT NULL CHECK (kind IN ('pane', 'split')),
-  id INTEGER NOT NULL,
-  width REAL NOT NULL,
-  PRIMARY KEY (window_id, kind, id)
-);
-CREATE TABLE clients(
-  client_id TEXT PRIMARY KEY,
-  session_id INTEGER REFERENCES sessions(session_id),
-  previous_session_id INTEGER REFERENCES sessions(session_id),
-  last_used INTEGER,
-  read_only INTEGER,
-  ignore_size INTEGER,
-  message TEXT,
-  connected REAL
-);
-"""
-    + ClientOptionRow.SQL
-    + """CREATE TABLE client_windows(
-  client_id TEXT NOT NULL REFERENCES clients(client_id),
-  session_id INTEGER NOT NULL REFERENCES sessions(session_id),
-  active_window_id INTEGER REFERENCES windows(window_id),
-  previous_window_id INTEGER REFERENCES windows(window_id),
-  PRIMARY KEY (client_id, session_id)
-);
-CREATE TABLE named_buffers(
-  name TEXT PRIMARY KEY,
-  text TEXT NOT NULL
-);
-CREATE TABLE server_lists(
-  list TEXT NOT NULL CHECK (list IN ('prompt_history', 'message_log')),
-  position INTEGER NOT NULL,
-  text TEXT NOT NULL,
-  PRIMARY KEY (list, position)
-);
-CREATE TABLE hooks(
-  hook TEXT NOT NULL,
-  position INTEGER NOT NULL,
-  command TEXT NOT NULL,
-  PRIMARY KEY (hook, position)
-);
-CREATE TABLE key_bindings(
-  key_table TEXT NOT NULL,
-  written TEXT NOT NULL,
-  command TEXT NOT NULL,
-  arguments TEXT NOT NULL,
-  PRIMARY KEY (key_table, written)
-);
-CREATE TABLE notifications(
-  notification_id INTEGER PRIMARY KEY,
-  title TEXT NOT NULL,
-  body TEXT NOT NULL,
-  urgency INTEGER NOT NULL,
-  pane_id INTEGER,
-  at REAL NOT NULL,
-  position INTEGER UNIQUE,
-  identifier TEXT,
-  source TEXT NOT NULL DEFAULT '',
-  CHECK ((position IS NULL) != (identifier IS NULL))
-);
-CREATE TABLE notification_routes(
-  ours TEXT PRIMARY KEY,
-  pane_id INTEGER NOT NULL,
-  identifier TEXT NOT NULL,
-  position INTEGER NOT NULL UNIQUE
-);
-CREATE TABLE wait_channels(
-  name TEXT PRIMARY KEY,
-  woken INTEGER NOT NULL,
-  locked INTEGER NOT NULL
-);
-CREATE TABLE saved_queries(
-  name TEXT PRIMARY KEY,
-  sql TEXT NOT NULL,
-  description TEXT
-);
-CREATE TABLE forgotten_seeds(
-  name TEXT PRIMARY KEY
-);
-CREATE TABLE jobs(
-  job_id INTEGER PRIMARY KEY,
-  command TEXT NOT NULL,
-  directory TEXT,
-  pty INTEGER NOT NULL,
-  status TEXT NOT NULL,
-  returncode INTEGER,
-  error TEXT,
-  started REAL NOT NULL,
-  finished REAL,
-  last_active REAL NOT NULL,
-  env TEXT NOT NULL,
-  stdout_dropped INTEGER NOT NULL,
-  stderr_dropped INTEGER NOT NULL,
-  pid INTEGER,
-  fds TEXT,
-  parent INTEGER
-);
-CREATE TABLE job_tags(
-  job_id INTEGER NOT NULL REFERENCES jobs(job_id),
-  key TEXT NOT NULL,
-  value TEXT,
-  PRIMARY KEY (job_id, key)
-);
-CREATE TABLE job_output(
-  job_id INTEGER NOT NULL REFERENCES jobs(job_id),
-  stream TEXT NOT NULL CHECK (stream IN ('stdout', 'stderr')),
-  start INTEGER NOT NULL,
-  data BLOB NOT NULL,
-  PRIMARY KEY (job_id, stream, start)
-);
-CREATE TABLE pane_programs(
-  pane_id INTEGER PRIMARY KEY REFERENCES panes(pane_id),
-  pane_pid INTEGER NOT NULL,
-  pane_revision INTEGER NOT NULL,
-  screen TEXT NOT NULL,
-  stream TEXT NOT NULL,
-  process TEXT NOT NULL,
-  master_fd INTEGER,
-  parent INTEGER
-);
-CREATE TABLE screen_appearances(
-  pane_id INTEGER NOT NULL REFERENCES panes(pane_id),
-  appearance INTEGER NOT NULL,
-  value TEXT NOT NULL,
-  PRIMARY KEY (pane_id, appearance)
-);
-CREATE TABLE screen_rows(
-  pane_id INTEGER NOT NULL REFERENCES panes(pane_id),
-  buffer TEXT NOT NULL,
-  number INTEGER NOT NULL,
-  wrapped INTEGER NOT NULL,
-  text TEXT NOT NULL,
-  cells TEXT NOT NULL,
-  marks INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (pane_id, buffer, number)
-);
-CREATE TABLE client_modes(
-  client_id TEXT PRIMARY KEY REFERENCES clients(client_id),
-  modes TEXT NOT NULL
-);
-"""
-)
-
-#: The tables in the order a dump compares them.
-TABLES = (
-    "server",
-    "counters",
-    "server_options",
-    "session_defaults",
-    "global_environment",
-    "sessions",
-    "session_environment",
-    "session_tags",
-    "session_options",
-    "window_defaults",
-    "windows",
-    "window_options",
-    "window_tags",
-    "splits",
-    "panes",
-    "pane_user_vars",
-    "pane_tags",
-    "pane_viewers",
-    "split_weights",
-    "column_widths",
-    "clients",
-    "client_options",
-    "client_windows",
-    "named_buffers",
-    "server_lists",
-    "hooks",
-    "key_bindings",
-    "notifications",
-    "notification_routes",
-    "wait_channels",
-    "saved_queries",
-    "forgotten_seeds",
-    "jobs",
-    "job_tags",
-    "job_output",
-    "pane_programs",
-    "screen_appearances",
-    "screen_rows",
-    "client_modes",
-)
-
 JOB_TABLES = ("jobs", "job_tags", "job_output")
 
 #: A pane's program and its screen, which only the transition holds.
@@ -443,10 +183,6 @@ SCREEN_TABLES = ("pane_programs", "screen_appearances", "screen_rows")
 #: What a client is in the middle of -- a held prefix, a key table, a
 #: prompt -- which typing changes, so only the transition holds it too.
 CLIENT_MODE_TABLES = ("client_modes",)
-
-#: The tables of window management, which `sql` reads under `live`. A
-#: snapshot holds the jobs, the screens and the client modes beside them.
-LIVE_TABLES = tuple(table for table in TABLES if table not in JOB_TABLES + SCREEN_TABLES + CLIENT_MODE_TABLES)
 
 
 #: Marks a column worked out from the live objects -- what a person
@@ -511,7 +247,7 @@ class SessionRow:
 class SessionEnvironmentRow:
     TABLE: ClassVar[str] = "session_environment"
     KEY: ClassVar[tuple[str, ...]] = ("session_id", "name")
-    session_id: int
+    session_id: int = field(metadata=column(references="sessions(session_id)"))
     name: str
     value: str | None
 
@@ -520,7 +256,7 @@ class SessionEnvironmentRow:
 class SessionTagRow:
     TABLE: ClassVar[str] = "session_tags"
     KEY: ClassVar[tuple[str, ...]] = ("session_id", "key")
-    session_id: int
+    session_id: int = field(metadata=column(references="sessions(session_id)"))
     key: str
     value: str | None
 
@@ -530,7 +266,7 @@ class WindowRow:
     TABLE: ClassVar[str] = "windows"
     KEY: ClassVar[tuple[str, ...]] = ("window_id",)
     window_id: int
-    session_id: int
+    session_id: int = field(metadata=column(references="sessions(session_id)"))
     linked: int
     position: int
     window_index: int
@@ -543,10 +279,10 @@ class WindowRow:
     manual_width: int | None
     zoom: int
     frame_rate_set: int
-    bell: int
-    activity: int
-    silence: int
-    notified: int
+    bell: int = 0
+    activity: int = 0
+    silence: int = 0
+    notified: int = 0
     shown_name: str | None = shown()
 
 
@@ -554,7 +290,7 @@ class WindowRow:
 class WindowTagRow:
     TABLE: ClassVar[str] = "window_tags"
     KEY: ClassVar[tuple[str, ...]] = ("window_id", "key")
-    window_id: int
+    window_id: int = field(metadata=column(references="windows(window_id)"))
     key: str
     value: str | None
 
@@ -564,9 +300,9 @@ class SplitRow:
     TABLE: ClassVar[str] = "splits"
     KEY: ClassVar[tuple[str, ...]] = ("split_id",)
     split_id: int
-    window_id: int
-    kind: str
-    parent_split_id: int | None
+    window_id: int = field(metadata=column(references="windows(window_id)"))
+    kind: str = field(metadata=column(check="kind IN ('hsplit', 'vsplit')"))
+    parent_split_id: int | None = field(metadata=column(references="splits(split_id)"))
     position: int | None
 
 
@@ -575,8 +311,8 @@ class PaneRow:
     TABLE: ClassVar[str] = "panes"
     KEY: ClassVar[tuple[str, ...]] = ("pane_id",)
     pane_id: int
-    window_id: int | None
-    parent_split_id: int | None
+    window_id: int | None = field(metadata=column(references="windows(window_id)"))
+    parent_split_id: int | None = field(metadata=column(references="splits(split_id)"))
     position: int | None
     pane_name: str | None
     clock_mode: int
@@ -584,7 +320,7 @@ class PaneRow:
     current_host: str | None
     command_zone: str | None
     last_exit_status: int | None
-    bell: int
+    bell: int = 0
     shown_name: str | None = shown()
     title: str | None = shown()
     current_command: str | None = shown()
@@ -595,7 +331,7 @@ class PaneRow:
 class PaneUserVarRow:
     TABLE: ClassVar[str] = "pane_user_vars"
     KEY: ClassVar[tuple[str, ...]] = ("pane_id", "name")
-    pane_id: int
+    pane_id: int = field(metadata=column(references="panes(pane_id)"))
     name: str
     value: str
 
@@ -604,7 +340,7 @@ class PaneUserVarRow:
 class PaneTagRow:
     TABLE: ClassVar[str] = "pane_tags"
     KEY: ClassVar[tuple[str, ...]] = ("pane_id", "key")
-    pane_id: int
+    pane_id: int = field(metadata=column(references="panes(pane_id)"))
     key: str
     value: str | None
 
@@ -613,8 +349,8 @@ class PaneTagRow:
 class ViewerRow:
     TABLE: ClassVar[str] = "pane_viewers"
     KEY: ClassVar[tuple[str, ...]] = ("pane_id",)
-    pane_id: int
-    job_id: int
+    pane_id: int = field(metadata=column(references="panes(pane_id)"))
+    job_id: int = field(metadata=column(references="jobs(job_id)"))
     pane_width: int
     pane_height: int
 
@@ -623,8 +359,8 @@ class ViewerRow:
 class SplitWeightRow:
     TABLE: ClassVar[str] = "split_weights"
     KEY: ClassVar[tuple[str, ...]] = ("split_id", "kind", "id")
-    split_id: int
-    kind: str
+    split_id: int = field(metadata=column(references="splits(split_id)"))
+    kind: str = field(metadata=column(check="kind IN ('pane', 'split')"))
     id: int
     weight: int
 
@@ -633,8 +369,8 @@ class SplitWeightRow:
 class ColumnWidthRow:
     TABLE: ClassVar[str] = "column_widths"
     KEY: ClassVar[tuple[str, ...]] = ("window_id", "kind", "id")
-    window_id: int
-    kind: str
+    window_id: int = field(metadata=column(references="windows(window_id)"))
+    kind: str = field(metadata=column(check="kind IN ('pane', 'split')"))
     id: int
     width: float
 
@@ -644,8 +380,8 @@ class ClientRow:
     TABLE: ClassVar[str] = "clients"
     KEY: ClassVar[tuple[str, ...]] = ("client_id",)
     client_id: str
-    session_id: int | None
-    previous_session_id: int | None
+    session_id: int | None = field(metadata=column(references="sessions(session_id)"))
+    previous_session_id: int | None = field(metadata=column(references="sessions(session_id)"))
     last_used: int | None
     read_only: int | None
     ignore_size: int | None
@@ -658,10 +394,10 @@ class ClientRow:
 class ClientWindowRow:
     TABLE: ClassVar[str] = "client_windows"
     KEY: ClassVar[tuple[str, ...]] = ("client_id", "session_id")
-    client_id: str
-    session_id: int
-    active_window_id: int | None
-    previous_window_id: int | None
+    client_id: str = field(metadata=column(references="clients(client_id)"))
+    session_id: int = field(metadata=column(references="sessions(session_id)"))
+    active_window_id: int | None = field(metadata=column(references="windows(window_id)"))
+    previous_window_id: int | None = field(metadata=column(references="windows(window_id)"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -676,7 +412,7 @@ class NamedBufferRow:
 class ServerListRow:
     TABLE: ClassVar[str] = "server_lists"
     KEY: ClassVar[tuple[str, ...]] = ("list", "position")
-    list: str
+    list: str = field(metadata=column(check="list IN ('prompt_history', 'message_log')"))
     position: int
     text: str
 
@@ -704,15 +440,16 @@ class KeyBindingRow:
 class NotificationRow:
     TABLE: ClassVar[str] = "notifications"
     KEY: ClassVar[tuple[str, ...]] = ("notification_id",)
+    CHECKS: ClassVar[tuple[str, ...]] = ("(position IS NULL) != (identifier IS NULL)",)
     notification_id: int
     title: str
     body: str
     urgency: int
     pane_id: int | None
     at: float
-    position: int | None
+    position: int | None = field(metadata=column(unique=True))
     identifier: str | None
-    source: str
+    source: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -722,7 +459,7 @@ class NotificationRouteRow:
     ours: str
     pane_id: int
     identifier: str
-    position: int
+    position: int = field(metadata=column(unique=True))
 
 
 @dataclass(frozen=True, slots=True)
@@ -781,7 +518,7 @@ class JobRow:
 class JobTagRow:
     TABLE: ClassVar[str] = "job_tags"
     KEY: ClassVar[tuple[str, ...]] = ("job_id", "key")
-    job_id: int
+    job_id: int = field(metadata=column(references="jobs(job_id)"))
     key: str
     value: str | None
 
@@ -790,8 +527,8 @@ class JobTagRow:
 class JobOutputRow:
     TABLE: ClassVar[str] = "job_output"
     KEY: ClassVar[tuple[str, ...]] = ("job_id", "stream", "start")
-    job_id: int
-    stream: str
+    job_id: int = field(metadata=column(references="jobs(job_id)"))
+    stream: str = field(metadata=column(check="stream IN ('stdout', 'stderr')"))
     start: int
     data: bytes
 
@@ -800,7 +537,7 @@ class JobOutputRow:
 class ProgramRow:
     TABLE: ClassVar[str] = "pane_programs"
     KEY: ClassVar[tuple[str, ...]] = ("pane_id",)
-    pane_id: int
+    pane_id: int = field(metadata=column(references="panes(pane_id)"))
     pane_pid: int
     pane_revision: int
     screen: str
@@ -816,7 +553,7 @@ class ProgramRow:
 class AppearanceRow:
     TABLE: ClassVar[str] = "screen_appearances"
     KEY: ClassVar[tuple[str, ...]] = ("pane_id", "appearance")
-    pane_id: int
+    pane_id: int = field(metadata=column(references="panes(pane_id)"))
     appearance: int
     value: str
 
@@ -827,24 +564,24 @@ class ScreenRow:
 
     TABLE: ClassVar[str] = "screen_rows"
     KEY: ClassVar[tuple[str, ...]] = ("pane_id", "buffer", "number")
-    pane_id: int
+    pane_id: int = field(metadata=column(references="panes(pane_id)"))
     buffer: str
     number: int
     wrapped: int
     text: str
     cells: str
-    marks: int
+    marks: int = 0
 
 
 @dataclass(frozen=True, slots=True)
 class ClientModesRow:
     TABLE: ClassVar[str] = "client_modes"
     KEY: ClassVar[tuple[str, ...]] = ("client_id",)
-    client_id: str
+    client_id: str = field(metadata=column(references="clients(client_id)"))
     modes: str
 
 
-#: One class per table, in the order of `TABLES`.
+#: One class per table, in the order a snapshot creates and a dump compares them.
 ROWS = (
     ServerRow,
     CounterRow,
@@ -886,6 +623,15 @@ ROWS = (
     ScreenRow,
     ClientModesRow,
 )
+
+
+TABLES = tuple(kind.TABLE for kind in ROWS)
+
+SCHEMA = "".join(create_table(kind) for kind in ROWS)
+
+#: The tables of window management, which `sql` reads under `live`. A
+#: snapshot holds the jobs, the screens and the client modes beside them.
+LIVE_TABLES = tuple(table for table in TABLES if table not in JOB_TABLES + SCREEN_TABLES + CLIENT_MODE_TABLES)
 
 
 #: The rows of `LIVE_TABLES`.
@@ -984,17 +730,22 @@ class ChangedRows:
         return now
 
 
-def added_columns(db: apsw.Connection) -> str:
+def missing_from(db: apsw.Connection) -> str:
     """
-    What gives `db` each column `GENERATED` declares and it lacks, at
-    the column's default: a new option needs no step.
+    What gives `db` each table and column `ROWS` declares and it lacks,
+    a column at its default: an addition needs no step. sqlite cannot
+    add a `UNIQUE` column, or a `NOT NULL` one with no default, so those
+    fail here and need one.
     """
     statements = []
-    for kind in GENERATED:
-        have = {column[1] for column in db.execute("PRAGMA table_info(%s)" % (kind.TABLE,))}
-        for name, column in kind.COLUMNS.items():
+    for kind in ROWS:
+        have = {each[1] for each in db.execute("PRAGMA table_info(%s)" % (kind.TABLE,))}
+        if not have:
+            statements.append(create_table(kind))
+            continue
+        for name, definition in columns_of(kind).items():
             if name not in have:
-                statements.append("ALTER TABLE %s ADD COLUMN %s;\n" % (kind.TABLE, column))
+                statements.append("ALTER TABLE %s ADD COLUMN %s;\n" % (kind.TABLE, definition))
     return "".join(statements)
 
 

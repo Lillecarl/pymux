@@ -107,9 +107,10 @@ from .tables import (
     WindowOptionRow,
     WindowRow,
     WindowTagRow,
-    added_columns,
+    create_table,
     insert,
     literal,
+    missing_from,
     select,
 )
 from .window_options import WindowOptions
@@ -166,7 +167,7 @@ def _client_options_move_out() -> str:
         "coalesce(%s, %s)" % (old[each.attribute], literal(each.stored(each.default))) for each in declared
     )
     return (
-        ClientOptionRow.SQL
+        create_table(ClientOptionRow)
         + "INSERT INTO client_options(client_id, %s) SELECT client_id,\n  %s\nFROM clients;\n"
         % (", ".join(each.attribute for each in declared), values)
         + "".join("ALTER TABLE clients DROP COLUMN %s;\n" % column for column in old.values())
@@ -176,7 +177,8 @@ def _client_options_move_out() -> str:
 #: What takes a snapshot of the version before this one up to it. A
 #: snapshot only ever goes from a running build to the next one, so a
 #: change of shape adds the one step from the version before it and
-#: deletes any older step.
+#: deletes any older step. An added table or column needs none:
+#: `missing_from` adds it.
 STEPS: dict[int, str] = {39: _client_options_move_out()}
 
 #: The fields `ClientState.modes` holds, one JSON value in `client_modes`.
@@ -899,7 +901,7 @@ def _open(path: str | os.PathLike[str]) -> apsw.Connection:
     db = apsw.Connection(str(Path(path).resolve()), flags=apsw.SQLITE_OPEN_READONLY)
     version = int(db.pragma("user_version"))
     if version == SNAPSHOT_VERSION:
-        added = added_columns(db)
+        added = missing_from(db)
         if not added:
             return db
         steps = [added]

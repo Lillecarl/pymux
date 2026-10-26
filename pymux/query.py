@@ -23,13 +23,13 @@ from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import nullcontext
 from dataclasses import dataclass, fields
 from functools import partial
-from typing import TYPE_CHECKING, Any, NamedTuple, cast, get_args, get_type_hints
+from typing import TYPE_CHECKING, Any, NamedTuple, cast, get_type_hints
 
 import anyio
 import apsw
 import apsw.ext
 
-from .tables import LIVE_ROWS, JobTagRow, SavedQueryRow
+from .tables import LIVE_ROWS, JobTagRow, SavedQueryRow, affinity
 
 if TYPE_CHECKING:
     from .main import Pymux
@@ -348,20 +348,16 @@ def tables_of(pymux: Pymux) -> dict[tuple[str, str], Table]:
     return tables
 
 
-#: The column type each Python type declares, so that a `--param`,
-#: which arrives as text, compares with a number the way it does with a
-#: real table's column.
-_AFFINITY = {int: "INTEGER", float: "REAL", str: "TEXT", bytes: "BLOB"}
-
-
 def _declared(kind: type) -> str:
-    "The columns of `kind`, each with the type its field holds; untyped for `Any`."
+    """
+    The columns of `kind`, each with the type its field holds, so that a
+    `--param`, which arrives as text, compares with a number the way it
+    does with a real table's column.
+    """
     hints = get_type_hints(kind)
     columns = []
     for field in fields(kind):
-        types = [each for each in get_args(hints[field.name]) or (hints[field.name],) if each is not type(None)]
-        affinity = _AFFINITY.get(types[0], "") if len(types) == 1 else ""
-        columns.append(('"%s" %s' % (field.name, affinity)).rstrip())
+        columns.append(('"%s" %s' % (field.name, affinity(hints[field.name]))).rstrip())
     return "CREATE TABLE x(%s)" % ", ".join(columns)
 
 

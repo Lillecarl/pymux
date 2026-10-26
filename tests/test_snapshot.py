@@ -12,7 +12,7 @@ import json
 import os
 import shutil
 import sys
-from typing import override
+from typing import Any, ClassVar, override
 
 import anyio
 import apsw
@@ -80,14 +80,34 @@ def test_a_snapshot_writes_every_saved_field(name):
     )
 
 
-@pytest.mark.parametrize("row", tables.ROWS, ids=lambda row: row.TABLE)
-def test_a_row_names_the_columns_of_its_table(row):
-    db = apsw.Connection(":memory:")
-    db.execute(tables.SCHEMA)
+@dataclasses.dataclass(frozen=True, slots=True)
+class _ExampleRow:
+    TABLE: ClassVar[str] = "examples"
+    KEY: ClassVar[tuple[str, ...]] = ("owner_id", "name")
+    CHECKS: ClassVar[tuple[str, ...]] = ("count >= 0",)
+    owner_id: int = dataclasses.field(metadata=tables.column(references="owners(owner_id)"))
+    name: str
+    note: str | None
+    kind: str = dataclasses.field(metadata=tables.column(check="kind IN ('a', 'b')"))
+    value: Any
+    count: int = 0
+    seen: str | None = tables.shown()
 
-    columns = [column[1] for column in db.execute("PRAGMA table_info(%s)" % (row.TABLE,))]
 
-    assert [field.name for field in tables.stored_fields(row)] == columns
+def test_a_row_class_declares_its_table():
+    "Lillecarl/pymux#771."
+    assert tables.create_table(_ExampleRow) == (
+        "CREATE TABLE examples(\n"
+        "  owner_id INTEGER NOT NULL REFERENCES owners(owner_id),\n"
+        "  name TEXT NOT NULL,\n"
+        "  note TEXT,\n"
+        "  kind TEXT NOT NULL CHECK (kind IN ('a', 'b')),\n"
+        "  value,\n"
+        "  count INTEGER NOT NULL DEFAULT 0,\n"
+        "  PRIMARY KEY (owner_id, name),\n"
+        "  CHECK (count >= 0)\n"
+        ");\n"
+    )
 
 
 def test_a_shown_column_comes_after_every_stored_one():
@@ -96,20 +116,6 @@ def test_a_shown_column_comes_after_every_stored_one():
         names = [field.name for field in dataclasses.fields(row)]
         stored = [field.name for field in tables.stored_fields(row)]
         assert names[: len(stored)] == stored, row.TABLE
-
-
-@pytest.mark.parametrize("row", tables.ROWS, ids=lambda row: row.TABLE)
-def test_a_row_names_the_key_of_its_table(row):
-    db = apsw.Connection(":memory:")
-    db.execute(tables.SCHEMA)
-
-    key = sorted((column[5], column[1]) for column in db.execute("PRAGMA table_info(%s)" % (row.TABLE,)) if column[5])
-
-    assert row.KEY == tuple(name for _, name in key)
-
-
-def test_every_table_has_a_row():
-    assert [row.TABLE for row in tables.ROWS] == list(tables.TABLES)
 
 
 async def test_every_class_with_a_saved_field_is_written(pymux):
@@ -740,18 +746,10 @@ def _shape_of_a_fresh_snapshot() -> dict[str, list[tuple]]:
     return _shape(db)
 
 
-def test_the_table_list_is_the_schema_in_order():
-    "`LIVE_TABLES` is cut from it by name. Lillecarl/pymux#555."
-    db = apsw.Connection(":memory:")
-    db.execute(tables.SCHEMA)
-    made = [row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY rowid")]
-    assert list(tables.TABLES) == made
-
-
 def _as_version_39(path) -> None:
     "Put each client's options back as columns of `clients`, as 39 kept them."
     db = apsw.Connection(str(path))
-    for attribute in ClientOptionRow.COLUMNS:
+    for attribute in tables.columns_of(ClientOptionRow).keys() - set(ClientOptionRow.KEY):
         old = snapshot._OLD_CLIENT_COLUMNS.get(attribute, attribute)
         db.execute(f"ALTER TABLE clients ADD COLUMN {old}")
         db.execute(
@@ -803,6 +801,23 @@ async def test_a_column_this_build_declares_and_the_file_lacks_takes_its_default
 
     assert loaded.arrangement.windows
     assert all(window.options.monitor_silence == 0 for window in loaded.arrangement.windows)
+
+
+async def test_a_table_or_column_the_file_lacks_needs_no_step(pymux, tmp_path):
+    "Lillecarl/pymux#771."
+    path = tmp_path / "older.sqlite"
+    async with pymux.running():
+        await pymux.create_window("true")
+        snapshot.save(pymux, path)
+    db = apsw.Connection(str(path))
+    db.execute("ALTER TABLE panes DROP COLUMN bell")
+    db.execute("DROP TABLE forgotten_seeds")
+    db.close()
+
+    loaded = Pymux()
+    snapshot.load(loaded, path)
+
+    assert loaded.arrangement.windows
 
 
 def test_a_session_s_own_value_survives_and_the_rest_follow_the_default(pymux, tmp_path):
