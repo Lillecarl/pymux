@@ -100,6 +100,17 @@ async def test_a_pane_is_offered_by_its_id_and_its_place(pymux):
     assert found["%%%s" % pane.pane_id].startswith("work:")
 
 
+async def test_a_saved_question_replaces_what_tab_offers(pymux):
+    "The values are what the question of that name answers, so saving another changes them."
+    await two_sessions(pymux)
+    pymux.jobs.save_query("complete-session", "SELECT upper(session_name), 'shouted' FROM live.sessions", None)
+
+    found = offered(pymux, "switch-client -t ")
+
+    assert {"HOME", "WORK"} <= set(found)
+    assert set(found.values()) == {"shouted"}
+
+
 async def test_move_window_completes_where_a_window_can_go(pymux):
     await two_sessions(pymux)
 

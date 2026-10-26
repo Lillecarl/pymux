@@ -715,6 +715,7 @@ def _pane_rows(pane: Pane, window: Window | None, parent: _Split | None, place: 
         shown_name=pane.name,
         title=_title_of(pane),
         current_command=os.path.basename(pane.process.get_name() or "") or None,
+        pane_index=window.get_pane_index(pane) if window is not None else None,
     )
     for name, value in sorted(pane.user_vars.items()):
         yield PaneUserVarRow(pane.pane_id, name, value)
@@ -756,6 +757,7 @@ def _clients(pymux: Pymux) -> dict[str, dict]:
             "settings": {name: _value(getattr(state, name)) for name in CLIENT_SETTINGS},
             "modes": state.modes(),
             "connected": connection.created,
+            "terminal_name": connection.name,
         }
     return clients
 
@@ -769,6 +771,7 @@ def _client_rows(pymux: Pymux) -> Iterator[Row]:
             previous_session_id=client["previous_session_id"],
             connected=client.get("connected"),
             **{name: settings.get(name) for name in CLIENT_SETTINGS},
+            terminal_name=client.get("terminal_name"),
         )
         for session_id, (active, previous) in sorted(client["windows"].items()):
             yield ClientWindowRow(client_id, session_id, active, previous)

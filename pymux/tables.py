@@ -521,6 +521,7 @@ class PaneRow:
     shown_name: str | None = shown()
     title: str | None = shown()
     current_command: str | None = shown()
+    pane_index: int | None = shown()
 
 
 @dataclass(frozen=True, slots=True)
@@ -596,6 +597,7 @@ class ClientRow:
     audio_speaker_bitrate: int | None
     audio_microphone_bitrate: int | None
     file_transfer: str | None
+    terminal_name: str | None = shown()
 
 
 @dataclass(frozen=True, slots=True)

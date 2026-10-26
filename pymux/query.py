@@ -95,6 +95,59 @@ SEEDS = [
         ),
         "Jobs carrying a tag key; :tag names it.",
     ),
+    *(
+        ("complete-%s" % kind, sql, "What Tab offers for a %s: the word, and what it says beside it." % kind)
+        for kind, sql in (
+            (
+                "session",
+                (
+                    "SELECT s.session_name AS word,"
+                    " (SELECT count(*) FROM live.windows w WHERE w.session_id = s.session_id AND w.linked)"
+                    " || ' windows'"
+                    " || CASE WHEN EXISTS (SELECT 1 FROM live.clients c"
+                    " WHERE c.session_id = s.session_id AND c.terminal_name IS NOT NULL)"
+                    " THEN ' (attached)' ELSE '' END AS says"
+                    " FROM live.sessions s ORDER BY s.position"
+                ),
+            ),
+            (
+                "session-end",
+                (
+                    "SELECT session_name || ':' AS word, 'after the last window' AS says"
+                    " FROM live.sessions ORDER BY position"
+                ),
+            ),
+            (
+                "window",
+                (
+                    "SELECT s.session_name || ':' || w.window_index AS word,"
+                    " w.shown_name || ', ' || (SELECT count(*) FROM live.panes p WHERE p.window_id = w.window_id)"
+                    " || ' panes' AS says"
+                    " FROM live.windows w JOIN live.sessions s USING (session_id)"
+                    " WHERE w.linked ORDER BY s.position, w.window_index"
+                ),
+            ),
+            (
+                "pane",
+                (
+                    "SELECT '%' || p.pane_id AS word,"
+                    " s.session_name || ':' || w.window_index || '.' || p.pane_index"
+                    " || ' ' || coalesce(p.current_command, '') || ' ' || coalesce(p.title, '') AS says"
+                    " FROM live.panes p JOIN live.windows w USING (window_id) JOIN live.sessions s USING (session_id)"
+                    " WHERE w.linked ORDER BY s.position, w.window_index, p.pane_index"
+                ),
+            ),
+            (
+                "client",
+                (
+                    "SELECT coalesce(nullif(c.name, ''), c.terminal_name) AS word, s.session_name AS says"
+                    " FROM live.clients c LEFT JOIN live.sessions s USING (session_id)"
+                    " WHERE c.terminal_name IS NOT NULL ORDER BY c.connected"
+                ),
+            ),
+            ("job", "SELECT id AS word, command AS says FROM jobs ORDER BY id"),
+        )
+    ),
 ]
 
 
