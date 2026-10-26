@@ -56,7 +56,7 @@ from pyte.osc import CLEAR_SCROLLBACK, Osc
 from pyte.page import RowMark
 
 from . import hacks_and_lies, introspect, kernels, log
-from .actions import ActionLog, Kind, Origin, awaited_as, note, started_by
+from .actions import ActionLog, Kind, Origin, awaited_as, note, note_keys, started_by
 from .arrangement import Arrangement, Pane, Window
 from .audio import AudioServer
 from .browsers import Browsers
@@ -2619,6 +2619,7 @@ class Pymux:
             key_profile_func=lambda: self.key_profile_of(self.client_of(get_app())),
             helix_keys=lambda: self.options_of_pane(pane).mode_keys is EditingKeys.HELIX,
         )
+        terminal.on_copy_command = lambda keys: note_keys(self, "copy-mode", keys)
         pane = Pane(terminal)
         # The name the pane answers XTVERSION with, asked at each query:
         # the program in front may be one `hacks_and_lies` lies to.

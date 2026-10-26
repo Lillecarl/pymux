@@ -27,7 +27,7 @@ from ptkhx import Mode
 from ptkhx.bindings import HelixBindings
 from ptterm import Terminal
 
-from .actions import Kind, Origin, note, started_by
+from .actions import Kind, Origin, note, note_keys, started_by
 from .commands import call_command_handler
 from .commands.utils import wrap_argument
 from .enums import COMMAND, PROMPT, Chooser, EditingKeys
@@ -94,6 +94,7 @@ class PromptHelix(HelixBindings):
             filter=Condition(lambda: pymux.current_session.options.status_keys is EditingKeys.HELIX)
             & (has_focus(COMMAND) | has_focus(PROMPT))
         )
+        self.on_command = lambda _buffer, keys: note_keys(pymux, "prompt", keys)
 
     @override
     def before_escape(self, event: E) -> bool:

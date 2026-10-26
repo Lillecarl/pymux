@@ -52,6 +52,7 @@ __all__ = [
     "awaited_as",
     "default_path",
     "note",
+    "note_keys",
     "started_by",
     "words_of",
 ]
@@ -107,7 +108,8 @@ class Kind(StrEnum):
     CLICK = "click"
     #: A row taken in a chooser; what it runs, if anything, follows.
     CHOICE = "choice"
-    #: A key that runs no command: a move in a chooser, or leaving one.
+    #: A key that runs no command: a move in a chooser, leaving one, or
+    #: a command of copy mode's or the prompt's Helix editor.
     KEY = "key"
 
 
@@ -413,3 +415,9 @@ def _upkeep(db: apsw.Connection, limit: int) -> None:
     db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     db.execute("PRAGMA incremental_vacuum")
     db.execute("PRAGMA optimize")
+
+
+def note_keys(pymux: Pymux, key_table: str, keys: str) -> None:
+    "Log a command of a Helix editor by its keys: `w`, `gg`. The table says which editor."
+    with started_by(Origin.KEY, key_table, keys):
+        note(pymux, Kind.KEY, keys)

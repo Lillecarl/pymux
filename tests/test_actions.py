@@ -17,8 +17,12 @@ import json
 import apsw
 import pytest
 from prompt_toolkit.application.current import set_app
+from prompt_toolkit.keys import Keys
 from session import create_session
 from test_choose_window import press, run
+from test_command_mode import press as press_key
+from test_helix_mode_keys import _copy_mode_on
+from test_helix_status_keys import _helix
 
 from pymux.actions import SCHEMA_VERSION, Kind, Origin, _upkeep, note, started_by
 
@@ -151,6 +155,23 @@ async def test_a_key_that_runs_no_command_is_written(tmp_path):
             # what the person meant to type.
             ("leave-clock", "key", None),
         ]
+
+
+async def test_a_helix_command_is_written_by_its_keys_and_never_the_text(tmp_path):
+    "Copy mode's and the prompt's. Lillecarl/pymux#755."
+    async with create_session() as (pymux, state):
+        pymux.actions.path = tmp_path / "actions.db"
+        pymux.options.action_log = True
+        _copy_mode_on(pymux, state, "hello world")
+        for key in ("w", "g", "g", "q"):
+            press_key(state, key)
+        _helix(pymux, state, "")
+        for key in ("s", "e", "c", "r", "e", "t", Keys.Escape, "b"):
+            press_key(state, key)
+        await pymux.actions.settled()
+
+        keys = [(row["key_table"], row["name"]) for row in _rows(pymux.actions.path) if row["kind"] == Kind.KEY]
+        assert keys == [("copy-mode", "w"), ("copy-mode", "gg"), ("copy-mode", "q"), ("prompt", "b")]
 
 
 async def test_a_command_over_the_socket_has_no_client(tmp_path):
