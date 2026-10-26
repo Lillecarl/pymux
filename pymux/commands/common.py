@@ -59,7 +59,13 @@ def find_window(pymux: Pymux, target: str | None) -> Window | None:
     part.
     """
     if target is None or target == "":
-        return pymux.arrangement.get_active_window()
+        window = pymux.arrangement.get_active_window()
+        if window is not None and _sent_from_nowhere(pymux):
+            pymux.warn_caller(
+                "pymux: no window named and no pane sent this; it acts on @%d in session %s, which a person used last."
+                % (window.window_id, pymux.current_session.name)
+            )
+        return window
 
     # A pane ID target: `%<id>`. (Find the window that owns this pane.)
     if target.startswith("%"):
@@ -139,6 +145,21 @@ def _pane_of_asking_client(pymux: Pymux) -> Pane | None:
     return pymux.panes_by_id.get(pane_id)
 
 
+def _sent_from_nowhere(pymux: Pymux) -> bool:
+    """
+    A socket command with no live pane behind it: a script outside
+    pymux, or one from a pane that has gone. It falls back to what a
+    person used last, as tmux does, and says so: an agent read back
+    a window a person had open, and nothing told it.
+    Lillecarl/pymux#506.
+    """
+    try:
+        asking = pymux.get_client_state()
+    except ValueError:
+        return False
+    return asking.temporary and _pane_of_asking_client(pymux) is None
+
+
 def find_pane(pymux: Pymux, target: str | None) -> Pane | None:
     """
     Find a pane for a tmux-style target.
@@ -151,7 +172,13 @@ def find_pane(pymux: Pymux, target: str | None) -> Pane | None:
         caller = _pane_of_asking_client(pymux)
         if caller is not None:
             return caller
-        return pymux.arrangement.get_active_pane()
+        pane = pymux.arrangement.get_active_pane()
+        if pane is not None and _sent_from_nowhere(pymux):
+            pymux.warn_caller(
+                "pymux: no pane named and no pane sent this; it acts on %%%d in session %s, which a person used last."
+                % (pane.pane_id, pymux.current_session.name)
+            )
+        return pane
 
     # A pane ID target: `%<id>`. The server knows every pane by id, so
     # this reaches across the sessions.

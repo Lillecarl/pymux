@@ -16,8 +16,9 @@ import contextlib
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
+from libpymux.protocol import Field, Packet
 from prompt_toolkit.application.current import set_app
-from session import create_session
+from session import create_session, once, over_connection
 
 from pymux.commands import handle_command
 from pymux.commands.common import find_pane
@@ -106,3 +107,41 @@ async def test_the_commands_with_no_target_reach_the_calling_pane():
         assert caller.clock_mode
         assert active.chosen_name != "mine"
         assert not active.clock_mode
+
+
+async def _answered(session, text, pane_id=None) -> tuple[str, int]:
+    "What a command over a socket of its own said on stderr, and its exit code."
+    got = await session.command(text, pane_id=pane_id)
+    await once(lambda: any(packet[Field.CMD] == Packet.EXIT for packet in got), 10.0, "the command never answered")
+    said = "".join(packet[Field.DATA] for packet in got if packet[Field.CMD] == Packet.ERR)
+    return said, next(packet[Field.CODE] for packet in got if packet[Field.CMD] == Packet.EXIT)
+
+
+async def test_a_command_from_nowhere_says_what_it_acts_on():
+    """
+    No target and no pane behind it, or one that has gone: the command
+    still acts on what a person used last, as tmux does, and says which
+    on stderr. It still succeeds. Lillecarl/pymux#506.
+    """
+    async with over_connection() as session:
+        pymux = session.pymux
+        await pymux.create_window("sleep 60")
+
+        for pane_id, name in ((None, "far"), (999999, "gone")):
+            said, code = await _answered(session, "rename-pane %s" % name, pane_id=pane_id)
+            (pane,) = [pane for pane in pymux.panes_by_id.values() if pane.chosen_name == name]
+            assert code == 0
+            assert said == (
+                "pymux: no pane named and no pane sent this; it acts on %%%d in session %s, which a person used last.\n"
+                % (pane.pane_id, pymux.session_holding(pane).name)
+            )
+
+
+async def test_a_command_from_a_pane_or_with_a_target_says_nothing():
+    async with over_connection() as session:
+        pymux = session.pymux
+        await pymux.create_window("sleep 60")
+        pane = pymux.arrangement.get_active_pane()
+
+        assert await _answered(session, "rename-pane near", pane_id=pane.pane_id) == ("", 0)
+        assert await _answered(session, "select-pane -t %%%d" % pane.pane_id) == ("", 0)

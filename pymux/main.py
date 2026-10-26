@@ -1205,6 +1205,7 @@ def _browser_shim() -> str | None:
 
 _command_output: contextvars.ContextVar[list | None] = contextvars.ContextVar("pymux-command-output", default=None)
 _command_error: contextvars.ContextVar[list | None] = contextvars.ContextVar("pymux-command-error", default=None)
+_command_warnings: contextvars.ContextVar[list | None] = contextvars.ContextVar("pymux-command-warnings", default=None)
 _command_exit_code: contextvars.ContextVar[int | None] = contextvars.ContextVar("pymux-command-exit-code", default=None)
 _caller_context: contextvars.ContextVar[CallerContext | None] = contextvars.ContextVar(
     "pymux-caller-context", default=None
@@ -4474,6 +4475,21 @@ exec pymux notify -u "$urgency" -- "$@"
     @command_error.setter
     def command_error(self, lines: list | None) -> None:
         _command_error.set(lines)
+
+    @property
+    def command_warnings(self) -> list | None:
+        "What the caller should know, on stderr, with no change to the exit code."
+        return _command_warnings.get()
+
+    @command_warnings.setter
+    def command_warnings(self, lines: list | None) -> None:
+        _command_warnings.set(lines)
+
+    def warn_caller(self, message: str) -> None:
+        "Say `message` once to whoever sent this command over the socket."
+        warnings = self.command_warnings
+        if warnings is not None and message not in warnings:
+            warnings.append(message)
 
     @property
     def command_exit_code(self) -> int | None:
