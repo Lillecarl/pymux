@@ -3,70 +3,46 @@ Every option writes on the object its scope names.
 
 `Option.scope` says who holds an option and `Option.held_by` turns that
 into the object to write on: the server, the active window, or the
-client a command means. Lillecarl/pymux#223 added it, and three option
-classes kept writing to the server whatever their scope said. Nothing
-was wrong at the time -- all three were session options, and the server
-is what a session option is held by -- so the cost was the next one:
-a client-scoped option of one of those classes would write the value on
-the server while `show-client-options` read it back off the client.
+client a command means. Three option classes once wrote to the server
+whatever their scope said, so a client option's value went to the server
+while `show-client-options` read it back off the client.
 Lillecarl/pymux#348.
 
-This judges the classes and not the table. Which options exist is
-`options.py`; what a class does with a scope is here.
+This judges `FieldOption`, which every scope's options go through. Which
+options exist is each scope's dataclass; what a scope does is here.
 """
 
 from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
-
-from pymux.enums import EditingKeys
+from pymux.client_options import ClientOptions
 from pymux.main import Pymux
-from pymux.options import (
-    EnumOption,
-    OnOffOption,
-    PositiveIntOption,
-    Scope,
-    StringOption,
-)
-
-#: One option of each class that holds its value in an attribute, made
-#: client-scoped, with what a person writes and what it becomes.
-WRITERS = [
-    ("on/off", lambda: OnOffOption("judged", scope=Scope.CLIENT), "on", True),
-    ("string", lambda: StringOption("judged", scope=Scope.CLIENT), "desk", "desk"),
-    ("int", lambda: PositiveIntOption("judged", scope=Scope.CLIENT), "5", 5),
-    ("keys", lambda: EnumOption(EditingKeys, "judged", scope=Scope.CLIENT), "vi", EditingKeys.VI),
-]
+from pymux.options import ALL_CLIENT_OPTIONS, ALL_OPTIONS, ALL_SERVER_OPTIONS
 
 
-@pytest.mark.parametrize(
-    ("option", "written", "becomes"),
-    [(make, written, becomes) for _name, make, written, becomes in WRITERS],
-    ids=[name for name, _make, _written, _becomes in WRITERS],
-)
-def test_a_client_option_is_written_on_the_client(option, written, becomes):
+def test_a_client_option_is_written_on_the_client():
     pymux = Pymux()
-    client = SimpleNamespace()
+    client = SimpleNamespace(options=ClientOptions())
 
-    option().set_value(pymux, written, target=client)
+    ALL_CLIENT_OPTIONS["full-screen"].set_value(pymux, "on", target=client)
 
-    assert client.judged == becomes
-    assert not hasattr(pymux, "judged"), "the value went to the server"
+    assert client.options.full_screen is True
+    assert not hasattr(pymux.options, "full_screen"), "the value went to the server"
 
 
-@pytest.mark.parametrize(
-    ("option", "written", "becomes"),
-    [(make, written, becomes) for _name, make, written, becomes in WRITERS],
-    ids=[name for name, _make, _written, _becomes in WRITERS],
-)
-def test_a_session_option_is_written_on_the_server(option, written, becomes):
-    "The other half: a scope of its own must not have moved the default."
+def test_a_session_option_is_written_on_the_defaults():
     pymux = Pymux()
-    made = option()
-    made.scope = Scope.SESSION
 
-    made.set_value(pymux, written)
+    ALL_OPTIONS["status-interval"].set_value(pymux, "7")
 
-    assert pymux.judged == becomes
+    assert pymux.session_defaults.status_interval == 7
+    assert pymux.sessions == [] or all(not session.options.own() for session in pymux.sessions)
+
+
+def test_a_server_option_is_written_on_the_server():
+    pymux = Pymux()
+
+    ALL_SERVER_OPTIONS["job-ttl"].set_value(pymux, "9")
+
+    assert pymux.options.job_ttl == 9

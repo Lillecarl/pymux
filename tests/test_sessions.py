@@ -152,7 +152,7 @@ async def test_switch_client_c_moves_another_client_to_a_window():
         pymux = session.pymux
         here, _ = await session.attach("here", SIZE)
         there, _ = await session.attach("there", SIZE)
-        there.name = "desk"
+        there.options.name = "desk"
 
         await _command(pymux, here, "new-session -d -s work '%s'" % (WAITING,))
         await _command(pymux, here, "new-window -d -t work: '%s'" % (WAITING,))
@@ -191,7 +191,7 @@ async def test_a_question_leaves_the_keyboard_on_the_window_switched_to():
         pymux = session.pymux
         here, _ = await session.attach("here", SIZE)
         there, _ = await session.attach("there", SIZE)
-        there.name = "desk"
+        there.options.name = "desk"
 
         await _command(pymux, here, "new-window -d '%s'" % (WAITING,))
         _, second = there.session.arrangement.windows

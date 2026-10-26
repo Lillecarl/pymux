@@ -120,8 +120,8 @@ class Browsers:
                     Field.CMD: Packet.BROWSER,
                     Field.BROWSER: launch.launch_id,
                     Field.PORT: launch.port,
-                    Field.PROGRAM: client_state.browser_program,
-                    Field.PROFILE: client_state.browser_profile,
+                    Field.PROGRAM: client_state.options.browser_program,
+                    Field.PROFILE: client_state.options.browser_profile,
                     Field.ARGUMENTS: arguments,
                 }
             )

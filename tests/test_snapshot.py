@@ -30,14 +30,26 @@ from test_every_attribute_has_a_fate import declared, live_objects
 
 from pymux import snapshot, tables
 from pymux.arrangement import LayoutTypes
+from pymux.client_options import ClientOptions
 from pymux.commands.wait_for import WaitChannel
-from pymux.enums import Chooser, Clipboard, ForwardMode, WindowCodec, WindowSize
+from pymux.enums import (
+    AudioFrame,
+    Chooser,
+    ClientAudio,
+    Clipboard,
+    FileTransfer,
+    ForwardMode,
+    WindowCodec,
+    WindowScroll,
+    WindowSize,
+)
 from pymux.jobs import JobFeed, JobPipes
 from pymux.main import Pymux
 from pymux.notifications import Urgency
 from pymux.query import ask
 from pymux.session_options import SessionOptions
-from pymux.tables import SessionDefaultRow
+from pymux.snapshot import _values_of
+from pymux.tables import ClientOptionRow
 
 
 @pytest.fixture
@@ -298,24 +310,35 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     pymux.notifications.outgoing(pane.pane_id, "i=one;first")
     pymux.notifications.outgoing(strip.panes[0].pane_id, "i=two;second")
 
-    client_state.name = "desk"
-    client_state.full_screen = True
-    client_state.theme = "grey"
+    client_state.options.name = "desk"
+    client_state.options.full_screen = True
+    client_state.options.theme = "grey"
     pymux.returning_clients["gone"] = {
         "session_id": second.session_id,
         "previous_session_id": None,
         "windows": {second.session_id: (None, elsewhere.window_id)},
         "connected": 1000.5,
         "settings": {
-            "name": "phone",
             "last_used": client_state.last_used + 1,
             "read_only": True,
             "ignore_size": True,
-            "full_screen": False,
-            "theme": "nearest",
-            "swap_dark_and_light": True,
             "message": "job 2 exited 4",
         },
+        "options": _values_of(
+            ClientOptions(
+                name="phone",
+                swap_light_and_dark_colors=True,
+                window_scroll=WindowScroll.NOTCH,
+                browser_program="chromium",
+                browser_profile="work",
+                audio=ClientAudio.PLAYBACK,
+                audio_rtt_multiplier=3.0,
+                audio_frame=AudioFrame.MS_20,
+                audio_speaker_bitrate=256,
+                audio_microphone_bitrate=24,
+                file_transfer=FileTransfer.PYMUX,
+            )
+        ),
         "modes": {
             "has_prefix": True,
             "key_tables": ["resize"],
@@ -338,6 +361,7 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
         "windows": {},
         "connected": None,
         "settings": {},
+        "options": _values_of(ClientOptions()),
         "modes": {
             "has_prefix": False,
             "key_tables": [],
@@ -607,7 +631,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
                     (elsewhere,) = back.session.arrangement.windows
                     assert back.session.name == "second"
                     assert back.session.arrangement.previous_window_for(back.app) is elsewhere
-                    assert (back.name, back.read_only, back.message) == ("phone", True, "job 2 exited 4")
+                    assert (back.options.name, back.read_only, back.message) == ("phone", True, "job 2 exited 4")
                     assert "gone" not in fresh.returning_clients
                     assert back.connection.created == 1000.5
                     # What it was in the middle of, and the prompt holds the keyboard.
@@ -724,44 +748,43 @@ def test_the_table_list_is_the_schema_in_order():
     assert list(tables.TABLES) == made
 
 
-def _as_version_38(path) -> None:
-    "Put the session defaults and each session's own values back as names and values, as 38 kept them."
-    declared = [each for each in SessionOptions.DECLARED.values() if each.attribute in SessionDefaultRow.COLUMNS]
+def _as_version_39(path) -> None:
+    "Put each client's options back as columns of `clients`, as 39 kept them."
     db = apsw.Connection(str(path))
-    db.execute("CREATE TABLE options(name TEXT PRIMARY KEY, value)")
-    for each in declared:
-        db.execute(f"INSERT INTO options SELECT ?, {each.attribute} FROM session_defaults", (each.name,))
-    db.execute("DROP TABLE session_defaults")
-    db.execute("ALTER TABLE session_options RENAME TO new_session_options")
-    db.execute(
-        "CREATE TABLE session_options(session_id INTEGER NOT NULL, name TEXT NOT NULL, value,"
-        " PRIMARY KEY (session_id, name))"
-    )
-    for each in declared:
-        column = each.attribute
+    for attribute in ClientOptionRow.COLUMNS:
+        old = snapshot._OLD_CLIENT_COLUMNS.get(attribute, attribute)
+        db.execute(f"ALTER TABLE clients ADD COLUMN {old}")
         db.execute(
-            f"INSERT INTO session_options SELECT session_id, ?, {column} FROM new_session_options"
-            f" WHERE {column} IS NOT NULL",
-            (each.name,),
+            f"UPDATE clients SET {old} = (SELECT {attribute} FROM client_options o WHERE o.client_id = clients.client_id)"
         )
-    db.execute("DROP TABLE new_session_options")
-    db.execute("PRAGMA user_version = 38")
+    db.execute("DROP TABLE client_options")
+    # 39 left an option a client never announced NULL.
+    db.execute("UPDATE clients SET audio = NULL")
+    db.execute("PRAGMA user_version = 39")
     db.close()
 
 
-def test_a_version_38_snapshot_loads_its_session_options(pymux, tmp_path):
-    "38 kept them as names and values in `options` and `session_options`. Lillecarl/pymux#769."
-    pymux.session_defaults.status_left = "everyone's"
-    pymux.sessions[0].options.status_right = "mine"
-    path = tmp_path / "v38.sqlite"
+def test_a_version_39_snapshot_loads_its_client_options(pymux, tmp_path):
+    "39 kept them as columns of `clients`. Lillecarl/pymux#769."
+    pymux.returning_clients["gone"] = {
+        "session_id": pymux.sessions[0].session_id,
+        "previous_session_id": None,
+        "windows": {},
+        "settings": {"message": "bye"},
+        "options": _values_of(ClientOptions(name="phone", swap_light_and_dark_colors=True, audio=ClientAudio.OFF)),
+    }
+    path = tmp_path / "v39.sqlite"
     snapshot.save(pymux, path)
-    _as_version_38(path)
+    _as_version_39(path)
 
     loaded = Pymux()
     snapshot.load(loaded, path)
 
-    assert loaded.session_defaults.status_left == "everyone's"
-    assert loaded.sessions[0].options.own() == {"status_right": "mine"}
+    options = loaded.returning_clients["gone"]["options"]
+    assert options["name"] == "phone"
+    assert options["swap_light_and_dark_colors"] is True
+    assert options["audio"] is ClientAudio.ON
+    assert loaded.returning_clients["gone"]["settings"]["message"] == "bye"
 
 
 async def test_a_column_this_build_declares_and_the_file_lacks_takes_its_default(pymux, tmp_path):

@@ -129,10 +129,9 @@ def _theme_names() -> list[str]:
     cannot be built is a name nobody can be matched to, and this one
     is the search itself.
     """
-    from pymux.options import ALL_CLIENT_OPTIONS
+    from pymux.client_options import theme_names
 
-    offered = ALL_CLIENT_OPTIONS["theme"].get_all_values(None)
-    return [name for name in offered if name != NEAREST]
+    return [name for name in theme_names() if name != NEAREST]
 
 
 def _candidate(name: str) -> list[Lab] | None:

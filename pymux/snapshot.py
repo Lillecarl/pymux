@@ -51,8 +51,8 @@ from pyte.streams import Stream
 from pyte.titles import Titles
 
 from .arrangement import HSplit, LayoutTypes, Pane, VSplit, Window, _Split, node_key
+from .client_options import ClientOptions
 from .commands.wait_for import WaitChannel
-from .enums import AudioFrame, ClientAudio, FileTransfer, WindowScroll
 from .ids import PaneId, SessionId, WindowId, WindowIndex
 from .jobs import Job, JobFeed, JobId, JobPipes
 from .notifications import Notification, NotificationSource
@@ -69,6 +69,7 @@ from .tables import (
     AppearanceRow,
     ChangedRows,
     ClientModesRow,
+    ClientOptionRow,
     ClientRow,
     ClientWindowRow,
     ColumnWidthRow,
@@ -116,7 +117,7 @@ from .window_options import WindowOptions
 #: The options of each scope a snapshot holds.
 _SAVED: dict[type[Options], tuple[Declared, ...]] = {
     scope: tuple(each for each in scope.DECLARED.values() if each.keep is Keep.SAVED)
-    for scope in (ServerOptions, SessionOptions, WindowOptions)
+    for scope in (ServerOptions, SessionOptions, WindowOptions, ClientOptions)
 }
 
 if TYPE_CHECKING:
@@ -134,59 +135,41 @@ __all__ = [
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 39
+SNAPSHOT_VERSION = 40
 
 
-#: A client's own settings, each a column of `clients` and an attribute
-#: of `ClientState`, with the type sqlite gives back as.
+#: What a client holds besides its options, each a column of `clients`
+#: and an attribute of `ClientState`, with the type sqlite gives back as.
 _CLIENT_SETTING_TYPES: dict[str, type] = {
-    "name": str,
     "last_used": int,
     "read_only": bool,
     "ignore_size": bool,
-    "full_screen": bool,
-    "theme": str,
-    "swap_dark_and_light": bool,
     "message": str,
-    "window_scroll": WindowScroll,
-    "browser_program": str,
-    "browser_profile": str,
-    "audio": ClientAudio,
-    "audio_rtt_multiplier": float,
-    "audio_frame": AudioFrame,
-    "audio_speaker_bitrate": int,
-    "audio_microphone_bitrate": int,
-    "file_transfer": FileTransfer,
 }
 CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
 
 
-def _session_options_move_out() -> str:
+#: The columns of `clients` that 39 kept a client's options in, by the
+#: option's attribute where the name differs.
+_OLD_CLIENT_COLUMNS = {"swap_light_and_dark_colors": "swap_dark_and_light"}
+
+
+def _client_options_move_out() -> str:
     """
-    38 kept the session defaults as names and values in `options`, and
-    each session's own values the same way in `session_options`. 39 gives
-    both a column per option. Lillecarl/pymux#769.
+    39 kept a client's options as columns of `clients`, which a NULL
+    left unset. 40 gives them a table of their own, and
+    `swap-light-and-dark-colors` its attribute's name. Lillecarl/pymux#769.
     """
-    declared = _SAVED[SessionOptions]
-    columns = ", ".join(each.attribute for each in declared)
-    defaults = ",\n  ".join(
-        "coalesce((SELECT value FROM options WHERE name = '%s'), %s)" % (each.name, literal(each.stored(each.default)))
-        for each in declared
-    )
-    own = ",\n  ".join(
-        "%s = (SELECT value FROM old_session_options AS old"
-        " WHERE old.session_id = session_options.session_id AND old.name = '%s')" % (each.attribute, each.name)
-        for each in declared
+    declared = _SAVED[ClientOptions]
+    old = {each.attribute: _OLD_CLIENT_COLUMNS.get(each.attribute, each.attribute) for each in declared}
+    values = ",\n  ".join(
+        "coalesce(%s, %s)" % (old[each.attribute], literal(each.stored(each.default))) for each in declared
     )
     return (
-        SessionDefaultRow.SQL
-        + "INSERT INTO session_defaults(id, %s) SELECT 1,\n  %s;\n" % (columns, defaults)
-        + "DROP TABLE options;\n"
-        + "ALTER TABLE session_options RENAME TO old_session_options;\n"
-        + SessionOptionRow.SQL
-        + "INSERT INTO session_options(session_id) SELECT DISTINCT session_id FROM old_session_options;\n"
-        + "UPDATE session_options SET\n  %s;\n" % own
-        + "DROP TABLE old_session_options;\n"
+        ClientOptionRow.SQL
+        + "INSERT INTO client_options(client_id, %s) SELECT client_id,\n  %s\nFROM clients;\n"
+        % (", ".join(each.attribute for each in declared), values)
+        + "".join("ALTER TABLE clients DROP COLUMN %s;\n" % column for column in old.values())
     )
 
 
@@ -194,7 +177,7 @@ def _session_options_move_out() -> str:
 #: snapshot only ever goes from a running build to the next one, so a
 #: change of shape adds the one step from the version before it and
 #: deletes any older step.
-STEPS: dict[int, str] = {38: _session_options_move_out()}
+STEPS: dict[int, str] = {39: _client_options_move_out()}
 
 #: The fields `ClientState.modes` holds, one JSON value in `client_modes`.
 CLIENT_MODES = frozenset(
@@ -242,7 +225,7 @@ WRITES: dict[str, frozenset[str]] = {
     },
     "pymux.arrangement._Split": frozenset(_Split.KEEP),
     "pymux.arrangement.Pane": frozenset(name for name, fate in Pane.KEEP.items() if fate == Keep.SAVED),
-    "pymux.main.ClientState": frozenset({"session", "previous_session", *CLIENT_SETTINGS, *CLIENT_MODES}),
+    "pymux.main.ClientState": frozenset({"session", "previous_session", "options", *CLIENT_SETTINGS, *CLIENT_MODES}),
     # The record goes by the client's id, in `clients`.
     "pymux.server.ServerConnection": frozenset({"client_state", "created"}),
     "pymux.jobs.JobTable": frozenset({"_jobs", "last_id", "saved_queries", "forgotten_seeds"}),
@@ -778,6 +761,7 @@ def _clients(pymux: Pymux) -> dict[str, dict]:
             "previous_session_id": state.previous_session.session_id if state.previous_session is not None else None,
             "windows": windows,
             "settings": {name: _value(getattr(state, name)) for name in CLIENT_SETTINGS},
+            "options": _values_of(state.options),
             "modes": state.modes(),
             "connected": connection.created,
             "terminal_name": connection.name,
@@ -796,6 +780,7 @@ def _client_rows(pymux: Pymux) -> Iterator[Row]:
             **{name: settings.get(name) for name in CLIENT_SETTINGS},
             terminal_name=client.get("terminal_name"),
         )
+        yield ClientOptionRow(client_id, **_stored_options(ClientOptions, client["options"]))
         for session_id, (active, previous) in sorted(client["windows"].items()):
             yield ClientWindowRow(client_id, session_id, active, previous)
 
@@ -1184,6 +1169,11 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
                 name: _CLIENT_SETTING_TYPES[name](value)
                 for name in CLIENT_SETTINGS
                 if (value := getattr(client, name)) is not None
+            },
+            "options": {
+                attribute: value
+                for row in select(db, ClientOptionRow, "WHERE client_id = ?", client.client_id)
+                for attribute, value in _loaded_options(ClientOptions, row).items()
             },
             "modes": modes.get(client.client_id),
             "connected": client.connected,

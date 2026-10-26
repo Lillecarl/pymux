@@ -50,7 +50,7 @@ def _sender(pymux: Pymux) -> tuple[Pane, ServerConnection]:
     client = pymux.download_client(pane)
     if client is None:
         raise CommandException("Nobody is attached to the session of this pane, so nobody can send a file.")
-    if client.file_transfer is FileTransfer.PASSTHROUGH:
+    if client.options.file_transfer is FileTransfer.PASSTHROUGH:
         raise CommandException("file-transfer is passthrough, and only the pymux client sends a file.")
     connection = client.connection
     if not connection.sends_files:

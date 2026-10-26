@@ -14,7 +14,7 @@ a client that is already attached follows.
 terminal is, so two people on one session, one on a light screen and
 one on a dark one, choose separately. Lillecarl/pymux#223.
 
-**The tests ask the client, not the option.** `client.theme` says what
+**The tests ask the client, not the option.** `client.options.theme` says what
 was set and nothing else; whether a client draws with it is the
 question, and `app.style` is where a client reads it. An application
 that was handed the scheme itself passes every test on the attribute
@@ -136,7 +136,7 @@ async def test_client_draws_with_theme_it_starts_on():
     Lillecarl/pymux#346.
     """
     async with create_client() as (pymux, client):
-        assert client.theme == NEAREST
+        assert client.options.theme == NEAREST
         assert client.theme_in_use == DEFAULT_THEME
         assert bar_of(client.app) == "ansigreen"
 
@@ -162,7 +162,7 @@ async def test_choosing_theme_reaches_client_that_is_attached():
     async with create_client() as (pymux, client):
         pymux.handle_command("set-client-option theme grey")
 
-        assert client.theme == "grey"
+        assert client.options.theme == "grey"
         assert bar_of(client.app) == "5f5f87"
 
 
@@ -399,7 +399,7 @@ async def test_name_that_is_refused_leaves_the_theme_alone():
         with pytest.raises(SetOptionError):
             ALL_CLIENT_OPTIONS["theme"].set_value(pymux, "nosuchtheme")
 
-        assert client.theme == NEAREST
+        assert client.options.theme == NEAREST
 
 
 def test_a_name_is_refused_before_a_client_is_asked_for():

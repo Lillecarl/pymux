@@ -25,6 +25,7 @@ from typing import Any, ClassVar, Final, Protocol
 import apsw
 from pyte.keep import Keep
 
+from .client_options import ClientOptions
 from .option_fields import Options
 from .server_options import ServerOptions
 from .session_options import SessionOptions
@@ -56,7 +57,14 @@ def literal(value: Any) -> str:
 
 
 def options_table(
-    scope: type[Options], name: str, table: str, key: str, references: str | None, *, defaults: bool
+    scope: type[Options],
+    name: str,
+    table: str,
+    key: str,
+    references: str | None,
+    *,
+    defaults: bool,
+    key_type: type = int,
 ) -> type:
     """
     The row class of one scope's options, one column per option, with
@@ -67,7 +75,7 @@ def options_table(
     as not set.
     """
     columns = {}
-    specs: list[Any] = [(key, int)]
+    specs: list[Any] = [(key, key_type)]
     for declared in scope.DECLARED.values():
         if declared.keep is not Keep.SAVED:
             continue
@@ -83,9 +91,10 @@ def options_table(
                 literal(stored),
             )
             specs.append((declared.attribute, kind, field(default=stored)))
-    sql = "CREATE TABLE %s(\n  %s INTEGER PRIMARY KEY%s,\n  %s\n);\n" % (
+    sql = "CREATE TABLE %s(\n  %s %s PRIMARY KEY%s,\n  %s\n);\n" % (
         table,
         key,
+        "TEXT" if key_type is str else "INTEGER",
         "" if references is None else " REFERENCES " + references,
         ",\n  ".join(columns.values()),
     )
@@ -112,8 +121,13 @@ SessionOptionRow = options_table(
     SessionOptions, "SessionOptionRow", "session_options", "session_id", "sessions(session_id)", defaults=True
 )
 
+#: What one client set, by the id it keeps across reattaches.
+ClientOptionRow = options_table(
+    ClientOptions, "ClientOptionRow", "client_options", "client_id", "clients(client_id)", defaults=False, key_type=str
+)
+
 #: The tables `options_table` writes.
-GENERATED = (ServerOptionRow, SessionDefaultRow, SessionOptionRow, WindowDefaultRow, WindowOptionRow)
+GENERATED = (ServerOptionRow, SessionDefaultRow, SessionOptionRow, WindowDefaultRow, WindowOptionRow, ClientOptionRow)
 
 SCHEMA = (
     """
@@ -245,26 +259,15 @@ CREATE TABLE clients(
   client_id TEXT PRIMARY KEY,
   session_id INTEGER REFERENCES sessions(session_id),
   previous_session_id INTEGER REFERENCES sessions(session_id),
-  name TEXT,
   last_used INTEGER,
   read_only INTEGER,
   ignore_size INTEGER,
-  full_screen INTEGER,
-  theme TEXT,
-  swap_dark_and_light INTEGER,
   message TEXT,
-  connected REAL,
-  window_scroll TEXT,
-  browser_program TEXT,
-  browser_profile TEXT,
-  audio TEXT,
-  audio_rtt_multiplier REAL,
-  audio_frame TEXT,
-  audio_speaker_bitrate INTEGER,
-  audio_microphone_bitrate INTEGER,
-  file_transfer TEXT
+  connected REAL
 );
-CREATE TABLE client_windows(
+"""
+    + ClientOptionRow.SQL
+    + """CREATE TABLE client_windows(
   client_id TEXT NOT NULL REFERENCES clients(client_id),
   session_id INTEGER NOT NULL REFERENCES sessions(session_id),
   active_window_id INTEGER REFERENCES windows(window_id),
@@ -412,6 +415,7 @@ TABLES = (
     "split_weights",
     "column_widths",
     "clients",
+    "client_options",
     "client_windows",
     "named_buffers",
     "server_lists",
@@ -642,24 +646,11 @@ class ClientRow:
     client_id: str
     session_id: int | None
     previous_session_id: int | None
-    name: str | None
     last_used: int | None
     read_only: int | None
     ignore_size: int | None
-    full_screen: int | None
-    theme: str | None
-    swap_dark_and_light: int | None
     message: str | None
     connected: float | None
-    window_scroll: str | None
-    browser_program: str | None
-    browser_profile: str | None
-    audio: str | None
-    audio_rtt_multiplier: float | None
-    audio_frame: str | None
-    audio_speaker_bitrate: int | None
-    audio_microphone_bitrate: int | None
-    file_transfer: str | None
     terminal_name: str | None = shown()
 
 
@@ -876,6 +867,7 @@ ROWS = (
     SplitWeightRow,
     ColumnWidthRow,
     ClientRow,
+    ClientOptionRow,
     ClientWindowRow,
     NamedBufferRow,
     ServerListRow,

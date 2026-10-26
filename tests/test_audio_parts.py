@@ -24,6 +24,7 @@ from pymux.audio import (
     pw_cat,
     resolve,
 )
+from pymux.client_options import ClientOptions
 from pymux.enums import AudioFrame, AudioServerMode, ClientAudio
 from pymux.jitter import (
     CEILING_MS,
@@ -38,7 +39,7 @@ from pymux.jitter import (
     stats_every,
 )
 from pymux.main import Pymux
-from pymux.options import AudioBitrateOption, SetOptionError
+from pymux.options import ALL_CLIENT_OPTIONS, SetOptionError
 
 PIPEWIRE = {"pipewire": "/bin/pipewire", "wireplumber": "/bin/wireplumber"}
 
@@ -331,11 +332,7 @@ class _Client:
     def __init__(self, client_id: str, last_used: int, mode: ClientAudio = ClientAudio.ON) -> None:
         self.connection = _Connection(client_id)
         self.last_used = last_used
-        self.audio = mode
-        self.audio_rtt_multiplier = 2.0
-        self.audio_frame = AudioFrame.MS_10
-        self.audio_speaker_bitrate = 128
-        self.audio_microphone_bitrate = 64
+        self.options = ClientOptions(audio=mode, audio_frame=AudioFrame.MS_10)
         self.message = ""
 
 
@@ -381,7 +378,7 @@ def test_sound_goes_to_the_client_used_last(routed):
 
 def test_a_client_with_audio_off_is_never_it(routed):
     server, clients, links = routed
-    clients[1].audio = ClientAudio.OFF
+    clients[1].options.audio = ClientAudio.OFF
     assert server.current() is links["a"]
 
 
@@ -390,7 +387,7 @@ def test_the_microphone_opens_only_for_a_client_that_lends_it(routed):
     server.recording = True
     server._steer_microphone()
     assert links["b"].microphone_open and not links["a"].microphone_open
-    clients[1].audio = ClientAudio.PLAYBACK
+    clients[1].options.audio = ClientAudio.PLAYBACK
     server._steer_microphone()
     assert not links["b"].microphone_open
 
@@ -414,9 +411,9 @@ def test_the_person_is_told_when_their_microphone_is_refused(routed):
 
 def test_a_client_hears_its_options(routed):
     server, clients, links = routed
-    clients[0].audio_rtt_multiplier = 3.5
-    clients[0].audio_speaker_bitrate = 256
-    clients[0].audio_microphone_bitrate = 24
+    clients[0].options.audio_rtt_multiplier = 3.5
+    clients[0].options.audio_speaker_bitrate = 256
+    clients[0].options.audio_microphone_bitrate = 24
     server.client_options_changed()
     assert links["a"].sent[-1] == {"cmd": "audio", "data": "on", "frame": 10.0, "bitrate": 24000}
     assert links["a"].multiplier == 3.5
@@ -543,4 +540,4 @@ def test_an_open_microphone_takes_a_new_bitrate():
 @pytest.mark.parametrize("value", ["5", "511", "fast"])
 def test_a_bitrate_opus_cannot_encode_is_refused(value):
     with pytest.raises(SetOptionError):
-        AudioBitrateOption("audio_speaker_bitrate")._read(value)
+        ALL_CLIENT_OPTIONS["audio-speaker-bitrate"].set_value(Pymux(), value, target=_Client("a", 1))

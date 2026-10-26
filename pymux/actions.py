@@ -259,7 +259,7 @@ def where(client: ClientState | None) -> tuple[str | None, str | None, int | Non
         name = pane.process.get_name()
         program = os.path.basename(name) if name else None
     return (
-        client.name or client.connection.name,
+        client.options.name or client.connection.name,
         session.name,
         window.window_id if window is not None else None,
         pane.pane_id if pane is not None else None,

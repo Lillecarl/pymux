@@ -1579,7 +1579,7 @@ class LayoutManager:
         plane asks it of every watcher, so it reads this client's own
         `full-screen` rather than `Pymux.show_status`.
         """
-        if not self.client_state.session.options.status or self.client_state.full_screen:
+        if not self.client_state.session.options.status or self.client_state.options.full_screen:
             return 0
         return len(self._status_lines())
 

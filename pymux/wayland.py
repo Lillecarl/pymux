@@ -520,7 +520,7 @@ class WaylandServer:
     def _scrolls_smooth(self) -> bool:
         "Whether the client the scroll came from says `window-scroll smooth`."
         client = self.pymux.client_of(get_app())
-        return client is None or client.window_scroll == WindowScroll.SMOOTH
+        return client is None or client.options.window_scroll == WindowScroll.SMOOTH
 
     def pointer(self, toplevel: int, position, button: int | None, pressed: bool, time: int) -> None:
         compositor = self.compositor

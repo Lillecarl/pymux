@@ -139,11 +139,6 @@ def set_option(
             if option.scope is Scope.SESSION and args.g > 1 and option.attribute_name is not None:
                 for session in pymux.sessions:
                     session.options.forget(option.attribute_name)
-            # The colour base of every pane is derived from which theme
-            # owns the screen; `paint-screen` says whether it does.
-            # Lillecarl/pymux#283.
-            if name == "theme":
-                pymux.sync_color_bases()
     except SetOptionError as e:
         raise CommandException(e.message)
 

@@ -1163,7 +1163,7 @@ class ServerConnection:
         reports a theme change later comes through here as well, and
         the match follows it. Lillecarl/pymux#346.
         """
-        if self.client_state is None or self.client_state.theme != NEAREST:
+        if self.client_state is None or self.client_state.options.theme != NEAREST:
             return
 
         found = nearest_theme(wanted_from(self.default_colors))

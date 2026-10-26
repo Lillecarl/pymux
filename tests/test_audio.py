@@ -303,7 +303,7 @@ async def carrying(pymux, devices, client_id="the-client", frame=AudioFrame.MS_1
             await once(lambda: client_id in pymux.audio.links, 10.0, "the client never played sound")
             for client_state in pymux.clients:
                 if getattr(client_state.connection, "client_id", None) == client_id:
-                    client_state.audio_frame = frame
+                    client_state.options.audio_frame = frame
             pymux.audio.client_options_changed()
             await once(lambda: client.audio.frame_ms == frame.ms, 10.0, "the client never heard its frame")
             try:
@@ -482,7 +482,7 @@ async def test_the_server_sizes_both_buffers_from_the_round_trip(tmp_path):
         link = next(iter(pymux.audio.links.values()))
         await once(lambda: len(link.round_trip) >= 3, 10.0, "no echo came back")
         for client_state in pymux.clients:
-            client_state.audio_rtt_multiplier = 1e6
+            client_state.options.audio_rtt_multiplier = 1e6
         pymux.audio.client_options_changed()
         speaker = client.audio.speaker_buffer
         await once(

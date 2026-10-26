@@ -122,7 +122,7 @@ async def test_option_offers_names_and_refuses_others():
         assert "default" in values and "pygments:dracula" in values
 
         ALL_CLIENT_OPTIONS["theme"].set_value(pymux, "pygments:dracula")
-        assert client.theme == "pygments:dracula"
+        assert client.options.theme == "pygments:dracula"
 
         with pytest.raises(SetOptionError):
             ALL_CLIENT_OPTIONS["theme"].set_value(pymux, "pygments:nosuchtheme")
@@ -133,11 +133,11 @@ async def test_option_offers_names_and_refuses_others():
 
 async def test_client_draws_with_pygments_theme_it_is_given():
     """
-    `client.theme` says what was set; whether the client draws with it
+    `client.options.theme` says what was set; whether the client draws with it
     is the question, and `app.style` is where a client reads it.
     """
     async with a_client() as (pymux, client):
-        client.theme = "pygments:dracula"
+        client.options.theme = "pygments:dracula"
 
         assert client.style is pygments_theme("dracula")
         assert client.style.get_attrs_for_style_str("class:statusbar").bgcolor == "ff79c6"

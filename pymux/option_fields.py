@@ -35,11 +35,17 @@ class _Said:
     "What `option()` was told, until `@options` knows the field's name."
 
     doc: str
-    choices: tuple[str, ...]
+    choices: Choices
     parse: Callable[[str], Any] | None
     on_set: Callable[[Pymux, Any], None] | None
     on_write: Callable[[Any], None] | None
+    show: Callable[[Any, Any], str] | None
     keep: Keep
+
+
+#: What Tab offers: a fixed list, or a function that lists them in the
+#: order to offer them, called each time.
+type Choices = tuple[str, ...] | Callable[[], Iterable[str]]
 
 
 def option(
@@ -47,10 +53,11 @@ def option(
     *,
     doc: str,
     factory: Callable[[], Any] | None = None,
-    choices: Iterable[object] = (),
+    choices: Iterable[object] | Callable[[], Iterable[str]] = (),
     parse: Callable[[str], Any] | None = None,
     on_set: Callable[[Pymux, Any], None] | None = None,
     on_write: Callable[[Any], None] | None = None,
+    show: Callable[[Any, Any], str] | None = None,
     keep: Keep = Keep.SAVED,
 ) -> Any:
     """
@@ -59,7 +66,8 @@ def option(
     :param factory: Makes the default when an owner is made, in place
         of `default`: one that reads the environment, such as `$SHELL`.
     :param choices: What Tab offers besides the value it holds. A
-        boolean or an enum offers its own values.
+        boolean or an enum offers its own values. A function is called
+        each time, for a list that is costly to make or that grows.
     :param parse: The written value to what the option holds, or
         `ValueError` with what it takes. Without it the default's type
         decides.
@@ -67,11 +75,14 @@ def option(
         the server and the object the options belong to.
     :param on_write: What the owner does after any write: an invariant
         of its own, which no caller can skip.
+    :param show: What `show-options` prints for a value, given the
+        value and its owner, where the value alone does not say it all.
     :param keep: What a hot upgrade does with it. An option whose truth
         lives elsewhere -- the logger's level, a kernel setting -- is
         `REBUILT`, and the snapshot has no column for it.
     """
-    said = _Said(doc, tuple(str(one) for one in choices), parse, on_set, on_write, keep)
+    listed = choices if callable(choices) else tuple(str(one) for one in choices)
+    said = _Said(doc, listed, parse, on_set, on_write, show, keep)
     if factory is not None:
         return field(default_factory=factory, metadata={_KEY: said})
     return field(default=default, metadata={_KEY: said})
@@ -139,9 +150,10 @@ class Declared:
     attribute: str
     default: Any
     doc: str
-    choices: tuple[str, ...]
+    choices: Choices
     parse: Callable[[str], Any]
     on_set: Callable[[Pymux, Any], None] | None
+    show: Callable[[Any, Any], str] | None
     keep: Keep
 
     def values(self, now: Any = None) -> list[str]:
@@ -150,6 +162,11 @@ class Declared:
             return ["on", "off"]
         if isinstance(self.default, StrEnum):
             return [str(one) for one in type(self.default)]
+        if callable(self.choices):
+            listed = list(self.choices())
+            if now is not None and str(now) not in listed:
+                listed.append(str(now))
+            return listed
         offered = set(self.choices)
         if now is not None:
             offered.add(str(now))
@@ -233,6 +250,7 @@ def options[T: Options](cls: type[T]) -> type[T]:
             choices=said.choices,
             parse=said.parse or _parse_of(default),
             on_set=said.on_set,
+            show=said.show,
             keep=said.keep,
         )
         if said.on_write is not None:

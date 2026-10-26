@@ -621,7 +621,7 @@ async def test_a_scroll_reaches_the_window_as_the_client_says(tmp_path, scroll):
     async with with_a_window(tmp_path) as (pymux, state, pane, _recorder, log, _probe):
         await once(lambda: "drew" in logged(log), 10.0, "the window never drew")
         pymux.session_defaults.mouse = True
-        state.window_scroll = scroll
+        state.options.window_scroll = scroll
         where = await once(
             lambda: state.layout_manager.pane_write_positions.get(pane), 10.0, "the pane was never drawn"
         )

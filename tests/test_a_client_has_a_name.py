@@ -59,14 +59,14 @@ async def test_a_client_announces_the_name_it_was_given():
     async with over_connection() as session:
         state, _ = await session.attach("here", SIZE, client_options=CALLED_DESK)
 
-        assert state.name == "desk"
+        assert state.options.name == "desk"
 
 
 async def test_a_client_that_was_given_none_has_none():
     async with over_connection() as session:
         state, _ = await session.attach("here", SIZE)
 
-        assert state.name == ""
+        assert state.options.name == ""
 
 
 async def test_a_name_can_be_set_while_a_client_runs():
@@ -76,7 +76,7 @@ async def test_a_name_can_be_set_while_a_client_runs():
 
         session.pymux.handle_command("set-client-option name couch")
 
-        assert state.name == "couch"
+        assert state.options.name == "couch"
 
 
 def test_the_flag_is_announced_after_the_file(tmp_path):
@@ -186,7 +186,7 @@ async def test_the_flag_reaches_the_server(monkeypatch, tmp_path):
     empty.write_text("")
 
     async with a_real_client(monkeypatch, empty, "desk") as (pymux, state):
-        assert state.name == "desk"
+        assert state.options.name == "desk"
         assert clients_named(pymux, "desk") == [state]
 
 
@@ -196,7 +196,7 @@ async def test_the_file_reaches_the_server(monkeypatch, tmp_path):
     path.write_text("set-client-option name from-the-file\n")
 
     async with a_real_client(monkeypatch, path, None) as (_pymux, state):
-        assert state.name == "from-the-file"
+        assert state.options.name == "from-the-file"
 
 
 # ----------------------------------------------------------------------

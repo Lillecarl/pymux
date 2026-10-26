@@ -569,13 +569,13 @@ class AudioServer:
 
     def _audio_of(self, link: AudioLink) -> ClientAudio:
         client_state = self._client_of(link)
-        return client_state.audio if client_state is not None else ClientAudio.ON
+        return client_state.options.audio if client_state is not None else ClientAudio.ON
 
     def _tell(self, link: AudioLink) -> None:
         client_state = self._client_of(link)
         if client_state is None:
             return
-        frame = AudioFrame(client_state.audio_frame)
+        frame = AudioFrame(client_state.options.audio_frame)
         if frame is AudioFrame.AUTO:
             # A link that already raised its frame keeps it.
             frame_ms = link.frame_ms if link.adaptive else frame.ms
@@ -584,16 +584,16 @@ class AudioServer:
             frame_ms = frame.ms
             link.adaptive = False
         link.reframe(frame_ms)
-        link.speaker_bitrate = client_state.audio_speaker_bitrate * 1000
+        link.speaker_bitrate = client_state.options.audio_speaker_bitrate * 1000
         link.send(
             {
                 Field.CMD: Packet.AUDIO,
-                Field.DATA: str(client_state.audio),
+                Field.DATA: str(client_state.options.audio),
                 Field.FRAME: frame_ms,
-                Field.BITRATE: client_state.audio_microphone_bitrate * 1000,
+                Field.BITRATE: client_state.options.audio_microphone_bitrate * 1000,
             }
         )
-        link.retarget(client_state.audio_rtt_multiplier)
+        link.retarget(client_state.options.audio_rtt_multiplier)
 
     def raise_frame(self, link: AudioLink, now: float) -> None:
         "An `auto` link cannot keep up: frames one size longer, and the person told."

@@ -39,6 +39,7 @@ from pymux.downloads import (
 from pymux.entry_points.run_pymux import Mode, parse_arguments
 from pymux.enums import FileTransfer
 from pymux.files import ArrivingFiles, Whole, safe_name, save
+from pymux.main import Pymux
 from pymux.options import ALL_CLIENT_OPTIONS, SetOptionError
 from pymux.osc import extension_key_of
 
@@ -193,7 +194,7 @@ def test_only_iterm2_saves_a_download(version, saves):
 
 def test_the_option_takes_its_words_only():
     option = ALL_CLIENT_OPTIONS["file-transfer"]
-    assert sorted(option.get_all_values(None)) == ["auto", "passthrough", "pymux"]
+    assert sorted(option.get_all_values(Pymux())) == ["auto", "passthrough", "pymux"]
 
 
 async def test_the_option_is_one_clients():
@@ -201,8 +202,8 @@ async def test_the_option_is_one_clients():
         a, _ = await session.attach("a", SIZE)
         b, _ = await session.attach("b", SIZE)
         ALL_CLIENT_OPTIONS["file-transfer"].set_value(session.pymux, "pymux", target=a)
-        assert a.file_transfer is FileTransfer.PYMUX
-        assert b.file_transfer is FileTransfer.AUTO
+        assert a.options.file_transfer is FileTransfer.PYMUX
+        assert b.options.file_transfer is FileTransfer.AUTO
         with pytest.raises(SetOptionError):
             ALL_CLIENT_OPTIONS["file-transfer"].set_value(session.pymux, "sideways", target=a)
 

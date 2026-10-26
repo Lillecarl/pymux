@@ -61,6 +61,7 @@ from .arrangement import Arrangement, Pane, Window
 from .audio import AudioServer
 from .browsers import Browsers
 from .client.memory import MemoryClient
+from .client_options import ClientOptions
 from .colors import DefaultColors, theme_color_base
 from .commands import CommandException, call_command_handler, handle_command
 from .commands.completer import create_command_completer
@@ -77,9 +78,7 @@ from .enums import (
     CHOOSE,
     COMMAND,
     PROMPT,
-    AudioFrame,
     Chooser,
-    ClientAudio,
     Clipboard,
     EditingKeys,
     ExtendedKeys,
@@ -89,7 +88,6 @@ from .enums import (
     OpenUrlTarget,
     PaneBrowser,
     RenderMode,
-    WindowScroll,
     WindowSize,
     Woke,
 )
@@ -271,7 +269,7 @@ def _any_of_them_wants_chrome(watchers) -> bool:
     `pymux-pictures` all read a different screen. That is its own
     question, and it is Lillecarl/pymux#474.
     """
-    return not watchers or any(not one.full_screen for one in watchers)
+    return not watchers or any(not one.options.full_screen for one in watchers)
 
 
 def _listens(sock: socket.socket) -> bool:
@@ -323,23 +321,11 @@ class ClientState:
     KEEP: ClassVar[dict[str, Keep]] = {
         "session": Keep.SAVED,
         "previous_session": Keep.SAVED,
-        "name": Keep.SAVED,
+        "options": Keep.SAVED,
         "last_used": Keep.SAVED,
         "read_only": Keep.SAVED,
         "watched_clipboard": Keep.DROPPED,
         "ignore_size": Keep.SAVED,
-        "full_screen": Keep.SAVED,
-        "theme": Keep.SAVED,
-        "swap_dark_and_light": Keep.SAVED,
-        "window_scroll": Keep.SAVED,
-        "browser_program": Keep.SAVED,
-        "browser_profile": Keep.SAVED,
-        "audio": Keep.SAVED,
-        "audio_rtt_multiplier": Keep.SAVED,
-        "audio_frame": Keep.SAVED,
-        "audio_speaker_bitrate": Keep.SAVED,
-        "audio_microphone_bitrate": Keep.SAVED,
-        "file_transfer": Keep.SAVED,
         "matched": Keep.REBUILT,  # the nearest theme to the colours the terminal answers
         # Where the person was: a prefix held, a key table, a prompt,
         # a question, a menu, a chooser.
@@ -402,75 +388,17 @@ class ClientState:
         #: Where this client was before, for `switch-client -l`.
         self.previous_session: Session | None = None
 
-        #: The colour scheme this client draws with, and whether it
-        #: draws it the other way round.
-        #:
-        #: **Both belong to the client and not to the server.** Only a
-        #: client knows what its terminal is: two people on one session,
-        #: one on a light screen and one on a dark one, drew the same
-        #: colours while the server held these. A client announces what
-        #: its own configuration file says when it attaches, and
-        #: `set-client-option` changes one while it runs.
-        #: Lillecarl/pymux#223.
-        #: **The default is the search.** A client that names no theme
-        #: draws in the colours of the terminal it is in: pymux asks
-        #: that terminal what it draws with and takes the known theme
-        #: nearest to the answer. A terminal that answers nothing
-        #: leaves `matched` empty, and then this is `DEFAULT_THEME`,
-        #: which is what pymux looked like before.
-        #: Lillecarl/pymux#346.
-        self.theme = NEAREST
-        self.swap_dark_and_light = False
+        #: What a person set for this terminal. `pymux/client_options.py`
+        #: says why each is the client's and not the server's.
+        self.options = ClientOptions()
+        self.options.owner = self
 
         #: What the search found for this terminal, or None while it
         #: has said nothing. It is not what a person wrote, so it is
         #: kept beside `theme` rather than in it: a client whose
         #: terminal reports a new background is matched again, and
-        #: `show-client-options` says both.
+        #: `show-client-options` says both. Lillecarl/pymux#346.
         self.matched: str | None = None
-
-        #: What a person calls this terminal, or "" when nobody has.
-        #: `ServerConnection.name` is the one pymux derives, and this
-        #: is drawn over it wherever a client is named or selected.
-        #: Lillecarl/pymux#340.
-        self.name = ""
-
-        #: One pane over every cell of this terminal, with nothing
-        #: pymux draws for itself. It hides the status line and the
-        #: pane titlebars without changing the options that ask for
-        #: them, so turning it off gives both back.
-        #:
-        #: **A fact of one terminal, like the theme is.** A person
-        #: watching on a phone drops the chrome while the person
-        #: working keeps it. The plane is shared, so it keeps the rows
-        #: the chrome of any watcher needs and this client draws
-        #: background in them. Lillecarl/pymux#471.
-        self.full_screen = False
-
-        #: What a scroll from this terminal does to a Wayland window: a
-        #: fact of the person's pointing device. Lillecarl/pymux#652.
-        self.window_scroll = WindowScroll.SMOOTH
-
-        #: The browser a program on the server drives on this machine,
-        #: and the profile it runs with: "" for the first one found and
-        #: a profile pymux keeps. Lillecarl/pymux#653.
-        self.browser_program = ""
-        self.browser_profile = ""
-
-        #: Whether this machine plays the panes' sound and lends its
-        #: microphone, and how many round trips of sound it buffers:
-        #: two cover a round trip that doubles. Lillecarl/pymux#657.
-        self.audio = ClientAudio.ON
-        self.audio_rtt_multiplier = 2.0
-        self.audio_frame = AudioFrame.AUTO
-        #: kbit/s of Opus each way: music needs the 128, a voice the 64.
-        #: Lillecarl/pymux#674.
-        self.audio_speaker_bitrate = 128
-        self.audio_microphone_bitrate = 64
-
-        #: Who saves a file a pane sends to the person on this client.
-        #: Lillecarl/pymux#743.
-        self.file_transfer = FileTransfer.AUTO
 
         #: Whether this client only watches. `attach-session -r` sets
         #: it, and nothing clears it: tmux's `-r` only sets as well
@@ -944,7 +872,7 @@ class ClientState:
             style=DynamicStyle(lambda: self.style),
             style_transformation=ConditionalStyleTransformation(
                 SwapLightAndDarkStyleTransformation(),
-                Condition(lambda: self.swap_dark_and_light),
+                Condition(lambda: self.options.swap_light_and_dark_colors),
             ),
             on_invalidate=pymux.client_asked_for_frame,
         )
@@ -1153,8 +1081,8 @@ class ClientState:
         first frame draws in it and a later frame draws in the match.
         Lillecarl/pymux#346.
         """
-        if self.theme != NEAREST:
-            return self.theme
+        if self.options.theme != NEAREST:
+            return self.options.theme
         return self.matched or DEFAULT_THEME
 
     @property
@@ -1727,6 +1655,8 @@ class Pymux:
 
         for name, value in record["settings"].items():
             setattr(client_state, name, value)
+        for name, value in record["options"].items():
+            setattr(client_state.options, name, value)
         self.sync_color_bases()
         if record.get("connected") is not None:
             client_state.connection.created = record["connected"]
@@ -1886,7 +1816,7 @@ class Pymux:
             state = self.get_client_state()
         except ValueError:
             return self.last_used_session.options, False
-        return state.session.options, state.full_screen
+        return state.session.options, state.options.full_screen
 
     def _asking_is_full_screen(self) -> bool:
         """
@@ -1896,7 +1826,7 @@ class Pymux:
         holds the flag now, so with nobody there nobody asked for it.
         """
         try:
-            return self.get_client_state().full_screen
+            return self.get_client_state().options.full_screen
         except ValueError:
             return False
 
@@ -1913,7 +1843,7 @@ class Pymux:
         10% of a one-pane window's neighbour cost.
         Lillecarl/pymux#471.
         """
-        return any(one.full_screen for one in self._client_states.values())
+        return any(one.options.full_screen for one in self._client_states.values())
 
     def any_watcher_shows_pane_status(self, window=None) -> bool:
         """
@@ -3830,7 +3760,7 @@ exec pymux notify -u "$urgency" -- "$@"
         # Only `SshClient` says it can forward, so this is the fact that
         # the client came over SSH.
         terminal_saves = terminal_saves_downloads(client.connection.graphics.terminal_version)
-        route = route_of(client.file_transfer, client.connection.can_forward, terminal_saves)
+        route = route_of(client.options.file_transfer, client.connection.can_forward, terminal_saves)
         refused = None
         if route is FileTransfer.PASSTHROUGH and not terminal_saves:
             refused = "file-transfer is passthrough, and this terminal saves no iTerm2 download"

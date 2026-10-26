@@ -296,7 +296,7 @@ def clients_named(pymux: Pymux, wanted: str) -> list[ClientState]:
         for client_state in pymux.clients
         if wanted
         in (
-            getattr(client_state, "name", ""),
+            client_state.options.name,
             client_state.connection.name,
         )
     ]

@@ -172,7 +172,7 @@ async def test_the_client_draws_with_what_it_announced():
     async with a_server() as pymux:
         client = (await _attached(pymux, [["theme", "grey"]])).client_state
 
-        assert client.theme == "grey"
+        assert client.options.theme == "grey"
         assert client.style.get_attrs_for_style_str("class:statusbar").bgcolor == "5f5f87"
 
 
@@ -184,7 +184,7 @@ async def test_a_client_that_announces_nothing_starts_on_the_search():
     async with a_server() as pymux:
         client = (await _attached(pymux, [])).client_state
 
-        assert client.theme == NEAREST
+        assert client.options.theme == NEAREST
         assert client.theme_in_use == DEFAULT_THEME
 
 
@@ -193,8 +193,8 @@ async def test_two_clients_keep_their_own():
         one = await _attached(pymux, [["theme", "grey"]])
         two = await _attached(pymux, [])
 
-        assert one.client_state.theme == "grey"
-        assert two.client_state.theme == NEAREST
+        assert one.client_state.options.theme == "grey"
+        assert two.client_state.options.theme == NEAREST
 
 
 async def test_a_bad_value_never_fails_the_attach():
@@ -207,10 +207,10 @@ async def test_a_bad_value_never_fails_the_attach():
         client = (await _attached(pymux, [["theme", "nosuchtheme"], ["swap-light-and-dark-colors", "on"]])).client_state
 
         assert client is not None, "the attach was refused"
-        assert client.theme == NEAREST
+        assert client.options.theme == NEAREST
         assert "nosuchtheme" in (client.message or "")
         # And the line after the bad one still ran.
-        assert client.swap_dark_and_light is True
+        assert client.options.swap_light_and_dark_colors is True
 
 
 def test_the_server_reads_the_same_line_and_does_nothing(tmp_path):

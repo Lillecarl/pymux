@@ -328,7 +328,7 @@ async def test_theme_that_owns_screen_gives_pane_its_palette():
     """
     async with a_client() as (pymux, client):
         pymux.session_defaults.paint_screen = True
-        client.theme = "pygments:dracula"
+        client.options.theme = "pygments:dracula"
         pane = SimpleNamespace(screen=Screen(24, 80, write_process_input=lambda data: None))
 
         pymux.tell_pane_about_colours(pane)

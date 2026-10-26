@@ -140,8 +140,9 @@ SEEDS = [
             (
                 "client",
                 (
-                    "SELECT coalesce(nullif(c.name, ''), c.terminal_name) AS word, s.session_name AS says"
-                    " FROM live.clients c LEFT JOIN live.sessions s USING (session_id)"
+                    "SELECT coalesce(nullif(o.name, ''), c.terminal_name) AS word, s.session_name AS says"
+                    " FROM live.clients c LEFT JOIN live.client_options o USING (client_id)"
+                    " LEFT JOIN live.sessions s USING (session_id)"
                     " WHERE c.terminal_name IS NOT NULL ORDER BY c.connected"
                 ),
             ),

@@ -161,7 +161,7 @@ async def test_a_client_takes_the_theme_of_its_terminal():
     "The whole of Lillecarl/pymux#346, over a connection."
     async with over_connection() as session:
         state, _ = await session.attach("here", SIZE)
-        assert state.theme == NEAREST
+        assert state.options.theme == NEAREST
         assert state.theme_in_use == DEFAULT_THEME
 
         for index, colour in enumerate(_palette_of("base16:gruvbox-dark-hard")):
@@ -179,7 +179,7 @@ async def test_a_client_that_named_a_theme_is_left_alone():
 
         _reply(state.connection, "11", roles_of("base16:gruvbox-dark-hard")["pane"])
 
-        assert state.theme == "grey"
+        assert state.options.theme == "grey"
         assert state.theme_in_use == "grey"
         assert state.matched is None
 

@@ -113,7 +113,7 @@ async def test_taking_a_client_row_changes_this_client():
             state.layout_manager.choose_pointed_option()
             pymux.handle_command(state.prompt_command.replace("%", "on"))
 
-            assert pymux.the_client_to_tell().full_screen is True
+            assert pymux.the_client_to_tell().options.full_screen is True
 
 
 async def test_a_window_option_is_set_by_its_own_command():

@@ -670,7 +670,7 @@ def _client_name(context: FormatContext) -> str:
     thing a person can paste into a command. Lillecarl/pymux#340.
     """
     client = context.client
-    chosen = client.name if client is not None else ""
+    chosen = client.options.name if client is not None else ""
     return chosen or _client_tty(context)
 
 

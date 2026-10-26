@@ -242,19 +242,19 @@ async def test_a_read_only_client_may_set_its_own_terminal_up():
             session.pymux.handle_command("set-client-option theme grey")
 
         assert watching.message != "client is read-only"
-        assert watching.theme == "grey"
+        assert watching.options.theme == "grey"
 
 
 async def test_a_read_only_client_cannot_set_somebody_else_up():
     async with over_connection() as session:
         working, watching = await _two_clients(session)
-        was = working.theme
+        was = working.options.theme
 
         with set_app(watching.app):
             session.pymux.handle_command("set-client-option -t %s theme grey" % (working.connection.name,))
 
         assert watching.message == "client is read-only"
-        assert working.theme == was
+        assert working.options.theme == was
 
 
 async def test_a_read_only_client_may_still_read_the_clients():
