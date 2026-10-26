@@ -37,6 +37,11 @@ def run_job(pymux: Pymux, args: argparse.Namespace):
     terminal instead of pipes, for the command that needs one to
     behave; the waiting and the reading stay the same, with the whole
     terminal output in the stdout tail.
+
+    **A job runs as the user the server runs as, with nothing around
+    it.** Whoever can reach the server's socket can run anything that
+    user can; an agent that submits a job is that user. pymux is not
+    a sandbox and does not supervise: systemd does that better.
     """
     # The command is the rest of the line, whatever words it holds.
     # Several words go back together, with the quoting the shell
