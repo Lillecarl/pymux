@@ -220,7 +220,7 @@ async def test_the_session_switch_moves_the_window(pymux):
     assert pymux.session_of_window(moving) is pymux.get_session("work")
     assert moving.index == 2
 
-    assert await run(pymux, "move-window", "-s", "work:2", "--session", "home", "-t", "7") == []
+    assert await run(pymux, "move-window", "-s", "work:2", "-S", "home", "-t", "7") == []
     assert pymux.session_of_window(moving) is pymux.get_session("home")
     assert moving.index == 7
 

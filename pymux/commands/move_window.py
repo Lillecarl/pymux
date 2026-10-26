@@ -119,6 +119,7 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         help="The index to move to, with an optional session in front (`work:5`). A session alone (`work:`) takes the next free index there.",
     )
     parser.add_argument(
+        "-S",
         "--session",
         dest="session",
         metavar="<target-session>",
