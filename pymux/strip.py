@@ -57,7 +57,7 @@ from dataclasses import dataclass, field
 from prompt_toolkit.data_structures import Point, Size
 
 from . import arrangement
-from .plane import GROUND, Line, Pane, Plan, Rect, Slot, View
+from .plane import GROUND, Line, Pane, Plan, Rect, Seam, Slot, View
 from .tiling import BORDER_VERTICAL, Gaps, lay_out
 
 __all__ = ["Strip"]
@@ -147,7 +147,10 @@ class Strip:
         # Every line down a column runs the height of the tallest one,
         # because a stack of more panes than rows runs past the bottom.
         height = max((rect.bottom for _, rect in rects), default=0)
-        lines.extend(Line(Rect(x=right, y=0, width=gap, height=height), BORDER_VERTICAL) for right in rights)
+        lines.extend(
+            Line(Rect(x=right, y=0, width=gap, height=height), BORDER_VERTICAL, Seam(self.window.root, index))
+            for index, right in enumerate(rights)
+        )
 
         # Insertion order is reading order here, because the columns go
         # on left to right and a column's panes go on top to bottom.

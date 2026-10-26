@@ -132,6 +132,7 @@ from .wayland import WaylandServer
 from .window_pane import WindowWidget, is_window_pane
 
 if TYPE_CHECKING:
+    from .border_drag import BorderDrag
     from .pipes.posix import PosixSocketListener
     from .url_mode import UrlMode
 
@@ -331,6 +332,7 @@ class ClientState:
         # a question, a menu, a chooser.
         "has_prefix": Keep.SAVED,
         "url_mode": Keep.DROPPED,
+        "border_drag": Keep.DROPPED,
         "key_tables": Keep.SAVED,
         "message": Keep.SAVED,
         "confirmations": Keep.SAVED,
@@ -426,6 +428,10 @@ class ClientState:
 
         #: The labels `show-urls` put over a pane, while they are up.
         self.url_mode: UrlMode | None = None
+
+        #: The line between two panes this client is dragging, from the
+        #: press to the release. Lillecarl/pymux#772.
+        self.border_drag: BorderDrag | None = None
 
         #: Ticks of the input this client sent against ticks of the
         #: frames it asked for. A redraw is scheduled, and input

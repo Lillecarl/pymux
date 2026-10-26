@@ -35,8 +35,9 @@ answer, which is the whole point of the work.
 from __future__ import annotations
 
 from collections.abc import Callable
+from functools import partial
 from time import monotonic
-from typing import override
+from typing import TYPE_CHECKING, override
 
 from prompt_toolkit.application import get_app
 from prompt_toolkit.data_structures import Point, Size
@@ -46,6 +47,10 @@ from prompt_toolkit.layout.containers import Container, to_container
 from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.layout.mouse_handlers import MouseHandlers
 from prompt_toolkit.layout.screen import Char, Screen, WritePosition
+from prompt_toolkit.mouse_events import MouseEvent
+
+if TYPE_CHECKING:
+    from prompt_toolkit.key_binding.key_bindings import NotImplementedOrNone
 
 from .plane import Line, Pane, Plan, Rect, View
 
@@ -95,7 +100,14 @@ class PlanContainer(Container):
         room=None,
         glide_time: Callable[[], float] = lambda: 0.0,
         clock: Callable[[], float] | None = None,
+        on_line: Callable[[Line, MouseEvent], NotImplementedOrNone] | None = None,
+        line_z_index: int = 0,
     ) -> None:
+        #: Hears the mouse over a line that has a seam, from a draw at
+        #: `line_z_index`: a bar a pane draws over the line comes later
+        #: than the line, and would take its cells. Lillecarl/pymux#772.
+        self.on_line = on_line
+        self.line_z_index = line_z_index
         #: How long the view takes to glide to a new place, in seconds,
         #: as a callable because an option sets it while this stands.
         self.glide_time = glide_time
@@ -172,7 +184,7 @@ class PlanContainer(Container):
         shown = self._glide()
         view = self.view.shown_rect
 
-        self._draw_lines(self.plan.lines, screen, write_position, parent_style, view)
+        self._draw_lines(self.plan.lines, screen, mouse_handlers, write_position, parent_style, view, z_index)
 
         # **Told before culled, and over every slot.** A pane under a
         # higher plane still has a pty and a size it comes back to, so
@@ -236,9 +248,11 @@ class PlanContainer(Container):
         self,
         lines: tuple[Line, ...],
         screen: Screen,
+        mouse_handlers: MouseHandlers,
         write_position: WritePosition,
         parent_style: str,
         view: Rect,
+        z_index: int | None,
     ) -> None:
         """
         Fill the gaps the layout left, with the lines of its plan.
@@ -256,6 +270,7 @@ class PlanContainer(Container):
         """
         style = (parent_style + " class:border").strip()
         measure = screen.max_column_index
+        handled = []
 
         for line in lines:
             if not line.rect.overlaps(view):
@@ -266,6 +281,16 @@ class PlanContainer(Container):
             left = write_position.xpos + line.rect.x - view.x
 
             right = left + line.rect.width - 1
+            if self.on_line is not None and line.seam is not None:
+                handled.append(
+                    (
+                        max(left, write_position.xpos),
+                        min(right + 1, write_position.xpos + write_position.width),
+                        max(top, write_position.ypos),
+                        min(top + line.rect.height, write_position.ypos + write_position.height),
+                        partial(self.on_line, line),
+                    )
+                )
             for y in range(top, top + line.rect.height):
                 row = screen.data_buffer[y]
                 for x in range(left, right + 1):
@@ -279,6 +304,16 @@ class PlanContainer(Container):
                     measure[y] = screen_module._last_column(row)
                 elif reached < right:
                     measure[y] = right
+
+        if handled:
+
+            def handle() -> None:
+                for region in handled:
+                    mouse_handlers.set_mouse_handler_for_range(*region)
+
+            # The parent's z plus the lines', as a pane's bars take the
+            # parent's plus theirs: a body drawn late draws them again.
+            screen.draw_with_z_index(z_index=(z_index or 0) + self.line_z_index, draw_func=handle)
 
     def _glide(self) -> Point:
         """

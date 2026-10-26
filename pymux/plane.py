@@ -74,6 +74,7 @@ __all__ = [
     "Line",
     "Plan",
     "Rect",
+    "Seam",
     "Side",
     "Slot",
     "View",
@@ -259,6 +260,34 @@ class Line(NamedTuple):
 
     rect: Rect
     char: str
+    #: What a drag on the line moves. None for a line nothing moves.
+    seam: Seam | None = None
+
+
+class Seam:
+    """
+    What a line divides: the child of `split` at `index` and the one
+    after it. A strip's line divides a column from the room past it.
+
+    **Equal by the split's identity**, not its contents: a plan is
+    compared with the last one on every frame, and a split is a list
+    of everything under it. Lillecarl/pymux#772.
+    """
+
+    __slots__ = ("index", "split")
+
+    def __init__(self, split: object, index: int) -> None:
+        self.split = split
+        self.index = index
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, Seam) and self.split is other.split and self.index == other.index
+
+    def __hash__(self) -> int:
+        return hash((id(self.split), self.index))
+
+    def __repr__(self) -> str:
+        return "Seam(%s, %d)" % (type(self.split).__name__, self.index)
 
 
 class View:

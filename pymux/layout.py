@@ -60,6 +60,7 @@ from prompt_toolkit.widgets import Dialog, SearchToolbar, TextArea
 from pymux import arrangement
 
 from .actions import Kind, Origin, note, started_by
+from .border_drag import DragCapture, holds_window_panes, press_on_line
 from .cut_shade import Hidden, hex_of, hidden_of, lifts, shade
 from .divided import Divided
 from .enums import Chooser, EditingKeys, Justify, Woke
@@ -71,6 +72,7 @@ from .plane import Plan, Side, View, bounding_box
 from .strip import Strip
 from .tiling import BORDER_WIDTH, Gaps
 from .titlebar import PaneTitleBar
+from .window_pane import WindowWidget
 from .zoomed import Zoomed
 
 if TYPE_CHECKING:
@@ -183,11 +185,15 @@ class Z_INDEX:
     #: Lillecarl/pymux#339.
     CONFIRMATION = 8
     WINDOW_TITLE_BAR = 9
-    POPUP = 10
-    OVERLAY = 11
+    #: The mouse handlers of the lines between panes, over the bars a
+    #: stacked pane draws on its line and under every popup. They draw
+    #: nothing. Lillecarl/pymux#772.
+    BORDER_LINE = 10
+    POPUP = 11
+    OVERLAY = 12
     #: Over everything a person works in, because it is about all of
     #: it, and gone in seconds. Lillecarl/pymux#241.
-    ERROR_NOTICE = 12
+    ERROR_NOTICE = 13
 
     #: A clock and a pane number are drawn inside the pane they belong
     #: to, over the content of that pane. Nothing else draws in those
@@ -201,6 +207,9 @@ class Z_INDEX:
     #: Over the pane and over the clock and the numbers: a label is
     #: what the person is reading while the mode is up.
     URL_LABEL = 101
+    #: Last, so its mouse handler is the one every cell keeps while a
+    #: line is dragged. It draws nothing. Lillecarl/pymux#772.
+    DRAG_CAPTURE = 1000
 
 
 #: Where the panes of one render were drawn. It hangs on the screen of
@@ -2502,6 +2511,15 @@ class LayoutManager:
             floats=[
                 # It draws where each link is, and not in its own box.
                 Float(top=0, left=0, transparent=True, content=UrlLabels(self.client_state)),
+                Float(
+                    top=0,
+                    left=0,
+                    right=0,
+                    bottom=0,
+                    transparent=True,
+                    z_index=Z_INDEX.DRAG_CAPTURE,
+                    content=DragCapture(self.pymux, self.client_state),
+                ),
                 # That an error was logged, and where. It takes no focus
                 # and hides no cursor: a person typing in the pane under
                 # it keeps both. Lillecarl/pymux#241.
@@ -2901,13 +2919,20 @@ def _create_panes(pymux: Pymux, window, view: View) -> PlanContainer:
     """
     containers = {pane: _create_container_for_process(pymux, window, pane) for pane in window.panes}
 
+    def tell_its_size(pane: arrangement.Pane, rect) -> None:
+        if isinstance(pane.terminal, WindowWidget) and holds_window_panes(pymux, window):
+            return
+        _tell_pane_its_size(pane, rect)
+
     return PlanContainer(
         layout_of(pymux, window),
         containers,
-        _tell_pane_its_size,
+        tell_its_size,
         view=view,
         room=partial(room_for_panes, pymux, window),
         glide_time=lambda: pymux.current_session.options.strip_animation_time / 1000,
+        on_line=partial(press_on_line, pymux, window),
+        line_z_index=Z_INDEX.BORDER_LINE,
     )
 
 

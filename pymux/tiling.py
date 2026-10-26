@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import NamedTuple
 
 from . import arrangement
-from .plane import Line, Rect, Slot, bounding_box
+from .plane import Line, Rect, Seam, Slot, bounding_box
 
 __all__ = ["BORDER_WIDTH", "Gaps", "lay_out", "shares"]
 
@@ -101,9 +101,9 @@ def lay_out(item, rect: Rect, gaps: Gaps, into: list, lines: list | None = None)
         # it says so itself.
         if lines is not None and place < len(item) - 1:
             if sideways:
-                lines.append(Line(Rect(at, rect.y, gap, rect.height), BORDER_VERTICAL))
+                lines.append(Line(Rect(at, rect.y, gap, rect.height), BORDER_VERTICAL, Seam(item, place)))
             else:
-                lines.append(Line(Rect(rect.x, at, rect.width, gap), BORDER_HORIZONTAL))
+                lines.append(Line(Rect(rect.x, at, rect.width, gap), BORDER_HORIZONTAL, Seam(item, place)))
 
         at += gap
 
