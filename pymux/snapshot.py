@@ -55,7 +55,7 @@ from .commands.wait_for import WaitChannel
 from .enums import AudioFrame, ClientAudio, FileTransfer, WindowScroll
 from .ids import PaneId, SessionId, WindowId, WindowIndex
 from .jobs import Job, JobFeed, JobId, JobPipes
-from .notifications import Notification
+from .notifications import Notification, NotificationSource
 from .options import ALL_OPTIONS, ALL_SERVER_OPTIONS
 from .pipes.posix import PosixSocketListener
 from .session import Session, SessionOptions
@@ -121,7 +121,7 @@ __all__ = [
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 35
+SNAPSHOT_VERSION = 36
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -152,15 +152,9 @@ CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
 #: change of shape adds the one step from the version before it and
 #: deletes any older step.
 STEPS: dict[int, str] = {
-    # 35 keeps each window's activity, silence and notification marks
-    # and the monitors that raise them. Lillecarl/pymux#767.
-    34: """
-ALTER TABLE windows ADD COLUMN monitor_activity INTEGER NOT NULL DEFAULT 1;
-ALTER TABLE windows ADD COLUMN monitor_silence INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE windows ADD COLUMN monitor_notification INTEGER NOT NULL DEFAULT 1;
-ALTER TABLE windows ADD COLUMN activity INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE windows ADD COLUMN silence INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE windows ADD COLUMN notified INTEGER NOT NULL DEFAULT 0;
+    # 36 keeps what each notification came through. Lillecarl/pymux#768.
+    35: """
+ALTER TABLE notifications ADD COLUMN source TEXT NOT NULL DEFAULT '';
 """,
 }
 
@@ -229,7 +223,8 @@ WRITES: dict[str, frozenset[str]] = {
             "_window_history_for_cli",
         }
     ),
-    "pymux.arrangement.Window": frozenset(Window.KEEP) - {"_revisions_seen", "_quiet_since", "_silence_armed"},
+    "pymux.arrangement.Window": frozenset(Window.KEEP)
+    - {"_revisions_seen", "_quiet_since", "_silence_armed", "seen_at"},
     "pymux.arrangement._Split": frozenset(_Split.KEEP),
     "pymux.arrangement.Pane": frozenset(name for name, fate in Pane.KEEP.items() if fate == Keep.SAVED),
     "pymux.main.ClientState": frozenset({"session", "previous_session", *CLIENT_SETTINGS, *CLIENT_MODES}),
@@ -584,9 +579,9 @@ def rows_of(pymux: Pymux) -> Iterator[Row]:
     # has the identifier its chunks name instead.
     center = pymux.notification_center
     for position, record in enumerate(center._records):
-        yield NotificationRow(*record, position=position, identifier=None)
+        yield NotificationRow(*record[:-1], position=position, identifier=None, source=record.source)
     for (_pane_id, identifier), record in center._pending.items():
-        yield NotificationRow(*record, position=None, identifier=identifier)
+        yield NotificationRow(*record[:-1], position=None, identifier=identifier, source=record.source)
     for name, (sql, description) in sorted(pymux.jobs.saved_queries.items()):
         yield SavedQueryRow(name, sql, description)
     for name in sorted(pymux.jobs.forgotten_seeds):
@@ -985,7 +980,9 @@ def _read_notifications(pymux: Pymux, db: apsw.Connection, counters: dict[str, i
     center._next = counters["notification"]
     for row in select(db, NotificationRow, "ORDER BY position"):
         pane_id = PaneId(row.pane_id) if row.pane_id is not None else None
-        record = Notification(row.notification_id, row.title, row.body, row.urgency, pane_id, row.at)
+        record = Notification(
+            row.notification_id, row.title, row.body, row.urgency, pane_id, row.at, NotificationSource(row.source)
+        )
         if row.identifier is None:
             center._records.append(record)
         else:

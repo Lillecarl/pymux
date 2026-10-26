@@ -236,6 +236,7 @@ CREATE TABLE notifications(
   at REAL NOT NULL,
   position INTEGER UNIQUE,
   identifier TEXT,
+  source TEXT NOT NULL DEFAULT '',
   CHECK ((position IS NULL) != (identifier IS NULL))
 );
 CREATE TABLE notification_routes(
@@ -688,6 +689,7 @@ class NotificationRow:
     at: float
     position: int | None
     identifier: str | None
+    source: str
 
 
 @dataclass(frozen=True, slots=True)

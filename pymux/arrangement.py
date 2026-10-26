@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import math
 import os
+import time
 from collections.abc import Iterable
 from enum import Enum
 from typing import TYPE_CHECKING, ClassVar
@@ -383,6 +384,7 @@ class Window:
         "_revisions_seen": Keep.DROPPED,  # the next image's panes count from zero
         "_quiet_since": Keep.DROPPED,
         "_silence_armed": Keep.DROPPED,
+        "seen_at": Keep.DROPPED,  # the marks it qualifies are saved
         "tags": Keep.SAVED,
     }
 
@@ -480,6 +482,10 @@ class Window:
         #: Output came after the last silence mark, so the next quiet
         #: spell is news.
         self._silence_armed = False
+        #: When a client last looked, in `time.time()` like a
+        #: notification's `at`: the hub reads a newer one as unread.
+        #: Lillecarl/pymux#768.
+        self.seen_at = 0.0
 
         # Give unique ID.
         Window._window_counter += 1
@@ -667,6 +673,7 @@ class Window:
     def seen(self) -> None:
         "A client looks at this window now, so its marks and its active pane's bell are heard."
         self.bell = self.activity = self.silence = self.notified = False
+        self.seen_at = time.time()
         if self._active_pane is not None:
             self._active_pane.bell = False
 

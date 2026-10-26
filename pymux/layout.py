@@ -5,8 +5,8 @@ The layout engine. This builds the prompt_toolkit layout.
 from __future__ import annotations
 
 import argparse
-import datetime
 import os
+import time
 import weakref
 from collections.abc import Callable
 from functools import partial
@@ -1267,10 +1267,9 @@ class LayoutManager:
                 return names
             return [name for name in names if text in name.lower() or text in option_value_of(self.pymux, name).lower()]
         if kind is Chooser.NOTIFICATIONS:
-            records = list(reversed(self.pymux.notification_center.notifications()))
-            if not text:
-                return records
-            return [record for record in records if text in record.title.lower() or text in record.body.lower()]
+            from pymux.hub import rows_of
+
+            return rows_of(self.pymux, self.pymux.notification_center.notifications(), text)
         if kind is Chooser.JOB:
             from pymux.jobs import describe
 
@@ -1383,15 +1382,18 @@ class LayoutManager:
 
     def choose_pointed_notification(self) -> None:
         """
-        Take this client to the pane the pointed notification came
-        from. The hub closes either way; a pane that is gone, or a
-        notification no pane sent, leaves a message saying so instead
-        of moving.
+        Take this client to the pane the pointed row came from: a
+        message's own, or a heading's newest. The hub closes either
+        way; a pane that is gone, or a notification no pane sent,
+        leaves a message saying so instead of moving.
         """
-        record = self.pointed()
+        from pymux.hub import Heading
+
+        row = self.pointed()
         self.client_state.chooser = None
-        if record is None:
+        if row is None:
             return
+        record = row.newest if isinstance(row, Heading) else row.record
         found = self.pymux.window_of_pane(record.pane_id)
         if found is None:
             self.client_state.message = "The pane the notification came from is gone."
@@ -2173,34 +2175,47 @@ class LayoutManager:
 
     def _choose_notification_tokens(self) -> StyleAndTextTuples:
         """
-        The notifications, newest first: when each arrived, what it
-        says, and which pane it came from. The row the chooser points
-        at carries the gutter arrow and stands out, and a row answers
-        a click by jumping to its pane.
+        The hub: a heading for each window that sent something, newest
+        first, and its messages under it. A dot says unread, which is
+        the window's notification mark. A heading says the window, the
+        program and the directory its shell reported; a message says
+        what it said, how often in a row, and what it came through.
+        A row answers a click by jumping to its pane.
+        Lillecarl/pymux#768.
         """
-        matches = self.chooser_matches()
-        if not matches:
+        from pymux.hub import Heading, age, heading_text
+
+        rows = self.chooser_matches()
+        if not rows:
             return [("class:chooser.hint", " No notifications. ")]
 
-        chosen = self._pointed_index(len(matches))
+        now = time.time()
+        chosen = self._pointed_index(len(rows))
         tokens: StyleAndTextTuples = []
-        for i, record in enumerate(matches):
-            style = "class:chooser.selected" if i == chosen else "class:commandpalette"
-            when = datetime.datetime.fromtimestamp(record.at).strftime("%H:%M:%S")
+        for i, row in enumerate(rows):
+            pointed = i == chosen
+            gutter = "> " if pointed else "  "
+            dot = "\u25cf " if row.unread else "  "
+            handler = self._create_chooser_click_handler(i)
+            if isinstance(row, Heading):
+                text = heading_text(row)
+                where = self._where_pane_is(row.newest.pane_id)
+                if where:
+                    text += " " + where
+                style = "class:chooser.selected" if pointed else "class:chooser.session"
+                tokens.append((style, "%s%s%s  %s\n" % (gutter, dot, text, age(now - row.newest.at)), handler))
+                continue
+            record = row.record
             text = record.title
             if record.body:
-                text += " - " + record.body
-            source = "%%%d" % record.pane_id if record.pane_id is not None else "-"
-            where = self._where_pane_is(record.pane_id)
-            if where:
-                source += " " + where
-            tokens.append(
-                (
-                    style,
-                    "%s%s %s (%s)\n" % ("> " if i == chosen else "  ", when, text[:120], source),
-                    self._create_chooser_click_handler(i),
-                )
-            )
+                text += " - " + record.body if text else record.body
+            if row.count > 1:
+                text += " \u00d7%d" % row.count
+            style = "class:chooser.selected" if pointed else "class:commandpalette"
+            tokens.append((style, "%s%s  %s" % (gutter, dot, text[:120]), handler))
+            if record.source:
+                tokens.append((style if pointed else "class:chooser.hint", "  " + record.source, handler))
+            tokens.append((style, "\n", handler))
         return tokens
 
     def _where_pane_is(self, pane_id) -> str:

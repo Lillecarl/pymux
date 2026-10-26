@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
 
 from pymux.commands import CommandParser, add_command
-from pymux.notifications import Urgency
+from pymux.notifications import NotificationSource, Urgency
 
 
 def notify(pymux: Pymux, args: argparse.Namespace) -> None:
@@ -31,7 +31,9 @@ def notify(pymux: Pymux, args: argparse.Namespace) -> None:
     except Exception:
         pane_id = None
 
-    pymux.notification_center.add(title=args.title, body=args.body, urgency=urgency, pane_id=pane_id)
+    pymux.notification_center.add(
+        title=args.title, body=args.body, urgency=urgency, pane_id=pane_id, source=NotificationSource.COMMAND
+    )
 
 
 def register(subparsers: argparse._SubParsersAction[CommandParser]):

@@ -99,7 +99,7 @@ from .key_spelling import why_pane_cannot_read
 from .layout import Justify, LayoutManager, change_pane_size
 from .log import logger
 from .nearest import NEAREST
-from .notifications import Notification, NotificationCenter, NotificationRoutes, Urgency
+from .notifications import Notification, NotificationCenter, NotificationRoutes, NotificationSource, Urgency
 from .options import (
     ALL_CLIENT_OPTIONS,
     ALL_OPTIONS,
@@ -3843,7 +3843,7 @@ exec pymux notify -u "$urgency" -- "$@"
                 if notice is None:
                     return
                 title, body = notice
-                self.notification_center.add(title, body, pane_id=pane.pane_id)
+                self.notification_center.add(title, body, pane_id=pane.pane_id, source=NotificationSource.OSC_777)
 
             sequence = build_osc(code, param)
             if sequence is None:
@@ -3998,6 +3998,7 @@ exec pymux notify -u "$urgency" -- "$@"
                     "With fireworks." if value == "fireworks" else "",
                     Urgency.CRITICAL if value == "yes" else Urgency.NORMAL,
                     pane.pane_id,
+                    NotificationSource.ATTENTION,
                 )
             return True
 

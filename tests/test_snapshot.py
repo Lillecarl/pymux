@@ -34,7 +34,7 @@ from pymux.commands.wait_for import WaitChannel
 from pymux.enums import Chooser, WindowCodec, WindowSize
 from pymux.jobs import JobFeed, JobPipes
 from pymux.main import Pymux
-from pymux.notifications import Urgency
+from pymux.notifications import NotificationSource, Urgency
 from pymux.query import ask
 
 
@@ -697,28 +697,21 @@ def test_the_table_list_is_the_schema_in_order():
     assert list(tables.TABLES) == made
 
 
-async def test_a_version_34_snapshot_loads_with_the_monitors_on(pymux, tmp_path):
-    """
-    34 had no marks but the bell. Its windows load with activity and
-    notifications watched, as a new window starts. Lillecarl/pymux#767.
-    """
-    path = tmp_path / "v34.sqlite"
-    async with pymux.running():
-        window = await pymux.create_window("sleep 30")
-        window.monitor_activity = False
-        snapshot.save(pymux, path)
+def test_a_version_35_snapshot_loads_its_notifications_with_no_source(pymux, tmp_path):
+    "35 kept no source; its records say so with the empty one. Lillecarl/pymux#768."
+    pymux.notification_center.add("Built", source=NotificationSource.COMMAND)
+    path = tmp_path / "v35.sqlite"
+    snapshot.save(pymux, path)
     db = apsw.Connection(str(path))
-    for column in ("monitor_activity", "monitor_silence", "monitor_notification", "activity", "silence", "notified"):
-        db.execute("ALTER TABLE windows DROP COLUMN %s" % (column,))
-    db.execute("PRAGMA user_version = 34")
+    db.execute("ALTER TABLE notifications DROP COLUMN source")
+    db.execute("PRAGMA user_version = 35")
     db.close()
 
     loaded = Pymux()
     snapshot.load(loaded, path)
 
-    window = loaded.sessions[0].arrangement.windows[0]
-    assert (window.monitor_activity, window.monitor_silence, window.monitor_notification) == (True, 0, True)
-    assert not (window.activity or window.silence or window.notified)
+    (record,) = loaded.notification_center.notifications()
+    assert (record.title, record.source) == ("Built", NotificationSource.UNKNOWN)
 
 
 def test_a_session_s_own_value_survives_and_the_rest_follow_the_default(pymux, tmp_path):

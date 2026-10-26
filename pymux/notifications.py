@@ -24,6 +24,7 @@ import re
 import time
 from collections import OrderedDict
 from collections.abc import Callable
+from enum import StrEnum
 from typing import NamedTuple
 
 from pymux.ids import PaneId
@@ -68,6 +69,20 @@ def read_payload_type(metadata: str) -> str:
     return "title"
 
 
+class NotificationSource(StrEnum):
+    """
+    What a notification came through, so the hub can say it: which
+    programs use which is still being learned. Lillecarl/pymux#768.
+    """
+
+    #: A record from before the hub kept this.
+    UNKNOWN = ""
+    OSC_99 = "osc 99"
+    OSC_777 = "osc 777"
+    ATTENTION = "osc 1337"
+    COMMAND = "pymux notify"
+
+
 class Notification(NamedTuple):
     """One notification the hub shows, oldest stored first."""
 
@@ -77,6 +92,7 @@ class Notification(NamedTuple):
     urgency: int
     pane_id: PaneId | None
     at: float
+    source: NotificationSource = NotificationSource.UNKNOWN
 
 
 class NotificationCenter:
@@ -105,6 +121,7 @@ class NotificationCenter:
         body: str = "",
         urgency: int = Urgency.NORMAL,
         pane_id: PaneId | None = None,
+        source: NotificationSource = NotificationSource.UNKNOWN,
     ) -> Notification:
         "Record a finished notification."
         record = Notification(
@@ -114,6 +131,7 @@ class NotificationCenter:
             urgency=urgency,
             pane_id=pane_id,
             at=time.time(),
+            source=source,
         )
         self._next += 1
         return self._store(record)
@@ -152,6 +170,7 @@ class NotificationCenter:
                 body=text if payload_type == "body" else "",
                 urgency=urgency,
                 pane_id=pane_id,
+                source=NotificationSource.OSC_99,
             )
 
         key = (pane_id, identifier)
@@ -164,6 +183,7 @@ class NotificationCenter:
                 urgency=urgency,
                 pane_id=pane_id,
                 at=time.time(),
+                source=NotificationSource.OSC_99,
             )
             self._next += 1
         title = pending.title
