@@ -52,7 +52,7 @@ from pyte.titles import Titles
 
 from .arrangement import HSplit, LayoutTypes, Pane, VSplit, Window, _Split, node_key
 from .commands.wait_for import WaitChannel
-from .enums import AudioFrame, ClientAudio, FileTransfer, WindowCodec, WindowScroll, WindowSize
+from .enums import AudioFrame, ClientAudio, FileTransfer, WindowScroll
 from .ids import PaneId, SessionId, WindowId, WindowIndex
 from .jobs import Job, JobFeed, JobId, JobPipes
 from .notifications import Notification, NotificationSource
@@ -100,8 +100,10 @@ from .tables import (
     ViewerRow,
     WaitChannelRow,
     WindowDefaultRow,
+    WindowOptionRow,
     WindowRow,
     WindowTagRow,
+    added_columns,
     insert,
     select,
 )
@@ -122,7 +124,7 @@ __all__ = [
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 36
+SNAPSHOT_VERSION = 37
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -148,16 +150,37 @@ _CLIENT_SETTING_TYPES: dict[str, type] = {
 }
 CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
 
+
+def _window_options_move_out() -> str:
+    """
+    36 kept a window's options as columns of `windows`, and each default
+    as a name and a value. 37 gives each a table of its own, a column
+    per option. Lillecarl/pymux#769.
+    """
+    declared = list(WindowOptions.DECLARED.values())
+    columns = ", ".join(each.attribute for each in declared)
+    named = ",\n  ".join(
+        "%s = (SELECT value FROM old_window_defaults AS old"
+        " WHERE old.session_id = window_defaults.session_id AND old.name = '%s')" % (each.attribute, each.name)
+        for each in declared
+    )
+    return (
+        "ALTER TABLE window_defaults RENAME TO old_window_defaults;\n"
+        + WindowDefaultRow.SQL
+        + WindowOptionRow.SQL
+        + "INSERT INTO window_defaults(session_id) SELECT DISTINCT session_id FROM old_window_defaults;\n"
+        + "UPDATE window_defaults SET\n  %s;\n" % named
+        + "DROP TABLE old_window_defaults;\n"
+        + "INSERT INTO window_options(window_id, %s) SELECT window_id, %s FROM windows;\n" % (columns, columns)
+        + "".join("ALTER TABLE windows DROP COLUMN %s;\n" % each.attribute for each in declared)
+    )
+
+
 #: What takes a snapshot of the version before this one up to it. A
 #: snapshot only ever goes from a running build to the next one, so a
 #: change of shape adds the one step from the version before it and
 #: deletes any older step.
-STEPS: dict[int, str] = {
-    # 36 keeps what each notification came through. Lillecarl/pymux#768.
-    35: """
-ALTER TABLE notifications ADD COLUMN source TEXT NOT NULL DEFAULT '';
-""",
-}
+STEPS: dict[int, str] = {36: _window_options_move_out()}
 
 #: The fields `ClientState.modes` holds, one JSON value in `client_modes`.
 CLIENT_MODES = frozenset(
@@ -201,13 +224,6 @@ def _session_options() -> dict[str, str]:
         for name, option in ALL_OPTIONS.items()
         if option.attribute_name in SessionOptions.__annotations__
     }
-
-
-def _window_option_names() -> dict[str, str]:
-    "Window attribute to option name, for `window_defaults`."
-    from .options import ALL_WINDOW_OPTIONS
-
-    return {option.attribute_name: name for name, option in ALL_WINDOW_OPTIONS.items() if option.attribute_name}
 
 
 #: What each class writes into a table. `tests/test_snapshot.py` says
@@ -289,6 +305,23 @@ def _like(default: Any, value: Any) -> Any:
     if isinstance(default, Enum):
         return type(default)(value)
     return value
+
+
+_WINDOW_OPTIONS = tuple(WindowOptions.DECLARED.values())
+
+
+def _stored_options(values: dict[str, Any]) -> dict[str, Any]:
+    "Options by attribute, as their columns hold them."
+    return {each.attribute: each.stored(values[each.attribute]) for each in _WINDOW_OPTIONS if each.attribute in values}
+
+
+def _loaded_options(row: Any) -> dict[str, Any]:
+    "The options a row of `window_options` or `window_defaults` holds, by attribute; a NULL is not set."
+    return {
+        each.attribute: each.loaded(getattr(row, each.attribute))
+        for each in _WINDOW_OPTIONS
+        if getattr(row, each.attribute) is not None
+    }
 
 
 def _optional_id(item) -> int | None:
@@ -610,7 +643,6 @@ def rows_of(pymux: Pymux) -> Iterator[Row]:
     for name, value in sorted(pymux.global_environment.items()):
         yield GlobalEnvironmentRow(name, value)
 
-    window_option_names = _window_option_names()
     session_option_names = {attribute: name for name, attribute in _session_options().items()}
     for position, session in enumerate(pymux.sessions):
         arrangement = session.arrangement
@@ -635,8 +667,8 @@ def rows_of(pymux: Pymux) -> Iterator[Row]:
             yield SessionTagRow(session.session_id, key, value)
         for attribute, value in sorted(session.options.own().items()):
             yield SessionOptionRow(session.session_id, session_option_names[attribute], _value(value))
-        for attribute, value in sorted(arrangement.window_defaults.items()):
-            yield WindowDefaultRow(session.session_id, window_option_names.get(attribute, attribute), _value(value))
+        if arrangement.window_defaults:
+            yield WindowDefaultRow(session.session_id, **_stored_options(arrangement.window_defaults))
         for linked, windows in ((True, arrangement.windows), (False, arrangement._unlinked_windows)):
             for place, window in enumerate(windows):
                 yield from _window_rows(session, window, linked, place)
@@ -661,25 +693,19 @@ def _window_rows(session: Session, window: Window, linked: bool, place: int) -> 
         active_pane_id=_optional_id(window._active_pane),
         previous_active_pane_id=_optional_id(previous),
         previous_layout=_value(window.previous_selected_layout),
-        strip=window.options.strip,
-        window_size=_value(window.options.window_size),
         manual_height=manual.rows if manual is not None else None,
         manual_width=manual.columns if manual is not None else None,
         zoom=window.zoom,
-        synchronize_panes=window.options.synchronize_panes,
-        frame_rate=window.options.frame_rate,
         frame_rate_set=window.frame_rate_set,
-        wayland_scale=window.options.wayland_scale,
-        window_codec=_value(window.options.window_codec),
-        monitor_bell=window.options.monitor_bell,
         bell=window.bell,
-        monitor_activity=window.options.monitor_activity,
-        monitor_silence=window.options.monitor_silence,
-        monitor_notification=window.options.monitor_notification,
         activity=window.activity,
         silence=window.silence,
         notified=window.notified,
         shown_name=window.name,
+    )
+    yield WindowOptionRow(
+        window.window_id,
+        **_stored_options({each.attribute: getattr(window.options, each.attribute) for each in _WINDOW_OPTIONS}),
     )
     for key, value in sorted(window.tags.items()):
         yield WindowTagRow(window.window_id, key, value)
@@ -897,8 +923,13 @@ def _open(path: str | os.PathLike[str]) -> apsw.Connection:
     db = apsw.Connection(str(Path(path).resolve()), flags=apsw.SQLITE_OPEN_READONLY)
     version = int(db.pragma("user_version"))
     if version == SNAPSHOT_VERSION:
-        return db
-    if version != SNAPSHOT_VERSION - 1 or version not in STEPS:
+        added = added_columns(db)
+        if not added:
+            return db
+        steps = [added]
+    elif version == SNAPSHOT_VERSION - 1 and version in STEPS:
+        steps = [STEPS[version]]
+    else:
         db.close()
         raise SnapshotError("snapshot version %d, and this build reads %d" % (version, SNAPSHOT_VERSION))
     # The file stays as the old server wrote it: it serves on if this fails.
@@ -911,7 +942,8 @@ def _open(path: str | os.PathLike[str]) -> apsw.Connection:
     finally:
         backup.finish()
     db.close()
-    stepped.execute(STEPS[version])
+    for step in steps:
+        stepped.execute(step)
     return stepped
 
 
@@ -1078,7 +1110,6 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
         return split
 
     windows: dict[int, Window] = {}
-    window_attributes = {name: attribute for attribute, name in _window_option_names().items()}
     session_options = _session_options()
     sessions = []
     for row in select(db, SessionRow, "ORDER BY position"):
@@ -1102,10 +1133,7 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
                 setattr(session.options, attribute, _like(getattr(pymux, attribute), own.value))
         arrangement = session.arrangement
         for default in select(db, WindowDefaultRow, "WHERE session_id = ?", session.session_id):
-            attribute = window_attributes.get(default.name, default.name)
-            fresh = WindowOptions()
-            if hasattr(fresh, attribute):
-                arrangement.window_defaults[attribute] = _like(getattr(fresh, attribute), default.value)
+            arrangement.window_defaults.update(_loaded_options(default))
 
         for window_row in select(
             db, WindowRow, "WHERE session_id = ? ORDER BY linked DESC, position", session.session_id
@@ -1123,21 +1151,14 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
             window._pane_history = [ref(previous)] if previous is not None else []
             layout = window_row.previous_layout
             window.previous_selected_layout = LayoutTypes(layout) if layout is not None else None
-            window.options.strip = bool(window_row.strip)
-            window.options.window_size = WindowSize(window_row.window_size)
+            for own in select(db, WindowOptionRow, "WHERE window_id = ?", window.window_id):
+                for attribute, value in _loaded_options(own).items():
+                    setattr(window.options, attribute, value)
             if window_row.manual_height is not None and window_row.manual_width is not None:
                 window.manual_size = Size(rows=window_row.manual_height, columns=window_row.manual_width)
             window.zoom = bool(window_row.zoom)
-            window.options.synchronize_panes = bool(window_row.synchronize_panes)
-            window.options.frame_rate = window_row.frame_rate
             window.frame_rate_set = bool(window_row.frame_rate_set)
-            window.options.wayland_scale = window_row.wayland_scale
-            window.options.window_codec = WindowCodec(window_row.window_codec)
-            window.options.monitor_bell = bool(window_row.monitor_bell)
             window.bell = bool(window_row.bell)
-            window.options.monitor_activity = bool(window_row.monitor_activity)
-            window.options.monitor_silence = window_row.monitor_silence
-            window.options.monitor_notification = bool(window_row.monitor_notification)
             window.activity = bool(window_row.activity)
             window.silence = bool(window_row.silence)
             window.notified = bool(window_row.notified)

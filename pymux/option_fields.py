@@ -156,13 +156,17 @@ class Declared:
             return type(self.default)(value)
         return value
 
+    def python_type(self) -> type:
+        "What sqlite holds it as."
+        if isinstance(self.default, StrEnum):
+            return str
+        if isinstance(self.default, (bool, int)):
+            return int
+        return type(self.default)
+
     def column_type(self) -> str:
         "The type affinity of its snapshot column."
-        if isinstance(self.default, int):
-            return "INTEGER"
-        if isinstance(self.default, float):
-            return "REAL"
-        return "TEXT"
+        return {int: "INTEGER", float: "REAL"}.get(self.python_type(), "TEXT")
 
 
 class Options:

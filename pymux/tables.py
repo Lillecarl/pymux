@@ -8,18 +8,27 @@ the table's primary key. `tests/test_snapshot.py` holds both against
 what sqlite reads out of `SCHEMA`. The SQL stays hand-written; the
 classes only name the columns, so that a writer and a reader cannot
 disagree about them. Lillecarl/pymux#554.
+
+**The tables of options are the exception.** A scope's options declare
+their columns, so `options_table` writes the SQL and the row class
+from the declaration, and a load adds a column a newer build declared.
+Lillecarl/pymux#769.
 """
 
 from __future__ import annotations
 
 import functools
 from collections.abc import Iterable
-from dataclasses import Field, dataclass, field, fields
+from dataclasses import Field, dataclass, field, fields, make_dataclass
 from typing import Any, ClassVar, Final, Protocol
 
 import apsw
 
+from .option_fields import Options
+from .window_options import WindowOptions
+
 __all__ = [
+    "GENERATED",
     "LIVE_ROWS",
     "LIVE_TABLES",
     "ROWS",
@@ -27,11 +36,69 @@ __all__ = [
     "SCREEN_TABLES",
     "TABLES",
     "ChangedRows",
+    "added_columns",
     "insert",
     "select",
 ]
 
-SCHEMA = """
+
+def _literal(value: Any) -> str:
+    "A value as SQL writes it, for a column's DEFAULT."
+    if isinstance(value, bool):
+        return str(int(value))
+    if isinstance(value, (int, float)):
+        return repr(value)
+    return "'%s'" % str(value).replace("'", "''")
+
+
+def options_table(scope: type[Options], name: str, table: str, key: str, references: str, *, defaults: bool) -> type:
+    """
+    The row class of one scope's options, one column per option, with
+    its `CREATE TABLE` as `SQL` and each column's own as `COLUMNS`.
+
+    `defaults` makes the table of what a new owner starts with: a
+    column is NULL until somebody set it, which `show-options -g` reads
+    as not set.
+    """
+    columns = {}
+    specs: list[Any] = [(key, int)]
+    for declared in scope.DECLARED.values():
+        kind = declared.python_type()
+        if defaults:
+            columns[declared.attribute] = "%s %s" % (declared.attribute, declared.column_type())
+            specs.append((declared.attribute, kind | None, field(default=None)))
+        else:
+            stored = declared.stored(declared.default)
+            columns[declared.attribute] = "%s %s NOT NULL DEFAULT %s" % (
+                declared.attribute,
+                declared.column_type(),
+                _literal(stored),
+            )
+            specs.append((declared.attribute, kind, field(default=stored)))
+    sql = "CREATE TABLE %s(\n  %s INTEGER PRIMARY KEY REFERENCES %s,\n  %s\n);\n" % (
+        table,
+        key,
+        references,
+        ",\n  ".join(columns.values()),
+    )
+    namespace = {"TABLE": table, "KEY": (key,), "SQL": sql, "COLUMNS": columns}
+    return make_dataclass(name, specs, frozen=True, slots=True, namespace=namespace, module=__name__)
+
+
+#: What every new window of a session starts with, as `set-window-option -g` said.
+WindowDefaultRow = options_table(
+    WindowOptions, "WindowDefaultRow", "window_defaults", "session_id", "sessions(session_id)", defaults=True
+)
+#: One window's options.
+WindowOptionRow = options_table(
+    WindowOptions, "WindowOptionRow", "window_options", "window_id", "windows(window_id)", defaults=False
+)
+
+#: The tables `options_table` writes.
+GENERATED = (WindowDefaultRow, WindowOptionRow)
+
+SCHEMA = (
+    """
 CREATE TABLE server(
   name TEXT PRIMARY KEY,
   value
@@ -80,13 +147,9 @@ CREATE TABLE session_options(
   value,
   PRIMARY KEY (session_id, name)
 );
-CREATE TABLE window_defaults(
-  session_id INTEGER NOT NULL REFERENCES sessions(session_id),
-  name TEXT NOT NULL,
-  value,
-  PRIMARY KEY (session_id, name)
-);
-CREATE TABLE windows(
+"""
+    + WindowDefaultRow.SQL
+    + """CREATE TABLE windows(
   window_id INTEGER PRIMARY KEY,
   session_id INTEGER NOT NULL REFERENCES sessions(session_id),
   linked INTEGER NOT NULL,
@@ -97,26 +160,18 @@ CREATE TABLE windows(
   active_pane_id INTEGER,
   previous_active_pane_id INTEGER,
   previous_layout TEXT,
-  strip INTEGER NOT NULL,
-  window_size TEXT NOT NULL,
   manual_height INTEGER,
   manual_width INTEGER,
   zoom INTEGER NOT NULL,
-  synchronize_panes INTEGER NOT NULL,
-  frame_rate INTEGER NOT NULL,
   frame_rate_set INTEGER NOT NULL,
-  wayland_scale TEXT NOT NULL,
-  window_codec TEXT NOT NULL,
-  monitor_bell INTEGER NOT NULL DEFAULT 1,
   bell INTEGER NOT NULL DEFAULT 0,
-  monitor_activity INTEGER NOT NULL DEFAULT 1,
-  monitor_silence INTEGER NOT NULL DEFAULT 0,
-  monitor_notification INTEGER NOT NULL DEFAULT 1,
   activity INTEGER NOT NULL DEFAULT 0,
   silence INTEGER NOT NULL DEFAULT 0,
   notified INTEGER NOT NULL DEFAULT 0
 );
-CREATE TABLE window_tags(
+"""
+    + WindowOptionRow.SQL
+    + """CREATE TABLE window_tags(
   window_id INTEGER NOT NULL REFERENCES windows(window_id),
   key TEXT NOT NULL,
   value TEXT,
@@ -320,6 +375,7 @@ CREATE TABLE client_modes(
   modes TEXT NOT NULL
 );
 """
+)
 
 #: The tables in the order a dump compares them.
 TABLES = (
@@ -333,6 +389,7 @@ TABLES = (
     "session_options",
     "window_defaults",
     "windows",
+    "window_options",
     "window_tags",
     "splits",
     "panes",
@@ -471,15 +528,6 @@ class SessionOptionRow:
 
 
 @dataclass(frozen=True, slots=True)
-class WindowDefaultRow:
-    TABLE: ClassVar[str] = "window_defaults"
-    KEY: ClassVar[tuple[str, ...]] = ("session_id", "name")
-    session_id: int
-    name: str
-    value: Any
-
-
-@dataclass(frozen=True, slots=True)
 class WindowRow:
     TABLE: ClassVar[str] = "windows"
     KEY: ClassVar[tuple[str, ...]] = ("window_id",)
@@ -493,21 +541,11 @@ class WindowRow:
     active_pane_id: int | None
     previous_active_pane_id: int | None
     previous_layout: str | None
-    strip: int
-    window_size: str
     manual_height: int | None
     manual_width: int | None
     zoom: int
-    synchronize_panes: int
-    frame_rate: int
     frame_rate_set: int
-    wayland_scale: str
-    window_codec: str
-    monitor_bell: int
     bell: int
-    monitor_activity: int
-    monitor_silence: int
-    monitor_notification: int
     activity: int
     silence: int
     notified: int
@@ -833,6 +871,7 @@ ROWS = (
     SessionOptionRow,
     WindowDefaultRow,
     WindowRow,
+    WindowOptionRow,
     WindowTagRow,
     SplitRow,
     PaneRow,
@@ -956,6 +995,20 @@ class ChangedRows:
             inserts.extend(row for key, row in after.items() if before.get(key) != row)
         insert(db, inserts)
         return now
+
+
+def added_columns(db: apsw.Connection) -> str:
+    """
+    What gives `db` each column `GENERATED` declares and it lacks, at
+    the column's default: a new option needs no step.
+    """
+    statements = []
+    for kind in GENERATED:
+        have = {column[1] for column in db.execute("PRAGMA table_info(%s)" % (kind.TABLE,))}
+        for name, column in kind.COLUMNS.items():
+            if name not in have:
+                statements.append("ALTER TABLE %s ADD COLUMN %s;\n" % (kind.TABLE, column))
+    return "".join(statements)
 
 
 def select[R: Row](db: apsw.Connection, kind: type[R], where: str = "", *params) -> list[R]:

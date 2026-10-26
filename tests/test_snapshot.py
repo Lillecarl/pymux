@@ -34,8 +34,10 @@ from pymux.commands.wait_for import WaitChannel
 from pymux.enums import Chooser, WindowCodec, WindowSize
 from pymux.jobs import JobFeed, JobPipes
 from pymux.main import Pymux
-from pymux.notifications import NotificationSource, Urgency
+from pymux.notifications import Urgency
 from pymux.query import ask
+from pymux.tables import WindowOptionRow
+from pymux.window_options import WindowOptions
 
 
 @pytest.fixture
@@ -239,7 +241,18 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     second.arrangement.base_index = 0
     second.arrangement.renumber_windows = True
     first.options.status_right = "first's own"
-    second.arrangement.window_defaults["synchronize_panes"] = True
+    # Every default but frame-rate, which the first session's holds.
+    second.arrangement.window_defaults.update(
+        synchronize_panes=True,
+        monitor_bell=False,
+        monitor_activity=False,
+        monitor_silence=30,
+        monitor_notification=False,
+        strip=True,
+        window_size=WindowSize.LATEST,
+        wayland_scale="2",
+        window_codec=WindowCodec.VP9,
+    )
     pymux.global_environment["UNSET"] = None
 
     client_state.previous_session = second
@@ -614,7 +627,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
     assert _rows(first, "SELECT count(*) FROM splits WHERE parent_split_id IS NOT NULL") == [(3,)]
     assert _rows(first, "SELECT window_name FROM windows WHERE window_name IS NOT NULL") == [("built",)]
     assert _rows(first, "SELECT value FROM options WHERE name = 'status-left'") == [("left",)]
-    assert _rows(first, "SELECT value FROM window_defaults WHERE name = 'frame-rate'") == [(10,)]
+    assert _rows(first, "SELECT frame_rate FROM window_defaults WHERE frame_rate IS NOT NULL") == [(10,)]
     assert _rows(
         first, "SELECT count(*) FROM split_weights WHERE kind = 'pane' AND id NOT IN (SELECT pane_id FROM panes)"
     ) == [(1,)]
@@ -697,21 +710,70 @@ def test_the_table_list_is_the_schema_in_order():
     assert list(tables.TABLES) == made
 
 
-def test_a_version_35_snapshot_loads_its_notifications_with_no_source(pymux, tmp_path):
-    "35 kept no source; its records say so with the empty one. Lillecarl/pymux#768."
-    pymux.notification_center.add("Built", source=NotificationSource.COMMAND)
-    path = tmp_path / "v35.sqlite"
-    snapshot.save(pymux, path)
+def _as_version_36(path) -> None:
+    "Put a window's options back in `windows`, and each default in a row of its own, as 36 kept them."
+    declared = list(WindowOptions.DECLARED.values())
     db = apsw.Connection(str(path))
-    db.execute("ALTER TABLE notifications DROP COLUMN source")
-    db.execute("PRAGMA user_version = 35")
+    for each in declared:
+        db.execute("ALTER TABLE windows ADD COLUMN %s" % (WindowOptionRow.COLUMNS[each.attribute],))
+        column = each.attribute
+        db.execute(
+            f"UPDATE windows SET {column} = (SELECT {column} FROM window_options AS own"
+            " WHERE own.window_id = windows.window_id)"
+        )
+    db.execute("DROP TABLE window_options")
+    db.execute("ALTER TABLE window_defaults RENAME TO new_window_defaults")
+    db.execute(
+        "CREATE TABLE window_defaults(session_id INTEGER NOT NULL, name TEXT NOT NULL, value, PRIMARY KEY (session_id, name))"
+    )
+    for each in declared:
+        column = each.attribute
+        db.execute(
+            f"INSERT INTO window_defaults SELECT session_id, ?, {column} FROM new_window_defaults"
+            f" WHERE {column} IS NOT NULL",
+            (each.name,),
+        )
+    db.execute("DROP TABLE new_window_defaults")
+    db.execute("PRAGMA user_version = 36")
+    db.close()
+
+
+async def test_a_version_36_snapshot_loads_its_window_options(pymux, tmp_path):
+    "36 kept them in `windows` and `window_defaults` as names and values. Lillecarl/pymux#769."
+    async with pymux.running():
+        await pymux.create_window("true")
+        window = pymux.arrangement.windows[-1]
+        window.options.strip = True
+        window.options.window_codec = WindowCodec.VP9
+        pymux.arrangement.window_defaults.update(frame_rate=10, window_size=WindowSize.LARGEST)
+        path = tmp_path / "v36.sqlite"
+        snapshot.save(pymux, path)
+    _as_version_36(path)
+
+    loaded = Pymux()
+    snapshot.load(loaded, path)
+
+    window = loaded.arrangement.windows[-1]
+    assert (window.options.strip, window.options.window_codec) == (True, WindowCodec.VP9)
+    assert loaded.arrangement.window_defaults == {"frame_rate": 10, "window_size": WindowSize.LARGEST}
+
+
+async def test_a_column_this_build_declares_and_the_file_lacks_takes_its_default(pymux, tmp_path):
+    "A new option needs no step: the load adds its column. Lillecarl/pymux#769."
+    path = tmp_path / "older.sqlite"
+    async with pymux.running():
+        await pymux.create_window("true")
+        snapshot.save(pymux, path)
+    db = apsw.Connection(str(path))
+    db.execute("ALTER TABLE window_options DROP COLUMN monitor_silence")
+    db.execute("ALTER TABLE window_defaults DROP COLUMN monitor_silence")
     db.close()
 
     loaded = Pymux()
     snapshot.load(loaded, path)
 
-    (record,) = loaded.notification_center.notifications()
-    assert (record.title, record.source) == ("Built", NotificationSource.UNKNOWN)
+    assert loaded.arrangement.windows
+    assert all(window.options.monitor_silence == 0 for window in loaded.arrangement.windows)
 
 
 def test_a_session_s_own_value_survives_and_the_rest_follow_the_default(pymux, tmp_path):
