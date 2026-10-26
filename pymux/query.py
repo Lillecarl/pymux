@@ -61,9 +61,9 @@ if not apsw.using_amalgamation or not apsw.apsw_version().startswith(apsw.sqlite
 
 #: What this server answers with. Agents read it with `PRAGMA
 #: user_version` and re-read the tables when it differs from what they
-#: were told. 10: `main` has `known_options`, `option_choices`,
-#: `layouts`, `key_names` and `forwards`, what Tab offers.
-SCHEMA_VERSION = 10
+#: were told. 11: `live` has `forgotten_seeds`, and `live.saved_queries`
+#: holds only what was saved; `main.saved_queries` has the seeds too.
+SCHEMA_VERSION = 11
 
 #: The questions every boot starts with. A name an agent saves later
 #: replaces one of these for the rest of the boot; the next boot seeds
@@ -263,7 +263,7 @@ def _job_tags(pymux: Pymux) -> Iterator[JobTagRow]:
 
 
 def _saved_queries(pymux: Pymux) -> Iterator[SavedQueryRow]:
-    for name, (sql, description) in sorted(pymux.jobs.saved_queries.items()):
+    for name, (sql, description) in sorted(pymux.jobs.queries.items()):
         yield SavedQueryRow(name, sql, description)
 
 

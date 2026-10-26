@@ -164,7 +164,7 @@ class Questions:
 
     def rows(self, name: str, **params: str) -> list[tuple]:
         "What the question of that name answers, or nothing when it fails or outruns its budget."
-        saved = self.pymux.jobs.saved_queries.get(name)
+        saved = self.pymux.jobs.queries.get(name)
         if saved is None:
             return []
         if self._db is None:

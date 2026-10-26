@@ -35,7 +35,7 @@ from pymux.enums import Chooser, WindowCodec, WindowSize
 from pymux.jobs import JobFeed, JobPipes
 from pymux.main import Pymux
 from pymux.notifications import Urgency
-from pymux.query import ask
+from pymux.query import SEEDS, ask
 
 
 @pytest.fixture
@@ -362,9 +362,11 @@ async def _run_jobs(pymux) -> None:
         running = jobs.submit("echo started; exec sleep 60", None, [("long", None)], dict(os.environ), pty)
         pymux.tasks.start_soon(jobs.supervise, running)
         await once(lambda running=running: b"started" in running.kept("stdout"), 10.0, "a running job never printed")
-    # A question kept, and a seed taken away, which must stay away.
+    # Questions kept, and seeds taken away, which must stay away.
     jobs.save_query("mine", "SELECT id FROM jobs WHERE pty = 1", None)
+    jobs.save_query("theirs", "SELECT id FROM jobs WHERE pty = 0", "the pipes")
     assert jobs.forget_query("running")
+    assert jobs.forget_query("failed")
 
 
 async def _questions_of(pymux) -> list[tuple]:
@@ -690,19 +692,35 @@ def test_the_table_list_is_the_schema_in_order():
     assert list(tables.TABLES) == made
 
 
-def test_a_version_31_snapshot_had_no_tags(pymux, tmp_path):
-    "The server before it went held no tag but a job's."
-    path = tmp_path / "v31.sqlite"
+def test_a_version_32_snapshot_saved_its_seeds(pymux, tmp_path):
+    """
+    32 saved every question, its build's seeds among them. An untouched
+    seed copy goes, so this build's seeds take its place; a changed one
+    is a person's; a missing one was taken away.
+    """
+    path = tmp_path / "v32.sqlite"
     snapshot.save(pymux, path)
     db = apsw.Connection(str(path))
-    for table in ("session_tags", "window_tags", "pane_tags"):
-        db.execute("DROP TABLE %s" % table)
-    db.execute("PRAGMA user_version = 31")
+    db.execute("DROP TABLE forgotten_seeds")
+    db.execute("DELETE FROM saved_queries")
+    for name, sql, description in SEEDS[:4]:
+        if name == "running":
+            continue
+        if name == "failed":
+            sql = "SELECT 1"
+        db.execute("INSERT INTO saved_queries VALUES (?, ?, ?)", (name, sql, description))
+    db.execute("PRAGMA user_version = 32")
     db.close()
 
     loaded = Pymux()
     snapshot.load(loaded, path)
-    assert [session.tags for session in loaded.sessions] == [{} for _ in pymux.sessions]
+
+    queries = loaded.jobs.queries
+    assert "running" not in queries
+    assert queries["failed"][0] == "SELECT 1"
+    assert "recent" in queries
+    assert "complete-option" in queries
+    assert loaded.jobs.saved_queries == {"failed": ("SELECT 1", queries["failed"][1])}
 
 
 @pytest.mark.parametrize("pty", [True, False], ids=["on a terminal", "on pipes"])

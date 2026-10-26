@@ -267,6 +267,7 @@ class JobTable:
         "_jobs": Keep.SAVED,
         "last_id": Keep.SAVED,
         "saved_queries": Keep.SAVED,
+        "forgotten_seeds": Keep.SAVED,
     }
 
     def __init__(self) -> None:
@@ -274,11 +275,25 @@ class JobTable:
         #: The newest id handed out. It outlives the jobs it named, so
         #: a restored server never hands one out again.
         self.last_id = 0
-        #: The kept questions by name: their SQL and description. `sql`
-        #: reads them as the table `saved_queries`. Lillecarl/pymux#547.
-        self.saved_queries: dict[str, tuple[str, str | None]] = {
-            name: (sql, description) for name, sql, description in SEEDS
-        }
+        #: The questions a person or an agent saved, by name: their SQL
+        #: and description. Only these reach a snapshot. Lillecarl/pymux#547.
+        self.saved_queries: dict[str, tuple[str, str | None]] = {}
+        #: The seeds somebody took away. An upgrade keeps them away, and
+        #: brings every seed it adds.
+        self.forgotten_seeds: set[str] = set()
+
+    @property
+    def queries(self) -> dict[str, tuple[str, str | None]]:
+        """
+        Every kept question, as `sql` reads the table `saved_queries`:
+        this build's seeds, and what was saved over or beside them.
+
+        **The seeds are never saved.** A snapshot that kept them would
+        give an upgraded server the seeds of the build it came from, and
+        a seed this build adds -- `complete-option` -- would be missing.
+        """
+        seeded = {name: (sql, description) for name, sql, description in SEEDS if name not in self.forgotten_seeds}
+        return seeded | self.saved_queries
 
     def save_query(self, name: str, sql: str, description: str | None) -> None:
         "Keep a question, or replace the one of that name."
@@ -286,7 +301,11 @@ class JobTable:
 
     def forget_query(self, name: str) -> bool:
         "Forget a kept question. False when none had that name."
-        return self.saved_queries.pop(name, None) is not None
+        known = name in self.queries
+        self.saved_queries.pop(name, None)
+        if any(seed == name for seed, _sql, _description in SEEDS):
+            self.forgotten_seeds.add(name)
+        return known
 
     def submit(
         self,

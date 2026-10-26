@@ -71,6 +71,7 @@ from .tables import (
     ClientWindowRow,
     ColumnWidthRow,
     CounterRow,
+    ForgottenSeedRow,
     GlobalEnvironmentRow,
     HookRow,
     JobOutputRow,
@@ -119,7 +120,7 @@ __all__ = [
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 32
+SNAPSHOT_VERSION = 33
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -150,26 +151,23 @@ CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
 #: change of shape adds the one step from the version before it and
 #: deletes any older step.
 STEPS: dict[int, str] = {
-    # 32 tags sessions, windows and panes; 31 had nothing to tag them with.
-    31: """
-CREATE TABLE session_tags(
-  session_id INTEGER NOT NULL REFERENCES sessions(session_id),
-  key TEXT NOT NULL,
-  value TEXT,
-  PRIMARY KEY (session_id, key)
+    # 33 saves what a person saved and the seeds they took away; 32 saved
+    # every question, its seeds among them, so an upgrade carried the old
+    # build's seeds and never got the new ones. Its seeds as they were:
+    # an untouched copy goes, and one that is missing was taken away.
+    32: """
+CREATE TABLE forgotten_seeds(
+  name TEXT PRIMARY KEY
 );
-CREATE TABLE window_tags(
-  window_id INTEGER NOT NULL REFERENCES windows(window_id),
-  key TEXT NOT NULL,
-  value TEXT,
-  PRIMARY KEY (window_id, key)
-);
-CREATE TABLE pane_tags(
-  pane_id INTEGER NOT NULL REFERENCES panes(pane_id),
-  key TEXT NOT NULL,
-  value TEXT,
-  PRIMARY KEY (pane_id, key)
-);
+CREATE TEMP TABLE seeds_of_32(name TEXT PRIMARY KEY, sql TEXT NOT NULL);
+INSERT INTO seeds_of_32 VALUES
+  ('running', 'SELECT id, command FROM jobs WHERE status = ''running'' ORDER BY id'),
+  ('failed', 'SELECT id, command, returncode, error FROM jobs WHERE status = ''done'' AND (returncode != 0 OR error IS NOT NULL) ORDER BY id'),
+  ('recent', 'SELECT id, command, status, returncode FROM jobs ORDER BY id DESC LIMIT :n'),
+  ('by_tag', 'SELECT DISTINCT j.id, j.command FROM jobs j JOIN job_tags t ON t.job_id = j.id WHERE t.key = :tag ORDER BY j.id');
+INSERT INTO forgotten_seeds SELECT name FROM seeds_of_32 WHERE name NOT IN (SELECT name FROM saved_queries);
+DELETE FROM saved_queries WHERE (name, sql) IN (SELECT name, sql FROM seeds_of_32);
+DROP TABLE seeds_of_32;
 """,
 }
 
@@ -237,7 +235,7 @@ WRITES: dict[str, frozenset[str]] = {
     "pymux.main.ClientState": frozenset({"session", "previous_session", *CLIENT_SETTINGS, *CLIENT_MODES}),
     # The record goes by the client's id, in `clients`.
     "pymux.server.ServerConnection": frozenset({"client_state", "created"}),
-    "pymux.jobs.JobTable": frozenset({"_jobs", "last_id", "saved_queries"}),
+    "pymux.jobs.JobTable": frozenset({"_jobs", "last_id", "saved_queries", "forgotten_seeds"}),
     # The kept counts are the lengths of the chunks `job_output` holds.
     "pymux.jobs.Job": frozenset(name for name, fate in Job.KEEP.items() if fate == Keep.SAVED),
     # A viewer's row, in `pane_viewers`.
@@ -591,6 +589,8 @@ def rows_of(pymux: Pymux) -> Iterator[Row]:
         yield NotificationRow(*record, position=None, identifier=identifier)
     for name, (sql, description) in sorted(pymux.jobs.saved_queries.items()):
         yield SavedQueryRow(name, sql, description)
+    for name in sorted(pymux.jobs.forgotten_seeds):
+        yield ForgottenSeedRow(name)
     for name, channel in sorted(pymux.wait_channels.items()):
         yield WaitChannelRow(name, channel.woken, channel.locked)
     for position, (ours, (pane_id, identifier)) in enumerate(pymux.notifications._incoming.items()):
@@ -1169,6 +1169,7 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
     pymux._uses = counters["uses"]
     pymux.jobs.last_id = counters["job"]
     pymux.jobs.saved_queries = {row.name: (row.sql, row.description) for row in select(db, SavedQueryRow)}
+    pymux.jobs.forgotten_seeds = {row.name for row in select(db, ForgottenSeedRow)}
     _read_notifications(pymux, db, counters)
     return server["listener_fd"]
 

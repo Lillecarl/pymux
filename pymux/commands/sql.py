@@ -65,7 +65,7 @@ def sql(pymux: Pymux, args: argparse.Namespace):
 
 
 def _list(pymux: Pymux, args: argparse.Namespace) -> None:
-    kept = [(name, sql, description) for name, (sql, description) in sorted(pymux.jobs.saved_queries.items())]
+    kept = [(name, sql, description) for name, (sql, description) in sorted(pymux.jobs.queries.items())]
     if args.json:
         kept_json = [
             {"name": name, "sql": kept_sql, "description": description} for name, kept_sql, description in kept
@@ -96,7 +96,7 @@ def _delete(pymux: Pymux, name: str) -> None:
 
 
 async def _run_saved(pymux: Pymux, args: argparse.Namespace, name: str) -> None:
-    found = pymux.jobs.saved_queries.get(name)
+    found = pymux.jobs.queries.get(name)
     if found is None:
         raise CommandException("no saved query %s; sql --list shows the kept ones" % name)
     await _ask(pymux, args, found[0], _params(args))

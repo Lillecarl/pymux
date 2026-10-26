@@ -244,6 +244,9 @@ CREATE TABLE saved_queries(
   sql TEXT NOT NULL,
   description TEXT
 );
+CREATE TABLE forgotten_seeds(
+  name TEXT PRIMARY KEY
+);
 CREATE TABLE jobs(
   job_id INTEGER PRIMARY KEY,
   command TEXT NOT NULL,
@@ -336,6 +339,7 @@ TABLES = (
     "notification_routes",
     "wait_channels",
     "saved_queries",
+    "forgotten_seeds",
     "jobs",
     "job_tags",
     "job_output",
@@ -689,6 +693,15 @@ class SavedQueryRow:
 
 
 @dataclass(frozen=True, slots=True)
+class ForgottenSeedRow:
+    "A seed question somebody took away, which an upgrade must not bring back."
+
+    TABLE: ClassVar[str] = "forgotten_seeds"
+    KEY: ClassVar[tuple[str, ...]] = ("name",)
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
 class JobRow:
     TABLE: ClassVar[str] = "jobs"
     KEY: ClassVar[tuple[str, ...]] = ("job_id",)
@@ -809,6 +822,7 @@ ROWS = (
     NotificationRouteRow,
     WaitChannelRow,
     SavedQueryRow,
+    ForgottenSeedRow,
     JobRow,
     JobTagRow,
     JobOutputRow,
