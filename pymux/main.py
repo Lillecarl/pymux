@@ -2572,7 +2572,7 @@ class Pymux:
         if window is None:
             return self.size_with_no_client(None)
 
-        if window.window_size is WindowSize.MANUAL and window.manual_size is not None:
+        if window.options.window_size is WindowSize.MANUAL and window.manual_size is not None:
             return window.manual_size
 
         watchers = self.clients_watching(window)
@@ -2588,11 +2588,11 @@ class Pymux:
         # for the same reason (`resize.c:95-107`). Lillecarl/pymux#467.
         clients = [one for one in watchers if not one.ignore_size] or watchers
 
-        if window.window_size is WindowSize.LATEST:
+        if window.options.window_size is WindowSize.LATEST:
             newest = max(clients, key=lambda client: client.last_used)
             size = newest.app.output.get_size()
         else:
-            pick = max if window.window_size is WindowSize.LARGEST else min
+            pick = max if window.options.window_size is WindowSize.LARGEST else min
             sizes = [client.app.output.get_size() for client in clients]
             size = Size(
                 rows=pick(one.rows for one in sizes),
@@ -3336,7 +3336,7 @@ class Pymux:
                 # No window yet, or no application that ever ran.
                 continue
 
-            rate = getattr(window, "frame_rate", 0)
+            rate = window.options.frame_rate if window is not None else 0
             client_state.app.min_redraw_interval = (1.0 / rate) if rate else None
 
     def get_focused_pane(self):

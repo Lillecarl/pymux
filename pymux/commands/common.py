@@ -347,7 +347,7 @@ def option_as_written(pymux: Pymux, option: Option, args: argparse.Namespace, ta
             holder = option.held_by(pymux, target)
         except SetOptionError:
             return "not set"
-        value = getattr(holder, option.attribute_name, None)
+        value = option.read(holder)
 
     if value is None:
         return "not set"

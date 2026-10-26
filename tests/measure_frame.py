@@ -215,7 +215,7 @@ def create_window(count: int, strip: bool = False):
     window = ArrangementWindow()
     panes = [Pane(terminal=_Terminal())]
     window.add_pane(panes[0])
-    window.strip = strip
+    window.options.strip = strip
 
     for number in range(1, count):
         panes.append(Pane(terminal=_Terminal()))

@@ -45,7 +45,7 @@ def create_strip(columns=3):
     window = Window()
     opened = [create_pane()]
     window.add_pane(opened[0])
-    window.strip = True
+    window.options.strip = True
 
     for _ in range(columns - 1):
         opened.append(create_pane())
@@ -60,7 +60,7 @@ def order_of(window):
 
     A column is not always a bare pane, and a test that expected one
     would be about the shape of the tree rather than about the order.
-    The first column of a strip is a stack of one: `Window.strip` wraps
+    The first column of a strip is a stack of one: turning `strip` on wraps
     whatever the window was into the row, so the old root becomes the
     first column.
     """

@@ -69,7 +69,7 @@ def test_output_in_a_watched_window_marks_nothing_later():
 def test_monitor_activity_off_marks_nothing():
     arrangement = Arrangement()
     window, pane = _window(arrangement)
-    window.monitor_activity = False
+    window.options.monitor_activity = False
     arrangement.check_output([], 0.0)
 
     pane.content_changed()
@@ -79,8 +79,8 @@ def test_monitor_activity_off_marks_nothing():
 def test_a_quiet_spell_after_output_marks_silence_once():
     arrangement = Arrangement()
     window, pane = _window(arrangement)
-    window.monitor_activity = False
-    window.monitor_silence = 5
+    window.options.monitor_activity = False
+    window.options.monitor_silence = 5
     arrangement.check_output([], 0.0)
 
     assert not arrangement.check_output([], 10.0), "quiet with no output before it says nothing"
@@ -107,7 +107,7 @@ def test_a_notification_marks_a_window_nobody_looks_at():
 def test_monitor_notification_off_marks_nothing():
     arrangement = Arrangement()
     window, _pane = _window(arrangement)
-    window.monitor_notification = False
+    window.options.monitor_notification = False
 
     assert not arrangement.notify(window, [])
 

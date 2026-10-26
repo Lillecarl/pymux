@@ -217,7 +217,7 @@ async def test_manual_size_follows_no_client():
     async with two_clients() as (pymux, big, _small):
         await big.run("resize-window -x 120 -y 40")
 
-        assert window(pymux).window_size is WindowSize.MANUAL
+        assert window(pymux).options.window_size is WindowSize.MANUAL
         assert plane(pymux) == Size(rows=40, columns=120)
 
 
@@ -254,7 +254,7 @@ async def test_nudge_counts_from_size_window_has_now():
         was = plane(pymux)
         await big.run("resize-window -R 10 -D 4")
 
-        assert window(pymux).window_size is WindowSize.MANUAL
+        assert window(pymux).options.window_size is WindowSize.MANUAL
         assert plane(pymux) == Size(rows=was.rows + 4, columns=was.columns + 10)
 
 
@@ -319,7 +319,7 @@ async def test_window_of_no_cells_is_refused():
         await big.run("resize-window -x 0")
 
         assert big.state.message is not None
-        assert window(pymux).window_size is WindowSize.SMALLEST
+        assert window(pymux).options.window_size is WindowSize.SMALLEST
 
 
 async def test_word_that_is_not_policy_is_refused():
@@ -341,8 +341,8 @@ async def test_policy_belongs_to_one_window():
         await big.run("new-window")
 
         first, second = pymux.arrangement.windows
-        assert first.window_size is WindowSize.LARGEST
-        assert second.window_size is WindowSize.SMALLEST
+        assert first.options.window_size is WindowSize.LARGEST
+        assert second.options.window_size is WindowSize.SMALLEST
 
 
 async def test_default_says_what_every_new_window_starts_with():
@@ -354,8 +354,8 @@ async def test_default_says_what_every_new_window_starts_with():
         await big.run("new-window")
         _, second = pymux.arrangement.windows
 
-        assert first.window_size is WindowSize.SMALLEST
-        assert second.window_size is WindowSize.LARGEST
+        assert first.options.window_size is WindowSize.SMALLEST
+        assert second.options.window_size is WindowSize.LARGEST
 
 
 # ----------------------------------------------------------------------

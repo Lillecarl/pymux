@@ -44,8 +44,8 @@ def create_arrangement(windows=0):
 def test_window_starts_with_nothing_asked_for():
     arrangement = create_arrangement(1)
 
-    assert arrangement.windows[0].synchronize_panes is False
-    assert arrangement.windows[0].strip is False
+    assert arrangement.windows[0].options.synchronize_panes is False
+    assert arrangement.windows[0].options.strip is False
 
 
 def test_default_reaches_next_window():
@@ -54,7 +54,7 @@ def test_default_reaches_next_window():
 
     arrangement.create_window(create_pane(), set_active=False)
 
-    assert arrangement.windows[0].synchronize_panes is True
+    assert arrangement.windows[0].options.synchronize_panes is True
 
 
 def test_default_leaves_windows_that_are_open():
@@ -64,7 +64,7 @@ def test_default_leaves_windows_that_are_open():
 
     arrangement.window_defaults["synchronize_panes"] = True
 
-    assert was.synchronize_panes is False
+    assert was.options.synchronize_panes is False
 
 
 def test_default_that_reshapes_window_sees_pane():
@@ -79,7 +79,7 @@ def test_default_that_reshapes_window_sees_pane():
     arrangement.create_window(create_pane(), set_active=False)
 
     window = arrangement.windows[0]
-    assert window.strip is True
+    assert window.options.strip is True
     assert isinstance(window.root, VSplit)
     assert len(window.root) == 1
     assert len(window.panes) == 1

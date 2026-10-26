@@ -20,10 +20,10 @@ import pytest
 from prompt_toolkit.application.current import set_app
 from session import create_session
 
-from pymux.arrangement import DEFAULT_FRAME_RATE
 from pymux.commands import handle_command
 from pymux.main import Pymux
 from pymux.options import ALL_WINDOW_OPTIONS, SetOptionError
+from pymux.window_options import DEFAULT_FRAME_RATE
 
 PANE_COMMAND = "%s -c pass" % (sys.executable,)
 
@@ -42,7 +42,7 @@ def window(pymux):
 
 async def test_window_starts_at_thirty(pymux):
     assert DEFAULT_FRAME_RATE == 30
-    assert window(pymux).frame_rate == 30
+    assert window(pymux).options.frame_rate == 30
     # Thirty that nobody chose, which does not cap a Wayland window.
     # Lillecarl/pymux#636.
     assert not window(pymux).frame_rate_set
@@ -50,20 +50,20 @@ async def test_window_starts_at_thirty(pymux):
 
 async def test_option_writes_active_window(pymux):
     ALL_WINDOW_OPTIONS["frame-rate"].set_value(pymux, "10")
-    assert window(pymux).frame_rate == 10
+    assert window(pymux).options.frame_rate == 10
 
 
 async def test_command_writes_it(pymux):
     answer = handle_command(pymux, "set-window-option frame-rate 12")
     if answer is not None:
         await answer
-    assert window(pymux).frame_rate == 12
+    assert window(pymux).options.frame_rate == 12
     assert window(pymux).frame_rate_set
 
 
 async def test_zero_means_as_fast_as_it_can(pymux):
     ALL_WINDOW_OPTIONS["frame-rate"].set_value(pymux, "0")
-    assert window(pymux).frame_rate == 0
+    assert window(pymux).options.frame_rate == 0
 
 
 async def test_number_that_is_not_one_is_refused(pymux):
@@ -81,13 +81,13 @@ async def test_global_form_says_what_new_window_starts_with(pymux):
     `-g` on a window option is the default for the next window, and
     changes none that is open. Lillecarl/pymux#199.
     """
-    was = window(pymux).frame_rate
+    was = window(pymux).options.frame_rate
     pymux.handle_command("set-window-option -g frame-rate 15")
 
-    assert window(pymux).frame_rate == was, "it changed a window that was open"
+    assert window(pymux).options.frame_rate == was, "it changed a window that was open"
 
     await pymux.create_window(PANE_COMMAND)
-    assert pymux.arrangement.windows[-1].frame_rate == 15
+    assert pymux.arrangement.windows[-1].options.frame_rate == 15
 
 
 async def test_option_offers_rates_worth_naming(pymux):

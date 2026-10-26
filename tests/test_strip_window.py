@@ -47,7 +47,7 @@ def create_window(panes=1):
 
 
 def test_window_is_not_strip():
-    assert create_window().strip is False
+    assert create_window().options.strip is False
 
 
 def test_root_of_window_is_what_it_always_was():
@@ -59,11 +59,11 @@ def test_root_of_window_is_what_it_always_was():
 
 def test_strip_can_be_turned_off_again():
     window = create_window(2)
-    window.strip = True
+    window.options.strip = True
 
-    window.strip = False
+    window.options.strip = False
 
-    assert window.strip is False
+    assert window.options.strip is False
 
 
 def test_choosing_layout_leaves_strip():
@@ -73,11 +73,11 @@ def test_choosing_layout_leaves_strip():
     leave.
     """
     window = create_window(3)
-    window.strip = True
+    window.options.strip = True
 
     window.select_layout(LayoutTypes.TILED)
 
-    assert window.strip is False
+    assert window.options.strip is False
 
 
 # ----------------------------------------------------------------------
@@ -88,7 +88,7 @@ def test_turning_it_on_makes_root_row():
     "The columns of a strip are the children of the root."
     window = create_window(2)
 
-    window.strip = True
+    window.options.strip = True
 
     assert isinstance(window.root, VSplit)
 
@@ -98,7 +98,7 @@ def test_what_was_in_window_becomes_one_column():
     window = create_window(2)
     was = window.root
 
-    window.strip = True
+    window.options.strip = True
 
     assert list(window.root) == [was]
 
@@ -110,7 +110,7 @@ def test_root_that_is_already_row_is_left_alone():
     assert isinstance(window.root, VSplit)
     was = list(window.root)
 
-    window.strip = True
+    window.options.strip = True
 
     assert list(window.root) == was
 
@@ -119,7 +119,7 @@ def test_window_with_no_pane_becomes_empty_row():
     "Wrapping an empty split would give a column with nothing in it."
     window = Window()
 
-    window.strip = True
+    window.options.strip = True
 
     assert isinstance(window.root, VSplit)
     assert list(window.root) == []
@@ -129,7 +129,7 @@ def test_every_pane_is_still_there():
     window = create_window(3)
     panes = window.panes
 
-    window.strip = True
+    window.options.strip = True
 
     assert window.panes == panes
 
@@ -144,7 +144,7 @@ def test_column_takes_half_window():
     screen while a third one pushes past the edge.
     """
     window = create_window(2)
-    window.strip = True
+    window.options.strip = True
 
     assert window.column_width(window.root[0]) == DEFAULT_COLUMN_WIDTH
     assert DEFAULT_COLUMN_WIDTH == 1 / 2
@@ -152,7 +152,7 @@ def test_column_takes_half_window():
 
 def test_column_can_be_given_width_of_its_own():
     window = create_window(2)
-    window.strip = True
+    window.options.strip = True
     column = window.root[0]
 
     window.set_column_width(column, 1 / 3)
@@ -173,6 +173,6 @@ def test_turning_it_on_changes_hash_that_rebuilds_layout():
     window = create_window(2)
     before = window.invalidation_hash()
 
-    window.strip = True
+    window.options.strip = True
 
     assert window.invalidation_hash() != before

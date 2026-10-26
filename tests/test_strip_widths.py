@@ -35,7 +35,7 @@ def create_strip(columns=1):
     "A strip with this many columns, active on the last."
     window = Window()
     window.add_pane(create_pane())
-    window.strip = True
+    window.options.strip = True
     for _ in range(columns - 1):
         window.add_pane(create_pane(), vsplit=True)
     return window

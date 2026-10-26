@@ -20,18 +20,17 @@ from .enums import (
     EditingKeys,
     FileTransfer,
     PaneBrowser,
-    WindowCodec,
     WindowScroll,
-    WindowSize,
     Woke,
 )
 from .key_mappings import PYMUX_TO_PROMPT_TOOLKIT_KEYS
 from .key_spelling import key_however_it_is_written
 from .layout import Justify
 from .nearest import NEAREST
+from .option_fields import Declared, Options
 from .style import THEMES
 from .utils import get_default_shell
-from .wayland_scale import parse_scale
+from .window_options import WindowOptions
 
 if TYPE_CHECKING:
     from pymux.main import ClientState, Pymux
@@ -151,6 +150,10 @@ class Option(ABC):
             raise SetOptionError("This option holds its value somewhere else.")
         return self.attribute_name
 
+    def read(self, holder: Holder | Window | None) -> object:
+        "What `holder` holds for this option, or None."
+        return None if self.attribute_name is None else getattr(holder, self.attribute_name, None)
+
     def as_written(self, value: object, holder: Holder | Window | None) -> str:
         """
         What `show-options` prints for a value this option holds.
@@ -218,13 +221,57 @@ class OnOffOption(Option):
     def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
         setattr(self.held_by(pymux, target), self._attribute(), self._read(value))
 
+
+class FieldOption(Option):
+    """
+    An option declared as a field of its scope's options, which say
+    everything this does. Lillecarl/pymux#769.
+    """
+
+    def __init__(self, declared: Declared, scope: Scope) -> None:
+        self.declared = declared
+        self.scope = scope
+        self.attribute_name = declared.attribute
+
+    def _options_of(self, owner: Holder | Window | None) -> Options:
+        "The options `owner` holds, which a field option is written on."
+        options = getattr(owner, "options", None)
+        if not isinstance(options, Options):
+            raise SetOptionError("This is a %s option." % self.scope)
+        return options
+
+    @override
+    def read(self, holder: Holder | Window | None) -> object:
+        return getattr(self._options_of(holder), self.declared.attribute)
+
+    def _parse(self, value: str) -> object:
+        try:
+            return self.declared.parse(value)
+        except ValueError as error:
+            raise SetOptionError(str(error)) from None
+
+    @override
+    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
+        try:
+            now = self.read(self.held_by(pymux))
+        except SetOptionError:
+            now = None
+        return self.declared.values(now)
+
+    @override
+    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
+        parsed = self._parse(value)
+        owner = self.held_by(pymux, target)
+        setattr(self._options_of(owner), self.declared.attribute, parsed)
+        if self.declared.on_set is not None:
+            self.declared.on_set(pymux, owner)
+
     @override
     def set_default(self, pymux: Pymux, value: str) -> None:
         "What every new window starts with. Changes no window that is open."
         if self.scope is not Scope.WINDOW:
             return super().set_default(pymux, value)
-
-        pymux.arrangement.window_defaults[self._attribute()] = self._read(value)
+        pymux.arrangement.window_defaults[self.declared.attribute] = self._parse(value)
 
 
 class WaylandServerOption(OnOffOption):
@@ -295,14 +342,6 @@ class PositiveIntOption(Option):
     def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
         setattr(self.held_by(pymux, target), self._attribute(), self._read(value))
 
-    @override
-    def set_default(self, pymux: Pymux, value: str) -> None:
-        "What every new window starts with. Changes no window that is open."
-        if self.scope is not Scope.WINDOW:
-            return super().set_default(pymux, value)
-
-        pymux.arrangement.window_defaults[self._attribute()] = self._read(value)
-
 
 class PositiveFloatOption(Option):
     "A number above zero, which may have a fraction."
@@ -365,47 +404,6 @@ class AudioBitrateOption(PositiveIntOption):
     def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
         super().set_value(pymux, value, target)
         pymux.audio.client_options_changed()
-
-
-class FrameRateOption(PositiveIntOption):
-    """
-    `frame-rate`, which also says the window has one a person chose: that
-    is what caps the Wayland windows in it. Lillecarl/pymux#636.
-    """
-
-    @override
-    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
-        super().set_value(pymux, value, target)
-        window = self.held_by(pymux, target)
-        if isinstance(window, Window):
-            window.frame_rate_set = True
-
-
-class WaylandScaleOption(Option):
-    "`wayland-scale`: `auto`, `auto+N`, `auto-N`, `auto*N` or a number."
-
-    scope = Scope.WINDOW
-    attribute_name = "wayland_scale"
-
-    @override
-    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
-        return ["auto", "auto+0.5", "auto*1.5", "1", "2"]
-
-    def _read(self, value: str) -> str:
-        try:
-            return parse_scale(value)
-        except ValueError as error:
-            raise SetOptionError(str(error)) from None
-
-    @override
-    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
-        setattr(self.held_by(pymux, target), self._attribute(), self._read(value))
-        pymux.wayland.rescale()
-
-    @override
-    def set_default(self, pymux: Pymux, value: str) -> None:
-        "What every new window starts with. Changes no window that is open."
-        pymux.arrangement.window_defaults[self._attribute()] = self._read(value)
 
 
 class KeyPrefixOption(Option):
@@ -656,75 +654,6 @@ class RenderModeOption(EnumOption):
     @override
     def after(self, pymux: Pymux) -> None:
         pymux.apply_render_mode()
-
-
-class WindowCodecOption(EnumOption):
-    "`window-codec`: how the Wayland windows in a window reach a client."
-
-    def __init__(self) -> None:
-        super().__init__(WindowCodec, "window_codec", scope=Scope.WINDOW)
-
-    @override
-    def set_default(self, pymux: Pymux, value: str) -> None:
-        "What every new window starts with. Changes no window that is open."
-        try:
-            pymux.arrangement.window_defaults[self._attribute()] = WindowCodec(value)
-        except ValueError:
-            raise SetOptionError("Expecting one of: %s." % ", ".join('"%s"' % one for one in WindowCodec))
-
-    @override
-    def after(self, pymux: Pymux) -> None:
-        # The next frame of each client goes the new way.
-        pymux.invalidate()
-
-
-class WindowSizeOption(Option):
-    """
-    Which client's terminal decides how big a window's plane is.
-
-    A window option, because two windows of one session can be watched
-    by different clients. Decision 11 of `docs/layout-engine-plan.md`.
-    """
-
-    scope = Scope.WINDOW
-
-    attribute_name = "window_size"
-
-    @override
-    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
-        return [str(one) for one in WindowSize]
-
-    def _read(self, value: str) -> WindowSize:
-        try:
-            return WindowSize(value)
-        except ValueError:
-            raise SetOptionError("Expecting one of: %s." % ", ".join('"%s"' % one for one in WindowSize)) from None
-
-    @override
-    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
-        chosen = self._read(value)
-
-        window = pymux.arrangement.get_active_window()
-        if window is None:
-            raise SetOptionError(
-                "There is no window yet. A window option belongs to one "
-                "window, so a configuration file has none to set. "
-                'Use "-g" to say what every new window starts with.'
-            )
-
-        if chosen is WindowSize.MANUAL and window.manual_size is None:
-            # **`manual` with no size freezes the window as it is.** A
-            # person who says it and nothing else means "stop following
-            # the clients", not "pick a size for me", and tmux does the
-            # same. `resize-window` is how a size is named.
-            window.manual_size = pymux.plane_size(window)
-
-        window.window_size = chosen
-
-    @override
-    def set_default(self, pymux: Pymux, value: str) -> None:
-        "What every new window starts with. Changes no window that is open."
-        pymux.arrangement.window_defaults["window_size"] = self._read(value)
 
 
 class ThemeOption(Option):
@@ -1127,40 +1056,4 @@ ALL_CLIENT_OPTIONS = {
 }
 
 
-ALL_WINDOW_OPTIONS = {
-    "synchronize-panes": OnOffOption("synchronize_panes", scope=Scope.WINDOW),
-    # Whether a bell nobody saw flags the window and the pane it rang
-    # in. Lillecarl/pymux#501.
-    "monitor-bell": OnOffOption("monitor_bell", scope=Scope.WINDOW),
-    # Output, a quiet spell of so many seconds after output, and a
-    # notification, each in a window nobody looks at. Lillecarl/pymux#767.
-    "monitor-activity": OnOffOption("monitor_activity", scope=Scope.WINDOW),
-    "monitor-silence": PositiveIntOption("monitor_silence", [0, 10, 30, 60], scope=Scope.WINDOW),
-    "monitor-notification": OnOffOption("monitor_notification", scope=Scope.WINDOW),
-    # Lay this window's panes out as a strip that may run past the
-    # edge of the screen, the way niri's scrollable tiling works,
-    # instead of dividing the window between them.
-    #
-    # It is one window's option and it is off, so nothing that does
-    # not ask for it changes. `select-layout` turns it off again.
-    # Lillecarl/pymux#198.
-    "strip": OnOffOption("strip", scope=Scope.WINDOW),
-    # Which client's terminal decides how big this window's plane is,
-    # when more than one watches it. "smallest" is what pymux always
-    # did: every client sees the whole window, and a bigger one draws
-    # background around it. "largest" gives the window to the biggest
-    # client, and a smaller one moves its own view over it.
-    # Lillecarl/pymux#217.
-    "window-size": WindowSizeOption(),
-    # The most frames a second a client draws while it looks at this
-    # window. Zero is as many as it can, which is what pymux did
-    # before there was an option. `arrangement.DEFAULT_FRAME_RATE`
-    # says why thirty. Lillecarl/pymux#254.
-    "frame-rate": FrameRateOption("frame_rate", [0, 10, 30, 60, 120], scope=Scope.WINDOW),
-    # How dense the Wayland windows in this window draw: `auto` reads
-    # it off the client's cell. Lillecarl/pymux#637.
-    "wayland-scale": WaylandScaleOption(),
-    # Whether the Wayland windows in this window reach a client as the
-    # pixels that changed or as a VP9 stream. Lillecarl/pymux#639.
-    "window-codec": WindowCodecOption(),
-}
+ALL_WINDOW_OPTIONS = {name: FieldOption(declared, Scope.WINDOW) for name, declared in WindowOptions.DECLARED.items()}

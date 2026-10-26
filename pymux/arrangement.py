@@ -24,9 +24,8 @@ from ptterm import Terminal
 from pyte.keep import Keep
 
 from .downloads import DownloadReader
-from .enums import WindowCodec, WindowSize
 from .ids import PaneId, PaneIndex, WindowId, WindowIndex
-from .wayland_scale import DEFAULT_WAYLAND_SCALE
+from .window_options import WindowOptions
 
 if TYPE_CHECKING:
     from .recording import Recording
@@ -61,22 +60,6 @@ PRESET_COLUMN_WIDTHS = (1 / 3, 1 / 2, 2 / 3, 1.0)
 #: as well, and the reason a strip of two columns exactly fills the
 #: screen while a third one pushes past the edge.
 DEFAULT_COLUMN_WIDTH = 1 / 2
-
-#: The most frames a second a client draws, until somebody says
-#: otherwise. Zero means as many as it can.
-#:
-#: **Thirty, because a frame is expensive and an eye is not fast.** A
-#: frame at 187x59 costs about 19 ms of CPU, nearly all of it building
-#: cells that a diff then throws away (Lillecarl/pymux#254). A pane
-#: that animates asks for one on every write, and three of them
-#: together asked for seventeen a second. Thirty is above what a person
-#: reads text at and below what a program writes at, so it costs
-#: nothing anybody sees and refuses the frames nobody does.
-#:
-#: It is not a latency cap. A keystroke's frame is drawn at once
-#: whenever the last one was more than a thirtieth of a second ago,
-#: which at a human typing speed is always.
-DEFAULT_FRAME_RATE = 30
 
 
 class LayoutTypes(Enum):
@@ -363,21 +346,12 @@ class Window:
         "_pane_history": Keep.SAVED,  # weak references; its newest is saved, by pane id
         "chosen_name": Keep.SAVED,
         "previous_selected_layout": Keep.SAVED,
-        "_strip": Keep.SAVED,
+        "options": Keep.SAVED,
         "column_widths": Keep.SAVED,
-        "window_size": Keep.SAVED,
         "manual_size": Keep.SAVED,
         "zoom": Keep.SAVED,
-        "synchronize_panes": Keep.SAVED,
-        "frame_rate": Keep.SAVED,
         "frame_rate_set": Keep.SAVED,
-        "wayland_scale": Keep.SAVED,
-        "window_codec": Keep.SAVED,
-        "monitor_bell": Keep.SAVED,
         "bell": Keep.SAVED,
-        "monitor_activity": Keep.SAVED,
-        "monitor_silence": Keep.SAVED,
-        "monitor_notification": Keep.SAVED,
         "activity": Keep.SAVED,
         "silence": Keep.SAVED,
         "notified": Keep.SAVED,
@@ -402,11 +376,8 @@ class Window:
         #: What a caller said about this window, with `set-tag -w`.
         self.tags: Tags = {}
 
-        #: Lay the panes out as a strip that may be wider than the
-        #: screen, instead of dividing the screen between them. Read
-        #: and written through the `strip` property below, which keeps
-        #: the root in the shape a strip needs. Lillecarl/pymux#198.
-        self._strip = False
+        self.options = WindowOptions()
+        self.options.owner = self
 
         #: How wide each column of the strip is, as a fraction of the
         #: window, by the `node_key` of the column. A column with no
@@ -414,12 +385,6 @@ class Window:
         #: `column_width`: an entry outlives its column, so walking
         #: this dictionary finds columns that are gone.
         self.column_widths: dict[NodeKey, float] = {}
-
-        #: Which client's terminal decides how big this window's plane
-        #: is, when more than one watches it. `set-window-option
-        #: window-size` writes it. Decision 11 of
-        #: `docs/layout-engine-plan.md`.
-        self.window_size = WindowSize.SMALLEST
 
         #: How big a person said this window is, in cells, or `None`.
         #: `resize-window` writes it and turns `window_size` to
@@ -430,47 +395,20 @@ class Window:
         #: When true, the current pane is zoomed in.
         self.zoom = False
 
-        #: When True, send input to all panes simultaniously.
-        self.synchronize_panes = False
-
-        #: The most frames a second a client draws while it looks at
-        #: this window. Zero means as many as it can.
-        #:
-        #: A window is where this belongs, because a window is what a
-        #: client looks at and what holds the programs that animate.
-        #: One with cmatrix in it can be told to draw ten times a
-        #: second while the one a person is reading stays sharp.
-        #: Lillecarl/pymux#254.
-        self.frame_rate = DEFAULT_FRAME_RATE
         #: Whether a person set `frame-rate` on this window. Only then
         #: does it cap the Wayland windows in it, which otherwise draw
         #: as fast as the link to each client takes their frames.
         #: Lillecarl/pymux#636.
         self.frame_rate_set = False
-        #: How dense the Wayland windows in it draw, as `wayland-scale`
-        #: spells it. Lillecarl/pymux#637.
-        self.wayland_scale = DEFAULT_WAYLAND_SCALE
-        #: How the Wayland windows in it reach a client, as
-        #: `window-codec` says. Lillecarl/pymux#639.
-        self.window_codec = WindowCodec.LOSSLESS
 
-        #: Whether a bell in this window raises the flags below, as
-        #: `monitor-bell` says. On, as in tmux.
-        self.monitor_bell = True
         #: A pane in it rang the bell while no client looked at it.
         #: A client that makes it its window clears it, and
         #: `#{window_bell_flag}` and the `!` of `#F` are it.
         #: Lillecarl/pymux#501.
         self.bell = False
 
-        #: Whether output, a quiet spell of `monitor_silence` seconds
-        #: after output, and a notification flag a window no client
-        #: looks at. Activity and notifications are on, where tmux has
-        #: every monitor off: a mark nobody turned on tells nobody
-        #: anything. Lillecarl/pymux#767.
-        self.monitor_activity = True
-        self.monitor_silence = 0
-        self.monitor_notification = True
+        #: The marks the `monitor-*` options raise in a window no
+        #: client looks at. Lillecarl/pymux#767.
         self.activity = False
         self.silence = False
         self.notified = False
@@ -491,31 +429,17 @@ class Window:
         Window._window_counter += 1
         self.window_id: WindowId = WindowId(Window._window_counter)
 
-    @property
-    def strip(self) -> bool:
+    def shape_for_strip(self) -> None:
         """
-        Whether the panes are a strip that may run past the screen.
-
-        Every other layout divides the window between the panes. A
-        strip gives each column a width of its own, lets the row grow
-        past the edge, and scrolls to the column a person is on, the
-        way niri's scrollable tiling works. Lillecarl/pymux#198.
-        """
-        return self._strip
-
-    @strip.setter
-    def strip(self, value: bool) -> None:
-        """
-        Turn the mode on or off, and keep the root in the right shape.
+        Keep the root in the shape the `strip` option needs, after any
+        write of it.
 
         The columns of a strip are the children of `root`, so `root`
         has to be the row itself. A window that was laid out any other
         way becomes the first column of the strip, so nothing on screen
         moves except the way it is laid out.
         """
-        self._strip = bool(value)
-
-        if self._strip and not isinstance(self.root, VSplit):
+        if self.options.strip and not isinstance(self.root, VSplit):
             self.root = VSplit([self.root]) if len(self.root) else VSplit()
 
     def column_width(self, column) -> float:
@@ -647,7 +571,7 @@ class Window:
         # same panes are laid out and nothing else, so without it the
         # layout would not be rebuilt and the mode would take hold at
         # the next unrelated change.
-        return (self.window_id, self.zoom, self.strip, _shape_of(self.root))
+        return (self.window_id, self.zoom, self.options.strip, _shape_of(self.root))
 
     @property
     def active_pane(self) -> Pane | None:
@@ -694,11 +618,12 @@ class Window:
             self._quiet_since = now
         if wrote:
             self._silence_armed = True
-            if self.monitor_activity and not watched and not self.activity:
+            if self.options.monitor_activity and not watched and not self.activity:
                 self.activity = True
                 return True
             return False
-        if self._silence_armed and self.monitor_silence and now - self._quiet_since >= self.monitor_silence:
+        quiet = self.options.monitor_silence
+        if self._silence_armed and quiet and now - self._quiet_since >= quiet:
             self._silence_armed = False
             if not watched and not self.silence:
                 self.silence = True
@@ -745,7 +670,7 @@ class Window:
 
         if active is None:
             self.root.append(pane)
-        elif self._strip and vsplit:
+        elif self.options.strip and vsplit:
             column = self._column_of(active)
             self.root.insert(self.root.index(column) + 1, pane)
             self.active_pane = pane
@@ -771,7 +696,7 @@ class Window:
                 # And, in a strip, the width of the column it became.
                 # A pane that is stacked into a column should not make
                 # that column change width under a person.
-                if self._strip and parent is self.root:
+                if self.options.strip and parent is self.root:
                     self.set_column_width(new_split, self.column_width(active))
 
         self.active_pane = pane
@@ -836,7 +761,7 @@ class Window:
         into the splits inside it, so every pane that sat directly in
         the root was numbered before every pane in a nested split,
         whatever their place on the screen. A strip met that at once:
-        `Window.strip` wraps the window it is turning into a row, so
+        turning `strip` on wraps the window it is turning into a row, so
         the first column is a nested split and its panes came last. A
         picture of three columns showed the first one holding pane
         number 2. Lillecarl/pymux#210.
@@ -966,7 +891,7 @@ class Window:
         between the panes, which is the one thing a strip does not do,
         so asking for one is asking to leave. Lillecarl/pymux#198.
         """
-        self.strip = False
+        self.options.strip = False
 
         # When there is only one pane, always choose EVEN_HORIZONTAL,
         # Otherwise, we create VSplit/HSplit instances with an empty list of
@@ -1281,7 +1206,7 @@ class Arrangement:
         and sees nothing meanwhile. tmux keeps the window's flag alone;
         the pane's says which pane of a split it was.
         """
-        if not window.monitor_bell:
+        if not window.options.monitor_bell:
             return False
         watched = any(self._active_window_for_cli.get(app) is window for app in apps)
         raised = False
@@ -1296,7 +1221,7 @@ class Arrangement:
 
     def notify(self, window: Window, apps: Iterable[Application]) -> bool:
         "Mark a window a notification came from, unless a client looks at it. True when the mark went up."
-        if not window.monitor_notification or window.notified or self._watched(window, apps):
+        if not window.options.monitor_notification or window.notified or self._watched(window, apps):
             return False
         window.notified = True
         return True
@@ -1420,7 +1345,7 @@ class Arrangement:
         # After the pane, so that a default which reshapes the window
         # around what is in it sees the pane. `strip` is that.
         for attribute, value in self.window_defaults.items():
-            setattr(w, attribute, value)
+            setattr(w.options, attribute, value)
 
         self.windows.append(w)
 

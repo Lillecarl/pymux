@@ -172,7 +172,7 @@ def test_splitting_strip_gives_each_column_its_neighbours():
     window = Window()
     opened = [create_pane()]
     window.add_pane(opened[0])
-    window.strip = True
+    window.options.strip = True
 
     for _ in range(2):
         opened.append(create_pane())

@@ -74,7 +74,7 @@ def test_a_detached_client_sees_nothing():
 def test_monitor_bell_off_flags_nothing():
     arrangement = Arrangement()
     window, left, _right = _window_of_two(arrangement)
-    window.monitor_bell = False
+    window.options.monitor_bell = False
 
     assert not arrangement.ring(window, left, [])
     assert (window.bell, left.bell) == (False, False)

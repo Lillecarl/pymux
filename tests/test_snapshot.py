@@ -210,19 +210,19 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     strip.panes[0].screen.mark_row(RowMark.PROMPT | RowMark.OUTPUT)
 
     stacked.zoom = True
-    stacked.synchronize_panes = True
+    stacked.options.synchronize_panes = True
     stacked.manual_size = Size(rows=30, columns=100)
-    stacked.window_size = WindowSize.LARGEST
+    stacked.options.window_size = WindowSize.LARGEST
     stacked.previous_selected_layout = LayoutTypes.TILED
-    stacked.frame_rate = 60
+    stacked.options.frame_rate = 60
     stacked.frame_rate_set = True
-    stacked.wayland_scale = "auto*1.5"
-    stacked.window_codec = WindowCodec.VP9
-    stacked.monitor_bell = False
+    stacked.options.wayland_scale = "auto*1.5"
+    stacked.options.window_codec = WindowCodec.VP9
+    stacked.options.monitor_bell = False
     stacked.bell = True
-    stacked.monitor_activity = False
-    stacked.monitor_silence = 30
-    stacked.monitor_notification = False
+    stacked.options.monitor_activity = False
+    stacked.options.monitor_silence = 30
+    stacked.options.monitor_notification = False
     stacked.activity = stacked.silence = stacked.notified = True
     stacked.tags = {"role": "logs"}
     strip.tags = {"role": "build", "bare": None}

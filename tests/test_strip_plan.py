@@ -47,7 +47,7 @@ def create_strip(shape=(1, 1)):
     split makes a column, and a vertical one stacks inside the column.
     """
     window = Window()
-    window.strip = True
+    window.options.strip = True
     panes = []
 
     for count in shape:
@@ -278,7 +278,7 @@ def test_column_split_sideways_has_line_between_its_panes():
     window.add_pane(bottom)
     window.active_pane = top
     window.add_pane(beside, vsplit=True)
-    window.strip = True
+    window.options.strip = True
 
     plan = create_plan(window)
     (between,) = [line.rect for line in plan.lines if line.rect.x == where(plan, top).right]

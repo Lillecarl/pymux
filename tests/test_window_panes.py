@@ -20,10 +20,10 @@ from session import once, over_connection
 
 pytest.importorskip("pysmithay")
 
-from pymux.arrangement import DEFAULT_FRAME_RATE
 from pymux.enums import WindowCodec, WindowScroll, Woke
 from pymux.graphics import WINDOW_Z
 from pymux.main import Pymux
+from pymux.window_options import DEFAULT_FRAME_RATE
 from pymux.window_pane import is_window_pane
 
 PROBE = Path(__file__).with_name("wayland_probe.py")
@@ -82,8 +82,8 @@ async def with_a_window(
         if cell is not None:
             graphics.cell_width, graphics.cell_height = cell
             graphics.cell_size_known = True
-        state.session.arrangement.get_active_window().wayland_scale = scale
-        state.session.arrangement.get_active_window().window_codec = codec
+        state.session.arrangement.get_active_window().options.wayland_scale = scale
+        state.session.arrangement.get_active_window().options.window_codec = codec
         await once(lambda: pymux.wayland.display, 10.0, "the compositor never started")
         # pywayland makes its shm pools in XDG_RUNTIME_DIR, which a build
         # sandbox does not set.
@@ -347,7 +347,7 @@ async def test_a_window_draws_no_faster_than_a_frame_rate_chosen_for_it(tmp_path
     async with with_a_window(tmp_path, animate=True) as (pymux, state, _pane, _recorder, log, _probe):
         window = state.session.arrangement.get_active_window()
         # What `set-window-option frame-rate 10` does.
-        window.frame_rate = 10
+        window.options.frame_rate = 10
         window.frame_rate_set = True
         pymux.invalidate(Woke.WINDOW_PANE_CHANGED)
         await once(lambda: logged(log).count("frame") >= 3, 10.0, "the window never drew again")

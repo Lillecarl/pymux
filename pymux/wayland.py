@@ -416,7 +416,7 @@ class WaylandServer:
             return 0
         session, window, _pane = found
         if window.frame_rate_set or "frame_rate" in session.arrangement.window_defaults:
-            return window.frame_rate
+            return window.options.frame_rate
         return 0
 
     def _takes_keys(self) -> bool:
@@ -463,7 +463,7 @@ class WaylandServer:
         "The scale the `wayland-scale` of the window holding this one names."
         pane = self.panes.get(toplevel)
         found = None if pane is None else self.pymux.window_of_pane(pane.pane_id)
-        value = DEFAULT_WAYLAND_SCALE if found is None else found[1].wayland_scale
+        value = DEFAULT_WAYLAND_SCALE if found is None else found[1].options.wayland_scale
         return resolve_scale(value, cell_height)
 
     def close(self, toplevel: int) -> None:
@@ -599,7 +599,7 @@ class WaylandServer:
             update=update,
             shown=shown,
             rects=rects,
-            codec=str(found[1].window_codec) if found is not None else "",
+            codec=str(found[1].options.window_codec) if found is not None else "",
             video=video,
             encoder=None if pysmithay is None else pysmithay.Vp9Encoder,
         )

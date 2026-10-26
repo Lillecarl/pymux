@@ -9,7 +9,7 @@ internal detail: it is on the screen all day.
 It used to be the order of a walk that took each split's own panes
 before the splits inside it. Every pane sitting directly in the root
 was numbered before every pane in a nested split, whatever its place
-on the screen. A strip meets that at once, because `Window.strip`
+on the screen. A strip meets that at once, because turning `strip` on
 wraps the window it turns into a row: the first column is a nested
 split, so its panes came last. Lillecarl/pymux#210.
 """
@@ -68,7 +68,7 @@ def test_strip_numbers_its_columns_from_left():
     window = Window()
     opened = [create_pane()]
     window.add_pane(opened[0])
-    window.strip = True
+    window.options.strip = True
 
     for _ in range(2):
         opened.append(create_pane())

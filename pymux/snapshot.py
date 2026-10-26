@@ -52,7 +52,7 @@ from pyte.titles import Titles
 
 from .arrangement import HSplit, LayoutTypes, Pane, VSplit, Window, _Split, node_key
 from .commands.wait_for import WaitChannel
-from .enums import AudioFrame, ClientAudio, FileTransfer, WindowScroll
+from .enums import AudioFrame, ClientAudio, FileTransfer, WindowCodec, WindowScroll, WindowSize
 from .ids import PaneId, SessionId, WindowId, WindowIndex
 from .jobs import Job, JobFeed, JobId, JobPipes
 from .notifications import Notification, NotificationSource
@@ -105,6 +105,7 @@ from .tables import (
     insert,
     select,
 )
+from .window_options import WindowOptions
 
 if TYPE_CHECKING:
     from .main import ClientState, Pymux
@@ -225,6 +226,9 @@ WRITES: dict[str, frozenset[str]] = {
     ),
     "pymux.arrangement.Window": frozenset(Window.KEEP)
     - {"_revisions_seen", "_quiet_since", "_silence_armed", "seen_at"},
+    "pymux.window_options.WindowOptions": frozenset(
+        name for name, fate in WindowOptions.KEEP.items() if fate == Keep.SAVED
+    ),
     "pymux.arrangement._Split": frozenset(_Split.KEEP),
     "pymux.arrangement.Pane": frozenset(name for name, fate in Pane.KEEP.items() if fate == Keep.SAVED),
     "pymux.main.ClientState": frozenset({"session", "previous_session", *CLIENT_SETTINGS, *CLIENT_MODES}),
@@ -657,21 +661,21 @@ def _window_rows(session: Session, window: Window, linked: bool, place: int) -> 
         active_pane_id=_optional_id(window._active_pane),
         previous_active_pane_id=_optional_id(previous),
         previous_layout=_value(window.previous_selected_layout),
-        strip=window._strip,
-        window_size=_value(window.window_size),
+        strip=window.options.strip,
+        window_size=_value(window.options.window_size),
         manual_height=manual.rows if manual is not None else None,
         manual_width=manual.columns if manual is not None else None,
         zoom=window.zoom,
-        synchronize_panes=window.synchronize_panes,
-        frame_rate=window.frame_rate,
+        synchronize_panes=window.options.synchronize_panes,
+        frame_rate=window.options.frame_rate,
         frame_rate_set=window.frame_rate_set,
-        wayland_scale=window.wayland_scale,
-        window_codec=_value(window.window_codec),
-        monitor_bell=window.monitor_bell,
+        wayland_scale=window.options.wayland_scale,
+        window_codec=_value(window.options.window_codec),
+        monitor_bell=window.options.monitor_bell,
         bell=window.bell,
-        monitor_activity=window.monitor_activity,
-        monitor_silence=window.monitor_silence,
-        monitor_notification=window.monitor_notification,
+        monitor_activity=window.options.monitor_activity,
+        monitor_silence=window.options.monitor_silence,
+        monitor_notification=window.options.monitor_notification,
         activity=window.activity,
         silence=window.silence,
         notified=window.notified,
@@ -1099,7 +1103,7 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
         arrangement = session.arrangement
         for default in select(db, WindowDefaultRow, "WHERE session_id = ?", session.session_id):
             attribute = window_attributes.get(default.name, default.name)
-            fresh = Window()
+            fresh = WindowOptions()
             if hasattr(fresh, attribute):
                 arrangement.window_defaults[attribute] = _like(getattr(fresh, attribute), default.value)
 
@@ -1119,21 +1123,21 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
             window._pane_history = [ref(previous)] if previous is not None else []
             layout = window_row.previous_layout
             window.previous_selected_layout = LayoutTypes(layout) if layout is not None else None
-            window._strip = bool(window_row.strip)
-            window.window_size = type(window.window_size)(window_row.window_size)
+            window.options.strip = bool(window_row.strip)
+            window.options.window_size = WindowSize(window_row.window_size)
             if window_row.manual_height is not None and window_row.manual_width is not None:
                 window.manual_size = Size(rows=window_row.manual_height, columns=window_row.manual_width)
             window.zoom = bool(window_row.zoom)
-            window.synchronize_panes = bool(window_row.synchronize_panes)
-            window.frame_rate = window_row.frame_rate
+            window.options.synchronize_panes = bool(window_row.synchronize_panes)
+            window.options.frame_rate = window_row.frame_rate
             window.frame_rate_set = bool(window_row.frame_rate_set)
-            window.wayland_scale = window_row.wayland_scale
-            window.window_codec = type(window.window_codec)(window_row.window_codec)
-            window.monitor_bell = bool(window_row.monitor_bell)
+            window.options.wayland_scale = window_row.wayland_scale
+            window.options.window_codec = WindowCodec(window_row.window_codec)
+            window.options.monitor_bell = bool(window_row.monitor_bell)
             window.bell = bool(window_row.bell)
-            window.monitor_activity = bool(window_row.monitor_activity)
-            window.monitor_silence = window_row.monitor_silence
-            window.monitor_notification = bool(window_row.monitor_notification)
+            window.options.monitor_activity = bool(window_row.monitor_activity)
+            window.options.monitor_silence = window_row.monitor_silence
+            window.options.monitor_notification = bool(window_row.monitor_notification)
             window.activity = bool(window_row.activity)
             window.silence = bool(window_row.silence)
             window.notified = bool(window_row.notified)

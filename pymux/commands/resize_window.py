@@ -93,7 +93,7 @@ def resize_window(pymux: Pymux, args: argparse.Namespace) -> None:
     rows -= number(args.up, 0)
 
     window.manual_size = Size(rows=max(1, rows), columns=max(1, columns))
-    window.window_size = WindowSize.MANUAL
+    window.options.window_size = WindowSize.MANUAL
 
     # A frame is what tells a pane its size, and a window nobody
     # watches gets no frame. Without this the plane answered the new

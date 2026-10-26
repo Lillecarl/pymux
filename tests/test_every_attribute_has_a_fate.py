@@ -72,6 +72,7 @@ def live_objects(pymux):
         yield session.arrangement
         for window in session.arrangement.windows:
             yield window
+            yield window.options
             yield from window.splits
             for pane in window.panes:
                 yield pane

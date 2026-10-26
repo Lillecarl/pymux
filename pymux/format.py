@@ -828,7 +828,7 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     # clock is in a mode too.
     "pane_in_mode": lambda c: "1" if _pane_mode(c) else "0",
     "pane_mode": _pane_mode,
-    "pane_synchronized": lambda c: "1" if c.window.synchronize_panes else "0",
+    "pane_synchronized": lambda c: "1" if c.window.options.synchronize_panes else "0",
     # "Has anything happened in this pane?", as one number to compare.
     # It only goes up, and a difference says something may have changed
     # rather than how much. `Pane.revision` says what moves it.

@@ -29,7 +29,7 @@ def switch_column_width(pymux: Pymux, args: argparse.Namespace) -> None:
     """
     window = the_window(pymux, None)
 
-    if not window.strip:
+    if not window.options.strip:
         raise CommandException("This window is not a strip. `set-window-option strip on` first.")
 
     pane = window.active_pane

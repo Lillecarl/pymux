@@ -2956,7 +2956,7 @@ def layout_of(pymux: Pymux, window):
 
     **Zoom wraps whichever of them the window is in**, and that is why
     it is a wrapper. A branch that tests `window.zoom` before
-    `window.strip` makes a zoomed strip not a strip: the row stops
+    `window.options.strip` makes a zoomed strip not a strip: the row stops
     existing for that frame instead of being covered.
     Lillecarl/pymux#215.
 
@@ -2966,7 +2966,7 @@ def layout_of(pymux: Pymux, window):
     here is still standing.
     """
     gaps = partial(gaps_of, pymux, window)
-    inner = Strip(window, gaps) if window.strip else Divided(window, gaps)
+    inner = Strip(window, gaps) if window.options.strip else Divided(window, gaps)
 
     if window.zoom and window.active_pane is not None:
         return Zoomed(inner, window.active_pane)

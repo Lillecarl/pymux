@@ -43,7 +43,7 @@ def create_strip(columns=1):
     window = Window()
     opened = [create_pane()]
     window.add_pane(opened[0])
-    window.strip = True
+    window.options.strip = True
 
     for _ in range(columns - 1):
         opened.append(create_pane())

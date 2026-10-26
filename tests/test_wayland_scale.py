@@ -50,12 +50,12 @@ async def test_the_option_writes_the_active_window():
     async with mux.running():
         await mux.create_window("true")
         window = mux.arrangement.windows[0]
-        assert window.wayland_scale == "auto"
+        assert window.options.wayland_scale == "auto"
         ALL_WINDOW_OPTIONS["wayland-scale"].set_value(mux, "auto*1.5")
-        assert window.wayland_scale == "auto*1.5"
+        assert window.options.wayland_scale == "auto*1.5"
         with pytest.raises(SetOptionError):
             ALL_WINDOW_OPTIONS["wayland-scale"].set_value(mux, "huge")
-        assert window.wayland_scale == "auto*1.5"
+        assert window.options.wayland_scale == "auto*1.5"
 
 
 async def test_global_form_says_what_new_window_starts_with():
@@ -63,6 +63,6 @@ async def test_global_form_says_what_new_window_starts_with():
     async with mux.running():
         await mux.create_window("true")
         mux.handle_command("set-window-option -g wayland-scale 2")
-        assert mux.arrangement.windows[0].wayland_scale == "auto"
+        assert mux.arrangement.windows[0].options.wayland_scale == "auto"
         await mux.create_window("true")
-        assert mux.arrangement.windows[-1].wayland_scale == "2"
+        assert mux.arrangement.windows[-1].options.wayland_scale == "2"
