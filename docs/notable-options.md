@@ -47,6 +47,18 @@ The build switch: the root `default.nix` passes `pipewire` and `wireplumber` to 
 | `wayland-scale` | window | `auto` | A window draws at the density of the client's cells. |
 | `window-scroll` | client | `smooth` | One scroll event moves one cell of pixels, which follows a trackpad. `notch` is a mouse wheel's step. The terminal does not say which device it has. |
 
+## Which windows want attention
+
+A window that no client looks at carries a mark in `#F` (and so in the status line), in the window chooser's session label, and in `#{session_alerts}`. Looking at the window clears its marks. Lillecarl/pymux#767.
+
+| option | scope | default | why |
+| --- | --- | --- | --- |
+| `monitor-activity` | window | on | Output marks the window with `activity-symbol`. tmux has it off; a mark nobody turned on tells nobody which window is busy. |
+| `monitor-notification` | window | on | A notification from a pane (OSC 9, 99 or 777, or `pymux notify`) marks its window with `notification-symbol`. Not in tmux. |
+| `monitor-silence` | window | `0` | Seconds of quiet after output that mark the window with `silence-symbol`: the mark that says a build ended. Off, as in tmux, because the right time depends on the program. |
+| `monitor-bell` | window | on | A bell marks the window with `bell-symbol`, as in tmux. |
+| `activity-symbol`, `bell-symbol`, `silence-symbol`, `notification-symbol` | session | `#`, `!`, `~`, `?` | ASCII, so every font has them; the first three are tmux's. Each mark has its own symbol until use shows which programs send what. Set icons here for a font that has them. |
+
 ## A log of what you do
 
 | option | scope | default | why |

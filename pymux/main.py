@@ -99,7 +99,7 @@ from .key_spelling import why_pane_cannot_read
 from .layout import Justify, LayoutManager, change_pane_size
 from .log import logger
 from .nearest import NEAREST
-from .notifications import NotificationCenter, NotificationRoutes, Urgency
+from .notifications import Notification, NotificationCenter, NotificationRoutes, Urgency
 from .options import (
     ALL_CLIENT_OPTIONS,
     ALL_OPTIONS,
@@ -223,6 +223,10 @@ _FTCS_ROW_MARKS = {"A": RowMark.PROMPT, "C": RowMark.OUTPUT}
 #: caught up, in seconds: its next frame draws within this of it.
 #: Lillecarl/pymux#585.
 BEHIND_INTERVAL = 0.1
+
+#: How often the windows are checked for output and for quiet, in
+#: seconds: a mark goes up within this of what raised it.
+WINDOW_OUTPUT_INTERVAL = 1.0
 
 #: What a client refreshes in the session it attaches to, by default.
 #: tmux's own list, which is every name that points at something on
@@ -1388,6 +1392,10 @@ class Pymux:
         "chooser_session_lines": Keep.SAVED,
         "window_status_current_format": Keep.SAVED,
         "window_status_format": Keep.SAVED,
+        "bell_symbol": Keep.SAVED,
+        "activity_symbol": Keep.SAVED,
+        "silence_symbol": Keep.SAVED,
+        "notification_symbol": Keep.SAVED,
         # Tables, indexes and what the server last pushed.
         "option_tables": Keep.REBUILT,
         "panes_by_id": Keep.REBUILT,
@@ -1464,6 +1472,13 @@ class Pymux:
         # it changes nothing. Lillecarl/pymux#531.
         self.chooser_session_lines = True
         self.enable_bell = True
+        # tmux's letters for the three it has. A notification gets its
+        # own until real use shows which programs send what.
+        # Lillecarl/pymux#767.
+        self.bell_symbol = "!"
+        self.activity_symbol = "#"
+        self.silence_symbol = "~"
+        self.notification_symbol = "?"
 
         # Who may write the clipboard of the person at the keyboard.
         # tmux ships "external", where a copy the person makes goes out
@@ -1612,6 +1627,7 @@ class Pymux:
         #: beside the routes and not in them: a route answers one
         #: question, the hub lists everything.
         self.notification_center = NotificationCenter()
+        self.notification_center.on_added = self._notified
 
         # When no panes are available.
         self.original_cwd = os.getcwd()
@@ -2284,6 +2300,7 @@ class Pymux:
             self.loop = asyncio.get_running_loop()
             self.error_notice.install()
             tasks.start_soon(self._auto_refresh)
+            tasks.start_soon(self._watch_window_output)
             tasks.start_soon(self._sweep_jobs)
             tasks.start_soon(self.actions.keep, lambda: self.action_log_limit)
             tasks.start_soon(self.wayland.keep)
@@ -2317,6 +2334,30 @@ class Pymux:
         if self.tasks is None:
             raise RuntimeError("A connection was made outside `Pymux.running`, so nothing would read it.")
         self.tasks.start_soon(connection.serve)
+
+    async def _watch_window_output(self) -> None:
+        "Raise the activity and silence marks, once a second. Lillecarl/pymux#767."
+        while True:
+            await anyio.sleep(WINDOW_OUTPUT_INTERVAL)
+            now = anyio.current_time()
+            try:
+                raised = False
+                for session in self.sessions:
+                    raised |= session.arrangement.check_output(self.apps, now)
+                if raised:
+                    self.invalidate(Woke.WINDOW_MARKED)
+            except Exception:
+                # Like the clock: this must not take the server with it.
+                logger.exception("Checking the windows for output failed.")
+
+    def _notified(self, record: Notification) -> None:
+        "Mark the window a notification came from. Lillecarl/pymux#767."
+        found = self.window_of_pane(record.pane_id)
+        if found is None:
+            return
+        session, window, _pane = found
+        if session.arrangement.notify(window, self.apps):
+            self.invalidate(Woke.WINDOW_MARKED)
 
     async def _auto_refresh(self) -> None:
         """

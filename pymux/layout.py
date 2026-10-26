@@ -995,8 +995,17 @@ class LayoutManager:
         "The columns the session labels take, a space after them included."
         if not self._chooser_grouped():
             return 0
-        names = {self._session_name_of(window) for window in self.chooser_matches()}
-        return max((len(name) for name in names), default=0) + 1
+        sessions = {self.pymux.session_of_window(window) for window in self.chooser_matches()}
+        return max((len(self._session_label(session)) for session in sessions if session), default=0) + 1
+
+    def _session_label(self, session) -> str:
+        """
+        A session's name, and the marks its windows carry, so a line
+        says which session wants attention. Lillecarl/pymux#767.
+        """
+        from pymux.format import marks_of
+
+        return session.name + marks_of(session.options, session.arrangement.windows)
 
     def chooser_line_labels(self, lines: list[list[int]]) -> list[str]:
         """
@@ -1014,7 +1023,7 @@ class LayoutManager:
         previous = None
         for line in lines:
             session = self.pymux.session_of_window(matches[line[0]]) if line else None
-            name = session.name if session is not None and session is not previous else ""
+            name = self._session_label(session) if session is not None and session is not previous else ""
             labels.append(name.ljust(width))
             previous = session
         return labels
@@ -1504,7 +1513,12 @@ class LayoutManager:
                 format_str = self.client_state.session.options.window_status_current_format
 
             else:
-                style = "class:window.bell" if w.bell else "class:window"
+                if w.bell or w.notified:
+                    style = "class:window.bell"
+                elif w.activity or w.silence:
+                    style = "class:window.activity"
+                else:
+                    style = "class:window"
                 format_str = self.client_state.session.options.window_status_format
 
             result.append(

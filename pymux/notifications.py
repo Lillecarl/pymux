@@ -23,6 +23,7 @@ from __future__ import annotations
 import re
 import time
 from collections import OrderedDict
+from collections.abc import Callable
 from typing import NamedTuple
 
 from pymux.ids import PaneId
@@ -94,6 +95,9 @@ class NotificationCenter:
         self._next = 1
         self._records: list[Notification] = []
         self._pending: dict[tuple[PaneId | None, str], Notification] = {}
+        #: Called with each finished record, which is what marks the
+        #: window it came from. Lillecarl/pymux#767.
+        self.on_added: Callable[[Notification], None] | None = None
 
     def add(
         self,
@@ -112,9 +116,14 @@ class NotificationCenter:
             at=time.time(),
         )
         self._next += 1
+        return self._store(record)
+
+    def _store(self, record: Notification) -> Notification:
         self._records.append(record)
         while len(self._records) > self.limit:
             del self._records[0]
+        if self.on_added is not None:
+            self.on_added(record)
         return record
 
     def add_osc99(self, pane_id: PaneId | None, param: str) -> Notification | None:
@@ -172,10 +181,7 @@ class NotificationCenter:
                 self._pending.pop(next(iter(self._pending)))
             return None
         self._pending.pop(key, None)
-        self._records.append(pending)
-        while len(self._records) > self.limit:
-            del self._records[0]
-        return pending
+        return self._store(pending)
 
     def notifications(self) -> list[Notification]:
         "Every finished notification, oldest first."

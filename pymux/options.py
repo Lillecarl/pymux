@@ -1027,6 +1027,12 @@ ALL_OPTIONS = {
     "status-max-rows": PositiveIntOption("status_max_rows", [1, 2, 3, 5]),
     "window-status-format": StringOption("window_status_format"),
     "window-status-current-format": StringOption("window_status_current_format"),
+    # What `#F` writes for each mark of a window. ASCII, so every font
+    # has them; a configuration may set icons. Lillecarl/pymux#767.
+    "bell-symbol": StringOption("bell_symbol"),
+    "activity-symbol": StringOption("activity_symbol"),
+    "silence-symbol": StringOption("silence_symbol"),
+    "notification-symbol": StringOption("notification_symbol"),
     "default-shell": StringOption("default_shell", [get_default_shell()]),
     "status-justify": JustifyOption("status_justify"),
     "status-interval": PositiveIntOption("status_interval", [1, 2, 4, 8, 16, 30, 60]),
@@ -1126,6 +1132,11 @@ ALL_WINDOW_OPTIONS = {
     # Whether a bell nobody saw flags the window and the pane it rang
     # in. Lillecarl/pymux#501.
     "monitor-bell": OnOffOption("monitor_bell", scope=Scope.WINDOW),
+    # Output, a quiet spell of so many seconds after output, and a
+    # notification, each in a window nobody looks at. Lillecarl/pymux#767.
+    "monitor-activity": OnOffOption("monitor_activity", scope=Scope.WINDOW),
+    "monitor-silence": PositiveIntOption("monitor_silence", [0, 10, 30, 60], scope=Scope.WINDOW),
+    "monitor-notification": OnOffOption("monitor_notification", scope=Scope.WINDOW),
     # Lay this window's panes out as a strip that may run past the
     # edge of the screen, the way niri's scrollable tiling works,
     # instead of dividing the window between them.

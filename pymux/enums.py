@@ -236,6 +236,7 @@ class Woke(StrEnum):
     PANE_WAS_RESPAWNED = "a pane was respawned"
     PANE_RESIZED = "a program in a pane asked for a size"
     PANE_RANG = "a pane rang its bell where nobody saw it"
+    WINDOW_MARKED = "a window nobody saw wrote, went quiet or notified"
     WINDOW_OPENED = "a window opened"
     PANE_WAS_SPLIT_OFF = "a pane was split off"
     PANE_BROKE_OUT = "a pane broke out into a window"

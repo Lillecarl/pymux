@@ -17,7 +17,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, ClassVar
 from weakref import WeakKeyDictionary, ref
 
-from prompt_toolkit.application import Application, get_app, get_app_or_none, set_app
+from prompt_toolkit.application import Application, DummyApplication, get_app, get_app_or_none, set_app
 from prompt_toolkit.data_structures import Size
 from ptterm import Terminal
 from pyte.keep import Keep
@@ -374,6 +374,15 @@ class Window:
         "window_codec": Keep.SAVED,
         "monitor_bell": Keep.SAVED,
         "bell": Keep.SAVED,
+        "monitor_activity": Keep.SAVED,
+        "monitor_silence": Keep.SAVED,
+        "monitor_notification": Keep.SAVED,
+        "activity": Keep.SAVED,
+        "silence": Keep.SAVED,
+        "notified": Keep.SAVED,
+        "_revisions_seen": Keep.DROPPED,  # the next image's panes count from zero
+        "_quiet_since": Keep.DROPPED,
+        "_silence_armed": Keep.DROPPED,
         "tags": Keep.SAVED,
     }
 
@@ -451,6 +460,26 @@ class Window:
         #: `#{window_bell_flag}` and the `!` of `#F` are it.
         #: Lillecarl/pymux#501.
         self.bell = False
+
+        #: Whether output, a quiet spell of `monitor_silence` seconds
+        #: after output, and a notification flag a window no client
+        #: looks at. Activity and notifications are on, where tmux has
+        #: every monitor off: a mark nobody turned on tells nobody
+        #: anything. Lillecarl/pymux#767.
+        self.monitor_activity = True
+        self.monitor_silence = 0
+        self.monitor_notification = True
+        self.activity = False
+        self.silence = False
+        self.notified = False
+        #: The sum of the panes' revisions at the last check, or None
+        #: before the first: that check takes the count as it is, so a
+        #: load that replays every screen marks nothing.
+        self._revisions_seen: int | None = None
+        self._quiet_since = 0.0
+        #: Output came after the last silence mark, so the next quiet
+        #: spell is news.
+        self._silence_armed = False
 
         # Give unique ID.
         Window._window_counter += 1
@@ -636,10 +665,38 @@ class Window:
             value.bell = False
 
     def seen(self) -> None:
-        "A client looks at this window now, so its bell and its active pane's are heard."
-        self.bell = False
+        "A client looks at this window now, so its marks and its active pane's bell are heard."
+        self.bell = self.activity = self.silence = self.notified = False
         if self._active_pane is not None:
             self._active_pane.bell = False
+
+    def check_output(self, watched: bool, now: float) -> bool:
+        """
+        Raise the activity or silence mark from what the panes wrote
+        since the last check. True when a mark went up.
+
+        Polled, and not raised from the read of each pane: a read is
+        the hottest path pymux has, and a revision count costs nothing
+        there. Lillecarl/pymux#767.
+        """
+        total = sum(pane.revision for pane in self.panes)
+        first = self._revisions_seen is None
+        wrote = not first and total != self._revisions_seen
+        self._revisions_seen = total
+        if first or wrote:
+            self._quiet_since = now
+        if wrote:
+            self._silence_armed = True
+            if self.monitor_activity and not watched and not self.activity:
+                self.activity = True
+                return True
+            return False
+        if self._silence_armed and self.monitor_silence and now - self._quiet_since >= self.monitor_silence:
+            self._silence_armed = False
+            if not watched and not self.silence:
+                self.silence = True
+                return True
+        return False
 
     @property
     def previous_active_pane(self) -> Pane | None:
@@ -1183,7 +1240,12 @@ class Arrangement:
                 window = self.windows[0]
 
             self._active_window_for_cli[app] = window
-            window.seen()
+            # `get_app()` with no client current answers prompt_toolkit's
+            # stand-in, and nobody looks through that: an invalidate on
+            # a pane's callback cleared the marks it had just raised.
+            # Lillecarl/pymux#767.
+            if not isinstance(app, DummyApplication):
+                window.seen()
             return window
 
     def set_active_window(self, window: Window) -> None:
@@ -1220,6 +1282,23 @@ class Arrangement:
             window.bell = raised = True
         if (not watched or pane is not window.active_pane) and not pane.bell:
             pane.bell = raised = True
+        return raised
+
+    def _watched(self, window: Window, apps: Iterable[Application]) -> bool:
+        return any(self._active_window_for_cli.get(app) is window for app in apps)
+
+    def notify(self, window: Window, apps: Iterable[Application]) -> bool:
+        "Mark a window a notification came from, unless a client looks at it. True when the mark went up."
+        if not window.monitor_notification or window.notified or self._watched(window, apps):
+            return False
+        window.notified = True
+        return True
+
+    def check_output(self, apps: Iterable[Application], now: float) -> bool:
+        "`Window.check_output` for every window. True when a mark went up."
+        raised = False
+        for window in self.windows:
+            raised |= window.check_output(self._watched(window, apps), now)
         return raised
 
     def set_active_window_from_pane_id(self, pane_id: PaneId) -> None:

@@ -48,8 +48,10 @@ class SessionOptions:
     `tests/test_session_options.py` holds them to `ALL_OPTIONS`.
     """
 
+    activity_symbol: str
     allow_program_resize: bool
     base_index: int
+    bell_symbol: str
     chooser_session_lines: bool
     command_palette: bool
     cut_shade_strength: int
@@ -63,6 +65,7 @@ class SessionOptions:
     key_profile: str
     lock_command: str
     mode_keys: EditingKeys
+    notification_symbol: str
     notify_shim: bool
     open_url_forward: bool
     open_url_forward_idle: int
@@ -73,6 +76,7 @@ class SessionOptions:
     pane_browser: PaneBrowser
     remain_on_exit: bool
     renumber_windows: bool
+    silence_symbol: str
     status_interval: int
     status_justify: Justify
     status_keys: EditingKeys

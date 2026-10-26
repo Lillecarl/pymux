@@ -220,6 +220,10 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     stacked.window_codec = WindowCodec.VP9
     stacked.monitor_bell = False
     stacked.bell = True
+    stacked.monitor_activity = False
+    stacked.monitor_silence = 30
+    stacked.monitor_notification = False
+    stacked.activity = stacked.silence = stacked.notified = True
     stacked.tags = {"role": "logs"}
     strip.tags = {"role": "build", "bare": None}
     strip.set_column_width(strip.root[0], 0.75)
@@ -693,31 +697,28 @@ def test_the_table_list_is_the_schema_in_order():
     assert list(tables.TABLES) == made
 
 
-def test_a_version_33_snapshot_keeps_the_order_a_session_set(pymux, tmp_path):
+async def test_a_version_34_snapshot_loads_with_the_monitors_on(pymux, tmp_path):
     """
-    33 kept base-index and renumber-windows on every session's row. A
-    value other than the default is one the session set, and the rest
-    follow `set-option -g` from now on. Lillecarl/pymux#756.
+    34 had no marks but the bell. Its windows load with activity and
+    notifications watched, as a new window starts. Lillecarl/pymux#767.
     """
-    pymux.create_session("second")
-    path = tmp_path / "v33.sqlite"
-    snapshot.save(pymux, path)
+    path = tmp_path / "v34.sqlite"
+    async with pymux.running():
+        window = await pymux.create_window("sleep 30")
+        window.monitor_activity = False
+        snapshot.save(pymux, path)
     db = apsw.Connection(str(path))
-    db.execute("DROP TABLE session_options")
-    db.execute("ALTER TABLE sessions ADD COLUMN base_index INTEGER NOT NULL DEFAULT 1")
-    db.execute("ALTER TABLE sessions ADD COLUMN renumber_windows INTEGER NOT NULL DEFAULT 0")
-    db.execute("UPDATE sessions SET base_index = 0, renumber_windows = 1 WHERE position = 1")
-    db.execute("PRAGMA user_version = 33")
+    for column in ("monitor_activity", "monitor_silence", "monitor_notification", "activity", "silence", "notified"):
+        db.execute("ALTER TABLE windows DROP COLUMN %s" % (column,))
+    db.execute("PRAGMA user_version = 34")
     db.close()
 
     loaded = Pymux()
     snapshot.load(loaded, path)
 
-    first, second = loaded.sessions
-    assert first.options.own() == {}
-    assert second.options.own() == {"base_index": 0, "renumber_windows": True}
-    loaded.renumber_windows = True
-    assert first.arrangement.renumber_windows is True
+    window = loaded.sessions[0].arrangement.windows[0]
+    assert (window.monitor_activity, window.monitor_silence, window.monitor_notification) == (True, 0, True)
+    assert not (window.activity or window.silence or window.notified)
 
 
 def test_a_session_s_own_value_survives_and_the_rest_follow_the_default(pymux, tmp_path):

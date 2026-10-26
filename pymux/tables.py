@@ -108,7 +108,13 @@ CREATE TABLE windows(
   wayland_scale TEXT NOT NULL,
   window_codec TEXT NOT NULL,
   monitor_bell INTEGER NOT NULL DEFAULT 1,
-  bell INTEGER NOT NULL DEFAULT 0
+  bell INTEGER NOT NULL DEFAULT 0,
+  monitor_activity INTEGER NOT NULL DEFAULT 1,
+  monitor_silence INTEGER NOT NULL DEFAULT 0,
+  monitor_notification INTEGER NOT NULL DEFAULT 1,
+  activity INTEGER NOT NULL DEFAULT 0,
+  silence INTEGER NOT NULL DEFAULT 0,
+  notified INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE window_tags(
   window_id INTEGER NOT NULL REFERENCES windows(window_id),
@@ -498,6 +504,12 @@ class WindowRow:
     window_codec: str
     monitor_bell: int
     bell: int
+    monitor_activity: int
+    monitor_silence: int
+    monitor_notification: int
+    activity: int
+    silence: int
+    notified: int
     shown_name: str | None = shown()
 
 

@@ -343,21 +343,48 @@ def _symbol_window_name(context: FormatContext) -> str:
     return context.window.name or "(noname)"
 
 
+def marks_of(options, windows) -> str:
+    """
+    The symbols of the marks any of `windows` carries, in tmux's order:
+    activity, bell, silence, then pymux's notification.
+    Lillecarl/pymux#767.
+    """
+    return "".join(
+        symbol
+        for mark, symbol in (
+            ("activity", options.activity_symbol),
+            ("bell", options.bell_symbol),
+            ("silence", options.silence_symbol),
+            ("notified", options.notification_symbol),
+        )
+        if any(getattr(window, mark) for window in windows)
+    )
+
+
+def window_marks(options, window) -> str:
+    "The symbols of one window's marks."
+    # Every window of every status line asks, every frame, and almost
+    # none carry a mark: the keystroke budget sees the generator.
+    if not (window.activity or window.bell or window.silence or window.notified):
+        return ""
+    return marks_of(options, (window,))
+
+
 def _symbol_window_flags(context: FormatContext) -> str:
     arrangement = context.session.arrangement
     window = context.window
-    # tmux's order: the bell before the current mark, the zoom after.
-    bell = "!" if window.bell else ""
+    # tmux's order: the marks before the current mark, the zoom after.
+    marks = window_marks(context.session.options, window)
     z = "Z" if window.zoom else ""
 
     if window == arrangement.get_active_window():
-        return bell + "*" + z
+        return marks + "*" + z
     if window == arrangement.get_previous_active_window():
-        return bell + "-" + z
+        return marks + "-" + z
     # One column wide either way, so the windows beside this one do
     # not move when it becomes the current one. `#{window_flags}`
     # answers the flags alone.
-    return bell + z + " "
+    return marks + z + " "
 
 
 def _symbol_pane_id(context: FormatContext) -> str:
@@ -454,18 +481,40 @@ def _window_active(context: FormatContext) -> str:
 def _window_flags(context: FormatContext) -> str:
     arrangement = context.session.arrangement
     window = context.window
-    bell = "!" if window.bell else ""
+    marks = window_marks(context.session.options, window)
     z = "Z" if window.zoom else ""
 
     if window == arrangement.get_active_window():
-        return bell + "*" + z
+        return marks + "*" + z
     if window == arrangement.get_previous_active_window():
-        return bell + "-" + z
-    return bell + z
+        return marks + "-" + z
+    return marks + z
 
 
 def _window_bell_flag(context: FormatContext) -> str:
     return "1" if context.window.bell else "0"
+
+
+def _window_activity_flag(context: FormatContext) -> str:
+    return "1" if context.window.activity else "0"
+
+
+def _window_silence_flag(context: FormatContext) -> str:
+    return "1" if context.window.silence else "0"
+
+
+def _window_notification_flag(context: FormatContext) -> str:
+    return "1" if context.window.notified else "0"
+
+
+def _session_alerts(context: FormatContext) -> str:
+    "tmux's list of the marked windows: index and marks, by commas."
+    options = context.session.options
+    return ",".join(
+        "%s%s" % (window.index, marks)
+        for window in context.session.arrangement.windows
+        if (marks := window_marks(options, window))
+    )
 
 
 def _pane_bell_flag(context: FormatContext) -> str:
@@ -787,6 +836,7 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "pane_revision": lambda c: str(c.pane.revision),
     # Not tmux's: which pane of the window rang. Lillecarl/pymux#501.
     "pane_bell_flag": _pane_bell_flag,
+    "session_alerts": _session_alerts,
     # Not tmux's: the tags of `set-tag`, as `--tag` takes them, and a
     # dictionary in a template. Lillecarl/pymux#762.
     "pane_tags": lambda c: spelled(c.pane.tags),
@@ -799,6 +849,9 @@ tmux_variables: dict[str, Callable[[FormatContext], str]] = {
     "window_active": _window_active,
     "window_flags": _window_flags,
     "window_bell_flag": _window_bell_flag,
+    "window_activity_flag": _window_activity_flag,
+    "window_silence_flag": _window_silence_flag,
+    "window_notification_flag": _window_notification_flag,
     "window_panes": _window_panes,
     "window_width": lambda c: str(c.pane.process.sx),
     "window_height": lambda c: str(c.pane.process.sy),

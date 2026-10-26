@@ -121,7 +121,7 @@ __all__ = [
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 34
+SNAPSHOT_VERSION = 35
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -152,21 +152,15 @@ CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
 #: change of shape adds the one step from the version before it and
 #: deletes any older step.
 STEPS: dict[int, str] = {
-    # 34 keeps the values each session set itself in `session_options`;
-    # 33 kept base-index and renumber-windows on every session's row,
-    # whether the session set them or not. A value other than the
-    # default is one a session set. Lillecarl/pymux#756.
-    33: """
-CREATE TABLE session_options(
-  session_id INTEGER NOT NULL REFERENCES sessions(session_id),
-  name TEXT NOT NULL,
-  value,
-  PRIMARY KEY (session_id, name)
-);
-INSERT INTO session_options SELECT session_id, 'base-index', base_index FROM sessions WHERE base_index != 1;
-INSERT INTO session_options SELECT session_id, 'renumber-windows', renumber_windows FROM sessions WHERE renumber_windows != 0;
-ALTER TABLE sessions DROP COLUMN base_index;
-ALTER TABLE sessions DROP COLUMN renumber_windows;
+    # 35 keeps each window's activity, silence and notification marks
+    # and the monitors that raise them. Lillecarl/pymux#767.
+    34: """
+ALTER TABLE windows ADD COLUMN monitor_activity INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE windows ADD COLUMN monitor_silence INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE windows ADD COLUMN monitor_notification INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE windows ADD COLUMN activity INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE windows ADD COLUMN silence INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE windows ADD COLUMN notified INTEGER NOT NULL DEFAULT 0;
 """,
 }
 
@@ -235,7 +229,7 @@ WRITES: dict[str, frozenset[str]] = {
             "_window_history_for_cli",
         }
     ),
-    "pymux.arrangement.Window": frozenset(Window.KEEP),
+    "pymux.arrangement.Window": frozenset(Window.KEEP) - {"_revisions_seen", "_quiet_since", "_silence_armed"},
     "pymux.arrangement._Split": frozenset(_Split.KEEP),
     "pymux.arrangement.Pane": frozenset(name for name, fate in Pane.KEEP.items() if fate == Keep.SAVED),
     "pymux.main.ClientState": frozenset({"session", "previous_session", *CLIENT_SETTINGS, *CLIENT_MODES}),
@@ -680,6 +674,12 @@ def _window_rows(session: Session, window: Window, linked: bool, place: int) -> 
         window_codec=_value(window.window_codec),
         monitor_bell=window.monitor_bell,
         bell=window.bell,
+        monitor_activity=window.monitor_activity,
+        monitor_silence=window.monitor_silence,
+        monitor_notification=window.monitor_notification,
+        activity=window.activity,
+        silence=window.silence,
+        notified=window.notified,
         shown_name=window.name,
     )
     for key, value in sorted(window.tags.items()):
@@ -1134,6 +1134,12 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
             window.window_codec = type(window.window_codec)(window_row.window_codec)
             window.monitor_bell = bool(window_row.monitor_bell)
             window.bell = bool(window_row.bell)
+            window.monitor_activity = bool(window_row.monitor_activity)
+            window.monitor_silence = window_row.monitor_silence
+            window.monitor_notification = bool(window_row.monitor_notification)
+            window.activity = bool(window_row.activity)
+            window.silence = bool(window_row.silence)
+            window.notified = bool(window_row.notified)
             window.column_widths = {
                 (width.kind, width.id): width.width
                 for width in select(db, ColumnWidthRow, "WHERE window_id = ?", window.window_id)
