@@ -395,7 +395,7 @@ def test_the_completer_reads_the_server_it_was_made_for():
     assert completer._completion_tree is not None
     _parser, subparsers = completer._completion_tree
     action = next(a for a in subparsers.choices["set-option"]._actions if a.dest == "option")
-    assert action.completer.args[0] is second
+    assert action.completer.args[-1].pymux is second
 
 
 # ----------------------------------------------------------------------

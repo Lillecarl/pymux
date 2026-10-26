@@ -4,10 +4,14 @@ What completes a command as it is typed: argcomplete, in process.
 argcomplete completes a command line for a shell by parsing the line
 against the parser tree. The same move works in process: the bar
 hands over the line and the cursor, argcomplete hands back the words
-and their help, and nothing leaves the process. The values that only
-the running server knows -- the options, the words an option takes,
-the layout names, the keys -- are attached to their arguments below,
-by command and dest. Lillecarl/pymux#307.
+and their help, and nothing leaves the process. Lillecarl/pymux#307.
+
+**The commands and their flags come from the parser tree, and every
+value comes from SQL.** A value -- a session, a pane, an option, a
+word an option takes, a layout, a key -- is what a saved question
+answers over the tables `sql` reads (`Questions`). So SQL holds
+everything Tab can offer, and a person changes an offer by saving a
+question under its name.
 
 One finder owns the tree for the life of the process: the first
 completion patches the parsers with hooks that hold the finder, so a
@@ -30,11 +34,10 @@ from argcomplete.lexers import split_line
 from prompt_toolkit.completion import CompleteEvent, Completer, Completion
 from prompt_toolkit.document import Document
 
-from pymux.arrangement import LayoutTypes
 from pymux.commands import CommandException, CommandParser, build_parser_tree, parser_tree
 from pymux.commands.aliases import ALIASES
 from pymux.forwarding import Direction
-from pymux.key_spelling import KeyCompleter
+from pymux.key_spelling import key_completions
 from pymux.query import register, tables_of
 
 if TYPE_CHECKING:
@@ -73,7 +76,7 @@ def stop_shlex_comments() -> None:
 stop_shlex_comments()
 
 
-def _keys(pymux: Pymux, prefix: str, **_) -> list[str]:
+def _keys(questions: Questions, prefix: str, **_) -> dict[str, str]:
     """
     The key names for `bind-key` and `compose-key`.
 
@@ -85,42 +88,19 @@ def _keys(pymux: Pymux, prefix: str, **_) -> list[str]:
     `-n`, and `send-keys` sends to a pane, where `send-prefix` is the
     command that sends the prefix on. Neither takes it as part of a key.
     """
-    completer = KeyCompleter(offer_prefix=False)
-    return [c.text for c in completer.get_completions(Document(prefix), CompleteEvent())]
+    words = [(str(row[0]), str(row[1] or ""), str(row[2])) for row in questions.rows("complete-key") if len(row) > 2]
+    return {c.text: c.display_meta_text for c in key_completions(prefix, words, offer_prefix=False)}
 
 
-def _session_option_names(pymux: Pymux, **_) -> list[str]:
-    return sorted(pymux.options)
+def _option_names(scope: str, questions: Questions, **_) -> dict[str, str]:
+    return questions.ask("complete-option", scope=scope)
 
 
-def _window_option_names(pymux: Pymux, **_) -> list[str]:
-    return sorted(pymux.window_options)
+def _option_values(scope: str, questions: Questions, parsed_args: argparse.Namespace, **_) -> dict[str, str]:
+    return questions.ask("complete-option-value", scope=scope, option=parsed_args.option)
 
 
-def _option_values(pymux: Pymux, parsed_args: argparse.Namespace, **_) -> list[str]:
-    option = pymux.options.get(parsed_args.option)
-    return sorted(option.get_all_values(pymux)) if option else []
-
-
-def _window_option_values(pymux: Pymux, parsed_args: argparse.Namespace, **_) -> list[str]:
-    option = pymux.window_options.get(parsed_args.option)
-    return sorted(option.get_all_values(pymux)) if option else []
-
-
-def _client_option_names(pymux: Pymux, **_) -> list[str]:
-    return sorted(pymux.client_options)
-
-
-def _client_option_values(pymux: Pymux, parsed_args: argparse.Namespace, **_) -> list[str]:
-    option = pymux.client_options.get(parsed_args.option)
-    return sorted(option.get_all_values(pymux)) if option else []
-
-
-def _layout_names(pymux: Pymux, **_) -> list[str]:
-    return sorted(t.value for t in LayoutTypes)
-
-
-def _bound_command(pymux: Pymux, prefix: str, parsed_args: argparse.Namespace, **_) -> dict[str, str]:
+def _bound_command(questions: Questions, prefix: str, parsed_args: argparse.Namespace, **_) -> dict[str, str]:
     """
     The command a `bind-key` binding runs, and its arguments: the same
     question again, one word further in. The words already given land
@@ -136,37 +116,26 @@ def _bound_command(pymux: Pymux, prefix: str, parsed_args: argparse.Namespace, *
     return {m: meta.get(m, "") for m in matches}
 
 
-def _send_keys_names(pymux: Pymux, prefix: str, parsed_args: argparse.Namespace, **_) -> list[str]:
+def _send_keys_names(questions: Questions, prefix: str, parsed_args: argparse.Namespace, **_) -> dict[str, str]:
     "The keys are names while they are the first thing, and no `-l` says they are text."
     if parsed_args.keys or parsed_args.l:
-        return []
-    return _keys(pymux, prefix)
+        return {}
+    return _keys(questions, prefix)
 
 
-def _forward_listenings(pymux: Pymux, parsed_args: argparse.Namespace, direction: Direction, **_) -> dict[str, str]:
-    """
-    The listening ends `unforward-port` can name.
-
-    **The number offered is the number shown.** `list-forwards` draws
-    the port really bound, so a forward that asked for any free port is
-    reachable only by the number a person read there. Offering that same
-    spelling is what makes the offer removable. Lillecarl/pymux#441.
-    """
+def _forward_listenings(direction: Direction, questions: Questions, **_) -> dict[str, str]:
+    "The listening ends `unforward-port` can name, of the client it forwards for."
     try:
-        connection = pymux.forwarding_client().client_state.connection
+        connection = questions.pymux.forwarding_client().client_state.connection
     except CommandException, ValueError:
         return {}
-
-    return {
-        "%s:%s" % (one.get("listen_host", ""), one.get("port", "")): one.get("dest", "")
-        for one in connection.forwards
-        if one.get("direction") == direction.value
-    }
+    return questions.ask("complete-forward", client=connection.client_id or "", direction=direction.value)
 
 
 #: How long one completion question may run. It runs on the loop, and a
 #: question a person saved over a seed can be as slow as they wrote it.
-QUESTION_BUDGET: Final = 0.05
+#: Not less: the values of `theme` take 65 ms to list, measured.
+QUESTION_BUDGET: Final = 0.25
 
 
 class Questions:
@@ -188,20 +157,27 @@ class Questions:
         self.pymux = pymux
         self._db: apsw.Connection | None = None
 
-    def ask(self, name: str) -> dict[str, str]:
+    def rows(self, name: str, **params: str) -> list[tuple]:
+        "What the question of that name answers, or nothing when it fails or outruns its budget."
         saved = self.pymux.jobs.saved_queries.get(name)
         if saved is None:
-            return {}
+            return []
         if self._db is None:
             self._db = apsw.Connection(":memory:")
             register(self._db, tables_of(self.pymux), on_loop=False)
         deadline = time.monotonic() + QUESTION_BUDGET
         self._db.set_progress_handler(lambda: time.monotonic() > deadline, 1000)
         try:
-            rows = self._db.execute(saved[0]).fetchall()
-        except apsw.Error:
-            return {}
-        found = {str(row[0]): str(row[1]) if len(row) > 1 and row[1] is not None else "" for row in rows}
+            return [tuple(row) for row in self._db.execute(saved[0], params)]
+        except apsw.Error, KeyError:
+            # A KeyError is a `:name` the question reads and nothing fills.
+            return []
+
+    def ask(self, name: str, **params: str) -> dict[str, str]:
+        "The words a question answers, each with what it says beside it."
+        found = {
+            str(row[0]): str(row[1]) if len(row) > 1 and row[1] is not None else "" for row in self.rows(name, **params)
+        }
         if _finder is not None:
             # The words beside each match as well.
             _finder.descriptions.update(found)
@@ -233,28 +209,25 @@ TARGET_COMPLETERS: Final = {
     "[<dst-session>:]<dst-index>": partial(_asked, "complete-session-end"),
 }
 
-#: Targets whose kind a flag beside them says, by command and dest.
-_TARGETS_BY_FLAG = {
+#: What completes a value, by the command and the dest of the argument.
+#: Every one but `bind-key`'s command asks a question; that one is the
+#: command line again, which the parser tree completes.
+_VALUE_COMPLETERS = {
     ("set-tag", "target"): _tagged,
     ("show-tags", "target"): _tagged,
-}
-
-
-#: What completes a value, by the command and the dest of the argument.
-_VALUE_COMPLETERS = {
-    ("set-option", "option"): _session_option_names,
-    ("set-option", "value"): _option_values,
-    ("set-window-option", "option"): _window_option_names,
-    ("set-window-option", "value"): _window_option_values,
-    ("set-client-option", "option"): _client_option_names,
-    ("set-client-option", "value"): _client_option_values,
-    ("select-layout", "layout_type"): _layout_names,
+    ("set-option", "option"): partial(_option_names, "session"),
+    ("set-option", "value"): partial(_option_values, "session"),
+    ("set-window-option", "option"): partial(_option_names, "window"),
+    ("set-window-option", "value"): partial(_option_values, "window"),
+    ("set-client-option", "option"): partial(_option_names, "client"),
+    ("set-client-option", "value"): partial(_option_values, "client"),
+    ("select-layout", "layout_type"): partial(_asked, "complete-layout"),
     ("compose-key", "default"): _keys,
     ("bind-key", "key"): _keys,
     ("bind-key", "arguments"): _bound_command,
     ("send-keys", "keys"): _send_keys_names,
-    ("unforward-port", "local"): partial(_forward_listenings, direction=Direction.LOCAL),
-    ("unforward-port", "remote"): partial(_forward_listenings, direction=Direction.REMOTE),
+    ("unforward-port", "local"): partial(_forward_listenings, Direction.LOCAL),
+    ("unforward-port", "remote"): partial(_forward_listenings, Direction.REMOTE),
 }
 
 
@@ -436,11 +409,7 @@ def create_command_completer(pymux: Pymux):
             # A custom completer, which is argcomplete's own extension
             # point: it reads `action.completer` when one is set, and
             # argparse never declares it.
-            fn = _VALUE_COMPLETERS.get((name, action.dest))
+            fn = _VALUE_COMPLETERS.get((name, action.dest)) or TARGET_COMPLETERS.get(str(action.metavar))
             if fn is not None:
-                action.completer = partial(fn, pymux)  # pyrefly: ignore[missing-attribute]
-                continue
-            asked = _TARGETS_BY_FLAG.get((name, action.dest)) or TARGET_COMPLETERS.get(str(action.metavar))
-            if asked is not None:
-                action.completer = partial(asked, questions)  # pyrefly: ignore[missing-attribute]
+                action.completer = partial(fn, questions)  # pyrefly: ignore[missing-attribute]
     return CommandCompleter()

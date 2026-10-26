@@ -61,9 +61,9 @@ if not apsw.using_amalgamation or not apsw.apsw_version().startswith(apsw.sqlite
 
 #: What this server answers with. Agents read it with `PRAGMA
 #: user_version` and re-read the tables when it differs from what they
-#: were told. 9: `windows` has `shown_name`, and `panes` has
-#: `shown_name`, `title` and `current_command`.
-SCHEMA_VERSION = 9
+#: were told. 10: `main` has `known_options`, `option_choices`,
+#: `layouts`, `key_names` and `forwards`, what Tab offers.
+SCHEMA_VERSION = 10
 
 #: The questions every boot starts with. A name an agent saves later
 #: replaces one of these for the rest of the boot; the next boot seeds
@@ -146,6 +146,21 @@ SEEDS = [
                 ),
             ),
             ("job", "SELECT id AS word, command AS says FROM jobs ORDER BY id"),
+            ("option", "SELECT name AS word, NULL AS says FROM known_options WHERE scope = :scope"),
+            (
+                "option-value",
+                "SELECT value AS word, NULL AS says FROM option_choices WHERE scope = :scope AND name = :option",
+            ),
+            ("layout", "SELECT name AS word, NULL AS says FROM layouts"),
+            # A third column: the chord grammar reads where each word may stand.
+            ("key", "SELECT name AS word, says, kind FROM key_names"),
+            (
+                "forward",
+                (
+                    "SELECT listening AS word, dest AS says FROM forwards"
+                    " WHERE client_id = :client AND direction = :direction"
+                ),
+            ),
         )
     ),
 ]
@@ -169,6 +184,47 @@ class JobView:
     pty: int
 
 
+@dataclass(frozen=True, slots=True)
+class KnownOptionView:
+    "An option a command can set, and the scope `set-option`, `-window-` or `-client-` names."
+
+    scope: str
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
+class OptionChoiceView:
+    "One value an option takes, of those it can name: a free one names none."
+
+    scope: str
+    name: str
+    value: str
+
+
+@dataclass(frozen=True, slots=True)
+class LayoutView:
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
+class KeyNameView:
+    "A word a key is written with, and whether it is a key, a modifier or the prefix."
+
+    name: str
+    says: str
+    kind: str
+
+
+@dataclass(frozen=True, slots=True)
+class ForwardView:
+    "A port a client forwards, by the listening end `list-forwards` shows."
+
+    client_id: str
+    direction: str
+    listening: str
+    dest: str
+
+
 class Answer(NamedTuple):
     "The columns, up to the limit of rows, and whether rows were left over."
 
@@ -182,7 +238,7 @@ class QueryError(Exception):
 
 
 #: What gives a table its rows, called when a question first reads it.
-type Source = Callable[[], Iterable[Any]]
+type Source = Callable[..., Iterable[Any]]
 
 
 def _jobs(pymux: Pymux) -> Iterator[JobView]:
@@ -211,6 +267,56 @@ def _saved_queries(pymux: Pymux) -> Iterator[SavedQueryRow]:
         yield SavedQueryRow(name, sql, description)
 
 
+def _scoped_options(pymux: Pymux) -> Iterator[tuple[str, str, Any]]:
+    for scope, options in (
+        ("session", pymux.options),
+        ("window", pymux.window_options),
+        ("client", pymux.client_options),
+    ):
+        for name, option in sorted(options.items()):
+            yield scope, name, option
+
+
+def _known_options(pymux: Pymux) -> Iterator[KnownOptionView]:
+    for scope, name, _option in _scoped_options(pymux):
+        yield KnownOptionView(scope, name)
+
+
+def _option_choices(pymux: Pymux, scope: object = None, name: object = None) -> Iterator[OptionChoiceView]:
+    for each_scope, each_name, option in _scoped_options(pymux):
+        if (scope is not None and each_scope != scope) or (name is not None and each_name != name):
+            continue
+        for value in sorted(option.get_all_values(pymux)):
+            yield OptionChoiceView(each_scope, each_name, value)
+
+
+def _layouts(pymux: Pymux) -> Iterator[LayoutView]:
+    from .arrangement import LayoutTypes
+
+    for layout in sorted(each.value for each in LayoutTypes):
+        yield LayoutView(layout)
+
+
+def _key_names(pymux: Pymux) -> Iterator[KeyNameView]:
+    from .key_spelling import key_words
+
+    for name, says, kind in key_words():
+        yield KeyNameView(name, says, kind.value)
+
+
+def _forwards(pymux: Pymux) -> Iterator[ForwardView]:
+    for connection in pymux.connections:
+        for one in connection.forwards:
+            yield ForwardView(
+                connection.client_id or "",
+                one.get("direction", ""),
+                # The port really bound, which is what `list-forwards`
+                # shows and so what a person can name. Lillecarl/pymux#441.
+                "%s:%s" % (one.get("listen_host", ""), one.get("port", "")),
+                one.get("dest", ""),
+            )
+
+
 def _live(pymux: Pymux, table: str) -> Iterator[Any]:
     # Here and not at the top: the snapshot reaches `pymux.main`.
     from .snapshot import rows_of
@@ -218,15 +324,30 @@ def _live(pymux: Pymux, table: str) -> Iterator[Any]:
     return (row for row in rows_of(pymux) if row.TABLE == table)
 
 
-def tables_of(pymux: Pymux) -> dict[tuple[str, str], tuple[type, Source]]:
+class Table(NamedTuple):
+    "A table's rows, what gives them, and the columns an `=` can narrow the giving by."
+
+    kind: type
+    source: Source
+    narrows: tuple[str, ...] = ()
+
+
+def tables_of(pymux: Pymux) -> dict[tuple[str, str], Table]:
     "Every table a question sees, by schema and name, with what gives its rows."
-    tables: dict[tuple[str, str], tuple[type, Source]] = {
-        ("main", "jobs"): (JobView, partial(_jobs, pymux)),
-        ("main", "job_tags"): (JobTagRow, partial(_job_tags, pymux)),
-        ("main", "saved_queries"): (SavedQueryRow, partial(_saved_queries, pymux)),
+    tables = {
+        ("main", "jobs"): Table(JobView, partial(_jobs, pymux)),
+        ("main", "job_tags"): Table(JobTagRow, partial(_job_tags, pymux)),
+        ("main", "saved_queries"): Table(SavedQueryRow, partial(_saved_queries, pymux)),
+        ("main", "known_options"): Table(KnownOptionView, partial(_known_options, pymux)),
+        # Narrowed, because listing a value can be slow: `theme` reads
+        # every theme it knows, which measured 65 ms.
+        ("main", "option_choices"): Table(OptionChoiceView, partial(_option_choices, pymux), ("scope", "name")),
+        ("main", "layouts"): Table(LayoutView, partial(_layouts, pymux)),
+        ("main", "key_names"): Table(KeyNameView, partial(_key_names, pymux)),
+        ("main", "forwards"): Table(ForwardView, partial(_forwards, pymux)),
     }
     for kind in LIVE_ROWS:
-        tables["live", kind.TABLE] = (kind, partial(_live, pymux, kind.TABLE))
+        tables["live", kind.TABLE] = Table(kind, partial(_live, pymux, kind.TABLE))
     return tables
 
 
@@ -262,16 +383,18 @@ class _Rows:
     each show a slightly different moment; nothing here needs more.
     """
 
-    def __init__(self, kind: type, source: Source, on_loop: bool) -> None:
-        self.schema = _declared(kind)
-        self.names = [field.name for field in fields(kind)]
-        self.source = source
+    def __init__(self, table: Table, on_loop: bool) -> None:
+        self.schema = _declared(table.kind)
+        self.names = [field.name for field in fields(table.kind)]
+        self.source = table.source
+        self.narrows = table.narrows
         self.on_loop = on_loop
 
-    def build(self) -> list[Any]:
+    def build(self, **narrowed: apsw.SQLiteValue) -> list[Any]:
+        source = partial(self.source, **narrowed)
         if self.on_loop:
-            return apsw.async_run_coro(_on_loop(self.source))
-        return list(self.source())
+            return apsw.async_run_coro(_on_loop(source))
+        return list(source())
 
     def Create(
         self, connection: apsw.Connection, modulename: str, databasename: str, tablename: str, *args: apsw.SQLiteValue
@@ -280,8 +403,24 @@ class _Rows:
 
     Connect = Create
 
-    def BestIndex(self, constraints: Sequence[tuple[int, int]], orderbys: Sequence[tuple[int, int]]) -> None:
-        return None
+    def BestIndex(self, constraints: Sequence[tuple[int, int]], orderbys: Sequence[tuple[int, int]]) -> Any:
+        """
+        Hand an `=` on a column the source narrows by to the source, so
+        it builds only those rows. SQLite still checks every row, so a
+        source that narrows less than it was asked is only slower.
+        """
+        used: list[int | None] = []
+        columns: list[str] = []
+        for column, op in constraints:
+            name = self.names[column] if 0 <= column < len(self.names) else None
+            if op == apsw.SQLITE_INDEX_CONSTRAINT_EQ and name in self.narrows and name not in columns:
+                used.append(len(columns))
+                columns.append(name)
+            else:
+                used.append(None)
+        if not columns:
+            return None
+        return used, 0, ",".join(columns), False, 10.0
 
     def Open(self) -> _Cursor:
         return _Cursor(self)
@@ -298,8 +437,9 @@ class _Cursor:
         self._rows: list[Any] = []
         self._at = 0
 
-    def Filter(self, indexnum: int, indexname: str, constraintargs: tuple | None) -> None:
-        self._rows = self._table.build()
+    def Filter(self, indexnum: int, indexname: str | None, constraintargs: tuple | None) -> None:
+        narrowed = dict(zip(indexname.split(","), constraintargs or (), strict=True)) if indexname else {}
+        self._rows = self._table.build(**narrowed)
         self._at = 0
 
     def Eof(self) -> bool:
@@ -320,15 +460,15 @@ class _Cursor:
         pass
 
 
-def register(db: apsw.Connection, tables: dict[tuple[str, str], tuple[type, Source]], on_loop: bool) -> None:
+def register(db: apsw.Connection, tables: dict[tuple[str, str], Table], on_loop: bool) -> None:
     "The tables, on a connection that runs on the loop or, with `on_loop`, on a worker that hands back to it."
     db.execute("ATTACH ':memory:' AS live")
-    for (schema, name), (kind, source) in tables.items():
+    for (schema, name), table in tables.items():
         module = "%s_%s" % (schema, name)
         # A cast, because apsw's stubs make every optional method of a
         # virtual table -- `ShadowName`, `UpdateInsertRow`, `Savepoint`
         # -- a member of the protocol, which no read-only table has.
-        db.create_module(module, cast("apsw.VTModule", _Rows(kind, source, on_loop)))
+        db.create_module(module, cast("apsw.VTModule", _Rows(table, on_loop)))
         db.execute("CREATE VIRTUAL TABLE %s.%s USING %s()" % (schema, name, module))
     db.execute("PRAGMA user_version = %d" % SCHEMA_VERSION)
     db.execute("PRAGMA query_only = ON")

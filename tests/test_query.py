@@ -29,7 +29,16 @@ async def test_a_question_sees_the_jobs_and_the_live_tables():
         main = {name for (name,) in await _rows(pymux, "SELECT name FROM main.sqlite_master WHERE type = 'table'")}
         live = {name for (name,) in await _rows(pymux, "SELECT name FROM live.sqlite_master WHERE type = 'table'")}
 
-    assert main == {"jobs", "job_tags", "saved_queries"}
+    assert main == {
+        "jobs",
+        "job_tags",
+        "saved_queries",
+        "known_options",
+        "option_choices",
+        "layouts",
+        "key_names",
+        "forwards",
+    }
     assert live == set(tables.LIVE_TABLES)
     assert not live & {*tables.SCREEN_TABLES, *tables.JOB_TABLES, *tables.CLIENT_MODE_TABLES}
 
@@ -62,6 +71,27 @@ async def test_a_question_reads_what_a_person_sees():
 
         assert windows == [(window.name,)]
         assert panes == [(pane.name, "a title")]
+
+
+async def test_an_equal_narrows_what_a_table_builds(monkeypatch):
+    "`option_choices` lists the values of only the option a question names; listing every one is slow."
+    listed = []
+    real = {}
+    async with create_session(window=None) as (pymux, _state):
+        for name, option in pymux.options.items():
+            real[name] = option.get_all_values
+
+            def spy(pymux, name=name):
+                listed.append(name)
+                return real[name](pymux)
+
+            monkeypatch.setattr(option, "get_all_values", spy)
+        rows = await _rows(
+            pymux, "SELECT value FROM option_choices WHERE scope = 'session' AND name = :name", name="status"
+        )
+
+    assert ("on",) in rows
+    assert listed == ["status"]
 
 
 async def test_an_empty_table_still_names_its_columns():

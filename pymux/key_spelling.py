@@ -37,7 +37,8 @@ module reads a name, and a name only.
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Iterable, Iterator, Sequence
+from enum import StrEnum
 from typing import override
 
 from prompt_toolkit.completion import Completer, Completion
@@ -67,12 +68,15 @@ __all__ = [
     "SAME_MODIFIER",
     "TOGETHER",
     "KeyCompleter",
+    "KeyWord",
     "as_chord",
     "chord",
     "event",
     "event_however_it_is_written",
     "events_of",
+    "key_completions",
     "key_however_it_is_written",
+    "key_words",
     "key_written_out",
     "keys_of",
     "why_pane_cannot_read",
@@ -517,18 +521,60 @@ def _names_offered() -> list:
 _NAMES_OFFERED = _names_offered()
 
 
+class KeyWord(StrEnum):
+    "What a word of a chord is, which says where the grammar lets it stand."
+
+    PREFIX = "prefix"
+    KEY = "key"
+    MODIFIER = "modifier"
+
+
+def key_words() -> Iterator[tuple[str, str, KeyWord]]:
+    "Every word a key is written with, what it says, and what it is: `sql` reads these as `key_names`."
+    yield PREFIX, "the prefix key of this server", KeyWord.PREFIX
+    for name, meta in _NAMES_OFFERED:
+        yield name, meta, KeyWord.KEY
+    for name in MODIFIERS_A_PERSON_WRITES:
+        yield name, "held down", KeyWord.MODIFIER
+
+
+def key_completions(
+    text: str, words: Iterable[tuple[str, str, str]], offer_prefix: bool = True
+) -> Iterator[Completion]:
+    """
+    The words that may come next in a chord, for the text before the
+    cursor.
+
+    It completes one segment of one chord: what comes after the last
+    plus, of the step after the last space. So "ctrl+ho" completes to
+    "ctrl+home" and leaves the "ctrl+" where it is.
+
+    A modifier already held is not offered a second time, under any of
+    its spellings: "ctrl+control" is one modifier written twice. The
+    prefix is a step of its own and never a modifier, so it is offered
+    only where a step starts, and only with `offer_prefix`.
+    """
+    step = text.rsplit(AFTER, 1)[-1]
+    written, _, word = step.rpartition(TOGETHER)
+    lowered = word.lower()
+
+    held = 0
+    for part in written.split(TOGETHER):
+        held |= MODIFIERS_A_PERSON_WRITES.get(part.lower(), 0)
+
+    for name, meta, kind in words:
+        if kind == KeyWord.PREFIX and (written or not offer_prefix):
+            continue
+        if kind == KeyWord.MODIFIER and MODIFIERS_A_PERSON_WRITES.get(name.lower(), 0) & held:
+            continue
+        if name.lower().startswith(lowered):
+            yield Completion(name, start_position=-len(word), display_meta=meta)
+
+
 class KeyCompleter(Completer):
     """
     The keys and the modifiers a person can write, offered as they
-    type.
-
-    It completes the word under the cursor, which is one segment of one
-    chord: what comes after the last plus, of the step after the last
-    space. So "ctrl+ho" completes to "ctrl+home" and leaves the "ctrl+"
-    where it is.
-
-    A modifier already held is not offered a second time, under any of
-    its spellings: "ctrl+control" is one modifier written twice.
+    type, by the grammar of `key_completions`.
 
     `offer_prefix` says whether "prefix" is one of the answers. It
     is a step of the grammar, so a box that composes a binding wants
@@ -542,27 +588,4 @@ class KeyCompleter(Completer):
 
     @override
     def get_completions(self, document, complete_event):
-        step = document.text_before_cursor.rsplit(AFTER, 1)[-1]
-        written, _, word = step.rpartition(TOGETHER)
-        lowered = word.lower()
-        start = -len(word)
-
-        held = 0
-        for part in written.split(TOGETHER):
-            held |= MODIFIERS_A_PERSON_WRITES.get(part.lower(), 0)
-
-        def offer(name: str, meta: str):
-            if name.lower().startswith(lowered):
-                yield Completion(name, start_position=start, display_meta=meta)
-
-        if self.offer_prefix and not written:
-            # The prefix is a step of its own and never a modifier, so
-            # it is offered only where a step starts.
-            yield from offer(PREFIX, "the prefix key of this server")
-
-        for name, meta in _NAMES_OFFERED:
-            yield from offer(name, meta)
-
-        for name, modifier in MODIFIERS_A_PERSON_WRITES.items():
-            if not modifier & held:
-                yield from offer(name, "held down")
+        yield from key_completions(document.text_before_cursor, key_words(), self.offer_prefix)
