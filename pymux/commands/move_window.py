@@ -39,24 +39,41 @@ def move_window(pymux: Pymux, args: argparse.Namespace) -> None:
     Across sessions the insert and the kill run against the
     destination: the room is made where the window lands, and what
     dies is what was in its way there. Lillecarl/pymux#533.
+
+    A session and no index -- `work:`, or `work` alone when no window
+    index reads that way -- puts the window after the last one there,
+    which is what `prefix .` then a session name asks for. With `-a`
+    or `-b` the index is that session's active window, as in tmux.
     """
     window = the_window(pymux, args.src_window)
 
     src = pymux.session_of_window(window)
     assert src is not None  # `the_window` only returns windows in an order.
 
-    dst, rest = session_part(pymux, args.dst_window)
+    target = args.dst_window
+    if ":" not in target and not target.isdigit() and pymux.get_session(target) is not None:
+        target += ":"
+    dst, rest = session_part(pymux, target)
     if dst is None:
         raise CommandException("can't find session: %s" % (args.dst_window,))
-    try:
-        new_index = WindowIndex(int(rest))
-    except ValueError:
-        raise CommandException("Can't move window: bad index.") from None
+    arrangement = dst.arrangement
+
+    if rest == "":
+        active = arrangement.get_active_window()
+        if not (args.after or args.before) or active is None:
+            if dst is not src:
+                src.arrangement.move_window_to(window, arrangement)
+            return
+        new_index = active.index
+    else:
+        try:
+            new_index = WindowIndex(int(rest))
+        except ValueError:
+            raise CommandException("Can't move window: bad index.") from None
 
     if args.after:
         new_index += 1
 
-    arrangement = dst.arrangement
     occupant = arrangement.get_window_by_index(new_index)
 
     if occupant is window:
@@ -92,7 +109,7 @@ def register(subparsers: argparse._SubParsersAction[CommandParser]):
         dest="dst_window",
         metavar="<dst-window>",
         required=True,
-        help="The index to move to, with an optional session in front (`work:5`).",
+        help="The index to move to, with an optional session in front (`work:5`). A session alone (`work`) takes the next free index there.",
     )
     parser.add_argument(
         "-a", dest="after", action="store_true", help="Insert after that index, moving the windows in the way up."

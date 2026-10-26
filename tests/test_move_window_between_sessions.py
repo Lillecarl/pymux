@@ -199,6 +199,31 @@ async def test_a_destination_that_is_not_an_index_is_an_error(pymux):
     assert indices(pymux, "home") == [1, 2]
 
 
+@pytest.mark.parametrize("target", ["work:", "work"])
+async def test_a_session_alone_takes_the_next_free_index(pymux, target):
+    await two_sessions(pymux, work_windows=2)
+    moving = pymux.get_session("home").arrangement.get_window_by_index(1)
+
+    assert await run(pymux, "move-window", "-s", "home:1", "-t", target) == []
+
+    assert moving.index == 3
+    assert indices(pymux, "home") == [2]
+    assert indices(pymux, "work") == [1, 2, 3]
+    assert pymux.get_session("work").arrangement.get_active_window() is moving
+
+
+async def test_after_with_a_session_alone_goes_after_its_active_window(pymux):
+    await two_sessions(pymux, work_windows=2)
+    work = pymux.get_session("work")
+    work.arrangement.set_active_window(work.arrangement.get_window_by_index(1))
+    moving = pymux.get_session("home").arrangement.get_window_by_index(1)
+
+    assert await run(pymux, "move-window", "-a", "-s", "home:1", "-t", "work:") == []
+
+    assert moving.index == 2
+    assert indices(pymux, "work") == [1, 2, 3]
+
+
 # ----------------------------------------------------------------------
 # link-window across.
 
