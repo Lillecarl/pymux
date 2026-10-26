@@ -98,7 +98,7 @@ async def test_the_clock_a_template_prints_is_the_pinned_one(pymux):
     way a `%H:%M` status line does. Whole-string strftime is what this
     replaces: any `%` in a status line is a directive there.
     """
-    pymux.test_mode = True
+    pymux.options.test_mode = True
 
     drawn = format_pymux_string(pymux, "{{ now.strftime('%H:%M') }}")
 

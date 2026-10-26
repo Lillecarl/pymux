@@ -40,7 +40,7 @@ START_GUI = {
 
 def _server() -> Pymux:
     pymux = Pymux()
-    pymux.test_mode = True
+    pymux.options.test_mode = True
     return pymux
 
 

@@ -35,7 +35,7 @@ def _rows(path) -> list[dict]:
 async def _logged(pymux, state, path, *commands, origin=None) -> list[dict]:
     "Turn the log on at `path`, run `commands` as `state`'s client, and read what it wrote."
     pymux.actions.path = path
-    pymux.action_log = True
+    pymux.options.action_log = True
     with set_app(state.app):
         for command in commands:
             if origin is None:
@@ -116,7 +116,7 @@ async def test_a_failed_command_says_why(tmp_path):
 async def test_the_outermost_origin_wins(tmp_path):
     async with create_session() as (pymux, state):
         pymux.actions.path = tmp_path / "actions.db"
-        pymux.action_log = True
+        pymux.options.action_log = True
         with set_app(state.app), started_by(Origin.MOUSE), started_by(Origin.MENU):
             note(pymux, Kind.CLICK, "select-pane")
         await pymux.actions.settled()
@@ -126,7 +126,7 @@ async def test_the_outermost_origin_wins(tmp_path):
 async def test_a_command_over_the_socket_has_no_client(tmp_path):
     async with create_session() as (pymux, state):
         pymux.actions.path = tmp_path / "actions.db"
-        pymux.action_log = True
+        pymux.options.action_log = True
         with set_app(state.app), started_by(Origin.SOCKET):
             state.temporary = True
             try:

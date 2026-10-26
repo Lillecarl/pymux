@@ -24,7 +24,7 @@ CLOCK = re.compile(r"\d\d:\d\d \d\d-\w\w\w-\d\d")
 
 async def test_a_template_shows_the_frame_rates_where_it_says():
     pymux = Pymux()
-    pymux.test_mode = True
+    pymux.options.test_mode = True
     async with pymux.running(), attached(pymux) as session:
         await shows(session, CLOCK)
         connection = pymux.connections[-1]

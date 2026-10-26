@@ -143,9 +143,9 @@ async def test_zero_keeps_everything():
 
 async def test_the_time_to_live_is_an_option():
     async with create_session() as (pymux, state):
-        assert pymux.job_ttl == 3600
+        assert pymux.options.job_ttl == 3600
         await _run_answering(pymux, state, "set-option job-ttl 60")
-        assert pymux.job_ttl == 60
+        assert pymux.options.job_ttl == 60
         said = await _run_answering(pymux, state, "show-options job-ttl")
         assert said and "60" in said[0]
 

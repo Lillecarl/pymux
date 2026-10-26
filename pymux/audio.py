@@ -677,7 +677,7 @@ class AudioServer:
         "Run PipeWire whenever the option allows. Never returns."
         while True:
             have = programs()
-            self.mode = resolve(self.pymux.audio_server, have, self.pymux._serves_one_terminal)
+            self.mode = resolve(self.pymux.options.audio_server, have, self.pymux._serves_one_terminal)
             failed = False
             if self.mode != AudioServerMode.OFF and not self.paused:
                 with anyio.CancelScope() as self._scope:

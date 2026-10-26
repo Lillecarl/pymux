@@ -216,8 +216,8 @@ class FakeDevices:
 @asynccontextmanager
 async def serving(tmp_path, mode=AudioServerMode.PRIVATE, name="pymux.sock"):
     pymux = Pymux()
-    pymux.test_mode = True
-    pymux.audio_server = mode
+    pymux.options.test_mode = True
+    pymux.options.audio_server = mode
     pymux.listen_on_socket(str(tmp_path / name))
     async with pymux.running():
         try:
@@ -573,7 +573,7 @@ async def test_a_client_that_plays_no_sound_is_sent_none(tmp_path):
     "One that did not say `audio` in `start-gui`, an older one included: no link, and no sound packet."
     heard: list[dict] = []
     pymux = Pymux()
-    pymux.audio_server = AudioServerMode.PRIVATE
+    pymux.options.audio_server = AudioServerMode.PRIVATE
     pymux.socket_name = str(tmp_path / "pymux.sock")
     async with over_connection(pymux=pymux, read_packet=heard.append) as session:
         # Sound first: PipeWire starting beside an attach under load took
@@ -643,8 +643,8 @@ async def test_sound_reaches_a_client_over_ssh_and_after_the_link_comes_back(mon
 
     devices = FakeDevices()
     pymux = Pymux()
-    pymux.test_mode = True
-    pymux.audio_server = AudioServerMode.PRIVATE
+    pymux.options.test_mode = True
+    pymux.options.audio_server = AudioServerMode.PRIVATE
 
     def with_sound(client) -> None:
         client.audio = AudioClient(devices, client._send_from_a_thread)

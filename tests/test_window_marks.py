@@ -138,7 +138,7 @@ def test_a_session_label_names_each_mark_once():
 async def test_a_notification_from_a_pane_marks_its_window():
     "Every source reaches the hub, and the hub marks the window."
     pymux = Pymux()
-    pymux.test_mode = True
+    pymux.options.test_mode = True
     async with pymux.running():
         window = await pymux.create_window("sleep 30")
         try:

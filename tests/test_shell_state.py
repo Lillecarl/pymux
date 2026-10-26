@@ -17,9 +17,9 @@ from prompt_toolkit.application.current import set_app
 from pyte.page import RowMark
 from session import create_session
 
+from pymux.enums import Clipboard
 from pymux.main import MAX_USER_VARS, Pymux
 from pymux.notifications import Urgency
-from pymux.options import Clipboard
 from pymux.osc import (
     copy_data_of,
     current_dir_of,
@@ -78,7 +78,7 @@ class FakePane:
 
 def make_pymux(clipboard=Clipboard.ON):
     pymux = Pymux()
-    pymux.clipboard_mode = clipboard
+    pymux.options.set_clipboard = clipboard
     connections = [FakeConnection(), FakeConnection()]
     pymux._client_states = {connection: object() for connection in connections}
     return pymux, connections

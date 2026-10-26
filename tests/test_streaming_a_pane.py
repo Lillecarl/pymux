@@ -43,7 +43,7 @@ STAYS = '%s -c "import time; time.sleep(60)"' % (sys.executable,)
 @pytest.fixture
 async def pymux():
     mux = Pymux()
-    mux.test_mode = True
+    mux.options.test_mode = True
     async with mux.running():
         await mux.create_window(STAYS)
         try:

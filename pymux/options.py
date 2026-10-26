@@ -11,14 +11,14 @@ from typing import TYPE_CHECKING, override
 
 from pyte.keys import KEY_PROFILES
 
-from . import log
 from .arrangement import Window
 from .enums import (
     AudioFrame,
-    AudioServerMode,
     ClientAudio,
     EditingKeys,
     FileTransfer,
+    OpenUrlMode,
+    OpenUrlTarget,
     PaneBrowser,
     WindowScroll,
     Woke,
@@ -28,6 +28,7 @@ from .key_spelling import key_however_it_is_written
 from .layout import Justify
 from .nearest import NEAREST
 from .option_fields import Declared, Options
+from .server_options import ServerOptions
 from .style import THEMES
 from .utils import get_default_shell
 from .window_options import WindowOptions
@@ -45,8 +46,6 @@ __all__ = [
     "ALL_OPTIONS",
     "ALL_SERVER_OPTIONS",
     "ALL_WINDOW_OPTIONS",
-    "Clipboard",
-    "ExtendedKeys",
     "OnOffOption",
     "Option",
     "Scope",
@@ -274,15 +273,6 @@ class FieldOption(Option):
         pymux.arrangement.window_defaults[self.declared.attribute] = self._parse(value)
 
 
-class WaylandServerOption(OnOffOption):
-    "`wayland-server`, which starts or stops the compositor as it is set."
-
-    @override
-    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
-        super().set_value(pymux, value, target)
-        pymux.wayland.option_changed()
-
-
 class StringOption(Option):
     """
     String option, written on whatever the scope says holds it.
@@ -472,102 +462,6 @@ class RenumberOption(Option):
                 session.arrangement.renumber()
 
 
-class ExtendedKeys(StrEnum):
-    """
-    How much of the keyboard a session uses.
-
-    `OFF` is the escape hatch. A program that misbehaves under the
-    extended encodings has somewhere to go, and so does a person who
-    attaches with a terminal that claims more than it does: the whole
-    session steps down for as long as they choose, and steps back up
-    without restarting anything.
-
-    `ALWAYS` is for a terminal that speaks the protocol and does not
-    answer the query that asks. There are some.
-    """
-
-    OFF = "off"
-    ON = "on"
-    ALWAYS = "always"
-
-
-class Clipboard(StrEnum):
-    """
-    Who may write the clipboard of the person at the keyboard.
-
-    `EXTERNAL` is the careful one, and tmux's default: a copy the
-    person makes in copy mode goes out to their terminal, and a
-    program in a pane cannot reach the clipboard at all.
-
-    `ON` lets a program reach it, which is what a terminal does when
-    nothing stands between the two. It is a real choice: a program on
-    the other side of an ssh connection can then write what a person
-    pastes next.
-    """
-
-    OFF = "off"
-    EXTERNAL = "external"
-    ON = "on"
-
-
-class OpenUrlTarget(StrEnum):
-    """
-    Which client's browser "open-url" opens in.
-
-    `LAST` is the client somebody used last, by the stamp that
-    `window-size latest` reads. `BROADCAST` is every attached client.
-    """
-
-    LAST = "last"
-    BROADCAST = "broadcast"
-
-
-class OpenUrlMode(StrEnum):
-    """
-    What happens to a request to open a URL.
-
-    `ASK` shows "(y/n)" in the command bar of the clients it would
-    land on, and a yes runs `open-url -c`, so the question is asked
-    once.
-    """
-
-    OPEN = "open"
-    ASK = "ask"
-    OFF = "off"
-
-
-class ForwardMode(StrEnum):
-    """
-    What happens to a request to forward a port.
-
-    **`ON` is not "never ask".** A request that binds somewhere other
-    than loopback, and one that a program in a pane made rather than
-    the person, are confirmed whatever this says: `Pymux.forward_needs_asking`
-    holds the two. The port belongs to the machine somebody is sitting
-    at. Lillecarl/pymux#440.
-    """
-
-    ON = "on"
-    ASK = "ask"
-    OFF = "off"
-
-
-class RenderMode(StrEnum):
-    """
-    How a client's frames reach its terminal.
-
-    `OPTIMIZED` writes what changed since the frame before, scrolls
-    rows on the wire instead of repainting them, and builds a pane's
-    rows only when they changed. `REFERENCE` writes every cell of
-    every frame at its own position and keeps nothing between frames.
-    It is slow on purpose: it is the answer the optimized frames are
-    held against, and the way round a fault in them until it is fixed.
-    """
-
-    OPTIMIZED = "optimized"
-    REFERENCE = "reference"
-
-
 class EnumOption(Option):
     """
     One of the values of a `StrEnum`, held as the member itself.
@@ -599,17 +493,6 @@ class EnumOption(Option):
         "What the server does once the value has changed."
 
 
-class AudioServerOption(EnumOption):
-    "`audio-server`, which stops PipeWire and starts it again as it says."
-
-    def __init__(self, attribute_name: str) -> None:
-        super().__init__(AudioServerMode, attribute_name, scope=Scope.SERVER)
-
-    @override
-    def after(self, pymux: Pymux) -> None:
-        pymux.audio.option_changed()
-
-
 class AudioFrameOption(EnumOption):
     "`audio-frame`, which both ends of the client's sound hear at once."
 
@@ -630,30 +513,6 @@ class ClientAudioOption(EnumOption):
     @override
     def after(self, pymux: Pymux) -> None:
         pymux.audio.client_options_changed()
-
-
-class ExtendedKeysOption(EnumOption):
-    "How much of the keyboard a session uses."
-
-    def __init__(self, attribute_name: str, scope: Scope = Scope.SESSION) -> None:
-        super().__init__(ExtendedKeys, attribute_name, scope)
-
-    @override
-    def after(self, pymux: Pymux) -> None:
-        # The server tells every client what its terminal should send
-        # now, whoever holds the value.
-        pymux.sync_keyboard()
-
-
-class RenderModeOption(EnumOption):
-    "How every client's frames reach its terminal."
-
-    def __init__(self, attribute_name: str) -> None:
-        super().__init__(RenderMode, attribute_name, scope=Scope.SERVER)
-
-    @override
-    def after(self, pymux: Pymux) -> None:
-        pymux.apply_render_mode()
 
 
 class ThemeOption(Option):
@@ -743,30 +602,6 @@ class ThemeOption(Option):
     attribute_name = "theme"
 
 
-class LogLevelOption(Option):
-    """
-    How much this server writes to its log, from now on.
-
-    It reaches a server that is already running, which is the only time
-    it is any use: a person turns debug logging on because something is
-    already wrong, and a restart takes the thing they wanted to look at
-    with it. Lillecarl/pymux#252.
-    """
-
-    scope = Scope.SERVER
-    attribute_name = "log_level"
-
-    @override
-    def get_all_values(self, pymux: Pymux) -> Iterable[str]:
-        return sorted(log.LEVELS)
-
-    @override
-    def set_value(self, pymux: Pymux, value: str, target: Holder | None = None) -> None:
-        if value not in log.LEVELS:
-            raise SetOptionError("Expecting one of: %s." % ", ".join(sorted(log.LEVELS)))
-        pymux.log_level = value
-
-
 class JustifyOption(Option):
     def __init__(self, attribute_name: str, scope: Scope = Scope.SESSION) -> None:
         self.attribute_name = attribute_name
@@ -814,65 +649,7 @@ class ChoiceOption(Option):
 
 
 #: What the process holds, once for every session. Lillecarl/pymux#757.
-ALL_SERVER_OPTIONS = {
-    # Whether another process of this user may attach a debugger to this
-    # server: `python -m pdb -p <pid>`, or py-spy. Off, and it stays off
-    # unless a person asks: it lets anything they run read this server's
-    # memory, and a server holds every pane's scrollback.
-    # `pymux/introspect.py` says what answers most questions without it.
-    "allow-remote-debugging": OnOffOption("allow_remote_debugging", scope=Scope.SERVER),
-    # How much this server writes to its log, changed while it runs.
-    # `--log-level` says the same thing before it starts.
-    "log-level": LogLevelOption(),
-    # Who may write the clipboard of the person at the keyboard.
-    # "external" is tmux's default: a copy the person makes goes out,
-    # and a program in a pane is refused. Lillecarl/pymux#378.
-    "set-clipboard": EnumOption(Clipboard, "clipboard_mode", scope=Scope.SERVER),
-    # Hold a Wayland compositor for the panes whose session has no
-    # display, so wl-copy and wl-paste work there. Needs the `wayland`
-    # extra (pysmithay, Linux); without it this does nothing. A pane
-    # that runs already keeps the environment it was born with.
-    # Lillecarl/pymux#383.
-    "wayland-server": WaylandServerOption("wayland_server", scope=Scope.SERVER),
-    # Whose PipeWire holds the speaker and microphone that panes play
-    # into and record from: "private", "shared", "auto" or "off".
-    # `AudioServerMode` says what each means. Only new panes see it.
-    # Lillecarl/pymux#657.
-    "audio-server": AudioServerOption("audio_server"),
-    # What happens to a request to forward a port, and the two
-    # cases that ask whatever it says. `ForwardMode` says.
-    "forward-mode": EnumOption(ForwardMode, "forward_mode", scope=Scope.SERVER),
-    # How long a job outlives its last activity, in seconds. Output
-    # and completion both count, so a job that logs stays while a job
-    # that hangs silent goes; a running one is ended first, a
-    # finished one just forgotten, and a waited one never. Zero keeps
-    # every job until the cap forgets the finished ones.
-    "job-ttl": PositiveIntOption("job_ttl", [0, 600, 3600, 86400], scope=Scope.SERVER),
-    # Write what a person does to `actions.db` under the state
-    # directory: each command, what started it -- a key, the command
-    # bar, a click, a hook -- and the clicks that run none. Never what a
-    # pane shows or what is typed into one. Off, because nobody expects
-    # a multiplexer to keep that. `pymux/actions.py` says the rest.
-    "action-log": OnOffOption("action_log", scope=Scope.SERVER),
-    # The most rows `actions.db` keeps; the oldest go first. Zero keeps all.
-    "action-log-limit": PositiveIntOption("action_log_limit", [0, 100_000, 500_000, 1_000_000], scope=Scope.SERVER),
-    "default-terminal": StringOption("default_terminal", ["xterm", "xterm-256color", "screen"], scope=Scope.SERVER),
-    # How much of the keyboard this server uses. "off" is the escape
-    # hatch: for a program that misbehaves under the extended
-    # encodings, and for a person attaching with a terminal that
-    # claims more than it does. Lillecarl/pymux#173.
-    "extended-keys": ExtendedKeysOption("extended_keys", scope=Scope.SERVER),
-    # "reference" draws every cell of every frame and keeps nothing,
-    # which is slow and right. `RenderMode` says why it exists.
-    "render-mode": RenderModeOption("render_mode"),
-    # Show 13:37 on the 14th of March, of the year it really is,
-    # everywhere pymux displays a clock: the status line's format
-    # strings, a pane in clock-mode, and the frame token that says
-    # when a clock changed. Off by default. The point is a screen that
-    # does not change while nobody types: a picture of a pane cannot
-    # race the clock. Lillecarl/pymux#273's galleries photograph them.
-    "test-mode": OnOffOption("test_mode", scope=Scope.SERVER),
-}
+ALL_SERVER_OPTIONS = {name: FieldOption(declared, Scope.SERVER) for name, declared in ServerOptions.DECLARED.items()}
 
 
 ALL_OPTIONS = {

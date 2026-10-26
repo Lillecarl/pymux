@@ -157,7 +157,7 @@ async def _attached(pymux: Pymux, announced) -> ServerConnection:
 async def a_server():
     "A server that is stopped whatever the test does to it."
     pymux = Pymux()
-    pymux.test_mode = True
+    pymux.options.test_mode = True
 
     async with pymux.running():
         try:

@@ -49,7 +49,6 @@ from ptterm import Terminal
 from ptyhost.backends import Backend
 from ptyhost.backends.posix import GRACE, PosixBackend
 from ptyhost.ending import say_how_it_ends
-from pyte.environment import terminal_name
 from pyte.images import ASSUMED_CELL_HEIGHT, ASSUMED_CELL_WIDTH
 from pyte.keep import Keep
 from pyte.keys import KEY_PROFILES, KeyboardFlag, KeyProfile, key_profile_of
@@ -79,12 +78,17 @@ from .enums import (
     COMMAND,
     PROMPT,
     AudioFrame,
-    AudioServerMode,
     Chooser,
     ClientAudio,
+    Clipboard,
     EditingKeys,
+    ExtendedKeys,
     FileTransfer,
+    ForwardMode,
+    OpenUrlMode,
+    OpenUrlTarget,
     PaneBrowser,
+    RenderMode,
     WindowScroll,
     WindowSize,
     Woke,
@@ -105,12 +109,6 @@ from .options import (
     ALL_OPTIONS,
     ALL_SERVER_OPTIONS,
     ALL_WINDOW_OPTIONS,
-    Clipboard,
-    ExtendedKeys,
-    ForwardMode,
-    OpenUrlMode,
-    OpenUrlTarget,
-    RenderMode,
     Scope,
 )
 from .osc import (
@@ -128,6 +126,7 @@ from .osc import (
 from .pipes import bind_and_listen_on_socket, connect_in_memory
 from .rc import STARTUP_COMMANDS
 from .server import ServerConnection
+from .server_options import ServerOptions
 from .session import DEFAULT_SIZE, Session, SessionOptions
 from .style import DEFAULT_THEME, theme
 from .utils import editor_keys, get_default_shell
@@ -1321,7 +1320,6 @@ class Pymux:
         # An upgrade refuses a server that draws on its own terminal, so
         # the server that takes over is always on a socket.
         "_serves_one_terminal": Keep.REBUILT,
-        "test_mode": Keep.SAVED,
         # What the server holds for every session.
         "global_environment": Keep.SAVED,
         "update_environment": Keep.SAVED,
@@ -1338,33 +1336,24 @@ class Pymux:
         "key_bindings_manager": Keep.SAVED,
         # Option values.
         "allow_program_resize": Keep.SAVED,
-        "clipboard_mode": Keep.SAVED,
         "command_palette": Keep.SAVED,
         "default_shell": Keep.SAVED,
-        "default_terminal": Keep.SAVED,
         "enable_bell": Keep.SAVED,
         "base_index": Keep.SAVED,
         "renumber_windows": Keep.SAVED,
         "enable_mouse_support": Keep.SAVED,
         "enable_pane_status": Keep.SAVED,
         "enable_status": Keep.SAVED,
-        "extended_keys": Keep.SAVED,
         "key_profile": Keep.SAVED,
-        "forward_mode": Keep.SAVED,
         "history_limit": Keep.SAVED,
-        "job_ttl": Keep.SAVED,
-        "action_log": Keep.SAVED,
-        "action_log_limit": Keep.SAVED,
         # Its writer starts again in `running`; what waited was written
         # as the old scope ended.
         "actions": Keep.REBUILT,
         "lock_command": Keep.SAVED,
         "mode_keys": Keep.SAVED,
         "notify_shim": Keep.SAVED,
-        "wayland_server": Keep.SAVED,
         # The compositor's task starts again in `running`.
         "wayland": Keep.REBUILT,
-        "audio_server": Keep.SAVED,
         "audio": Keep.REBUILT,
         "browsers": Keep.DROPPED,  # each one goes with its program, which the upgrade ends
         "open_url_forward": Keep.SAVED,
@@ -1375,7 +1364,6 @@ class Pymux:
         "open_url_target": Keep.SAVED,
         "paint_screen": Keep.SAVED,
         "remain_on_exit": Keep.SAVED,
-        "render_mode": Keep.SAVED,
         "status_interval": Keep.SAVED,
         "status_justify": Keep.SAVED,
         "status_keys": Keep.SAVED,
@@ -1404,7 +1392,7 @@ class Pymux:
         "_client_states": Keep.REBUILT,  # from the client records, as clients reconnect
         "_notify_shim_dir": Keep.REBUILT,
         "_open_url_shim_dir": Keep.REBUILT,
-        "_allow_remote_debugging": Keep.REBUILT,  # a kernel attribute, asked for again
+        "options": Keep.SAVED,
         "_kitty_flags_sent": Keep.REBUILT,
         "_keyboard_state_sent": Keep.REBUILT,
         "_cell_size_sent": Keep.REBUILT,
@@ -1480,24 +1468,13 @@ class Pymux:
         self.silence_symbol = "~"
         self.notification_symbol = "?"
 
-        # Who may write the clipboard of the person at the keyboard.
-        # tmux ships "external", where a copy the person makes goes out
-        # and a program in a pane is refused: a program on the far side
-        # of an ssh connection can otherwise write what that person
-        # pastes next. pymux passed a pane's ask on and kept a copy of
-        # the person inside, which is the two answers the wrong way
-        # round. Lillecarl/pymux#378.
-        self.clipboard_mode = Clipboard.EXTERNAL
+        self.options = ServerOptions()
+        self.options.owner = self
+        # `--log-level` told the logger before this server existed.
+        self.options.hold("log_level", log.level())
+
         self.open_url_target = OpenUrlTarget.LAST
         self.open_url_mode = OpenUrlMode.OPEN
-
-        #: What happens to a request to forward a port. "on" is the
-        #: default because the common case is a person typing
-        #: `forward-port -L` at their own keyboard, and a question
-        #: there is a nuisance and no safer. The two cases that ask
-        #: anyway are in `forward_needs_asking`.
-        #: Lillecarl/pymux#440.
-        self.forward_mode = ForwardMode.ON
 
         #: Whether a loopback URL brings its port with it. On, because
         #: without it the URL cannot work: `http://localhost:3000` on
@@ -1528,12 +1505,10 @@ class Pymux:
         self.clipboard = InMemoryClipboard()
 
         # A Wayland compositor for the panes that have no display, when
-        # pysmithay is installed and this is on. `wayland.py` says why.
-        self.wayland_server = True
+        # pysmithay is installed and `wayland-server` is on. `wayland.py` says why.
         self.wayland = WaylandServer(self)
         # Sound to and from the client used last. `audio.py` says what
         # each mode costs. Lillecarl/pymux#657.
-        self.audio_server = AudioServerMode.AUTO
         self.audio = AudioServer(self)
         #: Browsers programs here drive on a client's machine.
         #: Lillecarl/pymux#653.
@@ -1570,25 +1545,7 @@ class Pymux:
         # what the clock in the status bar costs when nothing else is
         # happening.
         self.status_interval = 4
-        # How long a job outlives its last activity, in seconds. An
-        # hour: a finished job lingers for a look back, and a running
-        # job that hangs silent is ended and forgotten. Zero keeps
-        # every job until the cap forgets the finished ones.
-        self.job_ttl = 3600
-        # Whether what a person does goes to `actions.db`, and how many
-        # rows it keeps; zero keeps all. Off: nobody expects a
-        # multiplexer to write down what they do. Half a million rows
-        # is a year of a busy day's two thousand, near 100 MB.
-        self.action_log = False
-        self.action_log_limit = 500_000
         self.actions = ActionLog()
-        # What a pane is told it is. The entry of pyte describes what a
-        # pane really does; a build without one falls back to xterm.
-        #
-        # `ptterm` already tells a pane this, so the option is here to
-        # let a person say something else. It is `default-terminal` in
-        # tmux, and it keeps that job.
-        self.default_terminal = terminal_name()
 
         # What the lock commands run over the screen; the keyboard
         # comes back when it is done. tmux ships vlock for it.
@@ -1605,8 +1562,6 @@ class Pymux:
         self.status_justify = Justify.LEFT
         self.default_shell = get_default_shell()
         self.paint_screen = False
-        self.test_mode = False
-        self.render_mode = RenderMode.OPTIMIZED
 
         #: Which table a scope reads. `set-option`, `set-window-option`
         #: and `set-client-option` are one command over these, and
@@ -1653,13 +1608,6 @@ class Pymux:
         #: from any terminal; without it, a pane hears that it does
         #: not have it. ("synthesize-key-events".)
         self.synthesize_key_events = True
-
-        #: How much of the keyboard this session uses.
-        #: ("extended-keys".) `OFF` is the escape hatch, for a program
-        #: that misbehaves under the extended encodings and for a
-        #: person attaching with a terminal that claims more than it
-        #: does. Lillecarl/pymux#173.
-        self.extended_keys = ExtendedKeys.ON
 
         #: The `KEY_PROFILES` name for a client whose terminal neither
         #: XTVERSION nor TERM names. ("key-profile".) Lillecarl/pymux#706.
@@ -1743,11 +1691,6 @@ class Pymux:
         #: The id each pane image has on the terminals of the clients,
         #: one answer for all of them. Lillecarl/pymux#600.
         self.outer_image_ids = OuterImageIds()
-
-        #: Whether another process of this user may attach a debugger.
-        #: Set through `set-option allow-remote-debugging`, and the
-        #: property below is what tells the kernel.
-        self._allow_remote_debugging = False
 
         # Keep track of all the panes, by ID. (For quick lookup.)
         self.panes_by_id: weakref.WeakValueDictionary[PaneId, Pane] = weakref.WeakValueDictionary()
@@ -2253,36 +2196,6 @@ class Pymux:
         self.sync_pointer_shape()
         self.sync_keyboard_source_flags()
 
-    @property
-    def allow_remote_debugging(self) -> bool:
-        return self._allow_remote_debugging
-
-    @allow_remote_debugging.setter
-    def allow_remote_debugging(self, allowed: bool) -> None:
-        """
-        A setting the kernel has to be told about, so it is a property
-        and not an attribute. `introspect.let_debugger_attach` says
-        what it costs and why it is off.
-        """
-        self._allow_remote_debugging = introspect.let_debugger_attach(allowed)
-
-    @property
-    def log_level(self) -> str:
-        return log.level()
-
-    @log_level.setter
-    def log_level(self, name: str) -> None:
-        """
-        Held by the logger and not by this object, so it is a property.
-
-        A server can be told this while it runs, which is the only time
-        it helps: `--log-level` is read before the server starts, and by
-        then the thing worth logging has not happened yet.
-        Lillecarl/pymux#252.
-        """
-        log.set_level(name)
-        logger.info("The log level is %s from now on.", name)
-
     def server_starts(self) -> None:
         """
         What every route does before its loop turns.
@@ -2316,7 +2229,7 @@ class Pymux:
             tasks.start_soon(self._auto_refresh)
             tasks.start_soon(self._watch_window_output)
             tasks.start_soon(self._sweep_jobs)
-            tasks.start_soon(self.actions.keep, lambda: self.action_log_limit)
+            tasks.start_soon(self.actions.keep, lambda: self.options.action_log_limit)
             tasks.start_soon(self.wayland.keep)
             tasks.start_soon(self.audio.keep)
             if self.listener is not None:
@@ -2410,8 +2323,8 @@ class Pymux:
         while True:
             await anyio.sleep(JOB_SWEEP_EVERY)
             try:
-                if self.job_ttl:
-                    self.jobs.sweep(self.job_ttl)
+                if self.options.job_ttl:
+                    self.jobs.sweep(self.options.job_ttl)
             except Exception:
                 logger.exception("The sweep of idle jobs failed.")
 
@@ -2712,7 +2625,7 @@ class Pymux:
             # The name is one of those. `default-terminal` is an option
             # a person can set, and this hook runs after ptterm's, so
             # what they set wins.
-            environment["TERM"] = self.default_terminal
+            environment["TERM"] = self.options.default_terminal
 
             if self.socket_name:
                 environment["PYMUX"] = "%s,%i" % (self.socket_name, pane.pane_id)
@@ -2952,7 +2865,7 @@ class Pymux:
         )
 
         terminal_control = terminal.terminal_control
-        terminal_control.keep_rows = self.render_mode is RenderMode.OPTIMIZED
+        terminal_control.keep_rows = self.options.render_mode is RenderMode.OPTIMIZED
 
         # What moves `#{pane_revision}`. It is wired here and not in
         # `Pane`, because a pane is about the arrangement and knows
@@ -3264,7 +3177,7 @@ class Pymux:
         Draw every client and every pane the way `render-mode` says, from
         the next frame on, and draw that frame whole.
         """
-        reference = self.render_mode is RenderMode.REFERENCE
+        reference = self.options.render_mode is RenderMode.REFERENCE
         for pane in self.panes_by_id.values():
             pane.terminal.terminal_control.keep_rows = not reference
         for client_state in self._client_states.values():
@@ -3470,7 +3383,7 @@ class Pymux:
         here, so a picture of a pane holds still under the reader.
         """
         now = datetime.datetime.now()
-        if self.test_mode:
+        if self.options.test_mode:
             now = now.replace(month=3, day=14, hour=13, minute=37, second=0, microsecond=0)
         return now
 
@@ -3528,7 +3441,9 @@ class Pymux:
         # and is not one. Lillecarl/pymux#443.
         confirmed = confirmed and self.a_person_asked()
 
-        asking = options.open_url_mode == OpenUrlMode.ASK or (self.forward_mode == ForwardMode.ASK and any(forwards))
+        asking = options.open_url_mode == OpenUrlMode.ASK or (
+            self.options.forward_mode == ForwardMode.ASK and any(forwards)
+        )
 
         if asking and not confirmed:
             command = "open-url -c %s" % (shlex.quote(url),)
@@ -3562,7 +3477,7 @@ class Pymux:
         options = self.current_session.options
         if not options.open_url_forward:
             return None
-        if self.forward_mode == ForwardMode.OFF:
+        if self.options.forward_mode == ForwardMode.OFF:
             # Somebody turned port forwarding off. A URL is not a way
             # around that.
             return None
@@ -3655,7 +3570,7 @@ class Pymux:
 
         Lillecarl/pymux#440.
         """
-        if self.forward_mode == ForwardMode.ASK:
+        if self.options.forward_mode == ForwardMode.ASK:
             return True
 
         return not in_person or forward.listen_host not in LOOPBACK_NAMES
@@ -3834,7 +3749,7 @@ exec pymux notify -u "$urgency" -- "$@"
                 # `input_osc_52`, and its default answer is no. A copy
                 # that the person makes asks `write_user_clipboard`
                 # instead, which is the other half of the option.
-                if self.clipboard_mode is not Clipboard.ON:
+                if self.options.set_clipboard is not Clipboard.ON:
                     return
                 # What a pane copies goes into the paste buffer of the
                 # session as well, so that "paste-buffer" can put it in
@@ -4022,7 +3937,7 @@ exec pymux notify -u "$urgency" -- "$@"
                 return False
             # The same gate as OSC 52: only "on" lets a program in a
             # pane near the clipboard.
-            if self.clipboard_mode is not Clipboard.ON:
+            if self.options.set_clipboard is not Clipboard.ON:
                 return False
             self._mirror_clipboard("c;" + data)
             return True
@@ -4136,7 +4051,7 @@ exec pymux notify -u "$urgency" -- "$@"
 
         Never raises: this runs under a key press.
         """
-        if self.clipboard_mode is Clipboard.OFF or not text:
+        if self.options.set_clipboard is Clipboard.OFF or not text:
             return
         try:
             payload = base64.b64encode(text.encode("utf-8")).decode("ascii")
@@ -4279,7 +4194,7 @@ exec pymux notify -u "$urgency" -- "$@"
         state = (
             self.keyboard_source_flags(),
             tuple((session.session_id, session.options.synthesize_key_events) for session in self.sessions),
-            self.extended_keys,
+            self.options.extended_keys,
         )
         if state == self._keyboard_state_sent:
             return
@@ -4366,7 +4281,7 @@ exec pymux notify -u "$urgency" -- "$@"
         try:
             screen.keyboard_source_flags = self.keyboard_source_flags()
             screen.synthesize_key_events = self.options_of_pane(pane).synthesize_key_events
-            screen.extended_keys_allowed = self.extended_keys is not ExtendedKeys.OFF
+            screen.extended_keys_allowed = self.options.extended_keys is not ExtendedKeys.OFF
         except AttributeError:
             # An older ptterm knows nothing about the keyboard of the
             # host. It then claims what a pane asks for, as before.
@@ -4495,7 +4410,7 @@ exec pymux notify -u "$urgency" -- "$@"
         the client then writes "CSI = 0 ; 1 u" to put the terminal
         back in the legacy encoding. Lillecarl/pymux#173.
         """
-        if self.extended_keys is ExtendedKeys.OFF:
+        if self.options.extended_keys is ExtendedKeys.OFF:
             return 0
         return KeyboardFlag.DISAMBIGUATE | self.get_focused_kitty_flags()
 
@@ -5131,7 +5046,7 @@ exec pymux notify -u "$urgency" -- "$@"
             session=session,
         )
         client_state.temporary = temporary
-        client_state.app.renderer.reference = self.render_mode is RenderMode.REFERENCE
+        client_state.app.renderer.reference = self.options.render_mode is RenderMode.REFERENCE
 
         self._client_states[connection] = client_state
 

@@ -31,19 +31,19 @@ from test_every_attribute_has_a_fate import declared, live_objects
 from pymux import snapshot, tables
 from pymux.arrangement import LayoutTypes
 from pymux.commands.wait_for import WaitChannel
-from pymux.enums import Chooser, WindowCodec, WindowSize
+from pymux.enums import Chooser, Clipboard, ForwardMode, WindowCodec, WindowSize
 from pymux.jobs import JobFeed, JobPipes
 from pymux.main import Pymux
 from pymux.notifications import Urgency
 from pymux.query import ask
-from pymux.tables import WindowOptionRow
-from pymux.window_options import WindowOptions
+from pymux.server_options import ServerOptions
+from pymux.tables import ServerOptionRow
 
 
 @pytest.fixture
 def pymux():
     mux = Pymux()
-    mux.test_mode = True
+    mux.options.test_mode = True
     try:
         yield mux
     finally:
@@ -254,6 +254,11 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
         window_codec=WindowCodec.VP9,
     )
     pymux.global_environment["UNSET"] = None
+    pymux.options.set_clipboard = Clipboard.ON
+    pymux.options.forward_mode = ForwardMode.ASK
+    pymux.options.job_ttl = 60
+    pymux.options.action_log_limit = 10
+    pymux.options.default_terminal = "screen"
 
     client_state.previous_session = second
     (elsewhere,) = second.arrangement.windows
@@ -346,6 +351,9 @@ def _vary_what_no_command_reaches(pymux, client_state) -> None:
     }
 
 
+#: A table that holds one row, so no column of it can vary.
+ONE_ROW = {"server_options"}
+
 #: Columns that hold one value in every row however the server is used.
 CONSTANT = {
     ("counters", "value"),  # five counters, and two of them may agree
@@ -420,6 +428,8 @@ def _constant_columns(path) -> list[tuple[str, str]]:
     try:
         found = []
         for table in tables.TABLES:
+            if table in ONE_ROW:
+                continue
             if db.execute("SELECT count(*) FROM %s" % table).fetchone()[0] < 2:
                 found.append((table, "(fewer than two rows)"))
                 continue
@@ -534,7 +544,7 @@ async def test_a_snapshot_loads_back_to_the_same_tables_and_programs(pymux, tmp_
         # old one stays each program's parent, so each one's end is seen
         # here and its code is not.
         fresh = Pymux()
-        fresh.test_mode = True
+        fresh.options.test_mode = True
         fresh.socket_name = pymux.socket_name
         second = tmp_path / "second.sqlite"
         try:
@@ -710,52 +720,33 @@ def test_the_table_list_is_the_schema_in_order():
     assert list(tables.TABLES) == made
 
 
-def _as_version_36(path) -> None:
-    "Put a window's options back in `windows`, and each default in a row of its own, as 36 kept them."
-    declared = list(WindowOptions.DECLARED.values())
+def _as_version_37(path) -> None:
+    "Put the server's options back in `options`, as names and values, as 37 kept them."
     db = apsw.Connection(str(path))
-    for each in declared:
-        db.execute("ALTER TABLE windows ADD COLUMN %s" % (WindowOptionRow.COLUMNS[each.attribute],))
-        column = each.attribute
-        db.execute(
-            f"UPDATE windows SET {column} = (SELECT {column} FROM window_options AS own"
-            " WHERE own.window_id = windows.window_id)"
-        )
-    db.execute("DROP TABLE window_options")
-    db.execute("ALTER TABLE window_defaults RENAME TO new_window_defaults")
-    db.execute(
-        "CREATE TABLE window_defaults(session_id INTEGER NOT NULL, name TEXT NOT NULL, value, PRIMARY KEY (session_id, name))"
-    )
-    for each in declared:
-        column = each.attribute
-        db.execute(
-            f"INSERT INTO window_defaults SELECT session_id, ?, {column} FROM new_window_defaults"
-            f" WHERE {column} IS NOT NULL",
-            (each.name,),
-        )
-    db.execute("DROP TABLE new_window_defaults")
-    db.execute("PRAGMA user_version = 36")
+    for each in ServerOptions.DECLARED.values():
+        if each.attribute in ServerOptionRow.COLUMNS:
+            db.execute(
+                f"INSERT INTO options SELECT ?, {each.attribute} FROM server_options",
+                (each.name,),
+            )
+    db.execute("DROP TABLE server_options")
+    db.execute("PRAGMA user_version = 37")
     db.close()
 
 
-async def test_a_version_36_snapshot_loads_its_window_options(pymux, tmp_path):
-    "36 kept them in `windows` and `window_defaults` as names and values. Lillecarl/pymux#769."
-    async with pymux.running():
-        await pymux.create_window("true")
-        window = pymux.arrangement.windows[-1]
-        window.options.strip = True
-        window.options.window_codec = WindowCodec.VP9
-        pymux.arrangement.window_defaults.update(frame_rate=10, window_size=WindowSize.LARGEST)
-        path = tmp_path / "v36.sqlite"
-        snapshot.save(pymux, path)
-    _as_version_36(path)
+def test_a_version_37_snapshot_loads_its_server_options(pymux, tmp_path):
+    "37 kept them in `options` as names and values. Lillecarl/pymux#769."
+    pymux.options.set_clipboard = Clipboard.ON
+    pymux.options.job_ttl = 60
+    path = tmp_path / "v37.sqlite"
+    snapshot.save(pymux, path)
+    _as_version_37(path)
 
     loaded = Pymux()
     snapshot.load(loaded, path)
 
-    window = loaded.arrangement.windows[-1]
-    assert (window.options.strip, window.options.window_codec) == (True, WindowCodec.VP9)
-    assert loaded.arrangement.window_defaults == {"frame_rate": 10, "window_size": WindowSize.LARGEST}
+    assert (loaded.options.set_clipboard, loaded.options.job_ttl) == (Clipboard.ON, 60)
+    assert loaded.status_left == pymux.status_left
 
 
 async def test_a_column_this_build_declares_and_the_file_lacks_takes_its_default(pymux, tmp_path):

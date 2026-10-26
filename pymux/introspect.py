@@ -510,7 +510,7 @@ def _server(pymux: Pymux) -> str:
             # to read it back with. A person who turned it up and
             # forgot needs somewhere to find out. Lillecarl/pymux#252.
             "log %s, at %s" % (logfile() or "nowhere", level()),
-            "a debugger may attach: %s" % ("yes" if pymux.allow_remote_debugging else "no"),
+            "a debugger may attach: %s" % ("yes" if pymux.options.allow_remote_debugging else "no"),
         ]
     )
 

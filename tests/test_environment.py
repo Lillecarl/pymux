@@ -94,7 +94,7 @@ async def test_a_pane_starts_with_the_scopes_over_what_ptterm_prepared(monkeypat
         spawn = pane.terminal.terminal_control.process.backend.spawn()
 
         assert "KITTY_WINDOW_ID" not in spawn.environment
-        assert spawn.environment["TERM"] == pymux.default_terminal
+        assert spawn.environment["TERM"] == pymux.options.default_terminal
         assert spawn.environment["COLORTERM"] == "truecolor"
         assert spawn.environment["FOO"] == "bar"
         assert os.environ["KITTY_WINDOW_ID"] == "1"

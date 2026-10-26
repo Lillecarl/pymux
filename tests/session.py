@@ -303,7 +303,7 @@ async def in_this_process(pymux=None):
     # The clock a screen shows is pinned, so no test races the minute
     # it runs in. This is what test-mode is for. A Pymux a caller
     # brought is the caller's to pin.
-    pymux.test_mode = True
+    pymux.options.test_mode = True
     watched: dict[str, weakref.ref | None] = {}
     watch = _watcher(watched)
 
@@ -446,7 +446,7 @@ async def over_connection(pymux=None, read_packet=None):
     # The clock a screen shows is pinned, so no test races the minute
     # it runs in. This is what test-mode is for. A Pymux a caller
     # brought is the caller's to pin.
-    pymux.test_mode = True
+    pymux.options.test_mode = True
     watched: dict[str, weakref.ref | None] = {}
     watch = _watcher(watched)
 

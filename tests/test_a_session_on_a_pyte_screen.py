@@ -47,7 +47,7 @@ COPY_POSITION = re.compile(r"\[\d+/\d+\]")
 @pytest.fixture
 def pymux():
     mux = Pymux()
-    mux.test_mode = True
+    mux.options.test_mode = True
     try:
         yield mux
     finally:

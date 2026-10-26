@@ -26,8 +26,8 @@ from libpymux.protocol import Packet
 from session import once
 from test_a_session_on_a_pyte_screen import attached, shows
 
+from pymux.enums import Clipboard
 from pymux.main import Pymux
-from pymux.options import Clipboard
 from pymux.server import ServerConnection, _FrameOutput, _SocketStdout
 
 #: A clipboard write, as a pane writes one.
@@ -173,7 +173,7 @@ async def test_a_real_client_holds_it_through_a_flush_between_frames():
     Lillecarl/pymux#611.
     """
     mux = Pymux()
-    mux.test_mode = True
+    mux.options.test_mode = True
     try:
         async with mux.running(), attached(mux) as session:
             await shows(session, "$")
@@ -221,7 +221,7 @@ async def test_forwarding_asks_for_a_frame(pymux):
     """
     woke = []
     pymux.invalidate = lambda reason=None: woke.append(reason)
-    pymux.clipboard_mode = Clipboard.ON
+    pymux.options.set_clipboard = Clipboard.ON
     pane = pymux.arrangement.get_active_window().active_pane
 
     pymux.forward_osc(pane, "52", "c;aGVsbG8=")

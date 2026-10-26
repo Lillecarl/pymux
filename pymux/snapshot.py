@@ -56,8 +56,10 @@ from .enums import AudioFrame, ClientAudio, FileTransfer, WindowScroll
 from .ids import PaneId, SessionId, WindowId, WindowIndex
 from .jobs import Job, JobFeed, JobId, JobPipes
 from .notifications import Notification, NotificationSource
-from .options import ALL_OPTIONS, ALL_SERVER_OPTIONS
+from .option_fields import Declared, Options
+from .options import ALL_OPTIONS
 from .pipes.posix import PosixSocketListener
+from .server_options import ServerOptions
 from .session import Session, SessionOptions
 from .tables import (
     JOB_TABLES,
@@ -90,6 +92,7 @@ from .tables import (
     SavedQueryRow,
     ScreenRow,
     ServerListRow,
+    ServerOptionRow,
     ServerRow,
     SessionEnvironmentRow,
     SessionOptionRow,
@@ -105,9 +108,16 @@ from .tables import (
     WindowTagRow,
     added_columns,
     insert,
+    literal,
     select,
 )
 from .window_options import WindowOptions
+
+#: The options of each scope a snapshot holds.
+_SAVED: dict[type[Options], tuple[Declared, ...]] = {
+    scope: tuple(each for each in scope.DECLARED.values() if each.keep is Keep.SAVED)
+    for scope in (ServerOptions, WindowOptions)
+}
 
 if TYPE_CHECKING:
     from .main import ClientState, Pymux
@@ -124,7 +134,7 @@ __all__ = [
 
 #: The shape this build writes, in `PRAGMA user_version`. A load
 #: takes an older one up through `STEPS`, and refuses any other.
-SNAPSHOT_VERSION = 37
+SNAPSHOT_VERSION = 38
 
 
 #: A client's own settings, each a column of `clients` and an attribute
@@ -151,28 +161,23 @@ _CLIENT_SETTING_TYPES: dict[str, type] = {
 CLIENT_SETTINGS = tuple(_CLIENT_SETTING_TYPES)
 
 
-def _window_options_move_out() -> str:
+def _server_options_move_out() -> str:
     """
-    36 kept a window's options as columns of `windows`, and each default
-    as a name and a value. 37 gives each a table of its own, a column
-    per option. Lillecarl/pymux#769.
+    37 kept the server's options as names and values in `options`, beside
+    the session defaults. 38 gives them a row of their own, a column per
+    option. Lillecarl/pymux#769.
     """
-    declared = list(WindowOptions.DECLARED.values())
-    columns = ", ".join(each.attribute for each in declared)
-    named = ",\n  ".join(
-        "%s = (SELECT value FROM old_window_defaults AS old"
-        " WHERE old.session_id = window_defaults.session_id AND old.name = '%s')" % (each.attribute, each.name)
+    declared = _SAVED[ServerOptions]
+    found = ",\n  ".join(
+        "coalesce((SELECT value FROM options WHERE name = '%s'), %s)" % (each.name, literal(each.stored(each.default)))
         for each in declared
     )
     return (
-        "ALTER TABLE window_defaults RENAME TO old_window_defaults;\n"
-        + WindowDefaultRow.SQL
-        + WindowOptionRow.SQL
-        + "INSERT INTO window_defaults(session_id) SELECT DISTINCT session_id FROM old_window_defaults;\n"
-        + "UPDATE window_defaults SET\n  %s;\n" % named
-        + "DROP TABLE old_window_defaults;\n"
-        + "INSERT INTO window_options(window_id, %s) SELECT window_id, %s FROM windows;\n" % (columns, columns)
-        + "".join("ALTER TABLE windows DROP COLUMN %s;\n" % each.attribute for each in declared)
+        ServerOptionRow.SQL
+        + "INSERT INTO server_options(id, %s) SELECT 1,\n  %s;\n"
+        % (", ".join(each.attribute for each in declared), found)
+        + "DELETE FROM options WHERE name IN (%s);\n"
+        % ", ".join("'%s'" % each.name for each in ServerOptions.DECLARED.values())
     )
 
 
@@ -180,7 +185,7 @@ def _window_options_move_out() -> str:
 #: snapshot only ever goes from a running build to the next one, so a
 #: change of shape adds the one step from the version before it and
 #: deletes any older step.
-STEPS: dict[int, str] = {36: _window_options_move_out()}
+STEPS: dict[int, str] = {37: _server_options_move_out()}
 
 #: The fields `ClientState.modes` holds, one JSON value in `client_modes`.
 CLIENT_MODES = frozenset(
@@ -206,13 +211,13 @@ CLIENT_MODES = frozenset(
 _SPLIT_KINDS: dict[type[_Split], str] = {HSplit: "hsplit", VSplit: "vsplit"}
 
 
-def _server_options() -> dict[str, str]:
-    "Option name to `Pymux` attribute, for every option the server holds."
+def _session_defaults() -> dict[str, str]:
+    "Option name to `Pymux` attribute, for the default of every session option."
     from .main import Pymux
 
     return {
         name: option.attribute_name
-        for name, option in (ALL_SERVER_OPTIONS | ALL_OPTIONS).items()
+        for name, option in ALL_OPTIONS.items()
         if option.attribute_name is not None and Pymux.KEEP.get(option.attribute_name) is not None
     }
 
@@ -242,9 +247,10 @@ WRITES: dict[str, frozenset[str]] = {
     ),
     "pymux.arrangement.Window": frozenset(Window.KEEP)
     - {"_revisions_seen", "_quiet_since", "_silence_armed", "seen_at"},
-    "pymux.window_options.WindowOptions": frozenset(
-        name for name, fate in WindowOptions.KEEP.items() if fate == Keep.SAVED
-    ),
+    **{
+        "%s.%s" % (scope.__module__, scope.__qualname__): frozenset(each.attribute for each in saved)
+        for scope, saved in _SAVED.items()
+    },
     "pymux.arrangement._Split": frozenset(_Split.KEEP),
     "pymux.arrangement.Pane": frozenset(name for name, fate in Pane.KEEP.items() if fate == Keep.SAVED),
     "pymux.main.ClientState": frozenset({"session", "previous_session", *CLIENT_SETTINGS, *CLIENT_MODES}),
@@ -281,8 +287,8 @@ WRITES: dict[str, frozenset[str]] = {
         | {"created", "socket_name", "listener", "original_cwd", "source_file", "_startup_done"}
         | {"clipboard", "named_buffers", "prompt_history", "message_log", "hooks", "key_bindings_manager"}
         | {"notifications", "notification_center", "wait_channels"}
-        | {"startup_command"}
-        | set(_server_options().values())
+        | {"startup_command", "options"}
+        | set(_session_defaults().values())
     ),
 }
 
@@ -307,19 +313,20 @@ def _like(default: Any, value: Any) -> Any:
     return value
 
 
-_WINDOW_OPTIONS = tuple(WindowOptions.DECLARED.values())
-
-
-def _stored_options(values: dict[str, Any]) -> dict[str, Any]:
+def _stored_options(scope: type[Options], values: dict[str, Any]) -> dict[str, Any]:
     "Options by attribute, as their columns hold them."
-    return {each.attribute: each.stored(values[each.attribute]) for each in _WINDOW_OPTIONS if each.attribute in values}
+    return {each.attribute: each.stored(values[each.attribute]) for each in _SAVED[scope] if each.attribute in values}
 
 
-def _loaded_options(row: Any) -> dict[str, Any]:
-    "The options a row of `window_options` or `window_defaults` holds, by attribute; a NULL is not set."
+def _values_of(options: Options) -> dict[str, Any]:
+    return {each.attribute: getattr(options, each.attribute) for each in _SAVED[type(options)]}
+
+
+def _loaded_options(scope: type[Options], row: Any) -> dict[str, Any]:
+    "The options a row of a scope's table holds, by attribute; a NULL is not set."
     return {
         each.attribute: each.loaded(getattr(row, each.attribute))
-        for each in _WINDOW_OPTIONS
+        for each in _SAVED[scope]
         if getattr(row, each.attribute) is not None
     }
 
@@ -638,7 +645,8 @@ def rows_of(pymux: Pymux) -> Iterator[Row]:
         ("notification_route", pymux.notifications._next),
     ):
         yield CounterRow(name, value)
-    for name, attribute in sorted(_server_options().items()):
+    yield ServerOptionRow(1, **_stored_options(ServerOptions, _values_of(pymux.options)))
+    for name, attribute in sorted(_session_defaults().items()):
         yield OptionRow(name, _value(getattr(pymux, attribute)))
     for name, value in sorted(pymux.global_environment.items()):
         yield GlobalEnvironmentRow(name, value)
@@ -668,7 +676,7 @@ def rows_of(pymux: Pymux) -> Iterator[Row]:
         for attribute, value in sorted(session.options.own().items()):
             yield SessionOptionRow(session.session_id, session_option_names[attribute], _value(value))
         if arrangement.window_defaults:
-            yield WindowDefaultRow(session.session_id, **_stored_options(arrangement.window_defaults))
+            yield WindowDefaultRow(session.session_id, **_stored_options(WindowOptions, arrangement.window_defaults))
         for linked, windows in ((True, arrangement.windows), (False, arrangement._unlinked_windows)):
             for place, window in enumerate(windows):
                 yield from _window_rows(session, window, linked, place)
@@ -703,10 +711,7 @@ def _window_rows(session: Session, window: Window, linked: bool, place: int) -> 
         notified=window.notified,
         shown_name=window.name,
     )
-    yield WindowOptionRow(
-        window.window_id,
-        **_stored_options({each.attribute: getattr(window.options, each.attribute) for each in _WINDOW_OPTIONS}),
-    )
+    yield WindowOptionRow(window.window_id, **_stored_options(WindowOptions, _values_of(window.options)))
     for key, value in sorted(window.tags.items()):
         yield WindowTagRow(window.window_id, key, value)
     for (kind, id), width in sorted(window.column_widths.items()):
@@ -1056,9 +1061,12 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
 
     counters = {row.name: row.value for row in select(db, CounterRow)}
 
-    server_options = _server_options()
+    for row in select(db, ServerOptionRow):
+        for attribute, value in _loaded_options(ServerOptions, row).items():
+            setattr(pymux.options, attribute, value)
+    session_defaults = _session_defaults()
     for row in select(db, OptionRow):
-        attribute = server_options.get(row.name)
+        attribute = session_defaults.get(row.name)
         # An option this build dropped is not an error: it has nothing to hold it.
         if attribute is not None:
             setattr(pymux, attribute, _like(getattr(pymux, attribute), row.value))
@@ -1133,7 +1141,7 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
                 setattr(session.options, attribute, _like(getattr(pymux, attribute), own.value))
         arrangement = session.arrangement
         for default in select(db, WindowDefaultRow, "WHERE session_id = ?", session.session_id):
-            arrangement.window_defaults.update(_loaded_options(default))
+            arrangement.window_defaults.update(_loaded_options(WindowOptions, default))
 
         for window_row in select(
             db, WindowRow, "WHERE session_id = ? ORDER BY linked DESC, position", session.session_id
@@ -1152,7 +1160,7 @@ def _read(pymux: Pymux, db: apsw.Connection, takeover: Takeover) -> int | None:
             layout = window_row.previous_layout
             window.previous_selected_layout = LayoutTypes(layout) if layout is not None else None
             for own in select(db, WindowOptionRow, "WHERE window_id = ?", window.window_id):
-                for attribute, value in _loaded_options(own).items():
+                for attribute, value in _loaded_options(WindowOptions, own).items():
                     setattr(window.options, attribute, value)
             if window_row.manual_height is not None and window_row.manual_width is not None:
                 window.manual_size = Size(rows=window_row.manual_height, columns=window_row.manual_width)

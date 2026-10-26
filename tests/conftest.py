@@ -171,7 +171,7 @@ def a_server_in_test_mode(monkeypatch):
 
     def __init__(self, *args, **kw):
         original(self, *args, **kw)
-        self.test_mode = True
+        self.options.test_mode = True
         self.paint_screen = True
 
     monkeypatch.setattr(Pymux, "__init__", __init__)

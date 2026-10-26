@@ -29,7 +29,7 @@ from pymux.web.session import run_session
 @pytest.fixture
 def pymux():
     mux = Pymux()
-    mux.test_mode = True
+    mux.options.test_mode = True
     try:
         yield mux
     finally:

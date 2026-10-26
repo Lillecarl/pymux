@@ -40,7 +40,7 @@ async def a_server():
     rather than failing it.
     """
     pymux = Pymux()
-    pymux.test_mode = True
+    pymux.options.test_mode = True
 
     async with pymux.running():
         try:

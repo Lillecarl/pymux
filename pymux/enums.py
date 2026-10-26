@@ -265,3 +265,99 @@ class Woke(StrEnum):
     #: Window panes. Lillecarl/pymux#620.
     WINDOW_PANE_OPENED = "a Wayland window opened in a pane"
     WINDOW_PANE_CHANGED = "a Wayland window took a title or an app id"
+
+
+class ExtendedKeys(StrEnum):
+    """
+    How much of the keyboard a session uses.
+
+    `OFF` is the escape hatch. A program that misbehaves under the
+    extended encodings has somewhere to go, and so does a person who
+    attaches with a terminal that claims more than it does: the whole
+    session steps down for as long as they choose, and steps back up
+    without restarting anything.
+
+    `ALWAYS` is for a terminal that speaks the protocol and does not
+    answer the query that asks. There are some.
+    """
+
+    OFF = "off"
+    ON = "on"
+    ALWAYS = "always"
+
+
+class Clipboard(StrEnum):
+    """
+    Who may write the clipboard of the person at the keyboard.
+
+    `EXTERNAL` is the careful one, and tmux's default: a copy the
+    person makes in copy mode goes out to their terminal, and a
+    program in a pane cannot reach the clipboard at all.
+
+    `ON` lets a program reach it, which is what a terminal does when
+    nothing stands between the two. It is a real choice: a program on
+    the other side of an ssh connection can then write what a person
+    pastes next.
+    """
+
+    OFF = "off"
+    EXTERNAL = "external"
+    ON = "on"
+
+
+class OpenUrlTarget(StrEnum):
+    """
+    Which client's browser "open-url" opens in.
+
+    `LAST` is the client somebody used last, by the stamp that
+    `window-size latest` reads. `BROADCAST` is every attached client.
+    """
+
+    LAST = "last"
+    BROADCAST = "broadcast"
+
+
+class OpenUrlMode(StrEnum):
+    """
+    What happens to a request to open a URL.
+
+    `ASK` shows "(y/n)" in the command bar of the clients it would
+    land on, and a yes runs `open-url -c`, so the question is asked
+    once.
+    """
+
+    OPEN = "open"
+    ASK = "ask"
+    OFF = "off"
+
+
+class ForwardMode(StrEnum):
+    """
+    What happens to a request to forward a port.
+
+    **`ON` is not "never ask".** A request that binds somewhere other
+    than loopback, and one that a program in a pane made rather than
+    the person, are confirmed whatever this says: `Pymux.forward_needs_asking`
+    holds the two. The port belongs to the machine somebody is sitting
+    at. Lillecarl/pymux#440.
+    """
+
+    ON = "on"
+    ASK = "ask"
+    OFF = "off"
+
+
+class RenderMode(StrEnum):
+    """
+    How a client's frames reach its terminal.
+
+    `OPTIMIZED` writes what changed since the frame before, scrolls
+    rows on the wire instead of repainting them, and builds a pane's
+    rows only when they changed. `REFERENCE` writes every cell of
+    every frame at its own position and keeps nothing between frames.
+    It is slow on purpose: it is the answer the optimized frames are
+    held against, and the way round a fault in them until it is fixed.
+    """
+
+    OPTIMIZED = "optimized"
+    REFERENCE = "reference"

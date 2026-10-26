@@ -425,9 +425,9 @@ def test_a_client_hears_its_options(routed):
 
 def test_the_options_are_there():
     pymux = Pymux()
-    assert pymux.audio_server == AudioServerMode.AUTO
+    assert pymux.options.audio_server == AudioServerMode.AUTO
     pymux.handle_command("set-option audio-server off")
-    assert pymux.audio_server == AudioServerMode.OFF
+    assert pymux.options.audio_server == AudioServerMode.OFF
 
 
 class _Connection2:

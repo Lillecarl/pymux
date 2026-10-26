@@ -18,9 +18,8 @@ from .arrangement import Arrangement, Pane
 from .ids import SessionId
 
 if TYPE_CHECKING:
-    from .enums import EditingKeys, PaneBrowser
+    from .enums import EditingKeys, OpenUrlMode, OpenUrlTarget, PaneBrowser
     from .layout import Justify
-    from .options import OpenUrlMode, OpenUrlTarget
     from .tags import Tags
 
 __all__ = ["DEFAULT_SIZE", "Session", "SessionOptions"]

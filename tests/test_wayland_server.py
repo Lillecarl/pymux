@@ -21,8 +21,8 @@ from session import once, over_connection
 
 pytest.importorskip("pysmithay")
 
+from pymux.enums import Clipboard
 from pymux.main import Pymux
-from pymux.options import Clipboard
 from pymux.server import CLIPBOARD_READ_SECONDS
 
 SIZE = Size(rows=24, columns=80)
@@ -45,7 +45,7 @@ async def attached(tmp_path, terminal: ClipboardTerminal, mode: Clipboard):
     "A server under `set-clipboard <mode>`, with one client at `terminal`."
     pymux = Pymux()
     pymux.socket_name = str(tmp_path / "pymux.sock.test")
-    pymux.clipboard_mode = mode
+    pymux.options.set_clipboard = mode
     async with over_connection(pymux=pymux, read_packet=terminal) as session:
         state, _size = await session.attach("one", SIZE)
         terminal.typed = session.typed
@@ -148,7 +148,7 @@ async def test_the_option_stops_and_starts_it(mux):
 
 
 async def test_panes_share_a_copy_under_external(mux):
-    mux.clipboard_mode = Clipboard.EXTERNAL
+    mux.options.set_clipboard = Clipboard.EXTERNAL
     async with copying(mux, "between panes"):
         await once(lambda: mux.wayland.copied.get("clipboard"), 10.0, "the copy never arrived")
         assert await paste(mux) == (0, "between panes")
@@ -156,7 +156,7 @@ async def test_panes_share_a_copy_under_external(mux):
 
 
 async def test_a_paste_reads_nothing_of_the_person_under_external(mux):
-    mux.clipboard_mode = Clipboard.EXTERNAL
+    mux.options.set_clipboard = Clipboard.EXTERNAL
     mux.clipboard.set_data(ClipboardData("private"))
 
     _code, text = await paste(mux)

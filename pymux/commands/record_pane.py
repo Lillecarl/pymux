@@ -49,7 +49,7 @@ def record_pane(pymux: Pymux, args: argparse.Namespace) -> None:
             args.name or "",
             screen.lines,
             screen.columns,
-            pymux.default_terminal,
+            pymux.options.default_terminal,
             args.idle_time_limit,
         )
         pymux.show_message("Recording %s to %s" % (pane.recording.name, recordings_directory()))

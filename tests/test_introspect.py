@@ -277,7 +277,7 @@ async def test_nothing_may_attach_to_create_server_nobody_asked_about(create_ser
     """
     pymux, _state = create_server
 
-    assert pymux.allow_remote_debugging is False
+    assert pymux.options.allow_remote_debugging is False
     assert "a debugger may attach: no" in introspect.what_it_is_doing(pymux)
 
 
@@ -288,11 +288,11 @@ async def test_option_tells_kernel(create_server):
 
     with set_app(state.app):
         handle_command(pymux, "set-option allow-remote-debugging on")
-        assert pymux.allow_remote_debugging is True
+        assert pymux.options.allow_remote_debugging is True
         assert "a debugger may attach: yes" in introspect.what_it_is_doing(pymux)
 
         handle_command(pymux, "set-option allow-remote-debugging off")
-        assert pymux.allow_remote_debugging is False
+        assert pymux.options.allow_remote_debugging is False
 
 
 async def test_every_route_that_starts_create_server_takes_signal():

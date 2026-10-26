@@ -14,8 +14,8 @@ from pyte import escape
 from pyte.osc import PointerShapes
 from pyte.sequences import Terminator, csi, osc
 
+from pymux.enums import Clipboard
 from pymux.main import Pymux
-from pymux.options import Clipboard
 from pymux.osc import MAX_OSC_LENGTH, build_osc
 
 
@@ -163,7 +163,7 @@ def make_pymux(focused=(), pane=None, clipboard=Clipboard.ON):
     allowed through, and `set-clipboard` is judged on its own below.
     """
     pymux = Pymux()
-    pymux.clipboard_mode = clipboard
+    pymux.options.set_clipboard = clipboard
     connections = [FakeConnection(), FakeConnection()]
     states = [FakeClientState(), FakeClientState()]
     pymux._client_states = dict(zip(connections, states))
@@ -173,7 +173,7 @@ def make_pymux(focused=(), pane=None, clipboard=Clipboard.ON):
 
 def test_clipboard_write_reaches_every_client():
     pymux, connections = make_pymux()
-    pymux.clipboard_mode = Clipboard.ON
+    pymux.options.set_clipboard = Clipboard.ON
     pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
     for connection in connections:
         assert connection.written == [sequence("52", "c;aGVsbG8=")]
@@ -297,7 +297,7 @@ def test_unsafe_payload_reaches_nobody():
 @pytest.mark.parametrize("mode", [Clipboard.OFF, Clipboard.EXTERNAL])
 def test_clipboard_option_stops_clipboard_only(mode):
     pymux, connections = make_pymux()
-    pymux.clipboard_mode = mode
+    pymux.options.set_clipboard = mode
 
     pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
     assert connections[0].written == []
@@ -308,7 +308,7 @@ def test_clipboard_option_stops_clipboard_only(mode):
 
 def test_a_pane_reaches_the_clipboard_when_the_option_says_on():
     pymux, connections = make_pymux()
-    pymux.clipboard_mode = Clipboard.ON
+    pymux.options.set_clipboard = Clipboard.ON
     pymux.forward_osc(FakePane(), "52", "c;aGVsbG8=")
     assert connections[0].written == [sequence("52", "c;aGVsbG8=")]
 
@@ -320,7 +320,7 @@ def test_a_pane_is_refused_the_clipboard_by_default():
     connection would otherwise write what that person pastes next.
     Lillecarl/pymux#378.
     """
-    assert Pymux().clipboard_mode is Clipboard.EXTERNAL
+    assert Pymux().options.set_clipboard is Clipboard.EXTERNAL
 
 
 def test_broken_connection_does_not_stop_pane():

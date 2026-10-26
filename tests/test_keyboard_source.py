@@ -15,8 +15,9 @@ import pytest
 from pyte.keys import KeyboardFlag
 from session import Connection
 
+from pymux.enums import ExtendedKeys
 from pymux.main import Pymux
-from pymux.options import ALL_SERVER_OPTIONS, ExtendedKeys, SetOptionError
+from pymux.options import ALL_SERVER_OPTIONS, SetOptionError
 
 
 class FakeConnection(Connection):
@@ -252,7 +253,7 @@ def test_what_pane_asks_for_reaches_terminal_as_well():
 
 
 def test_extended_keys_is_on_to_begin_with():
-    assert Pymux().extended_keys is ExtendedKeys.ON
+    assert Pymux().options.extended_keys is ExtendedKeys.ON
 
 
 def test_off_asks_terminal_for_nothing():

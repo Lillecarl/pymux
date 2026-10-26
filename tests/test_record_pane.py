@@ -56,7 +56,7 @@ async def test_a_recording_holds_both_directions_and_the_pane_it_ran_in(pymux, t
     assert sum(reads["sizes"]) == len(output)
     recorded = json.loads((directory / "probe.session.json").read_text())
     assert (recorded["lines"], recorded["columns"]) == size
-    assert recorded["term"] == pymux.default_terminal
+    assert recorded["term"] == pymux.options.default_terminal
     sent = "".join(base64.b64decode(event[2]).decode() for event in recorded["events"] if event[1] == "in")
     assert "printf" in sent and DEVICE_ATTRIBUTES_ANSWER in sent
     resized = [event[2] for event in recorded["events"] if event[1] == "size"]

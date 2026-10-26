@@ -57,7 +57,7 @@ async def session():
     # The clock a screen shows is pinned, so no test here races the
     # minute it runs in. This is what test-mode is for; the clock
     # tests read it through `displayed_now`, which says so.
-    pymux.test_mode = True
+    pymux.options.test_mode = True
     async with pymux.running():
         await pymux.create_window("%s -c 'import time; time.sleep(30)'" % (sys.executable,))
 
@@ -320,7 +320,7 @@ def test_clock_runs_on_while_test_mode_is_off():
     """
     pymux = Pymux()
     set_option(pymux, "test-mode", "off")
-    assert pymux.test_mode is False
+    assert pymux.options.test_mode is False
 
     now = pymux.displayed_now()
     assert (now.hour, now.minute) == (datetime.datetime.now().hour, datetime.datetime.now().minute)

@@ -39,7 +39,7 @@ WAITS = "%s -c 'import time; time.sleep(30)'" % (sys.executable,)
 @asynccontextmanager
 async def a_server():
     pymux = Pymux()
-    pymux.test_mode = True
+    pymux.options.test_mode = True
 
     async with pymux.running():
         try:

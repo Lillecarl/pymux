@@ -39,6 +39,7 @@ class _Said:
     parse: Callable[[str], Any] | None
     on_set: Callable[[Pymux, Any], None] | None
     on_write: Callable[[Any], None] | None
+    keep: Keep
 
 
 def option(
@@ -49,6 +50,7 @@ def option(
     parse: Callable[[str], Any] | None = None,
     on_set: Callable[[Pymux, Any], None] | None = None,
     on_write: Callable[[Any], None] | None = None,
+    keep: Keep = Keep.SAVED,
 ) -> Any:
     """
     Declare one option.
@@ -62,8 +64,11 @@ def option(
         the server and the object the options belong to.
     :param on_write: What the owner does after any write: an invariant
         of its own, which no caller can skip.
+    :param keep: What a hot upgrade does with it. An option whose truth
+        lives elsewhere -- the logger's level, a kernel setting -- is
+        `REBUILT`, and the snapshot has no column for it.
     """
-    said = _Said(doc, tuple(str(one) for one in choices), parse, on_set, on_write)
+    said = _Said(doc, tuple(str(one) for one in choices), parse, on_set, on_write, keep)
     return field(default=default, metadata={_KEY: said})
 
 
@@ -132,6 +137,7 @@ class Declared:
     choices: tuple[str, ...]
     parse: Callable[[str], Any]
     on_set: Callable[[Pymux, Any], None] | None
+    keep: Keep
 
     def values(self, now: Any = None) -> list[str]:
         "What Tab offers: the choices, and the value it holds now."
@@ -187,6 +193,10 @@ class Options:
     def __post_init__(self) -> None:
         object.__setattr__(self, "owner", None)
 
+    def hold(self, name: str, value: Any) -> None:
+        "Take a value the owner already acts on, without its `on_write`."
+        object.__setattr__(self, name, value)
+
     def __setattr__(self, name: str, value: Any) -> None:
         object.__setattr__(self, name, value)
         hook = self._ON_WRITE.get(name)
@@ -216,11 +226,12 @@ def options[T: Options](cls: type[T]) -> type[T]:
             choices=said.choices,
             parse=said.parse or _parse_of(each.default),
             on_set=said.on_set,
+            keep=said.keep,
         )
         if said.on_write is not None:
             on_write[each.name] = said.on_write
     made.DECLARED = declared
     made._ON_WRITE = on_write
-    # The owner gives itself again; every value goes in the snapshot.
-    made.KEEP = {each.attribute: Keep.SAVED for each in declared.values()} | {"owner": Keep.REBUILT}
+    # The owner gives itself again.
+    made.KEEP = {each.attribute: each.keep for each in declared.values()} | {"owner": Keep.REBUILT}
     return made

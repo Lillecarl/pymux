@@ -123,7 +123,7 @@ async def a_real_client(monkeypatch, config_file, chosen_name):
     monkeypatch.setattr(sys, "stdout", terminal.stdout)
 
     pymux = Pymux()
-    pymux.test_mode = True
+    pymux.options.test_mode = True
 
     async with pymux.running():
         await pymux.create_window(WAITS)

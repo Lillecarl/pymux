@@ -37,13 +37,13 @@ from .actions import Origin, started_by
 from .audio import AudioLink
 from .colors import ColorDetection, DefaultColors
 from .commands import handle_command
-from .enums import Woke
+from .enums import ExtendedKeys, Woke
 from .graphics import ClientGraphics, draws_placeholders
 from .ids import PaneId
 from .keys import KittyVt100Parser
 from .log import logger
 from .nearest import NEAREST, nearest_theme, wanted_from
-from .options import ExtendedKeys, Scope, SetOptionError
+from .options import Scope, SetOptionError
 from .pipes import BrokenPipeError
 from .rate import Rate
 from .terminal_answers import SURVEY, TerminalAnswers
@@ -810,7 +810,7 @@ class ServerConnection:
         asks; there are some, and a person who knows theirs is one can
         say so. Lillecarl/pymux#173.
         """
-        if self.pymux.extended_keys is ExtendedKeys.ALWAYS:
+        if self.pymux.options.extended_keys is ExtendedKeys.ALWAYS:
             return True
         return self._kitty_supported
 

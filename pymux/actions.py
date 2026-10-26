@@ -222,7 +222,7 @@ def default_path() -> Path:
 
 def note(pymux: Pymux, kind: Kind, name: str, arguments: str | None = None, error: str | None = None) -> None:
     "Log one action, when `action-log` is on, with where it happened and what started it."
-    if not pymux.action_log:
+    if not pymux.options.action_log:
         return
     try:
         client = pymux.get_client_state()

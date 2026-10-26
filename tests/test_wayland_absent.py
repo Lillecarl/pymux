@@ -22,7 +22,7 @@ async def test_a_server_runs_with_no_compositor(no_pysmithay, tmp_path):
     mux = Pymux()
     mux.socket_name = str(tmp_path / "pymux.sock.test")
     async with mux.running():
-        assert mux.wayland_server
+        assert mux.options.wayland_server
         assert not wayland.available()
         assert mux.wayland.display is None
         mux.handle_command("set-option wayland-server off")

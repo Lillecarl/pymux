@@ -29,7 +29,7 @@ ROWS, COLUMNS = 24, 80
 async def client():
     "A client of a session that has never had a window."
     pymux = Pymux()
-    pymux.test_mode = True
+    pymux.options.test_mode = True
     async with pymux.running():
         output = Vt100_Output(stdout=io.StringIO(), get_size=lambda: Size(rows=ROWS, columns=COLUMNS))
         with create_pipe_input() as pipe:

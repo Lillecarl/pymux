@@ -23,8 +23,8 @@ from prompt_toolkit.application.current import set_app
 from prompt_toolkit.application.dummy import DummyApplication
 from session import create_session
 
+from pymux.enums import Clipboard
 from pymux.main import Pymux
-from pymux.options import Clipboard
 
 COLUMNS = 20
 LINES = 5
@@ -174,7 +174,7 @@ async def test_a_copy_goes_out_on_both_of_the_values_that_allow_it(pymux, mode):
     Lillecarl/pymux#378.
     """
     connection = listening(pymux)
-    pymux.clipboard_mode = mode
+    pymux.options.set_clipboard = mode
     pane, view = a_selection(pymux)
 
     view.copy_selection()
@@ -185,7 +185,7 @@ async def test_a_copy_goes_out_on_both_of_the_values_that_allow_it(pymux, mode):
 async def test_set_clipboard_off_keeps_the_copy_inside(pymux):
     "The one value that says no to the person as well."
     connection = listening(pymux)
-    pymux.clipboard_mode = Clipboard.OFF
+    pymux.options.set_clipboard = Clipboard.OFF
     pane, view = a_selection(pymux)
 
     view.copy_selection()

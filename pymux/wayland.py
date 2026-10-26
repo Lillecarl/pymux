@@ -42,11 +42,10 @@ import anyio.abc
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.clipboard import ClipboardData
 
-from pymux.enums import WindowScroll, Woke
+from pymux.enums import Clipboard, WindowScroll, Woke
 from pymux.graphics import FrameRects, VideoFrame, WindowView
 from pymux.ids import PaneId
 from pymux.niceness import as_a_person_runs
-from pymux.options import Clipboard
 from pymux.wayland_scale import DEFAULT_WAYLAND_SCALE, resolve_scale
 from pymux.window_pane import WindowWidget, now
 
@@ -193,13 +192,13 @@ class WaylandServer:
     def option_changed(self) -> None:
         "`wayland-server` moved: start or stop on the next turn."
         self._changed.set()
-        if not self.pymux.wayland_server and self._scope is not None:
+        if not self.pymux.options.wayland_server and self._scope is not None:
             self._scope.cancel()
 
     async def keep(self) -> None:
         "Run the compositor whenever the option is on. Never returns."
         while True:
-            if self.pymux.wayland_server and available():
+            if self.pymux.options.wayland_server and available():
                 with anyio.CancelScope() as self._scope:
                     await self._serve()
                 self._scope = None
@@ -618,7 +617,7 @@ class WaylandServer:
             return
         text = data.decode("utf-8", "replace")
         self.copied[target] = text
-        if self.pymux.clipboard_mode is not Clipboard.ON or not text:
+        if self.pymux.options.set_clipboard is not Clipboard.ON or not text:
             return
         if target == "clipboard":
             self.pymux.clipboard.set_data(ClipboardData(text))
@@ -629,7 +628,7 @@ class WaylandServer:
     async def _answer_paste(self, target: str, fd: int) -> None:
         "A pane pasted what the compositor holds: find the text, and write it."
         text = ""
-        if self.pymux.clipboard_mode is Clipboard.ON:
+        if self.pymux.options.set_clipboard is Clipboard.ON:
             text = await self._read_the_terminal(target)
             if text is None:
                 text = self._fallback(target)

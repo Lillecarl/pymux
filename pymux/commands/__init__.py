@@ -423,7 +423,7 @@ def call_command_handler(command: str, pymux: Pymux, arguments: list[str]):
     if parser is None:
         pymux.show_message("Invalid command: %s" % (command,))
         pymux.add_command_error("pymux: invalid command: %s" % (command,))
-        if pymux.action_log:
+        if pymux.options.action_log:
             note(pymux, Kind.COMMAND, command, words_of(command, arguments), "invalid command")
         return None
 
@@ -434,7 +434,7 @@ def call_command_handler(command: str, pymux: Pymux, arguments: list[str]):
         message = "%s (%s)" % (e.message, usage)
         pymux.show_message(message)
         pymux.add_command_error("pymux: %s" % (message,))
-        if pymux.action_log:
+        if pymux.options.action_log:
             note(pymux, Kind.COMMAND, command, words_of(command, arguments), e.message)
         return None
 
@@ -492,12 +492,12 @@ async def _finish(pymux: Pymux, command: str, namespace: argparse.Namespace, ans
 
 def _ran(pymux: Pymux, command: str, namespace: argparse.Namespace) -> None:
     pymux.invalidate(Woke.COMMAND_RAN % command)
-    if pymux.action_log:
+    if pymux.options.action_log:
         note(pymux, Kind.COMMAND, command, arguments_of(command, namespace))
 
 
 def _failed(pymux: Pymux, command: str, namespace: argparse.Namespace, error: CommandException) -> None:
     pymux.show_message(error.message)
     pymux.add_command_error("pymux: %s" % (error.message,))
-    if pymux.action_log:
+    if pymux.options.action_log:
         note(pymux, Kind.COMMAND, command, arguments_of(command, namespace), error.message)

@@ -23,8 +23,10 @@ from dataclasses import Field, dataclass, field, fields, make_dataclass
 from typing import Any, ClassVar, Final, Protocol
 
 import apsw
+from pyte.keep import Keep
 
 from .option_fields import Options
+from .server_options import ServerOptions
 from .window_options import WindowOptions
 
 __all__ = [
@@ -38,11 +40,12 @@ __all__ = [
     "ChangedRows",
     "added_columns",
     "insert",
+    "literal",
     "select",
 ]
 
 
-def _literal(value: Any) -> str:
+def literal(value: Any) -> str:
     "A value as SQL writes it, for a column's DEFAULT."
     if isinstance(value, bool):
         return str(int(value))
@@ -51,7 +54,9 @@ def _literal(value: Any) -> str:
     return "'%s'" % str(value).replace("'", "''")
 
 
-def options_table(scope: type[Options], name: str, table: str, key: str, references: str, *, defaults: bool) -> type:
+def options_table(
+    scope: type[Options], name: str, table: str, key: str, references: str | None, *, defaults: bool
+) -> type:
     """
     The row class of one scope's options, one column per option, with
     its `CREATE TABLE` as `SQL` and each column's own as `COLUMNS`.
@@ -63,6 +68,8 @@ def options_table(scope: type[Options], name: str, table: str, key: str, referen
     columns = {}
     specs: list[Any] = [(key, int)]
     for declared in scope.DECLARED.values():
+        if declared.keep is not Keep.SAVED:
+            continue
         kind = declared.python_type()
         if defaults:
             columns[declared.attribute] = "%s %s" % (declared.attribute, declared.column_type())
@@ -72,13 +79,13 @@ def options_table(scope: type[Options], name: str, table: str, key: str, referen
             columns[declared.attribute] = "%s %s NOT NULL DEFAULT %s" % (
                 declared.attribute,
                 declared.column_type(),
-                _literal(stored),
+                literal(stored),
             )
             specs.append((declared.attribute, kind, field(default=stored)))
-    sql = "CREATE TABLE %s(\n  %s INTEGER PRIMARY KEY REFERENCES %s,\n  %s\n);\n" % (
+    sql = "CREATE TABLE %s(\n  %s INTEGER PRIMARY KEY%s,\n  %s\n);\n" % (
         table,
         key,
-        references,
+        "" if references is None else " REFERENCES " + references,
         ",\n  ".join(columns.values()),
     )
     namespace = {"TABLE": table, "KEY": (key,), "SQL": sql, "COLUMNS": columns}
@@ -94,8 +101,11 @@ WindowOptionRow = options_table(
     WindowOptions, "WindowOptionRow", "window_options", "window_id", "windows(window_id)", defaults=False
 )
 
+#: The server's options, in its one row.
+ServerOptionRow = options_table(ServerOptions, "ServerOptionRow", "server_options", "id", None, defaults=False)
+
 #: The tables `options_table` writes.
-GENERATED = (WindowDefaultRow, WindowOptionRow)
+GENERATED = (ServerOptionRow, WindowDefaultRow, WindowOptionRow)
 
 SCHEMA = (
     """
@@ -111,7 +121,9 @@ CREATE TABLE options(
   name TEXT PRIMARY KEY,
   value
 );
-CREATE TABLE global_environment(
+"""
+    + ServerOptionRow.SQL
+    + """CREATE TABLE global_environment(
   name TEXT PRIMARY KEY,
   value TEXT
 );
@@ -382,6 +394,7 @@ TABLES = (
     "server",
     "counters",
     "options",
+    "server_options",
     "global_environment",
     "sessions",
     "session_environment",
@@ -864,6 +877,7 @@ ROWS = (
     ServerRow,
     CounterRow,
     OptionRow,
+    ServerOptionRow,
     GlobalEnvironmentRow,
     SessionRow,
     SessionEnvironmentRow,
